@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 
+# theo-ui link mode backup (ADR 0020) — never commit a backup workspace file
+pnpm-workspace.yaml.bak
+
 # Build output
 dist/
 .theo/
@@ -72,6 +75,8 @@ tmp/
 
 # Claude Code local settings
 .claude/settings.local.json
+.claude/worktrees/
+.claude/ralph-loop.local.md
 
 # Project-specific
 ONDAS.md
@@ -80,7 +85,7 @@ ONDAS.md
 my-test/
 
 # Reference framework implementations (cloned for SOTA research)
-referencias/
+# referencias/
 .gstack/
 fixtures/template-default/.theokit
 architecture-output
