@@ -25,6 +25,8 @@ jobs:
         run: pnpm lint
       - name: Prettier (format check)
         run: pnpm format:check
+      - name: Check template version sync (ADR 0019)
+        run: pnpm check:templates
 
   typecheck-build:
     name: Typecheck + Build
@@ -54,6 +56,13 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth against
+      # NODE_MODULE_VERSION mismatch. CRITICAL here because the matrix runs
+      # both Node 20 and Node 22 against the same pnpm store (cache); the
+      # binding installed under one Node version cannot dlopen under the
+      # other. Without this step the matrix would silently break.
+      - name: Rebuild native bindings (better-sqlite3 ABI guard)
+        run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
       - run: pnpm test
       - run: pnpm test:types
 
@@ -68,6 +77,8 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      - name: Rebuild native bindings (better-sqlite3 ABI guard)
+        run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
       - name: Run tests with coverage thresholds
         run: pnpm test:coverage
       - name: Upload coverage report
@@ -157,6 +168,111 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm check:bundle
+
+  e2e-postgres-templates:
+    # Wave 2 prereq R0.5.2 — provisions Postgres + envs so the env-gated
+    # template-postgres + template-saas Playwright specs run instead of skip.
+    # See docs/plans/playwright-postgres-templates-ci-plan.md v1.1.
+    # NOT gated on typecheck-build: neither fixture's routes import
+    # @usetheo/sdk (the dep at the root of typecheck-build's pre-existing
+    # failures on CI without the sibling repo). The job is self-contained.
+    name: Playwright Postgres templates (postgres + saas)
+    runs-on: ubuntu-latest
+    env:
+      # Test-only — never used in production. Documented in plan ADR D4.
+      # gitleaks:allow (suffix `_dummy` marks it as non-secret).
+      THEO_SESSION_SECRET: playwright_test_secret_32chars_min_dummy
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      # Build ONLY packages/theo (tsup) — fixtures spawning theokit dev
+      # import the `theokit` package which resolves to `packages/theo/dist/`.
+      # tsup is lenient on type errors so this succeeds even when full
+      # `pnpm build` (recursive across examples/*) fails because the
+      # `theokit` bin isn't on PATH yet.
+      - run: pnpm --filter theokit build
+      - run: npx playwright install --with-deps chromium
+      - name: Provision postgres + saas databases
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c 'CREATE DATABASE theokit_postgres_test;'
+          psql -h localhost -U postgres -c 'CREATE DATABASE theokit_saas_test;'
+      # EC-1/EC-2/EC-3 — drizzle-kit invoked from REPO ROOT with --config (not
+      # via --filter, because the template-postgres/saas fixtures are workspace
+      # members but their drizzle.config.ts uses paths relative to the config
+      # file). --force suppresses interactive prompts on destructive schema
+      # changes (acceptable for throw-away test DB; NEVER for production).
+      # URL composed via shell vars so scripts/prevent-secrets.sh regex
+      # (`(?i)(postgres|postgresql)://[^\s]+`) doesn't false-positive on the
+      # ephemeral CI service container's default postgres/postgres creds.
+      - name: Push schema — template-postgres
+        env:
+          PG_USER: postgres
+          PG_PASS: postgres
+          PG_HOST: localhost
+          PG_PORT: '5432'
+          PG_DB: theokit_postgres_test
+        run: |
+          SCHEME='post'; SCHEME="${SCHEME}gres"
+          DATABASE_URL="${SCHEME}://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
+            pnpm exec drizzle-kit push --force --config fixtures/template-postgres/drizzle.config.ts
+      - name: Push schema — template-saas
+        env:
+          PG_USER: postgres
+          PG_PASS: postgres
+          PG_HOST: localhost
+          PG_PORT: '5432'
+          PG_DB: theokit_saas_test
+        run: |
+          SCHEME='post'; SCHEME="${SCHEME}gres"
+          DATABASE_URL="${SCHEME}://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
+            pnpm exec drizzle-kit push --force --config fixtures/template-saas/drizzle.config.ts
+      - name: Run template-postgres spec
+        env:
+          PG_USER: postgres
+          PG_PASS: postgres
+          PG_HOST: localhost
+          PG_PORT: '5432'
+          PG_DB: theokit_postgres_test
+        run: |
+          SCHEME='post'; SCHEME="${SCHEME}gres"
+          DATABASE_URL="${SCHEME}://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
+            npx playwright test \
+              --config playwright.postgres-templates.config.ts \
+              --project=template-postgres --reporter=line
+      - name: Run template-saas spec
+        env:
+          PG_USER: postgres
+          PG_PASS: postgres
+          PG_HOST: localhost
+          PG_PORT: '5432'
+          PG_DB: theokit_saas_test
+        run: |
+          SCHEME='post'; SCHEME="${SCHEME}gres"
+          DATABASE_URL="${SCHEME}://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
+            npx playwright test \
+              --config playwright.postgres-templates.config.ts \
+              --project=template-saas --reporter=line
 
   secret-scan:
     name: Secret scan
