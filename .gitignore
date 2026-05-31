@@ -75,6 +75,8 @@ tmp/
 
 # Claude Code local settings
 .claude/settings.local.json
+.claude/worktrees/
+.claude/ralph-loop.local.md
 
 # Project-specific
 ONDAS.md
