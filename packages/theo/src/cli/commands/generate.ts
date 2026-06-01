@@ -33,6 +33,43 @@ function toKebabCase(name: string): boolean {
   return /^[a-z][a-z0-9/-]*$/.test(name)
 }
 
+/**
+ * Reserved JS identifier names that conflict with object prototype machinery
+ * or would shadow built-in module shapes if used as action/route names.
+ * Mirrors action-scan's RESERVED_NAMES (T1.4).
+ */
+const RESERVED_BASENAMES = new Set([
+  'index',
+  'constructor',
+  '__proto__',
+  'prototype',
+  'hasOwnProperty',
+])
+
+/**
+ * Validate that a name segment doesn't hit the reserved-identifier list.
+ * Checks the BASENAME (last `/` segment) — nested `admin/constructor` still
+ * rejected because the file `constructor.ts` would be the conflict.
+ */
+function hasReservedSegment(name: string): boolean {
+  const basename = name.includes('/') ? (name.split('/').pop() ?? name) : name
+  return RESERVED_BASENAMES.has(basename)
+}
+
+/**
+ * EC-4: validate that resolving `targetSubpath` under `cwd` stays inside `cwd`.
+ * Returns `true` when path is safe (stays inside), `false` when it escapes via
+ * `..`, absolute path, null byte, or similar traversal vector.
+ */
+function isPathInside(cwd: string, targetSubpath: string): boolean {
+  if (targetSubpath.includes('\x00')) return false
+  if (targetSubpath.startsWith('/') || targetSubpath.startsWith('\\')) return false
+  const resolved = resolve(cwd, targetSubpath)
+  const cwdResolved = resolve(cwd)
+  const sep = process.platform === 'win32' ? '\\' : '/'
+  return resolved === cwdResolved || resolved.startsWith(cwdResolved + sep)
+}
+
 function toPascalCase(name: string): string {
   return name
     .split(/[-/]/)
@@ -70,6 +107,62 @@ function generateActionTemplate(name: string): string {
     `  handler: ({ input, ctx }) => {`,
     `    return { message: 'TODO: implement ${name}' }`,
     `  },`,
+    `})`,
+    ``,
+  ].join('\n')
+}
+
+/**
+ * Co-located test template for `theokit generate action <name>` (T5.2 +
+ * plan Q4 cenário 1: roundtrip serialize). Skeleton uses vitest BDD shape
+ * per testing.md.
+ */
+function resolveTemplate(
+  cwd: string,
+  type: GeneratorType,
+  name: string,
+): { filePath: string; content: string } | null {
+  switch (type) {
+    case 'route':
+      return {
+        filePath: resolve(cwd, 'server/routes', `${name}.ts`),
+        content: generateRouteTemplate(name),
+      }
+    case 'action':
+      return {
+        filePath: resolve(cwd, 'server/actions', `${name}.ts`),
+        content: generateActionTemplate(name),
+      }
+    case 'page':
+      return { filePath: resolve(cwd, `app/${name}/page.tsx`), content: generatePageTemplate(name) }
+    case 'ws':
+      return {
+        filePath: resolve(cwd, 'server/ws', `${name}.ts`),
+        content: generateWsTemplate(name),
+      }
+    default:
+      return null
+  }
+}
+
+function generateActionTestTemplate(name: string): string {
+  const camel = toCamelCase(name)
+  return [
+    `import { describe, it, expect } from 'vitest'`,
+    ``,
+    `import { ${camel} } from './${name.split('/').pop()}.js'`,
+    ``,
+    `describe('${name} action', () => {`,
+    `  it('should accept a valid input shape', () => {`,
+    `    expect(${camel}.input).toBeDefined()`,
+    `    expect(typeof ${camel}.handler).toBe('function')`,
+    `  })`,
+    ``,
+    `  it('should reject invalid input via zod schema', () => {`,
+    `    const parsed = ${camel}.input.safeParse({ __invalid: true })`,
+    `    // Empty object schema accepts {}; tighten this assertion when adding fields.`,
+    `    expect(parsed.success).toBe(true)`,
+    `  })`,
     `})`,
     ``,
   ].join('\n')
@@ -125,28 +218,32 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
     }
   }
 
-  let filePath: string
-  let content: string
+  // EC-2-related: reject reserved JS identifier basenames (would shadow
+  // built-in prototype machinery in virtual module emit or scan).
+  if (hasReservedSegment(name)) {
+    return {
+      status: 'invalid_name',
+      message: `Reserved name "${name}" — basename collides with built-in identifier (index/constructor/__proto__/prototype/hasOwnProperty).`,
+    }
+  }
 
-  switch (type as GeneratorType) {
-    case 'route':
-      filePath = resolve(cwd, 'server/routes', `${name}.ts`)
-      content = generateRouteTemplate(name)
-      break
-    case 'action':
-      filePath = resolve(cwd, 'server/actions', `${name}.ts`)
-      content = generateActionTemplate(name)
-      break
-    case 'page':
-      filePath = resolve(cwd, `app/${name}/page.tsx`)
-      content = generatePageTemplate(name)
-      break
-    case 'ws':
-      filePath = resolve(cwd, 'server/ws', `${name}.ts`)
-      content = generateWsTemplate(name)
-      break
-    default:
-      return { status: 'invalid_kind', message: `Unknown type: ${type}` }
+  const resolved = resolveTemplate(cwd, type as GeneratorType, name)
+  if (resolved === null) {
+    return { status: 'invalid_kind', message: `Unknown type: ${type}` }
+  }
+  const { filePath, content } = resolved
+
+  // EC-4: confirm the resolved filePath stays inside cwd. `toKebabCase`
+  // already rejects most traversal vectors but a defense-in-depth check
+  // against `..` slipping in via valid-looking segments is cheap.
+  const relativeFromCwd = filePath.startsWith(resolve(cwd))
+    ? filePath.slice(resolve(cwd).length + 1)
+    : filePath
+  if (!isPathInside(cwd, relativeFromCwd)) {
+    return {
+      status: 'invalid_name',
+      message: `Path traversal denied: "${name}" would escape project root.`,
+    }
   }
 
   if (existsSync(filePath)) {
@@ -155,6 +252,16 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
 
   mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, content)
+
+  // T5.2 + plan Q4: emit co-located test file alongside actions (only
+  // for action type; routes/pages/ws keep prior single-file behavior).
+  // Skip if existing test file present (preserve user-customized tests).
+  if (type === 'action') {
+    const testPath = filePath.replace(/\.ts$/, '.test.ts')
+    if (!existsSync(testPath)) {
+      writeFileSync(testPath, generateActionTestTemplate(name))
+    }
+  }
 
   return { status: 'created', filePath, kind: type as GeneratorType, name }
 }
