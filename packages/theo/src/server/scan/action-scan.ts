@@ -2,7 +2,7 @@
  * Build-time scanner: walks `serverDir/actions/` derived from cwd.
  * No HTTP input ever reaches these fs calls.
  */
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { extname, join, relative } from 'node:path'
 
 import { walkSourceFiles } from '../_internal/scan-walker.js'
@@ -12,8 +12,48 @@ export interface ActionNode {
   actionPath: string
 }
 
-const ACTION_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
+/**
+ * Enriched manifest entry per plan g3-server-actions-and-useaction v1.2
+ * § Phase 1 / T1.4 + ADR D4. Consumed by virtual module `@theo/actions`
+ * (T3.1) and G4 devtools "Actions" tab (T5.1).
+ */
+export interface ActionManifestEntry {
+  name: string
+  filePath: string
+  urlPath: string
+  accept: 'form' | 'json'
+  hasInput: boolean
+}
 
+/**
+ * EC-2: structured error for scan-time defects (name collision, reserved
+ * identifier, etc.). Throw at scan time to fail loud — silent shadowing is
+ * a security/correctness footgun.
+ */
+export class ActionScanError extends Error {
+  readonly code: 'NAME_COLLISION' | 'RESERVED_NAME'
+  readonly conflictingPaths: readonly string[]
+
+  constructor(
+    code: 'NAME_COLLISION' | 'RESERVED_NAME',
+    message: string,
+    conflictingPaths: readonly string[],
+  ) {
+    super(message)
+    this.code = code
+    this.conflictingPaths = conflictingPaths
+  }
+}
+
+const ACTION_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
+const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx|js|jsx)$/
+const RESERVED_NAMES = new Set(['index', 'constructor', '__proto__', 'prototype', 'hasOwnProperty'])
+
+/**
+ * Backward-compatible: original simple-shape scanner used by existing
+ * consumers. Preserved verbatim; new consumers should call
+ * `scanServerActionsEnriched`.
+ */
 export function scanServerActions(serverDir: string): ActionNode[] {
   const actionsDir = join(serverDir, 'actions')
   if (!existsSync(actionsDir) || !statSync(actionsDir).isDirectory()) {
@@ -22,6 +62,7 @@ export function scanServerActions(serverDir: string): ActionNode[] {
 
   const results: ActionNode[] = []
   walkSourceFiles(actionsDir, { extensions: ACTION_EXTENSIONS }, (absPath) => {
+    if (TEST_FILE_RE.test(absPath)) return
     let rel = relative(actionsDir, absPath)
     rel = rel.replace(/\\/g, '/')
     rel = rel.slice(0, -extname(rel).length)
@@ -31,4 +72,106 @@ export function scanServerActions(serverDir: string): ActionNode[] {
     })
   })
   return results
+}
+
+/**
+ * Enriched scan: light AST detection of `accept: 'form'|'json'` + `input:`
+ * presence via regex-after-comment-stripping (EC-9). Throws ActionScanError
+ * on file/dir name collision (EC-2) or reserved JS identifier names.
+ *
+ * Output `ActionManifestEntry[]` is sorted by `name` for deterministic
+ * `.theo/actions-manifest.json` emission.
+ */
+export function scanServerActionsEnriched(serverDir: string): ActionManifestEntry[] {
+  const actionsDir = join(serverDir, 'actions')
+  if (!existsSync(actionsDir) || !statSync(actionsDir).isDirectory()) {
+    return []
+  }
+
+  const seenNames = new Set<string>()
+  const entries: ActionManifestEntry[] = []
+
+  // Collect first; collision-check after the full walk.
+  walkSourceFiles(actionsDir, { extensions: ACTION_EXTENSIONS }, (absPath) => {
+    if (TEST_FILE_RE.test(absPath)) return
+    const rel = relative(actionsDir, absPath).replace(/\\/g, '/')
+    const name = rel.slice(0, -extname(rel).length)
+
+    const basename = name.includes('/') ? (name.split('/').pop() ?? name) : name
+    if (RESERVED_NAMES.has(basename)) {
+      throw new ActionScanError(
+        'RESERVED_NAME',
+        `Reserved JS identifier "${basename}" cannot be an action name (${absPath})`,
+        [absPath],
+      )
+    }
+    if (seenNames.has(name)) {
+      throw new ActionScanError('NAME_COLLISION', `Duplicate action name "${name}"`, [absPath])
+    }
+    seenNames.add(name)
+
+    const source = readFileSync(absPath, 'utf8')
+    const stripped = stripComments(source)
+    const accept = /\baccept\s*:\s*['"]form['"]/.test(stripped) ? 'form' : 'json'
+    const hasInput = /\binput\s*:\s*z\./.test(stripped) || /\binput\s*:\s*\w+\(/.test(stripped)
+
+    entries.push({
+      name,
+      filePath: absPath,
+      urlPath: `/_actions/${name}`,
+      accept,
+      hasInput,
+    })
+  })
+
+  // EC-2: detect file vs dir collisions (e.g., foo.ts AND foo/bar.ts).
+  // After walk completes, any name that has children prefixed `name/` triggers collision.
+  for (const entry of entries) {
+    const childPrefix = `${entry.name}/`
+    const conflictingChild = entries.find((other) => other.name.startsWith(childPrefix))
+    if (conflictingChild) {
+      throw new ActionScanError(
+        'NAME_COLLISION',
+        `Action "${entry.name}" conflicts with directory of same name containing "${conflictingChild.name}"`,
+        [entry.filePath, conflictingChild.filePath],
+      )
+    }
+  }
+
+  entries.sort((a, b) => {
+    if (a.name < b.name) return -1
+    if (a.name > b.name) return 1
+    return 0
+  })
+  return entries
+}
+
+/**
+ * Strip JavaScript line + block comments from source. Simple state machine
+ * (does not parse strings — false positives if a comment marker appears
+ * inside a string literal, but that's an acceptable trade-off for v1 vs
+ * full AST parse).
+ */
+function stripComments(source: string): string {
+  let out = ''
+  let i = 0
+  while (i < source.length) {
+    const ch = source[i]
+    const next = source[i + 1]
+    if (ch === '/' && next === '/') {
+      // Line comment: skip until newline
+      while (i < source.length && source[i] !== '\n') i++
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      // Block comment: skip until */
+      i += 2
+      while (i < source.length - 1 && !(source[i] === '*' && source[i + 1] === '/')) i++
+      i += 2
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out
 }
