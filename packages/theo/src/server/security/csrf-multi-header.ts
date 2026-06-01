@@ -12,6 +12,8 @@
  */
 import type { IncomingMessage } from 'node:http'
 
+import { limitUntrustedHeaderValueForLogs } from '../_internal/log-safe.js'
+
 import { isCsrfOriginAllowed } from './wildcard-origin.js'
 
 export interface CsrfMultiHeaderOptions {
@@ -83,7 +85,7 @@ export function evaluateCsrfMultiHeader(
     return {
       allow: false,
       signal: 'sec-fetch-site',
-      reason: `Sec-Fetch-Site header indicates ${secFetchSite}`,
+      reason: `Sec-Fetch-Site header indicates ${limitUntrustedHeaderValueForLogs(secFetchSite)}`,
     }
   }
 
