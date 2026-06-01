@@ -60,6 +60,7 @@ function compareSemverPrerelease(a, b) {
  */
 function fetchDistTags(pkgName) {
   try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- build-time release script; npm is the canonical registry client
     const out = execFileSync('npm', ['view', pkgName, 'dist-tags', '--json'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -124,8 +125,13 @@ function validatePackage(pkg) {
 const results = PACKAGES.map(validatePackage)
 let networkErrors = 0
 let driftErrors = 0
+function iconFor(status) {
+  if (status === 'ok') return '✓'
+  if (status === 'skip') return '⚠'
+  return '✗'
+}
 for (const r of results) {
-  const icon = r.status === 'ok' ? '✓' : r.status === 'skip' ? '⚠' : '✗'
+  const icon = iconFor(r.status)
   console.log(`${icon} ${r.pkg}: ${r.message}`)
   if (r.status === 'drift') driftErrors++
   if (r.status === 'network-error') networkErrors++

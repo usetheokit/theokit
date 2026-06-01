@@ -28,7 +28,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(TEST_DIR, '..', '..')
@@ -37,11 +37,13 @@ let sandbox: string
 let linkScript: string
 let unlinkScript: string
 
-function setupSandbox(opts: {
-  withSibling?: boolean
-  withDist?: boolean
-  preExistingBak?: boolean
-} = {}) {
+function setupSandbox(
+  opts: {
+    withSibling?: boolean
+    withDist?: boolean
+    preExistingBak?: boolean
+  } = {},
+) {
   const { withSibling = true, withDist = true, preExistingBak = false } = opts
   sandbox = mkdtempSync(join(tmpdir(), 'theokit-link-flow-'))
   mkdirSync(join(sandbox, 'scripts'), { recursive: true })
@@ -55,10 +57,7 @@ function setupSandbox(opts: {
   chmodSync(unlinkScript, 0o755)
 
   // Workspace files.
-  writeFileSync(
-    join(sandbox, 'pnpm-workspace.yaml'),
-    "packages:\n  - 'packages/*'\n",
-  )
+  writeFileSync(join(sandbox, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n")
   writeFileSync(
     join(sandbox, 'pnpm-workspace.linked-ui.yaml'),
     "packages:\n  - 'packages/*'\n  - '../theo-ui'\n",
@@ -68,7 +67,10 @@ function setupSandbox(opts: {
     mkdirSync(join(sandbox, '..', 'theo-ui'), { recursive: true })
     if (withDist) {
       mkdirSync(join(sandbox, '..', 'theo-ui', 'dist'), { recursive: true })
-      writeFileSync(join(sandbox, '..', 'theo-ui', 'dist', 'vite-plugin.js'), 'export default () => ({ name: "fake" });\n')
+      writeFileSync(
+        join(sandbox, '..', 'theo-ui', 'dist', 'vite-plugin.js'),
+        'export default () => ({ name: "fake" });\n',
+      )
     }
   }
 
@@ -88,7 +90,11 @@ function runScript(script: string) {
   mkdirSync(stubDir, { recursive: true })
   writeFileSync(join(stubDir, 'pnpm'), '#!/usr/bin/env bash\nexit 0\n')
   chmodSync(join(stubDir, 'pnpm'), 0o755)
-  const env = { ...process.env, PATH: `${stubDir}:${process.env['PATH'] ?? ''}` }
+  const env = {
+    ...process.env,
+    PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+  }
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- test prepends sandboxed stubDir to PATH; the prepended bin shadows system pnpm and is owned by the test
   return spawnSync('bash', [script], { encoding: 'utf-8', env })
 }
 
@@ -178,7 +184,11 @@ describe('T3.1 — theo-ui-link.sh / theo-ui-unlink.sh flow (ADR 0020)', () => {
       )
       chmodSync(join(stubDir, 'git'), 0o755)
 
-      const env = { ...process.env, PATH: `${stubDir}:${process.env['PATH'] ?? ''}` }
+      const env = {
+        ...process.env,
+        PATH: `${stubDir}:${process.env.PATH ?? ''}`,
+      }
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- pre-commit hook stub: PATH prefix with sandboxed git stub, owned by the test
       const r = spawnSync('bash', [hookPath], { encoding: 'utf-8', env, cwd: hookSandbox })
 
       // Then: EC-3 — fail at GATE 0 with the "theo-ui linked" message.

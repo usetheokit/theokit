@@ -161,6 +161,38 @@ function buildTruth() {
 }
 
 /**
+ * Compare ONE (bucket, dep) cell of a template against truth.
+ * Returns drift entry or null. Mutates tpl in 'write' mode.
+ */
+function diffCell(tplPath, tpl, truth, mode, bucket, dep) {
+  const expected = truth[dep]
+  if (!expected) return null
+  const current = tpl[bucket]?.[dep]
+  if (current === undefined) return null // EC-4: not declared → don't force-add
+  if (typeof current === 'string' && current.startsWith('workspace:')) return null // EC-3
+  if (current === expected) return null
+  if (mode === 'write') {
+    tpl[bucket][dep] = expected
+  }
+  return { tpl: tplPath, bucket, dep, current, expected }
+}
+
+/**
+ * Compare one template against truth and collect drift entries.
+ * Mutates `tpl[bucket][dep]` in 'write' mode. Returns `{ entries, changed }`.
+ */
+function diffTemplate(tplPath, tpl, truth, mode) {
+  const entries = []
+  for (const dep of MANAGED_DEPS) {
+    for (const bucket of ['dependencies', 'devDependencies']) {
+      const entry = diffCell(tplPath, tpl, truth, mode, bucket, dep)
+      if (entry !== null) entries.push(entry)
+    }
+  }
+  return { entries, changed: entries.length > 0 && mode === 'write' }
+}
+
+/**
  * Main entry — collect drift, optionally write, exit appropriately.
  */
 export function syncTemplates({ mode = 'check', templatesDir = TEMPLATES_DIR, truth } = {}) {
@@ -172,23 +204,8 @@ export function syncTemplates({ mode = 'check', templatesDir = TEMPLATES_DIR, tr
 
   for (const tplPath of templatePaths) {
     const tpl = JSON.parse(readFileSync(tplPath, 'utf-8'))
-    let changed = false
-    for (const dep of MANAGED_DEPS) {
-      const expected = truth[dep]
-      if (!expected) continue // truth couldn't resolve this dep (e.g. lockfile missing)
-      for (const bucket of ['dependencies', 'devDependencies']) {
-        const current = tpl[bucket]?.[dep]
-        if (current === undefined) continue // EC-4: not declared → don't force-add
-        if (typeof current === 'string' && current.startsWith('workspace:')) continue // EC-3
-        if (current !== expected) {
-          drifted.push({ tpl: tplPath, bucket, dep, current, expected })
-          if (mode === 'write') {
-            tpl[bucket][dep] = expected
-            changed = true
-          }
-        }
-      }
-    }
+    const { entries, changed } = diffTemplate(tplPath, tpl, truth, mode)
+    drifted.push(...entries)
     if (mode === 'write' && changed) {
       writeFileSync(tplPath, JSON.stringify(tpl, null, 2) + '\n')
       written += 1
