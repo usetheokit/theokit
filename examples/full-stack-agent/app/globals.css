@@ -12,4 +12,4 @@
  * layouts where `@source` can't follow symlinks. RFC 0008 follow-up
  * tracked at @usetheo/ui — proper fix lives there.
  */
-@import "@usetheo/ui/styles.css";
+@import '@usetheo/ui/styles.css';

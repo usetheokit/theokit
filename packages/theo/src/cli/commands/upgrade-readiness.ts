@@ -201,8 +201,7 @@ function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
     return
   }
   const hasUi =
-    Boolean(pkg.dependencies?.['@usetheo/ui']) ||
-    Boolean(pkg.devDependencies?.['@usetheo/ui'])
+    Boolean(pkg.dependencies?.['@usetheo/ui']) || Boolean(pkg.devDependencies?.['@usetheo/ui'])
   if (!hasUi) return
 
   for (const ext of ['.ts', '.js', '.mjs', '.cjs']) {
@@ -233,7 +232,12 @@ function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
  * Suggest the framework's loadEnv (auto-invoked by CLI commands; importable
  * from theokit/server for standalone scripts).
  */
-function scanHandRolledDotenvHint(file: string, rel: string, content: string, out: Violation[]): void {
+function scanHandRolledDotenvHint(
+  file: string,
+  rel: string,
+  content: string,
+  out: Violation[],
+): void {
   // Only flag server/ files
   if (!rel.startsWith('server/')) return
   const lines = content.split('\n')

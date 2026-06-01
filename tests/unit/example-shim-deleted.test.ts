@@ -32,10 +32,7 @@ describe('T1.4 — example uses framework loadEnv (shim deleted)', () => {
   })
 
   it('theokit/server re-exports loadEnv', () => {
-    const src = readFileSync(
-      resolve(process.cwd(), 'packages/theo/src/server/index.ts'),
-      'utf-8',
-    )
+    const src = readFileSync(resolve(process.cwd(), 'packages/theo/src/server/index.ts'), 'utf-8')
     expect(src).toMatch(/export\s+\{[^}]*loadEnv[^}]*\}\s+from\s+['"]\.\.\/config\/load-env/)
   })
 })

@@ -6,12 +6,20 @@ import { loadEnv } from '../../config/load-env.js'
 import { validateProjectStructure } from '../../core/validate-structure.js'
 import { orchestrateDev } from '../../services/index.js'
 import { theoPluginAsync } from '../../vite-plugin/index.js'
+import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 interface DevOptions {
   port?: number
 }
 
 export async function startDevServer(cwd: string, options?: DevOptions): Promise<ViteDevServer> {
+  // Preflight (FIRST — BEFORE anything that touches native bindings):
+  // verifies Node version + native binding ABI match. Emits actionable
+  // error referencing `nvm use` + `pnpm rebuild` when the dev server
+  // was spawned under the wrong Node (common gotcha with `nohup env ...`
+  // stripping the nvm PATH prefix).
+  preflightNodeAndBindings(cwd)
+
   // Phase 1 (T1.2) — Load .env files into process.env BEFORE any module
   // reads them. Must run before loadConfig() so theo.config.ts functions
   // referencing process.env.* resolve correctly.
@@ -60,6 +68,9 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
       ssr: config.ssr,
       // Wave 2 (T3.1) — wire typed-client plugin when services declared.
       services: config.services,
+      // T4.1 (canvas-ecosystem-refactor / ADR D6) — passthrough peer-deps
+      // that plugins import dynamically (e.g., mermaid via plugin-canvas).
+      viteOptimizeDeps: config.viteOptimizeDeps,
     })
     server = await createServer({
       root: cwd,
