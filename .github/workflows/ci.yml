@@ -86,6 +86,10 @@ jobs:
       # other. Without this step the matrix would silently break.
       - name: Rebuild native bindings (better-sqlite3 ABI guard)
         run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
+      # Build packages before running tests so the integration tests that
+      # exercise `theokit build` (cron/job manifest tests, scaffold-build-start
+      # E2E) find the bin at `packages/theo/dist/cli/index.js`.
+      - run: pnpm --filter "./packages/*" build
       - run: pnpm test
       - run: pnpm test:types
 
@@ -108,6 +112,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Rebuild native bindings (better-sqlite3 ABI guard)
         run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
+      # Build packages before tests — same rationale as `test` job above.
+      - run: pnpm --filter "./packages/*" build
       - name: Run tests with coverage thresholds
         run: pnpm test:coverage
       - name: Upload coverage report
@@ -135,6 +141,9 @@ jobs:
           git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
+      # Build packages before E2E — fixtures spawn `theokit dev` which needs
+      # the bin at `packages/theo/dist/cli/index.js`.
+      - run: pnpm --filter "./packages/*" build
       - run: npx playwright install --with-deps chromium
       - run: pnpm test:e2e
 
@@ -155,6 +164,8 @@ jobs:
           git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
+      # Build packages first so knip can resolve theokit's dist exports.
+      - run: pnpm --filter "./packages/*" build
       - run: pnpm knip
 
   dependency-audit:
@@ -225,7 +236,8 @@ jobs:
           git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      # Filter to packages/* (skip examples) — same rationale as typecheck-build.
+      - run: pnpm --filter "./packages/*" build
       - run: pnpm check:bundle
 
   e2e-postgres-templates:
