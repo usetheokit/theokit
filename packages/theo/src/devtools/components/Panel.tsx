@@ -17,14 +17,7 @@ import { RoutesTab } from './Tabs/RoutesTab.js'
 import { SettingsTab } from './Tabs/SettingsTab.js'
 import { TheoLogo } from './TheoLogo.js'
 
-const TABS: DevtoolsTab[] = [
-  'requests',
-  'routes',
-  'agents',
-  'errors',
-  'csrf-readiness',
-  'settings',
-]
+const TABS: DevtoolsTab[] = ['requests', 'routes', 'agents', 'errors', 'csrf-readiness', 'settings']
 
 // Style builder extracted to keep Panel's body under the line ceiling.
 function buildPanelStyles(

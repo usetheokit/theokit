@@ -45,8 +45,10 @@ function parseDdg(html: string): SearchResponse {
   //   <a class="result__snippet"> snippet </a>
   // The regex is intentionally loose to survive minor HTML drift.
   const blockRe = /<div\s+class="(?:[^"]*\s)?result(?:\s[^"]*)?"[\s\S]*?<\/div>/gi
-  const titleRe = /<a\s+(?:[^>]*\s)?class="(?:[^"]*\s)?result__a(?:\s[^"]*)?"\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i
-  const snippetRe = /<a\s+(?:[^>]*\s)?class="(?:[^"]*\s)?result__snippet(?:\s[^"]*)?"[^>]*>([\s\S]*?)<\/a>/i
+  const titleRe =
+    /<a\s+(?:[^>]*\s)?class="(?:[^"]*\s)?result__a(?:\s[^"]*)?"\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i
+  const snippetRe =
+    /<a\s+(?:[^>]*\s)?class="(?:[^"]*\s)?result__snippet(?:\s[^"]*)?"[^>]*>([\s\S]*?)<\/a>/i
   const results: SearchResult[] = []
   let m: RegExpExecArray | null
   while ((m = blockRe.exec(html)) !== null && results.length < MAX_RESULTS) {

@@ -221,9 +221,7 @@ export async function integrateUseTheoUI(
 
   const tailwindPlugins = normalizePluginReturn(tailwindPlugin)
   if (tailwindPlugins === null) {
-    console.warn(
-      `[theokit] @tailwindcss/vite returned unexpected shape. Skipping auto-config.`,
-    )
+    console.warn(`[theokit] @tailwindcss/vite returned unexpected shape. Skipping auto-config.`)
     return []
   }
   const uiPlugins = normalizePluginReturn(uiPlugin)

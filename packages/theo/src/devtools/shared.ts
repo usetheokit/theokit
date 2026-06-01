@@ -5,7 +5,13 @@
  */
 
 export type DevtoolsPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
-export type DevtoolsTab = 'requests' | 'routes' | 'agents' | 'errors' | 'csrf-readiness' | 'settings'
+export type DevtoolsTab =
+  | 'requests'
+  | 'routes'
+  | 'agents'
+  | 'errors'
+  | 'csrf-readiness'
+  | 'settings'
 export type DevtoolsTheme = 'light' | 'dark' | 'system'
 
 export interface RequestRecord {
