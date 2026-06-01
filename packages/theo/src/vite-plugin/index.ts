@@ -154,7 +154,16 @@ export async function theoPluginAsync(
     )
   }
 
-  return [theoPlugin(rootOrOptions), ...uiPlugins, ...servicesPlugins]
+  // G1 — app typed client (`@theo/client`). Always wired (route detection is
+  // cheap and the plugin is a no-op when `server/routes/` is absent).
+  const { appTypedClientPlugin } = await import('./app-typed-client.js')
+  const appClientPlugin = appTypedClientPlugin({
+    cwd: projectRoot,
+    serverDir: resolve(projectRoot, 'server'),
+    distDir: resolve(projectRoot, '.theo'),
+  })
+
+  return [theoPlugin(rootOrOptions), ...uiPlugins, ...servicesPlugins, appClientPlugin]
 }
 
 /**

@@ -1,6 +1,10 @@
 export { theoFetch, TheoFetchError } from './theo-fetch.js'
 export type { InferResponse, InferQuery, InferBody, TheoFetchOptions } from './theo-fetch.js'
 
+// G1 — typed-client Proxy facade over theoFetch.
+export { createAppClient } from './app-client.js'
+export type { CreateAppClientOptions } from './app-client.js'
+
 export { createBatcher } from './batch.js'
 export type {
   Batcher,
