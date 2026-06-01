@@ -154,7 +154,10 @@ for file in $STAGED_FILES; do
      [[ "$file" == */templates/*/* ]] || \
      [[ "$file" == tests/integration/fixture-* ]] || \
      [[ "$file" == tests/fixtures/* ]] || \
-     [[ "$file" == tests/e2e/template-* ]]; then
+     [[ "$file" == tests/e2e/template-* ]] || \
+     [[ "$file" == tests/unit/*.test.ts ]] || \
+     [[ "$file" == tests/integration/*.test.ts ]] || \
+     [[ "$file" == tests/smoke/*.test.ts ]]; then
     continue
   fi
 

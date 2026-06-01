@@ -29,6 +29,11 @@ const ALLOWLIST = new Set([
   'BlueOak-1.0.0',
   'WTFPL',
   'PSF-2.0',
+  // MPL-2.0 is file-level copyleft (not viral like GPL). Compatible with
+  // permissive distribution because modifications stay in the licensed file
+  // only — does not propagate to the consumer's code. Used by `lightningcss`
+  // (transitive via Tailwind v4 / Vite ecosystem).
+  'MPL-2.0',
 ])
 
 // Strip surrounding parentheses with simple character iteration — keeps

@@ -68,11 +68,7 @@ test.describe('examples/full-stack-agent — item #6 demo', () => {
 
     // Wait for SSE error (placeholder key → 401) to flush.
     await expect(
-      page
-        .getByText(
-          /Agent error|Stream ended|openrouter|auth_failed/i,
-        )
-        .first(),
+      page.getByText(/Agent error|Stream ended|openrouter|auth_failed/i).first(),
     ).toBeVisible({ timeout: 15_000 })
 
     const cookies = await context.cookies()
@@ -91,11 +87,7 @@ test.describe('examples/full-stack-agent — item #6 demo', () => {
     await composer.pressSequentially('first', { delay: 50 })
     await composer.press('Enter')
     await expect(
-      page
-        .getByText(
-          /Agent error|Stream ended|openrouter|auth_failed/i,
-        )
-        .first(),
+      page.getByText(/Agent error|Stream ended|openrouter|auth_failed/i).first(),
     ).toBeVisible({ timeout: 15_000 })
     const before = (await context.cookies()).find((c) => c.name === 'theo_conversation')!.value
 
@@ -107,11 +99,7 @@ test.describe('examples/full-stack-agent — item #6 demo', () => {
     await composer2.pressSequentially('second', { delay: 50 })
     await composer2.press('Enter')
     await expect(
-      page
-        .getByText(
-          /Agent error|Stream ended|openrouter|auth_failed/i,
-        )
-        .first(),
+      page.getByText(/Agent error|Stream ended|openrouter|auth_failed/i).first(),
     ).toBeVisible({ timeout: 15_000 })
 
     const after = (await context.cookies()).find((c) => c.name === 'theo_conversation')!.value
@@ -138,11 +126,7 @@ test.describe('examples/full-stack-agent — item #6 demo', () => {
     await composer.pressSequentially('what time is it', { delay: 50 })
     await composer.press('Enter')
     await expect(
-      page
-        .getByText(
-          /Agent error|Stream ended|openrouter|auth_failed/i,
-        )
-        .first(),
+      page.getByText(/Agent error|Stream ended|openrouter|auth_failed/i).first(),
     ).toBeVisible({ timeout: 15_000 })
     // Filter known dev-mode artifacts:
     //   • Vite React Refresh inline script CSP violation (report-only doesn't

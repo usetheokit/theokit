@@ -27,8 +27,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
@@ -47,6 +45,12 @@ jobs:
             echo "::error::NPM_TOKEN secret is not configured."
             exit 1
           fi
+
+      # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth against
+      # NODE_MODULE_VERSION mismatch. CRITICAL for release flows:
+      # a silent ABI mismatch could publish a broken release.
+      - name: Rebuild native bindings (better-sqlite3 ABI guard)
+        run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
 
       - name: Full validation chain (typecheck + lint + tests)
         run: |
