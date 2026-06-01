@@ -40,6 +40,10 @@ export default defineConfig([
       'cac',
       'busboy',
       'superjson',
+      // G1 — `typescript` used by server/scan/detect-http-methods.ts for AST-based
+      // HTTP method detection. CJS package with dynamic require('fs'); cannot be
+      // bundled into ESM output. Reachable via vite/@vitejs/plugin-react transitive.
+      'typescript',
     ],
   },
   {
@@ -64,6 +68,10 @@ export default defineConfig([
       'cac',
       'busboy',
       'superjson',
+      // G1 — `typescript` used by server/scan/detect-http-methods.ts for AST-based
+      // HTTP method detection. CJS package with dynamic require('fs'); cannot be
+      // bundled into ESM output. Reachable via vite/@vitejs/plugin-react transitive.
+      'typescript',
     ],
   },
 ])

@@ -7,6 +7,7 @@ import { extname, join, relative } from 'node:path'
 
 import { walkSourceFiles } from '../_internal/scan-walker.js'
 
+import { detectExportedHttpMethods } from './detect-http-methods.js'
 import { compilePattern, type ServerRouteNode } from './match.js'
 
 const ROUTE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
@@ -43,11 +44,13 @@ export function scanServerRoutes(serverDir: string): ServerRouteNode[] {
   walkSourceFiles(routesDir, { extensions: ROUTE_EXTENSIONS }, (absPath) => {
     const routePath = fileToRoutePath(absPath, routesDir)
     const { pattern, paramNames } = compilePattern(routePath)
+    const methods = detectExportedHttpMethods(absPath)
     results.push({
       filePath: absPath,
       routePath,
       paramNames,
       pattern,
+      methods,
     })
   })
 
