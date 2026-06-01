@@ -29,6 +29,7 @@ const ENV_KEYS_TO_CLEAR = [
 
 function clearLLMEnv() {
   for (const k of ENV_KEYS_TO_CLEAR) {
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- test cleanup over fixed env key allowlist
     delete process.env[k]
   }
 }
@@ -47,8 +48,12 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
 
   afterEach(() => {
     for (const k of ENV_KEYS_TO_CLEAR) {
-      if (originalEnv[k] === undefined) delete process.env[k]
-      else process.env[k] = originalEnv[k]
+      if (originalEnv[k] === undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- test cleanup over fixed env key allowlist
+        delete process.env[k]
+      } else {
+        process.env[k] = originalEnv[k]
+      }
     }
     resetProviderRegistry()
   })
@@ -56,7 +61,7 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
   describe('resolveProvider() — env-driven Strategy', () => {
     it('should resolve OpenRouter when OPENROUTER_API_KEY is present', () => {
       // Given: only OPENROUTER_API_KEY is set,
-      process.env['OPENROUTER_API_KEY'] = 'sk-or-test'
+      process.env.OPENROUTER_API_KEY = 'sk-or-test'
       // When: resolveProvider() is called,
       const r = resolveProvider()
       // Then: OpenRouter wins with correct baseUrl.
@@ -66,14 +71,14 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
     })
 
     it('should resolve OpenAI when only OPENAI_API_KEY is present', () => {
-      process.env['OPENAI_API_KEY'] = 'sk-test'
+      process.env.OPENAI_API_KEY = 'sk-test'
       const r = resolveProvider()
       expect(r.name).toBe('openai')
       expect(r.baseUrl).toBe('https://api.openai.com/v1')
     })
 
     it('should resolve Anthropic when only ANTHROPIC_API_KEY is present', () => {
-      process.env['ANTHROPIC_API_KEY'] = 'sk-ant-test'
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test'
       const r = resolveProvider()
       expect(r.name).toBe('anthropic')
       expect(r.baseUrl).toBe('https://api.anthropic.com')
@@ -81,9 +86,9 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
 
     it('should PRIORITIZE OpenRouter when multiple env vars present', () => {
       // Given: OpenRouter AND OpenAI keys present,
-      process.env['OPENROUTER_API_KEY'] = 'sk-or-test'
-      process.env['OPENAI_API_KEY'] = 'sk-test'
-      process.env['ANTHROPIC_API_KEY'] = 'sk-ant-test'
+      process.env.OPENROUTER_API_KEY = 'sk-or-test'
+      process.env.OPENAI_API_KEY = 'sk-test'
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test'
       // When: resolve,
       const r = resolveProvider()
       // Then: priority order — OpenRouter wins (gateway > direct).
@@ -100,8 +105,8 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
 
     it('should treat empty-string env var as absent', () => {
       // Given: KEY presente mas vazia,
-      process.env['OPENROUTER_API_KEY'] = ''
-      process.env['OPENAI_API_KEY'] = 'sk-test'
+      process.env.OPENROUTER_API_KEY = ''
+      process.env.OPENAI_API_KEY = 'sk-test'
       // When: resolve,
       const r = resolveProvider()
       // Then: OpenAI (next priority) wins — empty string treated como absent.
@@ -115,7 +120,7 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
     })
 
     it('should return resolved when env present', () => {
-      process.env['OPENROUTER_API_KEY'] = 'sk-or-test'
+      process.env.OPENROUTER_API_KEY = 'sk-or-test'
       const r = tryResolveProvider()
       expect(r).not.toBeNull()
       expect(r?.name).toBe('openrouter')
@@ -144,8 +149,8 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
       expect(list[0]?.name).toBe('self-hosted') // priority 0 wins
 
       // Resolve respects new priority
-      process.env['SELF_HOSTED_API_KEY'] = 'custom-token'
-      process.env['OPENROUTER_API_KEY'] = 'sk-or-test'
+      process.env.SELF_HOSTED_API_KEY = 'custom-token'
+      process.env.OPENROUTER_API_KEY = 'sk-or-test'
       const r = resolveProvider()
       expect(r.name).toBe('self-hosted')
     })

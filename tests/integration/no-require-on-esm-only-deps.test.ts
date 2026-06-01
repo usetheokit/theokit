@@ -13,7 +13,7 @@
  *   - `import.meta.resolve(...)` (Node 22+ stable)
  *   - Async `import('@usetheo/ui')`
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -71,9 +71,9 @@ describe('D13: zero require.resolve / require on ESM-only deps in production cod
       //   localRequire.resolve('@usetheo/ui...') — named CJS require helper
       //   createRequire(...).resolve('@usetheo/ui...') — inline pattern
       const patterns = [
-        new RegExp(`\\brequire\\s*\\(\\s*[\\'\"\`]${escaped}`, 'g'),
-        new RegExp(`\\brequire\\.resolve\\s*\\(\\s*[\\'\"\`]${escaped}`, 'g'),
-        new RegExp(`\\.resolve\\s*\\(\\s*[\\'\"\`]${escaped}`, 'g'),
+        new RegExp(`\\brequire\\s*\\(\\s*['"\`]${escaped}`, 'g'),
+        new RegExp(`\\brequire\\.resolve\\s*\\(\\s*['"\`]${escaped}`, 'g'),
+        new RegExp(`\\.resolve\\s*\\(\\s*['"\`]${escaped}`, 'g'),
       ]
 
       for (const file of files) {
@@ -105,9 +105,7 @@ describe('D13: zero require.resolve / require on ESM-only deps in production cod
         violations,
         violations.length > 0
           ? `D13 violations found (${violations.length}):\n` +
-              violations
-                .map((v) => `  ${v.file}:${v.line}: ${v.text}`)
-                .join('\n') +
+              violations.map((v) => `  ${v.file}:${v.line}: ${v.text}`).join('\n') +
               `\n\nSubstitute by:\n` +
               `  - existsSync(join(cwd, 'node_modules', '@usetheo/ui', ...))  // filesystem probe\n` +
               `  - await import('@usetheo/ui')  // async ESM import\n` +

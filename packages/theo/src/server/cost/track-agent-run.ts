@@ -1,3 +1,5 @@
+import type { AgentRunRecord } from '../../devtools/shared.js'
+
 import type { UsageRecord, UsageStorageAdapter } from './cost-types.js'
 
 export interface TrackAgentRunInput {
@@ -53,7 +55,7 @@ export async function trackAgentRun(
   if (__IS_DEV) {
     try {
       const mod = (await import('../../devtools/dispatcher.js')) as {
-        dispatcher: { onAgentRun: (r: import('../../devtools/shared.js').AgentRunRecord) => void }
+        dispatcher: { onAgentRun: (r: AgentRunRecord) => void }
       }
       mod.dispatcher.onAgentRun({
         // eslint-disable-next-line sonarjs/pseudo-random -- non-secret correlation id
