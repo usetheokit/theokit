@@ -38,12 +38,14 @@ describe('theokit/packages/theo/package.json — @usetheo/ui peerDep contract (A
     expect(pkg.peerDependencies?.['@usetheo/ui']).toBeDefined()
   })
 
-  it('should declare a caret pre-release range for @usetheo/ui', () => {
-    // Given that UI is in 0.x with -next.X tags,
+  it('should declare a caret 0.x range for @usetheo/ui (pre-release or stable)', () => {
+    // Given that UI is in 0.x (pre-1.0 — breaking changes allowed within 0.x),
     // When we declare the range,
-    // Then it must use caret pre-release semantics (e.g. ^0.12.0-next.0).
+    // Then it must use caret semantics with optional pre-release suffix.
+    // Examples: ^0.12.0-next.0 (during -next ramp) OR ^0.13.0 (post-stable publish).
+    // Both are valid under ADR 0018: the gate is caret + 0.x, not the suffix.
     const range = pkg.peerDependencies?.['@usetheo/ui'] ?? ''
-    expect(range).toMatch(/^\^\d+\.\d+\.\d+-[a-z]+\.\d+$/)
+    expect(range).toMatch(/^\^0\.\d+\.\d+(-[a-z]+\.\d+)?$/)
   })
 
   it('should mark @usetheo/ui as optional in peerDependenciesMeta', () => {
