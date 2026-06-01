@@ -5,7 +5,6 @@ import type { z } from 'zod'
 import {
   ActionError,
   ActionInputError,
-  isActionError,
   type ActionErrorCode,
 } from '../../core/contracts/action-protocol.js'
 import { parseRequestBody, type ParsedBody } from '../body-parser.js'
@@ -391,6 +390,27 @@ function deriveActionNameFromPath(filePath: string): string {
   return base.replace(/\.[jt]sx?$/, '')
 }
 
+/**
+ * Duck-typed guard for ActionError-shaped throws. Necessary because Vite SSR
+ * may load multiple module copies of `core/contracts/action-protocol.ts` when
+ * the fixture resolves `theokit/server` via a different path than the runtime
+ * import — `err instanceof ActionError` then fails even though the user
+ * legitimately threw `new ActionError(...)`.
+ *
+ * Server-only: only invoked on handler-thrown errors (trust boundary already
+ * inside the action runtime). Not safe to use on client-parsed JSON — for
+ * that path keep `isActionError` (the instanceof guard) from action-protocol.
+ */
+function isActionErrorLike(err: unknown): err is ActionError {
+  if (err === null || typeof err !== 'object') return false
+  const obj = err as Record<string, unknown>
+  return (
+    (obj.type === 'TheoActionError' || obj.type === 'TheoActionInputError') &&
+    typeof obj.code === 'string' &&
+    typeof obj.status === 'number'
+  )
+}
+
 interface HandlerCtx {
   actionConfig: ActionConfig
   actionName: string
@@ -417,7 +437,11 @@ async function runActionHandler(args: HandlerCtx): Promise<void> {
   } catch (err) {
     // Handler-thrown ActionError → use the typed envelope; other throws bubble
     // up to executeActionWithOptions for handleActionError fallback chain.
-    if (isActionError(err)) {
+    // Duck-type the `type` discriminator (not instanceof): Vite SSR can load
+    // multiple module copies of action-protocol.ts when fixture and runtime
+    // resolve different paths; `err instanceof ActionError` then fails even
+    // when the handler legitimately threw via `new ActionError(...)`.
+    if (isActionErrorLike(err)) {
       writeSerialized(args.res, serializeActionResult({ data: undefined, error: err }))
       await emitActionCallTelemetry(args.actionName, args.startedAt, args.input, {
         status: 'error',

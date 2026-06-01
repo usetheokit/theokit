@@ -17,6 +17,21 @@ export * from './define/index.js'
 export * from './http/index.js'
 export * from './scan/index.js'
 
+// G3 action protocol: ActionError + ActionInputError + helpers, re-exported
+// from core/contracts for consumer ergonomics (`from 'theokit/server'`).
+export {
+  ActionError,
+  ActionInputError,
+  extractUniversalIssues,
+  isActionError,
+  isInputError,
+  type ActionErrorCode,
+  type ActionManifestEntry,
+  type ActionResult,
+  type SerializedActionResult,
+  type UniversalZodIssue,
+} from '../core/contracts/action-protocol.js'
+
 // Subdomain sub-barrels (consumers can also import direct: theokit/server/<sub>)
 export * from './agent/index.js'
 export * from './auth/index.js'
