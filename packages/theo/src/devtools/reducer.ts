@@ -17,6 +17,54 @@ function appendCapped<T>(arr: T[], item: T, cap = RING_BUFFER_CAP): T[] {
   return [item, ...arr].slice(0, cap)
 }
 
+function reduceAppend(state: DevtoolsState, action: DevtoolsAction): DevtoolsState | null {
+  switch (action.type) {
+    case 'REQUEST_ADD':
+      return { ...state, requests: appendCapped(state.requests, action.request) }
+    case 'ERROR_ADD':
+      return { ...state, errors: appendCapped(state.errors, action.error) }
+    case 'AGENT_RUN_ADD':
+      return { ...state, agentRuns: appendCapped(state.agentRuns, action.run) }
+    case 'ACTION_CALL_ADD':
+      return { ...state, actionCalls: appendCapped(state.actionCalls, action.record) }
+    default:
+      return null
+  }
+}
+
+function reduceReset(state: DevtoolsState, action: DevtoolsAction): DevtoolsState | null {
+  switch (action.type) {
+    case 'RESET_REQUESTS':
+      return { ...state, requests: [] }
+    case 'RESET_ERRORS':
+      return { ...state, errors: [] }
+    case 'RESET_AGENT_RUNS':
+      return { ...state, agentRuns: [] }
+    case 'RESET_ACTION_CALLS':
+      return { ...state, actionCalls: [] }
+    default:
+      return null
+  }
+}
+
+function csrfWarnToErrorRecord(payload: {
+  method: string
+  path: string
+  reason: string
+  code?: string
+  docsUrl?: string
+}): ErrorRecord {
+  return {
+    // eslint-disable-next-line sonarjs/pseudo-random -- non-secret correlation id for devtools UI
+    id: `csrf-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`,
+    type: 'csrf.warn',
+    message: `CSRF warn: ${payload.method} ${payload.path} — ${payload.reason}`,
+    code: payload.code,
+    docsUrl: payload.docsUrl,
+    timestamp: Date.now(),
+  }
+}
+
 export function devtoolsReducer(state: DevtoolsState, action: DevtoolsAction): DevtoolsState {
   switch (action.type) {
     case 'TOGGLE_PANEL':
@@ -29,36 +77,14 @@ export function devtoolsReducer(state: DevtoolsState, action: DevtoolsAction): D
       return { ...state, position: action.position }
     case 'SET_THEME':
       return { ...state, theme: action.theme }
-    case 'REQUEST_ADD':
-      return { ...state, requests: appendCapped(state.requests, action.request) }
-    case 'ERROR_ADD':
-      return { ...state, errors: appendCapped(state.errors, action.error) }
-    case 'CSRF_WARN': {
-      const errorRecord: ErrorRecord = {
-        // eslint-disable-next-line sonarjs/pseudo-random -- non-secret correlation id for devtools UI
-        id: `csrf-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`,
-        type: 'csrf.warn',
-        message: `CSRF warn: ${action.payload.method} ${action.payload.path} — ${action.payload.reason}`,
-        code: action.payload.code,
-        docsUrl: action.payload.docsUrl,
-        timestamp: Date.now(),
-      }
-      return { ...state, errors: appendCapped(state.errors, errorRecord) }
-    }
+    case 'CSRF_WARN':
+      return { ...state, errors: appendCapped(state.errors, csrfWarnToErrorRecord(action.payload)) }
     case 'MANIFEST_UPDATED':
       return { ...state, routeManifest: action.manifest }
     case 'ROUTE_MATCHED':
       return { ...state, activeRoutePath: action.path, activeChain: action.chain }
-    case 'AGENT_RUN_ADD':
-      return { ...state, agentRuns: appendCapped(state.agentRuns, action.run) }
-    case 'RESET_REQUESTS':
-      return { ...state, requests: [] }
-    case 'RESET_ERRORS':
-      return { ...state, errors: [] }
-    case 'RESET_AGENT_RUNS':
-      return { ...state, agentRuns: [] }
     default:
-      return state
+      return reduceAppend(state, action) ?? reduceReset(state, action) ?? state
   }
 }
 

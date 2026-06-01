@@ -9,6 +9,7 @@ export type DevtoolsTab =
   | 'requests'
   | 'routes'
   | 'agents'
+  | 'actions'
   | 'errors'
   | 'csrf-readiness'
   | 'settings'
@@ -82,6 +83,30 @@ export interface AgentRunRecord {
   status: 'finished' | 'error' | 'aborted'
 }
 
+/**
+ * T5.1 — Per-action-call telemetry surfaced to the Actions devtools tab.
+ *
+ * Emitted by `action-execute.ts` (server-side) via the dispatcher in dev
+ * mode; prod tree-shakes the wire (mirrors AgentRunRecord pattern).
+ * Field-level error pins consume `error.fields` directly when status='error'
+ * (per plan ADR D6).
+ */
+export interface ActionCallRecord {
+  id: string
+  timestamp: number
+  name: string
+  input: unknown
+  output?: unknown
+  error?: {
+    code: string
+    message: string
+    fields?: Record<string, string[]>
+    issues?: unknown[]
+  }
+  durationMs: number
+  status: 'success' | 'error'
+}
+
 export interface DevtoolsState {
   open: boolean
   visible: boolean
@@ -91,6 +116,7 @@ export interface DevtoolsState {
   requests: RequestRecord[]
   errors: ErrorRecord[]
   agentRuns: AgentRunRecord[]
+  actionCalls: ActionCallRecord[]
   routeManifest: RouteManifest | null
   activeRoutePath: string | null
   activeChain: string[]
@@ -108,9 +134,11 @@ export type DevtoolsAction =
   | { type: 'MANIFEST_UPDATED'; manifest: RouteManifest }
   | { type: 'ROUTE_MATCHED'; path: string; chain: string[] }
   | { type: 'AGENT_RUN_ADD'; run: AgentRunRecord }
+  | { type: 'ACTION_CALL_ADD'; record: ActionCallRecord }
   | { type: 'RESET_REQUESTS' }
   | { type: 'RESET_ERRORS' }
   | { type: 'RESET_AGENT_RUNS' }
+  | { type: 'RESET_ACTION_CALLS' }
 
 export const RING_BUFFER_CAP = 50
 export const MAX_QUEUE_SIZE = 100
@@ -125,6 +153,7 @@ export const initialState: DevtoolsState = {
   requests: [],
   errors: [],
   agentRuns: [],
+  actionCalls: [],
   routeManifest: null,
   activeRoutePath: null,
   activeChain: [],
@@ -136,3 +165,4 @@ export const CHANNEL_CSRF_WARN = 'theo:devtools:csrf.warn' as const
 export const CHANNEL_MANIFEST = 'theo:devtools:manifest' as const
 export const CHANNEL_ROUTE_MATCHED = 'theo:devtools:route-matched' as const
 export const CHANNEL_AGENT_RUN = 'theo:devtools:agent.run' as const
+export const CHANNEL_ACTION_CALL = 'theo:devtools:action.call' as const
