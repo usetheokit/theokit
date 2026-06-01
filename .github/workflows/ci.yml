@@ -52,7 +52,11 @@ jobs:
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
       # imports from `packages/theo/dist/*` to validate the npm publish
       # surface — those files don't exist until build runs.
-      - run: pnpm build
+      # Filter to packages/* only: `pnpm -r build` would walk examples
+      # too, which call `theokit build` (needs the bin from packages/theo,
+      # but the binstub points to dist/cli/index.js which doesn't exist
+      # until the theo package finishes building → ordering blow-up).
+      - run: pnpm --filter "./packages/*" build
       - run: pnpm typecheck
 
   test:
