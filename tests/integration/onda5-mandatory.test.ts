@@ -28,7 +28,7 @@ describe('Onda 5 — Middleware + Context', () => {
     expect(data.requestId.length).toBeGreaterThan(0)
   })
 
-  // Teste 2 — Context disponível em action
+  // Teste 2 — Context disponível em action (T1.3 sub-C: body is devalue-encoded)
   it('ctx.requestId exists in action handler', async () => {
     const res = await fetch(`http://localhost:${port}/api/__actions/ctx-test/testAction`, {
       method: 'POST',
@@ -36,7 +36,11 @@ describe('Onda 5 — Middleware + Context', () => {
       body: JSON.stringify({ value: 'hello' }),
     })
     expect(res.status).toBe(200)
-    const data = await res.json()
+    // @ts-expect-error — devalue lacks .d.ts at this resolved path; runtime is fine.
+    const mod = (await import('../../packages/theo/node_modules/devalue/index.js')) as {
+      parse: (s: string) => unknown
+    }
+    const data = mod.parse(await res.text()) as { requestId: unknown; value: unknown }
     expect(data.requestId).toBeDefined()
     expect(data.value).toBe('hello')
   })
