@@ -19,3 +19,20 @@ export type {
 } from './agent-events.js'
 export type { RouteConfig } from './route-config.js'
 export type { RouteNode } from './route-node.js'
+
+// Action protocol (G3 / T0.1). Types separated from runtime so type-only
+// consumers tree-shake the classes out.
+export type {
+  ActionErrorCode,
+  ActionManifestEntry,
+  ActionResult,
+  SerializedActionResult,
+  UniversalZodIssue,
+} from './action-protocol.js'
+export {
+  ActionError,
+  ActionInputError,
+  extractUniversalIssues,
+  isActionError,
+  isInputError,
+} from './action-protocol.js'
