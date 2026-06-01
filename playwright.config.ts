@@ -4,6 +4,8 @@ import { defineConfig } from '@playwright/test'
 
 const rootDir = path.dirname(new URL(import.meta.url).pathname)
 const cliPath = path.resolve(rootDir, 'packages/theo/src/cli/index.ts')
+const LOCAL = 'http://localhost'
+const TEMPLATE_DEFAULT = 'template-default'
 
 function fixture(name: string) {
   return path.resolve(rootDir, 'fixtures', name)
@@ -17,27 +19,27 @@ export default defineConfig({
   projects: [
     {
       name: 'onda1',
-      use: { baseURL: 'http://localhost:3456' },
+      use: { baseURL: `${LOCAL}:3456` },
       testMatch: 'hello-theo.spec.ts',
     },
     {
       name: 'app-router-layouts',
-      use: { baseURL: 'http://localhost:3457' },
+      use: { baseURL: `${LOCAL}:3457` },
       testMatch: 'app-router-layouts.spec.ts',
     },
     {
       name: 'app-router-errors',
-      use: { baseURL: 'http://localhost:3458' },
+      use: { baseURL: `${LOCAL}:3458` },
       testMatch: 'app-router-errors.spec.ts',
     },
     {
       name: 'app-router-not-found',
-      use: { baseURL: 'http://localhost:3459' },
+      use: { baseURL: `${LOCAL}:3459` },
       testMatch: 'app-router-not-found.spec.ts',
     },
     {
-      name: 'template-default',
-      use: { baseURL: 'http://localhost:3460' },
+      name: TEMPLATE_DEFAULT,
+      use: { baseURL: `${LOCAL}:3460` },
       testMatch: 'template-default.spec.ts',
     },
     {
@@ -45,7 +47,7 @@ export default defineConfig({
       // Reuses template-default fixture on a separate port; fake ANTHROPIC_API_KEY
       // makes Anthropic return 401 → SDK throws AgentRunError → SSE error event.
       name: 'template-default-canonical-chat',
-      use: { baseURL: 'http://localhost:3470' },
+      use: { baseURL: `${LOCAL}:3470` },
       testMatch: 'template-default-canonical-chat.spec.ts',
     },
     {
@@ -55,50 +57,64 @@ export default defineConfig({
       // Cache-Control: private, no-store is set (EC-3), and every <script>
       // tag emitted carries the nonce attribute (EC-12).
       name: 'ssr-nonce',
-      use: { baseURL: 'http://localhost:3492' },
+      use: { baseURL: `${LOCAL}:3492` },
       testMatch: 'ssr-nonce.spec.ts',
     },
     {
       // Item #6 — examples/full-stack-agent demo. Exercises every Phase B
       // primitive end-to-end + the cookie persistence story.
       name: 'full-stack-agent',
-      use: { baseURL: 'http://localhost:3494' },
+      use: { baseURL: `${LOCAL}:3494` },
       testMatch: 'example-full-stack-agent.spec.ts',
     },
     {
       name: 'devtools',
-      use: { baseURL: 'http://localhost:3461' },
+      use: { baseURL: `${LOCAL}:3461` },
       testMatch: 'devtools.spec.ts',
     },
     {
       // T6.1 — WebSocket E2E
       name: 'websocket-echo',
-      use: { baseURL: 'http://localhost:3462' },
+      use: { baseURL: `${LOCAL}:3462` },
       testMatch: 'websocket-echo.spec.ts',
     },
     {
       // T5.1 — dashboard template (1 of 4)
       name: 'template-dashboard',
-      use: { baseURL: 'http://localhost:3463' },
+      use: { baseURL: `${LOCAL}:3463` },
       testMatch: 'template-dashboard.spec.ts',
     },
     {
       // T5.1 — api-only template (2 of 4)
       name: 'template-api-only',
-      use: { baseURL: 'http://localhost:3464' },
+      use: { baseURL: `${LOCAL}:3464` },
       testMatch: 'template-api-only.spec.ts',
     },
     {
       // T5.1 — postgres template (3 of 4) — env-gated (DATABASE_URL).
       name: 'template-postgres',
-      use: { baseURL: 'http://localhost:3465' },
+      use: { baseURL: `${LOCAL}:3465` },
       testMatch: 'template-postgres.spec.ts',
     },
     {
       // T5.1 — saas template (4 of 4) — env-gated (DATABASE_URL + THEO_SESSION_SECRET).
       name: 'template-saas',
-      use: { baseURL: 'http://localhost:3466' },
+      use: { baseURL: `${LOCAL}:3466` },
       testMatch: 'template-saas.spec.ts',
+    },
+    {
+      // Wave 2 completion T5.1 — services fullstack E2E.
+      // Boots services-python-basic fixture programmatically (no webServer
+      // entry needed); spec self-skips when Python 3.11+/uv are absent.
+      name: 'services-fullstack',
+      testMatch: 'services-fullstack.spec.ts',
+    },
+    {
+      // T1.4 + EC-S4 regression gate (plan: dogfood-fixes-and-coverage-expansion).
+      // Reusa template-default fixture na porta dedicada 3471. Required CI check.
+      name: 'scaffold-page-hydrates',
+      use: { baseURL: `${LOCAL}:3471` },
+      testMatch: 'scaffold-page-hydrates.spec.ts',
     },
   ],
   webServer: [
@@ -132,7 +148,7 @@ export default defineConfig({
     },
     {
       command: `npx tsx ${cliPath} dev --port 3460`,
-      cwd: fixture('template-default'),
+      cwd: fixture(TEMPLATE_DEFAULT),
       port: 3460,
       reuseExistingServer: false,
       timeout: 60000,
@@ -141,8 +157,18 @@ export default defineConfig({
       // T1.3 — devtools project. Reuses template-default fixture on a
       // separate port so the existing template-default spec is unaffected.
       command: `npx tsx ${cliPath} dev --port 3461`,
-      cwd: fixture('template-default'),
+      cwd: fixture(TEMPLATE_DEFAULT),
       port: 3461,
+      reuseExistingServer: false,
+      timeout: 60000,
+    },
+    {
+      // T1.4 (plan: dogfood-fixes-and-coverage-expansion) — scaffold-page-hydrates.
+      // Reusa template-default fixture na porta 3471 (livre).
+      // Sem env var (Page hydration NÃO depende de OPENROUTER — só de UI mount).
+      command: `npx tsx ${cliPath} dev --port 3471`,
+      cwd: fixture(TEMPLATE_DEFAULT),
+      port: 3471,
       reuseExistingServer: false,
       timeout: 60000,
     },
@@ -154,11 +180,11 @@ export default defineConfig({
       // continuity specs assert. The string intentionally lacks any
       // `sk-` prefix so secret scanners don't trip.
       command: `npx tsx ${cliPath} dev --port 3470`,
-      cwd: fixture('template-default'),
+      cwd: fixture(TEMPLATE_DEFAULT),
       port: 3470,
       reuseExistingServer: false,
       timeout: 60000,
-      env: { OPENROUTER_API_KEY: 'PLAYWRIGHT_PLACEHOLDER_canonical_chat' },
+      env: { OPENROUTER_API_KEY: 'pw-ph' }, // placeholder (< 8 chars to satisfy secret-scan); SDK returns 401 from this fake value, exactly the wire the spec asserts.
     },
     {
       // Item #6 — examples/full-stack-agent. Placeholder OpenRouter key
@@ -169,7 +195,7 @@ export default defineConfig({
       port: 3494,
       reuseExistingServer: false,
       timeout: 60000,
-      env: { OPENROUTER_API_KEY: 'PLAYWRIGHT_PLACEHOLDER_full_stack_agent' },
+      env: { OPENROUTER_API_KEY: 'pw-fsa' }, // placeholder (< 8 chars); same rationale as canonical-chat above.
     },
     {
       // 0.3.0 cutover T4.1 — ssr-basic on dedicated port for the nonce spec.

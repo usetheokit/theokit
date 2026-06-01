@@ -3,7 +3,7 @@
  * @import must be in a CSS file (not JS) so Tailwind crawls the import
  * graph and processes @theme tokens correctly.
  */
-@import "@usetheo/ui/styles.css";
+@import '@usetheo/ui/styles.css';
 
 html,
 body,

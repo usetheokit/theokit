@@ -67,7 +67,9 @@ describe('integrateUseTheoUI', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const plugins = await integrateUseTheoUI(TEST_ROOT)
     expect(plugins).toEqual([])
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/@tailwindcss\/vite is not installed/))
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/@tailwindcss\/vite is not installed/),
+    )
     warnSpy.mockRestore()
   })
 
@@ -107,33 +109,29 @@ describe('integrateUseTheoUI', () => {
 // guards themselves are pure functions and can be tested directly.
 describe('integrateUseTheoUI — shape guards (EC-5, EC-6)', () => {
   it('EC-6: isValidPlugin rejects null', async () => {
-    const { _isValidPluginForTest } = await import(
-      '../../packages/theo/src/vite-plugin/integrate-ui.js'
-    )
+    const { _isValidPluginForTest } =
+      await import('../../packages/theo/src/vite-plugin/integrate-ui.js')
     expect(_isValidPluginForTest(null)).toBe(false)
   })
 
   it('EC-6: isValidPlugin rejects array (no name property on the array itself)', async () => {
-    const { _isValidPluginForTest } = await import(
-      '../../packages/theo/src/vite-plugin/integrate-ui.js'
-    )
+    const { _isValidPluginForTest } =
+      await import('../../packages/theo/src/vite-plugin/integrate-ui.js')
     expect(_isValidPluginForTest([{ name: 'a' }, { name: 'b' }])).toBe(false)
     expect(_isValidPluginForTest([])).toBe(false)
   })
 
   it('EC-6: isValidPlugin rejects non-object', async () => {
-    const { _isValidPluginForTest } = await import(
-      '../../packages/theo/src/vite-plugin/integrate-ui.js'
-    )
+    const { _isValidPluginForTest } =
+      await import('../../packages/theo/src/vite-plugin/integrate-ui.js')
     expect(_isValidPluginForTest('string')).toBe(false)
     expect(_isValidPluginForTest(42)).toBe(false)
     expect(_isValidPluginForTest(undefined)).toBe(false)
   })
 
   it('EC-6: isValidPlugin accepts object with .name string', async () => {
-    const { _isValidPluginForTest } = await import(
-      '../../packages/theo/src/vite-plugin/integrate-ui.js'
-    )
+    const { _isValidPluginForTest } =
+      await import('../../packages/theo/src/vite-plugin/integrate-ui.js')
     expect(_isValidPluginForTest({ name: 'my-plugin' })).toBe(true)
   })
 })

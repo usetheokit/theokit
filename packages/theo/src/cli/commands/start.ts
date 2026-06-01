@@ -21,6 +21,7 @@ import { createPluginRunnerFromConfig } from '../../server/plugins/load-plugins.
 import { createRateLimiter } from '../../server/rate-limit/rate-limit.js'
 import { createProductionLoader } from '../../server/scan/module-loader.js'
 import { resolveTransformer } from '../../server/transformer.js'
+import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 import {
   configureAgentRegistryFromConfig,
@@ -42,6 +43,8 @@ interface StartOptions {
 
 export async function startCommand(options: StartOptions): Promise<void> {
   const cwd = process.cwd()
+  // Preflight (FIRST — BEFORE anything that touches native bindings).
+  preflightNodeAndBindings(cwd)
   loadEnv({ cwd, mode: 'production' })
   const config = await loadConfig(cwd)
 
