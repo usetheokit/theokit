@@ -13,6 +13,7 @@
  * NEVER use dangerouslySetInnerHTML in any devtools component — see plan EC-20.
  */
 import {
+  type ActionCallRecord,
   type AgentRunRecord,
   type CsrfWarnPayload,
   type DevtoolsAction,
@@ -82,6 +83,9 @@ export const dispatcher = {
   }),
   onAgentRun: queuable((d: Dispatch, run: AgentRunRecord) => {
     d({ type: 'AGENT_RUN_ADD', run })
+  }),
+  onActionCall: queuable((d: Dispatch, record: ActionCallRecord) => {
+    d({ type: 'ACTION_CALL_ADD', record })
   }),
 
   /**
