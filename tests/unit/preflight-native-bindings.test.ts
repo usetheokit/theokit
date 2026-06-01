@@ -3,10 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import {
-  findRebuildCwd,
-  ensureNativeBindings,
-} from '../../scripts/preflight-native-bindings.mjs'
+import { findRebuildCwd, ensureNativeBindings } from '../../scripts/preflight-native-bindings.mjs'
 
 /**
  * T1.2 TDD — theokit native bindings preflight unit tests.

@@ -66,10 +66,7 @@ describe('T4.1 — zero-config hints', () => {
   })
 
   it('hint fires when server/ file imports dotenv', async () => {
-    writeFileSync(
-      join(tmpDir, 'server/load-env.ts'),
-      `import 'dotenv/config'\nexport const x = 1`,
-    )
+    writeFileSync(join(tmpDir, 'server/load-env.ts'), `import 'dotenv/config'\nexport const x = 1`)
     const report = await scanUpgradeReadiness({ cwd: tmpDir, allowWarnings: true })
     const hint = report.violations.find((v) => v.rule === 'handrolled-dotenv-suggest')
     expect(hint).toBeDefined()

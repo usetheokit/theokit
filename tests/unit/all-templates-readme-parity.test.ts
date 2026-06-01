@@ -22,11 +22,7 @@ const ROOT = resolve(__dirname, '../..')
 const TEMPLATES = ['default', 'dashboard', 'api-only', 'postgres', 'saas'] as const
 type TemplateName = (typeof TEMPLATES)[number]
 
-const REQUIRED_SECTIONS = [
-  '## Quick start',
-  '## Project structure',
-  '## Common commands',
-] as const
+const REQUIRED_SECTIONS = ['## Quick start', '## Project structure', '## Common commands'] as const
 
 // Bumped +2 LOC across all templates to absorb v1.1 docs link line + blank.
 const LOC_CAPS: Record<TemplateName, number> = {
