@@ -120,7 +120,7 @@ Open http://localhost:3000, type a message, hit Send. The chat thread renders th
 - **Rate limiting built in** — off by default, one config away.
 - **Generators that scaffold** — `theokit generate route users`, done.
 - **Add a Python or Node service when you actually need one** — opt-in, not required. The TS `server/` already ships login, users, sessions, billing, jobs, crons, and the agent endpoint. A sidecar enters only when the use case needs another language's library ecosystem (ML inference, OCR) or operational isolation. See [Polyglot services — when to use them](#polyglot-services--opt-in).
-- **Deploys anywhere, lands on TheoCloud** — 8 adapters shipped today (Node, Vercel, Cloudflare Workers, AWS Lambda, Bun, Deno Deploy, Netlify, Static) plus Docker via `theokit docker`. **TheoCloud** is the principal target — managed runtime with hosted Postgres, Redis, secret rotation, audit log; pluggable interfaces (`JobBackend`, `UsageStorageAdapter`) already designed for it. TheoCloud adapter ships with the next milestone.
+- **Ship to TheoCloud** — managed runtime with hosted Postgres, Redis, secret rotation, audit log. Pluggable interfaces (`JobBackend`, `UsageStorageAdapter`) already designed for it; adapter ships with the next milestone. Other adapters live in-tree as opt-in compatibility surfaces — not promoted, not validated end-to-end.
 - **Real starting templates** — default, dashboard, API-only, Postgres.
 
 ## What you'd ship
@@ -130,13 +130,13 @@ Open http://localhost:3000, type a message, hit Send. The chat thread renders th
 - **Multi-tenant agent SaaS.** Per-user sessions, per-request context, isolated state. Drizzle + Postgres template included.
 - **Agent admin tool with audit log.** Staff-only routes guarded by `requireAuth`, audit trail persisted to your DB.
 - **Webhook + messaging gateway.** Receive webhooks, fan them out to your agent, ack with typed responses.
-- **B2B agent product.** Onboarding, billing webhook, dashboard — deployable to Vercel or Cloudflare Workers in one command.
+- **B2B agent product.** Onboarding, billing webhook, dashboard — deployable to TheoCloud in one command.
 
 ## Why TheoKit
 
 **Hermes** picked your Telegram. **Cursor** picked your IDE. **TheoCode** picked your terminal. The agent your customers will pay for needs something different — a real domain, real auth, real WebSockets, a real product. The agent ecosystem has two halves: frameworks for **orchestrating** agents, and frameworks for **shipping apps**. Most teams build the agent, then realize they need an app — and stitch six libraries together. TheoKit is the app, with batteries for the agent built in.
 
-| Capability | TheoKit | Mastra | Vercel AI SDK + Next.js | Roll your own |
+| Capability | TheoKit | Mastra | AI SDK + Next.js | Roll your own |
 |---|---|---|---|---|
 | **Frame** | Build the app your agent lives in | Orchestrate the agent | Wrap LLM calls in a Next.js app | Pick six libs, glue them |
 | File-based routing | ✓ | DIY | Next.js | Next.js |
@@ -144,7 +144,7 @@ Open http://localhost:3000, type a message, hit Send. The chat thread renders th
 | Server actions with CSRF + Zod | ✓ | DIY | Partial (Next.js Actions) | DIY |
 | Encrypted sessions, one helper | ✓ (AES-256-GCM, `requireAuth`) | DIY | DIY | DIY |
 | WebSocket as a file | ✓ | DIY | DIY (needs separate WS server) | DIY |
-| Deploy targets out of the box | TheoCloud (principal, adapter shipping next) + 8 in-tree adapters (Node · Vercel · Cloudflare Workers · AWS Lambda · Bun · Deno Deploy · Netlify · Static) | DIY | Vercel | DIY |
+| Deploy target | TheoCloud (principal, adapter shipping next) | DIY | DIY | DIY |
 | Templates with DB wired | ✓ (postgres, dashboard, api-only) | Limited | DIY | DIY |
 | CLI scaffolding (`theokit generate`) | ✓ | Limited | Next.js (partial) | DIY |
 | License | Apache-2.0 | Open | Open (MIT SDK) | N/A |
@@ -282,14 +282,9 @@ Status-code semantics follow React 19: errors that happen **before** the shell f
 
 ```bash
 theokit dev                              # Dev server with HMR
-theokit build                            # Production build
-theokit build --target=vercel            # Build for Vercel
-theokit build --target=cloudflare        # Build for Cloudflare Workers
-theokit build --target=bun                # Build for Bun runtime
-theokit build --target=deno-deploy        # Build for Deno Deploy
-theokit build --target=netlify            # Build for Netlify Functions
-theokit build --target=aws-lambda         # Build for AWS Lambda (API Gateway v2)
-theokit build --target=static             # Pre-render to static HTML
+theokit build                            # Production build (Node default)
+# Other --target adapters are in-tree opt-in compatibility surfaces
+# (not validated end-to-end by the team). TheoCloud adapter ships next.
 theokit start                            # Production server (Node)
 theokit check                            # Run typecheck + scan + (optional) eslint
 theokit check --upgrade-readiness 0.3    # Static scan for 0.3.0 breakage — see docs/migration/0.2-to-0.3.md
@@ -451,8 +446,8 @@ TheoKit sits inside the [`usetheo`](https://usetheo.dev) product family. It is *
 
 **What this means in practice:**
 
-- TheoKit is **deploy-portable** today: choose any of the 8 in-tree adapters (Node, Vercel, Cloudflare Workers, AWS Lambda, Bun, Deno Deploy, Netlify, Static) and ship.
-- The **TheoCloud adapter ships next** — it's the strategic target, with the framework's pluggable interfaces already designed for it. Other adapters remain first-class (you're not locked into TheoCloud).
+- **TheoCloud is the strategic target** — the framework's pluggable interfaces (`JobBackend`, `UsageStorageAdapter`, `RateLimitStorageAdapter`) are already designed for it; adapter ships next milestone.
+- Other in-tree adapters exist as **opt-in compatibility surfaces** — present in the codebase, but not promoted and not validated end-to-end by the team. They reject `services: {}` non-empty by design (Wave 2).
 - The agent runtime (`@usetheo/sdk`) is required for any agent feature — if you only need routing/auth/SSR/jobs, you don't have to use it.
 - The UI library (`@usetheo/ui`) is opt-in but the default scaffold bundles it; if you swap it out, the framework's auto-injection becomes a no-op.
 - A user can clone TheoKit and run `pnpm install && pnpm dev` without cloning the `theo` (Go) sibling — non-TheoCloud paths are fully self-contained.
@@ -462,7 +457,7 @@ TheoKit sits inside the [`usetheo`](https://usetheo.dev) product family. It is *
 
 Honest claims only.
 
-- **Production for indie + small-team usage.** Framework, CLI, five templates (default, dashboard, api-only, postgres, saas), and 8 deploy adapters (Node, Vercel, Cloudflare Workers, AWS Lambda, Bun, Deno Deploy, Netlify, Static) shipped. Public API surface stable. **Real-prod validation pending** on Vercel + Cloudflare adapters (smoke tests structural; first real-deploy observation window is the next 0.4.0 task).
+- **Production for indie + small-team usage.** Framework, CLI, five templates (default, dashboard, api-only, postgres, saas) shipped. Public API surface stable. **TheoCloud is the only deploy target the team validates end-to-end** — other in-tree adapters are opt-in compatibility surfaces without team validation.
 - **TheoCloud (principal target) adapter.** Ships after 0.4.0 — the strategic next milestone. Framework hooks (`JobBackend`, `UsageStorageAdapter`, `RateLimitStorageAdapter` interfaces, structured logging) are already in place to slot it in.
 - **Agent layer (`agents/` directory).** On the roadmap. The framework already ships the primitives (sessions, WebSockets, server actions, typed RPC) an agent surface needs; the dedicated `agents/` convention formalizes the wiring.
 - **Documentation site.** On the roadmap. Today the README is the canonical reference; deep docs land with the dedicated site.

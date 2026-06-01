@@ -26,7 +26,7 @@ pnpm dev
 
 ## What is wired
 
-- Native fetch handler via Hono (works on Vercel, CF Workers Node-compat, TheoCloud, local)
+- Native fetch handler via Hono (works on TheoCloud and local)
 - JSON-line stdout logs
 - W3C `traceparent` propagation from incoming headers
 - TheoKit injects `THEOKIT_SERVICE_NAME` + `THEOKIT_SERVICE_PORT` env vars

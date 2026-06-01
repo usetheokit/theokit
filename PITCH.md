@@ -12,9 +12,9 @@ Every named feature is verified against README.md, packages/theo/src, and packag
 
 ### Real auth, real domain, real WebSockets — the app your agent ships in.
 
-*The Build (framework) layer of the [Theo ecosystem](https://usetheo.dev). Open-source. TypeScript end to end. Deploys to TheoCloud, Vercel, Cloudflare Workers, or any Docker host.*
+*The Build (framework) layer of the [Theo ecosystem](https://usetheo.dev). Open-source. TypeScript end to end. Ships on TheoCloud.*
 
-**4 templates · 4 deploy targets · file-based routing · typed RPC client · AES-256-GCM sessions · Apache-2.0**
+**4 templates · file-based routing · typed RPC client · AES-256-GCM sessions · Apache-2.0**
 
 ---
 
@@ -33,7 +33,7 @@ The agent your customers will pay for needs something different — a real domai
 - **Encrypted sessions, one helper** — AES-256-GCM cookies, `requireAuth` narrows the type.
 - **Per-request context, no globals** — plug your DB and user once, reach them anywhere.
 - **WebSocket as a file** — drop a file in `server/ws/`, it's a real-time endpoint.
-- **Three native build targets** — Node, Vercel, Cloudflare Workers. Or `theokit docker` + `theo deploy` to ship via TheoCloud.
+- **Ship to TheoCloud** — `theokit docker` + `theo deploy`. Managed runtime, hosted Postgres + Redis.
 - **Four templates that already deploy** — default, dashboard, API-only, Postgres.
 
 ## Feel it
@@ -78,13 +78,13 @@ A route. A WebSocket. A typed client call. Three files. No glue.
 - **Multi-tenant agent SaaS.** Per-user sessions, per-request context, isolated state. Drizzle + Postgres template included.
 - **Agent admin tool with audit log.** Staff-only routes guarded by `requireAuth`, audit trail persisted to your DB.
 - **Webhook + messaging gateway.** Receive webhooks, fan them out to your agent, ack with typed responses.
-- **B2B agent product.** Onboarding, billing webhook, dashboard — deployable to Vercel or Cloudflare Workers in one command.
+- **B2B agent product.** Onboarding, billing webhook, dashboard — deployable to TheoCloud in one command.
 
 ## Why TheoKit
 
 The agent ecosystem has two halves. Frameworks for **orchestrating** agents. Frameworks for **shipping apps**. Most teams build the agent, then realize they need an app — and stitch six libraries together. TheoKit is the app, with the agent wiring already in place.
 
-| Capability | TheoKit | Mastra | Vercel AI SDK + Next.js | Roll your own |
+| Capability | TheoKit | Mastra | AI SDK + Next.js | Roll your own |
 |---|---|---|---|---|
 | **Frame** | Build the app your agent lives in | Build stateful AI agents with memory, tools and MCP | Wrap LLM calls in a Next.js app | Pick six libs, glue them |
 | File-based routing | ✓ | DIY | Next.js | Next.js |
@@ -92,7 +92,7 @@ The agent ecosystem has two halves. Frameworks for **orchestrating** agents. Fra
 | Server actions with CSRF + Zod | ✓ | DIY | Partial (Next.js Actions) | DIY |
 | Encrypted sessions, one helper | ✓ (AES-256-GCM, `requireAuth`) | DIY | DIY | DIY |
 | WebSocket as a file | ✓ | DIY | DIY (needs separate WS server) | DIY |
-| Deploy targets out of the box | Docker · Vercel · Cloudflare Workers · TheoCloud | DIY | Vercel | DIY |
+| Deploy target | TheoCloud (managed runtime) | DIY | DIY | DIY |
 | Templates with DB wired | ✓ (postgres, dashboard, api-only) | Limited | DIY | DIY |
 | CLI scaffolding (`theokit generate`) | ✓ | Limited | Next.js (partial) | DIY |
 | License | Apache-2.0 | Open | Open (MIT SDK) | N/A |
@@ -163,9 +163,7 @@ import { theoFetch, TheoFetchError } from 'theokit/client'
 
 ```bash
 theokit dev                              # Dev server with HMR
-theokit build                            # Production build
-theokit build --target=vercel            # Build for Vercel
-theokit build --target=cloudflare        # Build for Cloudflare Workers
+theokit build                            # Production build (Node default)
 theokit start                            # Production server
 theokit generate route users             # Scaffold API route
 theokit generate page dashboard          # Scaffold page
@@ -211,7 +209,7 @@ TheoKit runs standalone. The other pillars compose with it when you want the ful
 
 **Theo's mission.** From prompt to production. We give every developer the opinion, the infrastructure, and the speed to build and ship real AI agents and applications — with no repetitive setup, no vendor lock-in, and no manual ops.
 
-**Theo's vision.** Be to AI agents what Vercel became to the web: the default, obvious, developer-respected path — with an open runtime end to end.
+**Theo's vision.** Be to AI agents what the best modern platforms became to the web: the default, obvious, developer-respected path — with an open runtime end to end.
 
 **TheoKit's vision.** The framework where agent products grow up — from prompt to a real app, real domain, real customers.
 
@@ -219,7 +217,7 @@ TheoKit runs standalone. The other pillars compose with it when you want the ful
 
 ## Status
 
-- **Production.** Framework, CLI, four templates (default, dashboard, api-only, postgres), and four deploy targets (Docker, Vercel, Cloudflare Workers, TheoCloud) all shipped. Public API surface stable.
+- **Production.** Framework, CLI, four templates (default, dashboard, api-only, postgres) shipped. **TheoCloud is the strategic deploy target** — adapter ships next milestone; other adapters in-tree as opt-in compatibility surfaces. Public API surface stable.
 - **Agent layer (`agents/` directory).** On the roadmap. The framework already ships the primitives (sessions, WebSockets, server actions, typed RPC) an agent surface needs; the dedicated `agents/` convention formalizes the wiring.
 - **Documentation site.** On the roadmap. Today the README is the canonical reference; deep docs land with the dedicated site.
 - **OpenAPI generation from Zod schemas.** On the roadmap.
