@@ -46,17 +46,32 @@ describe('CI Workflow', () => {
     expect(hasPnpmSetup).toBe(true)
   })
 
-  it('should use --frozen-lockfile for install', () => {
+  it('should use --frozen-lockfile for the main pnpm install', () => {
+    // The `test` job has TWO `pnpm install` steps: one for the sibling
+    // theokit-sdk clone (uses --no-frozen-lockfile because lockfile may be
+    // out of sync with the SDK's own dev cadence) and the canonical theokit
+    // install (uses --frozen-lockfile). We assert the canonical one exists,
+    // not the first match — workflow ordering is irrelevant to the contract.
     const workflow = loadWorkflow('ci.yml')
     const steps = workflow.jobs.test.steps
-    const installStep = steps.find((s: Record<string, string>) => s.run?.includes('pnpm install'))
-    expect(installStep?.run).toContain('--frozen-lockfile')
+    const hasFrozenInstall = steps.some((s: Record<string, string>) =>
+      s.run?.includes('pnpm install --frozen-lockfile'),
+    )
+    expect(hasFrozenInstall).toBe(true)
   })
 
-  it('should have build step', () => {
+  it('should have a build step (filtered or unfiltered)', () => {
+    // typecheck-build runs `pnpm --filter "./packages/*" build` to avoid
+    // walking examples/* which need the theokit bin built first. Accept any
+    // pnpm-driven build step — filtered or not.
     const workflow = loadWorkflow('ci.yml')
     const steps = workflow.jobs['typecheck-build'].steps
-    const hasBuild = steps.some((s: Record<string, string>) => s.run?.includes('pnpm build'))
+    const hasBuild = steps.some(
+      (s: Record<string, string>) =>
+        s.run?.includes('pnpm build') ||
+        s.run?.includes('pnpm -r build') ||
+        /pnpm\s+(?:--filter\s+[^\s]+\s+)?build/.test(s.run ?? ''),
+    )
     expect(hasBuild).toBe(true)
   })
 

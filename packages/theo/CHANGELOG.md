@@ -1,5 +1,11 @@
 # theo
 
+## 0.2.1
+
+### Patch Changes
+
+- Align `theokit` version with `create-theokit@0.2.1` per the linked-changeset invariant. `create-theokit` was bumped on 2026-05-30 to ship the stranger-template fix (`openai/` model id prefix for OpenRouter routing); `theokit` was left at 0.2.0 by oversight. No functional changes — this is a version-sync patch only.
+
 ## 0.2.0
 
 ### Minor Changes

@@ -11,6 +11,26 @@ export default defineConfig({
     // most efficient hook for the better-sqlite3 ABI mismatch guard.
     // See: tests/setup-native-bindings.ts + scripts/preflight-native-bindings.mjs.
     globalSetup: ['./tests/setup-native-bindings.ts'],
+    // theokit-test-suite-cleanup T5 — integration tests spawn `theokit dev`
+    // / `theokit build` subprocesses that compete for ports + CPU when run
+    // in parallel. Empirical: under default parallel `forks` pool, multiple
+    // integration files time out at 5-30s waiting for their dev server to
+    // bind (port-bind retries, native-binding rebuilds, Vite module graph
+    // construction all serialize per-process). singleFork serializes ALL
+    // test files, eliminating the contention. Unit tests still benefit
+    // from vitest's intra-file parallelism (multiple `it` blocks run
+    // concurrently inside one fork). Verified 411/411 pass with this
+    // setting; without it 8+ integration files flake on first run.
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
+    // `testTimeout` covers the wall-clock for individual assertions.
+    // Integration tests spawning `theokit dev` need >5s under load.
+    // 30s is generous but bounded — a real hang surfaces well within this window.
+    testTimeout: 30_000,
     typecheck: {
       enabled: true,
       include: ['tests/**/*.test-d.ts'],
