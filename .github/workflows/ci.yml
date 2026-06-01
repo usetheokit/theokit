@@ -25,6 +25,8 @@ jobs:
         run: pnpm lint
       - name: Prettier (format check)
         run: pnpm format:check
+      - name: Check template version sync (ADR 0019)
+        run: pnpm check:templates
 
   typecheck-build:
     name: Typecheck + Build
@@ -36,9 +38,26 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk is declared as a workspace member in
+      # pnpm-workspace.yaml (`../theokit-sdk/packages/{sdk,gateway,gateway-telegram}`).
+      # pnpm-lock.yaml lists those packages with `link:` paths — pnpm install
+      # expects the files on disk. `dist/` isn't committed so we also build
+      # the SDK before consuming it (typecheck needs the type entries to
+      # resolve at `./dist/index.d.ts`). Public repo, anonymous clone OK.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
+      # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
+      # imports from `packages/theo/dist/*` to validate the npm publish
+      # surface — those files don't exist until build runs.
+      # Filter to packages/* only: `pnpm -r build` would walk examples
+      # too, which call `theokit build` (needs the bin from packages/theo,
+      # but the binstub points to dist/cli/index.js which doesn't exist
+      # until the theo package finishes building → ordering blow-up).
+      - run: pnpm --filter "./packages/*" build
       - run: pnpm typecheck
-      - run: pnpm build
 
   test:
     name: Unit + Type tests
@@ -53,7 +72,24 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
+      # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth against
+      # NODE_MODULE_VERSION mismatch. CRITICAL here because the matrix runs
+      # both Node 20 and Node 22 against the same pnpm store (cache); the
+      # binding installed under one Node version cannot dlopen under the
+      # other. Without this step the matrix would silently break.
+      - name: Rebuild native bindings (better-sqlite3 ABI guard)
+        run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
+      # Build packages before running tests so the integration tests that
+      # exercise `theokit build` (cron/job manifest tests, scaffold-build-start
+      # E2E) find the bin at `packages/theo/dist/cli/index.js`.
+      - run: pnpm --filter "./packages/*" build
       - run: pnpm test
       - run: pnpm test:types
 
@@ -67,7 +103,17 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
+      - name: Rebuild native bindings (better-sqlite3 ABI guard)
+        run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
+      # Build packages before tests — same rationale as `test` job above.
+      - run: pnpm --filter "./packages/*" build
       - name: Run tests with coverage thresholds
         run: pnpm test:coverage
       - name: Upload coverage report
@@ -88,7 +134,16 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
+      # Build packages before E2E — fixtures spawn `theokit dev` which needs
+      # the bin at `packages/theo/dist/cli/index.js`.
+      - run: pnpm --filter "./packages/*" build
       - run: npx playwright install --with-deps chromium
       - run: pnpm test:e2e
 
@@ -102,7 +157,15 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
+      # Build packages first so knip can resolve theokit's dist exports.
+      - run: pnpm --filter "./packages/*" build
       - run: pnpm knip
 
   dependency-audit:
@@ -115,6 +178,12 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:audit
 
@@ -140,6 +209,12 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:licenses
 
@@ -154,8 +229,15 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      # Filter to packages/* (skip examples) — same rationale as typecheck-build.
+      - run: pnpm --filter "./packages/*" build
       - run: pnpm check:bundle
 
   e2e-postgres-templates:

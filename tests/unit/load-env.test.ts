@@ -43,7 +43,10 @@ const KEYS_TO_CLEAN = [
 ]
 
 function makeTmp(): string {
-  const dir = join(tmpdir(), `${ENV_SNAPSHOT_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2)}`)
+  const dir = join(
+    tmpdir(),
+    `${ENV_SNAPSHOT_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2)}`,
+  )
   mkdirSync(dir, { recursive: true })
   return dir
 }

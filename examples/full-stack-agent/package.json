@@ -1,7 +1,7 @@
 {
   "name": "@usetheo/example-full-stack-agent",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "theokit dev",
@@ -14,7 +14,7 @@
     "@usetheo/gateway": "workspace:*",
     "@usetheo/gateway-telegram": "workspace:*",
     "@usetheo/sdk": "workspace:*",
-    "@usetheo/ui": "^0.11.0-next.0",
+    "@usetheo/ui": "^0.13.0",
     "grammy": "^1.30.0",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",

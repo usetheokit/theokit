@@ -84,9 +84,10 @@ const runner = new GatewayRunner({
     try {
       const run = await agent.send(event.text)
       const result = await run.wait()
-      const reply = result.status === 'error' && result.error !== undefined
-        ? `Agent error: ${result.error.message}`
-        : (result.result ?? '(no reply)')
+      const reply =
+        result.status === 'error' && result.error !== undefined
+          ? `Agent error: ${result.error.message}`
+          : (result.result ?? '(no reply)')
       await ctx.reply(reply)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

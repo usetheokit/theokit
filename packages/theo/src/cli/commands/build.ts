@@ -24,6 +24,7 @@ import {
   writeManifest as writeServicesManifest,
 } from '../../services/index.js'
 import { cleanOutDir } from '../cleanup/cleanup.js'
+import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 // Adapters that do NOT support cron triggers natively. Build still
 // succeeds with crons declared, but emits a warning + skip note.
@@ -31,6 +32,8 @@ const CRON_NA_TARGETS = new Set<BuildTarget>(['bun', 'netlify', 'static'])
 
 export async function buildCommand(options?: { target?: string }): Promise<void> {
   const cwd = process.cwd()
+  // Preflight (FIRST — BEFORE anything that touches native bindings).
+  preflightNodeAndBindings(cwd)
   // Phase 1 (T1.2) — Load .env BEFORE config load.
   loadEnv({ cwd, mode: 'production' })
 
