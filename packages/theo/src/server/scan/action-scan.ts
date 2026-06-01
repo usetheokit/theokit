@@ -105,23 +105,39 @@ export function scanServerActionsEnriched(serverDir: string): ActionManifestEntr
         [absPath],
       )
     }
-    if (seenNames.has(name)) {
-      throw new ActionScanError('NAME_COLLISION', `Duplicate action name "${name}"`, [absPath])
-    }
-    seenNames.add(name)
-
+    // File-level collision (one file appearing twice) is impossible via the
+    // walker; per-export collision check happens inside the export loop below.
     const source = readFileSync(absPath, 'utf8')
     const stripped = stripComments(source)
     const accept = /\baccept\s*:\s*['"]form['"]/.test(stripped) ? 'form' : 'json'
     const hasInput = /\binput\s*:\s*z\./.test(stripped) || /\binput\s*:\s*\w+\(/.test(stripped)
 
-    entries.push({
-      name,
-      filePath: absPath,
-      urlPath: `/_actions/${name}`,
-      accept,
-      hasInput,
-    })
+    // T7.1 wire fix — extract exports so the urlPath includes the second
+    // segment required by action-middleware (`/api/__actions/<file>/<export>`).
+    // Each named action export becomes its own manifest entry.
+    // Proxy key on the EXPORT name (so consumers write `actions.saveMemory(input)`).
+    // URL keeps the runtime 2-segment shape `/api/__actions/<file>/<export>`
+    // expected by action-middleware. Cross-file export collisions become a
+    // scan error to surface the ambiguity early.
+    const exportNames = extractActionExportNames(stripped)
+    for (const exportName of exportNames) {
+      const proxyKey = exportName === 'default' ? name : exportName
+      if (seenNames.has(proxyKey)) {
+        throw new ActionScanError(
+          'NAME_COLLISION',
+          `Duplicate action proxy key "${proxyKey}" (two files export the same name)`,
+          [absPath],
+        )
+      }
+      seenNames.add(proxyKey)
+      entries.push({
+        name: proxyKey,
+        filePath: absPath,
+        urlPath: `/api/__actions/${name}/${exportName}`,
+        accept,
+        hasInput,
+      })
+    }
   })
 
   // EC-2: detect file vs dir collisions (e.g., foo.ts AND foo/bar.ts).
@@ -152,6 +168,28 @@ export function scanServerActionsEnriched(serverDir: string): ActionManifestEntr
  * inside a string literal, but that's an acceptable trade-off for v1 vs
  * full AST parse).
  */
+/**
+ * Extract action export names via regex over comment-stripped source.
+ * Matches `export const <name> = defineAction(...)`, `export default
+ * defineAction(...)`, and `export function <name>(...)` forms. Returns
+ * `['default']` when no named action exports are found (best-effort fallback
+ * for default-export shapes the regex misses).
+ */
+function extractActionExportNames(stripped: string): string[] {
+  const names = new Set<string>()
+  const namedRe = /\bexport\s+(?:const|let|var|function\*?)\s+([a-zA-Z_$][\w$]*)\s*[=(]/g
+  let m: RegExpExecArray | null
+  while ((m = namedRe.exec(stripped)) !== null) {
+    const name = m[1]
+    if (typeof name === 'string' && name.length > 0) names.add(name)
+  }
+  if (/\bexport\s+default\s+defineAction\b/.test(stripped)) {
+    names.add('default')
+  }
+  if (names.size === 0) names.add('default')
+  return [...names]
+}
+
 function stripComments(source: string): string {
   let out = ''
   let i = 0

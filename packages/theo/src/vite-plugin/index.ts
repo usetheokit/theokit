@@ -163,7 +163,24 @@ export async function theoPluginAsync(
     distDir: resolve(projectRoot, '.theo'),
   })
 
-  return [theoPlugin(rootOrOptions), ...uiPlugins, ...servicesPlugins, appClientPlugin]
+  // G3 — actions virtual module (`@theo/actions`). Always wired; the plugin
+  // emits an empty `{}` facade when `server/actions/` is absent so consumers
+  // can still `import { actions } from '@theo/actions'` without breakage.
+  // The `distDir` opt enables `.theo/actions.d.ts` emit so TS resolves the
+  // virtual module ambient declaration in consumer apps.
+  const { actionsVirtualModule } = await import('./actions-virtual-module.js')
+  const actionsPlugin = actionsVirtualModule({
+    serverDir: resolve(projectRoot, 'server'),
+    distDir: resolve(projectRoot, '.theo'),
+  })
+
+  return [
+    theoPlugin(rootOrOptions),
+    ...uiPlugins,
+    ...servicesPlugins,
+    appClientPlugin,
+    actionsPlugin,
+  ]
 }
 
 /**

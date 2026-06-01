@@ -94,10 +94,10 @@ describe('scanServerActionsEnriched — basic discovery', () => {
     expect(scanServerActionsEnriched(serverDir)).toEqual([])
   })
 
-  it('should emit urlPath as /_actions/<name>', () => {
+  it('should emit urlPath as /api/__actions/<file>/<exportName> (T7.1 wire fix)', () => {
     write('foo.ts', `export default defineAction({input:z.object({}),handler:()=>null})`)
     const entries = scanServerActionsEnriched(serverDir)
-    expect(entries[0].urlPath).toBe('/_actions/foo')
+    expect(entries[0].urlPath).toBe('/api/__actions/foo/default')
   })
 })
 
