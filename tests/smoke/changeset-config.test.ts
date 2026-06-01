@@ -28,6 +28,7 @@ describe('Changeset Configuration', () => {
   // stable line — versions must be valid semver, no longer pre-release.
   it('theo version should be valid stable semver (post-alpha exit)', () => {
     const pkg = JSON.parse(readFileSync(resolve(rootDir, 'packages/theo/package.json'), 'utf-8'))
+    // eslint-disable-next-line security/detect-unsafe-regex -- bounded semver assertion; no nested quantifiers
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/)
     expect(pkg.version).not.toMatch(/-alpha\./)
   })
@@ -36,6 +37,7 @@ describe('Changeset Configuration', () => {
     const pkg = JSON.parse(
       readFileSync(resolve(rootDir, 'packages/create-theo/package.json'), 'utf-8'),
     )
+    // eslint-disable-next-line security/detect-unsafe-regex -- bounded semver assertion; no nested quantifiers
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/)
     expect(pkg.version).not.toMatch(/-alpha\./)
   })

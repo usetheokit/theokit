@@ -25,6 +25,7 @@ const TEMPLATES = ['default', 'dashboard', 'api-only', 'postgres', 'saas'] as co
 
 function hasCorepack(): boolean {
   try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test probes runner PATH for corepack; sandbox-safe
     execFileSync('corepack', ['--version'], { stdio: 'pipe' })
     return true
   } catch {
@@ -51,7 +52,9 @@ async function waitForPort(port: number, timeoutMs: number): Promise<boolean> {
       } catch {
         clearTimeout(tid)
       }
-    } catch {}
+    } catch {
+      // outer try guards fetch-not-available (older runtimes); best-effort retry
+    }
     await new Promise((r) => setTimeout(r, 500))
   }
   return false
@@ -84,6 +87,7 @@ async function probeAllPortsFree(): Promise<boolean> {
 
 async function probeNpxReachable(): Promise<boolean> {
   try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test probes runner PATH for npx
     execFileSync('npx', ['--version'], { stdio: 'pipe', timeout: 5000 })
     return true
   } catch {
@@ -112,79 +116,77 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
     const tpl = TEMPLATES[i]!
     const port = 5000 + i // 5000-5004
 
-    it(
-      `template ${tpl} installs + boots dev via pnpm 11 without ERR_PNPM_IGNORED_BUILDS`,
-      async () => {
-        // v1.1 EC-7 pre-flight: port collision check actionable
-        if (await isPortBusy(port)) {
-          throw new Error(
-            `Port ${port} busy. Free it: lsof -ti :${port} | xargs kill -9`,
-          )
-        }
+    it(`template ${tpl} installs + boots dev via pnpm 11 without ERR_PNPM_IGNORED_BUILDS`, async () => {
+      // v1.1 EC-7 pre-flight: port collision check actionable
+      if (await isPortBusy(port)) {
+        throw new Error(`Port ${port} busy. Free it: lsof -ti :${port} | xargs kill -9`)
+      }
 
-        const sandbox = mkdtempSync(join(osTmpdir(), `pnpm11-${tpl}-`))
-        const appDir = join(sandbox, `my-${tpl}`)
-        let devPid: number | undefined
+      const sandbox = mkdtempSync(join(osTmpdir(), `pnpm11-${tpl}-`))
+      const appDir = join(sandbox, `my-${tpl}`)
+      let devPid: number | undefined
 
+      try {
+        // Step 1: scaffold via npx (latest published create-theokit)
+        execFileSync(
+          // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test runs scaffolder via PATH
+          'npx',
+          ['-y', 'create-theokit@latest', `my-${tpl}`, `--template=${tpl}`, '--skip-install'],
+          { cwd: sandbox, stdio: 'pipe', env: PNPM_ENV, timeout: 120_000 },
+        )
+        expect(existsSync(appDir)).toBe(true)
+
+        // Step 2: verify pnpm.onlyBuiltDependencies hint shipped
+        const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf-8'))
+        expect(pkg.pnpm?.onlyBuiltDependencies).toContain('esbuild')
+
+        // Step 3: install via pnpm 11 (env-scoped). pnpm 11 exits non-zero on
+        // ERR_PNPM_IGNORED_BUILDS even when install completed. Check by file
+        // presence, not exit code.
         try {
-          // Step 1: scaffold via npx (latest published create-theokit)
-          execFileSync(
-            'npx',
-            ['-y', 'create-theokit@latest', `my-${tpl}`, `--template=${tpl}`, '--skip-install'],
-            { cwd: sandbox, stdio: 'pipe', env: PNPM_ENV, timeout: 120_000 },
-          )
-          expect(existsSync(appDir)).toBe(true)
-
-          // Step 2: verify pnpm.onlyBuiltDependencies hint shipped
-          const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf-8'))
-          expect(pkg.pnpm?.onlyBuiltDependencies).toContain('esbuild')
-
-          // Step 3: install via pnpm 11 (env-scoped). pnpm 11 exits non-zero on
-          // ERR_PNPM_IGNORED_BUILDS even when install completed. Check by file
-          // presence, not exit code.
-          try {
-            execFileSync('pnpm', ['install', '--prefer-offline'], {
-              cwd: appDir,
-              stdio: 'pipe',
-              env: PNPM_ENV,
-              timeout: 120_000,
-            })
-          } catch {
-            // ignore non-zero exit — verify install completeness below
-          }
-          expect(existsSync(join(appDir, 'node_modules/theokit'))).toBe(true)
-
-          // Step 4: boot dev via theokit binary direct (bypass pnpm wrapper's
-          // deps-status-check that re-trips ERR_PNPM_IGNORED_BUILDS)
-          const theokitBin = join(appDir, 'node_modules/.bin/theokit')
-          expect(existsSync(theokitBin)).toBe(true)
-
-          const dev = spawn(theokitBin, ['dev', `--port=${port}`], {
+          // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test invokes pnpm via PATH
+          execFileSync('pnpm', ['install', '--prefer-offline'], {
             cwd: appDir,
             stdio: 'pipe',
-            detached: true,
-            env: { ...PNPM_ENV, NODE_ENV: 'development' },
+            env: PNPM_ENV,
+            timeout: 120_000,
           })
-          devPid = dev.pid
-          dev.stderr?.on('data', () => {}) // drain to avoid backpressure
-          dev.stdout?.on('data', () => {})
+        } catch {
+          // ignore non-zero exit — verify install completeness below
+        }
+        expect(existsSync(join(appDir, 'node_modules/theokit'))).toBe(true)
 
-          const ready = await waitForPort(port, 60_000)
-          expect(ready, `dev server failed to boot on port ${port} within 60s`).toBe(true)
-        } finally {
-          if (devPid !== undefined) {
+        // Step 4: boot dev via theokit binary direct (bypass pnpm wrapper's
+        // deps-status-check that re-trips ERR_PNPM_IGNORED_BUILDS)
+        const theokitBin = join(appDir, 'node_modules/.bin/theokit')
+        expect(existsSync(theokitBin)).toBe(true)
+
+        const dev = spawn(theokitBin, ['dev', `--port=${port}`], {
+          cwd: appDir,
+          stdio: 'pipe',
+          detached: true,
+          env: { ...PNPM_ENV, NODE_ENV: 'development' },
+        })
+        devPid = dev.pid
+        dev.stderr?.on('data', () => {}) // drain to avoid backpressure
+        dev.stdout?.on('data', () => {})
+
+        const ready = await waitForPort(port, 60_000)
+        expect(ready, `dev server failed to boot on port ${port} within 60s`).toBe(true)
+      } finally {
+        if (devPid !== undefined) {
+          try {
+            process.kill(-devPid, 'SIGKILL')
+          } catch {
             try {
-              process.kill(-devPid, 'SIGKILL')
+              process.kill(devPid, 'SIGKILL')
             } catch {
-              try {
-                process.kill(devPid, 'SIGKILL')
-              } catch {}
+              // process already exited; nothing to clean
             }
           }
-          rmSync(sandbox, { recursive: true, force: true })
         }
-      },
-      180_000,
-    )
+        rmSync(sandbox, { recursive: true, force: true })
+      }
+    }, 180_000)
   }
 })

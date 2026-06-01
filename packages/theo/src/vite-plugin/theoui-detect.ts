@@ -97,7 +97,7 @@ function resolveExportSubpath(pkgRoot: string, subpath: string): string | null {
     // exports value: string OR { import, require, default, types, ... }
     let target: string | undefined
     if (typeof exp === 'string') target = exp
-    else if (exp && typeof exp === 'object') {
+    else if (typeof exp === 'object') {
       const e = exp as { import?: string; default?: string }
       target = e.import ?? e.default
     }
@@ -112,9 +112,8 @@ function resolveExportSubpath(pkgRoot: string, subpath: string): string | null {
 
 const defaultResolver: SubpathResolver = (specifier, projectRoot) => {
   const parts = specifier.split('/')
-  const pkgName = parts[0]?.startsWith('@') && parts.length >= 2
-    ? `${parts[0]}/${parts[1]}`
-    : parts[0]
+  const pkgName =
+    parts[0]?.startsWith('@') && parts.length >= 2 ? `${parts[0]}/${parts[1]}` : parts[0]
   if (!pkgName) return false
   const subpath = specifier.slice(pkgName.length + 1)
   if (!subpath) return false

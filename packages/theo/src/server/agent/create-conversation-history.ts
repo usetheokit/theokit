@@ -323,8 +323,8 @@ export async function createConversationHistory(
  * Output shape:
  *   {
  *     ...originalOptions,
- *     apiKey: '<from-env>',
- *     providers: { routes: [{ capability: 'chat', provider: '<resolved-name>', ... }] }
+ *     apiKey: env,    // resolved from process.env
+ *     providers: { routes: [{ capability: 'chat', provider: name, ... }] }
  *   }
  */
 function autoResolveProviderIfNeeded(options: SdkAgentOptions): SdkAgentOptions {
@@ -356,9 +356,7 @@ function autoResolveProviderIfNeeded(options: SdkAgentOptions): SdkAgentOptions 
     ...options,
     apiKey: resolved.apiKey,
     providers: {
-      routes: [
-        { capability: 'chat', provider: resolved.name, baseUrl: resolved.baseUrl },
-      ],
+      routes: [{ capability: 'chat', provider: resolved.name, baseUrl: resolved.baseUrl }],
     },
-  } as SdkAgentOptions
+  }
 }

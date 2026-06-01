@@ -60,12 +60,15 @@ function normalizePluginReturn(value: unknown): unknown[] | null {
  *  - ^0.12.0-next.0 + 0.12.0-beta.0  → false (tag diferente)
  *  - ^0.12.0 + 0.12.1                → true (sem pre, mesmo minor)
  *
- * Limitação: não cobre todo o espaço npm semver. Suficiente para EC-7 hoist guard.
+ * Limitação: cobre apenas o subset de semver usado no monorepo (sem rangeSets,
+ * sem versões com build metadata). Suficiente para EC-7 hoist guard.
  */
 function satisfiesCaretPrerelease(version: string, range: string): boolean {
   if (!range.startsWith('^')) return false
   const pin = range.slice(1)
+  // eslint-disable-next-line security/detect-unsafe-regex -- bounded semver string (\d+ groups bounded by `.` and `$` anchors); no nested quantifiers; no catastrophic backtracking
   const pinMatch = /^(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)\.(\d+))?$/.exec(pin)
+  // eslint-disable-next-line security/detect-unsafe-regex -- same as above
   const verMatch = /^(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)\.(\d+))?$/.exec(version)
   if (!pinMatch || !verMatch) return false
   const [, pMaj, pMin, pPat, pTag, pNum] = pinMatch
@@ -165,9 +168,9 @@ describe('Contract: @usetheo/ui/vite-plugin (real dist, fixture-resolved)', () =
     expect(declaredRange).toBeDefined()
     expect(declaredRange).toMatch(/^\^/)
 
-    const uiPkg = JSON.parse(
-      readFileSync(join(UI_PKG_DIR, 'package.json'), 'utf-8'),
-    ) as { version: string }
+    const uiPkg = JSON.parse(readFileSync(join(UI_PKG_DIR, 'package.json'), 'utf-8')) as {
+      version: string
+    }
     const resolvedVersion = uiPkg.version
 
     expect(
