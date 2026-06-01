@@ -9,12 +9,12 @@ on:
       - 'scripts/validate-all-latest-tags.mjs'
       - '.github/workflows/dist-tag-guard.yml'
   schedule:
-    - cron: '0 6 * * *'  # Daily 06:00 UTC
+    - cron: '0 6 * * *' # Daily 06:00 UTC
   workflow_dispatch:
 
 concurrency:
   group: dist-tag-guard
-  cancel-in-progress: true  # read-only check, latest wins
+  cancel-in-progress: true # read-only check, latest wins
 
 jobs:
   validate:

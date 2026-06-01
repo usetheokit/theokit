@@ -27,8 +27,8 @@ export function AgentsTab() {
   if (state.agentRuns.length === 0) {
     return (
       <div style={{ color: tokens.colors.textMuted, padding: tokens.spacing.md }}>
-        No agent runs yet. Trigger a request to an endpoint using <code>trackAgentRun</code> to
-        see it here. (Wired in the saas template; opt-in elsewhere.)
+        No agent runs yet. Trigger a request to an endpoint using <code>trackAgentRun</code> to see
+        it here. (Wired in the saas template; opt-in elsewhere.)
       </div>
     )
   }

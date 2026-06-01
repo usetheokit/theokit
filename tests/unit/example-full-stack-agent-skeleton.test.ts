@@ -57,6 +57,8 @@ describe('examples/full-stack-agent skeleton — T1.1', () => {
     expect(config).toMatch(/ssr:\s*true/)
     // Production-conditional: enforce in prod, off/report-only in dev so Vite's
     // React Refresh inline preamble doesn't break HMR / first hydration.
-    expect(config).toMatch(/cspMode:\s*isProduction\s*\?\s*['"]enforce['"]\s*:\s*['"](off|report-only)['"]/)
+    expect(config).toMatch(
+      /cspMode:\s*isProduction\s*\?\s*['"]enforce['"]\s*:\s*['"](off|report-only)['"]/,
+    )
   })
 })
