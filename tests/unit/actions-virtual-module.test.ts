@@ -87,8 +87,9 @@ describe('actionsVirtualModule — load', () => {
     const code = typeof out === 'string' ? out : (out?.code ?? '')
     expect(code).toContain('createUser')
     expect(code).toContain('deleteUser')
-    expect(code).toContain('/_actions/createUser')
-    expect(code).toContain('/_actions/deleteUser')
+    // T7.1 wire fix — URL now uses runtime 2-segment shape.
+    expect(code).toContain('/api/__actions/createUser/default')
+    expect(code).toContain('/api/__actions/deleteUser/default')
   })
 
   it('should NOT load on non-virtual id', async () => {
