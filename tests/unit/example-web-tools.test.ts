@@ -5,10 +5,7 @@ import {
   isHostAllowed,
 } from '../../examples/full-stack-agent/server/tools/_allowlist.js'
 import { webFetch } from '../../examples/full-stack-agent/server/tools/web-fetch.js'
-import {
-  __parseDdg,
-  webSearch,
-} from '../../examples/full-stack-agent/server/tools/web-search.js'
+import { __parseDdg, webSearch } from '../../examples/full-stack-agent/server/tools/web-search.js'
 
 /**
  * T2.2 — Web tools (web_fetch + web_search).
@@ -103,9 +100,9 @@ describe('webFetch', () => {
   })
 
   it('EC-3 — rejects evilwikipedia.org lookalike at handler level', async () => {
-    await expect(
-      webFetch.handler({ url: 'https://evilwikipedia.org/test' }),
-    ).rejects.toThrow(/not in allowlist/i)
+    await expect(webFetch.handler({ url: 'https://evilwikipedia.org/test' })).rejects.toThrow(
+      /not in allowlist/i,
+    )
   })
 })
 

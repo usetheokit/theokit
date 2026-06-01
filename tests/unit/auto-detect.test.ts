@@ -29,10 +29,7 @@ afterEach(() => {
 describe('detectPackage', () => {
   it('happy: real installed package (workspace theokit detects fine via @vitejs/plugin-react)', () => {
     // packages/theo declares @vitejs/plugin-react as a dep.
-    const result = detectPackage(
-      '@vitejs/plugin-react',
-      join(process.cwd(), 'packages/theo'),
-    )
+    const result = detectPackage('@vitejs/plugin-react', join(process.cwd(), 'packages/theo'))
     expect(result.installed).toBe(true)
     expect(result.version).toMatch(/^\d+\.\d+\.\d+/)
   })

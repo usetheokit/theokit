@@ -33,9 +33,8 @@ function loadWorkflows(): WorkflowFile[] {
     const full = join(WORKFLOWS_DIR, name)
     if (!statSync(full).isFile()) continue
     const content = readFileSync(full, 'utf8')
-    const runsTests = /\bpnpm\s+(test|vitest|exec\s+vitest|test:coverage|test:types|test:e2e)\b/.test(
-      content,
-    )
+    const runsTests =
+      /\bpnpm\s+(test|vitest|exec\s+vitest|test:coverage|test:types|test:e2e)\b/.test(content)
     out.push({ name, content, runsTests })
   }
   return out
@@ -66,9 +65,8 @@ describe('CI workflows — native bindings rebuild step (T4.2, EC-5)', () => {
     for (const w of loadWorkflows()) {
       const lines = w.content.split('\n')
       for (const line of lines) {
-        const isTestRunner = /\bpnpm\s+(test|vitest|exec\s+vitest|test:coverage|test:types|test:e2e)\b/.test(
-          line,
-        )
+        const isTestRunner =
+          /\bpnpm\s+(test|vitest|exec\s+vitest|test:coverage|test:types|test:e2e)\b/.test(line)
         if (!isTestRunner) continue
         if (/\bpnpm\s+rebuild\b/.test(line)) continue // exempt the rebuild step
         if (/\|\|\s*(exit\s+0|true)\b/.test(line)) {
@@ -77,9 +75,7 @@ describe('CI workflows — native bindings rebuild step (T4.2, EC-5)', () => {
       }
     }
     if (swallowers.length > 0) {
-      const list = swallowers
-        .map((s) => `  - ${s.name}: ${s.line}`)
-        .join('\n')
+      const list = swallowers.map((s) => `  - ${s.name}: ${s.line}`).join('\n')
       throw new Error(
         `Found ${swallowers.length} test-step line(s) with \`|| exit 0\` / \`|| true\` swallowing failures:\n${list}\n\nThis can mask broken tests when paired with a silent rebuild failure (EC-5).`,
       )

@@ -152,13 +152,15 @@ function findBadImports(roots: string[]): BadImport[] {
 describe('no-wrong-stdlib-imports — node:os vs node:path member check', () => {
   it('should reject import of os members from node:path', () => {
     // Given: scan src/ + tests/ + packages/ for cross-source mistakes
-    const roots = ['src', 'tests', 'packages'].map((d) => join(ROOT, d)).filter((p) => {
-      try {
-        return statSync(p).isDirectory()
-      } catch {
-        return false
-      }
-    })
+    const roots = ['src', 'tests', 'packages']
+      .map((d) => join(ROOT, d))
+      .filter((p) => {
+        try {
+          return statSync(p).isDirectory()
+        } catch {
+          return false
+        }
+      })
 
     // When: collect all bad imports of node:os members from node:path
     const bad = findBadImports(roots).filter((b) => b.source === 'node:path')
@@ -166,7 +168,10 @@ describe('no-wrong-stdlib-imports — node:os vs node:path member check', () => 
     // Then: zero violations
     if (bad.length > 0) {
       const report = bad
-        .map((b) => `  ${b.file}:${b.line} — '${b.badMember}' belongs to ${b.belongsTo}, imported from ${b.source}`)
+        .map(
+          (b) =>
+            `  ${b.file}:${b.line} — '${b.badMember}' belongs to ${b.belongsTo}, imported from ${b.source}`,
+        )
         .join('\n')
       throw new Error(
         `Found ${bad.length} import(s) of node:os members from node:path:\n${report}\n\nFix: move the member to its correct \`import { ... } from '${bad[0].belongsTo}'\` line.`,
@@ -177,13 +182,15 @@ describe('no-wrong-stdlib-imports — node:os vs node:path member check', () => 
 
   it('should reject import of path members from node:os', () => {
     // Given: same scan
-    const roots = ['src', 'tests', 'packages'].map((d) => join(ROOT, d)).filter((p) => {
-      try {
-        return statSync(p).isDirectory()
-      } catch {
-        return false
-      }
-    })
+    const roots = ['src', 'tests', 'packages']
+      .map((d) => join(ROOT, d))
+      .filter((p) => {
+        try {
+          return statSync(p).isDirectory()
+        } catch {
+          return false
+        }
+      })
 
     // When: filter for inverse direction
     const bad = findBadImports(roots).filter((b) => b.source === 'node:os')

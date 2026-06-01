@@ -42,9 +42,7 @@ function isDeclared(name: string, projectRoot: string): boolean {
       peerDependencies?: Record<string, string>
     }
     return Boolean(
-      pkg.dependencies?.[name] ??
-        pkg.devDependencies?.[name] ??
-        pkg.peerDependencies?.[name],
+      pkg.dependencies?.[name] ?? pkg.devDependencies?.[name] ?? pkg.peerDependencies?.[name],
     )
   } catch {
     return false
@@ -82,10 +80,7 @@ function resolvePackageJson(name: string, cwd: string): { path: string; version?
  * D13: fallback probe via filesystem (substitui require.resolve).
  * Tenta common entry paths em node_modules. Retorna path do entry achado.
  */
-function fallbackProbe(
-  name: string,
-  cwd: string,
-): { resolvedEntry: string } | null {
+function fallbackProbe(name: string, cwd: string): { resolvedEntry: string } | null {
   const candidates = ['index.mjs', 'dist/index.mjs', 'dist/index.js', 'index.js']
   let dir = cwd
   for (let depth = 0; depth < 10; depth++) {
@@ -103,7 +98,10 @@ function fallbackProbe(
 
 /** Walk up from a resolved entry path until we hit the package's own package.json
  *  whose `name` field matches `expectedName`. Returns null on any failure. */
-function findOwningPackageJson(entry: string, expectedName: string): { path: string; version?: string } | null {
+function findOwningPackageJson(
+  entry: string,
+  expectedName: string,
+): { path: string; version?: string } | null {
   let dir = dirname(entry)
   // Bound the walk to ~10 levels to avoid pathological cases.
   for (let i = 0; i < 10; i++) {

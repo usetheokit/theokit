@@ -11,7 +11,7 @@ on:
         default: 'all'
         required: false
   schedule:
-    - cron: '0 9 * * 1'  # Mondays 09:00 UTC
+    - cron: '0 9 * * 1' # Mondays 09:00 UTC
 
 concurrency:
   group: dogfood-stranger
