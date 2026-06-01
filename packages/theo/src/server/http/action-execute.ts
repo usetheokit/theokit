@@ -2,16 +2,35 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import type { z } from 'zod'
 
-import { parseRequestBody } from '../body-parser.js'
+import {
+  ActionError,
+  ActionInputError,
+  isActionError,
+  type ActionErrorCode,
+} from '../../core/contracts/action-protocol.js'
+import { parseRequestBody, type ParsedBody } from '../body-parser.js'
 import type { PluginContext } from '../plugin-types.js'
 import type { PluginRunner } from '../plugins/plugin-runner.js'
 import type { LoadModule } from '../scan/module-loader.js'
 import { dispatchCsrfWarn } from '../security/csrf-warn-dispatch.js'
 import { enforceCsrf, type CsrfMode, type DisallowedConfig } from '../security/csrf.js'
 
-import { sendJson, sendError } from './execute.js'
+import { sendError } from './execute.js'
+import { formDataToObject } from './form-data-to-object.js'
 import { handleRequestError } from './handle-request-error.js'
 import { runMiddlewareAndContext } from './middleware-runner.js'
+import { serializeActionResult } from './serialize-action-result.js'
+
+// Universal dev gate — same IIFE pattern as track-agent-run (EC-11 tree-shake).
+// Both checks are statically replaceable by bundlers in prod build, so the
+// devtools dispatcher import is eliminated from prod bundles entirely.
+const __IS_DEV = (() => {
+  try {
+    return (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true
+  } catch {
+    return process.env.NODE_ENV !== 'production'
+  }
+})()
 
 // Minimal Zod-shaped contract — we only need `safeParse`, not the whole API.
 interface ZodLike {
@@ -29,6 +48,8 @@ interface ActionConfig {
   input: ZodLike
   handler: (params: { input: unknown; ctx: unknown }) => unknown
   csrf?: false
+  /** T1.3 sub-C: wire-protocol accept mode (defaults to 'json' when omitted). */
+  accept?: 'form' | 'json'
 }
 
 function isActionConfig(value: unknown): value is ActionConfig {
@@ -160,14 +181,113 @@ async function readActionBody(
   req: IncomingMessage,
   res: ServerResponse,
   requestId: string | undefined,
+  actionConfig: ActionConfig,
 ): Promise<{ ok: true; body: unknown } | { ok: false }> {
   try {
     const parsed = await parseRequestBody(req)
-    const body = parsed.json !== undefined ? parsed.json : parsed.fields
+    const accept = actionConfig.accept ?? 'json'
+    let body: unknown
+    if (accept === 'form') {
+      body = formDataToObject(
+        synthesizeFormData(parsed),
+        actionConfig.input as unknown as z.ZodObject<z.ZodRawShape>,
+      )
+    } else if (parsed.json !== undefined) {
+      body = parsed.json
+    } else {
+      body = parsed.fields
+    }
     return { ok: true, body }
   } catch (err) {
     sendError(res, 'VALIDATION_ERROR', (err as Error).message, 400, undefined, requestId)
     return { ok: false }
+  }
+}
+
+/**
+ * Build a FormData instance from the body-parser's `ParsedBody`. Fields become
+ * string entries; files become Blob entries with the original filename. Used
+ * only when `accept === 'form'` to feed `formDataToObject`.
+ */
+function synthesizeFormData(parsed: ParsedBody): FormData {
+  const fd = new FormData()
+  for (const [name, value] of Object.entries(parsed.fields)) {
+    fd.append(name, value)
+  }
+  for (const file of parsed.files) {
+    const blob = new Blob([file.buffer as unknown as ArrayBuffer], {
+      type: file.mimeType,
+    })
+    fd.append(file.fieldname, blob, file.filename)
+  }
+  return fd
+}
+
+/**
+ * Write a serialized ActionResult to the response. Sets content-type, status,
+ * and body. Returns void; caller must not write further after invoking.
+ */
+function writeSerialized(
+  res: ServerResponse,
+  serialized: ReturnType<typeof serializeActionResult>,
+): void {
+  if (serialized.type === 'empty') {
+    res.statusCode = serialized.status
+    res.end()
+    return
+  }
+  res.statusCode = serialized.status
+  res.setHeader('Content-Type', serialized.contentType)
+  res.end(serialized.body)
+}
+
+/**
+ * Dev-only telemetry: dispatch ACTION_CALL_ADD so the devtools Actions tab
+ * (T5.1) can render this call. Tree-shaken in prod via __IS_DEV guard.
+ * Mirrors trackAgentRun pattern. Never throws (swallow + log).
+ */
+async function emitActionCallTelemetry(
+  name: string,
+  startedAt: number,
+  input: unknown,
+  outcome: { status: 'success'; output: unknown } | { status: 'error'; error: ActionError },
+): Promise<void> {
+  if (!__IS_DEV) return
+  try {
+    const mod = (await import('../../devtools/dispatcher.js')) as {
+      dispatcher: {
+        onActionCall: (r: {
+          id: string
+          timestamp: number
+          name: string
+          input: unknown
+          output?: unknown
+          error?: { code: string; message: string; fields?: Record<string, string[]> }
+          durationMs: number
+          status: 'success' | 'error'
+        }) => void
+      }
+    }
+    mod.dispatcher.onActionCall({
+      // eslint-disable-next-line sonarjs/pseudo-random -- non-secret correlation id
+      id: `act-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: startedAt,
+      name,
+      input,
+      output: outcome.status === 'success' ? outcome.output : undefined,
+      error:
+        outcome.status === 'error'
+          ? {
+              code: outcome.error.code,
+              message: outcome.error.message,
+              fields: outcome.error instanceof ActionInputError ? outcome.error.fields : undefined,
+            }
+          : undefined,
+      durationMs: Date.now() - startedAt,
+      status: outcome.status,
+    })
+  } catch {
+    // devtools dispatcher missing in some prod-like bundle — silently skip
   }
 }
 
@@ -231,25 +351,29 @@ async function executeActionWithOptions(opts: ExecuteActionOptions): Promise<voi
     ctx = pipeline.ctx
 
     // 7. Parse body (supports JSON and multipart/form-data).
-    const bodyOutcome = await readActionBody(req, res, requestId)
+    const bodyOutcome = await readActionBody(req, res, requestId, actionConfig)
     if (!bodyOutcome.ok) return
 
-    // 8. Validate input with Zod.
+    // T1.3 sub-C action name derived from exportName for telemetry.
+    const actionName = exportName === 'default' ? deriveActionNameFromPath(filePath) : exportName
+    const startedAt = Date.now()
+
+    // 8. Validate input with Zod — failure → ActionInputError envelope (T0.1 + ADR D6).
     const result = actionConfig.input.safeParse(bodyOutcome.body)
     if (!result.success) {
-      sendError(
-        res,
-        'VALIDATION_ERROR',
-        'Invalid action input',
-        400,
-        result.error?.issues,
-        requestId,
-      )
+      const inputErr = new ActionInputError(result.error?.issues ?? [])
+      writeSerialized(res, serializeActionResult({ data: undefined, error: inputErr }))
+      await emitActionCallTelemetry(actionName, startedAt, bodyOutcome.body, {
+        status: 'error',
+        error: inputErr,
+      })
       return
     }
 
     await runActionHandler({
       actionConfig,
+      actionName,
+      startedAt,
       input: result.data,
       ctx,
       res,
@@ -261,8 +385,16 @@ async function executeActionWithOptions(opts: ExecuteActionOptions): Promise<voi
   }
 }
 
+/** Derive a stable display name from filePath when handler exported as default. */
+function deriveActionNameFromPath(filePath: string): string {
+  const base = filePath.split(/[\\/]/).pop() ?? 'unknown'
+  return base.replace(/\.[jt]sx?$/, '')
+}
+
 interface HandlerCtx {
   actionConfig: ActionConfig
+  actionName: string
+  startedAt: number
   input: unknown
   ctx: Record<string, unknown>
   res: ServerResponse
@@ -271,11 +403,40 @@ interface HandlerCtx {
 }
 
 async function runActionHandler(args: HandlerCtx): Promise<void> {
-  const handlerResult = await args.actionConfig.handler({ input: args.input, ctx: args.ctx })
-  const status = handlerResult === undefined || handlerResult === null ? 204 : 200
-  sendJson(args.res, handlerResult ?? null, status)
-  if (args.pluginRunner) {
-    await args.pluginRunner.runOnResponse(args.buildPluginCtx(args.ctx))
+  try {
+    const handlerResult = await args.actionConfig.handler({ input: args.input, ctx: args.ctx })
+    // T1.3 sub-C — wire devalue serialization (ADR D1). Undefined → 204; data → 200 + json+devalue.
+    writeSerialized(args.res, serializeActionResult({ data: handlerResult, error: undefined }))
+    if (args.pluginRunner) {
+      await args.pluginRunner.runOnResponse(args.buildPluginCtx(args.ctx))
+    }
+    await emitActionCallTelemetry(args.actionName, args.startedAt, args.input, {
+      status: 'success',
+      output: handlerResult,
+    })
+  } catch (err) {
+    // Handler-thrown ActionError → use the typed envelope; other throws bubble
+    // up to executeActionWithOptions for handleActionError fallback chain.
+    if (isActionError(err)) {
+      writeSerialized(args.res, serializeActionResult({ data: undefined, error: err }))
+      await emitActionCallTelemetry(args.actionName, args.startedAt, args.input, {
+        status: 'error',
+        error: err,
+      })
+      return
+    }
+    // Wrap unknown throws as INTERNAL_SERVER_ERROR with the original message
+    // preserved for telemetry; production error handler still consumes via
+    // handleActionError fallback (preserves AuthRequiredError duck-type).
+    const wrapped = new ActionError({
+      code: 'INTERNAL_SERVER_ERROR' satisfies ActionErrorCode,
+      message: err instanceof Error ? err.message : 'Action handler threw',
+    })
+    await emitActionCallTelemetry(args.actionName, args.startedAt, args.input, {
+      status: 'error',
+      error: wrapped,
+    })
+    throw err
   }
 }
 
