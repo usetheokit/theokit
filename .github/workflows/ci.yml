@@ -33,18 +33,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Sibling theokit-sdk is declared as a workspace member in
-      # pnpm-workspace.yaml (`../theokit-sdk/packages/{sdk,gateway,gateway-telegram}`).
-      # pnpm-lock.yaml lists those packages with `link:` paths — pnpm install
-      # then expects the files on disk. Without this step, typecheck fails
-      # with `Cannot find module '@usetheo/sdk'`. Public repo, anonymous clone OK.
-      - name: Checkout sibling theokit-sdk (workspace dep)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk is declared as a workspace member in
+      # pnpm-workspace.yaml (`../theokit-sdk/packages/{sdk,gateway,gateway-telegram}`).
+      # pnpm-lock.yaml lists those packages with `link:` paths — pnpm install
+      # expects the files on disk. `dist/` isn't committed so we also build
+      # the SDK before consuming it (typecheck needs the type entries to
+      # resolve at `./dist/index.d.ts`). Public repo, anonymous clone OK.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --frozen-lockfile && pnpm -r build)
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm build
@@ -57,13 +60,17 @@ jobs:
         node-version: [20, 22]
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout sibling theokit-sdk (workspace dep)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --frozen-lockfile && pnpm -r build)
       - run: pnpm install --frozen-lockfile
       # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth against
       # NODE_MODULE_VERSION mismatch. CRITICAL here because the matrix runs
@@ -80,13 +87,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout sibling theokit-sdk (workspace dep)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --frozen-lockfile && pnpm -r build)
       - run: pnpm install --frozen-lockfile
       - name: Rebuild native bindings (better-sqlite3 ABI guard)
         run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
@@ -105,13 +116,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout sibling theokit-sdk (workspace dep)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --frozen-lockfile && pnpm -r build)
       - run: pnpm install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
       - run: pnpm test:e2e
@@ -121,13 +136,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout sibling theokit-sdk (workspace dep)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --frozen-lockfile && pnpm -r build)
       - run: pnpm install --frozen-lockfile
       - run: pnpm knip
 
@@ -136,13 +155,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout sibling theokit-sdk (workspace dep)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --frozen-lockfile && pnpm -r build)
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:audit
 
@@ -163,13 +186,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout sibling theokit-sdk (workspace dep)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --frozen-lockfile && pnpm -r build)
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:licenses
 
@@ -179,13 +206,17 @@ jobs:
     needs: [typecheck-build]
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout sibling theokit-sdk (workspace dep)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
+      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
+      # `dist/` isn't committed → build after clone so type entries resolve.
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --frozen-lockfile && pnpm -r build)
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm check:bundle
