@@ -107,17 +107,29 @@ describe('actionsVirtualModule — plugin shape', () => {
   })
 })
 
-// Helpers to access vite's filter-shaped resolve/load handlers
-function getResolveHandler(plugin: ReturnType<typeof actionsVirtualModule>) {
+// Helpers to access vite's filter-shaped resolve/load handlers.
+// Tests intentionally call handlers with the runtime shape Vite uses
+// (single-arg resolveId, bound `this` context for load); Rollup's strict
+// PluginContext type is irrelevant to the contract under test, so handlers
+// are exposed via a loose signature.
+type LooseResolve = (id: string) => string | undefined | null
+type LoadResult = string | { code: string } | undefined | null
+type LooseLoad = (
+  this: { environment: { name: string } },
+  id: string,
+) => Promise<LoadResult> | LoadResult
+function getResolveHandler(plugin: ReturnType<typeof actionsVirtualModule>): LooseResolve {
   const r = plugin.resolveId
-  if (typeof r === 'function') return r
-  if (r && 'handler' in r && typeof r.handler === 'function') return r.handler
+  if (typeof r === 'function') return r as unknown as LooseResolve
+  if (r && 'handler' in r && typeof r.handler === 'function')
+    return r.handler as unknown as LooseResolve
   throw new Error('plugin.resolveId not a function or handler-shape')
 }
 
-function getLoadHandler(plugin: ReturnType<typeof actionsVirtualModule>) {
+function getLoadHandler(plugin: ReturnType<typeof actionsVirtualModule>): LooseLoad {
   const l = plugin.load
-  if (typeof l === 'function') return l
-  if (l && 'handler' in l && typeof l.handler === 'function') return l.handler
+  if (typeof l === 'function') return l as unknown as LooseLoad
+  if (l && 'handler' in l && typeof l.handler === 'function')
+    return l.handler as unknown as LooseLoad
   throw new Error('plugin.load not a function or handler-shape')
 }
