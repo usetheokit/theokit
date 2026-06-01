@@ -49,8 +49,11 @@ jobs:
           git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
+      # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
+      # imports from `packages/theo/dist/*` to validate the npm publish
+      # surface — those files don't exist until build runs.
       - run: pnpm build
+      - run: pnpm typecheck
 
   test:
     name: Unit + Type tests
