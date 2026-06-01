@@ -15,14 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
-const TEMPLATES_DIR = join(
-  TEST_DIR,
-  '..',
-  '..',
-  'packages',
-  'create-theo',
-  'templates',
-)
+const TEMPLATES_DIR = join(TEST_DIR, '..', '..', 'packages', 'create-theo', 'templates')
 
 const TOP_LEVEL_TEMPLATES = ['default', 'dashboard', 'api-only', 'postgres', 'saas']
 const REQUIRED_SCRIPTS = ['dev', 'build', 'start', 'typecheck']
@@ -87,7 +80,7 @@ describe('T2.1 + T2.2 + T2.3: DX hygiene across all 5 top-level templates', () =
         const inDev = pkg.devDependencies?.['drizzle-kit']
         const inProd = pkg.dependencies?.['drizzle-kit']
         expect(
-          inDev || inProd,
+          inDev ?? inProd,
           `template "${tpl}" tem script db:push mas drizzle-kit ausente das deps`,
         ).toBeDefined()
       },

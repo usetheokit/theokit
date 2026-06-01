@@ -7,7 +7,7 @@
  * Strategy: importa a função exportada `syncTemplates` em sandbox tmp
  * com truth injetada (não depende de lockfile real).
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -25,10 +25,7 @@ function makeSandbox(name: string) {
 
 function writeTpl(dir: string, name: string, body: object) {
   mkdirSync(join(dir, name), { recursive: true })
-  writeFileSync(
-    join(dir, name, 'package.json.tmpl'),
-    JSON.stringify(body, null, 2) + '\n',
-  )
+  writeFileSync(join(dir, name, 'package.json.tmpl'), JSON.stringify(body, null, 2) + '\n')
 }
 
 afterEach(() => {
@@ -193,9 +190,7 @@ describe('syncTemplates — edge cases (EC-2, EC-3, EC-4)', () => {
 
     // Then no entries are added — @usetheo/sdk/ui remain absent
     expect(result.drifted.length).toBe(0)
-    const after = JSON.parse(
-      readFileSync(join(sandbox, 'api-only', 'package.json.tmpl'), 'utf-8'),
-    )
+    const after = JSON.parse(readFileSync(join(sandbox, 'api-only', 'package.json.tmpl'), 'utf-8'))
     expect(after.dependencies['@usetheo/sdk']).toBeUndefined()
     expect(after.dependencies['@usetheo/ui']).toBeUndefined()
   })

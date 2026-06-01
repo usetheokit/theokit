@@ -190,8 +190,12 @@ describe('createConversationHistory', () => {
       )
     } finally {
       for (const [k, v] of Object.entries(origKeys)) {
-        if (v === undefined) delete process.env[k]
-        else process.env[k] = v
+        if (v === undefined) {
+          // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- test cleanup of env keys restored from snapshot
+          delete process.env[k]
+        } else {
+          process.env[k] = v
+        }
       }
     }
   })
