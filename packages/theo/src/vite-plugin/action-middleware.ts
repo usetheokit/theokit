@@ -105,13 +105,17 @@ export function createActionMiddleware(
         csrfMode,
         disallowed,
       )
-      logRequest({
-        method: req.method ?? 'POST',
-        url,
-        status: res.statusCode,
-        duration: Date.now() - start,
-        requestId,
-      })
+      logRequest(
+        {
+          method: req.method ?? 'POST',
+          url,
+          status: res.statusCode,
+          duration: Date.now() - start,
+          requestId,
+        },
+        undefined,
+        req,
+      )
     })()
   }
 }

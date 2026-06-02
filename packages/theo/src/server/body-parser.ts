@@ -47,6 +47,19 @@ export class FileTooLargeError extends Error {
 
 // --- JSON parsing ---
 
+/**
+ * Stash the parsed body on the IncomingMessage for the devtools forwarder
+ * to read at log time. Symbol-keyed so it never leaks into user-visible
+ * surfaces. Best-effort — failures (e.g. frozen req) are swallowed.
+ */
+function stashBodyPreview(req: IncomingMessage, body: unknown): void {
+  try {
+    ;(req as unknown as Record<symbol, unknown>)[DEVTOOLS_BODY_PREVIEW] = body
+  } catch {
+    // best-effort; never break the request
+  }
+}
+
 function parseJsonBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -178,6 +191,14 @@ function parseMultipartBody(
 
 // --- Main parser ---
 
+/**
+ * Symbol-keyed slot on IncomingMessage that the devtools request log
+ * forwarder reads to enrich the broadcast payload with a body preview.
+ * Symbol-keyed so it can't collide with user-land props and is invisible
+ * to JSON.stringify / iteration. Always optional — readers must guard.
+ */
+export const DEVTOOLS_BODY_PREVIEW = Symbol('theo:devtools:bodyPreview')
+
 export async function parseRequestBody(
   req: IncomingMessage,
   options?: BodyParserOptions,
@@ -192,6 +213,7 @@ export async function parseRequestBody(
   // JSON
   if (contentType.includes('application/json')) {
     const json = await parseJsonBody(req)
+    stashBodyPreview(req, json)
     return { fields: {}, files: [], json }
   }
 
@@ -203,6 +225,15 @@ export async function parseRequestBody(
       maxFieldSize: options?.maxFieldSize ?? DEFAULT_MAX_FIELD_SIZE,
     }
     const { fields, files } = await parseMultipartBody(req, contentType, limits)
+    stashBodyPreview(req, {
+      fields,
+      files: files.map((f) => ({
+        fieldname: f.fieldname,
+        filename: f.filename,
+        mimeType: f.mimeType,
+        size: f.size,
+      })),
+    })
     return { fields, files }
   }
 
