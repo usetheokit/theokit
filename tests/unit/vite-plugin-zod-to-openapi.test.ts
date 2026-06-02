@@ -15,6 +15,8 @@ import { z } from 'zod'
 import {
   ZodToOpenApiError,
   zodToOpenApiSchema,
+  type ConvertCtx,
+  type OpenApiSchema,
 } from '../../packages/theo/src/vite-plugin/openapi-emit/zod-to-openapi.js'
 
 describe('zodToOpenApiSchema — primitives', () => {
@@ -115,7 +117,10 @@ describe('zodToOpenApiSchema — recursive (seen-map cycle detection)', () => {
       z.object({ value: z.string(), next: Tree.optional() }),
     )
     // Use a named context so the second visit produces $ref to the named slot.
-    const ctx = { seen: new Map<z.ZodType, string>(), components: {} as Record<string, unknown> }
+    const ctx: ConvertCtx = {
+      seen: new Map<z.ZodType, string>(),
+      components: {} as Record<string, OpenApiSchema>,
+    }
     const r = zodToOpenApiSchema(Tree, { ctx, name: 'TreeNode' }) as { $ref?: string }
     // First call should register the schema under components AND return $ref.
     expect(r.$ref).toBe('#/components/schemas/TreeNode')
@@ -125,10 +130,12 @@ describe('zodToOpenApiSchema — recursive (seen-map cycle detection)', () => {
 
 describe('zodToOpenApiSchema — unsupported types', () => {
   it('z.function() throws ZodToOpenApiError with descriptive message', () => {
-    // @ts-expect-error -- testing the unsupported path; defineRoute would also reject this at the type level
-    expect(() => zodToOpenApiSchema(z.function())).toThrowError(ZodToOpenApiError)
-    // @ts-expect-error -- testing the unsupported path message; defineRoute would also reject
-    expect(() => zodToOpenApiSchema(z.function())).toThrow(/z\.function/i)
+    // z.function() is a ZodType at the type level, so no @ts-expect-error
+    // needed; the rejection is runtime via the switch's default arm.
+    expect(() => zodToOpenApiSchema(z.function() as unknown as z.ZodType)).toThrowError(
+      ZodToOpenApiError,
+    )
+    expect(() => zodToOpenApiSchema(z.function() as unknown as z.ZodType)).toThrow(/z\.function/i)
   })
 })
 
