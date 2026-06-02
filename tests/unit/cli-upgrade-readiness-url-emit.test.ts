@@ -24,13 +24,17 @@ const DIRTY_FIXTURE = resolve(__dirname, '../../fixtures/upgrade-readiness-dirty
 const MIGRATION_URL = 'https://theokit.dev/migration/0.2-to-0.3'
 
 describe('T1.3 — upgrade-readiness scanner emits migration-guide URL', () => {
+  // Loose any-typed spies — exact signature of vi.spyOn(process, 'exit') is
+  // intractable to match (mock returns never, callable expects unknown args).
   let logSpy: ReturnType<typeof vi.spyOn>
   let exitSpy: ReturnType<typeof vi.spyOn>
   let cwdSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined) as never) as ReturnType<typeof vi.spyOn>
   })
 
   afterEach(() => {
