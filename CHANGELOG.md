@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (0.3.0 cohort, 2026-06-02)
+
+**BREAKING:** these flips are the substance of TheoKit 0.3.0 (engineering already shipped in commits `3ee9dac`, `cc464c0`, `f13b371`, `380a3fc`). The cutover process is tracked in [`.claude/knowledge-base/plans/theokit-0-3-0-enforcement-cutover-plan.md`](../.claude/knowledge-base/plans/theokit-0-3-0-enforcement-cutover-plan.md) v1.1. Every breaking entry below ends with a migration-guide link per the Astro v6 CHANGELOG pattern (blueprint Q5).
+
+- **CSRF default flipped from `warn` to `strict`.** Apps that did not previously attach `X-Theo-Action: 1` to their action POSTs will now receive 403. The convergent peer pattern is Sec-Fetch-Site → Origin → Referer (verified across 4 frameworks per blueprint Q1). Opt-out: set `security.csrf: 'warn'` in `theo.config.ts` (existing enum value at `schema.ts:191`; see [ADR-0023](docs/adr/0023-csp-csrf-in-house-aligned-with-peers.md)) ([0.3.0 migration guidance](https://theokit.dev/migration/0.2-to-0.3#1-csrf-default-warn--strict))
+- **CSP default flipped from `report-only` to `enforce`.** Inline `<script>` and `<style>` without per-request nonce now block. SSR nonce machinery threads `ctx.nonce` automatically through layout/page. Opt-out: set `security.cspMode: 'report-only'` ([0.3.0 migration guidance](https://theokit.dev/migration/0.2-to-0.3#2-csp-default-report-only--enforce))
+- **Rollback runbook published.** See [`docs/runbook/0.3.0-rollback.md`](docs/runbook/0.3.0-rollback.md) for exact `npm dist-tag` commands if a regression surfaces post-promote. If a config-flag opt-out resolves your case, follow the migration guide first ([0.3.0 migration guidance](https://theokit.dev/migration/0.2-to-0.3#rollback))
+
 ### Added (dogfood-fixes-and-coverage-expansion T2.1 + T2.2 + T2.3, 2026-05-28)
 
 **DX hygiene em 5 templates** — resolve EC-S6 (sem scripts), EC-S7 (Node version), EC-S8 (favicon 404):
