@@ -23,6 +23,13 @@ import {
   buildManifest as buildServicesManifest,
   writeManifest as writeServicesManifest,
 } from '../../services/index.js'
+// G2 T2.2 — OpenAPI emit. Opt-in via `config.openapi`. Dual output:
+//   1. <distDir>/openapi.json (pre-Vite, dev surface + manifests sibling)
+//   2. dist/openapi.json      (post-Vite, build artifact)
+// The dist emit awaits runAdapterBuild — if Vite fails, the second emit
+// never runs (EC-2 absorbed: no stale dist artifact).
+import { emitOpenApi } from '../../vite-plugin/openapi-emit/emit.js'
+import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes.js'
 import { cleanOutDir } from '../cleanup/cleanup.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
@@ -100,8 +107,33 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
     )
   }
 
+  // G2 T2.2 — OpenAPI dev-surface emit (pre-Vite, sibling of manifests).
+  // Opt-in: only when config.openapi is defined. Best-effort: a route load
+  // failure produces a warning, not a build abort.
+  if (config.openapi !== undefined) {
+    const hydrated = await loadRoutesForOpenApi({ serverDir, routes: manifest.routes })
+    const devResult = emitOpenApi({
+      manifest: hydrated,
+      config: { ...config.openapi, outDir: distDir },
+    })
+    console.log(`  ✓ OpenAPI: ${String(hydrated.length)} ops → ${devResult.path}`)
+  }
+
   // Now run the adapter-specific bundling (Vite + adapter-specific work).
   await runAdapterBuild(target, config, cwd)
+
+  // G2 T2.2 — OpenAPI build-artifact emit (post-Vite, EC-2 gated on success).
+  // If runAdapterBuild threw, execution never reaches this point — no stale
+  // dist/openapi.json is written.
+  if (config.openapi !== undefined) {
+    const distOut = resolve(cwd, 'dist')
+    const hydrated = await loadRoutesForOpenApi({ serverDir, routes: manifest.routes })
+    const distResult = emitOpenApi({
+      manifest: hydrated,
+      config: { ...config.openapi, outDir: distOut },
+    })
+    console.log(`  ✓ OpenAPI (dist): ${distResult.path}`)
+  }
 
   const ssrNote = config.ssr ? ' (SSR)' : ''
   console.log(`\n  ✓ Build complete → ${target}${ssrNote}\n`)
