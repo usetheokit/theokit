@@ -40,6 +40,7 @@
     "openapi:regen-fixtures": "tsx scripts/regen-openapi-fixtures.ts"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
     "@arethetypeswrong/cli": "^0.18.2",
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^9",
