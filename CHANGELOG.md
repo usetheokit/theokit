@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (0.3.0 cutover docs+tests Phases 0-3 + T4.4, 2026-06-02)
+
+**Operational cutover scaffolding for TheoKit 0.3.0** (engineering already shipped per "Changed (0.3.0 cohort)" below). Plan: [`theokit-0-3-0-enforcement-cutover-plan.md`](../.claude/knowledge-base/plans/theokit-0-3-0-enforcement-cutover-plan.md) v1.1 SHIPPABLE_WITH_CAVEATS 79.6/100; blueprint 89/100. 9 commits `95943fd..b699238`:
+
+- **T0.1** — pre-flight verification audit (`docs/audit/0.3.0-preflight-2026-06-02.md`). schema.ts:191 csrf default, schema.ts:125 cspMode default, csrf-multi-header chain order confirmed at HEAD.
+- **T1.1** — `## Rollback` section expanded with `### Opt-out via config flag` + literal `csrf: 'warn'` config example. Canonical anchor `#rollback` preserved (EC-1+EC-2 absorbed: no duplicate heading).
+- **T1.2** — [`docs/adr/0023-csp-csrf-in-house-aligned-with-peers.md`](docs/adr/0023-csp-csrf-in-house-aligned-with-peers.md) (NEW; MADR 3.0). Locks Inquebrável §9 exception via blueprint Q3 confirming-negative (0/0/0/0 zod-to-* deps across Next.js/SvelteKit/Astro/Remix).
+- **T1.3** — `theokit check --upgrade-readiness 0.3` scanner emits migration-guide URL on success + violations paths. EC-7 insertion-point pinned to after no-violations message.
+- **T2.1** — [`tests/e2e/csp-blocks-external-script.spec.ts`](tests/e2e/csp-blocks-external-script.spec.ts) (NEW) mirror SvelteKit pattern: sidecar HTTP server localhost:9988 + fixture `ssr-basic/app/csp-test/page.tsx` + Playwright project port 3493. 2/2 GREEN proves CSP enforce blocks externally-injected script.
+- **T3.1** — `### Changed (0.3.0 cohort, 2026-06-02)` subsection added per Astro v6 URL pattern (every breaking entry ends with `([0.3.0 migration guidance](...))`). Anchor matching test.
+- **T3.2** — [`docs/blog/0.3.0-release.md`](docs/blog/0.3.0-release.md) (NEW) positioning vs 4 peers (Next.js/SvelteKit/Astro/Remix); HERO answers "what do I get"; Voice & Tone gate zero banned-everywhere terms.
+- **T4.4** — [`docs/runbook/0.3.0-rollback.md`](docs/runbook/0.3.0-rollback.md) (NEW; BLOCKS T4.1 per dependency graph). Exact `npm dist-tag add theokit@0.2.1 latest` commands + NEVER `npm unpublish` warning + 6-step procedure.
+
+7 new test files (45 tests total): `docs-migration-0-3-rollback`, `adr-0023-structure`, `cli-upgrade-readiness-url-emit`, `changelog-0-3-0-url-pattern`, `blog-0-3-0-voice-and-tone`, `runbook-0-3-0-rollback`, `csp-blocks-external-script.spec.ts`. All GREEN at HEAD.
+
+**Remaining cutover work (calendar-gated):** T4.1 publish `0.3.0-beta.0` to `next` (window opens ~2026-07-11 after ≥ 4-6 weeks warn-mode telemetry from 0.2.0 publish 2026-05-30); T4.2 ≥ 1 week observation; T4.3 promote `latest`; T5.1 final dogfood QA. Earliest promote ~2026-07-18.
+
+### Fixed (devtools dispatcher install-once, 2026-06-02, commit `3548d60`)
+
+**Actions tab silent-drop regression resolved.** After body-preview commit `c7906fa`, Actions tab + Requests POST telemetry silently dropped because Overlay's `useInsertionEffect` cleanup unconditionally cleared `window.__theoDevtoolsDispatcher`. In StrictMode/HMR, the unmount→mount ordering left the global undefined while the `@theo/actions` virtual module facade read it synchronously and no-op'd.
+
+- **`packages/theo/src/devtools/install-global.ts`** (NEW) — `installDispatcherGlobal()` is install-once for the page lifetime (mirrors React DevTools `__REACT_DEVTOOLS_GLOBAL_HOOK__` pattern). Returned cleanup is intentionally no-op for the global pointer; only `dispatcher.setDispatch(null)` cleans React-side wiring.
+- **`packages/theo/src/devtools/Overlay.tsx`** — uses the new helper; no longer touches `window.__theoDevtoolsDispatcher` directly.
+- **`tests/unit/devtools-global-dispatcher-pointer.test.ts`** (NEW, 4 tests) — regression test for StrictMode double-invoke pattern.
+- Browser-verified via Chrome MCP: Actions tab shows `saveMemory success 71ms` + Requests POST `/api/__actions/save-memory/saveMemory 200 32ms` populating correctly after reload.
+
 ### Changed (0.3.0 cohort, 2026-06-02)
 
 **BREAKING:** these flips are the substance of TheoKit 0.3.0 (engineering already shipped in commits `3ee9dac`, `cc464c0`, `f13b371`, `380a3fc`). The cutover process is tracked in [`.claude/knowledge-base/plans/theokit-0-3-0-enforcement-cutover-plan.md`](../.claude/knowledge-base/plans/theokit-0-3-0-enforcement-cutover-plan.md) v1.1. Every breaking entry below ends with a migration-guide link per the Astro v6 CHANGELOG pattern (blueprint Q5).

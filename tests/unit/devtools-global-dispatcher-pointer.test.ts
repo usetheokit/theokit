@@ -23,14 +23,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { dispatcher } from '../../packages/theo/src/devtools/dispatcher.js'
 import { installDispatcherGlobal } from '../../packages/theo/src/devtools/install-global.js'
 
-type WithGlobal = typeof globalThis & {
-  window?: { __theoDevtoolsDispatcher?: unknown }
-}
+// Test-only: we mutate `globalThis.window` to simulate browser + SSR contexts.
+// Using a loose Record type avoids fighting the jsdom Window-typed slot.
+type LooseGlobal = Record<string, unknown>
 
 function ensureWindow(): { __theoDevtoolsDispatcher?: unknown } {
-  const g = globalThis as WithGlobal
-  if (!g.window) g.window = {}
-  return g.window
+  const g = globalThis as unknown as LooseGlobal
+  g.window ??= {}
+  return g.window as { __theoDevtoolsDispatcher?: unknown }
 }
 
 describe('window.__theoDevtoolsDispatcher — stable global pointer', () => {
@@ -79,7 +79,7 @@ describe('window.__theoDevtoolsDispatcher — stable global pointer', () => {
   })
 
   it('no-ops when window is undefined (SSR safety)', () => {
-    const g = globalThis as WithGlobal
+    const g = globalThis as unknown as LooseGlobal
     const savedWindow = g.window
     delete g.window
     try {
