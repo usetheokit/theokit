@@ -28,10 +28,12 @@ export const nodeAdapter: DeployAdapter = {
       )
     }
 
-    // Client build
+    // Client build — `await` per ADR-0001 v3.1: makeVitePlugins may return
+    // a Promise (theokit build uses theoPluginAsync to wire the full chain
+    // including @theo/actions virtual module).
     await viteBuild({
       root: cwd,
-      plugins: ctx.makeVitePlugins({ root: cwd, ssr: config.ssr }),
+      plugins: await ctx.makeVitePlugins({ root: cwd, ssr: config.ssr }),
       build: {
         outDir: '.theo/client',
         emptyOutDir: true,
@@ -45,7 +47,7 @@ export const nodeAdapter: DeployAdapter = {
       console.log('\n  Building SSR...\n')
       await viteBuild({
         root: cwd,
-        plugins: ctx.makeVitePlugins({ root: cwd, ssr: true }),
+        plugins: await ctx.makeVitePlugins({ root: cwd, ssr: true }),
         build: {
           ssr: true,
           outDir: '.theo/server',

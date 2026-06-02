@@ -152,12 +152,19 @@ async function runAdapterBuild(
   // materialized only when needed (adapter is `node`). This keeps the CLI's startup
   // path independent of optional build-time deps (so e.g. `theokit build --target=static`
   // does not need react installed). dep-cruiser's per-module rule allows `cli → vite-plugin`.
-  const { theoPlugin } = await import('../../vite-plugin/index.js')
+  //
+  // 0.2.2 regression fix: switched sync `theoPlugin()` → `theoPluginAsync()` so the
+  // returned Plugin[] includes the @theo/actions virtual module + typed-client +
+  // services + @usetheo/ui auto-chain. Without async, build-time Rollup couldn't
+  // resolve `@theo/actions` even though dev-time Vite (which already used async)
+  // could. See https://github.com/usetheo/theokit/commits — 0.2.2 changelog.
+  const { theoPluginAsync } = await import('../../vite-plugin/index.js')
   const { default: react } = await import('@vitejs/plugin-react')
   const ctx: AdapterBuildContext = {
-    // `react()` may return Plugin or Plugin[] depending on version; flatten so the
-    // contract returns a flat Plugin[] as declared in AdapterBuildContext.
-    makeVitePlugins: (opts) => [react(), theoPlugin(opts)].flat(),
+    // `react()` may return Plugin or Plugin[] depending on version; spread the
+    // async chain so the contract returns a flat Plugin[] (AdapterBuildContext
+    // type updated to `Plugin[] | Promise<Plugin[]>`).
+    makeVitePlugins: async (opts) => [react(), ...(await theoPluginAsync(opts))].flat(),
   }
 
   // T1.1 (architecture-medium-deferrals, ADR D1) — Adapter Registry replaces
