@@ -1,7 +1,10 @@
+import { createSourceFile as tsCreateSourceFile, ScriptTarget } from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 import { generateClientDts } from '../../packages/theo/src/vite-plugin/app-typed-client.js'
 import type { TheoManifest } from '../../packages/theo/src/server/scan/manifest.js'
+
+const tsLatest = ScriptTarget.Latest
 
 function mkManifest(routes: TheoManifest['routes']): TheoManifest {
   return {
@@ -82,6 +85,62 @@ describe('generateClientDts', () => {
       serverDir: SERVER_DIR,
     })
     expect(out).toContain('params: { id: string }')
+  })
+
+  // Regression — theokit 0.2.2 fix: the previous codegen emitted
+  // `(opts: params: { id: string } & TheoFetchOptions<...>)` which is invalid
+  // TypeScript syntax (parser reads `params:` as a parameter label, then `{...}`
+  // as the type — combination invalid). Result: dogfood-app typecheck failed
+  // with TS1005/TS1359/TS1138 when consuming the published theokit@0.2.1.
+  // Fix wraps the intersection in `{ params: {...} }` so the signature is
+  // `(opts: { params: { id: string } } & TheoFetchOptions<...>)`.
+  it('regression: dynamic-param signature uses `(opts: { params: ... } & ...)` wrap (not `opts: params:` flat)', () => {
+    const out = generateClientDts({
+      manifest: mkManifest([
+        {
+          filePath: 'routes/users.[id].ts',
+          routePath: '/api/users/:id',
+          paramNames: ['id'],
+          methods: ['GET', 'DELETE'],
+        },
+      ]),
+      dtsOutPath: DTS_OUT,
+      serverDir: SERVER_DIR,
+    })
+    // Must contain the wrapped form
+    expect(out).toContain('(opts: { params: { id: string } } & import')
+    // Must NOT contain the broken flat form
+    expect(out).not.toContain('(opts: params: {')
+    // Parse with ts.createSourceFile to catch any syntax error globally —
+    // this catches future regressions in other intersection points.
+    // parseDiagnostics is attached to the SourceFile when set==true.
+    const sf = tsCreateSourceFile('out.d.ts', out, tsLatest, true)
+    const diags = (sf as unknown as { parseDiagnostics?: ReadonlyArray<{ messageText: string }> })
+      .parseDiagnostics
+    if (diags && diags.length > 0) {
+      throw new Error(
+        `Generated client.d.ts has ${diags.length} parse error(s): ${diags.map((d) => d.messageText).join(' | ')}`,
+      )
+    }
+  })
+
+  // Regression — theokit 0.2.2 fix: multi-param routes (`.:user/:id` etc) must
+  // also wrap correctly. Catch double-param edge case.
+  it('regression: multi-param route also uses `{ params: {...} }` wrap', () => {
+    const out = generateClientDts({
+      manifest: mkManifest([
+        {
+          filePath: 'routes/users.[user]/posts.[id].ts',
+          routePath: '/api/users/:user/posts/:id',
+          paramNames: ['user', 'id'],
+          methods: ['GET'],
+        },
+      ]),
+      dtsOutPath: DTS_OUT,
+      serverDir: SERVER_DIR,
+    })
+    expect(out).toContain('(opts: { params: { user: string; id: string } } & import')
+    expect(out).not.toMatch(/\(opts: params:/)
   })
 
   it('uses relative import paths from the .d.ts location (no aliases assumed)', () => {
@@ -176,9 +235,7 @@ describe('generateClientDts', () => {
 
   it('routes without methods declared (legacy manifest) are skipped silently', () => {
     const out = generateClientDts({
-      manifest: mkManifest([
-        { filePath: 'routes/x.ts', routePath: '/api/x', paramNames: [] },
-      ]),
+      manifest: mkManifest([{ filePath: 'routes/x.ts', routePath: '/api/x', paramNames: [] }]),
       dtsOutPath: DTS_OUT,
       serverDir: SERVER_DIR,
     })
