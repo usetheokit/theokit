@@ -193,6 +193,52 @@ async function handleBatchInline(
   }
 }
 
+/**
+ * P#3 T4.1 — fire pluginRunner.onRequest for unmatched routes so plugins
+ * can intercept paths outside server/routes/ (e.g., @usetheo/plugin-openapi
+ * /api/docs). Returns true when a plugin short-circuited the response.
+ */
+interface RunPluginsCtx {
+  req: IncomingMessage
+  res: ServerResponse
+  requestId: string
+  start: number
+  url: string
+}
+
+async function runPluginsBeforeRouteMatch(
+  pluginRunner: PluginRunner,
+  reqCtx: RunPluginsCtx,
+): Promise<boolean> {
+  const { req, res, requestId, start, url } = reqCtx
+  try {
+    const hookResult = await pluginRunner.runOnRequest({
+      request: req,
+      response: res,
+      ctx: {},
+      requestId,
+    })
+    if (hookResult.shortCircuited) {
+      logRequest(
+        {
+          method: req.method ?? 'GET',
+          url,
+          status: res.statusCode,
+          duration: Date.now() - start,
+          requestId,
+        },
+        undefined,
+        req,
+      )
+      return true
+    }
+  } catch (err) {
+    sendError(res, 'PLUGIN_ERROR', (err as Error).message, 500, undefined, requestId)
+    return true
+  }
+  return false
+}
+
 export function createApiMiddleware(
   vite: ViteDevServer,
   serverDir: string,
@@ -223,7 +269,12 @@ export function createApiMiddleware(
   const servicesProxyPrefixes = opts.servicesProxyPrefixes ?? []
 
   return (req, res, next) => {
-    void (async () => {
+    // Middleware dispatch arm: each branch guards a protocol concern
+    // (CSP report, CSRF readiness, services proxy, CORS preflight, rate
+    // limit, plugin onRequest, batch, route match); linear dispatch order
+    // is more readable than per-concern function extraction.
+    // eslint-disable-next-line complexity
+    const handle = async (): Promise<void> => {
       const url = req.url ?? ''
 
       // T5.1 — built-in CSP report endpoint. Matched BEFORE the /api/* gate
@@ -265,6 +316,15 @@ export function createApiMiddleware(
       corsHandler?.applyHeaders(req, res)
 
       if (applyRateLimitOr429(req, res, { rateLimiter, requestId, url, start })) {
+        return
+      }
+
+      // P#3 T4.1 — fire pluginRunner.onRequest BEFORE matchRoute so plugins
+      // can intercept unmatched paths (e.g., @usetheo/plugin-openapi /api/docs).
+      if (
+        pluginRunner &&
+        (await runPluginsBeforeRouteMatch(pluginRunner, { req, res, requestId, start, url }))
+      ) {
         return
       }
 
@@ -319,6 +379,7 @@ export function createApiMiddleware(
         undefined,
         req,
       )
-    })()
+    }
+    void handle()
   }
 }
