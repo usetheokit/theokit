@@ -28,8 +28,11 @@ describe('devtools — shared invariants', () => {
     expect(MAX_QUEUE_SIZE).toBe(100)
   })
 
-  it('STORAGE_VERSION = 1 (EC-21)', () => {
-    expect(STORAGE_VERSION).toBe(1)
+  it('STORAGE_VERSION >= 2 (bumped to invalidate pre-dark-default persisted state, EC-21)', () => {
+    // v1 was the cohort that defaulted theme to 'system'. v2 forces
+    // loadFromStorage() to return {} so the new 'dark' default surfaces
+    // for upgrading consumers (see devtools-default-theme.test.ts).
+    expect(STORAGE_VERSION).toBeGreaterThanOrEqual(2)
   })
 })
 
