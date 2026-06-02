@@ -22,6 +22,13 @@ import { resolveTransformer, type TheoTransformer } from '../server/transformer.
 
 import { detectTheoUi, type TheoUiDetectResult } from './theoui-detect.js'
 
+export interface ResolvedOpenApi {
+  servers: { url: string; description?: string }[]
+  specVersion: '3.1.0' | '3.0.3'
+  title: string
+  version: string
+}
+
 export interface ResolvedPluginConfig {
   pluginRunner: PluginRunner | undefined
   transformer: TheoTransformer | undefined
@@ -33,6 +40,10 @@ export interface ResolvedPluginConfig {
   cors: CorsConfig | undefined
   auditLogger: AuditLogger | undefined
   devtoolsEnabled: boolean
+  // P#3 T1.1 — undefined when config.openapi opt-out; otherwise validated config block
+  openapi: ResolvedOpenApi | undefined
+  // P#3 T1.1 — distDir resolved relative to projectRoot for openapi-emit output
+  distDir: string
 }
 
 /**
@@ -49,6 +60,8 @@ const DEFAULT_RESOLVED: ResolvedPluginConfig = {
   cors: undefined,
   auditLogger: undefined,
   devtoolsEnabled: true,
+  openapi: undefined,
+  distDir: '.theo',
 }
 
 export async function resolvePluginConfig(projectRoot: string): Promise<ResolvedPluginConfig> {
@@ -85,6 +98,8 @@ export async function resolvePluginConfig(projectRoot: string): Promise<Resolved
       cors: userConfig.security?.cors,
       auditLogger,
       devtoolsEnabled: userConfig.devtools !== false,
+      openapi: userConfig.openapi,
+      distDir: userConfig.distDir,
     }
   } catch {
     // Config load errors are surfaced elsewhere (validate-structure).
