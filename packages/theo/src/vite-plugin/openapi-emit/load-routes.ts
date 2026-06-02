@@ -33,6 +33,11 @@ interface ViteLikeServer {
   close: () => Promise<void>
 }
 
+interface DefaultLoader {
+  load: (absPath: string) => Promise<Record<string, unknown>>
+  dispose: () => Promise<void>
+}
+
 /** Method names recognized as per-route named exports (UPPERCASE). */
 const HTTP_METHOD_KEYS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
@@ -52,38 +57,56 @@ export interface LoadRoutesOptions {
  *
  * Routes that fail to load are skipped with a console warning — the emit
  * should be best-effort, not a hard build failure.
+ *
+ * The default Vite loader is created once per call and disposed in the
+ * `finally` block so the underlying server is released even when route
+ * loading throws.
  */
 export async function loadRoutesForOpenApi(
   options: LoadRoutesOptions,
 ): Promise<OpenApiManifestRoute[]> {
   const { serverDir, routes } = options
-  const loadModule = options.loadModule ?? (await createDefaultLoader(serverDir))
+  let loadModule = options.loadModule
+  let dispose: (() => Promise<void>) | undefined
+  if (loadModule === undefined) {
+    const created = await createDefaultLoader(serverDir)
+    loadModule = created.load
+    dispose = created.dispose
+  }
 
   const out: OpenApiManifestRoute[] = []
-  for (const r of routes) {
-    const abs = resolve(serverDir, r.filePath)
-    let mod: Record<string, unknown>
-    try {
-      mod = await loadModule(abs)
-    } catch (err) {
-      console.warn(`[openapi-emit] Skipping ${r.filePath}: load failed (${(err as Error).message})`)
-      continue
-    }
-
-    const methods = r.methods ?? HTTP_METHOD_KEYS.filter((m) => mod[m] !== undefined)
-    if (methods.length === 0) {
-      // Fall back to default export when no method-named exports detected.
-      const def = mod.default
-      if (def !== undefined && def !== null) {
-        out.push({ routePath: r.routePath, methods: ['GET'], ...extractSchemas(def) })
+  try {
+    for (const r of routes) {
+      const abs = resolve(serverDir, r.filePath)
+      let mod: Record<string, unknown>
+      try {
+        mod = await loadModule(abs)
+      } catch (err) {
+        console.warn(
+          `[openapi-emit] Skipping ${r.filePath}: load failed (${(err as Error).message})`,
+        )
+        continue
       }
-      continue
-    }
 
-    for (const method of methods) {
-      const handler = mod[method] ?? mod.default
-      if (handler === undefined || handler === null) continue
-      out.push({ routePath: r.routePath, methods: [method], ...extractSchemas(handler) })
+      const methods = r.methods ?? HTTP_METHOD_KEYS.filter((m) => mod[m] !== undefined)
+      if (methods.length === 0) {
+        // Fall back to default export when no method-named exports detected.
+        const def = mod.default
+        if (def !== undefined && def !== null) {
+          out.push({ routePath: r.routePath, methods: ['GET'], ...extractSchemas(def) })
+        }
+        continue
+      }
+
+      for (const method of methods) {
+        const handler = mod[method] ?? mod.default
+        if (handler === undefined || handler === null) continue
+        out.push({ routePath: r.routePath, methods: [method], ...extractSchemas(handler) })
+      }
+    }
+  } finally {
+    if (dispose !== undefined) {
+      await dispose()
     }
   }
   return out
@@ -103,16 +126,12 @@ function extractSchemas(handlerExport: unknown): RouteConfigShape {
 /**
  * Default loader: spin up a minimal Vite SSR dev server (no HMR, no
  * middlewares) just to use its `ssrLoadModule`. Vite handles TS, ESM, and
- * import resolution for free. The server is closed by the caller via
- * the returned cleanup… except we close eagerly inline by wrapping the
- * loader to dispose after the calling batch completes.
+ * import resolution for free.
  *
- * In practice the calling site (`loadRoutesForOpenApi`) doesn't hold the
- * server — it's created, used, closed in one shot via the IIFE pattern.
+ * Returns `{load, dispose}` — the caller owns the lifecycle and MUST
+ * call `dispose()` (typically in a `finally`) so the server is closed.
  */
-async function createDefaultLoader(
-  serverDir: string,
-): Promise<(absPath: string) => Promise<Record<string, unknown>>> {
+async function createDefaultLoader(serverDir: string): Promise<DefaultLoader> {
   // Vite is a peerDep in build flows; import dynamically.
   const { createServer } = await import('vite')
   const server = (await createServer({
@@ -123,26 +142,13 @@ async function createDefaultLoader(
     logLevel: 'silent',
   })) as unknown as ViteLikeServer
 
-  let inflight = 0
-  let closed = false
   const swallow = (): void => {
     /* eat close errors — best-effort cleanup */
   }
-  return async (absPath: string) => {
-    if (closed) throw new Error('vite-loader already closed')
-    inflight++
-    try {
-      return await server.ssrLoadModule(absPath)
-    } finally {
-      inflight--
-      if (inflight === 0) {
-        queueMicrotask(() => {
-          if (inflight === 0 && !closed) {
-            closed = true
-            void server.close().catch(swallow)
-          }
-        })
-      }
-    }
+  return {
+    load: async (absPath) => server.ssrLoadModule(absPath),
+    dispose: async () => {
+      await server.close().catch(swallow)
+    },
   }
 }
