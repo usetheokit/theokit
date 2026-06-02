@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (P#3 prerequisites — dev-emit hook + plugin-runner pre-route gate, 2026-06-02)
+
+Two additive surfaces unlocked by `@usetheo/plugin-openapi` (shipped in `theokit-plugins` 2026-06-02 — see [`@usetheo/plugin-openapi` CHANGELOG](../../theokit-plugins/packages/plugin-openapi/CHANGELOG.md)). Both are zero-breaking-change: gated behaviors that only activate when the consumer opts in.
+
+- **Dev-mode `.theo/openapi.json` emit on `theokit dev`** (T1.1). When `config.openapi !== undefined`, `vite-plugin/index.ts` spins up `reEmitOpenApi` on boot AND on `server/**/*.{ts,tsx,js,mjs}` chokidar watcher events. Single-flight guard via `inFlight` flag prevents handler pile-up when Vite SSR loader hangs on circular imports (EC-8 absorbed). Best-effort: ALL errors caught + `console.warn`'d, never throws out of the watcher (would crash dev). New helper at `packages/theo/src/vite-plugin/openapi-emit/dev-emit.ts`. 7/7 RED→GREEN tests. Commit `1b46ede`. Plan: [`p3-plugin-openapi-plan.md`](../.claude/knowledge-base/plans/p3-plugin-openapi-plan.md) v1.3 T1.1 + ADRs D3 + D4 + EC-8.
+
+- **`pluginRunner.runOnRequest` fires BEFORE `matchRoute`** (T4.1). Latent gap fix: `api-middleware.ts` sent 404 for unmatched routes before invoking the plugin runner, so generalist plugins handling paths outside `server/routes/` were dead. plugin-cors worked around via the special-cased `corsHandler.handlePreflight()` — no such escape hatch for `plugin-openapi`. Fix extracts `runPluginsBeforeRouteMatch()` helper that fires `onRequest` after CORS preflight + rate limit. Plugins that short-circuit (`writableEnded`/`headersSent`) skip the rest of the chain; non-matching plugins pass through. Mirrors Fastify model + matches the TheoApp contract. **Benefits any future plugin** handling paths outside `server/routes/` (e.g., `/health`, `/metrics`, `/api/docs`). Commit `955f182`. Audit: [`docs/audit/p3-plugin-openapi-dogfood-2026-06-02.md`](docs/audit/p3-plugin-openapi-dogfood-2026-06-02.md).
+
+Live smoke (dogfood-app): `GET /api/docs` → 200 text/html + Scalar embed; `GET /api/docs/openapi.json` → 200 + 44 paths; `/api/memory` present. `pnpm typecheck` exit 0; dep-cruiser 0 violations; lint clean.
+
 ### Added (G2 — OpenAPI emit, 2026-06-02)
 
 **`theokit build` now emits `openapi.json` from `defineRoute()` Zod schemas** (opt-in via `openapi: {...}` in `theo.config.ts`). Plan: [`g2-theokit-build-openapi-emit-plan.md`](../.claude/knowledge-base/plans/g2-theokit-build-openapi-emit-plan.md) v1.1. 10 commits `d6cbb42..1df8edb`:
