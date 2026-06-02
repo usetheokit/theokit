@@ -142,7 +142,7 @@ export type DevtoolsAction =
 
 export const RING_BUFFER_CAP = 50
 export const MAX_QUEUE_SIZE = 100
-export const STORAGE_VERSION = 1
+export const STORAGE_VERSION = 2
 
 export const initialState: DevtoolsState = {
   open: false,
