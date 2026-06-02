@@ -2,15 +2,18 @@
  * Actions tab — per-action-call telemetry (timestamp, name, status, duration).
  *
  * G3 plan T5.1 + ADR D7. Consumes `state.actionCalls` populated by
- * `dispatcher.onActionCall()` which is called from `server/http/action-execute.ts`
- * (or future consumers) in dev mode (tree-shaken in prod via __IS_DEV guard,
- * mirroring AgentsTab pattern).
+ * `dispatcher.onActionCall()`.
+ *
+ * UX: row-level inline expand/collapse, mirroring RequestsTab. Each row
+ * is a click-to-toggle button; details render inline under the expanded
+ * row. Multiple rows can be expanded simultaneously. JSONExplorer is
+ * used for input/output bodies (nested collapsibility).
  *
  * EC absorbed:
- * - EC-12 (PII mask heuristic): masked input/output rendered via maskPiiFields
- *   (password/token/secret/apiKey/credit_card/ssn/cpf/cnpj). Click-to-reveal
- *   per-record toggle stores the unmasked view in local component state
- *   (NEVER persisted; reset on tab close).
+ * - EC-12 (PII mask heuristic): bodies pass through maskPiiFields when
+ *   not revealed (password/token/secret/apiKey/credit_card/ssn/cpf/cnpj).
+ *   Click-to-reveal per-record toggle stores the unmasked view in local
+ *   component state (NEVER persisted; reset on tab close).
  * - EC-11 (tree-shake prod): the dispatcher emit path is __IS_DEV-guarded;
  *   in prod the entire telemetry module is dead-code-eliminated.
  *
@@ -18,6 +21,7 @@
  */
 import { useState } from 'react'
 
+import { toggleExpandedIds } from '../../actions-row-state.js'
 import { useDevtoolsContext } from '../../hooks/useDevtoolsContext.js'
 import { maskPiiFields } from '../../pii-mask.js'
 import type { ActionCallRecord } from '../../shared.js'
@@ -37,7 +41,6 @@ function formatPayload(value: unknown, reveal: boolean): string {
   }
 }
 
-// Style builder extracted to keep ActionsTab's body under the line ceiling.
 function buildActionsStyles(styles: ReturnType<typeof useDevtoolsContext>['styles']) {
   return {
     header: styles.css`
@@ -60,27 +63,37 @@ function buildActionsStyles(styles: ReturnType<typeof useDevtoolsContext>['style
       font-size: ${tokens.font.sizeXs};
       &:hover { color: ${tokens.colors.text}; }
     `,
-    table: styles.css`
-      width: 100%;
-      border-collapse: collapse;
+    rowContainer: styles.css`
+      border-bottom: 1px solid ${tokens.colors.borderSubtle};
       font-size: ${tokens.font.sizeXs};
-      th, td {
-        text-align: left;
-        padding: 4px 8px;
-        border-bottom: 1px solid ${tokens.colors.borderSubtle};
-      }
-      th {
-        color: ${tokens.colors.textMuted};
-        font-weight: 500;
-        font-size: ${tokens.font.sizeXs};
-      }
-      tr.status-error td { color: #c92a2a; }
-      tr.selected td { background: ${tokens.colors.borderSubtle}; cursor: pointer; }
-      tr { cursor: pointer; }
+    `,
+    rowSummary: styles.css`
+      display: grid;
+      grid-template-columns: 24px 80px 1fr 80px 80px;
+      gap: ${tokens.spacing.sm};
+      align-items: center;
+      width: 100%;
+      padding: ${tokens.spacing.xs} ${tokens.spacing.sm};
+      background: transparent;
+      border: none;
+      color: ${tokens.colors.text};
+      text-align: left;
+      cursor: pointer;
+      font-family: ${tokens.font.family};
+      font-size: ${tokens.font.sizeXs};
+      &:hover { background: ${tokens.colors.bgPanelHover}; }
+      &[aria-expanded='true'] { background: ${tokens.colors.bgPanelHover}; }
+      .chev { color: ${tokens.colors.textMuted}; font-family: ${tokens.font.mono}; }
+      .name { font-family: ${tokens.font.mono}; }
+      .time { color: ${tokens.colors.textMuted}; font-family: ${tokens.font.mono}; }
+      .status-success { color: ${tokens.colors.accent}; }
+      .status-error { color: #c92a2a; }
+      .duration { color: ${tokens.colors.textMuted}; text-align: right; }
     `,
     detail: styles.css`
-      padding: ${tokens.spacing.sm};
-      border-top: 1px solid ${tokens.colors.borderSubtle};
+      padding: ${tokens.spacing.sm} ${tokens.spacing.md};
+      background: ${tokens.colors.bgPanelHover};
+      border-top: 1px dashed ${tokens.colors.borderSubtle};
       font-size: ${tokens.font.sizeXs};
       pre {
         margin: 0;
@@ -91,12 +104,7 @@ function buildActionsStyles(styles: ReturnType<typeof useDevtoolsContext>['style
         max-height: 200px;
         font-family: ${tokens.font.mono};
       }
-      .field-errors {
-        margin-top: ${tokens.spacing.xs};
-        color: #c92a2a;
-      }
-      .field-errors li { margin-left: ${tokens.spacing.md}; }
-      button {
+      .reveal-btn {
         appearance: none;
         background: transparent;
         color: ${tokens.colors.textMuted};
@@ -107,6 +115,10 @@ function buildActionsStyles(styles: ReturnType<typeof useDevtoolsContext>['style
         cursor: pointer;
         font-size: ${tokens.font.sizeXs};
       }
+      .reveal-btn:hover { color: ${tokens.colors.text}; }
+      .section { margin-top: ${tokens.spacing.sm}; }
+      .field-errors { margin-top: ${tokens.spacing.xs}; color: #c92a2a; }
+      .field-errors li { margin-left: ${tokens.spacing.md}; }
     `,
   }
 }
@@ -124,22 +136,17 @@ function ActionsEmptyState() {
 export function ActionsTab() {
   const { state, dispatch, styles } = useDevtoolsContext()
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set())
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
 
   if (state.actionCalls.length === 0) return <ActionsEmptyState />
 
   const cls = buildActionsStyles(styles)
 
-  const selected: ActionCallRecord | undefined =
-    selectedId !== null ? state.actionCalls.find((r) => r.id === selectedId) : state.actionCalls[0]
-
   const toggleReveal = (id: string): void => {
-    setRevealedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+    setRevealedIds((prev) => toggleExpandedIds(prev, id))
+  }
+  const toggleExpand = (id: string): void => {
+    setExpandedIds((prev) => toggleExpandedIds(prev, id))
   }
 
   return (
@@ -150,26 +157,29 @@ export function ActionsTab() {
         count={state.actionCalls.length}
         onClear={() => {
           dispatch({ type: 'RESET_ACTION_CALLS' })
-          setSelectedId(null)
           setRevealedIds(new Set())
+          setExpandedIds(new Set())
         }}
       />
-      <ActionsTable
-        className={cls.table}
-        records={state.actionCalls}
-        selectedId={selected?.id}
-        onSelect={setSelectedId}
-      />
-      {selected && (
-        <ActionDetail
-          className={cls.detail}
-          record={selected}
-          revealed={revealedIds.has(selected.id)}
-          onToggleReveal={() => {
-            toggleReveal(selected.id)
-          }}
-        />
-      )}
+      <div>
+        {state.actionCalls.map((r) => (
+          <ActionRow
+            key={r.id}
+            record={r}
+            containerClass={cls.rowContainer}
+            summaryClass={cls.rowSummary}
+            detailClass={cls.detail}
+            expanded={expandedIds.has(r.id)}
+            revealed={revealedIds.has(r.id)}
+            onToggleExpand={() => {
+              toggleExpand(r.id)
+            }}
+            onToggleReveal={() => {
+              toggleReveal(r.id)
+            }}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -192,81 +202,66 @@ function ActionsHeader({
   )
 }
 
-function ActionsTable({
-  className,
-  records,
-  selectedId,
-  onSelect,
-}: Readonly<{
-  className: string
-  records: readonly ActionCallRecord[]
-  selectedId: string | undefined
-  onSelect: (id: string) => void
-}>) {
-  return (
-    <table className={className}>
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Action</th>
-          <th>Status</th>
-          <th>Duration</th>
-        </tr>
-      </thead>
-      <tbody>
-        {records.map((r) => (
-          <tr
-            key={r.id}
-            className={`status-${r.status} ${r.id === selectedId ? 'selected' : ''}`}
-            onClick={() => {
-              onSelect(r.id)
-            }}
-          >
-            <td>{formatTime(r.timestamp)}</td>
-            <td>{r.name}</td>
-            <td>{r.status}</td>
-            <td>{r.durationMs}ms</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function ActionDetail({
-  className,
+function ActionRow({
   record,
+  containerClass,
+  summaryClass,
+  detailClass,
+  expanded,
   revealed,
+  onToggleExpand,
   onToggleReveal,
 }: Readonly<{
-  className: string
   record: ActionCallRecord
+  containerClass: string
+  summaryClass: string
+  detailClass: string
+  expanded: boolean
   revealed: boolean
+  onToggleExpand: () => void
   onToggleReveal: () => void
 }>) {
+  const statusClass = record.status === 'success' ? 'status-success' : 'status-error'
   return (
-    <div className={className}>
-      <button type="button" onClick={onToggleReveal}>
-        {revealed ? 'Hide values' : 'Reveal values'}
+    <div className={containerClass} data-testid="devtools-action-row">
+      <button
+        type="button"
+        className={summaryClass}
+        onClick={onToggleExpand}
+        aria-expanded={expanded}
+        title={`${record.name} — click to ${expanded ? 'collapse' : 'expand'} details`}
+      >
+        <span className="chev">{expanded ? '▼' : '▶'}</span>
+        <span className="time">{formatTime(record.timestamp)}</span>
+        <span className="name">{record.name}</span>
+        <span className={statusClass}>{record.status}</span>
+        <span className="duration">{record.durationMs}ms</span>
       </button>
-      <div>
-        <strong>Input</strong>
-        <pre>{formatPayload(record.input, revealed)}</pre>
-      </div>
-      {record.status === 'success' && record.output !== undefined && (
-        <div>
-          <strong>Output</strong>
-          <pre>{formatPayload(record.output, revealed)}</pre>
+      {expanded && (
+        <div className={detailClass}>
+          <button type="button" className="reveal-btn" onClick={onToggleReveal}>
+            {revealed ? 'Hide values' : 'Reveal values'}
+          </button>
+          <div className="section">
+            <strong>Input</strong>
+            <pre>{formatPayload(record.input, revealed)}</pre>
+          </div>
+          {record.status === 'success' && record.output !== undefined && (
+            <div className="section">
+              <strong>Output</strong>
+              <pre>{formatPayload(record.output, revealed)}</pre>
+            </div>
+          )}
+          {record.status === 'error' && record.error && <ActionDetailError error={record.error} />}
         </div>
       )}
-      {record.status === 'error' && record.error && <ActionDetailError error={record.error} />}
     </div>
   )
 }
 
 function ActionDetailError({ error }: Readonly<{ error: NonNullable<ActionCallRecord['error']> }>) {
   return (
-    <div>
+    <div className="section">
       <strong>Error: {error.code}</strong>
       <p>{error.message}</p>
       {error.fields && Object.keys(error.fields).length > 0 && (
