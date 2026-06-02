@@ -61,6 +61,16 @@ export default defineConfig({
       testMatch: 'ssr-nonce.spec.ts',
     },
     {
+      // 0.3.0 cutover T2.1 — CSP enforce blocks externally-injected
+      // <script>. Mirrors SvelteKit's pattern (`kit/test/apps/options/
+      // test/test.js:11`). Spawns a sidecar HTTP server on localhost:9988;
+      // the fixture renders <script src="http://127.0.0.1:9988/blocked.js">;
+      // assertion: window.pwned stays undefined. GATES T4.1 publish.
+      name: 'csp-blocks-external-script',
+      use: { baseURL: `${LOCAL}:3493` },
+      testMatch: 'csp-blocks-external-script.spec.ts',
+    },
+    {
       // Item #6 — examples/full-stack-agent demo. Exercises every Phase B
       // primitive end-to-end + the cookie persistence story.
       name: 'full-stack-agent',
@@ -202,6 +212,18 @@ export default defineConfig({
       command: `npx tsx ${cliPath} dev --port 3492`,
       cwd: fixture('ssr-basic'),
       port: 3492,
+      reuseExistingServer: false,
+      timeout: 60000,
+    },
+    {
+      // 0.3.0 cutover T2.1 — ssr-basic on dedicated port 3493 for the
+      // csp-blocks-external-script spec. Reuses the ssr-basic fixture
+      // (now augmented with app/csp-test/page.tsx) on a separate port so
+      // ssr-nonce on 3492 keeps its isolated dev server. The spec spawns
+      // its own sidecar HTTP server on localhost:9988.
+      command: `npx tsx ${cliPath} dev --port 3493`,
+      cwd: fixture('ssr-basic'),
+      port: 3493,
       reuseExistingServer: false,
       timeout: 60000,
     },
