@@ -36,7 +36,8 @@
     "sync:templates": "node scripts/sync-template-versions.mjs --write",
     "check:templates": "node scripts/sync-template-versions.mjs",
     "theo-ui:link": "bash scripts/theo-ui-link.sh",
-    "theo-ui:unlink": "bash scripts/theo-ui-unlink.sh"
+    "theo-ui:unlink": "bash scripts/theo-ui-unlink.sh",
+    "openapi:regen-fixtures": "tsx scripts/regen-openapi-fixtures.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
