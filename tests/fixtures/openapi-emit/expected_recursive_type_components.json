@@ -1,0 +1,10 @@
+{
+  "ref": {
+    "$ref": "#/components/schemas/TreeNode"
+  },
+  "components": {
+    "TreeNode": {
+      "$ref": "#/components/schemas/TreeNode"
+    }
+  }
+}
