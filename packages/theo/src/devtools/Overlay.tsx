@@ -19,6 +19,7 @@ import { useActiveRoute } from './hooks/useActiveRoute.js'
 import { DevtoolsContext } from './hooks/useDevtoolsContext.js'
 import { useResolvedTheme } from './hooks/useResolvedTheme.js'
 import { useShortcuts } from './hooks/useShortcuts.js'
+import { installDispatcherGlobal } from './install-global.js'
 import { loadFromStorage, writeToStorage } from './persistence.js'
 import { devtoolsReducer, initialState } from './reducer.js'
 import { ShadowPortal } from './shadow-portal.js'
@@ -75,25 +76,15 @@ export function Overlay({ shadowRoot }: Readonly<{ shadowRoot: ShadowRoot }>) {
   // earliest hook React gives us. Lets queued events (Pattern F) flush
   // before any component reads state.
   //
-  // Also installs the dispatcher as `window.__theoDevtoolsDispatcher` so
-  // dev-only telemetry callers (e.g. the @theo/actions virtual module's
-  // callAction) can dispatch without a cross-package import — pattern
-  // mirrors React DevTools' `__REACT_DEVTOOLS_GLOBAL_HOOK__`. Cleaned up
-  // on unmount so HMR re-mounts don't leave a stale reference.
+  // The window global pointer is install-once for the page lifetime
+  // (see install-global.ts). Only the React dispatch reference is wired
+  // up/down per mount — that one IS lifecycle-bound.
   useInsertionEffect(() => {
     dispatcher.setDispatch(dispatch)
-    if (typeof window !== 'undefined') {
-      ;(
-        window as unknown as { __theoDevtoolsDispatcher?: typeof dispatcher }
-      ).__theoDevtoolsDispatcher = dispatcher
-    }
+    const uninstall = installDispatcherGlobal()
     return () => {
       dispatcher.setDispatch(null)
-      if (typeof window !== 'undefined') {
-        ;(
-          window as unknown as { __theoDevtoolsDispatcher?: typeof dispatcher }
-        ).__theoDevtoolsDispatcher = undefined
-      }
+      uninstall()
     }
   }, [])
 
