@@ -202,6 +202,11 @@ function buildOptimizeDepsInclude(
   if (existsSync(resolve(projectRoot, 'node_modules', 'lucide-react'))) {
     include.push('lucide-react')
   }
+  // T7.1 — devalue is a peer of the @theo/actions virtual module facade.
+  // Without this include hint, Vite import-analysis fails to resolve the
+  // facade's `await import('devalue')` from the consumer context (devalue
+  // lives in theokit's node_modules subtree, not the consumer root).
+  include.push('devalue')
   if (Array.isArray(viteOptimizeDeps)) {
     for (const pkg of viteOptimizeDeps) {
       if (typeof pkg === 'string' && pkg.length > 0 && !include.includes(pkg)) {
@@ -300,9 +305,18 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
           ? buildServicesProxyConfig(options.services)
           : undefined
 
+      // T7.1 dogfood fix — workspace-linked packages change frequently as
+      // we iterate. Vite's pre-bundler caches by lockfile hash, NOT source-
+      // content hash; when the workspace dist updates but the lockfile
+      // doesn't, the cache serves stale bundles (e.g., missing newly-added
+      // `useAction` export). Setting `force: true` always re-optimizes on
+      // boot — slower cold-start but cache-coherent across workspace iter.
       return {
         envPrefix: 'THEO_PUBLIC_',
-        optimizeDeps: optimizeDepsInclude.length > 0 ? { include: optimizeDepsInclude } : undefined,
+        optimizeDeps: {
+          ...(optimizeDepsInclude.length > 0 ? { include: optimizeDepsInclude } : {}),
+          force: true,
+        },
         server: {
           ...(warmupClientFiles.length > 0 ? { warmup: { clientFiles: warmupClientFiles } } : {}),
           ...(servicesProxy !== undefined ? { proxy: servicesProxy } : {}),
