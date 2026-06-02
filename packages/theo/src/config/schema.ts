@@ -422,6 +422,36 @@ export const theoConfigSchema = z
      * default and preserves Wave 1 behavior.
      */
     services: servicesConfigSchema,
+    /**
+     * G2 — OpenAPI emit (build-time only).
+     *
+     * When present, `theokit build` writes a generated `openapi.json` from
+     * every `defineRoute()` body/query/params Zod schema. `undefined` keeps
+     * the framework backward-compatible (no emit). Pass `openapi: {}` to
+     * opt in with defaults.
+     *
+     * Defaults: spec 3.1.0 · servers `http://localhost:3000` · title
+     * "TheoKit App" · version "0.0.0" · outDir ".theo" (next to dist).
+     *
+     * The env var `THEOKIT_OPENAPI_SERVERS` (CSV of URLs) overrides
+     * `servers[].url` at emit time without rebuilding the config.
+     */
+    openapi: z
+      .object({
+        servers: z
+          .array(
+            z.object({
+              url: z.string().url(),
+              description: z.string().optional(),
+            }),
+          )
+          .default([{ url: 'http://localhost:3000', description: 'Local development' }]),
+        specVersion: z.enum(['3.1.0', '3.0.3']).default('3.1.0'),
+        title: z.string().default('TheoKit App'),
+        version: z.string().default('0.0.0'),
+        outDir: z.string().default('.theo'),
+      })
+      .optional(),
   })
   // EC-2 fix: cross-config refine — no service may share TheoKit's web port.
   .refine((cfg) => !Object.values(cfg.services).some((s) => s.port === cfg.port), {
@@ -430,3 +460,5 @@ export const theoConfigSchema = z
   })
 
 export type TheoConfig = z.infer<typeof theoConfigSchema>
+
+export type OpenApiConfig = NonNullable<TheoConfig['openapi']>
