@@ -18,6 +18,7 @@ import type { CorsConfig } from '../server/http/cors.js'
 import type { AuditLogger } from '../server/observability/audit-log.js'
 import type { PluginRunner } from '../server/plugins/plugin-runner.js'
 import type { RateLimitConfig } from '../server/rate-limit/rate-limit.js'
+import { CsrfReadinessStore } from '../server/security/csrf-readiness-store.js'
 import type { DisallowedConfig } from '../server/security/csrf.js'
 import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
 import type { TheoTransformer } from '../server/transformer.js'
@@ -90,6 +91,17 @@ export interface TheoPluginOptions {
    *   viteOptimizeDeps: ['mermaid']
    */
   viteOptimizeDeps?: string[]
+  /**
+   * Optional override for the in-memory CSRF readiness store consumed by
+   * the `/__theo/csrf-readiness` endpoint and the devtools CSRF Readiness
+   * tab. When omitted, the plugin auto-instantiates a default in-process
+   * `CsrfReadinessStore` so the tab works out-of-the-box in dev.
+   *
+   * Override with a custom impl when you need cross-worker telemetry
+   * (e.g., Redis-backed store) or want to silence the tab entirely
+   * (pass an inert store that discards writes).
+   */
+  csrfReadinessStore?: CsrfReadinessStore
 }
 
 /**
@@ -501,6 +513,12 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
         options.services && Object.keys(options.services).length > 0
           ? Object.values(options.services).map((s) => s.proxy)
           : []
+      // Auto-instantiate a dev-only CsrfReadinessStore so the devtools
+      // CSRF Readiness tab works out-of-the-box. Consumers can override
+      // via options.csrfReadinessStore (e.g. a Redis-backed impl for
+      // multi-worker prod telemetry). In-memory, bounded at 1000 entries,
+      // single-process — see CsrfReadinessStore.MAX_ENTRIES.
+      const csrfReadinessStore = options.csrfReadinessStore ?? new CsrfReadinessStore()
       server.middlewares.use(
         createApiMiddleware(server, serverDir, {
           rateLimitConfig: options.rateLimit,
@@ -513,6 +531,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
           cors,
           auditLogger,
           servicesProxyPrefixes,
+          csrfReadinessStore,
         }),
       )
 
