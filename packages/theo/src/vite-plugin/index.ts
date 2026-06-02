@@ -27,7 +27,7 @@ import { buildServicesProxyConfig, type ServicesConfig } from '../services/index
 import { createActionMiddleware } from './action-middleware.js'
 import { createApiMiddleware } from './api-middleware.js'
 // T2.1-T2.3 (architecture-medium-deferrals) — sibling extractions.
-import { resolvePluginConfig } from './config-resolve.js'
+import { resolvePluginConfig, type ResolvedOpenApi } from './config-resolve.js'
 import {
   DEVTOOLS_RESOLVED_ID,
   DEVTOOLS_VIRTUAL_ID,
@@ -258,6 +258,9 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
   let auditLogger: AuditLogger | undefined
   // T1.2 — devtools opt-out. `false` skips injection; anything else enables (dev only).
   let devtoolsEnabled = true
+  // P#3 T1.1 — OpenAPI dev-emit config. undefined = opt-out (no behavior).
+  let resolvedOpenApi: ResolvedOpenApi | undefined
+  let resolvedDistDir = '.theo'
   // Dev mode flag set in configureServer. transformIndexHtml runs in both
   // dev and build; we only want to inject during dev.
   let isDevMode = false
@@ -283,6 +286,8 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
       cors = resolved.cors
       auditLogger = resolved.auditLogger
       devtoolsEnabled = resolved.devtoolsEnabled
+      resolvedOpenApi = resolved.openapi
+      resolvedDistDir = resolved.distDir
     },
 
     // Vite calls this hook (sync return is fine — no awaits left after
@@ -475,7 +480,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
       }
     },
 
-    configureServer(server) {
+    async configureServer(server) {
       // T1.2 — mark dev mode so transformIndexHtml injects devtools script
       // and resolveId/load serve the virtual module. Build mode never calls
       // configureServer, so isDevMode stays false and injection is skipped.
@@ -569,6 +574,42 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
 
       server.watcher.on('add', handleRouteChange)
       server.watcher.on('unlink', handleRouteChange)
+
+      // P#3 T1.1 — Dev-mode OpenAPI emit (ADR D3 + D4 + EC-8). Gated on
+      // config.openapi !== undefined. On boot + on route file change, re-run
+      // emitOpenApi so /api/docs/openapi.json (served by @usetheo/plugin-openapi)
+      // is always fresh. Best-effort: errors swallowed via reEmitOpenApi's
+      // try/catch — never throws out of the watcher handler (would crash
+      // Vite dev).
+      if (resolvedOpenApi !== undefined) {
+        // Capture non-undefined value into a local const so TS narrows it
+        // inside the watcher callback closures (outer let-binding is widened
+        // back to undefined inside callbacks).
+        const openApiCfg = resolvedOpenApi
+        const { reEmitOpenApi } = await import('./openapi-emit/dev-emit.js')
+        const openApiServerDir = resolve(projectRoot, 'server')
+        const openApiDistDir = resolve(projectRoot, resolvedDistDir)
+        const isRouteFileForOpenApi = (file: string): boolean =>
+          file.startsWith(openApiServerDir) && /\.(ts|tsx|js|mjs)$/.test(file)
+        // Boot emit (fire-and-forget — boot doesn't await)
+        void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
+        // Watcher emit (debounce via inFlight guard inside reEmitOpenApi)
+        server.watcher.on('change', (file: string) => {
+          if (isRouteFileForOpenApi(file)) {
+            void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
+          }
+        })
+        server.watcher.on('add', (file: string) => {
+          if (isRouteFileForOpenApi(file)) {
+            void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
+          }
+        })
+        server.watcher.on('unlink', (file: string) => {
+          if (isRouteFileForOpenApi(file)) {
+            void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
+          }
+        })
+      }
 
       // T2.3 (architecture-medium-deferrals) — WS upgrade extracted to sibling.
       setupWsUpgrade(server, projectRoot)
