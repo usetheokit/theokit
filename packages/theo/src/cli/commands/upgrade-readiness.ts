@@ -374,6 +374,11 @@ export async function upgradeReadinessCommand(opts: {
   if (report.violations.length === 0) {
     console.log('  ✓ Upgrade-readiness 0.3: no violations detected.')
     console.log('')
+    // T1.3 — friendly post-success URL (blueprint R4; Next.js next-codemod precedent).
+    // Anchor canon: #rollback (existing in docs/migration/0.2-to-0.3.md per T1.1).
+    console.log('  Migration guide: https://theokit.dev/migration/0.2-to-0.3')
+    console.log('  Need to roll back temporarily? See #rollback')
+    console.log('')
     process.exit(report.exitCode)
   }
   console.log(`  ✗ Upgrade-readiness 0.3: ${report.violations.length} violation(s)`)
@@ -384,5 +389,9 @@ export async function upgradeReadinessCommand(opts: {
     console.log(`    fix: ${v.fix}`)
     console.log('')
   }
+  // T1.3 — print migration-guide URL on violations branch too (one canonical link
+  // regardless of verdict, per blueprint Q5 Astro CHANGELOG URL pattern).
+  console.log('  Migration guide: https://theokit.dev/migration/0.2-to-0.3#rollback')
+  console.log('')
   process.exit(report.exitCode)
 }
