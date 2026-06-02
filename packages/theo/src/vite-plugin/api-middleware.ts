@@ -284,13 +284,17 @@ export function createApiMiddleware(
           ? `API route not found: ${urlPath}. Did you mean: ${suggestion}?`
           : 'API route not found'
         sendError(res, 'NOT_FOUND', msg, 404, undefined, requestId)
-        logRequest({
-          method: req.method ?? 'GET',
-          url,
-          status: 404,
-          duration: Date.now() - start,
-          requestId,
-        })
+        logRequest(
+          {
+            method: req.method ?? 'GET',
+            url,
+            status: 404,
+            duration: Date.now() - start,
+            requestId,
+          },
+          undefined,
+          req,
+        )
         return
       }
 
@@ -310,7 +314,11 @@ export function createApiMiddleware(
         csrfMode,
         disallowed,
       })
-      logRequest({ method, url, status: res.statusCode, duration: Date.now() - start, requestId })
+      logRequest(
+        { method, url, status: res.statusCode, duration: Date.now() - start, requestId },
+        undefined,
+        req,
+      )
     })()
   }
 }
