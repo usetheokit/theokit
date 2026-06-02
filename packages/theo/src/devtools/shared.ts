@@ -148,7 +148,7 @@ export const initialState: DevtoolsState = {
   open: false,
   visible: true,
   position: 'bottom-right',
-  theme: 'system',
+  theme: 'dark',
   activeTab: 'requests',
   requests: [],
   errors: [],
