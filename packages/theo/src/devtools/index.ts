@@ -26,6 +26,10 @@ export const Devtools =
 export const DevtoolsInProd = Overlay
 
 export { Overlay }
+// G3 telemetry — exposed for the @theo/actions virtual module's client
+// facade. callAction emits via `dispatcher.onActionCall(record)` so the
+// Actions tab updates in the SAME browser realm as the call site.
+export { dispatcher } from './dispatcher.js'
 export type {
   DevtoolsAction,
   DevtoolsPosition,

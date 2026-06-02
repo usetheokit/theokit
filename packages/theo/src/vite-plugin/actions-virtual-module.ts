@@ -153,25 +153,65 @@ const ACTION_URL_MAP = {
 ${entryLines}
 }
 
-async function callAction(url, input) {
+// Devtools telemetry — fires in the SAME realm as the Overlay React tree
+// (browser), so the Actions tab updates immediately on each call.
+// The Overlay component installs \`window.__theoDevtoolsDispatcher\` on
+// mount (dev only; prod tree-shakes the Overlay entirely). Reading the
+// global avoids a cross-package dynamic import that Vite's virtual-module
+// resolver cannot trace. Same pattern as React DevTools'
+// \`__REACT_DEVTOOLS_GLOBAL_HOOK__\`.
+function emitTelemetry(name, startedAt, input, outcome) {
+  if (typeof window === 'undefined') return
+  const dispatcher = window.__theoDevtoolsDispatcher
+  if (!dispatcher || typeof dispatcher.onActionCall !== 'function') return
+  try {
+    dispatcher.onActionCall({
+      id: 'act-' + String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8),
+      timestamp: startedAt,
+      name,
+      input,
+      output: outcome.status === 'success' ? outcome.data : undefined,
+      error: outcome.status === 'error' ? outcome.error : undefined,
+      durationMs: Date.now() - startedAt,
+      status: outcome.status,
+    })
+  } catch (_) {
+    // dispatcher threw — devtools UI bug; never bubble to consumer code
+  }
+}
+
+async function callAction(name, url, input) {
+  const startedAt = Date.now()
   const isForm = typeof FormData !== 'undefined' && input instanceof FormData
   const headers = { 'x-theo-action': '1' }
   const body = isForm ? input : JSON.stringify(input ?? {})
   if (!isForm) headers['content-type'] = 'application/json'
-  const response = await fetch(url, { method: 'POST', headers, body, credentials: 'same-origin' })
+  let response
+  try {
+    response = await fetch(url, { method: 'POST', headers, body, credentials: 'same-origin' })
+  } catch (e) {
+    const err = { code: 'NETWORK_ERROR', message: e && e.message ? e.message : 'fetch failed' }
+    emitTelemetry(name, startedAt, input, { status: 'error', error: err })
+    return { data: undefined, error: err }
+  }
   const contentType = response.headers.get('content-type') ?? ''
-  if (response.status === 204) return { data: undefined, error: undefined }
-  if (contentType.startsWith('application/json+devalue')) {
+  let result
+  if (response.status === 204) {
+    result = { data: undefined, error: undefined }
+  } else if (contentType.startsWith('application/json+devalue')) {
     const text = await response.text()
     const { parse } = await import('devalue')
-    return { data: parse(text, { URL: (h) => new URL(h) }), error: undefined }
-  }
-  if (contentType.startsWith('application/json')) {
+    result = { data: parse(text, { URL: (h) => new URL(h) }), error: undefined }
+  } else if (contentType.startsWith('application/json')) {
     const json = await response.json()
-    if (response.ok) return { data: json, error: undefined }
-    return { data: undefined, error: json }
+    result = response.ok ? { data: json, error: undefined } : { data: undefined, error: json }
+  } else {
+    result = { data: undefined, error: { code: 'INTERNAL_SERVER_ERROR', message: await response.text() } }
   }
-  return { data: undefined, error: { code: 'INTERNAL_SERVER_ERROR', message: await response.text() } }
+  emitTelemetry(name, startedAt, input, result.error
+    ? { status: 'error', error: result.error }
+    : { status: 'success', data: result.data })
+  return result
 }
 
 export const actions = new Proxy({}, {
@@ -179,7 +219,7 @@ export const actions = new Proxy({}, {
     if (typeof prop !== 'string') return undefined
     const url = ACTION_URL_MAP[prop]
     if (!url) return undefined
-    return (input) => callAction(url, input)
+    return (input) => callAction(prop, url, input)
   },
 })
 `
