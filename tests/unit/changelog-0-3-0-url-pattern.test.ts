@@ -37,7 +37,7 @@ describe('T3.1 — CHANGELOG 0.3.0 cohort uses Astro-style migration URL pattern
 
   it('every entry under 0.3.0 cohort ends with the migration-URL suffix', () => {
     const cohortMatch = content.match(
-      /^### Changed \(0\.3\.0 cohort[^\n]*\n([\s\S]+?)(?=^### |^## |$)/m,
+      /^### Changed \(0\.3\.0 cohort[^\n]*\n([\s\S]+?)(?=\n### |\n## |$(?![\s\S]))/m,
     )
     expect(cohortMatch).not.toBeNull()
     const cohortBody = cohortMatch![1]
@@ -54,7 +54,7 @@ describe('T3.1 — CHANGELOG 0.3.0 cohort uses Astro-style migration URL pattern
     // the algorithm, this test verifies SEMANTIC alignment: the keyword stem
     // of each anchor MUST appear in some migration-guide heading.
     const cohortMatch = content.match(
-      /^### Changed \(0\.3\.0 cohort[^\n]*\n([\s\S]+?)(?=^### |^## |$)/m,
+      /^### Changed \(0\.3\.0 cohort[^\n]*\n([\s\S]+?)(?=\n### |\n## |$(?![\s\S]))/m,
     )
     const cohortBody = cohortMatch![1]
     const anchors = new Set<string>()
