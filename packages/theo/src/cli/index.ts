@@ -7,6 +7,7 @@ interface CliOptions {
   json?: boolean
   allowWarnings?: boolean
   force?: boolean
+  dryRun?: boolean
 }
 
 const cli = cac('theokit')
@@ -113,6 +114,23 @@ cli.command('info', 'Print environment info (runtime, config, routes)').action(a
   const { infoCommand } = await import('./commands/info.js')
   await infoCommand()
 })
+
+cli
+  .command(
+    'openapi',
+    'Generate <distDir>/openapi.json from route schemas (opt-in via config.openapi)',
+  )
+  .option('--dry-run', 'Print the document to stdout without writing to disk (EC-3)')
+  .action(async (options: CliOptions) => {
+    try {
+      const { openapiCommand } = await import('./commands/openapi.js')
+      await openapiCommand({ dryRun: Boolean(options.dryRun) })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
 
 cli
   .command('docker', 'Generate Dockerfile for production')
