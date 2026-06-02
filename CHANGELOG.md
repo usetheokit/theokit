@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-02 (patch — regression fixes exposed by dogfood-app npm-version swap)
+
+### Fixed
+
+- **`generateClientDts` produced invalid TypeScript syntax for routes with path params** (regression in 0.2.1). The codegen emitted `(opts: params: { id: string } & TheoFetchOptions<...>)` — invalid: TS parser reads `params:` as a parameter label, then `{...}` as the type, combination invalid. Fix wraps the intersection in `{ params: {...} }` → `(opts: { params: { id: string } } & TheoFetchOptions<...>)`. Discovered when bumping dogfood-app from `file:` workspace link to `theokit@^0.2.1` from npm exposed the typecheck failure (TS1005/TS1359/TS1138 in `.theo/client.d.ts`). 3 regression tests added (`tests/unit/generate-client-dts.test.ts`): wrap presence, multi-param coverage, parse-error scan via `ts.createSourceFile`. (`packages/theo/src/vite-plugin/app-typed-client.ts:206`)
+
+- **`theokit build` failed to resolve `@theo/actions` virtual module** (regression in 0.2.1). `cli/commands/build.ts` invoked sync `theoPlugin()` which returns ONE Plugin (the root) — missing the `@theo/actions` + typed-client + services + `@usetheo/ui` auto-chain that `theoPluginAsync` returns as Plugin[]. Result: `pnpm build` of any G3 consumer (using `useAction(actions.foo)`) failed with `Rollup failed to resolve import "@theo/actions"` error. Fix swaps to `theoPluginAsync` + `AdapterBuildContext.makeVitePlugins` type accepts `Plugin[] | Promise<Plugin[]>` + `adapter-node.ts` awaits both client + SSR build calls. 4 regression tests added (`tests/unit/regression-build-uses-theo-plugin-async.test.ts`): import-name, async-factory, contract-type, adapter-node-await. (`packages/theo/src/cli/commands/build.ts:155`, `packages/theo/src/adapters/types.ts:15`, `packages/theo/src/adapters/node.ts:34/48`)
+
+### Notes
+
+- create-theokit bumped 0.2.1 → 0.2.2 to preserve the linked invariant (`tests/smoke/changeset-config.test.ts:50` + ADR 0019 template version sync gate). No functional changes in create-theokit.
+
 ### Added (P#3 prerequisites — dev-emit hook + plugin-runner pre-route gate, 2026-06-02)
 
 Two additive surfaces unlocked by `@usetheo/plugin-openapi` (shipped in `theokit-plugins` 2026-06-02 — see [`@usetheo/plugin-openapi` CHANGELOG](../../theokit-plugins/packages/plugin-openapi/CHANGELOG.md)). Both are zero-breaking-change: gated behaviors that only activate when the consumer opts in.
