@@ -8,6 +8,9 @@
  * Public API surface is unchanged — `logger.ts` re-exports `logRequest`
  * + `RequestLog` + `LoggerFn` for backward compat.
  */
+import type { IncomingMessage } from 'node:http'
+
+import { DEVTOOLS_BODY_PREVIEW } from '../body-parser.js'
 
 export interface RequestLog {
   level: string
@@ -29,6 +32,7 @@ const defaultLoggerFn: LoggerFn = (log) => {
 export function logRequest(
   info: Omit<RequestLog, 'level' | 'timestamp'>,
   customLogger?: LoggerFn,
+  req?: IncomingMessage,
 ): void {
   const log: RequestLog = {
     level: 'info',
@@ -38,7 +42,11 @@ export function logRequest(
   const logger = customLogger ?? defaultLoggerFn
   logger(log)
   // T2.1 — also broadcast to devtools (no-op in prod / when no dev server).
-  broadcastRequestToDevtools(info)
+  // Pass `req` so the devtools forwarder can extract headers + body preview
+  // stashed by body-parser (Symbol-keyed). Without `req`, only metadata
+  // (method/path/status/duration) reaches the devtools UI — the expanded
+  // row view then shows nothing useful.
+  broadcastRequestToDevtools(info, req)
 }
 
 /**
@@ -51,10 +59,29 @@ function randomRequestId(): string {
   return `req-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function broadcastRequestToDevtools(info: Omit<RequestLog, 'level' | 'timestamp'>): void {
+function broadcastRequestToDevtools(
+  info: Omit<RequestLog, 'level' | 'timestamp'>,
+  req?: IncomingMessage,
+): void {
   // T2.1 forwarder. Errors here must not propagate.
-  void import('../../devtools/server-side/broadcast.js')
-    .then(({ broadcastRequest }) => {
+  const headers = req?.headers
+    ? Object.fromEntries(
+        Object.entries(req.headers).map(([k, v]) => [
+          k,
+          Array.isArray(v) ? v.join(', ') : (v ?? ''),
+        ]),
+      )
+    : undefined
+  const stashedBody = req
+    ? (req as unknown as Record<symbol, unknown>)[DEVTOOLS_BODY_PREVIEW]
+    : undefined
+
+  void Promise.all([
+    import('../../devtools/server-side/broadcast.js'),
+    import('../../devtools/server-side/build-request-body-preview.js'),
+  ])
+    .then(([{ broadcastRequest }, { buildRequestBodyPreview }]) => {
+      const bodyInfo = buildRequestBodyPreview(stashedBody)
       broadcastRequest({
         id: randomRequestId(),
         traceId: info.requestId,
@@ -63,6 +90,14 @@ function broadcastRequestToDevtools(info: Omit<RequestLog, 'level' | 'timestamp'
         status: info.status,
         durationMs: info.duration,
         startedAt: Date.now() - info.duration,
+        ...(headers ? { headers } : {}),
+        ...(bodyInfo
+          ? {
+              bodyPreview: bodyInfo.preview,
+              bodyLength: bodyInfo.length,
+              bodyTruncated: bodyInfo.truncated,
+            }
+          : {}),
       })
     })
     .catch(() => {
