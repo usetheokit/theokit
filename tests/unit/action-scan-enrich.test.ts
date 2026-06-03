@@ -129,6 +129,72 @@ describe('scanServerActionsEnriched — EC-2 collision detection', () => {
   })
 })
 
+describe('scanServerActionsEnriched — P#4 plugin-forms shared-schema convention (T1.1)', () => {
+  it('exposes schemaFilePath when actions/schemas/<basename>.ts exists', () => {
+    write(
+      'create-user.ts',
+      `
+      import { defineAction } from 'theokit/server'
+      import { schema } from './schemas/create-user.js'
+      export const createUser = defineAction({ input: schema, handler: () => null })
+    `,
+    )
+    write(
+      'schemas/create-user.ts',
+      `
+      import { z } from 'zod'
+      export const schema = z.object({ name: z.string() })
+    `,
+    )
+    const entries = scanServerActionsEnriched(serverDir)
+    const entry = entries.find((e) => e.name === 'createUser')
+    expect(entry).toBeDefined()
+    expect(entry?.schemaFilePath).toMatch(/schemas\/create-user\.ts$/)
+  })
+
+  it('omits schemaFilePath when convention is NOT followed (inline schema)', () => {
+    write(
+      'inline-only.ts',
+      `
+      import { z } from 'zod'
+      import { defineAction } from 'theokit/server'
+      export const inlineOnly = defineAction({ input: z.object({ x: z.string() }), handler: () => null })
+    `,
+    )
+    const entries = scanServerActionsEnriched(serverDir)
+    const entry = entries.find((e) => e.name === 'inlineOnly')
+    expect(entry).toBeDefined()
+    expect(entry?.schemaFilePath).toBeUndefined()
+  })
+
+  it('detects .tsx/.js/.jsx extensions in priority order (.ts wins when ambiguous)', () => {
+    write(
+      'multi.ts',
+      `
+      import { defineAction } from 'theokit/server'
+      import { schema } from './schemas/multi.js'
+      export const multi = defineAction({ input: schema, handler: () => null })
+    `,
+    )
+    write(
+      'schemas/multi.ts',
+      `
+      import { z } from 'zod'
+      export const schema = z.object({ y: z.string() })
+    `,
+    )
+    write(
+      'schemas/multi.js',
+      `
+      export const schema = { _def: { typeName: 'NEVER_PICKED' } }
+    `,
+    )
+    const entries = scanServerActionsEnriched(serverDir)
+    const entry = entries.find((e) => e.name === 'multi')
+    expect(entry?.schemaFilePath).toMatch(/schemas\/multi\.ts$/)
+  })
+})
+
 describe('scanServerActionsEnriched — EC-9 comment stripping', () => {
   it("should ignore accept:'form' inside line comment", () => {
     write(
