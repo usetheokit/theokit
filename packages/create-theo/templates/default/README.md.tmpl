@@ -20,7 +20,7 @@ Open the printed URL. The default surface is a chat composer wired to `server/ro
 ## Templates
 
 - **default** (this one) — TheoUI chat composer + agent route.
-- **`--bare`** — Hello Theo with no `@usetheo/*` deps. Use this when you want a clean structure to grow into or when the SDK isn't on your registry yet.
+- **`--bare`** — Hello Theo with no `@theokit/*` deps. Use this when you want a clean structure to grow into or when the SDK isn't on your registry yet.
 - **dashboard** — nested layouts + sidebar.
 - **api-only** — server routes without React.
 - **postgres** — Drizzle ORM + migrations.
@@ -31,7 +31,7 @@ Open the printed URL. The default surface is a chat composer wired to `server/ro
 - **`.env` → `process.env`**. Edit `.env`; restart the dev server. Server routes read `process.env.MY_KEY` directly.
 - **`.theo/` build output cleanup** on every `theokit build`.
 - **`.theokit/agents/` LRU GC** on every `theokit dev` startup (default cap: 100 agents).
-- **Tailwind + `@usetheo/ui` styling** auto-configured when `@usetheo/ui` is in your `package.json` AND no consumer `tailwind.config.*` is present. This project ships an explicit `tailwind.config.ts` because the TheoUI v3 surface still requires it. The zero-config path lands when `@usetheo/ui` ships its Vite plugin (cross-repo work, pending sign-off).
+- **Tailwind + `@theokit/ui` styling** auto-configured when `@theokit/ui` is in your `package.json` AND no consumer `tailwind.config.*` is present. This project ships an explicit `tailwind.config.ts` because the TheoUI v3 surface still requires it. The zero-config path lands when `@theokit/ui` ships its Vite plugin (cross-repo work, pending sign-off).
 
 For the full story of what's automatic vs deliberate, see [docs.usetheo.dev/zero-config](https://docs.usetheo.dev/zero-config) (or your local `node_modules/theokit/docs/concepts/zero-config.md`).
 
@@ -62,12 +62,12 @@ postcss.config.js     PostCSS pipeline (Tailwind + autoprefixer)
 | `npx theokit generate route foo` | Scaffold a new server route |
 | `npx theokit routes` | List all routes + actions detected |
 
-## What if `npm install` fails on `@usetheo/sdk`?
+## What if `npm install` fails on `@theokit/sdk`?
 
-The agent SDK is in soft-release while the npm publish is operator-deferred. If you hit `404 Not Found` for `@usetheo/sdk`:
+The agent SDK is in soft-release while the npm publish is operator-deferred. If you hit `404 Not Found` for `@theokit/sdk`:
 
-- **Quick path**: re-scaffold with `--bare` — Hello Theo without any `@usetheo/*` deps.
-- **Inside the TheoKit monorepo**: replace `"@usetheo/sdk": "^1.0.0"` with `"workspace:*"` in `package.json`.
+- **Quick path**: re-scaffold with `--bare` — Hello Theo without any `@theokit/*` deps.
+- **Inside the TheoKit monorepo**: replace `"@theokit/sdk": "^1.0.0"` with `"workspace:*"` in `package.json`.
 - **Wait**: track the publish at https://github.com/usetheo/theokit-sdk.
 
 ## License

@@ -85,7 +85,7 @@ export interface TheoPluginOptions {
    * — Vite cannot trace those without a hint, and the browser receives a
    * `Failed to resolve module specifier '<pkg>'` error.
    *
-   * Default targets pre-bundled regardless: `@usetheo/ui`, `lucide-react`.
+   * Default targets pre-bundled regardless: `@theokit/ui`, `lucide-react`.
    *
    * Example:
    *   viteOptimizeDeps: ['mermaid']
@@ -136,7 +136,7 @@ function findConsumerConfig(projectRoot: string, basename: string): string | und
  * `plugins` array.
  *
  * Consumers should prefer `await theoPluginAsync(...)` over `theoPlugin(...)`
- * when they want @usetheo/ui + @tailwindcss/vite auto-chaining. The sync
+ * when they want @theokit/ui + @tailwindcss/vite auto-chaining. The sync
  * factory remains for backward compatibility and tests.
  */
 export async function theoPluginAsync(
@@ -197,7 +197,7 @@ export async function theoPluginAsync(
 
 /**
  * Build the `optimizeDeps.include` array Vite uses to pre-bundle heavy
- * deps at server startup. Detects `@usetheo/ui` and `lucide-react` in
+ * deps at server startup. Detects `@theokit/ui` and `lucide-react` in
  * the consumer's `node_modules` (auto-include) and appends user-declared
  * peer deps via `viteOptimizeDeps` (e.g., `mermaid` for plugin-canvas
  * — without this hint Vite fails to resolve dynamic `import('mermaid')`
@@ -209,7 +209,7 @@ function buildOptimizeDepsInclude(
 ): string[] {
   const include: string[] = []
   if (existsSync(resolve(projectRoot, 'node_modules', '@usetheo', 'ui'))) {
-    include.push('@usetheo/ui')
+    include.push('@theokit/ui')
   }
   if (existsSync(resolve(projectRoot, 'node_modules', 'lucide-react'))) {
     include.push('lucide-react')
@@ -291,7 +291,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
     },
 
     // Vite calls this hook (sync return is fine — no awaits left after
-    // the auto-chain moved to theoPluginAsync). The @usetheo/ui +
+    // the auto-chain moved to theoPluginAsync). The @theokit/ui +
     // @tailwindcss/vite auto-chain lives in `theoPluginAsync` because
     // Vite drops plugins returned from a child plugin's config() hook.
     config() {
@@ -300,7 +300,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
 
       // Perf: pre-bundle heavy deps at server startup (not on first request).
       // Without this, a cold `pnpm dev` takes ~10s before serving `/` because
-      // Vite discovers @usetheo/ui mid-request and stops to bundle it.
+      // Vite discovers @theokit/ui mid-request and stops to bundle it.
       // Measured 2026-05-22: cold first GET / = 10s → ~1s with includes wired.
       // See https://vite.dev/guide/dep-pre-bundling — "lazy dependency
       // discovery" is the canonical mitigation.
@@ -577,7 +577,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
 
       // P#3 T1.1 — Dev-mode OpenAPI emit (ADR D3 + D4 + EC-8). Gated on
       // config.openapi !== undefined. On boot + on route file change, re-run
-      // emitOpenApi so /api/docs/openapi.json (served by @usetheo/plugin-openapi)
+      // emitOpenApi so /api/docs/openapi.json (served by @theokit/plugin-openapi)
       // is always fresh. Best-effort: errors swallowed via reEmitOpenApi's
       // try/catch — never throws out of the watcher handler (would crash
       // Vite dev).

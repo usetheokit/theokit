@@ -15,7 +15,7 @@
 /**
  * Discriminated union for AgentRunError codes (Phase 1 — Production-Readiness #3).
  *
- * Mirrors `@usetheo/sdk`'s `AgentRunErrorCode` without hard-importing the SDK
+ * Mirrors `@theokit/sdk`'s `AgentRunErrorCode` without hard-importing the SDK
  * type (D2 decoupling). EC-7 forward-compat: `(string & {})` fallback preserves
  * autocompletion for the known codes while accepting future codes the SDK may
  * introduce — autocomplete works AND TS doesn't reject unknown codes.

@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 /**
  * Daily GC of stale conversation transcripts.
  *
- * The `@usetheo/sdk` Agent persists chat history under
+ * The `@theokit/sdk` Agent persists chat history under
  * `.theokit/agents/<agentId>/messages.jsonl`. With no TTL the directory
  * grows unbounded — production foot-gun. This cron removes any agent
  * directory whose `messages.jsonl` hasn't been touched in 30 days.

@@ -58,6 +58,6 @@ describe('theokit start — SIGTERM/SIGINT handlers (T6.2)', () => {
   it('test_sdk_import_is_lazy (only at shutdown time)', () => {
     // SDK is imported via dynamic import() inside the handler — not statically.
     // This avoids forcing the dep on apps that don't use agents.
-    expect(START_SOURCE).toMatch(/await import\(['"]@usetheo\/sdk['"]/)
+    expect(START_SOURCE).toMatch(/await import\(['"]@theokit\/sdk['"]/)
   })
 })

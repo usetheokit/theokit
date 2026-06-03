@@ -31,7 +31,7 @@ describe('pnpm typecheck clean gate (T0.3)', () => {
     })
     const sdkRooted = (
       result.match(
-        /examples\/full-stack-agent\/server\/tools.*@usetheo\/sdk|toJSONSchema|ZodObject/g,
+        /examples\/full-stack-agent\/server\/tools.*@theokit\/sdk|toJSONSchema|ZodObject/g,
       ) ?? []
     ).length
 

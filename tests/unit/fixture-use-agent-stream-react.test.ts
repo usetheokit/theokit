@@ -20,9 +20,9 @@ describe('T4.2 — use-agent-stream-react fixture', () => {
     expect(src).toMatch(/from\s+['"]theokit\/client['"]/)
   })
 
-  it('page.tsx has NO dependency on @usetheo/ui', () => {
+  it('page.tsx has NO dependency on @theokit/ui', () => {
     const src = read('app/page.tsx')
-    expect(src).not.toMatch(/@usetheo\/ui/)
+    expect(src).not.toMatch(/@theokit\/ui/)
   })
 
   it('page.tsx uses native HTML elements (button, input, ul, li)', () => {
@@ -46,6 +46,6 @@ describe('T4.2 — use-agent-stream-react fixture', () => {
 
   it('README explains plain-React proof (no UI library)', () => {
     const readme = read('README.md')
-    expect(readme).toMatch(/plain React|no.*@usetheo\/ui|no extra UI/i)
+    expect(readme).toMatch(/plain React|no.*@theokit\/ui|no extra UI/i)
   })
 })

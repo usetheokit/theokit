@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Card, Badge, Button } from '@usetheo/ui'
+import { Card, Badge, Button } from '@theokit/ui'
 import { Zap, RefreshCw, Trash2 } from 'lucide-react'
 
 interface QuoteResponse {

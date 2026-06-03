@@ -12,7 +12,7 @@ import type { RequestContext } from '../context.js'
  * (when running in dev).
  *
  * NOTE: `costUsd: 0` is a v1 stub. Pricing table integration is a
- * `@usetheo/sdk` follow-up (R0.5.11). Devtools tab renders "$0.0000" —
+ * `@theokit/sdk` follow-up (R0.5.11). Devtools tab renders "$0.0000" —
  * indicates "cost tracking not yet calibrated for this model".
  *
  * Replace the mock generator with your LLM provider call.

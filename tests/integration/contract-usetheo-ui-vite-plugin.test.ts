@@ -1,11 +1,11 @@
 /**
- * T1.2 — Contract test cross-repo executando contra @usetheo/ui REAL.
+ * T1.2 — Contract test cross-repo executando contra @theokit/ui REAL.
  *
- * O contrato (ADR 0018) é: @usetheo/ui/vite-plugin expõe um default-export
+ * O contrato (ADR 0018) é: @theokit/ui/vite-plugin expõe um default-export
  * factory que retorna Plugin | Plugin[] (com `name: string`). Subpath exports
  * /preset, /styles.css, /fonts.css devem resolver.
  *
- * Por que rodar contra fixture (não contra packages/theo): @usetheo/ui NÃO
+ * Por que rodar contra fixture (não contra packages/theo): @theokit/ui NÃO
  * é peerDep instalada em packages/theo — é dep opt-in dos consumers/fixtures.
  * A fixture `theoui-autoinject` tem UI instalado e é o canary canônico para
  * o contract test consumer-side (ADR 0020 D5: UI fica fora do workspace
@@ -25,7 +25,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { describe, it, expect } from 'vitest'
 
-// Localiza a fixture canônica com @usetheo/ui instalado.
+// Localiza a fixture canônica com @theokit/ui instalado.
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const FIXTURE_DIR = join(TEST_DIR, '..', '..', 'fixtures', 'theoui-autoinject')
 const UI_PKG_DIR = join(FIXTURE_DIR, 'node_modules', '@usetheo', 'ui')
@@ -94,9 +94,9 @@ function satisfiesCaretPrerelease(version: string, range: string): boolean {
   return false
 }
 
-describe('Contract: @usetheo/ui/vite-plugin (real dist, fixture-resolved)', () => {
+describe('Contract: @theokit/ui/vite-plugin (real dist, fixture-resolved)', () => {
   // Sanity: fixture must be installed before running.
-  it('precondition — fixture theoui-autoinject has @usetheo/ui installed', () => {
+  it('precondition — fixture theoui-autoinject has @theokit/ui installed', () => {
     expect(existsSync(UI_PKG_DIR)).toBe(true)
     expect(existsSync(UI_DIST('vite-plugin.js'))).toBe(true)
   })
@@ -138,7 +138,7 @@ describe('Contract: @usetheo/ui/vite-plugin (real dist, fixture-resolved)', () =
 
   // CT-4: ./preset existe como .css
   it('CT-4 — dist/preset.css subpath export exists and is .css', () => {
-    // Given the consumer can `import preset from '@usetheo/ui/preset'`,
+    // Given the consumer can `import preset from '@theokit/ui/preset'`,
     // When the dist is shipped,
     // Then preset.css must be present.
     expect(existsSync(UI_DIST('preset.css'))).toBe(true)
@@ -147,7 +147,7 @@ describe('Contract: @usetheo/ui/vite-plugin (real dist, fixture-resolved)', () =
 
   // CT-5: ./styles.css + ./fonts.css
   it('CT-5 — dist/styles.css and dist/fonts.css subpaths resolve', () => {
-    // Given theokit's vite-plugin emits `import '@usetheo/ui/styles.css'` etc,
+    // Given theokit's vite-plugin emits `import '@theokit/ui/styles.css'` etc,
     // When the dist is shipped,
     // Then both files must be present.
     expect(existsSync(UI_DIST('styles.css'))).toBe(true)
@@ -164,7 +164,7 @@ describe('Contract: @usetheo/ui/vite-plugin (real dist, fixture-resolved)', () =
     const theoPkg = JSON.parse(readFileSync(theoPkgPath, 'utf-8')) as {
       peerDependencies?: Record<string, string>
     }
-    const declaredRange = theoPkg.peerDependencies?.['@usetheo/ui']
+    const declaredRange = theoPkg.peerDependencies?.['@theokit/ui']
     expect(declaredRange).toBeDefined()
     expect(declaredRange).toMatch(/^\^/)
 

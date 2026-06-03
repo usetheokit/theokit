@@ -80,7 +80,7 @@ function hydrationDataExtractSnippet(): string {
 }
 
 function generateSingleShotEntry(options: EntryServerOptions): string {
-  const theoUiImport = options.theoUi ? `import { TheoUIProvider } from '@usetheo/ui'\n` : ''
+  const theoUiImport = options.theoUi ? `import { TheoUIProvider } from '@theokit/ui'\n` : ''
   const appTree = buildAppTreeJs(options)
   return [
     `import React, { Suspense } from 'react'`,
@@ -248,7 +248,7 @@ function backCompatRenderer(appTree: string): string[] {
 }
 
 function generateStreamingEntry(options: EntryServerOptions): string {
-  const theoUiImport = options.theoUi ? `import { TheoUIProvider } from '@usetheo/ui'\n` : ''
+  const theoUiImport = options.theoUi ? `import { TheoUIProvider } from '@theokit/ui'\n` : ''
   const appTree = buildAppTreeJs(options)
   return [
     `import React, { Suspense } from 'react'`,

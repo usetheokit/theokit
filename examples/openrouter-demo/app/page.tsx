@@ -16,7 +16,7 @@ import {
   type UIMessage,
   type QuickAction,
   type ToolCallStatus,
-} from '@usetheo/ui'
+} from '@theokit/ui'
 import { Sparkles, Wrench, Calculator, Clock, Globe, RotateCcw } from 'lucide-react'
 import { useAgentStream } from 'theokit/client'
 

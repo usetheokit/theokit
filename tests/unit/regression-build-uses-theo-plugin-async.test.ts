@@ -4,7 +4,7 @@
  * `cli/commands/build.ts` must invoke `theoPluginAsync` (NOT the sync
  * `theoPlugin`) because only the async factory returns the full Plugin[]
  * chain — including the `@theo/actions` virtual module + the typed-client
- * plugin + the services-typed-client plugin + @usetheo/ui auto-chain.
+ * plugin + the services-typed-client plugin + @theokit/ui auto-chain.
  *
  * Previous (broken in 0.2.1):
  *   const { theoPlugin } = await import('../../vite-plugin/index.js')
