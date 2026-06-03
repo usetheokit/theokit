@@ -14,7 +14,7 @@ my-agent-app/
 └── server/                       # TS backend — covers everything
     ├── routes/auth/{login,register,logout}.ts
     ├── routes/users/{me,[id]}.ts
-    ├── routes/chat.ts            # @usetheo/sdk agent endpoint
+    ├── routes/chat.ts            # @theokit/sdk agent endpoint
     ├── routes/billing/webhook.ts
     ├── actions/*.ts              # defineAction (CSRF)
     ├── middleware.ts
@@ -30,10 +30,10 @@ A polyglot sidecar (Python or Node service, declared via `services: {}` in `theo
 |---|:---:|---|
 | Login, sessions, encrypted cookies | ✅ | — |
 | CRUD users + admin panel | ✅ | — |
-| Agent chat via `@usetheo/sdk` | ✅ | — |
+| Agent chat via `@theokit/sdk` | ✅ | — |
 | Stripe billing + webhooks | ✅ | — |
 | `defineJob` + `defineCron` | ✅ | Node sidecar **only** if you need workers scaled independently |
-| Telegram / Discord bot (`@usetheo/gateway-*`) | ✅ | — |
+| Telegram / Discord bot (`@theokit/gateway-*`) | ✅ | — |
 | ML inference (sentence-transformers, scikit-learn, PyTorch) | painful in TS | ✅ Python sidecar |
 | OCR / heavy PDF parsing | painful in TS | ✅ Python sidecar |
 | Integrating an existing Node monolith / legacy API | ❌ | ✅ Node sidecar as reverse proxy |

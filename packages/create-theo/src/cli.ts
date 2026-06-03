@@ -31,10 +31,10 @@ export function main(): void {
     console.error('')
     console.error('Recipes:')
     console.error(
-      '  npx create-theokit my-app                    Full TheoUI + agent surface (requires @usetheo/sdk on npm)',
+      '  npx create-theokit my-app                    Full TheoUI + agent surface (requires @theokit/sdk on npm)',
     )
     console.error(
-      '  npx create-theokit my-app --bare             Minimal Hello Theo (no @usetheo/* deps — always works)',
+      '  npx create-theokit my-app --bare             Minimal Hello Theo (no @theokit/* deps — always works)',
     )
     console.error('  npx create-theokit my-app --template=dashboard')
     console.error(

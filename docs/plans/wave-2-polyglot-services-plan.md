@@ -2619,8 +2619,8 @@ After Wave 2 ships, the following remain open and require fresh ADRs with demand
 
 1. **WebSocket proxying in `services: {}`** — documented as known limit (T1.3 invariants)
 2. **CSRF for non-localhost service targets** — schema-level rejection in Wave 2 (T1.1); future ADR if cross-origin services demanded
-3. **`@usetheo/sdk-py` (native Python agent runtime)** — locked deferred per ADR-0012 invariant #2
+3. **`@theokit/sdk-py` (native Python agent runtime)** — locked deferred per ADR-0012 invariant #2
 4. **Auto-restart on service crash** — explicit decision: NO in Wave 2; user restarts
 5. **Service discovery via convention vs explicit** — decided explicit (D2); reopen only with demand
-6. **`@usetheo/gateway-telegram` migration to sidecar** — documented in T5.2 troubleshooting; in-process default in Wave 2
+6. **`@theokit/gateway-telegram` migration to sidecar** — documented in T5.2 troubleshooting; in-process default in Wave 2
 7. **Go/Rust/Java/Ruby/PHP backends** — archived in `theo-stacks`; future ADR per language with demand evidence

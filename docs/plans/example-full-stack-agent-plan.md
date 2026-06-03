@@ -10,8 +10,8 @@
   - `defineAgentTool` + `streamAgentRun` (item #4) — TheoKit sugar over SDK `CustomTool` contract + Run.stream → AgentEvent SSE bridge.
   - `createConversationHistory` (item #5) — agentId resolution + Agent.getOrCreate + cookie bridge via `cookieHeaders: Headers` on `defineAgentEndpoint`.
 - `fixtures/template-default/` has ~80% of the demo: TheoUI chat surface (ChatThread + ChatComposer + ToolCallCard + AgentErrorCard + EmptyState + QuickActionChips + ContextWindowBar + CommandPalette), canonical `chat.ts` with 1 tool (`current_time`), Playwright 7/7 GREEN.
-- `@usetheo/sdk` ships `Agent.create` + `Agent.getOrCreate` + `Agent.resume` (cross-repo, ADR D22).
-- `@usetheo/gateway` + `@usetheo/gateway-telegram` ship in `theokit-sdk/packages/gateway*` — adapter contract (`BasePlatformAdapter`), `GatewayRunner` orchestrator, `SessionRouter` for agentId mapping. Telegram adapter wraps `grammy`. README at `theokit-sdk/packages/gateway-telegram/README.md` shows the minimum wiring pattern.
+- `@theokit/sdk` ships `Agent.create` + `Agent.getOrCreate` + `Agent.resume` (cross-repo, ADR D22).
+- `@theokit/gateway` + `@theokit/gateway-telegram` ship in `theokit-sdk/packages/gateway*` — adapter contract (`BasePlatformAdapter`), `GatewayRunner` orchestrator, `SessionRouter` for agentId mapping. Telegram adapter wraps `grammy`. README at `theokit-sdk/packages/gateway-telegram/README.md` shows the minimum wiring pattern.
 
 **What's broken or missing:**
 
@@ -29,7 +29,7 @@
 
 **Memory pins:**
 
-- [[project-stack-deps]] — TheoKit always uses `@usetheo/sdk` + `@usetheo/ui`. The example MUST use both; no raw provider SDK or hand-rolled UI.
+- [[project-stack-deps]] — TheoKit always uses `@theokit/sdk` + `@theokit/ui`. The example MUST use both; no raw provider SDK or hand-rolled UI.
 - [[feedback-sdk-is-evolvable]] — if the demo surfaces SDK gaps, write SDK tasks into this plan.
 - [[project-theokit-purpose]] — the example is the "app the agent lives in" made concrete. It's the most visible artifact for a new visitor evaluating TheoKit.
 
@@ -43,7 +43,7 @@ Ship `examples/full-stack-agent/` so a new visitor can `git clone` + `pnpm insta
 2. 8 tools registered via `defineAgentTool`: `current_time`, `calculator`, `random_number`, `web_fetch` (allowlist), `workspace_read`, `workspace_write`, `web_search` (DuckDuckGo HTML), `echo`.
 3. Web UI shows ToolCallCard for each tool invocation with status + args + result.
 4. Conversation persists across page reload (cookie + `createConversationHistory`).
-5. Telegram bot — same agentId scheme (Telegram chat id → agentId) — answers in private chat; ignores groups unless mentioned (`shouldRespondInChat` policy from `@usetheo/gateway-telegram`).
+5. Telegram bot — same agentId scheme (Telegram chat id → agentId) — answers in private chat; ignores groups unless mentioned (`shouldRespondInChat` policy from `@theokit/gateway-telegram`).
 6. `theokit build` succeeds; `theokit start` boots a production server that SSRs the page (root div populated) AND sets full CSP + Cache-Control headers.
 7. New Playwright spec asserts the end-to-end web behavior (3 tools fired, cookie persisted, prod SSR not empty).
 8. Dogfood `full` health ≥ 70/100 with zero plan-caused CRITICAL.
@@ -85,7 +85,7 @@ Ship `examples/full-stack-agent/` so a new visitor can `git clone` + `pnpm insta
 
 **Decision:** The demo runs ONE Node process that handles both:
 - HTTP requests via `theokit start` (web UI + `/api/chat` SSE endpoint).
-- Telegram inbound via `@usetheo/gateway` + `@usetheo/gateway-telegram` long-polling (NOT webhook).
+- Telegram inbound via `@theokit/gateway` + `@theokit/gateway-telegram` long-polling (NOT webhook).
 
 **Rationale:**
 - Same-process means same `Agent.getOrCreate` registry — no cross-process state sync. Cross-channel resumption (web user → Telegram user with same `userId`) becomes trivial.
@@ -452,7 +452,7 @@ tests/unit/example-full-stack-agent-skeleton.test.ts         — (NEW) asserts s
 
 #### Deep file dependency analysis
 
-- **`package.json`** — declares `"theokit": "^0.2.0"`, `"@usetheo/sdk": "^1.0.0"`, `"@usetheo/ui": "^0.2.0"`, `"@usetheo/gateway": "^0.1.0"`, `"@usetheo/gateway-telegram": "^0.1.0"`, `"grammy": "^1.30.0"`, `"zod": "^3.24.0"`, `"react": "^19.0.0"`, `"react-dom": "^19.0.0"`. Scripts: `dev`, `build`, `start`, `bot`.
+- **`package.json`** — declares `"theokit": "^0.2.0"`, `"@theokit/sdk": "^1.0.0"`, `"@theokit/ui": "^0.2.0"`, `"@theokit/gateway": "^0.1.0"`, `"@theokit/gateway-telegram": "^0.1.0"`, `"grammy": "^1.30.0"`, `"zod": "^3.24.0"`, `"react": "^19.0.0"`, `"react-dom": "^19.0.0"`. Scripts: `dev`, `build`, `start`, `bot`.
 - **`.env.example`** — documented placeholders (`OPENROUTER_API_KEY`, `TELEGRAM_BOT_TOKEN`, `WEB_FETCH_ALLOWLIST`, `MODEL_ID`). NEVER includes real secrets.
 - **`theo.config.ts`** — `defineConfig({ ssr: true, securityHeaders: { cspMode: 'enforce' } })`. Demonstrates the 0.3.0 enforce default works.
 - **`app/page.tsx`** — reused TheoUI chat surface from `fixtures/template-default/app/page.tsx`. Same component imports; same EmptyState + QuickActionChips defaults. Adjust copy to "Full-Stack Agent Demo" headings.
@@ -492,7 +492,7 @@ tests/unit/example-full-stack-agent-skeleton.test.ts         — (NEW) asserts s
 RED: test_example_package_json_has_required_deps()
   Given examples/full-stack-agent/package.json
   When parsed
-  Then dependencies include theokit, @usetheo/sdk, @usetheo/ui, @usetheo/gateway, @usetheo/gateway-telegram, grammy, zod, react, react-dom
+  Then dependencies include theokit, @theokit/sdk, @theokit/ui, @theokit/gateway, @theokit/gateway-telegram, grammy, zod, react, react-dom
 
 RED: test_example_env_example_has_no_real_secrets()
   Given .env.example
@@ -1135,7 +1135,7 @@ BDD scenarios obrigatórios:
 
 ## Phase 4: Telegram gateway
 
-**Objective:** Same agent answers in Telegram via `@usetheo/gateway-telegram`. Boot as a sidecar process from the example's `pnpm bot` script.
+**Objective:** Same agent answers in Telegram via `@theokit/gateway-telegram`. Boot as a sidecar process from the example's `pnpm bot` script.
 
 ### T4.1 — `server/telegram-bot.ts` + `pnpm bot` script
 
@@ -1160,9 +1160,9 @@ tests/integration/example-telegram-bot-shape.test.ts      — (NEW) shape + dry-
 
 **Shape:**
 ```typescript
-import { Agent } from '@usetheo/sdk'
-import { GatewayRunner } from '@usetheo/gateway'
-import { TelegramAdapter } from '@usetheo/gateway-telegram'
+import { Agent } from '@theokit/sdk'
+import { GatewayRunner } from '@theokit/gateway'
+import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { buildTools } from './tools/index.js'
 
 const token = process.env.TELEGRAM_BOT_TOKEN
@@ -1194,7 +1194,7 @@ await runner.start()
 ```
 
 **Telegram-specific:**
-- `event.chatId` is the SDK gateway's normalized chat identifier (per `BasePlatformAdapter` contract). Documented in `@usetheo/gateway` README.
+- `event.chatId` is the SDK gateway's normalized chat identifier (per `BasePlatformAdapter` contract). Documented in `@theokit/gateway` README.
 - `ctx.reply(text)` handles the >4096 char split via `splitForTelegram` helper (re-exported by adapter).
 
 **Invariants:**

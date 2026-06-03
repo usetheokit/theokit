@@ -120,7 +120,7 @@ Com `export *` os ~60 símbolos públicos continuam reachable via `theokit/serve
 **Consequences:** ✅ rename interno em `server/cache/*` não quebra `theokit/server` consumers (eles importam de `theokit/server/cache`); ✅ LOC reduzido drasticamente; ❌ migração precisa codemod ou opt-in (manter `server/index.ts` exportando tudo por backwards compat na 0.4.x; deprecate path em 1.0).
 
 ### D9 — Skip de mirror-types em `create-conversation-history.ts` é opcional, NÃO obrigatório (DP-7)
-**Decisão:** Re-avaliar (NÃO remover automaticamente) as 5 duck-typed SDK mirror interfaces. Se o locked-stack premise (`@usetheo/sdk` é SEMPRE runtime) é absoluto, então `@usetheo/sdk` deve ser `dependency`, não `peerDependency` opcional; e os mirrors podem ser substituídos por imports diretos. Decisão fica como opcional na T5.2 com checklist explícito.
+**Decisão:** Re-avaliar (NÃO remover automaticamente) as 5 duck-typed SDK mirror interfaces. Se o locked-stack premise (`@theokit/sdk` é SEMPRE runtime) é absoluto, então `@theokit/sdk` deve ser `dependency`, não `peerDependency` opcional; e os mirrors podem ser substituídos por imports diretos. Decisão fica como opcional na T5.2 com checklist explícito.
 **Rationale:** Não over-engineer um "fix" que pode reintroduzir uma fragilidade. Mirrors são feios mas defensivos contra SDK não-instalado.
 **Consequences:** Decisão registrada como opcional; tarefa T5.2 lista as 2 opções claramente.
 
@@ -1325,7 +1325,7 @@ VERIFY:  npx vitest run tests/unit/services tests/integration/services
 
 #### Objective
 Re-avaliar as 5 duck-typed SDK mirror interfaces em `server/agent/create-conversation-history.ts:29-86`. Decidir entre:
-- **Opção A (preferida):** mover `@usetheo/sdk` para `dependencies` (já é); remover mirrors; importar tipos direto.
+- **Opção A (preferida):** mover `@theokit/sdk` para `dependencies` (já é); remover mirrors; importar tipos direto.
 - **Opção B (manter):** documentar com JSDoc + adicionar test que falha se SDK introduz novo método.
 
 #### Evidence
@@ -1334,16 +1334,16 @@ Re-avaliar as 5 duck-typed SDK mirror interfaces em `server/agent/create-convers
 #### Files to edit
 ```
 packages/theo/src/server/agent/create-conversation-history.ts — escolha A ou B
-packages/theo/package.json — confirm @usetheo/sdk em dependencies (não peer)
+packages/theo/package.json — confirm @theokit/sdk em dependencies (não peer)
 ```
 
 #### Deep file dependency analysis
 - Atualmente: file tem mirrors para evitar runtime dependency
-- Se A: imports diretos de `@usetheo/sdk` aumentam acoplamento de tipo runtime — tradeoff documentado
+- Se A: imports diretos de `@theokit/sdk` aumentam acoplamento de tipo runtime — tradeoff documentado
 - Se B: comment + test ensuring sanity
 
 #### Deep Dives
-**Verificar:** `package.json` de `packages/theo/` — `@usetheo/sdk` é `dependencies` ou `peerDependencies`?
+**Verificar:** `package.json` de `packages/theo/` — `@theokit/sdk` é `dependencies` ou `peerDependencies`?
 
 #### Tasks
 1. Inspecionar `package.json` para confirmar status atual
@@ -1354,7 +1354,7 @@ packages/theo/package.json — confirm @usetheo/sdk em dependencies (não peer)
 #### TDD + BDD
 
 ```
-RED:     test_sdk_in_deps_not_peer() — Given packages/theo/package.json, When parsed, Then @usetheo/sdk in 'dependencies' OR documented exception.
+RED:     test_sdk_in_deps_not_peer() — Given packages/theo/package.json, When parsed, Then @theokit/sdk in 'dependencies' OR documented exception.
 RED:     test_mirror_interfaces_either_removed_or_documented() — Given create-conversation-history.ts, When grep for 'interface .*Like$', Then either 0 matches (Opt A) or each interface has @kept JSDoc with reason.
 GREEN:   Apply chosen option.
 REFACTOR: None.

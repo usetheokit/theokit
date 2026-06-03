@@ -28,12 +28,12 @@ it through `createConversationHistory({ options: { conversationStorage } })`.
 
 | Adapter | Where it lives | Persistence | Multi-host? | Best for |
 |---------|----------------|-------------|:----:|----------|
-| `FileSystemConversationStorage` | `@usetheo/sdk` (default) | `.theokit/agents/<id>/messages.jsonl` | ❌ | Single-host Node, indie/MicroSaaS |
-| `InMemoryConversationStorage` | `@usetheo/sdk` | RAM only — lost on restart | ❌ | Tests, demos, ephemeral chats |
+| `FileSystemConversationStorage` | `@theokit/sdk` (default) | `.theokit/agents/<id>/messages.jsonl` | ❌ | Single-host Node, indie/MicroSaaS |
+| `InMemoryConversationStorage` | `@theokit/sdk` | RAM only — lost on restart | ❌ | Tests, demos, ephemeral chats |
 | `PostgresConversationStorage` | Recipe (this repo: `tests/fixtures/conversation-postgres/`) | Postgres `agent_conversations` table | ✅ | Production multi-host, K8s, TheoCloud |
 | `RedisConversationStorage` | Recipe (this repo: `tests/fixtures/conversation-redis/`) | Redis List + 30-day TTL | ✅ | Serverless (CF Workers + Upstash, Lambda + ElastiCache) |
 
-The first two ship in `@usetheo/sdk` itself. The latter two are **recipes** —
+The first two ship in `@theokit/sdk` itself. The latter two are **recipes** —
 ready-to-copy classes that consumers paste into their project. They live in
 `tests/fixtures/` as proof-of-contract; not as published packages.
 
@@ -151,5 +151,5 @@ Edge cases relevant here:
 - Redis recipe: `tests/fixtures/conversation-redis/storage.ts`
 - Test (Postgres): `tests/integration/conversation-postgres-fixture.test.ts`
 - Test (Redis): `tests/integration/conversation-redis-fixture.test.ts`
-- SDK source: `@usetheo/sdk` v1.1.0 — `Agent.getOrCreate` + `ConversationStorageAdapter`
+- SDK source: `@theokit/sdk` v1.1.0 — `Agent.getOrCreate` + `ConversationStorageAdapter`
 - Agent registry GC: `docs/concepts/agent-registry-lifecycle.md` (sibling concept)

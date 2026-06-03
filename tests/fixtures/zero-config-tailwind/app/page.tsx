@@ -3,7 +3,7 @@ import type { ReactElement } from 'react'
 /**
  * zero-config-tailwind fixture page. Imports a TheoUI component WITHOUT any
  * consumer-side tailwind.config or postcss.config — the framework's
- * integrateUseTheoUI() must auto-wire @tailwindcss/vite + @usetheo/ui/vite-plugin.
+ * integrateUseTheoUI() must auto-wire @tailwindcss/vite + @theokit/ui/vite-plugin.
  *
  * The fixture is the proof of T3.4.
  */

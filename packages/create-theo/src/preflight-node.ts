@@ -1,7 +1,7 @@
 /**
  * Node version preflight for `create-theokit`.
  *
- * `@usetheo/sdk` declares `engines.node: ">=22.12.0"`. Users on older Node
+ * `@theokit/sdk` declares `engines.node: ">=22.12.0"`. Users on older Node
  * hit cryptic `node:sqlite` / `better-sqlite3` ABI errors mid-chat without
  * any actionable diagnostic. This preflight runs at scaffold start, prints
  * a clear error, and exits before any FS write (ADR D4 of the plan).
@@ -9,7 +9,7 @@
  * Zero-dep semver comparator — no `semver` package needed.
  */
 
-/** Minimum Node version required by `@usetheo/sdk`. */
+/** Minimum Node version required by `@theokit/sdk`. */
 export const MIN_NODE_VERSION = '22.12.0'
 
 /**
@@ -47,7 +47,7 @@ export function assertNodeVersion(currentRaw: string, minimum: string = MIN_NODE
   const current = currentRaw.replace(/^v/, '')
   if (compareSemver(currentRaw, minimum) < 0) {
     throw new Error(
-      `create-theokit requires Node ${minimum} or later (the @usetheo/sdk peer engines floor).\n` +
+      `create-theokit requires Node ${minimum} or later (the @theokit/sdk peer engines floor).\n` +
         `  Detected: Node ${current}\n` +
         `  Fix:      nvm install 22 && nvm use 22\n` +
         `            (or your version manager equivalent — fnm, volta, asdf, nvs)\n`,

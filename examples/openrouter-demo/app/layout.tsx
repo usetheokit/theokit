@@ -1,12 +1,12 @@
 import './globals.css'
 
 import { Outlet } from 'react-router'
-import { TopNav, ThemeSwitcher, ThemeScript, Badge, Tooltip } from '@usetheo/ui'
+import { TopNav, ThemeSwitcher, ThemeScript, Badge, Tooltip } from '@theokit/ui'
 import { Bot } from 'lucide-react'
 
 /**
  * Root layout. The TheoUI provider is auto-injected by theokit/vite-plugin
- * when @usetheo/ui is detected — do not wrap manually here (double provider
+ * when @theokit/ui is detected — do not wrap manually here (double provider
  * resets persisted theme state).
  *
  * ThemeScript renders an inline script that runs BEFORE hydration and sets

@@ -18,7 +18,7 @@
 4. **CLAUDE.md R0.5.8:** Transactional outbox semantics — `enqueue` defers actual dispatch until current request commits (`res.on('finish')`). Rollback (handler throws) = nothing enqueued.
 5. **CLAUDE.md R0.5.9:** W3C Trace Context propagation through `enqueue → job → child enqueues`. `ctx.traceId` in job handler matches the originating request's `traceparent`.
 6. **CLAUDE.md R0.5.5:** Default `maxAttempts: 1`. **No surprise retries.** `NonRetryableError` for explicit opt-out of retries when `maxAttempts > 1`.
-7. **CLAUDE.md ADR-0006:** `defineWorker(name, { stream, handler })` — REJECTED. Stream consumers are not in scope until (a) `@usetheo/theo` offers managed streams, (b) 3+ apps demand, (c) agent layer formalizes.
+7. **CLAUDE.md ADR-0006:** `defineWorker(name, { stream, handler })` — REJECTED. Stream consumers are not in scope until (a) `@theokit/theo` offers managed streams, (b) 3+ apps demand, (c) agent layer formalizes.
 
 ---
 
@@ -173,7 +173,7 @@ These patterns appear in **3+ of the analyzed systems** and TheoKit adopts them 
 | Backend lock-in | Multi-backend via adapter | Inngest-engine only | Trigger.dev cloud only | n/a (in-process) | **Two backends: InMemory + Postgres** | Rails won. Locking to Redis (Sidekiq, BullMQ) excludes apps that want zero-Redis (which is most TheoKit apps — agent indies don't want to run a second datastore). Postgres is the realistic prod backend; InMemory is dev + tests. ADR-0002. |
 | Transactional behavior | Per-job `enqueue_after_transaction_commit` (Rails 7.1+, default `false`) | Engine-handled (events fire on send) | Engine-handled | None | **Outbox via `res.on('finish')`, default ON, no opt-out** | Rails made it per-job-opt-in because changing the default broke existing apps. TheoKit has no installed base — we get to ship the right default day one. Outbox is the default; if a handler wants fire-and-forget bypass, they can `backend.enqueue` directly (escape hatch, not advertised). |
 | Workflow API (`step.run`, chaining, `triggerAndWait`) | None | Core feature | Core feature | None | **Explicitly forbidden** | Per ADR-0006 + macro roadmap "Out of scope for 0.5.0." Workflow engines are a separate product category (Mastra, Inngest, Trigger.dev). TheoKit's job primitive does ONE thing: durable single-shot handler. Users who need workflows compose: enqueue child jobs from inside the handler (each is its own atomic job), OR adopt an upstream workflow tool. |
-| Stream consumer (`defineWorker`) | Sidekiq has nothing native | n/a | n/a | n/a | **Rejected — ADR-0006** | The 3 reopen conditions are codified. Adding stream consumers without a managed stream backend in `@usetheo/theo` is premature abstraction. |
+| Stream consumer (`defineWorker`) | Sidekiq has nothing native | n/a | n/a | n/a | **Rejected — ADR-0006** | The 3 reopen conditions are codified. Adding stream consumers without a managed stream backend in `@theokit/theo` is premature abstraction. |
 
 ---
 

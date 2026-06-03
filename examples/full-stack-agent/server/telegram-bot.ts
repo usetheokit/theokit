@@ -1,7 +1,7 @@
 /**
  * Telegram bot — same agent that runs in the web chat.
  *
- * Pattern (from @usetheo/gateway-telegram README):
+ * Pattern (from @theokit/gateway-telegram README):
  *
  *   1. `TelegramAdapter` wraps grammy + the BasePlatformAdapter contract.
  *   2. `GatewayRunner` orchestrates adapters; the handler receives a
@@ -15,9 +15,9 @@
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { Agent } from '@usetheo/sdk'
-import { GatewayRunner } from '@usetheo/gateway'
-import { TelegramAdapter } from '@usetheo/gateway-telegram'
+import { Agent } from '@theokit/sdk'
+import { GatewayRunner } from '@theokit/gateway'
+import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { loadEnv } from 'theokit/server'
 
 import { buildTools } from './tools/index.js'

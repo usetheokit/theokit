@@ -6,8 +6,8 @@ Persistent state across Ralph Loop iterations.
 
 **TheoUI é DEPENDENCY apenas do template default — NÃO do package `theokit`.**
 
-- `theokit` package core: ZERO referência a `@usetheo/ui`. Sem devDep, sem import, sem re-export.
-- `templates/default/package.json.tmpl`: lista `@usetheo/ui` em `dependencies` (apps gerados puxam).
+- `theokit` package core: ZERO referência a `@theokit/ui`. Sem devDep, sem import, sem re-export.
+- `templates/default/package.json.tmpl`: lista `@theokit/ui` em `dependencies` (apps gerados puxam).
 - `vite-plugin/index.ts`: detecta TheoUI no `node_modules` do **projeto user** (via `require.resolve` com `paths: [projectRoot]`). Quando detected, auto-injeta CSS + ThemeProvider no entry-client gerado.
 - `AgentEvent` runtime variant: vive 100% em `packages/theo/src/server/agent-types.ts`. ZERO relação com tipos de TheoUI. Consumer code mapeia runtime→visual quando renderiza.
 
@@ -26,7 +26,7 @@ Single-source-of-truth simplificado: TheoKit owns runtime variant (server emits,
 | T2.1 Detect TheoUI presence | **DONE (iter 2)** | `theoui-detect.ts` + schema `ui` field; require.resolve EC-1; EC-5; 8 tests |
 | T2.2 Inject CSS imports | **DONE (iter 3)** | `generateEntryClient` aceita opts.theoUi; EC-2 (entry-server NUNCA CSS); 7 tests |
 | T2.3 Wrap ThemeProvider | **DONE (iter 3)** | `generateEntryClient` envolve RouterProvider em `<TheoUIProvider theme={{ defaultTheme }}>`; 6 tests; usa TheoUIProvider (composição idiomática) ao invés de ThemeProvider cru |
-| T3.1 Template agent surface | **DONE (iter 4)** | template default: @usetheo/ui dep + AgentComposer/AgentTimeline + mock chat SSE; EC-11 doc; 8 tests |
+| T3.1 Template agent surface | **DONE (iter 4)** | template default: @theokit/ui dep + AgentComposer/AgentTimeline + mock chat SSE; EC-11 doc; 8 tests |
 | T4.1 --bare flag | **DONE (iter 5)** | `bare-transform.ts` + ScaffoldOptions + cli --bare; EC-4 atomic rollback via try/rmSync; 7 tests |
 | T5.1 defineAgentEndpoint | **DONE (iter 6)** | `define-agent-endpoint.ts` wraps async generator → SSE Response; EC-7 abort + EC-12 doc; 7 tests |
 | T5.2 useAgentStream | **DONE (iter 6)** | `agent-stream-core.ts` (pure SSE parser+fetch loop) + `use-agent-stream.ts` (React glue); EC-3 fetch+ReadableStream (no EventSource); EC-8 unmount abort; 12 tests |
@@ -61,17 +61,17 @@ Validation snapshot 2026-05-18:
 
 1. **Template apontava para `theokit@^0.1.0-alpha.2` (versão inexistente no npm).** Bug introduzido por mim na iter 4 sem justificativa. Fix: reverti para `^0.1.0-alpha.1` que existe.
 
-2. **`detectTheoUi` usava `require.resolve('@usetheo/ui/package.json')` — falhava em runtime.** O package `@usetheo/ui` define `exports` field sem expor `./package.json`, então o resolve sempre falhava. Fix: troquei para subpath confiável (`@usetheo/ui/styles.css`, `@usetheo/ui/fonts.css`) que está em `exports`.
+2. **`detectTheoUi` usava `require.resolve('@theokit/ui/package.json')` — falhava em runtime.** O package `@theokit/ui` define `exports` field sem expor `./package.json`, então o resolve sempre falhava. Fix: troquei para subpath confiável (`@theokit/ui/styles.css`, `@theokit/ui/fonts.css`) que está em `exports`.
 
-3. **`detectTheoUi` detectava `@usetheo/ui` falsamente em fixtures monorepo.** Node module resolution caminha pra cima a partir do `import.meta.url` do detect, ignorando `paths: [projectRoot]` como restrição exclusiva. Em fixtures (`onda1-hello-theo`) sem dep declarada, o resolve achava o `@usetheo/ui` do workspace e gerava entry-client com import que falhava 500. Fix: gate conservativo — antes de resolver, lê `<projectRoot>/package.json` e verifica que `@usetheo/ui` está em `dependencies`/`devDependencies`/`peerDependencies`. Pnpm hoist continua funcionando porque a consumer's package.json mantém a declaração mesmo quando install vai pro workspace root.
+3. **`detectTheoUi` detectava `@theokit/ui` falsamente em fixtures monorepo.** Node module resolution caminha pra cima a partir do `import.meta.url` do detect, ignorando `paths: [projectRoot]` como restrição exclusiva. Em fixtures (`onda1-hello-theo`) sem dep declarada, o resolve achava o `@theokit/ui` do workspace e gerava entry-client com import que falhava 500. Fix: gate conservativo — antes de resolver, lê `<projectRoot>/package.json` e verifica que `@theokit/ui` está em `dependencies`/`devDependencies`/`peerDependencies`. Pnpm hoist continua funcionando porque a consumer's package.json mantém a declaração mesmo quando install vai pro workspace root.
 
 **Refatoração colateral:** `detectTheoUi(root, raw, resolver?)` — resolver agora é injetável (DIP) para testes isolarem com determinismo. Refatorei `vite-plugin-theoui-detect.test.ts` para usar tmp dirs reais + stubs (de 8 para 13 tests, com novos casos: declared-but-not-installed, malformed package.json, devDependencies).
 
 **Smoke real (com workspace linkado a my-test):**
-- `pnpm try:scaffold` → cria projeto OK com `@usetheo/ui` + agent surface
+- `pnpm try:scaffold` → cria projeto OK com `@theokit/ui` + agent surface
 - `pnpm dev` → server sobe em http://localhost:3005
 - `GET /` → HTML 200
-- `GET /@theo/entry-client` → contém `import "@usetheo/ui/styles.css"`, `import "@usetheo/ui/fonts.css"`, `import { TheoUIProvider }` + wrap em `createRoot().render()`
+- `GET /@theo/entry-client` → contém `import "@theokit/ui/styles.css"`, `import "@theokit/ui/fonts.css"`, `import { TheoUIProvider }` + wrap em `createRoot().render()`
 - `POST /api/chat` → 3 SSE events corretos, Content-Type `text/event-stream`
 - `GET /app/page.tsx` → compilado com `AgentComposer` + `AgentTimeline` import OK
 
@@ -82,7 +82,7 @@ Validation: vitest 946 passed, tsc 0 errors, dogfood 19/19.
 **Phase 5 + Phase 6 DONE. Plan COMPLETE.**
 
 **Phase 6 Dogfood QA:** Added 4 new checks to `scripts/dogfood-smoke.sh` (now 19/19 instead of 15/15):
-- #16 TheoUI in default template (`@usetheo/ui` dep + `AgentTimeline` + `server/routes/chat.ts`)
+- #16 TheoUI in default template (`@theokit/ui` dep + `AgentTimeline` + `server/routes/chat.ts`)
 - #17 Auto-injection wiring (`theoui-detect.ts` + `TheoUIProvider` + `styles.css` in entry.ts)
 - #18 `--bare` opt-out (`applyBareTransform` + flag parsing + EC-4 `rmSync` rollback)
 - #19 Agent surfaces (`defineAgentEndpoint` + `useAgentStream` + `consumeAgentStream` exported)
@@ -117,7 +117,7 @@ Validation: 941/941 sequential, zero TS errors. Pré-existente: `vite-integratio
 ## Iter 5 — 2026-05-17
 
 **T4.1 DONE.** `--bare` flag implementation:
-- `packages/create-theo/src/bare-transform.ts` NEW: `applyBareTransform(targetDir, options)` que (1) remove `@usetheo/ui` de deps, (2) reescreve `app/page.tsx` para um "Hello Theo" mínimo, (3) unlink `server/routes/chat.ts`
+- `packages/create-theo/src/bare-transform.ts` NEW: `applyBareTransform(targetDir, options)` que (1) remove `@theokit/ui` de deps, (2) reescreve `app/page.tsx` para um "Hello Theo" mínimo, (3) unlink `server/routes/chat.ts`
 - `packages/create-theo/src/index.ts` reescrito: `ScaffoldOptions { bare?, _testForceTransformError? }`; **EC-4 atomic rollback** via `try { applyBareTransform } catch { rmSync(targetDir, recursive: true) + throw }`; `--bare` + template não-default lança erro claro
 - `packages/create-theo/src/cli.ts` parseia `--bare` flag + help text atualizado
 - `_testForceTransformError` injection prova rollback funciona
@@ -150,7 +150,7 @@ Validation: 907/907 sequential, zero TS errors.
 ## Iter 4 — 2026-05-17
 
 **T3.1 DONE.** Template default agent surface:
-- `package.json.tmpl` lista `@usetheo/ui ^0.1.0-next.0` em deps
+- `package.json.tmpl` lista `@theokit/ui ^0.1.0-next.0` em deps
 - `app/page.tsx` reescrito como agent surface: `"use client"` + `AgentTimeline` + `AgentComposer` consumindo `/api/chat` via fetch+ReadableStream SSE parser
 - `server/routes/chat.ts` NEW: mock que emite 3 AgentEvents via SSE (`text/event-stream`)
 - **EC-11:** comentário grande explicando "substitua pelo seu LLM"
@@ -164,7 +164,7 @@ Validation: 915/915 sequential, zero TS errors.
 
 **T2.1 DONE.** Detect TheoUI + schema:
 - `theoui-detect.ts` NEW: `detectTheoUi(projectRoot, raw)` + `resolveTheoUiConfig`
-- `require.resolve('@usetheo/ui/package.json', { paths: [projectRoot] })` em vez de existsSync — EC-1 (pnpm hoist) + EC-5 (corrupted install)
+- `require.resolve('@theokit/ui/package.json', { paths: [projectRoot] })` em vez de existsSync — EC-1 (pnpm hoist) + EC-5 (corrupted install)
 - `config.ui: false | { theme, fonts }` schema com enum validation (EC-9)
 - Theme default `violet-forge`, fonts default `bundled`
 - Wired em `vite-plugin/index.ts` configResolved, cacheado em closure

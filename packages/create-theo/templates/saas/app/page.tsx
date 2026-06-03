@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AgentComposer, AgentTimeline, type AgentEvent as AgentRow } from '@usetheo/ui'
+import { AgentComposer, AgentTimeline, type AgentEvent as AgentRow } from '@theokit/ui'
 import { useAgentStream } from 'theokit/client'
 
 interface Me {

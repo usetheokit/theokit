@@ -6,11 +6,11 @@ consulted: claude
 informed: release-engineer
 ---
 
-# ADR 0022: Republish `create-theokit` com template wirado @usetheo/sdk + README + DX hygiene completa
+# ADR 0022: Republish `create-theokit` com template wirado @theokit/sdk + README + DX hygiene completa
 
 ## Context and Problem Statement
 
-`create-theokit@0.1.0-alpha.4` (publicado) gera scaffold com **MOCK chat** (não @usetheo/sdk), **sem README**, **só script `dev`**. CLAUDE.md macro roadmap item #3 "✅ Done 2026-05-22" tem template SDK-wired no WORKSPACE mas T5.0 publish "DEFERRED to operator". Stranger HOJE recebe app subjetivamente quebrado.
+`create-theokit@0.1.0-alpha.4` (publicado) gera scaffold com **MOCK chat** (não @theokit/sdk), **sem README**, **só script `dev`**. CLAUDE.md macro roadmap item #3 "✅ Done 2026-05-22" tem template SDK-wired no WORKSPACE mas T5.0 publish "DEFERRED to operator". Stranger HOJE recebe app subjetivamente quebrado.
 
 ## Decision Drivers
 
@@ -40,7 +40,7 @@ Bump `create-theokit@0.1.0-alpha.5+` (ou next) contendo:
 **D2 (republish), D3 (README + scripts), D10 (DX hygiene como fix-and-forget) aceitas.**
 
 Mudanças (já implementadas em workspace via T1.3 + T2.1/T2.2/T2.3):
-- `packages/create-theo/templates/default/server/routes/chat.ts.tmpl` reescrito com @usetheo/sdk
+- `packages/create-theo/templates/default/server/routes/chat.ts.tmpl` reescrito com @theokit/sdk
 - `packages/create-theo/templates/default/README.md.tmpl` novo (≤80 linhas)
 - `packages/create-theo/templates/{default,dashboard,api-only,postgres,saas}/package.json.tmpl` — scripts completos
 - `packages/create-theo/templates/*/. nvmrc` novo (5 templates)

@@ -8,7 +8,7 @@ import { defineRoute } from 'theokit/server'
  * `<cwd>/.theokit/agents/`. Returns id + last-modified timestamp per dir.
  * Used by `/history` page to show recent conversations.
  *
- * Each conversation maps to one `Agent.getOrCreate(<id>)` from @usetheo/sdk
+ * Each conversation maps to one `Agent.getOrCreate(<id>)` from @theokit/sdk
  * (the SDK auto-persists turns in `messages.jsonl` inside each dir).
  */
 export const GET = defineRoute({

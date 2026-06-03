@@ -1,12 +1,12 @@
 # Plan: SDK v1.1.0 Consumption — TheoKit Production-Readiness Cutover
 
-> **Version 1.1** — `@usetheo/sdk` shipped v1.1.0 closing all 6 production-readiness gaps from the 2026-05-25 handoff (`ConversationStorageAdapter`, `Agent.registry` GC, `AgentRunError` discrimination, tool lifecycle hooks, `AbortSignal` propagation, quota gates). This plan consumes those primitives across the TheoKit framework, examples, fixtures, and docs. **Outcome**: TheoKit becomes honestly deploy-ready for serverless (Vercel/CF/Lambda) and multi-host (K8s/TheoCloud) — the three CRITICAL gaps from `docs/audit/dogfood-2026-05-25-phase-7-consolidated.md` are closed end-to-end.
+> **Version 1.1** — `@theokit/sdk` shipped v1.1.0 closing all 6 production-readiness gaps from the 2026-05-25 handoff (`ConversationStorageAdapter`, `Agent.registry` GC, `AgentRunError` discrimination, tool lifecycle hooks, `AbortSignal` propagation, quota gates). This plan consumes those primitives across the TheoKit framework, examples, fixtures, and docs. **Outcome**: TheoKit becomes honestly deploy-ready for serverless (Vercel/CF/Lambda) and multi-host (K8s/TheoCloud) — the three CRITICAL gaps from `docs/audit/dogfood-2026-05-25-phase-7-consolidated.md` are closed end-to-end.
 >
 > **v1.1 changelog** — Incorporates 17 edge cases from `docs/reviews/edge-case-plan/sdk-1-1-0-consumption-edge-cases-2026-05-26.md` (3 MUST FIX + 9 SHOULD TEST + 5 DOCUMENT). Tasks affected: T0.1, T2.1, T3.1, T4.1, T5.1, T6.1, T6.2, T7.1, T9.1, T9.2. The `## Edge cases incorporated` section at the bottom lists every EC and where it lands.
 
 ## Context
 
-`@usetheo/sdk` v1.1.0 was released on 2026-05-26 (SDK commits `0445e1f` "version 1.1.0" + `aae7178` "Phase 7 dogfood APROVADO"). The release note (in conversation history) confirms all six gaps from `docs/handoff/2026-05-25-sdk-production-readiness-handoff.md` are addressed with the contracts I proposed. Verification on local sibling:
+`@theokit/sdk` v1.1.0 was released on 2026-05-26 (SDK commits `0445e1f` "version 1.1.0" + `aae7178` "Phase 7 dogfood APROVADO"). The release note (in conversation history) confirms all six gaps from `docs/handoff/2026-05-25-sdk-production-readiness-handoff.md` are addressed with the contracts I proposed. Verification on local sibling:
 
 - `theokit-sdk/packages/sdk/package.json` → `"version": "1.1.0"` ✅
 - `Agent.registry`, `AgentRunError`, `AgentRunErrorCode`, `FileSystemConversationStorage`, `InMemoryConversationStorage` all exported ✅
@@ -59,7 +59,7 @@ Specific measurable goals:
 
 | ID | Decision | Rationale | Consequences |
 |----|---|---|---|
-| **D1** | TheoKit consumes `@usetheo/sdk` v1.1.0 via the existing workspace symlink (`pnpm-workspace.yaml`); no version pin change. | Workspace protocol means TheoKit picks up whatever the sibling has on disk. The SDK already publishes 1.1.0 (commit `0445e1f`); the bump is implicit. Pinning the version in `package.json` would couple us to an npm-published version we don't yet need. | Future SDK changes auto-flow into TheoKit on next `pnpm install`. Risk: if SDK ships a breaking change, TheoKit's CI is the first signal — acceptable, that's the workspace protocol's purpose. |
+| **D1** | TheoKit consumes `@theokit/sdk` v1.1.0 via the existing workspace symlink (`pnpm-workspace.yaml`); no version pin change. | Workspace protocol means TheoKit picks up whatever the sibling has on disk. The SDK already publishes 1.1.0 (commit `0445e1f`); the bump is implicit. Pinning the version in `package.json` would couple us to an npm-published version we don't yet need. | Future SDK changes auto-flow into TheoKit on next `pnpm install`. Risk: if SDK ships a breaking change, TheoKit's CI is the first signal — acceptable, that's the workspace protocol's purpose. |
 | **D2** | `createConversationHistory` passes `conversationStorage` **opaquely** via the existing `SdkAgentOptions` index signature, not via a typed field. Add a typed convenience field `conversationStorage?: ConversationStorageLike` on the public TheoKit API, but the internal call to `Agent.getOrCreate` passes it through the index. | Avoids hard-coupling TheoKit's types to the SDK's structural shape. The SDK is the source of truth for `ConversationStorageAdapter`; TheoKit defines a structural interface (duck-type) matching it. Existing apps without `conversationStorage` keep working unchanged (backward compat preserved). | Two type definitions (TheoKit structural + SDK nominal) MUST stay in sync. Mitigated by a contract test that imports the SDK type and asserts assignability to TheoKit's structural shape. |
 | **D3** | `Agent.registry.configure()` is called **lazily** the first time `defineAgentEndpoint` runs, not at module load. Configuration source: `theo.config.ts > agents.registry`. Defaults: `{ maxAgents: 100, idleTimeoutMs: 30 * 60_000 }`. | Module-load configuration races with bundlers (some apps lazy-load config). Lazy-on-first-use guarantees the config object is fully resolved. Defaults match SDK defaults — no surprises. | One extra `if (!configured) configure()` check per request. Cost: < 1µs. Acceptable. |
 | **D4** | `AgentEvent.error` extends the existing variant with **optional** fields. Existing client code reading `event.message` keeps working. New fields (`code`, `provider`, `retriable`, `retryAfterMs`) are read defensively. | Backward compat — clients still hydrating from old server versions get the legacy shape. Optional fields satisfy the migration window. Once TheoKit ships v0.3.0 the fields can become required (separate plan). | Type signature has 4 new optionals. Client code that does `switch (event.code)` must handle `undefined` (treat as legacy). |
@@ -109,7 +109,7 @@ Phase 1 (AgentEvent type contract)  ← blocks Phase 4
 ### T0.1 — Verify SDK v1.1.0 exports + workspace wire
 
 #### Objective
-Confirm `Agent.registry`, `AgentRunError`, `AgentRunErrorCode`, `FileSystemConversationStorage`, `InMemoryConversationStorage` are imported correctly from `@usetheo/sdk` in the running workspace.
+Confirm `Agent.registry`, `AgentRunError`, `AgentRunErrorCode`, `FileSystemConversationStorage`, `InMemoryConversationStorage` are imported correctly from `@theokit/sdk` in the running workspace.
 
 #### Evidence
 - `theokit-sdk/packages/sdk/package.json` shows v1.1.0 (verified earlier).
@@ -122,12 +122,12 @@ tests/integration/sdk-1-1-0-exports.test.ts (NEW) — contract test that imports
 ```
 
 #### Deep file dependency analysis
-- `tests/integration/sdk-1-1-0-exports.test.ts` (NEW) — imports from `@usetheo/sdk`, no other dependency. Runs in vitest under Node. Smoke-only — does not exercise functionality.
+- `tests/integration/sdk-1-1-0-exports.test.ts` (NEW) — imports from `@theokit/sdk`, no other dependency. Runs in vitest under Node. Smoke-only — does not exercise functionality.
 
 #### Deep Dives
 - **Data structures verified**: `Agent.registry` is an object/instance with `configure/evict/evictAll/size/ids` methods. `AgentRunError` has `code/provider/retriable/retryAfterMs/providerError/requestId/conversationId`. `AgentRunErrorCode` is a string literal union of 11+ codes.
 - **Invariants**: imports MUST resolve at TypeScript level AND at runtime. A TS-only assertion is not enough.
-- **Edge cases**: workspace symlink could point at a stale build. Test reads `@usetheo/sdk/package.json` and asserts version starts with `1.1.`.
+- **Edge cases**: workspace symlink could point at a stale build. Test reads `@theokit/sdk/package.json` and asserts version starts with `1.1.`.
 
 #### Tasks
 1. Create `tests/integration/sdk-1-1-0-exports.test.ts` with import + shape assertions.
@@ -137,7 +137,7 @@ tests/integration/sdk-1-1-0-exports.test.ts (NEW) — contract test that imports
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:  test_sdk_version_satisfies_caret_range() — Given @usetheo/sdk installed, When `semver.satisfies(version, '^1.1.0')` evaluated, Then true. (EC-4 — semver-aware, forward-compat: accepts 1.1.x, 1.2.x; rejects 1.0.x, 2.0.x.)
+RED:  test_sdk_version_satisfies_caret_range() — Given @theokit/sdk installed, When `semver.satisfies(version, '^1.1.0')` evaluated, Then true. (EC-4 — semver-aware, forward-compat: accepts 1.1.x, 1.2.x; rejects 1.0.x, 2.0.x.)
 RED:  test_agent_registry_has_configure_method() — Given Agent imported, When Agent.registry inspected, Then typeof Agent.registry.configure === 'function'
 RED:  test_agent_run_error_has_code_field() — Given AgentRunError thrown with code:'auth', When .code accessed, Then value is "auth"
 RED:  test_file_system_conversation_storage_constructs() — Given FileSystemConversationStorage class, When `new FileSystemConversationStorage()` called, Then instance has getMessages/appendMessage/deleteConversation methods
@@ -314,7 +314,7 @@ RED:  test_storage_omitted_defaults_to_sdk() — Given createConversationHistory
 RED:  test_storage_partial_interface_typechecks() — Given storage with only required methods (getMessages/appendMessage/deleteConversation), When passed, Then accepted by type
 RED:  test_storage_extra_methods_typecheck() — Given storage with optional listConversationIds + dispose, When passed, Then accepted
 RED:  test_sdk_contract_assignability() — Given SDK's ConversationStorageAdapter import, When assigned to ConversationStorageLike variable, Then no type error (D2 invariant, direction: SDK → TheoKit)
-RED:  test_theokit_storage_assignable_to_sdk_adapter() — Given TheoKit ConversationStorageLike value, When assigned to `import('@usetheo/sdk').ConversationStorageAdapter` variable, Then no type error (EC-5 — reverse direction: TheoKit → SDK; catches drift where TheoKit adds a method SDK doesn't have)
+RED:  test_theokit_storage_assignable_to_sdk_adapter() — Given TheoKit ConversationStorageLike value, When assigned to `import('@theokit/sdk').ConversationStorageAdapter` variable, Then no type error (EC-5 — reverse direction: TheoKit → SDK; catches drift where TheoKit adds a method SDK doesn't have)
 GREEN: Add interface + thread; existing test suite stays green.
 REFACTOR: Inline JSDoc explaining D2 + the unknown-message rationale.
 VERIFY: npx vitest run tests/unit/create-conversation-history-storage.test.ts
@@ -930,7 +930,7 @@ tests/integration/openrouter-demo-storage-wire.test.ts (NEW) — fixture-style s
 #### Deep Dives
 - **Code**:
   ```ts
-  import { InMemoryConversationStorage } from '@usetheo/sdk'
+  import { InMemoryConversationStorage } from '@theokit/sdk'
   // ...
   const storage = new InMemoryConversationStorage()
   // ...

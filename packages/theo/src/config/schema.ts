@@ -336,7 +336,7 @@ export const theoConfigSchema = z
       })
       .optional(),
     /** TheoUI auto-wire (T2.1). `false` = opt-out; object = explicit theme/fonts;
-     * undefined = enabled when @usetheo/ui is detected in node_modules. */
+     * undefined = enabled when @theokit/ui is detected in node_modules. */
     ui: z
       .union([
         z.literal(false),
@@ -381,7 +381,7 @@ export const theoConfigSchema = z
     /**
      * Extra package names to pre-bundle via Vite's `optimizeDeps.include`.
      *
-     * Framework auto-includes `@usetheo/ui` and `lucide-react` when present.
+     * Framework auto-includes `@theokit/ui` and `lucide-react` when present.
      * Apps adding plugin peer-deps that rely on a runtime `import('<pkg>')`
      * (dynamic specifier) — e.g. `@theokit/plugin-canvas` consumers
      * installing `mermaid` for Mermaid SVG rendering — must declare those

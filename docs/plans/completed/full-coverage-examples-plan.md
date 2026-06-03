@@ -357,7 +357,7 @@ New page shape:
 ```tsx
 'use client'
 import { useState } from 'react'
-import { AgentComposer, AgentTimeline, type AgentEvent as AgentRow } from '@usetheo/ui'
+import { AgentComposer, AgentTimeline, type AgentEvent as AgentRow } from '@theokit/ui'
 import { useAgentStream } from 'theokit/client'
 
 export default function Page() {
@@ -851,7 +851,7 @@ tests/unit/fixture-use-agent-stream-react.test.ts — (NEW)
 ```
 
 #### Deep file dependency analysis
-- `app/page.tsx` uses `useAgentStream` directly + native HTML (button, ul, li) — no `@usetheo/ui`
+- `app/page.tsx` uses `useAgentStream` directly + native HTML (button, ul, li) — no `@theokit/ui`
 - Demonstrates the hook works in any React app
 
 #### Deep Dives
@@ -890,7 +890,7 @@ Edge cases:
 
 ```
 RED:     test_fixture_uses_useAgentStream() — Given page.tsx, Then imports useAgentStream from 'theokit/client'
-RED:     test_fixture_no_theoui_dep() — Given package.json, Then deps do NOT include @usetheo/ui
+RED:     test_fixture_no_theoui_dep() — Given package.json, Then deps do NOT include @theokit/ui
 RED:     test_fixture_uses_native_html() — Given page.tsx, Then has <button>, <input>, <ul> (no AgentComposer etc.)
 RED:     test_fixture_demonstrates_send_and_reset() — Given page.tsx, Then both send() and reset() are wired to buttons
 GREEN:   Create files
@@ -905,7 +905,7 @@ BDD scenarios:
 - **Error scenario** — status === 'error' is reflected in UI
 
 #### Acceptance Criteria
-- [ ] No `@usetheo/ui` in deps
+- [ ] No `@theokit/ui` in deps
 - [ ] Hook used directly
 - [ ] Dogfood check #25
 
@@ -1763,16 +1763,16 @@ VERIFY:  npx vitest run tests/integration/fixture-adapter-aws-lambda.test.ts
 ### T9.1 — `fixtures/theoui-autoinject/`
 
 #### Objective
-Minimal fixture: declares `@usetheo/ui` in deps, runs dev, asserts entry-client contains CSS + Provider.
+Minimal fixture: declares `@theokit/ui` in deps, runs dev, asserts entry-client contains CSS + Provider.
 
 #### Evidence
 TheoUI auto-injection has unit tests but no isolated fixture. Today the only "proof" is the `default` template, which mixes many features. A fixture that ONLY exercises auto-injection catches regressions cleanly.
 
 #### Files to edit
 ```
-tests/fixtures/theoui-autoinject/package.json — (NEW) with @usetheo/ui
+tests/fixtures/theoui-autoinject/package.json — (NEW) with @theokit/ui
 tests/fixtures/theoui-autoinject/theo.config.ts — (NEW) with ui: { theme: 'noir' }
-tests/fixtures/theoui-autoinject/app/page.tsx — (NEW) imports nothing from @usetheo/ui directly
+tests/fixtures/theoui-autoinject/app/page.tsx — (NEW) imports nothing from @theokit/ui directly
 tests/fixtures/theoui-autoinject/index.html — (NEW)
 tests/fixtures/theoui-autoinject/README.md — (NEW)
 tests/integration/fixture-theoui-autoinject.test.ts — (NEW)
@@ -1783,7 +1783,7 @@ tests/integration/fixture-theoui-autoinject.test.ts — (NEW)
 - Test starts dev server, fetches `/@theo/entry-client`, asserts CSS imports + Provider wrap + theme === 'noir'
 
 #### Deep Dives
-This is the only fixture where the page does NOT import from `@usetheo/ui`. Auto-injection happens in the generated entry-client; the page is bare. Test ensures the wrap is automatic regardless of what the user code imports.
+This is the only fixture where the page does NOT import from `@theokit/ui`. Auto-injection happens in the generated entry-client; the page is bare. Test ensures the wrap is automatic regardless of what the user code imports.
 
 Edge cases:
 - `ui: false` → no injection (covered by separate test)
@@ -1809,7 +1809,7 @@ BDD scenarios:
 - **Happy path** — CSS + Provider auto-injected
 - **Validation error** — typo'd theme in config → schema rejects
 - **Edge case** — ui: false → no injection (asserted via separate negative test)
-- **Error scenario** — @usetheo/ui not in deps → no injection
+- **Error scenario** — @theokit/ui not in deps → no injection
 
 #### Acceptance Criteria
 - [ ] Fixture builds

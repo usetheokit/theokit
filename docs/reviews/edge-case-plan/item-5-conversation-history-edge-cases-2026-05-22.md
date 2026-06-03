@@ -23,17 +23,17 @@ Edge cases encontrados: 9 (MUST FIX: 2, SHOULD TEST: 4, DOCUMENT: 3, IGNORE: 12)
   ```
   Apply in the 4-step fallback chain (ADR D3): only accept the source if `isValidAgentId(value)`; otherwise fall through.
 
-### EC-2: `await import('@usetheo/sdk')` throws with cryptic ESM error when SDK not installed
+### EC-2: `await import('@theokit/sdk')` throws with cryptic ESM error when SDK not installed
 
 - **Task afetada:** T1.1 (`createConversationHistory`)
 - **Família:** Integration / DX
-- **Cenário:** Plan uses lazy `import('@usetheo/sdk')` so the SDK isn't loaded for consumers who never call the primitive. If a user calls `createConversationHistory()` WITHOUT having installed `@usetheo/sdk` (the npm package), Node throws `ERR_MODULE_NOT_FOUND: Cannot find package '@usetheo/sdk'`. The error fires deep in the promise chain — surfaces as a generic SSE `error` event with stack trace, not an actionable "install the SDK" message. The scaffold ships `@usetheo/sdk` as a dep (item #3 T3.1) so this is rare, but power users running TheoKit without scaffold OR upgrading partially WILL hit this.
-- **Impacto:** Confusing failure. User sees `MODULE_NOT_FOUND` in logs, doesn't know to `pnpm add @usetheo/sdk`.
+- **Cenário:** Plan uses lazy `import('@theokit/sdk')` so the SDK isn't loaded for consumers who never call the primitive. If a user calls `createConversationHistory()` WITHOUT having installed `@theokit/sdk` (the npm package), Node throws `ERR_MODULE_NOT_FOUND: Cannot find package '@theokit/sdk'`. The error fires deep in the promise chain — surfaces as a generic SSE `error` event with stack trace, not an actionable "install the SDK" message. The scaffold ships `@theokit/sdk` as a dep (item #3 T3.1) so this is rare, but power users running TheoKit without scaffold OR upgrading partially WILL hit this.
+- **Impacto:** Confusing failure. User sees `MODULE_NOT_FOUND` in logs, doesn't know to `pnpm add @theokit/sdk`.
 - **Fix sugerido:** Wrap the dynamic import with a try/catch that re-throws an actionable error:
   ```typescript
-  let sdk: typeof import('@usetheo/sdk')
-  try { sdk = await import('@usetheo/sdk') } catch (cause) {
-    throw new Error('createConversationHistory requires @usetheo/sdk. Install: pnpm add @usetheo/sdk', { cause })
+  let sdk: typeof import('@theokit/sdk')
+  try { sdk = await import('@theokit/sdk') } catch (cause) {
+    throw new Error('createConversationHistory requires @theokit/sdk. Install: pnpm add @theokit/sdk', { cause })
   }
   const agent = await sdk.Agent.getOrCreate(conversationId, args.options)
   ```

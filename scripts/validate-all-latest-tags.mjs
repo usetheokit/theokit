@@ -5,8 +5,8 @@
  * Validates dist-tag drift across 4 packages:
  *   - theokit          (alpha-track) — latest >= alpha
  *   - create-theokit   (alpha-track) — latest >= alpha
- *   - @usetheo/sdk     (stable)      — only latest matters
- *   - @usetheo/ui      (next-track)  — latest >= next
+ *   - @theokit/sdk     (stable)      — only latest matters
+ *   - @theokit/ui      (next-track)  — latest >= next
  *
  * Exit codes:
  *   0 — all dist-tags consistent (latest >= floor for every checked package)
@@ -15,7 +15,7 @@
  *
  * Background: sessão 2026-05-28 detectou drift 3x manualmente
  * (theokit@latest=alpha.8 enquanto alpha.13 publicado, create-theokit idem,
- * @usetheo/ui@latest=0.1.0 enquanto 0.12.0 disponível).
+ * @theokit/ui@latest=0.1.0 enquanto 0.12.0 disponível).
  * Substitui scripts/validate-ui-latest-tag.mjs (cobre 1 pkg apenas).
  *
  * EC-2 (v1.1) — workflow caller distingue exit 1 (hard drift) vs exit 2
@@ -27,8 +27,8 @@ import { execFileSync } from 'node:child_process'
 const PACKAGES = [
   { name: 'theokit', floorTag: 'alpha' },
   { name: 'create-theokit', floorTag: 'alpha' },
-  { name: '@usetheo/sdk', floorTag: null }, // stable-only, no pre-release track
-  { name: '@usetheo/ui', floorTag: 'next' },
+  { name: '@theokit/sdk', floorTag: null }, // stable-only, no pre-release track
+  { name: '@theokit/ui', floorTag: 'next' },
 ]
 
 function parseSemver(v) {

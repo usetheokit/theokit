@@ -1,6 +1,6 @@
 # use-agent-stream-react
 
-Demonstrates `useAgentStream` in plain React — no `@usetheo/ui`, no extra UI library. Proves the hook is usable in any React app.
+Demonstrates `useAgentStream` in plain React — no `@theokit/ui`, no extra UI library. Proves the hook is usable in any React app.
 
 The hook returns:
 

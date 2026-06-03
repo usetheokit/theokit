@@ -155,7 +155,7 @@ async function runAdapterBuild(
   //
   // 0.2.2 regression fix: switched sync `theoPlugin()` → `theoPluginAsync()` so the
   // returned Plugin[] includes the @theo/actions virtual module + typed-client +
-  // services + @usetheo/ui auto-chain. Without async, build-time Rollup couldn't
+  // services + @theokit/ui auto-chain. Without async, build-time Rollup couldn't
   // resolve `@theo/actions` even though dev-time Vite (which already used async)
   // could. See https://github.com/usetheo/theokit/commits — 0.2.2 changelog.
   const { theoPluginAsync } = await import('../../vite-plugin/index.js')

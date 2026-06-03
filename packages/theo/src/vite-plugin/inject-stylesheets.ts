@@ -3,7 +3,7 @@
  *
  * Why this exists (real bug, 2026-05-22): the example chat app had an
  * LCP of 9-16s because the HTML response landed WITHOUT any `<link>` tag
- * for `@usetheo/ui/styles.css`. CSS only loaded after entry-client.js
+ * for `@theokit/ui/styles.css`. CSS only loaded after entry-client.js
  * ran the layout import. Browser paint waited for the JS → CSS chain:
  *
  *   HTML arrives → browser paints nothing
@@ -27,8 +27,8 @@ interface StylesheetTarget {
 
 const TARGETS: StylesheetTarget[] = [
   {
-    href: '/@id/@usetheo/ui/styles.css',
-    packageRoot: '@usetheo/ui',
+    href: '/@id/@theokit/ui/styles.css',
+    packageRoot: '@theokit/ui',
   },
 ]
 
@@ -40,7 +40,7 @@ const TARGETS: StylesheetTarget[] = [
  * the React tree (fixed in commit 31506d1).
  *
  * Why we don't preload fonts:
- *   - In dev, pnpm hoists @usetheo/ui via `.pnpm/<hash>/...`. The CSS
+ *   - In dev, pnpm hoists @theokit/ui via `.pnpm/<hash>/...`. The CSS
  *     `@font-face` resolves to the real path; our preload would use the
  *     symlink path. Browser doesn't dedupe — preload is "wasted" and
  *     Chrome logs "preloaded but not used within a few seconds".
@@ -50,7 +50,7 @@ const TARGETS: StylesheetTarget[] = [
  *
  * If a future regression brings back font-related CLS, the right path
  * is `font-display: optional` (no swap) or size-adjust metric matching
- * in @usetheo/ui itself — not framework-side preload.
+ * in @theokit/ui itself — not framework-side preload.
  */
 
 export interface InjectStylesheetsResult {

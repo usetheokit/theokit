@@ -4,8 +4,8 @@
   "type": "module",
   "dependencies": {
     "theokit": "workspace:*",
-    "@usetheo/sdk": "workspace:*",
-    "@usetheo/ui": "^0.13.0",
+    "@theokit/sdk": "workspace:*",
+    "@theokit/ui": "^0.13.0",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

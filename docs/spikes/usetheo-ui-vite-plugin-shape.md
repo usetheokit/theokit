@@ -1,4 +1,4 @@
-# Spike: `@usetheo/ui` Vite Plugin API Shape
+# Spike: `@theokit/ui` Vite Plugin API Shape
 
 **Date:** 2026-05-22 (proposed) / 2026-05-28 (accepted)
 **Status:** **ACCEPTED** via [ADR 0018](../adr/0018-usetheo-ui-vite-plugin-contract-versionado.md) (theokit-side) + [ADR 0001 do theo-ui](../../../theo-ui/docs/adr/0001-vite-plugin-subpath-export-contract.md) (UI-side mirror).
@@ -10,16 +10,16 @@ Resolve the API shape that TheoKit's vite-plugin auto-config (T3.2 `integrateUse
 
 ## Open Questions resolved here
 
-- **Q3** (reference §10): What does `@usetheo/ui/vite-plugin` return?
-- **Q4** (reference §10): Does `@usetheo/ui` ship pre-compiled CSS, Tailwind preset, or both?
-- **Q-no-tailwind**: If `@usetheo/ui` is installed but `@tailwindcss/vite` is NOT, what does the framework do?
+- **Q3** (reference §10): What does `@theokit/ui/vite-plugin` return?
+- **Q4** (reference §10): Does `@theokit/ui` ship pre-compiled CSS, Tailwind preset, or both?
+- **Q-no-tailwind**: If `@theokit/ui` is installed but `@tailwindcss/vite` is NOT, what does the framework do?
 
 ## API Shape
 
 **Decision:** Default-export factory function.
 
 ```ts
-// @usetheo/ui/vite-plugin
+// @theokit/ui/vite-plugin
 import type { Plugin } from 'vite'
 
 export interface UseTheoUIPluginOptions {
@@ -32,11 +32,11 @@ export interface UseTheoUIPluginOptions {
 export default function useTheoUIVite(options?: UseTheoUIPluginOptions): Plugin
 ```
 
-**Return value:** A SINGLE Vite Plugin object with `name: '@usetheo/ui/vite-plugin'`. The plugin internally:
+**Return value:** A SINGLE Vite Plugin object with `name: '@theokit/ui/vite-plugin'`. The plugin internally:
 
-1. Registers virtual `@usetheo/ui/preset` modules consumed via `import preset from '@usetheo/ui/preset'` in the consumer's `tailwind.config.ts` (if consumer has one) — present for the manual-override path (D3 in the main plan).
-2. Adds Tailwind v4 `@source "node_modules/@usetheo/ui/dist/**/*.{js,mjs}"` directives via Vite plugin transform of CSS files.
-3. Registers `@usetheo/ui/styles.css` as a virtual entry that imports the base reset + fonts.
+1. Registers virtual `@theokit/ui/preset` modules consumed via `import preset from '@theokit/ui/preset'` in the consumer's `tailwind.config.ts` (if consumer has one) — present for the manual-override path (D3 in the main plan).
+2. Adds Tailwind v4 `@source "node_modules/@theokit/ui/dist/**/*.{js,mjs}"` directives via Vite plugin transform of CSS files.
+3. Registers `@theokit/ui/styles.css` as a virtual entry that imports the base reset + fonts.
 
 **Why a single Plugin and not a Plugin[]:**
 - Vite's plugin chain semantics are easier when a single integration owns its own ordering.
@@ -46,7 +46,7 @@ export default function useTheoUIVite(options?: UseTheoUIPluginOptions): Plugin
 ## Peer Dependencies
 
 ```jsonc
-// @usetheo/ui package.json
+// @theokit/ui package.json
 {
   "peerDependencies": {
     "@tailwindcss/vite": "^4.0.0",
@@ -67,13 +67,13 @@ export default function useTheoUIVite(options?: UseTheoUIPluginOptions): Plugin
 
 ## Preset Content Globs
 
-The `@usetheo/ui/preset` (Tailwind v4 preset) ships with:
+The `@theokit/ui/preset` (Tailwind v4 preset) ships with:
 
 ```ts
-// @usetheo/ui/preset (when imported in consumer's tailwind.config.ts)
+// @theokit/ui/preset (when imported in consumer's tailwind.config.ts)
 export default {
   content: [
-    './node_modules/@usetheo/ui/dist/**/*.{js,mjs,cjs}',
+    './node_modules/@theokit/ui/dist/**/*.{js,mjs,cjs}',
     // Consumer adds their own app dirs on top
   ],
   theme: {
@@ -85,29 +85,29 @@ export default {
 }
 ```
 
-**Resolution of Q4:** `@usetheo/ui` ships BOTH:
-- (a) A Tailwind v4 preset (`@usetheo/ui/preset`) for consumers who want full Tailwind control.
-- (b) A Vite plugin (`@usetheo/ui/vite-plugin`) that wires content globs + virtual modules WITHOUT consumer-side `tailwind.config.ts` — zero-config path.
+**Resolution of Q4:** `@theokit/ui` ships BOTH:
+- (a) A Tailwind v4 preset (`@theokit/ui/preset`) for consumers who want full Tailwind control.
+- (b) A Vite plugin (`@theokit/ui/vite-plugin`) that wires content globs + virtual modules WITHOUT consumer-side `tailwind.config.ts` — zero-config path.
 
-The framework's auto-config (TheoKit T3.2) uses path (b). Consumers who add their own `tailwind.config.ts` get D3 deferral + can `import preset from '@usetheo/ui/preset'` themselves.
+The framework's auto-config (TheoKit T3.2) uses path (b). Consumers who add their own `tailwind.config.ts` get D3 deferral + can `import preset from '@theokit/ui/preset'` themselves.
 
 ## No-Tailwind Behavior
 
-When `@usetheo/ui` is detected but `@tailwindcss/vite` is NOT:
+When `@theokit/ui` is detected but `@tailwindcss/vite` is NOT:
 
 - TheoKit's `integrateUseTheoUI` returns `[]` (no plugins).
-- Console warn (single line): `[theokit] @usetheo/ui detected but @tailwindcss/vite is not installed. Run \`pnpm add -D @tailwindcss/vite\` to enable styling.`
+- Console warn (single line): `[theokit] @theokit/ui detected but @tailwindcss/vite is not installed. Run \`pnpm add -D @tailwindcss/vite\` to enable styling.`
 - The UI plugin itself (if consumer manually adds it) detects the same and falls back to css-only mode (ships static reset + fonts but no Tailwind utility classes).
 
 ## Acceptance Criteria for cross-repo UI release
 
-Before Phase 3 of `framework-zero-config-polish-plan.md` can ship, `@usetheo/ui` must:
+Before Phase 3 of `framework-zero-config-polish-plan.md` can ship, `@theokit/ui` must:
 
 - [ ] Publish `./vite-plugin` subpath export with default-export factory returning `Plugin`.
 - [ ] Publish `./preset` subpath export with Tailwind v4 preset object.
 - [ ] Declare `@tailwindcss/vite ^4` as optional peer dep.
 - [ ] Include `@source` directives via the Vite plugin for content discovery.
-- [ ] Ship a static `@usetheo/ui/styles.css` for the no-Tailwind degraded path.
+- [ ] Ship a static `@theokit/ui/styles.css` for the no-Tailwind degraded path.
 
 ## Sign-off required
 

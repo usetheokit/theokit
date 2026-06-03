@@ -1,25 +1,25 @@
 # Plan: Framework Zero-Config Polish (5 polish bugs from item #6)
 
-> **Version 1.0** — Close the 5 framework-level polish bugs surfaced during item #6 (`examples/full-stack-agent`) end-to-end testing on 2026-05-22. A new TheoKit consumer running `npm create theokit my-app && pnpm add @usetheo/ui && pnpm dev` should see styled TheoUI components without touching `tailwind.config.ts` or `postcss.config.js`, and `.env` values must flow into `process.env` for server code without a hand-rolled shim. This plan adopts the convergent patterns from Next.js / Astro / Nuxt / Vite / SvelteKit documented in `.claude/knowledge-base/reference/zero-config-integration.md`. Expected outcome: scaffold-to-working-styled-chat in ≤ 30 seconds with **zero consumer-side config files** beyond `.env` and `theo.config.ts`.
+> **Version 1.0** — Close the 5 framework-level polish bugs surfaced during item #6 (`examples/full-stack-agent`) end-to-end testing on 2026-05-22. A new TheoKit consumer running `npm create theokit my-app && pnpm add @theokit/ui && pnpm dev` should see styled TheoUI components without touching `tailwind.config.ts` or `postcss.config.js`, and `.env` values must flow into `process.env` for server code without a hand-rolled shim. This plan adopts the convergent patterns from Next.js / Astro / Nuxt / Vite / SvelteKit documented in `.claude/knowledge-base/reference/zero-config-integration.md`. Expected outcome: scaffold-to-working-styled-chat in ≤ 30 seconds with **zero consumer-side config files** beyond `.env` and `theo.config.ts`.
 
 ## Context
 
 **What exists today:**
 
-- `packages/theo/src/vite-plugin/theoui-detect.ts:104-133` — `detectTheoUi(projectRoot, rawConfig, resolver)` already detects `@usetheo/ui` via `require.resolve` with `paths: [projectRoot]` (handles pnpm hoist). Used in `vite-plugin/index.ts:129`.
+- `packages/theo/src/vite-plugin/theoui-detect.ts:104-133` — `detectTheoUi(projectRoot, rawConfig, resolver)` already detects `@theokit/ui` via `require.resolve` with `paths: [projectRoot]` (handles pnpm hoist). Used in `vite-plugin/index.ts:129`.
 - `packages/theo/src/vite-plugin/integrations.ts:35-37` — `defineTheoIntegration` + `createIntegrationRegistry` lifecycle hooks (mirrors Astro Integrations) already exist.
 - `packages/theo/src/cli/commands/upgrade-readiness.ts` — pre-existing readiness command.
 - `packages/theo/src/config/load-config.ts:82` — reads `process.env.NODE_ENV` but **never loads `.env` files**.
-- `packages/theo/src/server/create-conversation-history.ts:7` — writes to `<cwd>/.theokit/agents/<agentId>/messages.jsonl` (via `@usetheo/sdk`) but **no GC**.
+- `packages/theo/src/server/create-conversation-history.ts:7` — writes to `<cwd>/.theokit/agents/<agentId>/messages.jsonl` (via `@theokit/sdk`) but **no GC**.
 - `examples/full-stack-agent/` — ships `tailwind.config.ts` + `postcss.config.js` + `server/_env.ts` as workaround shims for the 5 framework gaps.
 
 **What's broken / missing:**
 
-1. **TheoUI styling broken out of the box** — `detectTheoUi` runs but the result is used only for fonts/styles `<link>` injection; the consumer is still required to supply `tailwind.config.ts` + `postcss.config.js` for component classes to render. Reproduces by: `pnpm create theokit my-app && pnpm add @usetheo/ui && add <Button> to app/page.tsx && pnpm dev` → unstyled button. Evidence: `examples/full-stack-agent/tailwind.config.ts` (16 LOC) + `examples/full-stack-agent/postcss.config.js` (6 LOC) were both *required* to make item #6 dogfood pass.
+1. **TheoUI styling broken out of the box** — `detectTheoUi` runs but the result is used only for fonts/styles `<link>` injection; the consumer is still required to supply `tailwind.config.ts` + `postcss.config.js` for component classes to render. Reproduces by: `pnpm create theokit my-app && pnpm add @theokit/ui && add <Button> to app/page.tsx && pnpm dev` → unstyled button. Evidence: `examples/full-stack-agent/tailwind.config.ts` (16 LOC) + `examples/full-stack-agent/postcss.config.js` (6 LOC) were both *required* to make item #6 dogfood pass.
 2. **`.env` not auto-loaded into `process.env` for server code** — server route reads `process.env.OPENROUTER_API_KEY` → undefined even when `.env` has the value. Vite loads `.env` into `import.meta.env`, never `process.env`. Evidence: `examples/full-stack-agent/server/_env.ts` (35 LOC hand-rolled dotenv-lite loader) was required.
 3. **Agent registry cruft accumulates** — 52+ orphan `.theokit/agents/<id>/` directories piled up during item #6 testing. No `theokit clean`, no LRU, no GC. Evidence: manual `rm -rf .theokit/agents/` was required mid-session.
 4. **OpenRouter model slug rot in defaults** — `examples/full-stack-agent/server/routes/chat.ts` hard-codes `claude-3.5-sonnet` (deprecated by OpenRouter on 2026-05-XX); broke item #6 mid-test. Pattern problem: defaults shipped in fixtures rot. Out of framework scope for this plan; surfaces as docs-only update in T4.2.
-5. **No auto-config bridge between consumer-side `@usetheo/ui` install and TheoKit's Vite plugin** — adding `@usetheo/ui` to deps should be enough; today the consumer must wire Tailwind config + PostCSS config + content globs.
+5. **No auto-config bridge between consumer-side `@theokit/ui` install and TheoKit's Vite plugin** — adding `@theokit/ui` to deps should be enough; today the consumer must wire Tailwind config + PostCSS config + content globs.
 
 **Evidence:**
 
@@ -35,7 +35,7 @@
 
 ## Objective
 
-**Done = `pnpm create theokit my-app && pnpm add @usetheo/ui && pnpm dev` renders styled TheoUI components with zero consumer-side Tailwind/PostCSS config, `.env` values populate `process.env` for server code without a shim, and long-lived dev sessions self-clean orphan agent registries.**
+**Done = `pnpm create theokit my-app && pnpm add @theokit/ui && pnpm dev` renders styled TheoUI components with zero consumer-side Tailwind/PostCSS config, `.env` values populate `process.env` for server code without a shim, and long-lived dev sessions self-clean orphan agent registries.**
 
 Measurable goals:
 
@@ -58,14 +58,14 @@ Measurable goals:
 ### D2 — Auto-detect strategy: `package.json` declaration + subpath probe
 
 - **Decision:** `detectTheoUi` (already shipping) is the canonical pattern: read `<projectRoot>/package.json`, check `dependencies` / `devDependencies` / `peerDependencies` for the package name. If declared, probe a known subpath via `require.resolve(...{ paths: [projectRoot] })`. New `detectPackage(name, projectRoot)` is the generalized form for `tailwindcss` + `@tailwindcss/vite`.
-- **Rationale:** Filesystem-based detection (`existsSync('node_modules/@usetheo/ui')`) breaks under pnpm hoist (deps live at workspace root, not in `apps/my-app/node_modules/`). `require.resolve` walks Node's module resolution correctly — same logic the runtime uses. Tested + working in `theoui-detect.ts`.
-- **Consequences:** Detection is closed-on-source — adding `@usetheo/ui` to peerDeps without listing it as a real dep is silently false (intentional; peerDeps may be unresolved). False-negatives never throw; downstream code sees `enabled: false` and skips wiring. Auto-config NEVER touches consumer's `tailwind.config.ts` if one exists (D3).
+- **Rationale:** Filesystem-based detection (`existsSync('node_modules/@theokit/ui')`) breaks under pnpm hoist (deps live at workspace root, not in `apps/my-app/node_modules/`). `require.resolve` walks Node's module resolution correctly — same logic the runtime uses. Tested + working in `theoui-detect.ts`.
+- **Consequences:** Detection is closed-on-source — adding `@theokit/ui` to peerDeps without listing it as a real dep is silently false (intentional; peerDeps may be unresolved). False-negatives never throw; downstream code sees `enabled: false` and skips wiring. Auto-config NEVER touches consumer's `tailwind.config.ts` if one exists (D3).
 
 ### D3 — Auto-config defers to consumer's manual config when present
 
 - **Decision:** TheoKit's vite-plugin checks for consumer-side `tailwind.config.{ts,js,mjs,cjs}` and `postcss.config.{ts,js,mjs,cjs}` via walk-up. If either exists, log an info message and **DO NOT** auto-inject anything — consumer is in charge.
 - **Rationale:** Mirrors Astro `astro:config:done` lint pattern (`integrations/react/src/index.ts:188-199`) — framework warns about conflicts instead of forcing a resolution. Override-by-presence is unambiguous; users who want full control get it.
-- **Consequences:** Consumers who actively customize Tailwind keep their power. Consumers who add `@usetheo/ui` to a fresh project get zero-config. Migration message tells customizers how to extend via `@usetheo/ui/preset`.
+- **Consequences:** Consumers who actively customize Tailwind keep their power. Consumers who add `@theokit/ui` to a fresh project get zero-config. Migration message tells customizers how to extend via `@theokit/ui/preset`.
 
 ### D4 — State cleanup: hybrid by directory (Astro for build, Nuxt LRU for runtime)
 
@@ -75,11 +75,11 @@ Measurable goals:
 - **Rationale:** `.theo/` is publish-only (no cache lives there) — full wipe is safe + matches Astro. `.theokit/agents/` is runtime cache (each conversation = a directory of `messages.jsonl` + tool state) — full wipe would destroy active sessions. LRU keeps the 100 most-recent agents, deletes older ones quietly.
 - **Consequences:** Build is hermetic — `theokit build` cannot read stale `.theo/` artifacts. Dev sessions self-clean. Long-running production apps need a separate strategy (out of scope; production agent persistence belongs to the SDK).
 
-### D5 — Plugin-side auto-config (cross-repo: `@usetheo/ui` ships its own Vite plugin)
+### D5 — Plugin-side auto-config (cross-repo: `@theokit/ui` ships its own Vite plugin)
 
-- **Decision:** `@usetheo/ui` package (cross-repo: `theokit-ui`) ships `./vite-plugin` and `./preset` subpath exports. TheoKit's vite-plugin auto-detects `@usetheo/ui` AND `@tailwindcss/vite` in the consumer's deps, dynamic-imports them, and chains them into the Vite plugin array via `config()` hook return value. `@tailwindcss/vite` is a peer dep of `@usetheo/ui`, not of TheoKit.
-- **Rationale:** Mirrors Tailwind v4 + Astro v5 pattern: plugin owns its config; framework auto-wires. Avoids inventing a TheoKit-specific integration surface for what is fundamentally a Vite plugin chain problem. If `@usetheo/ui` evolves (adds new variants, changes content globs), the change lives in the UI repo — TheoKit doesn't need a release.
-- **Consequences:** Cross-repo dependency — `@usetheo/ui` must publish `./vite-plugin` and `./preset` BEFORE Phase 3 lands. Phase 3 is the largest scope phase. Phases 1 + 2 ship independent of cross-repo work.
+- **Decision:** `@theokit/ui` package (cross-repo: `theokit-ui`) ships `./vite-plugin` and `./preset` subpath exports. TheoKit's vite-plugin auto-detects `@theokit/ui` AND `@tailwindcss/vite` in the consumer's deps, dynamic-imports them, and chains them into the Vite plugin array via `config()` hook return value. `@tailwindcss/vite` is a peer dep of `@theokit/ui`, not of TheoKit.
+- **Rationale:** Mirrors Tailwind v4 + Astro v5 pattern: plugin owns its config; framework auto-wires. Avoids inventing a TheoKit-specific integration surface for what is fundamentally a Vite plugin chain problem. If `@theokit/ui` evolves (adds new variants, changes content globs), the change lives in the UI repo — TheoKit doesn't need a release.
+- **Consequences:** Cross-repo dependency — `@theokit/ui` must publish `./vite-plugin` and `./preset` BEFORE Phase 3 lands. Phase 3 is the largest scope phase. Phases 1 + 2 ship independent of cross-repo work.
 
 ### D6 — `loadEnv` mutation policy: own write, never delete user keys
 
@@ -99,32 +99,32 @@ Phase 1 ────────────────▶ Phase 2 ────
    │                                       Final Phase
    ▼                                       (Dogfood QA)
 Phase 3 (UI auto-config)
-[BLOCKED on cross-repo @usetheo/ui release]
+[BLOCKED on cross-repo @theokit/ui release]
    │
    ▼
 Phase 4 (merge point)
 ```
 
-- **Phase 0 (spike)** unblocks Phase 3 — resolves the `@usetheo/ui` Vite plugin API shape (Q3 + Q4 from reference doc). Cross-repo coordination.
+- **Phase 0 (spike)** unblocks Phase 3 — resolves the `@theokit/ui` Vite plugin API shape (Q3 + Q4 from reference doc). Cross-repo coordination.
 - **Phase 1** is independent — pure TheoKit CLI work.
 - **Phase 2** runs in parallel with Phase 1 (different files).
-- **Phase 3** waits on Phase 0 spike + cross-repo `@usetheo/ui` release. Once both ready, can run in parallel with Phase 2.
+- **Phase 3** waits on Phase 0 spike + cross-repo `@theokit/ui` release. Once both ready, can run in parallel with Phase 2.
 - **Phase 4** is the merge point — requires Phase 1 + 2 + 3 complete.
 - **Final Phase** (Dogfood) is the last gate.
 
 ---
 
-## Phase 0: Spike — Cross-repo `@usetheo/ui` Vite plugin API shape
+## Phase 0: Spike — Cross-repo `@theokit/ui` Vite plugin API shape
 
 **Objective:** Resolve open questions Q3 + Q4 from `zero-config-integration.md` so Phase 3 can ship without rework.
 
-### T0.1 — Spike: `@usetheo/ui` plugin API contract
+### T0.1 — Spike: `@theokit/ui` plugin API contract
 
 #### Objective
-Define the public API + behavior contract for `@usetheo/ui/vite-plugin` (cross-repo) so TheoKit's vite-plugin auto-wiring (Phase 3) can be written against a stable target.
+Define the public API + behavior contract for `@theokit/ui/vite-plugin` (cross-repo) so TheoKit's vite-plugin auto-wiring (Phase 3) can be written against a stable target.
 
 #### Evidence
-Reference doc §10 open questions Q3 + Q4: "What does `@usetheo/ui/vite-plugin` return?" and "Does `@usetheo/ui` ship pre-compiled CSS, Tailwind preset, or both?". Without the answer, Phase 3 implementation is speculative.
+Reference doc §10 open questions Q3 + Q4: "What does `@theokit/ui/vite-plugin` return?" and "Does `@theokit/ui` ship pre-compiled CSS, Tailwind preset, or both?". Without the answer, Phase 3 implementation is speculative.
 
 #### Files to edit
 ```
@@ -138,11 +138,11 @@ docs/spikes/usetheo-ui-vite-plugin-shape.md — (NEW) spike output
 
 #### Deep Dives
 - **API shape candidates** to test:
-  - `import useTheoUI from '@usetheo/ui/vite-plugin'; useTheoUI({ tailwind: 'auto' | 'off' })` returns `Plugin` (single Vite plugin that internally chains `@tailwindcss/vite`).
-  - OR `import { useTheoUIPlugins } from '@usetheo/ui/vite-plugin'; useTheoUIPlugins()` returns `Plugin[]` (caller chains).
-- **Preset shape**: `import preset from '@usetheo/ui/preset'` → Tailwind v4 preset object (`content: [...]`, `theme: {...}`, `plugins: [...]`).
-- **CSS strategy**: confirm `@usetheo/ui` content globs already include `@usetheo/ui/dist/**` (so consumer-side Tailwind picks them up via `@source` directives). If not, the auto-injected Tailwind plugin must add them.
-- **Peer dep version range**: confirm `@usetheo/ui@^X.Y.Z` peer-requires `@tailwindcss/vite@^4`.
+  - `import useTheoUI from '@theokit/ui/vite-plugin'; useTheoUI({ tailwind: 'auto' | 'off' })` returns `Plugin` (single Vite plugin that internally chains `@tailwindcss/vite`).
+  - OR `import { useTheoUIPlugins } from '@theokit/ui/vite-plugin'; useTheoUIPlugins()` returns `Plugin[]` (caller chains).
+- **Preset shape**: `import preset from '@theokit/ui/preset'` → Tailwind v4 preset object (`content: [...]`, `theme: {...}`, `plugins: [...]`).
+- **CSS strategy**: confirm `@theokit/ui` content globs already include `@theokit/ui/dist/**` (so consumer-side Tailwind picks them up via `@source` directives). If not, the auto-injected Tailwind plugin must add them.
+- **Peer dep version range**: confirm `@theokit/ui@^X.Y.Z` peer-requires `@tailwindcss/vite@^4`.
 
 #### Tasks
 1. Clone or inspect `theokit-ui/` repo state (it's a workspace sibling).
@@ -157,8 +157,8 @@ docs/spikes/usetheo-ui-vite-plugin-shape.md — (NEW) spike output
 RED:     test_spike_doc_exists_and_specifies_api() — Given the spike phase has completed, When tests/unit/spike-zero-config.test.ts inspects docs/spikes/usetheo-ui-vite-plugin-shape.md, Then the file MUST contain sections "API Shape", "Peer Dependencies", "Preset Content Globs", "Acceptance Criteria"
 RED:     test_spike_doc_specifies_default_export_signature() — Given the spike doc, When parsing the "API Shape" section, Then it documents either (a) `default function (opts) => Plugin` OR (b) named `useTheoUIPlugins` returning `Plugin[]`; ambiguity is rejected
 RED:     test_spike_doc_specifies_tailwind_peer_range() — Given the spike doc, When parsing "Peer Dependencies", Then `@tailwindcss/vite` semver range is present (validation error: regex `\^\d+`)
-RED:     test_spike_doc_handles_no_tailwind_case() — Given the consumer has @usetheo/ui but NOT @tailwindcss/vite, When auto-config runs, Then spike doc specifies the behavior (skip auto-wire + emit warning OR auto-install)
-GREEN:   Write the spike doc. Resolution: API = `default function ({ tailwind?: boolean }) => Plugin` (single plugin, internally chains Tailwind). Peer dep: `@tailwindcss/vite ^4`. No-tailwind case: emit "[theokit] @usetheo/ui detected, install @tailwindcss/vite to enable styling" warn, no-op.
+RED:     test_spike_doc_handles_no_tailwind_case() — Given the consumer has @theokit/ui but NOT @tailwindcss/vite, When auto-config runs, Then spike doc specifies the behavior (skip auto-wire + emit warning OR auto-install)
+GREEN:   Write the spike doc. Resolution: API = `default function ({ tailwind?: boolean }) => Plugin` (single plugin, internally chains Tailwind). Peer dep: `@tailwindcss/vite ^4`. No-tailwind case: emit "[theokit] @theokit/ui detected, install @tailwindcss/vite to enable styling" warn, no-op.
 REFACTOR: None expected (doc-only phase).
 VERIFY:  npx vitest run tests/unit/spike-zero-config.test.ts
 ```
@@ -722,17 +722,17 @@ BDD scenarios per template.
 
 ## Phase 3: TheoUI auto-config (Tailwind/PostCSS via plugin-side wiring)
 
-**Objective:** `pnpm add @usetheo/ui` + `pnpm dev` → TheoUI components render styled without consumer-side `tailwind.config.ts` or `postcss.config.js`.
+**Objective:** `pnpm add @theokit/ui` + `pnpm dev` → TheoUI components render styled without consumer-side `tailwind.config.ts` or `postcss.config.js`.
 
-> **BLOCKED on Phase 0 spike + cross-repo `@usetheo/ui` release** with `./vite-plugin` and `./preset` subpath exports.
+> **BLOCKED on Phase 0 spike + cross-repo `@theokit/ui` release** with `./vite-plugin` and `./preset` subpath exports.
 
 ### T3.1 — Implement `detectPackage(name, cwd)` generalized detector
 
 #### Objective
-Generalize the `theoui-detect.ts` pattern into a reusable `detectPackage(name, cwd)` that returns `{ installed, version?, resolvedPath? }`. Used by T3.2 to detect `@tailwindcss/vite` + `@usetheo/ui`.
+Generalize the `theoui-detect.ts` pattern into a reusable `detectPackage(name, cwd)` that returns `{ installed, version?, resolvedPath? }`. Used by T3.2 to detect `@tailwindcss/vite` + `@theokit/ui`.
 
 #### Evidence
-`packages/theo/src/vite-plugin/theoui-detect.ts:104-133` is specific to `@usetheo/ui`. Phase 3 needs the same probe for `@tailwindcss/vite` (peer dep of `@usetheo/ui`). Refactor first, wire second.
+`packages/theo/src/vite-plugin/theoui-detect.ts:104-133` is specific to `@theokit/ui`. Phase 3 needs the same probe for `@tailwindcss/vite` (peer dep of `@theokit/ui`). Refactor first, wire second.
 
 #### Files to edit
 ```
@@ -744,7 +744,7 @@ tests/unit/auto-detect.test.ts                          — (NEW) 6 BDD scenario
 
 #### Deep file dependency analysis
 - **`auto-detect.ts`** (NEW): exports `detectPackage(name: string, cwd: string): DetectResult`. Uses `createRequire(import.meta.url)` + `require.resolve` with `paths: [cwd]`. Reads resolved `package.json` for version.
-- **`theoui-detect.ts`** (EDIT): keeps public `detectTheoUi` API. Internally calls `detectPackage('@usetheo/ui', projectRoot)`. Net change: ~30 LOC removed, ~3 LOC added.
+- **`theoui-detect.ts`** (EDIT): keeps public `detectTheoUi` API. Internally calls `detectPackage('@theokit/ui', projectRoot)`. Net change: ~30 LOC removed, ~3 LOC added.
 - **All downstream of `detectTheoUi`**: unchanged contract.
 
 #### Deep Dives
@@ -774,9 +774,9 @@ tests/unit/auto-detect.test.ts                          — (NEW) 6 BDD scenario
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_detectPackage_happy_returns_version() — Given fixture project with @usetheo/ui in deps + resolvable, When detectPackage('@usetheo/ui', cwd) called, Then result.installed === true AND result.version matches /^\d+\.\d+\.\d+/
-RED:     test_detectPackage_not_declared() — Given fixture without @usetheo/ui in package.json, When called, Then result.installed === false
-RED:     test_detectPackage_declared_but_unresolvable() — Given fixture with @usetheo/ui in deps but node_modules empty, When called, Then result.installed === false
+RED:     test_detectPackage_happy_returns_version() — Given fixture project with @theokit/ui in deps + resolvable, When detectPackage('@theokit/ui', cwd) called, Then result.installed === true AND result.version matches /^\d+\.\d+\.\d+/
+RED:     test_detectPackage_not_declared() — Given fixture without @theokit/ui in package.json, When called, Then result.installed === false
+RED:     test_detectPackage_declared_but_unresolvable() — Given fixture with @theokit/ui in deps but node_modules empty, When called, Then result.installed === false
 RED:     test_detectPackage_handles_tailwind_vite() — Given fixture with @tailwindcss/vite in deps, When detectPackage('@tailwindcss/vite', cwd) called, Then result.installed === true
 RED:     test_detectPackage_pnpm_hoist_resolves() — Given monorepo layout (deps at workspace root, app in apps/x/), When detectPackage from apps/x/, Then result.installed === true (resolves via Node walk-up)
 RED:     test_detectPackage_invalid_name_safe() — Given invalid name '@nonexistent/garbage', When called, Then result.installed === false (no throw)
@@ -803,7 +803,7 @@ BDD scenarios per template.
 ### T3.2 — Implement `integrateUseTheoUI(viteConfig)` auto-config
 
 #### Objective
-The load-bearing piece. When `@usetheo/ui` is detected, return Vite plugins to chain: `@tailwindcss/vite` + `@usetheo/ui/vite-plugin`. When `@usetheo/ui` is absent, no-op.
+The load-bearing piece. When `@theokit/ui` is detected, return Vite plugins to chain: `@tailwindcss/vite` + `@theokit/ui/vite-plugin`. When `@theokit/ui` is absent, no-op.
 
 #### Evidence
 Reference doc §3.2 (Astro `updateConfig({vite: ...})` pattern), §5 divergent #3 (plugin-side auto-config wins over framework-side).
@@ -815,14 +815,14 @@ tests/unit/integrate-ui.test.ts                           — (NEW) 7 BDD scenar
 ```
 
 #### Deep file dependency analysis
-- **`integrate-ui.ts`** (NEW): exports `integrateUseTheoUI(cwd: string, opts?: IntegrateUiOptions): Promise<Plugin[]>`. Uses `detectPackage` (T3.1). Dynamic-imports `@usetheo/ui/vite-plugin` + `@tailwindcss/vite` via `await import(name)` so they're zero-cost when not installed.
+- **`integrate-ui.ts`** (NEW): exports `integrateUseTheoUI(cwd: string, opts?: IntegrateUiOptions): Promise<Plugin[]>`. Uses `detectPackage` (T3.1). Dynamic-imports `@theokit/ui/vite-plugin` + `@tailwindcss/vite` via `await import(name)` so they're zero-cost when not installed.
 - **`tests/unit/integrate-ui.test.ts`** (NEW): uses Vitest's `vi.mock()` to stub dynamic imports.
 
 #### Deep Dives
 - **API**:
   ```ts
   export interface IntegrateUiOptions {
-    /** Override: `false` disables auto-config even if @usetheo/ui detected */
+    /** Override: `false` disables auto-config even if @theokit/ui detected */
     enabled?: boolean
     /** Existing tailwind.config detector path (for D3 deferral) */
     consumerTailwindConfig?: string | undefined
@@ -833,22 +833,22 @@ tests/unit/integrate-ui.test.ts                           — (NEW) 7 BDD scenar
   ```
 - **Algorithm** (D3 + D5):
   1. If `opts?.enabled === false` → return `[]`.
-  2. `detectPackage('@usetheo/ui', cwd)` — if not installed, return `[]`.
-  3. If `opts?.consumerTailwindConfig || opts?.consumerPostcssConfig` set → log `[theokit] Detected your tailwind.config / postcss.config. Skipping auto-config. Extend with @usetheo/ui/preset to apply UI theme.` and return `[]`. D3 — consumer-in-control wins.
+  2. `detectPackage('@theokit/ui', cwd)` — if not installed, return `[]`.
+  3. If `opts?.consumerTailwindConfig || opts?.consumerPostcssConfig` set → log `[theokit] Detected your tailwind.config / postcss.config. Skipping auto-config. Extend with @theokit/ui/preset to apply UI theme.` and return `[]`. D3 — consumer-in-control wins.
   4. `detectPackage('@tailwindcss/vite', cwd)` — if not installed:
-     - Log `[theokit] @usetheo/ui detected but @tailwindcss/vite is not installed. Run \`pnpm add -D @tailwindcss/vite\` to enable styling.`
+     - Log `[theokit] @theokit/ui detected but @tailwindcss/vite is not installed. Run \`pnpm add -D @tailwindcss/vite\` to enable styling.`
      - Return `[]`.
   5. Both present → dynamic-import both:
      ```ts
      const { default: tailwindcssPlugin } = await import('@tailwindcss/vite')
-     const { default: useTheoUIPlugin } = await import('@usetheo/ui/vite-plugin')
+     const { default: useTheoUIPlugin } = await import('@theokit/ui/vite-plugin')
      return [tailwindcssPlugin(), useTheoUIPlugin()]
      ```
 - **Invariants**:
   - PRE: `cwd` exists.
   - POST: returns Vite Plugin array OR empty array. Never throws.
   - INVARIANT: dynamic imports happen only when needed (zero cost in absence).
-- **EC-5 (MUST FIX): default-export validation**. After `const mod = await import('@usetheo/ui/vite-plugin')`, check `typeof mod.default === 'function'`. If not, log `[theokit] @usetheo/ui/vite-plugin does not expose a default-export function. Expected shape: \`export default function (opts) => Plugin\`. Got: ${typeof mod.default}.` and return `[]`. Same guard for `@tailwindcss/vite`. Three lines per plugin.
+- **EC-5 (MUST FIX): default-export validation**. After `const mod = await import('@theokit/ui/vite-plugin')`, check `typeof mod.default === 'function'`. If not, log `[theokit] @theokit/ui/vite-plugin does not expose a default-export function. Expected shape: \`export default function (opts) => Plugin\`. Got: ${typeof mod.default}.` and return `[]`. Same guard for `@tailwindcss/vite`. Three lines per plugin.
 - **EC-6 (MUST FIX): return-shape validation**. After calling `useTheoUIPlugin()`, verify result is a Vite Plugin (truthy object with at least a `name: string` field). If not (array, null, non-Plugin), log error and return `[]`. Prevents cryptic crashes inside Vite's `config.plugins[N].apply is not a function`.
 
 #### Tasks
@@ -859,14 +859,14 @@ tests/unit/integrate-ui.test.ts                           — (NEW) 7 BDD scenar
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_integrateUi_happy_returns_two_plugins() — Given cwd with @usetheo/ui + @tailwindcss/vite both installed, When integrateUseTheoUI(cwd) called, Then result.length === 2 AND first is tailwind, second is ui
-RED:     test_integrateUi_no_ui_returns_empty() — Given cwd without @usetheo/ui, When called, Then result === []
-RED:     test_integrateUi_no_tailwind_warns_returns_empty() — Given @usetheo/ui present but @tailwindcss/vite missing, When called, Then a warn log is emitted AND result === []
-RED:     test_integrateUi_disabled_explicit() — Given @usetheo/ui present, When integrateUseTheoUI(cwd, {enabled: false}) called, Then result === []
-RED:     test_integrateUi_consumer_tailwind_config_defers() — Given @usetheo/ui present + consumerTailwindConfig === '/path/to/tailwind.config.ts', When called, Then info log emitted AND result === []
-RED:     test_integrateUi_consumer_postcss_config_defers() — Given @usetheo/ui present + consumerPostcssConfig set, When called, Then info log emitted AND result === []
-RED:     test_integrateUi_dynamic_import_failure() — Given @usetheo/ui declared but @usetheo/ui/vite-plugin subpath unresolvable, When called, Then warn logged AND result === [] (no throw)
-RED:     test_integrateUi_ui_plugin_missing_default_export_EC5() — Given @usetheo/ui/vite-plugin exists but has no default export (e.g., named-only), When integrateUseTheoUI called, Then warn logged matching /does not expose a default-export function/ AND result === []
+RED:     test_integrateUi_happy_returns_two_plugins() — Given cwd with @theokit/ui + @tailwindcss/vite both installed, When integrateUseTheoUI(cwd) called, Then result.length === 2 AND first is tailwind, second is ui
+RED:     test_integrateUi_no_ui_returns_empty() — Given cwd without @theokit/ui, When called, Then result === []
+RED:     test_integrateUi_no_tailwind_warns_returns_empty() — Given @theokit/ui present but @tailwindcss/vite missing, When called, Then a warn log is emitted AND result === []
+RED:     test_integrateUi_disabled_explicit() — Given @theokit/ui present, When integrateUseTheoUI(cwd, {enabled: false}) called, Then result === []
+RED:     test_integrateUi_consumer_tailwind_config_defers() — Given @theokit/ui present + consumerTailwindConfig === '/path/to/tailwind.config.ts', When called, Then info log emitted AND result === []
+RED:     test_integrateUi_consumer_postcss_config_defers() — Given @theokit/ui present + consumerPostcssConfig set, When called, Then info log emitted AND result === []
+RED:     test_integrateUi_dynamic_import_failure() — Given @theokit/ui declared but @theokit/ui/vite-plugin subpath unresolvable, When called, Then warn logged AND result === [] (no throw)
+RED:     test_integrateUi_ui_plugin_missing_default_export_EC5() — Given @theokit/ui/vite-plugin exists but has no default export (e.g., named-only), When integrateUseTheoUI called, Then warn logged matching /does not expose a default-export function/ AND result === []
 RED:     test_integrateUi_tailwind_missing_default_export_EC5() — Given @tailwindcss/vite exists but mod.default is not a function, When called, Then warn logged AND result === []
 RED:     test_integrateUi_ui_plugin_returns_array_EC6() — Given useTheoUIPlugin() returns Plugin[] instead of Plugin, When called, Then error logged matching /unexpected shape/ AND result === []
 RED:     test_integrateUi_ui_plugin_returns_null_EC6() — Given useTheoUIPlugin() returns null, When called, Then error logged AND result === []
@@ -922,10 +922,10 @@ tests/integration/vite-plugin-ui-wiring.test.ts          — (NEW) 4 scenarios w
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_vite_plugin_chains_tailwind_when_ui_present() — Given fixture with @usetheo/ui installed, When Vite createServer({ plugins: [theoPlugin()] }), Then resolved plugins include `@tailwindcss/vite` and `@usetheo/ui/vite-plugin` by name
-RED:     test_vite_plugin_no_chain_when_ui_absent() — Given fixture without @usetheo/ui, When createServer, Then resolved plugins do NOT include tailwind
-RED:     test_vite_plugin_defers_to_consumer_tailwind_config() — Given fixture with @usetheo/ui + a manually-created tailwind.config.ts, When createServer, Then NO auto-chain happens AND a console.info matches /detected your tailwind.config/i
-RED:     test_vite_plugin_warns_when_tailwind_missing() — Given fixture with @usetheo/ui but no @tailwindcss/vite, When createServer, Then console.warn matches /@tailwindcss\/vite is not installed/
+RED:     test_vite_plugin_chains_tailwind_when_ui_present() — Given fixture with @theokit/ui installed, When Vite createServer({ plugins: [theoPlugin()] }), Then resolved plugins include `@tailwindcss/vite` and `@theokit/ui/vite-plugin` by name
+RED:     test_vite_plugin_no_chain_when_ui_absent() — Given fixture without @theokit/ui, When createServer, Then resolved plugins do NOT include tailwind
+RED:     test_vite_plugin_defers_to_consumer_tailwind_config() — Given fixture with @theokit/ui + a manually-created tailwind.config.ts, When createServer, Then NO auto-chain happens AND a console.info matches /detected your tailwind.config/i
+RED:     test_vite_plugin_warns_when_tailwind_missing() — Given fixture with @theokit/ui but no @tailwindcss/vite, When createServer, Then console.warn matches /@tailwindcss\/vite is not installed/
 RED:     test_vite_plugin_idempotent_skip_double_tailwind_EC10() — Given consumer's vite.config.ts already has `tailwindcss()` in plugins (by name), When TheoKit vite-plugin runs, Then TheoKit does NOT re-add tailwind AND info log matches /already in your plugin chain/
 GREEN:   Edit vite-plugin/index.ts to call integrateUseTheoUI inside config() and return chained plugins. EC-10: before adding, check `viteConfig.plugins` for existing plugin with name matching `@tailwindcss/vite`; skip if found.
 REFACTOR: None expected.
@@ -948,28 +948,28 @@ BDD scenarios per template.
 ### T3.4 — Create fixture `zero-config-tailwind/` proving end-to-end
 
 #### Objective
-A reproducible fixture project with `@usetheo/ui` in deps but ZERO consumer-side Tailwind/PostCSS files. Vite build emits CSS with UI component classes.
+A reproducible fixture project with `@theokit/ui` in deps but ZERO consumer-side Tailwind/PostCSS files. Vite build emits CSS with UI component classes.
 
 #### Evidence
 Skill rule #12: "Every framework feature MUST have a fixture project in tests/fixtures/". This fixture is the proof.
 
 #### Files to edit
 ```
-tests/fixtures/zero-config-tailwind/package.json         — (NEW) deps: theokit + @usetheo/ui + @tailwindcss/vite
+tests/fixtures/zero-config-tailwind/package.json         — (NEW) deps: theokit + @theokit/ui + @tailwindcss/vite
 tests/fixtures/zero-config-tailwind/theo.config.ts        — (NEW) minimal
 tests/fixtures/zero-config-tailwind/index.html            — (NEW)
-tests/fixtures/zero-config-tailwind/app/page.tsx          — (NEW) imports Button from @usetheo/ui
+tests/fixtures/zero-config-tailwind/app/page.tsx          — (NEW) imports Button from @theokit/ui
 tests/fixtures/zero-config-tailwind/server/routes/health.ts — (NEW) minimal
 tests/integration/zero-config-tailwind.test.ts            — (NEW) build the fixture, inspect emitted CSS
 ```
 
 #### Deep file dependency analysis
-- All fixture files (NEW): minimal app importing `Button` from `@usetheo/ui`. NO `tailwind.config.ts`, NO `postcss.config.js`.
+- All fixture files (NEW): minimal app importing `Button` from `@theokit/ui`. NO `tailwind.config.ts`, NO `postcss.config.js`.
 - Integration test: runs `vite build` against fixture, reads `.theo/client/assets/index-*.css`, asserts known UI class (e.g., `.bg-primary` or `.theoui-button`) is present.
 
 #### Deep Dives
-- **Why integration not unit**: this proves the entire chain — detect → chain plugins → tailwind scans @usetheo/ui content globs → emits CSS. Unit tests alone can't validate the full pipeline.
-- **Edge case**: fixture's `@usetheo/ui` resolution may need a manual `workspace:*` to point at the local UI repo (or pnpm overrides). Will be configured per the spike outcome.
+- **Why integration not unit**: this proves the entire chain — detect → chain plugins → tailwind scans @theokit/ui content globs → emits CSS. Unit tests alone can't validate the full pipeline.
+- **Edge case**: fixture's `@theokit/ui` resolution may need a manual `workspace:*` to point at the local UI repo (or pnpm overrides). Will be configured per the spike outcome.
 
 #### Tasks
 1. Create fixture skeleton.
@@ -980,7 +980,7 @@ tests/integration/zero-config-tailwind.test.ts            — (NEW) build the fi
 
 ```
 RED:     test_fixture_builds_without_consumer_config() — Given fixture with NO tailwind.config / postcss.config, When `theokit build` runs, Then build succeeds AND .theo/client/assets/index-*.css exists
-RED:     test_fixture_emitted_css_contains_ui_class() — Given fixture build output, When reading the CSS file, Then it contains at least one @usetheo/ui-specific class selector (e.g., one matching /[.]theoui-/ or /[.]bg-primary/)
+RED:     test_fixture_emitted_css_contains_ui_class() — Given fixture build output, When reading the CSS file, Then it contains at least one @theokit/ui-specific class selector (e.g., one matching /[.]theoui-/ or /[.]bg-primary/)
 RED:     test_fixture_html_contains_styled_button() — Given fixture + index.html, When build runs + serves, Then the rendered HTML contains a button with the expected tailwind class string
 RED:     test_fixture_with_consumer_tailwind_skips_auto() — Given fixture variant WITH a hand-rolled tailwind.config.ts, When build runs, Then no auto-injection occurs AND build still succeeds (consumer is in control)
 GREEN:   Build the fixture + integration test. Resolution comes from T3.3 wiring being correct.
@@ -993,7 +993,7 @@ BDD scenarios per template.
 #### Acceptance Criteria
 - [ ] 4 RED → GREEN.
 - [ ] Fixture committed.
-- [ ] CHANGELOG entry under Added: "Auto-configure `@tailwindcss/vite` + `@usetheo/ui/vite-plugin` when `@usetheo/ui` is detected".
+- [ ] CHANGELOG entry under Added: "Auto-configure `@tailwindcss/vite` + `@theokit/ui/vite-plugin` when `@theokit/ui` is detected".
 
 #### DoD
 - [ ] All tasks completed.
@@ -1039,7 +1039,7 @@ tests/unit/example-tailwind-files-deleted.test.ts        — (NEW) static check
 RED:     test_tailwind_config_deleted() — Given example dir, When the test inspects FS, Then tailwind.config.ts does NOT exist
 RED:     test_postcss_config_deleted() — Given example dir, When the test inspects FS, Then postcss.config.js does NOT exist
 RED:     test_example_chat_renders_styled() — Given dev server boot + Playwright, When user opens / and types a message, Then ChatComposer renders with expected background color computed via DOM `getComputedStyle` (must be non-default)
-RED:     test_example_button_has_ui_classes() — Given Playwright at /, When inspecting any rendered button, Then className contains an @usetheo/ui-emitted class
+RED:     test_example_button_has_ui_classes() — Given Playwright at /, When inspecting any rendered button, Then className contains an @theokit/ui-emitted class
 GREEN:   Delete the two files. T3.3 wiring carries the load.
 REFACTOR: None expected.
 VERIFY:  npx vitest run tests/unit/example-tailwind-files-deleted.test.ts && pnpm test:e2e -- example-full-stack-agent
@@ -1065,7 +1065,7 @@ BDD scenarios per template.
 ### T4.1 — Add `theokit check` hints for upgrade readiness
 
 #### Objective
-`theokit check` (the existing `upgrade-readiness.ts` CLI command) scans for: (a) consumer-side `tailwind.config.ts` + `@usetheo/ui` in deps → suggest migration to preset; (b) hand-rolled `.env` loader → suggest deletion.
+`theokit check` (the existing `upgrade-readiness.ts` CLI command) scans for: (a) consumer-side `tailwind.config.ts` + `@theokit/ui` in deps → suggest migration to preset; (b) hand-rolled `.env` loader → suggest deletion.
 
 #### Evidence
 `packages/theo/src/cli/commands/upgrade-readiness.ts` already exists per code inventory. Phase 4 extends it to flag the new zero-config opportunities.
@@ -1077,11 +1077,11 @@ tests/unit/upgrade-readiness-zero-config.test.ts          — (NEW) 4 BDD scenar
 ```
 
 #### Deep file dependency analysis
-- **`upgrade-readiness.ts`**: today reports CSRF + CSP migration hints. Add: detect `tailwind.config.*` co-existing with `@usetheo/ui` declared → suggest extending via preset. Detect hand-rolled `_env.ts` or `import 'dotenv/config'` in `server/**` → suggest deletion.
+- **`upgrade-readiness.ts`**: today reports CSRF + CSP migration hints. Add: detect `tailwind.config.*` co-existing with `@theokit/ui` declared → suggest extending via preset. Detect hand-rolled `_env.ts` or `import 'dotenv/config'` in `server/**` → suggest deletion.
 
 #### Deep Dives
 - **Hint shape**: existing API of upgrade-readiness emits structured hints. Add 2 entries to the registry.
-- **False-positive guard**: don't over-suggest. Only fire when @usetheo/ui IS declared AND consumer's tailwind config doesn't import the preset (substring search for `@usetheo/ui/preset`).
+- **False-positive guard**: don't over-suggest. Only fire when @theokit/ui IS declared AND consumer's tailwind config doesn't import the preset (substring search for `@theokit/ui/preset`).
 
 #### Tasks
 1. Edit `upgrade-readiness.ts` to add the 2 checks.
@@ -1091,10 +1091,10 @@ tests/unit/upgrade-readiness-zero-config.test.ts          — (NEW) 4 BDD scenar
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_upgrade_hint_for_consumer_tailwind() — Given consumer with @usetheo/ui + tailwind.config.ts NOT importing preset, When `theokit check --upgrade-readiness` runs, Then output mentions "@usetheo/ui/preset"
-RED:     test_upgrade_no_hint_when_preset_already_used() — Given tailwind.config.ts containing `import preset from '@usetheo/ui/preset'`, When check runs, Then no hint emitted
+RED:     test_upgrade_hint_for_consumer_tailwind() — Given consumer with @theokit/ui + tailwind.config.ts NOT importing preset, When `theokit check --upgrade-readiness` runs, Then output mentions "@theokit/ui/preset"
+RED:     test_upgrade_no_hint_when_preset_already_used() — Given tailwind.config.ts containing `import preset from '@theokit/ui/preset'`, When check runs, Then no hint emitted
 RED:     test_upgrade_hint_for_handrolled_dotenv() — Given server/ containing a file with `dotenv` or manual `.env` read, When check runs, Then hint mentions "loadEnv from theokit/server"
-RED:     test_upgrade_no_hint_without_ui() — Given consumer without @usetheo/ui, When check runs, Then tailwind hint does not fire
+RED:     test_upgrade_no_hint_without_ui() — Given consumer without @theokit/ui, When check runs, Then tailwind hint does not fire
 GREEN:   Add 2 checks to upgrade-readiness.
 REFACTOR: None expected.
 VERIFY:  npx vitest run tests/unit/upgrade-readiness-zero-config.test.ts
@@ -1131,10 +1131,10 @@ README.md                                                  — (EDIT) HERO copy 
 - **`docs/concepts/zero-config.md`** (NEW): explains the 5 polish bug fixes. What it covers; what it leaves to the consumer.
 - **`CHANGELOG.md`**: add 4 entries under `[Unreleased] > Added`:
   - `Auto-load .env files into process.env via loadEnv() (theokit/server) — works in CLI commands and standalone scripts (#TBD)`
-  - `Auto-configure @tailwindcss/vite + @usetheo/ui/vite-plugin when @usetheo/ui is declared in package.json (#TBD)`
+  - `Auto-configure @tailwindcss/vite + @theokit/ui/vite-plugin when @theokit/ui is declared in package.json (#TBD)`
   - `Auto-cleanup .theo/ build directory at theokit build start (#TBD)`
   - `LRU cleanup of .theokit/agents/ at theokit dev startup (default cap: 100; configurable via agents.maxRegistries) (#TBD)`
-- **`README.md`**: 1-line addition to "What You Get" section: "Zero-config Tailwind — add @usetheo/ui to your deps, ship styled."
+- **`README.md`**: 1-line addition to "What You Get" section: "Zero-config Tailwind — add @theokit/ui to your deps, ship styled."
 
 #### Deep Dives
 - **Voice**: per CLAUDE.md voice & tone — HERO/BODY = aspirational, DEEP DIVE = technical. README addition is BODY (outcome-first). docs/concepts/zero-config.md is DEEP DIVE (full technical detail).
@@ -1149,7 +1149,7 @@ README.md                                                  — (EDIT) HERO copy 
 ```
 RED:     test_docs_zero_config_exists() — Given the docs tree, When tests/unit/docs-zero-config-exists.test.ts inspects, Then docs/concepts/zero-config.md exists AND contains sections "Env auto-load", "Tailwind auto-config", "State cleanup"
 RED:     test_changelog_has_4_new_entries() — Given CHANGELOG.md, When parsing [Unreleased], Then it contains 4 specific feature lines (loadEnv, tailwind auto, build cleanup, agent GC)
-RED:     test_readme_mentions_zero_config() — Given README.md, When parsed, Then "What You Get" section mentions "zero-config" or "auto" + "@usetheo/ui"
+RED:     test_readme_mentions_zero_config() — Given README.md, When parsed, Then "What You Get" section mentions "zero-config" or "auto" + "@theokit/ui"
 RED:     test_docs_no_banned_terms_in_hero() — Given README HERO + docs/concepts/zero-config.md top, When parsed, Then banned terms (per CLAUDE.md: blazing fast, robust, etc.) are NOT present
 GREEN:   Write docs + changelog + readme edit.
 REFACTOR: None expected.
@@ -1174,11 +1174,11 @@ BDD scenarios per template.
 
 | # | Gap / Requirement | Task(s) | Resolution |
 |---|---|---|---|
-| 1 | Polish bug #1: TheoUI styling broken out of the box | T3.1, T3.2, T3.3, T3.4, T3.5 | Auto-detect `@usetheo/ui`, auto-chain `@tailwindcss/vite` + `@usetheo/ui/vite-plugin` into Vite plugin array via TheoKit vite-plugin's `config()` hook. Fixture proves zero-config. |
+| 1 | Polish bug #1: TheoUI styling broken out of the box | T3.1, T3.2, T3.3, T3.4, T3.5 | Auto-detect `@theokit/ui`, auto-chain `@tailwindcss/vite` + `@theokit/ui/vite-plugin` into Vite plugin array via TheoKit vite-plugin's `config()` hook. Fixture proves zero-config. |
 | 2 | Polish bug #2: `.env` not auto-loaded for server code | T1.1, T1.2, T1.3, T1.4 | New `loadEnv` utility (Next.js-style algorithm). Wired into CLI commands and `loadConfig`. Re-exported from `theokit/server` for standalone scripts. Example shim deleted. |
 | 3 | Polish bug #3: Agent registry cruft accumulates | T2.1, T2.3 | Nuxt-LRU `gcAgentRegistry`. Runs at `theokit dev` startup. Default cap 100, configurable via `agents.maxRegistries`. |
 | 4 | Polish bug #4: OpenRouter slug rot | (not framework — docs-only) | Out of scope for framework changes. T4.2 docs the recommended fix path: pin in env, not in code. |
-| 5 | Polish bug #5: `@usetheo/ui` not auto-configured as Vite plugin | T0.1, T3.1, T3.2, T3.3 | Cross-repo spike resolves API shape. TheoKit auto-chains. Plugin-side ownership (D5). |
+| 5 | Polish bug #5: `@theokit/ui` not auto-configured as Vite plugin | T0.1, T3.1, T3.2, T3.3 | Cross-repo spike resolves API shape. TheoKit auto-chains. Plugin-side ownership (D5). |
 | 6 | `.theo/` cleanup at build | T2.1, T2.2 | Astro-pattern `cleanOutDir`. Skip `.git*`. |
 | 7 | Documentation of new zero-config flow | T4.2 | `docs/concepts/zero-config.md` + CHANGELOG + README edit. |
 | 8 | Upgrade-readiness hints for migration | T4.1 | 2 new hints in `theokit check`. |
@@ -1249,7 +1249,7 @@ Run `/dogfood full`. Always full. No shortcuts.
 - [ ] Zero CRITICAL issues introduced by this plan's changes.
 - [ ] Zero HIGH issues in commands/features modified by this plan (`theokit dev`, `theokit build`, `theokit start`, `theokit check`, vite-plugin config hook, theokit/server `loadEnv` export).
 - [ ] Phase 22 (cross-validation features) regressions: 0.
-- [ ] `npm create theokit my-app && cd my-app && pnpm add @usetheo/ui && pnpm dev` boots + renders styled UI without any consumer-side Tailwind/PostCSS file. Verified manually + as Playwright spec.
+- [ ] `npm create theokit my-app && cd my-app && pnpm add @theokit/ui && pnpm dev` boots + renders styled UI without any consumer-side Tailwind/PostCSS file. Verified manually + as Playwright spec.
 - [ ] Any pre-existing issues documented (not caused by this plan).
 
 ### If Dogfood Fails

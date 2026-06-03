@@ -6,13 +6,13 @@ consulted: claude
 informed: theokit-sdk-maintainers, theo-ui-maintainers
 ---
 
-# ADR 0018: `@usetheo/ui/vite-plugin` é contrato VERSIONADO + contract test cross-repo executa contra `dist/` real
+# ADR 0018: `@theokit/ui/vite-plugin` é contrato VERSIONADO + contract test cross-repo executa contra `dist/` real
 
 ## Context and Problem Statement
 
-A integração entre `theokit` e `@usetheo/ui` é hoje **100% implícita**: `theokit/packages/theo/src/vite-plugin/integrate-ui.ts` resolve `node_modules/@usetheo/ui/dist/vite-plugin.js` via filesystem walk e faz `await import()` dinâmico. Quando o contrato quebra (factory muda shape, dist ausente, subpath export removido), o `integrate-ui.ts` degrada silenciosamente para `[]` com `console.warn` em stderr — invisível em CI e em produção.
+A integração entre `theokit` e `@theokit/ui` é hoje **100% implícita**: `theokit/packages/theo/src/vite-plugin/integrate-ui.ts` resolve `node_modules/@theokit/ui/dist/vite-plugin.js` via filesystem walk e faz `await import()` dinâmico. Quando o contrato quebra (factory muda shape, dist ausente, subpath export removido), o `integrate-ui.ts` degrada silenciosamente para `[]` com `console.warn` em stderr — invisível em CI e em produção.
 
-`theokit/packages/theo/package.json` NÃO declara `@usetheo/ui` em `peerDependencies`, `dependencies` nem `optionalDependencies`. O `pnpm install` no app do usuário NÃO emite warn em mismatch de versão.
+`theokit/packages/theo/package.json` NÃO declara `@theokit/ui` em `peerDependencies`, `dependencies` nem `optionalDependencies`. O `pnpm install` no app do usuário NÃO emite warn em mismatch de versão.
 
 Existe spike `theokit/docs/spikes/usetheo-ui-vite-plugin-shape.md` (Status anterior: PROPOSED) que descreve o API shape esperado, peer-dep matrix e acceptance criteria — mas estava sem sign-off cross-repo.
 
@@ -21,20 +21,20 @@ Existe spike `theokit/docs/spikes/usetheo-ui-vite-plugin-shape.md` (Status anter
 1. **Honestidade — falhe alto, falhe cedo, falhe claro** (CLAUDE.md global §8). Silent fallback é o tipo mais perigoso de bug.
 2. **Não reinvente — use pipelines nativos** (CLAUDE.md global §9). `peerDependencies` + `publint`/`attw` + dynamic import test são contratos padrão; não precisamos de DSL própria.
 3. **DRY — source of truth única** (CLAUDE.md global §12). O range suportado vive em UM lugar: `package.json:peerDependencies`.
-4. **Testes que provam comportamento, não estrutura** (CLAUDE.md global §7). Mock de `@usetheo/ui` mascararia drift exatamente como mock de DB mascara bugs de migration. Único teste honesto: executar contra `dist/` real.
+4. **Testes que provam comportamento, não estrutura** (CLAUDE.md global §7). Mock de `@theokit/ui` mascararia drift exatamente como mock de DB mascara bugs de migration. Único teste honesto: executar contra `dist/` real.
 
 ## Considered Options
 
 ### Opção A — Status quo: filesystem walk + console.warn (REJEITADA)
 Manter contrato 100% implícito. **Por quê não:** 11 silent fallback paths em `integrate-ui.ts` confirmados pelo baseline 2026-05-28. CI não detecta regressões; drift descoberto em produção.
 
-### Opção B — `@usetheo/ui` como `dependency` regular (REJEITADA)
+### Opção B — `@theokit/ui` como `dependency` regular (REJEITADA)
 Força `pnpm install theokit` a sempre baixar UI mesmo se app não usar. **Por quê não:** UI é opt-in (apps `api-only` não precisam); seria over-installation.
 
-### Opção C — `@usetheo/ui` como `optionalDependencies` (REJEITADA)
+### Opção C — `@theokit/ui` como `optionalDependencies` (REJEITADA)
 Comportamento variável entre PMs; warn é silenciado. **Por quê não:** opaco — não é o sinal que queremos.
 
-### Opção D — `@usetheo/ui` como `peerDependencies` + `peerDependenciesMeta.optional: true` (ACEITA)
+### Opção D — `@theokit/ui` como `peerDependencies` + `peerDependenciesMeta.optional: true` (ACEITA)
 Range explícito + optional via meta. PM emite warn em mismatch (D vs ausente). `publint`/`attw` validam shape.
 
 ### Sobre o contract test:
@@ -47,8 +47,8 @@ Range explícito + optional via meta. PM emite warn em mismatch (D vs ausente). 
 
 ```jsonc
 {
-  "peerDependencies": { "@usetheo/ui": "^0.12.0-next.0" },
-  "peerDependenciesMeta": { "@usetheo/ui": { "optional": true } }
+  "peerDependencies": { "@theokit/ui": "^0.12.0-next.0" },
+  "peerDependenciesMeta": { "@theokit/ui": { "optional": true } }
 }
 ```
 
@@ -56,7 +56,7 @@ Range fechado `^0.12.0-next.0` segue semver caret pre-release semantics: aceita 
 
 **Decisão B (contract test):** Dois contract tests, um por lado:
 
-- `theokit/tests/integration/contract-usetheo-ui-vite-plugin.test.ts` — 6 `it()` (5 contrato + 1 hoist guard EC-7) executando `await import(require_.resolve('@usetheo/ui/vite-plugin'))` real.
+- `theokit/tests/integration/contract-usetheo-ui-vite-plugin.test.ts` — 6 `it()` (5 contrato + 1 hoist guard EC-7) executando `await import(require_.resolve('@theokit/ui/vite-plugin'))` real.
 - `theo-ui/tests/contract/theokit-consumer.test.ts` — 5 `it()` espelho contra o próprio `dist/vite-plugin.js` via path absoluto `PKG_ROOT` (EC-1 fix: usar `fileURLToPath(import.meta.url)` em vez de `require_.resolve('./dist/...')` que resolve relativo ao arquivo do teste).
 
 Hook `prepublishOnly` no `theo-ui/` exige `pnpm test:contract` antes de qualquer publish.

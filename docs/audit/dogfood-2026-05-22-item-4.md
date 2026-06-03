@@ -93,7 +93,7 @@ Two type-safety issues caught + fixed in the same session:
 | # | Bug | Fix |
 |---|---|---|
 | 1 | `AgentRunStreamMessage` discriminated union didn't structurally accept SDK's `SDKMessage` because SDK variants lack index signatures | Widened `AgentRunLike.stream` parameter to `AsyncIterable<{ type: string }>` + runtime type-guards (`isAssistant`, `isToolCall`) for narrowing |
-| 2 | `@usetheo/sdk` listed as peer dep crashed `pnpm install` (not on npm yet — T5.0 from item #3 is operator-gated) | Removed from `peerDependencies`; TheoKit's `define-agent-tool.ts` + `stream-agent-run.ts` use ZERO runtime SDK imports — only structural types |
+| 2 | `@theokit/sdk` listed as peer dep crashed `pnpm install` (not on npm yet — T5.0 from item #3 is operator-gated) | Removed from `peerDependencies`; TheoKit's `define-agent-tool.ts` + `stream-agent-run.ts` use ZERO runtime SDK imports — only structural types |
 
 ## Verdict
 

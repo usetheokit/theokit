@@ -2,7 +2,7 @@
  * Item #5 — `createConversationHistory`
  *
  * Orchestrator that resolves a stable `agentId` from (explicit → session →
- * cookie → fresh UUID), then returns an `@usetheo/sdk` `Agent` via
+ * cookie → fresh UUID), then returns an `@theokit/sdk` `Agent` via
  * `Agent.getOrCreate(agentId, options)`. Conversation turns auto-persist in
  * `<cwd>/.theokit/agents/<agentId>/messages.jsonl` — SDK owns the storage
  * (ADR D1). `MemorySettings` (facts recall layer) is opt-in passthrough via
@@ -30,13 +30,13 @@ import { tryResolveProvider } from './provider-resolver.js'
  *
  * **T5.2 (architecture-cleanup) — DP-7 decision: KEEP (Opt B).** The 5 duck-typed
  * mirrors below were flagged as "over-engineered" by the 2026-05-27 architecture
- * review. Decision: KEEP them because `@usetheo/sdk` is `devDependency` (not
+ * review. Decision: KEEP them because `@theokit/sdk` is `devDependency` (not
  * required at runtime for consumers that don't use agent features). Removing
  * the mirrors would force a hard runtime dep on the SDK, breaking consumers
  * who build TheoKit apps without the agent layer.
  *
  * @kept Defensive duck-type. Do NOT replace with direct SDK type imports unless
- *   `@usetheo/sdk` is promoted from devDependency to dependency. If promoting,
+ *   `@theokit/sdk` is promoted from devDependency to dependency. If promoting,
  *   ALSO drop the mirrors (Opt A from the architecture-cleanup plan T5.2).
  */
 export interface SdkRunLike {
@@ -50,7 +50,7 @@ export interface SdkAgent {
 }
 
 /**
- * Phase 2 — structural duck-type of `@usetheo/sdk`'s `ConversationStorageAdapter`.
+ * Phase 2 — structural duck-type of `@theokit/sdk`'s `ConversationStorageAdapter`.
  *
  * D2 (decoupling): we mirror the SDK's shape locally rather than hard-import
  * the SDK type. This lets consumers pass any object matching the structural
@@ -152,11 +152,11 @@ export function __resetSdkForTests(): void {
 
 async function loadSdk(): Promise<SdkModule> {
   // EC-2 (edge case review — MUST FIX): the SDK is an optional peer; if the
-  // consumer never installed it, `import('@usetheo/sdk')` throws
+  // consumer never installed it, `import('@theokit/sdk')` throws
   // ERR_MODULE_NOT_FOUND. Re-throw with an actionable message.
   if (sdkOverride === null) {
     throw new Error(
-      'createConversationHistory requires @usetheo/sdk. Install: pnpm add @usetheo/sdk',
+      'createConversationHistory requires @theokit/sdk. Install: pnpm add @theokit/sdk',
     )
   }
   if (sdkOverride !== undefined) return sdkOverride
@@ -171,12 +171,12 @@ async function loadSdk(): Promise<SdkModule> {
     // the same module the ESM `import` would.
     const { createRequire } = await import('node:module')
     const requireFn = createRequire(import.meta.url)
-    const spec = '@usetheo/sdk'
+    const spec = '@theokit/sdk'
     const mod = requireFn(spec) as unknown as SdkModule
     return mod
   } catch (cause) {
     throw new Error(
-      'createConversationHistory requires @usetheo/sdk. Install: pnpm add @usetheo/sdk',
+      'createConversationHistory requires @theokit/sdk. Install: pnpm add @theokit/sdk',
       { cause },
     )
   }

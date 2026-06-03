@@ -1,4 +1,4 @@
-// CSS-side entry per RFC 0008 follow-up: `@import "@usetheo/ui/styles.css"`
+// CSS-side entry per RFC 0008 follow-up: `@import "@theokit/ui/styles.css"`
 // must be in a CSS file (not JS) so Tailwind v4's compiler crawls the
 // import graph and processes @theme tokens correctly. See globals.css.
 import './globals.css'
@@ -14,7 +14,7 @@ import {
   Badge,
   CostMeter,
   type AgentProfileDescriptor,
-} from '@usetheo/ui'
+} from '@theokit/ui'
 import { Bot, MessageSquare, History, Settings, Zap } from 'lucide-react'
 
 const AGENTS: AgentProfileDescriptor[] = [

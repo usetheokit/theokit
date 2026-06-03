@@ -6,7 +6,7 @@
 
 ## Setup
 
-1. Added `@usetheo/plugin-openapi` to `dogfood-app/package.json` (`file:` link).
+1. Added `@theokit/plugin-openapi` to `dogfood-app/package.json` (`file:` link).
 2. Wired `openApiPlugin({ pageTitle: 'Dogfood App — API Reference' })` in `dogfood-app/theo.config.ts`.
 3. Rebuilt theokit dist (`pnpm --filter theokit run build`) to ship T1.1 dev-emit hook + this audit's api-middleware change.
 4. Force `pnpm install` in dogfood-app to refresh symlinks.
@@ -16,7 +16,7 @@
 
 **Initial smoke (404)**: `GET /api/docs` returned `404 NOT_FOUND` because `api-middleware.ts` sends 404 BEFORE invoking `pluginRunner.runOnRequest`. Plugin's `onRequest` hooks only fired DURING `executeRoute` (after route match), so a plugin handling a path with no `server/routes/` file was dead.
 
-**Root cause:** the TheoApp contract describes `onRequest` as "fires for every request", but the api-middleware only wires it inside the matched-route execution path. plugin-cors works around this via the special-cased `corsHandler.handlePreflight()` at line 249 — but a generalist plugin like `@usetheo/plugin-openapi` has no such escape hatch.
+**Root cause:** the TheoApp contract describes `onRequest` as "fires for every request", but the api-middleware only wires it inside the matched-route execution path. plugin-cors works around this via the special-cased `corsHandler.handlePreflight()` at line 249 — but a generalist plugin like `@theokit/plugin-openapi` has no such escape hatch.
 
 **Fix (this commit)**: extended `api-middleware.ts` to invoke `pluginRunner.runOnRequest(ctx)` BEFORE `matchRoute`, after CORS preflight + rate limit. Plugins that short-circuit the response (set `writableEnded`/`headersSent`) skip the route match. Plugins that don't match fall through to the normal flow. This is the Fastify model (`onRequest` fires for ALL requests) and matches the TheoApp contract.
 
@@ -63,13 +63,13 @@ Size=429 bytes
 Dev server log shows `[openapi-emit]` lines firing on boot (T1.1 watcher subscription active). One honest skip:
 ```
 [openapi-emit] Skipping routes/eval.info.ts: load failed
-  ([vite] The requested module '@usetheo/sdk' does not provide an export named 'Scorers')
+  ([vite] The requested module '@theokit/sdk' does not provide an export named 'Scorers')
 ```
 This is a pre-existing dogfood-app issue unrelated to P#3 (eval route imports a stale SDK export). The skip behavior is correct per T1.1 EC-8 absorbed (best-effort, never crash dev).
 
 ## Acceptance criteria checklist
 
-- [x] `dogfood-app/package.json` declares `@usetheo/plugin-openapi`
+- [x] `dogfood-app/package.json` declares `@theokit/plugin-openapi`
 - [x] `dogfood-app/theo.config.ts` wires `openApiPlugin()`
 - [x] theokit dist rebuilt + dogfood-app reinstalled
 - [x] `GET /api/docs` → 200 + `text/html` + Scalar embed

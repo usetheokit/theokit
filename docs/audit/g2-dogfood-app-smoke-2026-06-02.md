@@ -26,8 +26,8 @@ Rebuilt theokit (`pnpm --filter theokit run build`) + force-reinstalled dogfood-
 
 **Result:** dry-run printed an OpenAPI 3.1.0 document with 43 paths / 58 operations. Two routes skipped:
 
-- `routes/voice/stt.ts` — Missing OPENAI_API_KEY for @usetheo/plugin-voice STT
-- `routes/voice/tts.ts` — Missing OPENAI_API_KEY for @usetheo/plugin-voice TTS
+- `routes/voice/stt.ts` — Missing OPENAI_API_KEY for @theokit/plugin-voice STT
+- `routes/voice/tts.ts` — Missing OPENAI_API_KEY for @theokit/plugin-voice TTS
 
 Both skips are **expected behavior** — the voice plugin throws at module-load time when its required env var is absent. This is the loader's best-effort skip-with-warning pattern working as designed (no unsupported Zod construct detected — these are config errors, not schema-conversion failures).
 

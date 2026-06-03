@@ -27,7 +27,7 @@ const WORKSPACE_ROOT = resolve(__dirname, '..')
 // per plan EC-6.
 const NATIVE_DEPS = ['better-sqlite3']
 
-// EC-1 / EC-5: theokit consumes @usetheo/sdk via workspace link AND has its
+// EC-1 / EC-5: theokit consumes @theokit/sdk via workspace link AND has its
 // own native deps. Probe both the consuming package roots (where tests live)
 // AND the workspace root.
 const PROBE_ROOTS = [resolve(WORKSPACE_ROOT, 'packages/theo'), WORKSPACE_ROOT]

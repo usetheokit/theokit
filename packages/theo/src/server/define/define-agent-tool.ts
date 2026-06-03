@@ -4,7 +4,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 /**
  * Item #4 — `defineAgentTool`
  *
- * Sugar over the `@usetheo/sdk` `CustomTool` contract. Takes a Zod 3 schema +
+ * Sugar over the `@theokit/sdk` `CustomTool` contract. Takes a Zod 3 schema +
  * handler and produces a structurally-compatible `CustomTool` that
  * `Agent.create({ tools: [...] })` accepts.
  *
@@ -26,7 +26,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 
 /**
  * Local mirror of the SDK's `CustomTool` interface. We don't `import type`
- * from `@usetheo/sdk` because the SDK is an optional peer (consumers who
+ * from `@theokit/sdk` because the SDK is an optional peer (consumers who
  * never call `defineAgentTool` shouldn't need it installed). The shape is
  * the wire contract; any structurally-matching object is accepted by
  * `Agent.create({ tools })`.

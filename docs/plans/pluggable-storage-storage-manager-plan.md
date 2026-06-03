@@ -16,7 +16,7 @@ Nenhum desses pools fecha em SIGTERM. O `start.ts:418-447` só evicta agents:
 ```ts
 // start.ts:425-446
 void (async () => {
-  const sdk = (await import('@usetheo/sdk').catch(() => null)) as { ... }
+  const sdk = (await import('@theokit/sdk').catch(() => null)) as { ... }
   if (sdk?.Agent?.registry?.evictAll !== undefined) {
     await sdk.Agent.registry.evictAll()
   }
