@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-06-03 (feat — shared-schema convention for P#4 plugin-forms)
+
+### Added
+
+- **`actions.X.__zodSchema` exposed via shared-schema convention** in the `@theo/actions` virtual module. When a consumer writes their action schema in an isomorphic file at `server/actions/schemas/<basename>.ts` (exporting `export const schema = z.object(...)`), the Vite plugin auto-detects the convention and:
+  - Emits a real ESM `import { schema as __theoSchema0 } from '<absolute path>'` in the client virtual module bundle
+  - Adds an `ACTION_SCHEMA_MAP` entry routing each action to its schema reference
+  - Attaches the schema to the proxy callable via `Object.defineProperty(callable, '__zodSchema', { value, enumerable: false, writable: false, configurable: false })`
+  - Emits a typed `.theo/actions.d.ts` declaring `actions.X` as `((input: unknown) => Promise<...>) & { readonly __zodSchema: typeof import('<path>').schema }`
+  - Provides a stable per-action proxy cache so `actions.X === actions.X` and the `__zodSchema` attachment is idempotent
+- `ActionManifestEntry` interface gains an optional `schemaFilePath` field surfaced from `scanServerActionsEnriched`. Manifest consumers receive `undefined` when the convention is not followed (graceful degrade — existing inline-schema actions continue to work unchanged).
+- `scanServerActionsEnriched` now skips the `actions/schemas/` subdirectory (previously, schema files there were scanned AS actions, producing a spurious `schema` entry that broke the virtual module emit). 3 dedicated tests cover: convention followed → `schemaFilePath` populated; not followed → `undefined`; `.ts` priority over `.js` when both exist.
+- Internal helper `detectSchemaFile(actionsDir, basename)` — resolves `.ts/.tsx/.js/.jsx` priority order at scan time.
+
+### Why
+
+P#4 — `@theokit/plugin-forms@0.1.0` ships a `<TheoForm action={actions.X}>` component that drives `react-hook-form`'s `zodResolver` from the server schema, without consumer-side duplication. This release lands the minimum theokit extension required to make that work end-to-end. The convention chosen (per `p4-plugin-forms-blueprint.md` ADR D2 + edge-case-plan EC-2 strategy `(b)`): a separate isomorphic schema file beats AST extraction of `defineAction({ input: schema })` because zod schemas are pure JS data; importing them client-side is free, and bundlers tree-shake the unused server `handler` references.
+
+### Compatibility
+
+100% backwards compatible. Actions that keep `input: z.object({...})` inline continue to work — `__zodSchema` is `undefined` for them, and `<TheoForm>` (or any other consumer) falls back to an explicit `schema={...}` prop or no client-side validation.
+
+Plan ref: `.claude/knowledge-base/plans/p4-plugin-forms-plan.md` v1.1 (T1.1). Commit: `0a58083`.
+
 ## [0.2.2] - 2026-06-02 (patch — regression fixes exposed by dogfood-app npm-version swap)
 
 ### Fixed
