@@ -113,7 +113,7 @@
 
 ### EC-15: SECURITY.md aponta pra email que pode não existir
 - **Task afetada:** T7.3
-- **Risco aceito:** `security@usetheo.dev` MX records podem não estar configurados. Placeholder OK para 0.3.0; ajustar quando setup do projeto for completo. Adicionar fallback "OR open a private GitHub Security Advisory".
+- **Risco aceito:** `security@theokit.dev` MX records podem não estar configurados. Placeholder OK para 0.3.0; ajustar quando setup do projeto for completo. Adicionar fallback "OR open a private GitHub Security Advisory".
 
 ### EC-16: Beta window cruza feriado / sem reviewers
 - **Task afetada:** T8.1 / T9.1

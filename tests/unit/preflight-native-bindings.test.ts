@@ -32,7 +32,7 @@ describe('findRebuildCwd (v1.1 EC-1 MUST FIX — workspace-link routing)', () =>
     writeFileSync(binPath, 'fake-bin')
 
     linkedRepo = join(sandbox, 'consumer-repo')
-    mkdirSync(join(linkedRepo, 'node_modules/@usetheo'), { recursive: true })
+    mkdirSync(join(linkedRepo, 'node_modules/@theokit'), { recursive: true })
     symlinkSync(realRepo, join(linkedRepo, 'node_modules/@theokit/sdk'))
   })
 

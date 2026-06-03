@@ -208,7 +208,7 @@ function buildOptimizeDepsInclude(
   viteOptimizeDeps: readonly string[] | undefined,
 ): string[] {
   const include: string[] = []
-  if (existsSync(resolve(projectRoot, 'node_modules', '@usetheo', 'ui'))) {
+  if (existsSync(resolve(projectRoot, 'node_modules', '@theokit', 'ui'))) {
     include.push('@theokit/ui')
   }
   if (existsSync(resolve(projectRoot, 'node_modules', 'lucide-react'))) {
