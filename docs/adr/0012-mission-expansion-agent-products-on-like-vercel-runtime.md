@@ -24,7 +24,7 @@ A narrow "Next.js for agents" mission cannot absorb these forces without contrad
 
 **This is the corrected enframing of the expansion** (clarified by the owner 2026-05-27, after an initial analysis that mis-framed polyglot as a TheoKit-only choice):
 
-> **Polyglot is the differential of the Theo product-mark (the family of products under `usetheo`), not a feature TheoKit individually adopts.** The Theo identity has always been polyglot — `theo-stacks` shipped 19 templates in 7 languages precisely because Theo's wedge is "agent products in the language your team already uses". TheoKit was NARROW relative to that identity; expanding it brings TheoKit into alignment with the product-mark, not vice versa.
+> **Polyglot is the differential of the Theo product-mark (the family of products under `Theo`), not a feature TheoKit individually adopts.** The Theo identity has always been polyglot — `theo-stacks` shipped 19 templates in 7 languages precisely because Theo's wedge is "agent products in the language your team already uses". TheoKit was NARROW relative to that identity; expanding it brings TheoKit into alignment with the product-mark, not vice versa.
 
 **What this means concretely — the moat is the CROSS-PRODUCT standardization, not any single product:**
 

@@ -54,7 +54,7 @@ Threshold dogfood-skill: ≥ 70 ship-it / ≥ 80 minor issues / ≥ 90 productio
 
 ### Pre-existing (NOT caused by this plan)
 
-1. **Phase 20 PARTIAL** — README.md line 5 says "`theo deploy` ships it to production" referring to the broader `usetheo` product family. The dogfood Phase 20 banned-term list flags this. Recommend either rephrase as "deploy to your platform of choice" or accept as cross-product marketing. **No code impact.**
+1. **Phase 20 PARTIAL** — README.md line 5 says "`theo deploy` ships it to production" referring to the broader `Theo` product family. The dogfood Phase 20 banned-term list flags this. Recommend either rephrase as "deploy to your platform of choice" or accept as cross-product marketing. **No code impact.**
 
 ### Plan-caused (zero — all blockers resolved)
 
