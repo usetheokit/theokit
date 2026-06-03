@@ -35,7 +35,7 @@ describe('EC-4: optional peerDep emits warn on version mismatch (pnpm 9.x)', () 
   beforeAll(() => {
     if (!hasPnpm()) return
     sandbox = mkdtempSync(join(tmpdir(), 'theokit-ec4-'))
-    // Minimal app declaring @usetheo/ui WAY OUT of theokit's declared range.
+    // Minimal app declaring @theokit/ui WAY OUT of theokit's declared range.
     // theokit's peerDep is ^0.12.0-next.0; we ask for 0.1.0 which can't satisfy.
     writeFileSync(
       join(sandbox, 'package.json'),
@@ -49,7 +49,7 @@ describe('EC-4: optional peerDep emits warn on version mismatch (pnpm 9.x)', () 
           // use a peer chain that is observable. For honest validation, this
           // test asserts only that pnpm CLI is wired and the workspace's own
           // peer chain produces no surprise mismatch warns today.
-          '@usetheo/ui': '0.11.0-next.0',
+          '@theokit/ui': '0.11.0-next.0',
         },
       }) + '\n',
     )
@@ -94,5 +94,5 @@ describe('EC-4: optional peerDep emits warn on version mismatch (pnpm 9.x)', () 
   // If you want to run the full empirical check locally:
   //   1. cd sandbox; pnpm install 2>install.log
   //   2. grep -i 'peer dependencies' install.log
-  //   3. Expect a warn line mentioning '@usetheo/ui' mismatch.
+  //   3. Expect a warn line mentioning '@theokit/ui' mismatch.
 })

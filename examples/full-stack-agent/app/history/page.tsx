@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, EmptyState, Badge } from '@usetheo/ui'
+import { Card, EmptyState, Badge } from '@theokit/ui'
 import { History } from 'lucide-react'
 
 interface Conversation {

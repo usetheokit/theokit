@@ -7,7 +7,7 @@
  * `detectPackage(name, cwd)` — generalized form of `theoui-detect.ts`.
  *
  * Used by T3.2 `integrateUseTheoUI` to gate auto-config on whether the
- * consumer has `@usetheo/ui` AND `@tailwindcss/vite` installed.
+ * consumer has `@theokit/ui` AND `@tailwindcss/vite` installed.
  *
  * Algorithm (same as `theoui-detect.ts` but parameterized):
  *   1. Read `<cwd>/package.json`. Check `dependencies` / `devDependencies` /
@@ -27,7 +27,7 @@ import { dirname, join } from 'node:path'
 import type { DetectResult } from './auto-detect-types.js'
 
 /**
- * D13 invariant (ADR 0021): @usetheo/ui is ESM-only by design.
+ * D13 invariant (ADR 0021): @theokit/ui is ESM-only by design.
  * NÃO usar `createRequire(...).resolve()` — `ERR_PACKAGE_PATH_NOT_EXPORTED`
  * em runtime para packages que declaram `type:"module"` sem `require` condition.
  * Tudo filesystem walk direto.

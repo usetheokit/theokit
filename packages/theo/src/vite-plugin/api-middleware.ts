@@ -195,7 +195,7 @@ async function handleBatchInline(
 
 /**
  * P#3 T4.1 — fire pluginRunner.onRequest for unmatched routes so plugins
- * can intercept paths outside server/routes/ (e.g., @usetheo/plugin-openapi
+ * can intercept paths outside server/routes/ (e.g., @theokit/plugin-openapi
  * /api/docs). Returns true when a plugin short-circuited the response.
  */
 interface RunPluginsCtx {
@@ -320,7 +320,7 @@ export function createApiMiddleware(
       }
 
       // P#3 T4.1 — fire pluginRunner.onRequest BEFORE matchRoute so plugins
-      // can intercept unmatched paths (e.g., @usetheo/plugin-openapi /api/docs).
+      // can intercept unmatched paths (e.g., @theokit/plugin-openapi /api/docs).
       if (
         pluginRunner &&
         (await runPluginsBeforeRouteMatch(pluginRunner, { req, res, requestId, start, url }))

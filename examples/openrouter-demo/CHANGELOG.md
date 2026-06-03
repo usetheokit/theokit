@@ -1,4 +1,4 @@
-# @usetheo/example-openrouter-demo
+# @theokit/example-openrouter-demo
 
 ## 0.0.1
 

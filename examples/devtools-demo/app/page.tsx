@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge, Button, Card } from '@usetheo/ui'
+import { Badge, Button, Card } from '@theokit/ui'
 import { AlertTriangle, Bug, CheckCircle2, Eye, EyeOff, KeyRound, Sparkles } from 'lucide-react'
 
 interface Action {

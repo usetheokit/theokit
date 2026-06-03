@@ -33,7 +33,7 @@ export async function configureAgentRegistryFromConfig(
 ): Promise<void> {
   if (registryConfig === undefined) return
   try {
-    const sdk = (await import('@usetheo/sdk').catch(() => null)) as SdkModule | null
+    const sdk = (await import('@theokit/sdk').catch(() => null)) as SdkModule | null
     const sdkConfigure = sdk?.Agent?.registry?.configure
     if (sdkConfigure === undefined) return
     const { configureAgentRegistryOnce } =

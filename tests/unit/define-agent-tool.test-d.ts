@@ -8,7 +8,7 @@ import type { CustomTool } from '../../packages/theo/src/server/define/define-ag
  * T1.1 — defineAgentTool type tests.
  *
  * Pins the handler input inference via z.infer<T> and the return type
- * (CustomTool — structurally identical to @usetheo/sdk's CustomTool).
+ * (CustomTool — structurally identical to @theokit/sdk's CustomTool).
  */
 
 describe('defineAgentTool (types)', () => {

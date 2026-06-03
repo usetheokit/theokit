@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
  * T2.3 — Anti-stack lint gate (FAANG-precise).
  *
  * The locked stack assumption (memory: project-stack-deps) says TheoKit's
- * default scaffold ALWAYS wires `@usetheo/sdk`, never a raw provider SDK
+ * default scaffold ALWAYS wires `@theokit/sdk`, never a raw provider SDK
  * (OpenAI/Anthropic/etc).
  *
  * Precision: this gate checks for actual IMPORTS of the `openai` npm package
@@ -55,16 +55,16 @@ describe('scaffold anti-stack lint — no raw OpenAI in default chat.ts', () => 
         /from\s+['"]@anthropic-ai\/sdk['"]/i.test(content)
       expect(
         rawSdkImport,
-        `${relativePath} must not import raw provider SDKs (locked stack: @usetheo/sdk via createConversationHistory)`,
+        `${relativePath} must not import raw provider SDKs (locked stack: @theokit/sdk via createConversationHistory)`,
       ).toBe(false)
     })
 
-    it(`${relativePath} uses @usetheo/sdk (directly OR indirectly via createConversationHistory)`, () => {
+    it(`${relativePath} uses @theokit/sdk (directly OR indirectly via createConversationHistory)`, () => {
       const content = readFileSync(absPath, 'utf-8')
       // Item #3 / #4 imported Agent directly. Item #5 routes via
       // createConversationHistory (which dynamically imports the SDK).
       // Either path proves the locked stack — accept both.
-      const directImport = /import\s+\{\s*Agent\s*\}\s+from\s+['"]@usetheo\/sdk['"]/.test(content)
+      const directImport = /import\s+\{\s*Agent\s*\}\s+from\s+['"]@theokit\/sdk['"]/.test(content)
       const indirectViaTheokit = /createConversationHistory|defineAgentTool|streamAgentRun/.test(
         content,
       )

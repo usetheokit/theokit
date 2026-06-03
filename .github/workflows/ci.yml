@@ -245,7 +245,7 @@ jobs:
     # template-postgres + template-saas Playwright specs run instead of skip.
     # See docs/plans/playwright-postgres-templates-ci-plan.md v1.1.
     # NOT gated on typecheck-build: neither fixture's routes import
-    # @usetheo/sdk (the dep at the root of typecheck-build's pre-existing
+    # @theokit/sdk (the dep at the root of typecheck-build's pre-existing
     # failures on CI without the sibling repo). The job is self-contained.
     name: Playwright Postgres templates (postgres + saas)
     runs-on: ubuntu-latest

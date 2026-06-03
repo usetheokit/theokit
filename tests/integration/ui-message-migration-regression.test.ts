@@ -1,5 +1,5 @@
 /**
- * Regression — @usetheo/ui v0.6.3 renamed `Message` → `UIMessage` and
+ * Regression — @theokit/ui v0.6.3 renamed `Message` → `UIMessage` and
  * replaced `content: string` with `parts: UIMessagePart[]`. The old API
  * shape compiled silently (TS treated the missing export as `any` in the
  * import) but threw at runtime:
@@ -25,7 +25,7 @@ const SURFACES = [
   'packages/create-theo/templates/default/app/page.tsx',
 ]
 
-describe('UIMessage migration regression (@usetheo/ui v0.6.3)', () => {
+describe('UIMessage migration regression (@theokit/ui v0.6.3)', () => {
   for (const surface of SURFACES) {
     describe(surface, () => {
       const content = readFileSync(resolve(REPO, surface), 'utf8')

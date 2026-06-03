@@ -75,7 +75,7 @@
     "zod-to-json-schema": "^3.24.0"
   },
   "peerDependencies": {
-    "@usetheo/ui": "^0.13.0",
+    "@theokit/ui": "^0.13.0",
     "db0": "^0.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -85,7 +85,7 @@
     "zod": "^3.24.0"
   },
   "peerDependenciesMeta": {
-    "@usetheo/ui": {
+    "@theokit/ui": {
       "optional": true
     },
     "db0": {
@@ -102,7 +102,7 @@
     "@types/busboy": "^1.5.4",
     "@types/pg": "^8.20.0",
     "@types/picomatch": "^4.0.0",
-    "@usetheo/sdk": "workspace:*",
+    "@theokit/sdk": "workspace:*",
     "better-sqlite3": "^12.10.0",
     "db0": "^0.3.0",
     "pg": "^8.21.0",

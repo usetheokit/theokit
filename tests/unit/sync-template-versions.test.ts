@@ -41,8 +41,8 @@ afterEach(() => {
 
 const TRUTH = {
   theokit: '^0.1.0-alpha.5',
-  '@usetheo/sdk': '^1.1.0',
-  '@usetheo/ui': '^0.12.0-next.0',
+  '@theokit/sdk': '^1.1.0',
+  '@theokit/ui': '^0.12.0-next.0',
 }
 
 describe('syncTemplates — drift detection + write', () => {
@@ -177,7 +177,7 @@ describe('syncTemplates — edge cases (EC-2, EC-3, EC-4)', () => {
   })
 
   it('EC-4: should NOT force-add deps that are absent from the template', () => {
-    // Given a template that declares only theokit (no @usetheo/ui, no @usetheo/sdk)
+    // Given a template that declares only theokit (no @theokit/ui, no @theokit/sdk)
     // e.g., the api-only template in the real workspace
     const sandbox = makeSandbox('ec4-absent')
     writeTpl(sandbox, 'api-only', {
@@ -188,11 +188,11 @@ describe('syncTemplates — edge cases (EC-2, EC-3, EC-4)', () => {
     // When we run write mode
     const result = syncTemplates({ mode: 'write', templatesDir: sandbox, truth: TRUTH })
 
-    // Then no entries are added — @usetheo/sdk/ui remain absent
+    // Then no entries are added — @theokit/sdk/ui remain absent
     expect(result.drifted.length).toBe(0)
     const after = JSON.parse(readFileSync(join(sandbox, 'api-only', 'package.json.tmpl'), 'utf-8'))
-    expect(after.dependencies['@usetheo/sdk']).toBeUndefined()
-    expect(after.dependencies['@usetheo/ui']).toBeUndefined()
+    expect(after.dependencies['@theokit/sdk']).toBeUndefined()
+    expect(after.dependencies['@theokit/ui']).toBeUndefined()
   })
 
   it('should cover both dependencies and devDependencies buckets', () => {
@@ -201,7 +201,7 @@ describe('syncTemplates — edge cases (EC-2, EC-3, EC-4)', () => {
     writeTpl(sandbox, 'foo', {
       name: 'foo-tpl',
       dependencies: { theokit: '^0.1.0-alpha.1' },
-      devDependencies: { '@usetheo/sdk': '^1.0.0' },
+      devDependencies: { '@theokit/sdk': '^1.0.0' },
     })
 
     // When we run write mode
@@ -212,6 +212,6 @@ describe('syncTemplates — edge cases (EC-2, EC-3, EC-4)', () => {
     expect(result.written).toBe(1) // one file
     const after = JSON.parse(readFileSync(join(sandbox, 'foo', 'package.json.tmpl'), 'utf-8'))
     expect(after.dependencies.theokit).toBe('^0.1.0-alpha.5')
-    expect(after.devDependencies['@usetheo/sdk']).toBe('^1.1.0')
+    expect(after.devDependencies['@theokit/sdk']).toBe('^1.1.0')
   })
 })

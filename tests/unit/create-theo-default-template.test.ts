@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /**
- * T3.1 — Canonical chat.ts + @usetheo/sdk dep in `create-theokit` template.
+ * T3.1 — Canonical chat.ts + @theokit/sdk dep in `create-theokit` template.
  *
  * Mirrors fixtures/template-default. Verified via:
  *   - Byte-identical chat.ts bodies (defends drift)
@@ -67,10 +67,10 @@ describe('create-theokit default template — chat.ts parity with fixture', () =
 })
 
 describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)', () => {
-  it('package.json.tmpl includes @usetheo/sdk via regex grep (NOT JSON.parse — Mustache breaks parse)', () => {
+  it('package.json.tmpl includes @theokit/sdk via regex grep (NOT JSON.parse — Mustache breaks parse)', () => {
     const src = readFileSync(TEMPLATE_PKG, 'utf-8')
     // Defensive grep — JSON.parse would fail on {{name}} placeholder
-    expect(src).toMatch(/"@usetheo\/sdk":\s*"\^1/)
+    expect(src).toMatch(/"@theokit\/sdk":\s*"\^1/)
   })
 
   it('package.json.tmpl still preserves {{name}} placeholder (sanity)', () => {

@@ -31,7 +31,7 @@ const __IS_DEV = (() => {
 
 /**
  * Record a single agent run's usage + cost. Companion to the client-side
- * `<CostMeter>` from `@usetheo/ui`.
+ * `<CostMeter>` from `@theokit/ui`.
  *
  * EC-14: this function NEVER bubbles errors back to the caller. Adapter
  * failures (network outage, DB down, etc.) are logged via `console.warn`

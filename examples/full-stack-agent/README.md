@@ -2,7 +2,7 @@
 
 > One complete reference example exercising every Phase B primitive of TheoKit
 > (`Agent.create` + `defineAgentTool` + `streamAgentRun` + `createConversationHistory`)
-> on the locked stack: **TheoKit + @usetheo/sdk + @usetheo/ui + @usetheo/gateway-telegram**.
+> on the locked stack: **TheoKit + @theokit/sdk + @theokit/ui + @theokit/gateway-telegram**.
 > Same agent answers in a web UI AND a Telegram bot. Provider is **OpenRouter**
 > so any model (Claude, GPT-4, Llama, Mistral) works with one key.
 
@@ -100,7 +100,7 @@ The example defaults to **`openai/gpt-4o-mini`** — the canonical cheap + tool-
 │                         OpenRouter                           │
 │              (claude-3.5-sonnet / gpt-4o / ...)              │
 └────────────────────────────▲─────────────────────────────────┘
-                             │  @usetheo/sdk
+                             │  @theokit/sdk
                              │  Agent.getOrCreate + Run.stream
                              │
             ┌────────────────┴────────────────┐
@@ -123,7 +123,7 @@ The example defaults to **`openai/gpt-4o-mini`** — the canonical cheap + tool-
 ```
 
 Agent state lives in `.theokit/agents/<id>/messages.jsonl` and the workspace
-sandbox at `.theokit/workspace/<id>/`. Both are managed by `@usetheo/sdk` +
+sandbox at `.theokit/workspace/<id>/`. Both are managed by `@theokit/sdk` +
 TheoKit's `createConversationHistory` primitive.
 
 ## Tool catalog (per-file)

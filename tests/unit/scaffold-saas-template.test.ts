@@ -58,9 +58,9 @@ describe('T10.1 — saas template', () => {
     expect(src).toMatch(/assertProductionSecret/)
   })
 
-  it('package.json.tmpl pulls in @usetheo/ui + react-router + zod', () => {
+  it('package.json.tmpl pulls in @theokit/ui + react-router + zod', () => {
     const pkg = read('package.json.tmpl')
-    expect(pkg).toMatch(/"@usetheo\/ui"/)
+    expect(pkg).toMatch(/"@theokit\/ui"/)
     expect(pkg).toMatch(/"react-router"/)
     expect(pkg).toMatch(/"zod"/)
     expect(pkg).toMatch(/"drizzle-orm"/)

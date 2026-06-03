@@ -1,5 +1,5 @@
 {
-  "name": "@usetheo/example-full-stack-agent",
+  "name": "@theokit/example-full-stack-agent",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -11,10 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@usetheo/gateway": "workspace:*",
-    "@usetheo/gateway-telegram": "workspace:*",
-    "@usetheo/sdk": "workspace:*",
-    "@usetheo/ui": "^0.13.0",
+    "@theokit/gateway": "workspace:*",
+    "@theokit/gateway-telegram": "workspace:*",
+    "@theokit/sdk": "workspace:*",
+    "@theokit/ui": "^0.13.0",
     "grammy": "^1.30.0",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",

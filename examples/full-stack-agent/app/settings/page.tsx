@@ -1,4 +1,4 @@
-import { Card } from '@usetheo/ui'
+import { Card } from '@theokit/ui'
 import { Settings as SettingsIcon } from 'lucide-react'
 
 /**
@@ -27,12 +27,12 @@ const ROWS: Row[] = [
   },
   {
     label: 'SDK',
-    value: '@usetheo/sdk · Agent.getOrCreate + Run.stream',
+    value: '@theokit/sdk · Agent.getOrCreate + Run.stream',
     hint: 'Conversation auto-persisted under .theokit/agents/<id>/messages.jsonl',
   },
   {
     label: 'UI library',
-    value: '@usetheo/ui ^0.5.1-next.0',
+    value: '@theokit/ui ^0.5.1-next.0',
     hint: 'Tailwind v4 zero-config via @tailwindcss/vite + ./vite-plugin',
   },
 ]
