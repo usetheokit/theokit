@@ -23,6 +23,16 @@ export interface ActionManifestEntry {
   urlPath: string
   accept: 'form' | 'json'
   hasInput: boolean
+  /**
+   * P#4 plugin-forms shared-schema convention (per plan p4-plugin-forms v1.1 T1.1).
+   * When present, points to an isomorphic schema file at
+   * `<serverDir>/actions/schemas/<basename>.ts` exporting `export const schema = z.object(...)`.
+   * Virtual module emits `import {schema} from '<schemaFilePath>'` + attaches as
+   * `actions.X.__zodSchema` so client-side <TheoForm> can drive zodResolver.
+   * Undefined when convention not followed (graceful degrade — TheoForm still
+   * works via explicit `schema={...}` prop escape hatch).
+   */
+  schemaFilePath?: string
 }
 
 /**
@@ -95,6 +105,9 @@ export function scanServerActionsEnriched(serverDir: string): ActionManifestEntr
   walkSourceFiles(actionsDir, { extensions: ACTION_EXTENSIONS }, (absPath) => {
     if (TEST_FILE_RE.test(absPath)) return
     const rel = relative(actionsDir, absPath).replace(/\\/g, '/')
+    // P#4 plugin-forms — `schemas/` subdir holds isomorphic zod schemas
+    // for the shared-schema convention (T1.1). NOT executable actions; skip.
+    if (rel.startsWith('schemas/')) return
     const name = rel.slice(0, -extname(rel).length)
 
     const basename = name.includes('/') ? (name.split('/').pop() ?? name) : name
@@ -120,6 +133,10 @@ export function scanServerActionsEnriched(serverDir: string): ActionManifestEntr
     // expected by action-middleware. Cross-file export collisions become a
     // scan error to surface the ambiguity early.
     const exportNames = extractActionExportNames(stripped)
+    // P#4 plugin-forms shared-schema convention: check for
+    // `<actionsDir>/schemas/<basename>.ts` (or .tsx/.js/.jsx).
+    // Skip when actions live in subdirs (`schemas/` is flat by convention).
+    const schemaFilePath = name.includes('/') ? undefined : detectSchemaFile(actionsDir, basename)
     for (const exportName of exportNames) {
       const proxyKey = exportName === 'default' ? name : exportName
       if (seenNames.has(proxyKey)) {
@@ -130,13 +147,17 @@ export function scanServerActionsEnriched(serverDir: string): ActionManifestEntr
         )
       }
       seenNames.add(proxyKey)
-      entries.push({
+      const entry: ActionManifestEntry = {
         name: proxyKey,
         filePath: absPath,
         urlPath: `/api/__actions/${name}/${exportName}`,
         accept,
         hasInput,
-      })
+      }
+      if (schemaFilePath !== undefined) {
+        entry.schemaFilePath = schemaFilePath
+      }
+      entries.push(entry)
     }
   })
 
@@ -188,6 +209,21 @@ function extractActionExportNames(stripped: string): string[] {
   }
   if (names.size === 0) names.add('default')
   return [...names]
+}
+
+/**
+ * P#4 plugin-forms shared-schema convention helper (per plan p4-plugin-forms v1.1 T1.1).
+ * Returns the resolved path to `<actionsDir>/schemas/<basename>.<ext>` if it exists.
+ * Tries `.ts`, `.tsx`, `.js`, `.jsx` in that order. Returns undefined when no match.
+ */
+function detectSchemaFile(actionsDir: string, basename: string): string | undefined {
+  const schemasDir = join(actionsDir, 'schemas')
+  if (!existsSync(schemasDir)) return undefined
+  for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
+    const candidate = join(schemasDir, `${basename}${ext}`)
+    if (existsSync(candidate)) return candidate
+  }
+  return undefined
 }
 
 function stripComments(source: string): string {
