@@ -1,8 +1,8 @@
-# `@usetheo/ui` — ThemeSwitcher hydration mismatch on SSR
+# `@theokit/ui` — ThemeSwitcher hydration mismatch on SSR
 
 **Filed by:** TheoKit framework integration team
-**Affected version:** `@usetheo/ui@0.6.2-next.0` (latest as of 2026-05-23) — likely all prior `0.x` versions with the same `useState(() => localStorage.getItem(...))` pattern
-**Affected consumers:** any SSR'd app using `<ThemeSwitcher>` or `<TheoUIProvider>` from `@usetheo/ui` (verified in `theokit` template-default + full-stack-agent example)
+**Affected version:** `@theokit/ui@0.6.2-next.0` (latest as of 2026-05-23) — likely all prior `0.x` versions with the same `useState(() => localStorage.getItem(...))` pattern
+**Affected consumers:** any SSR'd app using `<ThemeSwitcher>` or `<TheoUIProvider>` from `@theokit/ui` (verified in `theokit` template-default + full-stack-agent example)
 **Severity:** HIGH — React hydration error in every SSR app the moment the user changes themes, full client re-render, console error in every page load
 
 ---
@@ -34,7 +34,7 @@ The `ThemeProvider` initializes state via `useState(() => fn())` where `fn()` re
 **Exact code (you wrote):**
 
 ```js
-// node_modules/@usetheo/ui/dist/index.js
+// node_modules/@theokit/ui/dist/index.js
 const [themeName, setThemeName] = useState(() => {
   if (typeof window === "undefined" || !storageKey) return defaultTheme;
   try {
@@ -197,7 +197,7 @@ pnpm dev
 
 ## Repro environment
 
-- `@usetheo/ui@0.6.2-next.0`
+- `@theokit/ui@0.6.2-next.0`
 - `theokit@workspace:*` (current HEAD)
 - React 19.0.0
 - Node 22.x, pnpm 9.15

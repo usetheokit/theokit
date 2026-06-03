@@ -11,7 +11,7 @@ Edge cases encontrados: 2 (MUST FIX: 1, SHOULD TEST: 0, DOCUMENT: 1)
 - **Família:** Boundary / Resource
 - **Cenário:** The package name `theo` on npm may already be registered by someone else. If it is, `npm publish` will fail with a 403 error. The plan assumes the name is available but never checks.
 - **Impacto:** Publish fails. Need to either: use a scoped name (`@theo/framework`), negotiate the name, or rename.
-- **Fix sugerido:** CONFIRMED: `theo` is taken (Salesforce, 109 versions). `create-theo` also exists (5 versions, usetheo.dev). Options: (a) Use scoped `@usetheo/theo` + `@usetheo/create-theo`, (b) Use `theo-framework` + `create-theo-app`, (c) Contact usetheo.dev owner (may be same project). User must decide package names before publish.
+- **Fix sugerido:** CONFIRMED: `theo` is taken (Salesforce, 109 versions). `create-theo` also exists (5 versions, usetheo.dev). Options: (a) Use scoped `@theokit/theo` + `@theokit/create-theo`, (b) Use `theo-framework` + `create-theo-app`, (c) Contact usetheo.dev owner (may be same project). User must decide package names before publish.
 
 ## DOCUMENT
 

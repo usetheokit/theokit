@@ -54,9 +54,9 @@ The plan's "local validation BEFORE CI" gate (ADR D5) earned its keep — 4 real
 `fixtures/template-postgres/server/routes/users.ts` GET handler wrapped the array in an object; spec asserted `Array.isArray`. Inconsistent with `template-api-only/server/routes/users.ts` which returns the array directly.
 **Fix:** Aligned `template-postgres` to return `allUsers` directly.
 
-### Bug 3 — `@usetheo/ui` missing from `template-saas` fixture deps
-`fixtures/template-saas/app/page.tsx` imports `@usetheo/ui` but the package was NOT in `fixtures/template-saas/package.json` dependencies. Vite Pre-transform error blocked rendering → h1 never appeared → home page spec failed.
-**Fix:** Added `"@usetheo/ui": "^0.11.0-next.0"` to `fixtures/template-saas/package.json` AND registered 4 template fixtures in `pnpm-workspace.yaml` (the 4 were not in the workspace, so the dep change wouldn't have installed otherwise — see edge-case review EC-2).
+### Bug 3 — `@theokit/ui` missing from `template-saas` fixture deps
+`fixtures/template-saas/app/page.tsx` imports `@theokit/ui` but the package was NOT in `fixtures/template-saas/package.json` dependencies. Vite Pre-transform error blocked rendering → h1 never appeared → home page spec failed.
+**Fix:** Added `"@theokit/ui": "^0.11.0-next.0"` to `fixtures/template-saas/package.json` AND registered 4 template fixtures in `pnpm-workspace.yaml` (the 4 were not in the workspace, so the dep change wouldn't have installed otherwise — see edge-case review EC-2).
 
 ### Bug 4 — `template-saas` spec sent `username` field but route expects `email`
 `tests/e2e/template-saas.spec.ts:33` posted `{ username: 'alice', password }` but `fixtures/template-saas/server/routes/login.ts` `body` schema is `{ email: z.string().email(), password: z.string().min(1) }`. Route returned 400 (validation error); spec accepted only `[200, 401]`.

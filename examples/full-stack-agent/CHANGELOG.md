@@ -1,4 +1,4 @@
-# @usetheo/example-full-stack-agent
+# @theokit/example-full-stack-agent
 
 ## 0.0.1
 

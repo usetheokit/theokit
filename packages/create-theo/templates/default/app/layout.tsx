@@ -1,4 +1,4 @@
-import '@usetheo/ui/styles.css'
+import '@theokit/ui/styles.css'
 
 import { Outlet } from 'react-router'
 import {
@@ -11,7 +11,7 @@ import {
   Badge,
   CostMeter,
   type AgentProfileDescriptor,
-} from '@usetheo/ui'
+} from '@theokit/ui'
 import { Bot, MessageSquare, History, Settings } from 'lucide-react'
 
 const AGENTS: AgentProfileDescriptor[] = [

@@ -187,9 +187,9 @@ function scanHtmlFile(file: string, rel: string, content: string, out: Violation
 }
 
 /**
- * T4.1 — Zero-config hint: consumer has @usetheo/ui in deps AND a manual
- * tailwind.config.* that does NOT import the @usetheo/ui preset. Suggest
- * extending via `import preset from '@usetheo/ui/preset'`.
+ * T4.1 — Zero-config hint: consumer has @theokit/ui in deps AND a manual
+ * tailwind.config.* that does NOT import the @theokit/ui preset. Suggest
+ * extending via `import preset from '@theokit/ui/preset'`.
  */
 function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
   const pkgPath = resolve(cwd, 'package.json')
@@ -201,7 +201,7 @@ function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
     return
   }
   const hasUi =
-    Boolean(pkg.dependencies?.['@usetheo/ui']) || Boolean(pkg.devDependencies?.['@usetheo/ui'])
+    Boolean(pkg.dependencies?.['@theokit/ui']) || Boolean(pkg.devDependencies?.['@theokit/ui'])
   if (!hasUi) return
 
   for (const ext of ['.ts', '.js', '.mjs', '.cjs']) {
@@ -213,14 +213,14 @@ function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
     } catch {
       continue
     }
-    if (content.includes('@usetheo/ui/preset')) return // already using preset
+    if (content.includes('@theokit/ui/preset')) return // already using preset
     out.push({
       file: `tailwind.config${ext}`,
       line: 1,
       rule: 'zero-config-tailwind-suggest',
       message:
-        '@usetheo/ui detected with a manual tailwind.config — extend with the UI preset to keep theme tokens in sync.',
-      fix: "import preset from '@usetheo/ui/preset'; export default { presets: [preset], content: [...] }",
+        '@theokit/ui detected with a manual tailwind.config — extend with the UI preset to keep theme tokens in sync.',
+      fix: "import preset from '@theokit/ui/preset'; export default { presets: [preset], content: [...] }",
     })
     return
   }

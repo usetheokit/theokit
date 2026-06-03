@@ -7,7 +7,7 @@ import {
   InMemoryUsageStorage,
   type AgentEvent,
 } from 'theokit/server'
-import { InMemoryConversationStorage } from '@usetheo/sdk'
+import { InMemoryConversationStorage } from '@theokit/sdk'
 
 import { buildTools } from '../tools/index.js'
 
@@ -20,7 +20,7 @@ const usageStorage = new InMemoryUsageStorage()
  *
  *   • defineAgentEndpoint    — wraps the async generator into SSE.
  *   • createConversationHistory — agentId resolution + cookie bridge
- *                                 + Agent.getOrCreate from @usetheo/sdk.
+ *                                 + Agent.getOrCreate from @theokit/sdk.
  *   • streamAgentRun          — SDK Run.stream → AgentEvent SSE.
  *   • defineAgentTool × 8     — via buildTools(conversationId).
  *

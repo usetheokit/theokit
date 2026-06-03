@@ -8,8 +8,8 @@
 
 export interface SyncTemplatesTruth {
   theokit?: string
-  '@usetheo/sdk'?: string
-  '@usetheo/ui'?: string
+  '@theokit/sdk'?: string
+  '@theokit/ui'?: string
 }
 
 export interface SyncDriftEntry {

@@ -24,7 +24,7 @@ export function installGracefulShutdown(server: HttpServer): void {
       // Lazy-import SDK only at shutdown time to avoid forcing the dep on
       // apps that don't use agents at all.
       try {
-        const sdk = (await import('@usetheo/sdk').catch(() => null)) as {
+        const sdk = (await import('@theokit/sdk').catch(() => null)) as {
           Agent?: { registry?: { evictAll?: () => Promise<void> } }
         } | null
         if (sdk?.Agent?.registry?.evictAll !== undefined) {

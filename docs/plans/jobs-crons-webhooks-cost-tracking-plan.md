@@ -9,7 +9,7 @@ What exists today (confirmed via grep on `2026-05-24`):
 - **Zero cron primitives** in `packages/theo/src/`. The only "enqueue" in the codebase is `controller.enqueue(encodeSSE(...))` in `define-agent-endpoint.ts` (ReadableStream SSE — unrelated to job queues).
 - **Zero job/queue primitives.** No `JobBackend`, no `ctx.queue`, no outbox machinery.
 - **Zero webhook primitives.** `defineRoute` exposes `csrf: false` opt-out documented as "for endpoints that legitimately receive third-party POSTs (Stripe webhooks, GitHub webhooks, OAuth callbacks)" (`packages/theo/src/server/define/define-route.ts:14-22`), but every user has to manually parse signatures, re-read raw body, compute HMAC, handle timing-safe comparison, validate replay windows — security footgun territory.
-- **Zero cost tracking** for agent runs. The client-side `<CostMeter>` from `@usetheo/ui` exists; server-side primitive does not.
+- **Zero cost tracking** for agent runs. The client-side `<CostMeter>` from `@theokit/ui` exists; server-side primitive does not.
 
 Why now (evidence-driven):
 

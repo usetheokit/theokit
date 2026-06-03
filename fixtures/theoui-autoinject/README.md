@@ -1,16 +1,16 @@
 # theoui-autoinject
 
-Isolated fixture proving TheoUI auto-injection works **without any user-code import** of `@usetheo/ui`.
+Isolated fixture proving TheoUI auto-injection works **without any user-code import** of `@theokit/ui`.
 
 ## What this fixture exercises
 
-When `@usetheo/ui` is declared in `package.json` AND `ui` is enabled in `theo.config.ts`:
+When `@theokit/ui` is declared in `package.json` AND `ui` is enabled in `theo.config.ts`:
 
-1. The Vite plugin emits `import '@usetheo/ui/styles.css'` into the generated entry-client
-2. Plus `import '@usetheo/ui/fonts.css'` (or `fonts-cdn.css` based on config)
+1. The Vite plugin emits `import '@theokit/ui/styles.css'` into the generated entry-client
+2. Plus `import '@theokit/ui/fonts.css'` (or `fonts-cdn.css` based on config)
 3. Plus the `<TheoUIProvider theme={{ defaultTheme: <theme> }}>` wrap around `<RouterProvider>`
 
-The user's `app/page.tsx` doesn't have to touch `@usetheo/ui`. That's the point — auto-injection.
+The user's `app/page.tsx` doesn't have to touch `@theokit/ui`. That's the point — auto-injection.
 
 ## Config
 
@@ -22,7 +22,7 @@ defineConfig({
 
 ## Conservative gate
 
-Auto-injection requires `@usetheo/ui` to be **declared** in `package.json` (deps / devDeps / peerDeps). Prevents monorepos from accidentally detecting the package at the workspace root.
+Auto-injection requires `@theokit/ui` to be **declared** in `package.json` (deps / devDeps / peerDeps). Prevents monorepos from accidentally detecting the package at the workspace root.
 
 ## Run
 

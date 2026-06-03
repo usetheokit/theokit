@@ -43,7 +43,7 @@ export default defineConfig({
       testMatch: 'template-default.spec.ts',
     },
     {
-      // T2.2 — Canonical chat.ts via @usetheo/sdk Agent.prompt + throwOnError.
+      // T2.2 — Canonical chat.ts via @theokit/sdk Agent.prompt + throwOnError.
       // Reuses template-default fixture on a separate port; fake ANTHROPIC_API_KEY
       // makes Anthropic return 401 → SDK throws AgentRunError → SSE error event.
       name: 'template-default-canonical-chat',

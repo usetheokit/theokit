@@ -59,7 +59,7 @@ function emit_result() {
 # Returns 0 if THEOKIT_TEST_RESPONSE_OVERRIDE found, 1 otherwise.
 function sdk_supports_d14() {
   local sandbox="$1"
-  local sdk_dist="$sandbox/node_modules/@usetheo/sdk/dist/index.js"
+  local sdk_dist="$sandbox/node_modules/@theokit/sdk/dist/index.js"
   [[ -f "$sdk_dist" ]] || return 1
   grep -q "THEOKIT_TEST_RESPONSE_OVERRIDE" "$sdk_dist" 2>/dev/null
 }

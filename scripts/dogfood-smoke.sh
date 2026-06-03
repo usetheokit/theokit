@@ -162,9 +162,9 @@ else
   fail "registry still pointing at non-existing npm packages"
 fi
 
-# 16. TheoUI default integration — template ships @usetheo/ui (theoui plan T3.1)
-echo "→ TheoUI default template (@usetheo/ui in default scaffold)"
-if grep -q '"@usetheo/ui"' packages/create-theo/templates/default/package.json.tmpl \
+# 16. TheoUI default integration — template ships @theokit/ui (theoui plan T3.1)
+echo "→ TheoUI default template (@theokit/ui in default scaffold)"
+if grep -q '"@theokit/ui"' packages/create-theo/templates/default/package.json.tmpl \
    && grep -qE "ChatThread|ChatMessage|AgentTimeline" packages/create-theo/templates/default/app/page.tsx \
    && test -f packages/create-theo/templates/default/server/routes/chat.ts; then
   pass "default scaffold = agent surface (TheoUI + mock chat SSE)"
@@ -176,7 +176,7 @@ fi
 echo "→ TheoUI auto-injection (detect + CSS + Provider wrap)"
 if test -f packages/theo/src/vite-plugin/theoui-detect.ts \
    && grep -q "TheoUIProvider" packages/theo/src/router/entry.ts \
-   && grep -q "@usetheo/ui/styles.css" packages/theo/src/router/entry.ts; then
+   && grep -q "@theokit/ui/styles.css" packages/theo/src/router/entry.ts; then
   pass "vite-plugin auto-detects + injects CSS + Provider"
 else
   fail "TheoUI auto-injection not wired in vite-plugin / entry-client"
@@ -265,10 +265,10 @@ fi
 echo "→ use-agent-stream-react fixture (T4.2)"
 if [ -f fixtures/use-agent-stream-react/app/page.tsx ] \
    && grep -q "useAgentStream" fixtures/use-agent-stream-react/app/page.tsx \
-   && ! grep -q "@usetheo/ui" fixtures/use-agent-stream-react/app/page.tsx; then
+   && ! grep -q "@theokit/ui" fixtures/use-agent-stream-react/app/page.tsx; then
   pass "use-agent-stream-react: hook in plain React, no TheoUI"
 else
-  fail "use-agent-stream-react fixture missing or coupled to @usetheo/ui"
+  fail "use-agent-stream-react fixture missing or coupled to @theokit/ui"
 fi
 
 # 27. batching (T4.3)

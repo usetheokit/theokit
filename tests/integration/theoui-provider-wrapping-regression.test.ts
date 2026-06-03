@@ -1,7 +1,7 @@
 /**
  * Regression — chat surface root layouts:
  *   1. MUST NOT manually wrap `<TheoUIProvider>` — the framework
- *      auto-injects it via `theokit/vite-plugin` when @usetheo/ui is
+ *      auto-injects it via `theokit/vite-plugin` when @theokit/ui is
  *      detected. Double providers reset persisted theme state.
  *   2. MUST render `<ThemeScript />` — emits an inline `<script>` that
  *      runs BEFORE hydration and sets `data-theme` / `data-mode` on

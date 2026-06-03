@@ -1,7 +1,7 @@
 import { test, expect, type ConsoleMessage, type Page } from '@playwright/test'
 
 /**
- * T2.2 — Canonical chat.ts via `@usetheo/sdk` Agent.prompt + throwOnError.
+ * T2.2 — Canonical chat.ts via `@theokit/sdk` Agent.prompt + throwOnError.
  *
  * Boots `fixtures/template-default` on port 3470 with a deterministic fake
  * Anthropic key. Validates the full UI roundtrip:
@@ -41,7 +41,7 @@ function collectConsoleErrors(page: Page): string[] {
   return errors
 }
 
-test.describe('Canonical chat.ts — wired via @usetheo/sdk', () => {
+test.describe('Canonical chat.ts — wired via @theokit/sdk', () => {
   test.setTimeout(30_000)
 
   test('chat composer is rendered on initial load (proves SDK wires into the route without crash)', async ({
@@ -62,7 +62,7 @@ test.describe('Canonical chat.ts — wired via @usetheo/sdk', () => {
   //   2. POST hits the SDK, returns 401, yields { type: 'error', message }
   //      SSE event. Client receives it.
   //   3. Template renders error events via `<AgentErrorCard kind="model" />`
-  //      from `@usetheo/ui`. The current TheoUI version has a broken
+  //      from `@theokit/ui`. The current TheoUI version has a broken
   //      `kind="model"` path — the icon component is undefined, React
   //      explodes with "Element type is invalid... Check the render method
   //      of AgentErrorCard". Body text becomes "Unexpected Application Error!".

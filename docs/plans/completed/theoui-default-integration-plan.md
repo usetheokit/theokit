@@ -1,15 +1,15 @@
 # Plan: TheoUI Default Integration
 
-> **Version 1.0** — Faz `@usetheo/ui` ser o padrão visual do TheoKit. `npm create theokit my-app` produz um projeto com TheoUI já instalado, CSS auto-importado, `<ThemeProvider />` wrappado no entry-client e um scaffold que mostra uma agent surface real (timeline + composer + stream), não um "Hello Theo" cru. Quem não quer TheoUI passa `--bare`. Os dois projetos foram criados juntos para AI agents — esta integração formaliza a relação. Resultado: time-to-agent-UI cai de "horas de wiring" para "30 segundos do `create`".
+> **Version 1.0** — Faz `@theokit/ui` ser o padrão visual do TheoKit. `npm create theokit my-app` produz um projeto com TheoUI já instalado, CSS auto-importado, `<ThemeProvider />` wrappado no entry-client e um scaffold que mostra uma agent surface real (timeline + composer + stream), não um "Hello Theo" cru. Quem não quer TheoUI passa `--bare`. Os dois projetos foram criados juntos para AI agents — esta integração formaliza a relação. Resultado: time-to-agent-UI cai de "horas de wiring" para "30 segundos do `create`".
 
 ## Context
 
-TheoKit e `@usetheo/ui` são irmãos no monorepo `usetheo/` (referência em `../../CLAUDE.md`):
+TheoKit e `@theokit/ui` são irmãos no monorepo `usetheo/` (referência em `../../CLAUDE.md`):
 
 - **TheoKit** (`packages/theo/`, `packages/create-theo/`) — meta-framework Vite + React 19 para "build the app your agent lives in".
-- **`@usetheo/ui`** (`/home/paulo/Projetos/usetheo/theo-ui/`) — React component library, 102 componentes com foco em AI-agent surfaces e PaaS dashboards. Peer-dep React only. Framework-agnostic.
+- **`@theokit/ui`** (`/home/paulo/Projetos/usetheo/theo-ui/`) — React component library, 102 componentes com foco em AI-agent surfaces e PaaS dashboards. Peer-dep React only. Framework-agnostic.
 
-Hoje a integração é zero: `create-theokit` instala apenas `theokit` + `react`. User que quer TheoUI faz `pnpm add @usetheo/ui`, importa CSS manual, wrap `<ThemeProvider />` manual, escreve scaffold do zero. Atrito desnecessário dado que os dois foram **criados para trabalhar juntos**.
+Hoje a integração é zero: `create-theokit` instala apenas `theokit` + `react`. User que quer TheoUI faz `pnpm add @theokit/ui`, importa CSS manual, wrap `<ThemeProvider />` manual, escreve scaffold do zero. Atrito desnecessário dado que os dois foram **criados para trabalhar juntos**.
 
 Evidência:
 - TheoUI README: *"Built for AI agents. Primitives for skills, cron jobs, permission matrices, MCP servers, memory editing, hook config, audit logs, model cards, token usage charts, sub-agent dispatch."*
@@ -22,7 +22,7 @@ Evidência:
 
 Metas mensuráveis:
 
-- [ ] Template `default` lista `@usetheo/ui` em `dependencies`
+- [ ] Template `default` lista `@theokit/ui` em `dependencies`
 - [ ] `<ThemeProvider />` envolve `<RouterProvider />` no entry-client gerado pelo TheoKit Vite plugin
 - [ ] CSS imports (`styles.css`, `fonts.css`) auto-injetados pelo vite-plugin (consumer não escreve)
 - [ ] Default `app/page.tsx` mostra `<AgentTimeline />` + `<AgentComposer />` + `<AgentStream />` num layout funcional
@@ -30,27 +30,27 @@ Metas mensuráveis:
 - [ ] `theo.config.ts` aceita opcional `ui: false` (default = on) para apps existentes opt-out
 - [ ] `defineAgentEndpoint` helper em `theokit/server` casa com `<AgentStream>` do TheoUI via tipos compartilhados
 - [ ] `useAgentStream` hook em `theokit/client` consome o endpoint e expõe eventos
-- [ ] Type `AgentEvent` é re-exportado de `@usetheo/ui/types` pelo TheoKit — single source of truth
+- [ ] Type `AgentEvent` é re-exportado de `@theokit/ui/types` pelo TheoKit — single source of truth
 - [ ] Dogfood QA ≥ 85 com 4 checks novos (TheoUI instalado, CSS injetado, ThemeProvider presente, agent scaffold renderiza)
 
 ## ADRs
 
 ### D1 — TheoUI é dep DIRETA do template default, não peer-dep do `theokit`
 
-**Decisão:** `@usetheo/ui` entra como `dependencies` no `package.json.tmpl` do template `default`. Não é peer-dep do `theokit` core. Apps gerados com `--bare` não recebem.
+**Decisão:** `@theokit/ui` entra como `dependencies` no `package.json.tmpl` do template `default`. Não é peer-dep do `theokit` core. Apps gerados com `--bare` não recebem.
 
 **Racional:** Peer-dep no core obrigaria TODO usuário a instalar TheoUI, mesmo quando indesejado (e.g., user que vai usar UI custom ou Tremor). Dep no template é opt-in por escolha de template, não obrigatório. Mantém `theokit` package leve e framework-agnostic no que toca o lado UI.
 
 **Consequências:**
 - Apps gerados com template default têm TheoUI; apps `--bare` não
-- Atualizações de `@usetheo/ui` são responsabilidade do app gerado (não auto-sync com versão de `theokit`)
-- Documentar versionamento: TheoKit `0.2.x` testado contra `@usetheo/ui 0.1.x`
+- Atualizações de `@theokit/ui` são responsabilidade do app gerado (não auto-sync com versão de `theokit`)
+- Documentar versionamento: TheoKit `0.2.x` testado contra `@theokit/ui 0.1.x`
 
 ### D2 — Vite plugin auto-injeta CSS e ThemeProvider quando detecta TheoUI instalado
 
-**Decisão:** `theoPlugin` ao boot do `configResolved` checa `node_modules/@usetheo/ui` existence. Quando presente E `config.ui !== false`, gera `entry-client` com:
-1. `import '@usetheo/ui/styles.css'`
-2. `import '@usetheo/ui/fonts.css'` (ou `fonts-cdn.css` conforme `config.ui.fonts`)
+**Decisão:** `theoPlugin` ao boot do `configResolved` checa `node_modules/@theokit/ui` existence. Quando presente E `config.ui !== false`, gera `entry-client` com:
+1. `import '@theokit/ui/styles.css'`
+2. `import '@theokit/ui/fonts.css'` (ou `fonts-cdn.css` conforme `config.ui.fonts`)
 3. Wrap `RouterProvider` em `<ThemeProvider theme={config.ui.theme ?? 'violet-forge'}>`
 
 **Racional:** Detection-based ao invés de flag explicit é a versão mais "magic" — user não precisa setar nada. Combinado com `config.ui = false` opt-out, atende dev/prod parity sem inflar o config.
@@ -60,14 +60,14 @@ Metas mensuráveis:
 - Apps sem TheoUI instalado (e.g., `--bare` ou removido depois) não pagam custo — detection retorna false
 - O entry-client gerado tem 3 linhas a mais quando TheoUI presente; backward-compatible
 
-### D3 — `AgentEvent` type mora em `@usetheo/ui/types`, TheoKit re-exporta
+### D3 — `AgentEvent` type mora em `@theokit/ui/types`, TheoKit re-exporta
 
-**Decisão:** O shape `AgentEvent` (e variantes: tool_call, tool_result, message, handoff, error) é definido no `@usetheo/ui/types` (já existe lá). TheoKit `defineAgentEndpoint` e `useAgentStream` consomem via re-export: `export type { AgentEvent } from '@usetheo/ui/types'`.
+**Decisão:** O shape `AgentEvent` (e variantes: tool_call, tool_result, message, handoff, error) é definido no `@theokit/ui/types` (já existe lá). TheoKit `defineAgentEndpoint` e `useAgentStream` consomem via re-export: `export type { AgentEvent } from '@theokit/ui/types'`.
 
 **Racional:** O shape é primariamente visual — quem desenha define. Single source of truth. Evita dois lugares atualizando o mesmo enum. Permite TheoUI evoluir variantes sem mudar TheoKit.
 
 **Consequências:**
-- TheoKit ganha dep transitiva sobre `@usetheo/ui/types` em `theokit/server` e `theokit/client`
+- TheoKit ganha dep transitiva sobre `@theokit/ui/types` em `theokit/server` e `theokit/client`
 - Tipo `AgentEvent` é leve (~50 LOC) — não inflará bundle
 - Quem usa `theokit/server` sem TheoUI install ainda tem tipo disponível via type-only import (não vai pra runtime)
 
@@ -84,7 +84,7 @@ Metas mensuráveis:
 
 ### D5 — `--bare` flag remove TheoUI dep mas mantém todo o resto do template default
 
-**Decisão:** `--bare` é uma transformação no template default que: (a) remove `@usetheo/ui` de `dependencies`, (b) substitui `app/page.tsx` por um Hello Theo cru, (c) substitui `app/layout.tsx` por wrapper neutro. Outros templates (`dashboard`, `postgres`, etc.) ignoram `--bare` (são templates separados).
+**Decisão:** `--bare` é uma transformação no template default que: (a) remove `@theokit/ui` de `dependencies`, (b) substitui `app/page.tsx` por um Hello Theo cru, (c) substitui `app/layout.tsx` por wrapper neutro. Outros templates (`dashboard`, `postgres`, etc.) ignoram `--bare` (são templates separados).
 
 **Racional:** Manter `default` como single source of truth. `--bare` é variação programática, não template duplicado.
 
@@ -103,9 +103,9 @@ Metas mensuráveis:
 - Browser support: `ReadableStream` em `fetch.body` disponível em todos browsers modernos (Chrome 105+, Firefox 102+, Safari 14.1+); fine para target moderno do React 19
 - Test mocking: mockar `fetch` retornando `Response` com `ReadableStream` body é mais verbose que mockar `EventSource` — aceitar overhead
 
-### D6 — Versão pin: TheoKit `0.2.x` instala `@usetheo/ui ^0.2.x`
+### D6 — Versão pin: TheoKit `0.2.x` instala `@theokit/ui ^0.2.x`
 
-**Decisão:** `package.json.tmpl` lista `@usetheo/ui` com range major-locked: `"@usetheo/ui": "^0.2.0"`. Quando TheoKit bump para 0.3.0, atualizamos o range. Documentar matriz de compat em `docs/`.
+**Decisão:** `package.json.tmpl` lista `@theokit/ui` com range major-locked: `"@theokit/ui": "^0.2.0"`. Quando TheoKit bump para 0.3.0, atualizamos o range. Documentar matriz de compat em `docs/`.
 
 **Racional:** Two-package coordination requer pin. TheoUI 0.1.0-next.0 é a versão atual; vamos esperar 0.2.0 estável antes de pinar a template. Por enquanto template lista `^0.2.0-next` ou `latest` durante o período pre-stable.
 
@@ -202,7 +202,7 @@ BDD scenarios:
 
 ## Phase 1: Type bridge — `AgentEvent` re-export
 
-**Objective:** Estabelecer `@usetheo/ui/types` como source of truth para `AgentEvent`. TheoKit re-exporta.
+**Objective:** Estabelecer `@theokit/ui/types` como source of truth para `AgentEvent`. TheoKit re-exporta.
 
 ### T1.1 — Re-export type AgentEvent via `theokit/server` e `theokit/client`
 
@@ -214,25 +214,25 @@ TheoUI já tem `AgentEvent` type em `src/components/composites/agent-stream/` e 
 
 #### Files to edit
 ```
-packages/theo/package.json — adicionar @usetheo/ui como devDependency (types-only para build)
-packages/theo/src/server/index.ts — re-export type AgentEvent from '@usetheo/ui/types'
+packages/theo/package.json — adicionar @theokit/ui como devDependency (types-only para build)
+packages/theo/src/server/index.ts — re-export type AgentEvent from '@theokit/ui/types'
 packages/theo/src/client/index.ts — same re-export
 tests/unit/agent-event-type.test-d.ts — (NEW) type test
 ```
 
 #### Deep file dependency analysis
-- `@usetheo/ui` como `devDependency` no `theokit` package (types só) — não infla bundle runtime
+- `@theokit/ui` como `devDependency` no `theokit` package (types só) — não infla bundle runtime
 - Re-export usa `export type` para garantir erasure em runtime
-- Downstream: apps que importam `AgentEvent` from `theokit/server` ganham acesso sem precisar de `@usetheo/ui/types` install explícito
+- Downstream: apps que importam `AgentEvent` from `theokit/server` ganham acesso sem precisar de `@theokit/ui/types` install explícito
 
 #### Deep Dives
-- **Type-only re-export:** `export type { AgentEvent } from '@usetheo/ui/types'`. TypeScript erasure garante que nenhum require/import runtime acontece.
-- **Resolução em `--bare` apps:** `--bare` projects sem `@usetheo/ui` instalado importam `AgentEvent` via TheoKit. Como é type-only, funciona — bundler tree-shakes.
+- **Type-only re-export:** `export type { AgentEvent } from '@theokit/ui/types'`. TypeScript erasure garante que nenhum require/import runtime acontece.
+- **Resolução em `--bare` apps:** `--bare` projects sem `@theokit/ui` instalado importam `AgentEvent` via TheoKit. Como é type-only, funciona — bundler tree-shakes.
 - **Edge case:** Se TheoUI muda shape em breaking way, TheoKit precisa bumpar `peerDependenciesMeta` matrix. Coordenar via CHANGELOG.
 
 #### Tasks
-1. Adicionar `@usetheo/ui` como `devDependency` em `packages/theo/package.json`
-2. Adicionar `export type { AgentEvent } from '@usetheo/ui/types'` em `server/index.ts` e `client/index.ts`
+1. Adicionar `@theokit/ui` como `devDependency` em `packages/theo/package.json`
+2. Adicionar `export type { AgentEvent } from '@theokit/ui/types'` em `server/index.ts` e `client/index.ts`
 3. Criar `tests/unit/agent-event-type.test-d.ts` com expectTypeOf
 4. CHANGELOG entry
 
@@ -242,7 +242,7 @@ tests/unit/agent-event-type.test-d.ts — (NEW) type test
 RED:     test_agent_event_type_importable_from_server() — Given import { AgentEvent } from 'theokit/server', When tsc, Then no error
 RED:     test_agent_event_type_importable_from_client() — same for theokit/client
 RED:     test_agent_event_has_expected_shape() — Given AgentEvent, Then variants include 'tool_call' | 'tool_result' | 'message' | 'error'
-RED:     test_agent_event_erased_at_runtime() — Given build, When inspect dist, Then no runtime import of @usetheo/ui (type-only)
+RED:     test_agent_event_erased_at_runtime() — Given build, When inspect dist, Then no runtime import of @theokit/ui (type-only)
 GREEN:   Add devDep + re-export + type test
 REFACTOR: None expected
 VERIFY:  npx vitest run tests/unit/agent-event-type.test-d.ts
@@ -256,7 +256,7 @@ BDD scenarios:
 
 #### Acceptance Criteria
 - [ ] `import type { AgentEvent } from 'theokit/server'` compila
-- [ ] Runtime dist não importa `@usetheo/ui`
+- [ ] Runtime dist não importa `@theokit/ui`
 - [ ] Pass: tsc, lint, vitest
 - [ ] CHANGELOG entry
 
@@ -268,12 +268,12 @@ BDD scenarios:
 
 ## Phase 2: Vite plugin auto-wire (CSS + ThemeProvider)
 
-**Objective:** Quando `@usetheo/ui` está instalado E `config.ui !== false`, vite-plugin injeta CSS imports e wrap em ThemeProvider no entry-client.
+**Objective:** Quando `@theokit/ui` está instalado E `config.ui !== false`, vite-plugin injeta CSS imports e wrap em ThemeProvider no entry-client.
 
 ### T2.1 — Detect TheoUI presence em `configResolved`
 
 #### Objective
-`vite-plugin/index.ts` no `configResolved` checa `node_modules/@usetheo/ui` existence + `config.ui !== false`. Resultado cacheado em closure.
+`vite-plugin/index.ts` no `configResolved` checa `node_modules/@theokit/ui` existence + `config.ui !== false`. Resultado cacheado em closure.
 
 #### Evidence
 ADR D2 requer detection-based auto-wire. Sem detection, falhas silenciosas quando user desinstala TheoUI mas mantém config default.
@@ -290,14 +290,14 @@ tests/unit/vite-plugin-theoui-detect.test.ts — (NEW)
 - `config/schema.ts` adiciona Zod schema para `ui`. Default = on quando TheoUI presente.
 
 #### Deep Dives
-- **Detection (EC-1, MUST FIX):** usar `require.resolve('@usetheo/ui/package.json', { paths: [projectRoot] })` em vez de `existsSync(node_modules/...)`. Razão: em monorepos pnpm com hoist, TheoUI fica em `<workspace-root>/node_modules/`, não em `<projectRoot>/node_modules/`. `existsSync` falha silenciosamente; `require.resolve` respeita Node resolution algorithm e encontra. Wrappar em try/catch — `MODULE_NOT_FOUND` significa disabled.
+- **Detection (EC-1, MUST FIX):** usar `require.resolve('@theokit/ui/package.json', { paths: [projectRoot] })` em vez de `existsSync(node_modules/...)`. Razão: em monorepos pnpm com hoist, TheoUI fica em `<workspace-root>/node_modules/`, não em `<projectRoot>/node_modules/`. `existsSync` falha silenciosamente; `require.resolve` respeita Node resolution algorithm e encontra. Wrappar em try/catch — `MODULE_NOT_FOUND` significa disabled.
 - **Corrupted install (EC-5):** detection precisa também verificar que `package.json` resolve E tem `main` field válido. Se TheoUI dir existe mas package.json corrompido/faltando, `require.resolve` já trata.
 - **`ui: false` opt-out:** apps que querem UI custom (Tremor, MUI) setam `false` no config.
 - **Flag closure:** mesmo padrão do `pluginRunner` / `transformer` / `resolvedBatching`.
 
 #### Tasks
 1. Schema: adicionar `ui: z.union([z.literal(false), z.object({ theme: z.enum(['violet-forge', 'noir', 'paper']).optional(), fonts: z.enum(['bundled', 'cdn']).optional() })]).optional()` — **EC-9** valida enum de themes
-2. Vite plugin: detect via `require.resolve('@usetheo/ui/package.json', { paths: [projectRoot] })` (EC-1)
+2. Vite plugin: detect via `require.resolve('@theokit/ui/package.json', { paths: [projectRoot] })` (EC-1)
 3. Test unit verifica que detect retorna true/false corretamente
 4. Test verifica que `ui: false` força disabled mesmo com TheoUI presente
 5. Test verifica que pnpm hoist scenario (TheoUI em workspace root) ainda detecta (EC-1)
@@ -306,12 +306,12 @@ tests/unit/vite-plugin-theoui-detect.test.ts — (NEW)
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_detect_enabled_when_theoui_installed() — Given node_modules/@usetheo/ui exists, When plugin boot, Then theoUiEnabled === true
+RED:     test_detect_enabled_when_theoui_installed() — Given node_modules/@theokit/ui exists, When plugin boot, Then theoUiEnabled === true
 RED:     test_detect_disabled_when_theoui_missing() — Given no theoui in node_modules, When plugin boot, Then theoUiEnabled === false
 RED:     test_force_disabled_via_config_ui_false() — Given config.ui = false + theoui installed, When plugin boot, Then theoUiEnabled === false
 RED:     test_schema_rejects_invalid_ui_shape() — Given config.ui = 'string', When loadConfig, Then Zod error
 RED:     test_detect_works_in_pnpm_hoist_layout() — Given TheoUI at workspace-root/node_modules, project at workspace-root/apps/<x>, When plugin boot from app, Then theoUiEnabled === true via require.resolve (EC-1)
-RED:     test_detect_handles_corrupted_install() — Given node_modules/@usetheo/ui/ exists but package.json missing, When detect runs, Then theoUiEnabled === false without crash (EC-5)
+RED:     test_detect_handles_corrupted_install() — Given node_modules/@theokit/ui/ exists but package.json missing, When detect runs, Then theoUiEnabled === false without crash (EC-5)
 RED:     test_schema_validates_theme_against_known_list() — Given config.ui.theme = 'invalid-name', When loadConfig, Then Zod error listing valid themes (EC-9)
 GREEN:   Implement schema + detect via require.resolve
 REFACTOR: None expected
@@ -339,7 +339,7 @@ BDD scenarios:
 ### T2.2 — Inject CSS imports no entry-client
 
 #### Objective
-Quando `theoUiEnabled`, `generateEntryClient` emite `import '@usetheo/ui/styles.css'` + `import '@usetheo/ui/fonts.css'` (ou cdn variant).
+Quando `theoUiEnabled`, `generateEntryClient` emite `import '@theokit/ui/styles.css'` + `import '@theokit/ui/fonts.css'` (ou cdn variant).
 
 #### Evidence
 TheoUI requer CSS imports manuais. Auto-inject elimina passo manual do user.
@@ -357,10 +357,10 @@ tests/unit/entry-client-theoui-css.test.ts — (NEW)
 - Backward compat: sem opts.theoUi, comportamento atual preservado
 
 #### Deep Dives
-- **Side-effect imports:** CSS imports são side-effect — `import '@usetheo/ui/styles.css'`. Vite trata automaticamente como CSS injection.
+- **Side-effect imports:** CSS imports são side-effect — `import '@theokit/ui/styles.css'`. Vite trata automaticamente como CSS injection.
 - **Order:** CSS imports antes de qualquer outro import para evitar FOUC.
 - **fonts variant:** default `bundled` (mais reliable em offline). `cdn` opcional para apps que querem network-loaded fonts.
-- **EC-2 (MUST FIX) — Client-only emission:** CSS imports são side-effect Browser-only. `import '@usetheo/ui/styles.css'` em `entry-server.ts` (rodando em Node SSR) quebra build — Node não resolve `.css` natively. Por design, T2.2 toca APENAS `generateEntryClient`. `generateEntryServer` JAMAIS recebe CSS imports. Adicionar test explícito verificando que entry-server NÃO contém `@usetheo/ui/styles.css` mesmo com theoUi enabled + ssr: true.
+- **EC-2 (MUST FIX) — Client-only emission:** CSS imports são side-effect Browser-only. `import '@theokit/ui/styles.css'` em `entry-server.ts` (rodando em Node SSR) quebra build — Node não resolve `.css` natively. Por design, T2.2 toca APENAS `generateEntryClient`. `generateEntryServer` JAMAIS recebe CSS imports. Adicionar test explícito verificando que entry-server NÃO contém `@theokit/ui/styles.css` mesmo com theoUi enabled + ssr: true.
 
 #### Tasks
 1. Modificar `generateEntryClient` signature
@@ -371,10 +371,10 @@ tests/unit/entry-client-theoui-css.test.ts — (NEW)
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_entry_client_imports_styles_css_when_enabled() — Given theoUi enabled, When generateEntryClient, Then output contains "import '@usetheo/ui/styles.css'"
-RED:     test_entry_client_imports_fonts_bundled_by_default() — Given theoUi enabled, Then "import '@usetheo/ui/fonts.css'"
-RED:     test_entry_client_imports_fonts_cdn_when_configured() — Given theoUi.fonts = 'cdn', Then "import '@usetheo/ui/fonts-cdn.css'"
-RED:     test_entry_client_no_css_when_disabled() — Given theoUi disabled, Then no @usetheo/ui imports
+RED:     test_entry_client_imports_styles_css_when_enabled() — Given theoUi enabled, When generateEntryClient, Then output contains "import '@theokit/ui/styles.css'"
+RED:     test_entry_client_imports_fonts_bundled_by_default() — Given theoUi enabled, Then "import '@theokit/ui/fonts.css'"
+RED:     test_entry_client_imports_fonts_cdn_when_configured() — Given theoUi.fonts = 'cdn', Then "import '@theokit/ui/fonts-cdn.css'"
+RED:     test_entry_client_no_css_when_disabled() — Given theoUi disabled, Then no @theokit/ui imports
 RED:     test_entry_server_NEVER_imports_css_even_with_theoui_enabled() — Given theoUi enabled AND ssr: true, When generateEntryServer, Then output does NOT contain ".css" (EC-2)
 GREEN:   Implement emit logic — client-only CSS
 REFACTOR: None expected
@@ -430,7 +430,7 @@ tests/unit/entry-client-theoui-provider.test.ts — (NEW)
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_entry_client_imports_ThemeProvider_when_enabled() — Given theoUi enabled, Then template contains "import { ThemeProvider } from '@usetheo/ui'"
+RED:     test_entry_client_imports_ThemeProvider_when_enabled() — Given theoUi enabled, Then template contains "import { ThemeProvider } from '@theokit/ui'"
 RED:     test_entry_client_wraps_RouterProvider_in_ThemeProvider() — Given theoUi enabled, Then template wraps RouterProvider in ThemeProvider
 RED:     test_entry_client_uses_default_theme_violet_forge() — Given no config.ui.theme, Then template uses theme="violet-forge"
 RED:     test_entry_client_respects_custom_theme() — Given config.ui.theme = 'noir', Then template uses theme="noir"
@@ -444,7 +444,7 @@ BDD scenarios:
 - Happy: wrap correto, theme default
 - Validation: invalid theme → schema rejected (caught em T2.1)
 - Edge: SSR mode + theoUi — wrap funciona em hydrateRoot
-- Error: ThemeProvider não exportado por @usetheo/ui (versão errada) — error em runtime no app, não no template
+- Error: ThemeProvider não exportado por @theokit/ui (versão errada) — error em runtime no app, não no template
 
 #### Acceptance Criteria
 - [ ] Wrap correto
@@ -470,7 +470,7 @@ Hoje template default é `<h1>Hello Theo</h1>`. Atende zero ao pitch "AI agents"
 
 #### Files to edit
 ```
-packages/create-theo/templates/default/package.json.tmpl — adicionar @usetheo/ui
+packages/create-theo/templates/default/package.json.tmpl — adicionar @theokit/ui
 packages/create-theo/templates/default/app/layout.tsx — minimal wrapper (ThemeProvider vem do entry-client)
 packages/create-theo/templates/default/app/page.tsx — agent surface
 packages/create-theo/templates/default/server/routes/chat.ts — (NEW) mock agent endpoint retornando events estáticos
@@ -478,7 +478,7 @@ fixtures/create-theokit-default/ — (NEW) snapshot do scaffold gerado
 ```
 
 #### Deep file dependency analysis
-- `package.json.tmpl` ganha `"@usetheo/ui": "^0.2.0-next.0"` (range pin)
+- `package.json.tmpl` ganha `"@theokit/ui": "^0.2.0-next.0"` (range pin)
 - `app/page.tsx` usa Client Components — adicionar `"use client"` directive (React 19)
 - `server/routes/chat.ts` retorna SSE com 3 events estáticos para demo
 
@@ -488,7 +488,7 @@ fixtures/create-theokit-default/ — (NEW) snapshot do scaffold gerado
 - **Edge case:** apps com `--bare` recebem o `app/page.tsx` Hello Theo via transformação (T4.1).
 
 #### Tasks
-1. Atualizar `package.json.tmpl` com `@usetheo/ui`
+1. Atualizar `package.json.tmpl` com `@theokit/ui`
 2. Reescrever `app/page.tsx` com agent surface
 3. Criar mock `server/routes/chat.ts`
 4. Snapshot fixture do scaffold gerado
@@ -497,7 +497,7 @@ fixtures/create-theokit-default/ — (NEW) snapshot do scaffold gerado
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_scaffold_default_includes_usetheo_ui_dep() — Given scaffold default, When read package.json, Then "@usetheo/ui" in dependencies
+RED:     test_scaffold_default_includes_usetheo_ui_dep() — Given scaffold default, When read package.json, Then "@theokit/ui" in dependencies
 RED:     test_scaffold_default_page_uses_agent_components() — Given scaffold default, When read app/page.tsx, Then content includes "AgentComposer" + "AgentTimeline"
 RED:     test_scaffold_default_chat_route_exists() — Given scaffold, When read server/routes/chat.ts, Then file exports POST defineRoute
 RED:     test_scaffold_default_chat_returns_sse_with_3_events() — Given chat route, When POST mock, Then SSE response with 3 chunks
@@ -513,7 +513,7 @@ BDD scenarios:
 - Error: TheoUI not yet published → mensagem clara
 
 #### Acceptance Criteria
-- [ ] Template default tem `@usetheo/ui` dep
+- [ ] Template default tem `@theokit/ui` dep
 - [ ] Agent surface no `app/page.tsx`
 - [ ] Mock chat route funcional
 - [ ] Fixture snapshot persistente
@@ -532,7 +532,7 @@ BDD scenarios:
 ### T4.1 — `--bare` flag em create-theokit
 
 #### Objective
-CLI detecta `--bare`, pós-scaffold remove `@usetheo/ui` de deps, substitui `app/page.tsx` por Hello Theo.
+CLI detecta `--bare`, pós-scaffold remove `@theokit/ui` de deps, substitui `app/page.tsx` por Hello Theo.
 
 #### Evidence
 ADR D5: `--bare` é transformação no default template, não duplicação.
@@ -567,7 +567,7 @@ tests/unit/create-theokit-bare.test.ts — (NEW)
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_bare_flag_removes_theoui_dep() — Given --bare, When scaffolded, Then package.json has no @usetheo/ui
+RED:     test_bare_flag_removes_theoui_dep() — Given --bare, When scaffolded, Then package.json has no @theokit/ui
 RED:     test_bare_flag_replaces_page_with_hello() — Given --bare, When scaffolded, Then app/page.tsx contains "Hello Theo"
 RED:     test_bare_flag_keeps_chat_route_or_removes_it() — Document choice: --bare also removes server/routes/chat.ts (mock chat dependent on TheoUI events)
 RED:     test_bare_with_other_template_errors() — Given --bare --template=dashboard, Then error "incompatible"
@@ -730,7 +730,7 @@ BDD scenarios:
 
 Rodar `scripts/dogfood-smoke.sh` (proxy `/dogfood full`). Adicionar 4 checks novos:
 
-1. Template default tem `@usetheo/ui` em deps
+1. Template default tem `@theokit/ui` em deps
 2. Entry-client gerado importa CSS + wrap ThemeProvider quando theoUi enabled
 3. Scaffold gerado tem `AgentComposer` em `app/page.tsx`
 4. `--bare` produz scaffold sem TheoUI
@@ -754,15 +754,15 @@ Rodar `scripts/dogfood-smoke.sh` (proxy `/dogfood full`). Adicionar 4 checks nov
 
 | # | Gap / Requirement | Task(s) | Resolution |
 |---|---|---|---|
-| 1 | Template default tem TheoUI dep | T3.1 | `package.json.tmpl` lista `@usetheo/ui` |
-| 2 | CSS auto-importado | T2.2 | `generateEntryClient` emite `import '@usetheo/ui/styles.css'` |
+| 1 | Template default tem TheoUI dep | T3.1 | `package.json.tmpl` lista `@theokit/ui` |
+| 2 | CSS auto-importado | T2.2 | `generateEntryClient` emite `import '@theokit/ui/styles.css'` |
 | 3 | ThemeProvider wrap default | T2.3 | `generateEntryClient` envolve RouterProvider |
 | 4 | Default scaffold = agent surface | T3.1 | `app/page.tsx` usa `AgentComposer` + `AgentTimeline` + `AgentStream` |
 | 5 | `--bare` opt-out | T4.1 | CLI flag + transform pós-scaffold |
 | 6 | `config.ui: false` opt-out runtime | T2.1 | Schema field + vite-plugin respect |
 | 7 | `defineAgentEndpoint` server-side | T5.1 | Helper que produz SSE de generator |
 | 8 | `useAgentStream` client-side | T5.2 | Hook React consumindo SSE |
-| 9 | Type `AgentEvent` compartilhado | T1.1 | Re-export from `@usetheo/ui/types` |
+| 9 | Type `AgentEvent` compartilhado | T1.1 | Re-export from `@theokit/ui/types` |
 | 10 | Dogfood QA passa | Phase 6 | Health ≥ 85 |
 
 **Coverage: 10/10 = 100%.**
@@ -824,6 +824,6 @@ Tabela rastreando os 12 ECs do `edge-case-plan` review:
 - **TheoUI version sync automation** — release-coordenado manual via CHANGELOG por enquanto. Automation (e.g., bot que bump TheoKit quando TheoUI lança) fica para outra iteração.
 - **Custom agent components em TheoKit** — TheoKit não duplica componentes. Sempre delega para TheoUI.
 - **Server-only agent surfaces (RSC)** — TheoKit não usa RSC hoje. TheoUI components são `"use client"`. Quando RSC entrar no roadmap, revisitar.
-- **`theokit add @usetheo/ui` external command** — não necessário porque TheoUI já vem default. Caminho `external` do `theokit add` permanece para futuros plugins de terceiros.
+- **`theokit add @theokit/ui` external command** — não necessário porque TheoUI já vem default. Caminho `external` do `theokit add` permanece para futuros plugins de terceiros.
 - **Mock chat → real LLM upgrade path (EC-11):** Mock retorna 3 events estáticos para o scaffold funcionar. `server/routes/chat.ts` ganha comentário grande explicando substituição: "// Substitua este mock pelo seu LLM provider (OpenAI/Anthropic/local). O shape de AgentEvent é o contrato — qualquer provider que produza events compatíveis funciona." Quickstart no README do scaffold também menciona.
 - **SSE backpressure / token streaming (EC-12):** Generator que produz 1000+ events em rápida sucessão (e.g., agent streaming tokens) pode saturar conexão. Pattern recomendado: para token streaming, usar chunked text content em um único event de tipo `message` em vez de event-per-token. Documentar em comment no exemplo do scaffold.

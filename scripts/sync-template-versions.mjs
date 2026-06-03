@@ -19,7 +19,7 @@
  * Edge cases:
  *   EC-2: walk recursivo 2 níveis cobre services/agent-{node,python}.
  *   EC-3: `workspace:*` é intentional dentro do monorepo; ignorado.
- *   EC-4: dep ausente do template (api-only sem @usetheo/ui) → ignora; não force-add.
+ *   EC-4: dep ausente do template (api-only sem @theokit/ui) → ignora; não force-add.
  *   EC-8: JSON.stringify normaliza indent (2 spaces). Primeira execução pode produzir
  *         grande diff cosmético — aceitar como commit "style:" separado.
  *   Lockfile ausente → erro claro pedindo `pnpm install`.
@@ -35,7 +35,7 @@ const TEMPLATES_DIR = join(ROOT, 'packages', 'create-theo', 'templates')
 const THEO_PKG_PATH = join(ROOT, 'packages', 'theo', 'package.json')
 const LOCKFILE_PATH = join(ROOT, 'pnpm-lock.yaml')
 
-const MANAGED_DEPS = ['theokit', '@usetheo/sdk', '@usetheo/ui']
+const MANAGED_DEPS = ['theokit', '@theokit/sdk', '@theokit/ui']
 
 /**
  * Resolve workspace version of theokit from packages/theo/package.json.
@@ -59,9 +59,9 @@ function resolveTheokitVersion() {
  * a published version from the lockfile — we read the sibling repo's package.json.
  */
 const SIBLING_FALLBACKS = {
-  '@usetheo/sdk': join(ROOT, '..', 'theokit-sdk', 'packages', 'sdk', 'package.json'),
-  '@usetheo/gateway': join(ROOT, '..', 'theokit-sdk', 'packages', 'gateway', 'package.json'),
-  '@usetheo/ui': join(ROOT, '..', 'theo-ui', 'package.json'),
+  '@theokit/sdk': join(ROOT, '..', 'theokit-sdk', 'packages', 'sdk', 'package.json'),
+  '@theokit/gateway': join(ROOT, '..', 'theokit-sdk', 'packages', 'gateway', 'package.json'),
+  '@theokit/ui': join(ROOT, '..', 'theo-ui', 'package.json'),
 }
 
 /**
@@ -143,7 +143,7 @@ function buildTruth() {
 
   const lockfile = parseYaml(readFileSync(LOCKFILE_PATH, 'utf-8'))
 
-  for (const name of ['@usetheo/sdk', '@usetheo/ui']) {
+  for (const name of ['@theokit/sdk', '@theokit/ui']) {
     // Workspace truth (sibling package.json) wins over lockfile (npm-resolved).
     const siblingVersion = resolveFromSiblingFirst(name)
     if (siblingVersion) {

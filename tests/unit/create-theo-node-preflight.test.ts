@@ -9,7 +9,7 @@ import {
 /**
  * T4.1 — Node ≥ 22.12 preflight in create-theokit CLI.
  *
- * `@usetheo/sdk` requires Node ≥ 22.12. Without preflight, users on older
+ * `@theokit/sdk` requires Node ≥ 22.12. Without preflight, users on older
  * Node hit cryptic `node:sqlite` / `better-sqlite3` ABI errors mid-chat
  * with no actionable diagnostic. This preflight runs at scaffold start
  * (D4: not at runtime in `theokit dev`), prints a clear error, exits 1

@@ -1,6 +1,6 @@
-# Upstream prompts — `@usetheo/ui`
+# Upstream prompts — `@theokit/ui`
 
-Architectural prompts shipped to the `@usetheo/ui` team to fix issues discovered while integrating with TheoKit. Each prompt follows the same pattern: precise repro, root cause from real built-source line numbers, ranked options, recommended fix with code, acceptance criteria, prior-art references.
+Architectural prompts shipped to the `@theokit/ui` team to fix issues discovered while integrating with TheoKit. Each prompt follows the same pattern: precise repro, root cause from real built-source line numbers, ranked options, recommended fix with code, acceptance criteria, prior-art references.
 
 The pattern works: every prompt below was accepted + shipped in a `next.0` release within the same sprint.
 
@@ -8,9 +8,9 @@ The pattern works: every prompt below was accepted + shipped in a `next.0` relea
 
 | # | Issue | Prompt → ship | Fix verified in TheoKit |
 |---|---|---|---|
-| 1 | Tailwind v4 utilities not picking up `@source` glob on pnpm symlinks (hover state didn't work) | Prompt (informal) → `@usetheo/ui@0.6.1-next.0` — precompiled `components.css` defense-in-depth | ✓ verified in `examples/full-stack-agent` |
-| 2 | Tailwind v4 button preflight removed `cursor: pointer` — button looked non-clickable | Prompt (informal) → `@usetheo/ui@0.6.2-next.0` — defense-in-depth `cursor: pointer` reset | ✓ verified in `examples/full-stack-agent` |
-| 3 | ThemeSwitcher hydration mismatch on SSR — `useState(() => localStorage.getItem(...))` anti-pattern | **[Prompt arquivado neste diretório](./usetheo-ui-themeswitcher-hydration-mismatch.md)** → `@usetheo/ui@0.6.3-next.0` — `useEffect` deferral + `skipFirstPersistRef` + `ThemeScript` with `defaultDensity` | ✓ verified 2026-05-23: zero hydration errors, SSR renders `Violet Forge`, useEffect promotes to stored value post-mount |
+| 1 | Tailwind v4 utilities not picking up `@source` glob on pnpm symlinks (hover state didn't work) | Prompt (informal) → `@theokit/ui@0.6.1-next.0` — precompiled `components.css` defense-in-depth | ✓ verified in `examples/full-stack-agent` |
+| 2 | Tailwind v4 button preflight removed `cursor: pointer` — button looked non-clickable | Prompt (informal) → `@theokit/ui@0.6.2-next.0` — defense-in-depth `cursor: pointer` reset | ✓ verified in `examples/full-stack-agent` |
+| 3 | ThemeSwitcher hydration mismatch on SSR — `useState(() => localStorage.getItem(...))` anti-pattern | **[Prompt arquivado neste diretório](./usetheo-ui-themeswitcher-hydration-mismatch.md)** → `@theokit/ui@0.6.3-next.0` — `useEffect` deferral + `skipFirstPersistRef` + `ThemeScript` with `defaultDensity` | ✓ verified 2026-05-23: zero hydration errors, SSR renders `Violet Forge`, useEffect promotes to stored value post-mount |
 
 ## Why these prompts work
 

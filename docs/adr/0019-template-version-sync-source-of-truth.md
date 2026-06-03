@@ -9,9 +9,9 @@ consulted: claude
 
 ## Context and Problem Statement
 
-Os templates em `theokit/packages/create-theo/templates/` declaram versões hardcoded de `theokit`, `@usetheo/sdk` e `@usetheo/ui`. Hoje mantidas a mão. Resultado mensurado em 2026-05-28 (baseline):
+Os templates em `theokit/packages/create-theo/templates/` declaram versões hardcoded de `theokit`, `@theokit/sdk` e `@theokit/ui`. Hoje mantidas a mão. Resultado mensurado em 2026-05-28 (baseline):
 
-- **2 entries OUT of range** — `@usetheo/ui@^0.11.0-next.0` em `default` e `saas`, enquanto repo está em `0.12.0-next.0` (caret pre-release exclui `0.12.0-*` quando pin é `^0.11.0-next.0`).
+- **2 entries OUT of range** — `@theokit/ui@^0.11.0-next.0` em `default` e `saas`, enquanto repo está em `0.12.0-next.0` (caret pre-release exclui `0.12.0-*` quando pin é `^0.11.0-next.0`).
 - **Drift INTERNO entre templates** — 3 versões diferentes de `theokit` em 5 templates do mesmo release (`api-only`/`dashboard`/`postgres` em `^0.1.0-alpha.1`; `default` em `^0.1.0-alpha.4`; `saas` em `^0.1.0-alpha.5`).
 
 Sem gate, drift continua crescendo. Humanos esquecem.
@@ -39,7 +39,7 @@ Changesets já está em uso para CHANGELOG/version bump em `packages/`. Não cob
 ## Decision Outcome
 
 `theokit/scripts/sync-template-versions.mjs`:
-- **Source of truth:** `packages/theo/package.json:version` (para `theokit`); `pnpm-lock.yaml` (para `@usetheo/sdk`, `@usetheo/ui`).
+- **Source of truth:** `packages/theo/package.json:version` (para `theokit`); `pnpm-lock.yaml` (para `@theokit/sdk`, `@theokit/ui`).
 - **Algoritmo:** `findTemplatePackages()` walk recursivo 2 níveis (EC-2 fix — cobre `services/agent-node/`, `services/agent-python/`).
 - **Buckets cobertos:** `dependencies` E `devDependencies`.
 - **Idempotent:** templates sem managed deps são ignorados (EC-4); `workspace:*` é ignorado (EC-3).

@@ -44,8 +44,8 @@ Custo + duração inviabilizam auto-run.
 ### D11 — Health score ≥ 90/100 como gate de release coordenado
 0 CRITICAL + 0 HIGH + ≤ 2 MEDIUM.
 
-### D13 — `@usetheo/ui` permanece ESM-only intencional; theokit gated zero require em UI
-**Root cause de EC-S4 + EC-S5:** theokit `theoui-detect.ts:72` e `auto-detect.ts:52,71` usavam `createRequire(...).resolve()` em `@usetheo/ui` — package ESM-only retorna `ERR_PACKAGE_PATH_NOT_EXPORTED`. Fix: substituir por filesystem walk + leitura de `exports[subpath]`. Gate `tests/integration/no-require-on-esm-only-deps.test.ts` previne regressão.
+### D13 — `@theokit/ui` permanece ESM-only intencional; theokit gated zero require em UI
+**Root cause de EC-S4 + EC-S5:** theokit `theoui-detect.ts:72` e `auto-detect.ts:52,71` usavam `createRequire(...).resolve()` em `@theokit/ui` — package ESM-only retorna `ERR_PACKAGE_PATH_NOT_EXPORTED`. Fix: substituir por filesystem walk + leitura de `exports[subpath]`. Gate `tests/integration/no-require-on-esm-only-deps.test.ts` previne regressão.
 
 ### D14 — Test fault injection via `THEOKIT_TEST_RESPONSE_OVERRIDE` env var (gated por NODE_ENV=test)
 Substitui dependency real de provider em chaos scenarios. Custo $0, zero flake, zero quota burn. Padrão FAANG (Stripe SDK test mode, AWS SDK test endpoints).

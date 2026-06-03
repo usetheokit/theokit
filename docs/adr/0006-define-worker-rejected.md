@@ -92,7 +92,7 @@ Chosen option: **Option 4 — REJECT for 0.5.0.**
    coordination over a message bus (Hermes subagent spawning, Mastra
    hand-offs) IS the use case for stream consumers. TheoKit's locked
    mission ("Build the app your agent lives in") explicitly delegates
-   agent orchestration to upstream layers (`@usetheo/sdk`, Mastra,
+   agent orchestration to upstream layers (`@theokit/sdk`, Mastra,
    LangGraph). Adding `defineWorker` reopens that boundary.
 4. **Existing tools fit perfectly alongside.** Users who need a stream
    consumer write:

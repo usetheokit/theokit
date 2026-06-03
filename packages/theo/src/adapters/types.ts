@@ -13,7 +13,7 @@ import type { TheoConfig } from '../config/schema.js'
  *
  *   The factory MAY return a Promise — `theokit build` uses
  *   `theoPluginAsync` to wire the full Plugin[] chain (actions virtual
- *   module + typed client + services + @usetheo/ui auto-chain) so adapters
+ *   module + typed client + services + @theokit/ui auto-chain) so adapters
  *   MUST `await` the result. See `cli/commands/build.ts` for the canonical
  *   invocation.
  */
