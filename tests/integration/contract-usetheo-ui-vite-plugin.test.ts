@@ -28,7 +28,7 @@ import { describe, it, expect } from 'vitest'
 // Localiza a fixture canônica com @theokit/ui instalado.
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const FIXTURE_DIR = join(TEST_DIR, '..', '..', 'fixtures', 'theoui-autoinject')
-const UI_PKG_DIR = join(FIXTURE_DIR, 'node_modules', '@usetheo', 'ui')
+const UI_PKG_DIR = join(FIXTURE_DIR, 'node_modules', '@theokit', 'ui')
 const UI_DIST = (relative: string) => join(UI_PKG_DIR, 'dist', relative)
 
 // Reexporta os helpers internos do integrate-ui.ts (test-only side-doors EC-N CT-N).

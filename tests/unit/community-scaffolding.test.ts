@@ -96,7 +96,7 @@ describe('T7.3 — EC-15 SECURITY.md disclosure ordering', () => {
   it('Given SECURITY.md, Then mentions GitHub Private Security Advisory BEFORE email', () => {
     const md = readFileSync(r('SECURITY.md'), 'utf-8')
     const advisoryIdx = md.search(/private security advisor[yi]/i)
-    const emailIdx = md.search(/security@usetheo\.dev|security@/i)
+    const emailIdx = md.search(/security@theokit\.dev|security@/i)
     expect(advisoryIdx).toBeGreaterThanOrEqual(0)
     if (emailIdx >= 0) {
       // If the email is mentioned at all, the advisory must come first.
