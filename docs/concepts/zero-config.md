@@ -68,18 +68,18 @@ loadEnv({ cwd: resolve(__dirname, '..') }) // explicit cwd — anti-EC-7
 
 ---
 
-### 2. Tailwind + `@usetheo/ui` styling auto-configures
+### 2. Tailwind + `@theokit/ui` styling auto-configures
 
-When you have `@usetheo/ui` in your `package.json` dependencies, TheoKit's Vite plugin automatically:
+When you have `@theokit/ui` in your `package.json` dependencies, TheoKit's Vite plugin automatically:
 
-1. Detects `@usetheo/ui` and `@tailwindcss/vite` via Node module resolution (handles pnpm hoist).
+1. Detects `@theokit/ui` and `@tailwindcss/vite` via Node module resolution (handles pnpm hoist).
 2. Dynamic-imports both and chains them into the Vite plugin array.
 3. No consumer-side `tailwind.config.ts` or `postcss.config.js` required.
 
 ```bash
 pnpm create theokit my-app
 cd my-app
-pnpm add @usetheo/ui @tailwindcss/vite
+pnpm add @theokit/ui @tailwindcss/vite
 pnpm dev
 # Styled TheoUI components work immediately.
 ```
@@ -90,7 +90,7 @@ If you create a `tailwind.config.{ts,js,mjs,cjs}` or `postcss.config.{ts,js,mjs,
 
 ```ts
 // tailwind.config.ts
-import preset from '@usetheo/ui/preset'
+import preset from '@theokit/ui/preset'
 
 export default {
   presets: [preset],
@@ -102,10 +102,10 @@ This keeps the TheoUI theme tokens in sync while letting you add your own classe
 
 #### When `@tailwindcss/vite` is missing
 
-If you have `@usetheo/ui` but not `@tailwindcss/vite`, the framework emits a single line:
+If you have `@theokit/ui` but not `@tailwindcss/vite`, the framework emits a single line:
 
 ```
-[theokit] @usetheo/ui detected but @tailwindcss/vite is not installed.
+[theokit] @theokit/ui detected but @tailwindcss/vite is not installed.
 Run `pnpm add -D @tailwindcss/vite` to enable styling.
 ```
 
@@ -159,7 +159,7 @@ Cleanup is lockless. Two `theokit dev` invocations racing each other accept the 
 
 ## Migration from manual configs
 
-If you had a hand-rolled `.env` loader, manual `tailwind.config.ts` extending `@usetheo/ui`, or were accumulating `.theokit/agents/` cruft, run:
+If you had a hand-rolled `.env` loader, manual `tailwind.config.ts` extending `@theokit/ui`, or were accumulating `.theokit/agents/` cruft, run:
 
 ```bash
 theokit check
@@ -167,7 +167,7 @@ theokit check
 
 The upgrade-readiness scanner flags:
 
-- `zero-config-tailwind-suggest` — your `tailwind.config` is missing `@usetheo/ui/preset` extension.
+- `zero-config-tailwind-suggest` — your `tailwind.config` is missing `@theokit/ui/preset` extension.
 - `handrolled-dotenv-suggest` — a `server/` file imports `dotenv` directly. You can delete the import; the framework auto-loads.
 
 Each hint includes a one-line fix suggestion.
@@ -178,4 +178,4 @@ Each hint includes a one-line fix suggestion.
 
 - Reference doc: `.claude/knowledge-base/reference/zero-config-integration.md` (940 LOC prior-art audit of Next.js / Astro / Nuxt / Vite / SvelteKit conventions).
 - Plan: `docs/plans/framework-zero-config-polish-plan.md`.
-- Spike: `docs/spikes/usetheo-ui-vite-plugin-shape.md` (cross-repo `@usetheo/ui` API contract).
+- Spike: `docs/spikes/usetheo-ui-vite-plugin-shape.md` (cross-repo `@theokit/ui` API contract).

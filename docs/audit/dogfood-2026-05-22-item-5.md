@@ -57,7 +57,7 @@ Conversation persistence ships. Cookie-bridge wired through `defineAgentEndpoint
 | EC | Risk | Fix landed | Verified by |
 |---|---|---|---|
 | **EC-1** | `agentId` from cookie/explicit/session is attacker-controlled. SDK uses it as filesystem path AND it gets serialized into Set-Cookie. Path traversal + header injection. | `isValidAgentId` regex `^[a-zA-Z0-9_-]{1,128}$` at all 3 entry points; invalid values fall through silently to UUID generation | 4 tests in `create-conversation-history.test.ts`: path-traversal explicit, CRLF explicit, over-length cookie, valid session id |
-| **EC-2** | `await import('@usetheo/sdk')` throws cryptic `ERR_MODULE_NOT_FOUND` when SDK not installed | `loadSdk()` wraps the dynamic import in try/catch; re-throws Error with actionable "Install: pnpm add @usetheo/sdk" message + cause chain | 1 test (`__setSdkForTests(null)` simulates missing SDK; regex match on `/requires @usetheo\/sdk.*pnpm add/`) |
+| **EC-2** | `await import('@theokit/sdk')` throws cryptic `ERR_MODULE_NOT_FOUND` when SDK not installed | `loadSdk()` wraps the dynamic import in try/catch; re-throws Error with actionable "Install: pnpm add @theokit/sdk" message + cause chain | 1 test (`__setSdkForTests(null)` simulates missing SDK; regex match on `/requires @theokit\/sdk.*pnpm add/`) |
 
 ## SHOULD TEST items — VERIFIED with new tests
 
@@ -89,7 +89,7 @@ Conversation persistence ships. Cookie-bridge wired through `defineAgentEndpoint
 
 | # | Bug | Fix |
 |---|---|---|
-| 1 | `await import('@usetheo/sdk')` literal string caused TS to fail resolving module type at compile time | Use indirect spec `const spec = '@usetheo/sdk'; await import(spec)` — TS treats indirect import as `Promise<any>` and skips type resolution |
+| 1 | `await import('@theokit/sdk')` literal string caused TS to fail resolving module type at compile time | Use indirect spec `const spec = '@theokit/sdk'; await import(spec)` — TS treats indirect import as `Promise<any>` and skips type resolution |
 | 2 | `SdkAgent.send: (...args: never[])` was too strict — fixture's `agent.send(message: string)` failed to assign | Widened to `send: (message: string, options?: unknown) => Promise<SdkRunLike>` with structural `SdkRunLike` matching SDK's Run shape |
 | 3 | `defineAgentEndpoint` generator's first yield ran AFTER Response headers committed — cookies appended to `cookieHeaders` never made it to the SSE response | Wrapper now PRIMES the generator (`await generator.next()`) BEFORE constructing Response, then merges cookies via `cookieHeaders.getSetCookie()`. First-byte latency cost: bounded by handler's first-yield work (~100-500ms for chat); acceptable trade-off |
 | 4 | Playwright failed because route returned `Set OPENROUTER_API_KEY` error BEFORE calling `createConversationHistory` (no key in env) → no cookie issued | Set `OPENROUTER_API_KEY: 'PLAYWRIGHT_PLACEHOLDER_canonical_chat'` in `playwright.config.ts` webServer env. Reaches `createConversationHistory` → cookie issued → SDK returns 401 → error event surfaces. Cookie validated by spec |
