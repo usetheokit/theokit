@@ -2,7 +2,7 @@
 
 Contract between Claude and the **TheoKit** sub-project. Read before touching anything under `theokit/`.
 
-This file complements the [usetheo monorepo CLAUDE.md](../CLAUDE.md). Cross-project rules still apply — this file adds TheoKit-specific layers and **does not** propagate to other sub-projects in the monorepo.
+This file complements the [Theo monorepo CLAUDE.md](../CLAUDE.md). Cross-project rules still apply — this file adds TheoKit-specific layers and **does not** propagate to other sub-projects in the monorepo.
 
 ---
 
