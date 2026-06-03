@@ -23,9 +23,9 @@ will receive:
 
 ### Secondary channel — email
 
-If GitHub is unreachable for you, email `security@usetheo.dev`.
+If GitHub is unreachable for you, email `security@theokit.dev`.
 
-> **Note:** The `security@usetheo.dev` mailbox MAY not be monitored if
+> **Note:** The `security@theokit.dev` mailbox MAY not be monitored if
 > MX records have not yet been configured for this domain. **Prefer the
 > GitHub Private Security Advisory channel above** — it works
 > immediately and never goes silent. If you email and receive no
