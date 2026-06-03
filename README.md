@@ -2,7 +2,7 @@
 
 **Build the app your agent lives in.** Routing, auth, real-time, deploy — wired.
 
-Part of the [usetheo](https://usetheo.dev) family of products. TheoKit is the **web framework** layer — independent and self-contained, with **TheoCloud** as its principal deploy target. See [the Ecosystem section](#ecosystem) for how it relates to its siblings.
+Part of the [Theo](https://usetheo.dev) family of products. TheoKit is the **web framework** layer — independent and self-contained, with **TheoCloud** as its principal deploy target. See [the Ecosystem section](#ecosystem) for how it relates to its siblings.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-production-success?style=flat-square)](#status)
@@ -435,7 +435,7 @@ import { theoFetch, TheoFetchError } from 'theokit/client'
 
 ## Ecosystem
 
-TheoKit sits inside the [`usetheo`](https://usetheo.dev) product family. It is **self-contained** for any deploy (builds, ships, and runs without any sibling on any of the 8 in-tree adapters), and **TheoCloud is its principal strategic target** — the hosted product where TheoKit apps are designed to run in production. The relationships below are stated literally, against the code.
+TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **self-contained** for any deploy (builds, ships, and runs without any sibling on any of the 8 in-tree adapters), and **TheoCloud is its principal strategic target** — the hosted product where TheoKit apps are designed to run in production. The relationships below are stated literally, against the code.
 
 | Sibling | Repo | Direction | How it relates | Status |
 |---------|------|-----------|----------------|:------:|

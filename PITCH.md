@@ -194,7 +194,7 @@ npx create-theokit my-app --template=postgres      # Drizzle ORM + PostgreSQL
 
 ## Where this fits
 
-TheoKit is part of the [usetheo](https://usetheo.dev) workflow.
+TheoKit is part of the [Theo](https://usetheo.dev) workflow.
 
 | Step | Product | What it does |
 |---|---|---|
