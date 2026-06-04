@@ -36,3 +36,20 @@ export {
   isActionError,
   isInputError,
 } from './action-protocol.js'
+
+// Error envelope (G5 / T1.1). Form 4 Hybrid — shared CODE enum + per-domain
+// extensions + 2-layer SDK boundary translation per blueprint ADR D1+D3.
+export type {
+  TheoErrorCode,
+  TheoErrorEnvelope,
+  ValidationFieldsExt,
+  RetryableExt,
+  HintExt,
+} from './error-envelope.js'
+export { RETRYABLE_CODES, isRetryable } from './error-envelope.js'
+
+// TheoError helper class (G5 / T1.2). Envelope-emitting Error subclass mirroring
+// trpc's TRPCError ergonomic pattern; carries cause chain (TC39) + auto-strips
+// meta.stack in non-dev (ADR D5). `fromUnknown` coerces any thrown value.
+export type { TheoErrorOptions } from './theo-error.js'
+export { TheoError, fromUnknown } from './theo-error.js'

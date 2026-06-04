@@ -1,6 +1,26 @@
 import { z } from 'zod'
 
+import type { TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
 import { servicesConfigSchema } from '../services/index.js'
+
+/**
+ * G5 T1.3 — formatError hook signature (blueprint ADR D3).
+ *
+ * Type-inferred functional transformer that runs at framework error-boundary
+ * time. Producer-side analog of trpc's `errorFormatter`. The return type is
+ * `TheoErrorEnvelope<TExt>` for arbitrary `TExt` so the inference flows into
+ * `@theo/client` codegen + UI consumers.
+ */
+export interface FormatErrorContext {
+  readonly route?: string
+  readonly action?: string
+  readonly agentRunId?: string
+}
+
+export type FormatErrorHook = (
+  envelope: TheoErrorEnvelope,
+  ctx: FormatErrorContext,
+) => TheoErrorEnvelope
 
 /**
  * Base bucket config — legacy shape preserved for backwards compatibility.
@@ -450,6 +470,26 @@ export const theoConfigSchema = z
         title: z.string().default('TheoKit App'),
         version: z.string().default('0.0.0'),
         outDir: z.string().default('.theo'),
+      })
+      .optional(),
+    /**
+     * G5 T1.3 — error envelope transformer hook (blueprint ADR D3).
+     *
+     * When present, runs at framework error-boundary time to enrich the
+     * envelope with consumer-defined extensions (`hint`, custom telemetry
+     * tags, etc.) BEFORE the envelope is serialized to the client. The
+     * function signature is preserved via the explicit `FormatErrorHook`
+     * type — TS inference flows from `theo.config.ts` into `@theo/client`
+     * codegen and `@theokit/ui` AgentErrorCard consumers.
+     *
+     * Use `z.custom<FormatErrorHook>(...)` because Zod's built-in
+     * `z.function()` discards its TS signature after parse; `z.custom`
+     * with a function-typed runtime guard preserves the call-site type
+     * without trading off Zod runtime validation.
+     */
+    formatError: z
+      .custom<FormatErrorHook>((val) => typeof val === 'function', {
+        message: 'formatError must be a function',
       })
       .optional(),
   })
