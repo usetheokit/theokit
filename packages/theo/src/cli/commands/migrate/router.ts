@@ -19,11 +19,16 @@
  *     when not in a git repo or git mv fails.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, renameSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { dirname, resolve } from 'node:path'
 
-import { planRouterMigration, type RouterMigrationPlanItem } from './router-codemod.js'
+import {
+  computeDepthDelta,
+  planRouterMigration,
+  rewriteRelativeImports,
+  type RouterMigrationPlanItem,
+} from './router-codemod.js'
 
 export interface RouterMigrateOptions {
   /** Absolute path to `<project>/server/routes`. Defaults to `<cwd>/server/routes`. */
@@ -130,6 +135,23 @@ function applyRename(item: RouterMigrationPlanItem): void {
   }
 }
 
+/**
+ * Adjust relative imports inside the renamed file to compensate for the
+ * extra nesting depth. Without this, `import { foo } from './chat'` inside
+ * a file moved from `routes/admin.sdk-config.ts` → `routes/admin/sdk-config.ts`
+ * would fail to resolve at typecheck/runtime — the import needs `../chat`
+ * now that the file lives one level deeper.
+ */
+function applyImportRewrite(item: RouterMigrationPlanItem, routesDir: string): void {
+  const delta = computeDepthDelta(item.from, item.to, routesDir)
+  if (delta <= 0) return
+  const source = readFileSync(item.to, 'utf8')
+  const rewritten = rewriteRelativeImports(source, delta)
+  if (rewritten !== source) {
+    writeFileSync(item.to, rewritten, 'utf8')
+  }
+}
+
 export interface RouterMigrateResult {
   /** Successfully renamed (from, to) pairs. */
   migrated: RouterMigrationPlanItem[]
@@ -162,12 +184,14 @@ async function assertNoRunningDevServer(opts: RouterMigrateOptions): Promise<voi
 
 function executeRenames(
   plan: readonly RouterMigrationPlanItem[],
+  routesDir: string,
   log: LogFn,
 ): RouterMigrationPlanItem[] {
   const migrated: RouterMigrationPlanItem[] = []
   for (const item of plan) {
     try {
       applyRename(item)
+      applyImportRewrite(item, routesDir)
       migrated.push(item)
       log(`     ✓ ${item.from} → ${item.to}`)
     } catch (err) {
@@ -207,7 +231,7 @@ export async function routerMigrateCommand(
     return { migrated: [], alreadyClean: false }
   }
 
-  const migrated = executeRenames(plan, log)
+  const migrated = executeRenames(plan, routesDir, log)
   log(`  ✓ Migrated ${migrated.length} route(s).`)
   return { migrated, alreadyClean: false }
 }

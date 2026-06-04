@@ -20,6 +20,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   planRouterMigration,
+  computeDepthDelta,
+  rewriteRelativeImports,
   type RouterMigrationPlanItem,
 } from '../../packages/theo/src/cli/commands/migrate/router-codemod.js'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
@@ -130,5 +132,88 @@ describe('G6 T2.1 — planRouterMigration (pure codemod core)', () => {
     // Simulate a second `theokit migrate router` invocation on a clean tree
     const secondPass = planRouterMigration(routesDir)
     expect(secondPass).toEqual([])
+  })
+})
+
+describe('G6 T2.1 — computeDepthDelta', () => {
+  it('returns 1 when single dot becomes one nesting level', () => {
+    const delta = computeDepthDelta(
+      `${routesDir}/admin.sdk-config.ts`,
+      `${routesDir}/admin/sdk-config.ts`,
+      routesDir,
+    )
+    expect(delta).toBe(1)
+  })
+
+  it('returns 2 when triple-dotted becomes two extra nesting levels', () => {
+    const delta = computeDepthDelta(
+      `${routesDir}/debug.stability.last.ts`,
+      `${routesDir}/debug/stability/last.ts`,
+      routesDir,
+    )
+    expect(delta).toBe(2)
+  })
+
+  it('returns 1 when already-nested parent stays + leaf splits one dot', () => {
+    const delta = computeDepthDelta(
+      `${routesDir}/canvas/artifacts.[id].ts`,
+      `${routesDir}/canvas/artifacts/[id].ts`,
+      routesDir,
+    )
+    expect(delta).toBe(1)
+  })
+})
+
+describe('G6 T2.1 — rewriteRelativeImports', () => {
+  it('prepends one extra ../ to ./X imports when delta=1', () => {
+    const source = `import { foo } from './chat';\nimport { z } from 'zod';`
+    const out = rewriteRelativeImports(source, 1)
+    expect(out).toContain(`from '../chat'`)
+    expect(out).toContain(`from 'zod'`) // package specifier untouched
+  })
+
+  it('prepends ../../ to ./X imports when delta=2', () => {
+    const source = `import { foo } from './chat';`
+    const out = rewriteRelativeImports(source, 2)
+    expect(out).toContain(`from '../../chat'`)
+  })
+
+  it('prepends ../ to existing ../ imports when delta=1', () => {
+    const source = `import { foo } from '../canvas-store';`
+    const out = rewriteRelativeImports(source, 1)
+    expect(out).toContain(`from '../../canvas-store'`)
+  })
+
+  it('returns source unchanged when delta=0', () => {
+    const source = `import { foo } from './chat';\nimport { z } from 'zod';`
+    expect(rewriteRelativeImports(source, 0)).toBe(source)
+  })
+
+  it('handles double quotes', () => {
+    const source = `import { foo } from "./chat";`
+    const out = rewriteRelativeImports(source, 1)
+    expect(out).toContain(`from "../chat"`)
+  })
+
+  it('handles dynamic import()', () => {
+    const source = `const mod = await import('./agents');`
+    const out = rewriteRelativeImports(source, 1)
+    expect(out).toContain(`import('../agents')`)
+  })
+
+  it('handles re-export shape: export ... from "./X"', () => {
+    const source = `export { foo } from './chat';`
+    const out = rewriteRelativeImports(source, 1)
+    expect(out).toContain(`from '../chat'`)
+  })
+
+  it('leaves package specifiers untouched (theokit/server, node:fs, zod)', () => {
+    const source = [
+      `import { defineRoute } from 'theokit/server';`,
+      `import { readFileSync } from 'node:fs';`,
+      `import { z } from 'zod';`,
+      `import { useState } from 'react';`,
+    ].join('\n')
+    expect(rewriteRelativeImports(source, 5)).toBe(source)
   })
 })

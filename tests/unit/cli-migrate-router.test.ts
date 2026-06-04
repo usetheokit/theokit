@@ -100,6 +100,25 @@ describe('G6 T2.1 — routerMigrateCommand (CLI wrapper)', () => {
     expect(second.migrated).toEqual([])
   })
 
+  it('test_import_paths_rewritten_after_rename: ./chat becomes ../chat', async () => {
+    // Sibling reference: routes/admin.sdk-config.ts imports './chat' which is
+    // a sibling routes/chat.ts. After moving to routes/admin/sdk-config.ts,
+    // the import must become '../chat'.
+    touch('chat.ts', 'export const GET = { handler: () => ({}) }')
+    touch(
+      'admin.sdk-config.ts',
+      `import { defineRoute } from "theokit/server";\nimport { foo } from "./chat";\nimport { z } from "zod";\nexport const GET = defineRoute({ handler: () => ({}) });`,
+    )
+
+    const result = await routerMigrateCommand({ routesDir, force: true, silent: true })
+    expect(result.migrated).toHaveLength(1)
+
+    const moved = readFileSync(join(routesDir, 'admin', 'sdk-config.ts'), 'utf8')
+    expect(moved).toContain(`from "../chat"`)
+    expect(moved).toContain(`from "theokit/server"`) // package specifier untouched
+    expect(moved).toContain(`from "zod"`) // package specifier untouched
+  })
+
   it('test_isPortInUse_returns_true_when_a_server_holds_the_port (EC-2 plumbing)', async () => {
     // Pick a high port to avoid collisions with anything real on the dev box
     const port = 39_487

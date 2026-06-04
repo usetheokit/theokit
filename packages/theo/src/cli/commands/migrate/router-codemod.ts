@@ -57,6 +57,72 @@ export class RouterMigrationCollisionError extends Error {
   }
 }
 
+/**
+ * Compute the depth delta (number of extra `..` levels needed) between
+ * the original (dotted) path and the migrated (nested) path, relative
+ * to a common `routesDir` ancestor.
+ *
+ * - `admin.sdk-config.ts` (depth 0) → `admin/sdk-config.ts` (depth 1): delta = 1
+ * - `debug.stability.last.ts` (depth 0) → `debug/stability/last.ts` (depth 2): delta = 2
+ * - `canvas/artifacts.[id].ts` (depth 1) → `canvas/artifacts/[id].ts` (depth 2): delta = 1
+ */
+export function computeDepthDelta(from: string, to: string, routesDir: string): number {
+  const depthOf = (p: string): number => {
+    const rel = relative(routesDir, p).replace(/\\/g, '/')
+    // depth = number of `/` separators in the relative path
+    return rel.split('/').length - 1
+  }
+  return depthOf(to) - depthOf(from)
+}
+
+/**
+ * Rewrite all relative imports in `source` by prepending `../` × `delta`
+ * to every `./X` or `../X` specifier. Absolute / package specifiers
+ * (`theokit/server`, `zod`, `node:fs`) are untouched.
+ *
+ * Handles three import shapes:
+ *   - `import ... from './foo'`
+ *   - `import('./foo')` (dynamic)
+ *   - `import './foo'` (side-effect only)
+ *   - `export ... from './foo'` (re-exports)
+ *
+ * Pure: returns the new source; does NOT touch disk.
+ */
+export function rewriteRelativeImports(source: string, delta: number): string {
+  if (delta <= 0) return source
+
+  const prefix = '../'.repeat(delta)
+
+  // Rewrites a captured relative specifier: `./foo` → `<prefix>foo`,
+  // `../foo` → `<prefix>../foo`. Single source of truth for the algorithm
+  // shared by all three import-shape regexes below.
+  const transformSpecifier = (specifier: string): string => {
+    if (specifier.startsWith('./')) return `${prefix}${specifier.slice(2)}`
+    return `${prefix}${specifier}`
+  }
+
+  // Three narrow regexes keep us out of catastrophic-backtracking territory.
+  // Each is anchored on a keyword (`from`, `import`) and uses a possessive
+  // character class (`[^'"]+`) for the specifier, so backtracking is bounded.
+  const fromRe = /\bfrom\s+(['"])(\.{1,2}\/[^'"]+)\1/g
+  const dynRe = /\bimport\s*\(\s*(['"])(\.{1,2}\/[^'"]+)\1\s*\)/g
+  const sideRe = /\bimport\s+(['"])(\.{1,2}\/[^'"]+)\1/g
+
+  const fromSub = (_m: string, q: string, spec: string): string =>
+    `from ${q}${transformSpecifier(spec)}${q}`
+  const dynSub = (_m: string, q: string, spec: string): string =>
+    `import(${q}${transformSpecifier(spec)}${q})`
+  const sideSub = (_m: string, q: string, spec: string): string =>
+    `import ${q}${transformSpecifier(spec)}${q}`
+
+  // `from` covers both `import ... from '...'` and `export ... from '...'`
+  // (the `\bfrom\s+` anchor matches the keyword position in both shapes).
+  // `dynRe` handles `import('...')`. `sideRe` handles bare `import '...'`.
+  // No overlap — `sideRe` requires `import` followed by whitespace then
+  // a quote (vs. `import(` for dynRe and `import ... from` for fromRe).
+  return source.replace(fromRe, fromSub).replace(dynRe, dynSub).replace(sideRe, sideSub)
+}
+
 function isTestOrSpecFile(filePath: string): boolean {
   return TEST_OR_SPEC_RE.test(filePath)
 }
