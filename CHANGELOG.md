@@ -20,12 +20,21 @@ Per plan [`.claude/knowledge-base/plans/g5-error-envelope-cross-layer-plan.md`](
 - **G3 `ActionInputError.envelope`** override emits `ValidationFieldsExt` in `envelope.ext`. UI consumers can switch on the unified envelope without coupling to class identity.
 - **`serverErrorToEnvelope(value)` boundary translator** in `core/contracts/server-error-to-envelope.ts`. Single-point mapping for ad-hoc Error classes (`AuthRequiredError`, `FileTooLargeError`, `RequestBodyTooLargeError`, `BodyTooLargeError`, `RouterConventionError`) → canonical envelope codes. Preserves class identity inside the codebase (no invasive call-site rewrites). `RouterConventionError` ships a `HintExt`-shaped ext with the actionable migration tip.
 
-### Notes (G5 deferred to a follow-up cohort)
+### Migration guide
 
-- **SDK `/server/errors-envelope.ts` sub-path with `toEnvelope`/`fromEnvelope`** for the 15+ `TheokitAgentError`-family classes — Phase 2 T2.2, deferred until the next `@theokit/sdk` minor.
-- **`@theokit/ui` `AgentErrorCard` envelope prop adoption** — Phase 2 T2.3, deferred until the next `@theokit/ui` minor.
-- **Migration codemod `theokit migrate 0.2-to-0.4 --envelope`** for consumer `err.name === 'X'` checks — Phase 3 T3.2, deferred (backward-compat preserved on every G5 surface so no consumer breakage today).
-- **Migration guide `docs/migration/error-envelope-0-2-to-0-4.md`** — Phase 3 T3.3, ships with the SDK + UI cohort.
+- [`docs/migration/error-envelope-0-2-to-0-4.md`](docs/migration/error-envelope-0-2-to-0-4.md) (NEW) — additive adoption patterns for consumer code. Every legacy code path keeps working byte-for-byte; the envelope is opt-in.
+
+### Cross-package cohort
+
+The companion packages adopt the envelope on the same plan:
+
+- **`@theokit/sdk@1.7.0` (cross-repo `theokit-sdk` develop)** — `/server/errors-envelope` sub-path ships `toEnvelope(err)` + `fromEnvelope(env)` boundary translators for the 15+ `TheokitAgentError` family. 18 unit tests GREEN. ESM + CJS + d.ts emitted.
+- **`@theokit/ui` (cross-repo `theo-ui` develop)** — `AgentErrorCard` accepts a new optional `envelopeCode` prop that derives `kind` automatically. `kindFromEnvelopeCode(code)` helper exported for explicit-kind callers. Explicit `kind` prop wins precedence. 12/12 tests GREEN (6 new + 6 regression).
+
+### Notes (deferred to a follow-up cohort)
+
+- **Migration codemod `theokit migrate 0.2-to-0.4 --envelope`** for consumer `err.name === 'X'` checks — Phase 3 T3.2, deferred (backward-compat preserved on every G5 surface so no consumer breakage today; codemod ships when class-identity removal is on the table).
+- **Full dogfood-app SHIP-IT against the published cohort** — Phase 3 T3.4, gated on the calendar-aligned 0.4.x + 1.7.0 promotion to `@latest`.
 
 ### Quality gates
 
