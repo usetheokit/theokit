@@ -186,12 +186,21 @@ export async function theoPluginAsync(
     distDir: resolve(projectRoot, '.theo'),
   })
 
+  // G6 T1.2 — server-routes HMR. Watches `<serverDir>/routes/**` and
+  // invalidates SSR module cache + sends full-reload on any add/change/unlink
+  // with a 50 ms debounce per EC-6.
+  const { serverRoutesHmrPlugin } = await import('./server-routes-hmr.js')
+  const routesHmrPlugin = serverRoutesHmrPlugin({
+    serverDir: resolve(projectRoot, 'server'),
+  })
+
   return [
     theoPlugin(rootOrOptions),
     ...uiPlugins,
     ...servicesPlugins,
     appClientPlugin,
     actionsPlugin,
+    routesHmrPlugin,
   ]
 }
 
