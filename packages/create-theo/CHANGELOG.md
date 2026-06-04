@@ -1,5 +1,11 @@
 # create-theo
 
+## 0.4.0-beta.0
+
+### Major Changes
+
+- **Version locked to `theokit@0.4.0-beta.0`** per the `.changeset/config.json` linked invariant. `create-theokit` itself ships no template-content changes in this release — all 5 templates (default / saas / dashboard / api-only / postgres) were verified to already use the directory-nested router convention required by `theokit@0.4.0-beta.0`. Strangers scaffolding fresh apps see no migration prompt; existing apps run `npx theokit migrate router` once after upgrading.
+
 ## 0.2.1
 
 ### Patch Changes
