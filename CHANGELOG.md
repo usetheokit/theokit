@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (G5 — error envelope cross-layer, foundation only)
+
+Per plan [`.claude/knowledge-base/plans/g5-error-envelope-cross-layer-plan.md`](.claude/knowledge-base/plans/g5-error-envelope-cross-layer-plan.md) (SHIPPABLE 96.8/100) and blueprint [`g5-error-envelope-cross-layer-blueprint.md`](.claude/knowledge-base/discoveries/blueprints/g5-error-envelope-cross-layer-blueprint.md) (SHIPPABLE_WITH_CAVEATS 89/100). Form 4 Hybrid — shared `TheoErrorCode` enum + per-domain extension slots + 2-layer SDK boundary translation. (Inspired by trpc `TRPCError` + `errorFormatter` ergonomic patterns; encore `Meta json:"-"` server-only filter; hono `cause` chain via TC39 proposal-error-cause.)
+
+- **`TheoErrorCode` + `TheoErrorEnvelope<TExt>` types** in `core/contracts/error-envelope.ts`. 16 HTTP-status codes + 5 SDK/agent-domain codes (`AGENT_RUN_ERROR`, `PROVIDER_KEY_MISSING`, `BUDGET_EXCEEDED`, `RATE_LIMITED`, `CREDENTIAL_POOL_EXHAUSTED`). Discriminated union enables exhaustive `switch (env.code)` narrowing.
+- **`ValidationFieldsExt` / `RetryableExt` / `HintExt`** extension types. `retryable` and `hint` are opt-in extensions, NOT base envelope fields — 3/3 references derive retryability from code identity, not envelope shape.
+- **`RETRYABLE_CODES: ReadonlySet<TheoErrorCode>` + `isRetryable(env)`** helper. Mirrors trpc's `retryableRpcCodes` pattern — consumers derive retry policy from code identity, not envelope field.
+- **`TheoError<TExt>` helper class** in `core/contracts/theo-error.ts`. Envelope-emitting `Error` subclass with `.envelope` getter, `toJSON()` for canonical wire shape, auto-strips `meta.stack` in non-dev (server-side filter analog to encore's `Meta json:"-"`). `fromUnknown(value)` coerces any thrown value into a TheoError safely.
+- **`formatError` hook in `theo.config.ts`** schema. `(envelope, ctx) => envelope` functional transformer with type-inferred extension. `FormatErrorHook` + `FormatErrorContext` types exported.
+- **`TheoFetchError.envelope` getter** in `theokit/client`. Detects envelope-at-root shape OR legacy `{ error: {...} }` G3 SerializedActionResult shape. Legacy `.status` / `.code` / `.issues` getters preserved — additive expansion only, zero call-site breakage.
+- **G3 `ActionError.envelope` getter** maps `ActionErrorCode` to canonical `TheoErrorCode` (`VALIDATION_ERROR` → `UNPROCESSABLE_ENTITY`, `CONTENT_TOO_LARGE` → `PAYLOAD_TOO_LARGE`).
+- **G3 `ActionInputError.envelope`** override emits `ValidationFieldsExt` in `envelope.ext`. UI consumers can switch on the unified envelope without coupling to class identity.
+- **`serverErrorToEnvelope(value)` boundary translator** in `core/contracts/server-error-to-envelope.ts`. Single-point mapping for ad-hoc Error classes (`AuthRequiredError`, `FileTooLargeError`, `RequestBodyTooLargeError`, `BodyTooLargeError`, `RouterConventionError`) → canonical envelope codes. Preserves class identity inside the codebase (no invasive call-site rewrites). `RouterConventionError` ships a `HintExt`-shaped ext with the actionable migration tip.
+
+### Notes (G5 deferred to a follow-up cohort)
+
+- **SDK `/server/errors-envelope.ts` sub-path with `toEnvelope`/`fromEnvelope`** for the 15+ `TheokitAgentError`-family classes — Phase 2 T2.2, deferred until the next `@theokit/sdk` minor.
+- **`@theokit/ui` `AgentErrorCard` envelope prop adoption** — Phase 2 T2.3, deferred until the next `@theokit/ui` minor.
+- **Migration codemod `theokit migrate 0.2-to-0.4 --envelope`** for consumer `err.name === 'X'` checks — Phase 3 T3.2, deferred (backward-compat preserved on every G5 surface so no consumer breakage today).
+- **Migration guide `docs/migration/error-envelope-0-2-to-0-4.md`** — Phase 3 T3.3, ships with the SDK + UI cohort.
+
+### Quality gates
+
+- 41 new G5 unit tests (`error-envelope.test.ts`, `theo-error.test.ts`, `schema-format-error.test.ts`, `theo-fetch-envelope.test.ts`, `action-protocol-envelope.test.ts`, `server-error-to-envelope.test.ts`) ALL GREEN
+- 4 new contract integration tests (`tests/integration/envelope-roundtrip.test.ts`) ALL GREEN — server+client round-trip with inline snapshot per blueprint ADR D4
+- 68 regression tests on G3 / theoFetch / TheoFetchError / app-client-proxy ALL GREEN (zero behavior change on legacy consumers)
+- `npx tsc --noEmit`: exit 0
+- `npx depcruise` on new modules: 0 violations (`core/contracts/` stays free of intra-monorepo deps — boundary translator inspects Error names by string, not by `instanceof`)
+- `npx eslint` on G5 files: 0 errors, 0 warnings (max-warnings=0)
+
 ## [0.4.0-beta.0] - 2026-06-04 (BREAKING — router convention lockdown + bundled 0.3.0 security cutover)
 
 > **One release, two breaking surfaces.** Per the bundled cutover decision
