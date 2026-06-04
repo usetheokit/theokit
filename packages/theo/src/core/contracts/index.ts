@@ -53,3 +53,10 @@ export { RETRYABLE_CODES, isRetryable } from './error-envelope.js'
 // meta.stack in non-dev (ADR D5). `fromUnknown` coerces any thrown value.
 export type { TheoErrorOptions } from './theo-error.js'
 export { TheoError, fromUnknown } from './theo-error.js'
+
+// Server-side boundary translation (G5 / T2.5). Maps ad-hoc Error class
+// names (AuthRequiredError, FileTooLargeError, RouterConventionError, etc.)
+// to canonical TheoErrorEnvelope at the wire boundary. Single translation
+// point preserves class identity inside the codebase (no invasive
+// call-site rewrites).
+export { serverErrorToEnvelope } from './server-error-to-envelope.js'
