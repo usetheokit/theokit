@@ -70,7 +70,7 @@ describe('G6 T1.2 — serverRoutesHmrPlugin', () => {
   it('test_change_under_server_routes_triggers_invalidation_after_debounce', () => {
     const plugin = serverRoutesHmrPlugin({ serverDir })
     expect(typeof plugin.configureServer).toBe('function')
-    plugin.configureServer!(fakeViteDevServer() as never)
+    ;(plugin.configureServer as (server: never) => void)(fakeViteDevServer() as never)
 
     watcher.emit('change', join(serverDir, 'routes', 'a.ts'))
 
@@ -87,7 +87,7 @@ describe('G6 T1.2 — serverRoutesHmrPlugin', () => {
 
   it('test_event_outside_server_routes_is_ignored', () => {
     const plugin = serverRoutesHmrPlugin({ serverDir })
-    plugin.configureServer!(fakeViteDevServer() as never)
+    ;(plugin.configureServer as (server: never) => void)(fakeViteDevServer() as never)
 
     watcher.emit('change', join(projectRoot, 'app', 'page.tsx'))
     watcher.emit('change', join(projectRoot, 'server', 'actions', 'foo.ts'))
@@ -99,7 +99,7 @@ describe('G6 T1.2 — serverRoutesHmrPlugin', () => {
 
   it('test_watcher_50ms_debounce_collapses_burst (EC-6)', () => {
     const plugin = serverRoutesHmrPlugin({ serverDir })
-    plugin.configureServer!(fakeViteDevServer() as never)
+    ;(plugin.configureServer as (server: never) => void)(fakeViteDevServer() as never)
 
     // 10 file changes within 30 ms — well inside the 50 ms debounce window
     for (let i = 0; i < 10; i++) {
@@ -120,7 +120,7 @@ describe('G6 T1.2 — serverRoutesHmrPlugin', () => {
 
   it('test_add_and_unlink_also_trigger_invalidation', () => {
     const plugin = serverRoutesHmrPlugin({ serverDir })
-    plugin.configureServer!(fakeViteDevServer() as never)
+    ;(plugin.configureServer as (server: never) => void)(fakeViteDevServer() as never)
 
     watcher.emit('add', join(serverDir, 'routes', 'new.ts'))
     vi.advanceTimersByTime(60)
@@ -133,7 +133,7 @@ describe('G6 T1.2 — serverRoutesHmrPlugin', () => {
 
   it('test_invalidation_targets_only_route_modules_in_graph', () => {
     const plugin = serverRoutesHmrPlugin({ serverDir })
-    plugin.configureServer!(fakeViteDevServer() as never)
+    ;(plugin.configureServer as (server: never) => void)(fakeViteDevServer() as never)
 
     watcher.emit('change', join(serverDir, 'routes', 'a.ts'))
     vi.advanceTimersByTime(60)
