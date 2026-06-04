@@ -6,6 +6,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0-beta.0] - 2026-06-04 (BREAKING — router convention lockdown + bundled 0.3.0 security cutover)
+
+> **One release, two breaking surfaces.** Per the bundled cutover decision
+> (no active users on `@latest`), 0.4.0-beta.0 ships the router lockdown
+> together with the previously-prepared 0.3.0 security cutover (CSRF
+> strict, CSP enforce). Users moving from 0.2.x → 0.4.0 see both changes
+> in one upgrade. The 0.3.0 calendar window was abandoned in favor of
+> bundling.
+
+### Changed (router convention — BREAKING)
+
+- **Scanner rejects dotted route basenames.** Files like `server/routes/auth.[provider].login.ts` now throw `RouterConventionError` at scan time. Use the directory-nested form `server/routes/auth/[provider]/login.ts`. ([0.4 router migration guide](https://theokit.dev/migration/0.3-to-0.4-router))
+- **Why this is a fix in disguise:** the previous regex was greedy and produced `paramNames: ['provider.login']` (literal dot in param key) OR URL patterns with literal dots (`/api/posts.:id` instead of `/api/posts/:id`). Every dotted route was either silently producing wrong params or completely unreachable.
+
+### Added (router migration tooling)
+
+- **`theokit migrate router` CLI subcommand.** Walks `server/routes/`, identifies dotted basenames, renames via `git mv` (or `fs.rename` fallback), and rewrites relative imports inside moved files (`./sibling` becomes `../sibling` at the new depth). Pure-core function `planRouterMigration(routesDir)` exposed for programmatic use. Idempotent — safe to re-run.
+- **EC-2 pre-flight** refuses to run while `theokit dev` is up on port 3000 / 3100 (prevents an HMR cascade across the rename storm). `--force` skips for CI / non-TTY.
+- **EC-5 case-insensitive collision detection** refuses to overwrite files differing only in case (macOS HFS+/APFS, Windows NTFS safety).
+- **EC-7 partial-failure observability:** `RouterMigrationPartialFailure` carries `filesAlreadyMigrated[]` for safe re-run recovery.
+- **`--dry-run` flag** prints the migration plan without touching disk.
+- **EC-4 test/spec file filter:** `*.test.ts` / `*.spec.ts` co-located with routes are silently skipped by both scanner and codemod.
+- **Vite watcher 50 ms debounce** (EC-6) for `server/routes/**`: bursty file events (e.g., the codemod's 23 renames in ~5 s) collapse into one invalidation + one full-reload — without this the dev server crashed under the storm.
+
+### Fixed (router silent bug-fix bundle — EC-8)
+
+- **23 routes in the canonical dogfood-app silently transitioned from unreachable to working** after migration. The legacy URL patterns (`/api/admin.sdk-config`, `/api/agents.:id` with literal dot, etc.) were never matched by the client code (`fetch('/api/admin/sdk-config')`, `fetch('/api/agents/42')`, etc.). Migration restores reachability to every endpoint your client code already expected. Audit: [`docs/audit/g6-router-dogfood-app-migration-2026-06-04.md`](docs/audit/g6-router-dogfood-app-migration-2026-06-04.md).
+
+### Changed (security cohort, bundled from 0.3.0 — BREAKING)
+
+These flips were prepared in the 0.3.0 cutover plan and ship here in 0.4.0-beta.0 because no users are on `@latest` 0.3.0 (calendar window abandoned for bundling).
+
+- **CSRF default flipped from `warn` to `strict`.** Apps that did not previously attach `X-Theo-Action: 1` to action POSTs will now receive 403. Convergent peer pattern is Sec-Fetch-Site → Origin → Referer (verified across 4 frameworks per blueprint Q1). Opt-out: set `security.csrf: 'warn'` in `theo.config.ts` (see [ADR-0023](docs/adr/0023-csp-csrf-in-house-aligned-with-peers.md)) ([0.2 → 0.3 CSRF migration guidance](https://theokit.dev/migration/0.2-to-0.3#1-csrf-default-warn--strict))
+- **CSP default flipped from `report-only` to `enforce`.** Inline `<script>` and `<style>` without per-request nonce now block. SSR nonce machinery threads `ctx.nonce` automatically through layout/page. Opt-out: set `security.cspMode: 'report-only'` ([0.2 → 0.3 CSP migration guidance](https://theokit.dev/migration/0.2-to-0.3#2-csp-default-report-only--enforce))
+
+### Added (cutover scaffolding kept active)
+
+- [`docs/migration/0.3-to-0.4-router.md`](docs/migration/0.3-to-0.4-router.md) — **NEW** router migration guide.
+- [`docs/audit/g6-router-pre-flight-2026-06-04.md`](docs/audit/g6-router-pre-flight-2026-06-04.md), [`docs/audit/g6-router-dogfood-app-migration-2026-06-04.md`](docs/audit/g6-router-dogfood-app-migration-2026-06-04.md), [`docs/audit/g6-router-templates-audit-2026-06-04.md`](docs/audit/g6-router-templates-audit-2026-06-04.md) — pre-flight, dogfood, templates audit docs.
+- Existing 0.3.0 docs (still valid): [`docs/migration/0.2-to-0.3.md`](docs/migration/0.2-to-0.3.md), [`docs/runbook/0.3.0-rollback.md`](docs/runbook/0.3.0-rollback.md), [`docs/blog/0.3.0-release.md`](docs/blog/0.3.0-release.md), [`docs/adr/0023-csp-csrf-in-house-aligned-with-peers.md`](docs/adr/0023-csp-csrf-in-house-aligned-with-peers.md).
+- `theokit check --upgrade-readiness 0.3` scanner emits migration-guide URL on success + violations.
+- E2E Playwright spec `tests/e2e/csp-blocks-external-script.spec.ts` proves CSP enforce blocks externally-injected scripts.
+
+### Notes
+
+- **Polyglot sidecars (`services: {}`) are UNAFFECTED.** The router convention applies only to TypeScript route files under `server/routes/`. Python FastAPI / Node Hono / etc. sidecars keep their own routing conventions.
+- **`create-theokit` templates already 0.4-compliant.** All 5 templates (default / saas / dashboard / api-only / postgres) ship without any dotted basenames. Verified by `planRouterMigration` returning `plan=0 pending` for every template.
+- Type generation for typed-client codegen across the router convention is **deferred to a follow-up `g6.1-codegen-deep-dive`** (per G6 plan ADR D4). 0.4.0-beta.0 ships the convention lockdown + codemod only.
+
+### Migration in three commands
+
+```bash
+# 1. Stop your dev server (the codemod refuses while it's up).
+# 2. Preview the plan.
+npx theokit@next migrate router --dry-run
+# 3. Apply.
+npx theokit@next migrate router
+```
+
+See [`docs/migration/0.3-to-0.4-router.md`](docs/migration/0.3-to-0.4-router.md) for the full guide, edge-case handling, and rollback procedure.
+
 ## [0.2.4] - 2026-06-03 (feat — shared-schema convention for P#4 plugin-forms)
 
 ### Added

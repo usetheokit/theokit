@@ -1,5 +1,23 @@
 # theo
 
+## 0.4.0-beta.0
+
+### Major Changes
+
+- **BREAKING — Router convention lockdown.** Scanner rejects dotted route basenames (`auth.[provider].login.ts`) with `RouterConventionError`. Use directory-nested form (`auth/[provider]/login.ts`). Codemod `theokit migrate router` handles the upgrade automatically. See [`docs/migration/0.3-to-0.4-router.md`](../../docs/migration/0.3-to-0.4-router.md).
+- **BREAKING — Bundled 0.3.0 security cutover.** CSRF default flips `warn` → `strict`; CSP default flips `report-only` → `enforce`. Apps not previously sending `X-Theo-Action: 1` on POSTs now get 403. Inline `<script>` without per-request nonce now blocks. Opt-out: `security.csrf: 'warn'` and `security.cspMode: 'report-only'` in `theo.config.ts`. See [`docs/migration/0.2-to-0.3.md`](../../docs/migration/0.2-to-0.3.md).
+- **Skips 0.3.0 → goes directly to 0.4.0-beta.0** because the 0.3.0 cutover calendar window was abandoned in favor of bundling both breaking surfaces in one release.
+
+### Added
+
+- **`theokit migrate router` CLI subcommand** — dotted-to-nested codemod with `--dry-run`, `--force` (skip EC-2 dev-server pre-flight), idempotent re-run, partial-failure observability, EC-5 case-insensitive collision detection, EC-4 test/spec file filter. Rewrites relative imports inside moved files automatically.
+- **`RouterConventionError` class** (`theokit/server/scan` barrel) emitted by `scanServerRoutes` when a dotted basename is encountered.
+- **`vite-plugin/server-routes-hmr.ts`** — Vite watcher invalidation for `server/routes/**` with 50 ms debounce (EC-6) so the codemod's rename storm doesn't crash the dev server.
+
+### Fixed
+
+- **23 routes silently transitioned from unreachable to working** in the canonical dogfood-app after migration. Every dotted route was producing either a wrong `paramNames` shape OR a URL pattern with a literal dot that the client code never hit (audit: [`docs/audit/g6-router-dogfood-app-migration-2026-06-04.md`](../../docs/audit/g6-router-dogfood-app-migration-2026-06-04.md)).
+
 ## 0.2.1
 
 ### Patch Changes
