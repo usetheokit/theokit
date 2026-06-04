@@ -133,6 +133,31 @@ cli
   })
 
 cli
+  .command(
+    'migrate <kind>',
+    'Run a one-shot convention migration. Supported: router (G6 dotted→nested)',
+  )
+  .option('--dry-run', 'Print the migration plan but do not touch the filesystem')
+  .option('--force', 'Skip the dev-server port pre-flight check (CI / non-TTY)')
+  .action(async (kind: string, options: CliOptions) => {
+    try {
+      if (kind !== 'router') {
+        console.error(`\n  ✗ Unknown migration kind: ${kind}. Supported: router\n`)
+        process.exit(1)
+      }
+      const { routerMigrateCommand } = await import('./commands/migrate/router.js')
+      await routerMigrateCommand({
+        dryRun: Boolean(options.dryRun),
+        force: Boolean(options.force),
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
+
+cli
   .command('docker', 'Generate Dockerfile for production')
   .option('--force', 'Overwrite existing Dockerfile')
   .action(async (options: CliOptions) => {
