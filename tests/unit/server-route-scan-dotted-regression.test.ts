@@ -1,23 +1,21 @@
 /**
- * G6 T0.1 — RED regression test for the dotted-path scanner bug.
+ * G6 T0.1 — Dotted-path regression test (INVERTED after T1.1).
  *
  * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
- * Bug observed during G11 implementation 2026-06-04 madrugada:
- *   `auth.[provider].login.ts` produces routePath `/auth.:provider.login` where
- *   `compilePattern` parses the segment `:provider.login` as a single param
- *   name (with literal text in it), NOT extracting `provider` cleanly. Result:
- *   `params.provider === undefined` at request time.
- *
- * This test asserts the CURRENT (broken) behavior in Phase 0. In Phase 1
- * T1.1, the scanner will REJECT dotted basenames with `RouterConventionError`,
- * at which point this test is inverted to expect the explicit error.
- *
- * Status before T1.1: RED (assertion fails on scanner that incorrectly succeeds)
- * Status after T1.1: GREEN (this file is updated to expect RouterConventionError)
+ * History:
+ *   - Phase 0 (RED, 2026-06-04 madrugada): asserted the BROKEN behavior of the
+ *     scanner — `auth.[provider].login.ts` succeeded but produced
+ *     `paramNames: ['provider.login']` (single param with literal dot) and
+ *     `routePath: '/api/auth.:provider.login'` (literal dot in URL pattern).
+ *   - Phase 1 T1.1 (GREEN, 2026-06-04 madrugada): scanner now REJECTS dotted
+ *     basenames with `RouterConventionError`. This file asserts the new
+ *     contract; the original BROKEN assertions are preserved in commit
+ *     history (`git log --follow tests/unit/server-route-scan-dotted-regression.test.ts`).
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { scanServerRoutes } from '../../packages/theo/src/server/scan/scan.js'
+import { RouterConventionError } from '../../packages/theo/src/server/scan/errors.js'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -39,38 +37,19 @@ function touch(relativePath: string, content = 'export const GET = { handler: ()
   writeFileSync(full, content)
 }
 
-describe('G6 T0.1 — dotted-path regression (RED before Phase 1 T1.1)', () => {
-  it('test_dotted_middle_param_silently_drops: auth.[provider].login.ts paramNames does NOT contain "provider"', () => {
+describe('G6 T0.1 — dotted-path regression (post-T1.1 rejection contract)', () => {
+  it('test_dotted_middle_param_now_rejected: auth.[provider].login.ts throws RouterConventionError', () => {
     touch('auth.[provider].login.ts')
-    const routes = scanServerRoutes(serverDir)
-    expect(routes).toHaveLength(1)
-    const route = routes[0]!
-
-    // The scanner SHOULD extract `provider` as a path param. Bug: it does not —
-    // the regex matches `:provider.login` as a single param name containing
-    // literal `.login`. Asserting the BROKEN behavior to document the bug.
-    expect(route.paramNames).not.toContain('provider')
-
-    // Documenting what the current scanner DOES produce (broken):
-    //   routePath: '/api/auth.:provider.login' (scanner prefixes with /api)
-    //   paramNames: ['provider.login']  (a single param-key with literal dot)
-    expect(route.routePath).toBe('/api/auth.:provider.login')
-    expect(route.paramNames).toEqual(['provider.login'])
+    // BEFORE T1.1: silently produced paramNames=['provider.login'] (bug).
+    // AFTER T1.1: fails fast at scan time with actionable error.
+    expect(() => scanServerRoutes(serverDir)).toThrow(RouterConventionError)
   })
 
-  it('test_dotted_trailing_only_param_also_silently_broken: posts.[id].ts produces wrong paramNames', () => {
+  it('test_dotted_trailing_only_now_rejected: posts.[id].ts throws RouterConventionError', () => {
     touch('posts.[id].ts')
-    const routes = scanServerRoutes(serverDir)
-    expect(routes).toHaveLength(1)
-    const route = routes[0]!
-
-    // Even the "trailing-only" dotted convention is broken — the dot stays
-    // literal in the route path. The user expected `/api/posts/:id` but the
-    // scanner produces `/api/posts.:id`.
-    expect(route.routePath).toBe('/api/posts.:id')
-
-    // paramNames contains 'id' but the URL pattern is `/api/posts.X` (literal
-    // dot), not `/api/posts/X`. So a request to `/api/posts/42` would NOT match.
-    expect(route.paramNames).toEqual(['id'])
+    // BEFORE T1.1: silently produced routePath='/api/posts.:id' (literal dot,
+    // unreachable from request `/api/posts/42`).
+    // AFTER T1.1: fails fast at scan time with actionable error.
+    expect(() => scanServerRoutes(serverDir)).toThrow(RouterConventionError)
   })
 })
