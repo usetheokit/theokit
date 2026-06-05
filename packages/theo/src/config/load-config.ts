@@ -5,9 +5,9 @@
  */
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 import { TheoConfigError } from './errors.js'
+import { importUserModule } from './import-user-module.js'
 import { loadEnv } from './load-env.js'
 import { theoConfigSchema } from './schema.js'
 import type { TheoConfig } from './schema.js'
@@ -65,7 +65,7 @@ export async function loadConfig(dir: string): Promise<TheoConfig> {
 
   let mod: Record<string, unknown>
   try {
-    mod = (await import(pathToFileURL(configPath).href)) as Record<string, unknown>
+    mod = await importUserModule(configPath)
   } catch (err) {
     throw new TheoConfigError([{ field: '_file', message: (err as Error).message }], configPath)
   }
@@ -94,7 +94,7 @@ export async function loadConfig(dir: string): Promise<TheoConfig> {
 
     if (existsSync(envPath)) {
       try {
-        const envMod = (await import(pathToFileURL(envPath).href)) as Record<string, unknown>
+        const envMod = await importUserModule(envPath)
         const envConfig = envMod.default
 
         if (envConfig != null && typeof envConfig === 'object') {
