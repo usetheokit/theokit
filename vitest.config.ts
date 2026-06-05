@@ -11,6 +11,32 @@ export default defineConfig({
     // most efficient hook for the better-sqlite3 ABI mismatch guard.
     // See: tests/setup-native-bindings.ts + scripts/preflight-native-bindings.mjs.
     globalSetup: ['./tests/setup-native-bindings.ts'],
+    // theokit-test-suite-cleanup followup 2026-06-05 — register `tsx/esm`
+    // ESM loader inside every test worker so `loadConfig()` (and downstream
+    // tests that spawn `theokit dev`/`build`) can `await import(...theo.config.ts)`
+    // against user-authored TypeScript configs. CLI bin already calls
+    // `import "tsx/esm"` at startup; setupFiles closes the symmetric gap
+    // for in-process tests. See tests/setup-tsx-loader.ts for full rationale
+    // + the failure inventory it closes.
+    setupFiles: ['./tests/setup-tsx-loader.ts'],
+    // theokit-test-suite-cleanup followup 2026-06-05 — vitest defaults to
+    // running ALL dynamic `await import()` calls through Vite's SSR loader
+    // (including those inside framework code like `load-config.ts:68` that
+    // import user-authored `theo.config.ts` files written to /tmp during
+    // tests). Vite cannot resolve URLs outside its server root, so it
+    // throws "Cannot find module" even though the file exists. The
+    // `server.deps.external` option marks paths matching the predicate
+    // as external — Vite hands them back to Node, where tsx/esm
+    // (registered by tests/setup-tsx-loader.ts) handles the actual
+    // transformation. The OS-tempdir prefix (`/tmp/`, `/var/folders/`,
+    // `os.tmpdir()` on linux/mac) covers every test fixture path.
+    // Without this hook, ~89 tests fail (TheoConfigError "Cannot find
+    // module" cascade) — verified empirically 2026-06-05.
+    server: {
+      deps: {
+        external: [/^\/tmp\//, /^\/var\/folders\//, /^\/private\/var\/folders\//],
+      },
+    },
     // theokit-test-suite-cleanup T5 — integration tests spawn `theokit dev`
     // / `theokit build` subprocesses that compete for ports + CPU when run
     // in parallel. Empirical: under default parallel `forks` pool, multiple
