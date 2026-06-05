@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { theoCloudAdapter } from '../../packages/theo/src/adapters/theo-cloud.js'
 import { VALID_TARGETS } from '../../packages/theo/src/adapters/types.js'
 
-describe('T2.3 — theo-cloud adapter (Wave 2 stub)', () => {
+describe('T2.3 — theo-cloud adapter (Wave 3 v2.0 thin)', () => {
   it('VALID_TARGETS includes "theo-cloud"', () => {
     expect(VALID_TARGETS).toContain('theo-cloud')
   })
@@ -21,8 +21,11 @@ describe('T2.3 — theo-cloud adapter (Wave 2 stub)', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       await theoCloudAdapter.build({ port: 3000, ssr: false } as never, tmp)
       const logCalls = consoleSpy.mock.calls.map((c) => String(c[0]))
-      expect(logCalls.some((l) => l.includes('Wave 2 stub'))).toBe(true)
-      expect(logCalls.some((l) => l.includes('services=none'))).toBe(true)
+      expect(logCalls.some((l) => l.includes('Wave 3 v2.0'))).toBe(true)
+      expect(logCalls.some((l) => l.includes('TS-only app (no services)'))).toBe(true)
+      expect(logCalls.some((l) => l.includes('TheoCloud emits K8s manifests internally'))).toBe(
+        true,
+      )
       consoleSpy.mockRestore()
     } finally {
       rmSync(tmp, { recursive: true, force: true })
