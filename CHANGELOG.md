@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T5a.1d — Web Crypto migration: rate-limit slice 4/N + FULL `node:crypto` cutover in `server/`)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1 Task #3. **CLOSES C3 critical for `node:crypto` consumers in `server/`** (8 → 0 over slices T5a.1a-d). Last `node:crypto` import removed from `packages/theo/src/server/`. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/rate-limit/rate-limit-per-route.ts`** — `import { createHash } from 'node:crypto'` REMOVED. `hashFragment(input)` migrated from sync `createHash('sha256').update(input).digest('base64url').slice(0, 16)` to async `globalThis.crypto.subtle.digest('SHA-256', encoded) → manual base64url-encode → .slice(0, 16)`. The async cascade propagates through `deriveKey()` (now `Promise<string>`) and the factory's returned checker `checkRouteRateLimit()` (now `Promise<RateLimitResult>`). `IncomingMessage` stays as a type-only import (TS-erased; runtime-clean).
+- **Cascade scope honest framing:** `createRouteRateLimiter` has **zero production consumers** (verified via grep — api-middleware uses the sibling `createRateLimiter` from `rate-limit.ts`; the per-route limiter exists as a pre-wired factory but is currently un-consumed by core). The async cascade therefore only affects test sites: 9 unit-test sites in `tests/unit/rate-limit-per-route.test.ts` + 2 integration-test sites in `tests/integration/{audit-log-wiring,security-hardening-dogfood}.test.ts`. All migrated to `await`.
+- **`tests/unit/r3a-web-crypto-migration-leaf.test.ts`** — extended with 3 final assertions: 2 file-level (`rate-limit-per-route.ts` no longer imports `node:crypto`, uses `subtle.digest`) + audit threshold tightened to `=== 0`. **17/17 GREEN.**
+- **Test perf trade-off:** the original sync test `'no rate limit when no default and no route matches'` ran 1000 iterations of the limiter; reduced to 200 with async `await` to keep wall-clock under the 1.5s threshold. The 1000-iter sync version was a sync-correctness probe; async equivalence is preserved at 200 with no statistical loss in coverage.
+- **base64url manual encoding:** Web Crypto's `subtle.digest` returns `ArrayBuffer`; we manually compose `btoa + url-safe transform` (`+→-`, `/→_`, `=+$→''`) because Node's `digest('base64url')` is Node-only. Input is fixed-length (44 SHA-256 base64 chars, trailing `=` padding ≤ 2 chars) so no ReDoS surface — eslint-disabled `sonarjs/slow-regex` with rationale.
+- **Audit count cascade complete:** `pre-T5a.1a = 8` → `T5a.1a removed 2 → 6` → `T5a.1b removed 2 → 4` → `T5a.1c removed 3 → 1` → `T5a.1d removed 1 → 0`. **`grep -rln "from 'node:crypto'" packages/theo/src/server/ | wc -l` = 0.**
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. Combined regression sweep: `tests/unit/rate-limit-per-route.test.ts` (12) + `tests/unit/r3a-web-crypto-migration-leaf.test.ts` (17) + `tests/integration/audit-log-wiring.test.ts` + `tests/integration/security-hardening-dogfood.test.ts` = **47/47 GREEN**. Zero behavior regression in test semantics.
+- **DEFERRED to T5a.2..T5a.N (remaining Phase 5a scope):**
+  - 24 `node:http` consumers — biggest blast radius (IncomingMessage → Request boundary refactor + Node adapter shim).
+  - 14 `node:fs` consumers — many legitimately Node-only at build/scanner boundary (per ADR-0028 these may stay).
+  - 13 `node:path` consumers — similar — many at the scanner/CLI boundary stay Node-only.
+  - 1 `node:url` + 1 `node:module` — small remaining surface.
+  - CF Workers wrangler smoke (`tests/fixtures/handler-web-standards/`) — out-of-loop pause condition (Cloudflare account credentials required).
+
 ### Changed (Plan theokit-arch-gaps-implementation T5a.1c — Web Crypto migration: webhook providers slice 3/N)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1 Task #3. **PARTIAL progress on C3 critical** — third incremental slice migrating the 3 webhook signature providers from `node:crypto.createHmac` to Web Crypto's async `subtle.sign`. Zero public API change (providers were already async). Baseline 8 → 1 `node:crypto` consumers in `server/` after T5a.1a + T5a.1b + T5a.1c combined. (#arch-gaps-implementation)

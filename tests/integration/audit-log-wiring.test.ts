@@ -77,13 +77,14 @@ describe('T4.2 — csrf.warn emits audit event via safeAudit', () => {
 })
 
 describe('T4.2 — rate-limit.exceeded emits audit event', () => {
-  it('limited request forwards to audit', () => {
+  // T5a.1d — limiter became async (Web Crypto cascade in rate-limit-per-route).
+  it('limited request forwards to audit', async () => {
     const { logger, events } = recordingLogger()
     const limiter = createRouteRateLimiter({ default: { windowMs: 60_000, max: 1 } })
     // First request OK
-    limiter(mockReq({ url: '/api/x' }))
+    await limiter(mockReq({ url: '/api/x' }))
     // Second request → limited
-    const r = limiter(mockReq({ url: '/api/x' }))
+    const r = await limiter(mockReq({ url: '/api/x' }))
     if (r.limited) {
       safeAudit(logger, {
         action: 'rate-limit.exceeded',
