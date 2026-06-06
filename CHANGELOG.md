@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase F slice 3/3 — Web WebSocket handler + Phase F CLOSED)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase F. **CLOSES Phase F (Plugin types + define).** All 3 slices shipped: plugin-types Web sibling + define-channel Web sibling + define-websocket Web sibling. Next: Phase G (Execute pipeline — HIGH blast radius). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/define/define-websocket.ts`** — adds Web-Standards sibling:
+  - `defineWebSocket(handler)` + `WebSocketHandler` (existing IncomingMessage) UNCHANGED.
+  - **`WebSocketHandlerWeb` interface NEW** — mirror with:
+    - `onOpen(ws, request: Request)` instead of `req: IncomingMessage`.
+    - `onMessage(ws, data: string | Uint8Array)` instead of `string | Buffer` (Web standards have no Buffer; Node Buffer is a Uint8Array subclass so legacy values flow through unchanged at the adapter boundary).
+    - `onClose(ws, code, reason: string)` instead of `Buffer` (Web `CloseEvent` exposes reason as UTF-8 string natively).
+    - `onError(ws, error)` shape-agnostic.
+  - **`defineWebSocketWeb(handler): WebSocketHandlerWeb` NEW** — identity function for type inference.
+  - **Architectural note inlined** documenting per-runtime upgrade semantics: Node `WebSocketServer.handleUpgrade(req, ...)` (IncomingMessage); CF Workers `new WebSocketPair()` (Web Request); Bun `server.upgrade(request, ...)` (Web Request); Deno `Deno.upgradeWebSocket(request)` (Web Request). Cross-runtime endpoints ship BOTH `WebSocketHandler` + `WebSocketHandlerWeb` exports — canonical Hono/Nitric pattern.
+- **`tests/unit/define-websocket-web.test.ts` NEW** — 7 RED→GREEN assertions:
+  - Identity function returns handler unchanged.
+  - All-optional-methods-omitted valid.
+  - `onOpen` receives Request (`.headers.get(name)` available).
+  - `onMessage` accepts string data.
+  - `onMessage` accepts Uint8Array data (NOT Buffer).
+  - `onClose` reason is string (NOT Buffer).
+  - `onError` receives Error instance.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **21/21 GREEN** combined Phase F sweep — 7 new (define-websocket-web) + 5 (define-channel-web) + 5 (define-channel) + 4 (define-websocket).
+- **Phase F CLOSED:** 3/3 leaves complete (plugin-types + define-channel + define-websocket).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase F slice 2/3 — Web channel handler)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase F. (#arch-gaps-implementation)
