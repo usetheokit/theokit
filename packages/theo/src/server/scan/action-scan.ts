@@ -50,6 +50,10 @@ export class ActionScanError extends Error {
     conflictingPaths: readonly string[],
   ) {
     super(message)
+    // T4.1 fix: identify class by name so serverErrorToEnvelope boundary
+    // translator can route via class-name lookup (without this, runtime
+    // `err.name` defaults to 'Error' and the meta.name diagnostic is wrong).
+    this.name = 'ActionScanError'
     this.code = code
     this.conflictingPaths = conflictingPaths
   }
