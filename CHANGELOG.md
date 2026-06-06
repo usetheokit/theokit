@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 3/6 — CSRF readiness endpoint Web sibling)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; csrf-readiness-endpoint.ts is leaf #3 of 6). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/security/csrf-readiness-endpoint.ts`** — adds the Web-Standards sibling:
+  - `handleCsrfReadiness(req, res, store): Promise<boolean>` (existing IncomingMessage) UNCHANGED.
+  - **`handleCsrfReadinessRequest(request, store): Promise<Response | null>` NEW** — returns `Response` when the URL matches one of the readiness paths; returns `null` when not (caller short-circuits accordingly — same control-flow semantic as the IncomingMessage path's boolean return).
+  - Same routes (GET `CSRF_READINESS_PATH`, POST `CSRF_READINESS_RESET_PATH`).
+  - Same CSRF dog-food on reset: requires `X-Theo-Action: 1` + same-origin (Origin matches Host header OR `request.url`'s host as fallback when host header absent — Web Request guarantees absolute URL).
+  - Helper functions `buildJsonResponse`, `buildErrorResponse`, `originMatchesHostFromRequest` are private to this file.
+- **`tests/unit/csrf-readiness-endpoint-request.test.ts` NEW** — 8 RED→GREEN assertions covering:
+  - Non-matching URL → `null`.
+  - `GET /__theo/csrf-readiness` → 200 + JSON summary.
+  - `POST /__theo/csrf-readiness` → 405 METHOD_NOT_ALLOWED.
+  - `GET /__theo/csrf-readiness/reset` → 405 METHOD_NOT_ALLOWED.
+  - Reset POST without `X-Theo-Action` → 403 CSRF_INVALID.
+  - Reset POST with `X-Theo-Action` but cross-origin → 403 CSRF_INVALID.
+  - Reset POST with `X-Theo-Action` + same-origin → 204 + `store.reset()` invoked.
+  - Reset POST uses `request.url` fallback when host header absent (Web-only semantic).
+- **Validation:** `pnpm typecheck` exit 0 (1 initial mistake about `CsrfReadinessStore.record()` shape caught + fixed — `{method, path, reason}` not `{route, secFetchSite, origin}`). `pnpm eslint` clean. **15/15 GREEN** combined sweep — 8 new Web tests + 7 legacy IncomingMessage tests (`tests/unit/csrf-readiness-endpoint.test.ts` unchanged).
+- **Phase B progress:** **3/6 header-only leaves complete** (csrf.ts + csrf-multi-header.ts + csrf-readiness-endpoint.ts). 3 remaining: `csp-report.ts`, `cors.ts`, `cookies.ts`. Each follows the same pure-helper + Web-shaped sibling pattern.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 2/6 — multi-header CSRF Web sibling)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; csrf-multi-header.ts is leaf #2 of 6). Same dual-signature pattern as slice 1/6: extract pure helper + add Web-shaped sibling preserving the IncomingMessage path unchanged. (#arch-gaps-implementation)
