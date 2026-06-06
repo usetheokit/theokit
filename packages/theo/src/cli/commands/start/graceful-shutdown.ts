@@ -12,7 +12,7 @@
 
 import type { Server as HttpServer } from 'node:http'
 
-import { warnOnce } from '../../server/observability/logger.js'
+import { warnOnce } from '../../../server/observability/logger.js'
 
 export function installGracefulShutdown(server: HttpServer): void {
   let shuttingDown = false
@@ -41,7 +41,7 @@ export function installGracefulShutdown(server: HttpServer): void {
       // agents may still hold open pool refs while evicting; closing pools
       // first would break in-flight queries.
       try {
-        const { getStorageManager } = await import('../../server/storage/storage-manager.js')
+        const { getStorageManager } = await import('../../../server/storage/storage-manager.js')
         const manager = getStorageManager()
         await manager.dispose()
       } catch (err) {

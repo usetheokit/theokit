@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { resolveSsrEntry } from '../../packages/theo/src/cli/commands/start.js'
+import { resolveSsrEntry } from '../../packages/theo/src/cli/commands/start/index.js'
 
 /**
  * T0.1 — SSR entry resolution for `theokit start`.

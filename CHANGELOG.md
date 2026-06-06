@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T2.2 — M4 cli/commands/start/ subfolder)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.2. Pure structural refactor; ZERO behavior change. Closes M4 mecânico (inconsistência interna — sibling `cli/commands/migrate/` JÁ era subfolder; `start*` files eram 7 flat). (#arch-gaps-implementation)
+
+- **8 files moved** into `packages/theo/src/cli/commands/start/` (git history preserved):
+  - `start.ts` → `start/index.ts`
+  - `start-bootstrap-stages.ts` → `start/bootstrap-stages.ts`
+  - `start-graceful-shutdown.ts` → `start/graceful-shutdown.ts`
+  - `start-handlers.ts` → `start/handlers.ts`
+  - `start-manifest-loader.ts` → `start/manifest-loader.ts`
+  - `start-request-handler.ts` → `start/request-handler.ts`
+  - `start-ssr-setup.ts` → `start/ssr-setup.ts`
+  - `start-websocket-handler.ts` → `start/websocket-handler.ts`
+- **EC-6 codemod (intra-folder)**: 9 sibling imports `from './start-XXX.js'` → `from './XXX.js'` (drop `start-` prefix, same folder now).
+- **External-folder imports re-leveled (15+ sites)**: `from '../../<X>...'` → `from '../../../<X>...'` (one extra `..` because files moved 1 level deeper). Covered BOTH static `import { … } from …` AND dynamic `await import('…')` forms (the latter were the most-overlooked failure mode — only surfaced via typecheck error).
+- **Sibling `./preflight-node-version.js` adjustment**: `start/index.ts` was importing `'./preflight-node-version.js'` (when at `cli/commands/`); fixed to `'../../preflight-node-version.js'` (preflight lives in `cli/`).
+- **External-consumer entry-point update**: `cli/index.ts:42` dynamic `import('./commands/start.js')` → `import('./commands/start/index.js')`.
+- **Test import update**: `tests/unit/start-ssr-resolution.test.ts:7` repointed to `cli/commands/start/index.js`.
+- **Validation**: `pnpm typecheck` exit 0 (clean). `pnpm vitest run tests/unit/start-ssr-resolution.test.ts` → 1 file / 4 tests GREEN.
+
 ### Changed (Plan theokit-arch-gaps-implementation T2.1 — M5 lonely folders eliminated)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.1. Pure structural refactor; ZERO behavior change. Closes M5 mecânico (architecture review consolidated finding). (#arch-gaps-implementation)

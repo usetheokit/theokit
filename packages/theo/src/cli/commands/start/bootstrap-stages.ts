@@ -14,7 +14,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { warnOnce } from '../../server/observability/logger.js'
+import { warnOnce } from '../../../server/observability/logger.js'
 
 interface SdkAgentRegistry {
   configure?: (opts: { maxAgents?: number; idleTimeoutMs?: number }) => void
@@ -37,7 +37,7 @@ export async function configureAgentRegistryFromConfig(
     const sdkConfigure = sdk?.Agent?.registry?.configure
     if (sdkConfigure === undefined) return
     const { configureAgentRegistryOnce } =
-      await import('../../server/agent/configure-agent-registry.js')
+      await import('../../../server/agent/configure-agent-registry.js')
     configureAgentRegistryOnce(
       {
         configure: (opts) => {
@@ -63,8 +63,8 @@ export async function configureAgentRegistryFromConfig(
 export async function configureStorageManagerFromConfig(storageConfig: unknown): Promise<void> {
   if (storageConfig === undefined || storageConfig === null) return
   try {
-    const { getStorageManager } = await import('../../server/storage/storage-manager.js')
-    const { storageSchema } = await import('../../config/schema.js')
+    const { getStorageManager } = await import('../../../server/storage/storage-manager.js')
+    const { storageSchema } = await import('../../../config/schema.js')
     // Re-validate at boot so a malformed config from a non-Zod source
     // (test fixtures, dynamic configs) surfaces a clear error early.
     const parsed = storageSchema.parse(storageConfig)
