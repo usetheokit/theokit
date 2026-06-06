@@ -39,6 +39,8 @@ import type { z } from 'zod'
 import type { TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
 import { serverErrorToEnvelope } from '../core/contracts/server-error-to-envelope.js'
 
+import { validateCsrfRequest } from './security/csrf.js'
+
 /**
  * Minimal structural type for a `defineRoute` config. Mirrors
  * `core/contracts/route-config.ts` shape but only the fields this entry
@@ -243,6 +245,34 @@ function envelopeCodeToStatus(code: string): number {
 }
 
 /**
+ * Optional behavior knobs for `executeWebRequest`. Each knob defaults to
+ * the safe "no-op" stance so existing Phase A consumers (T1.2 fixture
+ * tests) keep working unchanged.
+ *
+ * **`csrfMode`** (T5a.2 Phase B slice 1/6) — when set to `'strict'`, the
+ * Web-Standards request gate runs `validateCsrfRequest` BEFORE method
+ * dispatch on state-changing methods (POST/PUT/PATCH/DELETE) and emits a
+ * `403 FORBIDDEN` envelope when the check fails. Default: `'off'` (no
+ * CSRF enforcement) to preserve Phase A backward compat. Production
+ * consumers SHOULD pass `csrfMode: 'strict'`.
+ *
+ * Per the T5a.2 plan v1.0 § Phase B header-only leaves: csrf.ts is the
+ * first leaf to be migrated (slice 1/6); 5 more sibling leaves remain
+ * (csrf-multi-header, csrf-readiness-endpoint, csp-report, cors, cookies).
+ */
+export interface ExecuteWebRequestOptions {
+  csrfMode?: 'off' | 'strict'
+}
+
+/**
+ * Methods that require CSRF enforcement when `csrfMode: 'strict'`. GET
+ * and HEAD are read-only per HTTP semantics and bypass CSRF (the threat
+ * model is state-changing requests forged via cross-origin POSTs); OPTIONS
+ * is the CORS preflight and also bypasses.
+ */
+const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/**
  * Web-Standards entry-point for executing a route module against a native
  * Web `Request`. Returns a native Web `Response`.
  *
@@ -256,11 +286,13 @@ function envelopeCodeToStatus(code: string): number {
  * const response = await executeWebRequest(
  *   new Request('http://localhost/api/users', { method: 'GET' }),
  *   users,
+ *   { csrfMode: 'strict' },
  * )
  */
 export async function executeWebRequest(
   request: Request,
   routeModule: WebRouteModule,
+  opts: ExecuteWebRequestOptions = {},
 ): Promise<Response> {
   const method = request.method.toUpperCase() as keyof WebRouteModule
   const config = routeModule[method] as WebRouteHandlerConfig | undefined
@@ -273,6 +305,22 @@ export async function executeWebRequest(
       status: 405,
       headers: { 'content-type': 'application/json' },
     })
+  }
+  // T5a.2 Phase B slice 1/6 — CSRF enforcement (opt-in via opts.csrfMode).
+  // Only state-changing methods (POST/PUT/PATCH/DELETE) get checked;
+  // GET/HEAD/OPTIONS bypass per HTTP threat-model semantics.
+  if (opts.csrfMode === 'strict' && CSRF_PROTECTED_METHODS.has(method)) {
+    const csrfCheck = validateCsrfRequest(request)
+    if (!csrfCheck.valid) {
+      const envelope: TheoErrorEnvelope = {
+        code: 'FORBIDDEN',
+        message: `CSRF check failed: ${csrfCheck.reason}`,
+      }
+      return new Response(JSON.stringify(envelope), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
   }
   try {
     const outcome = await runHandler(config, request)
