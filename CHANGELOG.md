@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (BREAKING) (Plan theokit-arch-gaps-implementation T2.5 — M1 sub-package exports)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.5. Hono-shape adoption per [ADR-0028 blueprint D4](docs/adr/0028-multi-runtime-strategy.md). Closes M1 mecânico (16 `export *` wildcards in `server/index.ts` violated ISP at package surface — 376 transitive exports for consumers wanting 6). (#arch-gaps-implementation)
+
+- **15 new `package.json#exports` sub-paths** for `theokit/server/<domain>` (previously umbrella-only): `server/agent`, `server/define`, `server/http`, `server/observability`, `server/plugins`, `server/rate-limit`, `server/realtime`, `server/scan`, `server/security`, `server/storage`, `server/webhook` (11 new) joining the existing 4 (`server/auth`, `server/cost`, `server/cron`, `server/jobs`).
+- **15 new tsup entries** matching the exports field — `dist/server/<domain>/index.{js,d.ts}` materialized at build time, mirroring the pattern already used for `server/auth/index` etc.
+- **`server/index.ts` becomes deprecated umbrella barrel** with one-time runtime `console.warn` on first import (EC-2 honest framing): `"[theokit] umbrella import 'theokit/server' is DEPRECATED. Use sub-paths (theokit/server/<domain>): auth, jobs, http, security, observability, etc. ... Removal scheduled for 0.x+2."`. Module-scoped flag `__theokit_server_umbrella_warn_emitted__` ensures the warning fires once per process — tree-shake-safe (IIFE on module load, single console.warn cost negligible).
+- **Migration timeline (per EC-2):** umbrella barrel keeps working in this release (0.x). Removal final in **0.x+2** per CHANGELOG — gives consumers 2 minor cycles to migrate. The `dist/server/index.js` continues to materialize from `tsup` so dynamic `import('theokit/server')` consumers see the deprecation warning instead of an outright module-not-found error.
+- **JSDoc on `server/index.ts`** updated to reflect deprecation status + lists the canonical sub-paths + points to migration codemod (planned for follow-up release).
+- **Validation:** `pnpm typecheck` exit 0 (clean). Sample suites (`tests/unit/{devtools-action-record,load-config,define-route}.test.ts`) → 3 files / 24 tests GREEN. Zero new regressions.
+
+**DEFERRED to follow-up (out of T2.5 scope per plan v1.2 + autonomous halt-loop constraints):**
+- `npx publint packages/theo` CI gate (publint needs working `pnpm build` to validate `dist/` shape; full build pipeline requires Phase 5a fix for `node:*`-locked `server/` body — meta-circular dependency. publint adoption lands in a follow-up plan after Phase 5a).
+- `pnpm exec theokit migrate server-umbrella-to-subpaths` codemod (mentioned in deprecation JSDoc but not yet implemented — needs ts-morph-based AST transform similar to T4.1 envelope codemod; deferred to ship alongside T4.1 ts-morph infrastructure).
+- `docs/migration/0.x-to-0.y-server-exports.md` migration guide (one-pager listing the umbrella keys + their new sub-path home; can ship without code change — separate doc PR).
+- 5 loose `server/` root files (`serialization.ts`, `body-parser.ts`, `body-parser-web.ts`, `plugin-types.ts`, `transformer.ts`) stay re-exported via umbrella only; final consolidation under `theokit/server/runtime` planned for 0.x+2 cleanup release.
+
 ### Changed (Plan theokit-arch-gaps-implementation T2.4 — M3 devtools sub-organization)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.4. Pure structural refactor; ZERO behavior change. Closes M3 mecânico (devtools/ root with 13 loose files mixing 5 concerns vs Astro `dev-toolbar/{apps,helpers,settings,toolbar,ui-library}` pattern). (#arch-gaps-implementation)
