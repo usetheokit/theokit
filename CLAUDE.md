@@ -6,6 +6,25 @@ This file complements the [Theo monorepo CLAUDE.md](../CLAUDE.md). Cross-project
 
 ---
 
+## How TheoKit connects to TheoCloud (read this BEFORE editing any seam code)
+
+TheoKit (this repo) emits `.theo/services.json` v2 — the **only** contract surface with the **TheoCloud commercial PaaS** (`theo-cloud/theo`). The two systems are deliberately decoupled per the `TheoCloud-first re-lock (2026-05-27)` invariant — neither imports the other; the artifact on disk is the seam.
+
+**Canonical integration doc:** [`docs/architecture/theokit-theocloud-integration.md`](docs/architecture/theokit-theocloud-integration.md). It contains the end-to-end flow diagram, the wire-protocol contract, the typed-error cause chain, the services.json schema-version table, and the hardening invariants from Plan v1.2 (the 22 findings closed on the integration seam).
+
+Claude MUST consult that doc BEFORE editing:
+
+- `packages/theo/src/services/adapters-bridge/manifest.ts` (the v2 emit producer)
+- `packages/theo/src/services/schema/schema.ts` (the Zod schema mirrored from TheoCloud's JSON Schema 7)
+- `packages/theo/src/cli/commands/build.ts` (the `--target theo-cloud` adapter)
+- `packages/theo/src/cli/commands/migrate/services-json.ts` (the v1 → v2 codemod)
+- `packages/theo/src/config/schema.ts` `name` field (DNS-1123 validated, used as project identifier)
+- any new code that touches `services.json`, the `--target theo-cloud` emit path, or the cross-product schema-version drift guard (`tests/unit/services-manifest-v2.test.ts` EC-7)
+
+The doc is mirrored at `theo-cloud/theo/docs/architecture/theokit-theocloud-integration.md` — keep both copies in sync (edit one, copy the diff to the other in the same commit).
+
+---
+
 ## What TheoKit is — and how we talk about it
 
 TheoKit is the **app the agent lives in**. Technically, it is a Next.js-based framework for building full-stack AI agents in TypeScript. But that technical description is the answer to "what is it?" — not to "what do I get?". This `CLAUDE.md` enforces the gap between the two.
