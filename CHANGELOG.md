@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase H — end-to-end pipeline integration + ALL T5a.2 PHASES CLOSED)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase H (final). **CLOSES Phase H AND closes T5a.2 — the full 8-phase IncomingMessage→Request SHAPE refactor.** The Web-Standards execution pipeline composes end-to-end through a real `http.createServer` + `fetch` round-trip. CF Workers / Bun / Deno wrangler smokes remain out-of-loop scope per driver pause conditions. (#arch-gaps-implementation)
+
+- **`tests/integration/t5a2-end-to-end-pipeline.test.ts` NEW (capstone)** — wires EVERY shipped Phase A-G surface together through a real Node `http.createServer` + `fetch` round-trip (no mocks). Tests:
+  - **Login → session cookie → GET with cookie → handler reads userId** (Phase A executor + Phase B-cookies + Phase D-session + Phase F-plugin + Phase G-hooks + Phase G-Node-adapter all composed).
+  - **GET without session → 401 from auth-gate plugin short-circuit** (Phase G slice 1/N lifecycle hooks proven end-to-end).
+  - **OPTIONS preflight → CORS plugin short-circuits with 204** (Phase B slice 5/6 + Phase G).
+  - **OPTIONS preflight from disallowed origin → 403** (CORS security policy).
+  - **request-id plugin always sets x-request-id header on responses** (Phase C slice 1/2 trace extraction + Phase G onResponse).
+- **`packages/theo/src/server/web-handler.ts` — architectural fix during Phase H integration:**
+  - **`onRequest` hooks now run BEFORE method dispatch** (Hono / Fastify convention) so CORS preflight + auth-gate plugins can intercept OPTIONS / unauthorized requests regardless of route shape. The 405 METHOD_NOT_ALLOWED check fires only if NO hook short-circuits.
+  - **CSRF gate moved AFTER `onRequest` hooks** so auth-short-circuit (no session → 401) avoids the CSRF cost on already-rejected requests.
+  - **`runPreHandlerPipeline` helper extracted** from `runWithHooks` to keep cyclomatic complexity under the lint cap (15). Also extracted `methodNotAllowedResponse` + `csrfFailedResponse` helpers (DRY for the no-hooks branch + the hooks branch which share the gate logic).
+  - No-hooks branch unchanged (Phase A backward compat preserved — same 405-first + CSRF-second + handler order).
+- **Validation:** `pnpm typecheck` exit 0 (1 TS inference adjustment for `hookCtx.response` post-mutation — added safe fallback `INTERNAL_SERVER_ERROR` response per defensive contract). `pnpm eslint` clean (2 initial complexity/unnecessary-cast warnings fixed via helper extraction). **50/50 GREEN** across all 6 executor integration test files:
+  - 5 new t5a2-end-to-end-pipeline + 10 web-handler-hooks + 8 handler-web-standards (Phase A T1.2) + 14 web-handler-csrf-integration + 5 web-handler-body-parser-full + 8 node-web-adapter = 50 tests.
+- **T5a.2 progress: ALL 8 PHASES CLOSED:**
+  - ✅ Phase A — executeWebRequest entry-point (Phase A foundation)
+  - ✅ Phase B (6/6) — header-only leaves (csrf, csrf-multi-header, csrf-readiness-endpoint, csp-report, cors, cookies)
+  - ✅ Phase C (2/2) — Tracing + observability (trace-context, request-log)
+  - ✅ Phase D (3/3) — Rate-limit + auth (rate-limit-per-route, rate-limit, session)
+  - ✅ Phase E (1/1) — Body parser opt-in
+  - ✅ Phase F (3/3) — Plugin types + define (plugin-types, define-channel, define-websocket)
+  - ✅ Phase G (5/N) — Execute pipeline (lifecycle hooks, WebPluginRunner, error-handler, send-response, Node adapter shim)
+  - ✅ Phase H (final) — end-to-end pipeline integration test + executor architectural fix
+- **Out-of-loop work documented:** CF Workers `wrangler dev tests/fixtures/handler-web-standards/` smoke + Bun/Deno adapter pass-through smokes remain explicit driver pause conditions (Cloudflare credentials + dedicated session required).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 5/N — Node adapter shim + Phase G CLOSED)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G slice 5/N. **CLOSES Phase G (Execute pipeline).** Builds the bidirectional bridge between Node `IncomingMessage`/`ServerResponse` and the Web-Standards `executeWebRequest` — per ADR-0028 R3a, the Node adapter is the ONLY place IncomingMessage ↔ Request conversion happens. Existing api-middleware + prod CLI start path can migrate to the Web executor without touching call sites. Next: Phase H. (#arch-gaps-implementation)
