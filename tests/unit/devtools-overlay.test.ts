@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { devtoolsReducer, initialState } from '../../packages/theo/src/devtools/reducer.js'
+import { devtoolsReducer, initialState } from '../../packages/theo/src/devtools/state/reducer.js'
 import {
   RING_BUFFER_CAP,
   MAX_QUEUE_SIZE,

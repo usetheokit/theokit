@@ -8,7 +8,7 @@
  * NEVER use dangerouslySetInnerHTML in any devtools component — see plan EC-20.
  */
 
-import type { ActionCallRecord } from './shared.js'
+import type { ActionCallRecord } from '../shared.js'
 
 /**
  * Toggle `id` membership in the expanded set. Returns a NEW Set (never

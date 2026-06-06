@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyCsrfReadinessError,
   type CsrfReadinessErrorKind,
-} from '../../packages/theo/src/devtools/csrf-readiness-classify.js'
+} from '../../packages/theo/src/devtools/format/csrf-readiness-classify.js'
 
 describe('classifyCsrfReadinessError', () => {
   it('should classify HTTP 404 as store-not-wired (the canonical case)', () => {
