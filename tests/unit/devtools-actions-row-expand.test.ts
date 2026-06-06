@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeActionsTabIds,
   toggleExpandedIds,
-} from '../../packages/theo/src/devtools/actions-row-state.js'
+} from '../../packages/theo/src/devtools/state/actions-row-state.js'
 
 describe('actions row expand state — pure helpers', () => {
   it('toggleExpandedIds adds id when absent', () => {

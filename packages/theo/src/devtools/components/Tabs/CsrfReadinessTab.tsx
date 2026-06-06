@@ -14,7 +14,7 @@ import { useEffect, useState, useCallback, type ReactElement } from 'react'
 import {
   classifyCsrfReadinessError,
   type ClassifiedCsrfReadinessError,
-} from '../../csrf-readiness-classify.js'
+} from '../../format/csrf-readiness-classify.js'
 import { useDevtoolsContext } from '../../hooks/useDevtoolsContext.js'
 import { tokens } from '../../styles/tokens.js'
 

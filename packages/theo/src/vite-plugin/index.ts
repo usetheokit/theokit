@@ -386,7 +386,10 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
             // the script tag is never injected by inject-devtools.ts in build mode)
             {
               find: 'theokit/devtools/entry',
-              replacement: resolve(theoSrcDir, `devtools/entry${ext === '.ts' ? '.tsx' : '.js'}`),
+              replacement: resolve(
+                theoSrcDir,
+                `devtools/dom/entry${ext === '.ts' ? '.tsx' : '.js'}`,
+              ),
             },
             { find: 'theokit', replacement: resolve(theoSrcDir, `index${ext}`) },
           ],

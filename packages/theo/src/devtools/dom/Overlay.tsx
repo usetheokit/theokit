@@ -11,20 +11,21 @@
  */
 import { useEffect, useInsertionEffect, useMemo, useReducer } from 'react'
 
-import { Indicator } from './components/Indicator.js'
-import { Panel } from './components/Panel.js'
-import { dispatcher } from './dispatcher.js'
-import { subscribeToServerEvents } from './hmr-bridge.js'
-import { useActiveRoute } from './hooks/useActiveRoute.js'
-import { DevtoolsContext } from './hooks/useDevtoolsContext.js'
-import { useResolvedTheme } from './hooks/useResolvedTheme.js'
-import { useShortcuts } from './hooks/useShortcuts.js'
-import { installDispatcherGlobal } from './install-global.js'
-import { loadFromStorage, writeToStorage } from './persistence.js'
-import { devtoolsReducer, initialState } from './reducer.js'
+import { dispatcher } from '../bridge/dispatcher.js'
+import { subscribeToServerEvents } from '../bridge/hmr-bridge.js'
+import { installDispatcherGlobal } from '../bridge/install-global.js'
+import { Indicator } from '../components/Indicator.js'
+import { Panel } from '../components/Panel.js'
+import { useActiveRoute } from '../hooks/useActiveRoute.js'
+import { DevtoolsContext } from '../hooks/useDevtoolsContext.js'
+import { useResolvedTheme } from '../hooks/useResolvedTheme.js'
+import { useShortcuts } from '../hooks/useShortcuts.js'
+import { loadFromStorage, writeToStorage } from '../state/persistence.js'
+import { devtoolsReducer, initialState } from '../state/reducer.js'
+import { createStyles } from '../styles/styles.js'
+import { buildThemeCssVars } from '../styles/tokens.js'
+
 import { ShadowPortal } from './shadow-portal.js'
-import { createStyles } from './styles/styles.js'
-import { buildThemeCssVars } from './styles/tokens.js'
 
 function ActiveRouteTracker() {
   useActiveRoute()

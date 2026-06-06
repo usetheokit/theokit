@@ -20,8 +20,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { dispatcher } from '../../packages/theo/src/devtools/dispatcher.js'
-import { installDispatcherGlobal } from '../../packages/theo/src/devtools/install-global.js'
+import { dispatcher } from '../../packages/theo/src/devtools/bridge/dispatcher.js'
+import { installDispatcherGlobal } from '../../packages/theo/src/devtools/bridge/install-global.js'
 
 // Test-only: we mutate `globalThis.window` to simulate browser + SSR contexts.
 // Using a loose Record type avoids fighting the jsdom Window-typed slot.

@@ -6,8 +6,8 @@
  * NEVER use dangerouslySetInnerHTML in any devtools component — see plan EC-20.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dispatcher } from '../../packages/theo/src/devtools/dispatcher.js'
-import { subscribeToServerEvents } from '../../packages/theo/src/devtools/hmr-bridge.js'
+import { dispatcher } from '../../packages/theo/src/devtools/bridge/dispatcher.js'
+import { subscribeToServerEvents } from '../../packages/theo/src/devtools/bridge/hmr-bridge.js'
 
 type HotHandlers = Record<string, (data: unknown) => void>
 

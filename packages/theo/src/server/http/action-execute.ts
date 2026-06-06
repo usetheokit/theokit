@@ -253,7 +253,7 @@ async function emitActionCallTelemetry(
 ): Promise<void> {
   if (!__IS_DEV) return
   try {
-    const mod = (await import('../../devtools/dispatcher.js')) as {
+    const mod = (await import('../../devtools/bridge/dispatcher.js')) as {
       dispatcher: {
         onActionCall: (r: {
           id: string

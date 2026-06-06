@@ -10,7 +10,6 @@
  *
  * NEVER use dangerouslySetInnerHTML in any devtools component — see plan EC-20.
  */
-import type { Dispatcher } from './dispatcher.js'
 import {
   CHANNEL_CSRF_WARN,
   CHANNEL_ERROR,
@@ -21,7 +20,9 @@ import {
   type ErrorRecord,
   type RequestRecord,
   type RouteManifest,
-} from './shared.js'
+} from '../shared.js'
+
+import type { Dispatcher } from './dispatcher.js'
 
 export interface ViteHot {
   on(event: string, cb: (data: unknown) => void): void

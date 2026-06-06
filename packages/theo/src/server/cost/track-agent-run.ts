@@ -54,7 +54,7 @@ export async function trackAgentRun(
   // Dev-only: surface run to devtools Agents tab (T3.1)
   if (__IS_DEV) {
     try {
-      const mod = (await import('../../devtools/dispatcher.js')) as {
+      const mod = (await import('../../devtools/bridge/dispatcher.js')) as {
         dispatcher: { onAgentRun: (r: AgentRunRecord) => void }
       }
       mod.dispatcher.onAgentRun({
