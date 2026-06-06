@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 2/N — WebPluginRunner facade)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G. Web-shaped sibling of the existing `PluginRunner` — composes registered Web plugins into hook arrays consumable directly by `executeWebRequest`'s `opts.hooks` (Phase G slice 1/N landing zone). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/plugins/web-plugin-runner.ts` NEW** — `WebPluginRunner` class mirroring `PluginRunner` for the Web shape:
+  - **C1 sibling-isolated scopes preserved** (T3.1 / ADR-0028 blueprint D1): each plugin gets a CHILD `WebTheoApp` built via `Object.create(parentApp)` (Fastify `plugin-override.js:38` pattern). Cross-plugin decoration-key collisions PERMITTED via per-plugin scope; `decorateRequest` writes land in per-scope Map.
+  - **`register(plugin: WebTheoPlugin)`** — reserves the name (rejects duplicates with `DuplicatePluginError` reused from the legacy module), builds the child scope, invokes `plugin.register(scope.app)`. Rolls back the registry on throw (T1.1 BDD invariant — failed plugin leaves no half-mounted state).
+  - **`getHooks()`** — returns `{ onRequest, preHandler, onResponse, onError }` arrays in the shape `executeWebRequest`'s `opts.hooks` consumes directly. Adapters wire this end-to-end:
+    ```ts
+    const runner = new WebPluginRunner()
+    await runner.register(corsPlugin)
+    await runner.register(authPlugin)
+    const response = await executeWebRequest(request, routes, {
+      hooks: runner.getHooks(),
+    })
+    ```
+  - **`applyDecorations(ctx)`** — last-writer-wins flat-bag aggregation across all plugin scopes (mirror of `PluginRunner.applyDecorations`).
+  - **Introspection** — `getPluginScope(name)`, `getParentApp()`, `getParentDecorations()` for adapters + devtools.
+  - **`decorateRequest` non-string-key TypeError guard** preserved (T1.1 BDD).
+  - **Parent decorations stay UNTOUCHED** by plugin decorate calls (T3.1 invariant).
+- **`tests/unit/web-plugin-runner.test.ts` NEW** — 11 RED→GREEN assertions:
+  - **C1 invariants (8)**: register + has tracking; `DuplicatePluginError` on second register; rollback on register throw; hooks flow to getHooks() arrays; sibling isolation (same key, different scopes); applyDecorations last-writer-wins; non-string-key TypeError; parent decorations untouched.
+  - **End-to-end with executeWebRequest (3)**: plugin-registered hooks fire during lifecycle; multiple plugins compose into single hook chain (registration order preserved); plugin onRequest short-circuits handler via `ctx.response`.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (2 initial unnecessary-cast + sonarjs-void warnings fixed). **36/36 GREEN** combined sweep — 11 new + 15 legacy `plugin-runner.test.ts` + 10 `web-handler-hooks.test.ts`. Zero regression.
+- **Phase G progress:** 2/N slices. Remaining: error-handler Web sibling, send-response helpers, Node adapter shim (executeRoute IncomingMessage → Web Request bridge).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 1/N — plugin lifecycle hooks in executeWebRequest)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G (Execute pipeline — HIGH blast radius). Opens Phase G with the plugin lifecycle hooks integration — wires the Phase F types (`WebPluginContext`, `WebOnRequestHook`, etc.) into the real `executeWebRequest` execution path. (#arch-gaps-implementation)
