@@ -19,30 +19,47 @@ import { join, resolve } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const VITE_PLUGIN_TS = resolve(__dirname, '../../packages/theo/src/vite-plugin/index.ts')
+// T2.6 (M6 vite-plugin/index.ts boy-scout refactor) extracted the
+// configureServer body into a sibling `configure-server-hook.ts`. The
+// source-string assertions now target the extracted file as the canonical
+// home of the openapi-emit wiring (per docs/audit/arch-gaps-phase5a-progress-2026-06-06.md
+// the vite-plugin/index.ts is now an orchestrator threading state into 4
+// extracted hook bodies; configure-server-hook.ts owns the configureServer
+// body including the openapi dev-emit chain).
+const CONFIGURE_SERVER_HOOK_TS = resolve(
+  __dirname,
+  '../../packages/theo/src/vite-plugin/configure-server-hook.ts',
+)
 
 describe('T1.1 — vite-plugin wires openapi dev emit (source assertions)', () => {
   it('wires reEmitOpenApi gated on resolvedOpenApi !== undefined', () => {
-    const src = readFileSync(VITE_PLUGIN_TS, 'utf-8')
+    const src = readFileSync(CONFIGURE_SERVER_HOOK_TS, 'utf-8')
     // Gate uses the resolved closure variable (post-configResolved) rather than
     // raw config.openapi (which is read at configResolved time + cached).
+    // Post-T2.6: the gate now reads `ctx.resolvedOpenApi !== undefined`
+    // (the configureServer hook accepts a ConfigureServerCtx struct).
     expect(src).toMatch(/resolvedOpenApi !== undefined/)
     expect(src).toMatch(/reEmitOpenApi\(/)
   })
 
   it('subscribes to server.watcher for re-emit on route changes', () => {
-    const src = readFileSync(VITE_PLUGIN_TS, 'utf-8')
+    const src = readFileSync(CONFIGURE_SERVER_HOOK_TS, 'utf-8')
     // EC-8 single-flight guard pattern
     expect(src).toMatch(/server\.watcher\.on\(/)
     expect(src).toMatch(/reEmitOpenApi/)
   })
 
-  it('co-locates emit + watcher inside configureServer', () => {
-    const src = readFileSync(VITE_PLUGIN_TS, 'utf-8')
-    const configureServerIdx = src.indexOf('configureServer(server)')
+  it('co-locates emit + watcher inside the configureServer hook body', () => {
+    // Post-T2.6: the entire configureServer body lives in
+    // configure-server-hook.ts (runConfigureServer function). Both watcher
+    // subscription and openapi emit are present within the same file body.
+    const src = readFileSync(CONFIGURE_SERVER_HOOK_TS, 'utf-8')
+    const runHookIdx = src.indexOf('runConfigureServer')
     const emitIdx = src.indexOf('reEmitOpenApi')
-    expect(configureServerIdx).toBeGreaterThan(-1)
-    expect(emitIdx).toBeGreaterThan(configureServerIdx)
+    const watcherIdx = src.indexOf('server.watcher.on')
+    expect(runHookIdx).toBeGreaterThan(-1)
+    expect(emitIdx).toBeGreaterThan(runHookIdx)
+    expect(watcherIdx).toBeGreaterThan(runHookIdx)
   })
 })
 
