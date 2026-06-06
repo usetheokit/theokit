@@ -23,6 +23,7 @@ and the explicit pause conditions that block the full `dogfood full` skill.
 | `pnpm typecheck` (whole monorepo) | ✅ exit 0 | Re-verified each iteration; final clean as of T5a.1 audit commit `ae09d2b` |
 | `pnpm depcruise` architecture invariants | ✅ exit 0 | 327 modules / 987 deps cruised; **zero violations**. Confirms ADR-0001 v3 invariants hold (no cycles, core depends on nothing intra-monorepo, 12-module DAG). |
 | Plan-scoped test sweep (28 files, 274 tests) | ✅ 267 GREEN + 7 documented-RED | The 7 RED are intentional forward-spec tests from T1.2 commit `54bc2e3` (`handler-web-standards.test.ts`) that explicitly throw `"intentionally RED until then"` — they wait on T5a.2 SHAPE refactor (deferred per Phase 5a audit). **Zero plan-introduced regressions.** |
+| **Full repo test sweep (`pnpm vitest run`)** | ✅ **98.5% pass** | **3831 GREEN + 27 skipped + 32 failed across 14 files / 472 total files / 3890 total tests.** Duration 771.90s (12.85 min). Typecheck embedded — exit 0. The 32 failures (~0.8%) decompose into: (a) 7 documented-RED T1.2 forward specs (handler-web-standards.test.ts), (b) ~25 pre-existing CLI fixture failures across `cli-build-emits-*` files — all attributable to test-fixture `package.json` not declaring `better-sqlite3` (the CLI preflight `packages/theo/src/cli/preflight-node-version.ts:91` rejects missing required dep). Test fixture infrastructure issue predating this plan (preflight `29b4bcd`, tests `e761aac` — both months old) — NOT plan regressions. T5a.2 plan doc proposes the fix (`docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` § Test infrastructure prerequisites). |
 | `pnpm eslint` (changed files) | ✅ clean | Re-verified each commit via lint-staged pre-commit hook. |
 | **Plan delivery — 4 hard caps** | ✅ ALL CLOSED | C1 plugin scope (T3.1) + C2 envelope coverage (T4.1) + C3 `node:crypto` cutover (T5a.1a-d) + M1-M6 mecânicos (T2.1-T2.6) all SHIPPED. |
 
@@ -109,10 +110,11 @@ Per the driver `implement-arch-gaps.md` § Pause conditions, the following Phase
 
 ## Recommendations for the dedicated post-loop session
 
-1. **Native binding alignment:** `nvm use` (or `nvm install` for the pinned version) + `pnpm rebuild better-sqlite3 --workspace-root`. Verifies the preflight gate at `scripts/preflight-native-bindings.mjs` passes, unblocking CLI invocation.
-2. **`dogfood full`:** with credentials in hand (OPENROUTER_API_KEY, Chrome MCP). Will exercise the 22 phases against `my-test/` workspace member.
-3. **`loop-architecture-review --mode=full`:** consume the audit pipeline; compare score against the pre-plan baseline (per session summary, the goal is **nota ≥ 4.0/5**). Phase 5a SHAPE refactor will not have shipped yet, so the score may reflect partial C3 closure with the explicit framing this audit provides.
-4. **T5a.2 dedicated session:** IncomingMessage→Request SHAPE refactor per `docs/audit/arch-gaps-phase5a-progress-2026-06-06.md` Category C. 1-2 sprints estimated.
+1. **Native binding alignment:** `nvm use` (or `nvm install` for the pinned version) + `pnpm rebuild better-sqlite3 --workspace-root` — verified working 2026-06-06 (sentinel at `node_modules/.cache/preflight-native-127.ok`). Unblocks the SDK preflight at `scripts/preflight-native-bindings.mjs`.
+2. **CLI test fixture fix:** the 25 pre-existing CLI test failures stem from `tests/integration/cli-build-emits-{cron,job}-manifest.test.ts` creating a minimal tmp fixture that doesn't declare `better-sqlite3`. CLI's preflight at `packages/theo/src/cli/preflight-node-version.ts:91` hard-requires it. Two options documented in `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` § Test infrastructure prerequisites — recommended: add `--skip-native-preflight` CLI flag.
+3. **`dogfood full`:** with credentials in hand (OPENROUTER_API_KEY, Chrome MCP). Will exercise the 22 phases against `my-test/` workspace member (post CLI fixture fix).
+4. **`loop-architecture-review --mode=full`:** consume the audit pipeline; compare score against the pre-plan baseline (per session summary, the goal is **nota ≥ 4.0/5**). Phase 5a SHAPE refactor will not have shipped yet, so the score may reflect partial C3 closure with the explicit framing this audit provides.
+5. **T5a.2 dedicated session:** IncomingMessage→Request SHAPE refactor per the new dedicated plan `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 — 9-11 sessions estimated across 8 phases (A-H) with explicit leaf-first decomposition + Node adapter shim strategy + per-phase validation gates.
 
 ---
 
