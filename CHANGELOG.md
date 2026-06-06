@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase A — Web-Standards `executeWebRequest` entry-point)
+
+Per the dedicated T5a.2 plan v1.0 § Phase A (Foundation). **Closes the last 7 documented-RED T1.2 forward specs** that explicitly throw `"intentionally RED until then"` waiting on T5a.2. Implements the Web-Standards entry-point that accepts a native Web `Request` and returns a native Web `Response` per ADR-0028 R3a. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/web-handler.ts` NEW** — `executeWebRequest(request: Request, routeModule: { GET?, POST?, ... }): Promise<Response>`. Web-Standards-shaped entry-point with intentionally narrow scope (Phase A landing zone):
+  - **Method dispatch** keyed by `request.method.toUpperCase()`; emits envelope-shaped `405 METHOD_NOT_ALLOWED` for missing methods.
+  - **Zod validation** for `query` (from `URL.searchParams` via `searchParamsToObject` helper), `body` (from `request.json()` OR `request.text()` based on Content-Type), `params` (passed as `{}` at this layer — file-system routing scan integration deferred to Phase B+).
+  - **Validation error → envelope** — `400 BAD_REQUEST` with `ext.fields[]` carrying Zod issue details per G5 ValidationFieldsExt shape.
+  - **Result → Response** conventions: `undefined`/`void` → `204 No Content`; existing `Response` instance → pass-through; otherwise `200 JSON`.
+  - **Handler throws → envelope** via `serverErrorToEnvelope()` (G5 boundary translation). HTTP status derived from envelope code via `envelopeCodeToStatus` (BAD_REQUEST→400, UNAUTHORIZED→401, RATE_LIMITED→429, INTERNAL_SERVER_ERROR→500, etc.).
+  - **No `node:*` runtime imports** — pure Web Standards (`Request`, `Response`, `Headers`, `URL`, `URLSearchParams`). The invariant guard `tests/unit/r3a-web-crypto-migration-leaf.test.ts` (Category B allowlist) verifies this stays true.
+- **`packages/theo/src/server/index.ts`** — re-exports `executeWebRequest`. Available via either the umbrella `theokit/server` (deprecated) or the `theokit/server` direct path. The T1.2 RED tests dynamic-import from `packages/theo/src/server/index.js`.
+- **Intentionally OUT of Phase A scope (deferred to Phase B-G per T5a.2 plan):**
+  - Plugin runner integration (`onRequest`/`preHandler`/`onResponse`/`onError` hooks).
+  - CSRF / CORS / security headers / rate limiting / cookies / auth.
+  - Middleware chain, SSR rendering, WebSocket upgrade, file upload (Busboy is Node-only; Web path uses `request.formData()` via `body-parser-web.ts`).
+  - File-system routing scan integration; consumers explicitly pass the route module today.
+  - Node adapter shim `incomingMessageToWebRequest` / `webResponseToServerResponse` (Phase A optional; consumers on Node use the legacy `executeRoute` until Phase G migrates the executor).
+- **T1.2 RED → GREEN:** `tests/integration/handler-web-standards.test.ts` **8/8 GREEN** (was 1/8 GREEN + 7 documented-RED). All 4 boundary-spec tests + 4 BDD scenarios pass:
+  - boundary: handler accepts Web Request → returns Response instance (with `text`/`json`/`headers.get`/`status` API).
+  - boundary: handler module contains no `node:*` import.
+  - boundary: response.body is ReadableStream (getReader().read works).
+  - BDD happy path: GET empty query → 200 + JSON body.
+  - BDD validation error: POST with Zod mismatch → 400.
+  - BDD edge case: empty body POST → 400/422 (no crash).
+  - BDD error scenario: handler throws → 500 with envelope shape (`{code, message}`).
+- **Architecture invariants preserved:** `pnpm depcruise` **0 violations** across 328 modules / 991 deps (was 327 / 987 — one new module + 4 new edges = `web-handler.ts` importing `core/contracts/error-envelope.js` + `core/contracts/server-error-to-envelope.js` + `zod` type + barrel re-export).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (initial run flagged 2 issues: redundant `unknown | Promise<unknown>` union + unnecessary undefined check — both fixed via `unknown` simplification + `Object.hasOwn(out, key)` pattern).
+- **Phase A complete; ~9-10 sessions remain for full T5a.2** per plan v1.0 (Phase B-H: header-only leaves → tracing → rate-limit/auth → body parsing → plugin types → execute pipeline → integration). Each subsequent phase migrates IncomingMessage→Request shape in a leaf-first cluster while keeping `executeWebRequest` working.
+
 ### Fixed (Plan theokit-arch-gaps-implementation Phase 6 final — `@theokit/ui` fixture peerDep drift)
 
 Per Phase 6 broad-suite empirical sweep. **The last cross-cutting integration test failure is closed:** `contract-usetheo-ui-vite-plugin.test.ts EC-7` peerDep drift. The drift was real: theokit's peerDep declared `@theokit/ui: ^0.14.0` (commit `a871f13` bumped from `^0.13.0` together with template pins; not all fixtures were updated in lockstep). The sibling workspace `theo-ui` already houses `@theokit/ui@0.14.0` (just not npm-published yet); fixture pins of `^0.13.0` resolved via pnpm workspace symlink to the 0.14.0 source, but failed the EC-7 range-satisfaction guard. (#arch-gaps-implementation)
