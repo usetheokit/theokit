@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation Phase 6 follow-up — additional CLI fixture consumers wired to env-var skip)
+
+Per the env-var escape hatch shipped in the prior commit (`ea923b8`). Additional callers of CLI build via `execSync` are wired to pass `THEOKIT_SKIP_NATIVE_PREFLIGHT=1`, completing the Phase 6 fixture-infrastructure cleanup. (#arch-gaps-implementation)
+
+- **`tests/integration/scaffold-build-start-e2e.test.ts`** — scaffold E2E test's `envWithBin` extends with `THEOKIT_SKIP_NATIVE_PREFLIGHT: '1'`. Scaffold creates a clean project that doesn't install better-sqlite3 — preflight would block before manifest emit step. **5/5 GREEN** (was passing via try/catch silent swallow before; now properly executes the CLI build all the way to manifest emit).
+- **`tests/integration/_helpers/build-template-default.ts`** — shared helper used by 6+ test files (`devtools-treeshake.test.ts`, `bundle-budget.test.ts`, `devtools-entry-dist.test.ts`, `publint-attw-green.test.ts`, `theokit-build-succeeds.test.ts`, `import-validation.test.ts`). Adds `THEOKIT_SKIP_NATIVE_PREFLIGHT: '1'` to the execSync env. The template-default fixture has `theokit: workspace:*` so the preflight resolution often succeeds via the symlinked node_modules, but defense-in-depth ensures consistency across local dev / CI / different pnpm workspace topologies. **9/9 GREEN** in the 3 sampled consumer test files (devtools-treeshake, bundle-budget, devtools-entry-dist).
+- **`tests/integration/_helpers/build-theokit-package.ts`** — NOT modified. This helper runs `pnpm --filter theokit build` which is tsup-building the framework itself; it does NOT invoke the CLI's preflight.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. Direct sweep of touched tests: **scaffold-build-start-e2e + 3 template-default consumers = 14/14 GREEN.**
+
 ### Added (Plan theokit-arch-gaps-implementation Phase 6 prerequisite — `THEOKIT_SKIP_NATIVE_PREFLIGHT` env-var escape hatch)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 6 + T5a.2 plan v1.0 § Test infrastructure prerequisites (Option B). **Unblocks ~25 pre-existing CLI integration test failures** that had been carried since the preflight was added in commit `29b4bcd` (months ago). (#arch-gaps-implementation)
