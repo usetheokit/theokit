@@ -32,6 +32,7 @@ describe('buildJsonResponse (T5a.2 Phase G slice 4/N — Web shape)', () => {
 
   it('uses transformer.serialize when provided', async () => {
     const transformer: TheoTransformer = {
+      name: 'test-transformer',
       serialize: (data: unknown) => `__SERIALIZED__${JSON.stringify(data)}`,
       deserialize: (payload: string) => JSON.parse(payload.replace(/^__SERIALIZED__/, '')),
     }

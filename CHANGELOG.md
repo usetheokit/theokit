@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 5/N — Node adapter shim + Phase G CLOSED)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G slice 5/N. **CLOSES Phase G (Execute pipeline).** Builds the bidirectional bridge between Node `IncomingMessage`/`ServerResponse` and the Web-Standards `executeWebRequest` — per ADR-0028 R3a, the Node adapter is the ONLY place IncomingMessage ↔ Request conversion happens. Existing api-middleware + prod CLI start path can migrate to the Web executor without touching call sites. Next: Phase H. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/http/node-web-adapter.ts` NEW** — 3 conversion + composition functions:
+  - **`incomingMessageToWebRequest(req: IncomingMessage): Request`** — Node → Web. Reads `req.method`, `req.url`, `req.headers`, resolves URL to absolute form via `req.headers.host` (Web Request guarantees absolute URL). For POST/PUT/PATCH/DELETE, drains Node Readable body into Web `ReadableStream` via `Readable.toWeb()` (Node 18+; theokit floor is 22+). Sets `duplex: 'half'` per Node 18+ requirement. Handles `string | string[]` header values from Node by joining with `, ` (Web Headers single-value-per-key semantic).
+  - **`writeWebResponseToServerResponse(response: Response, res: ServerResponse): Promise<void>`** — Web → Node. Sets status + statusText + headers via `writeHead`. Set-Cookie preserved as array via `setHeader('Set-Cookie', getSetCookie())` BEFORE writeHead (multi-value Web header → multiple `Set-Cookie:` lines in HTTP wire format). Drains Web `ReadableStream` body chunk-by-chunk into `res.write(value)`. Handles null body (just `res.end()`).
+  - **`executeWebRequestFromNode(req, res, routeModule, opts?): Promise<void>`** — convenience composer wiring both ends. Use case: migrate `api-middleware` from legacy `executeRoute(req, res, ...)` to the Web executor without touching call sites. Handles `res.end()` internally.
+- **`tests/integration/node-web-adapter.test.ts` NEW** — 8 RED→GREEN assertions via REAL `http.createServer` + `fetch` round-trip (no mocks):
+  - GET round-trip through Web executor returns JSON.
+  - POST with JSON body parses + handler sees parsed body; URL resolved to absolute form from host header.
+  - Multiple Set-Cookie headers preserved through bridge (`getSetCookie()` roundtrip).
+  - Handler throw → 500 envelope flows through bridge.
+  - Zod validation failure → 400 envelope via bridge.
+  - 405 Method Not Allowed when handler missing.
+  - Query string preserved in URL.
+  - Host header → request.url host preserved.
+- **Plus 1 unrelated fix:** `tests/unit/send-response-web.test.ts` `TheoTransformer` test stub gained the missing `name` field (caught by typecheck after this commit's import surface widened).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **8/8 GREEN** on the new integration suite. Zero regression in any Phase A-G surface.
+- **Phase G CLOSED:** 5/N slices shipped. Lifecycle hooks integration + WebPluginRunner facade + error-handler Web sibling + send-response Web helpers + Node adapter shim. Next: Phase H (Integration + tests).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 4/N — send-response Web helpers)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G. Web-shaped siblings of `sendJson` + `sendError` returning native `Response` instances instead of mutating `ServerResponse`. (#arch-gaps-implementation)
