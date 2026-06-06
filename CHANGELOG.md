@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 1/N — plugin lifecycle hooks in executeWebRequest)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G (Execute pipeline — HIGH blast radius). Opens Phase G with the plugin lifecycle hooks integration — wires the Phase F types (`WebPluginContext`, `WebOnRequestHook`, etc.) into the real `executeWebRequest` execution path. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/web-handler.ts`** — `executeWebRequest` gains lifecycle orchestration:
+  - **`ExecuteWebRequestOptions.hooks?`** NEW (optional). When provided, the executor threads a `WebPluginContext` through the canonical 4-stage lifecycle: `onRequest → preHandler → handler → onResponse`, with `onError` catching handler throws + pre-handler hook throws.
+  - **`ExecuteWebRequestOptions.requestId?`** NEW (optional). Stable identifier propagated into hook contexts; defaults to `globalThis.crypto.randomUUID()`. Adapters resolve via `extractTraceIdFromRequest` (Phase C slice 1/2) and pass through.
+  - **Short-circuit semantic** — a hook may set `ctx.response` in `onRequest` or `preHandler` to skip the handler. Subsequent same-stage hooks observe and skip too; `onResponse` always runs (useful for logging/audit).
+  - **`responseHeaders` merge invariant** — hook-set headers (e.g., CORS, Set-Cookie) merge into the final Response; handler-set headers WIN on conflict (handler has the most context about its own response); Set-Cookie is appended (Web spec allows multiple).
+  - **`ctx.ctx[key] = value` persists** across hook stages (request-scoped state for plugin author convention).
+  - **EC-9 — onError throw swallowed** to avoid error-in-error-handler recursion.
+  - **Zero overhead when `hooks` omitted** — `executeWebRequest` branches early to the Phase A path; no hookCtx allocated.
+  - **Helper extractions:** `mergeHookHeaders(response, hookHeaders)` (Set-Cookie append + handler-headers-win merge); `runWithHooks(request, config, opts, hooks)` (extracted from `executeWebRequest` to keep cyclomatic/cognitive complexity under lint caps); `runErrorHooks(err, hookCtx, onError)` (EC-9 isolation).
+- **`tests/integration/web-handler-hooks.test.ts` NEW** — 10 RED→GREEN assertions:
+  - Lifecycle order: `onRequest → preHandler → handler → onResponse`.
+  - `onRequest` short-circuit: skips handler + preHandler.
+  - `preHandler` short-circuit: skips handler (onRequest ran).
+  - `responseHeaders` merged into final Response (incl. Set-Cookie append).
+  - Handler-set headers WIN over hook headers on conflict.
+  - `ctx.ctx[key]` persists across hooks.
+  - Handler throw → `onError` fires with envelope-shaped error response.
+  - EC-9 — `onError` hook throw swallowed (no recursion).
+  - `requestId` defaults to fresh UUID per request.
+  - Default no-hooks path preserves Phase A behavior (zero overhead).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (3 initial complexity/collapsible-if warnings fixed via helper extraction). **37/37 GREEN** combined sweep — 10 new hooks + 8 Phase A + 14 Phase B-CSRF + 5 Phase E body-parser-full. Zero regression.
+- **Phase G progress:** 1/N slice. Next G slices: `WebPluginRunner` facade (parallel to existing PluginRunner), full `executeWebRequest` integration with `WebTheoApp` plugin registration, error-handler Web sibling.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase F slice 3/3 — Web WebSocket handler + Phase F CLOSED)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase F. **CLOSES Phase F (Plugin types + define).** All 3 slices shipped: plugin-types Web sibling + define-channel Web sibling + define-websocket Web sibling. Next: Phase G (Execute pipeline — HIGH blast radius). (#arch-gaps-implementation)
