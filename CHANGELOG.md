@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (BREAKING) (Plan theokit-arch-gaps-implementation T3.1 — C1 plugin scope encapsulation)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 3 T3.1. **CLOSES C1 critical** (`PluginRunner.decorateRequest` previously stored decorations in a flat Map with `DuplicateDecorationError` protection — preventing legitimate per-plugin namespacing). Adopts the Fastify `Object.create(parent)` plugin-scope pattern per [ADR-0028](docs/adr/0028-multi-runtime-strategy.md) blueprint D1. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/plugins/plugin-runner.ts` REWRITTEN** with per-plugin scope:
+  - `parentApp: TheoApp` is the proto-chain root with its own decoration map (`parentDecorations`).
+  - `register(plugin)` now builds a CHILD `TheoApp` via `Object.create(parentApp)` (Fastify `plugin-override.js:38` pattern). The child overrides `decorateRequest` so writes land in a per-scope `decorations` map; parent + sibling scopes stay isolated through the JavaScript prototype chain.
+  - `register(plugin)` rolls back the registry entry + scope when `plugin.register()` throws — leaves no half-mounted state.
+  - **NEW introspection APIs** (consumed by T1.1 BDD tests + future devtools): `getPluginScope(name)` returns the child `TheoApp`; `getParentApp()` returns the proto-chain root; `getParentDecorations()` returns the parent decorations map; `applyScopedDecorations(name, target)` applies one plugin's decorations to a target object.
+  - `applyDecorations(ctx)` (legacy flat-bag aggregator used by HTTP execute paths) is preserved — iterates every plugin scope and applies decorations in registration order (last-writer-wins for keys shared across plugins).
+  - `decorateRequest` gains a runtime guard rejecting non-string keys with a typed `TypeError` (T1.1 BDD validation scenario; prior to T3.1 the TS signature already rejected this at compile-time, so the runtime guard is a defense-in-depth).
+- **BREAKING:** `DuplicateDecorationError` is **@deprecated** and **no longer thrown**. Cross-plugin decoration-key collisions are now PERMITTED because each plugin gets its own child scope. The class is retained for one minor cycle so consumers who `instanceof DuplicateDecorationError` continue to compile; **removal scheduled for 0.x+2** per the same migration cadence as T2.5 (M1 sub-package exports umbrella deprecation).
+- **EC-7 unit test MIGRATED** (`tests/unit/plugin-runner.test.ts:295-340`) from "expects throw" to "asserts permitted with scope isolation" — same two plugins, same `user` key, different values; assertion now proves `pluginA.scope.decorations.user.id === 1` AND `pluginB.scope.decorations.user.id === 2` via `getPluginScope()`. The class-existence check (`expect(DuplicateDecorationError).toBeDefined()`) stays so removal of the @deprecated class in 0.x+2 is the next test-breaking event consumers can prepare for.
+- **Migration path for plugin authors who relied on `DuplicateDecorationError`:**
+  1. Plugin authors who used the throw as collision detection should switch to opt-in per-plugin namespacing — decorate keys like `auth.user` or scoped under the plugin name in your own consumer code.
+  2. Consumers reading decorations from `ctx.<key>` (legacy flat bag) get last-writer-wins semantics; if scope-aware reads are needed, use `pluginRunner.applyScopedDecorations(pluginName, target)` instead of `applyDecorations(ctx)`.
+- **Validation:** `pnpm typecheck` exit 0. T1.1 RED→GREEN proven: `tests/integration/plugin-scope-encapsulation.test.ts` **9/9 GREEN** (all 4 RED-1..RED-4 scoping probes + happy path + error scenario + EC-4 mutable-proto invariant + validation error). `tests/unit/plugin-runner.test.ts` **15/15 GREEN** (post-migration). `tests/unit/server/` regression sweep **39/39 GREEN**. Plugin loader + ADR-0008 plugin contract + execute-transformer regression sweep **19/19 GREEN**. Zero new regressions in HTTP execution paths consuming `applyDecorations()`.
+
 ### Changed (Plan theokit-arch-gaps-implementation T2.6 — M6 vite-plugin/index.ts boy-scout refactor)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.6. Pure structural refactor; ZERO behavior change. Closes M6 mecânico (vite-plugin/index.ts 635 LOC with `T2.1-T2.3 architecture-medium-deferrals` marker admitting refactor was incomplete). **CLOSES PHASE 2 (mecânicos M1-M6).** (#arch-gaps-implementation)
