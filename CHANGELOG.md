@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 3/N — error-handler Web sibling)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G. Web-shaped sibling of `handleRequestError` returning a native `Response` instead of mutating `ServerResponse`. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/http/handle-request-error.ts`** — adds Web-Standards sibling:
+  - `handleRequestError(err, ctx)` (existing IncomingMessage) UNCHANGED.
+  - **`HandleWebRequestErrorCtx { requestId? }` interface NEW** — minimal ctx; no `pluginRunner` field because the Web-path plugin runner orchestration lives in `executeWebRequest`'s `runWithHooks` / `runErrorHooks` (Phase G slice 1/N).
+  - **`handleWebRequestError(err, ctx?): Promise<Response>` NEW** — returns native Response directly:
+    - Auth detection via `instanceof AuthRequiredError` PLUS duck-type fallback (`code === 'AUTH_REQUIRED' && status === 401`) — required because Vite-dev / vitest can produce duplicate class identities, breaking instanceof.
+    - Envelope-shaped JSON via `serverErrorToEnvelope` (G5 D3 boundary translation) for everything else.
+    - HTTP status derived via `envelopeCodeToHttpStatus` internal helper (intentional sync of mapping table with web-handler.ts's inline mapper; consolidation deferred to Phase G slice 4/N).
+    - `x-request-id` header emitted when `ctx.requestId` provided (observability tail).
+    - `content-type: application/json` always set.
+    - Lazy dynamic import of `serverErrorToEnvelope` keeps the happy-path bundle free of the translator.
+- **`tests/unit/handle-request-error-web.test.ts` NEW** — 10 RED→GREEN assertions:
+  - AuthRequiredError instance → 401 + AUTH_REQUIRED envelope.
+  - Duck-typed auth error (code+status, no instanceof) → 401 (cross-module class identity safety).
+  - Plain Error → 500 + INTERNAL_SERVER_ERROR.
+  - FileTooLargeError → 413 + PAYLOAD_TOO_LARGE (via serverErrorToEnvelope mapping table).
+  - TheoError pass-through with custom code (RATE_LIMITED → 429).
+  - Non-Error string throw → 500 with string-as-message.
+  - Non-Error object throw → 500 with safe fallback message.
+  - `x-request-id` header propagated when ctx.requestId provided.
+  - `x-request-id` omitted when undefined.
+  - `content-type: application/json` always set (4 error-type cases).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **35/35 GREEN** combined sweep — 10 new + 25 action-protocol regression (`action-protocol.test.ts` + `action-protocol-envelope.test.ts` unchanged). Zero regression in IncomingMessage `handleRequestError` consumers.
+- **Phase G progress:** 3/N slices (lifecycle hooks + WebPluginRunner facade + error-handler Web sibling). Remaining: send-response helpers, Node adapter shim (executeRoute IncomingMessage → Web Request bridge).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 2/N — WebPluginRunner facade)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G. Web-shaped sibling of the existing `PluginRunner` — composes registered Web plugins into hook arrays consumable directly by `executeWebRequest`'s `opts.hooks` (Phase G slice 1/N landing zone). (#arch-gaps-implementation)
