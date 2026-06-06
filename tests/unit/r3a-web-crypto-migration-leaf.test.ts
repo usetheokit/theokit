@@ -270,6 +270,14 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // Standards alternative ships at packages/theo/src/server/body-parser-web.ts
       // (zero node:* imports — uses request.formData()).
       'packages/theo/src/server/body-parser.ts',
+      // Node-adapter scope (T5a.2 Phase G slice 5/N): IncomingMessage ↔
+      // Web Request bridge. Per ADR-0028 R3a, the Node adapter is the
+      // ONLY place IncomingMessage ↔ Request conversion happens; this
+      // file legitimately imports node:http + node:stream to drain the
+      // body. Web Workers / CF Workers / Bun / Deno do not load this
+      // module — they pass native Web Request through executeWebRequest
+      // directly without the bridge.
+      'packages/theo/src/server/http/node-web-adapter.ts',
     ])
 
     /**
