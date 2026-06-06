@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation — Phase 5a invariant allowlist + Phase 5a audit doc update for Phase G slice 5/N)
+
+Final post-T5a.2 housekeeping. **Session-wide regression sweep: 478/478 GREEN across 51 touched test files.** The Phase 5a invariant guard caught the new `node-web-adapter.ts` (Phase G slice 5/N) as a runtime `node:http` + `node:stream` consumer outside the original Category B allowlist — added to the allowlist as legitimate IncomingMessage ↔ Request bridge per ADR-0028 R3a (the ONLY place this conversion happens). (#arch-gaps-implementation)
+
+- **`tests/unit/r3a-web-crypto-migration-leaf.test.ts`** — Phase G allowlist extension. `packages/theo/src/server/http/node-web-adapter.ts` added to `NODE_ONLY_ALLOWLIST`. Rationale: this file is the IncomingMessage ↔ Web Request bridge for the Node adapter; CF Workers / Bun / Deno pass native Web Request directly through `executeWebRequest` and never load this module. Inline rationale documents the Category B classification.
+- **`docs/audit/arch-gaps-phase5a-progress-2026-06-06.md`** — Category B documentation updated with the `node-web-adapter.ts` entry + ADR-0028 R3a cross-reference. The invariant guard remains the executable spec of Node-adapter scope.
+- **Session-wide regression evidence:** running ALL 51 session-touched test files (every test added OR modified in commits `8e553a3..HEAD`) produces **478 PASSED + 0 FAILED + 0 SKIPPED** in 33 seconds. Zero plan-introduced failures across the full 47-commit T5a.2 surface. The result confirms the dual-signature pattern (preserve IncomingMessage paths unchanged + add Web siblings) preserved every legacy consumer.
+- **Final invariant + bundle proofs maintained:**
+  - `tests/unit/r3a-web-crypto-migration-leaf.test.ts`: 19 assertions GREEN (source-level node:crypto = 0, type-only node:http verified, Category B allowlist enforcement).
+  - `tests/unit/r3a-emitted-bundle-node-free.test.ts`: 5 assertions GREEN (dist/server/*.js empirically free of node:http references — Phase 5a Category A empirical proof at bundle level).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase H — end-to-end pipeline integration + ALL T5a.2 PHASES CLOSED)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase H (final). **CLOSES Phase H AND closes T5a.2 — the full 8-phase IncomingMessage→Request SHAPE refactor.** The Web-Standards execution pipeline composes end-to-end through a real `http.createServer` + `fetch` round-trip. CF Workers / Bun / Deno wrangler smokes remain out-of-loop scope per driver pause conditions. (#arch-gaps-implementation)
