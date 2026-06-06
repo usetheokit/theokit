@@ -111,12 +111,53 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     expect(source).toMatch(/(globalThis\.)?crypto\.randomUUID\(\)/)
   })
 
-  it('audit: node:crypto consumer count in server/ has dropped to ≤ 4 after T5a.1a+T5a.1b', () => {
-    // Given: the pre-T5a.1a baseline was 8 files importing node:crypto.
-    // T5a.1a removed 2 (job-backend-memory, trace-context-propagation).
-    // T5a.1b removes 2 more (atomic-write, http/trace-context).
-    // Then: post-migration the count is ≤ 4.
-    // Future iterations T5a.1c+ will continue decrementing this number.
+  // ===== T5a.1c additions (slice 3/N) =====
+  // 3 webhook signature providers (HMAC-SHA256 hex computation). Each is
+  // already `async (req: Request)` so swapping sync `createHmac` for the
+  // async `crypto.subtle.sign('HMAC', ...)` is zero public API change.
+  //   5. packages/theo/src/server/webhook/providers/github.ts
+  //   6. packages/theo/src/server/webhook/providers/slack.ts
+  //   7. packages/theo/src/server/webhook/providers/stripe.ts
+
+  it('webhook/providers/github.ts no longer imports from node:crypto', () => {
+    const source = readSource('packages/theo/src/server/webhook/providers/github.ts')
+    expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
+  })
+
+  it('webhook/providers/github.ts uses Web Crypto subtle.sign for HMAC', () => {
+    const source = readSource('packages/theo/src/server/webhook/providers/github.ts')
+    expect(source).toMatch(/(globalThis\.)?crypto\.subtle\.(sign|importKey)/)
+  })
+
+  it('webhook/providers/slack.ts no longer imports from node:crypto', () => {
+    const source = readSource('packages/theo/src/server/webhook/providers/slack.ts')
+    expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
+  })
+
+  it('webhook/providers/slack.ts uses Web Crypto subtle.sign for HMAC', () => {
+    const source = readSource('packages/theo/src/server/webhook/providers/slack.ts')
+    expect(source).toMatch(/(globalThis\.)?crypto\.subtle\.(sign|importKey)/)
+  })
+
+  it('webhook/providers/stripe.ts no longer imports from node:crypto', () => {
+    const source = readSource('packages/theo/src/server/webhook/providers/stripe.ts')
+    expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
+  })
+
+  it('webhook/providers/stripe.ts uses Web Crypto subtle.sign for HMAC', () => {
+    const source = readSource('packages/theo/src/server/webhook/providers/stripe.ts')
+    expect(source).toMatch(/(globalThis\.)?crypto\.subtle\.(sign|importKey)/)
+  })
+
+  it('audit: node:crypto consumer count in server/ has dropped to ≤ 1 after T5a.1a+T5a.1b+T5a.1c', () => {
+    // Baseline cascade:
+    //   pre-T5a.1a = 8
+    //   T5a.1a removes 2 → 6 (job-backend-memory, trace-context-propagation)
+    //   T5a.1b removes 2 → 4 (atomic-write, http/trace-context)
+    //   T5a.1c removes 3 → 1 (webhook/providers/{slack,github,stripe})
+    // Remaining: rate-limit/rate-limit-per-route.ts (sync createHash —
+    // async migration would cascade through keyForRequest → routeRateLimit
+    // middleware; deferred to T5a.1d+ when boundary refactor is sized).
     const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
     let count = 0
     const walk = (dir: string): void => {
@@ -131,6 +172,6 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       }
     }
     walk(serverDir)
-    expect(count).toBeLessThanOrEqual(4) // post-T5a.1b
+    expect(count).toBeLessThanOrEqual(1) // post-T5a.1c
   })
 })
