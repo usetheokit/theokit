@@ -15,12 +15,14 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// T4.2 (architecture-cleanup) — graceful-shutdown logic moved to
-// start-graceful-shutdown.ts. Tests assert both files combined cover the wiring.
+// T4.2 (architecture-cleanup) — graceful-shutdown logic moved to a sibling.
+// T2.2 (M4 cli/commands/start/ subfolder) — start.ts → start/index.ts;
+// start-graceful-shutdown.ts → start/graceful-shutdown.ts (prefix dropped).
+// Tests assert both files combined cover the wiring.
 const START_SOURCE = [
-  readFileSync(resolve(__dirname, '../../packages/theo/src/cli/commands/start.ts'), 'utf8'),
+  readFileSync(resolve(__dirname, '../../packages/theo/src/cli/commands/start/index.ts'), 'utf8'),
   readFileSync(
-    resolve(__dirname, '../../packages/theo/src/cli/commands/start-graceful-shutdown.ts'),
+    resolve(__dirname, '../../packages/theo/src/cli/commands/start/graceful-shutdown.ts'),
     'utf8',
   ),
 ].join('\n\n')
