@@ -1,283 +1,46 @@
 import { z } from 'zod'
 
-import type { TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
 import { servicesConfigSchema } from '../services/index.js'
 
-/**
- * G5 T1.3 — formatError hook signature (blueprint ADR D3).
- *
- * Type-inferred functional transformer that runs at framework error-boundary
- * time. Producer-side analog of trpc's `errorFormatter`. The return type is
- * `TheoErrorEnvelope<TExt>` for arbitrary `TExt` so the inference flows into
- * `@theo/client` codegen + UI consumers.
- */
-export interface FormatErrorContext {
-  readonly route?: string
-  readonly action?: string
-  readonly agentRunId?: string
-}
+import {
+  cacheSchema,
+  loggingSchema,
+  rateLimitSchema,
+  securitySchema,
+  storageSchema,
+  uploadSchema,
+  type FormatErrorContext,
+  type FormatErrorHook,
+} from './schemas/index.js'
 
-export type FormatErrorHook = (
-  envelope: TheoErrorEnvelope,
-  ctx: FormatErrorContext,
-) => TheoErrorEnvelope
+// Re-export per-concern schemas + types so downstream consumers
+// (`adapters/*`, vite-plugin, generators, tests) keep their existing
+// imports valid. Per plan T2.3 — pure structural split; zero behavior
+// change at the call site.
+export {
+  cacheSchema,
+  corsSchema,
+  disallowedConfigSchema,
+  headerSafeString,
+  loggingSchema,
+  rateLimitSchema,
+  securityHeadersSchema,
+  securitySchema,
+  storageSchema,
+  uploadSchema,
+} from './schemas/index.js'
 
-/**
- * Base bucket config — legacy shape preserved for backwards compatibility.
- */
-const baseRateLimitSchema = z.object({
-  windowMs: z.number().min(1),
-  max: z.number().int().min(1),
-})
-
-/**
- * T2.2 — Per-route + per-user rate limit. The new shape adds `routes`
- * (path map), `keyBy`, and `cookieName`. The legacy flat shape is still
- * accepted via the union — see `createRouteRateLimiter` for normalization.
- */
-export const rateLimitSchema = z.union([
-  baseRateLimitSchema,
-  z.object({
-    default: baseRateLimitSchema.optional(),
-    routes: z.record(z.string(), baseRateLimitSchema).optional(),
-    keyBy: z
-      .union([
-        z.enum(['ip', 'session', 'user']),
-        z.function().args(z.unknown()).returns(z.string()),
-      ])
-      .optional(),
-    cookieName: z.string().min(1).optional(),
-  }),
-])
-
-export const uploadSchema = z.object({
-  maxFileSize: z
-    .number()
-    .min(1)
-    .default(10 * 1024 * 1024), // 10MB
-  maxFiles: z.number().int().min(1).default(10),
-  maxFieldSize: z
-    .number()
-    .min(1)
-    .default(1 * 1024 * 1024), // 1MB
-})
-
-export const loggingSchema = z.object({
-  level: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
-})
+export type { FormatErrorContext, FormatErrorHook, StorageConfig } from './schemas/index.js'
 
 /**
- * Cache subsystem config (caching-and-revalidation-plan).
- * Default `cache: undefined` keeps the framework backward-compatible
- * (no engine initialized → no cache primitives available).
+ * Root `theo.config.ts` schema — composer assembled from the per-concern
+ * primitives re-exported above.
  *
- * Setting `cache: {}` opts in with all defaults.
+ * Embedded blocks that exist ONLY as part of the root config (`agents`,
+ * `ui`, `devtools`, `jobs`, `openapi`) stay inline below. They have no
+ * external consumers; splitting them would create lonely files (M5
+ * smell) without comprehension benefit.
  */
-const routeRuleSchema = z.object({
-  maxAge: z.number().nonnegative().finite().optional(),
-  swr: z.number().nonnegative().finite().optional(),
-  tags: z.array(z.string()).optional(),
-})
-
-export const cacheSchema = z.object({
-  enabled: z.boolean().default(true),
-  /** 'memory' uses InMemoryCacheAdapter; otherwise pass a custom adapter instance. */
-  storage: z.union([z.literal('memory'), z.custom<unknown>()]).default('memory'),
-  maxEntries: z.number().int().positive().default(1000),
-  defaults: z
-    .object({
-      maxAge: z.number().nonnegative().finite().default(1),
-      swr: z.number().nonnegative().finite().optional(),
-      cacheErrors: z.boolean().default(false),
-    })
-    .default({}),
-  keyDerivation: z
-    .object({
-      excludeQuery: z.array(z.string()).optional(),
-      sortQuery: z.boolean().default(true),
-      lowercaseHost: z.boolean().default(true),
-    })
-    .default({}),
-  routeRules: z.record(z.string(), routeRuleSchema).optional(),
-})
-
-/**
- * Phase 5 — CSRF warn-first (EC-1).
- *
- * 0.2.0 default: `warn`. Existing apps keep working but get structured
- * warnings about every state-mutating request that does not carry the
- * `X-Theo-Action: 1` header. 0.3.0 will flip the default to `strict`.
- *
- * Set explicitly to `strict` to opt into the future default early,
- * or `off` to disable CSRF entirely (only valid when you have another
- * defense — bearer auth, no session cookies, etc).
- */
-/**
- * Phase 6 — Default security headers (D4 / EC-2).
- *
- * 0.2.0 defaults:
- *   - CSP in `report-only` mode (EC-2: don't break existing apps)
- *   - X-Frame-Options: DENY · X-Content-Type-Options: nosniff
- *   - Referrer-Policy: strict-origin-when-cross-origin
- *   - HSTS in production only (no TLS on localhost)
- *
- * Users override individual headers, swap CSP to `enforce`, or disable
- * CSP entirely (`csp: false` / `cspMode: 'off'`).
- */
-/**
- * EC-3 — CWE-113 HTTP Response Splitting mitigation.
- *
- * Every string that becomes a header value must reject CR/LF. Apps that
- * derive header values from untrusted input (feature flags, tenant config,
- * URL params) would otherwise let attackers inject Set-Cookie / Location
- * headers via `\r\n`. Apply this refinement to every header-bound string
- * field: permissionsPolicy, csp, hsts, referrerPolicy.
- */
-const headerSafeString = z
-  .string()
-  .refine((s) => !/[\r\n]/.test(s), { message: 'Header value must not contain CR/LF' })
-
-export const securityHeadersSchema = z.object({
-  csp: z.union([headerSafeString, z.literal(false)]).optional(),
-  // T6.1 — default flipped from 'report-only' to 'enforce' for 0.3.0.
-  // Users who want the old behaviour set `cspMode: 'report-only'`
-  // explicitly. See docs/migrating/0.2-to-0.3.md.
-  cspMode: z.enum(['enforce', 'report-only', 'off']).default('enforce'),
-  hsts: z.union([headerSafeString, z.literal(false)]).optional(),
-  frameOptions: z.enum(['DENY', 'SAMEORIGIN']).default('DENY'),
-  contentTypeOptions: z.literal('nosniff').default('nosniff'),
-  referrerPolicy: headerSafeString.default('strict-origin-when-cross-origin'),
-  /**
-   * T1.1 — Permissions-Policy directive string. EC-3-refined: rejects CR/LF.
-   * Pass `false` to suppress the header.
-   */
-  permissionsPolicy: z.union([headerSafeString, z.literal(false)]).optional(),
-})
-
-/**
- * T5.1 — Disallowed-routes escalation pattern (Rails-inspired).
- *
- * `routes` accepts string (exact match — trailing slash matters) or
- * RegExp entries. Matched routes that would otherwise emit `csrf.warn`
- * dispatch through `disallowedBehavior` instead:
- *   - `'warn'`  : no-op vs the default warn-mode behavior
- *   - `'raise'` : escalate to 403, even when global `csrf` mode is 'warn'
- *
- * Use to roll out strict mode per-route (e.g., flip /api/auth/* first)
- * without committing the entire surface to strict at once.
- */
-export const disallowedConfigSchema = z.object({
-  routes: z.array(z.union([z.string(), z.instanceof(RegExp)])),
-  behavior: z.enum(['warn', 'raise']).default('raise'),
-})
-
-/**
- * T1.2 — CORS configuration.
- *
- * `origins` accepts a single value (`'*'`, string, RegExp, callback) OR an
- * array of (string | RegExp). The spec-violating `origins: '*'` +
- * `credentials: true` combination is rejected at parse time (browsers
- * ignore wildcards when credentials are sent).
- *
- * EC-3 — `allowedHeaders` and `exposedHeaders` entries go through the
- * header-safe refinement (CR/LF rejected — CWE-113 mitigation).
- */
-export const corsSchema = z
-  .object({
-    origins: z.union([
-      z.literal('*'),
-      headerSafeString,
-      z.instanceof(RegExp),
-      z.array(z.union([headerSafeString, z.instanceof(RegExp)])),
-      z.function().args(z.string()).returns(z.boolean()),
-    ]),
-    methods: z
-      .array(z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']))
-      .optional(),
-    allowedHeaders: z.array(headerSafeString).optional(),
-    exposedHeaders: z.array(headerSafeString).optional(),
-    credentials: z.boolean().default(false),
-    maxAge: z.number().int().min(0).max(86400).default(600),
-  })
-  .refine((c) => !(c.origins === '*' && c.credentials), {
-    message: 'CORS spec forbids origins:"*" with credentials:true — browsers ignore the wildcard',
-  })
-
-export const securitySchema = z.object({
-  // T6.1 — default flipped from 'warn' to 'strict' for 0.3.0. Apps that
-  // grep their warn-mode logs from 0.2.x already know which endpoints
-  // break; opt back into 'warn' globally OR use disallowedRoutes for
-  // surgical migration. See docs/migrating/0.2-to-0.3.md.
-  csrf: z.enum(['off', 'warn', 'strict']).default('strict'),
-  headers: securityHeadersSchema.optional(),
-  /** T5.1 — per-route escalation (Rails disallowed_warnings pattern). */
-  disallowed: disallowedConfigSchema.optional(),
-  /** T1.2 — Cross-Origin Resource Sharing. Single global config; runs first in pipeline. */
-  cors: corsSchema.optional(),
-})
-
-/**
- * StorageManager schemas (T1.1 / ADR-0007 D4).
- *
- * `theo.config.ts > storage` declares Postgres servers (credentials), the
- * databases on each server (TheoCloud / managed PG / self-host), and Redis
- * servers. The runtime `StorageManager` consumes this block; adapters
- * (PostgresJobBackend, PostgresConversationStorage, etc.) request pools by
- * database name and never see raw credentials at the call site.
- *
- * EC-1 (DOCUMENT in concept doc T4.1): Zod default strip-unknown mode
- * silently drops typo keys (`databasees` instead of `databases`). The
- * concept doc warns users to use exact names; runtime errors are still
- * actionable (`Database "X" not configured`).
- *
- * EC-2 (DEFERRED to use-time): `databases.X.server` references a key in
- * `servers`. Cross-field validation is intentionally NOT enforced at parse
- * time — `StorageManager.usePostgres()` throws an actionable error on the
- * first call with the dangling reference, matching Rails / Nitro behavior.
- */
-const tlsConfigSchema = z.object({
-  rejectUnauthorized: z.boolean().optional(),
-  caCert: z.string().optional(),
-  clientCert: z.string().optional(),
-  clientKey: z.string().optional(),
-})
-
-const serverConfigSchema = z.object({
-  host: z.string().min(1),
-  port: z.number().int().positive().max(65535).optional(),
-  user: z.string().min(1),
-  /** Password may be the empty string (some providers permit it). */
-  password: z.string(),
-  tls: tlsConfigSchema.optional(),
-})
-
-const postgresPoolConfigSchema = z.object({
-  min: z.number().int().nonnegative().optional(),
-  max: z.number().int().positive().optional(),
-  connectionTimeoutMillis: z.number().int().positive().optional(),
-  idleTimeoutMillis: z.number().int().nonnegative().optional(),
-})
-
-const postgresDatabaseConfigSchema = z.object({
-  /** References a key in `storage.servers`. Resolved at `usePostgres()` call time. */
-  server: z.string().min(1),
-  database: z.string().min(1),
-  pool: postgresPoolConfigSchema.optional(),
-})
-
-const redisServerConfigSchema = serverConfigSchema.extend({
-  db: z.number().int().nonnegative().optional(),
-  maxRetriesPerRequest: z.number().int().nonnegative().optional(),
-})
-
-export const storageSchema = z.object({
-  servers: z.record(z.string(), serverConfigSchema).optional(),
-  databases: z.record(z.string(), postgresDatabaseConfigSchema).optional(),
-  redis: z.record(z.string(), redisServerConfigSchema).optional(),
-})
-
-export type StorageConfig = z.infer<typeof storageSchema>
-
 export const theoConfigSchema = z
   .object({
     /**
@@ -523,3 +286,7 @@ export const theoConfigSchema = z
 export type TheoConfig = z.infer<typeof theoConfigSchema>
 
 export type OpenApiConfig = NonNullable<TheoConfig['openapi']>
+
+// Silence unused-import warnings for type-only re-exports — TS strips at compile,
+// but exports above re-introduce them for downstream consumers.
+export type _FormatErrorContext = FormatErrorContext
