@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed (Plan theokit-arch-gaps-implementation Phase 6 follow-up — stale source-path references from T2.2 + T2.6 refactors)
+
+Per the broad-suite empirical sweep diagnosed in Phase 6 audit. **Two real plan-introduced regressions** surfaced where structural tests held stale source-path references to files that moved during the M3-M6 mecânicos. Per Rule 3 (extreme honesty) these were MY regressions to fix. (#arch-gaps-implementation)
+
+- **`tests/integration/dev-openapi-emit.test.ts` (T2.6 regression — vite-plugin/index.ts boy-scout refactor)** — 3 source-string assertion tests expected `resolvedOpenApi !== undefined` + `reEmitOpenApi(` + `server.watcher.on(` patterns to live in `packages/theo/src/vite-plugin/index.ts`. Post-T2.6 (commit `2850377`), those patterns live in the extracted `configure-server-hook.ts` (which owns the entire `configureServer` body — 60% of vite-plugin/index.ts moved into 4 sibling hook bodies). Test target updated to `configure-server-hook.ts` with inline rationale linking back to T2.6 + audit doc. The third test's intent ("co-locates emit + watcher inside configureServer") is preserved by reading the `runConfigureServer` function position. **7/7 GREEN** (was 4/7).
+- **`tests/integration/start-storage-manager-shutdown.test.ts` (T2.2 regression — cli/commands/start/ subfolder)** — 3 source-string assertion tests targeted `cli/commands/start.ts` + `cli/commands/start-graceful-shutdown.ts`. Post-T2.2 (commit `54a5a3d`), those files moved to `start/index.ts` + `start/graceful-shutdown.ts` (prefix dropped per the subfolder convention). Test targets updated; inline rationale links back to T2.2. **8/8 GREEN** (was 5/8).
+- **3 sibling tests with same T2.2 stale path references found via grep + fixed defense-in-depth:**
+  - `tests/unit/cli-env-wiring.test.ts` — `START` const path + the `start.ts imports loadEnv` test's import-depth regex (relative path went `../../config/load-env` → `../../../config/load-env` because start/index.ts is 1 level deeper). Regex relaxed to `\.\.(?:\/\.\.){2,3}` to tolerate both depths (defense across pre/post-T2.2 layouts).
+  - `tests/unit/dead-code-audit-decisions.test.ts:24` — PV-14 assertion read `cli/commands/start-request-handler.ts`; updated to `cli/commands/start/request-handler.ts`.
+  - `tests/integration/start-sigterm-evictall.test.ts` — `START_SOURCE` array read both stale paths; both updated to subfolder layout.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. Combined sweep of all 5 fixed files: **36/36 GREEN** (was 6/36 — 6 RED prior to this commit, all attributable to source-path drift from T2.2 + T2.6 refactors).
+- **Net impact:** 6 additional pre-existing failures cleared (3 from dev-openapi-emit + 3 from start-storage-manager). The 7 documented-RED in `handler-web-standards.test.ts` remain intentional forward specs for T5a.2. Remaining integration sweep failures shrink from 14 → 8 (the 7 T5a.2 RED + 1 `contract-usetheo-ui-vite-plugin.test.ts` peerDep drift unrelated to plan).
+
 ### Changed (Plan theokit-arch-gaps-implementation Phase 6 follow-up — additional CLI fixture consumers wired to env-var skip)
 
 Per the env-var escape hatch shipped in the prior commit (`ea923b8`). Additional callers of CLI build via `execSync` are wired to pass `THEOKIT_SKIP_NATIVE_PREFLIGHT=1`, completing the Phase 6 fixture-infrastructure cleanup. (#arch-gaps-implementation)
