@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T2.4 — M3 devtools sub-organization)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.4. Pure structural refactor; ZERO behavior change. Closes M3 mecânico (devtools/ root with 13 loose files mixing 5 concerns vs Astro `dev-toolbar/{apps,helpers,settings,toolbar,ui-library}` pattern). (#arch-gaps-implementation)
+
+- **11 files moved** into 4 conceptual sub-folders (git history preserved):
+  - `devtools/dom/` (3 files): `Overlay.tsx`, `entry.tsx`, `shadow-portal.tsx`
+  - `devtools/state/` (3 files): `reducer.ts`, `actions-row-state.ts`, `persistence.ts`
+  - `devtools/bridge/` (3 files): `dispatcher.ts`, `install-global.ts`, `hmr-bridge.ts`
+  - `devtools/format/` (2 files): `pii-mask.ts`, `csrf-readiness-classify.ts`
+- **`devtools/shared.ts`** stays at root (genuinely shared cross-concern types: `RequestRecord`, `ErrorRecord`, `RouteManifest`, `DevtoolsAction`, `DevtoolsState`, etc.).
+- **`devtools/{assets,components,hooks,server-side,styles}/`** unchanged (already coesos).
+- **Import rewrites (60+ sites total, all 5 import shapes covered)**:
+  - **Intra-moved files** (e.g., `Overlay.tsx` referencing `dispatcher.ts`): `'./X.js'` → `'../<subfolder>/X.js'` OR same-folder `'./X.js'`. Subdir-keep references (`./components/`, `./hooks/`, etc.): `'./X/'` → `'../X/'`.
+  - **`devtools/index.ts`**: `'./Overlay.js'` → `'./dom/Overlay.js'`; `'./dispatcher.js'` → `'./bridge/dispatcher.js'`.
+  - **`devtools/components/`, `hooks/`, `server-side/`**: references to moved files re-pointed via `'../bridge/'` / `'../state/'` / `'../format/'`.
+  - **22 test files** (`tests/unit/devtools-*.test.ts`): import paths `packages/theo/src/devtools/<X>.js` → `packages/theo/src/devtools/<subfolder>/<X>.js`.
+  - **`devtools/components/Tabs/`** (depth 2): `'../../<X>.js'` → `'../../<subfolder>/<X>.js'` (e.g., ActionsTab.tsx, CsrfReadinessTab.tsx).
+  - **External consumers in `server/`**: dynamic `await import('../../devtools/dispatcher.js')` → `'../../devtools/bridge/dispatcher.js'` (track-agent-run.ts, action-execute.ts).
+  - **`vite-plugin/index.ts`** alias resolver: `devtools/entry${ext}` → `devtools/dom/entry${ext}`.
+  - **`packages/theo/tsup.config.ts`** entry: `'devtools/entry': 'src/devtools/entry.tsx'` → `'src/devtools/dom/entry.tsx'` (preserves `dist/devtools/entry.js` output path so `import('theokit/devtools/entry')` consumer-facing surface is unchanged).
+- **Validation:** `pnpm typecheck` exit 0 (clean). `pnpm vitest run tests/unit/devtools-*.test.ts` → **22 files / 176 tests GREEN** (zero new regressions). `pnpm vitest run tests/unit/devtools-entry-dist.test.ts` GREEN — confirms tsup builds `dist/devtools/entry.js` from the new source path correctly.
+- **EC-7 honest framing — Chrome MCP real-browser smoke DEFERRED:** plan T2.4 acceptance criteria adds "Chrome MCP visual smoke (open dogfood-app + verify Devtools tab populates with Actions/Requests data — React Context tree-shaking / path-mismatch bug catch)". This requires Chrome MCP which is not available in the autonomous halt-loop context. Sub-task tracking: a follow-up Chrome smoke run is required before considering Phase 6 Dogfood QA passing. The typecheck + 176 vitest tests cover the structural contract; the Chrome smoke covers Context reference identity that vitest cannot prove.
+
 ### Changed (Plan theokit-arch-gaps-implementation T2.3 — M2 config schemas split)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.3. Pure structural split; ZERO behavior change at consumer call site. Closes M2 mecânico (config/schema.ts monolítico vs Astro `schemas/{base,refined,relative}.ts` pattern). (#arch-gaps-implementation)

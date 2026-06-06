@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
-import { useDevtoolsContext } from './hooks/useDevtoolsContext.js'
+import { useDevtoolsContext } from '../hooks/useDevtoolsContext.js'
 
 export function ShadowPortal({ children }: { children: ReactNode }) {
   const { shadowRoot } = useDevtoolsContext()

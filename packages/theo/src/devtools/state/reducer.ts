@@ -11,7 +11,7 @@ import {
   type ErrorRecord,
   RING_BUFFER_CAP,
   initialState,
-} from './shared.js'
+} from '../shared.js'
 
 function appendCapped<T>(arr: T[], item: T, cap = RING_BUFFER_CAP): T[] {
   return [item, ...arr].slice(0, cap)

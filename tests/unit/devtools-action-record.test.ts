@@ -7,8 +7,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { type ActionCallRecord, initialState } from '../../packages/theo/src/devtools/shared.js'
-import { devtoolsReducer } from '../../packages/theo/src/devtools/reducer.js'
-import { maskPiiFields } from '../../packages/theo/src/devtools/pii-mask.js'
+import { devtoolsReducer } from '../../packages/theo/src/devtools/state/reducer.js'
+import { maskPiiFields } from '../../packages/theo/src/devtools/format/pii-mask.js'
 
 describe('devtools — ActionCallRecord shape', () => {
   it('should be present in initialState as actionCalls: []', () => {
@@ -142,7 +142,7 @@ describe('devtools — PII mask heuristic (EC-12 + ADR D7)', () => {
   })
 
   it('should expose isSensitiveKey helper', async () => {
-    const { isSensitiveKey } = await import('../../packages/theo/src/devtools/pii-mask.js')
+    const { isSensitiveKey } = await import('../../packages/theo/src/devtools/format/pii-mask.js')
     expect(isSensitiveKey('password')).toBe(true)
     expect(isSensitiveKey('PASSWORD')).toBe(true)
     expect(isSensitiveKey('userPassword')).toBe(true)

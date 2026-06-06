@@ -21,10 +21,10 @@
  */
 import { useState } from 'react'
 
-import { toggleExpandedIds } from '../../actions-row-state.js'
+import { maskPiiFields } from '../../format/pii-mask.js'
 import { useDevtoolsContext } from '../../hooks/useDevtoolsContext.js'
-import { maskPiiFields } from '../../pii-mask.js'
 import type { ActionCallRecord } from '../../shared.js'
+import { toggleExpandedIds } from '../../state/actions-row-state.js'
 import { tokens } from '../../styles/tokens.js'
 
 function formatTime(ts: number): string {

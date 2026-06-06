@@ -21,7 +21,7 @@ import {
   MAX_QUEUE_SIZE,
   type RequestRecord,
   type RouteManifest,
-} from './shared.js'
+} from '../shared.js'
 
 type Dispatch = (action: DevtoolsAction) => void
 type QueuedItem = (d: Dispatch) => void

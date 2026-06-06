@@ -14,7 +14,7 @@ import {
   type DevtoolsTab,
   type DevtoolsTheme,
   STORAGE_VERSION,
-} from './shared.js'
+} from '../shared.js'
 
 export const STORAGE_KEYS = {
   version: 'theo-devtools-storage-version',

@@ -7,7 +7,7 @@
  * NEVER use dangerouslySetInnerHTML in any devtools component — see plan EC-20.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dispatcher } from '../../packages/theo/src/devtools/dispatcher.js'
+import { dispatcher } from '../../packages/theo/src/devtools/bridge/dispatcher.js'
 import { MAX_QUEUE_SIZE } from '../../packages/theo/src/devtools/shared.js'
 
 beforeEach(() => {
