@@ -13,6 +13,12 @@ import { z } from 'zod'
 /** Wave 2 runtime kinds. Go/Rust/Java/Ruby/PHP archived; deferred per ADR-0012 invariant #2/#3. */
 const ServiceRuntimeSchema = z.enum(['python', 'node'])
 
+/**
+ * Plan v1.2 T2.2 — service shape enum, mirrored from `services.schema.json`
+ * server | worker | frontend. Optional; emitters default to "server".
+ */
+const ServiceTypeSchema = z.enum(['server', 'worker', 'frontend'])
+
 /** EC-3 fix: names that conflict with generated docker-compose entries. */
 const RESERVED_SERVICE_NAMES = ['web', 'caddy', 'postgres', 'redis'] as const
 
@@ -39,6 +45,7 @@ const ServiceNameSchema = z
  */
 const ServiceDefinitionSchema = z.object({
   runtime: ServiceRuntimeSchema,
+  type: ServiceTypeSchema.optional(),
   port: z.number().int().min(1).max(65535),
   proxy: z.string().regex(/^\/[a-zA-Z0-9\-_/]+$/, 'proxy must be a non-root path starting with /'),
   dev: z.string().min(1),

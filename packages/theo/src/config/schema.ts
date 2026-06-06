@@ -280,6 +280,27 @@ export type StorageConfig = z.infer<typeof storageSchema>
 
 export const theoConfigSchema = z
   .object({
+    /**
+     * Plan v1.2 T2.1 — project identifier propagated into
+     * `.theo/services.json` v2 `project` field. DNS-1123 compatible (drives
+     * Gitea repo + ArgoCD App naming on TheoCloud). When omitted, the build
+     * emits services.json v1 with the legacy `services-bundle` fallback
+     * (ADR D10) and logs a deprecation warning.
+     */
+    name: z
+      .string()
+      .max(63)
+      .refine(
+        // DNS-1123 equivalent expressed as explicit single-char anchors so
+        // security/detect-unsafe-regex stays clean (no backtracking).
+        (value) =>
+          value.length > 0 &&
+          /^[a-z0-9-]+$/u.test(value) &&
+          !value.startsWith('-') &&
+          !value.endsWith('-'),
+        'name must match DNS-1123 (lowercase alphanumeric+hyphens, 1-63 chars, no leading/trailing hyphen)',
+      )
+      .optional(),
     appDir: z.string().default('app'),
     serverDir: z.string().default('server'),
     /**
