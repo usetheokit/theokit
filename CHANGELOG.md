@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T5a.1c — Web Crypto migration: webhook providers slice 3/N)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1 Task #3. **PARTIAL progress on C3 critical** — third incremental slice migrating the 3 webhook signature providers from `node:crypto.createHmac` to Web Crypto's async `subtle.sign`. Zero public API change (providers were already async). Baseline 8 → 1 `node:crypto` consumers in `server/` after T5a.1a + T5a.1b + T5a.1c combined. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/webhook/providers/github.ts`** — `import { createHmac } from 'node:crypto'` REMOVED. Sync `createHmac('sha256', secret).update(rawBody).digest('hex')` swapped to async `globalThis.crypto.subtle.importKey('raw', ...) + subtle.sign('HMAC', ...)`. Skips the hex round-trip — `subtle.sign` returns the raw signature bytes directly, compared via `timingSafeEqual` against the parsed `sha256=<hex>` header bytes. Zero public API change (function was already `async (req: Request) => Promise<VerifyResult>`).
+- **`packages/theo/src/server/webhook/providers/slack.ts`** — same migration shape: `createHmac` → `subtle.sign`. Skips hex round-trip on the expected signature. The Slack basestring `v0:${ts}:${rawBody}` is encoded once via `TextEncoder` then signed.
+- **`packages/theo/src/server/webhook/providers/stripe.ts`** — same migration; the helper `expectedSig(secret, ts, body): string` becomes `expectedSigBytes(secret, ts, body): Promise<Uint8Array>` returning raw bytes (skipping the hex → bytes round-trip). Multi-signature comparison loop (Stripe allows multiple `v1=` headers per request) preserved.
+- **`tests/unit/r3a-web-crypto-migration-leaf.test.ts`** — extended with 6 new RED→GREEN file-level assertions + audit threshold tightened to `≤ 1` (only `rate-limit-per-route.ts` remains, deferred per cascade-async constraint). 15/15 GREEN.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. Behavior regression sweep: `tests/unit/webhook-providers-{github,slack,stripe}.test.ts` + `tests/unit/define-webhook.test.ts` + `tests/unit/webhook-raw-body.test.ts` + `tests/integration/webhook-fixtures.test.ts` **49/49 GREEN** — including the integration fixtures that exercise REAL signed GitHub + Slack + Stripe payloads end-to-end. Zero behavior change.
+- **DEFERRED to T5a.1d+ (per leaf-first decomposition):**
+  - **Last remaining `node:crypto` consumer:** `packages/theo/src/server/rate-limit/rate-limit-per-route.ts` — uses sync `createHash('sha256').update(input).digest('base64url')`. Web Crypto `subtle.digest` is async, which would cascade through `keyForRequest(req)` (currently sync) → `routeRateLimit` middleware (currently sync) → entire rate-limit pipeline. The async cascade is a substantive refactor that exceeds T5a.1c's leaf-first scope and merits its own dedicated slice.
+
 ### Changed (Plan theokit-arch-gaps-implementation T5a.1b — Web Crypto migration: leaf-first slice 2/N)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1 Task #3. **PARTIAL progress on C3 critical** — second incremental slice continuing the leaf-first sequence after T5a.1a. (#arch-gaps-implementation)

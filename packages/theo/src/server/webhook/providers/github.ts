@@ -1,5 +1,8 @@
-import { createHmac } from 'node:crypto'
-
+// T5a.1c — Web Crypto migration. Uses globalThis.crypto.subtle.sign for
+// HMAC-SHA256. Available in every runtime per ADR-0028 (Node 22+, CF
+// Workers, Bun, Deno). The provider function was already async (returns
+// Promise<VerifyResult>) so subtle.sign's Promise integrates with zero
+// public API change.
 import { timingSafeEqual } from '../timing-safe-equal.js'
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 
@@ -53,11 +56,22 @@ export function github(opts: GitHubWebhookOptions): VerifyFn {
     }
 
     const rawBody = await req.text()
+    const enc = new TextEncoder()
+    const bodyBytes = enc.encode(rawBody)
 
     for (const secret of secrets) {
-      const expectedHex = createHmac('sha256', secret).update(rawBody).digest('hex')
-      const expectedBytes = fromHex(expectedHex)
-      if (!expectedBytes) continue
+      // Web Crypto HMAC-SHA256: import secret as raw key, sign body bytes,
+      // compare resulting bytes directly (skip hex round-trip — subtle.sign
+      // returns the raw signature bytes which is what we need for timingSafeEqual).
+      const key = await globalThis.crypto.subtle.importKey(
+        'raw',
+        enc.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign'],
+      )
+      const sigBuf = await globalThis.crypto.subtle.sign('HMAC', key, bodyBytes)
+      const expectedBytes = new Uint8Array(sigBuf)
       if (sigBytes.length !== expectedBytes.length) continue
       if (timingSafeEqual(sigBytes, expectedBytes)) {
         return { ok: true }

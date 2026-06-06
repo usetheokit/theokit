@@ -1,5 +1,7 @@
-import { createHmac } from 'node:crypto'
-
+// T5a.1c — Web Crypto migration. Uses globalThis.crypto.subtle.sign for
+// HMAC-SHA256. Provider function was already async; subtle.sign Promise
+// integrates with zero public API change. `expectedSig` helper becomes
+// async to wrap the subtle.sign Promise.
 import { timingSafeEqual } from '../timing-safe-equal.js'
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 
@@ -54,11 +56,34 @@ function parseStripeHeader(header: string): ParsedHeader | null {
   return { timestamp, signatures }
 }
 
-function expectedSig(secret: string, timestamp: number, rawBody: string): string {
-  return createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex')
+const enc = new TextEncoder()
+
+/**
+ * HMAC-SHA256(secret, "${timestamp}.${rawBody}") returning the raw
+ * signature bytes. Web Crypto returns Promise<ArrayBuffer> via subtle.sign;
+ * we expose bytes (Uint8Array) so the comparison loop can use timingSafeEqual
+ * directly without a hex round-trip.
+ */
+async function expectedSigBytes(
+  secret: string,
+  timestamp: number,
+  rawBody: string,
+): Promise<Uint8Array> {
+  const key = await globalThis.crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const sigBuf = await globalThis.crypto.subtle.sign(
+    'HMAC',
+    key,
+    enc.encode(`${timestamp}.${rawBody}`),
+  )
+  return new Uint8Array(sigBuf)
 }
 
-const enc = new TextEncoder()
 const fromHex = (hex: string): Uint8Array | null => {
   if (hex.length % 2 !== 0) return null
   const bytes = new Uint8Array(hex.length / 2)
@@ -98,9 +123,7 @@ export function stripe(opts: StripeWebhookOptions): VerifyFn {
     const rawBody = await req.text()
 
     for (const secret of secrets) {
-      const expectedHex = expectedSig(secret, parsed.timestamp, rawBody)
-      const expectedBytes = fromHex(expectedHex)
-      if (!expectedBytes) continue
+      const expectedBytes = await expectedSigBytes(secret, parsed.timestamp, rawBody)
       for (const sig of parsed.signatures) {
         const sigBytes = fromHex(sig)
         if (!sigBytes) continue
