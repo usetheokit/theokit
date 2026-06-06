@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase D slice 2/3 — single-bucket rate-limit Web sibling)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase D. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/rate-limit/rate-limit.ts`** — adds Web-Standards sibling:
+  - `createRateLimiter(config, opts)` (IncomingMessage) UNCHANGED.
+  - **`createRateLimiterWeb(config, opts): (clientIp: string) => RateLimitResult` NEW** — Web sibling. Same `RateLimitConfig`, same `InMemoryStore` default, same async-store rejection at request-time (CR-005 parity).
+  - **Signature difference (KISS):** Web checker takes `(clientIp: string)` directly instead of `(request: Request)`. IP is the ONLY input the bucket needs; passing a Request would force the caller to populate `x-forwarded-for` extraction without giving safer per-runtime resolution. Convention matches Phase D slice 1/3's `DeriveKeyRequestContext.clientIp`: Node adapter resolves from socket; CF Workers from `cf-connecting-ip`; etc.
+- **`tests/unit/rate-limit-web.test.ts` NEW** — 6 RED→GREEN assertions:
+  - Under threshold returns not-limited with X-RateLimit-Limit + X-RateLimit-Remaining headers.
+  - Returns limited after bucket exhaustion with Retry-After.
+  - Different clientIp values get separate buckets.
+  - Empty clientIp falls back to shared "unknown" bucket.
+  - Accepts opt-in InMemoryStore.
+  - Rejects external async stores at request-time (CR-005 parity).
+- **Validation:** `pnpm typecheck` exit 0 (1 initial RateLimitStore stub missing `get`/`reset` methods caught + fixed). `pnpm eslint` clean. **15/15 GREEN** combined sweep — 6 new + 9 legacy (`rate-limit.test.ts` unchanged).
+- **Phase D progress:** **2/3 leaves complete** (rate-limit-per-route + rate-limit). 1 remaining: `auth/session.ts`.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase D slice 1/3 — rate-limit-per-route Web sibling)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase D (Rate-limit + auth). Opens Phase D with the rate-limit-per-route leaf. (#arch-gaps-implementation)
