@@ -106,40 +106,85 @@ export interface CsrfWarnPayload {
   docsUrl: string
 }
 
-export function validateCsrf(
-  req: IncomingMessage,
-): { valid: true } | { valid: false; reason: string } {
+/**
+ * T5a.2 Phase B (slice 1/6): pure header-only CSRF check extracted from
+ * `validateCsrf(req: IncomingMessage)` so it can be re-used by the Web-
+ * Standards `validateCsrfRequest(request: Request)` sibling. Per the T5a.2
+ * plan v1.0 § Phase B, header-only leaves are first to migrate. This is
+ * the dual-signature pattern (anti-pattern #2 avoidance): IncomingMessage
+ * consumers unchanged; new Request consumers go through the same logic
+ * via the shared helper.
+ *
+ * Pure logic — accepts pre-extracted header values as strings or null.
+ */
+function isCsrfValidFromHeaders(opts: {
+  csrfActionHeader: string | null
+  origin: string | null
+  host: string | null
+}): { valid: true } | { valid: false; reason: string } {
   // 1. Custom header must be present (primary defense — simple form posts
   //    cannot set custom headers, browsers gate via CORS preflight)
-  if (req.headers['x-theo-action'] !== '1') {
+  if (opts.csrfActionHeader !== '1') {
     return { valid: false, reason: 'Missing X-Theo-Action header' }
   }
 
   // 2. Origin matching (secondary defense)
-  const origin = req.headers.origin
-  if (!origin) {
+  if (opts.origin === null || opts.origin === '') {
     // Browsers omit Origin for same-origin requests — treat as valid
     return { valid: true }
   }
 
-  const host = req.headers.host
-  if (!host) {
+  if (opts.host === null || opts.host === '') {
     return { valid: true }
   }
 
-  const originStr = pickHeader(origin)
-  const hostStr = pickHeader(host)
-  if (originStr === '' || hostStr === '') return { valid: true }
   try {
-    const originHost = new URL(originStr).host
-    if (originHost !== hostStr) {
-      return { valid: false, reason: `Origin ${originStr} does not match host ${hostStr}` }
+    const originHost = new URL(opts.origin).host
+    if (originHost !== opts.host) {
+      return { valid: false, reason: `Origin ${opts.origin} does not match host ${opts.host}` }
     }
   } catch {
-    return { valid: false, reason: `Invalid origin: ${originStr}` }
+    return { valid: false, reason: `Invalid origin: ${opts.origin}` }
   }
 
   return { valid: true }
+}
+
+export function validateCsrf(
+  req: IncomingMessage,
+): { valid: true } | { valid: false; reason: string } {
+  // IncomingMessage adapter — normalize Node header shape to the pure
+  // helper's input shape (string|null).
+  const action = req.headers['x-theo-action']
+  const origin = req.headers.origin
+  const host = req.headers.host
+  return isCsrfValidFromHeaders({
+    csrfActionHeader: typeof action === 'string' ? action : null,
+    origin: origin !== undefined ? pickHeader(origin) || null : null,
+    host: host !== undefined ? pickHeader(host) || null : null,
+  })
+}
+
+/**
+ * T5a.2 Phase B (slice 1/6) — Web-Standards-shaped CSRF validator.
+ *
+ * Mirror of `validateCsrf(req: IncomingMessage)` for the Web `Request`
+ * shape. Consumes `request.headers.get(name)` (native Web `Headers` API)
+ * instead of `req.headers[name]` (Node `IncomingMessage` indexer). Same
+ * CSRF policy + same return shape — the difference is only the input
+ * extraction.
+ *
+ * Used by `executeWebRequest` (T5a.2 Phase A) to enforce CSRF on the
+ * Web-Standards request handler entry-point.
+ */
+export function validateCsrfRequest(
+  request: Request,
+): { valid: true } | { valid: false; reason: string } {
+  return isCsrfValidFromHeaders({
+    csrfActionHeader: request.headers.get('x-theo-action'),
+    origin: request.headers.get('origin'),
+    host: request.headers.get('host'),
+  })
 }
 
 /**

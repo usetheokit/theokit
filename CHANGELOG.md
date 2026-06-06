@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 1/6 — CSRF leaf + executeWebRequest integration)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; csrf.ts is leaf #1 of 6). **Adds CSRF enforcement to the Web-Standards `executeWebRequest` entry-point via the dual-signature pattern** (anti-pattern #2 avoidance: don't double-break consumers). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/security/csrf.ts`** — refactored to extract the pure header-only logic into a private `isCsrfValidFromHeaders(opts: {csrfActionHeader, origin, host})` helper that accepts `string | null` for each header value. Two sibling wrappers consume it:
+  - `validateCsrf(req: IncomingMessage)` — existing IncomingMessage consumers UNCHANGED (signature + return shape preserved). Internally normalizes `req.headers[X]` (Node string|string[]|undefined indexer) into the helper's input shape.
+  - **`validateCsrfRequest(request: Request)` NEW** — Web-Standards-shaped sibling. Consumes `request.headers.get(name)` (native Web `Headers` API) instead of the Node indexer. Same CSRF policy + same return shape — only the input extraction differs.
+- **`packages/theo/src/server/web-handler.ts`** — `executeWebRequest` now accepts optional `opts: ExecuteWebRequestOptions = {}` parameter with `csrfMode?: 'off' | 'strict'`. When `csrfMode === 'strict'`:
+  - Runs `validateCsrfRequest(request)` BEFORE method dispatch on state-changing methods (POST/PUT/PATCH/DELETE only — GET/HEAD/OPTIONS bypass per HTTP threat-model semantics).
+  - Emits a `403 FORBIDDEN` envelope with `code: 'FORBIDDEN', message: 'CSRF check failed: <reason>'` when the check fails.
+  - Default `csrfMode: 'off'` preserves Phase A backward compat (T1.2 fixture tests don't set X-Theo-Action header).
+- **`tests/integration/web-handler-csrf-integration.test.ts` NEW** — 14 RED→GREEN assertions covering:
+  - 7 unit tests on `validateCsrfRequest` (valid X-Theo-Action; missing/wrong header value; same-origin match; cross-origin mismatch; malformed Origin URL; browser-omitted Origin → valid).
+  - 7 integration tests on `executeWebRequest + csrfMode: 'strict'` (GET bypasses; POST without header → 403; POST with header → handler runs; PUT/DELETE same; cross-origin attack → 403; `csrfMode: 'off'` default preserves Phase A behavior).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (1 initial `String()` redundant cast caught + fixed). **22/22 GREEN** combined sweep (14 new CSRF integration + 8 Phase A T1.2 — Phase A unaffected). Existing IncomingMessage CSRF regression sweep: 5 test files / **61/61 GREEN** (csrf.test.ts + csrf-warn-first.test.ts + csrf-disallowed-routes.test.ts + csrf-multi-header.test.ts + csrf-protection.test.ts) — zero regression from the dual-signature extraction.
+- **Phase B progress:** 1/6 header-only leaves complete (csrf.ts). 5 remaining: `csrf-multi-header.ts`, `csrf-readiness-endpoint.ts`, `csp-report.ts`, `cors.ts`, `cookies.ts`. Each subsequent slice follows the same pure-helper extraction + Web-shaped sibling + executeWebRequest opts integration pattern.
+
 ### Added (Plan theokit-arch-gaps-implementation — Session final summary doc)
 
 Per the 25-commit autonomous halt-loop session driven by `.claude/halt-loop-prompts/implement-arch-gaps.md`. Captures everything shipped + verification commands + honest framing about the completion promise discipline. Enables the next dedicated session (T5a.2 Phases B-H + `dogfood full` + `loop-architecture-review --mode=full` re-run) to pick up cleanly. (#arch-gaps-implementation)
