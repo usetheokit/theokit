@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation R3a invariant — emitted-bundle empirical proof)
+
+Per `docs/audit/arch-gaps-phase5a-progress-2026-06-06.md` Category A. **Promotes the "type-only imports are runtime-clean" claim from source-level grep to empirical built-bundle assertion.** Stronger than the existing source-level invariant guard because it verifies the actual emitted JavaScript that runs on CF Workers / Bun / Deno. (#arch-gaps-implementation)
+
+- **`tests/unit/r3a-emitted-bundle-node-free.test.ts` NEW** — 5 invariant assertions on the emitted `dist/server/` bundle:
+  - `dist/server/ exists after tsup build` — sanity precondition.
+  - `emitted dist/server/*.js contains zero runtime node:http references outside the allowlist` — walks the entire dist subtree, flags any file containing `'node:http'` substring that isn't in the Category B allowlist (16 files: scanners, build-time leaves, boot wiring, static-file server, Node-adapter scope per ADR-0028). **0 offenders.**
+  - `request-handler entry-point dist/server/index.js is fully node:http-free` — pinpoint check on the canonical request entry-point that re-exports `executeWebRequest`. **Zero `'node:http'` reference in 313 KB of emitted code.**
+  - `emitted dist/server/web-handler*.js (executeWebRequest) is fully node:http-free` — pinpoint check on the Phase A Web-Standards entry-point chunk. Also asserts zero `node:crypto` / `node:fs` / `node:path` / `node:url` / `node:module` references. tsup hash-suffix tolerated via anchored ReDoS-safe regex.
+  - `audit: count of dist/server/*.js files containing node:http is at most equal to allowlist size` — sanity guard against allowlist drift; bound is the 16-entry allowlist.
+- **Empirical R3a claim now PROVEN at the bundle level** — not just at the source level. The Phase 5a audit's Category A claim ("24 type-only `import type` declarations are TS-erased") is no longer just a documentation assertion; the build pipeline produces evidence that matches.
+- **Uses `buildTheokitPackageOnce()` helper** (shared with `devtools-entry-dist.test.ts`, `bundle-budget.test.ts`, etc.) — re-uses the build cache + file lock so the rebuild is amortized across the test suite (single tsup invocation per session).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (initial run flagged ReDoS-prone unanchored regex; replaced with anchored prefix/suffix + bounded hash check). **5/5 GREEN** on first execution after rebuild including T5a.2 Phase A's `web-handler.ts`.
+- **CI implications:** the test depends on a successful tsup build. Pre-existing CI workflows already invoke `pnpm build` before tests; in dev, the `buildTheokitPackageOnce` lock + sentinel prevents wasteful rebuilds. If the build is stale (e.g., never run), the first run of this test triggers a fresh build (~5-10s).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase A — Web-Standards `executeWebRequest` entry-point)
 
 Per the dedicated T5a.2 plan v1.0 § Phase A (Foundation). **Closes the last 7 documented-RED T1.2 forward specs** that explicitly throw `"intentionally RED until then"` waiting on T5a.2. Implements the Web-Standards entry-point that accepts a native Web `Request` and returns a native Web `Response` per ADR-0028 R3a. (#arch-gaps-implementation)
