@@ -59,23 +59,19 @@ function randomRequestId(): string {
   return `req-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function broadcastRequestToDevtools(
+/**
+ * T5a.2 Phase C slice 2/2 — pure devtools broadcast that takes a
+ * pre-extracted headers object + optional stashed body, so both
+ * IncomingMessage and Web Request paths share the same dispatch logic.
+ *
+ * Errors here must not propagate — devtools forwarding is best-effort
+ * and silenced.
+ */
+function broadcastToDevtoolsCore(
   info: Omit<RequestLog, 'level' | 'timestamp'>,
-  req?: IncomingMessage,
+  headers: Record<string, string> | undefined,
+  stashedBody: unknown,
 ): void {
-  // T2.1 forwarder. Errors here must not propagate.
-  const headers = req?.headers
-    ? Object.fromEntries(
-        Object.entries(req.headers).map(([k, v]) => [
-          k,
-          Array.isArray(v) ? v.join(', ') : (v ?? ''),
-        ]),
-      )
-    : undefined
-  const stashedBody = req
-    ? (req as unknown as Record<symbol, unknown>)[DEVTOOLS_BODY_PREVIEW]
-    : undefined
-
   void Promise.all([
     import('../../devtools/server-side/broadcast.js'),
     import('../../devtools/server-side/build-request-body-preview.js'),
@@ -103,4 +99,60 @@ function broadcastRequestToDevtools(
     .catch(() => {
       // No-op: devtools forwarding is best-effort.
     })
+}
+
+function broadcastRequestToDevtools(
+  info: Omit<RequestLog, 'level' | 'timestamp'>,
+  req?: IncomingMessage,
+): void {
+  // T2.1 forwarder. Errors here must not propagate.
+  const headers = req?.headers
+    ? Object.fromEntries(
+        Object.entries(req.headers).map(([k, v]) => [
+          k,
+          Array.isArray(v) ? v.join(', ') : (v ?? ''),
+        ]),
+      )
+    : undefined
+  const stashedBody = req
+    ? (req as unknown as Record<symbol, unknown>)[DEVTOOLS_BODY_PREVIEW]
+    : undefined
+  broadcastToDevtoolsCore(info, headers, stashedBody)
+}
+
+/**
+ * T5a.2 Phase C slice 2/2 — Web-Standards request log + devtools
+ * forward. Mirror of `logRequest(info, logger?, req?: IncomingMessage)`
+ * accepting `request?: Request`.
+ *
+ * Extracts headers via `request.headers.entries()` (Web `Headers`
+ * iterator). Body preview stash is NOT yet supported on the Web path —
+ * `body-parser-web.ts` doesn't yet stash like `body-parser.ts` does for
+ * the IncomingMessage path. That hookup is Phase E scope (body parsing
+ * migration). Until then, the devtools UI shows headers but no body
+ * preview for Web-handled requests — same surface as the IncomingMessage
+ * path before the stash convention shipped.
+ */
+export function logRequestFromRequest(
+  info: Omit<RequestLog, 'level' | 'timestamp'>,
+  customLogger?: LoggerFn,
+  request?: Request,
+): void {
+  const log: RequestLog = {
+    level: 'info',
+    ...info,
+    timestamp: new Date().toISOString(),
+  }
+  const logger = customLogger ?? defaultLoggerFn
+  logger(log)
+
+  let headers: Record<string, string> | undefined
+  if (request) {
+    headers = {}
+    for (const [k, v] of request.headers.entries()) {
+      headers[k] = v
+    }
+  }
+  // Phase E will add body-preview stash on Web Request; for now no stash.
+  broadcastToDevtoolsCore(info, headers, undefined)
 }
