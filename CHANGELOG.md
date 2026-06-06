@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase C slice 1/2 — traceId Web extractor)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase C (Tracing + observability). Opens Phase C with the trace-context leaf migration. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/http/trace-context.ts`** — adds the Web-Standards sibling:
+  - Private `resolveTraceIdFromHeaders(traceparent, requestId): string` pure helper extracted (shared 3-tier precedence: traceparent → x-request-id → generated UUID via `globalThis.crypto.randomUUID()`).
+  - `extractTraceId(req: IncomingMessage)` UNCHANGED (delegates to the pure helper internally via `pickHeader` adapter).
+  - **`extractTraceIdFromRequest(request: Request): string` NEW** — Web-Standards sibling using `request.headers.get(name)` instead of the Node indexer. Same precedence + same return shape.
+- **`tests/unit/trace-context-request.test.ts` NEW** — 7 RED→GREEN assertions:
+  - Tier 1: traceparent valid → returns trace-id; malformed → falls through; all-zeros (W3C-invalid) → falls through.
+  - Tier 2: returns x-request-id when no traceparent.
+  - Tier 3: generates v4 UUID when no trace headers; distinct UUIDs across calls (no caching).
+  - Precedence: valid traceparent wins over x-request-id.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **19/19 GREEN** combined sweep — 7 new Web + 12 legacy (`trace-context.test.ts` unchanged).
+- **Phase C progress:** 1/2 leaves complete (trace-context). 1 remaining: `observability/request-log.ts`.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 6/6 — cookies Web helpers + Phase B CLOSED)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B. **CLOSES Phase B (header-only leaves cluster).** Cookies is leaf #6 of 6. All Web-Standards sibling helpers for the 6 header-only leaves now ship — the next dedicated session can pick up at Phase C (Tracing + observability). (#arch-gaps-implementation)
