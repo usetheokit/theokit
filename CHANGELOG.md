@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase D slice 3/3 — Web session manager + Phase D CLOSED)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase D. **CLOSES Phase D (Rate-limit + auth).** All 3 leaves shipped: rate-limit-per-route + rate-limit + auth/session. Next: Phase E (Body parsing). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/auth/session.ts`** — adds Web-Standards sibling for the session manager:
+  - **`SessionManagerWeb<TSession>` interface NEW** — parallel to `SessionManager<TSession>`. Read methods take `Request`, write methods take `Headers` (caller mutates the headers they're building for their Response).
+  - **`createSessionManagerWeb<TSession>(config): SessionManagerWeb<TSession>` NEW** — Web factory. Same `SessionConfig`, same `normalizeSecrets` validation (max 5 secrets, min 32 chars each), same `encrypt`/`decrypt` from `./crypto.js` (AES-256-GCM via Web Crypto), same CR-002 constant-time parallel decrypt walk for dual-key rotation, same OWASP A07 `rotateSession` invariant.
+  - **`rotateIfNeededWeb<TSession>(sm, request, target): Promise<TSession | null>` NEW** — Web sibling of `rotateIfNeeded`. **EC-4 honest framing inlined:** Web-path timing constraint is "before Response is constructed", not "before res.writeHead fires" — caller MUST invoke this BEFORE building the final `Response(body, { headers: target })`.
+  - Uses `getCookieFromRequest` + `appendCookieToHeaders` + `appendDeleteCookieToHeaders` from Phase B slice 6/6 (consistent CR-009 percent-encoding sanity).
+  - `createSessionManager` + `SessionManager` interface + `rotateIfNeeded` UNCHANGED.
+- **`tests/unit/session-web.test.ts` NEW** — 12 RED→GREEN assertions:
+  - **`createSessionManagerWeb` (9 tests):** createSession+getSession round-trip via Headers+Request; null when no cookie; null when wrong secret can't decrypt; destroySession Max-Age=0 cookie; getSessionWithMeta surfaces secretIndex=0 fresh; CR-002 dual-key rotation legacy decrypt with needsReencrypt=true; rotateSession re-encrypts with newest; rotateSession null when no session; custom cookieName respected.
+  - **`rotateIfNeededWeb` (3 tests):** no-op when session uses newest secret; re-encrypts when decrypted with legacy; null+no-op when no session.
+- **Test helper `makeRequestWithSessionFrom(headers, cookieName?)`** simulates the browser round-trip by extracting Set-Cookie from response Headers and stuffing into a fresh Request's `cookie` header.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (1 initial sonarjs argument-type warning fixed by extracting `end = semi === -1 ? sc.length : semi`). **37/37 GREEN** combined sweep — 12 new Web + 25 legacy (`session.test.ts` + `session-reencrypt.test.ts` + `session-rotate.test.ts` unchanged).
+- **Phase D CLOSED:** 3/3 leaves complete (rate-limit-per-route + rate-limit + auth/session).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase D slice 2/3 — single-bucket rate-limit Web sibling)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase D. (#arch-gaps-implementation)
