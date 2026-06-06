@@ -23,7 +23,7 @@ export default defineConfig([
       // not src/. Without this entry the alias resolves to a missing file
       // and `pnpm dev` in any consumer crashes with a vite:import-analysis
       // error (regression from 2026-05-22; see tests/unit/devtools-entry-dist.test.ts).
-      'devtools/entry': 'src/devtools/entry.tsx',
+      'devtools/entry': 'src/devtools/dom/entry.tsx',
     },
     format: ['esm'],
     dts: true,
