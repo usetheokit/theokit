@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 5/6 — CORS Web handler)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; cors.ts is leaf #5 of 6). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/http/cors.ts`** — adds Web-Standards sibling:
+  - `createCorsHandler(config): CorsHandler` (existing IncomingMessage) UNCHANGED.
+  - **`createCorsWebHandler(config): CorsWebHandler` NEW** — factory returning `{ handlePreflightRequest(request): Response | null, applyCorsHeaders(request, target): void }`.
+  - `handlePreflightRequest(request)` returns `Response` (204 with CORS headers OR 403 disallowed) when preflight; `null` when non-preflight (caller short-circuits).
+  - `applyCorsHeaders(request, target: Headers)` mutates the caller's `Headers` instance in place (CORS pattern: response decoration, not response construction).
+  - Same `CorsConfig` accepted by both factories. Same `matchesOrigin` pure-helper logic. Same security guarantees: echo matched origin only (NEVER `'*'` when credentials enabled per CORS spec), EC-8 fail-closed on callback throw.
+- **`tests/unit/cors-web-handler.test.ts` NEW** — 13 RED→GREEN assertions covering:
+  - Non-preflight bypass (3 tests: non-OPTIONS, OPTIONS without AC-Request-Method, OPTIONS without Origin).
+  - Origin matching (5 tests: disallowed → 403, allowed → 204+headers, credentials echo (never `*`), regex match, callback match with allow/deny).
+  - `applyCorsHeaders` (5 tests: matches origin adds Allow-Origin + Vary; no-op when origin missing; no-op when disallowed; includes Expose-Headers; includes Allow-Credentials).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **31/31 GREEN** combined sweep — 13 new Web + 18 legacy (`cors.test.ts` + `cors-config-inference.test.ts` unchanged).
+- **Phase B progress:** **5/6 header-only leaves complete** (csrf, csrf-multi-header, csrf-readiness-endpoint, csp-report, cors). 1 remaining: `cookies.ts`.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 4/6 — CSP report Web sibling)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; csp-report.ts is leaf #4 of 6). (#arch-gaps-implementation)
