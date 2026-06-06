@@ -39,6 +39,14 @@ import type { z } from 'zod'
 import type { TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
 import { serverErrorToEnvelope } from '../core/contracts/server-error-to-envelope.js'
 
+import type {
+  WebOnErrorHook,
+  WebOnRequestHook,
+  WebOnResponseHook,
+  WebPluginContext,
+  WebPluginErrorContext,
+  WebPreHandlerHook,
+} from './plugin-types.js'
 import { validateCsrfRequest } from './security/csrf.js'
 
 /**
@@ -315,6 +323,49 @@ export interface ExecuteWebRequestOptions {
    *   mode; JSON-only routes pay zero cost staying on `'inline'`.
    */
   bodyParser?: 'inline' | 'full'
+  /**
+   * T5a.2 Phase G slice 1/N — plugin lifecycle hooks.
+   *
+   * Adapters (Node, CF Workers, Bun, Deno) wire `WebPluginContext`-shaped
+   * hooks at the executeWebRequest lifecycle. Lifecycle order mirrors the
+   * Fastify / Hono convention:
+   *
+   *   1. CSRF check (when opts.csrfMode === 'strict')
+   *   2. onRequest — earliest, before body parsing. Plugins can short-circuit
+   *      by setting `ctx.response` (handler skipped; subsequent hooks see
+   *      the short-circuit response).
+   *   3. body parse (inline OR full per opts.bodyParser)
+   *   4. preHandler — after body parsed, before handler runs. Same
+   *      short-circuit semantic.
+   *   5. handler invocation
+   *   6. onResponse — after handler returns OR after a hook short-circuit.
+   *      `ctx.response` is populated.
+   *   7. onError — fires if any of (handler, onRequest, preHandler) throws.
+   *      `ctx.response` is the envelope-shaped error response built via
+   *      serverErrorToEnvelope.
+   *
+   * `responseHeaders` is shared across hooks; the final Response merges
+   * them with the handler's Response headers (handler headers win on
+   * conflict; hook headers add new ones). Decorations made via
+   * `ctx.ctx[key] = value` persist across hooks (request-scoped state).
+   *
+   * `hooks: undefined` (default) → no plugin lifecycle, Phase A behavior
+   * preserved. Production consumers wire via the WebPluginRunner facade
+   * (a future Phase G slice).
+   */
+  hooks?: {
+    onRequest?: readonly WebOnRequestHook[]
+    preHandler?: readonly WebPreHandlerHook[]
+    onResponse?: readonly WebOnResponseHook[]
+    onError?: readonly WebOnErrorHook[]
+  }
+  /**
+   * Stable request identifier propagated into hook contexts. Adapters
+   * resolve via traceparent / x-request-id / generated UUID (see
+   * `extractTraceIdFromRequest` from Phase C slice 1/2). Default:
+   * `globalThis.crypto.randomUUID()`.
+   */
+  requestId?: string
 }
 
 /**
@@ -342,6 +393,35 @@ const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
  *   { csrfMode: 'strict' },
  * )
  */
+/**
+ * T5a.2 Phase G slice 1/N — merge hook-mutated response headers into the
+ * handler's Response. Handler-set headers win on conflict (the handler
+ * has the most context about its own response); hook headers add new
+ * entries (e.g., CORS, Set-Cookie). Returns a new Response with the
+ * merged headers + same body/status as the source.
+ *
+ * Set-Cookie is multi-value at the Web spec layer — `getSetCookie()` is
+ * the only way to retrieve multiple values. The merge appends ALL hook-
+ * set Set-Cookie values to the response (multiple Set-Cookie headers is
+ * spec-correct and how browsers expect cookie issuance).
+ */
+function mergeHookHeaders(response: Response, hookHeaders: Headers): Response {
+  if ([...hookHeaders].length === 0) return response
+  const merged = new Headers(response.headers)
+  for (const [k, v] of hookHeaders.entries()) {
+    if (k.toLowerCase() === 'set-cookie') continue // handled separately
+    if (!merged.has(k)) merged.set(k, v)
+  }
+  for (const sc of hookHeaders.getSetCookie()) {
+    merged.append('Set-Cookie', sc)
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: merged,
+  })
+}
+
 export async function executeWebRequest(
   request: Request,
   routeModule: WebRouteModule,
@@ -375,11 +455,96 @@ export async function executeWebRequest(
       })
     }
   }
-  try {
-    const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
-    if (!outcome.ok) return outcome.response
-    return toResponse(outcome.result)
-  } catch (err) {
-    return handlerErrorResponse(err)
+
+  // T5a.2 Phase G slice 1/N — plugin lifecycle hooks.
+  // When opts.hooks is undefined, skip the entire hook orchestration to
+  // preserve Phase A backward compat (zero overhead for consumers not
+  // wiring hooks).
+  if (opts.hooks === undefined) {
+    try {
+      const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
+      if (!outcome.ok) return outcome.response
+      return toResponse(outcome.result)
+    } catch (err) {
+      return handlerErrorResponse(err)
+    }
   }
+
+  return runWithHooks(request, config, opts, opts.hooks)
+}
+
+/**
+ * Run the request through the full plugin lifecycle. Extracted to keep
+ * `executeWebRequest`'s cyclomatic + cognitive complexity under the lint
+ * caps (15/20). Pure side-effect surface — same return type as the
+ * no-hooks branch.
+ */
+async function runWithHooks(
+  request: Request,
+  config: WebRouteHandlerConfig,
+  opts: ExecuteWebRequestOptions,
+  hooks: NonNullable<ExecuteWebRequestOptions['hooks']>,
+): Promise<Response> {
+  // Single WebPluginContext shared across the lifecycle; mutations to
+  // ctx + responseHeaders persist for downstream hooks.
+  const hookCtx: WebPluginContext = {
+    request,
+    responseHeaders: new Headers(),
+    ctx: {},
+    requestId: opts.requestId ?? globalThis.crypto.randomUUID(),
+  }
+  // Short-circuit detector: a hook may set ctx.response to bypass the
+  // remaining pre-handler lifecycle.
+  const runPreHookList = async (list: readonly WebOnRequestHook[]): Promise<void> => {
+    for (const hook of list) {
+      if (hookCtx.response !== undefined) return
+      await hook(hookCtx)
+    }
+  }
+  try {
+    if (hooks.onRequest) await runPreHookList(hooks.onRequest)
+    if (hookCtx.response === undefined && hooks.preHandler) {
+      await runPreHookList(hooks.preHandler)
+    }
+    if (hookCtx.response === undefined) {
+      const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
+      hookCtx.response = outcome.ok ? toResponse(outcome.result) : outcome.response
+    }
+    if (hooks.onResponse) {
+      for (const hook of hooks.onResponse) {
+        await hook(hookCtx)
+      }
+    }
+    return mergeHookHeaders(hookCtx.response, hookCtx.responseHeaders)
+  } catch (err) {
+    return runErrorHooks(err, hookCtx, hooks.onError)
+  }
+}
+
+/**
+ * Run onError hooks against an envelope-shaped error response. EC-9 —
+ * each hook throw is swallowed to avoid error-in-error-handler recursion.
+ * Returns the merged final Response.
+ */
+async function runErrorHooks(
+  err: unknown,
+  hookCtx: WebPluginContext,
+  onError: readonly WebOnErrorHook[] | undefined,
+): Promise<Response> {
+  const errorResponse = handlerErrorResponse(err)
+  if (onError !== undefined) {
+    const errorCtx: WebPluginErrorContext = {
+      ...hookCtx,
+      response: errorResponse,
+      error: err,
+    }
+    for (const hook of onError) {
+      try {
+        await hook(errorCtx)
+      } catch {
+        // EC-9: error in error handler — swallow to avoid recursion.
+      }
+    }
+  }
+  return mergeHookHeaders(errorResponse, hookCtx.responseHeaders)
 }
