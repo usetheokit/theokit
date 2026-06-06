@@ -422,6 +422,30 @@ function mergeHookHeaders(response: Response, hookHeaders: Headers): Response {
   })
 }
 
+/** Build a 405 envelope Response. */
+function methodNotAllowedResponse(method: string): Response {
+  const envelope: TheoErrorEnvelope = {
+    code: 'METHOD_NOT_ALLOWED',
+    message: `Method ${method} not allowed`,
+  }
+  return new Response(JSON.stringify(envelope), {
+    status: 405,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+/** Build a 403 CSRF envelope Response. */
+function csrfFailedResponse(reason: string): Response {
+  const envelope: TheoErrorEnvelope = {
+    code: 'FORBIDDEN',
+    message: `CSRF check failed: ${reason}`,
+  }
+  return new Response(JSON.stringify(envelope), {
+    status: 403,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
 export async function executeWebRequest(
   request: Request,
   routeModule: WebRouteModule,
@@ -429,38 +453,20 @@ export async function executeWebRequest(
 ): Promise<Response> {
   const method = request.method.toUpperCase() as keyof WebRouteModule
   const config = routeModule[method] as WebRouteHandlerConfig | undefined
-  if (config === undefined || typeof config.handler !== 'function') {
-    const envelope: TheoErrorEnvelope = {
-      code: 'METHOD_NOT_ALLOWED',
-      message: `Method ${method} not allowed`,
-    }
-    return new Response(JSON.stringify(envelope), {
-      status: 405,
-      headers: { 'content-type': 'application/json' },
-    })
-  }
-  // T5a.2 Phase B slice 1/6 — CSRF enforcement (opt-in via opts.csrfMode).
-  // Only state-changing methods (POST/PUT/PATCH/DELETE) get checked;
-  // GET/HEAD/OPTIONS bypass per HTTP threat-model semantics.
-  if (opts.csrfMode === 'strict' && CSRF_PROTECTED_METHODS.has(method)) {
-    const csrfCheck = validateCsrfRequest(request)
-    if (!csrfCheck.valid) {
-      const envelope: TheoErrorEnvelope = {
-        code: 'FORBIDDEN',
-        message: `CSRF check failed: ${csrfCheck.reason}`,
-      }
-      return new Response(JSON.stringify(envelope), {
-        status: 403,
-        headers: { 'content-type': 'application/json' },
-      })
-    }
-  }
 
   // T5a.2 Phase G slice 1/N — plugin lifecycle hooks.
   // When opts.hooks is undefined, skip the entire hook orchestration to
   // preserve Phase A backward compat (zero overhead for consumers not
-  // wiring hooks).
+  // wiring hooks). In the no-hooks branch, dispatch + CSRF gates run
+  // FIRST and 405 short-circuits before the handler runs.
   if (opts.hooks === undefined) {
+    if (config === undefined || typeof config.handler !== 'function') {
+      return methodNotAllowedResponse(method)
+    }
+    if (opts.csrfMode === 'strict' && CSRF_PROTECTED_METHODS.has(method)) {
+      const csrfCheck = validateCsrfRequest(request)
+      if (!csrfCheck.valid) return csrfFailedResponse(csrfCheck.reason)
+    }
     try {
       const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
       if (!outcome.ok) return outcome.response
@@ -470,6 +476,10 @@ export async function executeWebRequest(
     }
   }
 
+  // With hooks: onRequest hooks run BEFORE method dispatch (Hono /
+  // Fastify convention) so CORS preflight plugins can intercept OPTIONS
+  // requests regardless of route shape. If no hook short-circuits, then
+  // 405 fires when the method isn't exported by the route module.
   return runWithHooks(request, config, opts, opts.hooks)
 }
 
@@ -479,43 +489,84 @@ export async function executeWebRequest(
  * caps (15/20). Pure side-effect surface — same return type as the
  * no-hooks branch.
  */
+/**
+ * Pre-handler pipeline: onRequest hooks → CSRF gate → preHandler hooks →
+ * method dispatch + handler. Mutates `hookCtx.response` on short-circuit
+ * OR on handler completion. Extracted from `runWithHooks` to keep the
+ * latter's cyclomatic complexity under the lint cap (15).
+ */
+async function runPreHandlerPipeline(
+  hookCtx: WebPluginContext,
+  request: Request,
+  config: WebRouteHandlerConfig | undefined,
+  opts: ExecuteWebRequestOptions,
+  hooks: NonNullable<ExecuteWebRequestOptions['hooks']>,
+): Promise<void> {
+  const method = request.method.toUpperCase()
+  const runList = async (list: readonly WebOnRequestHook[]): Promise<void> => {
+    for (const hook of list) {
+      if (hookCtx.response !== undefined) return
+      await hook(hookCtx)
+    }
+  }
+  // onRequest first (CORS preflight + auth gate intercept before dispatch).
+  if (hooks.onRequest) await runList(hooks.onRequest)
+  // CSRF gate AFTER onRequest (auth-short-circuit avoids CSRF cost) but
+  // BEFORE the handler.
+  if (
+    hookCtx.response === undefined &&
+    opts.csrfMode === 'strict' &&
+    CSRF_PROTECTED_METHODS.has(method)
+  ) {
+    const csrfCheck = validateCsrfRequest(request)
+    if (!csrfCheck.valid) hookCtx.response = csrfFailedResponse(csrfCheck.reason)
+  }
+  if (hookCtx.response === undefined && hooks.preHandler) {
+    await runList(hooks.preHandler)
+  }
+  if (hookCtx.response === undefined) {
+    // 405 if route module doesn't export this method.
+    if (config === undefined || typeof config.handler !== 'function') {
+      hookCtx.response = methodNotAllowedResponse(method)
+      return
+    }
+    const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
+    hookCtx.response = outcome.ok ? toResponse(outcome.result) : outcome.response
+  }
+}
+
 async function runWithHooks(
   request: Request,
-  config: WebRouteHandlerConfig,
+  config: WebRouteHandlerConfig | undefined,
   opts: ExecuteWebRequestOptions,
   hooks: NonNullable<ExecuteWebRequestOptions['hooks']>,
 ): Promise<Response> {
-  // Single WebPluginContext shared across the lifecycle; mutations to
-  // ctx + responseHeaders persist for downstream hooks.
   const hookCtx: WebPluginContext = {
     request,
     responseHeaders: new Headers(),
     ctx: {},
     requestId: opts.requestId ?? globalThis.crypto.randomUUID(),
   }
-  // Short-circuit detector: a hook may set ctx.response to bypass the
-  // remaining pre-handler lifecycle.
-  const runPreHookList = async (list: readonly WebOnRequestHook[]): Promise<void> => {
-    for (const hook of list) {
-      if (hookCtx.response !== undefined) return
-      await hook(hookCtx)
-    }
-  }
   try {
-    if (hooks.onRequest) await runPreHookList(hooks.onRequest)
-    if (hookCtx.response === undefined && hooks.preHandler) {
-      await runPreHookList(hooks.preHandler)
-    }
-    if (hookCtx.response === undefined) {
-      const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
-      hookCtx.response = outcome.ok ? toResponse(outcome.result) : outcome.response
-    }
+    await runPreHandlerPipeline(hookCtx, request, config, opts, hooks)
     if (hooks.onResponse) {
       for (const hook of hooks.onResponse) {
         await hook(hookCtx)
       }
     }
-    return mergeHookHeaders(hookCtx.response, hookCtx.responseHeaders)
+    // runPreHandlerPipeline guarantees hookCtx.response is set (via either
+    // a hook short-circuit OR handler outcome OR 405). TS doesn't infer this
+    // post-mutation; the assertion is safe per the function's contract.
+    const finalResponse =
+      hookCtx.response ??
+      new Response(
+        JSON.stringify({ code: 'INTERNAL_SERVER_ERROR', message: 'No response built' }),
+        {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        },
+      )
+    return mergeHookHeaders(finalResponse, hookCtx.responseHeaders)
   } catch (err) {
     return runErrorHooks(err, hookCtx, hooks.onError)
   }
