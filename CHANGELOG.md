@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase C slice 2/2 — request-log Web sibling + Phase C CLOSED)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase C. **CLOSES Phase C (Tracing + observability).** Both leaves shipped: `trace-context.ts` (slice 1/2) + `observability/request-log.ts` (slice 2/2). Next: Phase D (Rate-limit + auth). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/observability/request-log.ts`** — extracts pure helper + adds Web sibling:
+  - **`broadcastToDevtoolsCore(info, headers, stashedBody)` private NEW** — pure devtools broadcast that takes pre-extracted headers + optional body stash. Errors silenced (forwarding is best-effort).
+  - `logRequest(info, customLogger?, req?: IncomingMessage)` UNCHANGED externally — `broadcastRequestToDevtools` now delegates to the core helper after extracting from IncomingMessage shape.
+  - **`logRequestFromRequest(info, customLogger?, request?: Request): void` NEW** — Web-Standards sibling. Same canonical `RequestLog` shape + same devtools forwarder. Extracts headers via `request.headers.entries()` (Web `Headers` iterator).
+  - **Body preview stash on Web path = deferred to Phase E:** `body-parser-web.ts` doesn't yet stash like `body-parser.ts` (`DEVTOOLS_BODY_PREVIEW` Symbol-keyed). Until Phase E migrates body parsing, devtools UI shows headers but no body preview for Web-handled requests. Documented inline.
+- **`tests/unit/request-log-from-request.test.ts` NEW** — 5 RED→GREEN assertions:
+  - Default RequestLog shape (level=info + ISO timestamp).
+  - Default logger (console.log JSON) when customLogger undefined.
+  - Accepts optional Request + extracts headers for devtools.
+  - Request undefined → no throw, no devtools forward.
+  - Custom logger throw NOT swallowed (intentional pinning of behavior).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **18/18 GREEN** combined sweep — 5 new + 13 legacy (`logger.test.ts` + `logger-structured.test.ts` + `devtools-broadcast.test.ts` + `devtools-request-body-preview.test.ts` unchanged).
+- **Phase C CLOSED:** 2/2 leaves complete.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase C slice 1/2 — traceId Web extractor)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase C (Tracing + observability). Opens Phase C with the trace-context leaf migration. (#arch-gaps-implementation)
