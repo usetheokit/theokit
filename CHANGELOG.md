@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T5a.1a — Web Crypto migration: leaf-first slice 1/N)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1 Task #3 ("Refactor em ordem de dependência (leaves primeiro)"). **PARTIAL progress on C3 critical** — first incremental slice of the multi-iteration R3a Web Standards migration per [ADR-0028](docs/adr/0028-multi-runtime-strategy.md). (#arch-gaps-implementation)
+
+**Honest framing (per Rule 3 Inquebrável):** the full T5a.1 scope (42 files in `packages/theo/src/server/` importing from `node:crypto`/`node:fs`/`node:http`/`node:path`/`node:url`/`node:module` to be rewritten as Web Standards) is too large for a single autonomous iteration AND has a documented pause condition (CF Workers `wrangler dev` smoke requires Cloudflare account credentials that are out-of-loop scope per driver `implement-arch-gaps.md` Pause conditions). The plan's own Task #3 explicitly mandates incremental leaf-first refactor. This iteration ships the smallest safe slice: **2 of 8 `node:crypto` consumers** (the two PURE-LEAF files with zero public API change).
+
+- **`packages/theo/src/server/jobs/job-backend-memory.ts`** — `import { randomUUID } from 'node:crypto'` REMOVED. Single call-site swapped to `globalThis.crypto.randomUUID()`. Web Crypto's `randomUUID()` is in every runtime per ADR-0028 (Node 22+ / CF Workers / Bun / Deno / browsers). Zero behavior change (validated by 9/9 existing `tests/unit/job-backend-memory.test.ts` GREEN post-migration).
+- **`packages/theo/src/server/observability/trace-context-propagation.ts`** — `import { randomBytes } from 'node:crypto'` REMOVED. Internal `randomHex(bytes)` helper now uses `globalThis.crypto.getRandomValues(new Uint8Array(bytes))` + manual hex encoding (avoids `Buffer.toString('hex')` which is Node-only — CF Workers/Bun/Deno have no Buffer global). All-zeros rejection guard preserved per W3C spec. Zero behavior change (validated by 24/24 existing `tests/unit/trace-context-propagation.test.ts` GREEN post-migration).
+- **`tests/unit/r3a-web-crypto-migration-leaf.test.ts` NEW** — RED→GREEN audit test (5 tests): asserts neither leaf file imports `node:crypto`, asserts Web Crypto API is used (`crypto.randomUUID` + `crypto.getRandomValues`), parity audit that the `node:crypto` consumer count in `server/` has dropped from baseline 8 to ≤6. Future T5a.1b+ iterations will continue decrementing the count.
+- **Validation:** `pnpm typecheck` exit 0. RED→GREEN proof: `tests/unit/r3a-web-crypto-migration-leaf.test.ts` 5/5 GREEN (was 5/5 RED pre-migration). Behavior regression sweep: `tests/unit/job-backend-memory.test.ts` + `tests/unit/trace-context-propagation.test.ts` + `tests/unit/trace-context.test.ts` **33/33 GREEN**. Lint clean.
+- **DEFERRED to dedicated future iterations T5a.1b..T5a.1N (per leaf-first decomposition):**
+  - 6 remaining `node:crypto` consumers — `http/trace-context.ts` (pairs `node:http` IncomingMessage shape, needs Request adapter), `webhook/providers/{slack,github,stripe}.ts` (createHmac → `crypto.subtle.sign('HMAC')` async — function signature change), `rate-limit/rate-limit-per-route.ts` (createHash + IncomingMessage), `_internal/atomic-write.ts` (also imports `node:fs` + `node:path` — multi-module refactor).
+  - 24 `node:http` consumers (`execute.ts`, `body-parser.ts`, `csrf.ts`, etc.) — HIGH blast radius rewrite to accept `Request`/return `Response`. Will require Node adapter as boundary shim (`adapters/node.ts`) per ADR-0028.
+  - 14 `node:fs` consumers, 13 `node:path` consumers — many are scanner/CLI paths that legitimately need Node FS access (e.g., `scan/route-scan.ts` walks the app/ tree at build time). Per ADR-0028 these may STAY as Node-only with the runtime-portable boundary drawn at the request handler, not the scanner.
+  - CF Workers smoke test (`wrangler dev tests/fixtures/handler-web-standards/`) — out-of-loop pause condition; requires Cloudflare account credentials.
+
 ### Changed (Plan theokit-arch-gaps-implementation T4.1 — C2 envelope wire-format coverage)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 4 T4.1. **CLOSES C2 critical** — completes envelope coverage verification for all 29 ad-hoc Error classes. Reconciles plan's T4.1 with G5 D3 architectural decision shipped earlier. (#arch-gaps-implementation)
