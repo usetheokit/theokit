@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase F slice 1/3 — Web plugin types)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase F (Plugin types + define). Opens Phase F with the plugin-types Web sibling — defines the type surface that future Phase F slices (define-channel, define-websocket) and Phase G (execute pipeline) will consume. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/plugin-types.ts`** — adds Web-Standards plugin type surface:
+  - **`WebPluginContext` interface NEW** — mirror of `PluginContext` with:
+    - `request: Request` (instead of `IncomingMessage`)
+    - `responseHeaders: Headers` (mutable; runtime threads through hook chain — plugins append CORS/Set-Cookie/etc.)
+    - `response?: Response` (set AFTER handler returns; available during `onResponse`/`onError` only)
+    - `ctx: Record<string, unknown>` + `requestId: string` (same as IncomingMessage path)
+  - **`WebPluginErrorContext extends WebPluginContext`** with `error: unknown`.
+  - **`WebOnRequestHook` / `WebPreHandlerHook` / `WebOnResponseHook` / `WebOnErrorHook` types NEW** — parallel to the IncomingMessage hook type aliases.
+  - **`WebHookByName<K>` discriminated mapper NEW** — same generic shape as `HookByName<K>`, returns the Web hook type for each lifecycle name.
+  - **`WebTheoApp` interface NEW** — facade with same `addHook` + `decorateRequest` surface; only the hook function signatures differ.
+  - **`WebTheoPlugin` interface NEW** — `{ name, register(app: WebTheoApp): void | Promise<void> }`. Cross-runtime plugins ship BOTH `TheoPlugin` + `WebTheoPlugin` exports.
+  - **`defineWebPlugin(plugin): WebTheoPlugin` NEW** — identity function mirror of `definePlugin`, providing auto-completion + type-inference DX for Web plugin authors.
+  - **Honest framing inlined:** mirrors Hono `c.res` + Fastify `reply.headers` semantics — plugins mutate headers freely; body is the handler's responsibility. `response` field is `undefined` during `onRequest`/`preHandler` (which fire BEFORE the handler runs).
+  - Existing `PluginContext` + `TheoApp` + `TheoPlugin` + `definePlugin` UNCHANGED.
+- **`tests/unit/plugin-types-web.test.ts` NEW** — 9 RED→GREEN assertions:
+  - `defineWebPlugin` identity behavior.
+  - Plugin register receives WebTheoApp; all 4 hook names + decorateRequest invoked correctly.
+  - `WebPluginContext` shape (all canonical fields populated).
+  - `response` populated during onResponse/onError; undefined otherwise.
+  - `WebPluginErrorContext` carries error field.
+  - `WebHookByName<K>` discriminator maps each of 4 lifecycle names to the correct hook type alias.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (3 initial sonarjs void + 1 floating-promise warnings fixed). **24/24 GREEN** combined sweep — 9 new + 15 legacy plugin-runner. Zero regression.
+- **Phase F progress:** 1/3 leaves complete. 2 remaining: `server/define/define-channel.ts`, `server/define/define-websocket.ts`.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase E — body parser opt-in + Phase E CLOSED)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase E (Body parsing). **CLOSES Phase E.** The `body-parser-web.ts` already shipped Web-compatible (T5.1 — verified 5/5 GREEN regression); this slice wires it into `executeWebRequest` via opt-in `bodyParser: 'full'` option. Next: Phase F (Plugin types + define). (#arch-gaps-implementation)
