@@ -59,15 +59,47 @@ function pickHeader(value: string | string[] | undefined): string | null {
 }
 
 /**
+ * T5a.2 Phase C slice 1/2 — pure traceId resolution from pre-extracted
+ * header values. Shared between IncomingMessage and Web Request wrappers.
+ */
+function resolveTraceIdFromHeaders(traceparent: string | null, requestId: string | null): string {
+  if (traceparent !== null) {
+    const parsed = parseTraceparent(traceparent)
+    if (parsed !== null) return parsed
+  }
+  if (requestId !== null) return requestId
+  return globalThis.crypto.randomUUID()
+}
+
+/**
  * Resolve the request's traceId following the precedence above.
  */
 export function extractTraceId(req: IncomingMessage): string {
-  const traceparent = pickHeader(req.headers[TRACE_PARENT_HEADER])
-  if (traceparent) {
-    const parsed = parseTraceparent(traceparent)
-    if (parsed) return parsed
-  }
-  const requestId = pickHeader(req.headers[REQUEST_ID_HEADER])
-  if (requestId) return requestId
-  return globalThis.crypto.randomUUID()
+  return resolveTraceIdFromHeaders(
+    pickHeader(req.headers[TRACE_PARENT_HEADER]),
+    pickHeader(req.headers[REQUEST_ID_HEADER]),
+  )
+}
+
+/**
+ * T5a.2 Phase C slice 1/2 — Web-Standards-shaped traceId resolver.
+ *
+ * Mirror of `extractTraceId(req: IncomingMessage)` for the Web `Request`
+ * shape. Same precedence (`traceparent` → `x-request-id` → generated
+ * UUID). Uses `request.headers.get(name)` (native Web `Headers` API)
+ * instead of the Node indexer.
+ *
+ * **Multi-value note:** Web `Headers` collapses repeated headers into a
+ * single comma-separated string at parse. The IncomingMessage path's
+ * `pickHeader` "first non-empty value" semantic is naturally satisfied
+ * because there's no array to pick from on the Web side — `.get()`
+ * returns the comma-joined value, which for `traceparent` / `x-request-id`
+ * is treated as a single string anyway (both headers are conventionally
+ * single-valued).
+ */
+export function extractTraceIdFromRequest(request: Request): string {
+  return resolveTraceIdFromHeaders(
+    request.headers.get(TRACE_PARENT_HEADER),
+    request.headers.get(REQUEST_ID_HEADER),
+  )
 }
