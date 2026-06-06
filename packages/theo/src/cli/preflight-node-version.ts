@@ -147,10 +147,30 @@ function readNvmrcFloor(cwd: string): string | undefined {
 }
 
 /**
+ * Coerce common truthy env-var values to boolean. Convention: any explicit
+ * truthy string activates ("1", "true", "yes"); empty/undefined/"0"/"false" → off.
+ *
+ * @internal
+ */
+function envFlagIsTruthy(value: string | undefined): boolean {
+  if (value === undefined || value === '') return false
+  const v = value.toLowerCase()
+  return v !== '0' && v !== 'false' && v !== 'no'
+}
+
+/**
  * Run the Node + ABI preflight. Throws a descriptive Error on mismatch
  * BEFORE any module that imports better-sqlite3 loads. The error message
  * is the only user-facing artefact — caller can rely on `error.message`
  * being a full actionable diagnostic.
+ *
+ * Escape hatches (env-var; honor production-grade observability):
+ *   - `THEOKIT_SKIP_NATIVE_PREFLIGHT=1` — skip the ABI/native-binding check
+ *     entirely (still enforces Node-floor version). Test fixtures + cleanroom
+ *     consumer envs that don't actually use better-sqlite3 (no audit-log, no
+ *     LanceDB embedder, etc.) can opt out. Documented as a Phase 6 readiness
+ *     fix in docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md
+ *     § Test infrastructure prerequisites (Option B).
  *
  * @throws Error with multi-line actionable message when Node version or
  *   native binding ABI is wrong.
@@ -163,6 +183,9 @@ export function preflightNodeAndBindings(cwd: string): void {
     const suffix = pinned !== undefined ? `\n\nYour project pins Node ${pinned} in .nvmrc.` : ''
     throw new Error(`[theokit preflight] ${nodeCheck.reason}${suffix}`)
   }
+  // T5a.2 prerequisite: env-var escape hatch for native-binding ABI check.
+  // Node-floor check above stays enforced unconditionally.
+  if (envFlagIsTruthy(process.env.THEOKIT_SKIP_NATIVE_PREFLIGHT)) return
   const abiCheck = checkBindingAbi(cwd)
   if (!abiCheck.ok) {
     throw new Error(`[theokit preflight] ${abiCheck.reason}`)
