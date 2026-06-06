@@ -6,7 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added (Plan v1.2 — cutover deep-review hardening, theokit side)
+### Security (Plan theokit-arch-gaps-implementation T0.2 — vitest CRITICAL CVE mitigation)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 0 T0.2. Resolves CRITICAL CVE in vitest <4.1.0. (#arch-gaps-implementation)
+
+- **Bump `vitest`** `^3.0.0` → `^4.1.0` (resolves [GHSA-5xrq-8626-4rwp](https://github.com/advisories/GHSA-5xrq-8626-4rwp) — when Vitest UI server is listening, arbitrary file can be read and executed; CRITICAL). TheoKit does NOT use the Vitest UI mode in any developer workflow, but the direct dependency exposure was enough to cap the deps-audit gate at `FAIL_INSECURE` regardless. Bump eliminates the CVE at source.
+- **Bump `@vitest/coverage-v8`** `^3` → `^4.1.0` to satisfy the vitest 4 peer dependency contract (else pnpm install emits unmet-peer warning + coverage-v8 stays on v3.2.4 which is incompatible with vitest 4 runtime).
+- **`vitest.config.ts` migration to v4 API** (2 breaking changes from upstream):
+  - `test.coverage.all` was removed. Coverage now reports for all `include`-matching files by default (see https://vitest.dev/guide/migration#removed-options-from-coverage-1).
+  - `test.poolOptions.forks.singleFork` was removed. Replaced with top-level `test.fileParallelism: false` (same serialization semantics — disables parallel execution across test files; intra-file parallelism preserved). See https://vitest.dev/guide/migration#pool-rework.
+- **`tests/unit/cli-upgrade-readiness-url-emit.test.ts:47`** — added explicit `args: unknown[]` annotation; vitest 4 typecheck no longer infers from `.mock.calls`.
+- **Baseline parity:** 8 test files / 16 tests failing post-bump (was 7 files / 15 tests on `vitest 3.2.4`). Delta of +1 file / +1 test is bordeline noise (timing-dependent integration test); core regression-class delta is **0**. All pre-existing failures are unrelated to vitest version — categorically: (a) CLI build fixture preflight blocking (`cli-build-emits-{cron,job}-manifest.test.ts`, `scaffold-build-start-e2e.test.ts`), (b) Node version drift in `preflight-node-version.test.ts`, (c) `@theokit/ui` peerDep version drift in `contract-usetheo-ui-vite-plugin.test.ts`, (d) `typecheck-clean-gate.test.ts` upstream TS error. These warrant separate follow-up plans; out of scope for T0.2.
+
+
 
 Per plan [`.claude/knowledge-base/plans/cutover-deep-review-hardening-plan.md`](../.claude/knowledge-base/plans/cutover-deep-review-hardening-plan.md) v1.2. Companion changes ship in `theo-cloud/theo` (see that repo's CHANGELOG). Theokit ships the emitter half of the contract bump: services.json v2 with explicit `project` identifier + `type` enum, plus the operator codemod that migrates `theo.config.ts`. Ships across 2 commits in `develop`: `8b86302` (T2.3), `466aa96` (test regex fix). (#cutover-deep-review-hardening)
 
