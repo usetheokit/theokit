@@ -195,4 +195,115 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     walk(serverDir)
     expect(count).toBe(0) // post-T5a.1d — full Web Crypto cutover in server/
   })
+
+  // ===== Phase 5a invariant guard (R3a Web standards runtime portability) =====
+  // Documented in docs/audit/arch-gaps-phase5a-progress-2026-06-06.md.
+  // The 24 current node:http consumers in server/ are ALL `import type` —
+  // TypeScript erases them at build, so the emitted JS is runtime-clean.
+  // This guard fires if a future change introduces a RUNTIME (non-type) node:http
+  // import that would break CF Workers / Bun / Deno bundling.
+
+  /**
+   * Line-based, ReDoS-safe detector for runtime (non-type) imports from a
+   * given node:* module. Walks lines, matches the literal `'node:<name>'`,
+   * and skips any line whose trimmed prefix starts with `import type` (the
+   * TS-erased form is OK; only runtime imports are flagged).
+   */
+  function hasRuntimeNodeImport(src: string, moduleName: string): boolean {
+    const needle = `'node:${moduleName}'`
+    const altNeedle = `"node:${moduleName}"`
+    for (const line of src.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('import')) continue
+      if (trimmed.startsWith('import type ')) continue
+      if (trimmed.includes(needle) || trimmed.includes(altNeedle)) return true
+    }
+    return false
+  }
+
+  it('invariant: zero runtime (non-type) node:http imports in server/ (R3a runtime portability)', () => {
+    const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (statSync(full).isDirectory()) {
+          walk(full)
+        } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
+          const src = readFileSync(full, 'utf8')
+          if (hasRuntimeNodeImport(src, 'http')) {
+            offenders.push(full.replace(REPO_ROOT + '/', ''))
+          }
+        }
+      }
+    }
+    walk(serverDir)
+    expect(offenders).toEqual([])
+  })
+
+  it('invariant: zero runtime node:* imports in server/ outside the documented Node-only leaves (audit doc)', () => {
+    // Per docs/audit/arch-gaps-phase5a-progress-2026-06-06.md Category B,
+    // these files are legitimately Node-only at scanner/build/static-file
+    // boundary per ADR-0028. Allowlisted explicitly. Any new file appearing
+    // with a runtime node:* import OUTSIDE this allowlist is a regression.
+    const NODE_ONLY_ALLOWLIST = new Set<string>([
+      // Build-time scanners
+      'packages/theo/src/server/scan/scan.ts',
+      'packages/theo/src/server/scan/manifest.ts',
+      'packages/theo/src/server/scan/action-scan.ts',
+      'packages/theo/src/server/scan/middleware-scan.ts',
+      'packages/theo/src/server/scan/ws-scan.ts',
+      'packages/theo/src/server/scan/detect-http-methods.ts',
+      'packages/theo/src/server/scan/module-loader.ts',
+      'packages/theo/src/server/jobs/job-scan.ts',
+      'packages/theo/src/server/cron/cron-scan.ts',
+      // Build-time manifest writers / cron emit
+      'packages/theo/src/server/_internal/atomic-write.ts',
+      'packages/theo/src/server/_internal/scan-walker.ts',
+      'packages/theo/src/server/cron/adapter-translators.ts',
+      // Boot-time wiring (once per process)
+      'packages/theo/src/server/http/middleware-runner.ts',
+      'packages/theo/src/server/http/error-pages.ts',
+      // Node-adapter scope per ADR-0028 (static-file serving = Node only)
+      'packages/theo/src/server/http/static.ts',
+      // Node-adapter scope: Busboy multipart parser (Node-only); the Web
+      // Standards alternative ships at packages/theo/src/server/body-parser-web.ts
+      // (zero node:* imports — uses request.formData()).
+      'packages/theo/src/server/body-parser.ts',
+    ])
+
+    /**
+     * Line-based, ReDoS-safe detector for ANY runtime node:* import.
+     * Matches `'node:<...>'` or `"node:<...>"` on lines starting with
+     * `import` but NOT `import type `.
+     */
+    function hasAnyRuntimeNodeImport(src: string): boolean {
+      for (const line of src.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('import')) continue
+        if (trimmed.startsWith('import type ')) continue
+        if (trimmed.includes("'node:") || trimmed.includes('"node:')) return true
+      }
+      return false
+    }
+
+    const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (statSync(full).isDirectory()) {
+          walk(full)
+        } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
+          const src = readFileSync(full, 'utf8')
+          const rel = full.replace(REPO_ROOT + '/', '')
+          if (hasAnyRuntimeNodeImport(src) && !NODE_ONLY_ALLOWLIST.has(rel)) {
+            offenders.push(rel)
+          }
+        }
+      }
+    }
+    walk(serverDir)
+    expect(offenders).toEqual([])
+  })
 })
