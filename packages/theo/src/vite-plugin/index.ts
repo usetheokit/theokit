@@ -3,43 +3,34 @@
  * layout under `theoSrcDir` (build-time literal). No HTTP input.
  */
 import { existsSync } from 'node:fs'
-import { resolve, basename, dirname } from 'node:path'
+import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { Plugin } from 'vite'
 
-import { broadcastRouteManifest } from '../devtools/server-side/route-manifest.js'
-import { generateEntryServer } from '../router/entry-server.js'
-import { generateEntryClient } from '../router/entry.js'
-import { generateRouteManifest } from '../router/generate.js'
-import { scanRoutes } from '../router/scan.js'
-import { isRouteFile } from '../router/types.js'
 import type { CorsConfig } from '../server/http/cors.js'
 import type { AuditLogger } from '../server/observability/audit-log.js'
 import type { PluginRunner } from '../server/plugins/plugin-runner.js'
 import type { RateLimitConfig } from '../server/rate-limit/rate-limit.js'
-import { CsrfReadinessStore } from '../server/security/csrf-readiness-store.js'
+import type { CsrfReadinessStore } from '../server/security/csrf-readiness-store.js'
 import type { DisallowedConfig } from '../server/security/csrf.js'
 import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
 import type { TheoTransformer } from '../server/transformer.js'
-import { buildServicesProxyConfig, type ServicesConfig } from '../services/index.js'
+import { type ServicesConfig } from '../services/index.js'
 
-import { createActionMiddleware } from './action-middleware.js'
-import { createApiMiddleware } from './api-middleware.js'
-// T2.1-T2.3 (architecture-medium-deferrals) — sibling extractions.
+// T2.1-T2.3 (architecture-medium-deferrals) + T2.6 (M6) — sibling extractions.
+import { runConfigHook } from './config-hook.js'
 import { resolvePluginConfig, type ResolvedOpenApi } from './config-resolve.js'
-import {
-  DEVTOOLS_RESOLVED_ID,
-  DEVTOOLS_VIRTUAL_ID,
-  injectDevtoolsScript,
-} from './inject-devtools.js'
-import { injectEntryClient } from './inject-entry-client.js'
-import { injectStylesheets } from './inject-stylesheets.js'
+import { runConfigureServer } from './configure-server-hook.js'
 import { integrateUseTheoUI } from './integrate-ui.js'
 import { resolveTheoRootDir } from './resolve-theo-root.js'
-import { setupSsrDevMiddleware } from './ssr-dev-middleware.js'
 import type { TheoUiDetectResult } from './theoui-detect.js'
-import { setupWsUpgrade } from './ws-upgrade.js'
+import { runTransformIndexHtml } from './transform-html-hook.js'
+import {
+  loadVirtualModule,
+  resolveVirtualModuleId,
+  type VirtualModuleIds,
+} from './virtual-modules-hook.js'
 
 export {
   defineTheoIntegration,
@@ -238,7 +229,17 @@ function buildOptimizeDepsInclude(
   return include
 }
 
-// eslint-disable-next-line max-lines-per-function -- Vite plugin factory: state setup + hooks live together by Vite convention
+const VIRTUAL_MODULE_IDS: VirtualModuleIds = {
+  VIRTUAL_ENTRY_ID,
+  RESOLVED_ENTRY_ID,
+  VIRTUAL_MANIFEST_ID,
+  RESOLVED_MANIFEST_ID,
+  VIRTUAL_ENTRY_SERVER_ID,
+  RESOLVED_ENTRY_SERVER_ID,
+  VIRTUAL_RUNTIME_CONFIG_ID,
+  RESOLVED_RUNTIME_CONFIG_ID,
+}
+
 export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
   const options =
     typeof rootOrOptions === 'string' ? { root: rootOrOptions } : (rootOrOptions ?? {})
@@ -271,8 +272,10 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
   let resolvedOpenApi: ResolvedOpenApi | undefined
   let resolvedDistDir = '.theo'
   // Dev mode flag set in configureServer. transformIndexHtml runs in both
-  // dev and build; we only want to inject during dev.
-  let isDevMode = false
+  // dev and build; we only want to inject during dev. Wrapped in a ref
+  // struct so sub-hooks (configure-server-hook, transform-html-hook) can
+  // observe mutations across hook boundaries without losing identity.
+  const isDevModeRef = { value: false }
   let configLoadedOnce = false
 
   return {
@@ -299,336 +302,77 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
       resolvedDistDir = resolved.distDir
     },
 
-    // Vite calls this hook (sync return is fine — no awaits left after
-    // the auto-chain moved to theoPluginAsync). The @theokit/ui +
-    // @tailwindcss/vite auto-chain lives in `theoPluginAsync` because
-    // Vite drops plugins returned from a child plugin's config() hook.
+    // T2.6 (M6) — config() body extracted to config-hook.ts. The hook
+    // owns optimizeDeps + warmup + services proxy + alias cascade.
+    // The @theokit/ui + @tailwindcss/vite auto-chain lives in
+    // `theoPluginAsync` because Vite drops plugins returned from a
+    // child plugin's config() hook.
     config() {
-      // Detect whether we're running from source (.ts) or compiled dist (.js)
-      const ext = existsSync(resolve(theoSrcDir, 'index.ts')) ? '.ts' : '.js'
-
-      // Perf: pre-bundle heavy deps at server startup (not on first request).
-      // Without this, a cold `pnpm dev` takes ~10s before serving `/` because
-      // Vite discovers @theokit/ui mid-request and stops to bundle it.
-      // Measured 2026-05-22: cold first GET / = 10s → ~1s with includes wired.
-      // See https://vite.dev/guide/dep-pre-bundling — "lazy dependency
-      // discovery" is the canonical mitigation.
-      const optimizeDepsInclude = buildOptimizeDepsInclude(projectRoot, options.viteOptimizeDeps)
-
-      // Perf: warm up the app's critical-path files so Vite transforms them
-      // before the browser asks. Cuts the visible LCP when these files
-      // import heavy barrels (TheoUI).
-      const warmupClientFiles: string[] = []
-      for (const candidate of ['app/layout.tsx', 'app/page.tsx', 'app/page.jsx']) {
-        const full = resolve(projectRoot, candidate)
-        if (existsSync(full)) warmupClientFiles.push(`./${candidate}`)
-      }
-
-      // Wave 2 completion T1.1 — translate `services: {}` into Vite proxy.
-      // Empty services → empty record → Vite proxy unaffected.
-      const servicesProxy =
-        options.services && Object.keys(options.services).length > 0
-          ? buildServicesProxyConfig(options.services)
-          : undefined
-
-      // T7.1 dogfood fix — workspace-linked packages change frequently as
-      // we iterate. Vite's pre-bundler caches by lockfile hash, NOT source-
-      // content hash; when the workspace dist updates but the lockfile
-      // doesn't, the cache serves stale bundles (e.g., missing newly-added
-      // `useAction` export). Setting `force: true` always re-optimizes on
-      // boot — slower cold-start but cache-coherent across workspace iter.
-      return {
-        envPrefix: 'THEO_PUBLIC_',
-        optimizeDeps: {
-          ...(optimizeDepsInclude.length > 0 ? { include: optimizeDepsInclude } : {}),
-          force: true,
-        },
-        server: {
-          ...(warmupClientFiles.length > 0 ? { warmup: { clientFiles: warmupClientFiles } } : {}),
-          ...(servicesProxy !== undefined ? { proxy: servicesProxy } : {}),
-          // Skip watching gitignored heavy dirs to avoid hitting ENOSPC
-          // (inotify watcher exhaustion). `referencias/` are deep-research
-          // clones; `.theokit/` is per-conversation cache; `.theo/` is
-          // build output. None should trigger HMR.
-          watch: {
-            ignored: [
-              '**/referencias/**',
-              '**/.theokit/**',
-              '**/.theo/**',
-              '**/dist/**',
-              '**/node_modules/**',
-            ],
-          },
-        },
-        resolve: {
-          alias: [
-            // Order matters: most-specific first so `theokit/X` doesn't
-            // get matched by the bare `theokit` alias.
-            { find: 'theokit/server', replacement: resolve(theoSrcDir, `server/index${ext}`) },
-            { find: 'theokit/client', replacement: resolve(theoSrcDir, `client/index${ext}`) },
-            {
-              find: 'theokit/react-query',
-              replacement: resolve(theoSrcDir, `react-query/index${ext}`),
-            },
-            {
-              find: 'theokit/vite-plugin',
-              replacement: resolve(theoSrcDir, `vite-plugin/index${ext}`),
-            },
-            {
-              find: 'theokit/adapters/web-shim',
-              replacement: resolve(theoSrcDir, `adapters/web-shim${ext}`),
-            },
-            {
-              find: 'theokit/adapters/ws-shim',
-              replacement: resolve(theoSrcDir, `adapters/ws-shim${ext}`),
-            },
-            // T1.2 — devtools entry (DEV only; tree-shaken in build because
-            // the script tag is never injected by inject-devtools.ts in build mode)
-            {
-              find: 'theokit/devtools/entry',
-              replacement: resolve(
-                theoSrcDir,
-                `devtools/dom/entry${ext === '.ts' ? '.tsx' : '.js'}`,
-              ),
-            },
-            { find: 'theokit', replacement: resolve(theoSrcDir, `index${ext}`) },
-          ],
-        },
-      }
+      return runConfigHook({
+        projectRoot,
+        theoSrcDir,
+        services: options.services,
+        optimizeDepsInclude: buildOptimizeDepsInclude(projectRoot, options.viteOptimizeDeps),
+      })
     },
 
-    // Auto-inject the entry-client `<script>` into every served HTML
-    // (Phase 2 of nextjs-maturity plan). Runs BEFORE Vite's own
-    // transform so the injection lands inside <body>, not after
-    // Vite-injected content. Idempotent: if the user already wrote
-    // the script tag, the HTML is returned unchanged.
+    // T2.6 (M6) — transformIndexHtml hook extracted to transform-html-hook.ts.
+    // Preserves the canonical 3-step order (entry-client → devtools → styles)
+    // so EC-10 (Vite hook ordering side effects) is honored.
     transformIndexHtml: {
       order: 'pre' as const,
       handler(html: string): string {
-        // 1. entry-client (always)
-        const entry = injectEntryClient(html)
-        if (entry.warning) console.warn(entry.warning)
-        let next = entry.html
-
-        // 2. devtools (dev only, respecting config.devtools = false)
-        const devtools = injectDevtoolsScript(next, {
-          isDev: isDevMode,
-          enabled: devtoolsEnabled,
+        return runTransformIndexHtml(html, {
+          isDevMode: isDevModeRef,
+          devtoolsEnabled,
+          projectRoot,
         })
-        if (devtools.warning) console.warn(devtools.warning)
-        next = devtools.html
-
-        // 3. Stylesheet link (dev only) — fixes LCP. Without the
-        // <link rel="stylesheet">, CSS only loads after the JS bundle
-        // executes `import 'styles.css'`, causing FOUC + LCP > 9s.
-        // Production builds rely on Vite's SSR bundle for the
-        // correctly-hashed <link>. Font preload was tried + reverted
-        // (see inject-stylesheets.ts comment); CLS was hydration
-        // mismatch, not font swap.
-        const styles = injectStylesheets(next, {
-          isDev: isDevMode,
-          hasPackage: (name) =>
-            existsSync(resolve(projectRoot, 'node_modules', ...name.split('/'))),
-        })
-        next = styles.html
-
-        return next
       },
     },
 
+    // T2.6 (M6) — virtual-module resolveId + load dispatch extracted to
+    // virtual-modules-hook.ts. Pure structural split; identity branches
+    // preserved.
     resolveId(id: string) {
-      if (id === VIRTUAL_ENTRY_ID) return RESOLVED_ENTRY_ID
-      if (id === VIRTUAL_MANIFEST_ID) return RESOLVED_MANIFEST_ID
-      if (id === VIRTUAL_ENTRY_SERVER_ID) return RESOLVED_ENTRY_SERVER_ID
-      if (id === VIRTUAL_RUNTIME_CONFIG_ID) return RESOLVED_RUNTIME_CONFIG_ID
-      // T1.2 — devtools virtual module. Only resolves in dev; build mode
-      // never serves it because transformIndexHtml never injects the tag.
-      if (id === DEVTOOLS_VIRTUAL_ID) return DEVTOOLS_RESOLVED_ID
+      return resolveVirtualModuleId(id, VIRTUAL_MODULE_IDS)
     },
 
     load(id: string) {
-      if (id === RESOLVED_ENTRY_ID) {
-        return generateEntryClient(ssrEnabled, {
-          theoUi: theoUi?.enabled
-            ? { fonts: theoUi.config.fonts, theme: theoUi.config.theme }
-            : undefined,
-        })
-      }
-      if (id === RESOLVED_MANIFEST_ID) {
-        const tree = scanRoutes(appDir)
-        // T3.1 — also broadcast a devtools-shaped manifest to the overlay
-        // (no-op in prod / when no dev server is attached).
-        broadcastRouteManifest(tree)
-        return generateRouteManifest(tree)
-      }
-      if (id === RESOLVED_ENTRY_SERVER_ID) {
-        // SSR tree MUST mirror client tree shape — pass theoUi through so
-        // <TheoUIProvider> wraps in both. Without this, React detects a
-        // hydration mismatch and silently falls back to client-only
-        // render — onClick handlers never get attached.
-        return generateEntryServer({
-          streaming: options.ssrStreaming === true,
-          theoUi: theoUi?.enabled ? { theme: theoUi.config.theme } : undefined,
-        })
-      }
-      if (id === RESOLVED_RUNTIME_CONFIG_ID) {
-        // T1.3 — set globalThis.__THEO_TRANSFORMER__ so theoFetch picks it up
-        const tName = transformer?.name ?? 'json'
-        return [
-          `// Generated by Theo Vite plugin`,
-          `;(globalThis).__THEO_TRANSFORMER__ = ${JSON.stringify(tName)}`,
-          `export const TRANSFORMER_NAME = ${JSON.stringify(tName)}`,
-        ].join('\n')
-      }
-      if (id === DEVTOOLS_RESOLVED_ID) {
-        // T1.2 — virtual module re-exports the real entry from theokit's devtools subpath.
-        // The actual mount logic lives in packages/theo/src/devtools/entry.tsx;
-        // we just emit a tiny shim that imports it (Vite's resolver finds the
-        // file via the `theokit` package alias set up in `config()` above).
-        return [
-          `// Theo devtools — virtual entry (DEV only)`,
-          `import('theokit/devtools/entry').catch((e) => console.error('[theo devtools] mount failed', e))`,
-        ].join('\n')
-      }
+      return loadVirtualModule(id, {
+        ids: VIRTUAL_MODULE_IDS,
+        appDir,
+        ssrEnabled,
+        streamingEnabled: options.ssrStreaming === true,
+        theoUi,
+        transformer,
+      })
     },
 
+    // T2.6 (M6) — configureServer body extracted to configure-server-hook.ts.
+    // The hook owns middleware order, ws subscriptions, watcher handlers,
+    // OpenAPI re-emit, and WS upgrade. EC-10 honored (every effect preserved
+    // in its original ordering).
     async configureServer(server) {
-      // T1.2 — mark dev mode so transformIndexHtml injects devtools script
-      // and resolveId/load serve the virtual module. Build mode never calls
-      // configureServer, so isDevMode stays false and injection is skipped.
-      isDevMode = true
-
-      // T2.4 — expose dev server WS to server-side broadcast helper
-      // (so server modules can push events to the devtools UI without a
-      // hard dependency on Vite). Cleared on server.close.
-      ;(globalThis as { __theoViteHotServer?: typeof server }).__theoViteHotServer = server
-
-      // T3.1 — re-broadcast the route manifest when the devtools bridge
-      // asks. The initial broadcast happens during `load()` for the
-      // manifest virtual module — that fires BEFORE the bridge subscribes.
-      // The bridge sends 'theo:devtools:request-manifest' right after
-      // subscribing; we reply with a fresh broadcast.
-      server.ws.on('theo:devtools:request-manifest', () => {
-        try {
-          const tree = scanRoutes(appDir)
-          broadcastRouteManifest(tree)
-        } catch {
-          /* fail silently — dev-only convenience */
-        }
-      })
-
-      // Server middleware (action before API — more specific prefix first)
-      const serverDir = resolve(projectRoot, 'server')
-      server.middlewares.use(
-        createActionMiddleware(server, serverDir, { pluginRunner, csrfMode, disallowed }),
-      )
-      // Wave 2 completion — services-proxy prefixes flow through to the
-      // api-middleware so it can call `next()` for paths that should be
-      // forwarded to a sidecar by Vite's proxyMiddleware (registered AFTER
-      // configureServer hooks per Vite's middleware order).
-      const servicesProxyPrefixes =
-        options.services && Object.keys(options.services).length > 0
-          ? Object.values(options.services).map((s) => s.proxy)
-          : []
-      // Auto-instantiate a dev-only CsrfReadinessStore so the devtools
-      // CSRF Readiness tab works out-of-the-box. Consumers can override
-      // via options.csrfReadinessStore (e.g. a Redis-backed impl for
-      // multi-worker prod telemetry). In-memory, bounded at 1000 entries,
-      // single-process — see CsrfReadinessStore.MAX_ENTRIES.
-      const csrfReadinessStore = options.csrfReadinessStore ?? new CsrfReadinessStore()
-      server.middlewares.use(
-        createApiMiddleware(server, serverDir, {
-          rateLimitConfig: options.rateLimit,
-          pluginRunner,
-          batching: resolvedBatching,
-          transformer,
-          csrfMode,
-          securityHeaders,
-          disallowed,
-          cors,
-          auditLogger,
-          servicesProxyPrefixes,
-          csrfReadinessStore,
-        }),
-      )
-
-      // EC-1: warn if theo.config.ts is edited during dev session — do NOT
-      // re-instantiate runner (would cause register side-effect leaks).
-      const configPath = resolve(projectRoot, 'theo.config.ts')
-      server.watcher.on('change', (file) => {
-        if (file === configPath) {
-          console.warn(
-            '\n[theokit] theo.config.ts changed; restart dev server for plugin changes to take effect\n',
-          )
-        }
-      })
-
-      // T2.2 (architecture-medium-deferrals) — SSR dev middleware extracted.
-      if (ssrEnabled) {
-        setupSsrDevMiddleware(server, {
-          projectRoot,
-          virtualEntryServerId: VIRTUAL_ENTRY_SERVER_ID,
-          securityHeaders,
-        })
-      }
-
-      // Frontend HMR watcher
-      function handleRouteChange(filePath: string) {
-        if (!isRouteFile(basename(filePath))) return
-        if (!filePath.startsWith(appDir)) return
-
-        const mod = server.moduleGraph.getModuleById(RESOLVED_MANIFEST_ID)
-        if (mod) {
-          server.moduleGraph.invalidateModule(mod)
-          server.ws.send({ type: 'full-reload' })
-        }
-      }
-
-      server.watcher.on('add', handleRouteChange)
-      server.watcher.on('unlink', handleRouteChange)
-
-      // P#3 T1.1 — Dev-mode OpenAPI emit (ADR D3 + D4 + EC-8). Gated on
-      // config.openapi !== undefined. On boot + on route file change, re-run
-      // emitOpenApi so /api/docs/openapi.json (served by @theokit/plugin-openapi)
-      // is always fresh. Best-effort: errors swallowed via reEmitOpenApi's
-      // try/catch — never throws out of the watcher handler (would crash
-      // Vite dev).
-      if (resolvedOpenApi !== undefined) {
-        // Capture non-undefined value into a local const so TS narrows it
-        // inside the watcher callback closures (outer let-binding is widened
-        // back to undefined inside callbacks).
-        const openApiCfg = resolvedOpenApi
-        const { reEmitOpenApi } = await import('./openapi-emit/dev-emit.js')
-        const openApiServerDir = resolve(projectRoot, 'server')
-        const openApiDistDir = resolve(projectRoot, resolvedDistDir)
-        const isRouteFileForOpenApi = (file: string): boolean =>
-          file.startsWith(openApiServerDir) && /\.(ts|tsx|js|mjs)$/.test(file)
-        // Boot emit (fire-and-forget — boot doesn't await)
-        void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
-        // Watcher emit (debounce via inFlight guard inside reEmitOpenApi)
-        server.watcher.on('change', (file: string) => {
-          if (isRouteFileForOpenApi(file)) {
-            void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
-          }
-        })
-        server.watcher.on('add', (file: string) => {
-          if (isRouteFileForOpenApi(file)) {
-            void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
-          }
-        })
-        server.watcher.on('unlink', (file: string) => {
-          if (isRouteFileForOpenApi(file)) {
-            void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
-          }
-        })
-      }
-
-      // T2.3 (architecture-medium-deferrals) — WS upgrade extracted to sibling.
-      setupWsUpgrade(server, projectRoot)
-
-      // T2.4 — clear devtools WS reference on shutdown
-      server.httpServer?.once('close', () => {
-        ;(globalThis as { __theoViteHotServer?: unknown }).__theoViteHotServer = undefined
+      await runConfigureServer(server, {
+        projectRoot,
+        appDir,
+        resolvedDistDir,
+        ssrEnabled,
+        isDevMode: isDevModeRef,
+        pluginRunner,
+        transformer,
+        resolvedBatching,
+        csrfMode,
+        securityHeaders,
+        disallowed,
+        cors,
+        auditLogger,
+        resolvedOpenApi,
+        services: options.services,
+        rateLimit: options.rateLimit,
+        csrfReadinessStoreOverride: options.csrfReadinessStore,
+        virtualEntryServerId: VIRTUAL_ENTRY_SERVER_ID,
+        resolvedManifestId: RESOLVED_MANIFEST_ID,
       })
     },
   }
