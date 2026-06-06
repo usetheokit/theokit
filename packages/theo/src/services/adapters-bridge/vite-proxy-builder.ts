@@ -10,7 +10,7 @@
  *  - `changeOrigin: true` set by default (matches Vite's string-shortcut behavior)
  *  - User-set entries take precedence on prefix collision (we never clobber)
  */
-import type { ServicesConfig } from '../schema/schema.js'
+import type { ServicesConfig } from '../schema.js'
 
 /**
  * Shape compatible with Vite's `server.proxy` type. We intentionally don't

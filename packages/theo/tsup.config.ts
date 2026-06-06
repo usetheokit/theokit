@@ -14,7 +14,7 @@ export default defineConfig([
       'server/jobs/index': 'src/server/jobs/index.ts',
       'vite-plugin/index': 'src/vite-plugin/index.ts',
       'client/index': 'src/client/index.ts',
-      'react-query/index': 'src/react-query/index.ts',
+      'react-query/index': 'src/client/react-query.ts',
       'adapters/web-shim': 'src/adapters/web-shim.ts',
       'adapters/ws-shim': 'src/adapters/ws-shim.ts',
       // Devtools client entry — loaded dynamically in dev mode by the
