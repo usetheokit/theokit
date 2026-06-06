@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 6/6 — cookies Web helpers + Phase B CLOSED)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B. **CLOSES Phase B (header-only leaves cluster).** Cookies is leaf #6 of 6. All Web-Standards sibling helpers for the 6 header-only leaves now ship — the next dedicated session can pick up at Phase C (Tracing + observability). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/http/cookies.ts`** — adds Web-Standards siblings + pure helper extraction:
+  - **`serializeCookie(name, value, options): string` NEW** — pure helper that returns the canonical `Set-Cookie` header value string (no `Set-Cookie:` prefix). Defaults: `httpOnly: true`, `secure: NODE_ENV === 'production'`, `sameSite: 'lax'`, `path: '/'`. Both `setCookie` (IncomingMessage path) and `appendCookieToHeaders` (Web path) delegate to it for attribute composition.
+  - **`getCookieFromRequest(request, name): string | undefined` NEW** — mirror of `getCookie(req: IncomingMessage, name)` using `request.headers.get('cookie')`. Same CR-009 percent-encoding sanity (returns undefined for `%[non-hex]` or `%[hex]$` malformed cases).
+  - **`appendCookieToHeaders(target: Headers, name, value, options): void` NEW** — mirror of `setCookie(res, ...)`. Calls `target.append('Set-Cookie', serialized)` which produces multiple `Set-Cookie` headers per the Web spec. Caller retrieves via `headers.getSetCookie()` — the one multi-value header the Web API exposes natively.
+  - **`appendDeleteCookieToHeaders(target: Headers, name, options)` NEW** — mirror of `deleteCookie(res, ...)` emitting `Set-Cookie` with `Max-Age=0`.
+  - **`setCookie` refactored** to delegate to `serializeCookie` (no behavior change; DRY consolidation).
+- **`tests/unit/cookies-web.test.ts` NEW** — 19 RED→GREEN assertions covering:
+  - 8 `serializeCookie` tests (defaults, URL-encoding, Max-Age, Domain, HttpOnly opt-out, SameSite=Strict, Secure, custom Path).
+  - 6 `getCookieFromRequest` tests (missing cookie / missing name / URL-decoded / multi-cookie / CR-009 `%G1` malformed / skip malformed no-`=` entries).
+  - 5 `appendCookie*ToHeaders` tests (single append, multi-append produces multiple Set-Cookie headers, delete with `Max-Age=0`, custom path, Response constructor round-trip via `getSetCookie()`).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (1 initial `sonarjs/slow-regex` disable was unnecessary since the existing legacy `getCookie` uses the same regex without disable — removed; lint clean). **37/37 GREEN** combined sweep — 19 new Web + 18 legacy (`cookies.test.ts` + `cookies-parse.test.ts` unchanged).
+- **Phase B CLOSED:** 6/6 header-only leaves complete (csrf, csrf-multi-header, csrf-readiness-endpoint, csp-report, cors, cookies). Phase B was scoped as "1 session" in T5a.2 plan v1.0 — shipped across 6 incremental autonomous-loop iterations with the dual-signature pattern preserving every legacy IncomingMessage consumer unchanged. **Phase C (Tracing + observability)** is the next slice.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 5/6 — CORS Web handler)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; cors.ts is leaf #5 of 6). (#arch-gaps-implementation)
