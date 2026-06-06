@@ -1,4 +1,7 @@
-import { randomUUID } from 'node:crypto'
+// T5a.1a — Web Standards migration (leaf-first slice). Web Crypto's
+// `crypto.randomUUID()` is available on globalThis in every supported
+// runtime per ADR-0028 (Node 22+, CF Workers, Bun, Deno, browsers).
+// No node:crypto import needed.
 
 import type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
 
@@ -86,7 +89,7 @@ export class InMemoryJobBackend implements JobBackend {
       }
     }
 
-    const jobId = randomUUID()
+    const jobId = globalThis.crypto.randomUUID()
     const now = Date.now()
     const availableAt = now + (input.delaySeconds ?? 0) * 1000
     const entry: PendingEntry = {
