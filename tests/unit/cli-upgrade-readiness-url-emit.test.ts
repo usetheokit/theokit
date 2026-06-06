@@ -44,7 +44,7 @@ describe('T1.3 — upgrade-readiness scanner emits migration-guide URL', () => {
   })
 
   function capturedStdout(): string {
-    return logSpy.mock.calls.map((args) => args.join(' ')).join('\n')
+    return logSpy.mock.calls.map((args: unknown[]) => args.join(' ')).join('\n')
   }
 
   it('on success path (clean fixture), prints the migration-guide URL', async () => {
