@@ -48,11 +48,13 @@ export default defineConfig({
     // concurrently inside one fork). Verified 411/411 pass with this
     // setting; without it 8+ integration files flake on first run.
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    // Vitest 4 removed `poolOptions.forks.singleFork`. The equivalent
+    // top-level option is `fileParallelism: false` — disables parallel
+    // execution across test files, achieving the same serialization that
+    // singleFork delivered. Intra-file parallelism (multiple `it` per file)
+    // is preserved (per vitest 4 default behavior).
+    // See https://vitest.dev/guide/migration#pool-rework
+    fileParallelism: false,
     // `testTimeout` covers the wall-clock for individual assertions.
     // Integration tests spawning `theokit dev` need >5s under load.
     // 30s is generous but bounded — a real hang surfaces well within this window.
@@ -100,7 +102,9 @@ export default defineConfig({
         branches: 75,
         statements: 80,
       },
-      all: true,
+      // Vitest 4 removed `all: true` — coverage now reports for all included
+      // files by default via the `include` field above. See
+      // https://vitest.dev/guide/migration.html#removed-options-from-coverage-1
       clean: true,
     },
   },
