@@ -85,8 +85,12 @@ function searchParamsToObject(params: URLSearchParams): Record<string, string | 
 /**
  * Parse request body based on Content-Type. JSON is the canonical path;
  * empty body returns `undefined` (the handler treats as "no body").
+ *
+ * **Inline-only mode (default):** handles `application/json` and `text/*`.
+ * Other content-types return `undefined`. Multipart/form-data requires
+ * the opt-in `bodyParser: 'full'` mode (T5a.2 Phase E).
  */
-async function parseBody(request: Request): Promise<unknown> {
+async function parseBodyInline(request: Request): Promise<unknown> {
   // GET/HEAD have no body by spec; even if the consumer sets one, ignore it
   // (matches Web Request semantics — `body` is null for GET/HEAD anyway).
   if (request.method === 'GET' || request.method === 'HEAD') return undefined
@@ -108,6 +112,40 @@ async function parseBody(request: Request): Promise<unknown> {
     return text.length === 0 ? undefined : text
   }
   return undefined
+}
+
+/**
+ * T5a.2 Phase E — "full" body parser delegating to `parseWebRequestBody`.
+ * Returns a `ParsedWebBody` (`{ json?, fields, files }`) for JSON OR
+ * multipart, or `undefined` when the body is empty / unparseable.
+ *
+ * Handler downstream pattern:
+ *   `body?.json` (JSON requests)
+ *   `body?.fields` + `body?.files` (multipart upload requests)
+ *
+ * Limits enforced by parseWebRequestBody:
+ *   - declared Content-Length cap (default 10MB × maxFiles + 1MB margin)
+ *   - per-file size cap (default 10MB)
+ *   - max files (default 10)
+ */
+async function parseBodyFull(request: Request): Promise<unknown> {
+  if (request.method === 'GET' || request.method === 'HEAD') return undefined
+  const { parseWebRequestBody } = await import('./body-parser-web.js')
+  try {
+    const parsed = await parseWebRequestBody(request)
+    // If nothing parsed (empty body OR unhandled content-type), return undefined
+    // so Zod schemas treat it as missing — same semantics as inline parser.
+    if (
+      parsed.json === undefined &&
+      Object.keys(parsed.fields).length === 0 &&
+      parsed.files.length === 0
+    ) {
+      return undefined
+    }
+    return parsed
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -140,10 +178,12 @@ function validationErrorResponse(zodError: z.ZodError, field: string): Response 
 async function runHandler(
   config: WebRouteHandlerConfig,
   request: Request,
+  bodyParser: 'inline' | 'full' = 'inline',
 ): Promise<{ ok: true; result: unknown } | { ok: false; response: Response }> {
   const url = new URL(request.url)
   const queryRaw = searchParamsToObject(url.searchParams)
-  const bodyRaw = await parseBody(request)
+  const bodyRaw =
+    bodyParser === 'full' ? await parseBodyFull(request) : await parseBodyInline(request)
   // No params support yet at the Web-Request entry-point (no router scan in
   // scope per Phase A). Pass `{}` as the params input; Zod schemas requiring
   // params will fail validation.
@@ -262,6 +302,19 @@ function envelopeCodeToStatus(code: string): number {
  */
 export interface ExecuteWebRequestOptions {
   csrfMode?: 'off' | 'strict'
+  /**
+   * T5a.2 Phase E — body parser strategy.
+   *
+   * - `'inline'` (default): handle `application/json` + `text/*` only.
+   *   Returns the parsed value (object for JSON, string for text). Other
+   *   content-types (e.g., multipart) return `undefined`.
+   * - `'full'`: delegate to `parseWebRequestBody` for multipart support
+   *   + per-file size caps + max-files cap (Web Standards `request.formData()`
+   *   under the hood). Returns a `ParsedWebBody` object:
+   *   `{ json?, fields, files }`. Multipart consumers MUST opt into this
+   *   mode; JSON-only routes pay zero cost staying on `'inline'`.
+   */
+  bodyParser?: 'inline' | 'full'
 }
 
 /**
@@ -323,7 +376,7 @@ export async function executeWebRequest(
     }
   }
   try {
-    const outcome = await runHandler(config, request)
+    const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
     if (!outcome.ok) return outcome.response
     return toResponse(outcome.result)
   } catch (err) {
