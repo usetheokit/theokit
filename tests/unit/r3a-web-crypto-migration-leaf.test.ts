@@ -149,7 +149,28 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     expect(source).toMatch(/(globalThis\.)?crypto\.subtle\.(sign|importKey)/)
   })
 
-  it('audit: node:crypto consumer count in server/ has dropped to ≤ 1 after T5a.1a+T5a.1b+T5a.1c', () => {
+  // ===== T5a.1d additions (slice 4/N — LAST node:crypto removal in server/) =====
+  // Last node:crypto consumer in server/: rate-limit/rate-limit-per-route.ts.
+  // `createHash` is sync but Web Crypto subtle.digest is async. The factory
+  // exports deriveKey + createRouteRateLimiter, both sync. The cascade:
+  //   hashFragment(input): string → Promise<string>
+  //   deriveKey(req, keyBy, cookie): string → Promise<string>
+  //   checkRouteRateLimit(req): RateLimitResult → Promise<RateLimitResult>
+  // No production caller of createRouteRateLimiter exists (verified via grep;
+  // api-middleware uses the sibling createRateLimiter from rate-limit.ts).
+  // Only the 9 test sites need updating.
+
+  it('rate-limit-per-route.ts no longer imports from node:crypto', () => {
+    const source = readSource('packages/theo/src/server/rate-limit/rate-limit-per-route.ts')
+    expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
+  })
+
+  it('rate-limit-per-route.ts uses Web Crypto subtle.digest for hashing', () => {
+    const source = readSource('packages/theo/src/server/rate-limit/rate-limit-per-route.ts')
+    expect(source).toMatch(/(globalThis\.)?crypto\.subtle\.digest/)
+  })
+
+  it('audit: node:crypto consumer count in server/ has dropped to 0 after T5a.1a+T5a.1b+T5a.1c+T5a.1d', () => {
     // Baseline cascade:
     //   pre-T5a.1a = 8
     //   T5a.1a removes 2 → 6 (job-backend-memory, trace-context-propagation)
@@ -172,6 +193,6 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       }
     }
     walk(serverDir)
-    expect(count).toBeLessThanOrEqual(1) // post-T5a.1c
+    expect(count).toBe(0) // post-T5a.1d — full Web Crypto cutover in server/
   })
 })
