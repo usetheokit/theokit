@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 2/6 — multi-header CSRF Web sibling)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; csrf-multi-header.ts is leaf #2 of 6). Same dual-signature pattern as slice 1/6: extract pure helper + add Web-shaped sibling preserving the IncomingMessage path unchanged. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/security/csrf-multi-header.ts`** — refactored to extract the pure decision logic into private `evaluateCsrfMultiHeaderFromInputs(inputs, ownOrigin, options): CsrfDecision` helper that accepts pre-resolved header strings:
+  - `evaluateCsrfMultiHeader(req: IncomingMessage)` — existing IncomingMessage consumers UNCHANGED. Internally extracts `req.headers[X]` into the helper's input shape via `headerAsString()` adapter; EC-10 multi-Origin check stays in this wrapper (only observable on IncomingMessage where Node parses repeated headers as array).
+  - **`evaluateCsrfMultiHeaderRequest(request: Request)` NEW** — Web-Standards-shaped sibling. Consumes `request.headers.get(name)` (native `Headers` API) and `getOwnOriginFromRequest(request, trustForwarded)` which uses Web `Headers` + falls back to `new URL(request.url).origin` when host header absent (Web Request guarantees an absolute URL, unlike IncomingMessage where `req.url` is path-only).
+  - **EC-10 note inlined as JSDoc:** the Web `Headers` API collapses multi-value headers into a single comma-separated string at parse time. The `'multiple-origin'` decision signal is unreachable on the Web path by design — Web standards expose `getSetCookie()` for the only multi-value header that's API-exposed; all others are single-valued at the API layer. Documented behavior, not a gap.
+- **`tests/unit/csrf-multi-header-request.test.ts` NEW** — 15 RED→GREEN assertions mirroring the IncomingMessage test surface for the Web Request path:
+  - 4 Sec-Fetch-Site cases (same-origin / none / same-site / cross-site reject).
+  - 4 Origin cases (same-origin / cross-origin reject / 'null' iframe / wildcard allowlist).
+  - 2 Referer cases (matching origin / malformed URL).
+  - 2 no-headers cases (default reject / allowRequestsWithoutOriginCheck escape).
+  - 2 forwarded-headers cases (trustForwardedHeaders true vs false default).
+  - 1 fallback case (request.url's origin used when host header absent — Web Request semantic that IncomingMessage path lacks).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean (no issues caught). **32/32 GREEN** combined sweep — 15 new Web tests + 17 legacy IncomingMessage tests. Zero regression in `tests/unit/csrf-multi-header.test.ts`.
+- **Phase B progress:** 2/6 header-only leaves complete (csrf.ts + csrf-multi-header.ts). 4 remaining: `csrf-readiness-endpoint.ts`, `csp-report.ts`, `cors.ts`, `cookies.ts`. Each subsequent slice follows the same pure-helper-extraction + Web-shaped-sibling pattern. Integration of the multi-header path into `executeWebRequest` (alongside `validateCsrfRequest`) deferred to a follow-up integration slice (consumer can already use `evaluateCsrfMultiHeaderRequest` directly via the `theokit/server/security` sub-path).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 1/6 — CSRF leaf + executeWebRequest integration)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; csrf.ts is leaf #1 of 6). **Adds CSRF enforcement to the Web-Standards `executeWebRequest` entry-point via the dual-signature pattern** (anti-pattern #2 avoidance: don't double-break consumers). (#arch-gaps-implementation)
