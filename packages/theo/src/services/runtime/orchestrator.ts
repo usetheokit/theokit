@@ -14,7 +14,7 @@ import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 
-import type { ServiceDefinition, ServicesConfig } from '../schema/schema.js'
+import type { ServiceDefinition, ServicesConfig } from '../schema.js'
 
 import { pollHealthcheck } from './healthcheck-poller.js'
 import { createLogMerger } from './log-merge.js'

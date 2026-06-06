@@ -261,6 +261,53 @@ Items considered and rejected. **Do not move these into a milestone without a st
 
 ---
 
+## Pipeline de ciclos (plan ecosystem)
+
+Configurado em `.claude/` via `bash scripts/install.sh` do template [`plan`](file:///home/paulo/Projetos/plan), em modo **adição-only**: o framework custom do TheoKit (58 skills, 4 rules, 4 hooks, agents/, worktrees/) permanece **intacto**; o plan ecosystem foi sobreposto adicionando componentes novos sem destruir nada. Backups locais (gitignored via `*.bak`):
+
+- `CLAUDE.md.bak` — versão 266 linhas pré-merge
+- `.claude/settings.json.bak` — versão pré-extensão (3 hooks, agora 6)
+
+**O que foi adicionado** (sem sobrescrever o existente):
+
+- **21 skills do plan**: `ast-grep`, `auto-plan`, `code-quality`, `deck`, `deps-audit`, `discover-{plan,plan-confidence,edge-cases,execute,confidence,improve}` (6), `generated`, `grill-me`, `implement`, `marp-slide`, `plan-confidence`, `plan-improve`, `release`, `skill-{register,validator,writer}`. As 58 skills SDK (`server-actions-architect`, `vite-integration-engineer`, `runtime-adapter-strategist`, `dx-error-message-specialist`, etc.) coexistem.
+- **28 rules do plan**: `cycle-*.md` (8), `*-golden-rule.md`, `*-thresholds.txt`, `*-allowlist.txt`, `audit-trail-rotation.md`, `loop-engine-convention.md`, `public-copy.md`, `review-model-routing.txt`. As 5 rules SDK (`architecture.md`, `backend.md`, `frontend.md`, `testing.md`, `type-safety.md`) coexistem.
+- **4 hooks do plan**: `sessionstart-context.sh`, `userpromptsubmit-inject.sh`, `public-copy-lint.sh`, `precompact-preserve.sh`. Os 4 hooks SDK (`validate-command.sh`, `boundary-check.sh`, `post-edit-check.sh`, `stop-validation.sh`) **permanecem na versão custom do TheoKit** (não foram sobrescritos pelos do plan, que têm conteúdo diferente).
+- **`scripts/`** (install.sh, check_xrefs.py, test_e2e_smoke.py, session-catchup.py, attest-plan.sh, statusline.sh), **`commands/`** (plan-attest, plan-goal, plan-loop), **`plugin.json`**, **`HOW-TO-USE.md`**, **`.active_plan.example`**.
+- **knowledge-base/** estendido com subdirs estruturais faltantes (plans, implementations, audits, adrs, grills, dogfood/evidence, judge-codex, discoveries/{plans,blueprints,snapshots}, progress, tools, references). Os existentes `reference/` e `reviews/` permanecem.
+
+**`.claude/settings.json` estendido** (não substituído):
+
+- Adicionado `statusLine` apontando para `scripts/statusline.sh`.
+- Adicionados eventos `SessionStart` (injeta git state + active plan) e `UserPromptSubmit` (injeta active plan excerpt).
+- Adicionado `PreCompact` (snapshot do plano antes de compactar contexto).
+- Adicionado `public-copy-lint.sh` ao `PostToolUse` existente.
+- Adicionadas deny entries para `.claude/knowledge-base/{references,tools}/**` (read-only zones).
+- **Preservados**: permissões SDK (npm/pnpm/vitest/playwright/tsc/eslint/prettier), todos os hooks SDK no wireup original.
+
+**Comandos disponíveis (TheoKit custom + plan):**
+
+- **TheoKit custom** (preserva): `/server-actions-architect`, `/vite-integration-engineer`, `/runtime-adapter-strategist`, `/dx-error-message-specialist`, `/zod-contract-specialist`, `/framework-api-reviewer`, `/dogfood`, `/dogfood-npm`, `/edge-case-plan`, `/to-plan`, `/to-reference`, `/to-research`, `/review`, `/changelog`, `/build`, `/dev`, `/test`, `/meeting`, ... (58 skills)
+- **Plan (adicionado)**: `/grill-me`, `/auto-plan`, `/deps-audit`, `/code-quality`, `/plan-confidence`, `/plan-improve`, `/implement`, `/release`, `/discover-{plan,plan-confidence,edge-cases,execute,confidence,improve}`, `/skill-{register,validator,writer}`, `/ast-grep`, `/deck`, `/marp-slide`
+
+**Conflitos de nomenclatura preservados na versão TheoKit** (skill SDK vence):
+
+- `dogfood` (TheoKit 548 linhas vs plan 98) — TheoKit version permanece. Plan version disponível ao consultar `.claude.bak` se houver futuro merge.
+- `to-plan` (TheoKit 267 vs plan 153), `edge-case-plan` (TheoKit vs plan), `review`, `to-reference`, `excalidraw` — TheoKit versions permanecem.
+
+**Hooks SDK preservados (conteúdo diferente do plan):**
+
+- `boundary-check.sh` (TheoKit 48 vs plan 32 linhas)
+- `post-edit-check.sh` (TheoKit 36 vs plan 88 linhas)
+- `stop-validation.sh` (TheoKit 175 vs plan 199 linhas)
+- `validate-command.sh` (TheoKit 45 vs plan 90 linhas)
+
+Os hooks do TheoKit têm regras custom do projeto; os hooks do plan não foram instalados para evitar regressão.
+
+**Contratos**: `.claude/rules/cycle-*.md` (plan) + `.claude/rules/{architecture,backend,frontend,testing,type-safety}.md` (TheoKit). Não há sobreposição.
+
+---
+
 ## When this file is wrong
 
 The TheoKit code and README are authoritative. If this file says one thing and the code/README say another, the code/README win. Update this file via PR with a one-line rationale. The voice and tone rules require an explicit strategic review before being weakened or repealed.

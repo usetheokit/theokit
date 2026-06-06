@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T2.1 — M5 lonely folders eliminated)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.1. Pure structural refactor; ZERO behavior change. Closes M5 mecânico (architecture review consolidated finding). (#arch-gaps-implementation)
+
+- **`packages/theo/src/react-query/index.ts` → `packages/theo/src/client/react-query.ts`** (`git mv`-preserved history). The `theokit/react-query` npm subpath export is preserved — `package.json#exports['./react-query']` continues to map to `./dist/react-query/index.js`; tsup entry key `'react-query/index'` source updated to new path. Internal relative imports inside the moved file fixed (`../client/react-query-adapter.js` → `./react-query-adapter.js`).
+- **`packages/theo/src/services/schema/schema.ts` → `packages/theo/src/services/schema.ts`** (`git mv`-preserved history). Zero external consumers; only `services/index.ts` and 4 sibling files inside `services/{adapters-bridge,runtime}/` needed import path updates (`../schema/schema.js` → `../schema.js`).
+- **Test imports updated**: `tests/unit/theokit-react-query-package.test.ts` + `tests/unit/use-theo-query.test.ts` repointed to `client/react-query.js` source path.
+- **Validation:** 3 test files / 19 tests (react-query suite) GREEN. 2 test files / 12 tests (services suite) GREEN. Zero new test regressions vs pre-T2.1 baseline.
+- **Pre-existing TS errors NOT introduced by this task:** `@theokit/sdk` missing `.d.ts` (sibling workspace build state) + `start-bootstrap-stages.ts:36` + `process-spawn-helpers.ts:34` — outside T2.1 scope.
+
 ### Added (Plan theokit-arch-gaps-implementation T1.2 — Web Request boundary RED tests)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 1 T1.2. TDD-first RED test fixture for the Web-standards handler boundary that Phase 5a (T5a.1) will implement per [ADR-0028](docs/adr/0028-multi-runtime-strategy.md). Closes Phase 1 (TDD baseline). (#arch-gaps-implementation)

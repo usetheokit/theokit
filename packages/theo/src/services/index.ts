@@ -36,13 +36,13 @@ export { buildManifest, writeManifest, readManifest } from './adapters-bridge/ma
 export type { ManifestServiceEntry, ServicesManifest } from './adapters-bridge/manifest.js'
 
 // Schema
-export { servicesConfigSchema } from './schema/schema.js'
+export { servicesConfigSchema } from './schema.js'
 export type {
   ServiceDefinition,
   ServicesConfig,
   ServicesConfigInput,
   ServicesConfigOutput,
-} from './schema/schema.js'
+} from './schema.js'
 
 // Runtime (dev orchestration)
 export { orchestrateDev } from './runtime/orchestrator.js'

@@ -89,3 +89,7 @@ my-test/
 .gstack/
 fixtures/template-default/.theokit
 architecture-output
+
+# Local backups (e.g., CLAUDE.md.bak, .claude/settings.json.bak from migrations)
+*.bak
+*.bak/

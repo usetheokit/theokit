@@ -8,7 +8,7 @@
  * EC-7: lifecycle handlers prevent orphan children on parent exit/signal.
  * EC-8: auto-injected env vars (THEOKIT_SERVICE_NAME, THEOKIT_SERVICE_PORT).
  */
-import type { ServiceDefinition } from '../schema/schema.js'
+import type { ServiceDefinition } from '../schema.js'
 
 /**
  * Build the env passed to `child_process.spawn`.
