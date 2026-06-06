@@ -98,12 +98,26 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   // Wave 2 (T1.2) — services manifest at <cwd>/.theo/services.json. Always
   // emit (empty array when services: {} is empty) so adapters can rely on
   // the file existing. Topological order preserved by buildServicesManifest.
-  const servicesManifest = buildServicesManifest(config.services)
+  //
+  // Plan v1.2 T2.1 — when theo.config.ts declares `name`, emit services.json
+  // v2 with that project identifier. Falling back to v1 (no project field)
+  // keeps TheoCloud's deprecation warning path intact (services-bundle).
+  const projectName = config.name
+  const servicesManifest = buildServicesManifest(config.services, projectName)
   writeServicesManifest(cwd, servicesManifest)
   if (servicesManifest.services.length > 0) {
+    const versionLabel = `v${String(servicesManifest.version)}`
+    const projectLabel =
+      servicesManifest.version === 2 ? ` project="${servicesManifest.project}"` : ''
     console.log(
-      `  ✓ Services manifest: ${String(servicesManifest.services.length)} service(s) ` +
+      `  ✓ Services manifest (${versionLabel}${projectLabel}): ${String(servicesManifest.services.length)} service(s) ` +
         `(${servicesManifest.services.map((s) => s.name).join(', ')})`,
+    )
+  } else if (servicesManifest.version === 1) {
+    console.log(
+      '  ⚠ services.json emitted as v1 (no `name` in theo.config.ts). ' +
+        'TheoCloud will accept this with a deprecation warning; sunset in theokit 0.6.0. ' +
+        'Run `theokit migrate services-json-v1-to-v2` to upgrade.',
     )
   }
 

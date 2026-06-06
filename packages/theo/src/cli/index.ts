@@ -135,21 +135,33 @@ cli
 cli
   .command(
     'migrate <kind>',
-    'Run a one-shot convention migration. Supported: router (G6 dotted→nested)',
+    'Run a one-shot convention migration. Supported: router (G6 dotted→nested), services-json-v1-to-v2 (Plan v1.2 T2.3)',
   )
   .option('--dry-run', 'Print the migration plan but do not touch the filesystem')
   .option('--force', 'Skip the dev-server port pre-flight check (CI / non-TTY)')
-  .action(async (kind: string, options: CliOptions) => {
+  .option('--name <slug>', 'Explicit project name (DNS-1123). Services-json migrate only.')
+  .action(async (kind: string, options: CliOptions & { name?: string }) => {
     try {
-      if (kind !== 'router') {
-        console.error(`\n  ✗ Unknown migration kind: ${kind}. Supported: router\n`)
-        process.exit(1)
+      if (kind === 'router') {
+        const { routerMigrateCommand } = await import('./commands/migrate/router.js')
+        await routerMigrateCommand({
+          dryRun: Boolean(options.dryRun),
+          force: Boolean(options.force),
+        })
+        return
       }
-      const { routerMigrateCommand } = await import('./commands/migrate/router.js')
-      await routerMigrateCommand({
-        dryRun: Boolean(options.dryRun),
-        force: Boolean(options.force),
-      })
+      if (kind === 'services-json-v1-to-v2' || kind === 'services-json') {
+        const { servicesJsonMigrateCommand } = await import('./commands/migrate/services-json.js')
+        await servicesJsonMigrateCommand({
+          dryRun: Boolean(options.dryRun),
+          name: options.name,
+        })
+        return
+      }
+      console.error(
+        `\n  ✗ Unknown migration kind: ${kind}. Supported: router, services-json-v1-to-v2\n`,
+      )
+      process.exit(1)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`\n  ✗ ${msg}\n`)

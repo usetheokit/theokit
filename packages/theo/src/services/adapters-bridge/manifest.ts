@@ -21,9 +21,18 @@ import { dirname, join } from 'node:path'
 
 import type { ServiceDefinition, ServicesConfig } from '../schema/schema.js'
 
+/**
+ * Plan v1.2 T2.2 — service shape enum, mirrored from
+ * `theo-cloud/api/internal/source/services.schema.json`. Optional in
+ * services.json v2; TheoCloud Go-side defaults to `server` when absent.
+ */
+export type ManifestServiceType = 'server' | 'worker' | 'frontend'
+
 export interface ManifestServiceEntry {
   name: string
   runtime: 'python' | 'node'
+  /** Plan v1.2 T2.2 — service shape. Omit to keep default `server`. */
+  type?: ManifestServiceType
   port: number
   proxy: string
   dev: string
@@ -37,10 +46,28 @@ export interface ManifestServiceEntry {
   passSetCookie: boolean
 }
 
-export interface ServicesManifest {
+/**
+ * Plan v1.2 T2.1 — services.json now ships in 2 shapes:
+ *
+ *   v1 (deprecated, sunset theokit 0.6.0): { version: 1, services: [...] }
+ *   v2 (current):                          { version: 2, project: <name>, services: [...] }
+ *
+ * `buildManifest()` selects which version to emit based on whether a
+ * project name is supplied. Consumers (TheoCloud Go-side validator)
+ * accept both via the JSON Schema 7 `oneOf` block.
+ */
+export interface ServicesManifestV1 {
   version: 1
   services: ManifestServiceEntry[]
 }
+
+export interface ServicesManifestV2 {
+  version: 2
+  project: string
+  services: ManifestServiceEntry[]
+}
+
+export type ServicesManifest = ServicesManifestV1 | ServicesManifestV2
 
 const MANIFEST_RELATIVE_PATH = ['.theo', 'services.json'] as const
 
@@ -96,6 +123,9 @@ function definitionToEntry(name: string, def: ServiceDefinition): ManifestServic
     cors: def.cors,
     passSetCookie: def.passSetCookie,
   }
+  // Plan v1.2 T2.2 — only emit `type` when explicitly set so v1 fixtures
+  // (no type field at all) stay byte-identical.
+  if (def.type !== undefined) entry.type = def.type
   if (def.build !== undefined) entry.build = def.build
   if (def.openapi !== undefined) entry.openapi = def.openapi
   if (def.env !== undefined) entry.env = def.env
@@ -103,12 +133,18 @@ function definitionToEntry(name: string, def: ServiceDefinition): ManifestServic
   return entry
 }
 
-export function buildManifest(services: ServicesConfig): ServicesManifest {
+/**
+ * Build a services manifest. Plan v1.2 T2.1: pass a `project` name to emit
+ * v2; omit it to emit v1 (deprecated, accepted by TheoCloud until 0.6.0
+ * sunset).
+ */
+export function buildManifest(services: ServicesConfig, project?: string): ServicesManifest {
   const ordered = topoSort(services)
-  return {
-    version: 1,
-    services: ordered.map((name) => definitionToEntry(name, services[name])),
+  const entries = ordered.map((name) => definitionToEntry(name, services[name]))
+  if (project !== undefined && project.length > 0) {
+    return { version: 2, project, services: entries }
   }
+  return { version: 1, services: entries }
 }
 
 function manifestPath(cwd: string): string {
