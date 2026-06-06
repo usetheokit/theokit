@@ -205,3 +205,143 @@ export function createRouteRateLimiter(config: RouteRateLimitConfig | RateLimitC
     }
   }
 }
+
+/**
+ * T5a.2 Phase D slice 1/3 — Web-Standards rate-limiter inputs context.
+ *
+ * Web `Request` has no equivalent of `req.socket.remoteAddress` (Node
+ * runtime concept) or `req.user` (set by upstream middleware). The
+ * Web-shaped rate-limiter requires the caller to pass these explicitly:
+ *
+ *   - `clientIp` — resolved per-runtime (Node: `socket.remoteAddress`;
+ *     CF Workers: `request.headers.get('cf-connecting-ip')`; Vercel:
+ *     `x-forwarded-for` first hop; Bun/Deno: adapter-specific).
+ *   - `userId` — resolved by auth middleware (Phase D slice 3/3 ships
+ *     the Web-shaped session helper).
+ *
+ * Defaults: `clientIp = 'unknown'`, `userId = undefined` (matches the
+ * IncomingMessage path's fallback semantics).
+ */
+export interface DeriveKeyRequestContext {
+  clientIp?: string
+  userId?: string
+}
+
+/**
+ * T5a.2 Phase D slice 1/3 — Web-Standards-shaped key derivation.
+ *
+ * Mirror of `deriveKey(req: IncomingMessage, keyBy, cookieName)` for the
+ * Web `Request` shape. Same `'ip' | 'session' | 'user'` enum cases (the
+ * `function` callback case is IncomingMessage-only because the existing
+ * `KeyByMode` callback type is Node-shaped; Web callers use the enum
+ * cases or call a future `KeyByModeWeb` shape — out of T5a.2 Phase D scope).
+ *
+ * Uses `getCookieFromRequest` (Phase B slice 6/6) for session-mode cookie
+ * lookup. Cookie parsing has the same CR-009 percent-encoding safety.
+ */
+export async function deriveKeyFromRequest(
+  request: Request,
+  keyBy: Exclude<KeyByMode, (req: IncomingMessage) => string>,
+  cookieName: string,
+  ctx: DeriveKeyRequestContext = {},
+): Promise<string> {
+  const ip = ctx.clientIp ?? 'unknown'
+  switch (keyBy) {
+    case 'session': {
+      // Reuse the Web cookie helper extracted in Phase B slice 6/6 so
+      // CR-009 percent-encoding sanity stays consistent across paths.
+      const { getCookieFromRequest } = await import('../http/cookies.js')
+      const cookie = getCookieFromRequest(request, cookieName)
+      return cookie ? `session:${await hashFragment(cookie)}` : `ip:${ip}`
+    }
+    case 'user': {
+      return ctx.userId ? `user:${ctx.userId}` : `ip:${ip}`
+    }
+    case 'ip':
+    default:
+      return `ip:${ip}`
+  }
+}
+
+/**
+ * T5a.2 Phase D slice 1/3 — Web-Standards rate-limiter factory.
+ *
+ * Mirror of `createRouteRateLimiter(config)` returning a checker that
+ * accepts `(request: Request, ctx?: DeriveKeyRequestContext)` instead of
+ * `(req: IncomingMessage)`. Same `RouteRateLimitConfig` accepted; same
+ * `keyBy` enum cases; same `InMemoryStore` constraint (CR-005 guard).
+ *
+ * Same returned `RateLimitResult` shape (headers + limited boolean).
+ *
+ * Web `Request` has no `req.url` path-only property — uses
+ * `new URL(request.url).pathname + search` to derive the URL the way the
+ * IncomingMessage path's `req.url ?? ''` would.
+ */
+export function createRouteRateLimiterWeb(config: RouteRateLimitConfig | RateLimitConfig) {
+  const isFlat =
+    'windowMs' in config && 'max' in config && !('default' in config) && !('routes' in config)
+  const cfg: RouteRateLimitConfig = isFlat ? { default: config } : config
+
+  const store = cfg.store ?? new InMemoryStore()
+  if (!(store instanceof InMemoryStore)) {
+    throw new Error(
+      'createRouteRateLimiterWeb: async RateLimitStore implementations require a dedicated async middleware path. ' +
+        'Use the InMemoryStore default for the Web façade.',
+    )
+  }
+  const inMemoryStore = store
+  const keyBy = (cfg.keyBy ?? 'ip') as Exclude<KeyByMode, (req: IncomingMessage) => string>
+  const cookieName = cfg.cookieName ?? 'theo_session'
+
+  const patternList: [string | RegExp, RateLimitConfig][] = []
+  if (cfg.routes) {
+    for (const [pattern, c] of Object.entries(cfg.routes)) patternList.push([pattern, c])
+  }
+  if (cfg.routePatterns) {
+    for (const tuple of cfg.routePatterns) patternList.push(tuple)
+  }
+
+  return async function checkRouteRateLimitWeb(
+    request: Request,
+    ctx: DeriveKeyRequestContext = {},
+  ): Promise<RateLimitResult> {
+    // Web Request guarantees absolute URL — extract path+query for pattern
+    // matching (mirror of IncomingMessage's `req.url ?? ''`).
+    const parsed = new URL(request.url)
+    const url = `${parsed.pathname}${parsed.search}`
+    let matched: RateLimitConfig | undefined
+    for (const [pattern, c] of patternList) {
+      if (matchRoutePattern(url, pattern)) {
+        matched = c
+        break
+      }
+    }
+    const effective = matched ?? cfg.default
+    if (!effective) {
+      return { limited: false, headers: {} }
+    }
+
+    const bucketSuffix = typeof matched === 'undefined' ? '*default*' : normalizePath(url)
+    const key = `${await deriveKeyFromRequest(request, keyBy, cookieName, ctx)}|${bucketSuffix}`
+    const state = inMemoryStore.incrSync(key, effective.windowMs)
+
+    if (state.count > effective.max) {
+      const retryAfter = Math.ceil((state.resetAt - Date.now()) / 1000)
+      return {
+        limited: true,
+        headers: {
+          'X-RateLimit-Limit': String(effective.max),
+          'X-RateLimit-Remaining': '0',
+          'Retry-After': String(retryAfter),
+        },
+      }
+    }
+    return {
+      limited: false,
+      headers: {
+        'X-RateLimit-Limit': String(effective.max),
+        'X-RateLimit-Remaining': String(Math.max(0, effective.max - state.count)),
+      },
+    }
+  }
+}
