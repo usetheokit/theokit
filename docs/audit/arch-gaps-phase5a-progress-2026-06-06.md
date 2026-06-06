@@ -70,6 +70,9 @@ ADR-0028 explicitly draws the runtime-portable boundary at the **request handler
 **Busboy multipart body parser (Node-only; Web Standards alternative ships at `body-parser-web.ts`):**
 - `body-parser.ts` (uses `node:path.basename` for filename sanitization + Busboy npm dep which is Node-only). Consumers on CF Workers / Bun use `body-parser-web.ts` which calls `request.formData()` natively (zero `node:*`).
 
+**IncomingMessage ↔ Web Request bridge (T5a.2 Phase G slice 5/N — Node-adapter scope per ADR-0028 R3a):**
+- `http/node-web-adapter.ts` (imports `node:http` + `node:stream`). The ONLY place IncomingMessage ↔ Request conversion happens per the R3a boundary contract. CF Workers / Bun / Deno pass native Web Request directly through `executeWebRequest` without loading this module. Allowlisted as legitimate Category B.
+
 **Boot-time wiring (executed once on startup):**
 - `http/middleware-runner.ts` (uses `existsSync` to detect optional middleware file at boot)
 - `http/error-pages.ts` (loads custom error HTML once at boot)
