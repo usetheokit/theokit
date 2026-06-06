@@ -1,4 +1,7 @@
-import { randomUUID } from 'node:crypto'
+// T5a.1b — Web Crypto migration. randomUUID() moved to globalThis.crypto.
+// IncomingMessage stays as a type-only import (runtime-clean — TS erases at
+// build); full IncomingMessage→Request boundary migration deferred to a
+// later T5a.1c+ slice per ADR-0028 incremental leaf-first sequence.
 import type { IncomingMessage } from 'node:http'
 
 /**
@@ -66,5 +69,5 @@ export function extractTraceId(req: IncomingMessage): string {
   }
   const requestId = pickHeader(req.headers[REQUEST_ID_HEADER])
   if (requestId) return requestId
-  return randomUUID()
+  return globalThis.crypto.randomUUID()
 }

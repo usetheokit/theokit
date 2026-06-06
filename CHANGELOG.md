@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T5a.1b — Web Crypto migration: leaf-first slice 2/N)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1 Task #3. **PARTIAL progress on C3 critical** — second incremental slice continuing the leaf-first sequence after T5a.1a. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/_internal/atomic-write.ts`** — `import { randomBytes } from 'node:crypto'` REMOVED. `randomBytes(4)` swapped to `globalThis.crypto.getRandomValues(new Uint8Array(4))` + manual hex encoding (avoids Node-only Buffer). `node:fs` + `node:path` imports KEPT — this is a build-time manifest writer (e.g., `.theo/jobs.json`), and per ADR-0028 the runtime-portable boundary is the request handler, not the scanner. Zero behavior change.
+- **`packages/theo/src/server/http/trace-context.ts`** — `import { randomUUID } from 'node:crypto'` REMOVED. Single fallback call-site swapped to `globalThis.crypto.randomUUID()`. `import type { IncomingMessage } from 'node:http'` KEPT (type-only — TS erases at build; runtime-clean). Full `IncomingMessage → Request` boundary migration deferred to T5a.1c+ per the leaf-first decomposition.
+- **`tests/unit/r3a-web-crypto-migration-leaf.test.ts`** — extended with 5 new assertions (4 file-level + 1 audit). Audit threshold tightened: `server/` `node:crypto` consumer count now ≤ 4 (baseline 8 − 2 from T5a.1a − 2 from T5a.1b). 9/9 GREEN.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. Unit regression sweep: `tests/unit/trace-context.test.ts` + `tests/unit/trace-context-propagation.test.ts` + `tests/unit/job-backend-memory.test.ts` **33/33 GREEN** (zero regressions from T5a.1a + T5a.1b combined).
+- **Pre-existing failure parity (NOT caused by T5a.1b):** `tests/integration/cli-build-emits-{cron,job}-manifest.test.ts` continue to fail with the documented `[theokit preflight] native binding abi mismatch detected (node v22.22.2, abi 127) — better-sqlite3` error. This is the long-running Node version drift carried since the session opened (see session summary "Pre-existing failures ~15-16 tests carried throughout — preflight, Node version, @theokit/ui drift"). Out of T5a.1b scope.
+
 ### Changed (Plan theokit-arch-gaps-implementation T5a.1a — Web Crypto migration: leaf-first slice 1/N)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1 Task #3 ("Refactor em ordem de dependência (leaves primeiro)"). **PARTIAL progress on C3 critical** — first incremental slice of the multi-iteration R3a Web Standards migration per [ADR-0028](docs/adr/0028-multi-runtime-strategy.md). (#arch-gaps-implementation)

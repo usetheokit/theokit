@@ -76,15 +76,47 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     expect(source).toMatch(/(globalThis\.)?crypto\.getRandomValues\(/)
   })
 
-  it('audit: node:crypto consumer count in server/ has decreased by 2 from pre-T5a.1a baseline', () => {
-    // Given: the pre-T5a.1a baseline was 8 files importing node:crypto (audited
-    // 2026-06-06 before this iteration started). The slice migrates 2 of them.
-    // Then: post-migration the count is ≤ 6.
-    // Future iterations T5a.1b+ will continue decrementing this number.
-    //
-    // We measure by grepping the live tree — the assertion uses Node's fs to
-    // walk the server/ directory and count occurrences. This is a process-level
-    // audit, NOT a unit-level grep, so it catches regressions in any file.
+  // ===== T5a.1b additions (slice 2/N) =====
+  // Two more pure-leaf node:crypto swaps:
+  //   3. packages/theo/src/server/_internal/atomic-write.ts
+  //      - was: `import { randomBytes } from 'node:crypto'`
+  //      - now: `globalThis.crypto.getRandomValues(new Uint8Array(N))`
+  //      - NOTE: keeps `node:fs` + `node:path` because this is a build-time
+  //        manifest-write leaf (`.theo/jobs.json` etc). Per ADR-0028 the
+  //        runtime-portable boundary is the request handler, not the scanner.
+  //   4. packages/theo/src/server/http/trace-context.ts
+  //      - was: `import { randomUUID } from 'node:crypto'`
+  //      - now: `globalThis.crypto.randomUUID()`
+  //      - NOTE: keeps `import type { IncomingMessage } from 'node:http'`
+  //        (type-only import, runtime-clean). Full IncomingMessage→Request
+  //        boundary migration deferred to a later T5a.1c+ slice.
+
+  it('atomic-write.ts no longer imports from node:crypto', () => {
+    const source = readSource('packages/theo/src/server/_internal/atomic-write.ts')
+    expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
+  })
+
+  it('atomic-write.ts uses Web Crypto API (crypto.getRandomValues)', () => {
+    const source = readSource('packages/theo/src/server/_internal/atomic-write.ts')
+    expect(source).toMatch(/(globalThis\.)?crypto\.getRandomValues\(/)
+  })
+
+  it('http/trace-context.ts no longer imports randomUUID from node:crypto', () => {
+    const source = readSource('packages/theo/src/server/http/trace-context.ts')
+    expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
+  })
+
+  it('http/trace-context.ts uses Web Crypto API (crypto.randomUUID)', () => {
+    const source = readSource('packages/theo/src/server/http/trace-context.ts')
+    expect(source).toMatch(/(globalThis\.)?crypto\.randomUUID\(\)/)
+  })
+
+  it('audit: node:crypto consumer count in server/ has dropped to ≤ 4 after T5a.1a+T5a.1b', () => {
+    // Given: the pre-T5a.1a baseline was 8 files importing node:crypto.
+    // T5a.1a removed 2 (job-backend-memory, trace-context-propagation).
+    // T5a.1b removes 2 more (atomic-write, http/trace-context).
+    // Then: post-migration the count is ≤ 4.
+    // Future iterations T5a.1c+ will continue decrementing this number.
     const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
     let count = 0
     const walk = (dir: string): void => {
@@ -99,6 +131,6 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       }
     }
     walk(serverDir)
-    expect(count).toBeLessThanOrEqual(6) // pre-T5a.1a = 8; T5a.1a removes 2
+    expect(count).toBeLessThanOrEqual(4) // post-T5a.1b
   })
 })
