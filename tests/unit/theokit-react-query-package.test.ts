@@ -7,7 +7,7 @@ import {
   type FetcherFn,
   type UseTheoQueryConfig,
   type UseTheoQueryInternals,
-} from '../../packages/theo/src/react-query/index.js'
+} from '../../packages/theo/src/client/react-query.js'
 
 /**
  * `theokit/react-query` subpath — public surface.

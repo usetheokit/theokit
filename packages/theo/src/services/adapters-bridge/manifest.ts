@@ -19,7 +19,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import type { ServiceDefinition, ServicesConfig } from '../schema/schema.js'
+import type { ServiceDefinition, ServicesConfig } from '../schema.js'
 
 /**
  * Plan v1.2 T2.2 — service shape enum, mirrored from

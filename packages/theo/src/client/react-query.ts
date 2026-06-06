@@ -28,20 +28,20 @@
 
 // Canonical implementation lives in `client/react-query-adapter.ts`.
 // Re-export so consumers can import from a dedicated subpath.
-export { stableQueryKey, buildUseTheoQueryConfig } from '../client/react-query-adapter.js'
+export { stableQueryKey, buildUseTheoQueryConfig } from './react-query-adapter.js'
 
 export type {
   Fetcher,
   FetchOptionsLike,
   QueryKey,
   UseTheoQueryConfig,
-} from '../client/react-query-adapter.js'
+} from './react-query-adapter.js'
 
 // Aliases — preserve the names the (never-published) standalone package used,
 // so anyone who tried the pre-release surface can keep their imports.
-export { buildUseTheoQueryConfig as buildUseTheoQueryInternals } from '../client/react-query-adapter.js'
+export { buildUseTheoQueryConfig as buildUseTheoQueryInternals } from './react-query-adapter.js'
 
 export type {
   Fetcher as FetcherFn,
   UseTheoQueryConfig as UseTheoQueryInternals,
-} from '../client/react-query-adapter.js'
+} from './react-query-adapter.js'
