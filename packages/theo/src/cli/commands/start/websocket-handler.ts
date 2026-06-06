@@ -10,9 +10,9 @@ import type { Server as HttpServer } from 'node:http'
 
 import type * as WsLib from 'ws'
 
-import type { WebSocketHandler } from '../../server/define/define-websocket.js'
-import type { LoadModule } from '../../server/scan/module-loader.js'
-import type { WebSocketRouteNode } from '../../server/scan/ws-scan.js'
+import type { WebSocketHandler } from '../../../server/define/define-websocket.js'
+import type { LoadModule } from '../../../server/scan/module-loader.js'
+import type { WebSocketRouteNode } from '../../../server/scan/ws-scan.js'
 
 export async function attachWebSocketHandler(
   server: HttpServer,

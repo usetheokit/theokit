@@ -15,27 +15,27 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join, resolve } from 'node:path'
 
-import { loadConfig } from '../../config/load-config.js'
-import { loadEnv } from '../../config/load-env.js'
-import { createPluginRunnerFromConfig } from '../../server/plugins/load-plugins.js'
-import { createRateLimiter } from '../../server/rate-limit/rate-limit.js'
-import { createProductionLoader } from '../../server/scan/module-loader.js'
-import { resolveTransformer } from '../../server/transformer.js'
-import { preflightNodeAndBindings } from '../preflight-node-version.js'
+import { loadConfig } from '../../../config/load-config.js'
+import { loadEnv } from '../../../config/load-env.js'
+import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
+import { createRateLimiter } from '../../../server/rate-limit/rate-limit.js'
+import { createProductionLoader } from '../../../server/scan/module-loader.js'
+import { resolveTransformer } from '../../../server/transformer.js'
+import { preflightNodeAndBindings } from '../../preflight-node-version.js'
 
 import {
   configureAgentRegistryFromConfig,
   configureStorageManagerFromConfig,
-} from './start-bootstrap-stages.js'
-import { installGracefulShutdown } from './start-graceful-shutdown.js'
-import type { RequestHandlerCtx } from './start-handlers.js'
-import { loadRoutesAndActions } from './start-manifest-loader.js'
-import { createRequestHandler } from './start-request-handler.js'
-import { setupSsr } from './start-ssr-setup.js'
-import { attachWebSocketHandler } from './start-websocket-handler.js'
+} from './bootstrap-stages.js'
+import { installGracefulShutdown } from './graceful-shutdown.js'
+import type { RequestHandlerCtx } from './handlers.js'
+import { loadRoutesAndActions } from './manifest-loader.js'
+import { createRequestHandler } from './request-handler.js'
+import { setupSsr } from './ssr-setup.js'
+import { attachWebSocketHandler } from './websocket-handler.js'
 
 // Backwards-compat: external test fixtures may import resolveSsrEntry from here.
-export { resolveSsrEntry } from './start-bootstrap-stages.js'
+export { resolveSsrEntry } from './bootstrap-stages.js'
 
 interface StartOptions {
   port?: number
