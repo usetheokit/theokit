@@ -55,12 +55,19 @@ export function getCookie(req: IncomingMessage, name: string): string | undefine
   return value
 }
 
-export function setCookie(
-  res: ServerResponse,
-  name: string,
-  value: string,
-  options?: CookieOptions,
-): void {
+/**
+ * T5a.2 Phase B slice 6/6 — pure Set-Cookie serializer. Extracted from
+ * `setCookie(res, ...)` so the IncomingMessage path AND the Web Headers
+ * path can share the cookie attribute composition.
+ *
+ * Returns the canonical `Set-Cookie` header value string (no surrounding
+ * `Set-Cookie:` prefix — caller wraps via `res.setHeader('Set-Cookie', ...)`
+ * or `headers.append('Set-Cookie', ...)`).
+ *
+ * Defaults: `httpOnly: true`, `secure: NODE_ENV === 'production'`,
+ * `sameSite: 'lax'`, `path: '/'`.
+ */
+export function serializeCookie(name: string, value: string, options?: CookieOptions): string {
   const opts: Required<Omit<CookieOptions, 'maxAge' | 'domain'>> &
     Pick<CookieOptions, 'maxAge' | 'domain'> = {
     httpOnly: true,
@@ -73,15 +80,21 @@ export function setCookie(
   const parts = [`${name}=${encodeURIComponent(value)}`]
   if (opts.httpOnly) parts.push('HttpOnly')
   if (opts.secure) parts.push('Secure')
-  // sameSite has a default ('lax') so it is always defined after the
-  // spread. Keep the cast inside the value computation to avoid a wide
-  // re-narrowing branch in CSV output.
   const sameSiteCanonical = opts.sameSite.charAt(0).toUpperCase() + opts.sameSite.slice(1)
   parts.push(`SameSite=${sameSiteCanonical}`)
   if (opts.maxAge !== undefined) parts.push(`Max-Age=${opts.maxAge}`)
   if (opts.path) parts.push(`Path=${opts.path}`)
   if (opts.domain) parts.push(`Domain=${opts.domain}`)
+  return parts.join('; ')
+}
 
+export function setCookie(
+  res: ServerResponse,
+  name: string,
+  value: string,
+  options?: CookieOptions,
+): void {
+  const serialized = serializeCookie(name, value, options)
   // Append to existing Set-Cookie headers (EC-1: don't overwrite)
   const existing = res.getHeader('Set-Cookie')
   let cookies: string[] = []
@@ -90,10 +103,66 @@ export function setCookie(
   } else if (existing !== undefined) {
     cookies = [String(existing)]
   }
-  cookies.push(parts.join('; '))
+  cookies.push(serialized)
   res.setHeader('Set-Cookie', cookies)
 }
 
 export function deleteCookie(res: ServerResponse, name: string, options?: { path?: string }): void {
   setCookie(res, name, '', { maxAge: 0, path: options?.path ?? '/' })
+}
+
+/**
+ * T5a.2 Phase B slice 6/6 — Web-Standards cookie getter.
+ *
+ * Mirror of `getCookie(req: IncomingMessage, name)` for the Web `Request`
+ * shape. Consumes `request.headers.get('cookie')` (native `Headers` API)
+ * instead of `req.headers.cookie`. Same parse logic + same malformed
+ * percent-encoding sanity (returns undefined when raw value contains a
+ * lone `%` that didn't decode, preserving the IncomingMessage path's
+ * "treat as unreadable" CR-009 semantics).
+ */
+export function getCookieFromRequest(request: Request, name: string): string | undefined {
+  const cookieHeader = request.headers.get('cookie')
+  if (cookieHeader === null) return undefined
+  const cookies = parseCookieHeader(cookieHeader)
+  const value = cookies.get(name)
+  if (value === undefined) return undefined
+  if (/(?:%[^0-9A-Fa-f])|(?:%[0-9A-Fa-f]$)/.test(value)) return undefined
+  return value
+}
+
+/**
+ * T5a.2 Phase B slice 6/6 — Web-Standards cookie setter.
+ *
+ * Mirror of `setCookie(res, name, value, options)` for the Web `Headers`
+ * shape. Appends a `Set-Cookie` entry to the caller's `Headers` instance
+ * via `headers.append('Set-Cookie', ...)`. Multiple appends produce
+ * multiple `Set-Cookie` headers per the Web spec; `headers.getSetCookie()`
+ * retrieves them as an array (the one multi-value header the Web API
+ * exposes natively).
+ *
+ * Uses the shared `serializeCookie` pure helper — same defaults and
+ * attribute composition as the IncomingMessage path.
+ */
+export function appendCookieToHeaders(
+  target: Headers,
+  name: string,
+  value: string,
+  options?: CookieOptions,
+): void {
+  target.append('Set-Cookie', serializeCookie(name, value, options))
+}
+
+/**
+ * T5a.2 Phase B slice 6/6 — Web-Standards cookie deleter.
+ *
+ * Mirror of `deleteCookie(res, name, options)` — emits a Set-Cookie with
+ * `Max-Age=0` so the browser drops the cookie immediately.
+ */
+export function appendDeleteCookieToHeaders(
+  target: Headers,
+  name: string,
+  options?: { path?: string },
+): void {
+  appendCookieToHeaders(target, name, '', { maxAge: 0, path: options?.path ?? '/' })
 }
