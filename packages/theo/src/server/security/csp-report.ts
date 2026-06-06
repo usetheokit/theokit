@@ -189,3 +189,89 @@ export async function handleCspReport(
   res.statusCode = 204
   res.end()
 }
+
+/**
+ * T5a.2 Phase B slice 4/6 — Web-Standards CSP report handler.
+ *
+ * Mirror of `handleCspReport(req: IncomingMessage, res: ServerResponse,
+ * opts): Promise<void>` for the Web `Request` shape. Returns
+ * `Response` directly instead of mutating `res`.
+ *
+ * Same content-type dispatch (legacy `application/csp-report` vs new
+ * `application/reports+json`), same normalizers (`normalizeLegacy`,
+ * `normalizeNew`), same side-effect loop (safeAudit + devtools + user
+ * hook). The body cap is enforced post-read because Web Request body
+ * streaming doesn't have a portable mid-stream rejection primitive
+ * across CF Workers / Bun / Deno; CSP reports are < 2 KB typical, well
+ * under MAX_BODY (16 KB).
+ *
+ * Returns:
+ *   - 204 on accepted reports OR no-op empty payload
+ *   - 413 on body too large (post-read check)
+ *   - 415 on unsupported content-type
+ *   - 400 on malformed JSON
+ */
+async function readBodyFromRequest(request: Request, maxBytes: number): Promise<string | null> {
+  const contentLengthHeader = request.headers.get('content-length')
+  if (contentLengthHeader !== null) {
+    const declared = Number.parseInt(contentLengthHeader, 10)
+    if (Number.isFinite(declared) && declared > maxBytes) return null
+  }
+  const text = await request.text()
+  if (text.length > maxBytes) return null
+  return text
+}
+
+function dispatchViolations(violations: CspViolation[], opts: CspReportHandlerOptions): void {
+  for (const v of violations) {
+    safeAudit(opts.auditLogger, {
+      action: 'csp.violation',
+      metadata: v as unknown as Record<string, unknown>,
+    })
+    try {
+      opts.devtoolsDispatcher?.onCspViolation?.(v)
+    } catch {
+      // dispatcher errors are isolated from the request
+    }
+    try {
+      opts.onViolation?.(v)
+    } catch {
+      // user hook throws are swallowed — never crash the request
+    }
+  }
+}
+
+export async function handleCspReportRequest(
+  request: Request,
+  opts: CspReportHandlerOptions,
+): Promise<Response> {
+  const ct = request.headers.get('content-type') ?? ''
+
+  const raw = await readBodyFromRequest(request, MAX_BODY)
+  if (raw === null) {
+    return new Response(null, { status: 413 })
+  }
+
+  let violations: CspViolation[]
+  try {
+    if (ct.startsWith('application/csp-report')) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      const inner = parsed['csp-report']
+      if (!inner || typeof inner !== 'object') {
+        return new Response(null, { status: 204 })
+      }
+      violations = [normalizeLegacy(inner as Record<string, unknown>)]
+    } else if (ct.startsWith('application/reports+json')) {
+      const parsed: unknown = JSON.parse(raw)
+      const entries = Array.isArray(parsed) ? parsed : []
+      violations = entries.map((e) => normalizeNew(e)).filter((v): v is CspViolation => v !== null)
+    } else {
+      return new Response(null, { status: 415 })
+    }
+  } catch {
+    return new Response(null, { status: 400 })
+  }
+
+  dispatchViolations(violations, opts)
+  return new Response(null, { status: 204 })
+}
