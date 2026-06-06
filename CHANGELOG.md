@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T2.3 — M2 config schemas split)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.3. Pure structural split; ZERO behavior change at consumer call site. Closes M2 mecânico (config/schema.ts monolítico vs Astro `schemas/{base,refined,relative}.ts` pattern). (#arch-gaps-implementation)
+
+- **`packages/theo/src/config/schema.ts`** 525 LOC → **292 LOC** (44% reduction). Becomes composer assembling `theoConfigSchema` from per-concern primitives + re-exporting them for downstream consumers (15 adapter files / vite-plugin / generators / tests keep their existing imports).
+- **`packages/theo/src/config/schemas/` (NEW)** — 8 per-concern files:
+  - `header-safe.ts` (14 LOC) — `headerSafeString` CR/LF refinement (EC-3 CWE-113 mitigation)
+  - `format-error.ts` (20 LOC) — `FormatErrorContext` + `FormatErrorHook` TS types (G5 T1.3)
+  - `rate-limit.ts` (29 LOC) — `rateLimitSchema` union (legacy + new shape)
+  - `upload.ts` (13 LOC) — `uploadSchema`
+  - `logging.ts` (5 LOC) — `loggingSchema`
+  - `cache.ts` (36 LOC) — `cacheSchema` + internal `routeRuleSchema`
+  - `storage.ts` (63 LOC) — StorageManager cluster (`tlsConfigSchema`, `serverConfigSchema`, postgres pool/database, `redisServerConfigSchema`, `storageSchema`, `StorageConfig` type)
+  - `security.ts` (106 LOC) — `securityHeadersSchema`, `disallowedConfigSchema`, `corsSchema`, `securitySchema` (depends on `header-safe`)
+  - `index.ts` (31 LOC) — barrel re-exporting all
+- **EC-9 ordem topológica respeitada**: leaf-most files (no intra-folder deps) created first (header-safe, format-error, rate-limit, upload, logging, cache, storage), then `security.ts` (depends on `header-safe`), then `index.ts` barrel.
+- **Inline-embedded schemas KEPT in composer** (intentional, not lonely-folder smell): `agents`, `ui`, `devtools`, `jobs`, `openapi` — they exist ONLY as part of `theoConfigSchema`'s root object shape; splitting would create files with single consumer (the composer itself) with no comprehension benefit. Closes M2 honestly — the visible win is the leaf concerns now have their own home.
+- **Validation:** `pnpm typecheck` exit 0 (clean). `pnpm vitest run tests/unit/{config-env,load-config,schema-distdir-refine,schema-format-error}.test.ts` → 4 files / 31 tests GREEN. Zero new regressions.
+
 ### Changed (Plan theokit-arch-gaps-implementation T2.2 — M4 cli/commands/start/ subfolder)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.2. Pure structural refactor; ZERO behavior change. Closes M4 mecânico (inconsistência interna — sibling `cli/commands/migrate/` JÁ era subfolder; `start*` files eram 7 flat). (#arch-gaps-implementation)
