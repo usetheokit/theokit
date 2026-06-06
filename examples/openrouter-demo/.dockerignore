@@ -1,0 +1,27 @@
+# Common — version control, OS noise, editor cruft.
+.git/
+.gitignore
+.svn/
+.hg/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# theokit-packs internals
+theokit-packs.json
+.dockerignore
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next/cache/
+.turbo/
+dist/
+build/
+coverage/
+.nyc_output/
