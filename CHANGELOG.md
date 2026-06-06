@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase E — body parser opt-in + Phase E CLOSED)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase E (Body parsing). **CLOSES Phase E.** The `body-parser-web.ts` already shipped Web-compatible (T5.1 — verified 5/5 GREEN regression); this slice wires it into `executeWebRequest` via opt-in `bodyParser: 'full'` option. Next: Phase F (Plugin types + define). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/web-handler.ts`** — adds `bodyParser` option:
+  - `ExecuteWebRequestOptions.bodyParser?: 'inline' | 'full'` NEW (default `'inline'`).
+  - **`'inline'` mode (default)**: handles `application/json` + `text/*` only. Returns parsed value (object for JSON, string for text). Other content-types return `undefined`. **Phase A backward compat preserved.**
+  - **`'full'` mode**: delegates to `parseWebRequestBody` (T5.1) for multipart/form-data support via `request.formData()` + per-file size cap + max-files cap. Returns a `ParsedWebBody` struct (`{ json?, fields, files }`). Multipart consumers MUST opt in; JSON-only routes pay zero cost staying on `'inline'`.
+  - Private `parseBodyInline(request)` and `parseBodyFull(request)` (dynamic `import` for body-parser-web to keep inline-only consumers from paying the import cost).
+  - `runHandler` accepts `bodyParser` argument; `executeWebRequest` passes `opts.bodyParser ?? 'inline'`.
+- **`tests/integration/web-handler-body-parser-full.test.ts` NEW** — 5 RED→GREEN assertions:
+  - JSON request in 'full' mode → `body.json` populated, fields/files empty.
+  - Multipart text-fields-only → `body.fields` populated.
+  - Multipart with file upload → `body.files` populated with filename + size.
+  - Empty body in 'full' mode → handler sees `body=undefined` (Zod any passes).
+  - Default 'inline' mode unchanged (Phase A behavior preserved — JSON returns parsed value directly, not wrapped in struct).
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **27/27 GREEN** combined regression sweep (Phase A 8 + Phase B CSRF 14 + body-parser-web 5) — zero regression. **5/5 GREEN** new Phase E tests.
+- **Phase E CLOSED:** 1/1 leaf (body-parser-web wired into executeWebRequest opt-in). `body-parser.ts` stays Node-only per Phase 5a audit Category B (Busboy multipart parser).
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase D slice 3/3 — Web session manager + Phase D CLOSED)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase D. **CLOSES Phase D (Rate-limit + auth).** All 3 leaves shipped: rate-limit-per-route + rate-limit + auth/session. Next: Phase E (Body parsing). (#arch-gaps-implementation)
