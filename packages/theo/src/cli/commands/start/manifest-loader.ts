@@ -8,14 +8,14 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { warnOnce } from '../../server/observability/logger.js'
-import type { ActionNode } from '../../server/scan/action-scan.js'
-import { scanServerActions } from '../../server/scan/action-scan.js'
-import { loadManifest } from '../../server/scan/manifest.js'
-import type { ServerRouteNode } from '../../server/scan/match.js'
-import { scanServerRoutes } from '../../server/scan/scan.js'
-import type { WebSocketRouteNode } from '../../server/scan/ws-scan.js'
-import { scanWebSocketRoutes } from '../../server/scan/ws-scan.js'
+import { warnOnce } from '../../../server/observability/logger.js'
+import type { ActionNode } from '../../../server/scan/action-scan.js'
+import { scanServerActions } from '../../../server/scan/action-scan.js'
+import { loadManifest } from '../../../server/scan/manifest.js'
+import type { ServerRouteNode } from '../../../server/scan/match.js'
+import { scanServerRoutes } from '../../../server/scan/scan.js'
+import type { WebSocketRouteNode } from '../../../server/scan/ws-scan.js'
+import { scanWebSocketRoutes } from '../../../server/scan/ws-scan.js'
 
 export interface LoadedRoutes {
   routes: ServerRouteNode[]

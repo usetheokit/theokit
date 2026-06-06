@@ -7,7 +7,7 @@
 
 import type { ServerResponse } from 'node:http'
 
-import { resolveSsrEntry } from './start-bootstrap-stages.js'
+import { resolveSsrEntry } from './bootstrap-stages.js'
 
 export interface SsrRenderResult {
   html: string
