@@ -8,10 +8,21 @@ export default defineConfig([
       // T4.4 (architecture-cleanup) — subpath entrypoints per ADR-0001 v3.
       // Consumers should migrate to these; `theokit/server` keeps re-exporting
       // them for backwards compat until 1.0.
+      'server/agent/index': 'src/server/agent/index.ts',
       'server/auth/index': 'src/server/auth/index.ts',
       'server/cost/index': 'src/server/cost/index.ts',
       'server/cron/index': 'src/server/cron/index.ts',
+      'server/define/index': 'src/server/define/index.ts',
+      'server/http/index': 'src/server/http/index.ts',
       'server/jobs/index': 'src/server/jobs/index.ts',
+      'server/observability/index': 'src/server/observability/index.ts',
+      'server/plugins/index': 'src/server/plugins/index.ts',
+      'server/rate-limit/index': 'src/server/rate-limit/index.ts',
+      'server/realtime/index': 'src/server/realtime/index.ts',
+      'server/scan/index': 'src/server/scan/index.ts',
+      'server/security/index': 'src/server/security/index.ts',
+      'server/storage/index': 'src/server/storage/index.ts',
+      'server/webhook/index': 'src/server/webhook/index.ts',
       'vite-plugin/index': 'src/vite-plugin/index.ts',
       'client/index': 'src/client/index.ts',
       'react-query/index': 'src/client/react-query.ts',
