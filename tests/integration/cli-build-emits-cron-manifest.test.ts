@@ -54,11 +54,19 @@ export default defineCron('${name}', { schedule: '${schedule}', handler: () => {
 
 const runBuild = (args = ''): { stdout: string; exitCode: number } => {
   try {
+    // T5a.2 prerequisite: THEOKIT_SKIP_NATIVE_PREFLIGHT=1 tells the CLI to
+    // skip the native-binding ABI check. Test fixtures don't install
+    // better-sqlite3 (the CLI's hard-required native dep) since they don't
+    // exercise audit-log / LanceDB / etc. The env-var escape hatch is the
+    // production-grade fix for this fixture infrastructure issue (per
+    // docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md
+    // § Test infrastructure prerequisites Option B).
     // eslint-disable-next-line sonarjs/os-command -- developer-local integration test invoking the framework's own CLI
     const stdout = execSync(`npx tsx ${CLI} build ${args}`, {
       cwd: projectDir,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, THEOKIT_SKIP_NATIVE_PREFLIGHT: '1' },
     })
     return { stdout, exitCode: 0 }
   } catch (err) {
