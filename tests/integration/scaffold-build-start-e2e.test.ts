@@ -80,6 +80,11 @@ describe('T7.4 Sub-fase D — scaffold → build → start E2E', () => {
     const envWithBin = {
       ...process.env,
       PATH: `${repoBinPath}:${process.env.PATH ?? ''}`,
+      // T5a.2 prerequisite: scaffold tmp project doesn't install
+      // better-sqlite3; skip the CLI's native-binding preflight check
+      // so `theokit build` reaches the manifest emit step. Node-floor
+      // version check stays enforced.
+      THEOKIT_SKIP_NATIVE_PREFLIGHT: '1',
     }
     try {
       // eslint-disable-next-line sonarjs/os-command -- developer-local E2E running our own CLI
