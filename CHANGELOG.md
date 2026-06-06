@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase F slice 2/3 — Web channel handler)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase F. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/define/define-channel.ts`** — adds Web-Standards sibling:
+  - `defineChannel<TMessage>(handler)` (existing IncomingMessage path) UNCHANGED.
+  - **`WebChannelHandler<TMessage>` interface NEW** — mirror of `ChannelHandler<TMessage>` with `onSubscribe(ws, room, request: Request)` (instead of `req: IncomingMessage`). `onMessage` and `onUnsubscribe` shape-agnostic (WebSocketLike already Web-Standards-compatible).
+  - **`defineWebChannel<TMessage>(handler): WebChannelHandler<TMessage>` NEW** — identity function for type inference.
+  - **Architectural note inlined:** WebSocket upgrade semantics differ across runtimes — Node uses `WebSocketServer.handleUpgrade(req, socket, head, cb)` handing IncomingMessage; CF Workers / Bun / Deno provide the upgrade handshake AS a Web Request. Cross-runtime channels ship BOTH shapes.
+- **`tests/unit/define-channel-web.test.ts` NEW** — 5 RED→GREEN assertions:
+  - Identity function returns handler unchanged.
+  - All-optional-methods-omitted is valid.
+  - `onSubscribe` receives Request (`.headers.get(name)` available).
+  - `onMessage` typed by TMessage generic.
+  - `onUnsubscribe` fires for room cleanup.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **26/26 GREEN** combined sweep — 5 new + 21 legacy (`define-channel.test.ts` + `fixture-define-channel.test.ts` + `channel-manager.test.ts` unchanged).
+- **Phase F progress:** 2/3 leaves complete. 1 remaining: `server/define/define-websocket.ts`.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase F slice 1/3 — Web plugin types)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase F (Plugin types + define). Opens Phase F with the plugin-types Web sibling — defines the type surface that future Phase F slices (define-channel, define-websocket) and Phase G (execute pipeline) will consume. (#arch-gaps-implementation)
