@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed (Plan theokit-arch-gaps-implementation Phase 6 final — `@theokit/ui` fixture peerDep drift)
+
+Per Phase 6 broad-suite empirical sweep. **The last cross-cutting integration test failure is closed:** `contract-usetheo-ui-vite-plugin.test.ts EC-7` peerDep drift. The drift was real: theokit's peerDep declared `@theokit/ui: ^0.14.0` (commit `a871f13` bumped from `^0.13.0` together with template pins; not all fixtures were updated in lockstep). The sibling workspace `theo-ui` already houses `@theokit/ui@0.14.0` (just not npm-published yet); fixture pins of `^0.13.0` resolved via pnpm workspace symlink to the 0.14.0 source, but failed the EC-7 range-satisfaction guard. (#arch-gaps-implementation)
+
+- **`fixtures/theoui-autoinject/package.json`** — `@theokit/ui` pin `^0.13.0` → `^0.14.0` (aligns with theokit peerDep + workspace 0.14.0 source).
+- **`fixtures/template-default/package.json`** — same bump for consistency (this fixture exercises the same hoist resolution at build-helper time).
+- **`fixtures/template-saas/package.json`** — same.
+- **`pnpm-lock.yaml`** — refreshed via `pnpm install --no-frozen-lockfile` to materialize the new ranges through pnpm's symlink resolution.
+- **Validation:** `pnpm typecheck` exit 0. `tests/integration/contract-usetheo-ui-vite-plugin.test.ts` **7/7 GREEN** (was 6/7 — EC-7 failure cleared). Template-default consumers regression sweep (`devtools-treeshake`, `bundle-budget`, `devtools-entry-dist`) **9/9 GREEN** (no regression from the fixture bump). The workspace symlink continues to resolve to the in-tree 0.14.0 — no npm `@theokit/ui@0.14.0` publish is needed to make the fixture work in dev/CI.
+- **Cross-repo coordination note:** when `theo-ui/` publishes `@theokit/ui@0.14.0` to npm, consumer apps using `^0.13.0` need to either bump or accept the npm-side drift. This is sibling-repo release cadence, not theokit's concern. Fixtures here are aligned now.
+
 ### Fixed (Plan theokit-arch-gaps-implementation Phase 6 follow-up — stale source-path references from T2.2 + T2.6 refactors)
 
 Per the broad-suite empirical sweep diagnosed in Phase 6 audit. **Two real plan-introduced regressions** surfaced where structural tests held stale source-path references to files that moved during the M3-M6 mecânicos. Per Rule 3 (extreme honesty) these were MY regressions to fix. (#arch-gaps-implementation)
