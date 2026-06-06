@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 4/N — send-response Web helpers)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G. Web-shaped siblings of `sendJson` + `sendError` returning native `Response` instances instead of mutating `ServerResponse`. (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/http/send-response.ts`** — adds Web-Standards siblings:
+  - `sendJson(res, data, status?, transformer?)` + `sendError(res, ...)` (existing IncomingMessage) UNCHANGED.
+  - **`buildJsonResponse(data, status?, transformer?): Response` NEW** — mirror of `sendJson`. Same transformer-aware serialization. Does NOT set Content-Length (runtime computes from body; setting manually risks conflict with streamed bodies on CF Workers / Bun / Deno).
+  - **`buildErrorResponse(input: SendErrorInput): Response` NEW** — mirror of `sendError` (options-bag form only — positional 7-param IncomingMessage overload was legacy-shim back-compat, not needed on the greenfield Web path). Same envelope `{ error: { code, message, requestId?, issues? } }` shape. Custom 404/500 HTML preserved via `options.custom404Html` / `options.custom500Html`. `requestId` flows into body + `x-request-id` header (parity with `handleWebRequestError` from Phase G slice 3/N).
+  - Production-mode INTERNAL_ERROR message hiding preserved (NODE_ENV gate).
+- **`tests/unit/send-response-web.test.ts` NEW** — 13 RED→GREEN assertions:
+  - **`buildJsonResponse` (4)**: defaults status 200 + content-type; custom status; transformer.serialize honored; no Content-Length header (runtime computes).
+  - **`buildErrorResponse` (9)**: envelope shape; requestId in body + header; requestId omitted when undefined; issues array included; custom 404 HTML on 404 status; custom 500 HTML on 500 status; HTML options ignored on status mismatch; production INTERNAL_ERROR hides message; non-production preserves message.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **31/31 GREEN** combined sweep — 13 new + 18 legacy (`send-error-overload.test.ts` + `custom-error-pages.test.ts` + `execute-transformer.test.ts` unchanged). Zero regression in IncomingMessage `sendJson`/`sendError` consumers.
+- **Phase G progress:** 4/N slices shipped. Remaining: Node adapter shim (executeRoute IncomingMessage → Web Request bridge) — Phase G slice 5/N.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase G slice 3/N — error-handler Web sibling)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase G. Web-shaped sibling of `handleRequestError` returning a native `Response` instead of mutating `ServerResponse`. (#arch-gaps-implementation)
