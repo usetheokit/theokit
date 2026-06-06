@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — Session final summary doc)
+
+Per the 25-commit autonomous halt-loop session driven by `.claude/halt-loop-prompts/implement-arch-gaps.md`. Captures everything shipped + verification commands + honest framing about the completion promise discipline. Enables the next dedicated session (T5a.2 Phases B-H + `dogfood full` + `loop-architecture-review --mode=full` re-run) to pick up cleanly. (#arch-gaps-implementation)
+
+- **`docs/audit/arch-gaps-session-final-summary-2026-06-06.md` NEW** — comprehensive session summary:
+  - **Plan task delivery table**: 16 of 18 plan tasks shipped with commit hashes (T0.1 through T5a.1d audit + T5a.2 Phase A).
+  - **Added-value table**: 7 commits beyond the original plan (Phase 6 audit, T5a.2 plan v1.0, env-var escape hatch, fixture follow-up, self-caught regression fix, fixture drift fix, emitted-bundle invariant).
+  - **Cumulative impact metrics**: 8→0 `node:crypto` server/ imports; 32→0 known broad-sweep failures; 7→0 documented-RED T1.2 forward specs; 0 plan-introduced regressions surviving (3 caught + self-fixed); 0 architecture violations; 25 atomic commits.
+  - **7 architectural decisions locked**: ADR-0028 R3a; C1 plugin scope encapsulation; C2 envelope coverage via G5 D3 (NOT class deletion); C3 runtime-portability + SHAPE refactor split; `executeWebRequest` Web-Standards entry-point; T2.5 sub-package exports BREAKING; `THEOKIT_SKIP_NATIVE_PREFLIGHT` env-var escape hatch.
+  - **Out-of-loop work enumerated**: T5a.2 Phases B-H (9-10 sessions), `dogfood full` (needs LLM creds + Chrome MCP), `loop-architecture-review --mode=full` re-run (dedicated multi-agent session).
+  - **10 verification commands** the user can run to re-validate every shipped surface (depcruise, typecheck, the 8 critical test files, broad-sweep baseline).
+  - **Honest framing about completion promise**: deliberately NOT emitted per Rules 1 + 3 Inquebráveis because T5a.2 + dogfood + loop-arch re-run remain out-of-loop. Audit preserves the discipline rather than emit a false `<promise>` statement.
+
 ### Added (Plan theokit-arch-gaps-implementation R3a invariant — emitted-bundle empirical proof)
 
 Per `docs/audit/arch-gaps-phase5a-progress-2026-06-06.md` Category A. **Promotes the "type-only imports are runtime-clean" claim from source-level grep to empirical built-bundle assertion.** Stronger than the existing source-level invariant guard because it verifies the actual emitted JavaScript that runs on CF Workers / Bun / Deno. (#arch-gaps-implementation)
