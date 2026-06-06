@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation Phase 6 — Full-suite empirical sweep + T5a.2 dedicated plan)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 6 + Phase 5a SHAPE refactor deferral. Captures empirical evidence from a full-suite test sweep AND ships the dedicated plan doc for the T5a.2 multi-session work. (#arch-gaps-implementation)
+
+- **Full-suite test sweep ran to completion** — `pnpm vitest run` (entire repo, 12.85 min wall-clock):
+  - **3831/3890 GREEN + 27 skipped + 32 failed across 14/472 files = 98.5% pass rate.**
+  - **Typecheck embedded — exit 0.**
+  - **The 32 failures (~0.8%) decompose into:** (a) 7 documented-RED T1.2 forward specs (`handler-web-standards.test.ts`) that explicitly throw `"intentionally RED until then"` waiting on T5a.2; (b) ~25 pre-existing CLI fixture failures across `cli-build-emits-*` files where the tmp fixture's minimal `package.json` doesn't declare `better-sqlite3` — CLI preflight at `packages/theo/src/cli/preflight-node-version.ts:91` hard-requires it. Test fixture infrastructure issue predating this plan (preflight `29b4bcd`, tests `e761aac` — both months old). NOT plan regressions.
+  - Phase 6 audit (`docs/audit/arch-gaps-phase6-progress-2026-06-06.md`) updated with this empirical row.
+- **`docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` NEW (v1.0)** — dedicated plan for the IncomingMessage→Request SHAPE refactor deferred from T5a.1 per Phase 5a audit Category C:
+  - **8 phases (A-H)** with explicit leaf-first decomposition: Foundation → Header-only leaves → Tracing+observability → Rate-limit+auth → Body parsing → Plugin types+define → Execute pipeline → Integration+tests.
+  - **9-11 sessions estimated** (1-2 sprints per plan v1.2 "Honest limitations").
+  - **Node adapter boundary shim strategy** documented (`adapters/node-web-shim.ts` with `incomingMessageToWebRequest` + `webResponseToServerResponse` + cookie/body normalization).
+  - **In/out of scope** explicitly bounded: `server/http/static.ts` and `server/body-parser.ts` STAY Node-only per ADR-0028 (scope already locked by Phase 5a audit Category B); scanner/build leaves NOT migrating.
+  - **Test infrastructure prerequisites** documented: better-sqlite3 rebuild (verified working 2026-06-06), CLI fixture fix (two options: declare dep in fixture OR add `--skip-native-preflight` flag), Cloudflare credentials for wrangler smoke.
+  - **5 anti-patterns enumerated** to avoid (big-bang refactor, double-break consumers, skip Node shim, executor-before-leaves, tests separate from leaf migrations).
+  - **Validation gates** per phase + final acceptance.
+- **`docs/audit/arch-gaps-phase6-progress-2026-06-06.md`** — updated with empirical full-suite numbers + better-sqlite3 rebuild evidence + pointer to the new T5a.2 plan.
+- **Recommendation for next session (updated):** the post-loop dedicated session has 5 prioritized actions enumerated in the Phase 6 audit, plus a complete T5a.2 plan ready for `/implement` invocation.
+
 ### Changed (Plan theokit-arch-gaps-implementation Phase 6 — Validation gates audit + Dogfood QA readiness)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Final Phase (Dogfood QA). **Closes the autonomous-runnable portion of Phase 6** by executing all validation gates that don't require out-of-loop infrastructure, AND documents the explicit pause conditions that block the full `dogfood full` skill + `loop-architecture-review --mode=full` re-run. (#arch-gaps-implementation)
