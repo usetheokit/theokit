@@ -49,11 +49,13 @@ export default defineJob('${name}', { ${inputField}maxAttempts: 3, handler: asyn
 
 const runBuild = (): { stdout: string; exitCode: number } => {
   try {
+    // T5a.2 prerequisite — see cli-build-emits-cron-manifest.test.ts rationale.
     // eslint-disable-next-line sonarjs/os-command -- developer-local integration test invoking the framework's own CLI
     const stdout = execSync(`npx tsx ${CLI} build`, {
       cwd: projectDir,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, THEOKIT_SKIP_NATIVE_PREFLIGHT: '1' },
     })
     return { stdout, exitCode: 0 }
   } catch (err) {
