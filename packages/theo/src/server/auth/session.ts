@@ -1,6 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-import { getCookie, setCookie, deleteCookie } from '../http/cookies.js'
+import {
+  getCookie,
+  setCookie,
+  deleteCookie,
+  getCookieFromRequest,
+  appendCookieToHeaders,
+  appendDeleteCookieToHeaders,
+} from '../http/cookies.js'
 
 import { encrypt, decrypt } from './crypto.js'
 
@@ -81,18 +88,55 @@ function normalizeSecrets(input: string | string[]): string[] {
   return arr
 }
 
+/**
+ * T5a.2 Phase D slice 3/3 — module-level pure helpers extracted so
+ * `createSessionManager` (IncomingMessage path) and
+ * `createSessionManagerWeb` (Web path) share the same encryption +
+ * dual-key rotation logic without code duplication (sonarjs
+ * no-identical-functions). Both wrappers pass `secrets` + `maxAge`
+ * captured from their respective factory scope.
+ */
+async function encryptSessionEnvelope(
+  data: unknown,
+  secrets: string[],
+  maxAge: number,
+): Promise<string> {
+  const envelope: SessionEnvelope<unknown> = {
+    data,
+    exp: Date.now() + maxAge * 1000,
+  }
+  return encrypt(envelope, secrets[0]) // newest
+}
+
+/**
+ * CR-002 constant-time: try EVERY rotation entry in parallel, then pick
+ * the newest match. Sequential early-exit leaked rotation position via
+ * timing (success on entry 0 returned in ~3 ms; success on entry 4 in
+ * ~15 ms). Running in parallel binds wall-clock to the slowest single
+ * attempt, independent of which entry actually matched. With derived-key
+ * cache (CR-002 in crypto.ts), the CPU multiplier per request is ~0
+ * after the first request per secret.
+ */
+async function decryptSessionWithFallback<TSession>(
+  raw: string,
+  secrets: string[],
+): Promise<{ envelope: SessionEnvelope<TSession>; index: number } | null> {
+  const results = await Promise.all(
+    secrets.map(async (secret, i) => {
+      const env = await decrypt<SessionEnvelope<TSession>>(raw, secret)
+      return env ? { envelope: env, index: i } : null
+    }),
+  )
+  for (const result of results) {
+    if (result) return result
+  }
+  return null
+}
+
 export function createSessionManager<TSession>(config: SessionConfig): SessionManager<TSession> {
   const secrets = normalizeSecrets(config.secret)
   const cookieName = config.cookieName ?? 'theo_session'
   const maxAge = config.maxAge ?? 604800 // 7 days
-
-  async function encryptEnvelope(data: TSession): Promise<string> {
-    const envelope: SessionEnvelope<TSession> = {
-      data,
-      exp: Date.now() + maxAge * 1000,
-    }
-    return encrypt(envelope, secrets[0]) // newest
-  }
 
   function writeCookie(res: ServerResponse, token: string): void {
     setCookie(res, cookieName, token, {
@@ -101,28 +145,6 @@ export function createSessionManager<TSession>(config: SessionConfig): SessionMa
       maxAge,
       path: '/',
     })
-  }
-
-  async function decryptWithFallback(
-    raw: string,
-  ): Promise<{ envelope: SessionEnvelope<TSession>; index: number } | null> {
-    // CR-002 constant-time: try EVERY rotation entry, then pick the newest
-    // match. Sequential early-exit leaked rotation position via timing
-    // (success on entry 0 returned in ~3 ms; success on entry 4 in ~15 ms).
-    // Running in parallel binds wall-clock to the slowest single attempt,
-    // independent of which entry actually matched. With derived-key cache
-    // (CR-002 in crypto.ts), the CPU multiplier per request is ~0 after
-    // the first request per secret.
-    const results = await Promise.all(
-      secrets.map(async (secret, i) => {
-        const env = await decrypt<SessionEnvelope<TSession>>(raw, secret)
-        return env ? { envelope: env, index: i } : null
-      }),
-    )
-    for (const result of results) {
-      if (result) return result
-    }
-    return null
   }
 
   return {
@@ -134,7 +156,7 @@ export function createSessionManager<TSession>(config: SessionConfig): SessionMa
     async getSessionWithMeta(req) {
       const raw = getCookie(req, cookieName)
       if (!raw) return { data: null, meta: { secretIndex: -1, needsReencrypt: false } }
-      const decoded = await decryptWithFallback(raw)
+      const decoded = await decryptSessionWithFallback<TSession>(raw, secrets)
       if (!decoded) return { data: null, meta: { secretIndex: -1, needsReencrypt: false } }
       if (decoded.envelope.exp < Date.now()) {
         return { data: null, meta: { secretIndex: decoded.index, needsReencrypt: false } }
@@ -146,7 +168,7 @@ export function createSessionManager<TSession>(config: SessionConfig): SessionMa
     },
 
     async createSession(res, data) {
-      const token = await encryptEnvelope(data)
+      const token = await encryptSessionEnvelope(data, secrets, maxAge)
       writeCookie(res, token)
     },
 
@@ -159,11 +181,119 @@ export function createSessionManager<TSession>(config: SessionConfig): SessionMa
       if (data === null) return null
       // Fresh IV per encrypt call (Web Crypto guarantee — see crypto.ts)
       // + refreshed expiry. Last write wins for the cookie value.
-      const token = await encryptEnvelope(data)
+      const token = await encryptSessionEnvelope(data, secrets, maxAge)
       writeCookie(res, token)
       return data
     },
   }
+}
+
+/**
+ * T5a.2 Phase D slice 3/3 — Web-Standards session manager.
+ *
+ * Mirror of `SessionManager<TSession>` for the Web `Request` + `Headers`
+ * shape. Same `SessionConfig`, same encryption (`encrypt`/`decrypt` from
+ * `./crypto.js`), same dual-key rotation logic (CR-002 constant-time
+ * decrypt fallback walk + transparent re-encrypt), same OWASP A07
+ * `rotateSession` invariant.
+ *
+ * **Signature differences vs `SessionManager`:**
+ *   - Read methods take `Request` (instead of `IncomingMessage`).
+ *   - Write methods take a `Headers` instance to mutate (instead of
+ *     `ServerResponse`) — caller passes the headers they're building
+ *     for their `Response` constructor.
+ *
+ * Uses `getCookieFromRequest` / `appendCookieToHeaders` /
+ * `appendDeleteCookieToHeaders` from Phase B slice 6/6.
+ */
+export interface SessionManagerWeb<TSession> {
+  getSession(request: Request): Promise<TSession | null>
+  getSessionWithMeta(request: Request): Promise<{ data: TSession | null; meta: SessionMeta }>
+  createSession(target: Headers, data: TSession): Promise<void>
+  destroySession(target: Headers): void
+  rotateSession(request: Request, target: Headers): Promise<TSession | null>
+}
+
+export function createSessionManagerWeb<TSession>(
+  config: SessionConfig,
+): SessionManagerWeb<TSession> {
+  const secrets = normalizeSecrets(config.secret)
+  const cookieName = config.cookieName ?? 'theo_session'
+  const maxAge = config.maxAge ?? 604800 // 7 days
+
+  function writeCookieWeb(target: Headers, token: string): void {
+    appendCookieToHeaders(target, cookieName, token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge,
+      path: '/',
+    })
+  }
+
+  return {
+    async getSession(request) {
+      const { data } = await this.getSessionWithMeta(request)
+      return data
+    },
+
+    async getSessionWithMeta(request) {
+      const raw = getCookieFromRequest(request, cookieName)
+      if (raw === undefined) return { data: null, meta: { secretIndex: -1, needsReencrypt: false } }
+      const decoded = await decryptSessionWithFallback<TSession>(raw, secrets)
+      if (!decoded) return { data: null, meta: { secretIndex: -1, needsReencrypt: false } }
+      if (decoded.envelope.exp < Date.now()) {
+        return { data: null, meta: { secretIndex: decoded.index, needsReencrypt: false } }
+      }
+      return {
+        data: decoded.envelope.data,
+        meta: { secretIndex: decoded.index, needsReencrypt: decoded.index > 0 },
+      }
+    },
+
+    async createSession(target, data) {
+      const token = await encryptSessionEnvelope(data, secrets, maxAge)
+      writeCookieWeb(target, token)
+    },
+
+    destroySession(target) {
+      appendDeleteCookieToHeaders(target, cookieName)
+    },
+
+    async rotateSession(request, target) {
+      const { data } = await this.getSessionWithMeta(request)
+      if (data === null) return null
+      const token = await encryptSessionEnvelope(data, secrets, maxAge)
+      writeCookieWeb(target, token)
+      return data
+    },
+  }
+}
+
+/**
+ * T5a.2 Phase D slice 3/3 — Web-Standards transparent re-encrypt helper.
+ *
+ * Mirror of `rotateIfNeeded(sm, req, res)` for the Web Request + Headers
+ * shape. Reads session via `getSessionWithMeta`; if the cookie was
+ * decrypted with a legacy secret (index > 0), re-issues the cookie with
+ * the newest secret via `createSession(target, data)`.
+ *
+ * **EC-4 honest framing:** unlike the IncomingMessage path where the
+ * timing constraint is "before `res.writeHead` fires", the Web Request
+ * path's constraint is "before the `Response` object is constructed and
+ * returned to the runtime". Caller MUST invoke `rotateIfNeededWeb`
+ * BEFORE building the final `Response(body, { headers: target })` so the
+ * re-encrypted Set-Cookie lands on the wire.
+ */
+export async function rotateIfNeededWeb<TSession>(
+  sm: SessionManagerWeb<TSession>,
+  request: Request,
+  target: Headers,
+): Promise<TSession | null> {
+  const { data, meta } = await sm.getSessionWithMeta(request)
+  if (data !== null && meta.needsReencrypt) {
+    await sm.createSession(target, data)
+  }
+  return data
 }
 
 /**
