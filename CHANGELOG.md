@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T1.1 — plugin scope encapsulation RED tests)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 1 T1.1. TDD-first RED test fixture for the C1 plugin scope encapsulation contract. RED today; turns GREEN once T3.1 (`Object.create(parent)` Fastify-style scope) lands. (#arch-gaps-implementation)
+
+- **`tests/integration/plugin-scope-encapsulation.test.ts`** (NEW, 9 tests — 8 RED + 1 contract note GREEN). Covers RED-1 sibling isolation, RED-2 no parent leak, RED-3 per-scope decoration apply, RED-4 `Object.getPrototypeOf(scope) === parent` invariant, plus 4 BDD scenarios (happy path, validation error on invalid key, **EC-4 edge case** documenting that mutable object decorations propagate through proto chain — DOCUMENTED invariant: plugin authors MUST pass primitives OR `Object.freeze`'d values, error scenario for register-time throws).
+- **`tests/fixtures/plugin-scope-{A,B}/index.ts`** (NEW, 2 fixture plugins decorating the SAME `user` key with different values). Today PluginRunner rejects this via `DuplicateDecorationError` (EC-7); post-T3.1 each plugin gets its own child scope and both registrations succeed.
+- **BREAKING change pre-announced (T3.1):** the current `DuplicateDecorationError` protection in `packages/theo/src/server/plugins/plugin-runner.ts` will be removed in T3.1. Plugin authors who relied on the duplicate-key error as a defensive contract must move to per-plugin namespacing OR scoped decoration access. The migration guide for T3.1 will document the transition; CHANGELOG entry there will mark `Changed (BREAKING)`.
+
 ### Added (Plan theokit-arch-gaps-implementation T0.1 — ADR-0028 multi-runtime strategy locked)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 0 T0.1. Unblocks Phase 5 (C3 closure). (#arch-gaps-implementation)
