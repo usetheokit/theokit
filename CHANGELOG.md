@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 4/6 — CSP report Web sibling)
+
+Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; csp-report.ts is leaf #4 of 6). (#arch-gaps-implementation)
+
+- **`packages/theo/src/server/security/csp-report.ts`** — adds the Web-Standards sibling:
+  - `handleCspReport(req, res, opts): Promise<void>` (existing IncomingMessage) UNCHANGED.
+  - **`handleCspReportRequest(request, opts): Promise<Response>` NEW** — returns Response directly instead of mutating `res`. Same content-type dispatch (legacy `application/csp-report` vs new `application/reports+json`), same normalizers (`normalizeLegacy`, `normalizeNew`), same side-effect loop (extracted into private `dispatchViolations` helper for DRY).
+  - **Body cap handling:** `readBodyFromRequest` pre-checks declared `Content-Length` header; rejects with 413 if > 16 KB. Post-read length check covers cases where header is absent or unreliable. Honest framing in JSDoc: Web Request body streaming has no portable mid-stream rejection primitive across CF Workers / Bun / Deno; CSP reports are < 2 KB typical, well under cap.
+- **`tests/unit/csp-report-request.test.ts` NEW** — 10 RED→GREEN assertions covering:
+  - Legacy `application/csp-report` happy path → 204 + dispatch.
+  - EC-2: `{"csp-report": null}` → 204 no-op.
+  - EC-2: empty `{}` → 204 no-op.
+  - New `application/reports+json` array → 204 + dispatch each entry.
+  - EC-2: entries lacking `body` filtered out.
+  - 415 unsupported content-type.
+  - 400 malformed JSON.
+  - 413 body too large (declared Content-Length cap).
+  - User `onViolation` throw doesn't crash request.
+  - `devtoolsDispatcher` throw doesn't crash request.
+- **Validation:** `pnpm typecheck` exit 0. `pnpm eslint` clean. **26/26 GREEN** combined sweep — 10 new Web + 16 legacy (`csp-report.test.ts` + `csp-report-pipeline.test.ts` integration tests unchanged).
+- **Phase B progress:** **4/6 header-only leaves complete** (csrf.ts + csrf-multi-header.ts + csrf-readiness-endpoint.ts + csp-report.ts). 2 remaining: `cors.ts`, `cookies.ts`.
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.2 Phase B slice 3/6 — CSRF readiness endpoint Web sibling)
 
 Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md` v1.0 § Phase B (header-only leaves; csrf-readiness-endpoint.ts is leaf #3 of 6). (#arch-gaps-implementation)
