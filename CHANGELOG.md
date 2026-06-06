@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T0.1 — ADR-0028 multi-runtime strategy locked)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 0 T0.1. Unblocks Phase 5 (C3 closure). (#arch-gaps-implementation)
+
+- **[ADR-0028](docs/adr/0028-multi-runtime-strategy.md) — Multi-runtime strategy: R3a (Hono Web standards) chosen.** Resolves the blueprint Q3 R3a-vs-R3b deferred decision. Closes C3 (42 `node:*` imports in `server/` vs 6 non-Node adapters in-tree — runtime incoherence per `architecture-output/consolidated_final_report.md`). Rationale: lower long-term cost (R3b's per-preset multiplier is unbounded), bounded blast radius (~42 sites is one-shot), preserves invariants 1+2+3 without new public barrels or dep-cruiser rules, and empirically validated by Hono surprise #3 (adapter complexity is 7-line shims in Web-standards model). Phase 5a in the plan implements `server/http/` → Web `Request`/`Response` migration; Node adapter becomes the boundary shim. BREAKING change for plugins importing `node:*` through TheoApp context (rare today; migration guide required).
+
 ### Security (Plan theokit-arch-gaps-implementation T0.2 — vitest CRITICAL CVE mitigation)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 0 T0.2. Resolves CRITICAL CVE in vitest <4.1.0. (#arch-gaps-implementation)
