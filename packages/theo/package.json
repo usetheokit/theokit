@@ -18,6 +18,10 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
     },
+    "./server/agent": {
+      "types": "./dist/server/agent/index.d.ts",
+      "import": "./dist/server/agent/index.js"
+    },
     "./server/auth": {
       "types": "./dist/server/auth/index.d.ts",
       "import": "./dist/server/auth/index.js"
@@ -30,9 +34,49 @@
       "types": "./dist/server/cron/index.d.ts",
       "import": "./dist/server/cron/index.js"
     },
+    "./server/define": {
+      "types": "./dist/server/define/index.d.ts",
+      "import": "./dist/server/define/index.js"
+    },
+    "./server/http": {
+      "types": "./dist/server/http/index.d.ts",
+      "import": "./dist/server/http/index.js"
+    },
     "./server/jobs": {
       "types": "./dist/server/jobs/index.d.ts",
       "import": "./dist/server/jobs/index.js"
+    },
+    "./server/observability": {
+      "types": "./dist/server/observability/index.d.ts",
+      "import": "./dist/server/observability/index.js"
+    },
+    "./server/plugins": {
+      "types": "./dist/server/plugins/index.d.ts",
+      "import": "./dist/server/plugins/index.js"
+    },
+    "./server/rate-limit": {
+      "types": "./dist/server/rate-limit/index.d.ts",
+      "import": "./dist/server/rate-limit/index.js"
+    },
+    "./server/realtime": {
+      "types": "./dist/server/realtime/index.d.ts",
+      "import": "./dist/server/realtime/index.js"
+    },
+    "./server/scan": {
+      "types": "./dist/server/scan/index.d.ts",
+      "import": "./dist/server/scan/index.js"
+    },
+    "./server/security": {
+      "types": "./dist/server/security/index.d.ts",
+      "import": "./dist/server/security/index.js"
+    },
+    "./server/storage": {
+      "types": "./dist/server/storage/index.d.ts",
+      "import": "./dist/server/storage/index.js"
+    },
+    "./server/webhook": {
+      "types": "./dist/server/webhook/index.d.ts",
+      "import": "./dist/server/webhook/index.js"
     },
     "./vite-plugin": {
       "types": "./dist/vite-plugin/index.d.ts",
