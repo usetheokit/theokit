@@ -97,6 +97,13 @@ export type { SerializedResponse } from './serialization.js'
 export { superjsonTransformer, jsonTransformer, resolveTransformer } from './transformer.js'
 export type { TheoTransformer } from './transformer.js'
 
+// T5a.2 Phase A — Web-Standards entry-point (R3a per ADR-0028). Accepts
+// a native Web Request and returns a native Web Response. Narrow scope:
+// method dispatch + Zod validation + envelope-shaped errors. Plugin
+// runner / CSRF / CORS / middleware integration deferred to Phase B-G
+// per docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md.
+export { executeWebRequest } from './web-handler.js'
+
 // Plugin types (used by definePlugin + extension authors)
 export type {
   TheoPlugin,
