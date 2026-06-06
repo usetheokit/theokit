@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T2.6 — M6 vite-plugin/index.ts boy-scout refactor)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.6. Pure structural refactor; ZERO behavior change. Closes M6 mecânico (vite-plugin/index.ts 635 LOC with `T2.1-T2.3 architecture-medium-deferrals` marker admitting refactor was incomplete). **CLOSES PHASE 2 (mecânicos M1-M6).** (#arch-gaps-implementation)
+
+- **`packages/theo/src/vite-plugin/index.ts`** 635 LOC → **379 LOC** (40% reduction, below the < 400 LOC target). Becomes orchestrator threading state into 4 extracted hook bodies.
+- **4 NEW sibling extraction files** (each owns one Vite hook body):
+  - `config-hook.ts` (~110 LOC) — `config()` body: optimizeDeps + warmup + services proxy + alias cascade.
+  - `transform-html-hook.ts` (~60 LOC) — `transformIndexHtml` body: 3-step injection sequence (entry-client → devtools → stylesheets) in canonical order.
+  - `virtual-modules-hook.ts` (~95 LOC) — `resolveId` + `load` dispatcher for the 5 framework virtual modules + devtools virtual.
+  - `configure-server-hook.ts` (~190 LOC) — `configureServer` body: middleware registration, ws subscriptions, watcher handlers, dev-mode OpenAPI re-emit, WS upgrade.
+- **State-sharing pattern**: `isDevMode` becomes `const isDevModeRef = { value: false }` so the boolean mutation in `configureServer` (sets `value = true`) is observable across the `transformIndexHtml` boundary without losing identity (hooks fire in arbitrary order — the ref struct is the canonical Vite plugin idiom for cross-hook state).
+- **EC-10 (Vite hook ordering side effects) HONORED:** every extracted body preserves the ORIGINAL invocation order — middleware `createActionMiddleware` BEFORE `createApiMiddleware`, `server.ws.on('theo:devtools:request-manifest')` BEFORE handler/HMR watchers, OpenAPI re-emit AFTER frontend HMR watcher registration, WS upgrade AFTER all watchers, shutdown cleanup AFTER everything. Documented inline in `configure-server-hook.ts` JSDoc.
+- **Imports cleaned in index.ts**: removed `existsSync`, `basename`, `broadcastRouteManifest`, `generateEntryServer`, `generateEntryClient`, `generateRouteManifest`, `scanRoutes`, `isRouteFile`, `CsrfReadinessStore`, `createActionMiddleware`, `createApiMiddleware`, `injectDevtoolsScript`, `DEVTOOLS_VIRTUAL_ID`, `DEVTOOLS_RESOLVED_ID`, `injectEntryClient`, `injectStylesheets`, `setupSsrDevMiddleware`, `setupWsUpgrade`, `buildServicesProxyConfig` — all moved into their respective hook extractions.
+- **Validation:** `pnpm typecheck` exit 0 (clean). `pnpm vitest run tests/unit/vite-plugin-*.test.ts tests/unit/server-routes-hmr.test.ts` → **8 files / 64 tests GREEN**. Lint clean (autofix resolved 5 unused-disable warnings post-extraction).
+- **EC-10 honest framing — dogfood-app dev/build/start full cycle DEFERRED:** plan T2.6 acceptance criteria adds "dogfood-app dev boot + HMR roundtrip + theokit build + theokit start full cycle reproduces comportamento idêntico ao pre-T2.6 (mesma sequence de hook invocations capturada via Vite plugin debug log)". This requires real dev-server execution which is impractical in the autonomous halt-loop (port allocation, network, file watchers across processes). The 64 unit/integration tests cover the hook-shape contract; the full-cycle dogfood is required for Phase 6 Dogfood QA pass.
+
 ### Changed (BREAKING) (Plan theokit-arch-gaps-implementation T2.5 — M1 sub-package exports)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 2 T2.5. Hono-shape adoption per [ADR-0028 blueprint D4](docs/adr/0028-multi-runtime-strategy.md). Closes M1 mecânico (16 `export *` wildcards in `server/index.ts` violated ISP at package surface — 376 transitive exports for consumers wanting 6). (#arch-gaps-implementation)
