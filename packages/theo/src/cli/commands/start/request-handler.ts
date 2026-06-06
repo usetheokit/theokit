@@ -8,9 +8,9 @@
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-import { generateNonce } from '../../server/auth/nonce.js'
-import { sendError } from '../../server/http/send-response.js'
-import { buildSecurityHeaders } from '../../server/security/security-headers.js'
+import { generateNonce } from '../../../server/auth/nonce.js'
+import { sendError } from '../../../server/http/send-response.js'
+import { buildSecurityHeaders } from '../../../server/security/security-headers.js'
 
 import {
   tryServeAction,
@@ -18,13 +18,13 @@ import {
   tryServeCustom404,
   tryServeStatic,
   type RequestHandlerCtx,
-} from './start-handlers.js'
+} from './handlers.js'
 import {
   isSsrRenderResult,
   type SsrRender,
   type SsrRenderResult,
   type SsrRenderStreaming,
-} from './start-ssr-setup.js'
+} from './ssr-setup.js'
 
 export interface RequestHandlerContext {
   buildCtx: (

@@ -39,7 +39,7 @@ cli
   .option('--port <port>', 'Port number')
   .action(async (options: CliOptions) => {
     try {
-      const { startCommand } = await import('./commands/start.js')
+      const { startCommand } = await import('./commands/start/index.js')
       await startCommand({ port: options.port ? Number(options.port) : undefined })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
