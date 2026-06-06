@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation T1.2 — Web Request boundary RED tests)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 1 T1.2. TDD-first RED test fixture for the Web-standards handler boundary that Phase 5a (T5a.1) will implement per [ADR-0028](docs/adr/0028-multi-runtime-strategy.md). Closes Phase 1 (TDD baseline). (#arch-gaps-implementation)
+
+- **`tests/integration/handler-web-standards.test.ts`** (NEW, 8 tests — 7 RED + 1 surrogate PASS). RED-1 handler accepts native `Request` + returns native `Response`; RED-2 handler module source has zero `node:*` imports (surrogate — see EC-5 note); RED-3 response IS instance of native `Response`; RED-4 streaming via `ReadableStream`. BDD: happy path (GET → 200 + JSON), validation error (Zod mismatch → 400), edge case (empty body → 400/422 no crash), error scenario (handler throws → 500 with TheoError envelope post-T4.1).
+- **`tests/fixtures/handler-web-standards/route.ts`** (NEW). Defines GET (zero input, returns JSON) and POST (Zod body schema, greets by name) routes using `defineRoute`. Zero `node:*` imports. Becomes the wrangler dev fixture for Phase 5a acceptance.
+- **EC-5 honest framing recorded:** vitest under Node has `node:*` resolvable — cannot truly prove "no node:* required" in handler runtime. The vitest tests assert SURROGATE properties (Web type identity, source-file content). Real proof comes from `wrangler dev tests/fixtures/handler-web-standards/` returning 200 in Phase 5a CI gate. Documented in file header + plan v1.2 T1.2 acceptance criteria.
+
 ### Added (Plan theokit-arch-gaps-implementation T1.1 — plugin scope encapsulation RED tests)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 1 T1.1. TDD-first RED test fixture for the C1 plugin scope encapsulation contract. RED today; turns GREEN once T3.1 (`Object.create(parent)` Fastify-style scope) lands. (#arch-gaps-implementation)
