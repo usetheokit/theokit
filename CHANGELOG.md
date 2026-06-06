@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation Phase 6 — Validation gates audit + Dogfood QA readiness)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Final Phase (Dogfood QA). **Closes the autonomous-runnable portion of Phase 6** by executing all validation gates that don't require out-of-loop infrastructure, AND documents the explicit pause conditions that block the full `dogfood full` skill + `loop-architecture-review --mode=full` re-run. (#arch-gaps-implementation)
+
+- **`docs/audit/arch-gaps-phase6-progress-2026-06-06.md` NEW** — final progress audit with:
+  - **Validation gates executed in loop:** `pnpm typecheck` exit 0, `pnpm depcruise` exit 0 (327 modules / 987 deps cruised, **zero violations** — confirms ADR-0001 v3 architecture invariants hold), plan-scoped test sweep across 28 files / 274 tests = **267 GREEN + 7 documented-RED** (the 7 are intentional forward-spec tests from T1.2 commit `54bc2e3` `handler-web-standards.test.ts` that explicitly throw `"intentionally RED until then"` waiting on T5a.2 SHAPE refactor — NOT regressions).
+  - **Pre-existing failures categorized:** ~15-16 tests fail with `[theokit preflight] native binding abi mismatch detected (node v22.22.2, abi 127) — better-sqlite3`. Documented Node-version drift, pre-existing for the entire session, NOT caused by this plan. Recovery: `nvm use` + `pnpm rebuild better-sqlite3` per CLAUDE.md "Native bindings discipline" section.
+  - **Task-by-task verdict:** 16/18 plan tasks SHIPPED end-to-end with atomic commits (T0.1 through T5a.1 audit). Phase 6 partially closed via this audit; the `dogfood full` skill + `loop-architecture-review --mode=full` re-run are blocked on out-of-loop infra.
+  - **Out-of-loop pause conditions documented:** `dogfood full` (CLI start blocked by better-sqlite3 ABI; needs real LLM API key + Chrome MCP + real Postgres + Cloudflare credentials per template), `loop-architecture-review --mode=full` (multi-agent pipeline, ~10-30 min dedicated session), CF Workers wrangler smoke (Cloudflare credentials — driver pause condition).
+  - **Recommendations for dedicated post-loop session:** native binding alignment via `nvm use` + `pnpm rebuild`; `dogfood full` with credentials; `loop-architecture-review --mode=full` re-run with goal nota ≥ 4.0/5; T5a.2 IncomingMessage→Request SHAPE refactor (1-2 sprints estimated).
+  - **Completion promise held back honestly per Rules 1 + 3 Inquebráveis:** the driver completion promise is NOT emitted because T5a.2 SHAPE refactor + `dogfood full` health ≥ 70 + `loop-architecture-review` re-run nota ≥ 4.0/5 are all out-of-loop scope. The audit preserves promise discipline rather than emit a false `<promise>` statement.
+
 ### Changed (Plan theokit-arch-gaps-implementation T5a.1 — Phase 5a progress audit + invariant guards)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1. **Documents what's functionally complete vs what remains as multi-session future work, AND adds invariant guards that prevent regression.** (#arch-gaps-implementation)
