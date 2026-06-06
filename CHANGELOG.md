@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation T5a.1 — Phase 5a progress audit + invariant guards)
+
+Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1. **Documents what's functionally complete vs what remains as multi-session future work, AND adds invariant guards that prevent regression.** (#arch-gaps-implementation)
+
+- **`docs/audit/arch-gaps-phase5a-progress-2026-06-06.md` NEW** — comprehensive progress audit categorizing the remaining `node:*` consumers in `packages/theo/src/server/` into:
+  - **Category A — Type-only imports (runtime-clean):** all 24 `node:http` imports today are `import type` — TypeScript erases them at build, so the emitted JS contains zero `node:http` references. CF Workers / Bun / Deno bundlers don't see them. The plan's strict-grep AC#1 ("0 imports node:*") is reframed to distinguish type-only vs runtime imports; the SEMANTIC R3a goal (runtime portability) is satisfied for these files today.
+  - **Category B — Legitimately Node-only at scanner/build/static-file boundary per ADR-0028:** scanners (`scan/*`, `_internal/scan-walker.ts`), build-time manifest writers (`_internal/atomic-write.ts`), boot-time wiring (`http/middleware-runner.ts`, `http/error-pages.ts`), static-file server (`http/static.ts`), cron adapter translators (`cron/adapter-translators.ts`), module loader (`scan/module-loader.ts`), Busboy multipart parser (`body-parser.ts` — Web alternative `body-parser-web.ts` already ships at zero `node:*`). These 16 files are intentionally Node-bound and a future "extract Node adapter" task per ADR-0028 will relocate them to `adapters/node/` rather than rewrite them.
+  - **Category C — IncomingMessage→Request SHAPE refactor (multi-session future work):** the 24 type-only imports represent SHAPE coupling. Migrating to Web `Request`/`Response` shape is the genuine T5a.2 work — plan v1.2 itself documents this as "Massivo. Blast radius alto" + "Pode levar 1-2 sprints". Out-of-loop autonomous scope per driver pause condition (CF Workers credentials required for end-to-end smoke).
+- **`tests/unit/r3a-web-crypto-migration-leaf.test.ts`** — extended with 2 NEW invariant guards that fire on regression:
+  - **Guard 1:** `zero runtime (non-type) node:http imports in server/` — catches any future change that adds `import { X } from 'node:http'` (vs the safe `import type { X } from 'node:http'`).
+  - **Guard 2:** `zero runtime node:* imports in server/ outside the documented Node-only leaves` — uses an explicit allowlist of 16 files (Category B above). Any new file appearing with a runtime `node:*` import OUTSIDE the allowlist is a regression that fails CI. The allowlist is the executable spec of the Node-adapter scope per ADR-0028.
+- **T5a.1 verdict (per audit doc):**
+  - ✅ COMPLETE — `node:crypto` in server/ = 0 (full Web Crypto cutover via T5a.1a-d).
+  - ✅ COMPLETE — `node:http` runtime imports in server/ = 0 (all 24 are type-only).
+  - ✅ COMPLETE — `node:fs/path/url/module` at request hot path = 0 (all remaining consumers are Category B per audit).
+  - ⏳ DEFERRED — IncomingMessage→Request SHAPE refactor (T5a.2; multi-session, out-of-loop autonomous scope).
+  - ⏳ BLOCKED — CF Workers `wrangler dev` smoke (driver pause condition: Cloudflare credentials out-of-loop).
+- **Plan AC#1 reframing proposal for plan v1.3** documented in the audit doc § Reframed Plan AC#1. Recommended split: "0 RUNTIME imports of node:* in server/" (achievable + verified by invariant guard) vs "0 references to node:* in dist/server/*.js after tsup build" (semantic verification on emitted bundles).
+- **Validation:** `tests/unit/r3a-web-crypto-migration-leaf.test.ts` **19/19 GREEN** (15 existing + 4 invariant guards). `pnpm typecheck` exit 0. Audit doc cross-references the 4 prior commits (T5a.1a-d) + the 17 audit tests + the plan v1.2 + ADR-0028.
+
 ### Changed (Plan theokit-arch-gaps-implementation T5a.1d — Web Crypto migration: rate-limit slice 4/N + FULL `node:crypto` cutover in `server/`)
 
 Per plan [`docs/plans/theokit-arch-gaps-implementation-plan.md`](docs/plans/theokit-arch-gaps-implementation-plan.md) v1.2 Phase 5a T5a.1 Task #3. **CLOSES C3 critical for `node:crypto` consumers in `server/`** (8 → 0 over slices T5a.1a-d). Last `node:crypto` import removed from `packages/theo/src/server/`. (#arch-gaps-implementation)
