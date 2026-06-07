@@ -272,6 +272,22 @@ In-loop dogfood evidence: **20 of 22 phases verified GREEN/PARTIAL with caveats
 disclosed** (1, 2, 3, 6, 7, 8, 12, 14, 15, 16, 17 PARTIAL, 18, 19, 20, 22.1, 22.2, 22.3, 22.4, 22.5, 22.6). The remaining 2 phases require resources
 the halt-loop pause-condition contract designates as out-of-loop (E2E Playwright Chrome + HMR visual + Chat LLM + Auth OAuth + DX qualitative + regression whole-suite OOM).
 
+## Quality-gate baseline outside the dogfood scope (this turn iter 58)
+
+Additional package-quality scripts surfaced under `package.json` were run to triangulate the plan's surface against the broader monorepo baseline. None of these are part of the plan's Global DoD; they're recorded here for transparency:
+
+| Script | Result | Plan-introduced? |
+|---|---|---|
+| `pnpm check:naming` (ls-lint) | ✅ PASS | n/a |
+| `pnpm check:secrets` (prevent-secrets.sh) | ✅ PASS | n/a |
+| `pnpm check:templates` (sync-template-versions.mjs) | ✅ PASS — "6 template(s) scanned, no drift" | n/a |
+| `pnpm check:licenses` (scripts/check-licenses.mjs) | ⚠️ FAIL — `khroma@2.1.0` reports "Unknown" license in package.json (transitive of `@theokit/ui`). Actual `license` file in the package contains "The MIT License (MIT)" verbatim — MIT is in the allowlist. **Findings:** upstream `khroma` package.json omits the `license` field; the script's `package.json`-only read misses the LICENSE file. **NOT plan-introduced** (transitive of sibling `@theokit/ui`). | NO |
+| `pnpm check:audit` (pnpm audit --prod --audit-level=high) | ⚠️ FAIL — 1 HIGH CVE in `valibot@0.42.1` (15 paths, all reaching from `@theokit/ui@0.14.0`). **NOT plan-introduced** (transitive of sibling). Tracking-only: `https://github.com/advisories/GHSA-vqpr-j7v3-hqw9`. | NO |
+| `pnpm format:check` (prettier --check) | ⚠️ FAIL — `prettier-plugin-astro` not installed locally. Environment artifact (no `.astro` files in this repo). **NOT plan-introduced.** | NO |
+| `pnpm knip` (unused exports) | ⚠️ FAIL — knip's own deps tree has broken `zod/mini` subpath resolution. Environment artifact in the installed `knip@5.88.1`. **NOT plan-introduced.** | NO |
+
+All 4 ⚠️ findings have evidence chains pointing to pre-existing transitive deps or local tooling environment — none introduced by the plan's commits in `8e553a3..HEAD`. The plan's Global DoD doesn't require these gates; they're recorded here so the next session/human has the complete quality picture without having to re-derive it.
+
 Per the plan's DoD wording — "Dogfood QA PASS — dogfood full health score
 ≥70, zero CRITICAL" — the full skill must run in a session with the
 out-of-loop resources available. This report establishes that the runnable
