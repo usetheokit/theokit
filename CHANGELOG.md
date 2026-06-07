@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — partial dogfood extension: Phases 3 + 19 GREEN — all 6 scaffold templates + publint + attw)
+
+Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` with two more dogfood phases verified in-loop. Goes from 5/22 to 7/22 phases green. (#arch-gaps-implementation)
+
+- **Phase 3 Scaffold ALL Templates:** `pnpm exec tsx packages/create-theo/src/cli.ts scaffold-<tpl> --template=<tpl> --skip-install` exercised every template (`default`, `dashboard`, `api-only`, `postgres`, `saas`) + `--bare` always-works fallback. All 6 scaffolds emit the expected file tree (per-template assets like `db/` + `drizzle.config.ts` for postgres/saas verified). `--skip-install` is the canonical way to test scaffold file emission decoupled from npm publish state (mirrors the forward-pin workaround documented in Phase 2 evidence).
+- **Phase 19 Build Pipeline + Package Validation:**
+  - `npx publint packages/theo` → "All good!" (Global DoD post-T2.5 gate explicitly listed in plan v1.2).
+  - `npx publint packages/create-theokit` → "All good!".
+  - `npx @arethetypeswrong/cli --pack packages/theo` → every sub-path 🟢 across node10 + node16-from-CJS + node16-from-ESM + bundler resolutions (`theokit` root + `theokit/client` + `theokit/react-query` + `theokit/adapters/web-shim` + `theokit/adapters/ws-shim` + every `theokit/server/*`). Zero 🔴.
+- **Cleanup:** scaffold-* directories removed after evidence collection.
+
 ### Added (Plan theokit-arch-gaps-implementation — partial dogfood evidence: Phases 1/2/7/8/22.5 GREEN on real scaffolded my-test)
 
 The DoD gate "Dogfood QA PASS — dogfood full health score ≥70, zero CRITICAL" requires the full 22-phase QA skill. Several phases (E2E Playwright, HMR visual, Chat LLM round-trip, Auth OAuth callbacks, Deploy adapters beyond CF Workers) need out-of-loop resources (Chrome MCP browser, real LLM creds, OAuth provider creds, deploy creds) per halt-loop driver pause condition lines 78-84. Per Rule 3 (extreme honesty), this commit ships an evidence report covering the in-loop runnable subset, with PASS/FAIL/CAVEAT per phase + clean cleanup. (#arch-gaps-implementation)
