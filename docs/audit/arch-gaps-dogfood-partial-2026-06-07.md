@@ -147,6 +147,69 @@ inventory matches the documented contract (postgres + saas add `db/` +
 
 **Aggregate:** 33 tests across 4 files, all GREEN in 1.38s.
 
+### Phase 14 — Env Vars + Error Pages + Rate Limiting + Config (PASS — extended this turn iter 56)
+
+`pnpm vitest run` on the env / rate-limit / error-pages / config suite:
+
+| Test file | Result |
+|---|---|
+| `env-vars.test.ts` | ✅ PASS |
+| `rate-limit.test.ts` | ✅ PASS |
+| `rate-limit-per-route.test.ts` | ✅ PASS |
+| `rate-limit-per-route-web.test.ts` | ✅ PASS (T5a.2 Phase D slice 1/3) |
+| `rate-limit-web.test.ts` | ✅ PASS (T5a.2 Phase D slice 2/3) |
+| `rate-limit-store.test.ts` | ✅ PASS |
+| `fixture-rate-limit.test.ts` | ✅ PASS |
+| `custom-error-pages.test.ts` | ✅ PASS |
+| `error-pages.test.ts` | ✅ PASS |
+| `load-config.test.ts` | ✅ PASS |
+| `define-config.test.ts` | ✅ PASS |
+| `config-schema.test.ts` | ✅ PASS |
+
+**Aggregate:** 101 tests across 12 files, all GREEN in 7.10s.
+
+### Phase 15 + 16 — SSR + WebSocket + Channels (PASS — extended this turn iter 56)
+
+`pnpm vitest run` on the SSR + WebSocket + Channel suite:
+
+| Test file | Result |
+|---|---|
+| `ssr-config.test.ts` | ✅ PASS |
+| `fixture-ssr-streaming.test.ts` | ✅ PASS |
+| `regression-4-ssr-csr-tree-mirror.test.ts` | ✅ PASS |
+| `streaming-ssr.test.ts` | ✅ PASS |
+| `streaming-ssr-web.test.ts` | ✅ PASS (T5a.2 Phase E body parser opt-in) |
+| `start-ssr-resolution.test.ts` | ✅ PASS |
+| `define-websocket.test.ts` | ✅ PASS |
+| `define-websocket-web.test.ts` | ✅ PASS (T5a.2 Phase F slice 3/3) |
+| `define-channel.test.ts` | ✅ PASS |
+| `fixture-define-channel.test.ts` | ✅ PASS |
+| `ws-scan.test.ts` | ✅ PASS |
+| `ws-shim.test.ts` | ✅ PASS |
+
+**Aggregate:** 78 tests across 12 files, all GREEN in 4.73s.
+
+### Phase 20 — Naming + README Integrity (PASS — extended this turn iter 56)
+
+Per Phase 20 acceptance criteria:
+
+| Check | Result |
+|---|---|
+| `package.json#name = "theokit"` | ✅ PASS |
+| `package.json#name = "create-theokit"` (create-theo) | ✅ PASS |
+| CLI cac registered as `cac('theokit')` | ✅ PASS |
+| CLI version `0.1.0-alpha.0` declared | ✅ PASS |
+| `bin: { "theokit": "./dist/cli/index.js" }` | ✅ PASS |
+| Generator imports use `from 'theokit/server'` | ✅ PASS (route, action, ws all verified) |
+| README NOT containing `theo/agent` | ✅ PASS |
+| README NOT containing `theo/react` | ✅ PASS |
+| README NOT containing `Theo Cloud` | ✅ PASS |
+| README NOT containing `theo deploy` | ✅ PASS |
+| README NOT containing `\bdefineAgent\b` (word-boundary) | ✅ PASS — 5 hits are `defineAgentEndpoint` / `defineAgentTool` (valid current APIs), not standalone `defineAgent`. The original dogfood skill grep was non-word-boundary and triggered a false positive; the precise word-boundary check passes. |
+| README contains `theokit` | ✅ PASS (55 occurrences) |
+| README contains `create-theokit` | ✅ PASS (6 occurrences) |
+| README contains `defineRoute` / `theoFetch` / `requireAuth` / `defineWebSocket` | ✅ PASS (all present) |
+
 ### Phase 17 — Generators + Route Listing (PARTIAL — extended this turn iter 55)
 
 Generators tested via `pnpm exec tsx packages/create-theo/src/cli.ts scaffold-gen --bare --skip-install` + symlink to workspace node_modules:
@@ -173,8 +236,8 @@ Sub-paths verified by attw: `theokit` (root) + `theokit/client` + `theokit/react
 
 ## Aggregate verdict
 
-In-loop dogfood evidence: **10 of 22 phases verified GREEN/PARTIAL with caveats
-disclosed** (1, 2, 3, 6, 7, 8, 12, 17 PARTIAL, 19, 22.5). The remaining 12 phases require resources
+In-loop dogfood evidence: **14 of 22 phases verified GREEN/PARTIAL with caveats
+disclosed** (1, 2, 3, 6, 7, 8, 12, 14, 15, 16, 17 PARTIAL, 19, 20, 22.5). The remaining 8 phases require resources
 the halt-loop pause-condition contract designates as out-of-loop.
 
 Per the plan's DoD wording — "Dogfood QA PASS — dogfood full health score
