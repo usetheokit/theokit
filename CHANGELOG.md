@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review structure mode COMPLETE — NOTA 4.0/5.0 ≥ DoD threshold)
+
+Iter 71 drove Phase 6 (report-writer) to completion. `<promise>ARCHITECTURE REVIEW COMPLETE</promise>` emitted. **Headline DoD verdict: media ponderada 4.0/5.0** ≥ 4.0 threshold = **PASS** for structure mode. (#arch-gaps-implementation)
+
+- **`architecture-output/final_report.md`** — 15 sections (12 required + 5a/5b sub-sections + Appendix). Top 3 architectural risks all medium-severity heuristic-tier (FO-10 doc drift, FO-7 test type folder dupe, FO-1 server/ god_folder file-count signal w/ bounded interpretation). Zero critical + zero high findings.
+- **`architecture-output/figures/severity_distribution.svg`** (3.5 KB) — bar chart from folder_observations.
+- **`architecture-output/figures/tree_heatmap.svg`** (8.5 KB) — folder tree colored by finding density.
+- **`architecture-output/adr-suggestions/0001-patch-architecture-doc-v3-2-react-query-and-services-schema-inlined.md`** (3.9 KB MADR 3.0) — addresses FO-10 doc drift.
+- **`architecture-output/adr-suggestions/0002-consolidate-tests-type-and-tests-types-singular-wins.md`** (3.7 KB MADR 3.0) — addresses FO-7 test type folder consolidation.
+- **Quality gates DB:** 3 rows (Phase 1 score=100, Phase 2 score=92, Phase 6 score=95) all `passed`.
+- **DB final counts:** 14 modules + 871 files_inventoried + 13 folder_observations + 2 naming_violations + 5 architectural_findings + 0 cycles + 1 tool_run + 3 quality_gates.
+- **Honest scope:** structure mode covers Phases 1+2+6 only. Phases 3 (principles), 4 (patterns), 5 (dependencies), 5.5 (SOTA) explicitly NOT executed per mode contract — projected 4.1 in full mode per `f819edd` evidence chain. The plan's DoD bullet "Re-run loop-architecture-review --mode=full retorna nota ≥4.0/5" is **PARTIALLY satisfied** (structure mode 4.0 ≥ 4.0); full-mode re-run still pending for the remaining 4 dimensions (a strict superset; structure findings carry through).
+- **Closure summary updated:** `docs/audit/arch-gaps-plan-closure-summary-2026-06-07.md` DoD gate row promoted from ⏳ UNRUN → ✅ PARTIAL PASS (structure mode 4.0).
+
 ### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 2 structure COMPLETE in-loop)
 
 Iter 70 drove Phase 2 (structure-auditor) of the structure-mode arch-review via the structure-auditor agent. **13 folder observations + 2 naming violations + 1 tool_run persisted to DB.** Phase 6 (report-writer) is the only remaining phase for structure mode. (#arch-gaps-implementation)
