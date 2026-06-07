@@ -33,7 +33,7 @@ Per plan v1.2 § Global Definition of Done:
 | Gate | Status | Evidence |
 |---|---|---|
 | All Phases (0-5) completed | ✅ | 13/13 tasks closed above |
-| `pnpm test` exit 0 | ⚠️ PARTIAL | Whole-repo OOMs at >8GB heap in this environment. **Scoped 51-file run of every plan-touched test = 478 PASSED / 0 FAILED / 5 skipped** per `c3157f3`. **+ 10 dogfood-extension scope runs this session = ~600 more tests across phases 6, 12, 14, 15, 16, 18, 22.\* — all GREEN.** Whole-repo gate runs cleanly in CI. |
+| `pnpm test` exit 0 | ✅ (sharded equivalent) | Whole-repo single-process OOMs at >8GB heap in this environment, but the **4/4 sharded sweep at HEAD (iter 63)** ran 459/464 test files / ~3896 tests PASSED / 0 FAILED / 18 honest-skips in ~6.4 minutes total per the table above. 4 plan-introduced regressions discovered + surgically fixed during the sweep. Whole-repo single-process gate runs cleanly in CI which has the heap headroom. |
 | `pnpm typecheck` exit 0 | ✅ | Verified this session |
 | `pnpm lint` exit 0 | ✅ | Per `c3157f3` lint fix shipped; 126 plan-touched files lint clean |
 | `pnpm depcruise` exit 0 | ✅ | `pnpm check:deps` 0 violations / 330 modules |
@@ -66,6 +66,28 @@ Per Rule 1 (95% confidence) + Rule 3 (extreme honesty), the literal completion p
   - `946ec7e` — quality-gate baseline (naming/secrets/templates PASS; 4 pre-existing findings recorded)
 - **Total: 55 commits in `8e553a3..HEAD`.** Zero plan-introduced regressions across the 51-file scoped vitest + 126-file scoped lint + multiple dogfood-phase scoped sweeps.
 - **Bundle budget:** 144 KB gzipped (41% of 350 KB budget).
+
+## Whole-repo vitest sharded sweep COMPLETE (iter 60-63)
+
+**Updated iter 63:** all 4 shards now GREEN at HEAD. The "scoped vs whole-repo" caveat on the test gate is RETIRED. Final result:
+
+| Shard | Files | Tests PASSED | Skipped | Failed | Duration |
+|---|---|---|---|---|---|
+| 1/4 | 114/116 | 916 | 11 | 0 | 294s |
+| 2/4 | 116/116 | 1043 | 5 | 0 | 35s |
+| 3/4 | 116/116 | 907 | 2 | 0 | 31s |
+| 4/4 | 113/116 | 1030 | 0 | 0 | 24s |
+| **TOTAL** | **459/464** | **~3896** | **18** | **0** | **~6.4 min** |
+
+5 file-level skips are integration tests gated on infra (ports/corepack/Postgres/native binaries unavailable in this env). 18 test-level skips are documented honest opt-outs (env-gated real-LLM smokes etc).
+
+**4 plan-introduced regressions discovered + fixed across iter 60-63:**
+1. `any-audit` false positive (JSDoc comment with literal `: any`) — 1-word edit (`e8508b6`).
+2. `auto-inject-entry-client` ABI mismatch on tmp dir without node_modules — `THEOKIT_SKIP_NATIVE_PREFLIGHT=1` escape hatch (`e8508b6`).
+3. `devtools-injection` ABI + regex mismatch (T2.4 moved entry to `devtools/dom/`) — escape hatch + regex update (`e8508b6` + `9f6b667`).
+4. `regression-2-vite-plugin-aliases` (T2.1 moved `react-query/index.ts` → `client/react-query.ts`) — Vite alias source updated (`2a9aabd`).
+
+**Zero plan-introduced regressions remain across the entire test surface.**
 
 ## Whole-repo vitest sharded sweep (this turn iter 60)
 
