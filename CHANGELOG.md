@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed (Plan theokit-arch-gaps-implementation — Vite alias `theokit/react-query` regression from T2.1 — WHOLE-REPO VITEST 4/4 SHARDS GREEN)
+
+Iter 63 finished the whole-repo vitest sweep that iter 60 deferred. All 4 shards run; one more plan-introduced regression discovered + fixed; 0 failures across the entire test surface. (#arch-gaps-implementation)
+
+- **`packages/theo/src/vite-plugin/config-hook.ts:78` alias fix** — T2.1 (M5 lonely folders) moved source from `react-query/index.ts` into `client/react-query.ts` (sibling of `client/index.ts`), but the Vite dev-time alias for `theokit/react-query` still pointed at the old `react-query/index${ext}` path that no longer exists. Fix: update `replacement` to `client/react-query${ext}`. The `package.json` export `./react-query` still points at the build artifact `./dist/react-query/index.{js,d.ts}` and is unaffected. Test `tests/unit/regression-2-vite-plugin-aliases.test.ts` was the canary — now 5/5 GREEN.
+- **Whole-repo vitest sweep (4/4 shards): 459 of 464 test files passed, 0 failed, ~3896 tests PASSED with 18 honest-skips**:
+
+| Shard | Files | Tests PASSED | Skipped | Failed | Duration |
+|---|---|---|---|---|---|
+| 1/4 | 114/116 | 916 | 11 | 0 | 294s |
+| 2/4 | 116/116 | 1043 | 5 | 0 | 35s |
+| 3/4 | 116/116 | 907 | 2 | 0 | 31s |
+| 4/4 | 113/116 | 1030 | 0 | 0 | 24s |
+| **TOTAL** | **459/464** | **~3896** | **18** | **0** | ~6.4 min |
+
+The 5 file-level skips are integration tests gated on infrastructure (ports / corepack / Postgres / native binaries that aren't installable in this env). The 18 test-level skips are documented honest opt-outs (env-gated like real-LLM smokes, native-binding ABI, etc.). **Zero plan-introduced regressions remain across the entire test surface.** Whole-repo `pnpm test` no longer needs the "scoped vs whole-repo" caveat — sharded sweep is the in-loop equivalent.
+
 ### Changed (Plan theokit-arch-gaps-implementation — shard 1/4 sweep now 100% GREEN after 3 plan-introduced regressions surgically fixed)
 
 Closure on the iter 60-62 whole-repo vitest sharding work. Shard 1/4 (116 files / 927 tests, ~25% of the test surface) re-run at HEAD after fixes: **114 passed / 0 failed / 2 skipped — 916 tests PASSED / 0 FAILED / 11 skipped** in 294s. Zero plan-introduced regressions remaining in shard 1's scope. (#arch-gaps-implementation)
