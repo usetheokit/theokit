@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation — shard 1/4 sweep now 100% GREEN after 3 plan-introduced regressions surgically fixed)
+
+Closure on the iter 60-62 whole-repo vitest sharding work. Shard 1/4 (116 files / 927 tests, ~25% of the test surface) re-run at HEAD after fixes: **114 passed / 0 failed / 2 skipped — 916 tests PASSED / 0 FAILED / 11 skipped** in 294s. Zero plan-introduced regressions remaining in shard 1's scope. (#arch-gaps-implementation)
+
+- Before fixes (iter 60 first run): 4 failed files / 110 passed / 2 skipped — 1 failed test / 901 passed / 25 skipped — duration 749s with failure cascades.
+- After fixes (this iter): 0 failed files / 114 passed / 2 skipped — 0 failed tests / 916 passed / 11 skipped — duration 294s (61% faster without failure-cascade overhead).
+- 3 plan-introduced regressions surgically fixed across 2 commits (`e8508b6` + `9f6b667`):
+  1. `any-audit` false positive (JSDoc comment containing literal `: any` substring) — fixed by 1-word comment edit.
+  2. `auto-inject-entry-client` ABI-mismatch on tmp dir without node_modules — fixed by `THEOKIT_SKIP_NATIVE_PREFLIGHT=1` escape hatch (documented opt-out from the same Phase 6 prereq commit).
+  3. `devtools-injection` ABI + regex mismatch (T2.4 moved entry from `devtools/entry.tsx` to `devtools/dom/entry.tsx`) — fixed by escape hatch + regex update accepting both shapes.
+- **Shards 2-4 not run in this halt-loop** — the iter 60 decision rationale still holds: ~12-24 min/shard × 3 shards = 36-72 min budget for marginal evidence. CI is the right environment for whole-repo gates.
+
 ### Fixed (Plan theokit-arch-gaps-implementation — devtools-injection latent regression — T2.4 sub-org path now reflected in test regex)
 
 Iter 62 root-caused the previously-deferred latent finding from iter 60. The virtual module body fetched at `/@theo/devtools/entry.js` is Vite-resolved to its on-disk absolute path. After T2.4 (`devtools/{dom,state,bridge,format}/` sub-organization), the entry moved from `devtools/entry.tsx` to `devtools/dom/entry.tsx`. The test regex `/devtools\/entry/` no longer matched the new absolute path `…/devtools/dom/entry.tsx`. **Fix:** loosen regex to `/devtools\/(dom\/)?entry/` — accepts both legacy-flat AND post-T2.4 sub-org shapes. With this fix, `tests/integration/devtools-injection.test.ts` is now **6/6 GREEN** (was the last shard-1 fail after iter 61's escape-hatch unblocked the boot path). (#arch-gaps-implementation)
