@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 5 dependencies extended in-loop — 0 CYCLES VERIFIED)
+
+Iter 74 drove Phase 5 (dependency-cartographer). 27 dependencies + 12 coupling_metrics + **0 cycles** verified at HEAD. Quality gate Phase 5 = 1.0. Cross-validates `pnpm check:deps` invariant + architecture.md v3.1 INVARIANT #2 "Zero cycles ever (Acyclic Dependencies Principle, Martin 1995 — consensus)". (#arch-gaps-implementation)
+
+- **27 directed module-pair edges** registered from `dependency-cruiser` extraction over 338 files / 1017 raw file-level deps → collapsed to module pairs. Weights range 1 (cache→core) to 59 (vite-plugin→server).
+- **12 coupling metrics** (Robert Martin Ca/Ce/I/A/D + LCOM4):
+  - **Stable foundations:** `core` (Ca=8 Ce=0 I=0.00) + `services` (Ca=5 Ce=0 I=0.00) — textbook Hexagonal/Ports
+  - **Maximally unstable leaves:** `cli` (Ca=0 Ce=7 I=1.00) + `client` (Ca=0 Ce=1 I=1.00) — expected for application entrypoints
+  - **Near Main Sequence (D ≤ 0.20):** cache 0.10, adapters 0.15, server 0.18 — ideal
+  - **Outliers (D > 0.4):** vite-plugin 0.42, client 0.47, core 0.50, router 0.50, services 0.52, cli 0.59, create-theo 0.72 — each with documented rationale (Vite-shim inherent, foundation, etc.)
+- **0 cycles at module level** (NetworkX `simple_cycles` over 12 nodes) + **0 cycles at file level** (dependency-cruiser `circular` count). Cross-validates HEAD-state `pnpm check:deps` 0 violations. Positive observation registered as `architectural_finding #8` (severity_source=consensus).
+- **2 NEW low-severity doc-drift findings (architectural_findings #9 + #10):**
+  - **EXTRA edge:** `config → services` exists at HEAD (`config/schema.ts:3` composes servicesConfigSchema). Permitted by `.dependency-cruiser.cjs` rule `config-may-only-depend-on-core-services`. Under-documented in architecture.md v3.1 narrative.
+  - **MISSING edge:** `adapters → core` declared in architecture.md + dep-cruiser allowlist (forward-compat) but no live import exists; 5 adapters only import config/services/intra-adapter.
+- **Topology match correction:** the plan brief mentioned "19 directed edges" but architecture.md v3.1 actually enumerates 27 when full per-module list is read. Live count **27 = declared 27** with 1 EXTRA + 1 MISSING swap (both low-severity, both registered).
+- **Coverage:** `coverage_pct_total = 1.0` (835/835 effective files); `coverage_pct_deep_read = 0.3844` (321 Phase-4 deep-reads preserved). Above Phase 5 floor 0.70.
+- **Quality gate Phase 5:** score=1.0 / status=passed / coverage_pct=1.0. Verdict consistent with June 5 full-mode 4.0/5 for this dimension.
+
 ### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 4 patterns extended in-loop)
 
 Iter 73 drove Phase 4 (patterns-detective). 29 design_pattern_findings + 2 new architectural_findings registered. **4 honest re-classifications vs June 5 review surfaced — Rule 3 in action.** (#arch-gaps-implementation)
