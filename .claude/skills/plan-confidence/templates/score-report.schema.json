@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plan-confidence.dev/schemas/score-report-v1.json",
+  "title": "Plan-Confidence Score Report",
+  "description": "Canonical schema for /plan-confidence M2 output (v1.1+). Portable: this skill works in any project at .claude/skills/plan-confidence/.",
+  "type": "object",
+  "required": [
+    "plan_slug",
+    "plan_path",
+    "plan_version",
+    "scored_at",
+    "completude_score",
+    "risco_estrutural_score",
+    "active_dimensions",
+    "weight_normalization_factor",
+    "weighted_avg",
+    "hard_caps_triggered",
+    "final_score_after_caps",
+    "verdict",
+    "reasons",
+    "sub_reports"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "plan_slug": { "type": "string", "minLength": 1 },
+    "plan_path": { "type": "string", "minLength": 1 },
+    "plan_version": { "type": "string", "minLength": 1 },
+    "scored_at": { "type": "string", "format": "date-time" },
+    "completude_score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "risco_estrutural_score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "active_dimensions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["completeness", "evidence", "calibration", "structural_risk"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "weight_normalization_factor": { "type": "number", "exclusiveMinimum": 0 },
+    "weighted_avg": { "type": "number", "minimum": 0, "maximum": 100 },
+    "hard_caps_triggered": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "coverage_lt_100",
+          "adr_without_alternatives",
+          "bugfix_without_tdd",
+          "citation_fabricated",
+          "fabricated_citation",
+          "vague_acceptance_criteria",
+          "soft_floor_smell_density_high",
+          "soft_floor_high_deferred_ratio",
+          "soft_floor_low_architecture_compliance"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "final_score_after_caps": { "type": "number", "minimum": 0, "maximum": 100 },
+    "verdict": {
+      "type": "string",
+      "enum": ["SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"]
+    },
+    "reasons": {
+      "type": "object",
+      "required": ["completeness", "evidence", "calibration", "structural_risk"],
+      "additionalProperties": false,
+      "properties": {
+        "completeness": { "$ref": "#/$defs/motivos_list" },
+        "evidence": { "$ref": "#/$defs/motivos_list" },
+        "calibration": { "$ref": "#/$defs/motivos_list" },
+        "structural_risk": { "$ref": "#/$defs/motivos_list" }
+      }
+    },
+    "sub_reports": {
+      "type": "object",
+      "required": ["coverage_matrix", "adr_completeness", "tdd_in_bugfix", "spec_smells"],
+      "properties": {
+        "coverage_matrix": {
+          "type": "object",
+          "required": ["total_gaps", "mapped_gaps", "coverage_ratio", "is_complete"]
+        },
+        "adr_completeness": {
+          "type": "object",
+          "required": ["total_adrs", "with_alternatives", "completeness_ratio"]
+        },
+        "tdd_in_bugfix": {
+          "type": "object",
+          "required": ["total_bugfix_tasks", "with_tdd", "coverage_ratio"]
+        },
+        "spec_smells": {
+          "type": "object",
+          "required": ["total_hits", "by_category", "total_penalty"]
+        },
+        "architecture_compliance": {
+          "type": "object",
+          "required": ["compliance_score", "fallback_to_defaults"],
+          "properties": {
+            "compliance_score": { "type": "number", "minimum": 0, "maximum": 1 },
+            "project_rules_found_count": { "type": "integer", "minimum": 0 },
+            "fallback_to_defaults": { "type": "boolean" },
+            "rules_referenced_in_plan": { "type": "array", "items": { "type": "string" } },
+            "principles_cited": { "type": "array", "items": { "type": "string" } },
+            "has_dod_quality_signal": { "type": "boolean" },
+            "has_size_budget_signal": { "type": "boolean" },
+            "reasons": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "required": ["status", "holdout_count", "holdout_target", "kappa_measured"],
+      "properties": {
+        "status": { "type": "string", "enum": ["PROVISIONAL_v1", "PRODUCTION_v1"] },
+        "holdout_count": { "type": "integer", "minimum": 0 },
+        "holdout_target": { "type": "integer", "minimum": 1 },
+        "kappa_measured": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "motivos_list": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sign", "label", "weight"],
+        "additionalProperties": false,
+        "properties": {
+          "sign": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+          "label": { "type": "string" },
+          "weight": { "type": "number" }
+        }
+      }
+    }
+  }
+}

@@ -34,12 +34,29 @@ A task is **not** complete until all three are present:
 2. **Integration test** — covers the boundary the unit test mocked.
 3. **Runtime metric** — counter, histogram, or log line that lets ops see the new behavior in production. Without observability, the feature is invisible when it breaks.
 
+## Hard gates (pre-loop, at Step 2)
+
+- **Every plan task has an executable RED-test shape** — verified by `skills/implement/scripts/check_tdd_shape.py`. Tasks whose `#### TDD` body contains only prose (no assertion / GWT / `test_<behavior>` literal) BLOCK the halt-loop from starting. Defense in depth against vague plans that slipped past `/plan-confidence`'s `check_criterion_executability`. Failure path: loop back to `cycle-plan` `/plan-improve`.
+
 ## Hard gates (per iteration)
 
 - Test suite green before commit.
 - Linter clean (project-specific — see `rules/code-quality-languages.txt`).
 - No new symbols left dangling (every new function/class has a caller or a test exercising it).
 - CHANGELOG `[Unreleased]` updated (Unbreakable Rule 6).
+
+## Hard gates (per phase boundary — Step 4.7 mini review)
+
+When a commit closes a `## Phase N` of the plan, `skills/implement/scripts/mini_review.py` MUST run BEFORE the halt-loop accepts the next task. Verdict drives:
+
+| Verdict | Trigger | Action |
+|---|---|---|
+| `PHASE_REVIEW_PASS` | No HIGH or BLOCKER findings | Proceed to next phase |
+| `PHASE_REVIEW_NEEDS_FIX` | ≥ 1 HIGH/BLOCKER finding | Halt-loop emits BLOCKED with report path; surface to human; resume via § Step 4 "Resume after recovered blocker" only after fix |
+
+Aggregated checks: phase completeness, diff cohesion (declared scope vs modified files), wiring summary (pillar a non-negotiable across all phase symbols), delta-scoped code-quality (currently SKIP — full audit still runs at Step 5).
+
+Skipping mini review on phase boundary is a documented anti-pattern: design problems compound across phases, and each skipped boundary lets defects propagate into the next phase where they become harder to localize. Plans without `## Phase N` headers cause Step 4.7 to SKIP gracefully (no phases → no boundaries).
 
 ## Hard gates (post-halt-loop, before `IMPLEMENTATION_COMPLETE` is honored)
 
@@ -57,11 +74,10 @@ When the post-halt-loop gate returns `FAIL`, the skill re-invokes `ralph-loop:ra
 
 Contract:
 
-- **Completion promise:** `<promise>VALIDATION_GATE_PASSED</promise>` — asserts `run_validation.py {slug}` re-run in the same iteration exited `0`.
-- **Max iterations:** `5` (fix-mode is refinement; bounded smaller than Step 4).
+- **Completion promise:** `<promise>VALIDATION_GATE_PASSED</promise>` — asserts `run_validation.py {slug}` re-run in the same iteration exited `0`. The loop runs until validation actually passes; never emit this promise on a partial pass.
 - **Pre-flight guard:** verify the Step 4 `ralph-loop.local.md` has `active: false` before invoking; concurrent loops on overlapping state are an anti-pattern.
 - **Per-iteration objective:** fix one (or one root-cause-clustered group of) `check.status == FAIL` per iteration; commit atomically (`fix(validation): …`); re-run `run_validation.py`; emit promise on exit 0 or STOP turn for next iteration.
-- **Forbidden:** disabling/weakening failing tests, lowering coverage thresholds, no-op callers to satisfy pillar (a), hand-edited `.wiring-evidence.json`, ADR-defer of `symbol_fabrication_*` / `dead_code_unallowlisted_*` hard caps.
+- **Forbidden:** disabling/weakening failing tests, lowering coverage thresholds, no-op callers to satisfy pillar (a), hand-edited `.wiring-evidence.json`, ADR-defer of `symbol_fabrication_*` / `dead_code_unallowlisted_*` hard caps, emitting the promise on a `BLOCKED` exit to satisfy a downstream gate.
 
 ## Stop conditions
 
@@ -72,12 +88,13 @@ Contract:
 
 **Step 5.5 — Validation halt-loop:**
 
-- Same check FAIL × 3 consecutive iterations with no observable progress → emit `VALIDATION_GATE_PASSED` with BLOCKED report.
-- `iterations_used >= 5` and at least one check still FAIL → emit `VALIDATION_GATE_PASSED` with BLOCKED report.
+- Same check FAIL × 3 consecutive iterations with **no observable progress** (identical diagnostic, identical failure shape, no new diff direction) → HALT; surface BLOCKED report to the human. **Do NOT emit `VALIDATION_GATE_PASSED`** — the gate did not pass.
 - `code_quality INVALID` (contract itself broken) → HALT immediately; surface to human.
-- Unremediatable `FAIL_HARD` (`symbol_fabrication_*` / `dead_code_unallowlisted_*` cannot be fixed without scope-creeping the plan) → emit promise with BLOCKED report; recommend loop back to `cycle-plan`.
+- Unremediatable `FAIL_HARD` (`symbol_fabrication_*` / `dead_code_unallowlisted_*` cannot be fixed without scope-creeping the plan) → HALT; surface BLOCKED report; recommend loop back to `cycle-plan`. **Do NOT emit the completion promise** — the validation gate has NOT passed.
 
-**Either loop emitting a BLOCKED report blocks downstream:** `/review` and `/release` MUST NOT run until the human resolves the blocker. Honest BLOCKED > false PASS (Unbreakable Rule 3).
+The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation.py` exits `0`. There is no graceful-exit path that emits the promise on a partial pass. Honest BLOCKED > false PASS (Unbreakable Rule 3).
+
+**Either loop emitting a BLOCKED report blocks downstream:** `/review` and `/release` MUST NOT run until the human resolves the blocker.
 
 ## Anti-patterns
 
@@ -98,5 +115,15 @@ Contract:
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Skill: `skills/implement/SKILL.md`
 - Conventions: `rules/architecture.md`, `rules/testing.md`, `rules/loop-engine-convention.md`
+- Macro super-loop: `rules/cycle-roadmap.md` — one cycle-implement run per milestone in the super-loop
 - Upstream: `rules/cycle-plan.md` (plan must reach verdict ≥ SHIPPABLE_WITH_CAVEATS)
 - Downstream: `rules/cycle-code-quality.md` (runs after `IMPLEMENTATION_COMPLETE`)
+- Companion gates against plan vagueness:
+  - Plan-side (heuristic, linguistic): `skills/plan-confidence/scripts/check_criterion_executability.py`
+  - Implement-side (structural, shape detection): `skills/implement/scripts/check_tdd_shape.py`
+- Phase-boundary mini review (Step 4.7):
+  - Orchestrator: `skills/implement/scripts/mini_review.py`
+  - Phase completeness: `skills/implement/scripts/check_phase_completeness.py`
+  - Diff cohesion: `skills/implement/scripts/check_diff_cohesion.py`
+  - Reports persisted at: `knowledge-base/mini-reviews/{slug}-phase{N}-review-{date}.md`
+  - Companion to `cycle-review.md` (final review): mini review runs per-phase; cycle-review runs once at the end. Both must pass for handoff.

@@ -10,6 +10,7 @@ Produce an implementation plan — what to build, how, in what order, with which
 
 - A feature has a defined goal and known prior art (otherwise, run DISCOVER first).
 - A non-trivial bug fix that touches multiple modules.
+- (Optional macro context) — when running inside the `cycle-roadmap` super-loop, `/to-plan` accepts `--milestone M<N>` to persist the milestone ID in the plan frontmatter; `cycle-release` reads this metadata to flip the checkbox post-merge. Plans without `--milestone` are valid (ad-hoc / hotfix work) but skip the post-release flip.
 
 Do NOT trigger PLAN for:
 - Single-line changes (write the code).
@@ -55,9 +56,8 @@ Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requiremen
 
 `/plan-improve` is the only phase of `cycle-plan` that drives an autonomous halt-loop via `ralph-loop:ralph-loop`. It follows the same rigorous template established for `/implement` (per `rules/cycle-implement.md`): pre-flight guard against concurrent ralph-loops, formal stop conditions, post-promise sanity check, anti-patterns enumerated, honest BLOCKED report over false PASS.
 
-- **Completion promise:** `<promise>PLAN_IMPROVED</promise>` — asserts re-run of `run_structural.py` in the emitting iteration shows verdict ≥ `--target`. Step 6 post-promise sanity check re-verifies score-on-disk.
-- **Max iterations:** 20 (canonical). Beyond 30 the plan is structurally broken.
-- **Stop conditions:** see `skills/plan-improve/SKILL.md § Stop conditions` (6 enumerated cases).
+- **Completion promise:** `<promise>PLAN_IMPROVED</promise>` — asserts re-run of `run_structural.py` in the emitting iteration shows verdict ≥ `--target`. Step 6 post-promise sanity check re-verifies score-on-disk. The loop runs until the score on disk reaches the target; partial improvements do not justify emitting the promise.
+- **Stop conditions:** see `skills/plan-improve/SKILL.md § Stop conditions` (6 enumerated cases). When the loop stops without reaching the target, emit a BLOCKED report (no completion promise) and surface the structural blocker to the human.
 - **Hard caps are NOT auto-fixable.** Per § Verdicts, `INVALID` (49) returns to `/to-plan` rewrite — `/plan-improve` MUST NOT iterate trying to lift a hard cap.
 
 A BLOCKED report blocks downstream: `/plan-confidence` MUST NOT honor the plan as SHIPPABLE until the human resolves the blocker.
@@ -89,6 +89,7 @@ A BLOCKED report blocks downstream: `/plan-confidence` MUST NOT honor the plan a
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Skills: `skills/grill-me/SKILL.md`, `skills/to-plan/SKILL.md`, `skills/edge-case-plan/SKILL.md`, `skills/deps-audit/SKILL.md`, `skills/plan-confidence/SKILL.md`, `skills/plan-improve/SKILL.md`
+- Macro super-loop: `rules/cycle-roadmap.md` — defines the `milestone_id` frontmatter contract that plans MAY carry
 - Upstream: `rules/cycle-discover.md` (when prior art is unknown)
 - Downstream: `rules/cycle-implement.md` (consumes the plan with verdict ≥ SHIPPABLE_WITH_CAVEATS)
 - Conventions: `rules/architecture.md`, `rules/testing.md`

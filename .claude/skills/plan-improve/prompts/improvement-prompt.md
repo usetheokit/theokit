@@ -104,7 +104,7 @@ Run the scorer again (Step 1). If improved, continue. If not improved (same or l
 
 - You must run the scorer BEFORE and AFTER each iteration's edits.
 - You must log what you changed per iteration (a brief bullet list per iteration).
-- You must not exceed `{MAX_ITERATIONS}` total iterations.
-- If you hit max iterations without reaching target, emit the promise with an honest status report.
+- The loop has no iteration cap. It runs until EITHER the target verdict is reached on disk (emit the promise) OR a stop condition fires (HALT without promise and surface a BLOCKED report).
+- If no-improvement is detected for 2 consecutive iterations (same score, same `reasons`), do NOT keep iterating speculatively — HALT, surface BLOCKED, do not emit the promise.
 
 Start by running Step 1 now.

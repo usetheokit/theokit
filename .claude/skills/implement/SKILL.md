@@ -3,7 +3,7 @@ name: implement
 description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + quality gates (SOLID, Clean Code, DRY, Design Patterns). Single entry-point for cycle-implement. Use after /to-plan chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `develop`.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill Agent
-argument-hint: "{plan-slug} [--max-iterations 50] [--time-budget 8h]"
+argument-hint: "{plan-slug}"
 ---
 
 # Implement — Plan → Code Halt-Loop
@@ -16,7 +16,7 @@ This skill is **the only phase** of [`cycle-implement`](../../rules/cycle-implem
 
 - Pre-conditions (plan verdict ≥ SHIPPABLE_WITH_CAVEATS; on `develop`; never on `main`)
 - Hard gates (TDD RED phase MUST fail; TDD GREEN MUST pass; wiring triad; validate gate)
-- Stop conditions (3-attempt fail per task; max iterations; environment broken)
+- Stop conditions (3-attempt fail per task; no-progress detection; environment broken; plan-defect halt)
 - Anti-patterns (no TDD-skip, no main commits, no `git checkout`/`git revert`/`git push --force`)
 - Rollback (`git stash` + `git switch`/`--soft reset`, NEVER `--hard`)
 
@@ -123,6 +123,28 @@ Read `knowledge-base/plans/{slug}-plan.md`. Extract:
 - Per-task: Files to edit, TDD section (RED tests), Acceptance Criteria, DoD entries
 - Global DoD entries (test/typecheck/lint/coverage gates + runtime-metric proof targets)
 
+#### 2.1  TDD shape gate (defense in depth — MANDATORY)
+
+Before writing the implementation contract, run:
+
+```bash
+python3 skills/implement/scripts/check_tdd_shape.py --plan knowledge-base/plans/{slug}-plan.md --json
+```
+
+This validates that every task has an executable RED-test shape (assertion API, Given/When/Then, OR `test_<behavior>` literal). Tasks whose `#### TDD` section is missing OR contains only prose cannot drive a TDD RED phase.
+
+Behavior:
+
+| Script exit | Action |
+|---|---|
+| `0` (`all_pass: true`) | Proceed to Step 2.2 (write contract). |
+| `1` (at least one task lacks executable shape) | HALT — do NOT enter the halt-loop. Surface the `blocked_task_ids` to the user with the reason ("no #### TDD section" OR "no executable shape"). Recommend loop back to `cycle-plan` `/plan-improve` to rewrite the affected tasks. |
+| `2` (file not found / parse error) | Surface the script error verbatim. |
+
+This is the **companion gate to `plan-confidence`'s `check_criterion_executability`** (`skills/plan-confidence/scripts/check_criterion_executability.py`). Plan-confidence catches vague Acceptance Criteria at the plan-side; this gate catches vague TDD sections at the implement-side. The two layers exist because the plan-side check is heuristic (linguistic patterns can false-positive); the implement-side check is structural (shape detection from the TDD body). Both must pass for the halt-loop to start.
+
+#### 2.2  Write the implementation contract
+
 Write the ordered task list to `knowledge-base/implementations/{slug}-implementation.md` using `templates/implementation-task-template.md`. This file is the halt-loop's working contract.
 
 ### Step 2.5 — Spawn the SEPA (agent + paired knowledge skill)
@@ -144,20 +166,17 @@ Build the per-invocation driver file:
 
 1. Read `prompts/implementation-prompt.md` and substitute static placeholders:
    - `{PLAN_SLUG}`, `{PLAN_PATH}`, `{IMPLEMENTATION_PATH}`
-   - `{MAX_ITERATIONS}` — default 50 (more than discover-execute because TDD has 3 phases per task; bump to 80 if plan has > 15 tasks)
-   - `{TIME_BUDGET}` — default 8h (configurable; warn at 75%, halt at 100%)
    - Leave `{ITERATION}` for ralph-loop to substitute per iteration.
 2. Write the substituted text to `halt-loop-prompts/implement-{plan-slug}.md` (gitignored).
 
 ### Step 4 — Invoke ralph-loop (shell-safe positional prompt + flags) — MANDATORY
 
-**The halt-loop is the ONLY mode of execution. Driving tasks manually outside of ralph-loop is a contract violation.** The skill exists to wrap a `cycle-plan` output in a long-running TDD halt-loop; bypassing the loop defeats the whole point (audit trail, restart-on-Stop hook, max-iterations safety, promise-marker termination).
+**The halt-loop is the ONLY mode of execution. Driving tasks manually outside of ralph-loop is a contract violation.** The skill exists to wrap a `cycle-plan` output in a long-running TDD halt-loop; bypassing the loop defeats the whole point (audit trail, restart-on-Stop hook, honest stop conditions, promise-marker termination).
 
 Use the Skill tool to invoke `ralph-loop:ralph-loop`:
 
 - Positional prompt (no shell metachars): `Read halt-loop-prompts/implement-{plan-slug}.md and follow its instructions for this halt-loop iteration.`
 - `--completion-promise 'IMPLEMENTATION_COMPLETE'`
-- `--max-iterations N` (matches `{MAX_ITERATIONS}` from Step 3)
 
 Each iteration, ralph-loop replays the short positional prompt; Claude reads the driver file and drives one TDD step.
 
@@ -166,7 +185,7 @@ Each iteration, ralph-loop replays the short positional prompt; Claude reads the
 | Terminal state | Trigger | Skill action |
 |---|---|---|
 | `<promise>IMPLEMENTATION_COMPLETE</promise>` | All tasks status=`committed` OR `blocked` with reason; all DoD checkboxes true | Proceed to Step 5 (validation gate) |
-| `<promise>IMPLEMENTATION_COMPLETE</promise>` with honest BLOCKED report | `iterations_used >= MAX_ITERATIONS` OR time budget exhausted OR same task fails GREEN 3× OR plan-defect halt | Surface BLOCKED tasks to user; do NOT pretend complete |
+| HALT without promise — BLOCKED report surfaced | Same task fails GREEN 3× OR plan-defect halt OR external dependency missing OR HIGH/CRITICAL CVE surfaced during real-tree validation | Surface BLOCKED tasks to user; **NEVER emit the completion promise** — the implementation gate has NOT passed |
 | Ralph-loop cancelled externally (Stop hook removed, user `/cancel`, etc.) | User intervention OR fatal environment failure | **See § "Resume after recovered blocker" below — re-invoke ralph-loop with corrected state. NEVER drive remaining tasks manually.** |
 
 Each iteration executes ONE task's complete TDD cycle:
@@ -177,8 +196,46 @@ Each iteration executes ONE task's complete TDD cycle:
 4. **WIRING phase:** run `python3 skills/implement/scripts/check_wiring.py {symbol-name}` — HALT if any pillar fails
 5. **COMMIT phase:** atomic commit with conventional-commit format (`feat(scope): description`, `fix(scope): description`, etc.) referencing plan task ID
 6. **PROGRESS:** update `.progress-{slug}.json` audit trail
+7. **PHASE BOUNDARY CHECK** (Step 4.7 — see below): if this commit closed a phase, run mini review BEFORE accepting the next task
 
 If a task fails at any phase, the iteration HALTS (no commit), surfaces the failure honestly, and the loop attempts up to 3 retries with revised approach. After 3 attempts, mark task BLOCKED and continue OR escalate to human per stop conditions in cycle rule.
+
+#### Step 4.7 — Phase-boundary mini review (MANDATORY)
+
+After step 6 (PROGRESS), check whether THIS commit closed a `## Phase N` of the plan (last task of the phase is now `committed`). If yes:
+
+```bash
+python3 skills/implement/scripts/mini_review.py \
+  --slug {PLAN_SLUG} \
+  --plan knowledge-base/plans/{PLAN_SLUG}-plan.md \
+  --progress knowledge-base/implementations/.progress-{PLAN_SLUG}.json \
+  --phase N \
+  --project-root . \
+  --output-dir knowledge-base/mini-reviews \
+  --json
+```
+
+The orchestrator aggregates four checks:
+
+| Check | What it asserts |
+|---|---|
+| `phase_completeness` | Every task of phase N has `status=committed`; phase-level DoD non-empty if declared |
+| `diff_cohesion` | Files modified in phase N appear in each task's `#### Files to edit` declaration |
+| `wiring_summary` | `check_wiring.py` PASS for every symbol resolvable from phase files (pillar a non-negotiable) |
+| `code_quality_delta` | `/code-quality` on the phase's file delta (today: SKIP — delta-scoped CQ not implemented; full audit still runs at Step 5) |
+
+**Verdict (severity-aggregated using `/review` vocabulary):**
+
+| Verdict | Trigger | Halt-loop action |
+|---|---|---|
+| `PHASE_REVIEW_PASS` | Max severity ≤ MEDIUM | Proceed to next task in next phase |
+| `PHASE_REVIEW_NEEDS_FIX` | At least one HIGH or BLOCKER finding | **Halt-loop emits BLOCKED** with mini-review report path. Surface to human; do NOT proceed. Resume per § "Resume after recovered blocker" once findings addressed. |
+
+Plans that do NOT structure tasks with `## Phase N` headers cause Step 4.7 to SKIP gracefully — no phase boundary means no mini review. The Step 5 final validation gate still runs.
+
+The report is persisted at `knowledge-base/mini-reviews/{slug}-phase{N}-review-{date}.md`. Even on PASS, MEDIUM/LOW findings are logged for human awareness (carried forward as TODO context for the next phase).
+
+**Why this exists:** without phase-boundary mini reviews, design problems compound across phases — a wrong abstraction in Phase 1 contaminates Phase 2, Phase 3, etc. By the time `/review` (final) runs at the end, fixing it means re-implementing 3 phases. Mini review catches design drift the moment it crosses a story boundary, before it propagates further.
 
 #### Resume after recovered blocker
 
@@ -228,8 +285,6 @@ When Step 5 exits with code `1`, the skill re-invokes `ralph-loop:ralph-loop` wi
    - `{PLAN_SLUG}`, `{PLAN_PATH}`, `{IMPLEMENTATION_PATH}`
    - `{VALIDATION_REPORT_PATH}` — markdown report from Step 5
    - `{VALIDATION_REPORT_JSON_PATH}` — write the JSON output of Step 5 to `halt-loop-prompts/validate-{slug}-report.json` and reference this path (Step 5 captures stdout to this file before Step 5.5 runs)
-   - `{MAX_ITERATIONS}` — default `5` (fix mode is refinement; not bounded by plan task count)
-   - `{TIME_BUDGET}` — inherits the budget remaining from Step 4 (no separate budget)
    - Leave `{ITERATION}` for ralph-loop to substitute per iteration.
 2. Write the substituted text to `halt-loop-prompts/validate-{plan-slug}.md` (gitignored).
 
@@ -237,7 +292,6 @@ When Step 5 exits with code `1`, the skill re-invokes `ralph-loop:ralph-loop` wi
 
 - Positional prompt: `Read halt-loop-prompts/validate-{plan-slug}.md and follow its instructions for this validation-fix iteration.`
 - `--completion-promise 'VALIDATION_GATE_PASSED'`
-- `--max-iterations 5`
 
 **Per-iteration contract** (enforced by the driver):
 
@@ -256,7 +310,7 @@ When Step 5 exits with code `1`, the skill re-invokes `ralph-loop:ralph-loop` wi
 | Terminal state | Trigger | Skill action |
 |---|---|---|
 | `<promise>VALIDATION_GATE_PASSED</promise>` | Re-run of `run_validation.py {slug}` in current iteration exits 0 | Proceed to Step 6 |
-| `<promise>VALIDATION_GATE_PASSED</promise>` with explicit BLOCKED report | `iterations_used >= 5` OR same check FAIL × 3 consecutive iterations OR `code_quality INVALID` OR unremediatable `FAIL_HARD` | Surface BLOCKED to user in Step 6; `/review` and `/release` MUST NOT run |
+| HALT without promise — BLOCKED report surfaced | Same check FAIL × 3 consecutive iterations with no observable progress OR `code_quality INVALID` OR unremediatable `FAIL_HARD` (`symbol_fabrication_*` / `dead_code_unallowlisted_*`) | Surface BLOCKED to user in Step 6; **NEVER emit `VALIDATION_GATE_PASSED`** — the gate has NOT passed; `/review` and `/release` MUST NOT run |
 | Ralph-loop cancelled externally | User intervention OR fatal env failure | Re-invoke per same pre-flight guard once blocker resolved; NEVER drive fixes manually |
 
 The driver enforces: TDD-first applies to new edge cases discovered during fix; commit discipline (`fix(validation): …` conventional format); CHANGELOG `[Unreleased]` updated when fix is consumer-visible; git-safety (no `--no-verify`, no `git checkout`/`revert`/`reset --hard`).
@@ -277,7 +331,7 @@ TDD halt-loop (Step 4): IMPLEMENTATION_COMPLETE / BLOCKED
 
 Validation gate (Step 5 + 5.5): VALIDATION_GATE_PASSED / BLOCKED
   Step 5 (single-shot): PASS / PARTIAL / FAIL
-  Step 5.5 (fix-loop):  not-triggered / converged in K iter / BLOCKED at iter 5
+  Step 5.5 (fix-loop):  not-triggered / converged in K iter / HALTED with BLOCKED report
 
 Final validation verdict:    PASS / PARTIAL / FAIL
 Final code-quality verdict:  PASS / PASS_WITH_CAVEATS / FAIL_SOFT / FAIL_HARD / INVALID
@@ -307,6 +361,8 @@ If EITHER halt-loop emitted a BLOCKED report, Step 6 surfaces BLOCKED at the top
 - **The skill NEVER drives validation fixes manually after Step 5 returns FAIL.** Step 5.5 (validation halt-loop) is the only valid execution mode for fix-mode iteration. Bypassing Step 5.5 to "just patch quickly" reproduces the same anti-pattern the Step 4 loop exists to prevent.
 - **The skill NEVER spawns concurrent ralph-loops on overlapping state.** Step 5.5's pre-flight guard verifies the Step 4 loop's `ralph-loop.local.md` is `active: false` before invocation. Concurrent loops on overlapping state is a documented anti-pattern (`rules/loop-engine-convention.md`).
 - **The skill NEVER emits `VALIDATION_GATE_PASSED` without re-running `run_validation.py` in the same iteration.** The promise asserts a measurable fact (exit code 0); emitting it speculatively (without verification) is fabrication.
+- **The skill NEVER skips Step 4.7 phase-boundary mini review when a phase closes.** If the commit closed a phase, `mini_review.py` MUST run before proceeding to the next phase. Skipping mini review accumulates design debt across phases — defects from one phase propagate into the next and become harder to localize.
+- **The skill NEVER emits `PHASE_REVIEW_PASS` without `mini_review.py` having actually run and written the report.** The verdict is a measurable fact; speculating is fabrication.
 
 ## When to give up honestly
 
@@ -314,20 +370,18 @@ Per `cycle-implement.md § Stop conditions`:
 
 **Step 4 — TDD halt-loop:**
 
-1. Task fails GREEN 3 times → BLOCKED, surface to human
-2. Halt-loop max iterations reached → emit `IMPLEMENTATION_COMPLETE` with honest "tasks N through M remaining"
-3. External dependency missing (DB/service down, library not installed) → halt; surface for human to fix environment
-4. Plan task assumes behavior contradicted by reality (e.g., referenced pattern doesn't actually exist) → halt; loop back to `cycle-plan` for revision
-5. Real-tree validation surfaces a HIGH/CRITICAL CVE on a declared dep (e.g., `pip-audit` / `npm audit` / `govulncheck` / `cargo audit` post-install) → halt; loop back to `cycle-plan` for ADR + dep bump; re-invoke per § Step 4 "Resume after recovered blocker" once the plan is corrected
+1. Task fails GREEN 3 times → HALT; surface BLOCKED to human; **do NOT emit the completion promise**
+2. External dependency missing (DB/service down, library not installed) → HALT; surface for human to fix environment; **do NOT emit the completion promise**
+3. Plan task assumes behavior contradicted by reality (e.g., referenced pattern doesn't actually exist) → HALT; loop back to `cycle-plan` for revision; **do NOT emit the completion promise**
+4. Real-tree validation surfaces a HIGH/CRITICAL CVE on a declared dep (e.g., `pip-audit` / `npm audit` / `govulncheck` / `cargo audit` post-install) → HALT; loop back to `cycle-plan` for ADR + dep bump; re-invoke per § Step 4 "Resume after recovered blocker" once the plan is corrected
 
 **Step 5.5 — Validation halt-loop:**
 
-6. Same check FAIL × 3 consecutive iterations with no observable progress (compare `stderr_tail` between iterations) → emit `VALIDATION_GATE_PASSED` with explicit BLOCKED report
-7. `iterations_used >= 5` and at least one check still FAIL → emit `VALIDATION_GATE_PASSED` with explicit BLOCKED report
-8. `code_quality` verdict `INVALID` (golden-rule missing or allowlist malformed) → HALT immediately; the contract itself is broken — do NOT iterate inside the fix-loop
-9. `code_quality` `FAIL_HARD` with `symbol_fabrication_*` / `dead_code_unallowlisted_*` that genuinely cannot be remediated without scope-creeping the plan → emit `VALIDATION_GATE_PASSED` with BLOCKED report; recommend revising plan in `cycle-plan`
+5. Same check FAIL × 3 consecutive iterations with no observable progress (compare `stderr_tail` between iterations) → HALT; surface BLOCKED report; **do NOT emit `VALIDATION_GATE_PASSED`** — the gate did not pass
+6. `code_quality` verdict `INVALID` (golden-rule missing or allowlist malformed) → HALT immediately; the contract itself is broken — do NOT iterate inside the fix-loop; **do NOT emit the completion promise**
+7. `code_quality` `FAIL_HARD` with `symbol_fabrication_*` / `dead_code_unallowlisted_*` that genuinely cannot be remediated without scope-creeping the plan → HALT; surface BLOCKED report; recommend revising plan in `cycle-plan`; **do NOT emit the completion promise**
 
-Honest BLOCKED > false completion (Unbreakable Rule 3). **"Run out of session context" is NOT a valid halt reason** — the halt-loop's purpose is to span context boundaries via the Stop hook + restart pattern. If the foreground session is exhausting context, the correct response is to let ralph-loop's Stop hook trigger a fresh iteration, NOT to pause and ask the user.
+The completion promises `IMPLEMENTATION_COMPLETE` and `VALIDATION_GATE_PASSED` are emitted EXCLUSIVELY when the gate actually passes — every task `committed` or honestly `blocked` with reason AND `run_validation.py` exiting `0`, respectively. There is no graceful-exit path that emits either promise from a partial state. Honest BLOCKED > false completion (Unbreakable Rule 3). **"Run out of session context" is NOT a valid halt reason** — the halt-loop's purpose is to span context boundaries via the Stop hook + restart pattern. If the foreground session is exhausting context, the correct response is to let ralph-loop's Stop hook trigger a fresh iteration, NOT to pause and ask the user.
 
 In all BLOCKED cases, `/review` and `/release` MUST NOT run until the human resolves the blocker.
 

@@ -1,6 +1,6 @@
 # Validation Halt-Loop Driver Prompt
 
-You are in the post-implementation **VALIDATION FIX loop**, iteration {ITERATION}/{MAX_ITERATIONS}.
+You are in the post-implementation **VALIDATION FIX loop**, iteration {ITERATION}.
 
 Implementation tasks already produced commits on the working branch. `/implement` Step 5 ran `scripts/run_validation.py {PLAN_SLUG}` and got `overall_status = "FAIL"`. Your contract: fix the specific check failures until `run_validation.py` exits 0 (overall `PASS` or `PARTIAL`), then emit `<promise>VALIDATION_GATE_PASSED</promise>`.
 
@@ -8,7 +8,6 @@ Implementation tasks already produced commits on the working branch. `/implement
 **Implementation working contract:** `{IMPLEMENTATION_PATH}`
 **Last validation report (markdown):** `{VALIDATION_REPORT_PATH}`
 **Last validation report (JSON, captured during Step 5):** `{VALIDATION_REPORT_JSON_PATH}`
-**Time budget remaining:** `{TIME_BUDGET}`
 **Progress file:** `.claude/knowledge-base/implementations/.progress-{PLAN_SLUG}.json` (gitignored)
 **SEPA agent file:** `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa.md`
 
@@ -114,21 +113,21 @@ If exit code != 0, do NOT emit the promise. STOP your turn — the Stop hook wil
 
 ## When to give up honestly
 
-Emit the promise WITH a BLOCKED report (never false PASS) if ANY of:
+HALT and surface a BLOCKED report — do NOT emit `<promise>VALIDATION_GATE_PASSED</promise>` — if ANY of:
 
-- `iterations_used >= {MAX_ITERATIONS}` and at least one check still FAIL.
 - The same check (same `name`) is FAIL for 3 consecutive iterations with no observable progress (compare `stderr_tail` between iterations).
 - A `code_quality` `FAIL_HARD` with `symbol_fabrication_*` or `dead_code_unallowlisted_*` that you genuinely cannot remediate without scope-creeping beyond the plan.
+- A `code_quality` `INVALID` (contract itself broken) — HALT immediately.
 - An external dependency unavailable for fix (e.g., test fixture file deleted, CI tool absent).
 
-In all four cases, the response BODY must include:
+In all cases, the response BODY must include:
 
 ```
 BLOCKED checks (validation gate NOT passed):
   - <check.name>: <last stderr_tail summary> [<iterations-stuck>]
   - ...
-Reason for emitting promise without PASS: <one-line explicit reason>
+Reason for HALT: <one-line explicit reason>
 Recommended next step: <human action required>
 ```
 
-THEN emit the marker on its own line. The downstream `/implement` Step 6 will surface BLOCKED to the user; `/review` and `/release` MUST NOT run. Honest BLOCKED > false completion (Unbreakable Rule 3).
+Do NOT emit the promise marker. The promise `<promise>VALIDATION_GATE_PASSED</promise>` is emitted EXCLUSIVELY when `run_validation.py` re-run in the current iteration exits 0. There is no graceful-exit path that emits the promise from a partial pass. The downstream `/implement` Step 6 will surface BLOCKED to the user; `/review` and `/release` MUST NOT run. Honest BLOCKED > false completion (Unbreakable Rule 3).

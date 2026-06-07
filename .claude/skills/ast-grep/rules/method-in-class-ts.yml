@@ -1,0 +1,18 @@
+id: method-in-class-ts
+language: typescript
+severity: info
+message: |
+  Find every method declaration inside any class body.
+  Returns the full method (signature + body), with line range
+  pointing to the enclosing class. Useful for listing the surface
+  of a target class (e.g., Project A's `Memory`) without reading the whole file.
+
+  Customize: add a constraint inside `all:` to filter by method name, e.g.
+    all:
+      - kind: method_definition
+      - inside: { kind: class_body }
+      - has: { pattern: 'add($$$)' }
+rule:
+  kind: method_definition
+  inside:
+    kind: class_body

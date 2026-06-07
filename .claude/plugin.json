@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "plan",
+  "version": "1.0.0",
+  "description": "Stack/domain-agnostic 4+1 cycle planning ecosystem (DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW + AUTO-PLAN orchestrator) for Claude Code. Skills + rules + hooks + commands compose into an unbreakable chain from idea to merge, with TDD discipline, wiring triad enforcement, and honesty gates.",
+  "author": "planning-ecosystem",
+  "license": "MIT",
+  "keywords": ["planning", "tdd", "code-review", "discovery", "halt-loop", "cycle", "agnostic"],
+  "requires": {
+    "claudeCode": ">=1.0.0",
+    "plugins": ["ralph-loop"]
+  },
+  "_comment_": "This repository is dual-mode: (1) standalone — open the directory directly in Claude Code; settings.json + hooks/* + skills/* + rules/* + commands/* work as-is; (2) plugin — install via marketplace; Claude Code reads plugin.json and wires the same components under the plugin namespace. Both modes share the same source; nothing per-mode."
+}
