@@ -122,6 +122,45 @@ inventory matches the documented contract (postgres + saas add `db/` +
 `drizzle.config.ts`; api-only adds no app router pages; bare strips every
 `@theokit/*` dep keeping only `theokit` itself).
 
+### Phase 6 — Cookie Helpers (PASS — extended this turn iter 55)
+
+`pnpm vitest run tests/unit/cookies.test.ts tests/unit/cookies-web.test.ts tests/unit/cookies-parse.test.ts`:
+
+| Test file | Result |
+|---|---|
+| `cookies.test.ts` | ✅ PASS |
+| `cookies-web.test.ts` | ✅ PASS (T5a.2 Phase B slice 6/6 — Web-shaped helpers via `appendCookieToHeaders`/`getCookieFromRequest`) |
+| `cookies-parse.test.ts` | ✅ PASS |
+
+**Aggregate:** 37 tests across 3 files, all GREEN in 1.03s.
+
+### Phase 12 — Typed Client + Serialization (PASS — extended this turn iter 55)
+
+`pnpm vitest run` on the typed-client suite:
+
+| Test file | Result |
+|---|---|
+| `app-client-proxy.test.ts` | ✅ PASS (G1 Proxy facade) |
+| `theo-fetch-batched.test.ts` | ✅ PASS (G1 batch RPC) |
+| `theo-fetch-envelope.test.ts` | ✅ PASS (G5 envelope client-side translation) |
+| `app-client-error-propagation.test.ts` | ✅ PASS (cross-boundary error shape) |
+
+**Aggregate:** 33 tests across 4 files, all GREEN in 1.38s.
+
+### Phase 17 — Generators + Route Listing (PARTIAL — extended this turn iter 55)
+
+Generators tested via `pnpm exec tsx packages/create-theo/src/cli.ts scaffold-gen --bare --skip-install` + symlink to workspace node_modules:
+
+| Generator | Result | File created |
+|---|---|---|
+| `theokit generate route users` | ✅ PASS | `server/routes/users.ts` with `import { defineRoute } from 'theokit/server'` |
+| `theokit generate action create-user` | ✅ PASS | `server/actions/create-user.ts` with `import { defineAction } from 'theokit/server'` |
+| `theokit generate page settings` | ✅ PASS | `app/settings/page.tsx` |
+| `theokit generate ws notifications` | ✅ PASS | `server/ws/notifications.ts` with `import { defineWebSocket } from 'theokit/server'` |
+| `theokit routes` listing | ⚠️ CAVEAT | Requires `pnpm install` to resolve `theokit` package alias in `theo.config.ts`. Symlink trick (`node_modules → workspace/node_modules`) works for generators but `routes` command loads config which goes through pnpm's strict package resolution. Documented finding — not a regression. |
+
+Generators contract verified: all 4 emit `from 'theokit/server'` imports (Phase 17 AC).
+
 ### Phase 19 — Build Pipeline + Package Validation (PASS — extended this turn iter 54)
 
 | Tool | Verdict | Evidence |
@@ -134,8 +173,8 @@ Sub-paths verified by attw: `theokit` (root) + `theokit/client` + `theokit/react
 
 ## Aggregate verdict
 
-In-loop dogfood evidence: **7 of 22 phases verified GREEN with caveats
-disclosed** (1, 2, 3, 7, 8, 19, 22.5). The remaining 15 phases require resources
+In-loop dogfood evidence: **10 of 22 phases verified GREEN/PARTIAL with caveats
+disclosed** (1, 2, 3, 6, 7, 8, 12, 17 PARTIAL, 19, 22.5). The remaining 12 phases require resources
 the halt-loop pause-condition contract designates as out-of-loop.
 
 Per the plan's DoD wording — "Dogfood QA PASS — dogfood full health score
