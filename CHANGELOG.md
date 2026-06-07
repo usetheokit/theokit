@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — partial dogfood extension: Phases 18 + 22.1-22.6 GREEN — 20/22 cumulative)
+
+Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` from 14/22 to 20/22 dogfood phases verified in-loop. Only 2 phases remain (Phase 9 E2E Playwright + Phase 10 HMR + Phase 5 chat LLM smoke + Phase 13 Auth OAuth + Phase 11 DX qualitative + Phase 21 full regression — all need out-of-loop resources per halt-loop driver pause conditions). (#arch-gaps-implementation)
+
+- **Phase 18 Deploy Adapters (PASS):** 98 tests across 15 files all GREEN in 7.23s. Covers every adapter unit (cloudflare, vercel, deno, bun, aws-lambda, theo-cloud, universal) + every adapter fixture (cloudflare, vercel, deno, bun, aws-lambda, netlify). **Cloudflare additionally has live HTTP runtime proof** via `tests/integration/wrangler-smoke.test.ts` 3/3 GREEN under Miniflare (per `30a1d12`).
+- **Phase 22.1-22.6 Cross-Validation Features (PASS):** 69 tests across 9 files all GREEN in 6.48s.
+  - **22.1 Route Manifest** — `regression-6-route-manifest-static-imports.test.ts` + `devtools-route-manifest.test.ts`.
+  - **22.2 File Upload (Multipart/FormData)** — `fixture-multipart-upload.test.ts`.
+  - **22.3 Catch-all Routes** — `catchall-routes.test.ts`.
+  - **22.4 Middleware Composável** — `define-middleware.test.ts` + `middleware-composable.test.ts` + `api-middleware-coverage.test.ts`.
+  - **22.5 Structured Logging** — already verified via Phase 8 live prod-server JSON log line + reinforced by 22.4 middleware tests.
+  - **22.6 Audit Log** — `audit-log.test.ts` + `audit-log-wiring.test.ts`.
+
 ### Added (Plan theokit-arch-gaps-implementation — partial dogfood extension: Phases 14 + 15 + 16 + 20 GREEN — 14/22 cumulative)
 
 Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` from 10/22 to 14/22 dogfood phases verified in-loop. (#arch-gaps-implementation)
