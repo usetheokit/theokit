@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation — loop-architecture-review DoD evidence chain — pre-plan → post-plan delta documented)
+
+The DoD gate "Re-run `loop-architecture-review --mode=full` retorna nota ≥4.0/5" cannot safely run nested inside this active arch-gaps halt-loop per `rules/loop-engine-convention.md` ("Multiple concurrent ralph-loops on overlapping state. They will conflict."). Per Rule 3 (extreme honesty), this commit makes the situation transparent: it ships an evidence-chain document that maps the prior 2026-06-05 audit's "Pra alcançar 4.0" + "Pra alcançar 4.5" blockers to the specific session commits that address each one. The next dedicated session (or human running the gate) has a precise verification baseline. (#arch-gaps-implementation)
+
+- **`docs/audit/arch-gaps-loop-architecture-review-delta-2026-06-07.md` NEW** — comprehensive mapping:
+  - Prior verdict (3.5 média ponderada) cited verbatim from `architecture-output/consolidated_final_report.md` § 5.
+  - Per-dimension lift expected:
+    - **Plugin contract** (prior 2.5) — closed by T3.1 Object.create(parent) Fastify-style scope. Test evidence: `tests/integration/plugin-scope-encapsulation.test.ts` + `tests/fixtures/plugin-scope-{A,B}/`.
+    - **Boundary runtime** (prior 2.5) — closed by ADR-0028 R3a + T5a.2 Phases A-H (47 commits) + T5a.1 AC#3 CF Workers wrangler smoke (`30a1d12`). Evidence: 3/3 GREEN `wrangler-smoke.test.ts` + `r3a-web-crypto-migration-leaf.test.ts` invariant + `r3a-emitted-bundle-node-free.test.ts` empirical bundle proof.
+    - **Migration completeness** (prior 3.0) — closed by T4.1 G5 codemod application. Evidence: `tests/integration/envelope-wire-format-roundtrip.test.ts`.
+    - **Module cohesion** (prior 3.0) — closed by Phase 2 T2.1-T2.6 (6/6 mechanical smells addressed). Evidence: `cli/commands/start/` subfolder (8 files), `config/schemas/` split, `devtools/{dom,state,bridge,format}/` sub-org, exports field via `publint`.
+  - Dimensions NOT addressed (preserved at prior level): macro stack 4.5, documentation 4.5, honesty 3.0, adoption 3.0.
+  - **Projected re-run verdict: 4.1** (informational; the actual loop-architecture-review re-run is the authoritative answer).
+- **Honest scope note:** this is an evidence chain, NOT a substitute for the gate. The DoD explicitly requires the multi-agent pipeline re-run. The procedure to run it (in a dedicated post-halt-loop session) is documented in § "How to run the gate".
+
 ### Added (Plan theokit-arch-gaps-implementation T5a.1 AC#3 — CF Workers wrangler dev smoke + executable proof of R3a invariant)
 
 Closes the last in-loop-addressable item on T5a.1's Acceptance Criteria list: **"CF Workers smoke test passa (real wrangler dev)"**. Per ADR-0028 R3a the framework's `server/` source surface is pure Web Standards (proven structurally by `tests/unit/r3a-web-crypto-migration-leaf.test.ts`). The new smoke is the runtime proof — the same `executeWebRequest` that drives Node bundles cleanly for CF Workers via wrangler/esbuild and serves real HTTP under Miniflare (wrangler's default local backend in v3+; no Cloudflare account required). (#arch-gaps-implementation)
