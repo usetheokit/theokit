@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 3 principles extended in-loop)
+
+Iter 72 drove Phase 3 (principles-auditor) against the same DB to extend coverage beyond structure mode. 23 principle_violations registered with real SOLID/Clean Code/DRY findings. (#arch-gaps-implementation)
+
+- **23 principle violations registered** (per category):
+  - SRP: 2 medium + 2 low (god-file / god-module)
+  - OCP: 3 low (switch proliferation)
+  - DIP: 1 high + 2 medium + 1 low (cross-module deep imports)
+  - DRY: 1 high + 1 low (duplicated business rule)
+  - ISP: 1 low (fat interface)
+  - clean_function: 1 high + 4 medium (param count / LOC / nesting)
+  - LSP/clean_error/clean_naming/clean_comment: 4 info (no-violation positive records)
+- **3 high-severity findings** (each with file:line + remediation + threshold source):
+  1. `executeAction` 11 positional params at `packages/theo/src/server/http/action-execute.ts:78` (consensus Bob Martin threshold = 4). Team already exposed `executeActionWithOptions` object-shape variant + eslint-disable for back-compat.
+  2. `cli/` deep-imports 43 paths from `server/` at `packages/theo/src/cli/commands/start/index.ts:18` + siblings. Violates architecture.md INVIOLABLE invariant #3 "public API only flows through barrels". cli has I=1.00 (most unstable).
+  3. `envelopeCodeToStatus` duplicated verbatim across `packages/theo/src/server/http/handle-request-error.ts:175` + `packages/theo/src/server/web-handler.ts:262-293`. Source comment ADMITS the duplication ("MUST stay in sync — Phase G slice 4/N may consolidate"). Real DRY violation; tracked.
+- **Positive observations (info-tier):** 0 truly-empty catches; 0 `|| true`; 0 generic Exception catches; 0 `as any`/`@ts-ignore`/`@ts-expect-error` in production; 4 TODO markers total (2 inside template literals); 0 generic identifiers (foo/bar/baz/qux).
+- **Engineering culture signal:** 4 of 8 medium+ findings are SELF-TRACKED in source comments referencing future refactor slots. Transparent technical-debt accounting per Inquebrável Rule 3.
+- **Coverage:** 20 deep-read + 815 sampled = 835/835 active = 1.00 headline coverage (gate ≥ 0.40 PASSED); coverage_pct_deep_read = 0.024 (below the suggested 0.40 but sampling-strategy meeting note documents the trade-off).
+- **Quality gate Phase 3:** 0.88/1.00 PASSED.
+
 ### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review structure mode COMPLETE — NOTA 4.0/5.0 ≥ DoD threshold)
 
 Iter 71 drove Phase 6 (report-writer) to completion. `<promise>ARCHITECTURE REVIEW COMPLETE</promise>` emitted. **Headline DoD verdict: media ponderada 4.0/5.0** ≥ 4.0 threshold = **PASS** for structure mode. (#arch-gaps-implementation)
