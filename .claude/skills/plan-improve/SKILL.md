@@ -3,7 +3,7 @@ name: plan-improve
 description: Iteratively improve a /to-plan plan's M2 score by applying deterministic fixes + LLM-driven semantic fixes via a ralph-loop-style autonomous iteration. Use after /plan-confidence returns a verdict below SHIPPABLE_WITH_CAVEATS (NON_SHIPPABLE or INVALID) and you want the system to attempt auto-improvement before human intervention.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
-argument-hint: "{plan-slug} [--target SHIPPABLE_WITH_CAVEATS] [--max-iterations 20]"
+argument-hint: "{plan-slug} [--target SHIPPABLE_WITH_CAVEATS]"
 ---
 
 # Plan-Improve — Iterative Score Lifter
@@ -16,7 +16,7 @@ Reads a plan, scores it with `/plan-confidence`, applies deterministic + semanti
 
 ## Cycle contract
 
-This skill is **phase 4** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the source of truth for chain order (invoked when `/plan-confidence` verdict < SHIPPABLE_WITH_CAVEATS; followed by `/plan-confidence` re-score), hard limits (max-iterations, no-improvement detection), anti-patterns (never fabricate ADR alternatives), and rollback. **Read `cycle-plan.md` before invoking this skill.** This SKILL.md retains phase-specific detail (Phase A deterministic fixes, Phase B LLM fixes, fix categories, limitations).
+This skill is **phase 4** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the source of truth for chain order (invoked when `/plan-confidence` verdict < SHIPPABLE_WITH_CAVEATS; followed by `/plan-confidence` re-score), stop conditions (no-improvement detection, hard-cap blockers), anti-patterns (never fabricate ADR alternatives), and rollback. **Read `cycle-plan.md` before invoking this skill.** This SKILL.md retains phase-specific detail (Phase A deterministic fixes, Phase B LLM fixes, fix categories, limitations).
 
 ## When to Trigger
 
@@ -29,13 +29,13 @@ User explicitly invokes `/plan-improve {slug}` after seeing a low score from `/p
 Accept these forms:
 - `/plan-improve {slug}`
 - `/plan-improve {slug} --target SHIPPABLE`
-- `/plan-improve {slug} --max-iterations 30`
 
 Where `{slug}` is the basename of a plan file in `.claude/knowledge-base/plans/` (or auto-detected plans directory).
 
 Defaults:
 - `--target`: `SHIPPABLE_WITH_CAVEATS` (the realistic ceiling per ADR D8 + EC-5)
-- `--max-iterations`: `20` (canonical cap — see § Hard limits; the "Maximum reasonable" of 30 mentioned later is the absolute ceiling beyond which the plan is structurally broken, not the default)
+
+The loop runs until EITHER the target verdict is reached on disk OR a genuine stop condition fires (see § Stop conditions). There is no iteration cap — premature termination would let downstream cycles treat a sub-target plan as improved.
 
 ### Step 2 — Resolve plan path
 
@@ -47,7 +47,6 @@ Read `.claude/skills/plan-improve/prompts/improvement-prompt.md` and substitute:
 - `{PLAN_SLUG}` — the slug
 - `{PLAN_PATH}` — the resolved path
 - `{TARGET_VERDICT}` — target band
-- `{MAX_ITERATIONS}` — iteration limit
 
 ### Step 4 — Pre-flight guard (concurrent-loop safety)
 
@@ -61,7 +60,6 @@ Before invoking ralph-loop, verify `.claude/ralph-loop.local.md` (if present in 
 2. Invoke `ralph-loop:ralph-loop` with:
    - Positional prompt (no shell metachars): `Read .claude/halt-loop-prompts/plan-improve-{plan-slug}.md and follow its instructions for this halt-loop iteration.`
    - `--completion-promise 'PLAN_IMPROVED'`
-   - `--max-iterations N`
 
 The ralph-loop plugin:
 - Writes `.claude/ralph-loop.local.md` (state file)
@@ -89,16 +87,15 @@ After the loop terminates AND sanity check passes:
 
 ## Stop conditions
 
-Emit the promise (per `prompts/improvement-prompt.md`) **with explicit BLOCKED report**, never false PASS, when ANY of:
+HALT and surface BLOCKED report to the human (do NOT emit `<promise>PLAN_IMPROVED</promise>`) when ANY of the following structural blockers fires:
 
-1. `iterations_used >= --max-iterations` and `verdict < --target`.
-2. No-improvement detected for 2 consecutive iterations (same score, same `reasons`).
-3. Hard cap fires that cannot be auto-resolved (INVALID at 49 — `/plan-improve` does NOT fix hard caps per `cycle-plan.md § Verdicts`). HALT, recommend `/to-plan` rewrite.
-4. ADR alternative cannot be credibly proposed by Phase B → leave TODO comment, surface for human.
-5. Coverage Matrix gap cannot be deferred via existing ADR justification → leave TODO comment.
-6. Post-promise sanity check (Step 6) detects score-disk drift → re-invoke OR HALT after 2 retries.
+1. No-improvement detected for 2 consecutive iterations (same score, same `reasons`).
+2. Hard cap fires that cannot be auto-resolved (INVALID at 49 — `/plan-improve` does NOT fix hard caps per `cycle-plan.md § Verdicts`). Recommend `/to-plan` rewrite.
+3. ADR alternative cannot be credibly proposed by Phase B → leave TODO comment, surface for human.
+4. Coverage Matrix gap cannot be deferred via existing ADR justification → leave TODO comment.
+5. Post-promise sanity check (Step 6) detects score-disk drift → re-invoke OR HALT after 2 retries.
 
-In all 6 cases, `cycle-plan` downstream phases MUST NOT proceed treating the plan as auto-improved. Honest BLOCKED > false IMPROVED (Unbreakable Rule 3).
+The promise `<promise>PLAN_IMPROVED</promise>` is emitted EXCLUSIVELY when the score on disk reaches `--target`. There is no path that emits the promise on a partial improvement. In all blocker cases, `cycle-plan` downstream phases MUST NOT proceed treating the plan as auto-improved. Honest BLOCKED > false IMPROVED (Unbreakable Rule 3).
 
 ## Fix categories (4 active in v1)
 
@@ -117,14 +114,13 @@ In all 6 cases, `cycle-plan` downstream phases MUST NOT proceed treating the pla
 - The skill NEVER commits or pushes to git.
 - The skill NEVER emits `<promise>PLAN_IMPROVED</promise>` falsely — Step 6 sanity check enforces.
 - The skill NEVER spawns concurrent ralph-loops on overlapping state (Step 4 pre-flight guard).
-- The loop NEVER iterates beyond `--max-iterations`.
-- If the loop reaches max iterations without target met, the agent emits the promise WITH an honest "remaining issues" report. Forbidden per-iteration practices are enumerated in `prompts/improvement-prompt.md § Invariants you SHALL NOT violate`.
+- The skill NEVER emits the completion promise as a graceful exit from a stop condition — when a blocker fires, the skill HALTS and surfaces a BLOCKED report without promise. Forbidden per-iteration practices are enumerated in `prompts/improvement-prompt.md § Invariants you SHALL NOT violate`.
 
 ## Hard limits
 
-- `apply_fixes.py` is DETERMINISTIC — same input always produces same output. Idempotent: running twice = no second change. Cost: $0.
-- Phase B LLM iterations use the main model (cost depends on plan size and number of ADRs to enrich).
-- Maximum reasonable max-iterations: ~30. Beyond that, the plan is probably structurally broken and needs human intervention.
+- `apply_fixes.py` is DETERMINISTIC — same input always produces same output. Idempotent: running twice = no second change.
+- Phase B LLM iterations use the main model.
+- The loop has no iteration cap; it runs until the target verdict is reached on disk OR a stop condition fires. If many iterations pass without convergence and no-progress is detected, the no-improvement stop condition (see § Stop conditions) HALTS the loop honestly without emitting the promise.
 
 ## Output
 
@@ -135,7 +131,7 @@ When the loop completes:
 Plan: <slug>
 Initial verdict: NON_SHIPPABLE (49.0)
 Final verdict:   SHIPPABLE_WITH_CAVEATS (72.3)
-Iterations:      8 / 20
+Iterations:      8
 
 Changes applied:
   weak_imperatives: 23
@@ -162,4 +158,4 @@ Diff: <git diff against working tree>
 - **Phase A fixes can over-correct.** Replacing "should" with "must" everywhere may make some sentences sound forced ("must consider X" instead of "should consider X"). Acceptable trade-off because the rubric explicitly penalizes "should" as weak.
 - **Phase B (ADR alternatives) depends on LLM judgment.** The loop instructs Claude to leave TODO comments rather than fabricate, but the line between "credible alternative" and "fabricated text" is judgment-call.
 - **Unmapped Coverage Matrix gaps** require either (a) creating new tasks (Phase B doesn't do this — too risky) or (b) marking as deferred (only if a real ADR justifies it). Most unmapped gaps will require human intervention.
-- **Loop terminates** when EITHER target reached OR max-iterations OR no improvement seen in 2 consecutive iterations.
+- **Loop terminates** when EITHER target verdict reached on disk (promise emitted) OR a stop condition fires (HALT without promise — see § Stop conditions).

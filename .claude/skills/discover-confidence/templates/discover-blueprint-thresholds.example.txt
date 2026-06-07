@@ -1,0 +1,23 @@
+# Discover-Blueprint Score Thresholds (TEMPLATE)
+#
+# Copy this file to `.claude/rules/discover-blueprint-thresholds.txt` in your project.
+#
+# Format: <band-name>|<min-score>|<sunset-date>|<adr-ref>
+#
+# Bands (descending):
+#   90+   -> SHIPPABLE              (verde, blueprint pronto para uso)
+#   70-89 -> SHIPPABLE_WITH_CAVEATS (ressalvas explicitas)
+#   50-69 -> NON_SHIPPABLE          (re-execute discovery)
+#   0-49  -> INVALID                (hard cap fired OR very low score)
+#
+# Comparison is >= (inclusive). Score == 70 -> SHIPPABLE_WITH_CAVEATS.
+#
+# Customize cutoffs to your project's calibration. Defaults (90/70/50/0) are
+# SOTA-equivalent from plan-confidence — adjust after your holdout calibration.
+#
+# Sunset = quarterly review. Update sunset + ADR ref when you recalibrate.
+#
+SHIPPABLE|90|2027-01-31|YOUR_ADR_REF
+SHIPPABLE_WITH_CAVEATS|70|2027-01-31|YOUR_ADR_REF
+NON_SHIPPABLE|50|2027-01-31|YOUR_ADR_REF
+INVALID|0|2027-01-31|YOUR_ADR_REF

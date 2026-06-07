@@ -1,10 +1,9 @@
 # Discover-Execute Halt-Loop Driver Prompt
 
-You are mid-discovery, iteration {ITERATION}/{MAX_ITERATIONS}. The user invoked `/discover-execute {PLAN_SLUG}` to drive a deep-research investigation across `.claude/knowledge-base/references/`.
+You are mid-discovery, iteration {ITERATION}. The user invoked `/discover-execute {PLAN_SLUG}` to drive a deep-research investigation across `.claude/knowledge-base/references/`.
 
 **Discovery plan:** `{PLAN_PATH}`
 **Blueprint (in progress):** `{BLUEPRINT_PATH}`
-**Time budget remaining:** {TIME_BUDGET}
 **Progress file:** `.claude/knowledge-base/discoveries/.progress-{PLAN_SLUG}.json` (gitignored)
 
 ## Your contract for this iteration
@@ -108,10 +107,12 @@ You are mid-discovery, iteration {ITERATION}/{MAX_ITERATIONS}. The user invoked 
 
 ## When the loop should give up
 
-If `iterations_used >= {MAX_ITERATIONS}` OR time budget exhausted OR the same question fails twice in a row:
+If the same question fails twice in a row with no observable progress OR a per-project time budget declared inside the discovery plan is exhausted for that project OR a fabricated citation cannot be replaced with a real path:
 
-- Mark all remaining questions as `blocked` with reason "loop exhausted"
+- Mark the affected questions as `blocked` with an explicit reason (e.g., "no-progress after retry", "project time budget exhausted", "fabricated citation, no replacement")
 - Emit `<promise>BLUEPRINT_BLOCKED</promise>` (NOT `BLUEPRINT_COMPLETE`) with the honest blocked-questions report
 - DO NOT pretend the blueprint is complete
 
 `BLUEPRINT_BLOCKED` signals to the ralph-loop wrapper that the loop terminated honestly without satisfying every halt condition. The downstream `/discover-confidence` will catch any structural failure regardless. Honesty over false completion (Unbreakable Rule 3).
+
+The promise `<promise>BLUEPRINT_COMPLETE</promise>` is reserved for genuine satisfaction of every halt condition; there is no graceful-exit path that emits `BLUEPRINT_COMPLETE` from a partial state.

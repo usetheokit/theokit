@@ -1,6 +1,6 @@
 # Discover-Improve Halt-Loop Prompt
 
-You are mid-improvement of a blueprint, iteration {ITERATION}/{MAX_ITERATIONS}. The user invoked `/discover-improve {BLUEPRINT_SLUG}` after `/discover-confidence` returned a verdict below `{TARGET_VERDICT}`.
+You are mid-improvement of a blueprint, iteration {ITERATION}. The user invoked `/discover-improve {BLUEPRINT_SLUG}` after `/discover-confidence` returned a verdict below `{TARGET_VERDICT}`.
 
 **Blueprint:** `{BLUEPRINT_PATH}`
 **Target verdict:** `{TARGET_VERDICT}` (default: `SHIPPABLE_WITH_CAVEATS`, score ≥ 70)
@@ -53,10 +53,11 @@ Correct emission (place exactly this on its own line at end of response):
 
 You may precede the marker with: initial verdict → final verdict, changes applied per category, remaining issues that need human review (don't auto-fix what you can't honestly fix — leave a TODO). The marker must be the last content of the response.
 
-If `iterations_used >= {MAX_ITERATIONS}` OR no-improvement detected for 2 consecutive iterations:
+If no-improvement is detected for 2 consecutive iterations (same score, same `reasons`):
 
-- Emit the promise WITH honest remaining-issues report
-- Do NOT pretend the target was reached
+- HALT this iteration. Do NOT emit `<promise>BLUEPRINT_IMPROVED</promise>` — the target was NOT reached.
+- Write an explicit BLOCKED report listing the remaining issues and why automated improvement is stuck.
+- Surface the BLOCKED report to the human. The completion promise is reserved for genuine target hits on disk.
 
 ## Inviolable rules
 
@@ -65,7 +66,7 @@ If `iterations_used >= {MAX_ITERATIONS}` OR no-improvement detected for 2 consec
 - NEVER modify `.claude/knowledge-base/references/` (boundary-check hook enforces).
 - NEVER fabricate a citation. If a path doesn't exist, mark it BLOCKED and move on.
 - NEVER emit the promise while a hard cap is still active. INVALID verdict cannot be auto-improved past 49 without resolving the underlying structural defect (empty corner / fabricated citation).
-- NEVER iterate beyond `{MAX_ITERATIONS}`.
+- NEVER emit the completion promise as a graceful exit from a stop condition — when a blocker fires, HALT and surface a BLOCKED report without promise.
 - NEVER emit `<promise>BLUEPRINT_IMPROVED</promise>` without re-running `run_blueprint_score.py` in this iteration AFTER your last edit. The promise asserts a measurable fact (verdict ≥ `{TARGET_VERDICT}`); emitting it speculatively (without verification) is fabrication.
 - NEVER spawn a nested ralph-loop inside this iteration. NEVER modify `.claude/ralph-loop.local.md` directly. If you observe `ralph-loop.local.md` with `active: true` referencing a DIFFERENT slug, HALT and surface the conflict.
 
@@ -76,4 +77,4 @@ If a hard cap fires that cannot be resolved without human input:
 - Fabricated citation with no plausible replacement → BLOCKED, recommend `/discover-execute` to re-run that question
 - Empty corner with no relevant existing content → BLOCKED, recommend `/discover-plan` to re-plan or accept lower verdict
 
-Emit the promise with these issues itemized. The user reads the report and decides.
+HALT without emitting the promise. Write a BLOCKED report itemizing the unresolvable issues. The user reads the report and decides. The completion promise is reserved for genuine target hits — emitting it on a blocker would let downstream cycles treat the blueprint as auto-improved.

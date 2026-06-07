@@ -42,6 +42,11 @@ describe('T1.2 — devtools injection (default — devtools enabled)', () => {
   let port: number
 
   beforeAll(async () => {
+    // Phase 6 prereq escape hatch — makeProject() creates a tmp dir
+    // without node_modules, so the native-binding ABI preflight
+    // (preflight-node-version.ts) would fire on `startDevServer`. Tests
+    // don't exercise better-sqlite3; opt out.
+    process.env.THEOKIT_SKIP_NATIVE_PREFLIGHT = '1'
     root = makeProject({})
     server = await startDevServer(root, { port: 0 })
     const addr = (server.httpServer as Server).address()

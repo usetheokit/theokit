@@ -30,7 +30,9 @@ Do NOT invoke when:
 ## Argument parsing
 
 ```
-/auto-plan {topic-slug}                      # FULL pipeline (default): discover → plan → implement → code-quality → review → release
+/auto-plan                                   # ROADMAP-DRIVEN: read ROADMAP.md, pick next eligible milestone
+/auto-plan M<N>                              # ROADMAP-DRIVEN: target specific milestone (M0..M8)
+/auto-plan {topic-slug}                      # AD-HOC: full pipeline with a free-form slug (no roadmap link)
 /auto-plan {topic-slug} --plan-only          # legacy: stop after plan; user runs /implement manually
 /auto-plan {topic-slug} --depth=none         # skip discover; depth is auto-derived from confidence band otherwise
 /auto-plan {topic-slug} --depth=light
@@ -40,7 +42,38 @@ Do NOT invoke when:
 /auto-plan {topic-slug} --force-override     # bypass refusal even at LOW confidence
 ```
 
+**Slug resolution order:**
+
+1. If no arg AND `ROADMAP.md` exists → roadmap-driven mode: select next eligible milestone (see Step 0).
+2. If arg matches `^M[0-8]$` AND `ROADMAP.md` exists → roadmap-driven mode targeting that milestone.
+3. Otherwise → ad-hoc mode with the arg as free-form slug. Emit `INFO ad-hoc: no milestone_id will be persisted; release will skip checkbox flip`.
+
+If no arg AND `ROADMAP.md` is MISSING → refuse with `BLOCKED roadmap-init-required: run /roadmap-init {project-slug} first, or invoke /auto-plan {topic-slug} for ad-hoc work`.
+
 ## Process
+
+### Step 0 — Select milestone (roadmap-driven mode only)
+
+Skip this step in ad-hoc mode.
+
+```bash
+# 0.1  Pick target milestone
+if [ -z "$ARG" ] || [[ "$ARG" =~ ^M[0-8]$ ]]; then
+  TARGET_MILESTONE=$(python3 skills/auto-plan/scripts/select_next_milestone.py \
+    --roadmap ROADMAP.md \
+    ${ARG:+--prefer "$ARG"} \
+    --json)
+fi
+```
+
+`select_next_milestone.py` returns one of:
+
+- `{"milestone_id": "M<N>", "name": "...", "objective": "...", "dod": [...], "depends_on": ["M<K>", ...]}` — picked eligible milestone (lowest ID with all dependencies `[x]`).
+- `{"verdict": "ROADMAP_COMPLETE"}` — every milestone is `[x]`. Refuse to start a new cycle; surface to human: "ROADMAP delivered. Declare V2 or stop."
+- `{"verdict": "ROADMAP_BLOCKED", "wall": [...]}` — `[ ]` milestones remain but each one's dependencies are still `[ ]`. Surface the dependency wall.
+- `{"verdict": "PREFER_NOT_ELIGIBLE", "reason": "..."}` — user passed `M<N>` but `M<N>` is not eligible (already `[x]` OR dependencies not satisfied). Refuse with the reason.
+
+Outputs from this step feed Step 2 (derive depth) and Step 3 (chain execution): `slug` is derived from the milestone name (kebab-case), and the milestone metadata is written into the plan frontmatter in Phase P.
 
 ### Step 1 — Assess confidence (deterministic, ~0 LLM tokens)
 
@@ -84,7 +117,7 @@ Skill(/discover-improve {topic-slug})       # ralph-loop halt-loop
 Skill(/discover-confidence {topic-slug})    # re-score
 ```
 
-For `light` depth: pass time-budget/question-budget hints in the discover plan (instruct `/discover-plan` to target 2-3 questions, ≤ 60min budget).
+For `light` depth: instruct `/discover-plan` to target 2-3 questions per project (narrower scope), so the discovery loop converges on fewer questions.
 
 For `full` depth: standard `/discover-plan` defaults (5-10 questions per `cycle-discover.md v1.1`).
 
@@ -93,12 +126,16 @@ If `/discover-confidence` after improve still < SHIPPABLE_WITH_CAVEATS → halt 
 #### Phase P — Plan (always)
 
 ```
-Skill(/to-plan {topic-slug})
+Skill(/to-plan {topic-slug} [--milestone M<N>])   # --milestone forwarded only in roadmap-driven mode
 Skill(/edge-case-plan {topic-slug})
 # AUTO-INJECT MUST-FIX items into the plan (no AskUserQuestion):
 Bash(python3 skills/auto-plan/scripts/inject_must_fix.py \
        --plan knowledge-base/plans/{slug}-plan.md \
        --edge-cases knowledge-base/reviews/{slug}-edge-cases-*.md)
+# INJECT milestone_id into plan frontmatter (roadmap-driven mode only):
+Bash(python3 skills/auto-plan/scripts/inject_milestone_id.py \
+       --plan knowledge-base/plans/{slug}-plan.md \
+       --milestone-id M<N>)
 Skill(/deps-audit {topic-slug})
 Skill(/plan-confidence {topic-slug})
 # If verdict < SHIPPABLE:
@@ -107,6 +144,8 @@ Skill(/plan-confidence {topic-slug})         # re-score
 ```
 
 `inject_must_fix.py` parses the `## MUST FIX` section of the edge-case report and appends each item as a sub-task (or ADR-deferred note) into the plan. The user does NOT have to absorb them manually. `/plan-confidence` is re-run after injection to validate the augmented plan.
+
+`inject_milestone_id.py` writes the `milestone_id: M<N>` field into the plan's YAML frontmatter (per `cycle-roadmap § Plan metadata contract`). In ad-hoc mode this script is skipped — the plan frontmatter carries no `milestone_id` and `cycle-release` will skip the checkbox flip with WARN.
 
 #### Phase A — Attest (always, post-plan)
 
@@ -216,14 +255,17 @@ This skill is `phase 0` of the super-cycle that orchestrates `cycle-discover` + 
 
 ## Related
 
+- `rules/cycle-roadmap.md` — macro super-loop that delegates one `cycle-auto-plan` run per milestone
 - `rules/cycle-auto-plan.md` — cycle SoT
 - `rules/cycle-discover.md` — discover sub-cycle
 - `rules/cycle-plan.md` — plan sub-cycle
 - `rules/cycle-implement.md` — implement sub-cycle
 - `rules/cycle-code-quality.md` — code-quality sub-cycle
 - `rules/cycle-review.md` — review sub-cycle
-- `rules/cycle-release.md` — release sub-cycle
+- `rules/cycle-release.md` — release sub-cycle (performs the post-merge ROADMAP.md checkbox flip)
 - `commands/plan-goal.md` + `plan-loop.md` — Claude Code primitive composition (alternative autonomy mechanism)
 - `scripts/attest-plan.sh` — attestation post-plan
+- `skills/auto-plan/scripts/select_next_milestone.py` — Step 0 milestone selector (roadmap-driven mode)
+- `skills/auto-plan/scripts/inject_milestone_id.py` — Phase P metadata injector
 - `skills/auto-plan/scripts/inject_must_fix.py` — auto-absorption of MUST-FIX items
 - Inspired by `planning-with-files` v2.43.0 (MIT, OthmanAdi) — autonomous file-based planning pattern, absorbed 2026-05-26

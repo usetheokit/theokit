@@ -3,7 +3,7 @@ name: discover-improve
 description: Iteratively improve a blueprint's discover-confidence score by applying deterministic fixes + LLM-driven semantic fixes via a halt-loop (ralph-loop-style autonomous iteration). Mirrors /plan-improve but for blueprints.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
-argument-hint: "{blueprint-slug} [--target SHIPPABLE_WITH_CAVEATS] [--max-iterations 20]"
+argument-hint: "{blueprint-slug} [--target SHIPPABLE_WITH_CAVEATS]"
 ---
 
 # Discover-Improve — Iterative Blueprint Score Lifter
@@ -32,14 +32,14 @@ Accept:
 
 - `/discover-improve {slug}`
 - `/discover-improve {slug} --target SHIPPABLE`
-- `/discover-improve {slug} --max-iterations 30`
 
 Where `{slug}` is the basename of a blueprint file in `.claude/knowledge-base/discoveries/blueprints/`.
 
 Defaults:
 
 - `--target`: `SHIPPABLE_WITH_CAVEATS` (the realistic ceiling for auto-improvement)
-- `--max-iterations`: `20` (canonical cap — see § Hard limits; the "Maximum reasonable" of 30 mentioned later is the absolute ceiling beyond which the blueprint is structurally broken, not the default)
+
+The loop runs until EITHER the target verdict is reached on disk OR a genuine stop condition fires (see § Stop conditions). There is no iteration cap — premature termination would let downstream cycles treat a sub-target blueprint as improved.
 
 ### Step 2 — Resolve blueprint path
 
@@ -52,7 +52,6 @@ Read `.claude/skills/discover-improve/prompts/improvement-prompt.md` and substit
 - `{BLUEPRINT_SLUG}` — the slug
 - `{BLUEPRINT_PATH}` — the resolved path
 - `{TARGET_VERDICT}` — target band
-- `{MAX_ITERATIONS}` — iteration limit
 
 ### Step 4 — Pre-flight guard (concurrent-loop safety)
 
@@ -66,7 +65,6 @@ Before invoking ralph-loop, verify `.claude/ralph-loop.local.md` (if present in 
 2. Invoke `ralph-loop:ralph-loop` with:
    - Positional prompt (no shell metachars): `Read .claude/halt-loop-prompts/discover-improve-{blueprint-slug}.md and follow its instructions for this halt-loop iteration.`
    - `--completion-promise 'BLUEPRINT_IMPROVED'`
-   - `--max-iterations N`
 
 The ralph-loop plugin:
 
@@ -96,16 +94,15 @@ After the loop terminates AND sanity check passes:
 
 ## Stop conditions
 
-Emit the promise (per `prompts/improvement-prompt.md § When to give up honestly`) **with explicit BLOCKED report**, never false PASS, when ANY of:
+HALT and surface BLOCKED report to the human (do NOT emit `<promise>BLUEPRINT_IMPROVED</promise>`) when ANY of the following structural blockers fires:
 
-1. `iterations_used >= --max-iterations` and `verdict < --target`.
-2. No-improvement detected for 2 consecutive iterations (same score, same `reasons`).
-3. Fabricated citation with no plausible replacement → BLOCKED, recommend `/discover-execute` to re-run the source question.
-4. Empty coverage corner with no relevant content elsewhere → BLOCKED, recommend `/discover-plan` to revise OR accept lower verdict.
-5. Hard cap remains active (INVALID at 49) and cannot be lifted via Phase A or Phase B without scope-creeping → HALT, surface to human.
-6. Post-promise sanity check (Step 6) detects score-disk drift → re-invoke OR HALT after 2 retries.
+1. No-improvement detected for 2 consecutive iterations (same score, same `reasons`).
+2. Fabricated citation with no plausible replacement → recommend `/discover-execute` to re-run the source question.
+3. Empty coverage corner with no relevant content elsewhere → recommend `/discover-plan` to revise OR accept lower verdict.
+4. Hard cap remains active (INVALID at 49) and cannot be lifted via Phase A or Phase B without scope-creeping → surface to human.
+5. Post-promise sanity check (Step 6) detects score-disk drift → re-invoke OR HALT after 2 retries.
 
-In all 6 cases, downstream phases of `cycle-discover` MUST NOT proceed treating the blueprint as auto-improved. Honest BLOCKED > false IMPROVED (Unbreakable Rule 3).
+The promise `<promise>BLUEPRINT_IMPROVED</promise>` is emitted EXCLUSIVELY when the score on disk reaches `--target`. There is no path that emits the promise on a partial improvement. In all blocker cases, downstream phases of `cycle-discover` MUST NOT proceed treating the blueprint as auto-improved. Honest BLOCKED > false IMPROVED (Unbreakable Rule 3).
 
 ## Fix categories (4 active in v1)
 
@@ -128,13 +125,13 @@ In all 6 cases, downstream phases of `cycle-discover` MUST NOT proceed treating 
 - The skill NEVER commits or pushes to git.
 - The skill NEVER emits `<promise>BLUEPRINT_IMPROVED</promise>` falsely — Step 6 sanity check enforces.
 - The skill NEVER spawns concurrent ralph-loops on overlapping state (Step 4 pre-flight guard).
-- The loop NEVER iterates beyond `--max-iterations`. Forbidden per-iteration practices are enumerated in `prompts/improvement-prompt.md § Inviolable rules`.
+- The skill NEVER emits the completion promise as a graceful exit from a stop condition — when a blocker fires, the skill HALTS without promise. Forbidden per-iteration practices are enumerated in `prompts/improvement-prompt.md § Inviolable rules`.
 
 ## Hard limits
 
-- `apply_fixes.py` is DETERMINISTIC — same input always produces same output. Idempotent. Cost: $0.
+- `apply_fixes.py` is DETERMINISTIC — same input always produces same output. Idempotent.
 - Phase B LLM iterations use the main model.
-- Maximum reasonable `--max-iterations`: ~30. Beyond that, the blueprint is probably structurally broken and needs human re-execute via `/discover-execute`.
+- The loop has no iteration cap; it runs until the target verdict is reached on disk OR a stop condition fires. If many iterations pass without convergence and no-progress is detected, the no-improvement stop condition (see § Stop conditions) HALTS the loop honestly without emitting the promise.
 
 ## Output
 
@@ -145,7 +142,7 @@ When the loop completes:
 Blueprint: <slug>
 Initial verdict: NON_SHIPPABLE (52.0)
 Final verdict:   SHIPPABLE_WITH_CAVEATS (74.5)
-Iterations:      6 / 20
+Iterations:      6
 
 Changes applied:
   weak_imperatives: 14
@@ -173,4 +170,4 @@ Diff: <git diff against working tree>
 - **Phase A fixes can over-correct.** Replacing "should" with "must" in a blueprint where "should" is a hedge ("the codebase should be < 50KB") may sound stronger than the evidence warrants. Acceptable trade-off because the rubric penalizes weak imperatives.
 - **Phase B (empty-corner deferral) depends on LLM judgment.** The loop instructs Claude to leave TODO comments rather than fabricate, but the line between "credible ADR for deferral" and "fabricated rationale" is judgment-call.
 - **Fabricated citations cannot be auto-fixed.** The fix is to MARK them as blocked, not to invent a correct path. Human must re-execute that section of the discovery.
-- **Loop terminates** when EITHER target reached OR max-iterations OR no improvement seen in 2 consecutive iterations.
+- **Loop terminates** when EITHER target verdict reached on disk (promise emitted) OR a stop condition fires (HALT without promise — see § Stop conditions).

@@ -3,7 +3,7 @@ name: discover-execute
 description: Executes a discovery plan via halt-loop (ralph-loop-style autonomous iteration) over the sources declared in the plan — local references under knowledge-base/references/ e/ou URLs allowlisted via rules/discover-web-allowlist.txt. Produces a technical blueprint at knowledge-base/discoveries/blueprints/{slug}-blueprint.md. Use after /discover-edge-cases has approved the plan.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
-argument-hint: "{plan-slug} [--max-iterations 30]"
+argument-hint: "{plan-slug}"
 ---
 
 # Discover-Execute — Halt-Loop Deep-Research Driver
@@ -21,7 +21,7 @@ Reads an approved discovery plan, then drives a halt-loop investigation across `
 
 ## Cycle contract
 
-This skill is **phase 3** of [`cycle-discover`](../../rules/cycle-discover.md). The cycle rule is the source of truth for chain order, hard gates (path existence, halt-loop conditions, fabricated citation refusal), stop conditions (3-retry Fase A, time budget exhaustion), anti-patterns (never modify .claude/knowledge-base/references/, never fabricate Fase B answers), and rollback. **Read `cycle-discover.md` before invoking this skill.** This SKILL.md retains phase-specific detail (halt-loop workflow, per-iteration prompt, halt-loop invariants).
+This skill is **phase 3** of [`cycle-discover`](../../rules/cycle-discover.md). The cycle rule is the source of truth for chain order, hard gates (path existence, halt-loop conditions, fabricated citation refusal), stop conditions (3-retry Fase A, fabricated citation without replacement, empty coverage corner without credible source), anti-patterns (never modify .claude/knowledge-base/references/, never fabricate Fase B answers), and rollback. **Read `cycle-discover.md` before invoking this skill.** This SKILL.md retains phase-specific detail (halt-loop workflow, per-iteration prompt, halt-loop invariants).
 
 ## When to Trigger
 
@@ -35,13 +35,8 @@ This skill is **phase 3** of [`cycle-discover`](../../rules/cycle-discover.md). 
 Accept:
 
 - `/discover-execute {slug}`
-- `/discover-execute {slug} --max-iterations 30`
-- `/discover-execute {slug} --time-budget 60min`
 
-Defaults:
-
-- `--max-iterations`: `30`
-- `--time-budget`: derived from the discovery plan's per-project budget; default `60min` total if absent
+The loop runs until every research question is `done` OR `blocked` with reason AND every citation in the blueprint resolves on disk AND all four coverage corners are populated. There is no iteration cap; per-project time budgets declared inside the discovery plan still apply as honest stop conditions that mark questions as `blocked` (see § Stop conditions).
 
 ### Step 2 — Resolve plan + initialize blueprint
 
@@ -57,8 +52,6 @@ Read `.claude/skills/discover-execute/prompts/execute-mode-prompt.md` and substi
 - `{PLAN_SLUG}` — the slug
 - `{PLAN_PATH}` — the resolved plan path
 - `{BLUEPRINT_PATH}` — the resolved blueprint path
-- `{MAX_ITERATIONS}` — iteration limit
-- `{TIME_BUDGET}` — total time budget
 
 ### Step 4 — Pre-flight guard (concurrent-loop safety)
 
@@ -72,7 +65,6 @@ Before invoking ralph-loop, verify `.claude/ralph-loop.local.md` (if present in 
 2. Invoke `ralph-loop:ralph-loop` with:
    - Positional prompt (no shell metachars): `Read .claude/halt-loop-prompts/discover-execute-{plan-slug}.md and follow its instructions for this halt-loop iteration.`
    - `--completion-promise 'BLUEPRINT_COMPLETE'`
-   - `--max-iterations N`
 
 The ralph-loop plugin:
 
@@ -117,11 +109,11 @@ If the loop emitted `<promise>BLUEPRINT_BLOCKED</promise>`, the sanity check sti
 
 ### Step 8 — Report
 
-After the loop terminates (promise detected OR max iterations OR time budget):
+After the loop terminates (promise detected OR stop condition fires):
 
 - Path to the produced blueprint
 - Number of iterations used
-- Questions answered / questions blocked
+- Questions answered / questions blocked (with blocker reasons)
 - Citations verified count (cross-ref against `.progress-{slug}.json`)
 - Recommendation: invoke `/discover-confidence {slug}` next
 
@@ -133,26 +125,24 @@ After the loop terminates (promise detected OR max iterations OR time budget):
 - The skill NEVER emits `<promise>BLUEPRINT_COMPLETE</promise>` while ANY of the four halt-condition checks fails.
 - The skill NEVER emits a promise without the post-promise sanity check (Step 7) confirming on-disk truth.
 - The skill NEVER spawns concurrent ralph-loops on overlapping state (Step 4 pre-flight guard).
-- The loop NEVER iterates beyond `--max-iterations` or `--time-budget`.
-- If exhausted before completion, the skill emits `<promise>BLUEPRINT_BLOCKED</promise>` (not `BLUEPRINT_COMPLETE`) with HONEST blocked-questions report. Forbidden practices specific to per-iteration work are enumerated in `prompts/execute-mode-prompt.md § Inviolable rules`.
+- The skill NEVER emits `<promise>BLUEPRINT_COMPLETE</promise>` as a graceful exit from a stop condition. When a stop condition fires (see § Stop conditions), the skill emits `<promise>BLUEPRINT_BLOCKED</promise>` (a distinct, honest failure marker) with the blocked-questions report. Forbidden practices specific to per-iteration work are enumerated in `prompts/execute-mode-prompt.md § Inviolable rules`.
 
 ## Stop conditions
 
 Emit `<promise>BLUEPRINT_BLOCKED</promise>` (NEVER `BLUEPRINT_COMPLETE`) with explicit BLOCKED report when ANY of:
 
-1. `iterations_used >= --max-iterations` and at least one question is still `pending`.
-2. Time budget exhausted (`--time-budget`).
-3. Same question fails twice in a row with no observable progress.
-4. A fabricated citation cannot be replaced with a real path (recommend re-running `/discover-plan` for that question).
-5. A coverage corner has zero credible source after exhaustive Fase A + Fase B passes (the question budget allocated to that corner was insufficient — recommend `/discover-plan` to revise).
-6. Boundary-check hook blocked a write attempt to `knowledge-base/references/` — surfaces an underlying bug, not a content gap; HALT immediately and surface to human.
+1. Same question fails twice in a row with no observable progress (same diagnostic, same shape).
+2. A fabricated citation cannot be replaced with a real path (recommend re-running `/discover-plan` for that question).
+3. A coverage corner has zero credible source after exhaustive Fase A + Fase B passes — recommend `/discover-plan` to revise.
+4. A per-project time budget declared inside the discovery plan (ADR D1 or equivalent) is exhausted with questions still `pending` for that project — mark those questions as `blocked` with reason "project time budget exhausted" and continue with the next project; if every remaining project is in the same state, emit `BLUEPRINT_BLOCKED`.
+5. Boundary-check hook blocked a write attempt to `knowledge-base/references/` — surfaces an underlying bug, not a content gap; HALT immediately and surface to human.
 
-In all 6 cases, `/discover-confidence` MUST NOT honor the blueprint as SHIPPABLE — the BLOCKED report is canonical until the human resolves the blocker. Honest BLOCKED > false COMPLETE (Unbreakable Rule 3).
+The promise `<promise>BLUEPRINT_COMPLETE</promise>` is emitted EXCLUSIVELY when ALL halt conditions hold (every question `done` or honestly `blocked`, every citation resolves, four corners populated, ≥ 1 ADR present). There is no path that emits `BLUEPRINT_COMPLETE` from a partial state. In all stop-condition cases, `/discover-confidence` MUST NOT honor the blueprint as SHIPPABLE — the BLOCKED report is canonical until the human resolves the blocker. Honest BLOCKED > false COMPLETE (Unbreakable Rule 3).
 
 ## Per-iteration prompt skeleton (informational — actual prompt lives in `prompts/execute-mode-prompt.md`)
 
 ```
-You are mid-discovery, iteration {N}/{MAX}.
+You are mid-discovery, iteration {N}.
 
 Plan: {PLAN_PATH}
 Blueprint (in progress): {BLUEPRINT_PATH}
