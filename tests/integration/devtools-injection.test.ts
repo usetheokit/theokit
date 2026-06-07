@@ -81,9 +81,12 @@ describe('T1.2 — devtools injection (default — devtools enabled)', () => {
     expect(ct.toLowerCase()).toMatch(/javascript|text\/jsx|jsx/)
     const body = await res.text()
     // The virtual module re-imports the real entry (Vite resolves the alias
-    // to an absolute path before serving). We just verify the module body
-    // is non-trivial JS that mentions devtools entry.
-    expect(body).toMatch(/devtools\/entry/)
+    // to an absolute path before serving). After T2.4 (M3 sub-org of
+    // devtools/), the entry moved from `devtools/entry.tsx` to
+    // `devtools/dom/entry.tsx`. Vite resolves `theokit/devtools/entry`
+    // to its absolute on-disk path, so the regex accepts either
+    // `devtools/entry` (legacy flat) OR `devtools/dom/entry` (post-T2.4 sub-org).
+    expect(body).toMatch(/devtools\/(dom\/)?entry/)
     expect(body).toContain('import')
   })
 
