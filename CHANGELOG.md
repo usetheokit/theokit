@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — partial dogfood extension: Phases 6 + 12 GREEN + Phase 17 PARTIAL with finding)
+
+Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` from 7/22 to 10/22 dogfood phases verified in-loop. (#arch-gaps-implementation)
+
+- **Phase 6 Cookie Helpers (PASS):** 37 tests across 3 files (`cookies.test.ts` + `cookies-web.test.ts` + `cookies-parse.test.ts`) all GREEN in 1.03s. The Web-shaped `cookies-web.test.ts` validates T5a.2 Phase B slice 6/6 helpers (`appendCookieToHeaders` + `getCookieFromRequest`).
+- **Phase 12 Typed Client + Serialization (PASS):** 33 tests across 4 files (`app-client-proxy.test.ts` + `theo-fetch-batched.test.ts` + `theo-fetch-envelope.test.ts` + `app-client-error-propagation.test.ts`) all GREEN in 1.38s. Covers G1 Proxy facade + G1 batch RPC + G5 client-side envelope translation + cross-boundary error shape.
+- **Phase 17 Generators + Route Listing (PARTIAL):** all 4 generators (`route`, `action`, `page`, `ws`) emit correct files with `from 'theokit/server'` imports (verified). `theokit routes` listing requires `pnpm install` to resolve the `theokit` alias in `theo.config.ts`; documented as caveat — not a plan regression but a known testability constraint.
+
 ### Added (Plan theokit-arch-gaps-implementation — partial dogfood extension: Phases 3 + 19 GREEN — all 6 scaffold templates + publint + attw)
 
 Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` with two more dogfood phases verified in-loop. Goes from 5/22 to 7/22 phases green. (#arch-gaps-implementation)
