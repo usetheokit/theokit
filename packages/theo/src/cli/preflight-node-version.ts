@@ -147,8 +147,8 @@ function readNvmrcFloor(cwd: string): string | undefined {
 }
 
 /**
- * Coerce common truthy env-var values to boolean. Convention: any explicit
- * truthy string activates ("1", "true", "yes"); empty/undefined/"0"/"false" → off.
+ * Coerce common truthy env-var values to boolean. Every explicit truthy
+ * string activates ("1", "true", "yes"); empty/undefined/"0"/"false" → off.
  *
  * @internal
  */
