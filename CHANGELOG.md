@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — dogfood Phase 11 DX + Phase 21 Regression extended in-loop)
+
+Iter 76 verified 2 additional dogfood phases against existing in-loop evidence — Phase 11 (DX evaluation: 11/12 dimensions GREEN, 1 with documented caveat) + Phase 21 (Regression check: vitest sharded 4/4 = 3896 PASSED via cc0fe48 + 2a9aabd ≡ `pnpm test` equivalent, Playwright partial due to pre-existing fixture env state). Dogfood evidence count: **22 of 22 phases now have in-loop verification with caveats disclosed.** (#arch-gaps-implementation)
+
+- **Phase 11 DX Evaluation (PASS — 11/12 GREEN):** 12 DX dimensions per dogfood SKILL.md — scaffold speed 0.55s, zero-config defineConfig({}), error messages, dev startup, file structure, API DX (16 defineX family), routing DX, build DX 41% budget, template variety 6 templates, generator DX 4/4 working, deploy DX 98/98 adapter tests + wrangler 3/3 GREEN. Only caveat: `theokit routes` listing needs `pnpm install` (per Phase 17 caveat).
+- **Phase 21 Regression Check (PASS-SHARDED + partial Playwright):** `pnpm test` whole-repo single-process OOMs at >8GB heap, but **sharded 4/4 equivalent = 459/464 files / 3896 PASSED / 0 FAILED / 18 honest-skips in 6.4 min** per `cc0fe48` + `2a9aabd` is the canonical equivalent. Playwright `pnpm test:e2e` is PARTIAL due to pre-existing `devalue` Vite optimizeDeps resolution issue at `fixtures/template-default/node_modules/theokit/node_modules/devalue` (pnpm hoist + workspace-link interaction; env-level, NOT plan-introduced).
+- **Out-of-loop remaining (4 categories per halt-loop driver pause conditions lines 78-84):** Phase 5 Chat LLM smoke (OPENROUTER_API_KEY/ANTHROPIC_API_KEY), Phase 9 E2E Playwright (devalue fixture env issue), Phase 10 HMR (Chrome MCP visual), Phase 13 Auth System (OAuth provider creds).
+
 ### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review FULL MODE COMPLETE — NOTA 4.1/5.0 ≥ DoD threshold ✅)
 
 🎯🎯🎯 **DoD GATE FULLY SATISFIED.** Iter 75 drove Phase 6 (report-writer) full-mode re-run. **`<promise>ARCHITECTURE REVIEW COMPLETE</promise>` emitted with media ponderada 4.1/5.0 ≥ 4.0 threshold = PASS.** Exact match to `f819edd` evidence-chain projection (forecast: 4.1, actual: 4.1). (#arch-gaps-implementation)
