@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review FULL MODE COMPLETE — NOTA 4.1/5.0 ≥ DoD threshold ✅)
+
+🎯🎯🎯 **DoD GATE FULLY SATISFIED.** Iter 75 drove Phase 6 (report-writer) full-mode re-run. **`<promise>ARCHITECTURE REVIEW COMPLETE</promise>` emitted with media ponderada 4.1/5.0 ≥ 4.0 threshold = PASS.** Exact match to `f819edd` evidence-chain projection (forecast: 4.1, actual: 4.1). (#arch-gaps-implementation)
+
+- **Final NOTA verdict per dimension** (vs June 5 baseline 3.5):
+  - Disciplina cycles + type safety: **5.0** (unchanged — 0 cycles, 0 any, 86/86 eslint-disable justified)
+  - Escolhas macro de stack: **4.5** (unchanged — T0.1 ADR-0028 R3a confirmed)
+  - **Design do contrato Plugin: 2.5 → 4.0** ✅ (T3.1 Object.create scope = Fastify Mediator pattern shipped)
+  - **Coerência de boundary runtime: 2.5 → 4.0** ✅ (T5a Phase 5a + R3a Web standards + wrangler smoke 3/3 GREEN)
+  - **Completude de migrações declaradas: 3.0 → 3.5** (T4.1 G5 codemod applied; capped at 3.5 because Phase 3 caught envelopeCodeToStatus admitted-but-undeleted DRY duplication)
+  - **Cohesão interna de módulos: 3.0 → 4.5** ✅ (Phase 2 T2.1-T2.6 6/6 mechanical smells addressed)
+  - Documentação arquitetural: **4.5 → 4.0** (NEW doc-drift findings FO-10 + AF-4 surfaced — architecture.md v3.2 patch needed)
+  - Honestidade do auto-relato: **3.5** (Phase 4 surfaced 4 honest re-classifications vs June 5 errors)
+  - Adoção real: **3.0** (unchanged — needs sibling+community signals)
+- **MÉDIA PONDERADA: 4.1 / 5.0** ← headline DoD verdict
+- **Artifacts shipped under `architecture-output/`:**
+  - `final_report.md` — 715-line consolidated full-mode report (12 sections)
+  - `figures/severity_distribution.svg` (5.0 KB) — re-rendered with full counts
+  - `figures/tree_heatmap.svg` (10.1 KB) — re-rendered with finding density (server/ red — carries all 3 HIGH PVs)
+  - `figures/coupling_distance.svg` (5.8 KB) NEW — Martin's A×I scatter (cache D=0.10 best, cli D=0.59 + create-theo D=0.72 outliers explained)
+- **5 MADR 3.0 ADR drafts** under `architecture-output/adr-suggestions/`:
+  - 0001 architecture.md v3.2 patch (react-query/services/schema doc drift)
+  - 0002 tests/type+types consolidation
+  - 0003 NEW — TheoPlugin Mediator-vs-Composite doc clarification
+  - 0004 NEW — envelopeCodeToStatus DRY consolidation to core/contracts/
+  - 0005 NEW — cli/server-internals sub-barrel (restore INVARIANT #3)
+- **Final DB counts** (all evidence persisted):
+  - 14 modules + 871 files_inventoried
+  - 13 folder_observations + 2 naming_violations + 23 principle_violations + 29 design_pattern_findings
+  - 27 dependencies + 12 coupling_metrics + **0 cycles**
+  - 11 architectural_findings (0 critical + 3 HIGH + ...)
+  - 6 quality_gates ALL PASSED (P1=100, P2=92, P3=88, P5=100, P6 iter1=95, P6 iter2=96)
+  - 2 tool_runs (madge present + ls-lint absent)
+- **Honest disclosures** in § 10:
+  - Phase 5.5 SOTA bypassed (no catalog seeded — to enable, run with `--sota-catalog PATH`)
+  - Test-suite deep-read coverage 38.44% (production-source coverage effectively 100%)
+  - `ls-lint` binary not installed (manual Pass A classifier used)
+  - Sibling workspaces (`theokit-sdk/`, `theo-ui/`, `theokit-plugins/`) not reviewed (separate repos)
+- **Plan v1.2 Global DoD bullet "Re-run `loop-architecture-review --mode=full` retorna nota ≥4.0/5":** ✅ **NOW FULLY SATISFIED.** Closure summary updated from ⏳ PARTIAL → ✅ FULL PASS.
+
 ### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 5 dependencies extended in-loop — 0 CYCLES VERIFIED)
 
 Iter 74 drove Phase 5 (dependency-cartographer). 27 dependencies + 12 coupling_metrics + **0 cycles** verified at HEAD. Quality gate Phase 5 = 1.0. Cross-validates `pnpm check:deps` invariant + architecture.md v3.1 INVARIANT #2 "Zero cycles ever (Acyclic Dependencies Principle, Martin 1995 — consensus)". (#arch-gaps-implementation)
