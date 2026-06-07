@@ -28,8 +28,10 @@ from typing import Any
 from _rubric_loader import load_rubric
 from check_adr_completeness import ADRReport, check_adr_completeness
 from check_architecture_compliance import check_architecture_compliance
+from check_baseline_context import BaselineContextReport, check_baseline_context
 from check_coverage_matrix import CoverageReport, check_coverage_matrix
 from check_criterion_executability import ExecutabilityReport, check_criterion_executability
+from check_drawbacks_section import DrawbacksReport, check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
 from check_spec_smells import SmellReport, check_spec_smells
 from check_tdd_in_bugfix import TDDReport, check_tdd_in_bugfix
@@ -291,6 +293,8 @@ def run_structural(
     compliance = check_architecture_compliance(plan_path)
     evidence = check_evidence_citations(plan_path, _find_repo_root_from_plan(plan_path))
     executability = check_criterion_executability(plan_path)
+    baseline_ctx = check_baseline_context(plan_path)
+    drawbacks = check_drawbacks_section(plan_path)
 
     # Compute per-dimension scores
     completeness, completude_motivos = _compute_completude(cov, adr, tdd)
@@ -329,6 +333,25 @@ def run_structural(
     if compliance.compliance_score < 0.4 and final_score > 89.0:
         final_score = 89.0
         hard_cap_ids.append("soft_floor_low_architecture_compliance")
+
+    # SOTA-upgrade soft caps (sunset 2026-09-07 — after which these promote to hard caps at 70).
+    # These verify the new mandatory sections introduced by the SOTA plan-template upgrade:
+    #   - Baseline Context (deep review of current state) — file table + callers + glossary
+    #   - Drawbacks & Risks — ≥ 2 entries with severity + mitigation + owner
+    #   - Unresolved Questions — entries OR explicit "(none — every decision is resolved)"
+    # Soft cap at 89 means legacy plans keep working as SHIPPABLE_WITH_CAVEATS until
+    # authors migrate them. See `rules/plan-confidence-golden-rule.md § SOTA upgrade`.
+    # Every violation is appended independently (not gated by current final_score)
+    # so authors see the full migration backlog in the hard_caps_triggered list.
+    if not baseline_ctx.is_complete:
+        hard_cap_ids.append("soft_floor_baseline_context_incomplete")
+        final_score = min(final_score, 89.0)
+    if not drawbacks.drawbacks_is_complete:
+        hard_cap_ids.append("soft_floor_drawbacks_section_insufficient")
+        final_score = min(final_score, 89.0)
+    if not drawbacks.unresolved_is_complete:
+        hard_cap_ids.append("soft_floor_unresolved_questions_section_missing")
+        final_score = min(final_score, 89.0)
 
     verdict = _lookup_verdict(final_score, bands)
     # Hard caps "coverage_lt_100" and "fabricated_citation" force INVALID regardless of bands.
@@ -433,6 +456,28 @@ def run_structural(
                 "vague_criteria_sample": [
                     c.text for c in executability.criteria if c.score == 0
                 ][:5],
+            },
+            "baseline_context": {
+                "section_present": baseline_ctx.section_present,
+                "is_complete": baseline_ctx.is_complete,
+                "missing_subsections": list(baseline_ctx.missing_subsections),
+                "file_table_rows": baseline_ctx.file_table_rows,
+                "file_table_placeholder_hits": baseline_ctx.file_table_placeholder_hits,
+                "glossary_entries": baseline_ctx.glossary_entries,
+                "glossary_placeholder_hits": baseline_ctx.glossary_placeholder_hits,
+                "reasons": list(baseline_ctx.reasons),
+            },
+            "drawbacks_and_unresolved": {
+                "drawbacks_section_present": drawbacks.drawbacks_section_present,
+                "drawbacks_entries": drawbacks.drawbacks_entries,
+                "drawbacks_placeholder_hits": drawbacks.drawbacks_placeholder_hits,
+                "drawbacks_is_complete": drawbacks.drawbacks_is_complete,
+                "drawbacks_reasons": list(drawbacks.drawbacks_reasons),
+                "unresolved_section_present": drawbacks.unresolved_section_present,
+                "unresolved_entries": drawbacks.unresolved_entries,
+                "unresolved_explicit_none": drawbacks.unresolved_explicit_none,
+                "unresolved_is_complete": drawbacks.unresolved_is_complete,
+                "unresolved_reasons": list(drawbacks.unresolved_reasons),
             },
         },
     )
