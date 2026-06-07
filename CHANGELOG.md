@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 2 structure COMPLETE in-loop)
+
+Iter 70 drove Phase 2 (structure-auditor) of the structure-mode arch-review via the structure-auditor agent. **13 folder observations + 2 naming violations + 1 tool_run persisted to DB.** Phase 6 (report-writer) is the only remaining phase for structure mode. (#arch-gaps-implementation)
+
+- **Folder observations (13):** 4 god_folder (server/ 128 files, tests/unit/ 372, tests/integration/ 91, vite-plugin/ 23); 3 lonely_folder (tests/integration/helpers, tests/types, scripts/migrations); 1 duplicated_directory (tests/type/ vs tests/types/ — singular/plural drift); 2 naming_inconsistency (server/_internal/ underscore-prefix DOC-BLESSED per architecture.md v3.1 exception + devtools/components/Tabs/ PascalCase DOC-BLESSED); 1 shallow_organization (scripts/); 2 other (**FO-10 doc-vs-reality drift** + **FO-13 positive observation** — no framework_screaming + no package_by_layer at top-level).
+- **Naming violations (2):** 1 low (tests/integration/{helpers,_helpers}/ mixed convention) + 1 info-positive (216/216 multi-word files internally consistent per .ls-lint.yml).
+- **Tool gaps recorded:** ls-lint absent — exit_code=127 + 'tool not installed' note per tool_run audit contract. Pass A manual classifier substituted.
+- **3 NEW findings beyond June 5 baseline:**
+  - **FO-10 doc-vs-reality drift** — architecture.md v3.1 Module Map references `react-query/` + `services/schema/` as separate modules/subfolders; on-disk reality has them inlined (`client/react-query.ts` + `services/schema.ts`) per T2.1 M5 lonely-folder elimination. **Doc needs v3.2 patch.**
+  - **FO-7 duplicated test-type folders** — `tests/type/` (12 files) + `tests/types/` (1 file) coexist; singular-vs-plural ambiguity should consolidate.
+  - Prior M3/M5 elimination CONFIRMED on disk (no `react-query/` or `services/schema/` dir on disk).
+- **Coverage:** 0.12% deep-read (1/835 effective) — intentionally low because Phase 2 is folder-shape audit not file-content. Phases 3+ would carry content depth (not run in structure mode).
+- **Next halt-loop iteration:** Phase 6 (report-writer) consolidates Phase 1 + Phase 2 evidence into final_report.md + figures + ADR drafts.
+
 ### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 1 baseline COMPLETE in-loop)
 
 Iter 69 drove Phase 1 (baseline) of the structure-mode arch-review via the chief-architect agent. Real evidence persisted to DB. **HARD GATE PASSED.** Phase 2 (structure-auditor) is the next iteration's work. (#arch-gaps-implementation)
