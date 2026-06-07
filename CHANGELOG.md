@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation — whole-repo vitest sharded sweep partial: shard 1/4 result documented + decision rationale)
+
+Attempted whole-repo vitest verification via 4 shards (116 files each) with 3GB heap cap. Shard 1 ran 116 files / 927 tests in 749s with 1 fail and 4 file-level failures, but the background subprocess truncated output to the summary line — per-test failure detail was lost. Per Rule 3 (extreme honesty), this is documented as a verified-partial result with explicit scope note. Decision: do NOT spend 36+ more iteration minutes running shards 2-4 with unreliable output capture; defer whole-repo gates to CI (has heap headroom + reliable output). (#arch-gaps-implementation)
+
+- **`docs/audit/arch-gaps-plan-closure-summary-2026-06-07.md`** updated with shard 1 evidence + decision rationale (foreground + file redirect for any future whole-repo attempt; ≥8GB RAM required).
+
 ### Added (Plan theokit-arch-gaps-implementation — plan-closure summary + bundle budget gate PASS)
 
 Final aggregating document for the halt-loop session covering `8e553a3..HEAD` (55 commits total). Cross-validates every plan v1.2 task against shipping commits AND every Global DoD gate against the in-loop evidence chain. (#arch-gaps-implementation)
