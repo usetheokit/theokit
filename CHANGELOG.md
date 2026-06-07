@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed (Plan theokit-arch-gaps-implementation — loop-architecture-review setup pre-configured for next session)
+
+Iter 68 pre-configured the architecture-review pipeline so the next dedicated session can drive phases 1→2→6 directly without re-running setup. Surfaced + resolved a schema-mismatch blocker. (#arch-gaps-implementation)
+
+- **Schema-mismatch blocker resolved:** the existing `architecture-output/architecture.db` (June 5 schema) lacked the `severity_source` column the current plugin version requires. Moved old artifacts to `architecture-output.old-2026-06-05/` to preserve the June 5 report (it remains the authoritative prior verdict cited in `f819edd` evidence chain).
+- **Fresh state initialized:** new `architecture-output/architecture.db` + state file `.claude/architecture-review-loop.local.md` at Phase 1 (baseline) iteration 1.
+- **Tool availability snapshot recorded:** `madge` + `dependency-cruiser` + `radon` present; `ls-lint` + `skott` + Python complexity tools absent (some phases will note degraded coverage but proceed).
+- **Honest scope note:** setup ran in-loop; the actual phase-1→2→6 drive remains for a dedicated session per the BLOCKED report. Reasoning: each phase spawns sub-agents via Task tool that would consume substantial context; full-pipeline completion needs a session that's not already coordinating an active ralph-loop on the same source tree. The chief-architect agent can resume directly from this state.
+
 ### Fixed (Plan theokit-arch-gaps-implementation — Vite alias `theokit/react-query` regression from T2.1 — WHOLE-REPO VITEST 4/4 SHARDS GREEN)
 
 Iter 63 finished the whole-repo vitest sweep that iter 60 deferred. All 4 shards run; one more plan-introduced regression discovered + fixed; 0 failures across the entire test surface. (#arch-gaps-implementation)
