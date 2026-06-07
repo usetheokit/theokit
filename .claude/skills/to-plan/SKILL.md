@@ -66,15 +66,50 @@ When writing a task that creates a NEW test path, verify against the runner conf
 
 When in doubt, prefer placing unit tests co-located with the file under test (per the convention declared in `rules/testing.md § Test pairing convention`).
 
-### Step 1 — Explore the repo
+### Step 1 — Deep review of the current state (MANDATORY)
 
-After reading the rules, explore the codebase to understand the current state, patterns, and architecture in light of those rules.
+The plan's `## Baseline Context` section is generated from THIS step's evidence. Skipping or hand-waving Step 1 means `## Baseline Context` will be fabricated, which `/plan-confidence` catches and caps to INVALID. This is the deepest non-negotiable change introduced by the SOTA template upgrade: **a junior reading the plan must NOT have to spelunk the repo to understand what exists today.**
+
+Run, at minimum, the following commands and capture their output:
+
+```bash
+# 1. Enumerate every file the plan will touch (work backwards from the user's request)
+#    For each candidate file, capture LoC + last meaningful commit + the reason it exists.
+wc -l <candidate-file>                                       # LoC today
+git log -1 --pretty=format:"%h %ad %s" --date=short -- <file>  # last touch
+git log --oneline -5 -- <file>                                # short history
+git blame -L1,5 <file>                                        # original intent of the top of the file
+
+# 2. Enumerate current callers of every public symbol the plan will change
+grep -rln 'symbolName' --include='*.<ext>' <src-roots> | grep -v '<test-roots>'    # production callers
+grep -rln 'symbolName' --include='*.<ext>' <test-roots>                            # test callers
+# Cross-repo callers (when the symbol is part of a published interface): the user MUST point you at consumers; do not guess.
+
+# 3. Identify architecture boundaries that the plan crosses
+cat rules/architecture.md            # DIP boundaries, allowed imports, layering
+grep -E '^## ' rules/architecture.md  # quick section index
+
+# 4. Extract domain-specific terms the plan will use
+#    Read the relevant module README / package-level docstring; list 3-7 terms with one-line definitions.
+
+# 5. Discover prior art ALREADY available in this repo
+ls knowledge-base/discoveries/blueprints/ 2>/dev/null   # blueprints from /discover-execute runs
+ls skills/*-patterns/ 2>/dev/null                       # patterns skills from /skill-register
+ls knowledge-base/references/ 2>/dev/null               # cloned reference projects (read-only)
+```
+
+The captured output feeds the `## Baseline Context` table directly. **If a row in the table cannot cite a `file:line` or a real `<sha>`, the row is fabricated and must be removed.**
+
+Honesty gates that apply to Step 1:
+
+- If you cannot identify the public callers of a symbol the plan modifies, STOP and ask the user — do not guess. Half the bugs caught in `/review` start with "we did not know X also called this."
+- If `knowledge-base/discoveries/blueprints/` is empty for the topic AND no `*-patterns` skill matches, the `## Prior Art & Related Work` section must say "(none identified — first-of-its-kind in this codebase)" — `/edge-case-plan` will challenge that.
 
 ### Step 2 — Architecture Snapshot (BEFORE) — OPTIONAL
 
-This step is for projects that have wired a **project-specific** architecture-docs skill (e.g., a custom `/architecture-docs` skill that emits Mermaid diagrams of the affected packages). The planning ecosystem does NOT ship one — it is an extension point. If your project has installed such a skill under its own `skills/` directory, run it for the affected domain(s) and save the current-state architecture docs to `knowledge-base/architecture/{domain}/`. This is the baseline before the plan changes anything.
+This step is for projects that have wired a **project-specific** architecture-docs skill (e.g., a custom `/architecture-docs` skill that emits Mermaid diagrams of the affected packages). The planning ecosystem does NOT ship one — it is an extension point. If your project has installed such a skill under its own `skills/` directory, run it for the affected domain(s) and save the current-state architecture docs to `knowledge-base/architecture/{domain}/`. The diagrams complement the `## Baseline Context` table from Step 1.
 
-If no such skill is installed (the default), document the affected directories directly in the plan's Context section instead. List: which files exist, what they do, and which boundaries they sit behind (per `architecture.md`).
+If no such skill is installed (the default), the `## Baseline Context` table from Step 1 IS the baseline — no extra step needed.
 
 ### Step 3 — Identify the modules
 
@@ -108,25 +143,35 @@ These rules are NON-NEGOTIABLE for every plan produced by this skill:
 
 1. **Every task has TDD** — no task without RED-GREEN-REFACTOR cycle. Tests are listed BEFORE implementation steps.
 
-2. **Every task has "Files to edit"** — exact paths, not vague references. If a file doesn't exist yet, say "(NEW)".
+2. **Every task has "Files to edit"** — exact paths, not vague references. If a file doesn't exist yet, say "(NEW)". Every file listed here MUST also appear in `## Baseline Context § Files that will be touched`.
 
-3. **Every task has "Deep file dependency analysis"** — understand what you're touching and what depends on it.
+3. **Every task has "Deep file dependency analysis"** — understand what you're touching and what depends on it. Citations resolve against `## Baseline Context § Current callers`.
 
-4. **Every task has acceptance criteria** — observable, verifiable conditions. Include code-audit checks.
+4. **Every task has "Why this step"** — ReAct discipline: one paragraph for the action, one paragraph for the reasoning chain (cite ADR, prior-art entry, or Baseline Context row). A junior reading only this subsection understands both the move and the motivation.
 
-5. **Every task has DoD** — definition of done with concrete verification commands.
+5. **Every task has acceptance criteria** — observable, verifiable conditions. Include code-audit checks.
 
-6. **ADRs justify decisions** — no implementation detail appears without a rationale. If you chose approach A over B, say why.
+6. **Every task has DoD** — definition of done with concrete verification commands.
 
-7. **Dependency graph is explicit** — which phases block which. Which can parallelize.
+7. **ADRs justify decisions** — no implementation detail appears without a rationale. If you chose approach A over B, say why. Every ADR includes at least one rejected alternative with reason.
 
-8. **Evidence-driven** — every phase/task should reference concrete evidence (data, logs, code analysis) that justifies its existence. No speculative tasks.
+8. **Dependency graph is explicit** — which phases block which. Which can parallelize.
 
-9. **No file paths in ADRs** — ADRs describe architectural decisions, not implementation details. File paths go in tasks.
+9. **Evidence-driven** — every phase/task references concrete evidence (data, logs, `file:line` from code analysis) that justifies its existence. No speculative tasks.
 
-10. **Coverage matrix is complete** — every original requirement/gap maps to at least one task. 100% coverage is the target.
+10. **No file paths in ADRs** — ADRs describe architectural decisions, not implementation details. File paths go in tasks.
 
-11. **Integration validation is mandatory** — every plan MUST include a final "Integration Validation" phase. The plan is NOT complete until the full chain (test, typecheck/lint, coverage gate) passes. No exceptions. This is the "eat your own cooking" gate — if integration tests fail or types break, the plan failed.
+11. **Coverage matrix is complete** — every original requirement/gap maps to at least one task. 100% coverage is the target.
+
+12. **Baseline Context section is mandatory** — `## Baseline Context` is populated from the Step 1 evidence (file table with LoC + git sha, callers list, glossary, architecture boundaries). Fabricated rows cap the plan at INVALID. A junior reads this section to understand "what exists today" without reading the codebase.
+
+13. **Prior Art & Related Work section is mandatory** — `## Prior Art & Related Work` cites internal blueprints, patterns skills, reference projects, OR external literature. "(none identified)" is acceptable but `/edge-case-plan` will challenge it.
+
+14. **Drawbacks & Risks section is mandatory** — `## Drawbacks & Risks` has ≥ 2 entries with severity + mitigation + owner. No plan is risk-free; missing or under-populated section caps the plan at 70 (SHIPPABLE_WITH_CAVEATS at best).
+
+15. **Unresolved Questions section is mandatory** — `## Unresolved Questions` lists open questions OR explicitly states "(none — every decision is resolved at plan time)". Empty/missing section caps at 70.
+
+16. **Integration validation is mandatory** — every plan MUST include a final "Integration Validation" phase. The plan is NOT complete until the full chain (test, typecheck/lint, coverage gate) passes. No exceptions. This is the "eat your own cooking" gate — if integration tests fail or types break, the plan failed.
 
 ## Cycle contract
 

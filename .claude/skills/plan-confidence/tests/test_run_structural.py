@@ -112,9 +112,24 @@ def test_run_structural_motivos_has_4_keys() -> None:
     assert set(report.reasons.keys()) == {"completeness", "evidence", "calibration", "structural_risk"}
 
 
-def test_run_structural_evidencia_empty_in_m2() -> None:
+def test_run_structural_evidencia_inactive_in_m2_weights() -> None:
+    """In M2 the `evidence` dimension is NOT in the weighted-score formula
+    (only `completeness` and `structural_risk` are active per M2_ACTIVE_DIMENSIONS).
+
+    But the orchestrator still scans citations and records positive/negative
+    motivos for visibility — they just do not contribute to the score. After the
+    SOTA upgrade the good-plan fixture cites real rule files (Baseline Context,
+    Prior Art, Drawbacks references), so positive evidence motivos may be present
+    even though their weight is zero.
+
+    Pre-upgrade assertion was `report.reasons["evidence"] == []` (the fixture
+    had zero citations). That asserted an artifact of the fixture's poverty,
+    not a contract of the orchestrator — the renamed assertion below pins
+    the actual contract.
+    """
     report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
-    assert report.reasons["evidence"] == []
+    # Evidence dimension is not part of the M2 weighted formula.
+    assert "evidence" not in (report.active_dimensions or [])
 
 
 def test_run_structural_calibracao_empty_in_m2() -> None:

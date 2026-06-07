@@ -39,10 +39,30 @@ The rule closes this gap by forcing minimum structural state PRESENT before the 
 | ADR without alternatives in Rationale → score ≤ 70 | M2 — `check_adr_completeness.py` |
 | Bug-fix task without TDD RED-GREEN-REFACTOR → score ≤ 70 | M2 — `check_tdd_in_bugfix.py` |
 | Vague Acceptance Criteria → score ≤ 70 (heuristic) | `check_criterion_executability.py` — triggers when `vague_ratio > 0.10` OR `acceptable_ratio < 0.80` across DoD/Acceptance Criteria bullets. Each criterion scored on 3 axes (observable verb, measurable object, oracle). HONESTLY HEURISTIC: linguistic patterns can false-positive; the JSON sub_report lists every vague criterion for human override via `/plan-improve`. Closes the plan-vagueness propagation gap (companion gate in `skills/implement/scripts/check_tdd_shape.py`). |
+| Baseline Context section missing OR placeholder-laden → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.0 — `check_baseline_context.py`. The section is the "deep review of current state" — file table + LoC + git sha + callers + glossary + architecture boundaries. Junior implementer should not need to spelunk the repo. Stable id: `soft_floor_baseline_context_incomplete`. See § SOTA upgrade below. |
+| Drawbacks & Risks section missing OR < 2 entries → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.0 — `check_drawbacks_section.py`. RFC tradition — no non-trivial plan is risk-free. Stable id: `soft_floor_drawbacks_section_insufficient`. |
+| Unresolved Questions section missing AND no explicit "(none)" marker → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.0 — `check_drawbacks_section.py` (covers both Drawbacks & Unresolved). Stable id: `soft_floor_unresolved_questions_section_missing`. |
 | `--skip-checks` flag does not exist and SHALL NOT be added | Constructor invariant in `run_structural.py` |
 | Score capped MUST appear marked in the report | Rendering rule |
 | `hard_caps_triggered` list MUST be non-empty when verdict==INVALID | JSON schema invariant |
 | Renormalization (D8) does NOT bypass hard caps | `final_score_after_caps = min(weighted_avg, smallest_active_cap)` |
+
+## SOTA upgrade (2026-06-07)
+
+The template at `skills/to-plan/templates/plan-template.md` was upgraded with four new mandatory sections + one new mandatory subsection per task, drawing from three SOTA reference points:
+
+1. **RFC tradition** (Rust RFCs, Python PEPs, IETF RFCs) — Motivation, Detailed Design, **Drawbacks**, Rationale & Alternatives, **Prior Art**, **Unresolved Questions**.
+2. **C4 / ARC42 baseline view** — what exists today before any change is the foundation for evaluating what comes next.
+3. **ReAct planning** (Yao et al. 2022 — action + reasoning per step) — each task now has a `#### Why this step` subsection forcing both the action and the reasoning chain to be explicit.
+
+### Why the soft cap (not hard cap) at sunset 2026-09-07
+
+There are ~115 active plans + ~55 completed plans across consumer projects when this upgrade ships. Hard-capping at 70 immediately would invalidate every plan currently in flight. The migration path:
+
+1. **Now → 2026-09-07**: soft cap at 89. Legacy plans become at most SHIPPABLE_WITH_CAVEATS until migrated. `hard_caps_triggered` JSON lists `soft_floor_baseline_context_incomplete` etc., so authors see the WARN and migrate gradually.
+2. **2026-09-07 →**: review the migration ratio. Promote each soft cap to a hard cap at 70 (or earlier, if the migration is complete). The promotion requires a new ADR per § "When this rule may change".
+
+Authors migrating a legacy plan need only re-run `/to-plan` against the updated template OR hand-edit the plan to add the four new sections (and the per-task `#### Why this step` subsection). `/plan-confidence` re-scores them automatically.
 
 ## When this rule may change
 

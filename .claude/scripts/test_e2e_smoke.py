@@ -134,8 +134,22 @@ def check_cycle_rules(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 
 
 def check_skill_frontmatter(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Validate every SKILL.md has a parseable YAML frontmatter with required fields.
+
+    The earlier substring check (`"name:" in fm`) silently passed `roadmap-feature/SKILL.md`
+    when the description contained an unquoted colon that made YAML parsing fail —
+    Claude Code aborts skill discovery for an entire tree on a single invalid frontmatter,
+    so the gap caused 'skills do not load on consumers'. This function now validates the
+    YAML structurally with PyYAML and requires the canonical fields.
+    """
     issues: list[str] = []
-    required_fields = ("name:", "description:")
+    required_fields = ("name", "description")
+    try:
+        import yaml  # PyYAML — listed as a setup pre-condition in README
+    except ImportError:
+        issues.append("  PyYAML not available — install via `pip install pyyaml`")
+        return False, issues
+
     for skill_dir in (ecosystem_dir / "skills").iterdir():
         if not skill_dir.is_dir() or skill_dir.name == "generated":
             continue
@@ -147,14 +161,27 @@ def check_skill_frontmatter(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         if not content.startswith("---\n"):
             issues.append(f"  {skill_dir.name}/SKILL.md missing opening frontmatter")
             continue
-        # Find closing ---
         end = content.find("\n---\n", 4)
         if end == -1:
             issues.append(f"  {skill_dir.name}/SKILL.md missing closing frontmatter")
             continue
-        fm = content[4:end]
+        fm_raw = content[4:end]
+        try:
+            fm = yaml.safe_load(fm_raw)
+        except yaml.YAMLError as e:
+            # Compact the YAML error to a single line so the report stays readable.
+            err = str(e).splitlines()[0] if str(e) else "unknown YAML error"
+            issues.append(
+                f"  {skill_dir.name}/SKILL.md YAML frontmatter is invalid: {err}"
+            )
+            continue
+        if not isinstance(fm, dict):
+            issues.append(
+                f"  {skill_dir.name}/SKILL.md frontmatter is not a YAML mapping"
+            )
+            continue
         for field in required_fields:
-            if field not in fm:
+            if not fm.get(field):
                 issues.append(f"  {skill_dir.name}/SKILL.md missing field `{field}`")
     return len(issues) == 0, issues
 
