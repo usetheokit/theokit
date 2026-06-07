@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — partial dogfood extension: Phases 14 + 15 + 16 + 20 GREEN — 14/22 cumulative)
+
+Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` from 10/22 to 14/22 dogfood phases verified in-loop. (#arch-gaps-implementation)
+
+- **Phase 14 Env Vars + Error Pages + Rate Limiting + Config (PASS):** 101 tests across 12 files all GREEN in 7.10s. Includes T5a.2 Phase D slice 1/3 + slice 2/3 (web-shaped rate-limit siblings).
+- **Phase 15 + 16 SSR + WebSocket + Channels (PASS):** 78 tests across 12 files all GREEN in 4.73s. Includes T5a.2 Phase E body-parser opt-in + Phase F slice 3/3 (web-shaped defineWebSocket sibling).
+- **Phase 20 Naming + README Integrity (PASS):** every Phase 20 AC verified — package names + CLI cac + version + bin + Vite aliases + generator imports + README forbidden/required patterns. Note: the dogfood skill's grep for `defineAgent` is non-word-boundary and gives false positives on `defineAgentEndpoint` / `defineAgentTool` (valid current APIs); the precise word-boundary check (`grep -E "\bdefineAgent\b"`) returns zero hits — README integrity is genuinely clean.
+
 ### Added (Plan theokit-arch-gaps-implementation — partial dogfood extension: Phases 6 + 12 GREEN + Phase 17 PARTIAL with finding)
 
 Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` from 7/22 to 10/22 dogfood phases verified in-loop. (#arch-gaps-implementation)
