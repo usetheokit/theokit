@@ -74,8 +74,13 @@ export function runConfigHook(ctx: ConfigHookCtx): Record<string, unknown> {
         { find: 'theokit/server', replacement: resolve(ctx.theoSrcDir, `server/index${ext}`) },
         { find: 'theokit/client', replacement: resolve(ctx.theoSrcDir, `client/index${ext}`) },
         {
+          // T2.1 (M5 lonely folders) moved the source from
+          // `react-query/index.ts` into `client/react-query.ts` (sibling of
+          // `client/index.ts`). The package.json export `./react-query`
+          // still points at the build artifact `./dist/react-query/index.{js,d.ts}`,
+          // but the dev-time source alias must follow the new location.
           find: 'theokit/react-query',
-          replacement: resolve(ctx.theoSrcDir, `react-query/index${ext}`),
+          replacement: resolve(ctx.theoSrcDir, `client/react-query${ext}`),
         },
         {
           find: 'theokit/vite-plugin',
