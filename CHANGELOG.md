@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 1 baseline COMPLETE in-loop)
+
+Iter 69 drove Phase 1 (baseline) of the structure-mode arch-review via the chief-architect agent. Real evidence persisted to DB. **HARD GATE PASSED.** Phase 2 (structure-auditor) is the next iteration's work. (#arch-gaps-implementation)
+
+- **Sub-phase 1a — Exhaustive file inventory (HARD GATE: PASS):** 871 files inventoried (DB count = `find` count exactly). Breakdown: 840 TS/TSX/MTS + 11 shell + 7 JSON + 6 JS/MJS + 7 other. 36 marked excluded (templates/fixtures/auto-generated). 537 tagged `is_test=1`. 835 active.
+- **Sub-phase 1b — Module registration:** 14 modules persisted per `.claude/rules/architecture.md` v3.1 canonical map (`core`, `config`, `adapters`, `router`, `client`, `cache`, `devtools`, `services`, `server`, `vite-plugin`, `cli`, `create-theo`, `scripts`, `tests`). LOC totals: `server` 14,594 (largest, application kind); `vite-plugin` 4,249; `devtools` 3,936; `cli` 3,970.
+- **Real architecture-doc-vs-reality finding surfaced:** `architecture.md` v3.1 references a `react-query/` module dir; on-disk reality has it inlined into `client/react-query.ts` (per T2.1 M5 lonely-folder elimination). Documented honestly — Phase 2 (structure-auditor) will formalize as folder_observation. Not fabricated — chief-architect's verdict: honest absence over fabricated module row.
+- **Tooling gaps recorded:** `add-meeting` requires `participants` as string (not list); fixed inline by agent. Worth promoting to skill spec fix.
+- **`.gitignore` updated:** `.claude/architecture-review-loop.local.md` + `architecture-output.old-*` added (loop state files + preserved June 5 DB backup are local-only artifacts, not committed).
+- **Next halt-loop iteration:** Phase 2 (structure-auditor) will read folder shape + register `folder_observations` (god folders, lonely folders, deep nesting, ambiguous naming, mixed concerns) + `naming_violations` against the 871-file inventory.
+
 ### Changed (Plan theokit-arch-gaps-implementation — loop-architecture-review setup pre-configured for next session)
 
 Iter 68 pre-configured the architecture-review pipeline so the next dedicated session can drive phases 1→2→6 directly without re-running setup. Surfaced + resolved a schema-mismatch blocker. (#arch-gaps-implementation)

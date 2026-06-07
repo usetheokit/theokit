@@ -77,6 +77,7 @@ tmp/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/ralph-loop.local.md
+.claude/architecture-review-loop.local.md
 
 # Project-specific
 ONDAS.md
@@ -89,6 +90,7 @@ my-test/
 .gstack/
 fixtures/template-default/.theokit
 architecture-output
+architecture-output.old-*
 
 # Local backups (e.g., CLAUDE.md.bak, .claude/settings.json.bak from migrations)
 *.bak
