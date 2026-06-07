@@ -101,10 +101,41 @@ this report:
   `tests/integration/wrangler-smoke.test.ts` (per `30a1d12`); Vercel/Bun
   paths require their respective tooling.
 
+### Phase 3 — Scaffold ALL Templates (PASS — extended this turn iter 54)
+
+`pnpm exec tsx packages/create-theo/src/cli.ts scaffold-<tpl> --template=<tpl> --skip-install`
+exercised every published template (the `--skip-install` flag bypasses the
+forward-pin npm install issue from Phase 2 since this gate verifies scaffold
+file emission, not install resolvability):
+
+| Template | Result | Files emitted |
+|---|---|---|
+| `default` | ✅ PASS | app, server, theo.config.ts, tsconfig.json, package.json, README.md, public, index.html, types |
+| `dashboard` | ✅ PASS | + dashboard-shaped app |
+| `api-only` | ✅ PASS | API-shape (no app router pages) |
+| `postgres` | ✅ PASS | + `db/`, `drizzle.config.ts` |
+| `saas` | ✅ PASS | + `db/`, `drizzle.config.ts` (full SaaS stack) |
+| `--bare` | ✅ PASS | minimal Hello-Theo with zero `@theokit/*` deps (always-works fallback) |
+
+All 5 templates + the `--bare` mode scaffold cleanly. Per-template asset
+inventory matches the documented contract (postgres + saas add `db/` +
+`drizzle.config.ts`; api-only adds no app router pages; bare strips every
+`@theokit/*` dep keeping only `theokit` itself).
+
+### Phase 19 — Build Pipeline + Package Validation (PASS — extended this turn iter 54)
+
+| Tool | Verdict | Evidence |
+|---|---|---|
+| `npx publint packages/theo` | ✅ PASS | "All good!" (publint v0.3.20) |
+| `npx publint packages/create-theo` | ✅ PASS | "All good!" (publint v0.3.20) |
+| `npx @arethetypeswrong/cli --pack packages/theo` | ✅ PASS | Every sub-path resolves 🟢 across node10 / node16-from-CJS / node16-from-ESM / bundler. Zero 🔴. |
+
+Sub-paths verified by attw: `theokit` (root) + `theokit/client` + `theokit/react-query` + `theokit/adapters/web-shim` + `theokit/adapters/ws-shim` (plus every other `theokit/*` and `theokit/server/*` sub-export).
+
 ## Aggregate verdict
 
-In-loop dogfood evidence: **5 of 22 phases verified GREEN with caveats
-disclosed** (1, 2, 7, 8, 22.5). The 17 unverified phases require resources
+In-loop dogfood evidence: **7 of 22 phases verified GREEN with caveats
+disclosed** (1, 2, 3, 7, 8, 19, 22.5). The remaining 15 phases require resources
 the halt-loop pause-condition contract designates as out-of-loop.
 
 Per the plan's DoD wording — "Dogfood QA PASS — dogfood full health score
