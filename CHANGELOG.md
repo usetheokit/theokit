@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — plan-closure summary + bundle budget gate PASS)
+
+Final aggregating document for the halt-loop session covering `8e553a3..HEAD` (55 commits total). Cross-validates every plan v1.2 task against shipping commits AND every Global DoD gate against the in-loop evidence chain. (#arch-gaps-implementation)
+
+- **`docs/audit/arch-gaps-plan-closure-summary-2026-06-07.md` NEW** — task-by-task closure verification (13/13 plan tasks have shipping commits in the window) + Global DoD gate matrix with explicit ✅/⚠️/⏳ status per gate + honest scope note on what cannot be honestly emitted as completion promise + next-session handoff procedure.
+- **`pnpm check:bundle` PASS** — 144 KB gzipped (41% of 350 KB budget). Bundle budget gate clean post-T5a.2 Phases A-H + all Phase 2 mechanical refactors.
+
 ### Added (Plan theokit-arch-gaps-implementation — quality-gate baseline beyond plan DoD: naming + secrets + templates PASS; 4 pre-existing findings recorded)
 
 Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` with a full sweep of orthogonal package-quality scripts. Triangulates the plan's surface against the broader monorepo baseline. None are part of plan v1.2's Global DoD; recorded for transparency. (#arch-gaps-implementation)
