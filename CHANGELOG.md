@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed (Plan theokit-arch-gaps-implementation — Global DoD lint gate: deprecated reference in T3.1 contract test)
+
+Final Global DoD validation surfaced one lint warning in `tests/integration/plugin-scope-encapsulation.test.ts`: the intentional `instanceof DuplicateDecorationError` smoke (kept for one minor cycle so consumers compiled-against-the-deprecated-class keep compiling) tripped `@typescript-eslint/no-deprecated`. Added narrow `eslint-disable-next-line` with rationale comment. The deprecation warning IS the contract — the suppression is the correct signal here, not a hide-the-bug pattern. (#arch-gaps-implementation)
+
+- **`tests/integration/plugin-scope-encapsulation.test.ts`** — narrow `eslint-disable-next-line @typescript-eslint/no-deprecated` over the single `DuplicateDecorationError.name` assertion, with 5-line rationale: "Intentional reference to the deprecated class — this test exists to assert that consumers who `instanceof DuplicateDecorationError` keep compiling for one minor cycle after T3.1 deprecation. Removal is scheduled for 0.x+2 per CHANGELOG. Lint suppression is the correct signal here: the deprecation warning is the contract."
+- **Global DoD validation evidence at this commit:**
+  - `pnpm typecheck` exit 0 (tsc --noEmit clean across the workspace).
+  - `pnpm check:deps` exit 0 (dependency-cruiser: 0 violations across 330 modules, 1000 dependencies).
+  - `pnpm exec eslint <126 plan-touched files> --max-warnings=0` exit 0 (zero warnings across the entire 47-commit T5a.2 source surface).
+  - `pnpm exec vitest run <51 plan-touched test files>` on Node 22.22.2 (per project `.nvmrc`): **478 PASSED + 0 FAILED + 5 SKIPPED** in 82s.
+- **Honest limitation:** `pnpm test` (full vitest suite) and `pnpm lint .` (full ESLint sweep across every file in the monorepo) require >8GB heap in this environment and OOM-killed at ~2GB headroom. The scoped-but-comprehensive evidence above covers every source + test touched by this plan in commits `8e553a3..HEAD`. Whole-repo gates run cleanly in CI per the workflow contract.
+
 ### Changed (Plan theokit-arch-gaps-implementation — Phase 5a invariant allowlist + Phase 5a audit doc update for Phase G slice 5/N)
 
 Final post-T5a.2 housekeeping. **Session-wide regression sweep: 478/478 GREEN across 51 touched test files.** The Phase 5a invariant guard caught the new `node-web-adapter.ts` (Phase G slice 5/N) as a runtime `node:http` + `node:stream` consumer outside the original Category B allowlist — added to the allowlist as legitimate IncomingMessage ↔ Request bridge per ADR-0028 R3a (the ONLY place this conversion happens). (#arch-gaps-implementation)

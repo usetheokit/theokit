@@ -234,6 +234,12 @@ describe('Plugin scope encapsulation — BDD scenarios (T1.1)', () => {
   // (kept in the import block to make the breaking-change connection visible
   // to humans reading this file).
   it('contract note: DuplicateDecorationError will be removed in T3.1', () => {
+    // Intentional reference to the deprecated class — this test exists to
+    // assert that consumers who `instanceof DuplicateDecorationError` keep
+    // compiling for one minor cycle after T3.1 deprecation. Removal is
+    // scheduled for 0.x+2 per CHANGELOG. Lint suppression is the correct
+    // signal here: the deprecation warning is the contract.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(DuplicateDecorationError.name).toBe('DuplicateDecorationError')
   })
 })
