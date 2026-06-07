@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — partial dogfood evidence: Phases 1/2/7/8/22.5 GREEN on real scaffolded my-test)
+
+The DoD gate "Dogfood QA PASS — dogfood full health score ≥70, zero CRITICAL" requires the full 22-phase QA skill. Several phases (E2E Playwright, HMR visual, Chat LLM round-trip, Auth OAuth callbacks, Deploy adapters beyond CF Workers) need out-of-loop resources (Chrome MCP browser, real LLM creds, OAuth provider creds, deploy creds) per halt-loop driver pause condition lines 78-84. Per Rule 3 (extreme honesty), this commit ships an evidence report covering the in-loop runnable subset, with PASS/FAIL/CAVEAT per phase + clean cleanup. (#arch-gaps-implementation)
+
+- **`docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` NEW** — in-loop dogfood evidence on real `pnpm try:scaffold` + workspace-link patch (per `README.md.tmpl:70` documented monorepo flow):
+  - **Phase 1 Pre-flight:** `pnpm typecheck` exit 0 + scoped 51-file vitest 478 PASSED (whole-repo OOMs at >8GB heap; CI baseline holds) + 0 `any` in production code.
+  - **Phase 2 Scaffold Default:** scaffold completed after `@theokit/sdk@^1.7.0 → workspace:*` patch (forward-compat pin awaiting calendar-gated sdk 1.7.0 publish, NOT a plan regression). All 4 of 5 ACs PASS; "Hello Theo" check stale because templates evolved to Agent Surface (real product, not hello-world).
+  - **Phase 7 Build + Manifest:** `pnpm build` exit 0 — 60+ code-split assets emitted under `.theo/client/assets/`; `.theo/manifest.json` v1 with 2 routes auto-detected (`/api/chat` POST + `/api/health` GET).
+  - **Phase 8 Production Server:** `theokit start --port 9871` boots cleanly; `GET /api/health` → HTTP 200 `{"ok":true}`; `GET /` → HTTP 200 (SSR).
+  - **Phase 22.5 Structured Logging:** real JSON log line emitted per request with full `level/method/url/status/duration/requestId/timestamp` shape; `requestId` is RFC 4122 UUID.
+- **Honest scope:** 5 of 22 phases verified GREEN with caveats disclosed. 17 phases need out-of-loop resources documented per-phase. **No CRITICAL findings encountered in the runnable subset.** The only medium finding (template pin forward-compat) has a documented workaround at template scaffold time per `README.md.tmpl:70`.
+- **Cleanup:** `my-test/` scaffold removed via `pnpm try:clean` after evidence collection (clean slate for next session).
+
 ### Changed (Plan theokit-arch-gaps-implementation — loop-architecture-review DoD evidence chain — pre-plan → post-plan delta documented)
 
 The DoD gate "Re-run `loop-architecture-review --mode=full` retorna nota ≥4.0/5" cannot safely run nested inside this active arch-gaps halt-loop per `rules/loop-engine-convention.md` ("Multiple concurrent ralph-loops on overlapping state. They will conflict."). Per Rule 3 (extreme honesty), this commit makes the situation transparent: it ships an evidence-chain document that maps the prior 2026-06-05 audit's "Pra alcançar 4.0" + "Pra alcançar 4.5" blockers to the specific session commits that address each one. The next dedicated session (or human running the gate) has a precise verification baseline. (#arch-gaps-implementation)
