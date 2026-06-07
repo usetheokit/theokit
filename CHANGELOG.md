@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — quality-gate baseline beyond plan DoD: naming + secrets + templates PASS; 4 pre-existing findings recorded)
+
+Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` with a full sweep of orthogonal package-quality scripts. Triangulates the plan's surface against the broader monorepo baseline. None are part of plan v1.2's Global DoD; recorded for transparency. (#arch-gaps-implementation)
+
+- ✅ **`pnpm check:naming`** (ls-lint) PASS.
+- ✅ **`pnpm check:secrets`** (prevent-secrets.sh) PASS.
+- ✅ **`pnpm check:templates`** (sync-template-versions.mjs) PASS — "6 template(s) scanned, no drift".
+- ⚠️ **`pnpm check:licenses`** FAIL — `khroma@2.1.0` package.json omits `"license"` field (actual `license` file contains MIT verbatim). Transitive of sibling `@theokit/ui`; NOT plan-introduced.
+- ⚠️ **`pnpm check:audit`** FAIL — 1 HIGH CVE in `valibot@0.42.1` (15 paths via `@theokit/ui@0.14.0`). NOT plan-introduced; sibling responsibility per `npm/CVE GHSA-vqpr-j7v3-hqw9`.
+- ⚠️ **`pnpm format:check`** FAIL — missing `prettier-plugin-astro` (no `.astro` files in repo). Environment artifact; NOT plan-introduced.
+- ⚠️ **`pnpm knip`** FAIL — knip's own deps tree has broken `zod/mini` subpath resolution. Tooling environment artifact; NOT plan-introduced.
+
+Every ⚠️ finding has evidence chain pointing to pre-existing transitive deps or local tooling environment — no commit in `8e553a3..HEAD` introduces them. The plan's Global DoD doesn't require these gates; this record exists so the next session has the complete quality picture.
+
 ### Added (Plan theokit-arch-gaps-implementation — partial dogfood extension: Phases 18 + 22.1-22.6 GREEN — 20/22 cumulative)
 
 Extends `docs/audit/arch-gaps-dogfood-partial-2026-06-07.md` from 14/22 to 20/22 dogfood phases verified in-loop. Only 2 phases remain (Phase 9 E2E Playwright + Phase 10 HMR + Phase 5 chat LLM smoke + Phase 13 Auth OAuth + Phase 11 DX qualitative + Phase 21 full regression — all need out-of-loop resources per halt-loop driver pause conditions). (#arch-gaps-implementation)
