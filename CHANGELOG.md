@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed (Plan theokit-arch-gaps-implementation — devtools-injection latent regression — T2.4 sub-org path now reflected in test regex)
+
+Iter 62 root-caused the previously-deferred latent finding from iter 60. The virtual module body fetched at `/@theo/devtools/entry.js` is Vite-resolved to its on-disk absolute path. After T2.4 (`devtools/{dom,state,bridge,format}/` sub-organization), the entry moved from `devtools/entry.tsx` to `devtools/dom/entry.tsx`. The test regex `/devtools\/entry/` no longer matched the new absolute path `…/devtools/dom/entry.tsx`. **Fix:** loosen regex to `/devtools\/(dom\/)?entry/` — accepts both legacy-flat AND post-T2.4 sub-org shapes. With this fix, `tests/integration/devtools-injection.test.ts` is now **6/6 GREEN** (was the last shard-1 fail after iter 61's escape-hatch unblocked the boot path). (#arch-gaps-implementation)
+
+- The previous CHANGELOG entry classified this as "pre-existing latent NOT plan-introduced" — that was a misclassification per the new investigation. **It IS plan-related** (T2.4 moved the file, and the test regex wasn't updated alongside the move). Correct classification: T2.4 left a regex-shaped trailing edge that became visible only when the iter-61 escape-hatch unblocked the boot path. Honest re-classification per Rule 3.
+
 ### Fixed (Plan theokit-arch-gaps-implementation — 2 latent regressions discovered + fixed via whole-repo vitest shard 1)
 
 Iter 60's verbose foreground re-run of shard 1 surfaced detailed failure output that the prior background subprocess truncated. Three classes of failure identified; two surgically fixable in-loop, one discovered-but-deferred. (#arch-gaps-implementation)
