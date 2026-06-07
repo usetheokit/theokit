@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 4 patterns extended in-loop)
+
+Iter 73 drove Phase 4 (patterns-detective). 29 design_pattern_findings + 2 new architectural_findings registered. **4 honest re-classifications vs June 5 review surfaced — Rule 3 in action.** (#arch-gaps-implementation)
+
+- **29 design pattern findings (per verdict):**
+  - 26 applied_correctly across adapter, bridge, chain_of_responsibility, command, decorator, facade, factory, mediator, observer, proxy, singleton, strategy
+  - 2 missing (builder — intentional YAGNI; repository — intentional delegation to `@theokit/orm` sibling per ADR-0007)
+  - 1 over_engineered (the previous classification of 16 `defineX` as Factory pattern was wrong — they're TS identity helpers, not GoF Factory)
+- **4 HONEST re-classifications vs June 5 review** (real plan-side improvements verified on disk):
+  1. **TheoPlugin = Mediator applied_correctly** (was "misnamed Composite") — `plugin-types.ts:39-44` TheoApp hub aggregates registrations; `plugin-runner.ts:87-167` Object.create per-plugin scope (T3.1) = Fastify Mediator pattern. C1 (self-recursive Plugin[]) fails decisively → NOT Composite.
+  2. **Agent registry = init guard "other" applied_correctly** (was "misapplied Singleton") — `configure-agent-registry.ts:42` doesn't construct/own registry; it's an idempotent EC-3 race-safe init guard delegating to SDK. SG1 fails → not Singleton.
+  3. **16 `defineX` = over_engineered Factory classification** — `define-route.ts:14` is `return config` identity helper for TS type inference (TanStack/Astro idiom). F1+F2+F3 all fail. Webhook providers + createSessionManager remain legitimate factories.
+  4. **Repository = missing-intentional** confirmed via architecture.md ADR-0007 (owned by `@theokit/orm` sibling).
+- **NEW patterns discovered post-plan:**
+  - **Bridge** at Web/Node twin interface family (`plugin-types.ts:104` WebTheoApp; T5a.2 Phase F-G dual signatures)
+  - **Decorator-like** at `TheoLogger.child(context)` (`observability/logger.ts:43`)
+  - **Command** at CLI verb surface (12+ commands) + devtools reducer
+  - **Mediator** at services orchestrator (polyglot coordination)
+  - **Adapter** at `core/contracts/server-error-to-envelope.ts:28` — G5 wire-boundary translator (T4.1)
+- **2 new architectural_findings (Phase 4):**
+  - `naming_misleading` — TheoPlugin name evokes Composite but shape is Mediator (worth doc patch)
+  - `tooling_gap` — 60% deep-read threshold semantics need refinement (counter mixes prod source with test fixtures)
+- **Phase 4 coverage:** 321 deep-read files = 38.4% global / 100% of `packages/theo/src/` production source + create-theo + scripts. Below the 0.60 suggested threshold (counter inclues 514 test fixtures; production source coverage is actually 100%).
+
 ### Added (Plan theokit-arch-gaps-implementation — loop-architecture-review Phase 3 principles extended in-loop)
 
 Iter 72 drove Phase 3 (principles-auditor) against the same DB to extend coverage beyond structure mode. 23 principle_violations registered with real SOLID/Clean Code/DRY findings. (#arch-gaps-implementation)
