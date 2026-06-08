@@ -76,6 +76,24 @@ SNAPSHOTS: dict[str, dict[str, object]] = {
         "score_min": 0,
         "expected_hard_caps_subset": set(),
     },
+    # Active plans added 2026-06-08 SOTA upgrade — accept any band (just verify the
+    # plan loads + scores without error). Tighten the envelope after the plans
+    # complete their migration to the new template.
+    "harden-fabrication-and-cq-gate-plan.md": {
+        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
+        "score_min": 0,
+        "expected_hard_caps_subset": set(),
+    },
+    "slice-s0-walking-skeleton-plan.md": {
+        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
+        "score_min": 0,
+        "expected_hard_caps_subset": set(),
+    },
+    "slice-s0b-walking-skeleton-crd-first-plan.md": {
+        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
+        "score_min": 0,
+        "expected_hard_caps_subset": set(),
+    },
 }
 
 

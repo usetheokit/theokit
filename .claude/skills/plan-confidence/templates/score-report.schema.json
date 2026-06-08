@@ -52,7 +52,12 @@
           "vague_acceptance_criteria",
           "soft_floor_smell_density_high",
           "soft_floor_high_deferred_ratio",
-          "soft_floor_low_architecture_compliance"
+          "soft_floor_low_architecture_compliance",
+          "soft_floor_baseline_context_incomplete",
+          "soft_floor_drawbacks_section_insufficient",
+          "soft_floor_unresolved_questions_section_missing",
+          "soft_floor_concurrency_tests_missing",
+          "soft_floor_failure_scenarios_missing"
         ]
       },
       "uniqueItems": true
