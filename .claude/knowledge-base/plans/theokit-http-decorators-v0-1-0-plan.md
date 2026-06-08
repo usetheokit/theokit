@@ -6,6 +6,8 @@ goal: Ship a new `@theokit/http-decorators` package at v0.1.0 that bridges NestJ
 
 # Plan: `@theokit/http-decorators` v0.1.0 — NestJS decorator bridge over `defineRoute`
 
+> **Version 1.1** (2026-06-08) — Absorbed 5 MUST FIX items from edge-case review `theokit-http-decorators-v0-1-0-edge-cases-2026-06-08.md`: EC-1 mount mechanism (NEW ADR D7 — Vite plugin writes generated route files to gitignored `server/routes/__decorated__/`), EC-2 missing @Controller throws (T3.2), EC-3 path normalization in joinPath (T3.2), EC-4 missing emitDecoratorMetadata throws (T3.2), EC-5 duplicate controller dedup + warn (T3.3). Plus 6 SHOULD TEST + 3 DOCUMENT items folded into respective tasks. Plus EC-15 CLI help string fix in T5.1.
+>
 > **Version 1.0** — Ship a new opt-in package `@theokit/http-decorators` that lets NestJS-migrating teams write `@Controller`/`@Get`/`@Body`/`@UseGuards` decorators while the runtime translates them at build-time / startup-time into TheoKit's existing `defineRoute` + `defineMiddleware` factory contracts. Zero changes to TheoKit core (`packages/theo/src/server/define/define-route.ts`, `packages/theo/src/core/contracts/route-config.ts`); the package consumes only the public `theokit/server` barrel per Pattern D6. Decision provenance comes from the registered patterns skill `theokit-http-decorators-pattern-from-nestjs-patterns` (6 Patterns D1-D6 + 9 Recommendations + 13 key citations from blueprint scored SHIPPABLE_WITH_CAVEATS 89.0).
 
 ## Goal
@@ -31,6 +33,7 @@ The package fills the "NestJS-equivalent backend DX" slot that currently has `@t
 | `packages/theo/src/core/contracts/route-config.ts` | 45 | `29b4bcd` (2026-05-31) | `RouteConfig<TQuery,TBody,TParams,TCtx,TResponse>` 5-arity interface with optional Zod schemas + handler | **READ-ONLY in this plan.** Bridge consumes the type via `theokit/server` barrel; `core/contracts/<file>.ts` is the canonical home for shared types per `architecture.md` v3.1 INVARIANT #3 exception. |
 | `packages/theo/src/server/index.ts` | 134 | `45b1892` (2026-06-06) | Public `theokit/server` barrel re-exporting `define/*` + `http/*` + `scan/*` etc. | **READ-ONLY in this plan.** Already exposes `defineRoute` + `defineMiddleware` via `export * from './define/index.js'` (line 54). Pattern D6 requires zero new exports from this file. |
 | `packages/theo/src/cli/commands/generate.ts` | 291 | `4e44ddf` (2026-06-01) | `theokit generate {route,action,page,ws} <name>` CLI command with inline template functions | Must add ONE entry to `VALID_TYPES` (`route, action, page, ws, controller`) + ONE switch case in `resolveTemplate()` (line 125) + ONE new `generateControllerTemplate(name)` function mirroring `generateRouteTemplate` pattern (line 85). Existing 4 verbs unchanged. |
+| `packages/theo/src/cli/index.ts` | (existing) | `45b1892` (2026-06-06) | CLI dispatcher entry — declares the `generate <type> <name>` command and its help text at line 52 | v1.1 EC-15: line 52 help string `'Generate a route, action, page, or ws endpoint'` must become `'Generate a route, action, page, ws, or controller endpoint'`. Dispatch logic at line 55-56 unchanged (passes `<type>` through generically). |
 | `packages/http-decorators/package.json` (NEW) | 0 | — | (to be created) | — |
 | `packages/http-decorators/tsconfig.json` (NEW) | 0 | — | (to be created) | — |
 | `packages/http-decorators/src/index.ts` (NEW) | 0 | — | (to be created) — public barrel | — |
@@ -44,6 +47,9 @@ The package fills the "NestJS-equivalent backend DX" slot that currently has `@t
 | `packages/http-decorators/src/bridge/walk-metadata.ts` (NEW) | 0 | — | (to be created) — reads `reflect-metadata` per class, emits `defineRoute` config + `defineMiddleware` wrap chain | — |
 | `packages/http-decorators/src/bridge/register-controllers.ts` (NEW) | 0 | — | (to be created) — public `registerControllers([Controller1, Controller2])` API | — |
 | `packages/http-decorators/src/bridge/dto-zod.ts` (NEW) | 0 | — | (to be created) — resolves `static schema` Zod on DTO class per Pattern D2 | — |
+| `packages/http-decorators/src/bridge/errors.ts` (NEW — v1.1 EC-2/EC-4) | 0 | — | (to be created) — `HttpDecoratorsConfigError` typed error class with actionable migration hints | — |
+| `packages/http-decorators/src/vite/plugin.ts` (NEW — v1.1 ADR D7) | 0 | — | (to be created) — Vite plugin `decoratorsBridgePlugin()` that scans `server/controllers/**/*.ts` and writes generated route files to `server/routes/__decorated__/` at dev-start + build-start | — |
+| `packages/http-decorators/src/vite/emit-route-file.ts` (NEW — v1.1 ADR D7) | 0 | — | (to be created) — given a `WalkResult`, emits TypeScript source for a single `server/routes/__decorated__/{...}.ts` file (named-export-per-verb form: `export const GET = defineRoute({...})`) | — |
 | `packages/http-decorators/tests/contract/*.test.ts` (NEW × 6) | 0 | — | (to be created) — ONE contract test per Pattern D1-D6 | — |
 | `packages/http-decorators/tests/integration/basic-controller.test.ts` (NEW) | 0 | — | (to be created) — Pattern 2 boundary smoke using `startDevServer` + native `fetch` per Pattern D4 | — |
 | `fixtures/http-decorators-basic/` (NEW dir) | 0 | — | (to be created) — minimal fixture project with a decorated controller for the integration test | — |
@@ -118,6 +124,7 @@ Per `rules/architecture.md` v3.1 Module Map:
 - [ ] Sub-goal 7 — `theokit generate controller <name>` CLI verb shipped via single `VALID_TYPES` extension + one template function per Pattern D5 + Recommendation 7.
 - [ ] Sub-goal 8 — Integration test using existing TheoKit Pattern 2 (`startDevServer` + native `fetch`) PASSES against `fixtures/http-decorators-basic/` per Pattern D4 + Recommendation 8.
 - [ ] Sub-goal 9 — Zero deep imports — `import { defineRoute, defineMiddleware } from 'theokit/server'` only. Enforced by a `tests/contract/no-deep-imports.test.ts` per Pattern D6 + Recommendation 9.
+- [ ] Sub-goal 10 (v1.1 — ADR D7) — `decoratorsBridgePlugin()` Vite plugin emits route files to `server/routes/__decorated__/`, auto-writes `.gitignore`, and `scanServerRoutes` picks them up. Verified end-to-end by T-final.2 round-trip test. Resolves EC-1 mount-mechanism gap.
 
 ## ADRs
 
@@ -197,6 +204,31 @@ NestJS's separation of Guards vs Interceptors is implementation-detail of its Rx
 
 **Consequences:** Bridge code is robust against TheoKit internal refactors. Bridge layer's contract tests verify barrel-import shape (catches accidental deep imports during development).
 
+### D7 — Mount mechanism: Vite plugin writes generated route files to gitignored `server/routes/__decorated__/` (resolves edge-case-review EC-1)
+
+**Decision:** v0.1.0 ships `@theokit/http-decorators/vite-plugin` exporting `decoratorsBridgePlugin()` that runs at Vite `configResolved` + `buildStart` hooks. The plugin (i) scans `server/controllers/**/*.ts` via the existing TheoKit module-loader pattern; (ii) for each decorated class, calls `walkControllerMetadata` (T3.2) + `emitRouteFile` (NEW T3.5) to emit one file per route to `server/routes/__decorated__/{verb}__{path}.ts` using TheoKit's existing named-export-per-verb convention (`export const GET = defineRoute({...})`); (iii) gitignores the directory via auto-added `server/routes/__decorated__/.gitignore` on first run. The existing TheoKit scanner at `packages/theo/src/server/scan/scan.ts:102` picks up the generated files identically to hand-authored routes.
+
+`registerControllers([...])` API is REPLACED in v1.1: the public surface is now `decoratorsBridgePlugin({ controllers: [CatsController, DogsController] })` invoked from the consumer's `vite.config.ts`. Consumers add the plugin once; the bridge handles the rest.
+
+**Rationale:** Blueprint Q1 conclusion offered strategy (a) "emit files at build time" vs strategy (b) "register virtual routes at startup". Plan v1.0 picked (b) — edge-case-review EC-1 surfaced that strategy (b) requires a runtime route-registration API that TheoKit does NOT expose (verified via `grep` on `packages/theo/src/server/index.ts` + `packages/theo/src/server/scan/index.ts` 2026-06-08 — only `scanServerRoutes`, `matchRoute`, `compilePattern` exported). Switching to strategy (a) via Vite plugin:
+- Preserves ADR D1's "zero changes to TheoKit core" claim (no `theokit/server` barrel additions, no scanner modification).
+- Reuses the existing file-scan pipeline — generated files are indistinguishable from hand-authored ones at runtime.
+- Aligns with TheoKit's Vite-first architecture (see `architecture.md` v3.1 § Module Map row `vite-plugin/`).
+- Composes naturally with existing TheoKit Vite plugins (no plugin order conflicts since emission happens at `buildStart`, before route scanning).
+
+**Alternatives considered:**
+- (b) Add `mountVirtualRoutes(registrations)` to `theokit/server` barrel — REJECTED: requires a core change that violates ADR D1's invariant; would add a public API that exists ONLY to serve this package; bad surface stewardship.
+- (c) Document `registerControllers` as returning an array the consumer hand-wires into `server/routes/_decorators.ts` re-exports — REJECTED: weakens the "automatic" promise in the Goal; consumer ergonomics suffer; defeats the migration-friendliness aim.
+- (d) Write files at runtime (process start) instead of Vite hook — REJECTED: dev vs build divergence; files written at `npm start` are not present during `npm dev` first cold start; race conditions with the scanner.
+
+**Consequences:**
+- New deliverables: `packages/http-decorators/src/vite/plugin.ts` (~150 LoC) + `packages/http-decorators/src/vite/emit-route-file.ts` (~80 LoC) + a `packages/http-decorators/vite-plugin` sub-path export in `package.json`.
+- Consumer `vite.config.ts` gains one line: `plugins: [theoPlugin(), decoratorsBridgePlugin({ controllers: [CatsController] })]`.
+- Generated directory `server/routes/__decorated__/` is gitignored by the plugin (consumer doesn't commit generated files).
+- T3.3 (registerControllers) is reframed in v1.1: the function still exists as the LOW-LEVEL API (used by the Vite plugin internally + advanced consumers who don't use Vite), but the PRIMARY consumer-facing surface is the plugin.
+- New T3.5 task added in Phase 3 to ship the Vite plugin + emit-route-file helpers.
+- New T-final.2 added to Final Phase: verify `server/routes/__decorated__/.gitignore` is auto-written + verify generated files are picked up by the existing scanner (round-trip integration test).
+
 ## Drawbacks & Risks
 
 | Drawback / Risk | Severity | Mitigation | Owner |
@@ -222,7 +254,7 @@ NestJS's separation of Guards vs Interceptors is implementation-detail of its Rx
 Phase 0 (Pre-flight) ──▶ Phase 1 (Foundation) ──▶ Phase 2 (Parameter + Response decorators)
                                 │
                                 ▼
-                            Phase 3 (Bridge engine + DTO Zod)
+                            Phase 3 (Bridge engine + DTO Zod + Vite plugin [T3.5 NEW v1.1])
                                 │
                                 ├──▶ Phase 4 (Guards/Interceptors)
                                 │
@@ -233,9 +265,13 @@ Phase 0 (Pre-flight) ──▶ Phase 1 (Foundation) ──▶ Phase 2 (Parameter
                                 │
                                 ▼
                             Final Phase: Integration Validation
+                              (T-final.1 Pattern-2 boundary smoke +
+                               T-final.2 round-trip mount verification [NEW v1.1])
 ```
 
 Phases 4 and 5 can be implemented in parallel (no shared files). All other phases are sequential.
+
+T3.5 (NEW v1.1 — Vite plugin) is a hard dependency of T-final.1 and T-final.2 — both integration tests require the plugin to actually mount routes for `fetch` calls to reach handlers.
 
 ---
 
@@ -441,6 +477,7 @@ export function getMeta<T>(key: symbol, target: object, propertyKey?: string | s
 RED:     test_set_get_roundtrip — setMeta then getMeta returns same value
 RED:     test_missing_key_returns_undefined
 RED:     test_property_key_isolation — same key on class vs class.method are independent
+RED:     test_consumer_inherits_reflect_metadata_via_package_import (EC-11) — verify storage.ts's `import 'reflect-metadata'` side-effect propagates so consumers don't need their own explicit import; assert via fresh module-load that Reflect.defineMetadata is available
 GREEN:   Implement keys.ts + storage.ts.
 REFACTOR: None expected.
 VERIFY:  pnpm --filter @theokit/http-decorators test tests/unit/metadata.test.ts
@@ -449,7 +486,7 @@ VERIFY:  pnpm --filter @theokit/http-decorators test tests/unit/metadata.test.ts
 #### Acceptance Criteria
 - [ ] 8 symbol constants exported from keys.ts.
 - [ ] setMeta/getMeta facade typed `<T>` (no `any` in production code per `.claude/rules/type-safety.md`).
-- [ ] 3 RED tests GREEN.
+- [ ] 4 RED tests GREEN (3 original + 1 EC-11 reflect-metadata auto-import).
 - [ ] Pass: size — every changed file ≤ 100 lines.
 
 #### DoD
@@ -651,13 +688,14 @@ export const All     = makeVerbDecorator('ALL')
 RED:     test_each_verb_stores_entry (8 sub-tests, one per verb)
 RED:     test_multiple_methods_accumulate — class with @Get findAll() + @Post create() stores 2 entries
 RED:     test_get_with_subpath — @Get('breed') stores {path: 'breed'}
+RED:     test_method_with_multiple_verb_decorators (EC-6) — Given method decorated with both @Get() AND @Post(), When walkControllerMetadata runs, Then BOTH entries register (mirror NestJS dual-route behavior)
 GREEN:   Implement methods.ts.
 VERIFY:  pnpm --filter @theokit/http-decorators test tests/unit/methods.test.ts
 ```
 
 #### Acceptance Criteria
 - [ ] 8 named exports + correct typing.
-- [ ] All RED tests GREEN.
+- [ ] All RED tests GREEN (10 sub-tests + 1 EC-6 dual-verb case).
 - [ ] Pass: size — file ≤ 100 LoC.
 
 #### DoD
@@ -735,13 +773,14 @@ export function Res(opts?: { passthrough?: boolean }): ParameterDecorator { /* s
 RED:     test_each_param_decorator (9 sub-tests, one per decorator)
 RED:     test_multiple_params_per_method — handler(@Body() b, @Param('id') id) records both at index 0/1
 RED:     test_res_passthrough — @Res({passthrough:true}) stores passthrough=true
+RED:     test_walk_handles_param_index_gap (EC-7) — Given handler `findOne(@Param('id') id, ctx: SomeCtx, @Headers('x') hdr)` where param index 1 has no decorator, When walkControllerMetadata builds paramExtractors, Then index 1 returns undefined (gracefully skipped) and indices 0+2 are correctly extracted; bridge MUST NOT crash
 GREEN:   Implement params.ts.
 VERIFY:  pnpm --filter @theokit/http-decorators test tests/unit/params.test.ts
 ```
 
 #### Acceptance Criteria
 - [ ] 9 named exports.
-- [ ] All RED tests GREEN.
+- [ ] All RED tests GREEN (11 original sub-tests + 1 EC-7 index-gap case).
 - [ ] Pass: size — file ≤ 150 LoC.
 
 #### DoD
@@ -971,42 +1010,55 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
 ```
 
 #### Tasks
-1. Implement `walkControllerMetadata` + helper `joinPath` + helper `buildExtractor`.
-2. Write RED tests with full-coverage fixture classes for: simple GET; POST with @Body DTO; GET with @Query + @Header; PUT with @Param; DELETE with @HttpCode; @Redirect; class with @Controller host (warning emitted).
+1. Implement `walkControllerMetadata` + helper `joinPath` (with normalization per EC-3) + helper `buildExtractor` + `errors.ts` exporting `HttpDecoratorsConfigError`.
+2. **EC-2 (MUST FIX):** When `getMeta(CONTROLLER_PREFIX, ControllerClass)` returns `undefined`, throw `HttpDecoratorsConfigError('Controller class ${ControllerClass.name} is missing @Controller() decorator')`. Replace plan-v1.0 default `?? { prefix: '', host: undefined }`.
+3. **EC-3 (MUST FIX):** `joinPath(prefix, path)` MUST normalize leading/trailing slashes: `('/' + prefix + '/' + path).replace(/\/+/g, '/').replace(/\/$/, '') || '/'`. Verify against 4 input shapes in RED tests.
+4. **EC-4 (MUST FIX):** When ANY `@Body`/`@Query`/`@Param` decorator exists on a method AND `Reflect.getMetadata('design:paramtypes', ControllerClass.prototype, propertyKey)` returns `undefined`, throw `HttpDecoratorsConfigError('emitDecoratorMetadata not enabled in consumer tsconfig — add "emitDecoratorMetadata": true. See migration guide § Troubleshooting.')`.
+5. **EC-8 (SHOULD TEST):** Walk MUST traverse the prototype chain when reading `ROUTE_METHODS` / `ROUTE_PARAMS` so inherited `@Get` from a parent class registers under child class's prefix. Implement via `getMeta` walking `ControllerClass.prototype` then `Object.getPrototypeOf(ControllerClass.prototype)` if needed.
+6. Write RED tests for original 7 cases PLUS 4 new MUST FIX cases PLUS EC-8 inheritance case (12 total).
 
 #### TDD
 ```
-RED:     test_walk_simple_get — class with @Controller('cats') + @Get() findAll() returns one WalkResult {verb:'GET', fullPath:'cats', ...}
+RED:     test_walk_simple_get — class with @Controller('cats') + @Get() findAll() returns one WalkResult {verb:'GET', fullPath:'/cats', ...}
 RED:     test_walk_post_with_body_dto — @Body() body: CreateCatDto with static schema → bodySchema resolved
 RED:     test_walk_get_with_query_header — verifies querySchema + headers list
 RED:     test_walk_put_with_param — verifies paramsSchema + paramExtractor for @Param('id')
 RED:     test_walk_delete_with_http_code — verifies status=204
 RED:     test_walk_redirect — verifies redirect={url, status}
 RED:     test_walk_host_warning — verifies console.warn called for @Controller({host:'x'})
-GREEN:   Implement walk-metadata.ts.
-REFACTOR: Extract joinPath + buildExtractor if walk-metadata.ts > 200 LoC.
+RED:     test_walk_throws_when_missing_controller_decorator (EC-2) — class with @Get() but no @Controller throws HttpDecoratorsConfigError
+RED:     test_join_path_normalizes_leading_trailing_slashes (EC-3) — 4 sub-cases: ('cats','/breed') → '/cats/breed'; ('/cats','breed') → '/cats/breed'; ('cats/','/breed/') → '/cats/breed'; ('','') → '/'
+RED:     test_walk_throws_when_design_paramtypes_missing (EC-4) — @Body decorator + emitDecoratorMetadata=false simulation throws HttpDecoratorsConfigError mentioning migration guide
+RED:     test_walk_inheritance_child_inherits_parent_methods (EC-8) — class AdminCatsController extends CatsController; @Get from parent registers under AdminCatsController's @Controller prefix
+GREEN:   Implement walk-metadata.ts + joinPath + errors.ts.
+REFACTOR: Extract joinPath + buildExtractor + errors out if walk-metadata.ts > 200 LoC.
 VERIFY:  pnpm --filter @theokit/http-decorators test tests/unit/walk-metadata.test.ts
 ```
 
 #### Acceptance Criteria
-- [ ] 7 RED tests GREEN.
-- [ ] Zero `any` in production code.
+- [ ] 12 RED tests GREEN (7 original + 4 MUST FIX + 1 SHOULD TEST inheritance).
+- [ ] Zero `any` in production code (Pattern D1 compliance — `.claude/rules/type-safety.md`).
 - [ ] `walk-metadata.ts` ≤ 300 LoC (per `.claude/rules/architecture.md` default 500 budget).
+- [ ] `errors.ts` ≤ 50 LoC and exports `HttpDecoratorsConfigError extends Error` with `name = 'HttpDecoratorsConfigError'`.
 - [ ] Q4 host warning emitted exactly once per call.
+- [ ] All thrown errors include actionable hint pointing to migration guide section.
 
 #### DoD
 - [ ] Bridge engine core green.
 - [ ] Coverage ≥ 90% on `walk-metadata.ts`.
+- [ ] EC-2/EC-3/EC-4/EC-8 absorbed and verified.
 
-### T3.3 — `registerControllers([...])` public API (binds walk-result to `defineRoute`)
+### T3.3 — `registerControllers([...])` low-level API (binds walk-result to `defineRoute`) — v1.1 dedupes per EC-5
 
-#### Objective
-Implement `packages/http-decorators/src/bridge/register-controllers.ts` exporting `registerControllers(controllers: Function[]): RouteRegistration[]`. Iterates each controller, calls `walkControllerMetadata`, converts each `WalkResult` to a `defineRoute(...)` call (imported via barrel per Pattern D6), and returns the registration list. THIS is the first task that imports from `theokit/server`.
+#### Objective (v1.1 reframed)
+Implement `packages/http-decorators/src/bridge/register-controllers.ts` exporting `registerControllers(controllers: Function[]): RouteRegistration[]`. Iterates each controller (de-duplicated by class reference per EC-5), calls `walkControllerMetadata`, converts each `WalkResult` to a `defineRoute(...)` call (imported via barrel per Pattern D6), and returns the registration list.
+
+**Reframed per ADR D7 (v1.1):** this function is now the LOW-LEVEL API consumed internally by the Vite plugin (T3.5) AND by advanced users who don't use Vite. It is no longer the primary consumer-facing surface (that role moved to `decoratorsBridgePlugin()`).
 
 #### Why this step (action + reasoning — ReAct discipline)
 
-1. **What this step does** — public API surface consumers call from their `server/main.ts` or equivalent: `registerControllers([CatsController, DogsController])`. Returns an array of `{verb, path, route}` ready to mount.
-2. **Why it is necessary now** — without this, the walk results (T3.2) have no destination. This is the seam where the bridge meets TheoKit. Pattern D6 enforced here — single `import { defineRoute, defineMiddleware } from 'theokit/server'`.
+1. **What this step does** — low-level API that translates `WalkResult[]` → `RouteRegistration[]`. Used internally by the Vite plugin to produce the route definitions written to `server/routes/__decorated__/`. Pattern D6 enforced — single `import { defineRoute, defineMiddleware } from 'theokit/server'`.
+2. **Why it is necessary now** — even though primary consumer-surface is the Vite plugin (T3.5), the bridge's emit-file step needs the array of route definitions to serialize. Splitting `walkControllerMetadata` (T3.2 — pure metadata) → `registerControllers` (T3.3 — `defineRoute` instances) → `emitRouteFile` (T3.5 — serialize to source) gives 3 testable units. Pattern D6 honored here.
 
 #### Evidence
 - Blueprint Q1 conclusion strategy (b): "register virtual routes at startup via a `registerControllers([...])` API".
@@ -1037,7 +1089,18 @@ export interface RouteRegistration {
 }
 
 export function registerControllers(controllers: Function[]): RouteRegistration[] {
-  return controllers.flatMap((Ctor) => {
+  // EC-5: dedupe by class reference; warn on duplicates
+  const seen = new Set<Function>()
+  const unique: Function[] = []
+  for (const Ctor of controllers) {
+    if (seen.has(Ctor)) {
+      console.warn(`[@theokit/http-decorators] Controller ${Ctor.name} registered multiple times — dropping duplicate`)
+      continue
+    }
+    seen.add(Ctor)
+    unique.push(Ctor)
+  }
+  return unique.flatMap((Ctor) => {
     const walks = walkControllerMetadata(Ctor)
     return walks.map((w) => buildRegistration(Ctor, w))
   })
@@ -1087,18 +1150,20 @@ RED:     test_register_body_dto_invocation — POST with @Body, handler receives
 RED:     test_register_http_code_override — @HttpCode(204) makes response status=204
 RED:     test_register_redirect_short_circuit — @Redirect handler returns Response.redirect
 RED:     test_register_multiple_controllers — array of 2 controllers returns combined registrations
+RED:     test_register_duplicate_controllers_dedupes_with_warn (EC-5) — [X, X] returns N registrations (not 2N) and console.warn called once
 GREEN:   Implement register-controllers.ts.
 VERIFY:  pnpm --filter @theokit/http-decorators test tests/unit/register-controllers.test.ts
 ```
 
 #### Acceptance Criteria
-- [ ] 6 RED tests GREEN.
+- [ ] 7 RED tests GREEN (6 original + 1 EC-5 dedup).
 - [ ] T1.3 contract test (no-deep-imports) STILL passes after this commit — only `from 'theokit/server'` allowed.
 - [ ] Pass: size — file ≤ 200 LoC.
 
 #### DoD
 - [ ] Public API green.
 - [ ] Pattern D6 contract test green.
+- [ ] EC-5 absorbed (idempotent registration).
 
 ### T3.4 — Contract tests per Pattern D1, D2, D3 (NestJS-equivalent behavior verification)
 
@@ -1142,6 +1207,131 @@ VERIFY:  pnpm --filter @theokit/http-decorators test tests/contract/
 
 #### DoD
 - [ ] Contract tests in place.
+
+### T3.5 — Vite plugin `decoratorsBridgePlugin()` + `emitRouteFile()` helper (NEW in v1.1 — resolves EC-1 via ADR D7)
+
+#### Objective
+Ship `packages/http-decorators/src/vite/plugin.ts` exporting `decoratorsBridgePlugin({ controllers, generatedDir? })` Vite plugin that hooks into `configResolved` + `buildStart` and writes generated route files to `<generatedDir>` (default: `server/routes/__decorated__/`). Also ship `packages/http-decorators/src/vite/emit-route-file.ts` exporting `emitRouteFile(WalkResult): { filePath: string; source: string }` that serializes one `WalkResult` to a TypeScript source string in TheoKit's named-export-per-verb convention.
+
+#### Why this step (action + reasoning — ReAct discipline)
+
+1. **What this step does** — ships the consumer-facing primary surface that resolves the EC-1 mount gap. Plugin runs at Vite dev/build, walks each controller class, emits one `.ts` file per route into `server/routes/__decorated__/`, where TheoKit's existing scanner (`scanServerRoutes` at `packages/theo/src/server/scan/scan.ts:102`) picks them up automatically. Also writes `server/routes/__decorated__/.gitignore` containing `*` on first run so consumers don't commit generated files.
+2. **Why it is necessary now** — without this, the entire bridge engine (T3.2 + T3.3) produces unmountable routes. ADR D7 specifies this mechanism as the canonical mount path for v0.1.0. Without T3.5, the Goal-mandated Pattern-2 integration test (T-final.1) FAILS structurally because no routes are reachable via `fetch`.
+
+#### Evidence
+- ADR D7 (NEW v1.1).
+- Edge-case review EC-1: "registerControllers([...]) has no mount mechanism — TheoKit's router is file-scan-only".
+- Verified via `grep` on `packages/theo/src/server/index.ts` + `packages/theo/src/server/scan/index.ts` (2026-06-08): only `scanServerRoutes`, `matchRoute`, `compilePattern` exported — no runtime `addRoute`.
+
+#### Files to edit
+```
+packages/http-decorators/src/vite/plugin.ts (NEW) — decoratorsBridgePlugin
+packages/http-decorators/src/vite/emit-route-file.ts (NEW) — emitRouteFile helper
+packages/http-decorators/src/vite/index.ts (NEW) — barrel
+packages/http-decorators/package.json (UPDATE) — add "./vite-plugin" subpath export pointing at dist/vite/index.js
+packages/http-decorators/tests/unit/emit-route-file.test.ts (NEW) — RED tests for serialization
+packages/http-decorators/tests/integration/vite-plugin-emit.test.ts (NEW) — RED test that runs the plugin on a fixture + verifies files written + gitignore written
+```
+
+#### Deep file dependency analysis
+- Plugin imports from `theokit/server` barrel (Pattern D6) for `defineRoute` type reference in the emitted source string.
+- Plugin imports `node:fs` + `node:path` for file operations.
+- Plugin consumes `walkControllerMetadata` (T3.2) + DOES NOT consume `registerControllers` directly (it consumes `walkControllerMetadata` then `emitRouteFile`; `registerControllers` is for the non-Vite low-level path).
+
+#### Pseudo-code / Signatures
+
+```typescript
+// packages/http-decorators/src/vite/plugin.ts
+import type { Plugin } from 'vite'
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
+import { resolve, join } from 'node:path'
+import { walkControllerMetadata } from '../bridge/walk-metadata.js'
+import { emitRouteFile } from './emit-route-file.js'
+
+export interface DecoratorsBridgePluginOptions {
+  controllers: Function[]
+  generatedDir?: string  // default: 'server/routes/__decorated__'
+}
+
+export function decoratorsBridgePlugin(opts: DecoratorsBridgePluginOptions): Plugin {
+  let projectRoot: string
+  const generatedDir = opts.generatedDir ?? 'server/routes/__decorated__'
+
+  return {
+    name: '@theokit/http-decorators:bridge',
+    configResolved(config) { projectRoot = config.root },
+    buildStart() {
+      const outDir = resolve(projectRoot, generatedDir)
+      mkdirSync(outDir, { recursive: true })
+      // Auto-write .gitignore on first run
+      const gitignorePath = join(outDir, '.gitignore')
+      if (!existsSync(gitignorePath)) {
+        writeFileSync(gitignorePath, '# Generated by @theokit/http-decorators\n*\n!.gitignore\n')
+      }
+      // Emit one file per route
+      for (const Ctor of opts.controllers) {
+        const walks = walkControllerMetadata(Ctor)
+        for (const w of walks) {
+          const { filePath, source } = emitRouteFile(w)
+          const fullPath = join(outDir, filePath)
+          mkdirSync(resolve(fullPath, '..'), { recursive: true })
+          writeFileSync(fullPath, source)
+        }
+      }
+    },
+  }
+}
+
+// packages/http-decorators/src/vite/emit-route-file.ts
+import type { WalkResult } from '../bridge/walk-metadata.js'
+
+export function emitRouteFile(w: WalkResult): { filePath: string; source: string } {
+  // filePath: __decorated__/{path-segments}/index.ts
+  const safePath = w.fullPath.replace(/^\//, '').replace(/[^a-z0-9/_-]/gi, '_') || 'index'
+  const filePath = `${safePath}/${w.verb.toLowerCase()}.ts`  // e.g. 'cats/get.ts'
+  const source = [
+    `// AUTO-GENERATED by @theokit/http-decorators decoratorsBridgePlugin`,
+    `// Do not edit — regenerated on every dev/build`,
+    `import { defineRoute } from 'theokit/server'`,
+    `// (full handler body re-inlined here via serialized closures — see § Serialization)`,
+    `export const ${w.verb} = defineRoute({ /* serialized config */ })`,
+  ].join('\n')
+  return { filePath, source }
+}
+```
+
+> **Serialization note:** The emitted file's `defineRoute({...})` must include a real handler body — NOT a function reference (which can't be serialized to source). The plugin emits a file that imports the controller class, instantiates it, and inlines the parameter-extraction wrapper. Concretely: each generated file imports the user's controller, builds the handler closure at module-load time, and exports the `defineRoute` call. This sidesteps function-serialization entirely.
+
+#### Tasks
+1. Implement `emit-route-file.ts` with serialization strategy (controller import + closure-build).
+2. Implement `vite/plugin.ts` with `configResolved` + `buildStart` hooks.
+3. Add `./vite-plugin` subpath export to `package.json`.
+4. Write RED unit tests for `emitRouteFile` (per-verb file naming, source shape, controller import correctness).
+5. Write RED integration test for the plugin (run on a fixture controller, verify files written + `.gitignore` auto-written + scanner can pick them up).
+
+#### TDD
+```
+RED:     test_emit_get_route_file — emitRouteFile({verb:'GET', fullPath:'/cats'}) returns {filePath:'cats/get.ts', source:contains 'export const GET'}
+RED:     test_emit_post_with_body_file — POST with body schema serializes correctly
+RED:     test_emit_nested_path — fullPath:'/admin/cats/:id' produces filePath:'admin/cats/_id/get.ts' (safe-path replacement)
+RED:     test_plugin_writes_gitignore_on_first_run — fixture with no .gitignore → plugin writes it
+RED:     test_plugin_does_not_overwrite_gitignore — fixture with existing .gitignore → plugin leaves it alone
+RED:     test_plugin_emits_one_file_per_route — fixture with 4-method controller → 4 files written
+RED:     test_plugin_emitted_files_are_scanner_compatible — scanServerRoutes(fixture/server) returns the emitted routes as ServerRouteNode[]
+GREEN:   Implement vite/plugin.ts + vite/emit-route-file.ts.
+VERIFY:  pnpm --filter @theokit/http-decorators test tests/unit/emit-route-file.test.ts tests/integration/vite-plugin-emit.test.ts
+```
+
+#### Acceptance Criteria
+- [ ] 7 RED tests GREEN.
+- [ ] `packages/http-decorators/package.json` has `"./vite-plugin": { "import": "./dist/vite/index.js", "types": "./dist/vite/index.d.ts" }` subpath export.
+- [ ] `server/routes/__decorated__/.gitignore` auto-written on first plugin run.
+- [ ] Emitted files import only `theokit/server` (Pattern D6 contract test T1.3 still passes).
+- [ ] Pass: size — `plugin.ts` ≤ 200 LoC; `emit-route-file.ts` ≤ 150 LoC.
+
+#### DoD
+- [ ] Vite plugin green.
+- [ ] EC-1 absorbed and verified via T-final.2 round-trip integration test.
 
 ---
 
@@ -1198,12 +1388,13 @@ RED:     test_use_guards_method_level
 RED:     test_use_guards_variadic_order_preserved
 RED:     test_use_interceptors_class_level
 RED:     test_use_interceptors_variadic
+RED:     test_class_and_method_use_guards_compose (EC-9) — Given `@UseGuards(ClassGuard) class C { @UseGuards(MethodGuard) @Get() h() {} }`, When the route is invoked, Then ClassGuard runs BEFORE MethodGuard (NestJS convention class-first); both observed in correct order
 GREEN:   Implement middleware.ts.
 VERIFY:  pnpm --filter @theokit/http-decorators test tests/unit/middleware-decorators.test.ts
 ```
 
 #### Acceptance Criteria
-- [ ] 5 RED tests GREEN.
+- [ ] 6 RED tests GREEN (5 original + 1 EC-9 class+method composition order).
 - [ ] Pattern D3 contract test (T3.4) flips from skipped to active and passes.
 - [ ] Pass: size — file ≤ 80 LoC.
 
@@ -1280,12 +1471,13 @@ RED:     test_guard_canactivate_false_returns_401 — Pattern 2 fetch test
 RED:     test_guard_canactivate_true_passes_through
 RED:     test_interceptor_wraps_response
 RED:     test_multi_guards_short_circuit_first_false
+RED:     test_guard_canactivate_throws_propagates_as_500_not_401 (EC-10) — Given a guard whose canActivate throws `new Error('boom')` (not auth-related), When the route is invoked, Then response is 500 with error envelope (NOT 401 — only `return false` maps to 401); thrown errors propagate via existing error-envelope translator
 GREEN:   Implement wrap-middleware.ts + update register-controllers.ts.
 VERIFY:  pnpm --filter @theokit/http-decorators test tests/integration/guards-interceptors.test.ts
 ```
 
 #### Acceptance Criteria
-- [ ] 4 RED tests GREEN.
+- [ ] 5 RED tests GREEN (4 original + 1 EC-10 throw-vs-false-return distinction).
 - [ ] Pass: size — `wrap-middleware.ts` ≤ 150 LoC.
 - [ ] Pattern D6 contract test still green.
 
@@ -1319,6 +1511,7 @@ Edit `packages/theo/src/cli/commands/generate.ts`:
 ```
 packages/theo/src/cli/commands/generate.ts — VALID_TYPES extension + resolveTemplate switch case + generateControllerTemplate function (~30 LoC added)
 packages/theo/src/cli/commands/generate.test.ts — RED tests for the new verb
+packages/theo/src/cli/index.ts — EC-15: line 52 help string update from 'Generate a route, action, page, or ws endpoint' → 'Generate a route, action, page, ws, or controller endpoint'
 ```
 
 #### Deep file dependency analysis
@@ -1377,8 +1570,8 @@ RED:     test_generate_controller_writes_file — `theokit generate controller c
 RED:     test_generate_controller_pascal_case_class_name — file content has `export class CatsController`
 RED:     test_generate_controller_invalid_name_rejected — non-kebab-case rejected
 RED:     test_existing_4_verbs_regression — route/action/page/ws all still work
-RED:     test_generate_controller_help_lists_5_verbs — `theokit generate --help` includes 'controller'
-GREEN:   Implement generate.ts edits.
+RED:     test_generate_controller_help_lists_5_verbs (EC-15) — `theokit generate --help` includes literal 'controller' in the help string at cli/index.ts:52
+GREEN:   Implement generate.ts + cli/index.ts edits.
 VERIFY:  pnpm --filter theokit test tests/unit/generate.test.ts
 ```
 
@@ -1401,7 +1594,13 @@ VERIFY:  pnpm --filter theokit test tests/unit/generate.test.ts
 ### T6.1 — `packages/http-decorators/README.md` + `docs/migration/nestjs-to-theokit-http-decorators.md`
 
 #### Objective
-Write the README covering: installation (peer deps), tsconfig delta, `@Controller`/`@Get` quick start, DTO Zod static-schema convention with worked example, Guards/Interceptors example, `theokit generate controller` CLI verb, `registerControllers([...])` mounting example. Write a separate migration guide covering NestJS-to-TheoKit translations for `Test.createTestingModule` → `startDevServer`, `supertest` → `fetch`, class-validator → Zod static schema.
+Write the README covering: installation (peer deps), tsconfig delta, `@Controller`/`@Get` quick start, DTO Zod static-schema convention with worked example, Guards/Interceptors example, `theokit generate controller` CLI verb, `decoratorsBridgePlugin()` Vite plugin mounting example (per ADR D7), AND three mandatory "Limitations" subsections per v1.1 absorbing EC-12/EC-13/EC-14 DOCUMENT items:
+
+- **§ Limitations — Singleton-scope controllers only (EC-12).** T3.3 instantiates `new (Ctor)()` ONCE per `registerControllers` call (singleton). NestJS supports request-scoped (`@Injectable({ scope: Scope.REQUEST })`) which builds a fresh instance per request. v0.1.0 ships singleton-only. Migration path: v0.2.0+ adds scope support via `@theokit/di` integration (already-shipped sibling package).
+- **§ Limitations — Interceptor wrap can't skip `next()` (EC-13).** True NestJS Interceptor signature `intercept(context, next): Observable<T>` lets the interceptor DECIDE whether/when to call `next` (e.g., cache-hit short-circuit BEFORE calling `next`). v0.1.0 wraps always-call-next-then-decorate per Pattern D3's `(request, next) → Response` shape. Consumers needing cache-style interceptors must hand-roll as `defineMiddleware`. The migration guide ships a side-by-side example.
+- **§ Limitations — Handler returning `Response` makes `@HttpCode`/`@Header` no-ops (EC-14).** T3.3 short-circuits on `if (result instanceof Response) return result`, which bypasses the `Response.json(result, {status, headers})` construction path. Means a handler that constructs its own `Response` bypasses decorator-set status/headers. NestJS has the same behavior with `@Res() passthrough: false`. Document with simple rule: "If your handler returns a `Response`, you own the status + headers — decorator-set status/headers are NOT merged in."
+
+Write a separate migration guide covering NestJS-to-TheoKit translations for `Test.createTestingModule` → `startDevServer`, `supertest` → `fetch`, class-validator → Zod static schema, plus a § Troubleshooting section covering the `emitDecoratorMetadata` consumer-tsconfig requirement (Pattern D1 + EC-4 actionable error).
 
 #### Why this step (action + reasoning — ReAct discipline)
 
@@ -1425,15 +1624,19 @@ docs/migration/nestjs-to-theokit-http-decorators.md (NEW)
 #### TDD
 ```
 RED:     test_readme_mentions_static_schema_convention — grep test
-RED:     test_readme_mentions_register_controllers_api
+RED:     test_readme_mentions_decorators_bridge_plugin (v1.1 ADR D7) — README must reference decoratorsBridgePlugin (replaces the v1.0 registerControllers primary-surface reference)
+RED:     test_readme_has_limitations_section_singleton_scope (EC-12)
+RED:     test_readme_has_limitations_section_interceptor_wrap (EC-13)
+RED:     test_readme_has_limitations_section_response_precedence (EC-14)
 RED:     test_migration_guide_covers_test_harness_translation
+RED:     test_migration_guide_has_troubleshooting_emit_decorator_metadata (EC-4 actionable)
 GREEN:   Write the docs.
 VERIFY:  pnpm --filter @theokit/http-decorators test tests/docs/
 ```
 
 #### Acceptance Criteria
-- [ ] README ≥ 200 lines covering 7 sections.
-- [ ] Migration guide ≥ 100 lines covering 3 translations.
+- [ ] README ≥ 250 lines covering 7 sections + 3 mandatory Limitations subsections (EC-12/EC-13/EC-14).
+- [ ] Migration guide ≥ 120 lines covering 3 translations + § Troubleshooting (EC-4 actionable error explanation).
 - [ ] All code snippets in docs use the canonical APIs (no fabricated function names).
 - [ ] No marketing fluff per `.claude/rules/public-copy.md` (technical docs, not HERO copy).
 
@@ -1501,6 +1704,52 @@ VERIFY:  pnpm --filter @theokit/http-decorators test tests/integration/basic-con
 #### DoD
 - [ ] Integration smoke green.
 
+### T-final.2 — Round-trip mount-mechanism verification (NEW in v1.1 — closes ADR D7 + EC-1)
+
+#### Objective
+Verify the END-TO-END mount mechanism per ADR D7: `decoratorsBridgePlugin({ controllers: [CatsController] })` written into `fixtures/http-decorators-basic/vite.config.ts` produces (i) `server/routes/__decorated__/.gitignore` auto-created with `*` content; (ii) one generated `.ts` file per route at `server/routes/__decorated__/{path}/{verb}.ts`; (iii) `scanServerRoutes('fixtures/http-decorators-basic/server')` returns the emitted routes as `ServerRouteNode[]`; (iv) `fetch http://localhost:${port}/cats` reaches the user's `findAll()` handler.
+
+#### Why this step (action + reasoning — ReAct discipline)
+
+1. **What this step does** — single end-to-end test that proves the entire mount mechanism works. If this passes, EC-1 is closed; if it fails, the bridge is still inert.
+2. **Why it is necessary now** — without this, ADR D7 is theoretical. T-final.1 verifies the integration via fetch, but T-final.2 verifies the underlying mechanism (gitignore + file emission + scanner pick-up) so a future regression in the Vite plugin doesn't silently break the scanner contract.
+
+#### Evidence
+- ADR D7 + EC-1.
+
+#### Files to edit
+```
+packages/http-decorators/tests/integration/mount-mechanism.test.ts (NEW)
+fixtures/http-decorators-basic/vite.config.ts (UPDATE — add decoratorsBridgePlugin({controllers: [CatsController]}) to plugins)
+```
+
+#### Tasks
+1. Wire the Vite plugin into `fixtures/http-decorators-basic/vite.config.ts`.
+2. Write RED tests:
+   - `test_gitignore_auto_written` — fixture has no `__decorated__/` before; after Vite buildStart, dir exists with `.gitignore` containing `*`.
+   - `test_one_file_per_route_emitted` — CatsController with 2 methods → 2 files in `__decorated__/`.
+   - `test_scanner_picks_up_emitted_files` — `scanServerRoutes(fixture/server)` returns the 2 routes as `ServerRouteNode[]`.
+   - `test_fetch_reaches_user_handler_via_emitted_route` — `fetch http://localhost:${port}/cats` returns the value returned by `CatsController.findAll()`.
+
+#### TDD
+```
+RED:     test_gitignore_auto_written
+RED:     test_one_file_per_route_emitted
+RED:     test_scanner_picks_up_emitted_files
+RED:     test_fetch_reaches_user_handler_via_emitted_route
+GREEN:   Plugin already implemented in T3.5; tests verify end-to-end behavior.
+VERIFY:  pnpm --filter @theokit/http-decorators test tests/integration/mount-mechanism.test.ts
+```
+
+#### Acceptance Criteria
+- [ ] 4 RED tests GREEN.
+- [ ] EC-1 explicitly verified — `RouteRegistration` array is no longer the integration boundary; emitted-file-pickup by scanner IS.
+- [ ] ADR D7 mount mechanism proven end-to-end.
+
+#### DoD
+- [ ] Round-trip green.
+- [ ] No "PLANO PRECISA DE AJUSTE" residual edge cases.
+
 ### Execution
 
 Run the full validation chain:
@@ -1549,8 +1798,23 @@ pnpm test                                            # workspace-wide test suite
 | 12 | Q2 — Guard returning false → wire format | (resolved at plan time — AuthRequiredError) | Documented in Unresolved Questions § Q2 + implemented in T4.2 |
 | 13 | Q3 — multiple @UseGuards composition | (resolved at plan time — declaration order, sequential, short-circuit) | Documented in Unresolved Questions § Q3 + tested in T4.2 |
 | 14 | Q4 — @HostParam / Controller({host}) in v0.1.0 | (resolved at plan time — metadata captured, enforcement deferred) | Documented in Unresolved Questions § Q4 + warning emitted in T3.2 |
+| 15 | Sub-goal 10 (v1.1) — Vite plugin mount mechanism (ADR D7 + EC-1) | T3.5, T-final.2 | decoratorsBridgePlugin in T3.5; round-trip verification T-final.2 |
+| 16 | EC-2 (v1.1) — Missing @Controller throws HttpDecoratorsConfigError | T3.2 (test added) | `test_walk_throws_when_missing_controller_decorator` |
+| 17 | EC-3 (v1.1) — joinPath normalizes leading/trailing slashes | T3.2 (test added + impl required) | `test_join_path_normalizes_leading_trailing_slashes` |
+| 18 | EC-4 (v1.1) — Missing consumer emitDecoratorMetadata throws actionable error | T3.2 (test added + impl required) + T6.1 (Troubleshooting doc) | `test_walk_throws_when_design_paramtypes_missing` + migration-guide section |
+| 19 | EC-5 (v1.1) — Duplicate controller registration deduped + warned | T3.3 (test added + impl required) | `test_register_duplicate_controllers_dedupes_with_warn` |
+| 20 | EC-6 (v1.1) — Method with both @Get + @Post registers both | T1.5 (test added) | `test_method_with_multiple_verb_decorators` |
+| 21 | EC-7 (v1.1) — Parameter index gap handled gracefully | T2.1 (test added) | `test_walk_handles_param_index_gap` |
+| 22 | EC-8 (v1.1) — Inherited controller methods register correctly | T3.2 (test + impl) | `test_walk_inheritance_child_inherits_parent_methods` |
+| 23 | EC-9 (v1.1) — Class+method @UseGuards composition order | T4.1 (test added) | `test_class_and_method_use_guards_compose` |
+| 24 | EC-10 (v1.1) — Guard throws propagates as 500 (not 401) | T4.2 (test added) | `test_guard_canactivate_throws_propagates_as_500_not_401` |
+| 25 | EC-11 (v1.1) — reflect-metadata auto-imported by package's storage.ts | T1.2 (test added) | `test_consumer_inherits_reflect_metadata_via_package_import` |
+| 26 | EC-12 (v1.1) — Singleton-scope-only documented | T6.1 (README Limitations) | § Limitations § Singleton scope only |
+| 27 | EC-13 (v1.1) — Interceptor can't-skip-next limitation documented | T6.1 (README Limitations) | § Limitations § Interceptor wrap |
+| 28 | EC-14 (v1.1) — Handler returning Response makes decorators no-op documented | T6.1 (README Limitations) | § Limitations § Response precedence |
+| 29 | EC-15 (v1.1) — CLI help string includes 'controller' | T5.1 (cli/index.ts:52 + test) | `test_generate_controller_help_lists_5_verbs` |
 
-**Coverage: 14/14 gaps covered (100%).**
+**Coverage: 29/29 gaps covered (100%) — 14 original (v1.0) + 15 v1.1 additions (1 sub-goal + 14 edge cases).**
 
 ## Global Definition of Done
 
