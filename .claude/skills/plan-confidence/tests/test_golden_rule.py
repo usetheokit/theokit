@@ -59,13 +59,34 @@ def test_golden_rule_mentions_coverage_matrix_hard_cap_49(rules_dir: Path) -> No
     assert "49" in content
 
 
-def test_golden_rule_explicitly_marks_m3_as_future(rules_dir: Path) -> None:
+def test_golden_rule_documents_m3_status(rules_dir: Path) -> None:
+    """The golden rule must declare the status of every M3 milestone shipped.
+
+    M3 has multiple sub-milestones (v0.1 active, v0.2 deferred per ADR). The test
+    was originally written when M3 was wholly future — now M3 v0.1 is ENFORCED and
+    M3 v0.2 (code-file refs `src/foo.py:42`) is DEFERRED. The contract this test
+    pins is "the golden rule states the status of M3 in some explicit form" — so
+    a reader cannot mistakenly assume an M3 sub-milestone is or is not active.
+    """
     content = _read_golden_rule(rules_dir)
     content_lower = content.lower()
-    # Should mention M3 future / citation fabricada as future
-    assert (
-        "m3" in content_lower and ("future" in content_lower or "futuro" in content_lower or "futur" in content_lower)
-    ) or "citation fabricada" in content_lower or "citação fabricada" in content_lower
+    assert "m3" in content_lower, "golden-rule does not mention M3 milestone(s) at all"
+    status_signals = (
+        "future",
+        "futuro",
+        "futur",
+        "deferred",
+        "active",
+        "enforced",
+        "citation fabricada",
+        "citação fabricada",
+        "fabricated_citation",
+        "fabricated citation",
+    )
+    assert any(sig in content_lower for sig in status_signals), (
+        "golden-rule mentions M3 but does not declare its status "
+        "(future/deferred/active/enforced/citation_*)"
+    )
 
 
 def test_golden_rule_has_related_section_with_links(rules_dir: Path) -> None:
