@@ -20,44 +20,33 @@
     "verdict"
   ],
   "properties": {
-    "blueprint_slug": { "type": "string" },
-    "blueprint_path": { "type": "string" },
-    "blueprint_version": { "type": ["string", "null"] },
-    "scored_at": { "type": "string", "format": "date-time" },
-    "research_coverage_score": { "type": "number", "minimum": 0, "maximum": 100 },
-    "reference_citations_score": { "type": "number", "minimum": 0, "maximum": 100 },
-    "blueprint_completeness_score": { "type": "number", "minimum": 0, "maximum": 100 },
-    "risco_estrutural_score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "blueprint_slug": {"type": "string"},
+    "blueprint_path": {"type": "string"},
+    "blueprint_version": {"type": ["string", "null"]},
+    "scored_at": {"type": "string", "format": "date-time"},
+    "research_coverage_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "reference_citations_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "blueprint_completeness_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "risco_estrutural_score": {"type": "number", "minimum": 0, "maximum": 100},
     "active_dimensions": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "enum": [
-          "research_coverage",
-          "reference_citations",
-          "blueprint_completeness",
-          "structural_risk"
-        ]
-      }
+      "items": {"type": "string", "enum": ["research_coverage", "reference_citations", "blueprint_completeness", "structural_risk"]}
     },
-    "weight_normalization_factor": { "type": "number", "exclusiveMinimum": 0 },
-    "weighted_avg": { "type": "number", "minimum": 0, "maximum": 100 },
+    "weight_normalization_factor": {"type": "number", "exclusiveMinimum": 0},
+    "weighted_avg": {"type": "number", "minimum": 0, "maximum": 100},
     "hard_caps_triggered": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {"type": "string"}
     },
-    "final_score_after_caps": { "type": "number", "minimum": 0, "maximum": 100 },
-    "verdict": {
-      "type": "string",
-      "enum": ["SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"]
-    },
+    "final_score_after_caps": {"type": "number", "minimum": 0, "maximum": 100},
+    "verdict": {"type": "string", "enum": ["SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"]},
     "calibration": {
       "type": "object",
       "properties": {
-        "status": { "type": "string" },
-        "holdout_count": { "type": "integer", "minimum": 0 },
-        "holdout_target": { "type": "integer", "minimum": 0 },
-        "kappa_measured": { "type": "boolean" }
+        "status": {"type": "string"},
+        "holdout_count": {"type": "integer", "minimum": 0},
+        "holdout_target": {"type": "integer", "minimum": 0},
+        "kappa_measured": {"type": "boolean"}
       }
     },
     "reasons": {
@@ -65,11 +54,11 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "contributors": { "type": "array", "items": { "type": "string" } },
-          "detractors": { "type": "array", "items": { "type": "string" } }
+          "contributors": {"type": "array", "items": {"type": "string"}},
+          "detractors": {"type": "array", "items": {"type": "string"}}
         }
       }
     },
-    "sub_reports": { "type": "object" }
+    "sub_reports": {"type": "object"}
   }
 }
