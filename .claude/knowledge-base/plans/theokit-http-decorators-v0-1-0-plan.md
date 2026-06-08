@@ -8,7 +8,7 @@ goal: Ship a new `@theokit/http-decorators` package at v0.1.0 that bridges NestJ
 
 > **Version 1.2** (2026-06-08) — Added `## Dependencies` section per `rules/deps-audit-golden-rule.md § 5` after `/deps-audit theokit-http-decorators-v0-1-0` returned INVALID_PLAN_DEPS (`plan_dependencies_section_missing`). Audit report at `.claude/knowledge-base/audits/theokit-http-decorators-v0-1-0-deps-audit-2026-06-08.md`. Declared deps (`reflect-metadata ^0.2.2`, `zod ^3.22.0`, `theokit >=0.2.0` + 3 devDeps) are all CVE-clean per `pnpm audit` (workspace baseline 0 critical / 8 high / 6 moderate — none affect declared peer deps).
 >
-> **Version 1.1** (2026-06-08) — Absorbed 5 MUST FIX items from edge-case review `theokit-http-decorators-v0-1-0-edge-cases-2026-06-08.md`: EC-1 mount mechanism (NEW ADR D7 — Vite plugin writes generated route files to gitignored `server/routes/__decorated__/`), EC-2 missing @Controller throws (T3.2), EC-3 path normalization in joinPath (T3.2), EC-4 missing emitDecoratorMetadata throws (T3.2), EC-5 duplicate controller dedup + warn (T3.3). Plus 6 SHOULD TEST + 3 DOCUMENT items folded into respective tasks. Plus EC-15 CLI help string fix in T5.1.
+> **Version 1.1** (2026-06-08) — Absorbed 5 MUST FIX items from edge-case review `.claude/knowledge-base/reviews/theokit-http-decorators-v0-1-0-edge-cases-2026-06-08.md`: EC-1 mount mechanism (NEW ADR D7 — Vite plugin writes generated route files to gitignored `server/routes/__decorated__/`), EC-2 missing @Controller throws (T3.2), EC-3 path normalization in joinPath (T3.2), EC-4 missing emitDecoratorMetadata throws (T3.2), EC-5 duplicate controller dedup + warn (T3.3). Plus 6 SHOULD TEST + 3 DOCUMENT items folded into respective tasks. Plus EC-15 CLI help string fix in T5.1.
 >
 > **Version 1.0** — Ship a new opt-in package `@theokit/http-decorators` that lets NestJS-migrating teams write `@Controller`/`@Get`/`@Body`/`@UseGuards` decorators while the runtime translates them at build-time / startup-time into TheoKit's existing `defineRoute` + `defineMiddleware` factory contracts. Zero changes to TheoKit core (`packages/theo/src/server/define/define-route.ts`, `packages/theo/src/core/contracts/route-config.ts`); the package consumes only the public `theokit/server` barrel per Pattern D6. Decision provenance comes from the registered patterns skill `theokit-http-decorators-pattern-from-nestjs-patterns` (6 Patterns D1-D6 + 9 Recommendations + 13 key citations from blueprint scored SHIPPABLE_WITH_CAVEATS 89.0).
 
@@ -104,7 +104,7 @@ Per `rules/architecture.md` v3.1 Module Map:
 
 ## Prior Art & Related Work
 
-- **Internal blueprint:** `.claude/knowledge-base/discoveries/blueprints/theokit-http-decorators-pattern-from-nestjs-blueprint.md` (verdict SHIPPABLE_WITH_CAVEATS 89.0) — the spec source. Cited throughout the ADRs as `Blueprint §"Coverage Corner N"` / `Blueprint §"ADR Dn"`.
+- **Internal blueprint:** `.claude/knowledge-base/discoveries/blueprints/theokit-http-decorators-pattern-from-nestjs-blueprint.md` (verdict SHIPPABLE_WITH_CAVEATS 89.0) — the spec source. Cited throughout the ADRs via the four Coverage Corner sections and the D1-D6 ADR blocks of that blueprint.
 - **Patterns skill:** `.claude/skills/theokit-http-decorators-pattern-from-nestjs-patterns/SKILL.md` — promoted to first-class 2026-06-08 (audit at `.claude/knowledge-base/reviews/skill-register-theokit-http-decorators-pattern-from-nestjs-patterns-2026-06-08.md`). This plan adopts all 6 Patterns D1-D6 verbatim. Any deviation requires an override ADR per `/to-plan` Step 0 contract; this plan deviates ZERO times.
 - **Reference projects** (cited in blueprint, verified):
   - `.claude/knowledge-base/references/fastify/lib/handle-request.js:20` — Fastify dispatch comparison (Pattern D6 imperative-handler shape that TheoKit follows).
@@ -968,7 +968,7 @@ Implement `packages/http-decorators/src/bridge/walk-metadata.ts` exporting `walk
 
 #### Evidence
 - Blueprint Q1 § "Dispatch internals (NestJS reflect-metadata model)" — describes the metadata-walk pattern.
-- Blueprint § "Conclusion for Q1" — explicitly recommends strategy (b) `registerControllers([...])` for v0.1.0.
+- The discovery blueprint's Q1 Conclusion subsection at `.claude/knowledge-base/discoveries/blueprints/theokit-http-decorators-pattern-from-nestjs-blueprint.md` — explicitly recommends strategy (b) `registerControllers([...])` for v0.1.0.
 
 #### Files to edit
 ```
