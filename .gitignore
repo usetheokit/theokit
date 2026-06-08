@@ -79,6 +79,11 @@ tmp/
 .claude/ralph-loop.local.md
 .claude/architecture-review-loop.local.md
 
+# Cycle infrastructure (per skill SoT — halt-loop driver files + per-slug progress trackers)
+.claude/halt-loop-prompts/
+.claude/knowledge-base/discoveries/.progress-*.json
+.claude/knowledge-base/implementations/.progress-*.json
+
 # Project-specific
 ONDAS.md
 
