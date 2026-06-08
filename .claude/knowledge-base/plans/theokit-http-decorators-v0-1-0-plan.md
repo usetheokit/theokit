@@ -6,6 +6,8 @@ goal: Ship a new `@theokit/http-decorators` package at v0.1.0 that bridges NestJ
 
 # Plan: `@theokit/http-decorators` v0.1.0 — NestJS decorator bridge over `defineRoute`
 
+> **Version 1.2** (2026-06-08) — Added `## Dependencies` section per `rules/deps-audit-golden-rule.md § 5` after `/deps-audit theokit-http-decorators-v0-1-0` returned INVALID_PLAN_DEPS (`plan_dependencies_section_missing`). Audit report at `.claude/knowledge-base/audits/theokit-http-decorators-v0-1-0-deps-audit-2026-06-08.md`. Declared deps (`reflect-metadata ^0.2.2`, `zod ^3.22.0`, `theokit >=0.2.0` + 3 devDeps) are all CVE-clean per `pnpm audit` (workspace baseline 0 critical / 8 high / 6 moderate — none affect declared peer deps).
+>
 > **Version 1.1** (2026-06-08) — Absorbed 5 MUST FIX items from edge-case review `theokit-http-decorators-v0-1-0-edge-cases-2026-06-08.md`: EC-1 mount mechanism (NEW ADR D7 — Vite plugin writes generated route files to gitignored `server/routes/__decorated__/`), EC-2 missing @Controller throws (T3.2), EC-3 path normalization in joinPath (T3.2), EC-4 missing emitDecoratorMetadata throws (T3.2), EC-5 duplicate controller dedup + warn (T3.3). Plus 6 SHOULD TEST + 3 DOCUMENT items folded into respective tasks. Plus EC-15 CLI help string fix in T5.1.
 >
 > **Version 1.0** — Ship a new opt-in package `@theokit/http-decorators` that lets NestJS-migrating teams write `@Controller`/`@Get`/`@Body`/`@UseGuards` decorators while the runtime translates them at build-time / startup-time into TheoKit's existing `defineRoute` + `defineMiddleware` factory contracts. Zero changes to TheoKit core (`packages/theo/src/server/define/define-route.ts`, `packages/theo/src/core/contracts/route-config.ts`); the package consumes only the public `theokit/server` barrel per Pattern D6. Decision provenance comes from the registered patterns skill `theokit-http-decorators-pattern-from-nestjs-patterns` (6 Patterns D1-D6 + 9 Recommendations + 13 key citations from blueprint scored SHIPPABLE_WITH_CAVEATS 89.0).
@@ -112,6 +114,37 @@ Per `rules/architecture.md` v3.1 Module Map:
   - NestJS Controllers chapter (user-pasted spec in `/discover-plan` invocation iter 79) — canonical decorator surface to mirror.
   - TC39 Decorators proposal (Stage-3, https://github.com/tc39/proposal-decorators) — for Pattern D1's "deferred to v0.2.0" rationale.
   - reflect-metadata npm package (https://www.npmjs.com/package/reflect-metadata) — peer dep per Pattern D1.
+
+## Dependencies
+
+### Existing — use as-is
+
+| Package | Version | Ecosystem | Why |
+|---|---|---|---|
+| `theokit` | `>= 0.2.0` (peer) | npm | The framework being extended; bridge consumes `defineRoute` + `defineMiddleware` from `theokit/server` barrel per Pattern D6. |
+| `zod` | `^3.22.0` (peer) | npm | Canonical schema lib per `.claude/rules/type-safety.md` ("Zod is the Single Source of Truth"). DTO `static schema` convention per Pattern D2 requires Zod. |
+| `vitest` | `*` (devDep) | npm | TheoKit-wide test runner per `.claude/rules/testing.md`. |
+| `tsup` | `*` (devDep) | npm | TheoKit-wide build tool used by every package in `packages/*`. |
+| `typescript` | `>=5.0.0` (devDep) | npm | Required for Legacy decorators (`experimentalDecorators`) per ADR D1; TS 5.0+ stable across TheoKit since 0.1.0. |
+| `vite` | `>=5.0.0` (devDep, peer of `tsup` indirectly + needed for T3.5 Vite plugin types) | npm | T3.5 Vite plugin (ADR D7) targets Vite ≥ 5; TheoKit-wide constraint per workspace `package.json`. |
+
+### New — to be introduced
+
+| Package | Version | Ecosystem | Rule 9 rationale (libs evaluated) | Why this one |
+|---|---|---|---|---|
+| `reflect-metadata` | `^0.2.2` (peer) | npm | **Evaluated alternatives:** (a) `@abraham/reflection` — smaller (1KB) but lacks the `Reflect.getMetadata(key, target, propertyKey)` 3-arity overload NestJS expects, breaks migration compat; (b) TC39 Stage-3 native Reflect — Stage-3 metadata API not yet in any JS runtime as of 2026-06-08; (c) hand-rolled WeakMap-based metadata layer — violates Rule 9 "Don't Reinvent" and ships 200+ LoC of error-prone code for no DX gain. | Canonical TC39 Metadata Reflection API polyfill required by Legacy `experimentalDecorators` + `emitDecoratorMetadata` per ADR D1. Same library NestJS itself uses (mid-2026 baseline). ~3KB gzipped. Active maintenance (Microsoft / TypeScript team). |
+
+### Removed
+
+| Package | Last version | Why removed |
+|---|---|---|
+| (none) | — | This is a NEW package; no removals. |
+
+### Audit notes
+
+- `pnpm audit` (`.claude/knowledge-base/audits/theokit-http-decorators-v0-1-0-deps-audit-2026-06-08.md`) confirms ZERO CVEs affecting the declared peer/dev deps of this plan (`reflect-metadata ^0.2.2`, `zod ^3.22.0`, `theokit ≥0.2.0`, `vitest *`, `tsup *`, `typescript ≥5.0.0`, `vite ≥5.0.0`).
+- Workspace has 14 pre-existing transitive vulnerabilities (8 HIGH + 6 MODERATE) in `valibot`, `wrangler`, `minimatch`, `undici`, `ws`, `uuid`, `esbuild` — these are OUT OF SCOPE for this plan per `cycle-plan.md` scope discipline. Tracked as separate follow-up `/to-plan workspace-cve-cleanup-2026-06-08`.
+- `osv-scanner` not installed locally; coverage caveat is `auditor_unavailable_osv-scanner` (soft signal only — `pnpm audit` covers the same GitHub Advisory data).
 
 ## Objective
 
