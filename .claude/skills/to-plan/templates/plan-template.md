@@ -229,6 +229,37 @@ REFACTOR: What cleanup is expected (or "None expected")
 VERIFY:  <project test command for this file>
 ```
 
+#### Concurrency tests (only when applicable)
+
+If this task touches state mutated under concurrency — locks, mutexes, async/await,
+goroutines, threading, atomic counters, channels, shared memory, transactions — list
+the concurrency tests here. Single-threaded TDD does NOT catch race conditions: the
+single-thread execution always interleaves cleanly. A race-aware test is the only
+proof that the invariant holds.
+
+Acceptable shapes (pick what fits the stack):
+
+- **Race detector run** — `go test -race ./pkg/...`, `cargo test` under `loom`,
+  Python `pytest -p no:cacheprovider` + `pytest-asyncio` with a stress fixture,
+  Java JCStress harness, Node `worker_threads` test exercising the shared resource.
+- **Atomic-counter invariant** — N concurrent writers each `Add(1)`; assert final
+  count == N and no Lost Update.
+- **Happens-before observation** — explicit barrier (`sync.WaitGroup`, `Promise.all`,
+  `CountDownLatch`) followed by an assert on the observed-after state.
+- **Cancellation / timeout** — when concurrency is structured (goroutine + ctx,
+  asyncio.Task), assert that cancelling the parent propagates and the child stops.
+
+If the task is genuinely single-threaded (refactor of pure function, UI markup
+change, CLI argument parsing), write exactly:
+
+```
+(none — single-threaded)
+```
+
+`/plan-confidence` only enforces this subsection when the plan's Baseline Context
+or Deep Dives contains a concurrency signal (mutex/lock/async/goroutine/atomic/
+channel/threading/concurrent). Plans without concurrency are unaffected.
+
 #### Acceptance Criteria
 Bulleted list of observable, verifiable conditions:
 - [ ] Criterion 1
@@ -276,6 +307,33 @@ Table mapping original gaps/requirements to tasks:
 - [ ] **Runtime-metric proof** — for every task whose DoD references a runtime counter, the metric MUST be observed non-zero in an integration workload, not just verified to compile. "Code exists + tests pass" is NOT proof the wiring fires in real workloads.
 - [ ] **Plan archived** — after `/review` returns `READY_TO_MERGE` AND the PR has been merged, move `knowledge-base/plans/{slug}-plan.md` to `knowledge-base/plans/completed/{slug}-plan.md`. This signals the plan is no longer the active contract. Associated artifacts (confidence reports, edge-case reports, implementation md, review reports) stay in their original locations and follow the rotation policy in [`rules/audit-trail-rotation.md`](../../../rules/audit-trail-rotation.md). NEVER move the plan before the PR is merged — the plan is the contract `/review` cites.
 
+## Failure scenarios (when I/O external)
+
+If the plan touches **non-deterministic external I/O** — HTTP calls, database queries
+under transaction, message queues, gRPC, sockets, S3-class object stores, third-party
+services — list ≥ 1 failure scenario per external dependency here. Happy-path tests
+do NOT prove resilience: production failure modes (timeouts, 5xx, connection reset,
+rate-limit, partial writes) are where most outages happen.
+
+For each external dependency, document:
+
+| Dependency | Failure mode | How the test reproduces it | Expected behavior |
+|---|---|---|---|
+| `payments-api` (HTTP) | 5xx burst (10 consecutive) | mock with `httpx_mock` returning 503 | circuit breaker opens; user sees friendly error; metric `payments_failed` increments |
+| `postgres:orders` (DB) | connection reset mid-transaction | testcontainers + `pg_terminate_backend` | retry exactly once; on second failure, surface to user; no partial write to `orders` |
+| `nats:events` (queue) | publish ack timeout (3s) | toxiproxy with `latency=5s` | message buffered; retry with backoff; metric `nats_publish_retry` non-zero |
+
+If the plan touches **no external I/O** (pure in-process logic, refactor, UI markup),
+write exactly:
+
+```
+(none — no external I/O touched)
+```
+
+`/plan-confidence` only enforces this section when the plan's Baseline Context, Files
+to edit, or Deep Dives contains an external-I/O signal (HTTP client, database driver,
+queue, gRPC, socket). Plans without external I/O are unaffected.
+
 ## Final Phase: Integration Validation (MANDATORY)
 
 > This phase runs AFTER all implementation phases are complete. The plan is NOT done until the integration validation chain passes.
@@ -299,6 +357,13 @@ If the project has e2e tests:
 <project e2e command>
 ```
 
+If the plan has a `## Failure scenarios` section with concrete dependencies, run
+the chaos/failure test pass before declaring the plan complete:
+
+```
+<project chaos test command>    # e.g. pytest tests/failure/ -v, or `go test -tags=chaos ./...`
+```
+
 ### Acceptance Criteria
 
 - [ ] All test suites green (unit + integration + e2e when present)
@@ -306,6 +371,7 @@ If the project has e2e tests:
 - [ ] Zero type errors
 - [ ] Zero lint warnings
 - [ ] Runtime-metric proof — for any task referencing a counter/metric, that counter is observed non-zero in integration tests
+- [ ] Failure scenarios green — every row of `## Failure scenarios` was exercised and the expected behavior was observed (skip when "(none — no external I/O touched)" was declared)
 
 ### If Validation Fails
 
