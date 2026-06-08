@@ -171,7 +171,11 @@ These rules are NON-NEGOTIABLE for every plan produced by this skill:
 
 15. **Unresolved Questions section is mandatory** — `## Unresolved Questions` lists open questions OR explicitly states "(none — every decision is resolved at plan time)". Empty/missing section caps at 70.
 
-16. **Integration validation is mandatory** — every plan MUST include a final "Integration Validation" phase. The plan is NOT complete until the full chain (test, typecheck/lint, coverage gate) passes. No exceptions. This is the "eat your own cooking" gate — if integration tests fail or types break, the plan failed.
+16. **Concurrency tests are conditional but mandatory when applicable** — when the plan's Baseline Context / Deep Dives / Files-to-edit contains concurrency signals (mutex, lock, async/await, goroutine, atomic counter, channel, threading), every task MUST declare its concurrency posture in `#### Concurrency tests` with either an acceptable race-aware signal (race detector / loom / atomic-counter invariant / cancellation propagation) OR the explicit `(none — single-threaded)` escape. Single-thread TDD does NOT catch race conditions; the race-aware test is the only proof the invariant holds. Plans without concurrency signals are unaffected.
+
+17. **Failure scenarios are conditional but mandatory when applicable** — when the plan touches external I/O (HTTP client, DB driver, queue, gRPC, socket, object store), the `## Failure scenarios` section MUST list ≥ 1 scenario per external dependency: failure mode + how the test reproduces it + expected behavior. Happy-path tests do NOT prove resilience. Explicit `(none — no external I/O touched)` is honored when applicable. Plans without external I/O are unaffected.
+
+18. **Integration validation is mandatory** — every plan MUST include a final "Integration Validation" phase. The plan is NOT complete until the full chain (test, typecheck/lint, coverage gate, **failure-scenarios chaos pass when applicable**) passes. No exceptions. This is the "eat your own cooking" gate — if integration tests fail or types break, the plan failed.
 
 ## Cycle contract
 

@@ -42,6 +42,8 @@ The rule closes this gap by forcing minimum structural state PRESENT before the 
 | Baseline Context section missing OR placeholder-laden → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.0 — `check_baseline_context.py`. The section is the "deep review of current state" — file table + LoC + git sha + callers + glossary + architecture boundaries. Junior implementer should not need to spelunk the repo. Stable id: `soft_floor_baseline_context_incomplete`. See § SOTA upgrade below. |
 | Drawbacks & Risks section missing OR < 2 entries → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.0 — `check_drawbacks_section.py`. RFC tradition — no non-trivial plan is risk-free. Stable id: `soft_floor_drawbacks_section_insufficient`. |
 | Unresolved Questions section missing AND no explicit "(none)" marker → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.0 — `check_drawbacks_section.py` (covers both Drawbacks & Unresolved). Stable id: `soft_floor_unresolved_questions_section_missing`. |
+| Concurrency signals present AND task missing `#### Concurrency tests` with acceptable race-aware signal OR explicit `(none — single-threaded)` → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.1 — `check_concurrency_tests.py`. CONDITIONAL — only triggers when the plan contains concurrency signals (mutex/lock/atomic/goroutine/async/channel/threading/concurrent). Single-thread TDD does NOT prove race-freedom. Stable id: `soft_floor_concurrency_tests_missing`. |
+| External-I/O signals present AND `## Failure scenarios` section missing OR empty → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.1 — `check_failure_scenarios.py`. CONDITIONAL — only triggers when the plan contains external-I/O signals (HTTP client / DB driver / queue / gRPC / object store). Happy-path tests do NOT prove resilience under timeout / 5xx / connection reset. Explicit `(none — no external I/O touched)` escape is honored. Stable id: `soft_floor_failure_scenarios_missing`. |
 | `--skip-checks` flag does not exist and SHALL NOT be added | Constructor invariant in `run_structural.py` |
 | Score capped MUST appear marked in the report | Rendering rule |
 | `hard_caps_triggered` list MUST be non-empty when verdict==INVALID | JSON schema invariant |
@@ -63,6 +65,17 @@ There are ~115 active plans + ~55 completed plans across consumer projects when 
 2. **2026-09-07 →**: review the migration ratio. Promote each soft cap to a hard cap at 70 (or earlier, if the migration is complete). The promotion requires a new ADR per § "When this rule may change".
 
 Authors migrating a legacy plan need only re-run `/to-plan` against the updated template OR hand-edit the plan to add the four new sections (and the per-task `#### Why this step` subsection). `/plan-confidence` re-scores them automatically.
+
+### Phase 2 (2026-06-07) — Conditional concurrency + failure-scenarios enforcement
+
+Two additional checkers ship with the same sunset (2026-09-07). Both are **CONDITIONAL** by design — they only enforce their contract when the plan contains the matching signals. Single-thread TDD never catches a race condition because the single-threaded execution always interleaves cleanly; happy-path tests never catch a timeout / 5xx outage because the mock returns synchronously. The cheapest way to make a plan honest about these failure modes is to detect the signal in prose (`mutex`, `goroutine`, `httpx`, `Kafka`) and require the matching test contract before SHIPPABLE is allowed.
+
+Signal taxonomies:
+
+- **Concurrency signals** (triggers `check_concurrency_tests`): `mutex`, `lock`, `atomic counter`, `concurrent`, `race condition`, `thread-safe`, `non-blocking`, `happens-before`, language-specific (`threading.`, `asyncio`, `async def`, `await`, `sync.Mutex`, `goroutine`, `chan `, `tokio::`, `Arc<`, `synchronized`, `ConcurrentHashMap`, `AtomicInteger`, `Promise.all`, `worker_threads`, `Atomics.`).
+- **External-I/O signals** (triggers `check_failure_scenarios`): HTTP clients (`requests.`, `httpx.`, `fetch(`, `axios.`, `http.Client`, `RestTemplate`, `OkHttp`), DB drivers (`psycopg`, `sqlalchemy`, `prisma`, `mongoose`, `database/sql`, `sqlx::`, `jdbc:`), queues (`Celery`, `RabbitMQ`, `Kafka`, `NATS`, `SQS`, `PubSub`), RPC (`gRPC`, `WebSocket`, `tonic::`), object stores (`S3`, `GCS`, `boto3`), generic external-service indicators (`external API`, `third-party API`, `downstream service`).
+
+Plans without these signals are completely unaffected — a UI markup change does not need a race test, and a CLI argument parser does not need a chaos test. The conditional design matches the SRP/YAGNI discipline of `check_tdd_in_bugfix` (which only enforces TDD on tasks labeled `fix(...)`).
 
 ## When this rule may change
 
