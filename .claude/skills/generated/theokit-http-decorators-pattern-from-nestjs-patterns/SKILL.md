@@ -1,6 +1,6 @@
 ---
 name: theokit-http-decorators-pattern-from-nestjs-patterns
-description: Use when planning `@theokit/http-decorators` v0.1.0 implementation. Use when designing NestJS-style decorator bridges on top of `defineRoute`. Use when deciding between Legacy `experimentalDecorators` vs TC39 Stage-3 decorators in TheoKit packages. Use when wiring `@UseGuards` / `@UseInterceptors` to TheoKit `defineMiddleware`. Use when extending `theokit generate` with a `controller` verb. Use when bridging DTO classes to Zod schemas while preserving the "Zod is the Single Source of Truth" invariant.
+description: Use when /to-plan targets `@theokit/http-decorators` v0.1.0 implementation. Use when designing NestJS-style decorator bridges on top of `defineRoute` in src/server/define/. Use when deciding between Legacy `experimentalDecorators` vs TC39 Stage-3 decorators in TheoKit packages. Use when wiring `@UseGuards` / `@UseInterceptors` to TheoKit `defineMiddleware`. Use when extending `theokit generate` with a `controller` verb in src/cli/commands/generate.ts. Use when bridging DTO classes to Zod schemas while preserving the "Zod is the Single Source of Truth" invariant from .claude/rules/type-safety.md.
 user-invocable: true
 allowed-tools: Read Glob Grep
 generated-from-blueprint: theokit-http-decorators-pattern-from-nestjs
