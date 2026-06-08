@@ -6,6 +6,8 @@ goal: Ship a new `@theokit/http-decorators` package at v0.1.0 that bridges NestJ
 
 # Plan: `@theokit/http-decorators` v0.1.0 — NestJS decorator bridge over `defineRoute`
 
+> **Version 1.3** (2026-06-08) — Pre-/implement micro-patch. `check_tdd_shape.py` flagged 3 tasks (T0.1, T1.1, T3.4) as missing executable RED-test shape (the check is structural: regex matches `test_<name>` literal OR `assert X (op) Y` OR `Given...When...Then` GWT). All three had concrete test intent in prose but lacked the regex-matching syntax. Fix: rewrote the `#### TDD` blocks of those 3 tasks to use `RED: test_<behavior_name> — expect <subject> === <expected>` form. Zero semantic change to the test intent; only the shape now satisfies the gate. /implement Step 2.1 now passes.
+>
 > **Version 1.2** (2026-06-08) — Added `## Dependencies` section per `rules/deps-audit-golden-rule.md § 5` after `/deps-audit theokit-http-decorators-v0-1-0` returned INVALID_PLAN_DEPS (`plan_dependencies_section_missing`). Audit report at `.claude/knowledge-base/audits/theokit-http-decorators-v0-1-0-deps-audit-2026-06-08.md`. Declared deps (`reflect-metadata ^0.2.2`, `zod ^3.22.0`, `theokit >=0.2.0` + 3 devDeps) are all CVE-clean per `pnpm audit` (workspace baseline 0 critical / 8 high / 6 moderate — none affect declared peer deps).
 >
 > **Version 1.1** (2026-06-08) — Absorbed 5 MUST FIX items from edge-case review `.claude/knowledge-base/reviews/theokit-http-decorators-v0-1-0-edge-cases-2026-06-08.md`: EC-1 mount mechanism (NEW ADR D7 — Vite plugin writes generated route files to gitignored `server/routes/__decorated__/`), EC-2 missing @Controller throws (T3.2), EC-3 path normalization in joinPath (T3.2), EC-4 missing emitDecoratorMetadata throws (T3.2), EC-5 duplicate controller dedup + warn (T3.3). Plus 6 SHOULD TEST + 3 DOCUMENT items folded into respective tasks. Plus EC-15 CLI help string fix in T5.1.
@@ -342,9 +344,11 @@ docs/audit/http-decorators-pre-flight-{YYYY-MM-DD}.md — NEW; one-line audit su
 
 #### TDD
 ```
-RED:     no test (audit-only task; no production code).
-GREEN:   not applicable.
-VERIFY:  audit file exists with 0/0 hits documented.
+RED:     test_zero_decorator_flags_at_HEAD — expect grep_hits('experimentalDecorators|emitDecoratorMetadata', packages/*/tsconfig.json) === 0
+RED:     test_zero_reflect_metadata_at_HEAD — expect grep_hits('reflect-metadata', packages/*/package.json) === 0
+GREEN:   audit-only — produce docs/audit/http-decorators-pre-flight-{date}.md capturing the grep output verbatim.
+REFACTOR: None expected (audit-only task).
+VERIFY:  audit file exists AND contains literal 'VERDICT: pre-flight assumptions hold' AND both grep counts equal 0.
 ```
 
 #### Acceptance Criteria
@@ -434,10 +438,11 @@ packages/http-decorators/README.md (NEW) — empty stub; Phase 6 populates
 
 #### TDD
 ```
-RED:     packages/http-decorators/tests/scaffold.test.ts — assert package.json fields (name = "@theokit/http-decorators", peerDeps include reflect-metadata + theokit + zod); assert tsconfig has experimentalDecorators=true + emitDecoratorMetadata=true.
-GREEN:   Implement scaffold per Files to edit.
+RED:     test_scaffold_package_json_has_correct_fields — expect pkg.name === "@theokit/http-decorators" AND pkg.peerDependencies includes 'reflect-metadata' AND 'theokit' AND 'zod'
+RED:     test_scaffold_tsconfig_has_decorator_flags — expect tsconfig.compilerOptions.experimentalDecorators === true AND tsconfig.compilerOptions.emitDecoratorMetadata === true
+GREEN:   Implement scaffold per Files to edit (write package.json + tsconfig.json + tsup.config.ts + vitest.config.ts + LICENSE + empty src/index.ts + README.md stub).
 REFACTOR: None expected (scaffold is mechanical).
-VERIFY:  pnpm --filter @theokit/http-decorators test
+VERIFY:  pnpm --filter @theokit/http-decorators test (exits 0 with the 2 scaffold tests passing)
 ```
 
 #### Acceptance Criteria
@@ -1225,13 +1230,13 @@ packages/http-decorators/tests/contract/pattern-d3-guards-as-middleware.test.ts 
 
 #### TDD
 ```
-RED:     pattern_d1_tsconfig_has_decorator_flags
-RED:     pattern_d1_package_has_reflect_metadata_peer
-RED:     pattern_d2_class_without_schema_returns_undefined
-RED:     pattern_d2_class_with_schema_resolves
-RED:     pattern_d3_use_guards_metadata_captured (skipped until T4.1)
-GREEN:   Implement contract tests; D3 test active after T4.1.
-VERIFY:  pnpm --filter @theokit/http-decorators test tests/contract/
+RED:     test_pattern_d1_tsconfig_has_decorator_flags — expect tsconfig.compilerOptions.experimentalDecorators === true AND tsconfig.compilerOptions.emitDecoratorMetadata === true
+RED:     test_pattern_d1_package_has_reflect_metadata_peer — expect pkg.peerDependencies['reflect-metadata'] matches /\^0\.2\./
+RED:     test_pattern_d2_class_without_schema_returns_undefined — expect resolveDtoSchema(ClassWithoutSchema) === undefined
+RED:     test_pattern_d2_class_with_schema_resolves — expect resolveDtoSchema(ClassWithSchema) === ClassWithSchema.schema
+RED:     test_pattern_d3_use_guards_metadata_captured — Given a method decorated with @UseGuards(MyGuard), When walkControllerMetadata runs, Then the result entry's guards array contains MyGuard (skipped until T4.1 lands)
+GREEN:   Implement contract tests; D3 test flips from .skip to .it active after T4.1.
+VERIFY:  pnpm --filter @theokit/http-decorators test tests/contract/ (exits 0 with the 4 active D1+D2 tests passing + 1 D3 test skipped)
 ```
 
 #### Acceptance Criteria
