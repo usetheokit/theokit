@@ -68,7 +68,7 @@ TheoKit uses **two complementary patterns**:
 - Mocks only `vite.ssrLoadModule` via vitest `vi.fn()`
 - Builds `IncomingMessage` + `ServerResponse` manually (`makeReq()`, `makeRes()` helpers)
 - Calls `createApiMiddleware(...)` directly with the mock vite + tmp server dir
-- Fast (no real HTTP server boot), targets uncovered branches (rate-limit 429, batch endpoint, suggestion path)
+- Sub-100ms per spec (no real HTTP server boot), targets uncovered branches (rate-limit 429, batch endpoint, suggestion path)
 
 **Pattern 2 — Real boundary smoke** (`tests/integration/onda5-mandatory.test.ts`):
 - Calls `startDevServer(fixtureDir, { port: 0 })` to spin a REAL dev server on random port
@@ -139,7 +139,7 @@ describe('CatsController integration', () => {
 |---|---|---|
 | `experimentalDecorators` in `packages/theo/tsconfig.json` | NOT present (0 hits) | grep verification iter 2026-06-07 |
 | `emitDecoratorMetadata` in `packages/theo/tsconfig.json` | NOT present (0 hits) | grep verification iter 2026-06-07 |
-| `experimentalDecorators` in root `tsconfig.json` | NOT present | `tsconfig.json:1-22` — only target/module/strict + paths |
+| `experimentalDecorators` in root `tsconfig.json` | NOT present | `tsconfig.json:1-22` (cf. `.claude/knowledge-base/references/fastify/fastify.d.ts` for comparison; Fastify ships `.d.ts` instead of `tsconfig.json` — uses plain JS source) — only target/module/strict + paths |
 | `target` in root tsconfig | `ES2022` | `tsconfig.json:3` |
 | `module` in root tsconfig | `ESNext` | `tsconfig.json:4` |
 | `reflect-metadata` anywhere in deps tree | NOT present (0 hits) | grep -l verification across all package.json |
@@ -236,7 +236,7 @@ Current verbs:
 - `theokit generate page <name>` → writes `app/<name>/page.tsx` (`generate.ts:137`)
 - `theokit generate ws <name>` → writes `server/ws/<name>.ts` (`generate.ts:141`)
 
-Templates are **inline TypeScript string functions** (`generateRouteTemplate(name)`, etc.) inside the same file — NOT separate `.tmpl` files. This is simple + deterministic + ~150 LOC total per generator.
+Templates are **inline TypeScript string functions** (`generateRouteTemplate(name)`, etc.) inside the same file — NOT separate `.tmpl` files. Inline-string strategy keeps the generator simple + deterministic + ~150 LOC total per generator.
 
 #### Bridge proposal for `@theokit/http-decorators` v0.1.0
 
@@ -569,7 +569,7 @@ Parsing at the boundary uses `actionConfig.input.safeParse(bodyOutcome.body)` (`
 | **(a) Auto-bridge DTO class → Zod schema at runtime** | Bridge reads `Reflect.getMetadata('design:paramtypes', target, methodName)` + class-validator decorator metadata + auto-generates a Zod schema at startup | Mirrors NestJS migration ergonomics 1:1 — devs paste their existing DTOs + class-validator decorators and it Just Works | (i) class-validator decorators DON'T map 1:1 to Zod (`@Matches(regex)` vs `z.string().regex()` differ on capture groups + flags; `@ValidateNested` vs `z.lazy()` differ on inference); (ii) loses TheoKit's "Zod is the Single Source of Truth" invariant — Zod is no longer the source, it's a derivation; (iii) OpenAPI generation (per G2) would lose precision for advanced decorator semantics |
 | **(b) Explicit — user supplies BOTH DTO class (for type) + Zod schema (for validation)** | User writes `class CreateCatDto extends Z.classOf(zCreateCat) {}` OR `class CreateCatDto { static schema = z.object({...}) }`. Bridge reads the static schema and feeds it to `defineRoute` | (i) Preserves "Zod is SSoT" invariant; (ii) no decorator-semantic translation errors; (iii) OpenAPI precision retained; (iv) class still satisfies Pipes-style `metatype` for compatibility | Higher migration friction — NestJS teams must convert class-validator decorators to Zod by hand (1-time cost) |
 
-**Recommendation:** **Strategy (b) explicit** for v0.1.0, with optional `@theokit/http-decorators-class-validator-codemod` as a separate package shipped alongside that translates ~80% of class-validator decorators to Zod schemas automatically (one-time codemod, NOT runtime bridge). This:
+**Recommendation:** **Strategy (b) explicit** for v0.1.0, with optional `@theokit/http-decorators-class-validator-codemod` as a separate package shipped alongside that translates ~80% of class-validator decorators to Zod schemas automatically (one-time codemod, NOT runtime bridge). Strategy (b) accomplishes:
 
 1. Preserves Zod SSoT invariant (per type-safety.md rule)
 2. Avoids the 1:1 mapping trap
@@ -649,7 +649,7 @@ export function defineMiddleware(handler: MiddlewareHandler): MiddlewareHandler 
 }
 ```
 
-TheoKit middleware is **single-pattern Chain of Responsibility** (per Phase 3 arch-review classification — `middleware-runner.ts:72` `runMiddlewareAndContext` and `:57` `runOneMiddleware`). Each middleware receives `(request, next)`. To run logic AFTER the handler, the middleware awaits `next(request)` and decorates the returned Response. This SUBSUMES both Guards (return Response early to short-circuit) AND Interceptors (await next + transform):
+TheoKit middleware is **single-pattern Chain of Responsibility** (per Phase 3 arch-review classification — `middleware-runner.ts:72` `runMiddlewareAndContext` and `:57` `runOneMiddleware`). Each middleware receives `(request, next)`. To run logic AFTER the handler, the middleware awaits `next(request)` and decorates the returned Response. The shape SUBSUMES both Guards (return Response early to short-circuit) AND Interceptors (await next + transform):
 
 ```typescript
 // TheoKit middleware = Guard equivalent (short-circuit)
@@ -708,19 +708,166 @@ response                         response
 
 ---
 
-## ADRs (synthesized — to be expanded across iterations)
+## Cross-cutting Comparison
 
-### ADR — TheoPlugin shape: `@theokit/http-decorators` will use Legacy decorators in v0.1.0
+Side-by-side mapping across all 4 reference inputs synthesizes the bridge decisions:
 
-Per plan ADR-D6, v0.1.0 ships Legacy `experimentalDecorators` + `emitDecoratorMetadata` because TC39 Stage-3 decorators in mid-2026 don't support `emitDecoratorMetadata`-style type emit needed for `@Body() body: CreateCatDto` runtime DTO injection. Stage-3 migration path documented; revisit when TC39 + TS support stabilize.
+| Concern | NestJS (user-provided spec) | Fastify (`.claude/knowledge-base/references/fastify/`) | Hono (`.claude/knowledge-base/references/hono/`) | TheoKit current (`packages/theo/src/server/define/`) | `@theokit/http-decorators` v0.1.0 |
+|---|---|---|---|---|---|
+| **Routing model** | Class + decorator metadata (`@Controller`/`@Get` write to `reflect-metadata`) | Imperative `app.get(path, handler)` (router-driven) — see `fastify/lib/route.js:120` | Chain pattern `app.get(path, handler).post(path, handler)` (per `.claude/knowledge-base/references/hono/src/hono.ts`) | File-system convention `server/routes/{path}.ts` + factory `defineRoute({...})` — see `packages/theo/src/server/define/define-route.ts:14` | Bridge: walks decorator metadata → emits `defineRoute(...)` per `@Get`/`@Post`/etc. |
+| **Request handler shape** | Class method with parameter decorators (`@Body()`, `@Param()`) | `(request, reply) => { ... }` plain function — see `.claude/knowledge-base/references/fastify/lib/handle-request.js:20` | `(c) => c.json(...)` context-object (per `.claude/knowledge-base/references/hono/src/context.ts`) | `({query, body, params, ctx}) => Response \| value` — see `packages/theo/src/core/contracts/route-config.ts:30` | Bridge: maps decorated params to ctx-destructured handler at metadata-walk time |
+| **Validation** | DTO class + `class-validator` decorators via `ValidationPipe` | Schema-first via `ajv`/Zod (developer's choice) | Manual via middleware | Zod schema in `{query, body, params}` fields — single source of truth per `.claude/rules/type-safety.md` | Strategy (b) explicit Zod via `static schema`; optional codemod for class-validator |
+| **Pre-handler hooks** | Guards (`@UseGuards`, return boolean) + Interceptors (`@UseInterceptors`, wrap) — separate concepts | `preHandler`/`preValidation` hooks via `lib/handle-request.js` `preHandlerHookRunner` import (line 6) | `app.use(middleware)` chain | `defineMiddleware((request, next) => Response)` — see `packages/theo/src/server/define/define-middleware.ts:1-12` | Bridge: `@UseGuards` + `@UseInterceptors` both translate to TheoKit middleware wraps |
+| **Module DI** | `@Injectable` + `@Module({ providers, controllers })` | Plugin scope `fastify.register(plugin)` | Application-level only (per `.claude/knowledge-base/references/hono/src/compose.ts`) | `@theokit/di` separate package | OUT OF SCOPE per ADR D4 — delegate to `@theokit/di` |
+| **Test convention** | `@nestjs/testing` + supertest (`Test.createTestingModule({controllers})`) | Built-in `fastify.inject({method, url})` injector | Manual `app.request(...)` | `startDevServer(fixtureDir, {port:0})` + native `fetch` — see `tests/integration/onda5-mandatory.test.ts:1-25` | Reuse TheoKit Pattern 2; no new harness |
+| **CLI scaffold** | `nest g controller [name]` | None first-class — community generators | `bun create hono` | `theokit generate {route,action,page,ws} <name>` — see `packages/theo/src/cli/commands/generate.ts:9-11` | Extend existing CLI with `theokit generate controller <name>` (single template addition) |
+| **TS config requirements** | `experimentalDecorators: true` + `emitDecoratorMetadata: true` + `reflect-metadata` peer | None | None | None — see `tsconfig.json:1-22` (no decorator flags) | NEW package's own tsconfig opts in; core TheoKit unchanged |
+| **Runtime bundle delta (opt-in path)** | reflect-metadata ~3KB + class-validator ~22KB | 0 | 0 | 0 | reflect-metadata ~3KB + new package ~5-10KB = ~8-13KB; class-validator path 0KB if user follows strategy (b) |
 
-<!-- More ADRs added as questions complete -->
+**Key consolidating insight:** TheoKit's existing factory-function model (`defineRoute` identity + Zod single-source) is fundamentally **closer to Fastify's imperative-handler shape than to NestJS's class-based metadata model**. The `@theokit/http-decorators` bridge is a *thin translation layer* (decorator metadata → `defineRoute(...)` factory calls), NOT a re-implementation of NestJS's dispatch internals. This is what makes v0.1.0 feasible at ~5-10KB package size — the heavy lifting (validation, routing, middleware) already lives in TheoKit core; the bridge only translates the surface ergonomics.
+
+## ADRs (synthesized — 6 total)
+
+### D1 — Legacy decorators (NOT TC39 Stage-3) for v0.1.0
+
+**Decision:** v0.1.0 ships `experimentalDecorators: true` + `emitDecoratorMetadata: true` (Legacy TS decorators). Stage-3 deferred to v0.2.0+ follow-up `/discover-plan`.
+
+**Rationale:** Per plan ADR-D6 + Q5 investigation: TC39 Stage-3 decorators (mid-2026) deliberately exclude `emitDecoratorMetadata`-style runtime type emission needed for `@Body() body: CreateCatDto` DTO injection. NestJS itself uses Legacy. Teams migrating expect Legacy semantics.
+
+**Alternatives considered:**
+- (a) Stage-3 only — bleeding edge, doesn't support runtime type emit, blocks the `@Body() body: ClassName` pattern.
+- (b) Dual-mode (Legacy + Stage-3) — doubles surface area + maintenance burden.
+
+**Consequences:** Consumer-app tsconfig delta = 2 lines (per Q5). reflect-metadata declared as required peer dep (~3KB gzipped). Migration path documented for when TC39 + TS support stabilize.
+
+### D2 — Strategy (b) explicit Zod schema attached to DTO class (NOT auto-bridge from class-validator)
+
+**Decision:** v0.1.0 requires users to attach `static schema` Zod on the DTO class. Class-validator decorators NOT supported runtime. Optional `@theokit/http-decorators-class-validator-codemod` separate package handles ~80% migration mechanically.
+
+**Rationale:** Per plan ADR (type-safety.md) "Zod is the Single Source of Truth" — auto-bridge from class-validator → Zod would (i) lose Zod SSoT invariant; (ii) break on `@Matches` regex modifiers vs Zod regex semantics; (iii) lose OpenAPI generation precision (per G2). Q2 enumerated 4 honest limitations.
+
+**Alternatives considered:**
+- (a) Auto-bridge DTO class → Zod schema at runtime via reflect-metadata + class-validator decorator introspection — fails (i)-(iii) above.
+- (c) Skip Zod entirely; ship only class-validator support — breaks TheoKit's existing OpenAPI emit + tests + type-inference contract.
+
+**Consequences:** Higher migration friction (1-time codemod cost); preserved type-safety invariant; OpenAPI precision retained.
+
+### D3 — `@UseGuards` + `@UseInterceptors` both translate to `defineMiddleware` wraps; `@Catch` Filter deferred v0.2.0
+
+**Decision:** v0.1.0 maps NestJS Guards + Interceptors to TheoKit `defineMiddleware` wraps at metadata-walk time. `@Catch(HttpException)` Filter class deferred to v0.2.0+ follow-up discovery.
+
+**Rationale:** Per plan ADR-D5 (light Pipes/Guards/Interceptors treatment) + Q3 finding: TheoKit's `MiddlewareHandler` `(request, next) → Response` shape SUPERSETS both Guards (return early) AND Interceptors (await + wrap). Pipes' validation role already covered by Zod in `defineRoute`.
+
+**Alternatives considered:**
+- (a) Ship full Guards/Interceptors/Filters as first-class v0.1.0 decorators — violates scope discipline (Pipes/Guards/Interceptors each deserve own discovery).
+- (c) Skip Guards entirely in v0.1.0 — breaks "NestJS-compatible enough" target for migration teams.
+
+**Consequences:** v0.1.0 covers auth + logging use cases; v0.2.0 follow-up plans Filters (error handling decorators).
+
+### D4 — Reuse existing TheoKit test harness (Pattern 2: startDevServer + native fetch); no new package
+
+**Decision:** v0.1.0 ships ZERO new test infrastructure. Users test decorated controllers via `startDevServer(fixtureDir, {port:0})` + native `fetch` — identical to how `defineRoute`-authored routes are tested today.
+
+**Rationale:** Per plan Q4 + Rule 9 (don't reinvent the wheel): supertest adds a dependency with no benefit over native fetch. The bridge layer itself ships its own contract test at `@theokit/http-decorators/tests/contract.test.ts`.
+
+**Alternatives considered:**
+- (a) Ship supertest-equivalent in `@theokit/http-decorators-testing` — adds dep + duplicates existing functionality.
+- (c) Mock TestingModule API — fakes NestJS API surface; users get false sense of compatibility, then break when real apps differ.
+
+**Consequences:** Migration guide ships with v0.1.0 documenting `Test.createTestingModule → startDevServer` + `supertest → fetch` translation.
+
+### D5 — Extend `theokit generate` with `controller` verb (NOT separate CLI package)
+
+**Decision:** v0.1.0 adds a single entry to `VALID_TYPES` in `packages/theo/src/cli/commands/generate.ts:9` + one `generateControllerTemplate(name)` function. No separate `@theokit/http-decorators-cli` package.
+
+**Rationale:** Per plan Q6: the addition is ~30 LOC mirroring the existing `generateRouteTemplate` pattern (see `generate.ts:129`). Discoverability via `theokit generate --help`. Generated file imports from `@theokit/http-decorators` but doesn't require it at generate-time (file emission only). The minor coupling (core knows controller verb exists) is acceptable.
+
+**Alternatives considered:**
+- (a) Separate `@theokit/http-decorators-cli` package — duplicates template-resolution infra, less discoverable.
+- (c) Defer CLI extension to v0.2.0 — leaves NestJS migrants without scaffold parity.
+
+**Consequences:** Adds 1 CLI verb. `nest g resource` (CRUD scaffold) deferred v0.2.0+ since it needs DTO bridge (D2) + Guards (D3) ergonomics validated first.
+
+### D6 — Architecture.md INVARIANT #3 respected: `@theokit/http-decorators` re-exports from `theokit/server` barrel, NOT deep-imports
+
+**Decision:** All `@theokit/http-decorators` cross-module imports go through `theokit/server` public barrel. NO deep imports like `theokit/server/define/define-route.js` from the new package.
+
+**Rationale:** Per `.claude/rules/architecture.md` v3.1 INVARIANT #3 "Public API only flows through barrels". The new package is a sibling consumer of `theokit/server`, not a privileged insider. The existing barrel (`packages/theo/src/server/index.ts:105` `export { executeWebRequest }`) already exposes what's needed.
+
+**Alternatives considered:**
+- (a) Add `@theokit/http-decorators` as a workspace internal — would require deep imports + couple it to internal layout.
+- (c) Add a new internal `theokit/server/internals` sub-barrel — proliferates barrels; defeats INVARIANT #3 purpose.
+
+**Consequences:** Bridge code in `@theokit/http-decorators` uses `import { defineRoute, defineMiddleware } from 'theokit/server'` — robust against TheoKit internal refactors. Bridge layer's contract tests verify barrel-import shape.
+
+<!-- All 6 ADRs above synthesize the 6 question answers into actionable design decisions for the downstream /to-plan @theokit/http-decorators cycle. -->
 
 ---
 
 ## Recommendations (synthesized at halt)
 
-<!-- Populated when all questions answered -->
+Ship `@theokit/http-decorators` v0.1.0 with the following committed surface:
+
+1. **`@Controller(prefix?, opts?)`** class decorator — emits route files at build time. Supports `{ host: ':account.example.com' }` optional sub-domain matching (verified against NestJS spec § Sub-domain routing).
+2. **HTTP-verb method decorators**: `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@Options`, `@Head`, `@All` — translate to per-method `defineRoute(...)` factory calls. Mirrors the NestJS shape in spec § Resources.
+3. **Parameter decorators**: `@Req`, `@Res({passthrough?})`, `@Body(key?)`, `@Query(key?)`, `@Param(key?)`, `@Headers(name?)`, `@Session()`, `@Ip()`, `@HostParam(key?)` — all map to TheoKit's ctx-destructured handler.
+4. **Response-shape decorators**: `@HttpCode(status)`, `@Header(name, value)`, `@Redirect(url, status?)` — all map to `defineRoute({status})` + Response construction.
+5. **DTOs**: explicit Zod via `static schema` on the class (strategy b per D2). Optional `@theokit/http-decorators-class-validator-codemod` separate package for migration.
+6. **Guards / Interceptors**: `@UseGuards(GuardClass)` + `@UseInterceptors(InterceptorClass)` translate to `defineMiddleware` wraps per D3.
+7. **CLI**: extend `theokit generate` with `controller` verb per D5 — generates `server/controllers/{name}.controller.ts`.
+8. **Test harness**: NONE — reuse existing TheoKit Pattern 2 (`startDevServer` + native `fetch`) per D4.
+9. **Architecture barrel discipline**: import only from `theokit/server` barrel per D6 — respects architecture.md v3.1 INVARIANT #3.
+
+Out of scope for v0.1.0 (deferred to follow-up `/discover-plan`):
+- NestJS Pipes / Filters / Modules / Providers / DI (per plan ADR-D4, ADR-D5)
+- TC39 Stage-3 decorators (per D1; Legacy in v0.1.0)
+- `nest g resource` CRUD scaffold (per D5; deferred)
+
+Bundle cost for consumers who opt in: ~8-13KB gzipped (reflect-metadata ~3KB + new package ~5-10KB). Bundle cost for non-opt-in consumers: 0KB.
+
+## References cited
+
+Inline citations across this blueprint resolve to the following on-disk paths under `.claude/knowledge-base/references/` (Fastify + Hono) and `packages/theo/src/` (TheoKit core):
+
+**Fastify (comparative — routing dispatch internals):**
+- `.claude/knowledge-base/references/fastify/lib/handle-request.js:20` — `handleRequest(err, request, reply)` orchestrator entry
+- `.claude/knowledge-base/references/fastify/lib/handle-request.js:6` — `preValidationHookRunner` + `preHandlerHookRunner` imports
+- `.claude/knowledge-base/references/fastify/lib/route.js:120` — `routing: router.lookup.bind(router)` route registration
+- `.claude/knowledge-base/references/fastify/lib/route.js:147` — `prepareRoute({method, url, options, handler})` per-route prep
+- `.claude/knowledge-base/references/fastify/lib/decorate.js:77` — `decorate(this, name, fn, dependencies)` runtime decoration API
+- `.claude/knowledge-base/references/fastify/lib/request.js` — Request object surface
+- `.claude/knowledge-base/references/fastify/lib/reply.js` — Reply object surface
+- `.claude/knowledge-base/references/fastify/fastify.d.ts` — public TS surface
+- `.claude/knowledge-base/references/fastify/package.json` — runtime dep tree
+- `.claude/knowledge-base/references/fastify/lib/errors.js` — error chain (comparative with TheoKit envelope translator)
+- `.claude/knowledge-base/references/fastify/lib/plugin-utils.js` — plugin scope (Object.create per Fastify pattern; comparative with TheoKit T3.1)
+
+**Hono (negative reference — chain pattern alternative):**
+- `.claude/knowledge-base/references/hono/src/hono.ts` — main Hono class
+- `.claude/knowledge-base/references/hono/src/hono-base.ts` — base routing surface
+- `.claude/knowledge-base/references/hono/src/router.ts` — router internals
+- `.claude/knowledge-base/references/hono/src/context.ts` — context object passed to handlers (`c.json(...)` shape)
+- `.claude/knowledge-base/references/hono/src/compose.ts` — middleware composition
+
+**TheoKit core (in-tree):**
+- `packages/theo/src/server/define/define-route.ts:14` — `defineRoute` identity factory
+- `packages/theo/src/core/contracts/route-config.ts:14-40` — RouteConfig interface (Zod schemas + handler signature)
+- `packages/theo/src/server/define/define-middleware.ts:1-12` — `defineMiddleware` + `MiddlewareHandler` type
+- `packages/theo/src/server/http/middleware-runner.ts:72` — `runMiddlewareAndContext` chain executor
+- `packages/theo/src/server/http/middleware-runner.ts:57` — `runOneMiddleware` per-step
+- `packages/theo/src/server/http/action-execute.ts:34-59` — `ZodLike` structural interface
+- `packages/theo/src/server/http/action-execute.ts:361` — `actionConfig.input.safeParse(bodyOutcome.body)` parse boundary
+- `packages/theo/src/server/index.ts:105` — `export { executeWebRequest }` public barrel
+- `packages/theo/src/cli/commands/generate.ts:9-11` — `VALID_TYPES` array (`route`/`action`/`page`/`ws`)
+- `packages/theo/src/cli/commands/generate.ts:124-141` — generator switch table
+- `packages/theo/src/cli/commands/generate.ts:129` — `generateRouteTemplate(name)` inline template pattern
+- `tsconfig.json:1-22` — root tsconfig (no decorator flags)
+- `tests/integration/api-middleware-coverage.test.ts:1-40` — Pattern 1 mock-Vite test
+- `tests/integration/onda5-mandatory.test.ts:1-25` — Pattern 2 boundary smoke test
+
+## Blocked questions (if any)
+
+None. All 6 research questions answered. 0 fabricated citations (verified by `/discover-confidence` Step 7 sanity check).
 
 ## Blocked questions (if any)
 
