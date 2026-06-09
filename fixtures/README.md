@@ -81,6 +81,7 @@ You can then copy the relevant code patterns from any fixture into your scaffold
 | webhook-stripe | `defineWebhook` + `stripe(secret)` helper roundtrip | jobs-crons-webhooks |
 | webhook-github | `defineWebhook` + `github(secret)` helper roundtrip | jobs-crons-webhooks |
 | webhook-slack | `defineWebhook` + `slack({signingSecret})` helper roundtrip | jobs-crons-webhooks |
+| decorator-fullstack | `@Controller`/`@Get`/`@Body` decorators via `@theokit/http-decorators` + React frontend | http-decorators |
 
 ## Notes on adapter fixtures
 
