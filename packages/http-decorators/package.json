@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./theokit-plugin": {
+      "import": "./dist/theokit-plugin.js",
+      "types": "./dist/theokit-plugin.d.ts"
     }
   },
   "files": [
