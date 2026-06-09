@@ -16,13 +16,13 @@ TheoKit just shipped `system-100-percent-functional` (v0.2.0 candidate). The web
 
 Per `CLAUDE.md` memory `feedback-sdk-is-evolvable`: when TheoKit work needs an SDK change, write the SDK task in the SDK repo — don't workaround in TheoKit. This document is that task, structured.
 
-Per `CLAUDE.md` memory `project-stack-deps`: TheoKit's stack assumption is **always** `@usetheo/sdk` + `@theokit/ui`. The SDK is not "evaluated against alternatives" — it IS the runtime. Therefore the SDK is the only place these gaps can be fixed without violating the locked premise.
+Per `CLAUDE.md` memory `project-stack-deps`: TheoKit's stack assumption is **always** `@theokit/sdk` + `@theokit/ui`. The SDK is not "evaluated against alternatives" — it IS the runtime. Therefore the SDK is the only place these gaps can be fixed without violating the locked premise.
 
 The cross-repo workflow (per `CLAUDE.md` "Macro Roadmap" section, "SDK plan (cross-repo)" table):
 
 ```
 1. SDK team implements + tests + docs.md + CHANGELOG in theokit-sdk/
-2. SDK publishes @usetheo/sdk@^X.Y.Z-next.N
+2. SDK publishes @theokit/sdk@^X.Y.Z-next.N
 3. TheoKit consumes via bump + writes the wrapper that uses the new API
 4. TheoKit ships fixture proof in tests/fixtures/
 ```
@@ -59,7 +59,7 @@ Recommended ship order: **1 → 2 → 3 → 5 → 4 → 6**. Reason: 1+2 are inf
 
 ### Evidence
 
-`@usetheo/sdk`'s `Agent.getOrCreate(id)` persists conversation turns to:
+`@theokit/sdk`'s `Agent.getOrCreate(id)` persists conversation turns to:
 
 ```
 .theokit/agents/<conversationId>/messages.jsonl
@@ -138,7 +138,7 @@ export interface ConversationStorageAdapter {
 
 ### Recipes in `theokit-sdk/docs/recipes/`
 
-(Not in core — to keep `@usetheo/sdk` dep-light; document the pattern, ship as user code.)
+(Not in core — to keep `@theokit/sdk` dep-light; document the pattern, ship as user code.)
 
 3. **`PostgresConversationStorage`** — uses `pg` + a table `agent_conversations(id text, messages jsonb, updated_at timestamptz)`.
 4. **`RedisConversationStorage`** — uses `ioredis`; key = `agent:conversation:<id>`; messages stored as a Redis list (`RPUSH`/`LRANGE`).
@@ -222,7 +222,7 @@ describe('ConversationStorageAdapter contract', () => {
 
 ### Acceptance criteria
 
-- [ ] `ConversationStorageAdapter` interface exported from `@usetheo/sdk`
+- [ ] `ConversationStorageAdapter` interface exported from `@theokit/sdk`
 - [ ] `FileSystemConversationStorage` is the default (no breaking change to existing apps)
 - [ ] `InMemoryConversationStorage` exported
 - [ ] Postgres + Redis recipes in `docs/recipes/`
@@ -235,7 +235,7 @@ describe('ConversationStorageAdapter contract', () => {
 ### TheoKit-side follow-up (post-SDK publish)
 
 TheoKit will:
-1. Bump `@usetheo/sdk` to the version that ships this
+1. Bump `@theokit/sdk` to the version that ships this
 2. Update `createConversationHistory` in `packages/theo/src/server/agent/create-conversation-history.ts` to accept and pass through `conversationStorage`
 3. Add a fixture project `tests/fixtures/conversation-redis/` proving the Redis recipe works end-to-end
 4. Document in `docs/concepts/conversation-history.md` the per-deploy-target choice (FileSystem for self-hosted Node, Postgres/Redis for serverless + multi-host)
@@ -248,7 +248,7 @@ TheoKit will:
 
 TheoKit currently has a dev-mode-only GC at `packages/theo/src/cli/cleanup/cleanup.ts` (`gcAgentRegistry`). It only runs during `theokit dev`. In production (`theokit start`), nothing evicts agents from memory.
 
-Each `Agent.getOrCreate(conversationId)` adds an entry to an internal registry (current implementation in `@usetheo/sdk`). Reasonable assumption based on the API shape: there's a `Map<id, Agent>` or equivalent.
+Each `Agent.getOrCreate(conversationId)` adds an entry to an internal registry (current implementation in `@theokit/sdk`). Reasonable assumption based on the API shape: there's a `Map<id, Agent>` or equivalent.
 
 ### Impact
 
@@ -567,7 +567,7 @@ describe('AgentRunError discrimination', () => {
 
 ### Evidence
 
-`@usetheo/sdk`'s `CustomTool` runtime executes tools opaquely. TheoKit's `trackAgentRun` (server/cost/track-agent-run.ts) wants to accumulate:
+`@theokit/sdk`'s `CustomTool` runtime executes tools opaquely. TheoKit's `trackAgentRun` (server/cost/track-agent-run.ts) wants to accumulate:
 - Per-tool execution count
 - Per-tool latency (p50/p99)
 - Per-tool error rate
@@ -883,10 +883,10 @@ For observability — the hooks should NEVER:
 
 This handoff is **complete** when:
 
-- [ ] All 6 gaps have shipped in `@usetheo/sdk` (some minor version on `next` tag)
+- [ ] All 6 gaps have shipped in `@theokit/sdk` (some minor version on `next` tag)
 - [ ] Each ships with: tests, CHANGELOG, `docs.md` section
 - [ ] Cross-repo smoke test against TheoKit's openrouter-demo passes
-- [ ] TheoKit core bumps `@usetheo/sdk` to the latest version that includes all 6
+- [ ] TheoKit core bumps `@theokit/sdk` to the latest version that includes all 6
 - [ ] TheoKit's `examples/openrouter-demo/server/routes/chat.ts` updated to:
   - Use `conversationStorage` (Postgres or Redis adapter in production builds)
   - Thread `signal` from request to `agent.send`

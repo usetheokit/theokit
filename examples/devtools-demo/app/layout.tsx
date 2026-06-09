@@ -1,7 +1,7 @@
-import '@usetheo/ui/styles.css'
+import '@theokit/ui/styles.css'
 
 import { Outlet, Link } from 'react-router'
-import { ThemeSwitcher, Tooltip } from '@usetheo/ui'
+import { ThemeSwitcher, Tooltip } from '@theokit/ui'
 import { Bug, Home, Info, Package } from 'lucide-react'
 
 const NAV_ITEMS = [

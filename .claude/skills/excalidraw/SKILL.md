@@ -1,9 +1,22 @@
 ---
-name: excalidraw-diagram
-description: Create Excalidraw diagram JSON files that make visual arguments. Use when the user wants to visualize workflows, architectures, or concepts.
+name: excalidraw
+description: Create Excalidraw diagram JSON files that make visual arguments. Use when the user wants to visualize workflows, architectures, or concepts (standalone or as input to /marp-slide and /deck).
+user-invocable: true
+allowed-tools: Read Glob Grep Bash Write Edit
+argument-hint: "<topic or description>"
 ---
 
 # Excalidraw Diagram Creator
+
+> **INQUEBRÁVEL — 95% Confidence Gate**
+>
+> NÃO FAÇA NADA SE NÃO TIVER 95% DE CONFIANÇA.
+> SEMPRE QUE PRECISAR DE UMA DECISÃO DO USUÁRIO, APRESENTE
+> OPÇÕES PARA ELE ESCOLHER.
+>
+> Ver `/home/paulo/.claude/CLAUDE.md` § 1 (95% Confidence).
+
+**Project rules consumed:** if `.claude/rules/public-copy.md` exists, slides/diagrams derived from this output that may surface in README/PITCH are bound by its voice rules. `.claude/rules/dogfood-golden-rule.md` blocks any "production-ready" diagram label without dogfood evidence.
 
 Generate `.excalidraw` JSON files that **argue visually**, not just display information.
 
@@ -14,6 +27,39 @@ Generate `.excalidraw` JSON files that **argue visually**, not just display info
 **All colors and brand-specific styles live in one file:** `references/color-palette.md`. Read it before generating any diagram and use it as the single source of truth for all color choices — shape fills, strokes, text colors, evidence artifact backgrounds, everything.
 
 To make this skill produce diagrams in your own brand style, edit `color-palette.md`. Everything else in this file is universal design methodology and Excalidraw best practices.
+
+## Integration with Marp Slides
+
+When creating diagrams for Marp presentations (see `/marp-slide` skill), follow these conventions:
+
+### Frame Size
+- Use a **1280x720 frame** (matches Marp 16:9 slide dimensions)
+- This ensures the diagram fills the slide without distortion
+
+### Export Format
+- **Preferred:** SVG — vectorial, scalable, smaller files
+- **Fallback:** PNG at **2x scale** (2560x1440) for HiDPI/Retina screens
+- **Always enable "Embed Scene"** — preserves the `.excalidraw` data inside the export for future editing
+
+### File Organization
+Store files next to the presentation markdown. Default presentation directory is `docs/presentations/`; projects may override:
+```
+<presentation-dir>/  # default: docs/presentations/
+  apresentacao-<name>.md
+  diagrams/
+    <name>/
+      01-description.excalidraw    ← editable source
+      01-description.svg           ← preferred export
+```
+
+### Dark Mode (Same as Slides)
+
+Diagrams use the **same dark background** as slides (`#0d1117`). This eliminates visual contrast between diagram and slide — they look seamless.
+
+- Set `viewBackgroundColor: "#0d1117"` in the `.excalidraw` JSON
+- Use the dark-mode color palette from `references/color-palette.md`
+- Fills are deep/muted, strokes are bright/vivid for contrast on dark backgrounds
+- Text colors match the slide theme exactly (`#58a6ff` for titles, `#c9d1d9` inside shapes)
 
 ---
 
@@ -404,6 +450,18 @@ Guide the eye: typically left→right or top→bottom for sequences, radial for 
 ### Connections Required
 Position alone doesn't show relationships. If A relates to B, there must be an arrow.
 
+### Sizing for Marp Slides
+When the diagram will be embedded in a Marp slide at a specific width, plan your layout accordingly:
+
+| Marp Width | Effective Canvas | Use Case |
+|------------|-----------------|----------|
+| `w:960` | Full frame, max size | Diagram-only slide |
+| **`w:900`** | **Standard (default)** | **Most diagrams — use this** |
+| `w:780` | ~60% of frame | Diagram + 1-2 text lines |
+| `w:560` | ~44% of frame | Diagram + significant text |
+
+At `w:650` and below, simplify: fewer elements, larger text (18-20px), bolder strokes.
+
 ---
 
 ## Text Rules
@@ -444,6 +502,56 @@ See `references/element-templates.md` for copy-paste JSON templates for each ele
 
 ---
 
+## Icon Library
+
+For semantic icons (AI, memory, flow, brand logos), use the curated icon library at `references/icons/`. **Do not hand-draw what already exists in the library** — a Lucide `brain` SVG is more consistent and legible than 8 hand-placed paths.
+
+### Available icons
+
+- `lucide/` — ~110 line icons (MIT, 24×24, 2px stroke). Default choice for UI concepts, AI, flow, storage, actions.
+- `tabler/` — ~17 line icons (MIT). Complement when Lucide misses a specific technical concept.
+- `simple-icons/` — ~34 brand logos (CC0). GitHub, Anthropic, Claude, Python, Docker, etc. Trademarks belong to their owners — editorial use only.
+- `phosphor-duotone/` — ~15 hero icons (MIT, two-tone). Use **sparingly** for hero elements in infographics; never for routine UI.
+
+Browse the full curated list in `references/icons/curated_icons.txt`.
+
+### Inserting an icon into your diagram
+
+Run the helper, then merge the output into your scene:
+
+```bash
+cd .claude/skills/excalidraw/references/icons
+python3 icon_to_excalidraw.py lucide/brain --x 200 --y 150 --size 64
+```
+
+The output JSON has two keys:
+- `element` — push into your `elements` array
+- `file` — add to your `files` object (keyed by `file["id"]`)
+
+Override color when the default category doesn't fit:
+```bash
+python3 icon_to_excalidraw.py lucide/database --color "#fbbf24"
+```
+
+### Adding a new icon to the library
+
+If you need an icon that's not in `curated_icons.txt`:
+1. Append a line: `<lib>/<icon-name> <category>` (categories in `theo_palette_map.json`)
+2. `python3 download_icons.py`
+3. `python3 apply_theo_palette.py`
+
+Always prefer Lucide first; fall back to Tabler only if Lucide misses the concept.
+
+### When NOT to use an icon
+
+- As decoration. If removing the icon doesn't change the meaning of the section, remove it.
+- For labels that already have a clear shape (a `database` shape doesn't need a `database` icon next to it — redundant).
+- Inside small containers (<60×60px) where the icon won't be legible. Size icons at least 32px in the rendered output.
+
+See `references/icons/README.md` for the full workflow.
+
+---
+
 ## Render & Validate (MANDATORY)
 
 You cannot judge a diagram from JSON alone. After generating or editing the Excalidraw JSON, you MUST render it to PNG, view the image, and fix what you see — in a loop until it's right. This is a core part of the workflow, not a final check.
@@ -451,7 +559,7 @@ You cannot judge a diagram from JSON alone. After generating or editing the Exca
 ### How to Render
 
 ```bash
-cd .claude/skills/excalidraw-diagram/references && uv run python render_excalidraw.py <path-to-file.excalidraw>
+cd .claude/skills/excalidraw/references && uv run python render_excalidraw.py <path-to-file.excalidraw>
 ```
 
 This outputs a PNG next to the `.excalidraw` file. Then use the **Read tool** on the PNG to actually view it.
@@ -503,7 +611,7 @@ The loop is done when:
 ### First-Time Setup
 If the render script hasn't been set up yet:
 ```bash
-cd .claude/skills/excalidraw-diagram/references
+cd .claude/skills/excalidraw/references
 uv sync
 uv run playwright install chromium
 ```
@@ -541,6 +649,7 @@ uv run playwright install chromium
 18. **Roughness**: `roughness: 0` for clean/modern (unless hand-drawn style requested)
 19. **Opacity**: `opacity: 100` for all elements (no transparency)
 20. **Container ratio**: <30% of text elements should be inside containers
+21. **Icons from library**: semantic icons come from `references/icons/`, not hand-drawn
 
 ### Visual Validation (Render Required)
 21. **Rendered to PNG**: Diagram has been rendered and visually inspected

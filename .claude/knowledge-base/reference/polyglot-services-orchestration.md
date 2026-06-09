@@ -1078,11 +1078,11 @@ These items DID NOT reach a confident answer in research. Each becomes a TODO be
 
 4. **Service discovery vs explicit declaration:** Encore uses `encore.service.ts` convention; TheoKit Wave 2 plan uses explicit `services: {}`. **Should we also auto-discover services in `services/*/`?** Convention reduces config but adds magic. **Recommendation:** explicit only in Wave 2; revisit if friction surfaces.
 
-5. **`@usetheo/sdk` agent runtime in a Python service?** ADR-0012 invariant #2 says TS-only for Wave 2. But the boundary "Python service is tool/data provider, not agent" needs concrete documentation: what if a Python service WANTS to call an LLM directly (e.g., specialized embedding pipeline)? It can — but it MUST NOT be advertised as "running an Agent". **Resolve by:** doc in `docs/concepts/services.md` with examples and counter-examples.
+5. **`@theokit/sdk` agent runtime in a Python service?** ADR-0012 invariant #2 says TS-only for Wave 2. But the boundary "Python service is tool/data provider, not agent" needs concrete documentation: what if a Python service WANTS to call an LLM directly (e.g., specialized embedding pipeline)? It can — but it MUST NOT be advertised as "running an Agent". **Resolve by:** doc in `docs/concepts/services.md` with examples and counter-examples.
 
 6. **CSRF for cross-origin proxy targets:** if `services.agent.target` is `http://external-api.com` (not local), the TheoKit's CSRF defenses become brittle. **Should `services: {}` reject non-localhost targets in Wave 2?** Lean: yes (Wave 2 is for local-or-managed sidecars; external API integration is out of scope; use a Hono route handler in `server/routes/` for that).
 
-7. **Telegram/gateway sidecar pattern:** `@usetheo/gateway-telegram` runs in the TheoKit TS process today. Should it become a "service" in `services: {}` for operational isolation? **Recommendation:** keep in-process by default; document the migration path to sidecar for users who want isolation.
+7. **Telegram/gateway sidecar pattern:** `@theokit/gateway-telegram` runs in the TheoKit TS process today. Should it become a "service" in `services: {}` for operational isolation? **Recommendation:** keep in-process by default; document the migration path to sidecar for users who want isolation.
 
 ---
 

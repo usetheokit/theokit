@@ -9,9 +9,9 @@ function read(rel: string): string {
 }
 
 describe('create-theokit default template — agent surface (T3.1)', () => {
-  it('package.json.tmpl includes @usetheo/ui in dependencies', () => {
+  it('package.json.tmpl includes @theokit/ui in dependencies', () => {
     const pkg = read('package.json.tmpl')
-    expect(pkg).toMatch(/"@usetheo\/ui"/)
+    expect(pkg).toMatch(/"@theokit\/ui"/)
   })
 
   it('package.json.tmpl declares theokit peer dependencies (regression — smoke real)', () => {
@@ -91,9 +91,9 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     expect(layout).toMatch(/tone:\s*['"`]/)
   })
 
-  it('app/page.tsx imports from @usetheo/ui (not local stub)', () => {
+  it('app/page.tsx imports from @theokit/ui (not local stub)', () => {
     const page = read('app/page.tsx')
-    expect(page).toMatch(/from ['"]@usetheo\/ui['"]/)
+    expect(page).toMatch(/from ['"]@theokit\/ui['"]/)
   })
 
   it('app/page.tsx is a Client Component ("use client" directive)', () => {
@@ -132,7 +132,7 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     // "replace with X" comments — it's the canonical SDK wiring. Comment now
     // explains the SDK-shaped contract (Agent.prompt, throwOnError, providers).
     const chat = read('server/routes/chat.ts')
-    expect(chat).toMatch(/agent|@usetheo\/sdk|Agent\.prompt|throwOnError/i)
+    expect(chat).toMatch(/agent|@theokit\/sdk|Agent\.prompt|throwOnError/i)
   })
 
   it('T1.1: chat.ts uses defineAgentEndpoint helper (not manual SSE)', () => {
@@ -150,7 +150,10 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
   it('T1.1: chat.ts handler is an async generator yielding AgentEvent', () => {
     const chat = read('server/routes/chat.ts')
     expect(chat).toMatch(/async\s*\*\s*handler/)
-    expect(chat).toMatch(/yield\s*\{\s*type:/)
+    // Either bare `yield { type: ... }` OR yield-delegate to a generator
+    // (e.g., `yield* streamAgentRun(run)` since item #4). Both shapes
+    // satisfy the AgentEvent contract.
+    expect(chat).toMatch(/yield\s*\{\s*type:|yield\*\s+streamAgentRun\(/)
   })
 
   it('regression — chat.ts does NOT call request.json() (smoke 2026-05-18)', () => {
@@ -201,14 +204,14 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     expect(layout).toMatch(/<Outlet/)
   })
 
-  it('zero-config: template DOES NOT ship tailwind.config.ts or postcss.config.js (Phase 3 / @usetheo/ui ^0.5)', () => {
+  it('zero-config: template DOES NOT ship tailwind.config.ts or postcss.config.js (Phase 3 / @theokit/ui ^0.5)', () => {
     expect(() => read('tailwind.config.ts')).toThrow()
     expect(() => read('postcss.config.js')).toThrow()
   })
 
-  it('layout imports @usetheo/ui/styles.css (Tailwind v4 entry — pre-bundled by @usetheo/ui)', () => {
+  it('layout imports @theokit/ui/styles.css (Tailwind v4 entry — pre-bundled by @theokit/ui)', () => {
     const layout = read('app/layout.tsx')
-    expect(layout).toMatch(/import\s+['"]@usetheo\/ui\/styles\.css['"]/)
+    expect(layout).toMatch(/import\s+['"]@theokit\/ui\/styles\.css['"]/)
   })
 
   it('package.json.tmpl declares tailwindcss@^4 + @tailwindcss/vite (v4 zero-config) + lucide-react', () => {

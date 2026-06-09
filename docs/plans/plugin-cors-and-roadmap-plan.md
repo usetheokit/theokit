@@ -86,7 +86,7 @@ Metas mensuráveis:
 
 ### D7 — Fixture + integration test usam workspace link cross-repo (EC-2 fix)
 - **Decisão:** `theokit-plugins/pnpm-workspace.yaml` adiciona `- '../theokit/packages/theo'` (sibling checkout pattern). T3.1 fixture importa `from 'theokit'` real (não stubbed); T3.2 integration test importa `PluginRunner from 'theokit/server'` real. Mesma estratégia usada por `theokit-sdk` em `pnpm-workspace.yaml` do core.
-- **Rationale:** Integration test stubbed seria circular (testaria nosso próprio stub, não a integração real). Workspace cross-repo já é padrão do monorepo usetheo (sibling tolerance: pnpm warns mas não falha se sibling não estiver clonado). EC-2 expunha inconsistência entre T3.1 ("stubbed") e T3.2 ("real PluginRunner") — esta ADR consolida para "real".
+- **Rationale:** Integration test stubbed seria circular (testaria nosso próprio stub, não a integração real). Workspace cross-repo já é padrão do monorepo Theo (sibling tolerance: pnpm warns mas não falha se sibling não estiver clonado). EC-2 expunha inconsistência entre T3.1 ("stubbed") e T3.2 ("real PluginRunner") — esta ADR consolida para "real".
 - **Consequences:** ✅ Test exercita PluginRunner real. ✅ Fixture é representativa do uso. ⚠️ CI runner precisa clonar AMBOS os repos (já é o caso pra `theokit-sdk` — CI workflow já handle). ⚠️ Contributors externos sem `theokit/` clonado vêem warning de pnpm — aceitable (mesma DX que SDK).
 
 ### D6 — Release inicial = v0.1.0, NÃO v1.0.0

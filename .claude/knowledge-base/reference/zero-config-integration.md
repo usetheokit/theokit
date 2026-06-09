@@ -590,7 +590,7 @@ Lighter-than-expected paths:
                 │  package.json:                   │
                 │    "dependencies": {              │
                 │      "@theokit/ui": "^1"         │
-                │      "@usetheo/sdk": "^1"        │
+                │      "@theokit/sdk": "^1"        │
                 │    }                             │
                 │  .env                            │
                 │  theo.config.ts                  │

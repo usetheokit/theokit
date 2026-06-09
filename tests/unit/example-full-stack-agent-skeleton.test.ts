@@ -23,10 +23,10 @@ describe('examples/full-stack-agent skeleton — T1.1', () => {
     const deps = pkg.dependencies ?? {}
     for (const name of [
       'theokit',
-      '@usetheo/sdk',
-      '@usetheo/ui',
-      '@usetheo/gateway',
-      '@usetheo/gateway-telegram',
+      '@theokit/sdk',
+      '@theokit/ui',
+      '@theokit/gateway',
+      '@theokit/gateway-telegram',
       'grammy',
       'zod',
       'react',
@@ -57,6 +57,8 @@ describe('examples/full-stack-agent skeleton — T1.1', () => {
     expect(config).toMatch(/ssr:\s*true/)
     // Production-conditional: enforce in prod, off/report-only in dev so Vite's
     // React Refresh inline preamble doesn't break HMR / first hydration.
-    expect(config).toMatch(/cspMode:\s*isProduction\s*\?\s*['"]enforce['"]\s*:\s*['"](off|report-only)['"]/)
+    expect(config).toMatch(
+      /cspMode:\s*isProduction\s*\?\s*['"]enforce['"]\s*:\s*['"](off|report-only)['"]/,
+    )
   })
 })

@@ -245,7 +245,7 @@ tests/unit/typecheck-clean-gate.test.ts (NEW) — asserts `pnpm typecheck` retur
 #### Deep Dives
 - **Expected residual after Zod fix:** ≤5 unrelated TS errors. If >5, escalate per file.
 - **Pre-existing TS errors NOT related to Zod:** unlikely but possible (e.g., a stale import). Fix one by one; document each in CHANGELOG.
-- **EC-203 (MUST FIX) — SDK isolation pre-flight:** `examples/full-stack-agent/server/tools/*.ts` use `defineAgentTool({ inputSchema: z.object(...) })`. The framework's `defineAgentTool` uses `z.ZodType` from Zod 3. But the example tools' output type cast may touch `@usetheo/sdk` types (which are Zod 4-shaped in the sibling repo, per B7 OUT OF SCOPE). Run pre-flight isolation: `pnpm typecheck 2>&1 | grep "examples/full-stack-agent/server/tools" | grep -E "@usetheo/sdk|toJSONSchema|ZodObject"`. If hits > 0, those errors are SDK-rooted (B7) and EXCLUDED from this task's pass criteria. Document the excluded count in `docs/audit/phase-0-typecheck-pre-flight-2026-MM-DD.md`.
+- **EC-203 (MUST FIX) — SDK isolation pre-flight:** `examples/full-stack-agent/server/tools/*.ts` use `defineAgentTool({ inputSchema: z.object(...) })`. The framework's `defineAgentTool` uses `z.ZodType` from Zod 3. But the example tools' output type cast may touch `@theokit/sdk` types (which are Zod 4-shaped in the sibling repo, per B7 OUT OF SCOPE). Run pre-flight isolation: `pnpm typecheck 2>&1 | grep "examples/full-stack-agent/server/tools" | grep -E "@theokit/sdk|toJSONSchema|ZodObject"`. If hits > 0, those errors are SDK-rooted (B7) and EXCLUDED from this task's pass criteria. Document the excluded count in `docs/audit/phase-0-typecheck-pre-flight-2026-MM-DD.md`.
 
 #### Tasks
 1. Run `pnpm typecheck` post-T0.2.

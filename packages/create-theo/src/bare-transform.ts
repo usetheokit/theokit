@@ -6,16 +6,16 @@
  * T4.1 — `--bare` transformation.
  *
  * Applied AFTER the default template is copied. Removes:
- *   - `@usetheo/ui` from `package.json` dependencies (TheoUI bundled components)
- *   - `@usetheo/sdk` from `package.json` dependencies (agent SDK — see below)
+ *   - `@theokit/ui` from `package.json` dependencies (TheoUI bundled components)
+ *   - `@theokit/sdk` from `package.json` dependencies (agent SDK — see below)
  *   - `app/page.tsx` agent-surface content (replaces with Hello Theo)
  *   - `server/routes/chat.ts` (mock chat — depends on SDK + TheoUI events)
  *   - `tailwind.config.ts` + `postcss.config.js` (Tailwind toolchain — only
- *     needed by the @usetheo/ui-driven default surface)
+ *     needed by the @theokit/ui-driven default surface)
  *   - tailwind* + postcss* from devDependencies (toolchain cleanup)
  *
  * Why SDK removal is in --bare:
- *   `@usetheo/sdk` is not yet on the public npm registry (operator-deferred
+ *   `@theokit/sdk` is not yet on the public npm registry (operator-deferred
  *   publish per macro roadmap item #3). A user running `npx create-theokit`
  *   without `--bare` hits `npm install` → 404. The `--bare` path produces a
  *   scaffold that ALWAYS works without registry dependencies — Hello Theo
@@ -43,7 +43,7 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     throw new Error(`Forced transform failure: ${options._testForceError}`)
   }
 
-  // 1. Remove @usetheo/ui + @usetheo/sdk + tailwind toolchain from deps
+  // 1. Remove @theokit/ui + @theokit/sdk + tailwind toolchain from deps
   const pkgPath = join(targetDir, 'package.json')
   if (existsSync(pkgPath)) {
     interface PartialPackageJson {
@@ -53,17 +53,17 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     }
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as PartialPackageJson
     if (pkg.dependencies) {
-      delete pkg.dependencies['@usetheo/ui']
+      delete pkg.dependencies['@theokit/ui']
       // Drop SDK — operator-deferred npm publish (macro roadmap item #3).
       // Without removal, `npm install` hits 404 for any consumer outside
       // the workspace.
-      delete pkg.dependencies['@usetheo/sdk']
+      delete pkg.dependencies['@theokit/sdk']
       // lucide-react ships with the TheoUI surface; --bare doesn't render
       // any icons so it's safe to drop.
       delete pkg.dependencies['lucide-react']
     }
     if (pkg.devDependencies) {
-      // Tailwind toolchain is only needed by the @usetheo/ui-driven default
+      // Tailwind toolchain is only needed by the @theokit/ui-driven default
       // surface. --bare ships unstyled Hello Theo; no Tailwind required.
       delete pkg.devDependencies.tailwindcss
       delete pkg.devDependencies['tailwindcss-animate']

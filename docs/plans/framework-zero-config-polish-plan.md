@@ -10,7 +10,7 @@
 - `packages/theo/src/vite-plugin/integrations.ts:35-37` — `defineTheoIntegration` + `createIntegrationRegistry` lifecycle hooks (mirrors Astro Integrations) already exist.
 - `packages/theo/src/cli/commands/upgrade-readiness.ts` — pre-existing readiness command.
 - `packages/theo/src/config/load-config.ts:82` — reads `process.env.NODE_ENV` but **never loads `.env` files**.
-- `packages/theo/src/server/create-conversation-history.ts:7` — writes to `<cwd>/.theokit/agents/<agentId>/messages.jsonl` (via `@usetheo/sdk`) but **no GC**.
+- `packages/theo/src/server/create-conversation-history.ts:7` — writes to `<cwd>/.theokit/agents/<agentId>/messages.jsonl` (via `@theokit/sdk`) but **no GC**.
 - `examples/full-stack-agent/` — ships `tailwind.config.ts` + `postcss.config.js` + `server/_env.ts` as workaround shims for the 5 framework gaps.
 
 **What's broken / missing:**

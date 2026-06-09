@@ -1,6 +1,8 @@
 import superjson from 'superjson'
 import type { z } from 'zod'
 
+import type { TheoErrorCode, TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
+
 import { getGlobalBatcher } from './batch-transport.js'
 
 // --- Transformer (T1.3) ---
@@ -88,20 +90,93 @@ export type TheoFetchOptions<T> = Omit<RequestInit, 'body' | 'method'> &
 
 // --- Error Class ---
 
+/**
+ * G5 T2.1 — extract a TheoErrorEnvelope from a response body. Supports both
+ * the new envelope-at-root shape (`{ code, message, ext?, ... }`, blueprint
+ * Recommendations § concrete shape) and the legacy nested shape
+ * (`{ error: { code, message, issues? } }`, G3 SerializedActionResult).
+ *
+ * Falls back to `INTERNAL_SERVER_ERROR` with a synthetic message when the
+ * body shape is unrecognized. Pure; no I/O.
+ */
+function extractEnvelope(status: number, body: unknown): TheoErrorEnvelope {
+  if (!body || typeof body !== 'object') {
+    return { code: 'INTERNAL_SERVER_ERROR', message: `HTTP ${String(status)}` }
+  }
+  const obj = body as Record<string, unknown>
+  // New shape — envelope at root
+  if (typeof obj.code === 'string' && typeof obj.message === 'string') {
+    return {
+      code: obj.code as TheoErrorCode,
+      message: obj.message,
+      cause: obj.cause,
+      meta: obj.meta as Record<string, unknown> | undefined,
+      ext: obj.ext,
+    }
+  }
+  // Legacy shape — { error: { code, message, ... } }
+  if (obj.error && typeof obj.error === 'object') {
+    const nested = obj.error as Record<string, unknown>
+    return {
+      code:
+        typeof nested.code === 'string' ? (nested.code as TheoErrorCode) : 'INTERNAL_SERVER_ERROR',
+      message: typeof nested.message === 'string' ? nested.message : `HTTP ${String(status)}`,
+    }
+  }
+  return { code: 'INTERNAL_SERVER_ERROR', message: `HTTP ${String(status)}` }
+}
+
+/**
+ * Pull a single string field from an object, returning undefined if missing
+ * or non-string. Helper for `extractLegacyFields` to stay under the
+ * complexity ceiling.
+ */
+function strField(obj: Record<string, unknown> | null, key: string): string | undefined {
+  const v = obj?.[key]
+  return typeof v === 'string' ? v : undefined
+}
+
+/**
+ * Pull the canonical {message, code, issues} from either an envelope-at-root
+ * body or the legacy { error: {...} } body. Pure.
+ */
+function extractLegacyFields(
+  status: number,
+  body: unknown,
+): { message: string; code?: string; issues?: unknown[] } {
+  if (!body || typeof body !== 'object') {
+    return { message: `HTTP ${String(status)}` }
+  }
+  const obj = body as Record<string, unknown>
+  const nested =
+    obj.error && typeof obj.error === 'object' ? (obj.error as Record<string, unknown>) : null
+  const issues = Array.isArray(nested?.issues) ? nested.issues : undefined
+  return {
+    message: strField(obj, 'message') ?? strField(nested, 'message') ?? `HTTP ${String(status)}`,
+    code: strField(obj, 'code') ?? strField(nested, 'code'),
+    issues,
+  }
+}
+
 export class TheoFetchError extends Error {
   status: number
   code?: string
   issues?: unknown[]
+  /**
+   * G5 T2.1 — canonical envelope view of the server-side error. Use this in
+   * consumer code that wants to switch on a typed TheoErrorCode instead of
+   * coupling to the legacy `.status` / `.code` flat fields.
+   */
+  readonly envelope: TheoErrorEnvelope
 
   constructor(status: number, body?: unknown) {
-    const parsed = body && typeof body === 'object' ? (body as Record<string, unknown>) : null
-    const error = parsed?.error as Record<string, unknown> | undefined
-    const errorMessage = typeof error?.message === 'string' ? error.message : undefined
-    super(errorMessage ?? `HTTP ${String(status)}`)
+    const legacy = extractLegacyFields(status, body)
+    super(legacy.message)
     this.name = 'TheoFetchError'
     this.status = status
-    this.code = typeof error?.code === 'string' ? error.code : undefined
-    this.issues = Array.isArray(error?.issues) ? error.issues : undefined
+    this.code = legacy.code
+    this.issues = legacy.issues
+    this.envelope = extractEnvelope(status, body)
   }
 }
 

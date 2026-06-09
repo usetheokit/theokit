@@ -5,11 +5,11 @@
  */
 /**
  * `integrateUseTheoUI(cwd, opts)` — auto-chains the Vite plugins needed
- * for `@usetheo/ui` styling when the consumer has the dep declared.
+ * for `@theokit/ui` styling when the consumer has the dep declared.
  *
  * Algorithm (D3 + D5 of the plan):
  *   1. opts.enabled === false → return [].
- *   2. detectPackage('@usetheo/ui') — if absent, return [].
+ *   2. detectPackage('@theokit/ui') — if absent, return [].
  *   3. opts.consumerTailwindConfig or opts.consumerPostcssConfig set →
  *      log info + return []. Consumer-in-control wins (D3).
  *   4. detectPackage('@tailwindcss/vite') — if absent, log warn + return [].
@@ -120,14 +120,14 @@ export async function integrateUseTheoUI(
 ): Promise<Plugin[]> {
   if (opts?.enabled === false) return []
 
-  const uiDetect = detectPackage('@usetheo/ui', cwd)
+  const uiDetect = detectPackage('@theokit/ui', cwd)
   if (!uiDetect.installed) return []
 
   // D3 — consumer's manual config wins
   if (opts?.consumerTailwindConfig || opts?.consumerPostcssConfig) {
     // eslint-disable-next-line no-console -- one-line transparency hint; goal is to surface the override path
     console.info(
-      `[theokit] Detected your tailwind.config / postcss.config — skipping auto-config. Extend with \`import preset from '@usetheo/ui/preset'\` to apply UI theme.`,
+      `[theokit] Detected your tailwind.config / postcss.config — skipping auto-config. Extend with \`import preset from '@theokit/ui/preset'\` to apply UI theme.`,
     )
     return []
   }
@@ -135,12 +135,12 @@ export async function integrateUseTheoUI(
   const tailwindDetect = detectPackage('@tailwindcss/vite', cwd)
   if (!tailwindDetect.installed) {
     console.warn(
-      `[theokit] @usetheo/ui detected but @tailwindcss/vite is not installed. Run \`pnpm add -D @tailwindcss/vite\` to enable styling.`,
+      `[theokit] @theokit/ui detected but @tailwindcss/vite is not installed. Run \`pnpm add -D @tailwindcss/vite\` to enable styling.`,
     )
     return []
   }
 
-  // Explicit chain: @tailwindcss/vite FIRST + @usetheo/ui/vite-plugin
+  // Explicit chain: @tailwindcss/vite FIRST + @theokit/ui/vite-plugin
   // with `{ tailwind: false }` (avoids double-add of @tailwindcss/vite).
   //
   // Why resolve via filesystem then import by URL: this module runs from
@@ -165,16 +165,16 @@ export async function integrateUseTheoUI(
     )
     return []
   }
-  // For @usetheo/ui/vite-plugin, resolve via package + subpath:
-  // node_modules/@usetheo/ui/dist/vite-plugin.js
-  const uiPkgInstalled = detectPackage('@usetheo/ui', cwd)
+  // For @theokit/ui/vite-plugin, resolve via package + subpath:
+  // node_modules/@theokit/ui/dist/vite-plugin.js
+  const uiPkgInstalled = detectPackage('@theokit/ui', cwd)
   const uiPkgDir = uiPkgInstalled.resolvedPath
     ? uiPkgInstalled.resolvedPath.replace(/[\\/]package\.json$/, '')
     : null
   const uiPluginPath = uiPkgDir ? join(uiPkgDir, 'dist', 'vite-plugin.js') : null
   if (!uiPluginPath || !existsSync(uiPluginPath)) {
     console.warn(
-      `[theokit] @usetheo/ui/vite-plugin entry not found at ${String(uiPluginPath)}. Skipping auto-config.`,
+      `[theokit] @theokit/ui/vite-plugin entry not found at ${String(uiPluginPath)}. Skipping auto-config.`,
     )
     return []
   }
@@ -182,7 +182,7 @@ export async function integrateUseTheoUI(
     uiMod = (await import(pathToFileURL(uiPluginPath).href)) as { default?: unknown }
   } catch (err) {
     console.warn(
-      `[theokit] @usetheo/ui/vite-plugin dynamic import failed (${(err as Error).message}). Skipping auto-config.`,
+      `[theokit] @theokit/ui/vite-plugin dynamic import failed (${(err as Error).message}). Skipping auto-config.`,
     )
     return []
   }
@@ -195,7 +195,7 @@ export async function integrateUseTheoUI(
   }
   if (typeof uiMod.default !== 'function') {
     console.warn(
-      `[theokit] @usetheo/ui/vite-plugin does not expose a default-export function. Skipping auto-config.`,
+      `[theokit] @theokit/ui/vite-plugin does not expose a default-export function. Skipping auto-config.`,
     )
     return []
   }
@@ -215,21 +215,19 @@ export async function integrateUseTheoUI(
       tailwind: false,
     })
   } catch (err) {
-    console.warn(`[theokit] @usetheo/ui/vite-plugin() threw: ${(err as Error).message}`)
+    console.warn(`[theokit] @theokit/ui/vite-plugin() threw: ${(err as Error).message}`)
     return []
   }
 
   const tailwindPlugins = normalizePluginReturn(tailwindPlugin)
   if (tailwindPlugins === null) {
-    console.warn(
-      `[theokit] @tailwindcss/vite returned unexpected shape. Skipping auto-config.`,
-    )
+    console.warn(`[theokit] @tailwindcss/vite returned unexpected shape. Skipping auto-config.`)
     return []
   }
   const uiPlugins = normalizePluginReturn(uiPlugin)
   if (uiPlugins === null) {
     console.warn(
-      `[theokit] @usetheo/ui/vite-plugin returned unexpected shape. Skipping auto-config.`,
+      `[theokit] @theokit/ui/vite-plugin returned unexpected shape. Skipping auto-config.`,
     )
     return []
   }

@@ -14,13 +14,13 @@ export function generateEntryClient(ssr?: boolean, opts: EntryClientOptions = {}
   if (opts.theoUi) {
     theoUiImports.push(
       `// T2.2 — TheoUI CSS auto-injected (config.ui)`,
-      `import '@usetheo/ui/styles.css'`,
+      `import '@theokit/ui/styles.css'`,
     )
     const fontsModule = opts.theoUi.fonts === 'cdn' ? 'fonts-cdn.css' : 'fonts.css'
     theoUiImports.push(
-      `import '@usetheo/ui/${fontsModule}'`,
+      `import '@theokit/ui/${fontsModule}'`,
       `// T2.3 — TheoUIProvider auto-wraps RouterProvider`,
-      `import { TheoUIProvider } from '@usetheo/ui'`,
+      `import { TheoUIProvider } from '@theokit/ui'`,
     )
   }
 

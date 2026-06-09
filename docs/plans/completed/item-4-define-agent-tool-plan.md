@@ -1,6 +1,6 @@
 # Plan: Item #4 — `defineAgentTool` + SSE wire bridge
 
-> **Version 1.0** — Ship `defineAgentTool({ name, description, inputSchema, handler })` as a TheoKit-native helper that produces a `@usetheo/sdk` `CustomTool` (consumable by `Agent.create({ tools: [...] })`) PLUS `streamAgentRun(run)` as the SDK-stream → AgentEvent SSE bridge. Together they remove ~40 lines of manual SDK-stream/AgentEvent plumbing per agent route, letting `defineAgentEndpoint` consume the SDK's tool calling lifecycle (`tool_call → execute → tool_result`) with one yield-delegation: `yield* streamAgentRun(run)`. Closes Macro Roadmap item #4 in `CLAUDE.md`. Stack assumption (locked): `@usetheo/sdk` + `@theokit/ui` — `defineAgentTool` is sugar over the SDK's `CustomTool` contract, not a parallel runtime.
+> **Version 1.0** — Ship `defineAgentTool({ name, description, inputSchema, handler })` as a TheoKit-native helper that produces a `@theokit/sdk` `CustomTool` (consumable by `Agent.create({ tools: [...] })`) PLUS `streamAgentRun(run)` as the SDK-stream → AgentEvent SSE bridge. Together they remove ~40 lines of manual SDK-stream/AgentEvent plumbing per agent route, letting `defineAgentEndpoint` consume the SDK's tool calling lifecycle (`tool_call → execute → tool_result`) with one yield-delegation: `yield* streamAgentRun(run)`. Closes Macro Roadmap item #4 in `CLAUDE.md`. Stack assumption (locked): `@theokit/sdk` + `@theokit/ui` — `defineAgentTool` is sugar over the SDK's `CustomTool` contract, not a parallel runtime.
 
 ## Context
 
@@ -29,7 +29,7 @@
 
 **Memory pins:**
 
-- [[project-stack-deps]] — TheoKit **always** ships with `@usetheo/sdk` + `@theokit/ui`. New primitives are sugar/wrappers over the SDK, never parallel implementations.
+- [[project-stack-deps]] — TheoKit **always** ships with `@theokit/sdk` + `@theokit/ui`. New primitives are sugar/wrappers over the SDK, never parallel implementations.
 - [[feedback-sdk-is-evolvable]] — when TheoKit work needs an SDK change, write the SDK task into the plan; don't workaround.
 - [[project-theokit-purpose]] — TheoKit is the framework someone uses to build their own agent app. `defineAgentTool` is the primitive a builder reaches for when their agent needs to do something beyond chat.
 
@@ -51,7 +51,7 @@ Ship `defineAgentTool` + `streamAgentRun` so adding a tool to an agent route is 
 
 ### D1 — TheoKit ships its own `defineAgentTool`, NOT delegate to SDK's `defineTool`
 
-**Decision:** TheoKit's `defineAgentTool` builds the `CustomTool` object directly (no `import { defineTool } from '@usetheo/sdk'` at runtime).
+**Decision:** TheoKit's `defineAgentTool` builds the `CustomTool` object directly (no `import { defineTool } from '@theokit/sdk'` at runtime).
 
 **Rationale:**
 - SDK's `defineTool` calls `z.toJSONSchema(...)` at the Zod root — only available in Zod 4.
@@ -99,7 +99,7 @@ Ship `defineAgentTool` + `streamAgentRun` so adding a tool to an agent route is 
 
 **Rationale:**
 - The library is small (~5 KB minified), pure JS, zero transitive deps, MIT licensed, mature (3M weekly DLs).
-- Forcing consumers to `pnpm add zod-to-json-schema` would re-introduce the install-pain pattern item #3 explicitly removed for `@usetheo/sdk`.
+- Forcing consumers to `pnpm add zod-to-json-schema` would re-introduce the install-pain pattern item #3 explicitly removed for `@theokit/sdk`.
 - Tree-shaking: `defineAgentTool` is server-only (`packages/theo/src/server/`). It does NOT leak into the client bundle. The dependency cost is server-side only.
 
 **Consequences:**
@@ -160,7 +160,7 @@ tests/unit/define-agent-tool.test-d.ts                    — (NEW) 4 type tests
 
 - **`packages/theo/package.json`** — adding `zod-to-json-schema` to `dependencies` triggers `pnpm install` rerun. No version conflict expected (pure JS, no peer needs). Downstream: any consumer running `pnpm install` after `git pull` picks it up automatically.
 - **`packages/theo/src/server/define-agent-tool.ts`** — NEW file. No downstream files touch it yet. Will be imported by Phase 3's scaffold chat.ts and by Playwright fixture in Phase 4.
-- **`packages/theo/src/server/index.ts`** — already re-exports `defineAgentEndpoint` + `AgentEvent` variants (lines 4-5, 109-113). Adding `defineAgentTool` + `DefineAgentToolSpec` type at the same level. Re-export `CustomTool` from `@usetheo/sdk` as a type-only alias (the consumer pattern: `import { defineAgentTool, type CustomTool } from 'theokit/server'`).
+- **`packages/theo/src/server/index.ts`** — already re-exports `defineAgentEndpoint` + `AgentEvent` variants (lines 4-5, 109-113). Adding `defineAgentTool` + `DefineAgentToolSpec` type at the same level. Re-export `CustomTool` from `@theokit/sdk` as a type-only alias (the consumer pattern: `import { defineAgentTool, type CustomTool } from 'theokit/server'`).
 - **`tests/unit/define-agent-tool.test.ts`** (NEW) — vitest. Imports `defineAgentTool` from source. No fixture project needed (pure unit).
 - **`tests/unit/define-agent-tool.test-d.ts`** (NEW) — type test via `expectTypeOf`.
 
@@ -210,8 +210,8 @@ export interface DefineAgentToolSpec<T extends z.ZodType> {
 3. Create `packages/theo/src/server/define-agent-tool.ts` with the `DefineAgentToolSpec` interface and `defineAgentTool` function.
 4. Add the name regex validation + ZodObject root check.
 5. Add the `console.warn` for empty description.
-6. Re-export from `packages/theo/src/server/index.ts`: `defineAgentTool`, type `DefineAgentToolSpec`, type `CustomTool` (re-exported from `@usetheo/sdk` as type-only).
-7. Add `@usetheo/sdk` as a type-only peer dep declaration in `packages/theo/package.json` `peerDependenciesMeta` (`{ "optional": true }`) — TheoKit doesn't NEED the SDK at runtime, but the `CustomTool` type re-export makes it a type-time peer.
+6. Re-export from `packages/theo/src/server/index.ts`: `defineAgentTool`, type `DefineAgentToolSpec`, type `CustomTool` (re-exported from `@theokit/sdk` as type-only).
+7. Add `@theokit/sdk` as a type-only peer dep declaration in `packages/theo/package.json` `peerDependenciesMeta` (`{ "optional": true }`) — TheoKit doesn't NEED the SDK at runtime, but the `CustomTool` type re-export makes it a type-time peer.
 
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
@@ -304,7 +304,7 @@ BDD scenarios obrigatórios:
 
 - [ ] `defineAgentTool` exported from `theokit/server` import path.
 - [ ] `DefineAgentToolSpec<T>` type-exported.
-- [ ] `CustomTool` re-exported as a type-only alias from `@usetheo/sdk`.
+- [ ] `CustomTool` re-exported as a type-only alias from `@theokit/sdk`.
 - [ ] 10/10 unit + type tests GREEN.
 - [ ] `pnpm tsc --noEmit` clean.
 - [ ] `pnpm lint` zero warnings.
@@ -349,7 +349,7 @@ tests/unit/stream-agent-run.test-d.ts                     — (NEW) 2 type tests
 
 #### Deep file dependency analysis
 
-- **`packages/theo/src/server/stream-agent-run.ts`** — NEW. Type-only imports of `Run`, `SDKMessage`, `SDKToolUseMessage`, `SDKAssistantMessage`, `TextBlock`, `ToolUseBlock`, `RunResult` from `@usetheo/sdk`. No runtime SDK call from TheoKit core. Used by Phase 3 (fixture) and Phase 4 (Playwright).
+- **`packages/theo/src/server/stream-agent-run.ts`** — NEW. Type-only imports of `Run`, `SDKMessage`, `SDKToolUseMessage`, `SDKAssistantMessage`, `TextBlock`, `ToolUseBlock`, `RunResult` from `@theokit/sdk`. No runtime SDK call from TheoKit core. Used by Phase 3 (fixture) and Phase 4 (Playwright).
 - **`packages/theo/src/server/index.ts`** — append `export { streamAgentRun } from './stream-agent-run.js'`.
 - Tests use mock `Run` objects (`{ stream: () => yieldedSDKMessages, wait: () => terminalResult }`) — no live network.
 
@@ -444,7 +444,7 @@ export async function* streamAgentRun(run: Run): AsyncGenerator<AgentEvent, void
 #### Tasks
 
 1. Create `packages/theo/src/server/stream-agent-run.ts`.
-2. Add type imports from `@usetheo/sdk` (Run, SDKMessage, RunResult).
+2. Add type imports from `@theokit/sdk` (Run, SDKMessage, RunResult).
 3. Implement the async generator per the algorithm above.
 4. Add JSDoc covering the abort semantics (consumer cancellation responsibility).
 5. Export from `packages/theo/src/server/index.ts`.
@@ -542,7 +542,7 @@ RED (type): test_stream_agent_run_returns_agent_event_generator()
   Then expectTypeOf(streamAgentRun(mockRun)).toEqualTypeOf<AsyncGenerator<AgentEvent, void, unknown>>()
 
 RED (type): test_stream_agent_run_accepts_sdk_run_type()
-  Given a Run from @usetheo/sdk
+  Given a Run from @theokit/sdk
   When passed to streamAgentRun
   Then it compiles without `as` casts
 
@@ -566,7 +566,7 @@ BDD scenarios obrigatórios:
 
 - [ ] `streamAgentRun` exported from `theokit/server`.
 - [ ] 10/10 tests GREEN (8 unit + 2 type).
-- [ ] Type imports from `@usetheo/sdk` are type-only (`import type {...}`).
+- [ ] Type imports from `@theokit/sdk` are type-only (`import type {...}`).
 - [ ] `pnpm tsc --noEmit` clean.
 - [ ] `pnpm lint` zero warnings.
 - [ ] No `any` introduced.
@@ -602,7 +602,7 @@ Show in the default scaffold how to add a tool. Pick a deliberately tiny tool (`
 ```
 fixtures/template-default/server/routes/chat.ts                       — refactor to use Agent.create + send + streamAgentRun + 1 tool
 packages/create-theo/templates/default/server/routes/chat.ts          — mirror (template parity)
-fixtures/template-default/package.json                                — already has @usetheo/sdk (item #3); no change
+fixtures/template-default/package.json                                — already has @theokit/sdk (item #3); no change
 tests/unit/fixture-template-default-canonical-chat.test.ts            — update assertions to check for defineAgentTool + streamAgentRun usage
 tests/unit/create-theo-default-template.test.ts                       — update assertions to mirror
 ```
@@ -618,7 +618,7 @@ tests/unit/create-theo-default-template.test.ts                       — update
 **New `chat.ts` shape (target ≤ 50 LOC total including the tool def):**
 
 ```typescript
-import { Agent } from '@usetheo/sdk'
+import { Agent } from '@theokit/sdk'
 import { z } from 'zod'
 import { defineAgentEndpoint, defineAgentTool, streamAgentRun, type AgentEvent } from 'theokit/server'
 

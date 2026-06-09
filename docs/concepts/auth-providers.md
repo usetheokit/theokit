@@ -32,12 +32,16 @@ This page walks the three patterns we recommend. Pick the one that matches your 
 
 ## When to choose what
 
+> **Updated 2026-06-03 per [ADR-0025](../adr/0025-lucia-removed-from-tier-1.md):** Lucia was previously named in this matrix. **As of 2026-06-03 Lucia is DEPRECATED on npm** (per discovery `g11-auth-architecture-decision` — `npm view lucia` returns the deprecation tombstone pointing to `lucia-auth.com/lucia-v3/migrate`). The Tier-1 recommendations are now Auth.js (largest provider matrix), Better Auth (modern TS-first DX), and Iron Session (lightweight session-only, replaces the Lucia slot).
+
 | Need | Recommended path |
 |---|---|
 | 5+ providers (Google, GitHub, Facebook, Microsoft, …) | **Option A — Auth.js** |
 | Modern TypeScript-first DX, fewer providers | **Option B — Better Auth** |
-| Just GitHub OAuth, no library overhead | **Option C — DIY using TheoKit primitives** |
+| Lightweight session-only, single provider you wire yourself | **Option C — Iron Session + DIY using TheoKit primitives** |
+| Just GitHub OAuth, no library overhead | **Option C — DIY using TheoKit primitives** (no extra dep) |
 | Hosted IdP (Clerk, Auth0, WorkOS, Stytch) | Use their SDK + TheoKit's `createSessionManager` for the local cookie |
+| Bundled TheoKit-maintained provider (Google / GitHub / Magic link) | **Option D — `@theokit/auth-*` packages** (Caminho C — see [ADR-0024](../adr/0024-auth-caminho-c-hybrid.md)) |
 
 ---
 
@@ -268,8 +272,50 @@ export const POST = defineRoute({
 
 ---
 
+## Option D — `@theokit/auth-*` first-party providers (Caminho C Hybrid)
+
+Per [ADR-0024](../adr/0024-auth-caminho-c-hybrid.md), TheoKit ships three first-party OAuth/passwordless providers as opt-in npm packages that plug into a thin `defineAuth` orchestrator in `@theokit/sdk/server/auth`. Use this option when you want first-class TheoKit ergonomics without the full Auth.js / Better Auth surface AND the provider you need is one of Google / GitHub / magic-link.
+
+```bash
+pnpm add @theokit/plugin-auth @theokit/sdk
+# OR install only what you need
+pnpm add @theokit/auth-google @theokit/sdk
+```
+
+```ts
+// server/auth.ts
+import { defineAuth } from "@theokit/sdk/server/auth";
+import { google, github, magicLink, createMemoryStore } from "@theokit/plugin-auth";
+import { createSessionManager } from "theokit/server/auth";
+
+const session = createSessionManager<{ userId: string }>({
+  secret: process.env.SESSION_SECRETS!.split(","),
+});
+
+export const auth = defineAuth({
+  session,
+  providers: [
+    google({ clientId: ..., clientSecret: ..., redirectUri: ... }),
+    github({ clientId: ..., clientSecret: ..., redirectUri: ... }),
+    magicLink({ store: createMemoryStore(), callbackBaseUrl: ..., sendEmail: ... }),
+  ],
+  onSignIn: async ({ profile, provider }) => ({ userId: "..." }),
+});
+```
+
+The orchestrator uses the same in-house primitives this doc lists above (`generatePkceChallenge`, `generateOAuthState`, `discoverOidcProvider`, `createSessionManager`) so the security posture is identical. The difference is packaging: each provider lives in its own semver-isolated npm package owned by TheoKit core for the Tier-1 set.
+
+**Lock alignment:** Caminho C is the AUTH-DELEGATION lock's own approved evolution path (per the lock's "If we do adopt later" escape-hatch clause). [ADR-0024](../adr/0024-auth-caminho-c-hybrid.md) records the decision rationale.
+
+---
+
 ## Reference
 
-- ADR: see [`CLAUDE.md` → "Architectural decisions on record" → AUTH-DELEGATION](../../CLAUDE.md)
+- ADR-0024: [Auth architecture — Caminho C (Hybrid)](../adr/0024-auth-caminho-c-hybrid.md)
+- ADR-0025: [Lucia removed from Tier-1](../adr/0025-lucia-removed-from-tier-1.md)
+- ADR-0026: [`auth-lib-friction` GitHub label for Trigger 2 telemetry](../adr/0026-auth-lib-friction-github-label.md)
+- ADR-0027: [Auth-delegation lock — semi-annual re-validation cadence](../adr/0027-auth-lock-semi-annual-revalidation.md)
+- Lock origin: [`CLAUDE.md` → "Architectural decisions on record" → AUTH-DELEGATION](../../CLAUDE.md)
 - Prior-art audit: [`.claude/knowledge-base/reference/oauth-oidc-delegation.md`](../../.claude/knowledge-base/reference/oauth-oidc-delegation.md) — 793 LOC, 8-framework survey
+- G11 discovery blueprint: [`g11-auth-architecture-decision-blueprint.md`](../../../.claude/knowledge-base/discoveries/blueprints/g11-auth-architecture-decision-blueprint.md)
 - Working fixtures: [`tests/fixtures/auth-providers/`](../../tests/fixtures/auth-providers)

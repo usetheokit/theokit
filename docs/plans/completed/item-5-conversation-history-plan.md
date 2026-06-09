@@ -1,6 +1,6 @@
 # Plan: Item #5 — `createConversationHistory` + session-cookie bridge
 
-> **Version 1.0** — Ship `createConversationHistory(args)` as a TheoKit-native primitive that resolves a stable `agentId` from the visitor's session cookie (issuing one on first hit) and returns an `@usetheo/sdk` `Agent` resumed via `Agent.getOrCreate(agentId, options)`. Conversation turns auto-persist in `<cwd>/.theokit/agents/<agentId>/messages.jsonl` — zero-config. Optional `MemorySettings` passthrough lets consumers enable the SDK's facts-recall layer when needed. Closes Macro Roadmap item #5 in `CLAUDE.md`. Stack assumption (locked): TheoKit always uses `@usetheo/sdk` + `@theokit/ui` — this primitive is sugar over what the SDK + the existing TheoKit session manager already ship, never a parallel implementation.
+> **Version 1.0** — Ship `createConversationHistory(args)` as a TheoKit-native primitive that resolves a stable `agentId` from the visitor's session cookie (issuing one on first hit) and returns an `@theokit/sdk` `Agent` resumed via `Agent.getOrCreate(agentId, options)`. Conversation turns auto-persist in `<cwd>/.theokit/agents/<agentId>/messages.jsonl` — zero-config. Optional `MemorySettings` passthrough lets consumers enable the SDK's facts-recall layer when needed. Closes Macro Roadmap item #5 in `CLAUDE.md`. Stack assumption (locked): TheoKit always uses `@theokit/sdk` + `@theokit/ui` — this primitive is sugar over what the SDK + the existing TheoKit session manager already ship, never a parallel implementation.
 
 ## Context
 
@@ -31,7 +31,7 @@
 
 **Memory pins:**
 
-- [[project-stack-deps]] — TheoKit **always** uses `@usetheo/sdk` + `@theokit/ui`. `createConversationHistory` wraps `Agent.getOrCreate`; does not re-implement persistence.
+- [[project-stack-deps]] — TheoKit **always** uses `@theokit/sdk` + `@theokit/ui`. `createConversationHistory` wraps `Agent.getOrCreate`; does not re-implement persistence.
 - [[feedback-sdk-is-evolvable]] — when TheoKit work needs an SDK change, write the SDK task into the plan; don't workaround.
 - [[project-theokit-purpose]] — TheoKit is the framework someone uses to build their own agent app. Conversation continuity is the headline UX feature that turns the demo into a product.
 
@@ -144,7 +144,7 @@ Phase 1 (createConversationHistory primitive)
 
 #### Objective
 
-Implement the function that resolves a stable `agentId` from (explicit | session | cookie | fresh UUID) and returns an `@usetheo/sdk` `Agent` via `Agent.getOrCreate(agentId, options)`.
+Implement the function that resolves a stable `agentId` from (explicit | session | cookie | fresh UUID) and returns an `@theokit/sdk` `Agent` via `Agent.getOrCreate(agentId, options)`.
 
 #### Evidence
 
@@ -167,7 +167,7 @@ tests/unit/create-conversation-history.test-d.ts                 — (NEW) 3 typ
 
 - **`packages/theo/src/server/create-conversation-history.ts`** (NEW) — Pure orchestration. Imports `getCookie` from `./cookies.js`. Type-imports the SDK's `Agent` (structural). Uses Node 22+ `crypto.randomUUID`.
 - **`packages/theo/src/server/index.ts`** — Add the export after `streamAgentRun`. Same export pattern as `defineAgentTool` (item #4).
-- **Tests** — Mock the SDK's `Agent.getOrCreate` via dependency injection (the primitive accepts a `_agentFactory` private arg for testing) OR via `vi.mock('@usetheo/sdk')`. Prefer DI to avoid module-level mocks bleeding into other tests.
+- **Tests** — Mock the SDK's `Agent.getOrCreate` via dependency injection (the primitive accepts a `_agentFactory` private arg for testing) OR via `vi.mock('@theokit/sdk')`. Prefer DI to avoid module-level mocks bleeding into other tests.
 
 #### Deep Dives
 
@@ -266,15 +266,15 @@ export async function createConversationHistory(
   //    for consumers that never call this primitive).
   //
   // EC-2 (edge case review — MUST FIX): the SDK is an optional peer; if
-  // the consumer never installed it, `import('@usetheo/sdk')` throws
+  // the consumer never installed it, `import('@theokit/sdk')` throws
   // `ERR_MODULE_NOT_FOUND`. Re-throw with an actionable message so the
   // log says "install the SDK" instead of a cryptic ESM error.
-  let sdk: typeof import('@usetheo/sdk')
+  let sdk: typeof import('@theokit/sdk')
   try {
-    sdk = await import('@usetheo/sdk')
+    sdk = await import('@theokit/sdk')
   } catch (cause) {
     throw new Error(
-      'createConversationHistory requires @usetheo/sdk. Install: pnpm add @usetheo/sdk',
+      'createConversationHistory requires @theokit/sdk. Install: pnpm add @theokit/sdk',
       { cause },
     )
   }
@@ -313,7 +313,7 @@ export async function createConversationHistory(
 2. Implement `readCookieValue` helper (RFC 6265 minimal parser).
 3. Implement `serializeCookie` helper.
 4. Implement `createConversationHistory` per the algorithm.
-5. Use dynamic `import('@usetheo/sdk')` so consumers who never call the primitive don't load the SDK runtime.
+5. Use dynamic `import('@theokit/sdk')` so consumers who never call the primitive don't load the SDK runtime.
 6. Export from `packages/theo/src/server/index.ts`.
 
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
@@ -392,9 +392,9 @@ RED: test_rejects_cookie_value_longer_than_128_chars_falls_through()  (EC-1)
   Then result.conversationId matches UUID regex (rejected; fresh UUID generated)
 
 RED: test_actionable_error_when_sdk_not_installed()  (EC-2)
-  Given a runtime where `import('@usetheo/sdk')` throws ERR_MODULE_NOT_FOUND
+  Given a runtime where `import('@theokit/sdk')` throws ERR_MODULE_NOT_FOUND
   When createConversationHistory(args) is called
-  Then it rejects with Error matching /requires @usetheo\/sdk.*pnpm add @usetheo\/sdk/
+  Then it rejects with Error matching /requires @theokit\/sdk.*pnpm add @theokit\/sdk/
 
 RED: test_concurrent_first_requests_each_get_their_own_uuid()  (EC-3, SHOULD TEST)
   Given two simultaneous calls with no existing cookie and independent response.headers
@@ -456,7 +456,7 @@ BDD scenarios obrigatórios:
 - [ ] `pnpm tsc --noEmit` clean.
 - [ ] `pnpm lint --max-warnings=0` clean.
 - [ ] No `any` introduced (verify: `grep -nP '\\bany\\b' packages/theo/src/server/create-conversation-history.ts | grep -v "^[[:space:]]*\\*"`).
-- [ ] Dynamic SDK import (no top-level `import { Agent } from '@usetheo/sdk'` in source).
+- [ ] Dynamic SDK import (no top-level `import { Agent } from '@theokit/sdk'` in source).
 
 #### DoD
 
@@ -900,7 +900,7 @@ BDD scenarios obrigatórios:
 | 15 | Dogfood gate | T4.1 | Mandatory phase |
 | 16 | Fixture proof | T2.1 + T3.1 | Updated fixture + Playwright spec |
 | 17 | EC-1 — path traversal + header injection via cookie/explicit agentId | T1.1 (algorithm + 3 tests) | `isValidAgentId` regex `^[a-zA-Z0-9_-]{1,128}$` at all 3 entry points; reject silently (fall through to UUID) |
-| 18 | EC-2 — cryptic ESM error when SDK not installed | T1.1 (algorithm + test) | Wrap `import('@usetheo/sdk')` in try/catch; throw actionable "Install: pnpm add @usetheo/sdk" |
+| 18 | EC-2 — cryptic ESM error when SDK not installed | T1.1 (algorithm + test) | Wrap `import('@theokit/sdk')` in try/catch; throw actionable "Install: pnpm add @theokit/sdk" |
 | 19 | EC-3 — concurrent first-requests race | T1.1 (SHOULD TEST) | Test pins independent UUIDs + independent Set-Cookies |
 | 20 | EC-4 — `cookieMaxAge: 0` deletes cookie immediately | T1.1 (SHOULD TEST + algorithm tweak) | Coerce non-positive to default 30d |
 | 21 | EC-5 — duplicate cookie name → first vs last wins ambiguity | T1.1 (SHOULD TEST) | Test pins first-wins |

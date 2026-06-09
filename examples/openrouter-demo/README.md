@@ -35,7 +35,7 @@ That's it. Open the URL, type "what time is it?" → the agent calls `current_ti
                                               │
                                               ▼
                                      ┌──────────────────┐
-                                     │  @usetheo/sdk    │
+                                     │  @theokit/sdk    │
                                      │  Agent.send()    │
                                      │  Run.stream()    │
                                      └──────────────────┘
@@ -66,7 +66,7 @@ openrouter-demo/
 ├── theo.config.ts        — SSR + CSP (off in dev, enforce in prod)
 ├── index.html            — Vite entry shell
 ├── .env.example          — OPENROUTER_API_KEY, MODEL_ID
-└── package.json          — theokit + @usetheo/sdk + @theokit/ui
+└── package.json          — theokit + @theokit/sdk + @theokit/ui
 ```
 
 ## The wire — line by line
@@ -212,7 +212,7 @@ OpenRouter is reachable from every TheoKit deploy target (no IP allowlist requir
 | Layer | What | Why |
 |-------|------|-----|
 | Framework | `theokit` | Routing, SSR, SSE, CSRF, CSP, build |
-| Agent runtime | `@usetheo/sdk` | `Agent.send`, `Run.stream`, providers, tool runtime, persistence |
+| Agent runtime | `@theokit/sdk` | `Agent.send`, `Run.stream`, providers, tool runtime, persistence |
 | UI | `@theokit/ui` | Pre-built chat surface (Thread, Composer, ToolCard, ErrorCard) |
 | LLM | OpenRouter | 100+ models, one key, $1 monthly budget covers prototyping |
 | Validation | Zod | Schema for tool inputs (runtime + types from one source) |

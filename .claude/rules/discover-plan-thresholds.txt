@@ -1,0 +1,30 @@
+# Discover-Plan Score Thresholds — per-project tuning.
+#
+# Authoritative source: rules/discover-plan-golden-rule.md
+#
+# Format (one entry per line):
+#   KEY | VALUE
+#
+# Lines starting with `#` and blank lines are skipped.
+# Delimiter is `|` (pipe) — matches the parser in
+# .claude/skills/discover-plan-confidence/scripts/run_discover_plan_score.py
+# (def _parse_thresholds — uses line.split("|")).
+# Defaults shipped with the skill at:
+#   skills/discover-plan-confidence/templates/ (when present)
+#
+# Per-project overrides go here and are CHANGELOG-tracked.
+
+# Soft caps
+soft_cap.question_count_low | 3
+soft_cap.coverage_corner_thin | 1
+
+# Hard caps
+hard_cap.question_count_max | 15
+hard_cap.fabricated_citation | 49
+hard_cap.empty_corner | 49
+
+# Verdict bands
+SHIPPABLE | 90
+SHIPPABLE_WITH_CAVEATS | 70
+NON_SHIPPABLE | 50
+INVALID | 0

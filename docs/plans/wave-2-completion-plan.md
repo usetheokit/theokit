@@ -147,7 +147,7 @@ Phase 4 ──▶ Phase 5 — Playwright E2E (needs fixtures + dev wire-up)
 
 ## Phase 0: Preflight + Workspace Pre-Reqs
 
-**Objective:** Confirm the 173-test Wave 2 baseline is intact, the full suite is at 3069 passing / 0 failing, and the 3 future fixtures' parent paths are workspace-registered so `@usetheo/sdk` and `theokit` resolve when fixtures are added.
+**Objective:** Confirm the 173-test Wave 2 baseline is intact, the full suite is at 3069 passing / 0 failing, and the 3 future fixtures' parent paths are workspace-registered so `@theokit/sdk` and `theokit` resolve when fixtures are added.
 
 ### T0.1 — Verify Wave 2 baseline is green
 
@@ -212,7 +212,7 @@ BDD scenarios:
 ### T0.2 — Register fixture parents in `pnpm-workspace.yaml`
 
 #### Objective
-Add `fixtures/services-python-basic`, `fixtures/services-node-basic`, `fixtures/services-both` to `pnpm-workspace.yaml` so future `pnpm install` resolves their `theokit` / `@usetheo/sdk` references.
+Add `fixtures/services-python-basic`, `fixtures/services-node-basic`, `fixtures/services-both` to `pnpm-workspace.yaml` so future `pnpm install` resolves their `theokit` / `@theokit/sdk` references.
 
 #### Evidence
 Recent fix to `theoui-autoinject` — adding it to the workspace was the root cause of 3 pre-existing failures. Same precedent applies: fixtures need workspace registration.

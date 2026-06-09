@@ -1119,7 +1119,7 @@ CODE_OF_CONDUCT.md — (NEW) Standard Contributor Covenant
 
 **Bug report template fields:** TheoKit version, repro repo, expected vs actual, logs, output of `theokit info`.
 
-**Security advisory process:** **Primary channel: GitHub Private Security Advisory** (works without DNS setup). Secondary: email `security@usetheo.dev` IF MX records are configured. EC-15: `SECURITY.md` MUST list GitHub Advisory first; email second with a "may not be monitored if MX not yet configured" note.
+**Security advisory process:** **Primary channel: GitHub Private Security Advisory** (works without DNS setup). Secondary: email `security@theokit.dev` IF MX records are configured. EC-15: `SECURITY.md` MUST list GitHub Advisory first; email second with a "may not be monitored if MX not yet configured" note.
 
 #### Tasks
 1. Write each file using standard open-source patterns.

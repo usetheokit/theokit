@@ -24,7 +24,7 @@ A narrow "Next.js for agents" mission cannot absorb these forces without contrad
 
 **This is the corrected enframing of the expansion** (clarified by the owner 2026-05-27, after an initial analysis that mis-framed polyglot as a TheoKit-only choice):
 
-> **Polyglot is the differential of the Theo product-mark (the family of products under `usetheo`), not a feature TheoKit individually adopts.** The Theo identity has always been polyglot — `theo-stacks` shipped 19 templates in 7 languages precisely because Theo's wedge is "agent products in the language your team already uses". TheoKit was NARROW relative to that identity; expanding it brings TheoKit into alignment with the product-mark, not vice versa.
+> **Polyglot is the differential of the Theo product-mark (the family of products under `Theo`), not a feature TheoKit individually adopts.** The Theo identity has always been polyglot — `theo-stacks` shipped 19 templates in 7 languages precisely because Theo's wedge is "agent products in the language your team already uses". TheoKit was NARROW relative to that identity; expanding it brings TheoKit into alignment with the product-mark, not vice versa.
 
 **What this means concretely — the moat is the CROSS-PRODUCT standardization, not any single product:**
 
@@ -33,7 +33,7 @@ A narrow "Next.js for agents" mission cannot absorb these forces without contrad
 | `create-theokit` (absorbed scaffolder) | Generates polyglot project structure (TS app + Python/Node service) in one command |
 | TheoKit framework | Orchestrates polyglot services at dev / build / deploy time via `services: {}` + manifest |
 | TheoCloud (deploy target) | Hosts polyglot services in production; consumes the same manifest |
-| `@usetheo/sdk` (agent runtime, locked TS) | Stays TS — agents are tool-using clients of polyglot services, not parallel agent runtimes |
+| `@theokit/sdk` (agent runtime, locked TS) | Stays TS — agents are tool-using clients of polyglot services, not parallel agent runtimes |
 
 **The moat is NOT "TheoKit supports polyglot" — that alone is commodity (Encore.ts + Go, Nitric multi-language, JHipster matrix all do it).** The moat is that **the same contract** (Like-Vercel — [ADR-0015](./0015-services-runtime-contract-like-vercel.md)) runs across `create-theokit` + TheoKit + TheoCloud, so a developer writes once and ships across local dev / Vercel / TheoCloud without reshaping their code. **Nobody else combines polyglot + agent-product-first + a single deploy contract across scaffold → framework → cloud.**
 
@@ -59,7 +59,7 @@ A narrow "Next.js for agents" mission cannot absorb these forces without contrad
 - **Coherence with code in flight** — `packages/create-theo/` already exists inside TheoKit; the absorption is partly mechanical.
 - **TheoCloud strategic priority** — TheoCloud adapter is the next major milestone; the framework's runtime contract must anticipate it.
 - **Avoiding JHipster's matrix trap** — 19 templates × 7 languages is unmaintainable for one team. The expansion must narrow scope, not widen it.
-- **`@usetheo/sdk` premise stays locked** — the agent runtime remains in TS. Polyglot services do NOT become parallel agent runtimes.
+- **`@theokit/sdk` premise stays locked** — the agent runtime remains in TS. Polyglot services do NOT become parallel agent runtimes.
 
 ## Considered Alternatives
 
@@ -77,14 +77,14 @@ A narrow "Next.js for agents" mission cannot absorb these forces without contrad
 
 > TheoKit is the framework for **agent products**. It ships three things, in this order of strategic weight:
 >
-> 1. The app the agent lives in — file-based routing, auth, sessions, realtime, deploy. TypeScript-first. Built around `@usetheo/sdk` (agent runtime) + `@theokit/ui` (UI).
+> 1. The app the agent lives in — file-based routing, auth, sessions, realtime, deploy. TypeScript-first. Built around `@theokit/sdk` (agent runtime) + `@theokit/ui` (UI).
 > 2. The scaffolding for the full project — `create-theokit` absorbs the role of the standalone `create-theo`. One CLI generates the TheoKit app PLUS optional polyglot services (Python, Node).
 > 3. The polyglot services orchestration contract — `theo.config.ts > services: {}` declares external processes that ship next to the TheoKit app, validated against a **Like-Vercel runtime contract** (see [ADR-0015](./0015-services-runtime-contract-like-vercel.md)).
 
 **Four invariants that survive the expansion (do not violate without a fresh ADR):**
 
 1. **Multi-runtime is NEVER embedded in TheoKit core.** Polyglot services run as external processes — see [ADR-0014](./0014-services-as-external-processes.md). (This is the only "never" invariant — the others below are scope/priority decisions, not absolute prohibitions.)
-2. **`@usetheo/sdk` is the priority agent runtime for Wave 2.** Python/Node services in Wave 2 are tool-providers / data-providers / job-workers, **not** parallel `Agent` runtimes. This is a **priority decision**, not a permanent prohibition — `@usetheo/sdk-py` or equivalent non-TS agent runtimes are **deferred**, not banned. A future PR shipping `@usetheo/sdk-<lang>` requires a fresh ADR with: (a) demand evidence (3+ production apps needing native agent runtime in `<lang>`, not just HTTP-tool integration), (b) preservation of invariant #4 (cross-product contract), (c) explicit conversation-history / tool-registry interop story with the TS SDK. Wave 2 stays TS-only to harden the primary surface before fragmenting maintenance.
+2. **`@theokit/sdk` is the priority agent runtime for Wave 2.** Python/Node services in Wave 2 are tool-providers / data-providers / job-workers, **not** parallel `Agent` runtimes. This is a **priority decision**, not a permanent prohibition — `@theokit/sdk-py` or equivalent non-TS agent runtimes are **deferred**, not banned. A future PR shipping `@theokit/sdk-<lang>` requires a fresh ADR with: (a) demand evidence (3+ production apps needing native agent runtime in `<lang>`, not just HTTP-tool integration), (b) preservation of invariant #4 (cross-product contract), (c) explicit conversation-history / tool-registry interop story with the TS SDK. Wave 2 stays TS-only to harden the primary surface before fragmenting maintenance.
 3. **Wave 2 polyglot backends are Python + Node ONLY.** Go, .NET, Rust, Java, Ruby, PHP (which `theo-stacks` shipped) are deferred to future ADRs with demand evidence. Same gate as invariant #2 — deferred, not banned.
 4. **The cross-product Like-Vercel contract is global across `create-theokit` + TheoKit + TheoCloud — not per-surface.** Any decision that relaxes the contract on a single product surface (e.g., "TheoCloud will accept a different log shape because Kubernetes makes it easier") destroys the moat. The moat is the cross-product standardization, not the individual products. See [ADR-0015](./0015-services-runtime-contract-like-vercel.md) for the contract's 6 invariants. Decisions to add a 7th invariant, or to weaken one of the 6, require BOTH this ADR AND ADR-0015 to be amended in the same PR. **This is an absolute invariant** — relaxing the cross-product contract destroys the strategic moat, unlike invariants #2/#3 which only narrow the priority surface.
 
@@ -127,7 +127,7 @@ my-agent-app/
 └── server/                       # TS backend — covers end-to-end
     ├── routes/auth/{login,register,logout}.ts   # encrypted sessions
     ├── routes/users/{me,[id]}.ts                # CRUD users
-    ├── routes/chat.ts                           # @usetheo/sdk agent endpoint
+    ├── routes/chat.ts                           # @theokit/sdk agent endpoint
     ├── routes/billing/webhook.ts                # defineWebhook (Stripe)
     ├── actions/*.ts                             # defineAction (CSRF)
     ├── middleware.ts                            # requireAuth()
@@ -151,10 +151,10 @@ export default defineConfig({
 |---|:---:|---|
 | Login + encrypted sessions | ✅ | No |
 | CRUD users + admin panel | ✅ | No |
-| Agent chat via `@usetheo/sdk` | ✅ | No |
+| Agent chat via `@theokit/sdk` | ✅ | No |
 | Stripe billing webhooks | ✅ | No |
 | Jobs + crons | ✅ | No (Node sidecar ONLY if isolating workers operationally) |
-| Bot Telegram via `@usetheo/gateway-telegram` | ✅ | No (already in TS) |
+| Bot Telegram via `@theokit/gateway-telegram` | ✅ | No (already in TS) |
 | ML inference (sentence-transformers, scikit-learn) | ⚠️ painful in TS | ✅ Python sidecar via `--backend python` |
 | OCR (Tesseract) / PDF heavy parsing | ⚠️ painful in TS | ✅ Python sidecar |
 | Importing legacy company API (existing Node monolith) | ❌ | ✅ Node sidecar as reverse proxy `/api/legacy/*` |

@@ -11,6 +11,10 @@
  */
 import { useEffect, useState, useCallback, type ReactElement } from 'react'
 
+import {
+  classifyCsrfReadinessError,
+  type ClassifiedCsrfReadinessError,
+} from '../../format/csrf-readiness-classify.js'
 import { useDevtoolsContext } from '../../hooks/useDevtoolsContext.js'
 import { tokens } from '../../styles/tokens.js'
 
@@ -92,21 +96,24 @@ export function CsrfReadinessTab(): ReactElement {
   const { styles } = useDevtoolsContext()
   const cls = buildTabStyles(styles)
   const [data, setData] = useState<ReadinessSummary | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ClassifiedCsrfReadinessError | null>(null)
   const [busy, setBusy] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/__theo/csrf-readiness')
       if (!res.ok) {
-        setError(`Endpoint returned ${String(res.status)} — is csrfReadinessStore wired?`)
+        setError(classifyCsrfReadinessError({ kind: 'http', status: res.status }))
         return
       }
       const json = (await res.json()) as ReadinessSummary
       setData(json)
       setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'fetch failed')
+      const classified = classifyCsrfReadinessError({ kind: 'thrown', error: e })
+      // Silently ignore aborts — user navigated away mid-poll.
+      if (classified.kind === 'aborted') return
+      setError(classified)
     }
   }, [])
 
@@ -133,11 +140,17 @@ export function CsrfReadinessTab(): ReactElement {
 
   if (error) {
     return (
-      <div className={cls.container} data-testid="devtools-csrf-readiness-error">
-        <div style={{ color: tokens.colors.error.csrf }}>{error}</div>
-        <p style={{ color: tokens.colors.textMuted, marginTop: tokens.spacing.sm }}>
-          Wire <code>csrfReadinessStore</code> in the api-middleware options to enable this tab.
-        </p>
+      <div
+        className={cls.container}
+        data-testid="devtools-csrf-readiness-error"
+        data-error-kind={error.kind}
+      >
+        <div style={{ color: tokens.colors.error.csrf }}>{error.summary}</div>
+        {error.hint.length > 0 && (
+          <p style={{ color: tokens.colors.textMuted, marginTop: tokens.spacing.sm }}>
+            {error.hint}
+          </p>
+        )}
       </div>
     )
   }

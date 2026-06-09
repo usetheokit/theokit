@@ -1,0 +1,32 @@
+[project]
+name = "plan-confidence"
+version = "0.1.0"
+description = "Plan-Confidence M2 structural scoring for /to-plan output"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+files = ["scripts/**/*.py", "tests/**/*.py"]
+warn_return_any = true
+warn_unused_ignores = true
+explicit_package_bases = true
+mypy_path = "scripts"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

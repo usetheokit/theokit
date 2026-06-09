@@ -1,12 +1,12 @@
-# Plan: Item #3 — Canonical `chat.ts` wires `@usetheo/sdk`
+# Plan: Item #3 — Canonical `chat.ts` wires `@theokit/sdk`
 
-> **Version 1.0** — Replace the `import { OpenAI }` mock in the default scaffold with a 6-line snippet that calls `@usetheo/sdk` `Agent.prompt` directly. Ship a small SDK PR (`throwOnError: true` option in `AgentOptions`) so the snippet collapses from 10 lines (status-check pattern) to 6 lines (try/catch pattern). Add a Node ≥ 22.12 preflight to `create-theokit` so users don't hit cryptic SDK runtime errors. Outcome: `npm create theokit my-app && pnpm add @usetheo/sdk && echo ANTHROPIC_API_KEY=… >> .env && pnpm dev` produces a working chat thread without the developer ever importing a raw provider SDK.
+> **Version 1.0** — Replace the `import { OpenAI }` mock in the default scaffold with a 6-line snippet that calls `@theokit/sdk` `Agent.prompt` directly. Ship a small SDK PR (`throwOnError: true` option in `AgentOptions`) so the snippet collapses from 10 lines (status-check pattern) to 6 lines (try/catch pattern). Add a Node ≥ 22.12 preflight to `create-theokit` so users don't hit cryptic SDK runtime errors. Outcome: `npm create theokit my-app && pnpm add @theokit/sdk && echo ANTHROPIC_API_KEY=… >> .env && pnpm dev` produces a working chat thread without the developer ever importing a raw provider SDK.
 
 ## Context
 
 **What exists today:**
-- Default scaffold (`packages/create-theo/templates/default/server/routes/chat.ts` + `fixtures/template-default/server/routes/chat.ts`) ships a **mock** that yields 3 hardcoded `AgentEvent`s. The comment example points at `import { OpenAI } from 'openai'` — violating the locked stack assumption (TheoKit always wires `@usetheo/sdk`, see [[project-stack-deps]]).
-- `@usetheo/sdk` is NOT a `dependencies` of the scaffold's `package.json.tmpl`. Tutorial requires an explicit `pnpm add @usetheo/sdk` step.
+- Default scaffold (`packages/create-theo/templates/default/server/routes/chat.ts` + `fixtures/template-default/server/routes/chat.ts`) ships a **mock** that yields 3 hardcoded `AgentEvent`s. The comment example points at `import { OpenAI } from 'openai'` — violating the locked stack assumption (TheoKit always wires `@theokit/sdk`, see [[project-stack-deps]]).
+- `@theokit/sdk` is NOT a `dependencies` of the scaffold's `package.json.tmpl`. Tutorial requires an explicit `pnpm add @theokit/sdk` step.
 - `Agent.prompt(message, options)` returns `Promise<RunResult>` where `result.status` may be `'error'` and `result.result` may be `undefined`. A naive `result.result ?? ''` snippet silently swallows API rejections (verified empirically 2026-05-22 with `sk-ant-fake-for-tutorial`: Anthropic returned 401, SDK wrapped it as `{ status: 'error', error: { message: 'Anthropic API error: auth_failed (HTTP 401)', code: 'anthropic_auth_failed', provider: 'anthropic' } }`, but `result.result === undefined` would render `''` to the user with no error path).
 - SDK declares `engines.node: ">=22.12.0"`. Users on Node 20 hit cryptic `node:sqlite` / `better-sqlite3` ABI mismatch errors mid-chat without any preflight warning.
 - Item #1 of the macro roadmap (`useAgentStream` sends `X-Theo-Action: 1`) is **already done** (`agent-stream-core.ts:75`, commit `ffa93b6`), so CSRF strict default (`packages/theo/src/config/schema.ts:154`) does not block the client-side flow.
@@ -20,12 +20,12 @@
 
 ## Objective
 
-`npm create theokit my-app && pnpm add @usetheo/sdk && echo ANTHROPIC_API_KEY=… >> .env && pnpm dev` produces a working chat thread using the canonical 6-line `Agent.prompt({ throwOnError: true })` snippet, with no `import { OpenAI }` artefact in the scaffold, no Node-version cryptic crash, and no silent-error snippet trap.
+`npm create theokit my-app && pnpm add @theokit/sdk && echo ANTHROPIC_API_KEY=… >> .env && pnpm dev` produces a working chat thread using the canonical 6-line `Agent.prompt({ throwOnError: true })` snippet, with no `import { OpenAI }` artefact in the scaffold, no Node-version cryptic crash, and no silent-error snippet trap.
 
 Specific measurable goals:
 1. SDK ships `throwOnError?: boolean` on `AgentOptions`; default `false` (non-breaking). When `true`, `Agent.prompt` throws `AgentRunError` (extends `TheokitAgentError`) carrying `code` + `message` + `provider` + `raw`.
 2. Default scaffold's `chat.ts` (both `fixtures/template-default/` and `packages/create-theo/templates/default/`) calls `Agent.prompt(message, { apiKey, model, throwOnError: true })` in a `try/catch` — 6 lines essence.
-3. Scaffold `package.json.tmpl` ships `@usetheo/sdk: ^1.0.0` as a `dependencies` entry by default (no manual `pnpm add` step).
+3. Scaffold `package.json.tmpl` ships `@theokit/sdk: ^1.0.0` as a `dependencies` entry by default (no manual `pnpm add` step).
 4. `create-theokit` CLI prints a clear preflight error and exits with code 1 if `process.version` < 22.12.0.
 5. `README.md` tutorial updates to show the 6-line essence (after SDK PR lands).
 6. Empirical reproduction: clean scaffold → preflight passes → mock-replace is exactly the snippet in `README.md` → real Anthropic key → live chat works; fake key → AgentErrorCard renders the SDK's exact error message.
@@ -39,19 +39,19 @@ Specific measurable goals:
   - (a) **Change the default** to throw on error: breaks every existing SDK consumer that branches on `result.status`. Rejected — breaking change for trivial sugar.
   - (b) **Return a different `result.result` type** (e.g., `string | null` instead of `string | undefined`): forces narrowing but doesn't simplify the snippet meaningfully (still need to branch). Rejected — UX neutral.
   - (c) **Add `throwOnError` opt-in option**: zero-risk additive change. Tutorial uses the opt-in form (6 lines: `try { await Agent.prompt(…, { throwOnError: true }) } catch (err) { yield … }`). Documentation continues to teach the status-check pattern as the lower-level escape hatch.
-- **Consequences:** SDK gains 1 new option. New error class `AgentRunError` in `@usetheo/sdk` errors hierarchy. Tutorial snippet drops 3 lines (status check + fallback). Long-term: opens path to consider flipping the default at SDK v2.0 with a migration shim — out of scope here.
+- **Consequences:** SDK gains 1 new option. New error class `AgentRunError` in `@theokit/sdk` errors hierarchy. Tutorial snippet drops 3 lines (status check + fallback). Long-term: opens path to consider flipping the default at SDK v2.0 with a migration shim — out of scope here.
 
-### D2 — Scaffold ships `@usetheo/sdk` as a default dep (not opt-in)
+### D2 — Scaffold ships `@theokit/sdk` as a default dep (not opt-in)
 
-- **Decision:** `packages/create-theo/templates/default/package.json.tmpl` includes `"@usetheo/sdk": "^1.0.0"` under `dependencies`.
-- **Rationale:** Per the locked stack assumption ([[project-stack-deps]]), TheoKit's default scaffold consumes the SDK. Making it an opt-in `pnpm add` step adds a tutorial step that 100% of users hit and 0% want to skip. The bundle cost is zero (SDK is server-side only, never reaches the client bundle — verified by absence of `@usetheo/sdk` in any `app/` import).
+- **Decision:** `packages/create-theo/templates/default/package.json.tmpl` includes `"@theokit/sdk": "^1.0.0"` under `dependencies`.
+- **Rationale:** Per the locked stack assumption ([[project-stack-deps]]), TheoKit's default scaffold consumes the SDK. Making it an opt-in `pnpm add` step adds a tutorial step that 100% of users hit and 0% want to skip. The bundle cost is zero (SDK is server-side only, never reaches the client bundle — verified by absence of `@theokit/sdk` in any `app/` import).
 - **Consequences:** First `pnpm install` after `create-theokit` pulls SDK + its peers (sqlite drivers). Marginal disk hit, no runtime hit. Mocks in `chat.ts` keep working without SDK calls — the mock returns hardcoded events; the SDK is dormant until the developer wires `Agent.prompt`.
 
 ### D3 — Tutorial snippet teaches `throwOnError: true` as canonical (not the status-check pattern)
 
 - **Decision:** `README.md` "Your first agent in 5 minutes" snippet uses `try { await Agent.prompt(message, { ..., throwOnError: true }) } catch (err) { yield { type: 'error', message: err.message } }`.
 - **Rationale:** The 6-line form is closer to the developer's mental model ("LLM call → throw → catch"). The status-check pattern (10 lines, `if (result.status === 'error')`) is a SDK-level escape hatch for users who want to handle structured errors without `try/catch` (e.g., logging path). Tutorial teaches the simpler form; SDK docs (`theokit-sdk/docs.md`) teach both.
-- **Consequences:** Tutorial reads "5 lines + try/catch" instead of "10 lines + status branch". Defends against the silent-error trap empirically discovered in item #2. Sets expectation that `@usetheo/sdk` follows idiomatic Node/JS error conventions when configured to.
+- **Consequences:** Tutorial reads "5 lines + try/catch" instead of "10 lines + status branch". Defends against the silent-error trap empirically discovered in item #2. Sets expectation that `@theokit/sdk` follows idiomatic Node/JS error conventions when configured to.
 
 ### D4 — Node version preflight runs at scaffold time, not at `theokit dev` time
 
@@ -73,7 +73,7 @@ Phase 1 (SDK throwOnError + AgentRunError) ──▶ T5.0 (SDK publish to npm)
                             │                                   │
                             ▼                                   ▼
             Phase 3 (Scaffold package.json.tmpl    Phase 5 T5.1 (README 6-line — needs T5.0)
-             ships @usetheo/sdk)
+             ships @theokit/sdk)
 
             Phase 4 (create-theokit Node preflight) — parallel to Phases 1-3
 
@@ -87,12 +87,12 @@ Phase 6 (Dogfood QA — full) — depends on EVERYTHING
 
 ## Phase 1: SDK — `throwOnError` option + `AgentRunError`
 
-**Objective:** Extend `@usetheo/sdk` so `Agent.prompt` can throw on error instead of returning `{ status: 'error' }`. Additive, non-breaking, documented in `theokit-sdk/docs.md` + CHANGELOG.
+**Objective:** Extend `@theokit/sdk` so `Agent.prompt` can throw on error instead of returning `{ status: 'error' }`. Additive, non-breaking, documented in `theokit-sdk/docs.md` + CHANGELOG.
 
 ### T1.1 — Add `AgentRunError` to SDK errors hierarchy
 
 #### Objective
-Add a new error class `AgentRunError` (extends `TheokitAgentError`) that carries `code` + `provider` + `raw` from a failed `RunResult`. Exported publicly from `@usetheo/sdk`.
+Add a new error class `AgentRunError` (extends `TheokitAgentError`) that carries `code` + `provider` + `raw` from a failed `RunResult`. Exported publicly from `@theokit/sdk`.
 
 #### Evidence
 - Existing hierarchy (`theokit-sdk/packages/sdk/src/errors.ts`) has `AuthenticationError`, `RateLimitError`, `ConfigurationError`, `NetworkError`, `UnknownAgentError`, `UnsupportedRunOperationError` — all extending `TheokitAgentError`. New class follows the same shape (no new hierarchy per ADR D65 of the SDK).
@@ -140,10 +140,10 @@ theokit-sdk/packages/sdk/tests/errors-agent-run-error.test.ts — RED + GREEN (N
 RED:     it('AgentRunError is instanceof TheokitAgentError', ...) — Given new AgentRunError('x', { code: 'agent_run_failed' }), Then `instanceof TheokitAgentError === true` (MUST fail before class exists)
 RED:     it('AgentRunError carries provider + raw fields', ...) — Given new AgentRunError('x', { code: 'agent_run_failed', provider: 'anthropic', raw: '{"e":1}' }), Then .provider === 'anthropic' AND .raw === '{"e":1}'
 RED:     it('AgentRunError.code surfaces in caught error', ...) — Given try { throw new AgentRunError('x', { code: 'rate_limited' }) } catch (e), Then e.code === 'rate_limited'
-RED:     it('AgentRunError is exported from @usetheo/sdk barrel', ...) — import { AgentRunError } from '../../src/index.js'; expect(typeof AgentRunError === 'function')
+RED:     it('AgentRunError is exported from @theokit/sdk barrel', ...) — import { AgentRunError } from '../../src/index.js'; expect(typeof AgentRunError === 'function')
 GREEN:   Add the class to errors.ts + re-export from index.ts
 REFACTOR: None expected — class is leaf, no shared state
-VERIFY:  pnpm --filter @usetheo/sdk test tests/errors-agent-run-error.test.ts
+VERIFY:  pnpm --filter @theokit/sdk test tests/errors-agent-run-error.test.ts
 ```
 
 **BDD scenarios:**
@@ -157,13 +157,13 @@ VERIFY:  pnpm --filter @usetheo/sdk test tests/errors-agent-run-error.test.ts
 - [ ] Re-exported from `index.ts`
 - [ ] 4 RED tests above become GREEN
 - [ ] `instanceof TheokitAgentError` test passes
-- [ ] Pass: `pnpm --filter @usetheo/sdk tsc --noEmit`
+- [ ] Pass: `pnpm --filter @theokit/sdk tsc --noEmit`
 - [ ] Pass: SDK existing test suite (zero regressions)
 
 #### DoD
 - [ ] All tasks completed and validated
-- [ ] `pnpm --filter @usetheo/sdk test tests/errors-agent-run-error.test.ts` green
-- [ ] `pnpm --filter @usetheo/sdk build` clean (DTS includes AgentRunError)
+- [ ] `pnpm --filter @theokit/sdk test tests/errors-agent-run-error.test.ts` green
+- [ ] `pnpm --filter @theokit/sdk build` clean (DTS includes AgentRunError)
 - [ ] `theokit-sdk/packages/sdk/CHANGELOG.md` `[Unreleased]` updated with the addition
 
 ---
@@ -245,7 +245,7 @@ RED (EC-2): it('throwOnError=true: does NOT throw on cancelled status', ...) —
 RED (EC-3): it('throwOnError=true: skipped when result.error is undefined (malformed RunResult)', ...) — Given fake RunResult { status: 'error', error: undefined }, When throwOnError=true, Then resolves (defensive guard fires, no AgentRunError constructed from undefined)
 GREEN:   Add the option to type + the branch + AgentRunError throw in Agent.prompt
 REFACTOR: Extract the error-construction snippet to a private helper if used elsewhere (likely yes — Agent.create + agent.send path might need same logic later; mark as TODO if not done here)
-VERIFY:  pnpm --filter @usetheo/sdk test tests/agent-prompt-throw-on-error.test.ts
+VERIFY:  pnpm --filter @theokit/sdk test tests/agent-prompt-throw-on-error.test.ts
 ```
 
 **BDD scenarios:**
@@ -259,7 +259,7 @@ VERIFY:  pnpm --filter @usetheo/sdk test tests/agent-prompt-throw-on-error.test.
 - [ ] `Agent.prompt` honours the option per spec
 - [ ] All 5 RED tests above GREEN
 - [ ] Existing `Agent.prompt` tests unchanged (zero regression)
-- [ ] Pass: `pnpm --filter @usetheo/sdk tsc --noEmit`
+- [ ] Pass: `pnpm --filter @theokit/sdk tsc --noEmit`
 - [ ] Pass: full SDK suite green except pre-existing Node-22-only tests (sqlite ABI; documented in earlier session)
 
 #### DoD
@@ -272,7 +272,7 @@ VERIFY:  pnpm --filter @usetheo/sdk test tests/agent-prompt-throw-on-error.test.
     with `AgentRunError` (new public class) instead of resolving with
     `{ status: 'error' }`. Default false (non-breaking).
   ```
-- [ ] `pnpm --filter @usetheo/sdk build` — DTS includes new option + new error class
+- [ ] `pnpm --filter @theokit/sdk build` — DTS includes new option + new error class
 
 ---
 
@@ -283,7 +283,7 @@ VERIFY:  pnpm --filter @usetheo/sdk test tests/agent-prompt-throw-on-error.test.
 ### T2.1 — Canonical `chat.ts` in `fixtures/template-default/`
 
 #### Objective
-Rewrite `fixtures/template-default/server/routes/chat.ts` to use `@usetheo/sdk` `Agent.prompt(message, { ..., throwOnError: true })` in a `try/catch`. Update comment to point at the SDK pattern, not OpenAI.
+Rewrite `fixtures/template-default/server/routes/chat.ts` to use `@theokit/sdk` `Agent.prompt(message, { ..., throwOnError: true })` in a `try/catch`. Update comment to point at the SDK pattern, not OpenAI.
 
 #### Evidence
 - Empirical experiment from item #2: this exact wiring works against real Anthropic and surfaces fake-key errors as SSE `data: {"type":"error","message":"..."}`.
@@ -292,13 +292,13 @@ Rewrite `fixtures/template-default/server/routes/chat.ts` to use `@usetheo/sdk` 
 #### Files to edit
 ```
 fixtures/template-default/server/routes/chat.ts — rewrite (NEW body, same export name)
-fixtures/template-default/package.json — add @usetheo/sdk to dependencies
+fixtures/template-default/package.json — add @theokit/sdk to dependencies
 pnpm-workspace.yaml — append '../theokit-sdk/packages/sdk' so the workspace resolves the SDK symlink
 ```
 
 #### Deep file dependency analysis
 - **`chat.ts`**: today is the 3-yield mock. After: 6-line `try { Agent.prompt(...) } catch { yield error }`. Tested via `tests/integration/fixture-template-default-*.test.ts` if such test exists, otherwise a new playwright spec (T2.2).
-- **`package.json`**: today lacks `@usetheo/sdk`. After: add `"@usetheo/sdk": "workspace:*"`. Downstream: `pnpm install` must succeed; SDK symlinks into `node_modules/@usetheo/sdk`.
+- **`package.json`**: today lacks `@theokit/sdk`. After: add `"@theokit/sdk": "workspace:*"`. Downstream: `pnpm install` must succeed; SDK symlinks into `node_modules/@theokit/sdk`.
 - **`pnpm-workspace.yaml`**: add sibling SDK path. Will warn if `../theokit-sdk/packages/sdk` doesn't exist on a contributor's machine, but won't fail (pnpm tolerates missing workspace globs).
 
 #### Deep Dives
@@ -319,7 +319,7 @@ pnpm-workspace.yaml — append '../theokit-sdk/packages/sdk' so the workspace re
 
 #### Tasks
 1. Rewrite `chat.ts` body with the 6-line snippet.
-2. Add `"@usetheo/sdk": "workspace:*"` to `fixtures/template-default/package.json` `dependencies`.
+2. Add `"@theokit/sdk": "workspace:*"` to `fixtures/template-default/package.json` `dependencies`.
 3. Append sibling SDK path to `pnpm-workspace.yaml`.
 4. `pnpm install` and confirm SDK symlinked into `fixtures/template-default/node_modules`.
 5. Run any existing template-default integration test to confirm no regression.
@@ -327,10 +327,10 @@ pnpm-workspace.yaml — append '../theokit-sdk/packages/sdk' so the workspace re
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_canonical_chat_imports_sdk() — Given fixtures/template-default/server/routes/chat.ts, When grep, Then contains 'import { Agent } from '@usetheo/sdk'' AND does NOT contain 'openai'
+RED:     test_canonical_chat_imports_sdk() — Given fixtures/template-default/server/routes/chat.ts, When grep, Then contains 'import { Agent } from '@theokit/sdk'' AND does NOT contain 'openai'
 RED:     test_canonical_chat_uses_throw_on_error() — Given chat.ts, When read, Then contains 'throwOnError: true' AND contains 'try {' / 'catch'
 RED:     test_canonical_chat_handles_missing_api_key() — Given chat.ts handler called with empty env, Then first yielded event has type==='error' AND message contains 'ANTHROPIC_API_KEY'
-RED:     test_fixture_package_json_includes_sdk() — Given fixtures/template-default/package.json parsed, Then dependencies['@usetheo/sdk'] === 'workspace:*'
+RED:     test_fixture_package_json_includes_sdk() — Given fixtures/template-default/package.json parsed, Then dependencies['@theokit/sdk'] === 'workspace:*'
 RED (EC-4): test_chat_handles_non_object_body() — Given POST with body='raw string' or body=[1,2,3], When handler runs, Then yields { type: 'error', message: /expected.*object/i }. Update snippet to guard via `typeof body === 'object' && !Array.isArray(body)` before cast.
 RED (EC-5): test_chat_handles_empty_agent_reply() — Given Agent.prompt resolves with { status: 'finished', result: undefined }, When handler runs, Then yields { type: 'message', content: '' } (no throw, empty content acceptable)
 GREEN:   Apply the file edits + pnpm install
@@ -346,8 +346,8 @@ VERIFY:  npx vitest run tests/unit/fixture-template-default-canonical-chat.test.
 
 #### Acceptance Criteria
 - [ ] `chat.ts` body matches the 6-line snippet
-- [ ] `@usetheo/sdk` listed in `fixtures/template-default/package.json`
-- [ ] `pnpm install` clean (no missing-peer warning for `@usetheo/sdk`)
+- [ ] `@theokit/sdk` listed in `fixtures/template-default/package.json`
+- [ ] `pnpm install` clean (no missing-peer warning for `@theokit/sdk`)
 - [ ] `grep -c "openai" fixtures/template-default/server/routes/chat.ts` → 0
 - [ ] All 4 RED tests GREEN
 - [ ] `npx tsc --noEmit` in `fixtures/template-default/` shows no new errors (pre-existing layout/page errors documented separately)
@@ -452,7 +452,7 @@ tests/unit/scaffold-no-openai-anti-stack.test.ts (NEW)
   ]
   for (const file of FILES_TO_SCAN) {
     const content = readFileSync(resolve(ROOT, file), 'utf-8').toLowerCase()
-    expect(content, `${file} must not reference 'openai' (locked stack: @usetheo/sdk)`).not.toContain('openai')
+    expect(content, `${file} must not reference 'openai' (locked stack: @theokit/sdk)`).not.toContain('openai')
   }
   ```
 - **Invariants:** scanning is case-insensitive; matches both `import { OpenAI }` and `openai.chat.completions.create` etc.
@@ -468,7 +468,7 @@ tests/unit/scaffold-no-openai-anti-stack.test.ts (NEW)
 ```
 RED:     test('fixtures/template-default chat.ts contains no openai reference') — Given chat.ts, Then content does NOT contain 'openai' case-insensitive
 RED:     test('packages/create-theo/templates/default chat.ts contains no openai reference') — same for create-theo template
-RED:     test('both files reference @usetheo/sdk Agent') — Given both files, Then each contains "import { Agent }" AND "@usetheo/sdk"
+RED:     test('both files reference @theokit/sdk Agent') — Given both files, Then each contains "import { Agent }" AND "@theokit/sdk"
 RED:     test('gate file lists both targets (defends against missing file in array)') — Given test source, Then FILES_TO_SCAN.length === 2
 GREEN:   T2.1 + T3.1 land their chat.ts edits → these all become GREEN
 REFACTOR: None expected
@@ -509,12 +509,12 @@ Identical body to T2.1 — apply the 6-line snippet to the template that `create
 #### Files to edit
 ```
 packages/create-theo/templates/default/server/routes/chat.ts — rewrite (same 6-line snippet as T2.1)
-packages/create-theo/templates/default/package.json.tmpl — add @usetheo/sdk to dependencies
+packages/create-theo/templates/default/package.json.tmpl — add @theokit/sdk to dependencies
 ```
 
 #### Deep file dependency analysis
 - **`chat.ts`**: identical change as T2.1 (literally same content). Downstream: T2.3 lint, T3.2 dogfood.
-- **`package.json.tmpl`**: today lacks `@usetheo/sdk`. After: add `"@usetheo/sdk": "^1.0.0"` (NOT `workspace:*` — published scaffold uses semver-ranged real package). Downstream: every new `create-theokit my-app` install pulls the SDK.
+- **`package.json.tmpl`**: today lacks `@theokit/sdk`. After: add `"@theokit/sdk": "^1.0.0"` (NOT `workspace:*` — published scaffold uses semver-ranged real package). Downstream: every new `create-theokit my-app` install pulls the SDK.
 
 #### Deep Dives
 - **Why `^1.0.0` here vs `workspace:*` in T2.1:** the fixture uses workspace protocol so the local SDK source links; the scaffold template ships to npm and consumers install from registry.
@@ -522,14 +522,14 @@ packages/create-theo/templates/default/package.json.tmpl — add @usetheo/sdk to
 
 #### Tasks
 1. Copy the T2.1 `chat.ts` body verbatim into the template path.
-2. Add `"@usetheo/sdk": "^1.0.0"` to `package.json.tmpl` `dependencies` (between `theokit` and `@theokit/ui` for diff readability).
+2. Add `"@theokit/sdk": "^1.0.0"` to `package.json.tmpl` `dependencies` (between `theokit` and `@theokit/ui` for diff readability).
 3. Run any existing create-theo test (`tests/unit/create-theo-*.test.ts`).
 
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
 RED:     test_template_default_chat_matches_fixture() — Given both chat.ts files, When compared (whitespace-normalized), Then they have identical bodies (defends drift)
-RED (EC-7): test_template_default_package_includes_sdk_via_regex() — package.json.tmpl has Mustache placeholders ({{name}}) so JSON.parse FAILS. Use regex grep `/"@usetheo\/sdk":\s*"\^1/` against raw file content
+RED (EC-7): test_template_default_package_includes_sdk_via_regex() — package.json.tmpl has Mustache placeholders ({{name}}) so JSON.parse FAILS. Use regex grep `/"@theokit\/sdk":\s*"\^1/` against raw file content
 RED:     test_template_default_chat_uses_throw_on_error() — Given chat.ts, Then contains 'throwOnError: true'
 RED:     test_template_default_chat_does_not_mention_openai() — case-insensitive
 GREEN:   Apply edits
@@ -545,7 +545,7 @@ VERIFY:  npx vitest run tests/unit/create-theo-default-template.test.ts (or new 
 
 #### Acceptance Criteria
 - [ ] `chat.ts` matches fixture body
-- [ ] `package.json.tmpl` includes `@usetheo/sdk` dep
+- [ ] `package.json.tmpl` includes `@theokit/sdk` dep
 - [ ] 4 RED tests GREEN
 - [ ] T2.3 lint test now GREEN for both files
 
@@ -591,7 +591,7 @@ tests/unit/create-theo-node-preflight.test.ts (NEW) — RED + GREEN
     const current = currentRaw.replace(/^v/, '')
     if (compareSemver(current, minimum) < 0) {
       throw new Error(
-        `create-theokit requires Node ${minimum} or later (the @usetheo/sdk peer engines floor).\n` +
+        `create-theokit requires Node ${minimum} or later (the @theokit/sdk peer engines floor).\n` +
         `  Detected: Node ${current}\n` +
         `  Fix:      nvm install 22 && nvm use 22  (or your version manager equivalent)`
       )
@@ -646,15 +646,15 @@ VERIFY:  npx vitest run tests/unit/create-theo-node-preflight.test.ts
 
 **Objective:** Update the tutorial snippet from the 10-line status-check pattern to the 6-line `throwOnError: true` pattern. Updates only happen AFTER Phase 1 lands AND the SDK is published to npm (T5.0 below).
 
-### T5.0 — Publish `@usetheo/sdk` to npm with `throwOnError` (EC-1 MUST FIX)
+### T5.0 — Publish `@theokit/sdk` to npm with `throwOnError` (EC-1 MUST FIX)
 
 > **Status: DEFERRED (operator gate).** Implementation in this loop covers everything **except** the actual `pnpm publish` call. The SDK code change (T1.1 + T1.2 above) IS done, tests are green, `CHANGELOG.md [Unreleased]` is updated, `docs.md` reflects the new option. What is NOT done in the loop: the version bump + `pnpm publish` + npm registry propagation — these require real npm publish credentials operated by a human. **T5.1 in this loop uses the workspace symlink** to validate the README snippet works end-to-end against the locally-linked SDK; once T5.0 is operated externally, T5.1's snippet works for npm consumers too without any code change. The TODO is operational, not code.
 
 #### Objective
-Bump `@usetheo/sdk` minor version (additive change), publish to npm, wait for registry propagation. Required before T5.1 so the tutorial's `pnpm add @usetheo/sdk` pulls a version that contains the new option.
+Bump `@theokit/sdk` minor version (additive change), publish to npm, wait for registry propagation. Required before T5.1 so the tutorial's `pnpm add @theokit/sdk` pulls a version that contains the new option.
 
 #### Evidence
-- Without this task, the README's 6-line snippet (T5.1) fails immediately for any new user: `pnpm add @usetheo/sdk` brings the previous SDK version, TypeScript errors on `throwOnError`. EC-1 from edge-case review.
+- Without this task, the README's 6-line snippet (T5.1) fails immediately for any new user: `pnpm add @theokit/sdk` brings the previous SDK version, TypeScript errors on `throwOnError`. EC-1 from edge-case review.
 
 #### Files to edit
 ```
@@ -663,34 +663,34 @@ theokit-sdk/packages/sdk/CHANGELOG.md — promote [Unreleased] to [1.1.0] with d
 ```
 
 #### Deep file dependency analysis
-- **`package.json`**: version field bump. Downstream: every npm install of `@usetheo/sdk` after publish.
+- **`package.json`**: version field bump. Downstream: every npm install of `@theokit/sdk` after publish.
 - **`CHANGELOG.md`**: convert `[Unreleased]` section to dated `[1.1.0]`. Downstream: release notes.
 
 #### Deep Dives
 - **Why minor (1.0.0 → 1.1.0):** additive change (new optional field + new public error class). No breaking. Semver minor.
-- **Release command** (per SDK's `theokit-sdk/CLAUDE.md` release policy): `pnpm --filter @usetheo/sdk publish --access public` after CI green. Verify `npm view @usetheo/sdk version` after ~1 min.
+- **Release command** (per SDK's `theokit-sdk/CLAUDE.md` release policy): `pnpm --filter @theokit/sdk publish --access public` after CI green. Verify `npm view @theokit/sdk version` after ~1 min.
 
 #### Tasks
 1. Bump version in `theokit-sdk/packages/sdk/package.json`.
 2. Promote CHANGELOG `[Unreleased]` to `[1.1.0] - YYYY-MM-DD`.
 3. Commit + tag SDK side.
-4. `pnpm --filter @usetheo/sdk publish`.
-5. Wait + verify `npm view @usetheo/sdk@1.1.0 version` returns `1.1.0`.
+4. `pnpm --filter @theokit/sdk publish`.
+5. Wait + verify `npm view @theokit/sdk@1.1.0 version` returns `1.1.0`.
 
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
 
 ```
-RED:     test_sdk_published_has_throw_on_error() — Given `npm view @usetheo/sdk@latest engines`, When response has expected version, Then version >= 1.1.0 (manual gate; not auto-test, see verification)
+RED:     test_sdk_published_has_throw_on_error() — Given `npm view @theokit/sdk@latest engines`, When response has expected version, Then version >= 1.1.0 (manual gate; not auto-test, see verification)
 RED:     test_sdk_package_version_bumped() — Given theokit-sdk/packages/sdk/package.json parsed, Then version is exactly the planned bump (e.g., '1.1.0')
 RED:     test_sdk_changelog_section_dated() — Given CHANGELOG, Then has section starting '## [1.1.0]' followed by ISO date
 RED:     test_sdk_changelog_unreleased_emptied_or_absent() — Given CHANGELOG, Then [Unreleased] section is empty OR removed (avoid double-billing)
 GREEN:   Execute bump + publish; tests pass after files updated
 REFACTOR: None — release artifact
-VERIFY:  pnpm view @usetheo/sdk@latest version && pnpm --filter @usetheo/sdk test
+VERIFY:  pnpm view @theokit/sdk@latest version && pnpm --filter @theokit/sdk test
 ```
 
 **BDD scenarios:**
-- **Happy path:** publish succeeds → registry returns new version → TheoKit `pnpm add @usetheo/sdk` brings it.
+- **Happy path:** publish succeeds → registry returns new version → TheoKit `pnpm add @theokit/sdk` brings it.
 - **Validation error:** publish fails (auth) → blocks T5.1; surface clearly.
 - **Edge case:** registry cache delay → `npm view` returns old version for ~5 min; wait + retry.
 - **Error scenario:** version conflict (someone else published same version) → re-bump + republish.
@@ -698,13 +698,13 @@ VERIFY:  pnpm view @usetheo/sdk@latest version && pnpm --filter @usetheo/sdk tes
 #### Acceptance Criteria
 - [ ] SDK version bumped to next minor
 - [ ] CHANGELOG dated entry
-- [ ] `npm view @usetheo/sdk@<new-version>` returns the version
-- [ ] `pnpm --filter @usetheo/sdk publish` exits 0
+- [ ] `npm view @theokit/sdk@<new-version>` returns the version
+- [ ] `pnpm --filter @theokit/sdk publish` exits 0
 - [ ] T5.1 can proceed (blocking gate cleared)
 
 #### DoD
 - [ ] Tasks done
-- [ ] Manual: `cd /tmp && mkdir t && cd t && pnpm init -y && pnpm add @usetheo/sdk && node -e "const {AgentRunError} = require('@usetheo/sdk'); console.log(!!AgentRunError)"` prints `true`
+- [ ] Manual: `cd /tmp && mkdir t && cd t && pnpm init -y && pnpm add @theokit/sdk && node -e "const {AgentRunError} = require('@theokit/sdk'); console.log(!!AgentRunError)"` prints `true`
 
 ---
 
@@ -728,7 +728,7 @@ README.md — replace the snippet + adjust the "5 things to notice" list
 #### Deep Dives
 - **6-line snippet:**
   ```typescript
-  import { Agent } from '@usetheo/sdk'
+  import { Agent } from '@theokit/sdk'
   import { defineAgentEndpoint, type AgentEvent } from 'theokit/server'
 
   export const POST = defineAgentEndpoint({
@@ -744,7 +744,7 @@ README.md — replace the snippet + adjust the "5 things to notice" list
     },
   })
   ```
-- **Invariants:** snippet still 100% type-safe. Still imports only from the locked stack (`@usetheo/sdk` + `theokit/server`). Error path preserves the same `AgentEvent` shape consumers already render.
+- **Invariants:** snippet still 100% type-safe. Still imports only from the locked stack (`@theokit/sdk` + `theokit/server`). Error path preserves the same `AgentEvent` shape consumers already render.
 - **Edge case:** API key missing → the empty string assertion (`apiKey!`) will pass to SDK, which throws `AuthenticationError` → caught by the try/catch → user sees the SDK's error message. (Slightly less friendly than the explicit `'Set ANTHROPIC_API_KEY in .env.'` message; counterbalance: snippet is shorter. Tutorial mentions both forms.)
 
 #### Tasks
@@ -757,7 +757,7 @@ README.md — replace the snippet + adjust the "5 things to notice" list
 ```
 RED:     test('README tutorial snippet uses throwOnError: true') — Given README.md, When grep, Then contains 'throwOnError: true' in the "Your first agent" section
 RED (EC-8): test('README tutorial snippet does NOT include status check — SCOPED to tutorial section') — Scope the grep to the section between '## Your first agent' heading and the next '## ' heading; only inside that slice assert NO `result.status` match. Avoids false positive if 'result.status' appears in a future advanced docs section.
-RED:     test('README tutorial snippet still references @usetheo/sdk') — same scoped section, Then contains 'import { Agent } from '@usetheo/sdk''
+RED:     test('README tutorial snippet still references @theokit/sdk') — same scoped section, Then contains 'import { Agent } from '@theokit/sdk''
 RED:     test('README tutorial does NOT reference openai') — case-insensitive grep on the scoped tutorial section, Then no match
 GREEN:   Apply the README edit
 REFACTOR: None expected
@@ -788,7 +788,7 @@ VERIFY:  npx vitest run tests/unit/readme-tutorial-snippet.test.ts
 | # | Gap / Requirement | Task(s) | Resolution |
 |---|---|---|---|
 | 1 | Mock comment in `chat.ts` references `import { OpenAI }` — violates locked stack | T2.1, T3.1, T2.3 | Replace + lint gate |
-| 2 | `@usetheo/sdk` is not a default dep of the scaffold | T2.1 (fixture), T3.1 (template) | Add to `package.json` |
+| 2 | `@theokit/sdk` is not a default dep of the scaffold | T2.1 (fixture), T3.1 (template) | Add to `package.json` |
 | 3 | `Agent.prompt` returns `result.result === undefined` silently on error | T1.1, T1.2, T5.1 | SDK `throwOnError` option + tutorial uses it |
 | 4 | Node ≥ 22.12 required by SDK; no preflight | T4.1 | `create-theokit` preflight + clear error message |
 | 5 | Tutorial canonical snippet is 10 lines (overly defensive) | T5.1 | Reduce to 6 lines using `throwOnError: true` |
@@ -843,7 +843,7 @@ test ! -d /tmp/dogfood-item-3 && echo "preflight OK"
 nvm use 22
 npx --yes create-theokit dogfood-item-3
 cd dogfood-item-3
-cat package.json | grep '@usetheo/sdk'  # EXPECT: present
+cat package.json | grep '@theokit/sdk'  # EXPECT: present
 cat server/routes/chat.ts | grep 'throwOnError'  # EXPECT: present
 cat server/routes/chat.ts | grep -i 'openai' && echo "FAIL — anti-stack leak"
 pnpm install
@@ -881,7 +881,7 @@ This plan touches TWO repos: `theokit/` and `theokit-sdk/`. Per [[feedback-sdk-i
 - **Phases 2-5** live in `theokit/`. They DEPEND on Phase 1 being landed (workspace symlink to local SDK suffices in dev; for `npx create-theokit my-app`, the published SDK on npm must contain `throwOnError` — coordinate release timing).
 - **Phase 6 (Dogfood)** validates the full cross-repo round-trip.
 
-Stack assumption ([[project-stack-deps]]) verified across every deliverable: every scaffold path imports `@usetheo/sdk` or `@theokit/ui`; no raw provider SDK appears as canonical.
+Stack assumption ([[project-stack-deps]]) verified across every deliverable: every scaffold path imports `@theokit/sdk` or `@theokit/ui`; no raw provider SDK appears as canonical.
 
 ---
 
@@ -890,7 +890,7 @@ Stack assumption ([[project-stack-deps]]) verified across every deliverable: eve
 Reviewed via `/edge-case-plan item-3-canonical-chat-sdk-wiring`. 12 edges found (1 MUST FIX, 7 SHOULD TEST, 4 DOCUMENT).
 
 **MUST FIX incorporated:**
-1. **EC-1** (SDK release timing) → New task **T5.0 — Publish `@usetheo/sdk`** added as gate between Phase 1 and T5.1. Dependency graph + Coverage Matrix updated.
+1. **EC-1** (SDK release timing) → New task **T5.0 — Publish `@theokit/sdk`** added as gate between Phase 1 and T5.1. Dependency graph + Coverage Matrix updated.
 
 **SHOULD TEST incorporated (RED tests added):**
 - T1.2: +2 tests — EC-2 (cancelled status doesn't throw), EC-3 (defensive guard on `result.error === undefined`)

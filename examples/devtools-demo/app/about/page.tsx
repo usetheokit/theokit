@@ -1,4 +1,4 @@
-import { Badge, Card } from '@usetheo/ui'
+import { Badge, Card } from '@theokit/ui'
 import { Info } from 'lucide-react'
 
 export default function AboutPage() {

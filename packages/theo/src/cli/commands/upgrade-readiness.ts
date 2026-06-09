@@ -187,9 +187,9 @@ function scanHtmlFile(file: string, rel: string, content: string, out: Violation
 }
 
 /**
- * T4.1 — Zero-config hint: consumer has @usetheo/ui in deps AND a manual
- * tailwind.config.* that does NOT import the @usetheo/ui preset. Suggest
- * extending via `import preset from '@usetheo/ui/preset'`.
+ * T4.1 — Zero-config hint: consumer has @theokit/ui in deps AND a manual
+ * tailwind.config.* that does NOT import the @theokit/ui preset. Suggest
+ * extending via `import preset from '@theokit/ui/preset'`.
  */
 function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
   const pkgPath = resolve(cwd, 'package.json')
@@ -201,8 +201,7 @@ function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
     return
   }
   const hasUi =
-    Boolean(pkg.dependencies?.['@usetheo/ui']) ||
-    Boolean(pkg.devDependencies?.['@usetheo/ui'])
+    Boolean(pkg.dependencies?.['@theokit/ui']) || Boolean(pkg.devDependencies?.['@theokit/ui'])
   if (!hasUi) return
 
   for (const ext of ['.ts', '.js', '.mjs', '.cjs']) {
@@ -214,14 +213,14 @@ function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
     } catch {
       continue
     }
-    if (content.includes('@usetheo/ui/preset')) return // already using preset
+    if (content.includes('@theokit/ui/preset')) return // already using preset
     out.push({
       file: `tailwind.config${ext}`,
       line: 1,
       rule: 'zero-config-tailwind-suggest',
       message:
-        '@usetheo/ui detected with a manual tailwind.config — extend with the UI preset to keep theme tokens in sync.',
-      fix: "import preset from '@usetheo/ui/preset'; export default { presets: [preset], content: [...] }",
+        '@theokit/ui detected with a manual tailwind.config — extend with the UI preset to keep theme tokens in sync.',
+      fix: "import preset from '@theokit/ui/preset'; export default { presets: [preset], content: [...] }",
     })
     return
   }
@@ -233,7 +232,12 @@ function scanZeroConfigTailwindHint(cwd: string, out: Violation[]): void {
  * Suggest the framework's loadEnv (auto-invoked by CLI commands; importable
  * from theokit/server for standalone scripts).
  */
-function scanHandRolledDotenvHint(file: string, rel: string, content: string, out: Violation[]): void {
+function scanHandRolledDotenvHint(
+  file: string,
+  rel: string,
+  content: string,
+  out: Violation[],
+): void {
   // Only flag server/ files
   if (!rel.startsWith('server/')) return
   const lines = content.split('\n')
@@ -370,6 +374,11 @@ export async function upgradeReadinessCommand(opts: {
   if (report.violations.length === 0) {
     console.log('  ✓ Upgrade-readiness 0.3: no violations detected.')
     console.log('')
+    // T1.3 — friendly post-success URL (blueprint R4; Next.js next-codemod precedent).
+    // Anchor canon: #rollback (existing in docs/migration/0.2-to-0.3.md per T1.1).
+    console.log('  Migration guide: https://theokit.dev/migration/0.2-to-0.3')
+    console.log('  Need to roll back temporarily? See #rollback')
+    console.log('')
     process.exit(report.exitCode)
   }
   console.log(`  ✗ Upgrade-readiness 0.3: ${report.violations.length} violation(s)`)
@@ -380,5 +389,9 @@ export async function upgradeReadinessCommand(opts: {
     console.log(`    fix: ${v.fix}`)
     console.log('')
   }
+  // T1.3 — print migration-guide URL on violations branch too (one canonical link
+  // regardless of verdict, per blueprint Q5 Astro CHANGELOG URL pattern).
+  console.log('  Migration guide: https://theokit.dev/migration/0.2-to-0.3#rollback')
+  console.log('')
   process.exit(report.exitCode)
 }

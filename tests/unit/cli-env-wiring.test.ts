@@ -14,7 +14,8 @@ import { describe, expect, it } from 'vitest'
 
 const DEV = resolve(process.cwd(), 'packages/theo/src/cli/commands/dev.ts')
 const BUILD = resolve(process.cwd(), 'packages/theo/src/cli/commands/build.ts')
-const START = resolve(process.cwd(), 'packages/theo/src/cli/commands/start.ts')
+// T2.2 (M4 cli/commands/start/ subfolder) — start.ts → start/index.ts
+const START = resolve(process.cwd(), 'packages/theo/src/cli/commands/start/index.ts')
 
 function read(path: string): string {
   return readFileSync(path, 'utf-8')
@@ -22,7 +23,9 @@ function read(path: string): string {
 
 describe('T1.2 — CLI commands wire loadEnv before loadConfig', () => {
   it('dev.ts imports loadEnv', () => {
-    expect(read(DEV)).toMatch(/import\s+\{\s*loadEnv\s*\}\s+from\s+['"]\.\.\/\.\.\/config\/load-env/)
+    expect(read(DEV)).toMatch(
+      /import\s+\{\s*loadEnv\s*\}\s+from\s+['"]\.\.\/\.\.\/config\/load-env/,
+    )
   })
 
   it('dev.ts calls loadEnv before loadConfig', () => {
@@ -37,7 +40,9 @@ describe('T1.2 — CLI commands wire loadEnv before loadConfig', () => {
   })
 
   it('build.ts imports loadEnv', () => {
-    expect(read(BUILD)).toMatch(/import\s+\{\s*loadEnv\s*\}\s+from\s+['"]\.\.\/\.\.\/config\/load-env/)
+    expect(read(BUILD)).toMatch(
+      /import\s+\{\s*loadEnv\s*\}\s+from\s+['"]\.\.\/\.\.\/config\/load-env/,
+    )
   })
 
   it('build.ts calls loadEnv with mode: production before loadConfig', () => {
@@ -49,7 +54,12 @@ describe('T1.2 — CLI commands wire loadEnv before loadConfig', () => {
   })
 
   it('start.ts imports loadEnv', () => {
-    expect(read(START)).toMatch(/import\s+\{\s*loadEnv\s*\}\s+from\s+['"]\.\.\/\.\.\/config\/load-env/)
+    // T2.2 (M4 cli/commands/start/ subfolder) — start/index.ts is one level
+    // deeper than the original start.ts, so the relative import is now
+    // `../../../config/load-env` (3 ../) instead of `../../config/load-env` (2 ../).
+    expect(read(START)).toMatch(
+      /import\s+\{\s*loadEnv\s*\}\s+from\s+['"]\.\.(?:\/\.\.){2,3}\/config\/load-env/,
+    )
   })
 
   it('start.ts calls loadEnv with mode: production before loadConfig', () => {

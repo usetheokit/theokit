@@ -51,13 +51,13 @@ describe('generalized .tmpl substitution', () => {
     }
   })
 
-  it('README explains the operator-deferred @usetheo/sdk publish', () => {
+  it('README explains the operator-deferred @theokit/sdk publish', () => {
     const target = makeTargetDir()
     rmSync(target, { recursive: true, force: true })
     try {
       scaffold(target, 'sdk-doc-app', 'default')
       const readme = readFileSync(join(target, 'README.md'), 'utf-8')
-      expect(readme).toMatch(/@usetheo\/sdk/)
+      expect(readme).toMatch(/@theokit\/sdk/)
       expect(readme).toMatch(/operator-deferred|publish/i)
     } finally {
       rmSync(target, { recursive: true, force: true })

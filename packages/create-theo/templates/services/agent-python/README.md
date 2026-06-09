@@ -26,7 +26,7 @@ uv run uvicorn main:app --reload --port 8001
 
 ## What is wired
 
-- ASGI fetch-handler (works on Vercel Python runtime, TheoCloud K8s, local uvicorn)
+- ASGI fetch-handler (works on TheoCloud K8s and local uvicorn)
 - JSON-line stdout logs
 - W3C `traceparent` propagation from incoming headers
 - TheoKit injects `THEOKIT_SERVICE_NAME` + `THEOKIT_SERVICE_PORT` env vars

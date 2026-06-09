@@ -20,7 +20,7 @@ import {
   type QuickAction,
   type CommandItem,
   type ToolCallStatus,
-} from '@usetheo/ui'
+} from '@theokit/ui'
 import { Sparkles, Wrench, RotateCcw, Command } from 'lucide-react'
 import { useAgentStream } from 'theokit/client'
 

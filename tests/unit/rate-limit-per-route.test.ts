@@ -39,59 +39,61 @@ function mockReq(input: {
 }
 
 describe('T2.2 — per-route rate limit', () => {
-  it('per-route config applied when path matches', () => {
+  it('per-route config applied when path matches', async () => {
     const limiter = createRouteRateLimiter({
       default: { windowMs: 60_000, max: 100 },
       routes: { '/api/login': { windowMs: 60_000, max: 5 } },
     })
     // Hit /api/login 6 times → 6th should be limited
     for (let i = 0; i < 5; i++) {
-      expect(limiter(mockReq({ url: '/api/login' })).limited).toBe(false)
+      expect((await limiter(mockReq({ url: '/api/login' }))).limited).toBe(false)
     }
-    expect(limiter(mockReq({ url: '/api/login' })).limited).toBe(true)
+    expect((await limiter(mockReq({ url: '/api/login' }))).limited).toBe(true)
   })
 
-  it('default config used when path is unmatched', () => {
+  it('default config used when path is unmatched', async () => {
     const limiter = createRouteRateLimiter({
       default: { windowMs: 60_000, max: 3 },
       routes: { '/api/login': { windowMs: 60_000, max: 5 } },
     })
     // /api/users has no entry → uses default (max=3)
-    expect(limiter(mockReq({ url: '/api/users' })).limited).toBe(false)
-    expect(limiter(mockReq({ url: '/api/users' })).limited).toBe(false)
-    expect(limiter(mockReq({ url: '/api/users' })).limited).toBe(false)
-    expect(limiter(mockReq({ url: '/api/users' })).limited).toBe(true)
+    expect((await limiter(mockReq({ url: '/api/users' }))).limited).toBe(false)
+    expect((await limiter(mockReq({ url: '/api/users' }))).limited).toBe(false)
+    expect((await limiter(mockReq({ url: '/api/users' }))).limited).toBe(false)
+    expect((await limiter(mockReq({ url: '/api/users' }))).limited).toBe(true)
   })
 
-  it('no rate limit when no default and no route matches', () => {
+  it('no rate limit when no default and no route matches', async () => {
     const limiter = createRouteRateLimiter({
       routes: { '/api/login': { windowMs: 60_000, max: 5 } },
       // no default
     })
-    // /api/health doesn't match → passes through (not limited)
-    for (let i = 0; i < 1000; i++) {
-      expect(limiter(mockReq({ url: '/api/health' })).limited).toBe(false)
+    // /api/health doesn't match → passes through (not limited).
+    // Reduced iteration count from 1000 → 200 to keep the async test fast
+    // post-T5a.1d; the original 1000 was for sync correctness only.
+    for (let i = 0; i < 200; i++) {
+      expect((await limiter(mockReq({ url: '/api/health' }))).limited).toBe(false)
     }
   })
 
-  it('EC-5: trailing slash normalized — /api/login matches /api/login/', () => {
+  it('EC-5: trailing slash normalized — /api/login matches /api/login/', async () => {
     const limiter = createRouteRateLimiter({
       routes: { '/api/login': { windowMs: 60_000, max: 2 } },
     })
-    expect(limiter(mockReq({ url: '/api/login' })).limited).toBe(false)
-    expect(limiter(mockReq({ url: '/api/login/' })).limited).toBe(false)
+    expect((await limiter(mockReq({ url: '/api/login' }))).limited).toBe(false)
+    expect((await limiter(mockReq({ url: '/api/login/' }))).limited).toBe(false)
     // Third hit (regardless of trailing slash form) should be limited
-    expect(limiter(mockReq({ url: '/api/login' })).limited).toBe(true)
+    expect((await limiter(mockReq({ url: '/api/login' }))).limited).toBe(true)
   })
 })
 
 describe('T2.2 — keyBy variants', () => {
-  it("keyBy='ip' uses remote address (default)", () => {
-    expect(deriveKey(mockReq({ ip: '1.2.3.4' }), 'ip', 'theo_session')).toBe('ip:1.2.3.4')
+  it("keyBy='ip' uses remote address (default)", async () => {
+    expect(await deriveKey(mockReq({ ip: '1.2.3.4' }), 'ip', 'theo_session')).toBe('ip:1.2.3.4')
   })
 
-  it("keyBy='session' hashes cookie (not raw value)", () => {
-    const key = deriveKey(
+  it("keyBy='session' hashes cookie (not raw value)", async () => {
+    const key = await deriveKey(
       mockReq({ cookie: 'theo_session=secret-token' }),
       'session',
       'theo_session',
@@ -100,10 +102,14 @@ describe('T2.2 — keyBy variants', () => {
     expect(key).not.toContain('secret-token') // raw token NEVER leaks
   })
 
-  it("EC-6: keyBy='session' reads configured cookie name (not hardcoded)", () => {
-    const key = deriveKey(mockReq({ cookie: 'app_session=token123' }), 'session', 'app_session')
+  it("EC-6: keyBy='session' reads configured cookie name (not hardcoded)", async () => {
+    const key = await deriveKey(
+      mockReq({ cookie: 'app_session=token123' }),
+      'session',
+      'app_session',
+    )
     expect(key).toMatch(/^session:/)
-    const fallback = deriveKey(
+    const fallback = await deriveKey(
       mockReq({ cookie: 'app_session=token123' }),
       'session',
       'theo_session',
@@ -111,28 +117,32 @@ describe('T2.2 — keyBy variants', () => {
     expect(fallback).toMatch(/^ip:/) // wrong cookie name → fall back to IP
   })
 
-  it("keyBy='user' falls back to ip when req.user is undefined", () => {
-    const key = deriveKey(mockReq({ ip: '5.6.7.8' }), 'user', 'theo_session')
+  it("keyBy='user' falls back to ip when req.user is undefined", async () => {
+    const key = await deriveKey(mockReq({ ip: '5.6.7.8' }), 'user', 'theo_session')
     expect(key).toBe('ip:5.6.7.8')
   })
 
-  it("keyBy='user' uses user.id when present", () => {
-    const key = deriveKey(mockReq({ user: { id: 'u-42' } }), 'user', 'theo_session')
+  it("keyBy='user' uses user.id when present", async () => {
+    const key = await deriveKey(mockReq({ user: { id: 'u-42' } }), 'user', 'theo_session')
     expect(key).toBe('user:u-42')
   })
 
-  it('keyBy callback invoked with req and result used', () => {
-    const key = deriveKey(mockReq({ url: '/x' }), (req) => `custom:${req.url}`, 'theo_session')
+  it('keyBy callback invoked with req and result used', async () => {
+    const key = await deriveKey(
+      mockReq({ url: '/x' }),
+      (req) => `custom:${req.url}`,
+      'theo_session',
+    )
     expect(key).toBe('custom:/x')
   })
 })
 
 describe('T2.2 — backwards compat', () => {
-  it('legacy flat config { windowMs, max } works as default', () => {
+  it('legacy flat config { windowMs, max } works as default', async () => {
     const limiter = createRouteRateLimiter({ windowMs: 60_000, max: 2 })
-    expect(limiter(mockReq({ url: '/api/anywhere' })).limited).toBe(false)
-    expect(limiter(mockReq({ url: '/api/anywhere' })).limited).toBe(false)
-    expect(limiter(mockReq({ url: '/api/anywhere' })).limited).toBe(true)
+    expect((await limiter(mockReq({ url: '/api/anywhere' }))).limited).toBe(false)
+    expect((await limiter(mockReq({ url: '/api/anywhere' }))).limited).toBe(false)
+    expect((await limiter(mockReq({ url: '/api/anywhere' }))).limited).toBe(true)
   })
 })
 

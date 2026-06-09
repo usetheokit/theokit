@@ -20,11 +20,14 @@ import {
   type StorageManager,
 } from '../../packages/theo/src/server/storage/storage-manager.js'
 
-const START_TS = resolve(__dirname, '../../packages/theo/src/cli/commands/start.ts')
+// T2.2 (M4 cli/commands/start/ subfolder refactor) — start.ts moved to
+// start/index.ts and start-* siblings moved to start/<name>.ts (prefix dropped).
+const START_TS = resolve(__dirname, '../../packages/theo/src/cli/commands/start/index.ts')
 // T4.2 (architecture-cleanup) — shutdown sequence extracted to a sibling file.
+// T2.2 also relocated this to start/graceful-shutdown.ts (prefix dropped per subfolder rename).
 const SHUTDOWN_TS = resolve(
   __dirname,
-  '../../packages/theo/src/cli/commands/start-graceful-shutdown.ts',
+  '../../packages/theo/src/cli/commands/start/graceful-shutdown.ts',
 )
 
 beforeEach(() => {

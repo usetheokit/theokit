@@ -80,3 +80,44 @@ function resultFromState(
     },
   }
 }
+
+/**
+ * T5a.2 Phase D slice 2/3 — Web-Standards single-bucket rate limiter.
+ *
+ * Mirror of `createRateLimiter(config, opts)` returning a checker that
+ * accepts `(clientIp: string)` instead of `(req: IncomingMessage)`. Web
+ * `Request` has no `req.socket.remoteAddress` — the IP is resolved by
+ * the caller per-runtime (Node adapter from socket; CF Workers from
+ * `cf-connecting-ip`; etc., same convention as Phase D slice 1/3's
+ * `DeriveKeyRequestContext.clientIp`).
+ *
+ * Same `RateLimitConfig`, same `InMemoryStore` default, same async
+ * store rejection (use a dedicated async middleware for external stores).
+ * Same `RateLimitResult` return shape.
+ *
+ * **Signature difference from `createRateLimiter`:** this Web factory's
+ * checker takes a raw IP string instead of a Request object. The IP is
+ * the ONLY input the bucket needs; passing a Request object would force
+ * the caller to populate `request.headers.get('x-forwarded-for')` or
+ * similar without giving us any safer extraction. KISS — accept the IP
+ * directly, document the per-runtime resolution at the adapter boundary.
+ */
+export function createRateLimiterWeb(
+  config: RateLimitConfig,
+  opts: { store?: RateLimitStore } = {},
+) {
+  const store = opts.store ?? new InMemoryStore()
+  const isInMemory = store instanceof InMemoryStore
+
+  return function checkRateLimitWeb(clientIp: string): RateLimitResult {
+    const key = clientIp.length > 0 ? clientIp : 'unknown'
+    if (isInMemory) {
+      const state = store.incrSync(key, config.windowMs)
+      return resultFromState(state, config)
+    }
+    throw new Error(
+      'createRateLimiterWeb: async RateLimitStore implementations are not supported by this sync façade. ' +
+        'Use the InMemoryStore default or build a custom middleware around the async store directly.',
+    )
+  }
+}

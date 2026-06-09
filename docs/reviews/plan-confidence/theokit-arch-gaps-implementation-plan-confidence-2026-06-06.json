@@ -1,0 +1,115 @@
+{
+  "plan_slug": "theokit-arch-gaps-implementation",
+  "plan_path": "docs/plans/theokit-arch-gaps-implementation-plan.md",
+  "plan_version": "1.2",
+  "scored_at": "2026-06-06T12:57:46+00:00",
+  "completude_score": 100.0,
+  "risco_estrutural_score": 94.0,
+  "active_dimensions": [
+    "completeness",
+    "structural_risk"
+  ],
+  "weight_normalization_factor": 2.0,
+  "weighted_avg": 97.6,
+  "hard_caps_triggered": [],
+  "final_score_after_caps": 97.6,
+  "verdict": "SHIPPABLE",
+  "reasons": {
+    "completeness": [
+      {
+        "sign": "positive",
+        "label": "Coverage Matrix 100%",
+        "weight": 60.0
+      },
+      {
+        "sign": "positive",
+        "label": "ADR alternatives (5/5)",
+        "weight": 20.0
+      },
+      {
+        "sign": "positive",
+        "label": "TDD in bug-fix (0/0)",
+        "weight": 20.0
+      }
+    ],
+    "evidence": [
+      {
+        "sign": "positive",
+        "label": "17 citations resolved",
+        "weight": 17.0
+      }
+    ],
+    "calibration": [],
+    "structural_risk": [
+      {
+        "sign": "negative",
+        "label": "2 weak_imperatives hits",
+        "weight": -2.0
+      }
+    ]
+  },
+  "sub_reports": {
+    "coverage_matrix": {
+      "total_gaps": 9,
+      "mapped_gaps": 9,
+      "coverage_ratio": 1.0,
+      "is_complete": true,
+      "orphan_tasks": [],
+      "unmapped_gaps": []
+    },
+    "adr_completeness": {
+      "total_adrs": 5,
+      "with_alternatives": 5,
+      "completeness_ratio": 1.0,
+      "missing_alternatives": []
+    },
+    "tdd_in_bugfix": {
+      "total_bugfix_tasks": 0,
+      "with_tdd": 0,
+      "coverage_ratio": 1.0,
+      "missing_tdd": []
+    },
+    "spec_smells": {
+      "total_hits": 2,
+      "by_category": {
+        "weak_imperatives": 2
+      },
+      "total_penalty": -6
+    },
+    "architecture_compliance": {
+      "compliance_score": 1.0,
+      "project_rules_found_count": 23,
+      "fallback_to_defaults": false,
+      "rules_referenced_in_plan": [
+        "testing.md"
+      ],
+      "principles_cited": [
+        "ISP",
+        "SOLID",
+        "TDD"
+      ],
+      "has_dod_quality_signal": true,
+      "has_size_budget_signal": true,
+      "reasons": [
+        "References 1 project rule(s): ['testing.md']",
+        "Cites 3 principle(s): ['ISP', 'SOLID', 'TDD']",
+        "Global DoD references quality gates (lint/complexity/size)",
+        "Plan mentions file-size budget"
+      ]
+    },
+    "evidence": {
+      "total_citations": 17,
+      "unresolved_citations": []
+    }
+  },
+  "calibration": {
+    "status": "PROVISIONAL_v1",
+    "holdout_count": 0,
+    "holdout_target": 30,
+    "kappa_measured": false
+  },
+  "code_quality": {
+    "verdict": "UNAVAILABLE",
+    "reason": "invocation failed or skipped"
+  }
+}

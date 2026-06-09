@@ -1,5 +1,6 @@
-import { createHmac } from 'node:crypto'
-
+// T5a.1c — Web Crypto migration. Uses globalThis.crypto.subtle.sign for
+// HMAC-SHA256. Provider function was already async; subtle.sign Promise
+// integrates with zero public API change.
 import { timingSafeEqual } from '../timing-safe-equal.js'
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 
@@ -72,11 +73,18 @@ export function slack(opts: SlackWebhookOptions): VerifyFn {
 
     const rawBody = await req.text()
     const base = `v0:${ts}:${rawBody}`
-    const expectedHex = createHmac('sha256', signingSecret).update(base).digest('hex')
-    const expectedBytes = fromHex(expectedHex)
-    if (!expectedBytes) {
-      return { ok: false, reason: 'failed to compute expected signature' }
-    }
+    const enc = new TextEncoder()
+    // Web Crypto HMAC-SHA256: skip hex round-trip — subtle.sign returns the
+    // raw signature bytes we compare against the parsed header signature.
+    const key = await globalThis.crypto.subtle.importKey(
+      'raw',
+      enc.encode(signingSecret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    )
+    const sigBuf = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(base))
+    const expectedBytes = new Uint8Array(sigBuf)
 
     const sigHex = sigHeader.slice(PREFIX.length)
     const sigBytes = fromHex(sigHex)

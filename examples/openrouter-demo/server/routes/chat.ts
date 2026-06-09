@@ -4,7 +4,7 @@ import {
   streamAgentRun,
   type AgentEvent,
 } from 'theokit/server'
-import { InMemoryConversationStorage } from '@usetheo/sdk'
+import { InMemoryConversationStorage } from '@theokit/sdk'
 
 import { tools } from '../tools/index.js'
 

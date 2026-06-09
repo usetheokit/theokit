@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.invalid/schemas/discover-confidence-score-report.v1.json",
+  "title": "Discover-Confidence Score Report",
+  "description": "Output schema for /discover-confidence M2 structural scoring of a blueprint.",
+  "type": "object",
+  "required": [
+    "blueprint_slug",
+    "blueprint_path",
+    "scored_at",
+    "research_coverage_score",
+    "reference_citations_score",
+    "blueprint_completeness_score",
+    "risco_estrutural_score",
+    "active_dimensions",
+    "weight_normalization_factor",
+    "weighted_avg",
+    "hard_caps_triggered",
+    "final_score_after_caps",
+    "verdict"
+  ],
+  "properties": {
+    "blueprint_slug": {"type": "string"},
+    "blueprint_path": {"type": "string"},
+    "blueprint_version": {"type": ["string", "null"]},
+    "scored_at": {"type": "string", "format": "date-time"},
+    "research_coverage_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "reference_citations_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "blueprint_completeness_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "risco_estrutural_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "active_dimensions": {
+      "type": "array",
+      "items": {"type": "string", "enum": ["research_coverage", "reference_citations", "blueprint_completeness", "structural_risk"]}
+    },
+    "weight_normalization_factor": {"type": "number", "exclusiveMinimum": 0},
+    "weighted_avg": {"type": "number", "minimum": 0, "maximum": 100},
+    "hard_caps_triggered": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "final_score_after_caps": {"type": "number", "minimum": 0, "maximum": 100},
+    "verdict": {"type": "string", "enum": ["SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"]},
+    "calibration": {
+      "type": "object",
+      "properties": {
+        "status": {"type": "string"},
+        "holdout_count": {"type": "integer", "minimum": 0},
+        "holdout_target": {"type": "integer", "minimum": 0},
+        "kappa_measured": {"type": "boolean"}
+      }
+    },
+    "reasons": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "contributors": {"type": "array", "items": {"type": "string"}},
+          "detractors": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "sub_reports": {"type": "object"}
+  }
+}

@@ -40,7 +40,7 @@
 
 ### EC-5: Sync contract test só checa uma direção
 - **Task afetada:** T2.1
-- **Teste sugerido:** `test_theokit_storage_assignable_to_sdk_adapter` — Given TheoKit `ConversationStorageLike` value, When atribuído a `import('@usetheo/sdk').ConversationStorageAdapter` variable, Then sem erro de tipo. Garante que se TheoKit's interface drift (e.g., adiciona método required), o teste pega. Já existe a direção SDK→TheoKit; falta TheoKit→SDK.
+- **Teste sugerido:** `test_theokit_storage_assignable_to_sdk_adapter` — Given TheoKit `ConversationStorageLike` value, When atribuído a `import('@theokit/sdk').ConversationStorageAdapter` variable, Then sem erro de tipo. Garante que se TheoKit's interface drift (e.g., adiciona método required), o teste pega. Já existe a direção SDK→TheoKit; falta TheoKit→SDK.
 
 ### EC-6: Type guard requer `'provider' in err` — falha em SDK partial
 - **Task afetada:** T4.1
@@ -81,7 +81,7 @@
 - **Risco aceito:** Se o user faz `Agent.registry.configure()` antes de uma request hit, e DEPOIS o lazy fire faz `configure()` de novo com config do `theo.config.ts`. Resultado: config do framework wins. **Doc em T6.1**: "Programmatic configure() is supported but TheoKit's lazy call (driven by theo.config.ts) overrides it. Use theo.config.ts for production."
 
 ### EC-15: `error.message` da SDK é trusted-no-secret
-- **Risco aceito:** O plano explicitamente impede leak de `providerError` via SSE wire (RED test). Mas `error.message` da SDK é serializado sem sanitização — SDK é responsável por não colocar secrets ali. **Doc em T4.1**: "Invariant: `@usetheo/sdk` MUST NOT include API keys, raw tokens, or PII in AgentRunError.message. SSE wire propagates message verbatim."
+- **Risco aceito:** O plano explicitamente impede leak de `providerError` via SSE wire (RED test). Mas `error.message` da SDK é serializado sem sanitização — SDK é responsável por não colocar secrets ali. **Doc em T4.1**: "Invariant: `@theokit/sdk` MUST NOT include API keys, raw tokens, or PII in AgentRunError.message. SSE wire propagates message verbatim."
 
 ### EC-16: `callId` collision (SDK reuse)
 - **Risco aceito:** Plano menciona "multiple onToolStart with same callId → use the last one (defensive)". Mas se SDK reusa `callId` por bug (não deveria — UUID-shaped), nosso Map sobrescreve. Se a SDK fixa o bug, comportamento muda. **Doc em T5.1**: "callId uniqueness é contrato da SDK. TheoKit defends against duplicate-start but does not retry."

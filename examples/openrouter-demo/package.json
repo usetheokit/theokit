@@ -1,7 +1,7 @@
 {
-  "name": "@usetheo/example-openrouter-demo",
+  "name": "@theokit/example-openrouter-demo",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "description": "The official TheoKit demo — chat agent powered by OpenRouter with 3 tools, streaming SSE, and conversation history.",
   "scripts": {
@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@usetheo/sdk": "workspace:*",
-    "@usetheo/ui": "^0.11.0-next.0",
+    "@theokit/sdk": "workspace:*",
+    "@theokit/ui": "^0.13.0",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

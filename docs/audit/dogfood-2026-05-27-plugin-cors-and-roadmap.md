@@ -130,7 +130,7 @@ Plan-specific:
 **Zero.**
 
 ### Notable in-loop fixes
-- **Cross-repo workspace strategy:** initial attempt to add `theokit/packages/theo` to `pnpm-workspace.yaml` pulled transitive workspace deps (`@usetheo/sdk` etc.) that don't exist in `theokit-plugins`. Switched to `link:../../../theokit/packages/theo` protocol in plugin's `devDependencies` — symlinks without resolving the linked package's own workspace. Same DX as workspace link, no transitive issues.
+- **Cross-repo workspace strategy:** initial attempt to add `theokit/packages/theo` to `pnpm-workspace.yaml` pulled transitive workspace deps (`@theokit/sdk` etc.) that don't exist in `theokit-plugins`. Switched to `link:../../../theokit/packages/theo` protocol in plugin's `devDependencies` — symlinks without resolving the linked package's own workspace. Same DX as workspace link, no transitive issues.
 - **`defineTheoPlugin` vs `definePlugin`:** smoke install revealed that published `theokit@0.1.0-alpha.5` exports only `defineTheoPlugin` (the legacy alias) — `definePlugin` was added in the local dev workspace but never published. Plugin source switched to `defineTheoPlugin` (canonical published name) so npm install + import works for end users today.
 - **`defineRoute` no `method` field:** fixture initially used `defineRoute({ method: 'GET', ... })` but TheoKit's `RouteConfig` doesn't expose `method` — it's inferred from filename. Removed from fixture, updated test.
 - **`PluginRunner` constructor:** initial integration test called `new PluginRunner('test-runner')` but the constructor accepts zero args. Fixed.

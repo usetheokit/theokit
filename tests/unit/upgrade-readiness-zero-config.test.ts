@@ -8,7 +8,7 @@ import { scanUpgradeReadiness } from '../../packages/theo/src/cli/commands/upgra
 
 /**
  * T4.1 — `theokit check` hints for zero-config migration:
- *   - zero-config-tailwind-suggest: tailwind.config without @usetheo/ui/preset
+ *   - zero-config-tailwind-suggest: tailwind.config without @theokit/ui/preset
  *   - handrolled-dotenv-suggest: server/ files importing dotenv directly
  */
 
@@ -22,7 +22,7 @@ function makeFixture(): string {
     join(dir, 'package.json'),
     JSON.stringify({
       name: 'fix',
-      dependencies: { theokit: '0.1.0', '@usetheo/ui': '0.1.0' },
+      dependencies: { theokit: '0.1.0', '@theokit/ui': '0.1.0' },
     }),
   )
   writeFileSync(join(dir, 'app/page.tsx'), 'export default function() { return null }')
@@ -38,24 +38,24 @@ afterEach(() => {
 })
 
 describe('T4.1 — zero-config hints', () => {
-  it('hint fires when @usetheo/ui + tailwind.config.ts without preset import', async () => {
+  it('hint fires when @theokit/ui + tailwind.config.ts without preset import', async () => {
     writeFileSync(join(tmpDir, 'tailwind.config.ts'), `export default { content: ['./app/**'] }`)
     const report = await scanUpgradeReadiness({ cwd: tmpDir, allowWarnings: true })
     const hint = report.violations.find((v) => v.rule === 'zero-config-tailwind-suggest')
     expect(hint).toBeDefined()
-    expect(hint?.fix).toMatch(/@usetheo\/ui\/preset/)
+    expect(hint?.fix).toMatch(/@theokit\/ui\/preset/)
   })
 
   it('no hint when tailwind.config already imports the preset', async () => {
     writeFileSync(
       join(tmpDir, 'tailwind.config.ts'),
-      `import preset from '@usetheo/ui/preset'\nexport default { presets: [preset] }`,
+      `import preset from '@theokit/ui/preset'\nexport default { presets: [preset] }`,
     )
     const report = await scanUpgradeReadiness({ cwd: tmpDir, allowWarnings: true })
     expect(report.violations.find((v) => v.rule === 'zero-config-tailwind-suggest')).toBeUndefined()
   })
 
-  it('no hint when @usetheo/ui is absent (even with tailwind.config)', async () => {
+  it('no hint when @theokit/ui is absent (even with tailwind.config)', async () => {
     writeFileSync(
       join(tmpDir, 'package.json'),
       JSON.stringify({ name: 'fix', dependencies: { theokit: '0.1.0' } }),
@@ -66,10 +66,7 @@ describe('T4.1 — zero-config hints', () => {
   })
 
   it('hint fires when server/ file imports dotenv', async () => {
-    writeFileSync(
-      join(tmpDir, 'server/load-env.ts'),
-      `import 'dotenv/config'\nexport const x = 1`,
-    )
+    writeFileSync(join(tmpDir, 'server/load-env.ts'), `import 'dotenv/config'\nexport const x = 1`)
     const report = await scanUpgradeReadiness({ cwd: tmpDir, allowWarnings: true })
     const hint = report.violations.find((v) => v.rule === 'handrolled-dotenv-suggest')
     expect(hint).toBeDefined()
