@@ -1,4 +1,9 @@
 export { resolveOrNew, type DiContainer } from './di-resolve.js'
+export {
+  runExceptionFilters,
+  type ExceptionFilter,
+  type ArgumentsHost,
+} from './exception-filter-chain.js'
 export { resolveDtoSchema } from './dto-zod.js'
 export { HttpDecoratorsConfigError } from './errors.js'
 export { runInterceptors, type Interceptor } from './interceptor-chain.js'
