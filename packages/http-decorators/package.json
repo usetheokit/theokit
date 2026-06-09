@@ -1,0 +1,38 @@
+{
+  "name": "@theokit/http-decorators",
+  "version": "0.1.0-alpha.0",
+  "description": "NestJS-style decorators (@Controller, @Get, @Post, @Body, @UseGuards) bridging to TheoKit's defineRoute + defineMiddleware",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "theokit": ">=0.2.0",
+    "reflect-metadata": "^0.2.2",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.7.0",
+    "tsup": "^8.0.0",
+    "vitest": "^3.2.0",
+    "zod": "^3.25.0"
+  },
+  "license": "MIT"
+}
