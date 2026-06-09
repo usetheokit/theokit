@@ -12,7 +12,7 @@ import {
   Controller, Get, Post, Delete,
   Body, Param, Query,
   HttpCode, UseGuards,
-  TheoApp, Module,
+  TheoApp,
   setMeta, ROUTE_PARAMS,
 } from '../../src/index.js'
 
@@ -83,22 +83,17 @@ wp(CatsController, 'remove', 0, 'param', 'id')
 Reflect.defineMetadata('design:paramtypes', [CatService], CatsController)
 Reflect.defineMetadata('design:paramtypes', [CreateCatDto], CatsController.prototype, 'create')
 
-// ── Module (Spring Boot style) ─────────────────────────
-
-@Module({
-  controllers: [CatsController, HealthCtrl],
-  providers: [CatService],
-})
-class AppModule {}
-
 // ── Tests ──────────────────────────────────────────────
 
-describe('TheoApp.create(AppModule) — NestFactory/SpringBoot style', () => {
+describe('TheoApp.create() — NestFactory/SpringBoot style', () => {
   let app: TheoApp
   let port: number
 
   beforeAll(async () => {
-    app = await TheoApp.create(AppModule)
+    app = TheoApp.create({
+      controllers: [CatsController, HealthCtrl],
+      providers: [CatService],
+    })
     const server = app.getHttpServer()
     await new Promise<void>(r => server.listen(0, r))
     port = (server.address() as { port: number }).port
