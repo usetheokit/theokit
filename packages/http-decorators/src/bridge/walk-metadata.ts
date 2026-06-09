@@ -84,7 +84,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
     // Only @Body() / @Query() WITHOUT a key need design:paramtypes for DTO class resolution.
     // @Param('id'), @Query('name') etc. use key-based extraction — no type metadata needed.
     const needsTypeResolution = paramEntries.some(
-      (p) => (p.source === 'body' || p.source === 'query') && !p.key,
+      (p: ParamEntry) => (p.source === 'body' || p.source === 'query') && !p.key,
     )
     if (needsTypeResolution && paramTypes.length === 0) {
       throw new HttpDecoratorsConfigError(
@@ -95,7 +95,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
       )
     }
 
-    const bodyParam = paramEntries.find((p) => p.source === 'body' && !p.key)
+    const bodyParam = paramEntries.find((p: ParamEntry) => p.source === 'body' && !p.key)
     const bodySchema = bodyParam ? resolveDtoSchema(paramTypes[bodyParam.index]) : undefined
 
     // Method-level guards/interceptors (composed: class FIRST per NestJS convention — EC-9)
