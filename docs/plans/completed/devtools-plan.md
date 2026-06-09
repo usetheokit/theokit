@@ -169,7 +169,7 @@ tests/unit/devtools-treeshake.test.ts                 — (NEW) Grep built bundl
 Downstream impact:
 - `packages/theo/src/vite-plugin/index.ts` (T1.2) will reference `/@theo/devtools/entry.js` as a virtual module pointing at `entry.tsx`.
 - `packages/theo/src/router/entry.ts` does NOT change in this phase. Devtools is injected as a separate script tag, not part of the entry-client.
-- TheoUI tokens (in `theo-ui/`) are NOT imported here — `styles/tokens.ts` defines its own minimal palette to avoid circular dep (`theokit` depends on `@usetheo/ui` is fine; the inverse would break).
+- TheoUI tokens (in `theo-ui/`) are NOT imported here — `styles/tokens.ts` defines its own minimal palette to avoid circular dep (`theokit` depends on `@theokit/ui` is fine; the inverse would break).
 
 #### Deep Dives
 

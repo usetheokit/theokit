@@ -32,7 +32,7 @@ npx create-theokit my-app
 cd my-app
 ```
 
-The default scaffold already ships an **agent surface**: a `ChatThread` rendered with [`@usetheo/ui`](https://npmjs.com/package/@usetheo/ui), an `/api/chat` endpoint, and `useAgentStream` wired to it. With Node ≥ 22 installed, you can boot it now (`pnpm dev`) — the mock at `server/routes/chat.ts` will echo your messages.
+The default scaffold already ships an **agent surface**: a `ChatThread` rendered with [`@theokit/ui`](https://npmjs.com/package/@theokit/ui), an `/api/chat` endpoint, and `useAgentStream` wired to it. With Node ≥ 22 installed, you can boot it now (`pnpm dev`) — the mock at `server/routes/chat.ts` will echo your messages.
 
 ### Step 2 — Install the agent SDK (15 s)
 
@@ -95,7 +95,7 @@ Open http://localhost:3000, type a message, hit Send. The chat thread renders th
 | Capability | Where it lives |
 |---|---|
 | File-based routing → `app/page.tsx` is `/` | TheoKit (`app/**`) |
-| Chat UI (`ChatThread`, `ChatMessage`, `ChatComposer`, `AgentErrorCard`) | `@usetheo/ui` |
+| Chat UI (`ChatThread`, `ChatMessage`, `ChatComposer`, `AgentErrorCard`) | `@theokit/ui` |
 | Agent endpoint primitive (`defineAgentEndpoint`, SSE wire) | TheoKit (`theokit/server`) |
 | Client hook (`useAgentStream`) with auto CSRF + cleanup | TheoKit (`theokit/client`) |
 | LLM call (`Agent.prompt`, provider routing, error model) | `@usetheo/sdk` |
@@ -445,7 +445,7 @@ TheoKit sits inside the [`usetheo`](https://usetheo.dev) product family. It is *
 | Sibling | Repo | Direction | How it relates | Status |
 |---------|------|-----------|----------------|:------:|
 | **`@usetheo/sdk`** — agent runtime (`Agent.create`, `Agent.send`, `Run.stream`, provider abstraction, tool runtime, conversation persistence) | `theokit-sdk/packages/sdk` | TheoKit ← sibling | **Workspace dep** via `pnpm-workspace.yaml` → `../theokit-sdk/packages/sdk`. Six framework files consume it (`server/agent/*`, `server/define/define-agent-tool.ts`). Locked premise — not "evaluate vs alternatives". | ✅ Wired |
-| **`@usetheo/ui`** — React component library (chat surface, theme system, design tokens) | `theo-ui/` | TheoKit ← sibling | **npm dep** via published `@usetheo/ui` package (`^0.11.0-next.0`). Framework auto-injects `<TheoUIProvider>` via `theokit/vite-plugin` when the package is detected. Ten+ files consume it. **Not** linked as a workspace package — local edits to `theo-ui/` require a publish to land in TheoKit. | ✅ Wired (npm) |
+| **`@theokit/ui`** — React component library (chat surface, theme system, design tokens) | `theo-ui/` | TheoKit ← sibling | **npm dep** via published `@theokit/ui` package (`^0.11.0-next.0`). Framework auto-injects `<TheoUIProvider>` via `theokit/vite-plugin` when the package is detected. Ten+ files consume it. **Not** linked as a workspace package — local edits to `theo-ui/` require a publish to land in TheoKit. | ✅ Wired (npm) |
 | **`theo` → TheoCloud** — managed platform / control plane (Go-based: K8s operators, Helm charts, hosted Postgres + Redis, secret rotation, audit log persistence, distributed rate-limiter store) | `theo/` | TheoKit → sibling | **The principal deploy target.** The `theo-cloud` deploy adapter does not exist yet (`packages/theo/src/adapters/theo-cloud.ts` is the next milestone after 0.4.0). **However:** TheoKit's pluggable interfaces (`JobBackend`, `UsageStorageAdapter`, `RateLimitStorageAdapter`, structured logging to stdout) were designed specifically so TheoCloud "slots in" without modifying framework code — per [ADR-0002](docs/adr/0002-job-backend-interface-neutral-contract.md). | 🟡 **Primary target — adapter on roadmap, interfaces ready** |
 | **`theokit-plugins`** — first-party plugin registry. Today: **1 package shipping** (`@theokit/plugin-cors` v0.1.0, 2026-Q3). Two proposed: `@theokit/plugin-sentry` + `@theokit/plugin-i18n`. Six more demand-gated. | `theokit-plugins/` | TheoKit → sibling (the sibling consumes the framework, not the other way around) | **Zero coupling in framework core.** Apps install plugins explicitly (`pnpm add @theokit/plugin-cors`) and wire them via `defineConfig({ plugins: [...] })`. The sibling consumes TheoKit via npm `peerDependencies` + the `TheoPlugin { name, register(app) }` SDK ([ADR-0008](docs/adr/0008-theoplugin-is-the-canonical-sdk.md)). The "moderate roadmap" strategy that governs which plugins ship lives in [ADR-0011](docs/adr/0011-moderate-plugin-roadmap-strategy.md) here, and the authoring guide in [`docs/concepts/plugins.md`](docs/concepts/plugins.md) §7. | 🌱 **First plugin shipping** |
 
@@ -454,7 +454,7 @@ TheoKit sits inside the [`usetheo`](https://usetheo.dev) product family. It is *
 - TheoKit is **deploy-portable** today: choose any of the 8 in-tree adapters (Node, Vercel, Cloudflare Workers, AWS Lambda, Bun, Deno Deploy, Netlify, Static) and ship.
 - The **TheoCloud adapter ships next** — it's the strategic target, with the framework's pluggable interfaces already designed for it. Other adapters remain first-class (you're not locked into TheoCloud).
 - The agent runtime (`@usetheo/sdk`) is required for any agent feature — if you only need routing/auth/SSR/jobs, you don't have to use it.
-- The UI library (`@usetheo/ui`) is opt-in but the default scaffold bundles it; if you swap it out, the framework's auto-injection becomes a no-op.
+- The UI library (`@theokit/ui`) is opt-in but the default scaffold bundles it; if you swap it out, the framework's auto-injection becomes a no-op.
 - A user can clone TheoKit and run `pnpm install && pnpm dev` without cloning the `theo` (Go) sibling — non-TheoCloud paths are fully self-contained.
 - **Plugins are opt-in additions, not framework features.** `theokit-plugins` lives next to TheoKit, not inside it. Install only what you need; the framework core ships nothing from this repo. The plugin SDK they consume (`TheoPlugin`, `definePlugin`) is in `theokit/server` — you can author your own under `@<scope>/theokit-plugin-<name>` without permission.
 

@@ -16,7 +16,7 @@ TheoKit just shipped `system-100-percent-functional` (v0.2.0 candidate). The web
 
 Per `CLAUDE.md` memory `feedback-sdk-is-evolvable`: when TheoKit work needs an SDK change, write the SDK task in the SDK repo — don't workaround in TheoKit. This document is that task, structured.
 
-Per `CLAUDE.md` memory `project-stack-deps`: TheoKit's stack assumption is **always** `@usetheo/sdk` + `@usetheo/ui`. The SDK is not "evaluated against alternatives" — it IS the runtime. Therefore the SDK is the only place these gaps can be fixed without violating the locked premise.
+Per `CLAUDE.md` memory `project-stack-deps`: TheoKit's stack assumption is **always** `@usetheo/sdk` + `@theokit/ui`. The SDK is not "evaluated against alternatives" — it IS the runtime. Therefore the SDK is the only place these gaps can be fixed without violating the locked premise.
 
 The cross-repo workflow (per `CLAUDE.md` "Macro Roadmap" section, "SDK plan (cross-repo)" table):
 
@@ -485,7 +485,7 @@ yield {
 }
 ```
 
-The `AgentEvent` Zod schema in `@usetheo/ui` will need a corresponding bump (cross-repo dance with the UI team — out of scope here, but coordinate timing).
+The `AgentEvent` Zod schema in `@theokit/ui` will need a corresponding bump (cross-repo dance with the UI team — out of scope here, but coordinate timing).
 
 ### Tests
 

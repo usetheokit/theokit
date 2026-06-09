@@ -14,7 +14,7 @@ Persistent state across Ralph Loop iterations.
 | T2.3 define-integration fixture | **DONE** | banner integration + virtual module prefix invariant; 6 tests |
 | T3.1 sessions-auth + assertProductionSecret | **DONE** | helper + 4 routes + EC-2 guard; 10 tests (incl. integration). Also fixed pre-existing instanceof AuthRequiredError bug in execute.ts via duck-typing fallback (ESM dup-cache). |
 | T4.1 typed-client fixture | **DONE** | end-to-end inference; 4 unit + 6 type tests; also relaxed boundary hook to allow type-only server imports |
-| T4.2 use-agent-stream-react fixture | **DONE** | plain React; no @usetheo/ui dep; 7 tests |
+| T4.2 use-agent-stream-react fixture | **DONE** | plain React; no @theokit/ui dep; 7 tests |
 | T4.3 batching fixture | **DONE** | createBatcher + same-tick collapse; 6 tests |
 | T4.4 react-query-integration fixture | **DONE** | tanstack v5 + theokit/react-query subpath + EC-10 stable key; 6 tests |
 | T5.1 loading-states fixture | **DONE** | per-segment loading.tsx + Suspense protocol; 6 tests |
@@ -29,7 +29,7 @@ Persistent state across Ralph Loop iterations.
 | T8.4 adapter-vercel | **DONE** | Build Output v3 config; 4 tests |
 | T8.5 adapter-netlify | **DONE** | functions/theo.mjs + non-destructive toml merge; 6 tests |
 | T8.6 adapter-aws-lambda | **DONE** | handler.mjs + v2 event conversion + base64 binary; 6 tests |
-| T9.1 theoui-autoinject fixture | **DONE** | isolated fixture (no @usetheo/ui imports in app); 7 tests pass (teardown timeout = pre-existing) |
+| T9.1 theoui-autoinject fixture | **DONE** | isolated fixture (no @theokit/ui imports in app); 7 tests pass (teardown timeout = pre-existing) |
 | T10.1 saas template | **DONE** | full SaaS: auth + sessions + postgres + defineAgentEndpoint(requireAuth) + AgentComposer/Timeline; EC-2 guard; 9 tests; scaffolder list updated |
 | T11.1 dogfood expansion #20-#41 | **DONE** | 22 novos checks; MAX=41 threshold ≥35 |
 | T12 Final Dogfood QA | **DONE** | 41/41 PASS, score 100%, vitest **1118/1118 (100%)** all 151 files clean. Pre-existing issues all addressed: vite-integrations.test fixed (sync expect), onda1/2 + theoui-autoinject + sessions-auth now use `safeClose` helper to bound Vite server teardown. Boundary hook relaxed for `import type` server imports. AuthRequiredError duck-typing fix in execute.ts. |

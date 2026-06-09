@@ -1,6 +1,6 @@
 # Plan: Item #5 — `createConversationHistory` + session-cookie bridge
 
-> **Version 1.0** — Ship `createConversationHistory(args)` as a TheoKit-native primitive that resolves a stable `agentId` from the visitor's session cookie (issuing one on first hit) and returns an `@usetheo/sdk` `Agent` resumed via `Agent.getOrCreate(agentId, options)`. Conversation turns auto-persist in `<cwd>/.theokit/agents/<agentId>/messages.jsonl` — zero-config. Optional `MemorySettings` passthrough lets consumers enable the SDK's facts-recall layer when needed. Closes Macro Roadmap item #5 in `CLAUDE.md`. Stack assumption (locked): TheoKit always uses `@usetheo/sdk` + `@usetheo/ui` — this primitive is sugar over what the SDK + the existing TheoKit session manager already ship, never a parallel implementation.
+> **Version 1.0** — Ship `createConversationHistory(args)` as a TheoKit-native primitive that resolves a stable `agentId` from the visitor's session cookie (issuing one on first hit) and returns an `@usetheo/sdk` `Agent` resumed via `Agent.getOrCreate(agentId, options)`. Conversation turns auto-persist in `<cwd>/.theokit/agents/<agentId>/messages.jsonl` — zero-config. Optional `MemorySettings` passthrough lets consumers enable the SDK's facts-recall layer when needed. Closes Macro Roadmap item #5 in `CLAUDE.md`. Stack assumption (locked): TheoKit always uses `@usetheo/sdk` + `@theokit/ui` — this primitive is sugar over what the SDK + the existing TheoKit session manager already ship, never a parallel implementation.
 
 ## Context
 
@@ -31,7 +31,7 @@
 
 **Memory pins:**
 
-- [[project-stack-deps]] — TheoKit **always** uses `@usetheo/sdk` + `@usetheo/ui`. `createConversationHistory` wraps `Agent.getOrCreate`; does not re-implement persistence.
+- [[project-stack-deps]] — TheoKit **always** uses `@usetheo/sdk` + `@theokit/ui`. `createConversationHistory` wraps `Agent.getOrCreate`; does not re-implement persistence.
 - [[feedback-sdk-is-evolvable]] — when TheoKit work needs an SDK change, write the SDK task into the plan; don't workaround.
 - [[project-theokit-purpose]] — TheoKit is the framework someone uses to build their own agent app. Conversation continuity is the headline UX feature that turns the demo into a product.
 

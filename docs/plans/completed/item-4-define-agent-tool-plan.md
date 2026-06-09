@@ -1,6 +1,6 @@
 # Plan: Item #4 — `defineAgentTool` + SSE wire bridge
 
-> **Version 1.0** — Ship `defineAgentTool({ name, description, inputSchema, handler })` as a TheoKit-native helper that produces a `@usetheo/sdk` `CustomTool` (consumable by `Agent.create({ tools: [...] })`) PLUS `streamAgentRun(run)` as the SDK-stream → AgentEvent SSE bridge. Together they remove ~40 lines of manual SDK-stream/AgentEvent plumbing per agent route, letting `defineAgentEndpoint` consume the SDK's tool calling lifecycle (`tool_call → execute → tool_result`) with one yield-delegation: `yield* streamAgentRun(run)`. Closes Macro Roadmap item #4 in `CLAUDE.md`. Stack assumption (locked): `@usetheo/sdk` + `@usetheo/ui` — `defineAgentTool` is sugar over the SDK's `CustomTool` contract, not a parallel runtime.
+> **Version 1.0** — Ship `defineAgentTool({ name, description, inputSchema, handler })` as a TheoKit-native helper that produces a `@usetheo/sdk` `CustomTool` (consumable by `Agent.create({ tools: [...] })`) PLUS `streamAgentRun(run)` as the SDK-stream → AgentEvent SSE bridge. Together they remove ~40 lines of manual SDK-stream/AgentEvent plumbing per agent route, letting `defineAgentEndpoint` consume the SDK's tool calling lifecycle (`tool_call → execute → tool_result`) with one yield-delegation: `yield* streamAgentRun(run)`. Closes Macro Roadmap item #4 in `CLAUDE.md`. Stack assumption (locked): `@usetheo/sdk` + `@theokit/ui` — `defineAgentTool` is sugar over the SDK's `CustomTool` contract, not a parallel runtime.
 
 ## Context
 
@@ -29,7 +29,7 @@
 
 **Memory pins:**
 
-- [[project-stack-deps]] — TheoKit **always** ships with `@usetheo/sdk` + `@usetheo/ui`. New primitives are sugar/wrappers over the SDK, never parallel implementations.
+- [[project-stack-deps]] — TheoKit **always** ships with `@usetheo/sdk` + `@theokit/ui`. New primitives are sugar/wrappers over the SDK, never parallel implementations.
 - [[feedback-sdk-is-evolvable]] — when TheoKit work needs an SDK change, write the SDK task into the plan; don't workaround.
 - [[project-theokit-purpose]] — TheoKit is the framework someone uses to build their own agent app. `defineAgentTool` is the primitive a builder reaches for when their agent needs to do something beyond chat.
 

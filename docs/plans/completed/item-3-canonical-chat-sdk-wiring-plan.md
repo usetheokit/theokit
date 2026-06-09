@@ -522,7 +522,7 @@ packages/create-theo/templates/default/package.json.tmpl — add @usetheo/sdk to
 
 #### Tasks
 1. Copy the T2.1 `chat.ts` body verbatim into the template path.
-2. Add `"@usetheo/sdk": "^1.0.0"` to `package.json.tmpl` `dependencies` (between `theokit` and `@usetheo/ui` for diff readability).
+2. Add `"@usetheo/sdk": "^1.0.0"` to `package.json.tmpl` `dependencies` (between `theokit` and `@theokit/ui` for diff readability).
 3. Run any existing create-theo test (`tests/unit/create-theo-*.test.ts`).
 
 #### TDD + BDD (⛔ OBRIGATÓRIO — BLOQUEANTE)
@@ -881,7 +881,7 @@ This plan touches TWO repos: `theokit/` and `theokit-sdk/`. Per [[feedback-sdk-i
 - **Phases 2-5** live in `theokit/`. They DEPEND on Phase 1 being landed (workspace symlink to local SDK suffices in dev; for `npx create-theokit my-app`, the published SDK on npm must contain `throwOnError` — coordinate release timing).
 - **Phase 6 (Dogfood)** validates the full cross-repo round-trip.
 
-Stack assumption ([[project-stack-deps]]) verified across every deliverable: every scaffold path imports `@usetheo/sdk` or `@usetheo/ui`; no raw provider SDK appears as canonical.
+Stack assumption ([[project-stack-deps]]) verified across every deliverable: every scaffold path imports `@usetheo/sdk` or `@theokit/ui`; no raw provider SDK appears as canonical.
 
 ---
 

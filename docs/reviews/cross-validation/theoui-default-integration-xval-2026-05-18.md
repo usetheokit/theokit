@@ -35,8 +35,8 @@
 
 | ID | Decisão | Evidência | Status |
 |---|---|---|---|
-| D1 | TheoUI como dep direta do template default | `packages/create-theo/templates/default/package.json.tmpl` lista `"@usetheo/ui"` em deps | CONFORME |
-| D2 | Detecção via `require.resolve` (não `existsSync`) | `theoui-detect.ts` usa `require.resolve('@usetheo/ui/styles.css', { paths: [projectRoot] })` (iter 7 corrigiu o exports field) | CONFORME |
+| D1 | TheoUI como dep direta do template default | `packages/create-theo/templates/default/package.json.tmpl` lista `"@theokit/ui"` em deps | CONFORME |
+| D2 | Detecção via `require.resolve` (não `existsSync`) | `theoui-detect.ts` usa `require.resolve('@theokit/ui/styles.css', { paths: [projectRoot] })` (iter 7 corrigiu o exports field) | CONFORME |
 | D3 | (DESCARTADO em iter 1 — re-export AgentEvent de TheoUI) | Decisão revisada com user: AgentEvent vive 100% em TheoKit (`packages/theo/src/server/agent-types.ts`) | DESCARTADO POR PLANO |
 | D4 | `defineAgentEndpoint` é sugar sobre `defineRoute` | `packages/theo/src/server/define-agent-endpoint.ts` chama `defineRoute({ ... handler: async (ctx) => { ... return Response(...) }})` | CONFORME |
 | D5 | `--bare` rollback atômico via try/rmSync | `packages/create-theo/src/index.ts:applyBareTransform` em try/catch → `rmSync(targetDir, { recursive: true, force: true })` | CONFORME |
@@ -64,7 +64,7 @@
 **Status:** CONFORME (com fix de iter 7)
 
 - File: `packages/theo/src/vite-plugin/theoui-detect.ts` (NEW) — EXISTE.
-- `detectTheoUi(projectRoot, raw, resolver?)` injetável (DIP); resolver de produção tenta `require.resolve('@usetheo/ui/styles.css', { paths: [projectRoot] })`.
+- `detectTheoUi(projectRoot, raw, resolver?)` injetável (DIP); resolver de produção tenta `require.resolve('@theokit/ui/styles.css', { paths: [projectRoot] })`.
 - Gate de declaração explícita em `package.json` antes do resolve (EC: monorepo false-positive corrigido em iter 7).
 - Schema `config.ui: false | { theme: 'violet-forge' | 'noir' | 'paper', fonts: 'bundled' | 'cdn' }` com defaults violet-forge/bundled.
 - Wiring: `vite-plugin/index.ts:configResolved` chama `detectTheoUi` e cacheia em closure usada por `load('/@theo/entry-client')`.
@@ -73,7 +73,7 @@
 ### T2.2 — Inject CSS imports no entry-client
 **Status:** CONFORME
 
-- `generateEntryClient(ssr, opts)` aceita `opts.theoUi: { fonts, theme }`. Quando enabled, emite `import '@usetheo/ui/styles.css'` + `import '@usetheo/ui/fonts.css'` (ou `fonts-cdn.css`).
+- `generateEntryClient(ssr, opts)` aceita `opts.theoUi: { fonts, theme }`. Quando enabled, emite `import '@theokit/ui/styles.css'` + `import '@theokit/ui/fonts.css'` (ou `fonts-cdn.css`).
 - EC-2: `generateEntryServer` NUNCA emite CSS (2 tests explícitos em `regression-prod-no-pipe-twice.test.ts` + `entry-client-theoui-css.test.ts`).
 - TDD: `tests/unit/entry-client-theoui-css.test.ts` 7 tests PASS.
 
@@ -87,7 +87,7 @@
 ### T3.1 — Atualizar template default com agent surface
 **Status:** CONFORME
 
-- `packages/create-theo/templates/default/package.json.tmpl` lista `@usetheo/ui` em deps.
+- `packages/create-theo/templates/default/package.json.tmpl` lista `@theokit/ui` em deps.
 - `packages/create-theo/templates/default/app/page.tsx` usa `AgentTimeline` + `AgentComposer` (grep retornou 4 ocorrências).
 - `packages/create-theo/templates/default/server/routes/chat.ts` mock SSE que emite 3 AgentEvents (`text/event-stream`).
 - EC-11: comentário "substitua pelo seu LLM" presente.
@@ -96,7 +96,7 @@
 ### T4.1 — --bare flag em create-theokit
 **Status:** CONFORME
 
-- `packages/create-theo/src/bare-transform.ts` (NEW) — EXISTE; `applyBareTransform` remove `@usetheo/ui`, reescreve `app/page.tsx`, unlink chat.ts.
+- `packages/create-theo/src/bare-transform.ts` (NEW) — EXISTE; `applyBareTransform` remove `@theokit/ui`, reescreve `app/page.tsx`, unlink chat.ts.
 - `packages/create-theo/src/index.ts:11` ocorrências de `bare`/`applyBareTransform` — rollback EC-4 atomic via `try { applyBareTransform } catch { rmSync(targetDir, recursive: true) }`.
 - `packages/create-theo/src/cli.ts:6` ocorrências de `--bare` (parse + help text).
 - `--bare` + template não-default emite erro claro.
@@ -127,7 +127,7 @@
 **Status:** CONFORME — EXCEDE TARGET
 
 - 4 checks novos no `scripts/dogfood-smoke.sh` (#16-19) verificados via grep linha 165-202:
-  - #16 default template tem `@usetheo/ui` + `AgentTimeline` + chat route
+  - #16 default template tem `@theokit/ui` + `AgentTimeline` + chat route
   - #17 vite-plugin auto-injeta `theoui-detect.ts` + `TheoUIProvider` + `styles.css` em `router/entry.ts`
   - #18 `--bare` opt-out + EC-4 rollback (`applyBareTransform` + `rmSync`)
   - #19 `defineAgentEndpoint` + `useAgentStream` + `consumeAgentStream` surfaces exported
@@ -149,7 +149,7 @@
 | `npm create theokit my-app` scaffold funcional | OK | iter 7 smoke real: `pnpm try:scaffold` → `pnpm dev` → 200 OK + SSE OK |
 | `--bare` produz Hello scaffold | OK | bare-transform.ts + cli flag + 7 tests |
 | `theokit dev` no scaffold mostra agent UI | OK | iter 7 smoke real |
-| CSS auto-injetado | OK | entry-client emite `@usetheo/ui/styles.css` (iter 3) |
+| CSS auto-injetado | OK | entry-client emite `@theokit/ui/styles.css` (iter 3) |
 | ThemeProvider wrappa app | OK | TheoUIProvider wrap (iter 3) |
 | AgentEvent type compartilhado | OK | T1.1 re-export server+client |
 | defineAgentEndpoint + useAgentStream integrados | OK | T5.1 + T5.2 |

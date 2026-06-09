@@ -29,7 +29,7 @@
 
 **Memory pins:**
 
-- [[project-stack-deps]] — TheoKit always uses `@usetheo/sdk` + `@usetheo/ui`. The example MUST use both; no raw provider SDK or hand-rolled UI.
+- [[project-stack-deps]] — TheoKit always uses `@usetheo/sdk` + `@theokit/ui`. The example MUST use both; no raw provider SDK or hand-rolled UI.
 - [[feedback-sdk-is-evolvable]] — if the demo surfaces SDK gaps, write SDK tasks into this plan.
 - [[project-theokit-purpose]] — the example is the "app the agent lives in" made concrete. It's the most visible artifact for a new visitor evaluating TheoKit.
 
@@ -452,7 +452,7 @@ tests/unit/example-full-stack-agent-skeleton.test.ts         — (NEW) asserts s
 
 #### Deep file dependency analysis
 
-- **`package.json`** — declares `"theokit": "^0.2.0"`, `"@usetheo/sdk": "^1.0.0"`, `"@usetheo/ui": "^0.2.0"`, `"@usetheo/gateway": "^0.1.0"`, `"@usetheo/gateway-telegram": "^0.1.0"`, `"grammy": "^1.30.0"`, `"zod": "^3.24.0"`, `"react": "^19.0.0"`, `"react-dom": "^19.0.0"`. Scripts: `dev`, `build`, `start`, `bot`.
+- **`package.json`** — declares `"theokit": "^0.2.0"`, `"@usetheo/sdk": "^1.0.0"`, `"@theokit/ui": "^0.2.0"`, `"@usetheo/gateway": "^0.1.0"`, `"@usetheo/gateway-telegram": "^0.1.0"`, `"grammy": "^1.30.0"`, `"zod": "^3.24.0"`, `"react": "^19.0.0"`, `"react-dom": "^19.0.0"`. Scripts: `dev`, `build`, `start`, `bot`.
 - **`.env.example`** — documented placeholders (`OPENROUTER_API_KEY`, `TELEGRAM_BOT_TOKEN`, `WEB_FETCH_ALLOWLIST`, `MODEL_ID`). NEVER includes real secrets.
 - **`theo.config.ts`** — `defineConfig({ ssr: true, securityHeaders: { cspMode: 'enforce' } })`. Demonstrates the 0.3.0 enforce default works.
 - **`app/page.tsx`** — reused TheoUI chat surface from `fixtures/template-default/app/page.tsx`. Same component imports; same EmptyState + QuickActionChips defaults. Adjust copy to "Full-Stack Agent Demo" headings.
@@ -492,7 +492,7 @@ tests/unit/example-full-stack-agent-skeleton.test.ts         — (NEW) asserts s
 RED: test_example_package_json_has_required_deps()
   Given examples/full-stack-agent/package.json
   When parsed
-  Then dependencies include theokit, @usetheo/sdk, @usetheo/ui, @usetheo/gateway, @usetheo/gateway-telegram, grammy, zod, react, react-dom
+  Then dependencies include theokit, @usetheo/sdk, @theokit/ui, @usetheo/gateway, @usetheo/gateway-telegram, grammy, zod, react, react-dom
 
 RED: test_example_env_example_has_no_real_secrets()
   Given .env.example

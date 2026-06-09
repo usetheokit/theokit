@@ -77,7 +77,7 @@ A narrow "Next.js for agents" mission cannot absorb these forces without contrad
 
 > TheoKit is the framework for **agent products**. It ships three things, in this order of strategic weight:
 >
-> 1. The app the agent lives in — file-based routing, auth, sessions, realtime, deploy. TypeScript-first. Built around `@usetheo/sdk` (agent runtime) + `@usetheo/ui` (UI).
+> 1. The app the agent lives in — file-based routing, auth, sessions, realtime, deploy. TypeScript-first. Built around `@usetheo/sdk` (agent runtime) + `@theokit/ui` (UI).
 > 2. The scaffolding for the full project — `create-theokit` absorbs the role of the standalone `create-theo`. One CLI generates the TheoKit app PLUS optional polyglot services (Python, Node).
 > 3. The polyglot services orchestration contract — `theo.config.ts > services: {}` declares external processes that ship next to the TheoKit app, validated against a **Like-Vercel runtime contract** (see [ADR-0015](./0015-services-runtime-contract-like-vercel.md)).
 

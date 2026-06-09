@@ -1,6 +1,6 @@
 # Cost tracking
 
-Server-side per-user agent usage accumulation for tier enforcement, billing, or dashboards. Companion to the client-side `<CostMeter>` from `@usetheo/ui`.
+Server-side per-user agent usage accumulation for tier enforcement, billing, or dashboards. Companion to the client-side `<CostMeter>` from `@theokit/ui`.
 
 ## API surface
 
@@ -118,5 +118,5 @@ export default defineMiddleware(async ({ request, ctx, next }) => {
 
 ## See also
 
-- [`<CostMeter>`](https://npmjs.com/package/@usetheo/ui) — client-side companion
+- [`<CostMeter>`](https://npmjs.com/package/@theokit/ui) — client-side companion
 - R0.5.11 (this primitive), R0.6.7 (durable storage recipes)

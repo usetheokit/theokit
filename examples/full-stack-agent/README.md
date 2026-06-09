@@ -2,7 +2,7 @@
 
 > One complete reference example exercising every Phase B primitive of TheoKit
 > (`Agent.create` + `defineAgentTool` + `streamAgentRun` + `createConversationHistory`)
-> on the locked stack: **TheoKit + @usetheo/sdk + @usetheo/ui + @usetheo/gateway-telegram**.
+> on the locked stack: **TheoKit + @usetheo/sdk + @theokit/ui + @usetheo/gateway-telegram**.
 > Same agent answers in a web UI AND a Telegram bot. Provider is **OpenRouter**
 > so any model (Claude, GPT-4, Llama, Mistral) works with one key.
 
