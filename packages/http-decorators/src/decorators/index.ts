@@ -11,3 +11,4 @@ export { HttpCode, Header, Redirect } from './response.js'
 export type { RedirectMeta } from './response.js'
 
 export { UseGuards, UseInterceptors, UseFilters, Catch } from './middleware.js'
+export { createDecorator, SetMetadata, Reflector, type MetadataKey } from './set-metadata.js'
