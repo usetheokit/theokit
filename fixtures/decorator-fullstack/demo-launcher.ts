@@ -1,20 +1,22 @@
 /**
- * Demo launcher — uses @swc/core to compile the demo.ts controller
- * (parameter decorators not supported by esbuild/tsx).
+ * TheoKit HTTP Decorators — Full NestJS Pipeline Demo
+ *
+ * Demonstrates the COMPLETE NestJS-compatible pipeline:
+ *   Middleware → Guards → Interceptors → Handler → Exception Filters
  *
  * Run: npx tsx fixtures/decorator-fullstack/demo-launcher.ts
  */
 import { loadControllerWithSwc } from '../../packages/http-decorators/src/bridge/swc-loader.js'
 import { createDecoratorServer } from '../../packages/http-decorators/src/bridge/create-server.js'
-import { MiddlewareConsumerImpl } from '../../packages/http-decorators/src/bridge/middleware-consumer.js'
-import { resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { resolve } from 'node:path'
 
-// ─── Middleware (no parameter decorators — runs through tsx fine) ───
+// ─── Middleware ───
 
 class LoggerMiddleware {
   use(req: IncomingMessage, _res: ServerResponse, next: () => void) {
-    console.log(`  [MW] ${req.method} ${req.url}`)
+    const time = new Date().toLocaleTimeString()
+    console.log(`  [${time}] ${req.method} ${req.url}`)
     next()
   }
 }
@@ -28,7 +30,6 @@ function corsMiddleware(_req: IncomingMessage, res: ServerResponse, next: () => 
 // ─── Main ───
 
 async function main() {
-  // Load controller via SWC (handles @Body/@Param/@Query parameter decorators)
   const controllerPath = resolve(import.meta.dirname!, 'server/controllers/tasks.controller.ts')
   const mod = await loadControllerWithSwc(controllerPath)
   const TasksController = mod.TasksController as Function
@@ -45,38 +46,48 @@ async function main() {
 
   server.listen(PORT, () => {
     console.log(`
-╔══════════════════════════════════════════════════════════╗
-║  TheoKit HTTP Decorators — Live Demo                    ║
-║  NestJS-style: Middleware → Guards → Interceptors       ║
-╠══════════════════════════════════════════════════════════╣
-║                                                         ║
-║  Server: http://localhost:${PORT}                          ║
-║                                                         ║
-║  Endpoints:                                             ║
-║                                                         ║
-║  GET  /api/v2/tasks              — list all             ║
-║  GET  /api/v2/tasks/stats        — statistics           ║
-║  GET  /api/v2/tasks/search?q=kit — search               ║
-║  GET  /api/v2/tasks/1            — get by id            ║
-║  POST /api/v2/tasks              — create (Zod)         ║
-║  POST /api/v2/tasks/1/complete   — mark done            ║
-║  DEL  /api/v2/tasks/3            — delete               ║
-║                                                         ║
-║  Features demonstrated:                                 ║
-║    ✓ @Controller + @Get/@Post/@Delete                   ║
-║    ✓ @Body(zodSchema) — Zod validation (422 on fail)    ║
-║    ✓ @Param('id') + @Query('q')                         ║
-║    ✓ @UseInterceptors(TimingInterceptor) — X-Resp-Time  ║
-║    ✓ @UseGuards(AuthGuard) — /stats requires auth       ║
-║    ✓ LoggerMiddleware (class) + corsMiddleware (fn)      ║
-║    ✓ configure().forRoutes() route filtering             ║
-║    ✓ SWC-powered controller loading (no esbuild limit)  ║
-║                                                         ║
-╚══════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║  TheoKit HTTP Decorators — Full NestJS Pipeline Demo        ║
+║  Middleware → Guards → Interceptors → Handler → Filters     ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                             ║
+║  Server: http://localhost:${PORT}                              ║
+║                                                             ║
+║  ┌─────────────────────────────────────────────────────┐    ║
+║  │ CRUD                                                │    ║
+║  │  GET  /api/v2/tasks            — list all           │    ║
+║  │  GET  /api/v2/tasks/stats      — statistics         │    ║
+║  │  GET  /api/v2/tasks/search?q=  — search             │    ║
+║  │  GET  /api/v2/tasks/1          — get by id          │    ║
+║  │  POST /api/v2/tasks            — create (Zod)       │    ║
+║  │  POST /api/v2/tasks/1/complete — mark done          │    ║
+║  │  DEL  /api/v2/tasks/3          — delete             │    ║
+║  └─────────────────────────────────────────────────────┘    ║
+║                                                             ║
+║  ┌─────────────────────────────────────────────────────┐    ║
+║  │ Error Handling (Exception Filters)                  │    ║
+║  │  GET  /api/v2/tasks/999        — 404 NotFoundException│  ║
+║  │  POST /api/v2/tasks {title:"a"} — 422 Zod validation │  ║
+║  └─────────────────────────────────────────────────────┘    ║
+║                                                             ║
+║  Pipeline features:                                         ║
+║    ✓ @Controller + @Get/@Post/@Delete decorators            ║
+║    ✓ @Body(zodSchema) — Zod validation → 422               ║
+║    ✓ @Param('id') + @Query('q') parameter decorators        ║
+║    ✓ @UseInterceptors(TimingInterceptor) — X-Response-Time  ║
+║    ✓ LoggerMiddleware (class) + corsMiddleware (functional)  ║
+║    ✓ configure().forRoutes() route filtering                 ║
+║    ✓ NotFoundException → 404 {error:{code,message}}         ║
+║    ✓ Exception filter pipeline with global fallback          ║
+║    ✓ SWC-powered controller loading                          ║
+║                                                             ║
+╚══════════════════════════════════════════════════════════════╝
 
-  curl localhost:${PORT}/api/v2/tasks
-  curl -X POST localhost:${PORT}/api/v2/tasks -H "Content-Type: application/json" -d '{"title":"Hello","priority":"high"}'
-  curl localhost:${PORT}/api/v2/tasks/search?q=hello
+  Try:
+    curl localhost:${PORT}/api/v2/tasks
+    curl localhost:${PORT}/api/v2/tasks/999
+    curl -X POST localhost:${PORT}/api/v2/tasks -H "Content-Type: application/json" -d '{"title":"Hello","priority":"high"}'
+    curl -X POST localhost:${PORT}/api/v2/tasks -H "Content-Type: application/json" -d '{"title":"a"}'
 `)
   })
 }
