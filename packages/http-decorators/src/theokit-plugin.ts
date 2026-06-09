@@ -36,6 +36,7 @@ import 'reflect-metadata'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { resolveOrNew, type DiContainer } from './bridge/di-resolve.js'
+import { runExceptionFilters } from './bridge/exception-filter-chain.js'
 import { runInterceptors } from './bridge/interceptor-chain.js'
 import {
   MiddlewareConsumerImpl,
@@ -220,8 +221,7 @@ async function handleDecoratorRoute(
 
     sendResponse(res, result, walk, method)
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    writeJson(res, 500, { error: { code: 'INTERNAL_SERVER_ERROR', message } })
+    await runExceptionFilters(err, walk.filters, req, res, container)
   }
 }
 

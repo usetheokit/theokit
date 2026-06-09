@@ -9,6 +9,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { ParamEntry } from '../decorators/params.js'
 
 import { resolveOrNew, type DiContainer } from './di-resolve.js'
+import { runExceptionFilters } from './exception-filter-chain.js'
 import { runInterceptors } from './interceptor-chain.js'
 import {
   MiddlewareConsumerImpl,
@@ -147,9 +148,7 @@ async function handleRequest(
 
     sendResponse(res, result, walk, method)
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    res.writeHead(500, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ error: { code: 'INTERNAL_SERVER_ERROR', message } }))
+    await runExceptionFilters(err, walk.filters, req, res, container)
   }
 }
 

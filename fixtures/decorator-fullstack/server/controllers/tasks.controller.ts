@@ -10,6 +10,7 @@ import {
   Query,
   HttpCode,
   UseInterceptors,
+  NotFoundException,
 } from '../../../../packages/http-decorators/src/index.js'
 import { taskStore } from '../routes/tasks/_store.js'
 import { TimingInterceptor } from '../interceptors/timing.interceptor.js'
@@ -41,7 +42,9 @@ export class TasksController {
 
   @Get(':id')
   findById(@Param('id') id: string) {
-    return taskStore.findById(id) ?? { error: 'Task not found' }
+    const task = taskStore.findById(id)
+    if (!task) throw new NotFoundException(`Task ${id} not found`)
+    return task
   }
 
   @Post()
@@ -51,7 +54,9 @@ export class TasksController {
 
   @Post(':id/complete')
   complete(@Param('id') id: string) {
-    return taskStore.complete(id) ?? { error: 'Task not found' }
+    const task = taskStore.complete(id)
+    if (!task) throw new NotFoundException(`Task ${id} not found`)
+    return task
   }
 
   @Delete(':id')
