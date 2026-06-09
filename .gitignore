@@ -5,6 +5,9 @@ node_modules/
 # theo-ui link mode backup (ADR 0020) — never commit a backup workspace file
 pnpm-workspace.yaml.bak
 
+# SWC loader temp files (@theokit/http-decorators)
+*.__decorated__.mjs
+
 # Build output
 dist/
 .theo/
