@@ -10,9 +10,11 @@ import {
   Query,
   HttpCode,
   UseGuards,
+  UseInterceptors,
 } from '../../../../packages/http-decorators/src/index.js'
 import { taskStore } from '../routes/tasks/_store.js'
 import { AuthGuard } from '../guards/auth.guard.js'
+import { TimingInterceptor } from '../interceptors/timing.interceptor.js'
 
 /**
  * Zod schema — single source of truth for task creation validation.
@@ -24,6 +26,7 @@ const zCreateTask = z.object({
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
 })
 
+@UseInterceptors(TimingInterceptor)
 @Controller('api/v2/tasks')
 export class TasksController {
   @Get()

@@ -29,14 +29,16 @@ export default function TaskManagerPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<ApiMode>('decorator')
+  const [responseTime, setResponseTime] = useState<string | null>(null)
 
   const base = API_BASE[mode]
 
   async function refresh() {
-    const [t, s] = await Promise.all([
-      fetch(base).then((r) => (r.ok ? r.json() : [])),
-      fetch(`${base}/stats`).then((r) => (r.ok ? r.json() : null)),
-    ])
+    const [tRes, sRes] = await Promise.all([fetch(base), fetch(`${base}/stats`)])
+    const t = tRes.ok ? await tRes.json() : []
+    const s = sRes.ok ? await sRes.json() : null
+    // Capture X-Response-Time from interceptor
+    setResponseTime(tRes.headers.get('x-response-time'))
     setTasks(Array.isArray(t) ? t : [])
     setStats(s)
     setLoading(false)
@@ -123,7 +125,12 @@ export default function TaskManagerPage() {
         >
           defineRoute (v1)
         </button>
-        <span style={{ color: '#555', fontSize: '0.75rem', alignSelf: 'center' }}>{base}</span>
+        <span style={{ color: '#555', fontSize: '0.75rem', alignSelf: 'center' }}>
+          {base}
+          {responseTime && (
+            <span style={{ marginLeft: '0.5rem', color: '#4ade80' }}>{responseTime}</span>
+          )}
+        </span>
       </div>
 
       {stats && (
