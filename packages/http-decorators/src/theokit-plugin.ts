@@ -1,44 +1,69 @@
-/* eslint-disable security/detect-non-literal-regexp --
- * Route patterns like /cats/:id are converted to regex at startup —
- * NOT from user HTTP input. The patterns come from decorator metadata
- * authored by the developer. No injection vector.
- */
-import 'reflect-metadata'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-
-import type { ParamEntry } from '../decorators/params.js'
-
-import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
-
+/* eslint-disable security/detect-non-literal-regexp */
 /**
- * Creates a real HTTP server from decorated controller classes.
- * This is the mount mechanism that makes `@Controller`/`@Get`/`@Body` decorators
- * produce real HTTP endpoints reachable via `fetch()`.
+ * TheoKit integration plugin for @theokit/http-decorators.
  *
- * Usage:
+ * Registers an `onRequest` hook that intercepts requests matching
+ * decorator-defined routes BEFORE TheoKit's file-based route scanner
+ * processes them. Same integration pattern as @theokit/plugin-openapi.
+ *
+ * Usage in theo.config.ts:
+ *
  * ```ts
- * const server = createDecoratorServer([CatsController, DogsController])
- * server.listen(3000)
- * // fetch('http://localhost:3000/cats') → CatsController.findAll()
+ * import { defineConfig } from 'theokit/server'
+ * import { httpDecoratorsPlugin } from '@theokit/http-decorators/theokit-plugin'
+ * import { CatsController } from './server/controllers/cats.controller.js'
+ *
+ * export default defineConfig({
+ *   plugins: [
+ *     httpDecoratorsPlugin({ controllers: [CatsController] })
+ *   ]
+ * })
  * ```
  */
-export function createDecoratorServer(controllers: Function[]) {
+import 'reflect-metadata'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+
+import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
+import type { ParamEntry } from './decorators/params.js'
+
+export interface HttpDecoratorsPluginOptions {
+  controllers: Function[]
+}
+
+interface RouteEntry {
+  walk: WalkResult
+  instance: object
+  regex: RegExp
+  paramNames: string[]
+}
+
+/**
+ * TheoKit plugin that mounts decorated controllers into the `theokit dev`
+ * / `theokit start` request pipeline via the `onRequest` hook.
+ *
+ * Returns a plain `{ name, register }` object compatible with
+ * `TheoPlugin` from `theokit/server` (Pattern D6 — we don't import the
+ * type to avoid adding theokit as a compile-time dep; the structural
+ * shape is sufficient).
+ */
+export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
   // Dedupe controllers (EC-5)
   const seen = new Set<Function>()
   const unique: Function[] = []
-  for (const Ctor of controllers) {
+  for (const Ctor of opts.controllers) {
     if (seen.has(Ctor)) continue
     seen.add(Ctor)
     unique.push(Ctor)
   }
 
-  // Walk metadata for all controllers
-  const routes: { walk: WalkResult; instance: object }[] = []
+  // Walk metadata and build route table at plugin creation time (once)
+  const routes: RouteEntry[] = []
   for (const Ctor of unique) {
     const instance = new (Ctor as new () => object)()
     const walks = walkControllerMetadata(Ctor)
     for (const w of walks) {
-      routes.push({ walk: w, instance })
+      const { regex, paramNames } = compilePattern(w.fullPath)
+      routes.push({ walk: w, instance, regex, paramNames })
     }
   }
 
@@ -50,40 +75,42 @@ export function createDecoratorServer(controllers: Function[]) {
     return 0
   })
 
-  const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-    void handleRequest(routes, req, res)
-  })
-
-  return server
+  return {
+    name: '@theokit/http-decorators',
+    register(app: {
+      addHook: (
+        name: string,
+        fn: (ctx: {
+          request: IncomingMessage
+          response: ServerResponse
+          ctx: Record<string, unknown>
+        }) => Promise<void>,
+      ) => void
+    }) {
+      app.addHook('onRequest', async (pluginCtx) => {
+        await handleDecoratorRoute(routes, pluginCtx.request, pluginCtx.response)
+      })
+    },
+  }
 }
 
-// ─── Request handler (extracted for complexity budget) ─────────
+// ─── Request handler (extracted for complexity budget) ──
 
-async function handleRequest(
-  routes: { walk: WalkResult; instance: object }[],
+async function handleDecoratorRoute(
+  routes: RouteEntry[],
   req: IncomingMessage,
   res: ServerResponse,
 ) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
   const method = (req.method ?? 'GET').toUpperCase()
-  const pathname = url.pathname
+  const match = findMatch(routes, method, url.pathname)
+  if (!match) return // Not our route — fall through to TheoKit's scanner
 
-  const match = findRoute(routes, method, pathname)
-  if (!match) {
-    res.writeHead(404, { 'content-type': 'application/json' })
-    res.end(
-      JSON.stringify({
-        error: { code: 'NOT_FOUND', message: `No route for ${method} ${pathname}` },
-      }),
-    )
-    return
-  }
-
-  const { walk, instance, params } = match
+  const { entry, params } = match
+  const { walk, instance } = entry
 
   try {
     if (await runGuards(walk.guards, req, res)) return
-
     const body = await resolveBody(method, req, walk, res)
     if (body === BODY_REJECTED) return
 
@@ -102,18 +129,13 @@ async function handleRequest(
 
     const handler = (instance as Record<string | symbol, Function>)[walk.propertyKey]
     const result = await handler.apply(instance, args)
-
     sendResponse(res, result, walk, method)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    res.writeHead(500, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ error: { code: 'INTERNAL_SERVER_ERROR', message } }))
+    writeJson(res, 500, { error: { code: 'INTERNAL_SERVER_ERROR', message } })
   }
 }
 
-// ─── Guards ───────────────────────────────────────────────────
-
-/** Returns true if guard rejected (response already sent). */
 async function runGuards(
   guards: Function[],
   req: IncomingMessage,
@@ -121,23 +143,18 @@ async function runGuards(
 ): Promise<boolean> {
   for (const GuardCtor of guards) {
     const guard = new (GuardCtor as new () => {
-      canActivate: (req: IncomingMessage) => boolean | Promise<boolean>
+      canActivate: (r: IncomingMessage) => boolean | Promise<boolean>
     })()
-    const allowed = await guard.canActivate(req)
-    if (!allowed) {
-      res.writeHead(401, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Guard rejected' } }))
+    if (!(await guard.canActivate(req))) {
+      writeJson(res, 401, { error: { code: 'UNAUTHORIZED', message: 'Guard rejected' } })
       return true
     }
   }
   return false
 }
 
-// ─── Body resolution ──────────────────────────────────────────
-
 const BODY_REJECTED = Symbol('body-rejected')
 
-/** Parses + validates body. Returns BODY_REJECTED if response was sent. */
 async function resolveBody(
   method: string,
   req: IncomingMessage,
@@ -145,21 +162,17 @@ async function resolveBody(
   res: ServerResponse,
 ): Promise<unknown> {
   if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
-
   let body = await parseBody(req)
   if (walk.bodySchema && body !== undefined) {
     const result = walk.bodySchema.safeParse(body)
     if (!result.success) {
-      res.writeHead(422, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ error: { code: 'VALIDATION_ERROR', issues: result.error.issues } }))
+      writeJson(res, 422, { error: { code: 'VALIDATION_ERROR', issues: result.error.issues } })
       return BODY_REJECTED
     }
     body = result.data
   }
   return body
 }
-
-// ─── Response serialization ───────────────────────────────────
 
 function sendResponse(res: ServerResponse, result: unknown, walk: WalkResult, method: string) {
   const status = walk.status ?? (method === 'POST' ? 201 : 200)
@@ -173,58 +186,54 @@ function sendResponse(res: ServerResponse, result: unknown, walk: WalkResult, me
     res.end()
     return
   }
-
   if (typeof result === 'string') {
     headers['content-type'] = 'text/plain'
     res.writeHead(status, headers)
     res.end(result)
     return
   }
+  writeJson(res, status, result, headers)
+}
 
+// ─── Helpers ──────────────────────────────────────────
+
+function writeJson(
+  res: ServerResponse,
+  status: number,
+  data: unknown,
+  extraHeaders?: Record<string, string>,
+) {
+  const headers: Record<string, string> = { 'content-type': 'application/json', ...extraHeaders }
   res.writeHead(status, headers)
-  res.end(JSON.stringify(result))
+  res.end(JSON.stringify(data))
 }
 
-// ─── Route matching ───────────────────────────────────────────
-
-interface RouteMatch {
-  walk: WalkResult
-  instance: object
-  params: Record<string, string>
-}
-
-function findRoute(
-  routes: { walk: WalkResult; instance: object }[],
+function findMatch(
+  routes: RouteEntry[],
   method: string,
   pathname: string,
-): RouteMatch | null {
-  for (const { walk, instance } of routes) {
-    if (walk.verb !== 'ALL' && walk.verb !== method) continue
-    const params = matchPath(walk.fullPath, pathname)
-    if (params !== null) {
-      return { walk, instance, params }
-    }
+): { entry: RouteEntry; params: Record<string, string> } | null {
+  for (const entry of routes) {
+    if (entry.walk.verb !== 'ALL' && entry.walk.verb !== method) continue
+    const match = pathname.match(entry.regex)
+    if (!match) continue
+    const params: Record<string, string> = {}
+    entry.paramNames.forEach((name, i) => {
+      params[name] = match[i + 1]
+    })
+    return { entry, params }
   }
   return null
 }
 
-function matchPath(pattern: string, pathname: string): Record<string, string> | null {
+function compilePattern(pattern: string): { regex: RegExp; paramNames: string[] } {
   const paramNames: string[] = []
   const regexStr = pattern.replace(/:(\w+)/g, (_m, name: string) => {
     paramNames.push(name)
     return '([^/]+)'
   })
-  const regex = new RegExp(`^${regexStr}$`)
-  const match = pathname.match(regex)
-  if (!match) return null
-  const params: Record<string, string> = {}
-  paramNames.forEach((name, i) => {
-    params[name] = match[i + 1]
-  })
-  return params
+  return { regex: new RegExp(`^${regexStr}$`), paramNames }
 }
-
-// ─── Body parsing ─────────────────────────────────────────────
 
 function parseBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -245,8 +254,6 @@ function parseBody(req: IncomingMessage): Promise<unknown> {
     req.on('error', reject)
   })
 }
-
-// ─── Argument builder ─────────────────────────────────────────
 
 interface ArgContext {
   req: IncomingMessage
@@ -278,9 +285,6 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
         break
       case 'ip':
         args[p.index] = ctx.req.socket.remoteAddress
-        break
-      case 'session':
-        args[p.index] = undefined
         break
       default:
         args[p.index] = undefined
