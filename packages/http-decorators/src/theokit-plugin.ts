@@ -37,6 +37,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { resolveOrNew, type DiContainer } from './bridge/di-resolve.js'
 import { runInterceptors } from './bridge/interceptor-chain.js'
+import {
+  MiddlewareConsumerImpl,
+  runMiddleware,
+  type ResolvedMiddleware,
+} from './bridge/middleware-consumer.js'
 import { loadControllersFromGlob } from './bridge/swc-loader.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
@@ -50,6 +55,8 @@ export interface HttpDecoratorsPluginOptions {
   controllersGlob?: string
   /** Optional DI container (e.g., @theokit/di Container). */
   container?: DiContainer
+  /** NestJS-style middleware configuration callback. */
+  configure?: (consumer: MiddlewareConsumerImpl) => void
 }
 
 interface RouteEntry {
@@ -72,6 +79,11 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
   const routes: RouteEntry[] = []
   let initialized = false
   let initPromise: Promise<void> | null = null
+
+  // Collect middleware via configure() callback (NestJS pattern)
+  const middlewareConsumer = new MiddlewareConsumerImpl(opts.container)
+  if (opts.configure) opts.configure(middlewareConsumer)
+  const middlewareEntries = middlewareConsumer.getEntries()
 
   // Mode 2: Direct class references — initialize eagerly
   if (opts.controllers && opts.controllers.length > 0) {
@@ -112,7 +124,13 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
         if (initPromise && !initialized) {
           await initPromise
         }
-        await handleDecoratorRoute(routes, pluginCtx.request, pluginCtx.response, opts.container)
+        await handleDecoratorRoute(
+          routes,
+          pluginCtx.request,
+          pluginCtx.response,
+          opts.container,
+          middlewareEntries,
+        )
       })
     },
   }
@@ -159,6 +177,7 @@ async function handleDecoratorRoute(
   req: IncomingMessage,
   res: ServerResponse,
   container?: DiContainer,
+  mwEntries: ResolvedMiddleware[] = [],
 ) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
   const method = (req.method ?? 'GET').toUpperCase()
@@ -169,6 +188,8 @@ async function handleDecoratorRoute(
   const { walk, instance } = entry
 
   try {
+    // Pipeline order per D2: middleware → guards → interceptors → handler
+    if (await runMiddleware(mwEntries, req, res, url.pathname)) return
     if (await runGuards(walk.guards, req, res, container)) return
     const body = await resolveBody(method, req, walk, res)
     if (body === BODY_REJECTED) return

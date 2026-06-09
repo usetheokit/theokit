@@ -10,6 +10,11 @@ import type { ParamEntry } from '../decorators/params.js'
 
 import { resolveOrNew, type DiContainer } from './di-resolve.js'
 import { runInterceptors } from './interceptor-chain.js'
+import {
+  MiddlewareConsumerImpl,
+  runMiddleware,
+  type ResolvedMiddleware,
+} from './middleware-consumer.js'
 import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
 
 /**
@@ -26,18 +31,28 @@ import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
  */
 export interface CreateDecoratorServerOptions {
   controllers: Function[]
-  /** Optional DI container (e.g., @theokit/di Container). When provided,
-   *  controllers + guards are resolved via container.resolve() instead of bare `new`.
-   *  Enables NestJS-style constructor injection: `constructor(private svc: MyService)`. */
+  /** Optional DI container (e.g., @theokit/di Container). */
   container?: DiContainer
+  /** NestJS-style middleware configuration callback.
+   *  Called at server creation time with a MiddlewareConsumer. */
+  configure?: (consumer: MiddlewareConsumerImpl) => void
 }
 
 export function createDecoratorServer(
   controllersOrOpts: Function[] | CreateDecoratorServerOptions,
 ) {
-  const { controllers, container } = Array.isArray(controllersOrOpts)
-    ? { controllers: controllersOrOpts, container: undefined }
-    : { controllers: controllersOrOpts.controllers, container: controllersOrOpts.container }
+  const { controllers, container, configure } = Array.isArray(controllersOrOpts)
+    ? { controllers: controllersOrOpts, container: undefined, configure: undefined }
+    : {
+        controllers: controllersOrOpts.controllers,
+        container: controllersOrOpts.container,
+        configure: controllersOrOpts.configure,
+      }
+
+  // Collect middleware via configure() callback (NestJS pattern)
+  const middlewareConsumer = new MiddlewareConsumerImpl(container)
+  if (configure) configure(middlewareConsumer)
+  const middlewareEntries = middlewareConsumer.getEntries()
   // Dedupe controllers (EC-5)
   const seen = new Set<Function>()
   const unique: Function[] = []
@@ -66,7 +81,7 @@ export function createDecoratorServer(
   })
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-    void handleRequest(routes, req, res, container)
+    void handleRequest(routes, req, res, container, middlewareEntries)
   })
 
   return server
@@ -79,6 +94,7 @@ async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   container?: DiContainer,
+  middlewareEntries: ResolvedMiddleware[] = [],
 ) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
   const method = (req.method ?? 'GET').toUpperCase()
@@ -98,6 +114,8 @@ async function handleRequest(
   const { walk, instance, params } = match
 
   try {
+    // Pipeline order per D2: middleware → guards → interceptors → handler
+    if (await runMiddleware(middlewareEntries, req, res, pathname)) return
     if (await runGuards(walk.guards, req, res, container)) return
 
     const body = await resolveBody(method, req, walk, res)
