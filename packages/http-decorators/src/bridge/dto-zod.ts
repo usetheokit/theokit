@@ -6,7 +6,7 @@ import type { ZodTypeAny } from 'zod'
  */
 export function resolveDtoSchema(dtoClass: unknown): ZodTypeAny | undefined {
   if (typeof dtoClass !== 'function') return undefined
-  const maybe = (dtoClass as Record<string, unknown>).schema
+  const maybe = (dtoClass as unknown as Record<string, unknown>).schema
   if (
     maybe !== null &&
     maybe !== undefined &&
