@@ -26,8 +26,16 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
 
+/** DI container interface — structural match for @theokit/di Container. */
+export interface DiContainer {
+  resolve<T>(token: Function): T
+}
+
 export interface HttpDecoratorsPluginOptions {
   controllers: Function[]
+  /** Optional DI container (e.g., @theokit/di Container). When provided,
+   *  controllers + guards are resolved via container.resolve() instead of bare `new`. */
+  container?: DiContainer
 }
 
 interface RouteEntry {
@@ -59,7 +67,7 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
   // Walk metadata and build route table at plugin creation time (once)
   const routes: RouteEntry[] = []
   for (const Ctor of unique) {
-    const instance = new (Ctor as new () => object)()
+    const instance = resolveOrNew(Ctor, opts.container)
     const walks = walkControllerMetadata(Ctor)
     for (const w of walks) {
       const { regex, paramNames } = compilePattern(w.fullPath)
@@ -88,7 +96,7 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
       ) => void
     }) {
       app.addHook('onRequest', async (pluginCtx) => {
-        await handleDecoratorRoute(routes, pluginCtx.request, pluginCtx.response)
+        await handleDecoratorRoute(routes, pluginCtx.request, pluginCtx.response, opts.container)
       })
     },
   }
@@ -100,6 +108,7 @@ async function handleDecoratorRoute(
   routes: RouteEntry[],
   req: IncomingMessage,
   res: ServerResponse,
+  container?: DiContainer,
 ) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
   const method = (req.method ?? 'GET').toUpperCase()
@@ -110,7 +119,7 @@ async function handleDecoratorRoute(
   const { walk, instance } = entry
 
   try {
-    if (await runGuards(walk.guards, req, res)) return
+    if (await runGuards(walk.guards, req, res, container)) return
     const body = await resolveBody(method, req, walk, res)
     if (body === BODY_REJECTED) return
 
@@ -140,11 +149,12 @@ async function runGuards(
   guards: Function[],
   req: IncomingMessage,
   res: ServerResponse,
+  container?: DiContainer,
 ): Promise<boolean> {
   for (const GuardCtor of guards) {
-    const guard = new (GuardCtor as new () => {
+    const guard = resolveOrNew(GuardCtor, container) as {
       canActivate: (r: IncomingMessage) => boolean | Promise<boolean>
-    })()
+    }
     if (!(await guard.canActivate(req))) {
       writeJson(res, 401, { error: { code: 'UNAUTHORIZED', message: 'Guard rejected' } })
       return true
@@ -291,4 +301,17 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
     }
   }
   return args
+}
+
+// ─── DI resolution helper ─────────────────────────────
+
+function resolveOrNew(Ctor: Function, container?: DiContainer): object {
+  if (container) {
+    try {
+      return container.resolve(Ctor)
+    } catch {
+      // MissingInjectableError — fall back to bare new
+    }
+  }
+  return new (Ctor as new () => object)()
 }
