@@ -49,7 +49,7 @@ cli
   })
 
 cli
-  .command('generate <type> <name>', 'Generate a route, action, page, or ws endpoint')
+  .command('generate <type> <name>', 'Generate a route, action, page, ws, or controller endpoint')
   .action(async (type: string, name: string) => {
     try {
       const { generateCommand } = await import('./commands/generate.js')
