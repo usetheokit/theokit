@@ -15,6 +15,7 @@ import {
   ROUTE_REDIRECT,
   USE_GUARDS,
   USE_INTERCEPTORS,
+  USE_FILTERS,
 } from '../metadata/index.js'
 
 import { resolveDtoSchema } from './dto-zod.js'
@@ -33,6 +34,7 @@ export interface WalkResult {
   redirect?: RedirectMeta
   guards: Function[]
   interceptors: Function[]
+  filters: Function[]
 }
 
 /**
@@ -106,6 +108,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
   // Class-level guards/interceptors
   const classGuards = getMeta<Function[]>(USE_GUARDS, ControllerClass) ?? []
   const classInterceptors = getMeta<Function[]>(USE_INTERCEPTORS, ControllerClass) ?? []
+  const classFilters = getMeta<Function[]>(USE_FILTERS, ControllerClass) ?? []
 
   return methods.map((m) => {
     const paramEntries = paramsMap.get(m.propertyKey) ?? []
@@ -127,6 +130,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
       redirect: getMeta<RedirectMeta>(ROUTE_REDIRECT, ControllerClass, m.propertyKey),
       guards: [...classGuards, ...methodGuards],
       interceptors: [...classInterceptors, ...methodInterceptors],
+      filters: getMeta<Function[]>(USE_FILTERS, ControllerClass, m.propertyKey) ?? classFilters,
     }
   })
 }
