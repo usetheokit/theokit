@@ -35,14 +35,11 @@
 import 'reflect-metadata'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { resolveOrNew, type DiContainer } from './bridge/di-resolve.js'
+import { runInterceptors } from './bridge/interceptor-chain.js'
 import { loadControllersFromGlob } from './bridge/swc-loader.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
-
-/** DI container interface — structural match for @theokit/di Container. */
-export interface DiContainer {
-  resolve<T>(token: Function): T
-}
 
 export interface HttpDecoratorsPluginOptions {
   /** Direct controller class references (Mode 2 — tests, pre-compiled). */
@@ -189,8 +186,17 @@ async function handleDecoratorRoute(
       return
     }
 
-    const handler = (instance as Record<string | symbol, Function>)[walk.propertyKey]
-    const result = await handler.apply(instance, args)
+    const handlerFn = (instance as Record<string | symbol, Function>)[walk.propertyKey]
+
+    // Interceptor chain wraps ONLY the handler call (EC-1)
+    const result = await runInterceptors(
+      walk.interceptors,
+      () => handlerFn.apply(instance, args) as Promise<unknown>,
+      req,
+      res,
+      container,
+    )
+
     sendResponse(res, result, walk, method)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -356,15 +362,4 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
   return args
 }
 
-// ─── DI resolution helper ─────────────────────────────
-
-function resolveOrNew(Ctor: Function, container?: DiContainer): object {
-  if (container) {
-    try {
-      return container.resolve(Ctor)
-    } catch {
-      // MissingInjectableError — fall back to bare new
-    }
-  }
-  return new (Ctor as new () => object)()
-}
+// resolveOrNew imported from ./bridge/di-resolve.ts (DRY — EC-3)

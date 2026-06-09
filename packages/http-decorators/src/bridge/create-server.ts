@@ -8,6 +8,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 
 import type { ParamEntry } from '../decorators/params.js'
 
+import { resolveOrNew, type DiContainer } from './di-resolve.js'
+import { runInterceptors } from './interceptor-chain.js'
 import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
 
 /**
@@ -22,11 +24,6 @@ import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
  * // fetch('http://localhost:3000/cats') → CatsController.findAll()
  * ```
  */
-/** DI container interface — structural match for @theokit/di Container. */
-export interface DiContainer {
-  resolve<T>(token: Function): T
-}
-
 export interface CreateDecoratorServerOptions {
   controllers: Function[]
   /** Optional DI container (e.g., @theokit/di Container). When provided,
@@ -119,8 +116,16 @@ async function handleRequest(
       return
     }
 
-    const handler = (instance as Record<string | symbol, Function>)[walk.propertyKey]
-    const result = await handler.apply(instance, args)
+    const handlerFn = (instance as Record<string | symbol, Function>)[walk.propertyKey]
+
+    // Interceptor chain wraps ONLY the handler call (EC-1: body parsing stays outside)
+    const result = await runInterceptors(
+      walk.interceptors,
+      () => handlerFn.apply(instance, args) as Promise<unknown>,
+      req,
+      res,
+      container,
+    )
 
     sendResponse(res, result, walk, method)
   } catch (err) {
@@ -309,16 +314,4 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
   return args
 }
 
-// ─── DI resolution helper ─────────────────────────────
-
-/** Resolve via DI container if provided; otherwise fall back to bare `new`. */
-function resolveOrNew(Ctor: Function, container?: DiContainer): object {
-  if (container) {
-    try {
-      return container.resolve(Ctor)
-    } catch {
-      // MissingInjectableError or similar — fall back to bare new
-    }
-  }
-  return new (Ctor as new () => object)()
-}
+// resolveOrNew imported from ./di-resolve.ts (DRY — EC-3)
