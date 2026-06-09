@@ -21,6 +21,8 @@ packages:
   - 'fixtures/template-api-only'
   - 'fixtures/template-postgres'
   - 'fixtures/template-saas'
+  # Decorator full-stack fixture — @theokit/http-decorators + React frontend
+  - 'fixtures/decorator-fullstack'
   # @theokit/sdk via sibling checkout (workspace protocol) — required by the
   # canonical chat.ts wired in fixtures/template-default. pnpm tolerates
   # missing sibling for contributors without the checkout.
