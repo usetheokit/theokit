@@ -1,8 +1,11 @@
 import { defineConfig } from 'theokit'
+import { httpDecoratorsPlugin } from '../../packages/http-decorators/src/theokit-plugin.js'
+import { TasksController } from './server/controllers/tasks.controller.js'
 
 export default defineConfig({
-  // httpDecoratorsPlugin will be wired here when the TheoKit core
-  // plugin system is extended to support decorator controllers.
-  // For now, decorator routes are served via the onRequest hook
-  // which intercepts before the file-based scanner.
+  plugins: [
+    httpDecoratorsPlugin({
+      controllers: [TasksController],
+    }),
+  ],
 })
