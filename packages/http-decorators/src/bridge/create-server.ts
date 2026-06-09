@@ -22,7 +22,25 @@ import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
  * // fetch('http://localhost:3000/cats') → CatsController.findAll()
  * ```
  */
-export function createDecoratorServer(controllers: Function[]) {
+/** DI container interface — structural match for @theokit/di Container. */
+export interface DiContainer {
+  resolve<T>(token: Function): T
+}
+
+export interface CreateDecoratorServerOptions {
+  controllers: Function[]
+  /** Optional DI container (e.g., @theokit/di Container). When provided,
+   *  controllers + guards are resolved via container.resolve() instead of bare `new`.
+   *  Enables NestJS-style constructor injection: `constructor(private svc: MyService)`. */
+  container?: DiContainer
+}
+
+export function createDecoratorServer(
+  controllersOrOpts: Function[] | CreateDecoratorServerOptions,
+) {
+  const { controllers, container } = Array.isArray(controllersOrOpts)
+    ? { controllers: controllersOrOpts, container: undefined }
+    : { controllers: controllersOrOpts.controllers, container: controllersOrOpts.container }
   // Dedupe controllers (EC-5)
   const seen = new Set<Function>()
   const unique: Function[] = []
@@ -35,7 +53,7 @@ export function createDecoratorServer(controllers: Function[]) {
   // Walk metadata for all controllers
   const routes: { walk: WalkResult; instance: object }[] = []
   for (const Ctor of unique) {
-    const instance = new (Ctor as new () => object)()
+    const instance = resolveOrNew(Ctor, container)
     const walks = walkControllerMetadata(Ctor)
     for (const w of walks) {
       routes.push({ walk: w, instance })
@@ -51,7 +69,7 @@ export function createDecoratorServer(controllers: Function[]) {
   })
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-    void handleRequest(routes, req, res)
+    void handleRequest(routes, req, res, container)
   })
 
   return server
@@ -63,6 +81,7 @@ async function handleRequest(
   routes: { walk: WalkResult; instance: object }[],
   req: IncomingMessage,
   res: ServerResponse,
+  container?: DiContainer,
 ) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
   const method = (req.method ?? 'GET').toUpperCase()
@@ -82,7 +101,7 @@ async function handleRequest(
   const { walk, instance, params } = match
 
   try {
-    if (await runGuards(walk.guards, req, res)) return
+    if (await runGuards(walk.guards, req, res, container)) return
 
     const body = await resolveBody(method, req, walk, res)
     if (body === BODY_REJECTED) return
@@ -118,11 +137,12 @@ async function runGuards(
   guards: Function[],
   req: IncomingMessage,
   res: ServerResponse,
+  container?: DiContainer,
 ): Promise<boolean> {
   for (const GuardCtor of guards) {
-    const guard = new (GuardCtor as new () => {
+    const guard = resolveOrNew(GuardCtor, container) as {
       canActivate: (req: IncomingMessage) => boolean | Promise<boolean>
-    })()
+    }
     const allowed = await guard.canActivate(req)
     if (!allowed) {
       res.writeHead(401, { 'content-type': 'application/json' })
@@ -287,4 +307,18 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
     }
   }
   return args
+}
+
+// ─── DI resolution helper ─────────────────────────────
+
+/** Resolve via DI container if provided; otherwise fall back to bare `new`. */
+function resolveOrNew(Ctor: Function, container?: DiContainer): object {
+  if (container) {
+    try {
+      return container.resolve(Ctor)
+    } catch {
+      // MissingInjectableError or similar — fall back to bare new
+    }
+  }
+  return new (Ctor as new () => object)()
 }
