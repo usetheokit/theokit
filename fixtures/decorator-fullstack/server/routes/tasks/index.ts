@@ -1,20 +1,15 @@
-/**
- * server/routes/tasks.ts — TheoKit file-based route (defineRoute style)
- *
- * Serves the task API using the factory-function pattern.
- * When httpDecoratorsPlugin is active, decorator controllers can
- * override or coexist with these routes.
- */
 import { defineRoute } from 'theokit/server'
-
-const tasks = [
-  { id: 1, title: 'Learn TheoKit decorators', done: false, priority: 'high' },
-  { id: 2, title: 'Build AI agent app', done: false, priority: 'high' },
-  { id: 3, title: 'Ship to production', done: false, priority: 'medium' },
-]
+import { z } from 'zod'
+import { taskStore } from './_store.js'
 
 export const GET = defineRoute({
-  handler: () => {
-    return tasks
-  },
+  handler: () => taskStore.findAll(),
+})
+
+export const POST = defineRoute({
+  body: z.object({
+    title: z.string().min(3, 'Title must be at least 3 characters'),
+    priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  }),
+  handler: ({ body }) => taskStore.create(body),
 })
