@@ -7,39 +7,45 @@ import type { ParamEntry } from './decorators/params.js'
 /**
  * TheoApp — NestJS/Spring Boot-style application bootstrap.
  *
- * Replaces the manual Container + createDecoratorServer boilerplate.
- * The consumer writes:
+ * Uses `@theokit/di`'s `@Module({ providers, imports, exports })` for DI
+ * and adds a `controllers` field for HTTP endpoint registration.
  *
  * ```ts
+ * import { Module } from '@theokit/di'     // <-- from @theokit/di (already shipped)
+ * import { TheoApp } from '@theokit/http-decorators'
+ *
  * @Module({
- *   controllers: [TasksController, HealthController],
  *   providers: [TaskService],
+ *   imports: [SharedModule],
+ *   exports: [TaskService],
  * })
  * class AppModule {}
  *
- * const app = await TheoApp.create(AppModule)
+ * const app = TheoApp.create({
+ *   module: AppModule,
+ *   controllers: [TasksController, HealthController],
+ * })
  * await app.listen(3000)
  * ```
  *
- * That's it. No manual Container, no createDecoratorServer, no wiring.
+ * Alternatively, for quick prototyping without @theokit/di:
+ *
+ * ```ts
+ * const app = TheoApp.create({
+ *   controllers: [TasksController],
+ *   providers: [TaskService],
+ * })
+ * ```
  */
 
-export interface ModuleMetadata {
-  controllers?: Function[]
+export interface TheoAppOptions {
+  /** Controllers to mount (classes decorated with @Controller). */
+  controllers: Function[]
+  /** Optional: @theokit/di @Module class. When provided, its providers/imports/exports
+   *  are used for DI resolution. When absent, providers array below is used. */
+  module?: Function
+  /** Inline providers (shorthand when not using @Module). Each is instantiated as singleton. */
   providers?: Function[]
-  imports?: Function[]
-}
-
-const MODULE_METADATA = Symbol('theokit:module')
-
-/**
- * @Module decorator — declares controllers + providers for a module.
- * Mirrors NestJS's @Module({ controllers, providers }).
- */
-export function Module(metadata: ModuleMetadata): ClassDecorator {
-  return (target) => {
-    Reflect.defineMetadata(MODULE_METADATA, metadata, target)
-  }
 }
 
 interface RouteEntry {
@@ -58,54 +64,69 @@ export class TheoApp {
   }
 
   /**
-   * Create a TheoKit application from a module class.
+   * Create a TheoKit application.
    *
-   * Equivalent to NestJS's `NestFactory.create(AppModule)`.
+   * NestJS:  `const app = await NestFactory.create(AppModule)`
+   * Spring:  `SpringApplication.run(AppClass.class)`
+   * TheoKit: `const app = TheoApp.create({ module: AppModule, controllers: [...] })`
    *
-   * ```ts
-   * const app = await TheoApp.create(AppModule)
-   * await app.listen(3000)
-   * ```
+   * Or simpler (without @Module):
+   *   `const app = TheoApp.create({ controllers: [...], providers: [...] })`
    */
-  static create(moduleClass: Function): TheoApp {
+  static create(opts: TheoAppOptions): TheoApp {
     const app = new TheoApp()
 
-    const metadata = Reflect.getMetadata(MODULE_METADATA, moduleClass) as ModuleMetadata | undefined
-    if (!metadata) {
-      throw new Error(
-        `${moduleClass.name} is not a module — add @Module({ controllers, providers }) decorator`,
-      )
-    }
-
-    // Build DI registry from providers
+    // Build provider registry
     const registry = new Map<Function, object>()
 
-    // Register providers (instantiate singletons)
-    for (const Provider of metadata.providers ?? []) {
-      registry.set(Provider, new (Provider as new () => object)())
-    }
+    // Strategy 1: @Module from @theokit/di (reads usetheo:di:module metadata)
+    if (opts.module) {
+      const moduleMeta = Reflect.getMetadata('usetheo:di:module', opts.module) as
+        | { providers?: Array<Function | { provide: unknown }>; imports?: Function[]; exports?: unknown[] }
+        | undefined
 
-    // Process imported modules recursively
-    for (const ImportedModule of metadata.imports ?? []) {
-      const importMeta = Reflect.getMetadata(MODULE_METADATA, ImportedModule) as ModuleMetadata | undefined
-      if (importMeta?.providers) {
-        for (const Provider of importMeta.providers) {
-          if (!registry.has(Provider)) {
-            registry.set(Provider, new (Provider as new () => object)())
+      if (moduleMeta?.imports) {
+        for (const ImportedModule of moduleMeta.imports) {
+          const importMeta = Reflect.getMetadata('usetheo:di:module', ImportedModule) as
+            | { providers?: Array<Function | { provide: unknown }>; exports?: unknown[] }
+            | undefined
+          if (importMeta?.providers) {
+            for (const p of importMeta.providers) {
+              if (typeof p === 'function' && !registry.has(p)) {
+                registry.set(p, new (p as new () => object)())
+              }
+            }
+          }
+        }
+      }
+
+      if (moduleMeta?.providers) {
+        for (const p of moduleMeta.providers) {
+          if (typeof p === 'function' && !registry.has(p)) {
+            registry.set(p, new (p as new () => object)())
           }
         }
       }
     }
 
+    // Strategy 2: inline providers (shorthand)
+    if (opts.providers) {
+      for (const Provider of opts.providers) {
+        if (!registry.has(Provider)) {
+          registry.set(Provider, new (Provider as new () => object)())
+        }
+      }
+    }
+
     // Resolve controllers with DI
-    for (const Controller of metadata.controllers ?? []) {
+    for (const Controller of opts.controllers) {
       const paramTypes: Function[] = Reflect.getMetadata('design:paramtypes', Controller) ?? []
       const args = paramTypes.map((pt: Function) => {
         const dep = registry.get(pt)
         if (!dep) {
           throw new Error(
             `[TheoApp] Cannot resolve ${pt.name} for ${Controller.name}. ` +
-            `Add ${pt.name} to the providers array in @Module().`,
+              `Add ${pt.name} to providers (or to @Module({ providers: [...] })).`,
           )
         }
         return dep
@@ -128,14 +149,7 @@ export class TheoApp {
     return app
   }
 
-  /**
-   * Start listening on a port.
-   *
-   * ```ts
-   * await app.listen(3000)
-   * // TheoKit Decorator App listening on http://localhost:3000
-   * ```
-   */
+  /** Start listening. */
   async listen(port: number): Promise<void> {
     return new Promise((resolve) => {
       this.server.listen(port, () => {
@@ -153,18 +167,17 @@ export class TheoApp {
   /** Close the server. */
   async close(): Promise<void> {
     return new Promise((resolve) => {
-      this.server.close(() => { resolve(); })
+      this.server.close(() => resolve())
     })
   }
 
   // ── Request handler ──────────────────────────────
-
   /* eslint-disable security/detect-non-literal-regexp */
+
   private async handleRequest(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     const method = (req.method ?? 'GET').toUpperCase()
 
-    // Find matching route
     const match = this.findRoute(method, url.pathname)
     if (!match) {
       res.writeHead(404, { 'content-type': 'application/json' })
@@ -173,12 +186,11 @@ export class TheoApp {
     }
 
     const { entry, params } = match
-    const { walk, instance } = entry
 
     try {
       // Guards
-      for (const GuardCtor of walk.guards) {
-        const guard = new (GuardCtor as new () => { canActivate: (r: typeof req) => boolean | Promise<boolean> })()
+      for (const GuardCtor of entry.walk.guards) {
+        const guard = new (GuardCtor as new () => { canActivate: (r: IncomingMessage) => boolean | Promise<boolean> })()
         if (!(await guard.canActivate(req))) {
           res.writeHead(401, { 'content-type': 'application/json' })
           res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Guard rejected' } }))
@@ -190,8 +202,8 @@ export class TheoApp {
       let body: unknown
       if (['POST', 'PUT', 'PATCH'].includes(method)) {
         body = await this.parseBody(req)
-        if (walk.bodySchema && body !== undefined) {
-          const result = walk.bodySchema.safeParse(body)
+        if (entry.walk.bodySchema && body !== undefined) {
+          const result = entry.walk.bodySchema.safeParse(body)
           if (!result.success) {
             res.writeHead(422, { 'content-type': 'application/json' })
             res.end(JSON.stringify({ error: { code: 'VALIDATION_ERROR', issues: result.error.issues } }))
@@ -202,42 +214,46 @@ export class TheoApp {
       }
 
       // Args
-      const args = this.buildArgs(walk.paramEntries, req, body, params, Object.fromEntries(url.searchParams))
+      const args = this.buildArgs(entry.walk.paramEntries, req, body, params, Object.fromEntries(url.searchParams))
 
       // Redirect
-      if (walk.redirect) {
-        res.writeHead(walk.redirect.status, { location: walk.redirect.url })
+      if (entry.walk.redirect) {
+        res.writeHead(entry.walk.redirect.status, { location: entry.walk.redirect.url })
         res.end()
         return
       }
 
       // Handler
-      const handler = (instance as Record<string | symbol, Function>)[walk.propertyKey]
-      const result = await handler.apply(instance, args)
+      const handler = (entry.instance as Record<string | symbol, Function>)[entry.walk.propertyKey]
+      const result = await handler.apply(entry.instance, args)
 
       // Response
-      const status = walk.status ?? (method === 'POST' ? 201 : 200)
-      const headers: Record<string, string> = { 'content-type': 'application/json' }
-      for (const [n, v] of walk.headers) headers[n.toLowerCase()] = v
-
-      if (result === undefined || result === null) {
-        res.writeHead(status === 200 ? 204 : status, headers)
-        res.end()
-        return
-      }
-      if (typeof result === 'string') {
-        headers['content-type'] = 'text/plain'
-        res.writeHead(status, headers)
-        res.end(result)
-        return
-      }
-      res.writeHead(status, headers)
-      res.end(JSON.stringify(result))
+      this.sendResponse(res, result, entry.walk, method)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       res.writeHead(500, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ error: { code: 'INTERNAL_SERVER_ERROR', message } }))
     }
+  }
+
+  private sendResponse(res: ServerResponse, result: unknown, walk: WalkResult, method: string) {
+    const status = walk.status ?? (method === 'POST' ? 201 : 200)
+    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    for (const [n, v] of walk.headers) headers[n.toLowerCase()] = v
+
+    if (result === undefined || result === null) {
+      res.writeHead(status === 200 ? 204 : status, headers)
+      res.end()
+      return
+    }
+    if (typeof result === 'string') {
+      headers['content-type'] = 'text/plain'
+      res.writeHead(status, headers)
+      res.end(result)
+      return
+    }
+    res.writeHead(status, headers)
+    res.end(JSON.stringify(result))
   }
 
   private findRoute(method: string, pathname: string) {
@@ -248,7 +264,7 @@ export class TheoApp {
         paramNames.push(name)
         return '([^/]+)'
       })
-      const match = new RegExp(`^${regexStr}$`).exec(pathname)
+      const match = pathname.match(new RegExp(`^${regexStr}$`))
       if (!match) continue
       const params: Record<string, string> = {}
       paramNames.forEach((name, i) => { params[name] = match[i + 1] })
