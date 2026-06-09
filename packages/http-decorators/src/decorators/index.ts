@@ -12,3 +12,10 @@ export type { RedirectMeta } from './response.js'
 
 export { UseGuards, UseInterceptors, UseFilters, Catch } from './middleware.js'
 export { createDecorator, SetMetadata, Reflector, type MetadataKey } from './set-metadata.js'
+export {
+  Throttle,
+  SkipThrottle,
+  getThrottleOptions,
+  isThrottleSkipped,
+  type ThrottleOptions,
+} from './throttle.js'
