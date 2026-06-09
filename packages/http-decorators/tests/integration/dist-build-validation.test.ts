@@ -47,11 +47,12 @@ describe('dist build validation', () => {
       expect(allDist).not.toContain('swc_wasm')
     })
 
-    it('should not bundle peer deps (reflect-metadata, zod, theokit)', () => {
+    it('should not bundle peer deps (zod, theokit)', () => {
       const indexCode = readFileSync(resolve(DIST, 'index.js'), 'utf-8')
-      // These should be import statements, not inlined code
+      // Zod should NOT be inlined — it's a peer dep
       expect(indexCode).not.toContain('z.object')
-      expect(indexCode).not.toContain('Reflect.defineMetadata')
+      // reflect-metadata is called via Reflect.defineMetadata in set-metadata.ts
+      // (legitimate usage, not bundled — the polyfill comes from the peer dep import)
     })
   })
 
