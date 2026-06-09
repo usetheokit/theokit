@@ -1,5 +1,7 @@
 # Discovery Plan: TheoKit Decorator → Client Bridge
 
+> **Version 1.1** (2026-06-09) — Absorbed EC-1 from edge-case review: Q1 evidence path corrected from `packages/theo/src/vite-plugin/app-typed-client.test.ts` (does not exist) → `tests/unit/app-typed-client-plugin.test.ts` + `tests/unit/fixture-typed-client.test.ts` + `tests/type/app-client-proxy.test-d.ts` (all verified). Added halt-loop checkpoints per EC-2 (Q6 filePath scope check) + EC-3 (Q4 multi-method handling).
+>
 > **Version 1.0** — Investigate how to extend TheoKit's G1 `@theo/client` typed Proxy so that BOTH `defineRoute` file-system routes AND `@theokit/http-decorators` controllers feed the same auto-typed client. The consumer writes `@Controller('cats')` + `@Get()` on server, and `client.cats.get()` is automatically typed on the frontend — zero manual API wiring.
 
 **Slug:** `theokit-decorator-client-bridge`
@@ -82,7 +84,7 @@ Produce a blueprint that answers: **how should TheoKit's `generateManifest()` + 
 - **Corner:** Integration tests
 - **Method:** Read `packages/theo/src/vite-plugin/app-typed-client.test.ts` (or equivalent) + Read `tests/unit/app-client-proxy.test.ts`. Identify the assertion pattern (snapshot? structural? parse the .d.ts?).
 - **Expected answer shape:** Table of existing test patterns + proposed test shape for decorator-augmented .d.ts.
-- **Evidence:** `packages/theo/src/vite-plugin/app-typed-client.test.ts`
+- **Evidence:** `tests/unit/app-typed-client-plugin.test.ts`, `tests/unit/fixture-typed-client.test.ts`, `tests/type/app-client-proxy.test-d.ts`
 
 ### Coverage Corner 2 — Dependencies
 
@@ -129,7 +131,7 @@ Produce a blueprint that answers: **how should TheoKit's `generateManifest()` + 
 
 | # | Question | Corner | Method | Evidence path | Expected shape |
 |---|---|---|---|---|---|
-| Q1 | G1 test shape for .d.ts accuracy | Tests | Read test files | `packages/theo/src/vite-plugin/app-typed-client.test.ts` | Test pattern table |
+| Q1 | G1 test shape for .d.ts accuracy | Tests | Read test files | `tests/unit/app-typed-client-plugin.test.ts` + `tests/unit/fixture-typed-client.test.ts` + `tests/type/app-client-proxy.test-d.ts` | Test pattern table |
 | Q2 | Dependency delta (expect: zero) | Deps | Read package.json × 3 | `packages/http-decorators/package.json`, `packages/theo/package.json`, `hono/package.json` | Delta table |
 | Q3 | Vite plugin watcher scope extension | Tools | Read app-typed-client.ts:280-405 | `packages/theo/src/vite-plugin/app-typed-client.ts` | Watcher extension spec |
 | Q4 | ManifestRoute ↔ WalkResult mapping | Techniques | Read manifest.ts + walk-metadata.ts | Both files | Field mapping table |
@@ -141,8 +143,10 @@ Produce a blueprint that answers: **how should TheoKit's `generateManifest()` + 
 ## Halt-Loop Checkpoints
 
 1. After Q1 + Q4: confirm ManifestRoute shape is compatible with WalkResult (if NOT → the merge strategy D2 needs revision → HALT).
-2. After Q5: confirm Hono's pattern is comparative-only (if it reveals a better approach → surface for human decision → HALT).
-3. After Q6: confirm the extension is ≤ 50 LoC delta in `app-typed-client.ts` (if larger → the scope is wrong → HALT).
+2. After Q4 (EC-3): verify that `generateClientDts()` handles multiple ManifestRoute entries with the SAME filePath but DIFFERENT routePath+methods. If not, bridge must split WalkResult[] into one ManifestRoute per (verb, fullPath) pair with synthetic filePaths.
+3. After Q5: confirm Hono's pattern is comparative-only (if it reveals a better approach → surface for human decision → HALT).
+4. After Q6 (EC-2): before drafting pseudo-code, verify that ManifestRoute.filePath is ONLY used for import-path generation (not file-existence checks). If used for module-loading, a virtual-module approach adds scope beyond 30 LoC — surface for decision.
+5. After Q6: confirm the extension is ≤ 50 LoC delta in `app-typed-client.ts` (if larger → the scope is wrong → HALT).
 
 ## Acceptance Criteria
 
