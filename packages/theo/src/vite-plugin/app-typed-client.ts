@@ -280,6 +280,15 @@ export interface AppTypedClientPluginOptions {
   serverDir: string
   /** Absolute path to the `.theo/` output dir (where `client.d.ts` lands). */
   distDir: string
+  /**
+   * Additional routes to merge into the typed client alongside file-system routes.
+   * Each entry follows ManifestRoute shape (filePath, routePath, methods, paramNames).
+   *
+   * Used by `@theokit/http-decorators` `httpDecoratorsPlugin` to inject
+   * decorator-defined routes — zero coupling between theokit core and the
+   * decorator package (the walk happens in http-decorators; only data arrives here).
+   */
+  extraRoutes?: ManifestRoute[]
 }
 
 const VIRTUAL_APP_CLIENT_ID = '@theo/client'
@@ -325,6 +334,14 @@ function emitClientDts(opts: AppTypedClientPluginOptions): { changed: boolean; p
     }
   }
   const manifest = generateManifest(opts.serverDir)
+
+  // Decorator-client-bridge: merge extra routes (from @theokit/http-decorators
+  // or any other source) into the manifest so generateClientDts() produces a
+  // SINGLE typed client covering both file-system routes AND injected routes.
+  if (opts.extraRoutes?.length) {
+    manifest.routes.push(...opts.extraRoutes)
+  }
+
   const dtsOutPath = posix.join(opts.distDir.replace(/\\/g, '/'), 'client.d.ts')
   const content = generateClientDts({
     manifest,
@@ -376,9 +393,11 @@ export function appTypedClientPlugin(opts: AppTypedClientPluginOptions): Plugin 
     configureServer(server) {
       viteServer = server
       const routesGlob = posix.join(opts.serverDir.replace(/\\/g, '/'), 'routes')
+      const controllersGlob = posix.join(opts.serverDir.replace(/\\/g, '/'), 'controllers')
       const onFile = (file: string): void => {
         const normalized = file.replace(/\\/g, '/')
-        if (normalized.startsWith(routesGlob)) scheduleEmit()
+        if (normalized.startsWith(routesGlob) || normalized.startsWith(controllersGlob))
+          scheduleEmit()
       }
       server.watcher.on('add', onFile)
       server.watcher.on('change', onFile)
