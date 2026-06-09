@@ -26,29 +26,82 @@ import { pathToFileURL, fileURLToPath } from 'node:url'
 
 import { HttpDecoratorsConfigError } from './errors.js'
 
+/** Extract jsc.target from parsed .swcrc or fall back to es2022. */
+function getSwcrcTarget(swcrc: Record<string, unknown> | null): string {
+  if (!swcrc) return 'es2022'
+  const jsc = swcrc.jsc
+  if (typeof jsc !== 'object' || jsc === null) return 'es2022'
+  const target = (jsc as Record<string, unknown>).target
+  return typeof target === 'string' ? target : 'es2022'
+}
+
+/** Cached consumer .swcrc — read once per process. */
+let consumerSwcrcCache: Record<string, unknown> | null | undefined
+
+/**
+ * Walk up from the controller file's directory to find a .swcrc.
+ * Returns the parsed JSON or null if none found.
+ * Caches the result — .swcrc doesn't change at runtime.
+ */
+function readConsumerSwcrc(startDir: string): Record<string, unknown> | null {
+  if (consumerSwcrcCache !== undefined) return consumerSwcrcCache
+
+  let dir = startDir
+  const root = dirname(dir) // stop at filesystem root
+  while (dir !== root) {
+    const candidate = join(dir, '.swcrc')
+    try {
+      const raw = readFileSync(candidate, 'utf-8')
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      // Strip $schema — not an SWC transform option
+      delete parsed.$schema
+      consumerSwcrcCache = parsed
+      return parsed
+    } catch {
+      // File doesn't exist or invalid JSON — walk up
+    }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+
+  consumerSwcrcCache = null
+  return null
+}
+
 interface SwcCore {
   transformSync: (src: string, opts: unknown) => { code: string }
 }
 
+/** Cached @swc/core instance — loaded once, reused across all controller files. */
+let swcCoreCache: SwcCore | null | undefined
+
 /**
- * Dynamically load @swc/core, handling pnpm strict node_modules.
- * In pnpm, @swc/core is only directly importable from the package
- * that declares it as a dependency. We use createRequire rooted at
- * THIS package's directory to resolve correctly.
+ * Dynamically load @swc/core with singleton cache.
+ *
+ * Handles pnpm strict node_modules: @swc/core is only directly importable
+ * from the package that declares it as a dependency. We use createRequire
+ * rooted at THIS package's directory to resolve correctly.
+ *
+ * The cache ensures the ~50ms dynamic import() cost is paid ONCE,
+ * not per-controller-file.
  */
 async function loadSwcCore(): Promise<SwcCore | null> {
+  if (swcCoreCache !== undefined) return swcCoreCache
+
   try {
-    return (await import('@swc/core')) as SwcCore
+    swcCoreCache = (await import('@swc/core')) as SwcCore
   } catch {
     try {
       const thisDir = dirname(fileURLToPath(import.meta.url))
       const req = createRequire(resolve(thisDir, 'index.js'))
       const resolved = req.resolve('@swc/core')
-      return (await import(pathToFileURL(resolved).href)) as SwcCore
+      swcCoreCache = (await import(pathToFileURL(resolved).href)) as SwcCore
     } catch {
-      return null
+      swcCoreCache = null
     }
   }
+  return swcCoreCache
 }
 
 /**
@@ -76,18 +129,23 @@ export async function loadControllerWithSwc(
   }
 
   const source = readFileSync(absoluteFilePath, 'utf-8')
+  const consumerSwcrc = readConsumerSwcrc(dirname(absoluteFilePath))
   const { code } = swc.transformSync(source, {
     filename: absoluteFilePath,
     jsc: {
       parser: {
         syntax: 'typescript',
         decorators: true,
+        ...(consumerSwcrc?.jsc?.parser as Record<string, unknown>),
       },
       transform: {
+        ...(consumerSwcrc?.jsc?.transform as Record<string, unknown>),
+        // NON-NEGOTIABLE — always enforce decorator metadata emission
+        // regardless of consumer .swcrc overrides
         legacyDecorator: true,
         decoratorMetadata: true,
       },
-      target: 'es2022',
+      target: getSwcrcTarget(consumerSwcrc),
     },
     module: { type: 'es6' },
     sourceMaps: false,

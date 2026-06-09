@@ -13,6 +13,10 @@
     "./theokit-plugin": {
       "import": "./dist/theokit-plugin.js",
       "types": "./dist/theokit-plugin.d.ts"
+    },
+    "./app": {
+      "import": "./dist/app.js",
+      "types": "./dist/app.d.ts"
     }
   },
   "files": [
