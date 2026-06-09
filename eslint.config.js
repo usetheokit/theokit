@@ -58,6 +58,7 @@ export default tseslint.config(
       // that the root parser projectService cannot resolve. Tests are
       // covered by vitest; config files are trivial. Lint the src/ only.
       'packages/http-decorators/tests/**',
+      'packages/http-decorators/examples/**',
       'packages/http-decorators/vitest.config.ts',
       'packages/http-decorators/tsup.config.ts',
     ],
