@@ -95,11 +95,13 @@ export function runConfigHook(ctx: ConfigHookCtx): Record<string, unknown> {
           replacement: resolve(ctx.theoSrcDir, `adapters/ws-shim${ext}`),
         },
         // T1.2 — devtools entry (DEV only; tree-shaken in build).
+        // Source layout: src/devtools/dom/entry.tsx (has /dom/ segment)
+        // Dist layout:   dist/devtools/entry.js    (tsup flattens /dom/)
         {
           find: 'theokit/devtools/entry',
           replacement: resolve(
             ctx.theoSrcDir,
-            `devtools/dom/entry${ext === '.ts' ? '.tsx' : '.js'}`,
+            ext === '.ts' ? 'devtools/dom/entry.tsx' : 'devtools/entry.js',
           ),
         },
         { find: 'theokit', replacement: resolve(ctx.theoSrcDir, `index${ext}`) },
