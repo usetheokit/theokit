@@ -44,6 +44,40 @@ export function joinPath(prefix: string, path: string): string {
 }
 
 /**
+ * Resolve the Zod body schema for a method's @Body() param entry.
+ *
+ * Priority: explicit @Body(zodSchema) > design:paramtypes + DTO static schema.
+ * EC-4 relaxed: warns (not throws) when paramtypes missing — @Body(zodSchema) is the fix.
+ */
+function resolveBodySchema(
+  paramEntries: ParamEntry[],
+  ControllerClass: Function,
+  propertyKey: string | symbol,
+): ZodTypeAny | undefined {
+  const bodyParam = paramEntries.find((p) => p.source === 'body' && !p.key)
+  if (!bodyParam) return undefined
+
+  // Priority 1: explicit Zod schema from @Body(zodSchema)
+  if (bodyParam.schema) return bodyParam.schema
+
+  // Priority 2: design:paramtypes + DTO static schema (requires emitDecoratorMetadata)
+  const paramTypes: Function[] =
+    Reflect.getMetadata('design:paramtypes', ControllerClass.prototype, propertyKey) ?? []
+  if (paramTypes.length > 0) {
+    return resolveDtoSchema(paramTypes[bodyParam.index])
+  }
+
+  // EC-4 relaxed: warn when @Body() has no schema and no paramtypes
+  console.warn(
+    `[@theokit/http-decorators] method ${String(propertyKey)} on ` +
+      `${ControllerClass.name}: @Body() without explicit schema and ` +
+      `emitDecoratorMetadata is not active. Body will be passed raw (no validation). ` +
+      `Fix: use @Body(zodSchema) for validation without metadata emission.`,
+  )
+  return undefined
+}
+
+/**
  * Walk all decorator metadata on a controller class and produce
  * a structured list of route descriptors. Pure function — no side effects.
  */
@@ -75,28 +109,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
 
   return methods.map((m) => {
     const paramEntries = paramsMap.get(m.propertyKey) ?? []
-
-    // Resolve body/query/params schemas from design:paramtypes + DTO static schema (Pattern D2)
-    const paramTypes: Function[] =
-      Reflect.getMetadata('design:paramtypes', ControllerClass.prototype, m.propertyKey) ?? []
-
-    // EC-4: detect missing emitDecoratorMetadata when WHOLE-OBJECT DTO injection is used
-    // Only @Body() / @Query() WITHOUT a key need design:paramtypes for DTO class resolution.
-    // @Param('id'), @Query('name') etc. use key-based extraction — no type metadata needed.
-    const needsTypeResolution = paramEntries.some(
-      (p: ParamEntry) => (p.source === 'body' || p.source === 'query') && !p.key,
-    )
-    if (needsTypeResolution && paramTypes.length === 0) {
-      throw new HttpDecoratorsConfigError(
-        `emitDecoratorMetadata not enabled in consumer tsconfig — ` +
-          `method ${String(m.propertyKey)} on ${ControllerClass.name} has @Body/@Query/@Param ` +
-          `decorators but design:paramtypes is empty. ` +
-          `Add "emitDecoratorMetadata": true to your tsconfig.json compilerOptions.`,
-      )
-    }
-
-    const bodyParam = paramEntries.find((p: ParamEntry) => p.source === 'body' && !p.key)
-    const bodySchema = bodyParam ? resolveDtoSchema(paramTypes[bodyParam.index]) : undefined
+    const bodySchema = resolveBodySchema(paramEntries, ControllerClass, m.propertyKey)
 
     // Method-level guards/interceptors (composed: class FIRST per NestJS convention — EC-9)
     const methodGuards = getMeta<Function[]>(USE_GUARDS, ControllerClass, m.propertyKey) ?? []

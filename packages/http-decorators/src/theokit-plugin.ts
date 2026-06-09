@@ -2,27 +2,40 @@
 /**
  * TheoKit integration plugin for @theokit/http-decorators.
  *
- * Registers an `onRequest` hook that intercepts requests matching
- * decorator-defined routes BEFORE TheoKit's file-based route scanner
- * processes them. Same integration pattern as @theokit/plugin-openapi.
+ * Two modes:
  *
- * Usage in theo.config.ts:
+ * **Mode 1 — controllersGlob (RECOMMENDED):**
+ * Controllers are discovered by glob pattern and loaded via @swc/core at
+ * first request. This bypasses the esbuild parameter-decorator limitation
+ * because controller files are never imported through tsx/esbuild.
  *
  * ```ts
+ * // theo.config.ts — NO controller import needed
  * import { defineConfig } from 'theokit/server'
  * import { httpDecoratorsPlugin } from '@theokit/http-decorators/theokit-plugin'
- * import { CatsController } from './server/controllers/cats.controller.js'
  *
  * export default defineConfig({
  *   plugins: [
- *     httpDecoratorsPlugin({ controllers: [CatsController] })
+ *     httpDecoratorsPlugin({
+ *       controllersGlob: 'server/controllers/**\/*.controller.ts'
+ *     })
  *   ]
  * })
+ * ```
+ *
+ * **Mode 2 — direct controllers array (tests, pre-compiled):**
+ * Pass controller classes directly. Only works when the transpiler
+ * supports parameter decorators (e.g., SWC in Vitest, or manual
+ * Reflect.defineMetadata in tests).
+ *
+ * ```ts
+ * httpDecoratorsPlugin({ controllers: [CatsController] })
  * ```
  */
 import 'reflect-metadata'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { loadControllersFromGlob } from './bridge/swc-loader.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
 
@@ -32,9 +45,13 @@ export interface DiContainer {
 }
 
 export interface HttpDecoratorsPluginOptions {
-  controllers: Function[]
-  /** Optional DI container (e.g., @theokit/di Container). When provided,
-   *  controllers + guards are resolved via container.resolve() instead of bare `new`. */
+  /** Direct controller class references (Mode 2 — tests, pre-compiled). */
+  controllers?: Function[]
+  /** Glob pattern relative to project root (Mode 1 — RECOMMENDED).
+   *  Example: 'server/controllers/**\/*.controller.ts'
+   *  Requires @swc/core as devDependency. */
+  controllersGlob?: string
+  /** Optional DI container (e.g., @theokit/di Container). */
   container?: DiContainer
 }
 
@@ -55,33 +72,31 @@ interface RouteEntry {
  * shape is sufficient).
  */
 export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
-  // Dedupe controllers (EC-5)
-  const seen = new Set<Function>()
-  const unique: Function[] = []
-  for (const Ctor of opts.controllers) {
-    if (seen.has(Ctor)) continue
-    seen.add(Ctor)
-    unique.push(Ctor)
-  }
-
-  // Walk metadata and build route table at plugin creation time (once)
   const routes: RouteEntry[] = []
-  for (const Ctor of unique) {
-    const instance = resolveOrNew(Ctor, opts.container)
-    const walks = walkControllerMetadata(Ctor)
-    for (const w of walks) {
-      const { regex, paramNames } = compilePattern(w.fullPath)
-      routes.push({ walk: w, instance, regex, paramNames })
-    }
+  let initialized = false
+  let initPromise: Promise<void> | null = null
+
+  // Mode 2: Direct class references — initialize eagerly
+  if (opts.controllers && opts.controllers.length > 0) {
+    buildRouteTable(routes, opts.controllers, opts.container)
+    initialized = true
   }
 
-  // Sort: static routes first, parameterized last (prevents /cats/:id matching "admin")
-  routes.sort((a, b) => {
-    const aHasParam = a.walk.fullPath.includes(':')
-    const bHasParam = b.walk.fullPath.includes(':')
-    if (aHasParam !== bHasParam) return aHasParam ? 1 : -1
-    return 0
-  })
+  // Mode 1: controllersGlob — defer initialization to first request
+  if (opts.controllersGlob && !initialized) {
+    const glob = opts.controllersGlob
+    initPromise = (async () => {
+      // Resolve root from process.cwd() — the TheoKit project root
+      const rootDir = process.cwd()
+      const controllers = await loadControllersFromGlob(rootDir, glob)
+      buildRouteTable(routes, controllers, opts.container)
+      initialized = true
+      console.log(
+        `[@theokit/http-decorators] Loaded ${controllers.length} controller(s) ` +
+          `with ${routes.length} route(s) via SWC.`,
+      )
+    })()
+  }
 
   return {
     name: '@theokit/http-decorators',
@@ -96,10 +111,48 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
       ) => void
     }) {
       app.addHook('onRequest', async (pluginCtx) => {
+        // Wait for lazy initialization (Mode 1)
+        if (initPromise && !initialized) {
+          await initPromise
+        }
         await handleDecoratorRoute(routes, pluginCtx.request, pluginCtx.response, opts.container)
       })
     },
   }
+}
+
+// ─── Route table builder ─────────────────────────────────
+
+function buildRouteTable(
+  routes: RouteEntry[],
+  controllers: Function[],
+  container?: DiContainer,
+): void {
+  // Dedupe controllers (EC-5)
+  const seen = new Set<Function>()
+  const unique: Function[] = []
+  for (const Ctor of controllers) {
+    if (seen.has(Ctor)) continue
+    seen.add(Ctor)
+    unique.push(Ctor)
+  }
+
+  for (const Ctor of unique) {
+    const instance = resolveOrNew(Ctor, container)
+    const walks = walkControllerMetadata(Ctor)
+    for (const w of walks) {
+      const { regex, paramNames } = compilePattern(w.fullPath)
+      routes.push({ walk: w, instance, regex, paramNames })
+    }
+  }
+
+  // Sort: static routes first, parameterized last (prevents /cats/:id matching "admin")
+  routes.sort((a, b) => {
+    const aHasParam = a.walk.fullPath.includes(':')
+    const bHasParam = b.walk.fullPath.includes(':')
+    if (aHasParam !== bHasParam) return aHasParam ? 1 : -1
+    return 0
+  })
 }
 
 // ─── Request handler (extracted for complexity budget) ──

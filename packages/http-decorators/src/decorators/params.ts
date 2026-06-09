@@ -1,3 +1,5 @@
+import type { ZodTypeAny } from 'zod'
+
 import { setMeta, getMeta, ROUTE_PARAMS } from '../metadata/index.js'
 
 export type ParamSource =
@@ -16,16 +18,44 @@ export interface ParamEntry {
   key?: string
   index: number
   passthrough?: boolean
+  /** Explicit Zod schema — when set, bypasses design:paramtypes + DTO resolution.
+   *  Preferred path: `@Body(zMySchema)` works without emitDecoratorMetadata. */
+  schema?: ZodTypeAny
+}
+
+/** Detect whether a value is a Zod schema (has `.safeParse()` method). */
+function isZodSchema(v: unknown): v is ZodTypeAny {
+  return (
+    v !== null &&
+    v !== undefined &&
+    typeof v === 'object' &&
+    typeof (v as Record<string, unknown>).safeParse === 'function'
+  )
 }
 
 function makeParamDecorator(source: ParamSource) {
-  return function (key?: string): ParameterDecorator {
+  /**
+   * Overloaded parameter decorator:
+   *  - `@Body()` / `@Param()` / `@Query()` — whole-object extraction
+   *  - `@Body('key')` / `@Param('key')` — named-field extraction
+   *  - `@Body(zodSchema)` — whole-object with explicit Zod validation
+   *    (works WITHOUT emitDecoratorMetadata — TheoKit "Zod is SSoT" alignment)
+   */
+  return function (keyOrSchema?: string | ZodTypeAny): ParameterDecorator {
     return (target, propertyKey, parameterIndex) => {
       if (propertyKey === undefined) return
       const map =
         getMeta<Map<string | symbol, ParamEntry[]>>(ROUTE_PARAMS, target.constructor) ?? new Map()
       const entries = map.get(propertyKey) ?? []
-      entries.push({ source, key, index: parameterIndex })
+
+      const entry: ParamEntry = { source, index: parameterIndex }
+      if (typeof keyOrSchema === 'string') {
+        entry.key = keyOrSchema
+      } else if (isZodSchema(keyOrSchema)) {
+        entry.schema = keyOrSchema
+      }
+
+      entries.push(entry)
       map.set(propertyKey, entries)
       setMeta(ROUTE_PARAMS, target.constructor, map)
     }

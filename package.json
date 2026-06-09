@@ -89,6 +89,7 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8",
+    "unplugin-swc": "^1.5.9",
     "unstorage": "^1.10.0",
     "vitest": "^4.1.0",
     "wrangler": "4.58.0",
