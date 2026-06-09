@@ -9,11 +9,9 @@ import {
   Param,
   Query,
   HttpCode,
-  UseGuards,
   UseInterceptors,
 } from '../../../../packages/http-decorators/src/index.js'
 import { taskStore } from '../routes/tasks/_store.js'
-import { AuthGuard } from '../guards/auth.guard.js'
 import { TimingInterceptor } from '../interceptors/timing.interceptor.js'
 
 /**
@@ -63,7 +61,6 @@ export class TasksController {
   }
 
   @Get('stats')
-  @UseGuards(AuthGuard)
   stats() {
     return taskStore.stats()
   }
