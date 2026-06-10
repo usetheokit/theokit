@@ -5,7 +5,7 @@
  * 2. Multi-turn conversation (session Map + EC-2 TTL eviction)
  * 3. Model from decorator metadata (EC-5 provider prefix auto-detect)
  * 4. Consistent tool names (dot ↔ underscore bidirectional mapping)
- * 5. Robust Zod→JSON Schema (handles nested, arrays, enums, optional, default)
+ * 5. Robust Zod→JSON Schema via Zod v4 native z.toJSONSchema()
  * 6. Budget enforcement (per-session cost tracking from EC-3 last-chunk usage)
  * 7. AbortController cancel (EC-4 race-safe signal.aborted check)
  */
@@ -171,37 +171,12 @@ export function createRealAgentStream(
   })
 }
 
-// ─── Gap 5: Robust Zod→JSON Schema ──────────────────────────
+// ─── Gap 5: Robust Zod→JSON Schema (Zod v4 native) ─────────
+
+import { z } from 'zod'
 
 function convertZodToJsonSchema(schema: unknown): Record<string, unknown> {
   if (!schema || typeof schema !== 'object') return { type: 'object', properties: {} }
-  return walk(schema)
-}
-
-function walk(node: unknown): Record<string, unknown> {
-  if (!node || typeof node !== 'object') return { type: 'string' }
-  const d = (node as { _def?: Record<string, unknown> })._def as Record<string, unknown> | undefined
-  if (!d) return { type: 'string' }
-  switch (d.typeName) {
-    case 'ZodObject': {
-      const shape = (d.shape as () => Record<string, unknown>)?.() ?? {}
-      const props: Record<string, unknown> = {}
-      const req: string[] = []
-      for (const [k, v] of Object.entries(shape)) {
-        props[k] = walk(v)
-        const vt = (v as { _def?: { typeName?: string } })._def?.typeName
-        if (vt !== 'ZodOptional' && vt !== 'ZodDefault') req.push(k)
-      }
-      return { type: 'object', properties: props, ...(req.length ? { required: req } : {}) }
-    }
-    case 'ZodString': return { type: 'string' }
-    case 'ZodNumber': return { type: 'number' }
-    case 'ZodBoolean': return { type: 'boolean' }
-    case 'ZodEnum': return { type: 'string', enum: d.values as string[] }
-    case 'ZodArray': return { type: 'array', items: walk(d.type) }
-    case 'ZodOptional': return walk(d.innerType)
-    case 'ZodDefault': return walk(d.innerType)
-    case 'ZodNullable': return { ...walk(d.innerType), nullable: true }
-    default: return { type: 'string' }
-  }
+  const { $schema: _, ...rest } = z.toJSONSchema(schema as z.ZodType) as Record<string, unknown>
+  return rest
 }
