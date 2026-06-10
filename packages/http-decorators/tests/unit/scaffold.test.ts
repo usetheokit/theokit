@@ -8,7 +8,7 @@ describe('T1.1 — Package scaffold', () => {
   it('test_scaffold_package_json_has_correct_fields', () => {
     const pkg = JSON.parse(readFileSync(resolve(PKG_ROOT, 'package.json'), 'utf8'))
     expect(pkg.name).toBe('@theokit/http-decorators')
-    expect(pkg.version).toBe('0.1.0')
+    expect(pkg.version).toBe('0.2.0')
     expect(pkg.type).toBe('module')
     expect(pkg.peerDependencies).toHaveProperty('reflect-metadata')
     expect(pkg.peerDependencies).toHaveProperty('theokit')
