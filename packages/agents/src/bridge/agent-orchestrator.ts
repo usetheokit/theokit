@@ -65,6 +65,8 @@ export async function delegate(
   message: string,
   opts: DelegateOptions = {},
 ): Promise<DelegationResult> {
+  // SECURITY: API key flows as string — accepted risk for v1.
+  // Key is never logged or serialized. Future: SecretString wrapper.
   const apiKey = opts.apiKey ?? ''
   if (!apiKey) {
     throw new DelegationError(
@@ -114,6 +116,10 @@ export async function delegate(
       if (event.type === 'done') {
         cost = (event.cost as number) ?? 0
         tokens = event.usage?.totalTokens ?? 0
+        // Security: mid-stream budget enforcement — abort immediately on exceeded
+        if (Number.isFinite(budget) && cost > budget) {
+          throw new BudgetExceededError(SubAgentClass.name, cost, budget)
+        }
       }
       if (event.type === 'error') {
         throw new DelegationError(SubAgentClass.name, (event as { message?: string }).message ?? 'Unknown agent error')

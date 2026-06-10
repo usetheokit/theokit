@@ -58,8 +58,13 @@ export class TheoApp {
   private readonly readinessChecks: ReadinessCheck[]
 
   private constructor(opts?: Pick<TheoAppOptions, 'readinessChecks' | 'healthPath' | 'readyPath'>) {
-    this.healthPath = opts?.healthPath ?? '/__theo/health'
-    this.readyPath = opts?.readyPath ?? '/__theo/ready'
+    const hp = opts?.healthPath ?? '/__theo/health'
+    const rp = opts?.readyPath ?? '/__theo/ready'
+    // Security: prevent health paths from colliding with user API routes
+    if (hp.startsWith('/api/')) throw new Error(`[TheoApp] healthPath "${hp}" must not start with /api/ — would collide with user routes`)
+    if (rp.startsWith('/api/')) throw new Error(`[TheoApp] readyPath "${rp}" must not start with /api/ — would collide with user routes`)
+    this.healthPath = hp
+    this.readyPath = rp
     this.readinessChecks = opts?.readinessChecks ?? []
     const adapter = createNodeAdapter()
     this.serverHandle = adapter.createServer((request) => this.handleRequest(request))
@@ -179,7 +184,8 @@ export class TheoApp {
 
   private async autoWireAgents(agentClasses: Function[], registry: Map<Function, object>, opts: TheoAppOptions) {
     // Dynamic import — @theokit/agents is optional peer dependency
-    // Uses Function-typed destructuring to avoid compile-time dependency on @theokit/agents
+    // SECURITY: new Function used for dynamic import of optional peer dep.
+    // Argument is HARDCODED ('@theokit/agents'), never user input. Safe.
     // eslint-disable-next-line @typescript-eslint/no-implied-eval -- dynamic import avoids compile-time dependency on optional peer
     const importFn = new Function('specifier', 'return import(specifier)') as (s: string) => Promise<Record<string, Function>>
     let walkAgentMetadata: Function, compileAgent: Function, generateAgentRoutes: Function, getMixins: Function, createRealAgentStreamFn: Function | undefined
@@ -416,8 +422,9 @@ export class TheoApp {
       if (err instanceof HttpException) {
         return jsonResponse(err.statusCode, err.toJSON())
       }
-      const message = err instanceof Error ? err.message : String(err)
-      return jsonResponse(500, { error: { code: 'INTERNAL_SERVER_ERROR', message } })
+      // Security: never leak raw error messages to clients
+      console.error('[theokit] Internal error:', err instanceof Error ? err.message : err)
+      return jsonResponse(500, { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal Server Error' } })
     }
   }
 
