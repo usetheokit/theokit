@@ -1,5 +1,10 @@
 export { resolveOrNew, type DiContainer } from './di-resolve.js'
 export {
+  createExecutionContext,
+  type ExecutionContext,
+  type CanActivate,
+} from './execution-context.js'
+export {
   runExceptionFilters,
   type ExceptionFilter,
   type ArgumentsHost,

@@ -36,8 +36,9 @@ class CreateCatDto {
 // ── Guard ──────────────────────────────────────────────
 
 class ApiKeyGuard {
-  canActivate(req) {
-    return req.headers['x-api-key'] === 'theokit-secret'
+  canActivate(context) {
+    const req = context.getRequest()
+    return req.headers.get('x-api-key') === 'theokit-secret'
   }
 }
 

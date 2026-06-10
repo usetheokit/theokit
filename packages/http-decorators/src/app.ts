@@ -1,51 +1,28 @@
+/* eslint-disable security/detect-non-literal-regexp */
 import 'reflect-metadata'
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 
+import { createExecutionContext, type CanActivate } from './bridge/execution-context.js'
+import { createNodeAdapter } from './bridge/runtime/node.js'
+import type { ServerHandle } from './bridge/runtime/types.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
+import { ForbiddenException } from './exceptions/http-exception.js'
 
 /**
  * TheoApp — NestJS/Spring Boot-style application bootstrap.
  *
- * Uses `@theokit/di`'s `@Module({ providers, imports, exports })` for DI
- * and adds a `controllers` field for HTTP endpoint registration.
- *
- * ```ts
- * import { Module } from '@theokit/di'     // <-- from @theokit/di (already shipped)
- * import { TheoApp } from '@theokit/http-decorators'
- *
- * @Module({
- *   providers: [TaskService],
- *   imports: [SharedModule],
- *   exports: [TaskService],
- * })
- * class AppModule {}
- *
- * const app = TheoApp.create({
- *   module: AppModule,
- *   controllers: [TasksController, HealthController],
- * })
- * await app.listen(3000)
- * ```
- *
- * Alternatively, for quick prototyping without @theokit/di:
- *
- * ```ts
- * const app = TheoApp.create({
- *   controllers: [TasksController],
- *   providers: [TaskService],
- * })
- * ```
+ * Internally uses Web Standard Request/Response pipeline.
+ * Node adapter converts at the HTTP server boundary.
  */
 
 export interface TheoAppOptions {
-  /** Controllers to mount (classes decorated with @Controller). */
   controllers: Function[]
-  /** Optional: @theokit/di @Module class. When provided, its providers/imports/exports
-   *  are used for DI resolution. When absent, providers array below is used. */
+  agents?: Function[]
   module?: Function
-  /** Inline providers (shorthand when not using @Module). Each is instantiated as singleton. */
   providers?: Function[]
+  agentPlugin?: {
+    register: (app: { addHook: (name: string, fn: Function) => void }) => void
+  }
 }
 
 interface RouteEntry {
@@ -54,62 +31,39 @@ interface RouteEntry {
 }
 
 export class TheoApp {
-  private server: Server
+  private serverHandle: ServerHandle
   private readonly routes: RouteEntry[] = []
+  private agentHooks: Function[] = []
 
   private constructor() {
-    this.server = createServer((req, res) => {
-      void this.handleRequest(req, res)
-    })
+    const adapter = createNodeAdapter()
+    this.serverHandle = adapter.createServer((request) => this.handleRequest(request))
   }
 
-  /**
-   * Create a TheoKit application.
-   *
-   * NestJS:  `const app = await NestFactory.create(AppModule)`
-   * Spring:  `SpringApplication.run(AppClass.class)`
-   * TheoKit: `const app = TheoApp.create({ module: AppModule, controllers: [...] })`
-   *
-   * Or simpler (without @Module):
-   *   `const app = TheoApp.create({ controllers: [...], providers: [...] })`
-   */
   static create(opts: TheoAppOptions): TheoApp {
     const app = new TheoApp()
 
-    // Build provider registry
+    // DI registry
     const registry = new Map<Function, object>()
 
-    // Strategy 1: @Module from @theokit/di (reads usetheo:di:module metadata)
+    // Module resolution
     if (opts.module) {
-      const moduleMeta = Reflect.getMetadata('usetheo:di:module', opts.module) as
-        | { providers?: Array<Function | { provide: unknown }>; imports?: Function[]; exports?: unknown[] }
-        | undefined
-
-      if (moduleMeta?.imports) {
-        for (const ImportedModule of moduleMeta.imports) {
-          const importMeta = Reflect.getMetadata('usetheo:di:module', ImportedModule) as
-            | { providers?: Array<Function | { provide: unknown }>; exports?: unknown[] }
-            | undefined
-          if (importMeta?.providers) {
-            for (const p of importMeta.providers) {
-              if (typeof p === 'function' && !registry.has(p)) {
-                registry.set(p, new (p as new () => object)())
-              }
+      const moduleMeta = Reflect.getMetadata('usetheo:di:module', opts.module)
+      if (moduleMeta) {
+        const allModules = [opts.module, ...(moduleMeta.imports ?? [])]
+        for (const Module of allModules) {
+          const meta = Reflect.getMetadata('usetheo:di:module', Module)
+          if (!meta) continue
+          for (const Provider of (meta.providers ?? [])) {
+            if (!registry.has(Provider)) {
+              registry.set(Provider, new (Provider as new () => object)())
             }
-          }
-        }
-      }
-
-      if (moduleMeta?.providers) {
-        for (const p of moduleMeta.providers) {
-          if (typeof p === 'function' && !registry.has(p)) {
-            registry.set(p, new (p as new () => object)())
           }
         }
       }
     }
 
-    // Strategy 2: inline providers (shorthand)
+    // Inline providers
     if (opts.providers) {
       for (const Provider of opts.providers) {
         if (!registry.has(Provider)) {
@@ -118,7 +72,7 @@ export class TheoApp {
       }
     }
 
-    // Resolve controllers with DI
+    // Controllers with DI
     for (const Controller of opts.controllers) {
       const paramTypes: Function[] = Reflect.getMetadata('design:paramtypes', Controller) ?? []
       const args = paramTypes.map((pt: Function) => {
@@ -138,7 +92,7 @@ export class TheoApp {
       }
     }
 
-    // Sort: static routes before parameterized
+    // Sort: static before parameterized
     app.routes.sort((a, b) => {
       const aP = a.walk.fullPath.includes(':')
       const bP = b.walk.fullPath.includes(':')
@@ -146,114 +100,101 @@ export class TheoApp {
       return 0
     })
 
+    // Agent plugin
+    if (opts.agents?.length && opts.agentPlugin) {
+      const hooks: Function[] = []
+      opts.agentPlugin.register({
+        addHook(_name: string, fn: Function) { hooks.push(fn) },
+      })
+      app.agentHooks = hooks
+    }
+
     return app
   }
 
-  /** Start listening. */
   async listen(port: number): Promise<void> {
     return new Promise((resolve) => {
-      this.server.listen(port, () => {
+      this.serverHandle.listen(port, () => {
         console.log(`TheoKit app listening on http://localhost:${port}`)
         resolve()
       })
     })
   }
 
-  /** Get the underlying HTTP server (for testing). */
-  getHttpServer(): Server {
-    return this.server
+  getServerHandle(): ServerHandle {
+    return this.serverHandle
   }
 
-  /** Close the server. */
   async close(): Promise<void> {
     return new Promise((resolve) => {
-      this.server.close(() => resolve())
+      this.serverHandle.close(() => { resolve(); })
     })
   }
 
-  // ── Request handler ──────────────────────────────
-  /* eslint-disable security/detect-non-literal-regexp */
+  // ── Web Standard request handler ──────────────────
 
-  private async handleRequest(req: IncomingMessage, res: ServerResponse) {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-    const method = (req.method ?? 'GET').toUpperCase()
+  private async handleRequest(request: Request): Promise<Response> {
+    // Agent hooks
+    for (const hook of this.agentHooks) {
+      const result = await (hook as (ctx: { request: Request }) => Promise<Response | undefined>)({ request })
+      if (result instanceof Response) return result
+    }
+
+    const url = new URL(request.url)
+    const method = request.method.toUpperCase()
 
     const match = this.findRoute(method, url.pathname)
     if (!match) {
-      res.writeHead(404, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: `No route for ${method} ${url.pathname}` } }))
-      return
+      return jsonResponse(404, { error: { code: 'NOT_FOUND', message: `No route for ${method} ${url.pathname}` } })
     }
 
     const { entry, params } = match
 
     try {
       // Guards
+      const ctx = createExecutionContext(request, entry.instance.constructor, entry.walk.propertyKey)
       for (const GuardCtor of entry.walk.guards) {
-        const guard = new (GuardCtor as new () => { canActivate: (r: IncomingMessage) => boolean | Promise<boolean> })()
-        if (!(await guard.canActivate(req))) {
-          res.writeHead(401, { 'content-type': 'application/json' })
-          res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Guard rejected' } }))
-          return
+        const guard = new (GuardCtor as new () => CanActivate)()
+        if (!(await guard.canActivate(ctx))) {
+          const ex = new ForbiddenException('Forbidden resource')
+          return jsonResponse(ex.statusCode, ex.toJSON())
         }
       }
 
       // Body
       let body: unknown
       if (['POST', 'PUT', 'PATCH'].includes(method)) {
-        body = await this.parseBody(req)
+        try {
+          const text = await request.text()
+          body = text ? JSON.parse(text) : undefined
+        } catch { body = undefined }
+
         if (entry.walk.bodySchema && body !== undefined) {
           const result = entry.walk.bodySchema.safeParse(body)
           if (!result.success) {
-            res.writeHead(422, { 'content-type': 'application/json' })
-            res.end(JSON.stringify({ error: { code: 'VALIDATION_ERROR', issues: result.error.issues } }))
-            return
+            return jsonResponse(422, { error: { code: 'VALIDATION_ERROR', issues: result.error.issues } })
           }
           body = result.data
         }
       }
 
       // Args
-      const args = this.buildArgs(entry.walk.paramEntries, req, body, params, Object.fromEntries(url.searchParams))
+      const args = this.buildArgs(entry.walk.paramEntries, request, body, params, Object.fromEntries(url.searchParams))
 
       // Redirect
       if (entry.walk.redirect) {
-        res.writeHead(entry.walk.redirect.status, { location: entry.walk.redirect.url })
-        res.end()
-        return
+        return new Response(null, { status: entry.walk.redirect.status, headers: { location: entry.walk.redirect.url } })
       }
 
       // Handler
       const handler = (entry.instance as Record<string | symbol, Function>)[entry.walk.propertyKey]
       const result = await handler.apply(entry.instance, args)
 
-      // Response
-      this.sendResponse(res, result, entry.walk, method)
+      return buildResponse(result, entry.walk, method)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      res.writeHead(500, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ error: { code: 'INTERNAL_SERVER_ERROR', message } }))
+      return jsonResponse(500, { error: { code: 'INTERNAL_SERVER_ERROR', message } })
     }
-  }
-
-  private sendResponse(res: ServerResponse, result: unknown, walk: WalkResult, method: string) {
-    const status = walk.status ?? (method === 'POST' ? 201 : 200)
-    const headers: Record<string, string> = { 'content-type': 'application/json' }
-    for (const [n, v] of walk.headers) headers[n.toLowerCase()] = v
-
-    if (result === undefined || result === null) {
-      res.writeHead(status === 200 ? 204 : status, headers)
-      res.end()
-      return
-    }
-    if (typeof result === 'string') {
-      headers['content-type'] = 'text/plain'
-      res.writeHead(status, headers)
-      res.end(result)
-      return
-    }
-    res.writeHead(status, headers)
-    res.end(JSON.stringify(result))
   }
 
   private findRoute(method: string, pathname: string) {
@@ -264,7 +205,7 @@ export class TheoApp {
         paramNames.push(name)
         return '([^/]+)'
       })
-      const match = pathname.match(new RegExp(`^${regexStr}$`))
+      const match = new RegExp(`^${regexStr}$`).exec(pathname)
       if (!match) continue
       const params: Record<string, string> = {}
       paramNames.forEach((name, i) => { params[name] = match[i + 1] })
@@ -273,34 +214,43 @@ export class TheoApp {
     return null
   }
 
-  private parseBody(req: IncomingMessage): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = []
-      req.on('data', (c: Buffer) => chunks.push(c))
-      req.on('end', () => {
-        const raw = Buffer.concat(chunks).toString('utf8')
-        if (!raw) { resolve(undefined); return }
-        try { resolve(JSON.parse(raw)) } catch { resolve(raw) }
-      })
-      req.on('error', reject)
-    })
-  }
-
-  private buildArgs(entries: ParamEntry[], req: IncomingMessage, body: unknown, params: Record<string, string>, query: Record<string, string>): unknown[] {
+  private buildArgs(entries: ParamEntry[], request: Request, body: unknown, params: Record<string, string>, query: Record<string, string>): unknown[] {
     if (entries.length === 0) return []
     const max = Math.max(...entries.map(p => p.index))
     const args: unknown[] = Array.from({ length: max + 1 }, () => undefined)
     for (const p of entries) {
       switch (p.source) {
-        case 'req': args[p.index] = req; break
+        case 'req': args[p.index] = request; break
         case 'body': args[p.index] = p.key ? (body as Record<string, unknown>)[p.key] : body; break
         case 'param': args[p.index] = p.key ? params[p.key] : params; break
         case 'query': args[p.index] = p.key ? query[p.key] : query; break
-        case 'headers': args[p.index] = p.key ? req.headers[p.key.toLowerCase()] : req.headers; break
-        case 'ip': args[p.index] = req.socket.remoteAddress; break
+        case 'headers': args[p.index] = p.key ? request.headers.get(p.key.toLowerCase()) : Object.fromEntries(request.headers.entries()); break
+        case 'ip': args[p.index] = request.headers.get('x-forwarded-for') ?? '127.0.0.1'; break
         default: args[p.index] = undefined
       }
     }
     return args
   }
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+function buildResponse(result: unknown, walk: WalkResult, method: string): Response {
+  const status = walk.status ?? (method === 'POST' ? 201 : 200)
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  for (const [n, v] of walk.headers) headers[n.toLowerCase()] = v
+
+  if (result === undefined || result === null) {
+    return new Response(null, { status: status === 200 ? 204 : status, headers })
+  }
+  if (typeof result === 'string') {
+    headers['content-type'] = 'text/plain'
+    return new Response(result, { status, headers })
+  }
+  return new Response(JSON.stringify(result), { status, headers })
 }

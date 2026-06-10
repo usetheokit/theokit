@@ -4,38 +4,29 @@
  * authored by the developer. No injection vector.
  */
 import 'reflect-metadata'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 
 import type { ParamEntry } from '../decorators/params.js'
+import { ForbiddenException } from '../exceptions/http-exception.js'
 
 import { resolveOrNew, type DiContainer } from './di-resolve.js'
 import { runExceptionFilters } from './exception-filter-chain.js'
+import { createExecutionContext, type CanActivate, type ExecutionContext } from './execution-context.js'
 import { runInterceptors } from './interceptor-chain.js'
 import {
   MiddlewareConsumerImpl,
   runMiddleware,
   type ResolvedMiddleware,
 } from './middleware-consumer.js'
+import { createNodeAdapter } from './runtime/node.js'
 import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
 
 /**
  * Creates a real HTTP server from decorated controller classes.
- * This is the mount mechanism that makes `@Controller`/`@Get`/`@Body` decorators
- * produce real HTTP endpoints reachable via `fetch()`.
- *
- * Usage:
- * ```ts
- * const server = createDecoratorServer([CatsController, DogsController])
- * server.listen(3000)
- * // fetch('http://localhost:3000/cats') → CatsController.findAll()
- * ```
+ * Uses Web Standard Request/Response internally; Node adapter at the boundary.
  */
 export interface CreateDecoratorServerOptions {
   controllers: Function[]
-  /** Optional DI container (e.g., @theokit/di Container). */
   container?: DiContainer
-  /** NestJS-style middleware configuration callback.
-   *  Called at server creation time with a MiddlewareConsumer. */
   configure?: (consumer: MiddlewareConsumerImpl) => void
 }
 
@@ -44,16 +35,13 @@ export function createDecoratorServer(
 ) {
   const { controllers, container, configure } = Array.isArray(controllersOrOpts)
     ? { controllers: controllersOrOpts, container: undefined, configure: undefined }
-    : {
-        controllers: controllersOrOpts.controllers,
-        container: controllersOrOpts.container,
-        configure: controllersOrOpts.configure,
-      }
+    : controllersOrOpts
 
-  // Collect middleware via configure() callback (NestJS pattern)
+  // Collect middleware
   const middlewareConsumer = new MiddlewareConsumerImpl(container)
   if (configure) configure(middlewareConsumer)
   const middlewareEntries = middlewareConsumer.getEntries()
+
   // Dedupe controllers (EC-5)
   const seen = new Set<Function>()
   const unique: Function[] = []
@@ -63,7 +51,7 @@ export function createDecoratorServer(
     unique.push(Ctor)
   }
 
-  // Walk metadata for all controllers
+  // Walk metadata
   const routes: { walk: WalkResult; instance: object }[] = []
   for (const Ctor of unique) {
     const instance = resolveOrNew(Ctor, container)
@@ -73,137 +61,121 @@ export function createDecoratorServer(
     }
   }
 
-  // Sort: static routes first, parameterized last (prevents /cats/:id matching "admin")
+  // Sort: static routes first
   routes.sort((a, b) => {
-    const aHasParam = a.walk.fullPath.includes(':')
-    const bHasParam = b.walk.fullPath.includes(':')
-    if (aHasParam !== bHasParam) return aHasParam ? 1 : -1
+    const aP = a.walk.fullPath.includes(':')
+    const bP = b.walk.fullPath.includes(':')
+    if (aP !== bP) return aP ? 1 : -1
     return 0
   })
 
-  const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-    void handleRequest(routes, req, res, container, middlewareEntries)
-  })
-
-  return server
+  // Create Web Standard handler + Node adapter
+  const adapter = createNodeAdapter()
+  const handler = (request: Request) => handleRequest(routes, request, container, middlewareEntries)
+  return adapter.createServer(handler)
 }
 
-// ─── Request handler (extracted for complexity budget) ─────────
+// ─── Web Standard request handler ────────────────────────────
 
 async function handleRequest(
   routes: { walk: WalkResult; instance: object }[],
-  req: IncomingMessage,
-  res: ServerResponse,
+  request: Request,
   container?: DiContainer,
   middlewareEntries: ResolvedMiddleware[] = [],
-) {
-  const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-  const method = (req.method ?? 'GET').toUpperCase()
+): Promise<Response> {
+  const url = new URL(request.url)
+  const method = request.method.toUpperCase()
   const pathname = url.pathname
 
   const match = findRoute(routes, method, pathname)
   if (!match) {
-    res.writeHead(404, { 'content-type': 'application/json' })
-    res.end(
-      JSON.stringify({
-        error: { code: 'NOT_FOUND', message: `No route for ${method} ${pathname}` },
-      }),
-    )
-    return
+    return jsonResponse(404, { error: { code: 'NOT_FOUND', message: `No route for ${method} ${pathname}` } })
   }
 
   const { walk, instance, params } = match
 
   try {
-    // Pipeline order per D2: middleware → guards → interceptors → handler
-    if (await runMiddleware(middlewareEntries, req, res, pathname)) return
-    if (await runGuards(walk.guards, req, res, container)) return
+    // Middleware
+    const mwResponse = await runMiddleware(middlewareEntries, request, pathname)
+    if (mwResponse) return mwResponse
 
-    const body = await resolveBody(method, req, walk, res)
-    if (body === BODY_REJECTED) return
+    // Guards
+    const ctx = createExecutionContext(request, instance.constructor, walk.propertyKey)
+    const guardResponse = await runGuards(walk.guards, ctx, container)
+    if (guardResponse) return guardResponse
 
-    const args = buildArgs(walk.paramEntries, {
-      req,
-      body,
-      params,
-      query: Object.fromEntries(url.searchParams),
-    })
+    // Body
+    const body = await resolveBody(method, request, walk)
+    if (body instanceof Response) return body // validation error response
 
+    // Build args
+    const args = buildArgs(walk.paramEntries, { request, body, params, query: Object.fromEntries(url.searchParams) })
+
+    // Redirect
     if (walk.redirect) {
-      res.writeHead(walk.redirect.status, { location: walk.redirect.url })
-      res.end()
-      return
+      return new Response(null, { status: walk.redirect.status, headers: { location: walk.redirect.url } })
     }
 
     const handlerFn = (instance as Record<string | symbol, Function>)[walk.propertyKey]
 
-    // Interceptor chain wraps ONLY the handler call (EC-1: body parsing stays outside)
+    // Interceptors wrap handler
     const result = await runInterceptors(
       walk.interceptors,
       () => handlerFn.apply(instance, args) as Promise<unknown>,
-      req,
-      res,
+      request,
       container,
     )
 
-    sendResponse(res, result, walk, method)
+    return buildResponse(result, walk, method)
   } catch (err) {
-    await runExceptionFilters(err, walk.filters, req, res, container)
+    return runExceptionFilters(err, walk.filters, request, container)
   }
 }
 
-// ─── Guards ───────────────────────────────────────────────────
+// ─── Guards (return Response on rejection, null on pass) ─────
 
-/** Returns true if guard rejected (response already sent). */
 async function runGuards(
   guards: Function[],
-  req: IncomingMessage,
-  res: ServerResponse,
+  context: ExecutionContext,
   container?: DiContainer,
-): Promise<boolean> {
+): Promise<Response | null> {
   for (const GuardCtor of guards) {
-    const guard = resolveOrNew(GuardCtor, container) as {
-      canActivate: (req: IncomingMessage) => boolean | Promise<boolean>
-    }
-    const allowed = await guard.canActivate(req)
+    const guard = resolveOrNew(GuardCtor, container) as CanActivate
+    const allowed = await guard.canActivate(context)
     if (!allowed) {
-      res.writeHead(401, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Guard rejected' } }))
-      return true
+      const ex = new ForbiddenException('Forbidden resource')
+      return jsonResponse(ex.statusCode, ex.toJSON())
     }
   }
-  return false
+  return null
 }
 
-// ─── Body resolution ──────────────────────────────────────────
+// ─── Body resolution ─────────────────────────────────────────
 
-const BODY_REJECTED = Symbol('body-rejected')
-
-/** Parses + validates body. Returns BODY_REJECTED if response was sent. */
-async function resolveBody(
-  method: string,
-  req: IncomingMessage,
-  walk: WalkResult,
-  res: ServerResponse,
-): Promise<unknown> {
+async function resolveBody(method: string, request: Request, walk: WalkResult): Promise<unknown> {
   if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
 
-  let body = await parseBody(req)
+  let body: unknown
+  try {
+    const text = await request.text()
+    body = text ? JSON.parse(text) : undefined
+  } catch {
+    body = undefined
+  }
+
   if (walk.bodySchema && body !== undefined) {
     const result = walk.bodySchema.safeParse(body)
     if (!result.success) {
-      res.writeHead(422, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ error: { code: 'VALIDATION_ERROR', issues: result.error.issues } }))
-      return BODY_REJECTED
+      return jsonResponse(422, { error: { code: 'VALIDATION_ERROR', issues: result.error.issues } })
     }
     body = result.data
   }
   return body
 }
 
-// ─── Response serialization ───────────────────────────────────
+// ─── Response builder ────────────────────────────────────────
 
-function sendResponse(res: ServerResponse, result: unknown, walk: WalkResult, method: string) {
+function buildResponse(result: unknown, walk: WalkResult, method: string): Response {
   const status = walk.status ?? (method === 'POST' ? 201 : 200)
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   for (const [name, value] of walk.headers) {
@@ -211,23 +183,25 @@ function sendResponse(res: ServerResponse, result: unknown, walk: WalkResult, me
   }
 
   if (result === undefined || result === null) {
-    res.writeHead(status === 200 ? 204 : status, headers)
-    res.end()
-    return
+    return new Response(null, { status: status === 200 ? 204 : status, headers })
   }
 
   if (typeof result === 'string') {
     headers['content-type'] = 'text/plain'
-    res.writeHead(status, headers)
-    res.end(result)
-    return
+    return new Response(result, { status, headers })
   }
 
-  res.writeHead(status, headers)
-  res.end(JSON.stringify(result))
+  return new Response(JSON.stringify(result), { status, headers })
 }
 
-// ─── Route matching ───────────────────────────────────────────
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+// ─── Route matching ──────────────────────────────────────────
 
 interface RouteMatch {
   walk: WalkResult
@@ -243,9 +217,7 @@ function findRoute(
   for (const { walk, instance } of routes) {
     if (walk.verb !== 'ALL' && walk.verb !== method) continue
     const params = matchPath(walk.fullPath, pathname)
-    if (params !== null) {
-      return { walk, instance, params }
-    }
+    if (params !== null) return { walk, instance, params }
   }
   return null
 }
@@ -256,42 +228,17 @@ function matchPath(pattern: string, pathname: string): Record<string, string> | 
     paramNames.push(name)
     return '([^/]+)'
   })
-  const regex = new RegExp(`^${regexStr}$`)
-  const match = pathname.match(regex)
+  const match = new RegExp(`^${regexStr}$`).exec(pathname)
   if (!match) return null
   const params: Record<string, string> = {}
-  paramNames.forEach((name, i) => {
-    params[name] = match[i + 1]
-  })
+  paramNames.forEach((name, i) => { params[name] = match[i + 1] })
   return params
 }
 
-// ─── Body parsing ─────────────────────────────────────────────
-
-function parseBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    req.on('data', (chunk: Buffer) => chunks.push(chunk))
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8')
-      if (!raw) {
-        resolve(undefined)
-        return
-      }
-      try {
-        resolve(JSON.parse(raw))
-      } catch {
-        resolve(raw)
-      }
-    })
-    req.on('error', reject)
-  })
-}
-
-// ─── Argument builder ─────────────────────────────────────────
+// ─── Argument builder ────────────────────────────────────────
 
 interface ArgContext {
-  req: IncomingMessage
+  request: Request
   body: unknown
   params: Record<string, string>
   query: Record<string, string>
@@ -304,7 +251,7 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
   for (const p of paramEntries) {
     switch (p.source) {
       case 'req':
-        args[p.index] = ctx.req
+        args[p.index] = ctx.request
         break
       case 'body':
         args[p.index] = p.key ? (ctx.body as Record<string, unknown>)[p.key] : ctx.body
@@ -316,10 +263,10 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
         args[p.index] = p.key ? ctx.query[p.key] : ctx.query
         break
       case 'headers':
-        args[p.index] = p.key ? ctx.req.headers[p.key.toLowerCase()] : ctx.req.headers
+        args[p.index] = p.key ? ctx.request.headers.get(p.key.toLowerCase()) : Object.fromEntries(ctx.request.headers.entries())
         break
       case 'ip':
-        args[p.index] = ctx.req.socket.remoteAddress
+        args[p.index] = ctx.request.headers.get('x-forwarded-for') ?? '127.0.0.1'
         break
       case 'session':
         args[p.index] = undefined
@@ -330,5 +277,3 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
   }
   return args
 }
-
-// resolveOrNew imported from ./di-resolve.ts (DRY — EC-3)

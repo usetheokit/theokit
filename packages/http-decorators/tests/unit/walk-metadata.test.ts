@@ -8,6 +8,7 @@ import { HttpCode, Header, Redirect } from '../../src/decorators/response.js'
 import { UseGuards } from '../../src/decorators/middleware.js'
 import { walkControllerMetadata, joinPath } from '../../src/bridge/walk-metadata.js'
 import { HttpDecoratorsConfigError } from '../../src/bridge/errors.js'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 
 // DTO fixture with static schema (Pattern D2)
 const zCreateCat = z.object({ name: z.string(), age: z.number() })
@@ -16,12 +17,12 @@ class CreateCatDto {
 }
 
 class AuthGuard {
-  canActivate() {
+  canActivate(_context: ExecutionContext) {
     return true
   }
 }
 class MethodGuard {
-  canActivate() {
+  canActivate(_context: ExecutionContext) {
     return true
   }
 }

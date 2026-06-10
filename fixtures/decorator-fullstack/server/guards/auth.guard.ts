@@ -1,7 +1,8 @@
-import type { IncomingMessage } from 'node:http'
+import type { ExecutionContext } from '../../../../packages/http-decorators/src/bridge/execution-context.js'
 
 export class AuthGuard {
-  canActivate(req: IncomingMessage): boolean {
-    return req.headers['authorization'] === 'Bearer theokit-token'
+  canActivate(context: ExecutionContext): boolean {
+    const req = context.getRequest()
+    return req.headers.get('authorization') === 'Bearer theokit-token'
   }
 }

@@ -1,17 +1,15 @@
 import 'reflect-metadata'
 import { describe, it, expect, vi } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import { runInterceptors, type Interceptor } from '../../src/bridge/interceptor-chain.js'
 
-// Minimal req/res stubs
-const fakeReq = {} as IncomingMessage
-const fakeRes = { setHeader: vi.fn() } as unknown as ServerResponse
+// Minimal request stub
+const fakeReq = new Request('http://localhost/test')
 
 describe('T1.1 — Interceptor chain runner', () => {
   it('test_single_interceptor_wraps_handler', async () => {
     const log: string[] = []
     class LogInterceptor implements Interceptor {
-      async intercept(_req: IncomingMessage, _res: ServerResponse, next: () => Promise<unknown>) {
+      async intercept(_req: Request, next: () => Promise<unknown>) {
         log.push('before')
         const result = await next()
         log.push('after')
@@ -23,7 +21,7 @@ describe('T1.1 — Interceptor chain runner', () => {
       return { ok: true }
     }
 
-    const result = await runInterceptors([LogInterceptor], handler, fakeReq, fakeRes)
+    const result = await runInterceptors([LogInterceptor], handler, fakeReq)
 
     expect(log).toEqual(['before', 'handler', 'after'])
     expect(result).toEqual({ ok: true })
@@ -33,7 +31,7 @@ describe('T1.1 — Interceptor chain runner', () => {
     const log: string[] = []
 
     class OuterInterceptor implements Interceptor {
-      async intercept(_r: IncomingMessage, _s: ServerResponse, next: () => Promise<unknown>) {
+      async intercept(_r: Request, next: () => Promise<unknown>) {
         log.push('outer-before')
         const result = await next()
         log.push('outer-after')
@@ -41,7 +39,7 @@ describe('T1.1 — Interceptor chain runner', () => {
       }
     }
     class InnerInterceptor implements Interceptor {
-      async intercept(_r: IncomingMessage, _s: ServerResponse, next: () => Promise<unknown>) {
+      async intercept(_r: Request, next: () => Promise<unknown>) {
         log.push('inner-before')
         const result = await next()
         log.push('inner-after')
@@ -53,7 +51,7 @@ describe('T1.1 — Interceptor chain runner', () => {
       log.push('handler')
       return 'done'
     }
-    await runInterceptors([OuterInterceptor, InnerInterceptor], handler, fakeReq, fakeRes)
+    await runInterceptors([OuterInterceptor, InnerInterceptor], handler, fakeReq)
 
     // Outer wraps inner: outer-before → inner-before → handler → inner-after → outer-after
     expect(log).toEqual(['outer-before', 'inner-before', 'handler', 'inner-after', 'outer-after'])
@@ -61,14 +59,14 @@ describe('T1.1 — Interceptor chain runner', () => {
 
   it('test_interceptor_can_transform_response', async () => {
     class WrapInterceptor implements Interceptor {
-      async intercept(_r: IncomingMessage, _s: ServerResponse, next: () => Promise<unknown>) {
+      async intercept(_r: Request, next: () => Promise<unknown>) {
         const result = await next()
         return { data: result, wrapped: true }
       }
     }
     const handler = async () => ({ id: 1, name: 'test' })
 
-    const result = await runInterceptors([WrapInterceptor], handler, fakeReq, fakeRes)
+    const result = await runInterceptors([WrapInterceptor], handler, fakeReq)
 
     expect(result).toEqual({ data: { id: 1, name: 'test' }, wrapped: true })
   })
@@ -77,13 +75,13 @@ describe('T1.1 — Interceptor chain runner', () => {
     const handlerSpy = vi.fn().mockResolvedValue('should-not-reach')
 
     class CacheInterceptor implements Interceptor {
-      async intercept(_r: IncomingMessage, _s: ServerResponse, _next: () => Promise<unknown>) {
+      async intercept(_r: Request, _next: () => Promise<unknown>) {
         // Short-circuit: return cached value without calling next()
         return { cached: true }
       }
     }
 
-    const result = await runInterceptors([CacheInterceptor], handlerSpy, fakeReq, fakeRes)
+    const result = await runInterceptors([CacheInterceptor], handlerSpy, fakeReq)
 
     expect(result).toEqual({ cached: true })
     expect(handlerSpy).not.toHaveBeenCalled()
@@ -92,7 +90,7 @@ describe('T1.1 — Interceptor chain runner', () => {
   it('test_interceptor_di_resolution', async () => {
     class DIInterceptor implements Interceptor {
       constructor(public value: string) {}
-      async intercept(_r: IncomingMessage, _s: ServerResponse, next: () => Promise<unknown>) {
+      async intercept(_r: Request, next: () => Promise<unknown>) {
         const result = await next()
         return { ...(result as object), injected: this.value }
       }
@@ -110,7 +108,6 @@ describe('T1.1 — Interceptor chain runner', () => {
       [DIInterceptor],
       handler,
       fakeReq,
-      fakeRes,
       container,
     )) as { injected: string }
 
@@ -119,13 +116,13 @@ describe('T1.1 — Interceptor chain runner', () => {
 
   it('test_interceptor_error_propagates_to_catch', async () => {
     class FailInterceptor implements Interceptor {
-      async intercept(_r: IncomingMessage, _s: ServerResponse, _next: () => Promise<unknown>) {
+      async intercept(_r: Request, _next: () => Promise<unknown>) {
         throw new Error('interceptor-boom')
       }
     }
 
     const handler = async () => 'ok'
-    await expect(runInterceptors([FailInterceptor], handler, fakeReq, fakeRes)).rejects.toThrow(
+    await expect(runInterceptors([FailInterceptor], handler, fakeReq)).rejects.toThrow(
       'interceptor-boom',
     )
   })
@@ -134,7 +131,7 @@ describe('T1.1 — Interceptor chain runner', () => {
     let handlerCallCount = 0
 
     class DoubleCallInterceptor implements Interceptor {
-      async intercept(_r: IncomingMessage, _s: ServerResponse, next: () => Promise<unknown>) {
+      async intercept(_r: Request, next: () => Promise<unknown>) {
         const first = await next()
         const second = await next() // second call should return cached
         return { first, second }
@@ -145,7 +142,7 @@ describe('T1.1 — Interceptor chain runner', () => {
       handlerCallCount++
       return { count: handlerCallCount }
     }
-    const result = (await runInterceptors([DoubleCallInterceptor], handler, fakeReq, fakeRes)) as {
+    const result = (await runInterceptors([DoubleCallInterceptor], handler, fakeReq)) as {
       first: unknown
       second: unknown
     }
@@ -157,28 +154,23 @@ describe('T1.1 — Interceptor chain runner', () => {
 
   it('test_no_interceptors_runs_handler_directly', async () => {
     const handler = async () => 'direct'
-    const result = await runInterceptors([], handler, fakeReq, fakeRes)
+    const result = await runInterceptors([], handler, fakeReq)
     expect(result).toBe('direct')
   })
 
-  it('test_interceptor_can_set_response_headers', async () => {
-    const mockRes = { setHeader: vi.fn() } as unknown as ServerResponse
-
+  it('test_interceptor_can_augment_result', async () => {
     class TimingInterceptor implements Interceptor {
-      async intercept(_r: IncomingMessage, res: ServerResponse, next: () => Promise<unknown>) {
+      async intercept(_r: Request, next: () => Promise<unknown>) {
         const start = Date.now()
         const result = await next()
-        res.setHeader('X-Response-Time', `${Date.now() - start}ms`)
-        return result
+        return { ...(result as object), timing: `${Date.now() - start}ms` }
       }
     }
 
-    const handler = async () => 'ok'
-    await runInterceptors([TimingInterceptor], handler, fakeReq, mockRes)
+    const handler = async () => ({ ok: true })
+    const result = await runInterceptors([TimingInterceptor], handler, fakeReq) as { ok: boolean; timing: string }
 
-    expect(mockRes.setHeader).toHaveBeenCalledWith(
-      'X-Response-Time',
-      expect.stringMatching(/\d+ms/),
-    )
+    expect(result.ok).toBe(true)
+    expect(result.timing).toMatch(/\d+ms/)
   })
 })

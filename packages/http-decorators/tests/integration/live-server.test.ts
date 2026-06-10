@@ -12,7 +12,7 @@
 import 'reflect-metadata'
 import { describe, it } from 'vitest'
 import { z } from 'zod'
-import type { IncomingMessage } from 'node:http'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import {
   Controller,
   Get,
@@ -89,8 +89,9 @@ class CreateUserDto {
 // ── Guards ─────────────────────────────────────────────
 
 class AuthGuard {
-  canActivate(req: IncomingMessage) {
-    return req.headers['x-api-key'] === 'secret'
+  canActivate(context: ExecutionContext) {
+    const req = context.getRequest()
+    return req.headers.get('x-api-key') === 'secret'
   }
 }
 
@@ -265,7 +266,7 @@ describe('LIVE SERVER (TypeScript @ syntax)', () => {
         opts: { method: 'DELETE' },
         expect: { status: 204 },
       },
-      { name: 'GET /users/stats no-auth', url: '/users/stats', expect: { status: 401 } },
+      { name: 'GET /users/stats no-auth', url: '/users/stats', expect: { status: 403 } },
       {
         name: 'GET /users/stats auth',
         url: '/users/stats',

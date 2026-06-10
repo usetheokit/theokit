@@ -39,9 +39,12 @@ class UpdateCatDto {
 
 // ── Guard ──────────────────────────────────────────────
 
+import type { ExecutionContext } from '../src/bridge/execution-context.js'
+
 class ApiKeyGuard {
-  canActivate(req: { headers: Record<string, string | string[] | undefined> }) {
-    return req.headers['x-api-key'] === 'theokit-secret'
+  canActivate(context: ExecutionContext) {
+    const req = context.getRequest()
+    return req.headers.get('x-api-key') === 'theokit-secret'
   }
 }
 

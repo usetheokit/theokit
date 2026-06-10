@@ -62,7 +62,8 @@ export function SetMetadata<T>(
 
 /**
  * Reflector — reads metadata set by createDecorator or @SetMetadata.
- * Simplified NestJS Reflector (no switchToHttp — HTTP-only per ADR D1).
+ * NestJS-compatible Reflector with getAllAndOverride/getAllAndMerge.
+ * HTTP-only per ADR D1.
  */
 export class Reflector {
   /**
@@ -100,5 +101,90 @@ export class Reflector {
       return Reflect.getMetadata(key, target, propertyKey) as T | undefined
     }
     return Reflect.getMetadata(key, target) as T | undefined
+  }
+
+  /**
+   * Read metadata checking method-level first, then class-level.
+   * Returns the first non-undefined value found.
+   *
+   * NestJS equivalent: `reflector.getAllAndOverride(ROLES_KEY, [context.getHandler(), context.getClass()])`
+   *
+   * @example
+   * ```ts
+   * const Roles = createDecorator<string[]>()
+   * // In a guard:
+   * const roles = reflector.getAllAndOverride(Roles, context.getClass(), context.getMethodName())
+   * // Checks method-level @Roles first, falls back to class-level @Roles
+   * ```
+   */
+  getAllAndOverride<T>(
+    decorator: (value: T) => MethodDecorator & ClassDecorator,
+    target: Function,
+    propertyKey?: string | symbol,
+  ): T | undefined {
+    if (propertyKey !== undefined) {
+      const methodLevel = this.get(decorator, target, propertyKey)
+      if (methodLevel !== undefined) return methodLevel
+    }
+    return this.get(decorator, target)
+  }
+
+  /**
+   * Read metadata checking method-level first, then class-level, by raw key.
+   * Returns the first non-undefined value found.
+   */
+  getAllAndOverrideByKey<T>(
+    key: string | symbol,
+    target: Function,
+    propertyKey?: string | symbol,
+  ): T | undefined {
+    if (propertyKey !== undefined) {
+      const methodLevel = this.getByKey<T>(key, target, propertyKey)
+      if (methodLevel !== undefined) return methodLevel
+    }
+    return this.getByKey<T>(key, target)
+  }
+
+  /**
+   * Read metadata from both method-level and class-level, merging arrays.
+   * Returns all found values as a flat array.
+   *
+   * NestJS equivalent: `reflector.getAllAndMerge(ROLES_KEY, [context.getHandler(), context.getClass()])`
+   *
+   * @example
+   * ```ts
+   * const Tags = createDecorator<string[]>()
+   *
+   * @Tags(['api'])
+   * @Controller('cats')
+   * class CatsCtrl {
+   *   @Tags(['read'])
+   *   @Get()
+   *   findAll() {}
+   * }
+   *
+   * reflector.getAllAndMerge(Tags, CatsCtrl, 'findAll')
+   * // → ['read', 'api'] (method + class merged)
+   * ```
+   */
+  getAllAndMerge<T>(
+    decorator: (value: T) => MethodDecorator & ClassDecorator,
+    target: Function,
+    propertyKey?: string | symbol,
+  ): T extends (infer U)[] ? U[] : T[] {
+    const result: unknown[] = []
+    if (propertyKey !== undefined) {
+      const methodLevel = this.get(decorator, target, propertyKey)
+      if (methodLevel !== undefined) {
+        if (Array.isArray(methodLevel)) result.push(...methodLevel)
+        else result.push(methodLevel)
+      }
+    }
+    const classLevel = this.get(decorator, target)
+    if (classLevel !== undefined) {
+      if (Array.isArray(classLevel)) result.push(...classLevel)
+      else result.push(classLevel)
+    }
+    return result as T extends (infer U)[] ? U[] : T[]
   }
 }

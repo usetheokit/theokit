@@ -7,7 +7,7 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { z } from 'zod'
-import type { IncomingMessage } from 'node:http'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import {
   Controller, Get, Post, Delete,
   Body, Param, Query,
@@ -36,7 +36,7 @@ class CreateCatDto { static schema = zCreateCat }
 // ── Guard ──────────────────────────────────────────────
 
 class ApiKeyGuard {
-  canActivate(req: IncomingMessage) { return req.headers['x-api-key'] === 'cats-secret' }
+  canActivate(context: ExecutionContext) { const req = context.getRequest(); return req.headers.get('x-api-key') === 'cats-secret' }
 }
 
 // ── Controller ─────────────────────────────────────────
@@ -94,7 +94,7 @@ describe('TheoApp.create() — NestFactory/SpringBoot style', () => {
       controllers: [CatsController, HealthCtrl],
       providers: [CatService],
     })
-    const server = app.getHttpServer()
+    const server = app.getServerHandle()
     await new Promise<void>(r => server.listen(0, r))
     port = (server.address() as { port: number }).port
   })
@@ -137,8 +137,8 @@ describe('TheoApp.create() — NestFactory/SpringBoot style', () => {
     expect(res.status).toBe(204)
   })
 
-  it('GET /cats/secret sem key → 401', async () => {
-    expect((await fetch(`http://localhost:${port}/cats/secret`)).status).toBe(401)
+  it('GET /cats/secret sem key → 403', async () => {
+    expect((await fetch(`http://localhost:${port}/cats/secret`)).status).toBe(403)
   })
 
   it('GET /cats/secret com key → 200', async () => {
