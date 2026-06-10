@@ -34,8 +34,9 @@ class CreateCatDto {
 }
 
 class ApiKeyGuard {
-  canActivate(req) {
-    return req.headers['x-api-key'] === 'theokit-secret'
+  canActivate(context) {
+    const req = context.getRequest()
+    return req.headers.get('x-api-key') === 'theokit-secret'
   }
 }
 
@@ -246,11 +247,11 @@ await test(
 )
 
 await test(
-  'GET /api/cats/stats sem key → 401',
+  'GET /api/cats/stats sem key → 403',
   '/api/cats/stats',
   {},
-  401,
-  (b) => b.error?.code === 'UNAUTHORIZED',
+  403,
+  (b) => b.error?.code === 'FORBIDDEN',
 )
 
 await test(

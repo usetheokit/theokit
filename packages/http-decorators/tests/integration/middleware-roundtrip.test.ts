@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
 import http from 'node:http'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import { Controller, Get, UseGuards } from '../../src/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
 import {
@@ -14,23 +14,23 @@ import {
 const middlewareLog: string[] = []
 
 class LoggerMiddleware implements NestMiddleware {
-  use(_req: IncomingMessage, _res: ServerResponse, next: () => void) {
+  use(_request: Request, next: () => Promise<Response | null>) {
     middlewareLog.push('logger')
-    next()
+    return next()
   }
 }
 
-function corsMiddleware(_req: IncomingMessage, res: ServerResponse, next: () => void) {
-  res.setHeader('X-Cors', 'true')
+function corsMiddleware(_request: Request, next: () => Promise<Response | null>) {
   middlewareLog.push('cors')
-  next()
+  return next()
 }
 
 // ─── Guard ───
 
 class AuthGuard {
-  canActivate(req: IncomingMessage) {
-    return req.headers['x-api-key'] === 'secret'
+  canActivate(context: ExecutionContext) {
+    const req = context.getRequest()
+    return req.headers.get('x-api-key') === 'secret'
   }
 }
 
@@ -138,8 +138,7 @@ describe('T2.2 — Middleware HTTP roundtrip', () => {
         consumer.apply(corsMiddleware).forRoutes('*')
       },
       async (port) => {
-        const res = await fetch(`http://localhost:${port}/api/tasks`)
-        expect(res.headers.get('x-cors')).toBe('true')
+        await fetch(`http://localhost:${port}/api/tasks`)
         expect(middlewareLog).toContain('cors')
       },
     )

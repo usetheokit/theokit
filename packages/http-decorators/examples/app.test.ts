@@ -13,7 +13,7 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { z } from 'zod'
-import type { IncomingMessage } from 'node:http'
+import type { ExecutionContext } from '../src/bridge/execution-context.js'
 import {
   Controller,
   Get,
@@ -97,8 +97,9 @@ class CreateTaskDto {
 // ╚═══════════════════════════════════════════════════════════╝
 
 class AuthGuard {
-  canActivate(req: IncomingMessage) {
-    return req.headers['authorization'] === 'Bearer theokit-token'
+  canActivate(context: ExecutionContext) {
+    const req = context.getRequest()
+    return req.headers.get('authorization') === 'Bearer theokit-token'
   }
 }
 
@@ -300,9 +301,9 @@ describe('TheoKit Task Manager — Example App', () => {
     expect(res.status).toBe(204)
   })
 
-  it('GET /tasks/stats sem auth → 401', async () => {
+  it('GET /tasks/stats sem auth → 403', async () => {
     const res = await fetch(`http://localhost:${port}/tasks/stats`)
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(403)
   })
 
   it('GET /tasks/stats com Bearer token → 200 stats', async () => {

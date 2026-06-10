@@ -148,10 +148,10 @@ describe('TheoKit plugin integration — httpDecoratorsPlugin', () => {
     expect(res.status).toBe(204)
   })
 
-  it('GET /cats/admin → 401 @UseGuards', async () => {
+  it('GET /cats/admin → 403 @UseGuards', async () => {
     const res = await fetch(`http://localhost:${port}/cats/admin`)
-    expect(res.status).toBe(401)
-    expect((await res.json()).error.code).toBe('UNAUTHORIZED')
+    expect(res.status).toBe(403)
+    expect((await res.json()).error.code).toBe('FORBIDDEN')
   })
 
   it('GET /unknown → 404 falls through to TheoKit scanner (plugin does not intercept)', async () => {

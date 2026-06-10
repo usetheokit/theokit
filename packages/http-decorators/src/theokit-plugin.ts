@@ -33,19 +33,21 @@
  * ```
  */
 import 'reflect-metadata'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { resolveOrNew, type DiContainer } from './bridge/di-resolve.js'
 import { runExceptionFilters } from './bridge/exception-filter-chain.js'
+import { createExecutionContext, type CanActivate, type ExecutionContext } from './bridge/execution-context.js'
 import { runInterceptors } from './bridge/interceptor-chain.js'
 import {
   MiddlewareConsumerImpl,
   runMiddleware,
   type ResolvedMiddleware,
 } from './bridge/middleware-consumer.js'
+import { nodeIncomingToRequest, writeResponseToNode } from './bridge/runtime/node.js'
 import { loadControllersFromGlob } from './bridge/swc-loader.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
+import { ForbiddenException } from './exceptions/http-exception.js'
 
 export interface HttpDecoratorsPluginOptions {
   /** Direct controller class references (Mode 2 — tests, pre-compiled). */
@@ -113,25 +115,19 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
     register(app: {
       addHook: (
         name: string,
-        fn: (ctx: {
-          request: IncomingMessage
-          response: ServerResponse
-          ctx: Record<string, unknown>
-        }) => Promise<void>,
+        fn: (ctx: Record<string, unknown>) => Promise<void>,
       ) => void
     }) {
       app.addHook('onRequest', async (pluginCtx) => {
-        // Wait for lazy initialization (Mode 1)
-        if (initPromise && !initialized) {
-          await initPromise
+        if (initPromise && !initialized) await initPromise
+
+        // Convert Node types → Web Standard at the boundary
+        const request = nodeIncomingToRequest(pluginCtx.request)
+        const response = await handleDecoratorRoute(routes, request, opts.container, middlewareEntries)
+        if (response) {
+          await writeResponseToNode(response, pluginCtx.response)
         }
-        await handleDecoratorRoute(
-          routes,
-          pluginCtx.request,
-          pluginCtx.response,
-          opts.container,
-          middlewareEntries,
-        )
+        // null = not our route, fall through to TheoKit scanner
       })
     },
   }
@@ -173,129 +169,105 @@ function buildRouteTable(
 
 // ─── Request handler (extracted for complexity budget) ──
 
+/** Returns Response if handled, null if not our route. */
 async function handleDecoratorRoute(
   routes: RouteEntry[],
-  req: IncomingMessage,
-  res: ServerResponse,
+  request: Request,
   container?: DiContainer,
   mwEntries: ResolvedMiddleware[] = [],
-) {
-  const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-  const method = (req.method ?? 'GET').toUpperCase()
+): Promise<Response | null> {
+  const url = new URL(request.url)
+  const method = request.method.toUpperCase()
   const match = findMatch(routes, method, url.pathname)
-  if (!match) return // Not our route — fall through to TheoKit's scanner
+  if (!match) return null
 
   const { entry, params } = match
   const { walk, instance } = entry
 
   try {
-    // Pipeline order per D2: middleware → guards → interceptors → handler
-    if (await runMiddleware(mwEntries, req, res, url.pathname)) return
-    if (await runGuards(walk.guards, req, res, container)) return
-    const body = await resolveBody(method, req, walk, res)
-    if (body === BODY_REJECTED) return
+    const mwResponse = await runMiddleware(mwEntries, request, url.pathname)
+    if (mwResponse) return mwResponse
+
+    const ctx = createExecutionContext(request, instance.constructor, walk.propertyKey)
+    const guardResponse = await runGuards(walk.guards, ctx, container)
+    if (guardResponse) return guardResponse
+
+    const body = await resolveBody(method, request, walk)
+    if (body instanceof Response) return body
 
     const args = buildArgs(walk.paramEntries, {
-      req,
+      request,
       body,
       params,
       query: Object.fromEntries(url.searchParams),
     })
 
     if (walk.redirect) {
-      res.writeHead(walk.redirect.status, { location: walk.redirect.url })
-      res.end()
-      return
+      return new Response(null, { status: walk.redirect.status, headers: { location: walk.redirect.url } })
     }
 
     const handlerFn = (instance as Record<string | symbol, Function>)[walk.propertyKey]
-
-    // Interceptor chain wraps ONLY the handler call (EC-1)
     const result = await runInterceptors(
       walk.interceptors,
       () => handlerFn.apply(instance, args) as Promise<unknown>,
-      req,
-      res,
+      request,
       container,
     )
 
-    sendResponse(res, result, walk, method)
+    return buildResponse(result, walk, method)
   } catch (err) {
-    await runExceptionFilters(err, walk.filters, req, res, container)
+    return runExceptionFilters(err, walk.filters, request, container)
   }
 }
 
 async function runGuards(
   guards: Function[],
-  req: IncomingMessage,
-  res: ServerResponse,
+  context: ExecutionContext,
   container?: DiContainer,
-): Promise<boolean> {
+): Promise<Response | null> {
   for (const GuardCtor of guards) {
-    const guard = resolveOrNew(GuardCtor, container) as {
-      canActivate: (r: IncomingMessage) => boolean | Promise<boolean>
-    }
-    if (!(await guard.canActivate(req))) {
-      writeJson(res, 401, { error: { code: 'UNAUTHORIZED', message: 'Guard rejected' } })
-      return true
+    const guard = resolveOrNew(GuardCtor, container) as CanActivate
+    if (!(await guard.canActivate(context))) {
+      const ex = new ForbiddenException('Forbidden resource')
+      return jsonResponse(ex.statusCode, ex.toJSON())
     }
   }
-  return false
+  return null
 }
 
-const BODY_REJECTED = Symbol('body-rejected')
-
-async function resolveBody(
-  method: string,
-  req: IncomingMessage,
-  walk: WalkResult,
-  res: ServerResponse,
-): Promise<unknown> {
+async function resolveBody(method: string, request: Request, walk: WalkResult): Promise<unknown> {
   if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
-  let body = await parseBody(req)
+  let body: unknown
+  try {
+    const text = await request.text()
+    body = text ? JSON.parse(text) : undefined
+  } catch { body = undefined }
   if (walk.bodySchema && body !== undefined) {
     const result = walk.bodySchema.safeParse(body)
     if (!result.success) {
-      writeJson(res, 422, { error: { code: 'VALIDATION_ERROR', issues: result.error.issues } })
-      return BODY_REJECTED
+      return jsonResponse(422, { error: { code: 'VALIDATION_ERROR', issues: result.error.issues } })
     }
     body = result.data
   }
   return body
 }
 
-function sendResponse(res: ServerResponse, result: unknown, walk: WalkResult, method: string) {
+function buildResponse(result: unknown, walk: WalkResult, method: string): Response {
   const status = walk.status ?? (method === 'POST' ? 201 : 200)
   const headers: Record<string, string> = { 'content-type': 'application/json' }
-  for (const [name, value] of walk.headers) {
-    headers[name.toLowerCase()] = value
-  }
-
+  for (const [n, v] of walk.headers) headers[n.toLowerCase()] = v
   if (result === undefined || result === null) {
-    res.writeHead(status === 200 ? 204 : status, headers)
-    res.end()
-    return
+    return new Response(null, { status: status === 200 ? 204 : status, headers })
   }
   if (typeof result === 'string') {
     headers['content-type'] = 'text/plain'
-    res.writeHead(status, headers)
-    res.end(result)
-    return
+    return new Response(result, { status, headers })
   }
-  writeJson(res, status, result, headers)
+  return new Response(JSON.stringify(result), { status, headers })
 }
 
-// ─── Helpers ──────────────────────────────────────────
-
-function writeJson(
-  res: ServerResponse,
-  status: number,
-  data: unknown,
-  extraHeaders?: Record<string, string>,
-) {
-  const headers: Record<string, string> = { 'content-type': 'application/json', ...extraHeaders }
-  res.writeHead(status, headers)
-  res.end(JSON.stringify(data))
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }
 
 function findMatch(
@@ -325,28 +297,8 @@ function compilePattern(pattern: string): { regex: RegExp; paramNames: string[] 
   return { regex: new RegExp(`^${regexStr}$`), paramNames }
 }
 
-function parseBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    req.on('data', (chunk: Buffer) => chunks.push(chunk))
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8')
-      if (!raw) {
-        resolve(undefined)
-        return
-      }
-      try {
-        resolve(JSON.parse(raw))
-      } catch {
-        resolve(raw)
-      }
-    })
-    req.on('error', reject)
-  })
-}
-
 interface ArgContext {
-  req: IncomingMessage
+  request: Request
   body: unknown
   params: Record<string, string>
   query: Record<string, string>
@@ -359,7 +311,7 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
   for (const p of paramEntries) {
     switch (p.source) {
       case 'req':
-        args[p.index] = ctx.req
+        args[p.index] = ctx.request
         break
       case 'body':
         args[p.index] = p.key ? (ctx.body as Record<string, unknown>)[p.key] : ctx.body
@@ -371,10 +323,10 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
         args[p.index] = p.key ? ctx.query[p.key] : ctx.query
         break
       case 'headers':
-        args[p.index] = p.key ? ctx.req.headers[p.key.toLowerCase()] : ctx.req.headers
+        args[p.index] = p.key ? ctx.request.headers.get(p.key.toLowerCase()) : Object.fromEntries(ctx.request.headers.entries())
         break
       case 'ip':
-        args[p.index] = ctx.req.socket.remoteAddress
+        args[p.index] = ctx.request.headers.get('x-forwarded-for') ?? '127.0.0.1'
         break
       default:
         args[p.index] = undefined

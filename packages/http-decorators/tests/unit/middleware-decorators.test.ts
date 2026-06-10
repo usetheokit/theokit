@@ -3,14 +3,15 @@ import { describe, it, expect } from 'vitest'
 import { UseGuards, UseInterceptors } from '../../src/decorators/middleware.js'
 import { getMeta, USE_GUARDS, USE_INTERCEPTORS } from '../../src/metadata/index.js'
 import { Get } from '../../src/decorators/methods.js'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 
 class AuthGuard {
-  canActivate() {
+  canActivate(_context: ExecutionContext) {
     return true
   }
 }
 class RoleGuard {
-  canActivate() {
+  canActivate(_context: ExecutionContext) {
     return true
   }
 }
