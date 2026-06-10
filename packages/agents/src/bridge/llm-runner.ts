@@ -31,6 +31,7 @@ interface ToolCall {
 // ─── Gap 2: Session store with TTL eviction (EC-2) ──────────
 
 interface Session { messages: Message[]; createdAt: number; totalCostUsd: number }
+const MAX_SESSIONS = 10_000
 const sessions = new Map<string, Session>()
 setInterval(() => {
   const now = Date.now()
@@ -71,6 +72,11 @@ export function createRealAgentStream(
       const t0 = Date.now()
 
       if (!sessions.has(sessionId)) {
+        // LRU eviction: Map preserves insertion order; evict oldest when at cap
+        if (sessions.size >= MAX_SESSIONS) {
+          const oldest = sessions.keys().next().value
+          if (oldest) sessions.delete(oldest)
+        }
         sessions.set(sessionId, {
           messages: [{ role: 'system', content: agentWalk.agentConfig.systemPrompt ?? 'You are a helpful assistant.' }],
           createdAt: Date.now(), totalCostUsd: 0,
@@ -95,7 +101,10 @@ export function createRealAgentStream(
         })
 
         if (!res.ok) {
-          yield { type: 'error', code: 'LLM_ERROR', message: `OpenRouter ${res.status}: ${await res.text()}`, retryable: res.status === 429 }
+          // Security: scrub error body — may contain account metadata
+          const errorBody = await res.text()
+          console.error(`[theokit:agents] OpenRouter ${res.status}:`, errorBody)
+          yield { type: 'error', code: 'LLM_ERROR', message: `LLM request failed (${res.status})`, retryable: res.status === 429 }
           return
         }
 
@@ -131,7 +140,9 @@ export function createRealAgentStream(
               }
               if (c.choices[0]?.finish_reason) finish = c.choices[0].finish_reason
               if (c.usage) { inTok += c.usage.prompt_tokens; outTok += c.usage.completion_tokens; if (c.usage.cost) session.totalCostUsd += c.usage.cost }
-            } catch { /* EC-1: skip malformed */ }
+            } catch (parseErr) {
+              console.warn('[theokit:agents] Malformed SSE chunk skipped:', parseErr instanceof Error ? parseErr.message : 'unknown')
+            }
           }
         }
 
@@ -149,13 +160,23 @@ export function createRealAgentStream(
             }
             const s = Date.now()
             try {
-              const r = await tool.handler(JSON.parse(tc.function.arguments || '{}'))
+              const rawArgs = JSON.parse(tc.function.arguments || '{}')
+              // Security: validate tool arguments against schema before calling handler
+              if (tool.inputSchema && typeof tool.inputSchema === 'object' && 'safeParse' in tool.inputSchema) {
+                const validated = (tool.inputSchema as { safeParse: (v: unknown) => { success: boolean; error?: { message: string } } }).safeParse(rawArgs)
+                if (!validated.success) {
+                  session.messages.push({ role: 'tool', content: 'Invalid tool arguments', tool_call_id: tc.id })
+                  yield { type: 'tool_result', callId: tc.id, toolName: orig, output: 'Invalid tool arguments', durationMs: Date.now() - s, isError: true }
+                  continue
+                }
+              }
+              const r = await tool.handler(rawArgs)
               session.messages.push({ role: 'tool', content: r, tool_call_id: tc.id })
               yield { type: 'tool_result', callId: tc.id, toolName: orig, output: r.substring(0, 200), durationMs: Date.now() - s, isError: false }
             } catch (e) {
-              const m = e instanceof Error ? e.message : 'Failed'
+              const m = e instanceof Error ? e.message : 'Tool execution failed'
               session.messages.push({ role: 'tool', content: `Error: ${m}`, tool_call_id: tc.id })
-              yield { type: 'tool_result', callId: tc.id, toolName: orig, output: m, durationMs: Date.now() - s, isError: true }
+              yield { type: 'tool_result', callId: tc.id, toolName: orig, output: 'Tool execution failed', durationMs: Date.now() - s, isError: true }
             }
           }
           tcs = []; content = ''
