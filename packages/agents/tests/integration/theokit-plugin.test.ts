@@ -5,7 +5,7 @@ import { Agent } from '../../src/decorators/agent.js'
 import { MainLoop } from '../../src/decorators/main-loop.js'
 import { agentsPlugin } from '../../src/theokit-plugin.js'
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
-import { nodeIncomingToRequest, writeResponseToNode } from '../../../http-decorators/src/bridge/runtime/node.js'
+import { nodeIncomingToRequest, writeResponseToNode } from '@theokit/http-decorators/runtime/node'
 
 @Agent({ name: 'test-agent', route: '/api/agents/test', model: 'mock' })
 class TestAgent {

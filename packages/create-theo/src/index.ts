@@ -59,9 +59,14 @@ export function scaffold(
     )
   }
 
-  if (!isValidProjectName(projectName)) {
+  // Bug #1 fix: "." means current directory — use dir basename as project name
+  const resolvedName = projectName === '.'
+    ? resolve(targetDir).split('/').pop() ?? 'my-app'
+    : projectName
+
+  if (!isValidProjectName(resolvedName)) {
     throw new Error(
-      `Invalid project name "${projectName}". ` +
+      `Invalid project name "${resolvedName}". ` +
         `Use lowercase letters, numbers, hyphens, and dots. Must start with a letter or number.`,
     )
   }
@@ -91,7 +96,7 @@ export function scaffold(
     if (!stat.isFile()) continue
     const dst = join(targetDir, entry.slice(0, -'.tmpl'.length))
     const content = readFileSync(src, 'utf-8')
-    const replaced = content.replace(/\{\{name\}\}/g, projectName)
+    const replaced = content.replace(/\{\{name\}\}/g, resolvedName)
     writeFileSync(dst, replaced)
     unlinkSync(src)
   }
