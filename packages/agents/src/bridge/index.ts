@@ -56,3 +56,11 @@ export {
 } from './agent-route-generator.js'
 
 export { createRealAgentStream } from './llm-runner.js'
+
+export {
+  delegate,
+  BudgetExceededError,
+  DelegationError,
+  type DelegateOptions,
+  type DelegationResult,
+} from './agent-orchestrator.js'
