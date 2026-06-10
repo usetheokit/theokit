@@ -15,6 +15,9 @@ import { ForbiddenException, HttpException } from './exceptions/http-exception.j
  * Node adapter converts at the HTTP server boundary.
  */
 
+/** Readiness check — async function returning health status. */
+export type ReadinessCheck = () => Promise<{ name: string; healthy: boolean; message?: string }>
+
 export interface TheoAppOptions {
   /** Controller classes decorated with @Controller. */
   controllers: Function[]
@@ -32,6 +35,12 @@ export interface TheoAppOptions {
   agentStreamFactory?: (walk: unknown, tools: unknown[], apiKey: string, model?: string) => (message: string, sessionId: string) => AsyncIterable<unknown>
   /** HTML string to serve at GET / (inline frontend). */
   html?: string
+  /** Readiness checks for GET /__theo/ready (K8s readiness probe). */
+  readinessChecks?: ReadinessCheck[]
+  /** Custom health endpoint path (default: '/__theo/health'). */
+  healthPath?: string
+  /** Custom readiness endpoint path (default: '/__theo/ready'). */
+  readyPath?: string
 }
 
 interface RouteEntry {
@@ -43,8 +52,15 @@ export class TheoApp {
   private serverHandle: ServerHandle
   private readonly routes: RouteEntry[] = []
   private frontendHtml?: string
+  private readonly startTime = Date.now()
+  private readonly healthPath: string
+  private readonly readyPath: string
+  private readonly readinessChecks: ReadinessCheck[]
 
-  private constructor() {
+  private constructor(opts?: Pick<TheoAppOptions, 'readinessChecks' | 'healthPath' | 'readyPath'>) {
+    this.healthPath = opts?.healthPath ?? '/__theo/health'
+    this.readyPath = opts?.readyPath ?? '/__theo/ready'
+    this.readinessChecks = opts?.readinessChecks ?? []
     const adapter = createNodeAdapter()
     this.serverHandle = adapter.createServer((request) => this.handleRequest(request))
   }
@@ -56,7 +72,7 @@ export class TheoApp {
    * EC-2: Registration order guaranteed: providers → controllers → agents.
    */
   static async create(opts: TheoAppOptions): Promise<TheoApp> {
-    const app = new TheoApp()
+    const app = new TheoApp(opts)
 
     // ── DI Container (replaces manual Map<Function, object>) ──
     // Uses @theokit/di Container for: scopes, lifecycle, async, typed errors.
@@ -249,6 +265,26 @@ export class TheoApp {
     }
   }
 
+  private async handleReadinessCheck(): Promise<Response> {
+    if (this.readinessChecks.length === 0) {
+      return jsonResponse(200, { status: 'ready', checks: [] })
+    }
+    const results = await Promise.all(this.readinessChecks.map(async (check) => {
+      try {
+        return await Promise.race([
+          check(),
+          new Promise<{ name: string; healthy: boolean; message?: string }>((resolve) =>
+            setTimeout(() => resolve({ name: 'unknown', healthy: false, message: 'Readiness check timed out (5s)' }), 5000),
+          ),
+        ])
+      } catch (err) {
+        return { name: 'unknown', healthy: false, message: err instanceof Error ? err.message : 'Check failed' }
+      }
+    }))
+    const allHealthy = results.every((r) => r.healthy)
+    return jsonResponse(allHealthy ? 200 : 503, { status: allHealthy ? 'ready' : 'not_ready', checks: results })
+  }
+
   private createFallbackStream(agentName: string, apiKey: string) {
     const msg = !apiKey
       ? 'Set OPENROUTER_API_KEY environment variable or pass llmApiKey to TheoApp.create()'
@@ -270,18 +306,28 @@ export class TheoApp {
   // ── Web Standard request handler ──────────────────
 
   private async handleRequest(request: Request): Promise<Response> {
+    const pathname = new URL(request.url).pathname
+
+    // ── Health & Readiness probes (bypass guards/interceptors) ──
+    if (request.method === 'GET') {
+      if (pathname === this.healthPath) {
+        return jsonResponse(200, { status: 'ok', uptime: (Date.now() - this.startTime) / 1000, timestamp: Date.now() })
+      }
+      if (pathname === this.readyPath) {
+        return this.handleReadinessCheck()
+      }
+    }
+
     // Bug #8: Serve frontend HTML at GET /
     if (request.method === 'GET') {
-      const p = new URL(request.url).pathname
-      if ((p === '/' || p === '/index.html') && this.frontendHtml) {
+      if ((pathname === '/' || pathname === '/index.html') && this.frontendHtml) {
         return new Response(this.frontendHtml, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
       }
     }
 
     // Agent routes (auto-wired — checked first, with guard enforcement per Bug #4)
-    const url0 = new URL(request.url)
     for (const route of this.agentRoutes) {
-      if (request.method.toUpperCase() === route.method && route.pattern.test(url0.pathname)) {
+      if (request.method.toUpperCase() === route.method && route.pattern.test(pathname)) {
         // Bug #4 fix: enforce @UseGuards on agent routes (same pipeline as controllers)
         if (route.guards.length > 0) {
           const ctx = createExecutionContext(request, route.agentClass, route.methodName)
