@@ -23,12 +23,6 @@ packages:
   - 'fixtures/template-saas'
   # Decorator full-stack fixture — @theokit/http-decorators + React frontend
   - 'fixtures/decorator-fullstack'
-  # @theokit/sdk via sibling checkout (workspace protocol) — required by the
-  # canonical chat.ts wired in fixtures/template-default. pnpm tolerates
-  # missing sibling for contributors without the checkout.
-  - '../theokit-sdk/packages/sdk'
-  # @theokit/gateway + @theokit/gateway-telegram — required by
-  # examples/full-stack-agent for the Telegram bot demo. Same sibling-checkout
-  # tolerance as @theokit/sdk.
-  - '../theokit-sdk/packages/gateway'
-  - '../theokit-sdk/packages/gateway-telegram'
+  # @theokit/sdk sibling links REMOVED (2026-06-10) — Turborepo requires all
+  # workspace packages inside repo root. SDK consumed via npm registry instead.
+  # To restore local dev: pnpm link ../theokit-sdk/packages/sdk

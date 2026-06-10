@@ -78,7 +78,7 @@ export const corsSchema = z
       headerSafeString,
       z.instanceof(RegExp),
       z.array(z.union([headerSafeString, z.instanceof(RegExp)])),
-      z.function().args(z.string()).returns(z.boolean()),
+      z.function({ input: z.tuple([z.string()]), output: z.boolean() }),
     ]),
     methods: z
       .array(z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']))

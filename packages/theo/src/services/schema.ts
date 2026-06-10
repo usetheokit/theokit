@@ -54,7 +54,7 @@ const ServiceDefinitionSchema = z.object({
   openapi: z.string().url().optional(),
   healthcheck: z.string().regex(/^\//, 'healthcheck must start with /').default('/health'),
   cors: z.boolean().default(false),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   dependsOn: z.array(z.string()).optional(),
   /**
    * EC-25 + ref doc §8: by default the proxy strips upstream Set-Cookie
