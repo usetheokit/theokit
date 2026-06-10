@@ -7,7 +7,7 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { z } from 'zod'
-import type { IncomingMessage } from 'node:http'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import {
   Controller,
   Get,
@@ -78,8 +78,9 @@ class CreateUserDto {
 // ═══════════════════════════════════════════════════════
 
 class AuthGuard {
-  canActivate(req: IncomingMessage) {
-    return req.headers['x-api-key'] === 'secret-key'
+  canActivate(context: ExecutionContext) {
+    const req = context.getRequest()
+    return req.headers.get('x-api-key') === 'secret-key'
   }
 }
 
@@ -250,9 +251,9 @@ describe('Full TheoKit App Demo — @syntax TypeScript real', () => {
     expect(res.status).toBe(204)
   })
 
-  it('GET /users/stats sem auth → 401', async () => {
+  it('GET /users/stats sem auth → 403', async () => {
     const res = await fetch(`http://localhost:${port}/users/stats`)
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(403)
   })
 
   it('GET /users/stats com auth → 200 stats from DI service', async () => {

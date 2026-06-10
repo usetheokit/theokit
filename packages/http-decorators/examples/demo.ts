@@ -35,6 +35,7 @@ import {
   registerControllers,
   walkControllerMetadata,
 } from '../src/index.js'
+import type { ExecutionContext } from '../src/bridge/execution-context.js'
 
 // ────────────────────────────────────────────
 // 1. Define DTOs with Zod static schema (Pattern D2)
@@ -55,8 +56,9 @@ class CreateCatDto {
 // ────────────────────────────────────────────
 
 class AuthGuard {
-  canActivate(request: Request): boolean {
-    return request.headers.get('authorization') !== null
+  canActivate(context: ExecutionContext): boolean {
+    const req = context.getRequest()
+    return req.headers.get('authorization') !== null
   }
 }
 

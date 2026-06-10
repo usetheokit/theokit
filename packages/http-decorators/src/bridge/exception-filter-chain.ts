@@ -1,13 +1,9 @@
 /**
- * Exception filter pipeline for @theokit/http-decorators.
+ * Exception filter pipeline — Web Standard Request/Response.
  *
- * Catches exceptions from the middleware → guards → interceptors → handler pipeline.
- * Per D3: method-level filters override class-level.
- * EC-1: recursion guard prevents infinite loop when filter itself throws.
- * EC-2: res.headersSent check prevents ERR_HTTP_HEADERS_SENT crash.
+ * Returns a Response instead of writing to ServerResponse.
+ * EC-1: recursion guard — filter that throws → global fallback.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http'
-
 import { HttpException } from '../exceptions/http-exception.js'
 import { getMeta, CATCH_EXCEPTIONS } from '../metadata/index.js'
 
@@ -15,83 +11,65 @@ import { resolveOrNew, type DiContainer } from './di-resolve.js'
 
 /** Interface for exception filter classes (bound via @UseFilters). */
 export interface ExceptionFilter {
-  catch(exception: unknown, host: ArgumentsHost): void | Promise<void>
+  catch(exception: unknown, host: ArgumentsHost): Response | Promise<Response>
 }
 
-/** Simplified host — HTTP-only per ADR D1 (no switchToHttp indirection). */
+/** ArgumentsHost — Web Standard. */
 export interface ArgumentsHost {
-  getRequest(): IncomingMessage
-  getResponse(): ServerResponse
+  getRequest(): Request
 }
 
 /**
- * Run exception filters for a caught exception.
- *
- * Priority: method-level filters → class-level filters → global fallback.
- * Per D3: method-level overrides class-level (first match wins).
+ * Run exception filters and return an error Response.
+ * Returns the filter's Response or a built-in fallback.
  */
 export async function runExceptionFilters(
   exception: unknown,
   filters: Function[],
-  req: IncomingMessage,
-  res: ServerResponse,
+  request: Request,
   container?: DiContainer,
-): Promise<void> {
-  // EC-2: if headers already sent, log and bail — can't write a new response
-  if (res.headersSent) {
-    console.error('[@theokit/http-decorators] Exception after headers sent:', exception)
-    return
-  }
-
+): Promise<Response> {
   const host: ArgumentsHost = {
-    getRequest: () => req,
-    getResponse: () => res,
+    getRequest: () => request,
   }
 
-  // Try to find a matching filter
   for (const FilterCtor of filters) {
     const catchTypes = getMeta<Function[]>(CATCH_EXCEPTIONS, FilterCtor) ?? []
     if (matchesException(exception, catchTypes)) {
       const filter = resolveOrNew(FilterCtor, container) as ExceptionFilter
       try {
-        await filter.catch(exception, host)
-        return
+        return await filter.catch(exception, host)
       } catch (filterError) {
-        // EC-1: filter itself threw — fall through to global fallback, no recursion
+        // EC-1: filter itself threw — fall to global fallback
         console.error('[@theokit/http-decorators] Exception filter threw:', filterError)
-        sendGlobalFallback(exception, res)
-        return
+        return globalFallback(exception)
       }
     }
   }
 
-  // No custom filter matched — use built-in handling
-  sendBuiltInResponse(exception, res)
+  return builtInResponse(exception)
 }
 
-/** Check if exception matches the @Catch types. Empty array = catch-all. */
 function matchesException(exception: unknown, catchTypes: Function[]): boolean {
-  if (catchTypes.length === 0) return true // catch-all
+  if (catchTypes.length === 0) return true
   return catchTypes.some((Type) => exception instanceof Type)
 }
 
-/** Built-in response: HttpException → typed JSON, other → 500. */
-function sendBuiltInResponse(exception: unknown, res: ServerResponse): void {
+function builtInResponse(exception: unknown): Response {
   if (exception instanceof HttpException) {
-    const json = exception.toJSON()
-    res.writeHead(exception.statusCode, { 'content-type': 'application/json' })
-    res.end(JSON.stringify(json))
-  } else {
-    sendGlobalFallback(exception, res)
+    return new Response(JSON.stringify(exception.toJSON()), {
+      status: exception.statusCode,
+      headers: { 'content-type': 'application/json' },
+    })
   }
+  return globalFallback(exception)
 }
 
-/** Global fallback: always 500 with generic message. Logs the real error. */
-function sendGlobalFallback(exception: unknown, res: ServerResponse): void {
+function globalFallback(exception: unknown): Response {
   const message = exception instanceof Error ? exception.message : 'Internal server error'
   console.error('[@theokit/http-decorators] Unhandled exception:', exception)
-  if (!res.headersSent) {
-    res.writeHead(500, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ error: { code: 'INTERNAL_SERVER_ERROR', message, statusCode: 500 } }))
-  }
+  return new Response(
+    JSON.stringify({ error: { code: 'INTERNAL_SERVER_ERROR', message, statusCode: 500 } }),
+    { status: 500, headers: { 'content-type': 'application/json' } },
+  )
 }

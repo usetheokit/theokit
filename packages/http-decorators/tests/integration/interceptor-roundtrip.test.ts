@@ -4,7 +4,7 @@ import http from 'node:http'
 import { Controller, Get, Post, Body, UseInterceptors, UseGuards } from '../../src/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
 import type { Interceptor } from '../../src/bridge/interceptor-chain.js'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import { z } from 'zod'
 
 // ─── Interceptors ───
@@ -12,17 +12,16 @@ import { z } from 'zod'
 const interceptorLog: string[] = []
 
 class TimingInterceptor implements Interceptor {
-  async intercept(_req: IncomingMessage, res: ServerResponse, next: () => Promise<unknown>) {
+  async intercept(_req: Request, next: () => Promise<unknown>) {
     const start = Date.now()
     const result = await next()
-    res.setHeader('X-Response-Time', `${Date.now() - start}ms`)
     interceptorLog.push('timing')
     return result
   }
 }
 
 class WrapInterceptor implements Interceptor {
-  async intercept(_req: IncomingMessage, _res: ServerResponse, next: () => Promise<unknown>) {
+  async intercept(_req: Request, next: () => Promise<unknown>) {
     const result = await next()
     interceptorLog.push('wrap')
     return { data: result, wrapped: true }
@@ -32,8 +31,9 @@ class WrapInterceptor implements Interceptor {
 // ─── Guard ───
 
 class AuthGuard {
-  canActivate(req: IncomingMessage) {
-    return req.headers['x-api-key'] === 'secret'
+  canActivate(context: ExecutionContext) {
+    const req = context.getRequest()
+    return req.headers.get('x-api-key') === 'secret'
   }
 }
 
@@ -85,10 +85,9 @@ describe('T1.2 — Interceptor HTTP roundtrip', () => {
     interceptorLog.length = 0
     await startServer()
     try {
-      const { status, headers } = await fetchJSON('/items')
+      const { status } = await fetchJSON('/items')
       expect(status).toBe(200)
-      // TimingInterceptor sets X-Response-Time
-      expect(headers.get('x-response-time')).toMatch(/\d+ms/)
+      // TimingInterceptor runs (no longer sets response headers directly)
       expect(interceptorLog).toContain('timing')
     } finally {
       server.close()
@@ -138,7 +137,7 @@ describe('T1.2 — Interceptor HTTP roundtrip', () => {
     try {
       // Without auth → guard rejects BEFORE interceptors run
       const noAuth = await fetchJSON('/items/protected')
-      expect(noAuth.status).toBe(401)
+      expect(noAuth.status).toBe(403)
       expect(interceptorLog).toEqual([]) // interceptors never ran
 
       // With auth → guard passes, interceptors run

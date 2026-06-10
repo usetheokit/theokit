@@ -4,7 +4,7 @@ import { createDecorator, SetMetadata, Reflector } from '../../src/decorators/se
 import { Controller, Get, Post, UseGuards } from '../../src/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
 import { ForbiddenException } from '../../src/exceptions/index.js'
-import type { IncomingMessage } from 'node:http'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import http from 'node:http'
 
 // ─── Role-based auth example (NestJS Reflector pattern) ───
@@ -13,10 +13,11 @@ const Roles = createDecorator<string[]>()
 const reflector = new Reflector()
 
 class RolesGuard {
-  canActivate(req: IncomingMessage) {
+  canActivate(context: ExecutionContext) {
+    const req = context.getRequest()
     // In real app: extract user from JWT, check roles via reflector
     // For test: check x-role header
-    const userRole = req.headers['x-role'] as string | undefined
+    const userRole = req.headers.get('x-role')
     if (!userRole) return false
     // Guard needs to know which roles are required — in NestJS this
     // uses ExecutionContext.getHandler() + Reflector. Here simplified:
@@ -90,9 +91,9 @@ describe('@SetMetadata + createDecorator + Reflector', () => {
     const port = (server.address() as { port: number }).port
 
     try {
-      // No role header → 401
+      // No role header → 403
       const r1 = await fetch(`http://localhost:${port}/admin`)
-      expect(r1.status).toBe(401)
+      expect(r1.status).toBe(403)
 
       // With role header → 200
       const r2 = await fetch(`http://localhost:${port}/admin`, {

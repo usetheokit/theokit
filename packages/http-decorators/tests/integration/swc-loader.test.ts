@@ -97,10 +97,10 @@ describe('SWC Loader', () => {
           const tasks = (await r1.json()) as unknown[]
           expect(Array.isArray(tasks)).toBe(true)
 
-          // POST — create task with Zod validation
+          // POST — create task with Zod validation (x-role: user for RBAC)
           const r2 = await fetch(`http://localhost:${port}/api/v2/tasks`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', 'x-role': 'user' },
             body: JSON.stringify({ title: 'SWC Test', priority: 'high' }),
           })
           expect(r2.status).toBe(201)
@@ -108,7 +108,7 @@ describe('SWC Loader', () => {
           // POST — validation error
           const r3 = await fetch(`http://localhost:${port}/api/v2/tasks`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', 'x-role': 'user' },
             body: JSON.stringify({ title: 'ab' }),
           })
           expect(r3.status).toBe(422)

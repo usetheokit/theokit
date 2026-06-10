@@ -18,10 +18,11 @@ import { Body, Post } from '../../src/decorators/index.js'
 @Catch(HttpException)
 class CustomErrorFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
-    const res = host.getResponse()
     const ex = exception as HttpException
-    res.writeHead(ex.statusCode, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ custom: true, code: ex.code, msg: ex.message }))
+    return new Response(JSON.stringify({ custom: true, code: ex.code, msg: ex.message }), {
+      status: ex.statusCode,
+      headers: { 'content-type': 'application/json' },
+    })
   }
 }
 

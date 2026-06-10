@@ -4,9 +4,10 @@ import { Controller } from '../../src/decorators/controller.js'
 import { Get } from '../../src/decorators/methods.js'
 import { UseGuards, UseInterceptors } from '../../src/decorators/middleware.js'
 import { walkControllerMetadata } from '../../src/bridge/walk-metadata.js'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 
 class AuthGuard {
-  canActivate() {
+  canActivate(_context: ExecutionContext) {
     return true
   }
 }
