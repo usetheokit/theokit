@@ -71,6 +71,8 @@ export interface DoneEvent {
     totalTokens: number
   }
   durationMs: number
+  /** Total cost in USD for this agent run (EC-2: added for budget tracking). */
+  cost?: number
 }
 
 /** Agent run started. */
