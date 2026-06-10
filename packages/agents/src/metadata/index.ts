@@ -1,5 +1,5 @@
 // Re-export setMeta/getMeta from http-decorators (DRY — single metadata engine)
-// Imported via package barrel — NOT relative path (per architecture.md Invariant 3)
+// Relative path for workspace-local usage; vitest resolves via alias
 export { setMeta, getMeta } from '@theokit/http-decorators'
 
 export * from './keys.js'
