@@ -90,7 +90,7 @@ describe('TheoApp.create() — NestFactory/SpringBoot style', () => {
   let port: number
 
   beforeAll(async () => {
-    app = TheoApp.create({
+    app = await TheoApp.create({
       controllers: [CatsController, HealthCtrl],
       providers: [CatService],
     })

@@ -122,10 +122,11 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
         if (initPromise && !initialized) await initPromise
 
         // Convert Node types → Web Standard at the boundary
-        const request = nodeIncomingToRequest(pluginCtx.request)
+        const _nodeHttp = await import('node:http')
+        const request = nodeIncomingToRequest(pluginCtx.request as InstanceType<typeof _nodeHttp.IncomingMessage>)
         const response = await handleDecoratorRoute(routes, request, opts.container, middlewareEntries)
         if (response) {
-          await writeResponseToNode(response, pluginCtx.response)
+          await writeResponseToNode(response, pluginCtx.response as InstanceType<typeof _nodeHttp.ServerResponse>)
         }
         // null = not our route, fall through to TheoKit scanner
       })

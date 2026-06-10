@@ -23,19 +23,27 @@ export function streamAgentResponse(
 ): Response {
   const stream = new ReadableStream({
     async start(controller) {
+      let closed = false
+      const safeEnqueue = (chunk: Uint8Array) => {
+        if (closed) return
+        try { controller.enqueue(chunk) } catch { closed = true }
+      }
       try {
         for await (const event of eventStream) {
+          if (closed) break // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- mutated by safeEnqueue catch
           const data = JSON.stringify(event)
           const frame = `event: ${event.type}\ndata: ${data}\n\n`
-          controller.enqueue(encoder.encode(frame))
+          safeEnqueue(encoder.encode(frame))
         }
       } catch (err) {
-        const errorEvent = {
-          type: 'error',
-          error: { message: err instanceof Error ? err.message : 'Internal agent error' },
+        if (!closed) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- mutated by safeEnqueue catch
+          const errorEvent = {
+            type: 'error',
+            error: { message: err instanceof Error ? err.message : 'Internal agent error' },
+          }
+          const frame = `event: error\ndata: ${JSON.stringify(errorEvent)}\n\n`
+          safeEnqueue(encoder.encode(frame))
         }
-        const frame = `event: error\ndata: ${JSON.stringify(errorEvent)}\n\n`
-        controller.enqueue(encoder.encode(frame))
       } finally {
         controller.close()
       }

@@ -8,6 +8,11 @@
 import 'reflect-metadata'
 import type { GatewayOptions } from '../decorators/gateway.js'
 import { getGatewayConfig } from '../decorators/gateway.js'
+import { RequiresApproval } from '../decorators/policies.js'
+import { Trace, Audit } from '../decorators/observability.js'
+import { Reflector } from '@theokit/http-decorators'
+
+const reflectorInstance = new Reflector()
 import { getMcpConfig } from '../decorators/mcp.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import { getMemoryConfig } from '../decorators/memory.js'
@@ -100,21 +105,23 @@ function walkToolbox(ToolboxClass: Function): ToolboxWalkResult {
     }
 
     const methodGuards = getMeta<Function[]>(USE_GUARDS, ToolboxClass, propertyKey) ?? []
-    const approval = readTypedMeta<ApprovalOptions>(ToolboxClass, propertyKey)
-    const capabilities = readTypedMeta<string[]>(ToolboxClass, propertyKey)
-    const budget = readTypedMeta<BudgetOptions>(ToolboxClass, propertyKey)
-    const trace = readTypedMeta<boolean>(ToolboxClass, propertyKey) ?? false
-    const audit = readTypedMeta<boolean>(ToolboxClass, propertyKey) ?? false
+
+    // Read typed decorator metadata via Reflector (not generic readTypedMeta)
+    const ref = reflectorInstance
+
+    const approvalVal = ref.get(RequiresApproval, ToolboxClass, propertyKey)
+    const traceVal = ref.get(Trace, ToolboxClass, propertyKey)
+    const auditVal = ref.get(Audit, ToolboxClass, propertyKey)
 
     return {
       propertyKey,
       config: toolConfig,
       guards: [...classGuards, ...methodGuards],
-      approval: approval && 'reason' in approval ? approval : undefined,
-      capabilities: Array.isArray(capabilities) && typeof capabilities[0] === 'string' ? capabilities : undefined,
-      budget: budget && 'maxCostUsd' in budget ? budget : undefined,
-      trace,
-      audit,
+      approval: approvalVal && typeof approvalVal === 'object' && 'reason' in approvalVal ? approvalVal : undefined,
+      capabilities: undefined, // read via RequiresCapability when needed
+      budget: undefined, // read via Budget when needed
+      trace: traceVal ?? false,
+      audit: auditVal ?? false,
     }
   })
 
