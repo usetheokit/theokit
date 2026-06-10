@@ -21,7 +21,7 @@ export const rateLimitSchema = z.union([
     keyBy: z
       .union([
         z.enum(['ip', 'session', 'user']),
-        z.function().args(z.unknown()).returns(z.string()),
+        z.function({ input: z.tuple([z.unknown()]), output: z.string() }),
       ])
       .optional(),
     cookieName: z.string().min(1).optional(),

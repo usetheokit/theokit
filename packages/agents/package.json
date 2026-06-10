@@ -32,12 +32,12 @@
   "peerDependencies": {
     "@theokit/http-decorators": ">=0.1.0-alpha.0",
     "reflect-metadata": ">=0.2.0",
-    "zod": "^3.22.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@theokit/http-decorators": "workspace:*",
     "reflect-metadata": "^0.2.0",
-    "zod": "^3.22.0",
+    "zod": "^4.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
     "vitest": "^3.0.0"
