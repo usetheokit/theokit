@@ -1,75 +1,89 @@
 # {{name}}
 
-TheoKit project. Build the app your agent lives in — routing, auth, real-time, deploy — wired.
+Built with [TheoKit](https://theokit.dev) — Full-Stack TypeScript for AI Agents.
 
-> 📚 **Full docs:** https://docs.theokit.dev
-
-## Quick start
+## Getting Started
 
 ```bash
-# 1. Set your provider key (OpenRouter recommended — one key, any model)
-cp .env.example .env  # if .env.example shipped; otherwise:
-echo 'OPENROUTER_API_KEY=sk-or-v1-...' > .env
+# Install dependencies
+npm install
 
-# 2. Boot the dev server
-npx theokit dev
+# Set your LLM API key
+cp .env.example .env
+# Edit .env with your OpenRouter/Anthropic/OpenAI key
+
+# Start development server
+bun dev
+# or: npm run dev:node
 ```
 
-Open the printed URL. The default surface is a chat composer wired to `server/routes/chat.ts`. Drop in your real key in `.env` and the agent responds.
-
-## Templates
-
-- **default** (this one) — TheoUI chat composer + agent route.
-- **`--bare`** — Hello Theo with no `@theokit/*` deps. Use this when you want a clean structure to grow into or when the SDK isn't on your registry yet.
-- **dashboard** — nested layouts + sidebar.
-- **api-only** — server routes without React.
-- **postgres** — Drizzle ORM + migrations.
-- **saas** — full app with auth, billing, sessions.
-
-## What the framework auto-loads
-
-- **`.env` → `process.env`**. Edit `.env`; restart the dev server. Server routes read `process.env.MY_KEY` directly.
-- **`.theo/` build output cleanup** on every `theokit build`.
-- **`.theokit/agents/` LRU GC** on every `theokit dev` startup (default cap: 100 agents).
-- **Tailwind + `@theokit/ui` styling** auto-configured when `@theokit/ui` is in your `package.json` AND no consumer `tailwind.config.*` is present. This project ships an explicit `tailwind.config.ts` because the TheoUI v3 surface still requires it. The zero-config path lands when `@theokit/ui` ships its Vite plugin (cross-repo work, pending sign-off).
-
-For the full story of what's automatic vs deliberate, see [docs.usetheo.dev/zero-config](https://docs.usetheo.dev/zero-config) (or your local `node_modules/theokit/docs/concepts/zero-config.md`).
-
-## Project structure
+## Project Structure
 
 ```
-app/                  Frontend (file-based routing)
-├── page.tsx          /              — chat composer
-├── layout.tsx        wrapper        — TheoUI provider + theme
-server/               Backend (explicit routes & actions)
-├── routes/
-│   ├── chat.ts       POST /api/chat — agent SSE stream
-│   └── health.ts     GET  /api/health
-theo.config.ts        Framework config
-tailwind.config.ts    Tailwind theme tokens (TheoUI)
-postcss.config.js     PostCSS pipeline (Tailwind + autoprefixer)
-.env                  Secrets — never committed (.gitignore)
+{{name}}/
+├── app.ts                          # Entry point (TheoApp.create)
+├── server/
+│   ├── controllers/
+│   │   └── tasks.controller.ts     # HTTP CRUD (@Controller)
+│   ├── agents/
+│   │   └── assistant.agent.ts      # AI Agent (@Agent + @MainLoop)
+│   ├── toolboxes/
+│   │   └── task.tools.ts           # Agent tools (@Toolbox + @Tool)
+│   ├── guards/
+│   │   └── auth.guard.ts           # RBAC (@Roles + RolesGuard)
+│   ├── interceptors/
+│   │   └── timing.interceptor.ts   # Request timing
+│   ├── filters/
+│   │   └── http-error.filter.ts    # Error formatting
+│   ├── middleware/
+│   │   └── logger.middleware.ts     # Request logging
+│   └── store.ts                    # In-memory data store
+└── .env.example                    # Environment variables
 ```
 
-## Common commands
+## API Endpoints
 
-| Command | What it does |
-|---|---|
-| `npx theokit dev` | Dev server with HMR, devtools overlay, structured logs |
-| `npx theokit build` | Production build → `.theo/` |
-| `npx theokit start` | Serve the production build |
-| `npx theokit check` | Lint for upgrade-readiness (CSRF, CSP, zero-config migration hints) |
-| `npx theokit generate route foo` | Scaffold a new server route |
-| `npx theokit routes` | List all routes + actions detected |
+### HTTP Controllers
 
-## What if `npm install` fails on `@theokit/sdk`?
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | /api/tasks | Public | List all tasks |
+| GET | /api/tasks/search?q= | Public | Search tasks |
+| GET | /api/tasks/:id | Public | Get task by ID |
+| POST | /api/tasks | User | Create task |
+| PUT | /api/tasks/:id | User | Update task |
+| DELETE | /api/tasks/:id | Admin | Delete task |
 
-The agent SDK is in soft-release while the npm publish is operator-deferred. If you hit `404 Not Found` for `@theokit/sdk`:
+### AI Agent
 
-- **Quick path**: re-scaffold with `--bare` — Hello Theo without any `@theokit/*` deps.
-- **Inside the TheoKit monorepo**: replace `"@theokit/sdk": "^1.0.0"` with `"workspace:*"` in `package.json`.
-- **Wait**: track the publish at https://github.com/usetheo/theokit-sdk.
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | /api/agents/assistant/chat | User | Chat with AI (SSE stream) |
 
-## License
+## Examples
 
-Apply your own. The TheoKit framework is Apache-2.0.
+```bash
+# List tasks
+curl http://localhost:3000/api/tasks
+
+# Create a task (requires user role)
+curl -X POST http://localhost:3000/api/tasks \
+  -H "Content-Type: application/json" \
+  -H "x-role: user" \
+  -d '{"title":"New task","priority":"high"}'
+
+# Chat with AI agent (SSE streaming)
+curl -N -X POST http://localhost:3000/api/agents/assistant/chat \
+  -H "Content-Type: application/json" \
+  -H "x-role: user" \
+  -d '{"message":"List all tasks and mark the first one as done"}'
+```
+
+## Key Concepts
+
+- **@Controller** — HTTP routes with Zod validation
+- **@Agent** — AI agent with LLM + tool calling + SSE streaming
+- **@Toolbox** + **@Tool** — Functions the AI can call
+- **@UseGuards** — Same auth for controllers AND agents
+- **@Mixin** — Compose toolboxes into agents
+- **TheoApp.create()** — Zero-wiring bootstrap (like NestFactory.create)

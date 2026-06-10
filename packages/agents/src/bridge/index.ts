@@ -54,3 +54,5 @@ export {
   type AgentRoute,
   type AgentRouteContext,
 } from './agent-route-generator.js'
+
+export { createRealAgentStream } from './llm-runner.js'
