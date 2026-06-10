@@ -79,11 +79,16 @@ function resolveBodySchema(
   return undefined
 }
 
+/** WeakMap cache — metadata is immutable; walk once, reuse forever. */
+const walkCache = new WeakMap<Function, WalkResult[]>()
+
 /**
  * Walk all decorator metadata on a controller class and produce
- * a structured list of route descriptors. Pure function — no side effects.
+ * a structured list of route descriptors. Memoized per class via WeakMap.
  */
 export function walkControllerMetadata(ControllerClass: Function): WalkResult[] {
+  const cached = walkCache.get(ControllerClass)
+  if (cached) return cached
   // EC-2: throw when @Controller decorator is missing
   const controllerMeta = getMeta<ControllerMeta>(CONTROLLER_PREFIX, ControllerClass)
   if (!controllerMeta) {
@@ -110,7 +115,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
   const classInterceptors = getMeta<Function[]>(USE_INTERCEPTORS, ControllerClass) ?? []
   const classFilters = getMeta<Function[]>(USE_FILTERS, ControllerClass) ?? []
 
-  return methods.map((m) => {
+  const result = methods.map((m) => {
     const paramEntries = paramsMap.get(m.propertyKey) ?? []
     const bodySchema = resolveBodySchema(paramEntries, ControllerClass, m.propertyKey)
 
@@ -133,4 +138,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
       filters: getMeta<Function[]>(USE_FILTERS, ControllerClass, m.propertyKey) ?? classFilters,
     }
   })
+
+  walkCache.set(ControllerClass, result)
+  return result
 }

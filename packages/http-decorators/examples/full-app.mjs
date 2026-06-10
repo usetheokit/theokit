@@ -98,14 +98,16 @@ class ProductService {
 // ═══════════════════════════════════════════════════════
 
 class ApiKeyGuard {
-  canActivate(req) {
-    return req.headers['x-api-key'] === 'theokit-2026'
+  canActivate(context) {
+    const req = context.getRequest()
+    return req.headers.get('x-api-key') === 'theokit-2026'
   }
 }
 
 class AdminGuard {
-  canActivate(req) {
-    return req.headers['x-role'] === 'admin'
+  canActivate(context) {
+    const req = context.getRequest()
+    return req.headers.get('x-role') === 'admin'
   }
 }
 

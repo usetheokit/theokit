@@ -56,14 +56,22 @@ async function main() {
 ║  Server: http://localhost:${PORT}                                   ║
 ║                                                                  ║
 ║  ┌────────────────────────────────────────────────────────────┐  ║
-║  │ ENDPOINTS                                                 │  ║
-║  │  GET  /api/v2/tasks              — list all               │  ║
-║  │  GET  /api/v2/tasks/stats        — statistics             │  ║
-║  │  GET  /api/v2/tasks/search?q=doc — search                 │  ║
-║  │  GET  /api/v2/tasks/1            — get by id              │  ║
-║  │  POST /api/v2/tasks              — create (Zod validated) │  ║
-║  │  POST /api/v2/tasks/1/complete   — mark done              │  ║
-║  │  DEL  /api/v2/tasks/3            — delete                 │  ║
+║  │ ENDPOINTS                        AUTH                     │  ║
+║  │  GET  /api/v2/tasks              — @IsPublic              │  ║
+║  │  GET  /api/v2/tasks/stats        — @IsPublic              │  ║
+║  │  GET  /api/v2/tasks/search?q=doc — @IsPublic              │  ║
+║  │  GET  /api/v2/tasks/1            — @IsPublic              │  ║
+║  │  POST /api/v2/tasks              — @Roles([User]) + Zod   │  ║
+║  │  POST /api/v2/tasks/1/complete   — @Roles([User])         │  ║
+║  │  DEL  /api/v2/tasks/3            — @Roles([Admin])        │  ║
+║  └────────────────────────────────────────────────────────────┘  ║
+║                                                                  ║
+║  ┌────────────────────────────────────────────────────────────┐  ║
+║  │ AUTH TESTING                                              │  ║
+║  │  POST without x-role    → 403 Forbidden                   │  ║
+║  │  POST x-role: user      → 201 Created                     │  ║
+║  │  DEL  x-role: user      → 403 Forbidden (needs admin)     │  ║
+║  │  DEL  x-role: admin     → 204 Deleted                     │  ║
 ║  └────────────────────────────────────────────────────────────┘  ║
 ║                                                                  ║
 ║  ┌────────────────────────────────────────────────────────────┐  ║
@@ -74,12 +82,14 @@ async function main() {
 ║                                                                  ║
 ║  PIPELINE:                                                       ║
 ║    ✓ @Controller + @Get/@Post/@Delete + @HttpCode                ║
+║    ✓ @Roles + @IsPublic + RolesGuard (RBAC authorization)        ║
 ║    ✓ @Body(zodSchema) + @Param('id') + @Query('q')              ║
 ║    ✓ @UseInterceptors(TimingInterceptor) — X-Response-Time       ║
 ║    ✓ LoggerMiddleware (class) + corsMiddleware (functional)       ║
 ║    ✓ configure().forRoutes() middleware route filtering           ║
 ║    ✓ NotFoundException → 404 typed JSON response                 ║
 ║    ✓ Exception filter pipeline with global fallback              ║
+║    ✓ ExecutionContext + Reflector for guard metadata access       ║
 ║    ✓ SWC-powered controller loading                              ║
 ║                                                                  ║
 ╚═══════════════════════════════════════════════════════════════════╝
@@ -87,8 +97,10 @@ async function main() {
   curl localhost:${PORT}/api/v2/tasks
   curl localhost:${PORT}/api/v2/tasks/999
   curl localhost:${PORT}/api/v2/tasks/search?q=doc
-  curl -X POST localhost:${PORT}/api/v2/tasks -H "Content-Type: application/json" -d '{"title":"Hello","priority":"high"}'
-  curl -X POST localhost:${PORT}/api/v2/tasks -H "Content-Type: application/json" -d '{"title":"a"}'
+  curl -X POST localhost:${PORT}/api/v2/tasks -H "Content-Type: application/json" -H "x-role: user" -d '{"title":"Hello","priority":"high"}'
+  curl -X POST localhost:${PORT}/api/v2/tasks -H "Content-Type: application/json" -d '{"title":"Hello"}'  # → 403 (no role)
+  curl -X DELETE localhost:${PORT}/api/v2/tasks/3 -H "x-role: admin"  # → 204
+  curl -X DELETE localhost:${PORT}/api/v2/tasks/3 -H "x-role: user"   # → 403 (needs admin)
 `)
   })
 }

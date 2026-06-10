@@ -1,6 +1,5 @@
 import 'reflect-metadata'
 import { describe, it, expect, vi } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   MiddlewareConsumerImpl,
   middlewareMatchesPath,
@@ -9,14 +8,13 @@ import {
   type ResolvedMiddleware,
 } from '../../src/bridge/middleware-consumer.js'
 
-const fakeReq = {} as IncomingMessage
-const fakeRes = { writableEnded: false } as unknown as ServerResponse
+const fakeReq = new Request('http://localhost/tasks')
 
 describe('T2.1 — MiddlewareConsumer builder', () => {
   it('test_consumer_apply_class_middleware', () => {
     class LoggerMiddleware implements NestMiddleware {
-      use(_req: IncomingMessage, _res: ServerResponse, next: () => void) {
-        next()
+      use(_request: Request, next: () => Promise<Response | null>) {
+        return next()
       }
     }
     const consumer = new MiddlewareConsumerImpl()
@@ -106,16 +104,16 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
     const log: string[] = []
     const entries: ResolvedMiddleware[] = [
       {
-        handler: (_req, _res, next) => {
+        handler: (_request, next) => {
           log.push('middleware-ran')
-          next()
+          return next()
         },
         routePatterns: ['tasks'],
         excludePatterns: [],
       },
     ]
-    const shortCircuited = await runMiddleware(entries, fakeReq, fakeRes, '/tasks')
-    expect(shortCircuited).toBe(false)
+    const response = await runMiddleware(entries, fakeReq, '/tasks')
+    expect(response).toBeNull() // null = not short-circuited
     expect(log).toEqual(['middleware-ran'])
   })
 
@@ -123,15 +121,15 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
     const log: string[] = []
     const entries: ResolvedMiddleware[] = [
       {
-        handler: (_req, _res, next) => {
+        handler: (_request, next) => {
           log.push('should-not-run')
-          next()
+          return next()
         },
         routePatterns: ['users'],
         excludePatterns: [],
       },
     ]
-    await runMiddleware(entries, fakeReq, fakeRes, '/tasks')
+    await runMiddleware(entries, fakeReq, '/tasks')
     expect(log).toEqual([])
   })
 })

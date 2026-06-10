@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { z } from 'zod'
-import type { IncomingMessage } from 'node:http'
+import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import { Controller } from '../../src/decorators/controller.js'
 import { Get, Post, Delete } from '../../src/decorators/methods.js'
 import { Body, Param, Query } from '../../src/decorators/params.js'
@@ -18,13 +18,13 @@ class CreateCatDto {
 }
 
 class RejectAllGuard {
-  canActivate(_req: IncomingMessage) {
+  canActivate(_context: ExecutionContext) {
     return false
   }
 }
 
 class ThrowingGuard {
-  canActivate(_req: IncomingMessage): boolean {
+  canActivate(_context: ExecutionContext): boolean {
     throw new Error('guard internal crash')
   }
 }
@@ -153,11 +153,11 @@ describe('T-final — HTTP roundtrip integration (real fetch → real handler)',
     expect(res.status).toBe(204)
   })
 
-  it('GET /cats/admin/secret returns 401 via @UseGuards(RejectAllGuard)', async () => {
+  it('GET /cats/admin/secret returns 403 via @UseGuards(RejectAllGuard)', async () => {
     const res = await fetch(`http://localhost:${port}/cats/admin/secret`)
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(403)
     const data = await res.json()
-    expect(data.error.code).toBe('UNAUTHORIZED')
+    expect(data.error.code).toBe('FORBIDDEN')
   })
 
   it('GET /nonexistent returns 404', async () => {
