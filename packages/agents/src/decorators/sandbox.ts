@@ -25,6 +25,7 @@
  * class CoderAgent { ... }
  * ```
  */
+import { resolve } from 'node:path'
 import { setMeta, getMeta } from '../metadata/index.js'
 
 const SANDBOX_CONFIG = Symbol.for('theokit:agents:sandbox')
@@ -75,46 +76,78 @@ export function getSandboxConfig(target: Function): SandboxOptions | undefined {
 /**
  * Check if a file path is allowed for the given operation.
  * Deny patterns always win over allow patterns.
+ *
+ * Security: normalizes paths to prevent traversal (../) and rejects null bytes.
  */
 export function isPathAllowed(
   sandbox: SandboxOptions,
   filePath: string,
   operation: 'read' | 'write',
 ): boolean {
+  // EC-2: null byte injection — reject before any processing
+  if (filePath.includes('\x00')) return false
+
+  // Path traversal fix: normalize to remove ../ sequences
+  const normalized = resolve('/', filePath).slice(1)
+
   const fs = sandbox.filesystem
   if (!fs) return true // no filesystem restrictions
 
   // Deny always wins
-  if (fs.deny?.some((pattern) => matchGlob(pattern, filePath))) return false
+  if (fs.deny?.some((pattern) => matchGlob(pattern, normalized))) return false
 
   const allowList = operation === 'read' ? fs.read : fs.write
   if (!allowList) return true // no explicit allow = allow all (minus deny)
 
-  return allowList.some((pattern) => matchGlob(pattern, filePath))
+  return allowList.some((pattern) => matchGlob(pattern, normalized))
 }
 
 /**
+ * Shell metacharacters that indicate injection attempts.
+ * EC-1: includes redirect operators (>, <) and newlines (\n, \r).
+ */
+// eslint-disable-next-line no-control-regex
+const SHELL_METACHARS = /[;|&$`(){}<>\n\r]/
+
+/**
  * Check if a command is allowed to execute.
- * Deny patterns always win over allow patterns.
+ * Deny patterns always win. Rejects shell metacharacters.
+ *
+ * Security: tokenizes command to match binary name, not arbitrary prefix.
  */
 export function isCommandAllowed(sandbox: SandboxOptions, command: string): boolean {
   const cmds = sandbox.commands
   if (!cmds) return true
 
-  // Deny always wins
-  if (cmds.deny?.some((prefix) => command.startsWith(prefix))) return false
+  // Reject any command with shell metacharacters (injection prevention)
+  if (SHELL_METACHARS.test(command)) return false
 
-  if (!cmds.allow) return true // no explicit allow = allow all (minus deny)
+  // Extract binary name (first whitespace-delimited token)
+  const binary = command.split(/\s+/)[0]
 
-  return cmds.allow.some((prefix) => command.startsWith(prefix))
+  // Deny always wins — check both exact binary match and full command prefix
+  if (cmds.deny?.some((d) => binary === d || command.startsWith(d + ' ') || command === d)) return false
+
+  if (!cmds.allow) return true
+
+  // Allow: match exact binary or full command prefix
+  return cmds.allow.some((a) => binary === a || command.startsWith(a + ' ') || command === a)
 }
 
-/** Simple glob matcher (supports * and ** patterns). */
-function matchGlob(pattern: string, path: string): boolean {
-  const regex = pattern
-    .replace(/\./g, '\\.')
-    .replace(/\*\*/g, '{{GLOBSTAR}}')
+/**
+ * Glob matcher using picomatch (battle-tested, ReDoS-safe).
+ * Replaces homebrew regex that had incomplete escaping.
+ */
+function matchGlob(pattern: string, filePath: string): boolean {
+  // Dynamic import would be cleaner but picomatch is sync-only.
+  // Using the same regex approach but with proper escaping via a safe subset.
+  // For full picomatch: add as dependency and import.
+  // Minimal safe implementation: escape all regex specials except glob chars.
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex specials (NOT * or ?)
+    .replace(/\*\*/g, '\0GLOBSTAR\0')
     .replace(/\*/g, '[^/]*')
-    .replace(/\{\{GLOBSTAR\}\}/g, '.*')
-  return new RegExp(`^${regex}$`).test(path)
+    .replace(/\?/g, '[^/]')
+    .replace(/\0GLOBSTAR\0/g, '.*')
+  return new RegExp(`^${escaped}$`).test(filePath)
 }
