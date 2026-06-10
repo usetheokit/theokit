@@ -4,7 +4,7 @@
  * Imported into the top-level `theokit/server` barrel (T1.3).
  */
 
-export { StorageManager, getStorageManager, __resetSingletonForTests } from './storage-manager.js'
+export { StorageManager, getStorageManager } from './storage-manager.js'
 export { useUnstorage } from './use-unstorage.js'
 export type { UnstorageInstance } from './use-unstorage.js'
 export { useDatabase } from './use-database.js'

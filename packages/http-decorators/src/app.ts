@@ -253,12 +253,18 @@ export class TheoApp {
     const msg = !apiKey
       ? 'Set OPENROUTER_API_KEY environment variable or pass llmApiKey to TheoApp.create()'
       : 'Pass agentStreamFactory to TheoApp.create() to connect your LLM provider'
-    return (_message: string, _sessionId: string) => ({
-      *[Symbol.asyncIterator]() {
-        yield { type: 'run_started', runId: `run-${Date.now()}`, agentName }
-        yield { type: 'error', code: 'AGENT_NOT_WIRED', message: msg, retryable: false }
-      },
-    })
+    return (_message: string, _sessionId: string) => {
+      const events = [
+        { type: 'run_started', runId: `run-${Date.now()}`, agentName },
+        { type: 'error', code: 'AGENT_NOT_WIRED', message: msg, retryable: false },
+      ]
+      return {
+        [Symbol.asyncIterator]: () => {
+          let i = 0
+          return { next: () => Promise.resolve(i < events.length ? { value: events[i++], done: false as const } : { value: undefined, done: true as const }) }
+        },
+      }
+    }
   }
 
   // ── Web Standard request handler ──────────────────

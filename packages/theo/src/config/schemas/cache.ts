@@ -24,13 +24,13 @@ export const cacheSchema = z.object({
       swr: z.number().nonnegative().finite().optional(),
       cacheErrors: z.boolean().default(false),
     })
-    .default({}),
+    .default({ maxAge: 1, cacheErrors: false }),
   keyDerivation: z
     .object({
       excludeQuery: z.array(z.string()).optional(),
       sortQuery: z.boolean().default(true),
       lowercaseHost: z.boolean().default(true),
     })
-    .default({}),
+    .default({ sortQuery: true, lowercaseHost: true }),
   routeRules: z.record(z.string(), routeRuleSchema).optional(),
 })

@@ -115,8 +115,7 @@
     "superjson": "^2.2.6",
     "tsx": "^4.19.0",
     "typescript": "^5.0.0",
-    "vite": "^6.0.0",
-    "zod-to-json-schema": "^3.24.0"
+    "vite": "^6.0.0"
   },
   "peerDependencies": {
     "@theokit/ui": "^0.14.0",
@@ -126,7 +125,7 @@
     "react-router": "^7.0.0",
     "unstorage": "^1.10.0",
     "ws": "^8.20.1",
-    "zod": "^3.24.0"
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@theokit/ui": {
@@ -146,7 +145,7 @@
     "@types/busboy": "^1.5.4",
     "@types/pg": "^8.20.0",
     "@types/picomatch": "^4.0.0",
-    "@theokit/sdk": "workspace:*",
+    "@theokit/sdk": "^1.5.0",
     "better-sqlite3": "^12.10.0",
     "db0": "^0.3.0",
     "pg": "^8.21.0",

@@ -33,7 +33,7 @@ export function resolveAdapter(options: ResolveAdapterOptions): ObservabilityAda
   const ingestUrl = options.env.THEO_CLOUD_INGEST_URL
   const apiKey = options.env.THEO_CLOUD_API_KEY
   if (ingestUrl && apiKey) {
-    return new TheoCloudObservabilityAdapter({ ingestUrl, apiKey })
+    return new TheoCloudObservabilityAdapter({ ingestUrl, token: apiKey })
   }
 
   // 3. Development → console adapter

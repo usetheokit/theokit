@@ -46,7 +46,7 @@
     "@eslint/js": "^9",
     "@ls-lint/ls-lint": "^2.3.1",
     "@playwright/test": "^1.52.0",
-    "@theokit/sdk": "workspace:*",
+    "@theokit/sdk": "^1.5.0",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^25.6.2",
     "@types/pg": "^8.20.0",
@@ -95,11 +95,11 @@
     "wrangler": "4.58.0",
     "ws": "^8.20.1",
     "yaml": "^2.8.4",
-    "zod": "^3.24.0"
+    "zod": "^4.0.0"
   },
   "pnpm": {
     "overrides": {
-      "zod": "3.25.76"
+      "zod": "^4.0.0"
     }
   }
 }

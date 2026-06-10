@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  zod: 3.25.76
+  zod: ^4.0.0
 
 importers:
 
@@ -30,8 +30,8 @@ importers:
         specifier: ^1.52.0
         version: 1.59.1
       '@theokit/sdk':
-        specifier: workspace:*
-        version: link:../theokit-sdk/packages/sdk
+        specifier: ^1.5.0
+        version: 1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)
       '@types/cross-spawn':
         specifier: ^6.0.6
         version: 6.0.6
@@ -177,87 +177,8 @@ importers:
         specifier: ^2.8.4
         version: 2.8.4
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
-
-  ../theokit-sdk/packages/gateway:
-    devDependencies:
-      '@theokit/sdk':
-        specifier: workspace:*
-        version: link:../sdk
-      tsup:
-        specifier: ^8.5.0
-        version: 8.5.1(@swc/core@1.15.40(@swc/helpers@0.5.23))(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
-      typescript:
-        specifier: ^5.8.0
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.6.2)(typescript@5.9.3))(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
-
-  ../theokit-sdk/packages/gateway-telegram:
-    devDependencies:
-      '@theokit/gateway':
-        specifier: workspace:*
-        version: link:../gateway
-      '@theokit/sdk':
-        specifier: workspace:*
-        version: link:../sdk
-      grammy:
-        specifier: ^1.30.0
-        version: 1.43.0
-      tsup:
-        specifier: ^8.5.0
-        version: 8.5.1(@swc/core@1.15.40(@swc/helpers@0.5.23))(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
-      typescript:
-        specifier: ^5.8.0
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.6.2)(typescript@5.9.3))(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
-
-  ../theokit-sdk/packages/sdk:
-    dependencies:
-      '@lancedb/lancedb':
-        specifier: ^0.30.0
-        version: 0.30.0(apache-arrow@18.1.0)
-      croner:
-        specifier: ^9.0.0
-        version: 9.1.0
-      zod-to-json-schema:
-        specifier: ^3.24.0
-        version: 3.25.2(zod@3.25.76)
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
-      '@types/proper-lockfile':
-        specifier: ^4.1.4
-        version: 4.1.4
-      '@types/ws':
-        specifier: ^8.18.0
-        version: 8.18.1
-      better-sqlite3:
-        specifier: ^12.10.0
-        version: 12.10.0
-      fast-check:
-        specifier: ^4.8.0
-        version: 4.8.0
-      proper-lockfile:
-        specifier: ^4.1.2
-        version: 4.1.2
-      sqlite-vec:
-        specifier: ^0.1.9
-        version: 0.1.9
-      typedoc:
-        specifier: ^0.28.19
-        version: 0.28.19(typescript@5.9.3)
-      ws:
-        specifier: ^8.18.0
-        version: 8.20.1
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
 
   examples/decorator-app:
     dependencies:
@@ -265,8 +186,8 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
 
   examples/devtools-demo:
     dependencies:
@@ -289,8 +210,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -302,14 +223,14 @@ importers:
   examples/full-stack-agent:
     dependencies:
       '@theokit/gateway':
-        specifier: workspace:*
-        version: link:../../../theokit-sdk/packages/gateway
+        specifier: ^0.4.0
+        version: 0.4.0(@theokit/sdk@1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3))
       '@theokit/gateway-telegram':
-        specifier: workspace:*
-        version: link:../../../theokit-sdk/packages/gateway-telegram
+        specifier: ^0.1.0
+        version: 0.1.0(@theokit/gateway@0.4.0(@theokit/sdk@1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)))(@theokit/sdk@1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3))(grammy@1.43.0)
       '@theokit/sdk':
-        specifier: workspace:*
-        version: link:../../../theokit-sdk/packages/sdk
+        specifier: ^1.5.0
+        version: 1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)
       '@theokit/ui':
         specifier: ^0.13.0
         version: 0.13.0(@tailwindcss/vite@4.3.0(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.16.47)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(mermaid@11.15.0)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.0)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))(yaml@2.9.0)
@@ -332,8 +253,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -360,8 +281,8 @@ importers:
   examples/openrouter-demo:
     dependencies:
       '@theokit/sdk':
-        specifier: workspace:*
-        version: link:../../../theokit-sdk/packages/sdk
+        specifier: ^1.5.0
+        version: 1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)
       '@theokit/ui':
         specifier: ^0.13.0
         version: 0.13.0(@tailwindcss/vite@4.3.0(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.16.47)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(mermaid@11.15.0)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.0)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))(yaml@2.9.0)
@@ -378,8 +299,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -418,8 +339,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
 
   fixtures/services-both:
     dependencies:
@@ -454,8 +375,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
 
   fixtures/template-dashboard:
     dependencies:
@@ -472,14 +393,14 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
 
   fixtures/template-default:
     dependencies:
       '@theokit/sdk':
-        specifier: workspace:*
-        version: link:../../../theokit-sdk/packages/sdk
+        specifier: ^1.5.0
+        version: 1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)
       '@theokit/ui':
         specifier: ^0.14.0
         version: 0.14.0(@tailwindcss/vite@4.3.0(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.16.47)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(mermaid@11.15.0)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.0)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))(yaml@2.9.0)
@@ -499,8 +420,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -530,8 +451,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
 
   fixtures/template-saas:
     dependencies:
@@ -557,14 +478,35 @@ importers:
         specifier: workspace:*
         version: link:../../packages/theo
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
 
   fixtures/theoui-autoinject:
     dependencies:
       '@theokit/ui':
         specifier: ^0.14.0
         version: 0.14.0(@tailwindcss/vite@4.3.0(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.16.47)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(mermaid@11.15.0)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.0)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))(yaml@2.9.0)
+
+  packages/agents:
+    devDependencies:
+      '@theokit/http-decorators':
+        specifier: workspace:*
+        version: link:../http-decorators
+      reflect-metadata:
+        specifier: ^0.2.0
+        version: 0.2.2
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@swc/core@1.15.41(@swc/helpers@0.5.23))(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@25.6.2)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.6.2)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.9.0)
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
 
   packages/create-theo:
     dependencies:
@@ -576,7 +518,7 @@ importers:
     dependencies:
       theokit:
         specifier: '>=0.2.0'
-        version: 0.2.4(ym6dw2bp6xub24dg3oyzlbtime)
+        version: 0.2.4(ryuivghzttifu7qzdtciig535a)
     devDependencies:
       '@swc/core':
         specifier: ^1.15.41
@@ -594,8 +536,8 @@ importers:
         specifier: ^3.2.0
         version: 3.2.6(@types/debug@4.1.13)(@types/node@25.6.2)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.6.2)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.9.0)
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
+        specifier: ^4.0.0
+        version: 4.4.3
 
   packages/theo:
     dependencies:
@@ -654,15 +596,12 @@ importers:
         specifier: ^8.20.1
         version: 8.20.1
       zod:
-        specifier: 3.25.76
-        version: 3.25.76
-      zod-to-json-schema:
-        specifier: ^3.24.0
-        version: 3.25.2(zod@3.25.76)
+        specifier: ^4.0.0
+        version: 4.4.3
     devDependencies:
       '@theokit/sdk':
-        specifier: workspace:*
-        version: link:../../../theokit-sdk/packages/sdk
+        specifier: ^1.5.0
+        version: 1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)
       '@types/busboy':
         specifier: ^1.5.4
         version: 1.5.4
@@ -1741,9 +1680,6 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
-  '@gerrit0/mini-shiki@3.23.0':
-    resolution: {integrity: sha512-bEMORlG0cqdjVyCEuU0cDQbORWX+kYCeo0kV1lbxF5bt4r7SID2l9bqsxJEM0zndaxpOUT7riCyIVEuqq/Ynxg==}
-
   '@grammyjs/types@3.27.3':
     resolution: {integrity: sha512-yUKMLliGsGbnxu96YUJ7km7B0zy4PzeH/Jvti5705R/LeKDMqkDV4DckMSt+OrliWQpTwQljHE0QLol5zgxBkg==}
 
@@ -1994,6 +1930,7 @@ packages:
   '@lancedb/lancedb@0.30.0':
     resolution: {integrity: sha512-d0FoEL6cthqgsulqAc7fck6kRXrSRGMTqlKYbhSGSazHU6vB2GEpD737Mu0HZd7fMyBUdhR9sD1W2C9uQZ5p0Q==}
     engines: {node: '>= 18'}
+    cpu: [x64, arm64]
     os: [darwin, linux, win32]
     peerDependencies:
       apache-arrow: '>=15.0.0 <=18.1.0'
@@ -2003,7 +1940,6 @@ packages:
 
   '@ls-lint/ls-lint@2.3.1':
     resolution: {integrity: sha512-vPe6IDByQnQRTxcAYjTxrmga/tSIui50VBFTB5KIJWY3OOFmxE2VtymjeSEfQfiMbhZV/ZPAqYy2lt8pZFQ0Rw==}
-    cpu: [x64, arm64, s390x, ppc64le]
     os: [darwin, linux, win32]
     hasBin: true
 
@@ -2801,26 +2737,14 @@ packages:
   '@shikijs/engine-oniguruma@1.29.2':
     resolution: {integrity: sha512-7iiOx3SG8+g1MnlzZVDYiaeHe7Ez2Kf2HrJzdmGwkRisT7r4rak0e655AcM/tF9JG/kg5fMNYlLLKglbN7gBqA==}
 
-  '@shikijs/engine-oniguruma@3.23.0':
-    resolution: {integrity: sha512-1nWINwKXxKKLqPibT5f4pAFLej9oZzQTsby8942OTlsJzOBZ0MWKiwzMsd+jhzu8YPCHAswGnnN1YtQfirL35g==}
-
   '@shikijs/langs@1.29.2':
     resolution: {integrity: sha512-FIBA7N3LZ+223U7cJDUYd5shmciFQlYkFXlkKVaHsCPgfVLiO+e12FmQE6Tf9vuyEsFe3dIl8qGWKXgEHL9wmQ==}
-
-  '@shikijs/langs@3.23.0':
-    resolution: {integrity: sha512-2Ep4W3Re5aB1/62RSYQInK9mM3HsLeB91cHqznAJMuylqjzNVAVCMnNWRHFtcNHXsoNRayP9z1qj4Sq3nMqYXg==}
 
   '@shikijs/themes@1.29.2':
     resolution: {integrity: sha512-i9TNZlsq4uoyqSbluIcZkmPL9Bfi3djVxRnofUHwvx/h6SRW3cwgBC5SML7vsDcWyukY0eCzVN980rqP6qNl9g==}
 
-  '@shikijs/themes@3.23.0':
-    resolution: {integrity: sha512-5qySYa1ZgAT18HR/ypENL9cUSGOeI2x+4IvYJu4JgVJdizn6kG4ia5Q1jDEOi7gTbN4RbuYtmHh0W3eccOrjMA==}
-
   '@shikijs/types@1.29.2':
     resolution: {integrity: sha512-VJjK0eIijTZf0QSTODEXCqinjBn0joAHQ+aPSBzrv4O2d/QSbsMw+ZeSRx03kV34Hy7NzUvV/7NqfYGRLrASmw==}
-
-  '@shikijs/types@3.23.0':
-    resolution: {integrity: sha512-3JZ5HXOZfYjsYSk0yPwBrkupyYSLpAE26Qc0HLghhZNGTZg/SKxXIIgoxOpmmeQP0RRSDJTk1/vPfw9tbw+jSQ==}
 
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
@@ -2839,22 +2763,10 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@swc/core-darwin-arm64@1.15.40':
-    resolution: {integrity: sha512-PaYyclfmQ++77D8ityYvmmVzHv9aG8ROwt2GfG6/ccloy4Hgf80qtOnzb9VYvPsUT7Ty1uhuDRhv3XYpf62qhQ==}
-    engines: {node: '>=10'}
-    cpu: [arm64]
-    os: [darwin]
-
   '@swc/core-darwin-arm64@1.15.41':
     resolution: {integrity: sha512-kREh6J5paQFvP3i7f/4FbqRNOJREutVFVOkder4GVyCBQ39YmER55cW/y1NNjwrchzFqgYswFn0mMDCqbqKzrw==}
     engines: {node: '>=10'}
     cpu: [arm64]
-    os: [darwin]
-
-  '@swc/core-darwin-x64@1.15.40':
-    resolution: {integrity: sha512-HbbPzvfLBUXjIB1Ezks+//lNUjmLjfyd63XSwprJgrZaXYdm70kohXPJUWdqKZozolFxbPaO+xtBaiUp6BoueA==}
-    engines: {node: '>=10'}
-    cpu: [x64]
     os: [darwin]
 
   '@swc/core-darwin-x64@1.15.41':
@@ -2863,32 +2775,14 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@swc/core-linux-arm-gnueabihf@1.15.40':
-    resolution: {integrity: sha512-SlRZsCjOCPR2LvFs0Ri/Xrx/5o5TCt8vl4gW6mX1hEZOG0a625RxzRHpHdAQNGykmAN/7IeaFAJG+QnNmxlHcA==}
-    engines: {node: '>=10'}
-    cpu: [arm]
-    os: [linux]
-
   '@swc/core-linux-arm-gnueabihf@1.15.41':
     resolution: {integrity: sha512-6XrId2fyle0mS5xxON8rU84mPd2Cq1kDJRj+4BnQKTd7u+2kSA6Ww+JkOP0iTNqOqt9OXhPOEAjBHAuonWcdCg==}
     engines: {node: '>=10'}
     cpu: [arm]
     os: [linux]
 
-  '@swc/core-linux-arm64-gnu@1.15.40':
-    resolution: {integrity: sha512-Q8byxJt2fh8CR3EUX6snBpy47AoBVm+In/+Z3rjDHMjC38ZvR9/gtUUNCT0tfrn4EdVsO8/QPi59nxrxvqxvBQ==}
-    engines: {node: '>=10'}
-    cpu: [arm64]
-    os: [linux]
-
   '@swc/core-linux-arm64-gnu@1.15.41':
     resolution: {integrity: sha512-ynLIarxlkVnqHn1D0fKOVht6mNU5ks6lrH+MY3kkS+XFaGGgDxFZVjWKJlkYTKm3RCvBTfA8Ng5fLufXheMRKQ==}
-    engines: {node: '>=10'}
-    cpu: [arm64]
-    os: [linux]
-
-  '@swc/core-linux-arm64-musl@1.15.40':
-    resolution: {integrity: sha512-4z0MgHU+7M0pZDqBN1El7mFXDI1SBwinfcUkAyA4v8QrhOIUOZltySt2aStQLZGrdXVXM4Y4ylfiTC04ED+MoQ==}
     engines: {node: '>=10'}
     cpu: [arm64]
     os: [linux]
@@ -2899,22 +2793,10 @@ packages:
     cpu: [arm64]
     os: [linux]
 
-  '@swc/core-linux-ppc64-gnu@1.15.40':
-    resolution: {integrity: sha512-fLI4iUgeSZu0eRWUXwe6YzPFx9gHbFiPkl8Rp3mJfP8OpNR3nTQCGPvHdDh9xniW7mVvgMY4ni7A4VzqI1KrpA==}
-    engines: {node: '>=10'}
-    cpu: [ppc64]
-    os: [linux]
-
   '@swc/core-linux-ppc64-gnu@1.15.41':
     resolution: {integrity: sha512-XGO6zVPXoPE0gf/XnI4jBbafNT13AYgoh6ns0JCSdOetI/kqVf0vhpz7NuNgAzZrMVCsmieqjPoTwViDgh4mOQ==}
     engines: {node: '>=10'}
     cpu: [ppc64]
-    os: [linux]
-
-  '@swc/core-linux-s390x-gnu@1.15.40':
-    resolution: {integrity: sha512-YqeKMAb7d4nQSGMJQ454IlaCENpzcDqhvBE9+CPfdnYpnUXxd+BSrB6Xk0YjW8UyoEhUj4p6quATCxbsp6J3jg==}
-    engines: {node: '>=10'}
-    cpu: [s390x]
     os: [linux]
 
   '@swc/core-linux-s390x-gnu@1.15.41':
@@ -2923,20 +2805,8 @@ packages:
     cpu: [s390x]
     os: [linux]
 
-  '@swc/core-linux-x64-gnu@1.15.40':
-    resolution: {integrity: sha512-7HOuS1iGcme/j/TuL1TfmmLGiMQrjv/GmjyZeydl00FKPtpGXEldwqfI56xgd1YzrzoB2svWjxbGGyQ0TEASxg==}
-    engines: {node: '>=10'}
-    cpu: [x64]
-    os: [linux]
-
   '@swc/core-linux-x64-gnu@1.15.41':
     resolution: {integrity: sha512-VxkuQK59c0tHm6uJZCUrS3cyA2JhGGfdU6e41SZz0x/JS+4Sm7C1mIc97In14vkZJopEt7yXA2TouCqZDSygEA==}
-    engines: {node: '>=10'}
-    cpu: [x64]
-    os: [linux]
-
-  '@swc/core-linux-x64-musl@1.15.40':
-    resolution: {integrity: sha512-h4kZYHc7dpc9P9u4brRJaS8Pl7tPVHAeiLSzw7T5RfIJgAoSdaCMKzI/2Uay9gFhaw8uyCDl0L5q37r0EpAfIA==}
     engines: {node: '>=10'}
     cpu: [x64]
     os: [linux]
@@ -2947,22 +2817,10 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@swc/core-win32-arm64-msvc@1.15.40':
-    resolution: {integrity: sha512-+mQgKZXSj6mV38Zh05QaxSjUDmGP/R2JWlXZTDLSPkDzHU6p3GxN9eeSf5dfyDVU86946fmCvSzyl/ucImx8+A==}
-    engines: {node: '>=10'}
-    cpu: [arm64]
-    os: [win32]
-
   '@swc/core-win32-arm64-msvc@1.15.41':
     resolution: {integrity: sha512-Y481sMNZM6rECh9VO4+y26N1lWEDAyxnBZskUf37fl90uHE946VHfmiVQWT0uMFOhyJJFovGTRuF4W82dwewUg==}
     engines: {node: '>=10'}
     cpu: [arm64]
-    os: [win32]
-
-  '@swc/core-win32-ia32-msvc@1.15.40':
-    resolution: {integrity: sha512-yvwdPLGd25mcj/mNatjNQ0lZujtQD6psH3v9PNmMb+fSzjbNG8KIDxjFWrcV+fsFVLOkyOmdJsFmX7NAFjVyPw==}
-    engines: {node: '>=10'}
-    cpu: [ia32]
     os: [win32]
 
   '@swc/core-win32-ia32-msvc@1.15.41':
@@ -2971,26 +2829,11 @@ packages:
     cpu: [ia32]
     os: [win32]
 
-  '@swc/core-win32-x64-msvc@1.15.40':
-    resolution: {integrity: sha512-OXtKsLU1bVtInzzDEAY2sYiF/rl4tvAnLLLpuMp3HzAOQZ5A+i69AKDhA1YLQTaMAqO3vzyYNVAYVRMPtSYD4w==}
-    engines: {node: '>=10'}
-    cpu: [x64]
-    os: [win32]
-
   '@swc/core-win32-x64-msvc@1.15.41':
     resolution: {integrity: sha512-WOkA+fJ/ViVBQDsSV9JC52NACTe5PhlurA6viASDZGb7HR3KS01ZG7RZ+Bg6SVQFIoq3gSbTsskQVe6EbHFAYw==}
     engines: {node: '>=10'}
     cpu: [x64]
     os: [win32]
-
-  '@swc/core@1.15.40':
-    resolution: {integrity: sha512-2kwzJikRvgtNAG7MwVZY2vEzZjTxKIq5jXOihuSV/8U+Hej8Va22t65aKnJZs3P+NwojZvR8Mf8kyM7O+V8sQg==}
-    engines: {node: '>=10'}
-    peerDependencies:
-      '@swc/helpers': '>=0.5.17'
-    peerDependenciesMeta:
-      '@swc/helpers':
-        optional: true
 
   '@swc/core@1.15.41':
     resolution: {integrity: sha512-03nQq/082QRJJiOvp3FGbgxTGyyxMxohPTjhk/W9bD2J0tk4ukITI7goOhOO2WbaHn/lsPmo/zf8+DIXhwpgYQ==}
@@ -3099,6 +2942,45 @@ packages:
     resolution: {integrity: sha512-t6J3OrB5Fc0ExuhohouH0fWUGMYL6PTLhW+E7zIk/pdbnJARZDCwjBznFnkh5ynRnIRSI4YjtTH0t6USjJISrw==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@theokit/gateway-telegram@0.1.0':
+    resolution: {integrity: sha512-ltmsnK2Ri2TaIvq32ZPXOcNafh/5+PY+yq1ea5Ll9YtfwsA78iJCXizcOsr7YU2yK2OfACA2j/XpYD7/Yk+KkQ==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/gateway': workspace:^
+      '@theokit/sdk': workspace:^
+      grammy: ^1.30.0
+
+  '@theokit/gateway@0.4.0':
+    resolution: {integrity: sha512-LAJqvYsg3tmCOK+wAj1xGKBNsxJ44jjadkhOAjieLd4YeDJuDlg0ZT9hwVhnBKEzLNdLISRyoi/GQ7gItBWgjQ==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/sdk': workspace:^
+
+  '@theokit/sdk@1.5.0':
+    resolution: {integrity: sha512-bm2gRfPGjq48jin1yYWGEMNoQxEg2mBP/5S+AURDcp6Eej5HVZlETvkR5O43FVCUyh8wz+WysK6QYZzERUXiyA==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      '@lancedb/lancedb': ^0.30.0
+      better-sqlite3: ^12.0.0
+      proper-lockfile: ^4.1.2
+      sqlite-vec: ^0.1.0
+      zod: ^4.0.0
+      zod-to-json-schema: ^3.24.0
+    peerDependenciesMeta:
+      '@lancedb/lancedb':
+        optional: true
+      better-sqlite3:
+        optional: true
+      proper-lockfile:
+        optional: true
+      sqlite-vec:
+        optional: true
+      zod:
+        optional: true
+      zod-to-json-schema:
+        optional: true
 
   '@theokit/ui@0.13.0':
     resolution: {integrity: sha512-zdkCTh87eNCxEBwWS9A0zuklwn83lc2MXhCxC4nY8XUJ4dYA0vK3ObkR1A8Gq93/QNC8k3CYV5MsssuYaqPOHw==}
@@ -3419,9 +3301,6 @@ packages:
   '@types/picomatch@4.0.3':
     resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
 
-  '@types/proper-lockfile@4.1.4':
-    resolution: {integrity: sha512-uo2ABllncSqg9F1D4nugVl9v93RmjxF6LJzQLMLDdPaXCUIDPeOJ21Gbqi43xNKzBi/WQ0Q0dICqufzQbMjipQ==}
-
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
     peerDependencies:
@@ -3429,9 +3308,6 @@ packages:
 
   '@types/react@19.2.14':
     resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
-
-  '@types/retry@0.12.5':
-    resolution: {integrity: sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw==}
 
   '@types/set-cookie-parser@2.4.10':
     resolution: {integrity: sha512-GGmQVGpQWUe5qglJozEjZV/5dyxbOOZ0LHe/lqyWssB88Y4svNfst0uqBVscdDeIKl5Jy5+aPSvy7mI9tYRguw==}
@@ -4616,10 +4492,6 @@ packages:
     resolution: {integrity: sha512-rRqJg/6gd538VHvR3PSrdRBb/1Vy2YfzHqzvbhGIQpDRKIa4FgV/54b5Q1xYSxOOwKvjXweS26E0Q+nAMwp2pQ==}
     engines: {node: '>=8.6'}
 
-  entities@4.5.0:
-    resolution: {integrity: sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==}
-    engines: {node: '>=0.12'}
-
   entities@6.0.1:
     resolution: {integrity: sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g==}
     engines: {node: '>=0.12'}
@@ -4927,10 +4799,6 @@ packages:
 
   extendable-error@0.1.7:
     resolution: {integrity: sha512-UOiS2in6/Q0FK0R0q6UY9vYpQ21mr/Qn1KOnte7vsACuNJf514WvCCUHSRCPcgjPT2bAhNIJdlE6bVap1GKmeg==}
-
-  fast-check@4.8.0:
-    resolution: {integrity: sha512-GOJ158CUMnN6cSahsv4+ExARvIDuzzinFjkp0E9WtiBa5zcVeLozVkWaE4IzFcc+Y48Wp1EDlUZsXRyAztQcSg==}
-    engines: {node: '>=12.17.0'}
 
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
@@ -5710,9 +5578,6 @@ packages:
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
-  linkify-it@5.0.1:
-    resolution: {integrity: sha512-wVoTjP4Q6R0NW5hiZkVJaFZPWgtXfoGF+6LucL3/FtiNjmcHhYjEr5f1Kqjirc1nBW07J/ZuRFumqr2oqccEWg==}
-
   lint-staged@15.5.2:
     resolution: {integrity: sha512-YUSOLq9VeRNAo/CTaVmhGDKG+LBtA8KF1X4K5+ykMSwWST1vDxJRB2kv2COgLb1fvpCo+A/y9A0G0znNVmdx4w==}
     engines: {node: '>=18.12.0'}
@@ -5790,9 +5655,6 @@ packages:
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  lunr@2.3.9:
-    resolution: {integrity: sha512-zTU3DaZaF3Rt9rhN3uBMGQD3dD2/vFQqnvZCDv4dl5iOzq2IZQqTxu90r4E5J+nP70J3ilqVCrbho2eWaeW8Ow==}
-
   luxon@3.7.2:
     resolution: {integrity: sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew==}
     engines: {node: '>=12'}
@@ -5809,10 +5671,6 @@ packages:
 
   manage-path@2.0.0:
     resolution: {integrity: sha512-NJhyB+PJYTpxhxZJ3lecIGgh4kwIY2RAh44XvAz9UlqthlQwtPBf62uBVR8XaD8CRuSjQ6TnZH2lNJkbLPZM2A==}
-
-  markdown-it@14.1.1:
-    resolution: {integrity: sha512-BuU2qnTti9YKgK5N+IeMubp14ZUKUUw7yeJbkjtosvHiP0AZ5c8IAgEMk79D0eC8F23r4Ac/q8cAIFdm2FtyoA==}
-    hasBin: true
 
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
@@ -5884,9 +5742,6 @@ packages:
 
   mdast-util-to-string@4.0.0:
     resolution: {integrity: sha512-0H44vDimn51F0YwvxSJSm0eCDOJTRlmN0R1yBh4HLj9wiV1Dn0QoXGbvFAWj2hSItVTlCmBF1hqKlIyUBVFLPg==}
-
-  mdurl@2.0.0:
-    resolution: {integrity: sha512-Lf+9+2r+Tdp5wXDXC4PcIBjTDtq4UKjCPMQhKIuzpJNW0b96kVqSwW0bT7FhRSfmAiFYgP+SCRvdrDozfh0U5w==}
 
   merge-stream@2.0.0:
     resolution: {integrity: sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w==}
@@ -6524,16 +6379,9 @@ packages:
   pump@3.0.4:
     resolution: {integrity: sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==}
 
-  punycode.js@2.3.1:
-    resolution: {integrity: sha512-uxFIHU0YlHYhDQtV4R9J6a52SLx28BCjT+4ieh7IGbgwVJWO+km431c4yRlREUAsAmt/uMjQUyQHNEPf0M39CA==}
-    engines: {node: '>=6'}
-
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
-
-  pure-rand@8.4.0:
-    resolution: {integrity: sha512-IoM8YF/jY0hiugFo/wOWqfmarlE6J0wc6fDK1PhftMk7MGhVZl88sZimmqBBFomLOCSmcCCpsfj7wXASCpvK9A==}
 
   quansync@0.2.11:
     resolution: {integrity: sha512-AifT7QEbW9Nri4tAwR5M/uzpBuqfZf+zwaEM/QkzEjj7NBuFD2rBuy0K3dE+8wltbezDV7JMA0WfnCPYRSYbXA==}
@@ -7156,7 +7004,7 @@ packages:
       react-router: ^7.0.0
       unstorage: ^1.10.0
       ws: ^8.20.1
-      zod: 3.25.76
+      zod: ^4.0.0
     peerDependenciesMeta:
       '@theokit/ui':
         optional: true
@@ -7317,13 +7165,6 @@ packages:
     resolution: {integrity: sha512-3KS2b+kL7fsuk/eJZ7EQdnEmQoaho/r6KUef7hxvltNA5DR8NAUM+8wJMbJyZ4G9/7i3v5zPBIMN5aybAh2/Jg==}
     engines: {node: '>= 0.4'}
 
-  typedoc@0.28.19:
-    resolution: {integrity: sha512-wKh+lhdmMFivMlc6vRRcMGXeGEHGU2g8a2CkPTJjJlwRf1iXbimWIPcFolCqe4E0d/FRtGszpIrsp3WLpDB8Pw==}
-    engines: {node: '>= 18', pnpm: '>= 10'}
-    hasBin: true
-    peerDependencies:
-      typescript: 5.0.x || 5.1.x || 5.2.x || 5.3.x || 5.4.x || 5.5.x || 5.6.x || 5.7.x || 5.8.x || 5.9.x || 6.0.x
-
   typescript-eslint@8.59.4:
     resolution: {integrity: sha512-Rw6+44QNFaXtgHSjPy+Kw8hrJniMYzR85E9yLmOLcfZ91/rz+JXQbDTCmc6ccxMPY6K6PgAq26f0JCBfR7LIPQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -7348,9 +7189,6 @@ packages:
   typical@7.3.0:
     resolution: {integrity: sha512-ya4mg/30vm+DOWfBg4YK3j2WD6TWtRkCbasOJr40CseYENzCUby/7rIvXA99JGsQHeNxLbnXdyLLxKSv3tauFw==}
     engines: {node: '>=12.17'}
-
-  uc.micro@2.1.0:
-    resolution: {integrity: sha512-ARDJmphmdvUk6Glw7y9DQ2bFkKBHwQHLi2lsaH6PPmz/Ka9sFOBsBluozhDltWmnv9u/cF6Rt87znRTPV+yp/A==}
 
   ufo@1.6.4:
     resolution: {integrity: sha512-JFNbkD1Svwe0KvGi8GOeLcP4kAWQ609twvCdcHxq1oSL8svv39ZuSvajcD8B+5D0eL4+s1Is2D/O6KN3qcTeRA==}
@@ -7876,10 +7714,10 @@ packages:
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
     peerDependencies:
-      zod: 3.25.76
+      zod: ^4.0.0
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -8695,14 +8533,6 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@gerrit0/mini-shiki@3.23.0':
-    dependencies:
-      '@shikijs/engine-oniguruma': 3.23.0
-      '@shikijs/langs': 3.23.0
-      '@shikijs/themes': 3.23.0
-      '@shikijs/types': 3.23.0
-      '@shikijs/vscode-textmate': 10.0.2
-
   '@grammyjs/types@3.27.3': {}
 
   '@humanfs/core@0.19.2':
@@ -8908,6 +8738,7 @@ snapshots:
       '@lancedb/lancedb-linux-x64-musl': 0.30.0
       '@lancedb/lancedb-win32-arm64-msvc': 0.30.0
       '@lancedb/lancedb-win32-x64-msvc': 0.30.0
+    optional: true
 
   '@loaderkit/resolve@1.0.5':
     dependencies:
@@ -9662,28 +9493,15 @@ snapshots:
       '@shikijs/vscode-textmate': 10.0.2
     optional: true
 
-  '@shikijs/engine-oniguruma@3.23.0':
-    dependencies:
-      '@shikijs/types': 3.23.0
-      '@shikijs/vscode-textmate': 10.0.2
-
   '@shikijs/langs@1.29.2':
     dependencies:
       '@shikijs/types': 1.29.2
     optional: true
 
-  '@shikijs/langs@3.23.0':
-    dependencies:
-      '@shikijs/types': 3.23.0
-
   '@shikijs/themes@1.29.2':
     dependencies:
       '@shikijs/types': 1.29.2
     optional: true
-
-  '@shikijs/themes@3.23.0':
-    dependencies:
-      '@shikijs/types': 3.23.0
 
   '@shikijs/types@1.29.2':
     dependencies:
@@ -9691,12 +9509,8 @@ snapshots:
       '@types/hast': 3.0.4
     optional: true
 
-  '@shikijs/types@3.23.0':
-    dependencies:
-      '@shikijs/vscode-textmate': 10.0.2
-      '@types/hast': 3.0.4
-
-  '@shikijs/vscode-textmate@10.0.2': {}
+  '@shikijs/vscode-textmate@10.0.2':
+    optional: true
 
   '@sindresorhus/is@4.6.0': {}
 
@@ -9706,96 +9520,40 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@swc/core-darwin-arm64@1.15.40':
-    optional: true
-
   '@swc/core-darwin-arm64@1.15.41':
-    optional: true
-
-  '@swc/core-darwin-x64@1.15.40':
     optional: true
 
   '@swc/core-darwin-x64@1.15.41':
     optional: true
 
-  '@swc/core-linux-arm-gnueabihf@1.15.40':
-    optional: true
-
   '@swc/core-linux-arm-gnueabihf@1.15.41':
-    optional: true
-
-  '@swc/core-linux-arm64-gnu@1.15.40':
     optional: true
 
   '@swc/core-linux-arm64-gnu@1.15.41':
     optional: true
 
-  '@swc/core-linux-arm64-musl@1.15.40':
-    optional: true
-
   '@swc/core-linux-arm64-musl@1.15.41':
-    optional: true
-
-  '@swc/core-linux-ppc64-gnu@1.15.40':
     optional: true
 
   '@swc/core-linux-ppc64-gnu@1.15.41':
     optional: true
 
-  '@swc/core-linux-s390x-gnu@1.15.40':
-    optional: true
-
   '@swc/core-linux-s390x-gnu@1.15.41':
-    optional: true
-
-  '@swc/core-linux-x64-gnu@1.15.40':
     optional: true
 
   '@swc/core-linux-x64-gnu@1.15.41':
     optional: true
 
-  '@swc/core-linux-x64-musl@1.15.40':
-    optional: true
-
   '@swc/core-linux-x64-musl@1.15.41':
-    optional: true
-
-  '@swc/core-win32-arm64-msvc@1.15.40':
     optional: true
 
   '@swc/core-win32-arm64-msvc@1.15.41':
     optional: true
 
-  '@swc/core-win32-ia32-msvc@1.15.40':
-    optional: true
-
   '@swc/core-win32-ia32-msvc@1.15.41':
     optional: true
 
-  '@swc/core-win32-x64-msvc@1.15.40':
-    optional: true
-
   '@swc/core-win32-x64-msvc@1.15.41':
-    optional: true
-
-  '@swc/core@1.15.40(@swc/helpers@0.5.23)':
-    dependencies:
-      '@swc/counter': 0.1.3
-      '@swc/types': 0.1.26
-    optionalDependencies:
-      '@swc/core-darwin-arm64': 1.15.40
-      '@swc/core-darwin-x64': 1.15.40
-      '@swc/core-linux-arm-gnueabihf': 1.15.40
-      '@swc/core-linux-arm64-gnu': 1.15.40
-      '@swc/core-linux-arm64-musl': 1.15.40
-      '@swc/core-linux-ppc64-gnu': 1.15.40
-      '@swc/core-linux-s390x-gnu': 1.15.40
-      '@swc/core-linux-x64-gnu': 1.15.40
-      '@swc/core-linux-x64-musl': 1.15.40
-      '@swc/core-win32-arm64-msvc': 1.15.40
-      '@swc/core-win32-ia32-msvc': 1.15.40
-      '@swc/core-win32-x64-msvc': 1.15.40
-      '@swc/helpers': 0.5.23
     optional: true
 
   '@swc/core@1.15.41(@swc/helpers@0.5.23)':
@@ -9822,6 +9580,7 @@ snapshots:
   '@swc/helpers@0.5.23':
     dependencies:
       tslib: 2.8.1
+    optional: true
 
   '@swc/types@0.1.26':
     dependencies:
@@ -9910,6 +9669,27 @@ snapshots:
       tailwindcss: 4.3.0
       vite: 7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
+  '@theokit/gateway-telegram@0.1.0(@theokit/gateway@0.4.0(@theokit/sdk@1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)))(@theokit/sdk@1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3))(grammy@1.43.0)':
+    dependencies:
+      '@theokit/gateway': 0.4.0(@theokit/sdk@1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3))
+      '@theokit/sdk': 1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)
+      grammy: 1.43.0
+
+  '@theokit/gateway@0.4.0(@theokit/sdk@1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3))':
+    dependencies:
+      '@theokit/sdk': 1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)
+
+  '@theokit/sdk@1.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(better-sqlite3@12.10.0)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)':
+    dependencies:
+      croner: 9.1.0
+    optionalDependencies:
+      '@lancedb/lancedb': 0.30.0(apache-arrow@18.1.0)
+      better-sqlite3: 12.10.0
+      proper-lockfile: 4.1.2
+      sqlite-vec: 0.1.9
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
+
   '@theokit/ui@0.13.0(@tailwindcss/vite@4.3.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.16.47)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(mermaid@11.15.0)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.0)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@6.4.2(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))(yaml@2.9.0)':
     dependencies:
       '@radix-ui/react-avatar': 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -9933,7 +9713,7 @@ snapshots:
       react-dom: 19.2.6(react@19.2.6)
       tailwind-merge: 2.6.1
       tailwindcss-animate: 1.0.7(tailwindcss@4.3.0)
-      zod: 3.25.76
+      zod: 4.4.3
     optionalDependencies:
       '@tailwindcss/vite': 4.3.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
       hast-util-from-html: 2.0.3
@@ -9983,7 +9763,7 @@ snapshots:
       react-dom: 19.2.6(react@19.2.6)
       tailwind-merge: 2.6.1
       tailwindcss-animate: 1.0.7(tailwindcss@4.3.0)
-      zod: 3.25.76
+      zod: 4.4.3
     optionalDependencies:
       '@tailwindcss/vite': 4.3.0(vite@7.3.3(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
       hast-util-from-html: 2.0.3
@@ -10032,7 +9812,7 @@ snapshots:
       react-dom: 19.2.6(react@19.2.6)
       tailwind-merge: 2.6.1
       tailwindcss-animate: 1.0.7(tailwindcss@4.3.0)
-      zod: 3.25.76
+      zod: 4.4.3
     optionalDependencies:
       '@tailwindcss/vite': 4.3.0(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
       hast-util-from-html: 2.0.3
@@ -10082,7 +9862,7 @@ snapshots:
       tailwind-merge: 2.6.1
       tailwindcss-animate: 1.0.7(tailwindcss@4.3.0)
       valibot: 0.42.1(typescript@5.9.3)
-      zod: 3.25.76
+      zod: 4.4.3
     optionalDependencies:
       '@tailwindcss/vite': 4.3.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
       hast-util-from-html: 2.0.3
@@ -10133,7 +9913,7 @@ snapshots:
       tailwind-merge: 2.6.1
       tailwindcss-animate: 1.0.7(tailwindcss@4.3.0)
       valibot: 0.42.1(typescript@5.9.3)
-      zod: 3.25.76
+      zod: 4.4.3
     optionalDependencies:
       '@tailwindcss/vite': 4.3.0(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
       hast-util-from-html: 2.0.3
@@ -10189,6 +9969,7 @@ snapshots:
   '@types/better-sqlite3@7.6.13':
     dependencies:
       '@types/node': 25.6.2
+    optional: true
 
   '@types/busboy@1.5.4':
     dependencies:
@@ -10199,9 +9980,11 @@ snapshots:
       '@types/deep-eql': 4.0.2
       assertion-error: 2.0.1
 
-  '@types/command-line-args@5.2.3': {}
+  '@types/command-line-args@5.2.3':
+    optional: true
 
-  '@types/command-line-usage@5.0.4': {}
+  '@types/command-line-usage@5.0.4':
+    optional: true
 
   '@types/cross-spawn@6.0.6':
     dependencies:
@@ -10377,6 +10160,7 @@ snapshots:
   '@types/hast@3.0.4':
     dependencies:
       '@types/unist': 3.0.3
+    optional: true
 
   '@types/json-schema@7.0.15': {}
 
@@ -10398,6 +10182,7 @@ snapshots:
   '@types/node@20.19.41':
     dependencies:
       undici-types: 6.21.0
+    optional: true
 
   '@types/node@22.19.19':
     dependencies:
@@ -10417,10 +10202,6 @@ snapshots:
 
   '@types/picomatch@4.0.3': {}
 
-  '@types/proper-lockfile@4.1.4':
-    dependencies:
-      '@types/retry': 0.12.5
-
   '@types/react-dom@19.2.3(@types/react@19.2.14)':
     dependencies:
       '@types/react': 19.2.14
@@ -10428,8 +10209,6 @@ snapshots:
   '@types/react@19.2.14':
     dependencies:
       csstype: 3.2.3
-
-  '@types/retry@0.12.5': {}
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
@@ -10445,7 +10224,8 @@ snapshots:
   '@types/unist@2.0.11':
     optional: true
 
-  '@types/unist@3.0.3': {}
+  '@types/unist@3.0.3':
+    optional: true
 
   '@types/whatwg-mimetype@3.0.2':
     optional: true
@@ -10685,15 +10465,6 @@ snapshots:
       msw: 2.14.6(@types/node@25.6.2)(typescript@5.9.3)
       vite: 7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
 
-  '@vitest/mocker@4.1.8(msw@2.14.6(@types/node@25.6.2)(typescript@5.9.3))(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))':
-    dependencies:
-      '@vitest/spy': 4.1.8
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      msw: 2.14.6(@types/node@25.6.2)(typescript@5.9.3)
-      vite: 7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
-
   '@vitest/pretty-format@3.2.6':
     dependencies:
       tinyrainbow: 2.0.0
@@ -10820,6 +10591,7 @@ snapshots:
       flatbuffers: 24.12.23
       json-bignum: 0.0.3
       tslib: 2.8.1
+    optional: true
 
   argparse@1.0.10:
     dependencies:
@@ -10831,9 +10603,11 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  array-back@3.1.0: {}
+  array-back@3.1.0:
+    optional: true
 
-  array-back@6.2.3: {}
+  array-back@6.2.3:
+    optional: true
 
   array-buffer-byte-length@1.0.2:
     dependencies:
@@ -11057,6 +10831,7 @@ snapshots:
   chalk-template@0.4.0:
     dependencies:
       chalk: 4.1.2
+    optional: true
 
   chalk@4.1.2:
     dependencies:
@@ -11194,6 +10969,7 @@ snapshots:
       find-replace: 3.0.0
       lodash.camelcase: 4.3.0
       typical: 4.0.0
+    optional: true
 
   command-line-usage@7.0.4:
     dependencies:
@@ -11201,6 +10977,7 @@ snapshots:
       chalk-template: 0.4.0
       table-layout: 4.1.1
       typical: 7.3.0
+    optional: true
 
   commander@10.0.1: {}
 
@@ -11675,8 +11452,6 @@ snapshots:
     dependencies:
       ansi-colors: 4.1.3
       strip-ansi: 6.0.1
-
-  entities@4.5.0: {}
 
   entities@6.0.1:
     optional: true
@@ -12230,10 +12005,6 @@ snapshots:
 
   extendable-error@0.1.7: {}
 
-  fast-check@4.8.0:
-    dependencies:
-      pure-rand: 8.4.0
-
   fast-deep-equal@3.1.3: {}
 
   fast-glob@3.3.3:
@@ -12290,6 +12061,7 @@ snapshots:
   find-replace@3.0.0:
     dependencies:
       array-back: 3.1.0
+    optional: true
 
   find-up@4.1.0:
     dependencies:
@@ -12312,7 +12084,8 @@ snapshots:
       flatted: 3.4.2
       keyv: 4.5.4
 
-  flatbuffers@24.12.23: {}
+  flatbuffers@24.12.23:
+    optional: true
 
   flatted@3.4.2: {}
 
@@ -12914,7 +12687,8 @@ snapshots:
 
   jsesc@3.1.0: {}
 
-  json-bignum@0.0.3: {}
+  json-bignum@0.0.3:
+    optional: true
 
   json-buffer@3.0.1: {}
 
@@ -12987,7 +12761,7 @@ snapshots:
       typescript: 5.9.3
       unbash: 2.2.0
       yaml: 2.9.0
-      zod: 3.25.76
+      zod: 4.4.3
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -13056,10 +12830,6 @@ snapshots:
 
   lines-and-columns@1.2.4: {}
 
-  linkify-it@5.0.1:
-    dependencies:
-      uc.micro: 2.1.0
-
   lint-staged@15.5.2:
     dependencies:
       chalk: 5.6.2
@@ -13097,7 +12867,8 @@ snapshots:
   lodash-es@4.18.1:
     optional: true
 
-  lodash.camelcase@4.3.0: {}
+  lodash.camelcase@4.3.0:
+    optional: true
 
   lodash.chunk@4.2.0: {}
 
@@ -13144,8 +12915,6 @@ snapshots:
     dependencies:
       react: 19.2.6
 
-  lunr@2.3.9: {}
-
   luxon@3.7.2: {}
 
   magic-string@0.30.21:
@@ -13163,15 +12932,6 @@ snapshots:
       semver: 7.8.1
 
   manage-path@2.0.0: {}
-
-  markdown-it@14.1.1:
-    dependencies:
-      argparse: 2.0.1
-      entities: 4.5.0
-      linkify-it: 5.0.1
-      mdurl: 2.0.0
-      punycode.js: 2.3.1
-      uc.micro: 2.1.0
 
   markdown-table@3.0.4:
     optional: true
@@ -13374,8 +13134,6 @@ snapshots:
     dependencies:
       '@types/mdast': 4.0.4
     optional: true
-
-  mdurl@2.0.0: {}
 
   merge-stream@2.0.0: {}
 
@@ -13670,7 +13428,7 @@ snapshots:
       workerd: 1.20260107.1
       ws: 8.18.0
       youch: 4.1.0-beta.10
-      zod: 3.25.76
+      zod: 4.4.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -14175,6 +13933,7 @@ snapshots:
       graceful-fs: 4.2.11
       retry: 0.12.0
       signal-exit: 3.0.7
+    optional: true
 
   property-information@7.2.0:
     optional: true
@@ -14191,11 +13950,7 @@ snapshots:
       end-of-stream: 1.4.5
       once: 1.4.0
 
-  punycode.js@2.3.1: {}
-
   punycode@2.3.1: {}
-
-  pure-rand@8.4.0: {}
 
   quansync@0.2.11: {}
 
@@ -14385,7 +14140,8 @@ snapshots:
 
   retimer@3.0.0: {}
 
-  retry@0.12.0: {}
+  retry@0.12.0:
+    optional: true
 
   rettime@0.11.11:
     optional: true
@@ -14595,7 +14351,8 @@ snapshots:
 
   siginfo@2.0.0: {}
 
-  signal-exit@3.0.7: {}
+  signal-exit@3.0.7:
+    optional: true
 
   signal-exit@4.1.0: {}
 
@@ -14690,6 +14447,7 @@ snapshots:
       sqlite-vec-linux-arm64: 0.1.9
       sqlite-vec-linux-x64: 0.1.9
       sqlite-vec-windows-x64: 0.1.9
+    optional: true
 
   stable-hash@0.0.5: {}
 
@@ -14852,6 +14610,7 @@ snapshots:
     dependencies:
       array-back: 6.2.3
       wordwrapjs: 5.1.1
+    optional: true
 
   tagged-tag@1.0.0:
     optional: true
@@ -14891,7 +14650,7 @@ snapshots:
     dependencies:
       any-promise: 1.3.0
 
-  theokit@0.2.4(ym6dw2bp6xub24dg3oyzlbtime):
+  theokit@0.2.4(ryuivghzttifu7qzdtciig535a):
     dependencies:
       '@vitejs/plugin-react': 4.7.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
       busboy: 1.6.0
@@ -14909,8 +14668,8 @@ snapshots:
       tsx: 4.21.0
       typescript: 5.9.3
       vite: 6.4.2(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
     optionalDependencies:
       '@theokit/ui': 0.13.0(@tailwindcss/vite@4.3.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.16.47)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(mermaid@11.15.0)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.0)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@6.4.2(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))(yaml@2.9.0)
       db0: 0.3.4(better-sqlite3@12.10.0)(drizzle-orm@0.45.2(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(gel@2.2.0)(pg@8.21.0)(postgres@3.4.9))
@@ -15010,35 +14769,6 @@ snapshots:
       strip-bom: 3.0.0
 
   tslib@2.8.1: {}
-
-  tsup@8.5.1(@swc/core@1.15.40(@swc/helpers@0.5.23))(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0):
-    dependencies:
-      bundle-require: 5.1.0(esbuild@0.27.7)
-      cac: 6.7.14
-      chokidar: 4.0.3
-      consola: 3.4.2
-      debug: 4.4.3
-      esbuild: 0.27.7
-      fix-dts-default-cjs-exports: 1.0.1
-      joycon: 3.1.1
-      picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(yaml@2.9.0)
-      resolve-from: 5.0.0
-      rollup: 4.60.3
-      source-map: 0.7.6
-      sucrase: 3.35.1
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.16
-      tree-kill: 1.2.2
-    optionalDependencies:
-      '@swc/core': 1.15.40(@swc/helpers@0.5.23)
-      postcss: 8.5.14
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - jiti
-      - supports-color
-      - tsx
-      - yaml
 
   tsup@8.5.1(@swc/core@1.15.41(@swc/helpers@0.5.23))(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.4):
     dependencies:
@@ -15155,15 +14885,6 @@ snapshots:
       possible-typed-array-names: 1.1.0
       reflect.getprototypeof: 1.0.10
 
-  typedoc@0.28.19(typescript@5.9.3):
-    dependencies:
-      '@gerrit0/mini-shiki': 3.23.0
-      lunr: 2.3.9
-      markdown-it: 14.1.1
-      minimatch: 10.2.5
-      typescript: 5.9.3
-      yaml: 2.9.0
-
   typescript-eslint@8.59.4(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3):
     dependencies:
       '@typescript-eslint/eslint-plugin': 8.59.4(@typescript-eslint/parser@8.59.4(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
@@ -15179,11 +14900,11 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  typical@4.0.0: {}
+  typical@4.0.0:
+    optional: true
 
-  typical@7.3.0: {}
-
-  uc.micro@2.1.0: {}
+  typical@7.3.0:
+    optional: true
 
   ufo@1.6.4: {}
 
@@ -15529,35 +15250,6 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.8(@types/node@25.6.2)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.6.2)(typescript@5.9.3))(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)):
-    dependencies:
-      '@vitest/expect': 4.1.8
-      '@vitest/mocker': 4.1.8(msw@2.14.6(@types/node@25.6.2)(typescript@5.9.3))(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
-      '@vitest/pretty-format': 4.1.8
-      '@vitest/runner': 4.1.8
-      '@vitest/snapshot': 4.1.8
-      '@vitest/spy': 4.1.8
-      '@vitest/utils': 4.1.8
-      es-module-lexer: 2.1.0
-      expect-type: 1.3.0
-      magic-string: 0.30.21
-      obug: 2.1.2
-      pathe: 2.0.3
-      picomatch: 4.0.4
-      std-env: 4.1.0
-      tinybench: 2.9.0
-      tinyexec: 1.2.4
-      tinyglobby: 0.2.16
-      tinyrainbow: 3.1.0
-      vite: 7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 25.6.2
-      '@vitest/coverage-v8': 4.1.8(vitest@4.1.8)
-      happy-dom: 20.9.0
-    transitivePeerDependencies:
-      - msw
-
   walk-up-path@4.0.0: {}
 
   watskeburt@5.0.3: {}
@@ -15633,7 +15325,8 @@ snapshots:
 
   word-wrap@1.2.5: {}
 
-  wordwrapjs@5.1.1: {}
+  wordwrapjs@5.1.1:
+    optional: true
 
   workerd@1.20260107.1:
     optionalDependencies:
@@ -15730,11 +15423,11 @@ snapshots:
       cookie: 1.1.1
       youch-core: 0.3.3
 
-  zod-to-json-schema@3.25.2(zod@3.25.76):
+  zod-to-json-schema@3.25.2(zod@4.4.3):
     dependencies:
-      zod: 3.25.76
+      zod: 4.4.3
 
-  zod@3.25.76: {}
+  zod@4.4.3: {}
 
   zwitch@2.0.4:
     optional: true

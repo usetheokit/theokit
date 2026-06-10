@@ -26,7 +26,7 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
   readonly name = 'theo-cloud'
   private pendingSpans: SpanData[] = []
   private isShutdown = false
-  private readonly opts: Required<Pick<TheoCloudAdapterOptions, 'ingestUrl' | 'apiKey'>> & TheoCloudAdapterOptions
+  private readonly opts: Required<Pick<TheoCloudAdapterOptions, 'ingestUrl' | 'token'>> & TheoCloudAdapterOptions
 
   constructor(options: TheoCloudAdapterOptions) {
     this.opts = { flushIntervalMs: 5000, ...options }
@@ -53,7 +53,7 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
     if (this.isShutdown || this.pendingSpans.length === 0) return
 
     const spans = this.pendingSpans.splice(0)
-    const body = serializeSpansToOtlp(spans)
+    const body = serializeSpansToOtlp(spans) as unknown as BodyInit
     const fetchFn = this.opts._mockFetch ?? globalThis.fetch
 
     try {
@@ -61,7 +61,7 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'authorization': `Bearer ${this.opts.apiKey}`,
+          'authorization': `Bearer ${this.opts.token}`,
         },
         body,
       })
