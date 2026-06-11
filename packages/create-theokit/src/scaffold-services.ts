@@ -1,4 +1,4 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
+/**
  * Build-time scaffold helper. All write paths derived from the trusted
  * targetDir (CLI argument, resolved absolute). Read paths are the
  * bundled service templates shipped with this package.
