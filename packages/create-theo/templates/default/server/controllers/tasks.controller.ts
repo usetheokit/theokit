@@ -12,7 +12,7 @@ import {
   Body, Param, Query, HttpCode,
   UseGuards, UseInterceptors, UseFilters,
   NotFoundException,
-} from '@theokit/http-decorators'
+} from '@theokit/http'
 import { RolesGuard, Roles, Role, IsPublic } from '../guards/auth.guard.js'
 import { TimingInterceptor } from '../interceptors/timing.interceptor.js'
 import { HttpErrorFilter } from '../filters/http-error.filter.js'

@@ -1,5 +1,5 @@
 /**
- * @theokit/http-decorators v0.1.0-alpha.0 — DEMO
+ * @theokit/http v0.1.0-alpha.0 — DEMO
  *
  * This example shows what works TODAY:
  *   ✅ Decorators write metadata correctly

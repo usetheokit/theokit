@@ -2,7 +2,7 @@
  * Live Server — TypeScript com @ syntax REAL
  *
  * Sobe um server HTTP e MANTÉM VIVO até SIGINT (Ctrl+C).
- * Roda via: pnpm --filter @theokit/http-decorators exec vitest run tests/integration/live-server.test.ts
+ * Roda via: pnpm --filter @theokit/http exec vitest run tests/integration/live-server.test.ts
  *
  * Depois abre outro terminal e faz:
  *   curl localhost:3333/users
@@ -105,7 +105,7 @@ class UsersController {
   }
 
   @Get()
-  @Header('X-Powered-By', '@theokit/http-decorators')
+  @Header('X-Powered-By', '@theokit/http')
   findAll() {
     return this.svc.findAll()
   }
@@ -155,7 +155,7 @@ class ProductsController {
 class HealthController {
   @Get()
   check() {
-    return { status: 'ok', framework: 'TheoKit', package: '@theokit/http-decorators' }
+    return { status: 'ok', framework: 'TheoKit', package: '@theokit/http' }
   }
 }
 

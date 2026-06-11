@@ -2,7 +2,7 @@
  * HttpErrorFilter — custom error response format.
  * Catches HttpException and returns structured JSON.
  */
-import { Catch, HttpException, type ExceptionFilter, type ArgumentsHost } from '@theokit/http-decorators'
+import { Catch, HttpException, type ExceptionFilter, type ArgumentsHost } from '@theokit/http'
 
 @Catch(HttpException)
 export class HttpErrorFilter implements ExceptionFilter {

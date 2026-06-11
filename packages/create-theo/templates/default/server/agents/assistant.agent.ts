@@ -9,7 +9,7 @@ import {
   Agent, MainLoop, Mixin,
   Memory, Budget, Hook,
 } from '@theokit/agents'
-import { UseGuards, UseInterceptors } from '@theokit/http-decorators'
+import { UseGuards, UseInterceptors } from '@theokit/http'
 import { RolesGuard, Roles, Role } from '../guards/auth.guard.js'
 import { TimingInterceptor } from '../interceptors/timing.interceptor.js'
 import { TaskTools } from '../toolboxes/task.tools.js'

@@ -10,7 +10,7 @@ import type { GatewayOptions } from '../decorators/gateway.js'
 import { getGatewayConfig } from '../decorators/gateway.js'
 import { RequiresApproval } from '../decorators/policies.js'
 import { Trace, Audit } from '../decorators/observability.js'
-import { Reflector } from '@theokit/http-decorators'
+import { Reflector } from '@theokit/http'
 
 const reflectorInstance = new Reflector()
 import { getMcpConfig } from '../decorators/mcp.js'

@@ -10,5 +10,5 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ['@theokit/http-decorators', '@theokit/sdk', 'reflect-metadata', 'zod'],
+  external: ['@theokit/http', '@theokit/sdk', 'reflect-metadata', 'zod'],
 })

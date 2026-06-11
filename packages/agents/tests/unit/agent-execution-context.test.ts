@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
 import { createAgentExecutionContext, isAgentContext } from '../../src/bridge/agent-execution-context.js'
-import type { ExecutionContext, CanActivate } from '@theokit/http-decorators'
+import type { ExecutionContext, CanActivate } from '@theokit/http'
 
 describe('AgentExecutionContext', () => {
   const mockReq = new Request('http://localhost/test', { method: 'POST' })

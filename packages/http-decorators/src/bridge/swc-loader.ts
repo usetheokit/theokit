@@ -179,7 +179,7 @@ export async function loadControllersFromGlob(
   const files = scanControllerFiles(rootDir, pattern)
   if (files.length === 0) {
     console.warn(
-      `[@theokit/http-decorators] No controller files found matching "${pattern}" ` +
+      `[@theokit/http] No controller files found matching "${pattern}" ` +
         `in ${rootDir}. Ensure files match the pattern and export @Controller classes.`,
     )
     return []

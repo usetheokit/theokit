@@ -1,7 +1,7 @@
 /**
  * Observability decorators for agent tracing and auditing.
  */
-import { createDecorator } from '@theokit/http-decorators'
+import { createDecorator } from '@theokit/http'
 
 /** Enable distributed tracing for a tool/toolbox/agent. */
 export const Trace = createDecorator<boolean>()

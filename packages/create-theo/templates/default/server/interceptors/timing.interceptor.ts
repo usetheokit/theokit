@@ -2,7 +2,7 @@
  * TimingInterceptor — logs request duration.
  * Applied to both controllers and agents.
  */
-import type { Interceptor } from '@theokit/http-decorators'
+import type { Interceptor } from '@theokit/http'
 
 export class TimingInterceptor implements Interceptor {
   async intercept(_request: Request, next: () => Promise<unknown>): Promise<unknown> {
