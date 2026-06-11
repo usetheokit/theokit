@@ -1,4 +1,4 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
+/**
  * `create-theokit` scaffold tool. All write paths are derived from the
  * user-supplied target directory (CLI argument, resolved to absolute).
  * Read paths are the bundled `templates/` shipped with this package.
@@ -36,7 +36,6 @@ export interface ScaffoldOptions {
   _testForceTransformError?: string
 }
 
-// eslint-disable-next-line complexity -- scaffold orchestrator: validate → copy → rename _gitignore → template-substitute all *.tmpl → optional --bare transform with rollback. Branches are linear, not nested.
 export function scaffold(
   targetDir: string,
   projectName: string,
@@ -60,9 +59,8 @@ export function scaffold(
   }
 
   // Bug #1 fix: "." means current directory — use dir basename as project name
-  const resolvedName = projectName === '.'
-    ? resolve(targetDir).split('/').pop() ?? 'my-app'
-    : projectName
+  const resolvedName =
+    projectName === '.' ? (resolve(targetDir).split('/').pop() ?? 'my-app') : projectName
 
   if (!isValidProjectName(resolvedName)) {
     throw new Error(

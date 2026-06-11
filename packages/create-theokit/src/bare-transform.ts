@@ -1,4 +1,4 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
+/**
  * Scaffold transform. Mutates files inside the freshly-created target
  * directory whose absolute path is the function input. No HTTP input.
  */
