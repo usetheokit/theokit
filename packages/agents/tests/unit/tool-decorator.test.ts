@@ -11,11 +11,11 @@ describe('@Toolbox + @Tool decorators', () => {
     expect(getToolboxConfig(SupportTools)).toEqual({ namespace: 'support' })
   })
 
-  it('test_toolbox_default_empty_namespace', () => {
+  it('test_toolbox_default_infers_namespace_from_class_name', () => {
     @Toolbox()
     class BasicTools {}
 
-    expect(getToolboxConfig(BasicTools)).toEqual({})
+    expect(getToolboxConfig(BasicTools)).toEqual({ namespace: 'basic' })
   })
 
   it('test_tool_stores_config', () => {
