@@ -55,7 +55,12 @@ export function createTypedClient<M extends RouteMap>(
   baseUrl: string,
   defaultHeaders?: Record<string, string>,
 ): TypedClient<M> {
-  async function request(method: string, path: string, body?: unknown, opts?: { headers?: Record<string, string>; query?: Record<string, string> }) {
+  async function request(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { headers?: Record<string, string>; query?: Record<string, string> },
+  ) {
     const url = new URL(path, baseUrl)
     if (opts?.query) {
       for (const [k, v] of Object.entries(opts.query)) url.searchParams.set(k, v)
@@ -79,10 +84,13 @@ export function createTypedClient<M extends RouteMap>(
   }
 
   return {
-    get: (path: string, opts?: Record<string, unknown>) => request('GET', path, undefined, opts as { headers?: Record<string, string>; query?: Record<string, string> }),
-    post: (path: string, body?: unknown, opts?: Record<string, unknown>) => request('POST', path, body, opts as { headers?: Record<string, string> }),
-    put: (path: string, body?: unknown, opts?: Record<string, unknown>) => request('PUT', path, body, opts as { headers?: Record<string, string> }),
-    delete: (path: string, opts?: Record<string, unknown>) => request('DELETE', path, undefined, opts as { headers?: Record<string, string> }),
+    get: (path: string, opts?: Record<string, unknown>) => request('GET', path, undefined, opts),
+    post: (path: string, body?: unknown, opts?: Record<string, unknown>) =>
+      request('POST', path, body, opts),
+    put: (path: string, body?: unknown, opts?: Record<string, unknown>) =>
+      request('PUT', path, body, opts),
+    delete: (path: string, opts?: Record<string, unknown>) =>
+      request('DELETE', path, undefined, opts),
   } as TypedClient<M>
 }
 

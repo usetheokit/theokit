@@ -1,4 +1,4 @@
-import type { ZodTypeAny } from 'zod'
+import type { z } from 'zod'
 
 /** Configuration stored by @Agent() decorator. */
 export interface AgentOptions {
@@ -49,7 +49,7 @@ export interface ToolOptions {
   /** LLM-facing description. */
   description: string
   /** Zod input schema — compiled to JSON Schema via defineTool(). */
-  input: ZodTypeAny
+  input: z.ZodType
   /** Risk level (informational — feeds manifest + UI). */
   risk?: 'low' | 'medium' | 'high'
 }
