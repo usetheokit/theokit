@@ -111,7 +111,14 @@ describe('executeAction — plugin pipeline', () => {
     )
 
     expect(res._getStatus()).toBe(200)
-    expect(JSON.parse(res._getBody())).toEqual({ id: '1', name: 'Paulo' })
+    // T1.3 sub-C — body now devalue-encoded (application/json+devalue) per ADR D1.
+    // Roundtrip parse via the workspace-resolved devalue (hoisted under
+    // packages/theo/node_modules — devalue isn't a root dep).
+    // @ts-expect-error — devalue lacks .d.ts at this resolved path; runtime is fine.
+    const mod = (await import('../../packages/theo/node_modules/devalue/index.js')) as {
+      parse: (s: string) => unknown
+    }
+    expect(mod.parse(res._getBody())).toEqual({ id: '1', name: 'Paulo' })
     expect(calls).toEqual(['onRequest', 'preHandler', 'onResponse'])
   })
 

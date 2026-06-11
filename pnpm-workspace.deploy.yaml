@@ -1,0 +1,32 @@
+# pnpm workspace config for DEPLOY mode (theokit-packs / TheoCloud).
+#
+# Differs from pnpm-workspace.yaml in two ways:
+#   1. The three '../theokit-sdk/packages/{sdk,gateway,gateway-telegram}'
+#      entries are absent — those paths cannot resolve inside a Docker
+#      build context rooted at the theokit repo. Containerized builds
+#      must consume @usetheo/sdk / @usetheo/gateway / @usetheo/gateway-telegram
+#      from the npm registry instead.
+#   2. dev-only fixtures stay listed (pnpm install --frozen-lockfile still
+#      requires every workspace member's package.json to be reachable).
+#
+# Activation: `scripts/prepare-deploy.sh` copies this file over
+# `pnpm-workspace.yaml` at the start of a TheoCloud build pipeline run.
+# The hook is idempotent — running it twice is a no-op.
+#
+# See docs/concepts/deploy-mode.md (TBD) and theokit-packs blueprint
+# ADR D3 for the full rationale. See ADR-0001 in theokit-sdk for the
+# original cross-repo workspace-link decision this overrides.
+
+packages:
+  - 'packages/*'
+  - 'my-test'
+  - 'examples/*'
+  - 'fixtures/template-default'
+  - 'fixtures/theoui-autoinject'
+  - 'fixtures/services-python-basic'
+  - 'fixtures/services-node-basic'
+  - 'fixtures/services-both'
+  - 'fixtures/template-dashboard'
+  - 'fixtures/template-api-only'
+  - 'fixtures/template-postgres'
+  - 'fixtures/template-saas'

@@ -20,9 +20,11 @@ if echo "$FILE_PATH" | grep -q "packages/"; then
   PKG=$(echo "$FILE_PATH" | sed -n 's|.*packages/\([^/]*\)/.*|\1|p')
 fi
 
-# Guard: agents/ directory must NOT exist in MVP
-if echo "$FILE_PATH" | grep -qE '^(.*/)?(packages/agents|src/agents)/'; then
-  echo '{"decision":"block","reason":"SCOPE VIOLATION: agents/ is OUT of MVP scope. The Theo framework must be excellent as a web framework first. agents/ belongs to Phase 2 only."}' >&2
+# Guard: agents/ directory — RELAXED 2026-06-09 per user authorization
+# packages/agents/ is now allowed (Phase 2 work authorized).
+# src/agents/ inside other packages remains blocked.
+if echo "$FILE_PATH" | grep -qE '^(.*/)?(src/agents)/'; then
+  echo '{"decision":"block","reason":"SCOPE VIOLATION: src/agents/ inside framework packages is not allowed. Use packages/agents/ instead."}' >&2
   exit 2
 fi
 

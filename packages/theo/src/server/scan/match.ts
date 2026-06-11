@@ -3,6 +3,10 @@ export interface ServerRouteNode {
   routePath: string
   paramNames: string[]
   pattern: RegExp
+  /** HTTP methods (uppercase) the route file exports. Optional for backward
+   * compatibility with manifests generated before G1. Empty array means the
+   * file has no HTTP exports (util-only); undefined means "not detected". */
+  methods?: string[]
 }
 
 export function compilePattern(routePath: string): {

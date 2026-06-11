@@ -89,3 +89,116 @@ export async function handleRequestError(err: unknown, c: HandleRequestErrorCtx)
     }
   }
 }
+
+/**
+ * T5a.2 Phase G slice 3/N — Web-Standards request error handler.
+ *
+ * Mirror of `handleRequestError(err, c: HandleRequestErrorCtx)` for the
+ * Web `Request` shape. Returns a native `Response` directly instead of
+ * mutating `res`. Same behavioral contract:
+ *
+ *   1. Auth-error detection via `instanceof AuthRequiredError` PLUS a
+ *      duck-type fallback (`code === 'AUTH_REQUIRED' && status === 401`)
+ *      — needed because Vite dev / vitest can produce duplicate class
+ *      identities, breaking `instanceof`.
+ *   2. Envelope-shaped JSON body using `serverErrorToEnvelope` (G5 D3
+ *      boundary translation).
+ *   3. Status code derived from envelope.code via `envelopeCodeToStatus`
+ *      mirror (already implemented inline in web-handler.ts; this slice
+ *      uses the same mapping table).
+ *
+ * **Difference vs IncomingMessage path:** the Web path's plugin runner
+ * orchestration lives in `executeWebRequest`'s `runWithHooks` /
+ * `runErrorHooks` (Phase G slice 1/N) — `handleWebRequestError` is the
+ * leaf that builds the error Response WITHOUT touching plugin hooks.
+ * Callers compose: `executeWebRequest` (or future Web execute pipeline)
+ * catches a throw, calls `handleWebRequestError(err, { requestId })` to
+ * build the Response, then routes through onError hooks separately.
+ */
+export interface HandleWebRequestErrorCtx {
+  requestId?: string
+}
+
+export async function handleWebRequestError(
+  err: unknown,
+  ctx: HandleWebRequestErrorCtx = {},
+): Promise<Response> {
+  // Lazy import to avoid pulling the full envelope translator into the
+  // bundle for consumers who don't hit the error path. Same dynamic-
+  // import pattern as web-handler.ts's parseBodyFull.
+  const { serverErrorToEnvelope } = await import('../../core/contracts/server-error-to-envelope.js')
+
+  // 1. Auth-error detection (instanceof + duck-type fallback — same as
+  //    IncomingMessage path for cross-module class-identity safety).
+  const isAuthError =
+    err instanceof AuthRequiredError ||
+    (err !== null &&
+      typeof err === 'object' &&
+      (err as { code?: unknown }).code === 'AUTH_REQUIRED' &&
+      (err as { status?: unknown }).status === 401)
+
+  if (isAuthError) {
+    const authErr = err as { code?: string; message?: string; status?: number }
+    return new Response(
+      JSON.stringify({
+        code: authErr.code ?? 'AUTH_REQUIRED',
+        message: authErr.message ?? 'Authentication required',
+      }),
+      {
+        status: authErr.status ?? 401,
+        headers: {
+          'content-type': 'application/json',
+          ...(ctx.requestId !== undefined ? { 'x-request-id': ctx.requestId } : {}),
+        },
+      },
+    )
+  }
+
+  // 2. Envelope translation for everything else (G5 D3 boundary).
+  const envelope = serverErrorToEnvelope(err)
+  return new Response(JSON.stringify(envelope), {
+    status: envelopeCodeToHttpStatus(envelope.code),
+    headers: {
+      'content-type': 'application/json',
+      ...(ctx.requestId !== undefined ? { 'x-request-id': ctx.requestId } : {}),
+    },
+  })
+}
+
+/**
+ * T5a.2 Phase G slice 3/N — internal HTTP-status mapper for envelope codes.
+ * Mirror of the inline `envelopeCodeToStatus` table in web-handler.ts;
+ * duplicated to avoid a circular dep between handle-request-error and
+ * web-handler. The two tables MUST stay in sync — Phase G slice 4/N may
+ * consolidate them into a shared core/contracts module.
+ */
+function envelopeCodeToHttpStatus(code: string): number {
+  switch (code) {
+    case 'BAD_REQUEST':
+      return 400
+    case 'UNAUTHORIZED':
+      return 401
+    case 'FORBIDDEN':
+      return 403
+    case 'NOT_FOUND':
+      return 404
+    case 'METHOD_NOT_ALLOWED':
+      return 405
+    case 'PAYLOAD_TOO_LARGE':
+      return 413
+    case 'UNPROCESSABLE_ENTITY':
+      return 422
+    case 'TOO_MANY_REQUESTS':
+    case 'RATE_LIMITED':
+      return 429
+    case 'BAD_GATEWAY':
+      return 502
+    case 'SERVICE_UNAVAILABLE':
+      return 503
+    case 'GATEWAY_TIMEOUT':
+      return 504
+    case 'INTERNAL_SERVER_ERROR':
+    default:
+      return 500
+  }
+}

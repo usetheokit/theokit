@@ -1,0 +1,141 @@
+{
+  "plan_slug": "theokit-arch-gaps-investigation",
+  "plan_path": "/home/paulo/Projetos/usetheo/theokit-tools/theokit/.claude/knowledge-base/discoveries/plans/theokit-arch-gaps-investigation-plan.md",
+  "plan_version": null,
+  "scored_at": "2026-06-06T08:36:01.763307+00:00",
+  "research_coverage_score": 100.0,
+  "reference_citations_score": 100.0,
+  "plan_completeness_score": 100.0,
+  "risco_estrutural_score": 97.0,
+  "active_dimensions": [
+    "research_coverage",
+    "reference_citations",
+    "plan_completeness",
+    "structural_risk"
+  ],
+  "weight_normalization_factor": 1.0,
+  "weighted_avg": 99.5,
+  "hard_caps_triggered": [],
+  "final_score_after_caps": 99.5,
+  "verdict": "SHIPPABLE",
+  "calibration": {
+    "status": "PROVISIONAL_v1",
+    "holdout_count": 0,
+    "holdout_target": 30,
+    "kappa_measured": false
+  },
+  "reasons": {
+    "research_coverage": {
+      "contributors": [
+        "Corner 'tests' populated (1 Q)",
+        "Corner 'deps' populated (1 Q)",
+        "Corner 'tools' populated (2 Qs)"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "contributors": ["46 verified .claude/knowledge-base/references/ citation(s)"],
+      "detractors": []
+    },
+    "plan_completeness": {
+      "contributors": [
+        "10/10 mandatory sections present",
+        "4 ADRs found",
+        "Question budget OK (7 Qs)"
+      ],
+      "detractors": []
+    },
+    "structural_risk": {
+      "contributors": [],
+      "detractors": ["weak_imperatives: 1 hits"]
+    }
+  },
+  "sub_reports": {
+    "research_coverage": {
+      "corners_populated": 4,
+      "corners_total": 4,
+      "corners_status": [
+        {
+          "corner": "tests",
+          "present": true,
+          "populated": true,
+          "question_count": 1,
+          "deferred": false
+        },
+        {
+          "corner": "deps",
+          "present": true,
+          "populated": true,
+          "question_count": 1,
+          "deferred": false
+        },
+        {
+          "corner": "tools",
+          "present": true,
+          "populated": true,
+          "question_count": 2,
+          "deferred": false
+        },
+        {
+          "corner": "techniques",
+          "present": true,
+          "populated": true,
+          "question_count": 3,
+          "deferred": false
+        }
+      ],
+      "empty_corners": [],
+      "contributors": [
+        "Corner 'tests' populated (1 Q)",
+        "Corner 'deps' populated (1 Q)",
+        "Corner 'tools' populated (2 Qs)"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "total": 46,
+      "verified": 46,
+      "fabricated": 0,
+      "explicitly_blocked": 0,
+      "fabricated_paths": [],
+      "blocked_paths": [],
+      "word_count": 4046,
+      "citation_density_per_200w": 2.27,
+      "contributors": ["46 verified .claude/knowledge-base/references/ citation(s)"],
+      "detractors": []
+    },
+    "plan_completeness": {
+      "total_required": 10,
+      "found": 10,
+      "present": [
+        "Header",
+        "Context",
+        "Objective",
+        "In-Scope",
+        "ADRs",
+        "Research Questions",
+        "Coverage Matrix",
+        "Halt-loop Checkpoints",
+        "Acceptance Criteria",
+        "Global Definition of Done"
+      ],
+      "missing_mandatory": [],
+      "adr_count": 4,
+      "budget_violations": [],
+      "methodless_questions": [],
+      "contributors": [
+        "10/10 mandatory sections present",
+        "4 ADRs found",
+        "Question budget OK (7 Qs)"
+      ],
+      "detractors": []
+    },
+    "structural_risk": {
+      "total_hits": 1,
+      "by_category": {
+        "weak_imperatives": 1
+      },
+      "total_penalty": -3
+    }
+  }
+}

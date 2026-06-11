@@ -1,0 +1,12 @@
+id: method-call-ts
+language: typescript
+severity: info
+message: |
+  Find every call site of a specific method (member call shape `obj.method(...)`).
+  Default $METHOD is `embed` — change to `add`, `search`, `delete`,
+  `complete`, etc. to map call sites of any operation.
+
+  Useful for: tracing where LLM/embedding operations happen across a codebase,
+  finding all consumers of a specific API surface.
+rule:
+  pattern: $OBJ.embed($$$)

@@ -1,0 +1,40 @@
+# Code-quality thresholds — per-detector floors + behavioral knobs
+#
+# Authoritative source: .claude/rules/code-quality-golden-rule.md § Severity rubric
+#
+# Format (one entry per line):
+#   KEY = VALUE
+#
+# Where:
+#   KEY     — dot-separated detector.parameter (e.g., vulture.min_confidence)
+#   VALUE   — int, float, or string; type coerced by parser
+#
+# Lines starting with `#` and blank lines are skipped.
+# Whitespace around `=` is tolerated.
+#
+# Sunset for default values: 2027-05-22 (revisit yearly to re-calibrate against actual usage).
+
+# D1 — Dead code
+vulture.min_confidence = 80
+knip.exit_code = strict
+cargo_udeps.fail_on_unused = true
+deadcode.fail_on_unused = true
+
+# D2 — Symbol fabrication
+symbol_fab.cache_ttl_hours = 24
+symbol_fab.registry_timeout_seconds = 5
+symbol_fab.fallback_on_introspection_failure = warning
+
+# D3 — Cross-package wiring
+orphan_export.skip_barrel_files = true
+orphan_export.skip_entry_points = true
+
+# D4 — Mutation testing
+mutation.critical_paths_required = true
+mutation.score_floor_high = 80
+mutation.score_floor_low = 60
+mutation.timeout_minutes = 5
+
+# Orchestrator
+orchestrator.no_network_disables_d2 = true
+orchestrator.detector_timeout_seconds = 300

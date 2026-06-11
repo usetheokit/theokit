@@ -1,0 +1,141 @@
+{
+  "blueprint_slug": "theokit-http-decorators-pattern-from-nestjs",
+  "blueprint_path": "/home/paulo/Projetos/usetheo/theokit-tools/theokit/.claude/knowledge-base/discoveries/blueprints/theokit-http-decorators-pattern-from-nestjs-blueprint.md",
+  "blueprint_version": null,
+  "scored_at": "2026-06-08T01:51:06.420381+00:00",
+  "research_coverage_score": 100.0,
+  "reference_citations_score": 100.0,
+  "blueprint_completeness_score": 100.0,
+  "risco_estrutural_score": 92.0,
+  "active_dimensions": [
+    "research_coverage",
+    "reference_citations",
+    "blueprint_completeness",
+    "structural_risk"
+  ],
+  "weight_normalization_factor": 1.0,
+  "weighted_avg": 98.8,
+  "hard_caps_triggered": [
+    "soft_floor_citation_density_low"
+  ],
+  "final_score_after_caps": 89.0,
+  "verdict": "SHIPPABLE_WITH_CAVEATS",
+  "calibration": {
+    "status": "PROVISIONAL_v1",
+    "holdout_count": 0,
+    "holdout_target": 30,
+    "kappa_measured": false
+  },
+  "reasons": {
+    "research_coverage": {
+      "contributors": [
+        "Corner 'tests' populated",
+        "Corner 'deps' populated",
+        "Corner 'tools' populated"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "contributors": [
+        "16 verified .claude/knowledge-base/references/ citation(s)"
+      ],
+      "detractors": []
+    },
+    "blueprint_completeness": {
+      "contributors": [
+        "10/10 mandatory sections present",
+        "6 ADR(s) found in ADRs section"
+      ],
+      "detractors": []
+    },
+    "structural_risk": {
+      "contributors": [],
+      "detractors": [
+        "non_verifiable: 1 hits",
+        "subjective_adjectives: 1 hits",
+        "vague_pronouns: 1 hits"
+      ]
+    }
+  },
+  "sub_reports": {
+    "research_coverage": {
+      "corners_populated": 4,
+      "corners_total": 4,
+      "corners_status": [
+        {
+          "corner": "tests",
+          "present": true,
+          "populated": true
+        },
+        {
+          "corner": "deps",
+          "present": true,
+          "populated": true
+        },
+        {
+          "corner": "tools",
+          "present": true,
+          "populated": true
+        },
+        {
+          "corner": "techniques",
+          "present": true,
+          "populated": true
+        }
+      ],
+      "empty_corners": [],
+      "contributors": [
+        "Corner 'tests' populated",
+        "Corner 'deps' populated",
+        "Corner 'tools' populated"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "total": 16,
+      "verified": 16,
+      "fabricated": 0,
+      "explicitly_blocked": 0,
+      "fabricated_paths": [],
+      "blocked_paths": [],
+      "word_count": 7269,
+      "citation_density_per_200w": 0.44,
+      "contributors": [
+        "16 verified .claude/knowledge-base/references/ citation(s)"
+      ],
+      "detractors": []
+    },
+    "blueprint_completeness": {
+      "total_required": 10,
+      "found": 10,
+      "present": [
+        "Header",
+        "Context",
+        "Objective",
+        "Coverage Corner 1",
+        "Coverage Corner 2",
+        "Coverage Corner 3",
+        "Coverage Corner 4",
+        "Cross-cutting Comparison",
+        "ADRs",
+        "Recommendations"
+      ],
+      "missing_mandatory": [],
+      "adr_count": 6,
+      "contributors": [
+        "10/10 mandatory sections present",
+        "6 ADR(s) found in ADRs section"
+      ],
+      "detractors": []
+    },
+    "structural_risk": {
+      "total_hits": 3,
+      "by_category": {
+        "non_verifiable": 1,
+        "subjective_adjectives": 1,
+        "vague_pronouns": 1
+      },
+      "total_penalty": -8
+    }
+  }
+}

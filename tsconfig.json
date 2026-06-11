@@ -14,6 +14,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "stripInternal": true,
     "paths": {
       "theokit": ["./packages/theo/src/index.ts"],
       "theokit/server": ["./packages/theo/src/server/index.ts"],
@@ -23,6 +24,7 @@
   "include": [
     "packages/*/src/**/*.ts",
     "packages/*/src/**/*.tsx",
+    "packages/*/tests/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "scripts/**/*.ts",

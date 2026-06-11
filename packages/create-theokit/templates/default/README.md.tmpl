@@ -1,0 +1,89 @@
+# {{name}}
+
+Built with [TheoKit](https://theokit.dev) — Full-Stack TypeScript for AI Agents.
+
+## Getting Started
+
+```bash
+# Install dependencies
+npm install
+
+# Set your LLM API key
+cp .env.example .env
+# Edit .env with your OpenRouter/Anthropic/OpenAI key
+
+# Start development server
+bun dev
+# or: npm run dev:node
+```
+
+## Project Structure
+
+```
+{{name}}/
+├── app.ts                          # Entry point (TheoApp.create)
+├── server/
+│   ├── controllers/
+│   │   └── tasks.controller.ts     # HTTP CRUD (@Controller)
+│   ├── agents/
+│   │   └── assistant.agent.ts      # AI Agent (@Agent + @MainLoop)
+│   ├── toolboxes/
+│   │   └── task.tools.ts           # Agent tools (@Toolbox + @Tool)
+│   ├── guards/
+│   │   └── auth.guard.ts           # RBAC (@Roles + RolesGuard)
+│   ├── interceptors/
+│   │   └── timing.interceptor.ts   # Request timing
+│   ├── filters/
+│   │   └── http-error.filter.ts    # Error formatting
+│   ├── middleware/
+│   │   └── logger.middleware.ts     # Request logging
+│   └── store.ts                    # In-memory data store
+└── .env.example                    # Environment variables
+```
+
+## API Endpoints
+
+### HTTP Controllers
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | /api/tasks | Public | List all tasks |
+| GET | /api/tasks/search?q= | Public | Search tasks |
+| GET | /api/tasks/:id | Public | Get task by ID |
+| POST | /api/tasks | User | Create task |
+| PUT | /api/tasks/:id | User | Update task |
+| DELETE | /api/tasks/:id | Admin | Delete task |
+
+### AI Agent
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | /api/agents/assistant/chat | User | Chat with AI (SSE stream) |
+
+## Examples
+
+```bash
+# List tasks
+curl http://localhost:3000/api/tasks
+
+# Create a task (requires user role)
+curl -X POST http://localhost:3000/api/tasks \
+  -H "Content-Type: application/json" \
+  -H "x-role: user" \
+  -d '{"title":"New task","priority":"high"}'
+
+# Chat with AI agent (SSE streaming)
+curl -N -X POST http://localhost:3000/api/agents/assistant/chat \
+  -H "Content-Type: application/json" \
+  -H "x-role: user" \
+  -d '{"message":"List all tasks and mark the first one as done"}'
+```
+
+## Key Concepts
+
+- **@Controller** — HTTP routes with Zod validation
+- **@Agent** — AI agent with LLM + tool calling + SSE streaming
+- **@Toolbox** + **@Tool** — Functions the AI can call
+- **@UseGuards** — Same auth for controllers AND agents
+- **@Mixin** — Compose toolboxes into agents
+- **TheoApp.create()** — Zero-wiring bootstrap (like NestFactory.create)

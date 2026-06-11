@@ -1,0 +1,54 @@
+[project]
+name = "code-quality-skill"
+version = "0.1.0"
+description = "Multi-language wiring + dead-code + symbol-fabrication gate (Claude skill)"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "planning-ecosystem" }]
+
+dependencies = [
+    "tree-sitter>=0.25,<0.26",
+    "tree-sitter-languages>=1.10,<2.0",
+    "requests>=2.32,<3.0",
+    "pyyaml>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["scripts", "scripts.detectors"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "python: detector tests for Python",
+    "typescript: detector tests for TypeScript",
+    "rust: detector tests for Rust",
+    "go: detector tests for Go",
+    "slow: tests that subprocess external CLIs (may be slow)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+ignore = ["E501"]  # line-length handled by tool.ruff.line-length
+
+[tool.coverage.run]
+source = ["scripts"]
+omit = ["tests/*", "fixtures/*"]

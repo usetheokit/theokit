@@ -1,7 +1,0 @@
-{
-  "name": "upgrade-readiness-dirty",
-  "private": true,
-  "dependencies": {
-    "theokit": "*"
-  }
-}

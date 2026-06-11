@@ -2,7 +2,11 @@
  * Build-time atomic write: caller-controlled paths only. No HTTP input
  * reaches these fs calls.
  */
-import { randomBytes } from 'node:crypto'
+// T5a.1b — Web Crypto migration. Build-time only; node:fs + node:path stay
+// because this is a manifest-write leaf (e.g. .theo/jobs.json) and per
+// ADR-0028 the runtime-portable boundary is the request handler, not the
+// scanner. Only node:crypto is swapped out — Web Crypto's
+// getRandomValues works in every supported runtime.
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -25,9 +29,14 @@ import { dirname } from 'node:path'
 export function writeAtomic(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true })
   // Include a random suffix so two concurrent writes don't trample each
-  // other's tmp file. crypto.randomBytes is non-blocking + collision-safe
-  // for the tiny entropy we need (8 hex chars = 32 bits).
-  const tmp = `${path}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`
+  // other's tmp file. Web Crypto getRandomValues is non-blocking +
+  // collision-safe for the tiny entropy we need (8 hex chars = 32 bits).
+  // Hex-encoded manually to avoid Buffer (runtime-agnostic per ADR-0028).
+  const randBuf = new Uint8Array(4)
+  globalThis.crypto.getRandomValues(randBuf)
+  let suffix = ''
+  for (const b of randBuf) suffix += b.toString(16).padStart(2, '0')
+  const tmp = `${path}.tmp-${process.pid}-${suffix}`
   writeFileSync(tmp, content, 'utf8')
   renameSync(tmp, path)
 }

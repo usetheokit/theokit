@@ -1,21 +1,14 @@
-import type { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
+import { z } from 'zod'
 
 /**
  * Item #4 — `defineAgentTool`
  *
- * Sugar over the `@usetheo/sdk` `CustomTool` contract. Takes a Zod 3 schema +
+ * Sugar over the `@theokit/sdk` `CustomTool` contract. Takes a Zod schema +
  * handler and produces a structurally-compatible `CustomTool` that
  * `Agent.create({ tools: [...] })` accepts.
  *
- * Why not delegate to SDK's `defineTool`?
- *   SDK's `defineTool` calls `z.toJSONSchema(...)` which only exists on Zod 4
- *   (at root) or `zod/v4` (Zod 3.25+ subpath). TheoKit pins Zod 3 framework-
- *   wide. Bumping to Zod 4 is a major breaking change touching every primitive
- *   — out of scope for this item. Instead, we convert the Zod schema to JSON
- *   Schema 7 with `zod-to-json-schema` (Zod 3 native, MIT, zero transitive
- *   deps, 3M weekly DLs) and build the `CustomTool` object directly. See ADR
- *   D1 in `docs/plans/item-4-define-agent-tool-plan.md`.
+ * Uses Zod v4's native `z.toJSONSchema()` to convert the input schema to
+ * JSON Schema for LLM providers.
  *
  * Handler error propagation:
  *   `defineAgentTool` parses the input via the Zod schema BEFORE calling the
@@ -26,7 +19,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 
 /**
  * Local mirror of the SDK's `CustomTool` interface. We don't `import type`
- * from `@usetheo/sdk` because the SDK is an optional peer (consumers who
+ * from `@theokit/sdk` because the SDK is an optional peer (consumers who
  * never call `defineAgentTool` shouldn't need it installed). The shape is
  * the wire contract; any structurally-matching object is accepted by
  * `Agent.create({ tools })`.
@@ -118,15 +111,9 @@ export function defineAgentTool<T extends z.ZodType>(spec: DefineAgentToolSpec<T
     )
   }
 
-  // `$refStrategy: 'none'` inlines all subschemas. LLMs handle inline schemas
-  // more reliably than $ref-resolved ones. Recursive schemas (z.lazy) are
-  // typically guarded by the consumer with maxDepth / typeName checks.
-  const rawSchema = zodToJsonSchema(spec.inputSchema, {
-    target: 'jsonSchema7',
-    $refStrategy: 'none',
-  }) as Record<string, unknown>
-  // Strip $schema if present at root — Anthropic + some providers reject it.
-  const { $schema: _$schema, ...inputSchema } = rawSchema as Record<string, unknown> & {
+  // Zod v4 native JSON Schema conversion — replaces zod-to-json-schema dep.
+  // Strip $schema (Anthropic + some providers reject it).
+  const { $schema: _$schema, ...inputSchema } = z.toJSONSchema(spec.inputSchema) as Record<string, unknown> & {
     $schema?: unknown
   }
 

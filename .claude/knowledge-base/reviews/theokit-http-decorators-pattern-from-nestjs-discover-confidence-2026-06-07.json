@@ -1,0 +1,146 @@
+{
+  "blueprint_slug": "theokit-http-decorators-pattern-from-nestjs",
+  "blueprint_path": "/home/paulo/Projetos/usetheo/theokit-tools/theokit/.claude/knowledge-base/discoveries/blueprints/theokit-http-decorators-pattern-from-nestjs-blueprint.md",
+  "blueprint_version": null,
+  "scored_at": "2026-06-08T01:39:43.451021+00:00",
+  "research_coverage_score": 100.0,
+  "reference_citations_score": 100.0,
+  "blueprint_completeness_score": 90.0,
+  "risco_estrutural_score": 92.0,
+  "active_dimensions": [
+    "research_coverage",
+    "reference_citations",
+    "blueprint_completeness",
+    "structural_risk"
+  ],
+  "weight_normalization_factor": 1.0,
+  "weighted_avg": 96.3,
+  "hard_caps_triggered": [
+    "mandatory_section_missing",
+    "no_adrs",
+    "soft_floor_citation_density_low"
+  ],
+  "final_score_after_caps": 70.0,
+  "verdict": "SHIPPABLE_WITH_CAVEATS",
+  "calibration": {
+    "status": "PROVISIONAL_v1",
+    "holdout_count": 0,
+    "holdout_target": 30,
+    "kappa_measured": false
+  },
+  "reasons": {
+    "research_coverage": {
+      "contributors": [
+        "Corner 'tests' populated",
+        "Corner 'deps' populated",
+        "Corner 'tools' populated"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "contributors": [
+        "1 verified .claude/knowledge-base/references/ citation(s)"
+      ],
+      "detractors": []
+    },
+    "blueprint_completeness": {
+      "contributors": [
+        "9/10 mandatory sections present"
+      ],
+      "detractors": [
+        "Missing section: Cross-cutting Comparison",
+        "No ADRs found under '## ADRs' section"
+      ]
+    },
+    "structural_risk": {
+      "contributors": [],
+      "detractors": [
+        "vague_pronouns: 3 hits",
+        "subjective_adjectives: 1 hits"
+      ]
+    }
+  },
+  "sub_reports": {
+    "research_coverage": {
+      "corners_populated": 4,
+      "corners_total": 4,
+      "corners_status": [
+        {
+          "corner": "tests",
+          "present": true,
+          "populated": true
+        },
+        {
+          "corner": "deps",
+          "present": true,
+          "populated": true
+        },
+        {
+          "corner": "tools",
+          "present": true,
+          "populated": true
+        },
+        {
+          "corner": "techniques",
+          "present": true,
+          "populated": true
+        }
+      ],
+      "empty_corners": [],
+      "contributors": [
+        "Corner 'tests' populated",
+        "Corner 'deps' populated",
+        "Corner 'tools' populated"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "total": 1,
+      "verified": 1,
+      "fabricated": 0,
+      "explicitly_blocked": 0,
+      "fabricated_paths": [],
+      "blocked_paths": [],
+      "word_count": 5149,
+      "citation_density_per_200w": 0.04,
+      "contributors": [
+        "1 verified .claude/knowledge-base/references/ citation(s)"
+      ],
+      "detractors": []
+    },
+    "blueprint_completeness": {
+      "total_required": 10,
+      "found": 9,
+      "present": [
+        "Header",
+        "Context",
+        "Objective",
+        "Coverage Corner 1",
+        "Coverage Corner 2",
+        "Coverage Corner 3",
+        "Coverage Corner 4",
+        "ADRs",
+        "Recommendations"
+      ],
+      "missing_mandatory": [
+        "Cross-cutting Comparison"
+      ],
+      "adr_count": 0,
+      "contributors": [
+        "9/10 mandatory sections present"
+      ],
+      "detractors": [
+        "Missing section: Cross-cutting Comparison",
+        "No ADRs found under '## ADRs' section"
+      ]
+    },
+    "structural_risk": {
+      "total_hits": 4,
+      "by_category": {
+        "subjective_adjectives": 1,
+        "vague_pronouns": 3
+      },
+      "total_penalty": -8
+    }
+  }
+}

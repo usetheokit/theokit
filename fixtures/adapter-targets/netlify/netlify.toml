@@ -1,8 +1,0 @@
-# Existing user content — the theokit adapter MUST preserve this on merge.
-[build]
-  publish = "dist/client"
-
-[[headers]]
-  for = "/static/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"

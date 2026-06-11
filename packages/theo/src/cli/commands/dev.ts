@@ -56,7 +56,7 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
     config.rateLimit && 'windowMs' in config.rateLimit && 'max' in config.rateLimit
       ? config.rateLimit
       : undefined
-  // theoPluginAsync auto-chains @usetheo/ui + @tailwindcss/vite via
+  // theoPluginAsync auto-chains @theokit/ui + @tailwindcss/vite via
   // top-level Plugin[] return (sync `theoPlugin()` factory's config()
   // hook returning {plugins:[...]} is silently dropped by Vite — see
   // commit history). Spread the result so Vite flattens them.
