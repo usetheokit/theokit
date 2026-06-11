@@ -3,7 +3,7 @@ import {
   stableQueryKey,
   buildUseTheoQueryInternals,
   type FetcherFn,
-} from '../../packages/theo/src/react-query/index.js'
+} from '../../packages/theo/src/client/react-query.js'
 
 describe('useTheoQuery internals (T4.1)', () => {
   it('exposes the queryKey via stableQueryKey', () => {

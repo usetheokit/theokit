@@ -20,16 +20,16 @@ const code = src
   .join('\n')
 
 describe('examples/full-stack-agent/server/telegram-bot.ts', () => {
-  it('imports Agent from @usetheo/sdk', () => {
-    expect(src).toMatch(/import\s+\{\s*Agent\s*\}\s+from\s+['"]@usetheo\/sdk['"]/)
+  it('imports Agent from @theokit/sdk', () => {
+    expect(src).toMatch(/import\s+\{\s*Agent\s*\}\s+from\s+['"]@theokit\/sdk['"]/)
   })
 
-  it('imports GatewayRunner from @usetheo/gateway', () => {
-    expect(src).toMatch(/import\s+\{\s*GatewayRunner\s*\}\s+from\s+['"]@usetheo\/gateway['"]/)
+  it('imports GatewayRunner from @theokit/gateway', () => {
+    expect(src).toMatch(/import\s+\{\s*GatewayRunner\s*\}\s+from\s+['"]@theokit\/gateway['"]/)
   })
 
-  it('imports TelegramAdapter from @usetheo/gateway-telegram', () => {
-    expect(src).toMatch(/TelegramAdapter\s*\}\s+from\s+['"]@usetheo\/gateway-telegram['"]/)
+  it('imports TelegramAdapter from @theokit/gateway-telegram', () => {
+    expect(src).toMatch(/TelegramAdapter\s*\}\s+from\s+['"]@theokit\/gateway-telegram['"]/)
   })
 
   it('imports buildTools from ./tools/index.js', () => {

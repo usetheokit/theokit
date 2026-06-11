@@ -3,7 +3,7 @@ import { theoPlugin } from '../../packages/theo/src/vite-plugin/index.js'
 
 /**
  * config() became async in T3.3 (zero-config-polish) so it can await
- * integrateUseTheoUI() for @usetheo/ui auto-config. Tests now await the hook.
+ * integrateUseTheoUI() for @theokit/ui auto-config. Tests now await the hook.
  */
 describe('Env Vars: THEO_PUBLIC_* prefix', () => {
   const plugin = theoPlugin({ root: '/tmp/test-project' })

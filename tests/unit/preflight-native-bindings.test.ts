@@ -32,8 +32,8 @@ describe('findRebuildCwd (v1.1 EC-1 MUST FIX — workspace-link routing)', () =>
     writeFileSync(binPath, 'fake-bin')
 
     linkedRepo = join(sandbox, 'consumer-repo')
-    mkdirSync(join(linkedRepo, 'node_modules/@usetheo'), { recursive: true })
-    symlinkSync(realRepo, join(linkedRepo, 'node_modules/@usetheo/sdk'))
+    mkdirSync(join(linkedRepo, 'node_modules/@theokit'), { recursive: true })
+    symlinkSync(realRepo, join(linkedRepo, 'node_modules/@theokit/sdk'))
   })
 
   afterEach(() => {
@@ -41,10 +41,10 @@ describe('findRebuildCwd (v1.1 EC-1 MUST FIX — workspace-link routing)', () =>
   })
 
   it('resolves symlink to sibling repo (EC-1)', () => {
-    // Given: a binding path under the symlinked @usetheo/sdk in the consumer
+    // Given: a binding path under the symlinked @theokit/sdk in the consumer
     const failingBindingPath = join(
       linkedRepo,
-      'node_modules/@usetheo/sdk/node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
+      'node_modules/@theokit/sdk/node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
     )
 
     // When

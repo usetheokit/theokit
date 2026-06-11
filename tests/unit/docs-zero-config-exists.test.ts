@@ -17,7 +17,7 @@ describe('T4.2 — docs + changelog + README', () => {
   it('docs/concepts/zero-config.md covers all 3 zero-config pillars', () => {
     const src = readFileSync(resolve(ROOT, 'docs/concepts/zero-config.md'), 'utf-8')
     expect(src).toMatch(/`\.env`\s+files\s+load\s+into\s+`process\.env`/i)
-    expect(src).toMatch(/Tailwind \+ `@usetheo\/ui` styling auto-configures/i)
+    expect(src).toMatch(/Tailwind \+ `@theokit\/ui` styling auto-configures/i)
     expect(src).toMatch(/State cleanup runs automatically/i)
   })
 

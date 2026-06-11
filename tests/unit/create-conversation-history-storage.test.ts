@@ -18,8 +18,8 @@ import {
   type SdkAgent,
 } from '../../packages/theo/src/server/agent/create-conversation-history.js'
 
-import { InMemoryConversationStorage } from '@usetheo/sdk'
-import type { ConversationStorageAdapter } from '@usetheo/sdk'
+import { InMemoryConversationStorage } from '@theokit/sdk'
+import type { ConversationStorageAdapter } from '@theokit/sdk'
 
 interface CapturedCall {
   agentId: string

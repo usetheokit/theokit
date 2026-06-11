@@ -16,7 +16,7 @@ import { theoPlugin } from '../../packages/theo/src/vite-plugin/index.js'
  * these tests fail.
  *
  * NOTE: config() became async after T3.3 (zero-config-polish) — it now
- * awaits integrateUseTheoUI() for @usetheo/ui auto-config. Tests await.
+ * awaits integrateUseTheoUI() for @theokit/ui auto-config. Tests await.
  */
 
 const EXPECTED_SUBPATHS = [
