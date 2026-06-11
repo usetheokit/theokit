@@ -1,18 +1,21 @@
 /**
- * TheoKit App — convention over configuration.
+ * TheoKit App — opinionated, React-first.
  *
- * "The framework that reduces noise for humans + AI."
- *
- * Backend classes registered in server/index.ts (one barrel, like Rails).
+ * React SSR renders app/page.tsx inside app/layout.tsx.
+ * Backend classes registered in server/index.ts.
  * Routes inferred from class names. Zero manual wiring.
  */
 import 'reflect-metadata'
-import { readFileSync } from 'node:fs'
+import React from 'react'
+import { renderToString } from 'react-dom/server'
 import { TheoApp } from '@theokit/http/app'
 import { TasksController, AssistantAgent, TaskTools } from './server/index.js'
+import Layout from './app/layout.js'
+import Page from './app/page.js'
 
-let html: string | undefined
-try { html = readFileSync(new URL('./public/index.html', import.meta.url), 'utf-8') } catch { /* no frontend */ }
+// React SSR — render the full app to HTML
+const html =
+  '<!DOCTYPE html>' + renderToString(React.createElement(Layout, null, React.createElement(Page)))
 
 const app = await TheoApp.create({
   controllers: [TasksController],
