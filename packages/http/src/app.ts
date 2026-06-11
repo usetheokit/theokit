@@ -41,6 +41,8 @@ export interface TheoAppOptions {
   ) => (message: string, sessionId: string) => AsyncIterable<unknown>
   /** HTML string to serve at GET / (inline frontend). */
   html?: string
+  /** React root element — framework renders SSR internally (preferred over html). */
+  root?: unknown
   /** Directory for static file serving (default: 'public', false to disable). */
   staticDir?: string | false
   /** Readiness checks for GET /__theo/ready (K8s readiness probe). */
@@ -182,8 +184,13 @@ export class TheoApp {
       entry.needsBody = entry.walk.paramEntries.some((p) => p.source === 'body')
     }
 
-    // Bug #8: Store frontend HTML
-    if (opts.html) app.frontendHtml = opts.html
+    // Frontend HTML — from root (React SSR) or html string
+    if (opts.root) {
+      const { renderToString } = await import('react-dom/server')
+      app.frontendHtml = '<!DOCTYPE html>' + renderToString(opts.root as React.ReactElement)
+    } else if (opts.html) {
+      app.frontendHtml = opts.html
+    }
 
     // Static file serving from public/ (default: enabled)
     if (opts.staticDir !== false) {
