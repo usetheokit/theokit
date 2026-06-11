@@ -1,19 +1,15 @@
 /**
  * TheoKit App — convention over configuration.
  *
- * TheoApp.create() auto-wires everything:
- *   Controllers → routes inferred from class name
- *   Agents → endpoints inferred from class name
- *   Providers → injected via DI
+ * "The framework that reduces noise for humans + AI."
  *
- * Zero manual route mapping. Zero plumbing.
+ * Backend classes registered in server/index.ts (one barrel, like Rails).
+ * Routes inferred from class names. Zero manual wiring.
  */
 import 'reflect-metadata'
 import { readFileSync } from 'node:fs'
 import { TheoApp } from '@theokit/http/app'
-import { TasksController } from './server/controllers/tasks.controller.js'
-import { AssistantAgent } from './server/agents/assistant.agent.js'
-import { TaskTools } from './server/toolboxes/task.tools.js'
+import { TasksController, AssistantAgent, TaskTools } from './server/index.js'
 
 let html: string | undefined
 try { html = readFileSync(new URL('./public/index.html', import.meta.url), 'utf-8') } catch { /* no frontend */ }
@@ -23,9 +19,6 @@ const app = await TheoApp.create({
   agents: [AssistantAgent],
   providers: [TaskTools],
   html,
-  readinessChecks: [
-    async () => ({ name: 'store', healthy: true }),
-  ],
 })
 
 await app.listen(3000)
