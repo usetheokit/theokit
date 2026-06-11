@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "description": "Unified decorator runtime — AI agents as first-class citizens of the TheoKit pipeline. @Agent() compiles to SDK Agent.create(), @Tool() compiles to defineTool().",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
