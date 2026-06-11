@@ -17,13 +17,16 @@ export function createDenoAdapter(): RuntimeAdapter {
     )
   }
 
+  // Capture in a const so TS narrows the type inside closures below.
+  const DenoRuntime = globalThis.Deno
+
   return {
     createServer(handler) {
       let server: { port: number; shutdown(): Promise<void> } | null = null
 
       const handle: ServerHandle = {
         listen(port: number, callback?: () => void) {
-          server = Deno.serve({ port, onListen: () => callback?.() }, handler)
+          server = DenoRuntime.serve({ port, onListen: () => callback?.() }, handler)
         },
         close(callback?: () => void) {
           // EC-1: shutdown() returns Promise — chain callback
@@ -45,12 +48,13 @@ export function createDenoAdapter(): RuntimeAdapter {
 
 // Deno global type augmentation
 declare global {
-   
-  var Deno: {
-    serve(
-      options: { port: number; onListen?: () => void },
-      handler: (request: Request) => Response | Promise<Response>,
-    ): { port: number; shutdown(): Promise<void> }
-    version: { deno: string }
-  } | undefined
+  var Deno:
+    | {
+        serve(
+          options: { port: number; onListen?: () => void },
+          handler: (request: Request) => Response | Promise<Response>,
+        ): { port: number; shutdown(): Promise<void> }
+        version: { deno: string }
+      }
+    | undefined
 }

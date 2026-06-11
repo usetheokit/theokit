@@ -130,16 +130,20 @@ export async function loadControllerWithSwc(
 
   const source = readFileSync(absoluteFilePath, 'utf-8')
   const consumerSwcrc = readConsumerSwcrc(dirname(absoluteFilePath))
+  const consumerJsc =
+    consumerSwcrc?.jsc && typeof consumerSwcrc.jsc === 'object'
+      ? (consumerSwcrc.jsc as Record<string, unknown>)
+      : null
   const { code } = swc.transformSync(source, {
     filename: absoluteFilePath,
     jsc: {
       parser: {
         syntax: 'typescript',
         decorators: true,
-        ...(consumerSwcrc?.jsc?.parser as Record<string, unknown>),
+        ...(consumerJsc?.parser as Record<string, unknown> | undefined),
       },
       transform: {
-        ...(consumerSwcrc?.jsc?.transform as Record<string, unknown>),
+        ...(consumerJsc?.transform as Record<string, unknown> | undefined),
         // NON-NEGOTIABLE — always enforce decorator metadata emission
         // regardless of consumer .swcrc overrides
         legacyDecorator: true,
