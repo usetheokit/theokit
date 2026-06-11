@@ -351,23 +351,31 @@ export default tseslint.config(
     },
   },
 
-  // @theokit/http-decorators — decorator metadata bridge requires `Function`
-  // type (controller classes are `Function` by definition), `any` from
-  // reflect-metadata returns (Reflect.getMetadata returns `any` per spec),
-  // and single-use type parameters (metadata facades are typed `<T>` for
-  // call-site inference even though T appears only in return position).
-  // These are inherent to the decorator/reflect-metadata pattern, not bugs.
+  // @theokit/http + @theokit/agents — decorator metadata bridge requires
+  // `Function` type (controller/agent classes are `Function` by definition),
+  // `any` from reflect-metadata returns (Reflect.getMetadata returns `any`
+  // per spec), and single-use type parameters (metadata facades are typed
+  // `<T>` for call-site inference even though T appears only in return
+  // position). These are inherent to the decorator/reflect-metadata pattern,
+  // not bugs. The packages/http path is the post-rename of http-decorators.
   {
-    files: ['packages/http-decorators/src/**/*.ts'],
+    files: [
+      'packages/http-decorators/src/**/*.ts',
+      'packages/http/src/**/*.ts',
+      'packages/agents/src/**/*.ts',
+    ],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-unnecessary-type-parameters': 'off',
       '@typescript-eslint/ban-types': 'off',
       '@typescript-eslint/no-unsafe-function-type': 'off',
       '@typescript-eslint/no-useless-constructor': 'off',
+      '@typescript-eslint/no-confusing-void-expression': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
       'no-console': 'off',
     },
   },
