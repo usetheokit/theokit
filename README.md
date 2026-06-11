@@ -391,6 +391,8 @@ export default defineConfig({
 
 ## Packages
 
+### TheoKit (this repo)
+
 | Package | Version | Description |
 |---|---|---|
 | [`theokit`](https://www.npmjs.com/package/theokit) | 0.4.0 | Framework core — routing, server, CLI, config, adapters |
@@ -398,23 +400,48 @@ export default defineConfig({
 | [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | 0.4.0 | AI agent decorators + SDK adapter + orchestration |
 | [`create-theokit`](https://www.npmjs.com/package/create-theokit) | 0.8.0 | Project scaffolding CLI |
 
+### SDK (agent runtime — sibling repo)
+
+| Package | Version | Description |
+|---|---|---|
+| [`@theokit/sdk`](https://www.npmjs.com/package/@theokit/sdk) | 1.7.0 | Agent runtime — `Agent.create()`, `Run.stream()`, providers, persistence |
+| [`@theokit/sdk-tools`](https://www.npmjs.com/package/@theokit/sdk-tools) | 0.1.0 | Tool definition helpers for SDK agents |
+| [`@theokit/sdk-budget`](https://www.npmjs.com/package/@theokit/sdk-budget) | 0.1.0 | Cost tracking + budget enforcement for agent runs |
+| [`@theokit/sdk-cache`](https://www.npmjs.com/package/@theokit/sdk-cache) | 0.1.0 | Response caching layer for agent calls |
+| [`@theokit/sdk-memory`](https://www.npmjs.com/package/@theokit/sdk-memory) | 0.1.0 | Persistent memory for agent conversations |
+| [`@theokit/sdk-handoff`](https://www.npmjs.com/package/@theokit/sdk-handoff) | 0.1.0 | Agent-to-agent handoff protocol |
+| [`@theokit/codemod-sdk-2-0`](https://www.npmjs.com/package/@theokit/codemod-sdk-2-0) | 1.0.0 | Codemod for SDK v1 → v2 migration |
+
+### Gateways (messaging channels — sibling repo)
+
+| Package | Version | Description |
+|---|---|---|
+| [`@theokit/gateway-sms`](https://www.npmjs.com/package/@theokit/gateway-sms) | 0.1.0 | SMS gateway (Twilio/Vonage) |
+| [`@theokit/gateway-line`](https://www.npmjs.com/package/@theokit/gateway-line) | 0.1.0 | LINE messaging gateway |
+| [`@theokit/gateway-matrix`](https://www.npmjs.com/package/@theokit/gateway-matrix) | 0.1.0 | Matrix protocol gateway |
+| [`@theokit/gateway-mattermost`](https://www.npmjs.com/package/@theokit/gateway-mattermost) | 0.1.0 | Mattermost gateway |
+
 ## Ecosystem
 
-TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **self-contained** — builds, ships, and runs without any sibling project.
+TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **self-contained** — builds, ships, and runs without any sibling project. The ecosystem spans **15 published npm packages** across 3 repos.
 
 | Sibling | Direction | How it relates | Status |
 |---------|-----------|----------------|:------:|
-| **`@theokit/sdk`** — agent runtime | TheoKit ← sibling | SDK is the **only** agent runtime (rule: INQUEBRAVEL). `Agent.create()`, `Run.stream()`, `defineTool()`. | ✅ Wired |
+| **`@theokit/sdk` v1.7.0** — agent runtime | TheoKit ← sibling | SDK is the **only** agent runtime (rule: INQUEBRAVEL). `Agent.create()`, `Run.stream()`, `defineTool()`. 6 sub-packages (tools, budget, cache, memory, handoff, codemod). | ✅ Wired |
+| **`@theokit/gateway-*`** — messaging channels | TheoKit ← sibling | SMS, LINE, Matrix, Mattermost gateways. Each is an independent npm package. | ✅ Published |
 | **`@theokit/ui`** — React component library | TheoKit ← sibling | Chat surface, theme system. Auto-injected when detected. npm dep, not workspace link. | ✅ Wired |
 | **TheoCloud** — managed platform | TheoKit → sibling | **Principal deploy target.** Thin validator adapter shipped. K8s emission lives in TheoCloud (Go). | ✅ Adapter shipped |
 | **`theokit-plugins`** — plugin registry | TheoKit → sibling | `@theokit/plugin-cors` v0.1.0 shipping. Apps install explicitly. Zero framework coupling. | 🌱 First plugin |
 
 ## Status
 
-- **566 tests passing** across 4 packages (329 HTTP + 237 agents). Zero lint errors, zero typecheck errors.
+- **635+ tests passing** across 4 packages (319 HTTP + 239 agents + 71 create-theokit + 6 E2E). Zero lint errors, zero typecheck errors.
 - **31 decorators** (16 HTTP + 15 agent) with convention naming inference.
 - **14 agent stream event types** with discriminated union.
-- **SDK integration complete** — `llm-runner.ts` deleted, all agent execution flows through `@theokit/sdk`.
+- **15 npm packages published** across the Theo ecosystem.
+- **13 system design guardrails** enforced on every interaction (G1-G13 including YAGNI, DRY, Feature Creep).
+- **Real E2E tests** — scaffold → install → dev server → HTTP request → 200 response.
+- **SDK integration complete** — all agent execution flows through `@theokit/sdk` v1.7.0.
 - **TheoCloud adapter shipped** — thin validator that bundles + uploads `services.json`.
 - **Honest warnings** — `@UseInterceptors`, `@UseFilters`, `@Budget` on agents emit stable warning codes when enforcement is metadata-only.
 
