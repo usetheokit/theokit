@@ -263,8 +263,8 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
       const to = resolve(srcDir, dir)
       if (existsSync(from)) renameSync(from, to)
     }
-    const appFrom = resolve(targetDir, 'app.ts')
-    if (existsSync(appFrom)) renameSync(appFrom, resolve(srcDir, 'app.ts'))
+    const appFrom = resolve(targetDir, 'app.tsx')
+    if (existsSync(appFrom)) renameSync(appFrom, resolve(srcDir, 'app.tsx'))
 
     const tscPath = resolve(targetDir, 'tsconfig.json')
     const tsc = JSON.parse(readFileSync(tscPath, 'utf-8'))
@@ -273,9 +273,9 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     writeFileSync(tscPath, JSON.stringify(tsc, null, 2) + '\n')
 
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    pkg.scripts.dev = 'npx tsx --watch src/app.ts'
-    pkg.scripts['dev:bun'] = 'bun --watch src/app.ts'
-    pkg.scripts.build = 'npx tsup src/app.ts --format esm --out-dir dist'
+    pkg.scripts.dev = 'npx tsx --watch src/app.tsx'
+    pkg.scripts['dev:bun'] = 'bun --watch src/app.tsx'
+    pkg.scripts.build = 'npx tsup src/app.tsx --format esm --out-dir dist'
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
   }
 
