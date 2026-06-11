@@ -1,12 +1,12 @@
 /**
- * TheoKit App — entry point.
+ * TheoKit App — convention over configuration.
  *
- * That's it. No manual wiring. No plumbing.
- * TheoApp.create() handles everything:
- *   - Controller routes (HTTP CRUD)
- *   - Agent routes (SSE streaming + tool calling)
- *   - DI (providers injected into controllers + agents)
- *   - Shared pipeline (guards, interceptors, filters)
+ * TheoApp.create() auto-wires everything:
+ *   Controllers → routes inferred from class name
+ *   Agents → endpoints inferred from class name
+ *   Providers → injected via DI
+ *
+ * Zero manual route mapping. Zero plumbing.
  */
 import 'reflect-metadata'
 import { readFileSync } from 'node:fs'
@@ -15,7 +15,6 @@ import { TasksController } from './server/controllers/tasks.controller.js'
 import { AssistantAgent } from './server/agents/assistant.agent.js'
 import { TaskTools } from './server/toolboxes/task.tools.js'
 
-// Frontend HTML (inline for alpha — upgrade to Vite plugin for React SSR)
 let html: string | undefined
 try { html = readFileSync(new URL('./public/index.html', import.meta.url), 'utf-8') } catch { /* no frontend */ }
 
@@ -24,6 +23,9 @@ const app = await TheoApp.create({
   agents: [AssistantAgent],
   providers: [TaskTools],
   html,
+  readinessChecks: [
+    async () => ({ name: 'store', healthy: true }),
+  ],
 })
 
 await app.listen(3000)

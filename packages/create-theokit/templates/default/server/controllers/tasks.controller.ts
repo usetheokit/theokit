@@ -23,7 +23,7 @@ const zCreateTask = z.object({
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
 })
 
-@Controller('api/tasks')
+@Controller()  // → /api/tasks (convention: inferred from TasksController)
 @UseGuards(RolesGuard)
 @UseInterceptors(TimingInterceptor)
 @UseFilters(HttpErrorFilter)
