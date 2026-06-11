@@ -50,6 +50,24 @@ export function RoutesTab() {
 
   return (
     <div data-testid="devtools-routes-tab">
+      <a
+        href="/__theo/openapi/docs"
+        target="_blank"
+        rel="noopener noreferrer"
+        className={styles.css`
+          display: inline-block;
+          margin-bottom: 8px;
+          padding: 4px 10px;
+          font-size: ${tokens.font.sizeSm};
+          color: ${tokens.colors.accent};
+          border: 1px solid ${tokens.colors.accent};
+          border-radius: 4px;
+          text-decoration: none;
+          &:hover { background: ${tokens.colors.accent}22; }
+        `}
+      >
+        📖 View API Docs
+      </a>
       {state.routeManifest.routes.map((route) => {
         const active =
           state.activeRoutePath === route.path || state.activeChain.includes(route.absoluteFilePath)

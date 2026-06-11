@@ -121,6 +121,27 @@ export function AgentsTab() {
           ))}
         </tbody>
       </table>
+
+      {/* Live stream events */}
+      {state.agentStreamEvents.length > 0 && (
+        <>
+          <div className={headerClass} style={{ marginTop: 12 }}>
+            <span>🔴 Live Stream ({state.agentStreamEvents.length} events)</span>
+            <button type="button" className={clearBtn} onClick={() => dispatch({ type: 'RESET_AGENT_STREAM' })}>clear</button>
+          </div>
+          <div style={{ maxHeight: 200, overflow: 'auto', fontSize: tokens.font.sizeXs, fontFamily: 'monospace' }}>
+            {state.agentStreamEvents.slice(-30).map((e, i) => (
+              <div key={i} style={{ padding: '2px 4px', borderBottom: `1px solid ${tokens.colors.border}` }}>
+                <span style={{ color: tokens.colors.textDim }}>{new Date(e.timestamp).toLocaleTimeString()}</span>
+                {' '}
+                <span style={{ color: e.type === 'error' ? '#c92a2a' : tokens.colors.accent }}>{e.type}</span>
+                {e.content && <span style={{ color: tokens.colors.text }}> {e.content.substring(0, 80)}</span>}
+                {e.toolName && <span style={{ color: tokens.colors.textMuted }}> → {e.toolName}</span>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
