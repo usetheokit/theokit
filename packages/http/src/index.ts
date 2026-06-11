@@ -13,3 +13,8 @@ export {
 } from './typed-client.js'
 export { contract } from './contract.js'
 export { createStaticHandler, getMimeType, isSafePath, type StaticOptions } from './static.js'
+export {
+  getRequestContext,
+  tryGetRequestContext,
+  type TheoRequestContext,
+} from './request-context.js'

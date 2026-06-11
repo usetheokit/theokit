@@ -7,6 +7,7 @@ import type { ServerHandle } from './bridge/runtime/types.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
 import { ForbiddenException, HttpException } from './exceptions/http-exception.js'
+import { runWithRequestContext, type TheoRequestContext } from './request-context.js'
 import { createStaticHandler } from './static.js'
 
 /**
@@ -416,6 +417,24 @@ export class TheoApp {
   private async handleRequest(request: Request): Promise<Response> {
     const pathname = new URL(request.url).pathname
 
+    // Wrap entire request in AsyncLocalStorage context
+    const reqCtx: TheoRequestContext = {
+      request,
+      pathname,
+      method: request.method,
+      params: {},
+      startedAt: Date.now(),
+    }
+    return runWithRequestContext(reqCtx, () =>
+      this.handleRequestInContext(request, pathname, reqCtx),
+    )
+  }
+
+  private async handleRequestInContext(
+    request: Request,
+    pathname: string,
+    _reqCtx: TheoRequestContext,
+  ): Promise<Response> {
     // ── Health & Readiness probes (bypass guards/interceptors) ──
     if (request.method === 'GET') {
       if (pathname === this.healthPath) {
