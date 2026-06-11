@@ -1,17 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const dir = dirname(fileURLToPath(import.meta.url))
-const clientJs = readFileSync(join(dir, 'client.ts'), 'utf-8')
-  // Strip TypeScript types for browser execution (simple transform)
-  .replace(
-    /:\s*(string|number|boolean|Record<[^>]+>|HTMLSelectElement|HTMLInputElement|HTMLButtonElement)\b/g,
-    '',
-  )
-  .replace(/\bas\s+\w+/g, '')
-  .replace(/import\s+type\b[^;]+;?\n?/g, '')
-
 export default function Page() {
   return (
     <div className="container">
@@ -79,7 +65,7 @@ export default function Page() {
         </section>
       </main>
 
-      <script dangerouslySetInnerHTML={{ __html: clientJs }} />
+      <script src="/client.js" defer />
     </div>
   )
 }
