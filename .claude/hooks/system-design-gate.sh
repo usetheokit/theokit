@@ -86,6 +86,47 @@ if echo "$FILE_PATH" | grep -qE 'packages/create-theokit/'; then
   fi
 fi
 
+# ── YAGNI: Speculative abstractions ──
+# Interface with single implementor = premature abstraction
+if echo "$CONTENT" | grep -qE '^\s*export\s+interface\s+\w+Factory\b'; then
+  VIOLATIONS="${VIOLATIONS}\n[YAGNI-WARN] Factory interface detected. Does it have 2+ implementors? Single-implementor interfaces violate YAGNI. Prefer direct implementation."
+fi
+if echo "$CONTENT" | grep -qE '^\s*export\s+interface\s+\w+Strategy\b'; then
+  VIOLATIONS="${VIOLATIONS}\n[YAGNI-WARN] Strategy interface detected. Does it have 2+ implementors? Single-implementor interfaces violate YAGNI."
+fi
+# Config options nobody asked for
+if echo "$CONTENT" | grep -qE 'enableExperimental|experimentalFeatures|featureFlags'; then
+  VIOLATIONS="${VIOLATIONS}\n[YAGNI-WARN] Feature flags/experimental config detected. Is this solving a current problem or anticipating a future one?"
+fi
+
+# ── DRY: Duplicate knowledge signals ──
+# Reimplementing what SDK already does
+if echo "$CONTENT" | grep -qE 'class\s+\w*ConversationStorage|class\s+\w*SessionStore|class\s+\w*MessageHistory'; then
+  if echo "$FILE_PATH" | grep -qvE 'packages/theo/'; then
+    VIOLATIONS="${VIOLATIONS}\n[DRY-WARN] Conversation/session storage class detected outside framework core. @theokit/sdk already provides ConversationStorageAdapter."
+  fi
+fi
+# Reimplementing HTTP status codes
+if echo "$CONTENT" | grep -qE "status:\s*(200|201|204|400|401|403|404|500)\b" | grep -cvq 'HttpStatus\.' > /dev/null 2>&1; then
+  true # complex check — handled by rule file instead
+fi
+
+# ── FEATURE CREEP: Scope expansion signals ──
+# New top-level directories that violate MVP scope
+if echo "$FILE_PATH" | grep -qE 'packages/(workflows|memory|mcp|orchestrator)/'; then
+  VIOLATIONS="${VIOLATIONS}\n[CREEP-BLOCK] New package outside MVP scope: workflows/, memory/, mcp/, orchestrator/ are explicitly out of scope per architecture.md."
+fi
+# New decorator without existing test
+if echo "$CONTENT" | grep -qE '^\s*export\s+(function|const)\s+\w+.*Decorator|^\s*export\s+function\s+[A-Z]\w+\(.*\):\s*(Class|Method|Parameter)Decorator'; then
+  VIOLATIONS="${VIOLATIONS}\n[CREEP-WARN] New decorator detected. Ensure: (1) real use case exists today, (2) test exists, (3) not duplicating an existing decorator."
+fi
+# Adding new dependencies
+if echo "$FILE_PATH" | grep -qE 'package\.json$'; then
+  if echo "$CONTENT" | grep -qE '"dependencies"|"peerDependencies"'; then
+    VIOLATIONS="${VIOLATIONS}\n[CREEP-WARN] Dependency change detected. Verify: (1) no existing package solves this, (2) the dep is actively maintained, (3) license is compatible (MIT/Apache-2.0/BSD)."
+  fi
+fi
+
 # ── Report ──
 if [ -n "$VIOLATIONS" ]; then
   echo -e "System Design Gate violations detected:${VIOLATIONS}"
