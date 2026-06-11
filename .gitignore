@@ -103,3 +103,6 @@ architecture-output.old-*
 # Local backups (e.g., CLAUDE.md.bak, .claude/settings.json.bak from migrations)
 *.bak
 *.bak/.turbo/
+.turbo/
+code-review-output/
+architecture-output/
