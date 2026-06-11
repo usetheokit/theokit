@@ -1,9 +1,13 @@
 /**
- * TheoKit App — opinionated, React-first.
+ * TheoKit App — opinionated, React-first, full-stack AI agents.
  *
  * React SSR renders app/page.tsx inside app/layout.tsx.
  * Backend classes registered in server/index.ts.
  * Routes inferred from class names. Zero manual wiring.
+ *
+ * To customize: edit app/layout.tsx (head, title, meta)
+ *               edit app/page.tsx (page content)
+ *               edit server/ (controllers, agents, toolboxes)
  */
 import 'reflect-metadata'
 import { renderToString } from 'react-dom/server'
