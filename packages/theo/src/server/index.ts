@@ -83,6 +83,7 @@ export * from './realtime/index.js'
 export * from './security/index.js'
 export * from './storage/index.js'
 export * from './webhook/index.js'
+export * from './openapi/index.js'
 
 // Cross-module: cache lives at packages/theo/src/cache/ (not server/cache)
 export * from '../cache/index.js'
