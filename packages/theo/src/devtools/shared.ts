@@ -120,6 +120,7 @@ export interface DevtoolsState {
   routeManifest: RouteManifest | null
   activeRoutePath: string | null
   activeChain: string[]
+  agentStreamEvents: AgentStreamRecord[]
 }
 
 export type DevtoolsAction =
@@ -139,6 +140,8 @@ export type DevtoolsAction =
   | { type: 'RESET_ERRORS' }
   | { type: 'RESET_AGENT_RUNS' }
   | { type: 'RESET_ACTION_CALLS' }
+  | { type: 'AGENT_STREAM_EVENT'; event: AgentStreamRecord }
+  | { type: 'RESET_AGENT_STREAM' }
 
 export const RING_BUFFER_CAP = 50
 export const MAX_QUEUE_SIZE = 100
@@ -157,6 +160,7 @@ export const initialState: DevtoolsState = {
   routeManifest: null,
   activeRoutePath: null,
   activeChain: [],
+  agentStreamEvents: [],
 }
 
 export const CHANNEL_REQUEST = 'theo:devtools:request' as const
@@ -166,3 +170,13 @@ export const CHANNEL_MANIFEST = 'theo:devtools:manifest' as const
 export const CHANNEL_ROUTE_MATCHED = 'theo:devtools:route-matched' as const
 export const CHANNEL_AGENT_RUN = 'theo:devtools:agent.run' as const
 export const CHANNEL_ACTION_CALL = 'theo:devtools:action.call' as const
+export const CHANNEL_AGENT_STREAM = 'theo:devtools:agent.stream' as const
+
+export interface AgentStreamRecord {
+  runId: string
+  agentName: string
+  type: string
+  content?: string
+  toolName?: string
+  timestamp: number
+}

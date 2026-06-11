@@ -27,6 +27,8 @@ function reduceAppend(state: DevtoolsState, action: DevtoolsAction): DevtoolsSta
       return { ...state, agentRuns: appendCapped(state.agentRuns, action.run) }
     case 'ACTION_CALL_ADD':
       return { ...state, actionCalls: appendCapped(state.actionCalls, action.record) }
+    case 'AGENT_STREAM_EVENT':
+      return { ...state, agentStreamEvents: appendCapped(state.agentStreamEvents, action.event) }
     default:
       return null
   }
@@ -42,6 +44,8 @@ function reduceReset(state: DevtoolsState, action: DevtoolsAction): DevtoolsStat
       return { ...state, agentRuns: [] }
     case 'RESET_ACTION_CALLS':
       return { ...state, actionCalls: [] }
+    case 'RESET_AGENT_STREAM':
+      return { ...state, agentStreamEvents: [] }
     default:
       return null
   }

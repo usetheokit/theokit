@@ -15,6 +15,7 @@
 import {
   type ActionCallRecord,
   type AgentRunRecord,
+  type AgentStreamRecord,
   type CsrfWarnPayload,
   type DevtoolsAction,
   type ErrorRecord,
@@ -86,6 +87,9 @@ export const dispatcher = {
   }),
   onActionCall: queuable((d: Dispatch, record: ActionCallRecord) => {
     d({ type: 'ACTION_CALL_ADD', record })
+  }),
+  onAgentStreamEvent: queuable((d: Dispatch, event: AgentStreamRecord) => {
+    d({ type: 'AGENT_STREAM_EVENT', event })
   }),
 
   /**
