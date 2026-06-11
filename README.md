@@ -6,158 +6,253 @@ Part of the [Theo](https://usetheo.dev) family of products. TheoKit is the **web
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow?style=flat-square)](#status)
-[![Tests](https://img.shields.io/badge/tests-431%20passing-brightgreen?style=flat-square)](#)
-[![Coverage](https://img.shields.io/badge/coverage-80%25%20threshold-green?style=flat-square)](#)
+[![Tests](https://img.shields.io/badge/tests-566%20passing-brightgreen?style=flat-square)](#)
+[![npm](https://img.shields.io/npm/v/theokit?style=flat-square&label=theokit)](https://www.npmjs.com/package/theokit)
+[![npm](https://img.shields.io/npm/v/@theokit/http?style=flat-square&label=@theokit/http)](https://www.npmjs.com/package/@theokit/http)
+[![npm](https://img.shields.io/npm/v/@theokit/agents?style=flat-square&label=@theokit/agents)](https://www.npmjs.com/package/@theokit/agents)
 
 ## Quick Start
 
 ```bash
 npx create-theokit my-app
 cd my-app
-theokit dev
-```
-
-Want a polyglot project (Go, Python, Rust, Java, Ruby, PHP, Node)? Use **TheoCreate**:
-
-```bash
-npm create theo@latest
-```
-
-## Your first agent in 5 minutes
-
-Goal: from `npx` to a chat thread powered by your own LLM API key.
-
-### Step 1 — Scaffold (30 s)
-
-```bash
-npx create-theokit my-app
-cd my-app
-```
-
-The default scaffold already ships an **agent surface**: a `ChatThread` rendered with [`@theokit/ui`](https://npmjs.com/package/@theokit/ui), an `/api/chat` endpoint, and `useAgentStream` wired to it. With Node ≥ 22 installed, you can boot it now (`pnpm dev`) — the mock at `server/routes/chat.ts` will echo your messages.
-
-### Step 2 — Install the agent SDK (15 s)
-
-```bash
-pnpm add @theokit/sdk
-```
-
-The SDK ships `Agent.prompt` / `Agent.send` / `defineTool` and routes to providers by model id (`claude-*` for Anthropic, `gpt-*` for other providers via the SDK, `ollama/*` for local). It is the canonical way TheoKit talks to LLMs.
-
-### Step 3 — Add your API key (15 s)
-
-```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
-```
-
-(Get a key at https://console.anthropic.com/settings/keys.)
-
-### Step 4 — Replace the mock (2 min)
-
-Open `server/routes/chat.ts` and swap the body of the handler for this **6-line essence**:
-
-```typescript
-import { Agent } from '@theokit/sdk'
-import { defineAgentEndpoint, type AgentEvent } from 'theokit/server'
-
-export const POST = defineAgentEndpoint({
-  async *handler({ body }): AsyncGenerator<AgentEvent> {
-    const { message = '' } = (body ?? {}) as { message?: string }
-    try {
-      const result = await Agent.prompt(message, {
-        apiKey: process.env.ANTHROPIC_API_KEY!,
-        model: { id: 'claude-sonnet-4-5-20250929' },
-        throwOnError: true,
-      })
-      yield { type: 'message', content: result.result ?? '' }
-    } catch (err) {
-      yield { type: 'error', message: err instanceof Error ? err.message : String(err) }
-    }
-  },
-})
-```
-
-Five things to notice:
-- `Agent.prompt(message, options)` is the SDK's one-shot helper — create → send → wait → dispose under the hood.
-- The model id (`claude-sonnet-4-5-20250929`) picks the provider via the SDK. Use a `gpt-*` id for other providers, `ollama/llama3.2:3b` for local — full matrix in [`@theokit/sdk` docs](https://www.npmjs.com/package/@theokit/sdk).
-- **`throwOnError: true`** turns provider rejections (401, rate limit, etc.) into thrown `AgentRunError` — caught in one place, surfaced via `yield { type: 'error' }`. No silent error swallowing.
-- `yield { type: 'error', ... }` surfaces in the chat thread as a red `AgentErrorCard` (already wired by the default scaffold).
-- `useAgentStream` on the client already attaches `X-Theo-Action: 1` so the framework's CSRF gate accepts your POST.
-
-### Step 5 — Run it (30 s)
-
-```bash
 pnpm dev
 ```
-
-Open http://localhost:3000, type a message, hit Send. The chat thread renders the SDK's reply in real time. If you see the error card with "Anthropic API error: auth_failed", your `.env` key is wrong — fix it, restart `pnpm dev`.
-
-### What you just got, mapped
-
-| Capability | Where it lives |
-|---|---|
-| File-based routing → `app/page.tsx` is `/` | TheoKit (`app/**`) |
-| Chat UI (`ChatThread`, `ChatMessage`, `ChatComposer`, `AgentErrorCard`) | `@theokit/ui` |
-| Agent endpoint primitive (`defineAgentEndpoint`, SSE wire) | TheoKit (`theokit/server`) |
-| Client hook (`useAgentStream`) with auto CSRF + cleanup | TheoKit (`theokit/client`) |
-| LLM call (`Agent.prompt`, provider routing, error model) | `@theokit/sdk` |
-| Secure session, deploy adapters, type-safe routes | TheoKit (all-in-one) |
-
-### Next steps
-
-- **Streaming tokens** — `Agent.prompt` returns the full answer at once. For token-by-token streaming, use `Agent.create` + `agent.send(...)` + iterate `run.stream()`. The TheoKit-side `defineAgentTool` + token-streaming helper are on the roadmap.
-- **Tool calling** — pass `tools: [defineTool({...})]` to `Agent.create` and the agent can call your functions. The TheoKit `defineAgentTool` wrapper (roadmap) collapses the `tool_call → execute → tool_result` SSE plumbing into a single declaration.
-- **Conversation memory** — switch from `Agent.prompt` (one-shot) to `Agent.getOrCreate(sessionId)` so the conversation persists across requests. The TheoKit `createConversationHistory` primitive (roadmap) bridges this with the framework's session cookie.
 
 ## What You Get
 
 - **Routes are just files** — `app/page.tsx` → `/`. Layouts, errors, loading, not-found — no config.
-- **APIs that validate themselves** — schemas in, types out, end-to-end on server and client.
+- **Route groups** — `app/(marketing)/pricing/page.tsx` → `/pricing`. Organize without affecting URLs.
+- **APIs that validate themselves** — Zod schemas in, types out, end-to-end.
+- **NestJS-style decorators** — `@Controller`, `@Get`, `@Post`, `@Body(Zod)`, `@UseGuards`, `@UseInterceptors`, `@UseFilters` for structured HTTP pipelines.
+- **AI agents as first-class citizens** — `@Agent`, `@Tool`, `@Toolbox`, `@MainLoop` with SSE streaming, budget control, human-in-the-loop approval.
+- **Convention over configuration** — `@Controller()` on `UsersController` infers `api/users`. `@Agent()` on `SupportAgent` infers name + route. Zero boilerplate.
+- **Shared guards between HTTP and AI** — same `@UseGuards(AuthGuard)` protects controllers and agents. Same RBAC, one model.
 - **Server actions without plumbing** — CSRF, validation, serialization handled.
 - **Backend calls that compile** — import the route type, get request and response inferred.
-- **Sessions that just work** — encrypted cookies, one helper to require a logged-in user. For OAuth and 2FA, see [`docs/concepts/auth-providers.md`](docs/concepts/auth-providers.md).
-- **Per-request context, no globals** — plug your DB and user once, reach them anywhere.
+- **Sessions that just work** — encrypted cookies, one helper to require a logged-in user.
 - **WebSocket as a file** — drop a file in `server/ws/`, it's a real-time endpoint.
-- **Server rendering on demand** — opt in with one flag.
-- **Rate limiting built in** — off by default, one config away.
-- **Generators that scaffold** — `theokit generate route users`, done.
-- **Add a Python or Node service when you actually need one** — opt-in, not required. The TS `server/` already ships login, users, sessions, billing, jobs, crons, and the agent endpoint. A sidecar enters only when the use case needs another language's library ecosystem (ML inference, OCR) or operational isolation. See [Polyglot services — when to use them](#polyglot-services--opt-in).
-- **Ship to TheoCloud** — managed runtime with hosted Postgres, Redis, secret rotation, audit log. Pluggable interfaces (`JobBackend`, `UsageStorageAdapter`) already designed for it; adapter ships with the next milestone. Other adapters live in-tree as opt-in compatibility surfaces — not promoted, not validated end-to-end.
-- **Real starting templates** — default, dashboard, API-only, Postgres.
+- **SDK is the only agent runtime** — `@theokit/sdk` handles LLM calls, tool execution, conversation persistence. No reimplemented runners.
+- **Ship to TheoCloud** — managed runtime with hosted Postgres, Redis, secret rotation, audit log.
+- **62 HTTP status codes** — `HttpStatus.OK`, `HttpStatus.TOO_MANY_REQUESTS`, etc.
 
-## What you'd ship
+## Architecture
 
-- **Customer-facing agent dashboard.** The surface where your users talk to the agent you built. Real auth, real sessions, real domain.
-- **Real-time agent control panel.** Stream tool calls and step events into the UI as they happen. WebSocket primitives + typed routes do the wiring; bring any SDK underneath.
-- **Multi-tenant agent SaaS.** Per-user sessions, per-request context, isolated state. Drizzle + Postgres template included.
-- **Agent admin tool with audit log.** Staff-only routes guarded by `requireAuth`, audit trail persisted to your DB.
-- **Webhook + messaging gateway.** Receive webhooks, fan them out to your agent, ack with typed responses.
-- **B2B agent product.** Onboarding, billing webhook, dashboard — deployable to TheoCloud in one command.
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        User Application                             │
+│  app/           Frontend — file-based routing + route groups        │
+│  server/        Backend — controllers, agents, toolboxes, routes    │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        ▼                     ▼                     ▼
+┌──────────────┐    ┌──────────────────┐    ┌──────────────┐
+│  theokit     │    │  @theokit/http   │    │@theokit/agents│
+│  Framework   │    │  HTTP Pipeline   │    │  AI Pipeline  │
+│  core/config │    │  16 decorators   │    │  15 decorators│
+│  router/cli  │    │  329 tests       │    │  237 tests    │
+└──────────────┘    └──────────────────┘    └──────────────┘
+                              │                     │
+                         Guards shared          @theokit/sdk
+                         (same @UseGuards)      Agent.create()
+                                                Run.stream()
+```
 
-## Why TheoKit
+**Key design decisions:**
+- HTTP and AI share **guards/policies**, but run through **distinct execution pipelines** (not the same middleware chain).
+- `@UseInterceptors` and `@UseFilters` on agents emit explicit warnings — they are metadata-only in this version. Guards are the shared surface.
+- `@Budget` on top-level agents is metadata-only; enforcement is active in `delegate()` sub-agent calls via clamping + mid-stream abort.
+- `@Tool()` always requires explicit `name`, `description`, and `input` schema — no implicit tool exposure.
 
-**Hermes** picked your Telegram. **Cursor** picked your IDE. **TheoCode** picked your terminal. The agent your customers will pay for needs something different — a real domain, real auth, real WebSockets, a real product. The agent ecosystem has two halves: frameworks for **orchestrating** agents, and frameworks for **shipping apps**. Most teams build the agent, then realize they need an app — and stitch six libraries together. TheoKit is the app, with batteries for the agent built in.
+## HTTP Decorators (`@theokit/http`)
 
-| Capability | TheoKit | Mastra | AI SDK + Next.js | Roll your own |
-|---|---|---|---|---|
-| **Frame** | Build the app your agent lives in | Orchestrate the agent | Wrap LLM calls in a Next.js app | Pick six libs, glue them |
-| File-based routing | ✓ | DIY | Next.js | Next.js |
-| Typed RPC client (`theoFetch<typeof GET>`) | ✓ | DIY | DIY | DIY |
-| Server actions with CSRF + Zod | ✓ | DIY | Partial (Next.js Actions) | DIY |
-| Encrypted sessions, one helper | ✓ (AES-256-GCM, `requireAuth`) | DIY | DIY | DIY |
-| WebSocket as a file | ✓ | DIY | DIY (needs separate WS server) | DIY |
-| Deploy target | TheoCloud (principal, adapter shipping next) | DIY | DIY | DIY |
-| Templates with DB wired | ✓ (postgres, dashboard, api-only) | Limited | DIY | DIY |
-| CLI scaffolding (`theokit generate`) | ✓ | Limited | Next.js (partial) | DIY |
-| License | Apache-2.0 | Open | Open (MIT SDK) | N/A |
+NestJS-compatible decorator system with Web Standards (Request/Response, not node:http).
 
-Mastra builds the agent. TheoKit ships the product around it. You can use both.
+### Controllers
+
+```typescript
+import { Controller, Get, Post, Body, Param, UseGuards, HttpStatus } from '@theokit/http'
+import { z } from 'zod'
+
+// Convention: @Controller() on UsersController → prefix "api/users"
+@Controller()
+@UseGuards(AuthGuard)
+class UsersController {
+  @Get()
+  async list() {
+    return { users: await db.users.findAll() }
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async create(@Body(z.object({ name: z.string(), email: z.string().email() })) body) {
+    return db.users.create(body)
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return db.users.findById(id)
+  }
+}
+```
+
+### Pipeline
+
+```typescript
+// Guards — decide if the request enters
+class AuthGuard {
+  canActivate(ctx: ExecutionContext): boolean {
+    return ctx.getRequest().headers.get('authorization') !== null
+  }
+}
+
+// Interceptors — wrap the handler
+class TimingInterceptor {
+  async intercept(ctx, next) {
+    const start = Date.now()
+    const result = await next()
+    ctx.getResponse().headers.set('X-Response-Time', `${Date.now() - start}ms`)
+    return result
+  }
+}
+
+// Exception Filters — transform errors into responses
+class HttpErrorFilter {
+  catch(error, ctx) {
+    return new Response(JSON.stringify({ error: error.message }), { status: error.status ?? 500 })
+  }
+}
+```
+
+### Available Decorators (16)
+
+| Category | Decorators |
+|---|---|
+| **Routing** | `@Controller`, `@Get`, `@Post`, `@Put`, `@Delete`, `@Patch` |
+| **Parameters** | `@Body`, `@Param`, `@Query`, `@Headers` |
+| **Response** | `@HttpCode` |
+| **Pipeline** | `@UseGuards`, `@UseInterceptors`, `@UseFilters` |
+| **Policies** | `@Roles`, `@Throttle` |
+
+## AI Agents (`@theokit/agents`)
+
+Decorator-based agent definitions that compile to `@theokit/sdk` runtime.
+
+### Agent + Toolbox
+
+```typescript
+import { Agent, MainLoop, Tool, Toolbox } from '@theokit/agents'
+import { UseGuards } from '@theokit/http'
+import { z } from 'zod'
+
+// Convention: @Agent() on SupportAgent → name "support", route "/api/agents/support"
+@Agent()
+@UseGuards(AuthGuard)
+class SupportAgent {
+  @MainLoop({ strategy: 'react', maxIterations: 8 })
+  async run() {}
+}
+
+// Convention: @Toolbox() on TicketTools → namespace "ticket"
+@Toolbox()
+class TicketTools {
+  @Tool({
+    name: 'search_tickets',
+    description: 'Search support tickets by keyword',
+    input: z.object({ query: z.string(), status: z.enum(['open', 'closed']).optional() }),
+  })
+  async searchTickets(input: { query: string; status?: string }) {
+    return JSON.stringify(await db.tickets.search(input.query, input.status))
+  }
+
+  @Tool({
+    name: 'close_ticket',
+    description: 'Close a ticket by ID',
+    input: z.object({ ticketId: z.string() }),
+    risk: 'medium',
+  })
+  @RequiresApproval({ reason: 'Closing a ticket affects customer workflow' })
+  async closeTicket(input: { ticketId: string }) {
+    await db.tickets.close(input.ticketId)
+    return `Ticket ${input.ticketId} closed`
+  }
+}
+```
+
+### Available Decorators (15)
+
+| Category | Decorators |
+|---|---|
+| **Definition** | `@Agent`, `@Tool`, `@Toolbox`, `@MainLoop` |
+| **Model** | `@Model`, `@SubAgents`, `@Gateway` |
+| **Policies** | `@Budget`, `@RequiresApproval` |
+| **Lifecycle** | `@Memory`, `@Checkpoint`, `@Hook` |
+| **Security** | `@Sandbox` (path traversal, command injection, null byte rejection) |
+| **Observability** | `@Trace`, `@Audit` |
+
+### Agent Stream Events (14 types)
+
+```
+run_started → text_delta → tool_call → tool_result → thinking →
+iteration → approval_required → artifact_start → artifact_chunk →
+state_update → checkpoint_saved → file_edit → error → done
+```
+
+### Multi-Agent Orchestration
+
+```typescript
+import { delegate } from '@theokit/agents/bridge'
+
+const result = await delegate(ResearchAgent, 'Find papers on RAG', {
+  apiKey: process.env.API_KEY,
+  budget: 0.50,                    // USD cap
+  parentBudgetRemaining: 1.00,     // Clamped to min(budget, parent)
+  parentTools: compiledTools,       // Inherited tools
+})
+// result: { response, toolCalls, cost, tokens }
+```
+
+Budget enforcement: clamping at delegation + mid-stream abort on exceed.
+
+## Decorator Support Matrix (Agents)
+
+| Decorator | Agent support | Notes |
+|---|---|---|
+| `@UseGuards` | **enforced** | Same as HTTP — shared execution |
+| `@UseInterceptors` | metadata-only | Warning `THEO_AGENT_INTERCEPTOR_METADATA_ONLY` |
+| `@UseFilters` | metadata-only | Warning `THEO_AGENT_FILTER_METADATA_ONLY` |
+| `@Budget` (top-level) | metadata-only | Warning `THEO_AGENT_BUDGET_TOP_LEVEL_METADATA_ONLY` |
+| `@Budget` (delegate) | **enforced** | Clamping + mid-stream abort |
+| `@RequiresApproval` | **enforced** | Human-in-the-loop |
+
+## Convention Naming
+
+Rails-style inference from class names — zero boilerplate for common patterns.
+
+```typescript
+@Controller()
+class UsersController {}        // → prefix: "api/users"
+class UserOrdersController {}   // → prefix: "api/user-orders"
+
+@Agent()
+class SupportAgent {}           // → name: "support", route: "/api/agents/support"
+class CodeReviewAgent {}        // → name: "code-review", route: "/api/agents/code-review"
+
+@Toolbox()
+class ProjectTools {}           // → namespace: "project"
+class BillingTools {}           // → namespace: "billing"
+```
+
+**Explicit always overrides inferred.** Pass arguments to any decorator to override.
+
+**Safety rule:** Convention naming applies to routing (HTTP) and namespace (toolbox) — never to tool capabilities. `@Tool()` always requires explicit `name`, `description`, and `input` schema.
 
 ---
 
 ## How it works
 
-The rest of this README is the technical surface. Vocabulary shifts here on purpose — `defineRoute`, `defineWebSocket`, `theoFetch`, and friends earn their keep below. If you came for the pitch, the bullets above are enough.
+The rest of this README is the technical surface. Vocabulary shifts here on purpose — `defineRoute`, `defineWebSocket`, `theoFetch`, and friends earn their keep below.
 
 ## Project Structure
 
@@ -166,14 +261,23 @@ my-app/
 ├── app/                       # Pages — file-based routing
 │   ├── page.tsx               # /
 │   ├── layout.tsx             # Root layout
+│   ├── (marketing)/           # Route group (not in URL)
+│   │   └── pricing/page.tsx   # /pricing
 │   └── dashboard/
 │       └── page.tsx           # /dashboard
 ├── server/                    # Backend — explicit and typed
-│   ├── routes/                # API routes → /api/*
-│   ├── actions/               # Server actions
-│   ├── ws/                    # WebSocket endpoints → /ws/*
+│   ├── controllers/           # @Controller classes
+│   ├── agents/                # @Agent classes
+│   ├── toolboxes/             # @Toolbox classes
+│   ├── guards/                # Shared guards
+│   ├── interceptors/          # HTTP interceptors
+│   ├── filters/               # Exception filters
+│   ├── routes/                # API routes (defineRoute)
+│   ├── actions/               # Server actions (defineAction)
+│   ├── ws/                    # WebSocket endpoints
 │   ├── middleware.ts           # Request middleware
-│   └── context.ts             # Request context factory
+│   ├── context.ts             # Request context factory
+│   └── index.ts               # Single registration point
 ├── theo.config.ts              # Framework config
 └── package.json
 ```
@@ -243,164 +347,23 @@ export default defineWebSocket({
 })
 ```
 
-## Streaming SSR
-
-Opt-in. Flag in `theo.config.ts`:
-
-```typescript
-import { defineConfig } from 'theokit'
-
-export default defineConfig({
-  ssr: true,
-  ssrStreaming: true,
-})
-```
-
-When enabled, `theokit start` uses `renderToPipeableStream` and flushes the React shell as soon as it is ready (`onShellReady`). Suspense boundaries stream progressively. The response uses `Transfer-Encoding: chunked`.
-
-**Suspense boundaries are required for streaming to deliver value** — without them the renderer still has to wait for the full tree, and you get no progressive HTML, only the chunked header overhead.
-
-```tsx
-// app/page.tsx
-import { Suspense } from 'react'
-
-export default function Page() {
-  return (
-    <main>
-      <h1>Stream me</h1>
-      <Suspense fallback={<p>Loading…</p>}>
-        <SlowSection />
-      </Suspense>
-    </main>
-  )
-}
-```
-
-Client disconnect handling: TheoKit wires `req.on('close')` to an `AbortController` and propagates the abort to the React stream. Plugins receive `ctx.signal` in their hooks — pass it to your DB/fetch calls so they cancel when the browser tab closes.
-
-Status-code semantics follow React 19: errors that happen **before** the shell flushes produce a synchronous 500. Errors **inside** a Suspense boundary after the shell has flushed stream a `fallback` and the response stays 200 — make sure your CDN does not cache that response as success when the user-visible content is an error fallback.
-
 ## CLI
 
 ```bash
 theokit dev                              # Dev server with HMR
-theokit build                            # Production build (Node default)
-# Other --target adapters are in-tree opt-in compatibility surfaces
-# (not validated end-to-end by the team). TheoCloud adapter ships next.
-theokit start                            # Production server (Node)
-theokit check                            # Run typecheck + scan + (optional) eslint
-theokit check --upgrade-readiness 0.3    # Static scan for 0.3.0 breakage — see docs/migration/0.2-to-0.3.md
-theokit add bun                          # Install a known adapter/plugin (whitelist)
-theokit info                             # Print runtime + project diagnostic
+theokit build                            # Production build
+theokit start                            # Production server
 theokit generate route users             # Scaffold API route
+theokit generate controller products     # Scaffold @Controller
+theokit generate agent support           # Scaffold @Agent
+theokit generate toolbox billing         # Scaffold @Toolbox
 theokit generate page dashboard          # Scaffold page
 theokit generate action create-user      # Scaffold action
 theokit generate ws notifications        # Scaffold WebSocket
 theokit routes                           # List all endpoints
 theokit docker                           # Generate Dockerfile
+theokit check                            # Typecheck + scan
 ```
-
-## Plugins (server runtime)
-
-`defineTheoPlugin` lets you hook into every request without touching individual routes. Four lifecycle hooks: `onRequest`, `preHandler`, `onResponse`, `onError`. Plugin can also `decorateRequest<T>(key, value)` to inject typed properties onto `ctx`.
-
-```typescript
-// plugins/request-id-echo.ts
-import { defineTheoPlugin } from 'theokit/server'
-
-export const requestIdEcho = defineTheoPlugin({
-  name: 'request-id-echo',
-  register(app) {
-    app.decorateRequest('startedAt', Date.now())
-
-    app.addHook('onRequest', (ctx) => {
-      // Short-circuit by ending the response here (e.g. auth gate).
-    })
-    app.addHook('onResponse', (ctx) => {
-      ctx.response.setHeader('x-request-id-echo', ctx.requestId)
-    })
-    app.addHook('onError', (ctx) => {
-      console.error(`[plugin] request ${ctx.requestId} failed:`, ctx.error)
-    })
-  },
-})
-```
-
-Wire it via `theo.config.ts > plugins`:
-
-```typescript
-import { defineConfig } from 'theokit'
-import { requestIdEcho } from './plugins/request-id-echo.js'
-
-export default defineConfig({
-  plugins: [requestIdEcho],
-})
-```
-
-Hooks fire in registration order. `decorateRequest` collisions throw `DuplicateDecorationError`. `onResponse` thrown in the error path is guarded against `onError → onResponse → onError` recursion.
-
-## Integrations (build-time)
-
-`defineTheoIntegration` is the build/dev counterpart — third parties plug into the Vite lifecycle to register routes, virtual modules, or Vite plugins without forking.
-
-```typescript
-// integrations/my-observability.ts
-import { defineTheoIntegration } from 'theokit/vite-plugin'
-
-export const observability = defineTheoIntegration({
-  name: 'observability',
-  hooks: {
-    'theo:config:setup': (ctx) => {
-      ctx.addRoute('/metrics', async () => new Response('metrics_total 1'))
-      ctx.addVirtualModule(
-        'virtual:integration:observability/info',
-        'export const info = { version: "0.1" }',
-      )
-    },
-  },
-})
-```
-
-Two guards enforced:
-
-- `addVirtualModule(id, ...)` requires `id` to start with `virtual:integration:<name>/` — prevents collisions with `/@theo/*` internals and other integrations.
-- `addRoute(path, ...)` throws `IntegrationRouteCollisionError` when `path` already exists in `server/routes/` or in another integration's routes — no silent override.
-
-## Templates
-
-```bash
-npx create-theokit my-app                        # Default
-npx create-theokit my-app --template=dashboard    # Nested layouts
-npx create-theokit my-app --template=api-only     # API routes only
-npx create-theokit my-app --template=postgres     # Drizzle ORM + PostgreSQL
-```
-
-> **Coming in Wave 2** (next major after 0.4.0): `--backend python` and `--backend node` flags will scaffold an optional sidecar service next to the TS app. See the section below for when sidecars make sense — and when they don't.
-
-## Polyglot services — opt-in
-
-**The TS `server/` directory ships everything you need for an agent product end-to-end.** Auth, users, sessions, billing webhooks, jobs, crons, agent endpoint, Telegram bot — all in TypeScript, all in one process, all already wired today. **90% of agent products live entirely in `server/`.**
-
-A polyglot sidecar (Python or Node service, declared via `services: {}` in `theo.config.ts`) is **opt-in**. It enters only when the use case **needs** another language's ecosystem or operational isolation — not as a default architecture.
-
-**Concrete decision table:**
-
-| Scenario | Stays in TS `server/` | Sidecar makes sense |
-|---|:---:|---|
-| Login, sessions, encrypted cookies | ✅ | — |
-| CRUD users + admin panel | ✅ | — |
-| Agent chat via `@theokit/sdk` | ✅ | — |
-| Stripe billing + webhooks | ✅ | — |
-| Jobs (`defineJob`) + crons (`defineCron`) | ✅ | Node sidecar **only** if you need workers scaled independently from the app |
-| Telegram / Discord bot (via `@theokit/gateway-*`) | ✅ | — |
-| ML inference (sentence-transformers, scikit-learn, PyTorch) | ⚠️ painful in TS | ✅ Python sidecar |
-| OCR / heavy PDF parsing (Tesseract, pdfplumber) | ⚠️ painful in TS | ✅ Python sidecar |
-| Integrating an existing Node monolith / legacy API | ❌ | ✅ Node sidecar as reverse proxy `/api/legacy/*` |
-| Microservice isolation (separate scaling, separate deploy) | depends | ✅ Node sidecar if isolation matters |
-
-**The rule:** if the use case is comfortable in TS, use `server/`. If it needs another language's library ecosystem or operational isolation, add a sidecar. **Sidecars complement the TS app; they do not substitute it.** The agent runtime stays in TS via `@theokit/sdk` in all cases (Wave 2 priority — additional language-native SDKs are deferred, not banned, per [ADR-0012](docs/adr/0012-mission-expansion-agent-products-on-like-vercel-runtime.md)).
-
-**`services: {}` is empty by default.** A user who never opens that key in `theo.config.ts` gets a full agent product end-to-end with the existing TheoKit primitives — same as today.
 
 ## Configuration
 
@@ -415,56 +378,45 @@ export default defineConfig({
 })
 ```
 
-## Imports
-
-```typescript
-import { defineConfig } from 'theokit'
-import { defineRoute, defineAction, defineMiddleware } from 'theokit/server'
-import { createSessionManager, requireAuth } from 'theokit/server'
-import { defineWebSocket } from 'theokit/server'
-import { theoFetch, TheoFetchError } from 'theokit/client'
-```
-
 ## Built With
 
 | Layer | Technology |
 |---|---|
 | Bundler + Dev Server | Vite 6 |
 | UI Framework | React 19 |
-| Type Validation | Zod |
+| Type Validation | Zod 4 |
 | Build | tsup |
 | Testing | Vitest + Playwright |
+| Agent Runtime | @theokit/sdk |
+
+## Packages
+
+| Package | Version | Description |
+|---|---|---|
+| [`theokit`](https://www.npmjs.com/package/theokit) | 0.4.0 | Framework core — routing, server, CLI, config, adapters |
+| [`@theokit/http`](https://www.npmjs.com/package/@theokit/http) | 0.5.0 | NestJS-style HTTP decorators + pipeline |
+| [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | 0.4.0 | AI agent decorators + SDK adapter + orchestration |
+| [`create-theokit`](https://www.npmjs.com/package/create-theokit) | 0.8.0 | Project scaffolding CLI |
 
 ## Ecosystem
 
-TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **self-contained** for any deploy (builds, ships, and runs without any sibling on any of the 8 in-tree adapters), and **TheoCloud is its principal strategic target** — the hosted product where TheoKit apps are designed to run in production. The relationships below are stated literally, against the code.
+TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **self-contained** — builds, ships, and runs without any sibling project.
 
-| Sibling | Repo | Direction | How it relates | Status |
-|---------|------|-----------|----------------|:------:|
-| **`@theokit/sdk`** — agent runtime (`Agent.create`, `Agent.send`, `Run.stream`, provider abstraction, tool runtime, conversation persistence) | `theokit-sdk/packages/sdk` | TheoKit ← sibling | **Workspace dep** via `pnpm-workspace.yaml` → `../theokit-sdk/packages/sdk`. Six framework files consume it (`server/agent/*`, `server/define/define-agent-tool.ts`). Locked premise — not "evaluate vs alternatives". | ✅ Wired |
-| **`@theokit/ui`** — React component library (chat surface, theme system, design tokens) | `theo-ui/` | TheoKit ← sibling | **npm dep** via published `@theokit/ui` package (`^0.11.0-next.0`). Framework auto-injects `<TheoUIProvider>` via `theokit/vite-plugin` when the package is detected. Ten+ files consume it. **Not** linked as a workspace package — local edits to `theo-ui/` require a publish to land in TheoKit. | ✅ Wired (npm) |
-| **`theo` → TheoCloud** — managed platform / control plane (Go-based: K8s operators, Helm charts, hosted Postgres + Redis, secret rotation, audit log persistence, distributed rate-limiter store) | `theo/` | TheoKit → sibling | **The principal deploy target.** The `theo-cloud` deploy adapter does not exist yet (`packages/theo/src/adapters/theo-cloud.ts` is the next milestone after 0.4.0). **However:** TheoKit's pluggable interfaces (`JobBackend`, `UsageStorageAdapter`, `RateLimitStorageAdapter`, structured logging to stdout) were designed specifically so TheoCloud "slots in" without modifying framework code — per [ADR-0002](docs/adr/0002-job-backend-interface-neutral-contract.md). | 🟡 **Primary target — adapter on roadmap, interfaces ready** |
-| **`theokit-plugins`** — first-party plugin registry. Today: **1 package shipping** (`@theokit/plugin-cors` v0.1.0, 2026-Q3). Two proposed: `@theokit/plugin-sentry` + `@theokit/plugin-i18n`. Six more demand-gated. | `theokit-plugins/` | TheoKit → sibling (the sibling consumes the framework, not the other way around) | **Zero coupling in framework core.** Apps install plugins explicitly (`pnpm add @theokit/plugin-cors`) and wire them via `defineConfig({ plugins: [...] })`. The sibling consumes TheoKit via npm `peerDependencies` + the `TheoPlugin { name, register(app) }` SDK ([ADR-0008](docs/adr/0008-theoplugin-is-the-canonical-sdk.md)). The "moderate roadmap" strategy that governs which plugins ship lives in [ADR-0011](docs/adr/0011-moderate-plugin-roadmap-strategy.md) here, and the authoring guide in [`docs/concepts/plugins.md`](docs/concepts/plugins.md) §7. | 🌱 **First plugin shipping** |
-
-**What this means in practice:**
-
-- **TheoCloud is the strategic target** — the framework's pluggable interfaces (`JobBackend`, `UsageStorageAdapter`, `RateLimitStorageAdapter`) are already designed for it; adapter ships next milestone.
-- Other in-tree adapters exist as **opt-in compatibility surfaces** — present in the codebase, but not promoted and not validated end-to-end by the team. They reject `services: {}` non-empty by design (Wave 2).
-- The agent runtime (`@theokit/sdk`) is required for any agent feature — if you only need routing/auth/SSR/jobs, you don't have to use it.
-- The UI library (`@theokit/ui`) is opt-in but the default scaffold bundles it; if you swap it out, the framework's auto-injection becomes a no-op.
-- A user can clone TheoKit and run `pnpm install && pnpm dev` without cloning the `theo` (Go) sibling — non-TheoCloud paths are fully self-contained.
-- **Plugins are opt-in additions, not framework features.** `theokit-plugins` lives next to TheoKit, not inside it. Install only what you need; the framework core ships nothing from this repo. The plugin SDK they consume (`TheoPlugin`, `definePlugin`) is in `theokit/server` — you can author your own under `@<scope>/theokit-plugin-<name>` without permission.
+| Sibling | Direction | How it relates | Status |
+|---------|-----------|----------------|:------:|
+| **`@theokit/sdk`** — agent runtime | TheoKit ← sibling | SDK is the **only** agent runtime (rule: INQUEBRAVEL). `Agent.create()`, `Run.stream()`, `defineTool()`. | ✅ Wired |
+| **`@theokit/ui`** — React component library | TheoKit ← sibling | Chat surface, theme system. Auto-injected when detected. npm dep, not workspace link. | ✅ Wired |
+| **TheoCloud** — managed platform | TheoKit → sibling | **Principal deploy target.** Thin validator adapter shipped. K8s emission lives in TheoCloud (Go). | ✅ Adapter shipped |
+| **`theokit-plugins`** — plugin registry | TheoKit → sibling | `@theokit/plugin-cors` v0.1.0 shipping. Apps install explicitly. Zero framework coupling. | 🌱 First plugin |
 
 ## Status
 
-Honest claims only.
-
-- **Production for indie + small-team usage.** Framework, CLI, five templates (default, dashboard, api-only, postgres, saas) shipped. Public API surface stable. **TheoCloud is the only deploy target the team validates end-to-end** — other in-tree adapters are opt-in compatibility surfaces without team validation.
-- **TheoCloud (principal target) adapter.** Ships after 0.4.0 — the strategic next milestone. Framework hooks (`JobBackend`, `UsageStorageAdapter`, `RateLimitStorageAdapter` interfaces, structured logging) are already in place to slot it in.
-- **Agent layer (`agents/` directory).** On the roadmap. The framework already ships the primitives (sessions, WebSockets, server actions, typed RPC) an agent surface needs; the dedicated `agents/` convention formalizes the wiring.
-- **Documentation site.** On the roadmap. Today the README is the canonical reference; deep docs land with the dedicated site.
-- **OpenAPI generation from Zod schemas.** On the roadmap.
-- **More templates (auth-basic, stripe-saas).** On the roadmap.
+- **566 tests passing** across 4 packages (329 HTTP + 237 agents). Zero lint errors, zero typecheck errors.
+- **31 decorators** (16 HTTP + 15 agent) with convention naming inference.
+- **14 agent stream event types** with discriminated union.
+- **SDK integration complete** — `llm-runner.ts` deleted, all agent execution flows through `@theokit/sdk`.
+- **TheoCloud adapter shipped** — thin validator that bundles + uploads `services.json`.
+- **Honest warnings** — `@UseInterceptors`, `@UseFilters`, `@Budget` on agents emit stable warning codes when enforcement is metadata-only.
 
 ## License
 
