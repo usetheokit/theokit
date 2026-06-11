@@ -1,6 +1,6 @@
 {
-  "name": "@theokit/http-decorators",
-  "version": "0.3.0",
+  "name": "@theokit/http",
+  "version": "0.4.0",
   "description": "NestJS-style decorators (@Controller, @Get, @Post, @Body, @UseGuards) bridging to TheoKit's defineRoute + defineMiddleware",
   "type": "module",
   "sideEffects": false,

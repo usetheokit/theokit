@@ -284,7 +284,7 @@ export interface AppTypedClientPluginOptions {
    * Additional routes to merge into the typed client alongside file-system routes.
    * Each entry follows ManifestRoute shape (filePath, routePath, methods, paramNames).
    *
-   * Used by `@theokit/http-decorators` `httpDecoratorsPlugin` to inject
+   * Used by `@theokit/http` `httpDecoratorsPlugin` to inject
    * decorator-defined routes — zero coupling between theokit core and the
    * decorator package (the walk happens in http-decorators; only data arrives here).
    */
@@ -335,7 +335,7 @@ function emitClientDts(opts: AppTypedClientPluginOptions): { changed: boolean; p
   }
   const manifest = generateManifest(opts.serverDir)
 
-  // Decorator-client-bridge: merge extra routes (from @theokit/http-decorators
+  // Decorator-client-bridge: merge extra routes (from @theokit/http
   // or any other source) into the manifest so generateClientDts() produces a
   // SINGLE typed client covering both file-system routes AND injected routes.
   if (opts.extraRoutes?.length) {

@@ -4,7 +4,7 @@
  * Per ADR D2 (LSP): any guard that accepts ExecutionContext works unchanged with
  * AgentExecutionContext. Agent-specific guards can narrow via isAgentContext().
  */
-import type { ExecutionContext } from '@theokit/http-decorators'
+import type { ExecutionContext } from '@theokit/http'
 
 import type { AgentOptions, ToolOptions } from '../types.js'
 

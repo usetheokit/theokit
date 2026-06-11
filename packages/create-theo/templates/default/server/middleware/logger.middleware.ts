@@ -1,7 +1,7 @@
 /**
  * LoggerMiddleware — logs every incoming request.
  */
-import type { NestMiddleware } from '@theokit/http-decorators'
+import type { NestMiddleware } from '@theokit/http'
 
 export class LoggerMiddleware implements NestMiddleware {
   use(request: Request, next: () => Promise<Response | null>): Promise<Response | null> {

@@ -8,7 +8,7 @@ import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
 import { compileAgent } from '../../src/bridge/agent-compiler.js'
 import { generateAgentRoutes } from '../../src/bridge/agent-route-generator.js'
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
-import { nodeIncomingToRequest, writeResponseToNode } from '@theokit/http-decorators/runtime/node'
+import { nodeIncomingToRequest, writeResponseToNode } from '@theokit/http/runtime/node'
 
 describe('agent-route-generator', () => {
   function setupAgent() {

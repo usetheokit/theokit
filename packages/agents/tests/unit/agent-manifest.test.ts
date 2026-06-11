@@ -5,7 +5,7 @@ import { Agent } from '../../src/decorators/agent.js'
 import { MainLoop } from '../../src/decorators/main-loop.js'
 import { Toolbox, Tool } from '../../src/decorators/tool.js'
 import { RequiresApproval } from '../../src/decorators/policies.js'
-import { UseGuards } from '@theokit/http-decorators'
+import { UseGuards } from '@theokit/http'
 import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
 import { generateAgentManifest } from '../../src/manifest/agent-manifest.js'
 

@@ -4,7 +4,7 @@
  * These decorators work with Reflector.getAllAndOverride() for hierarchical
  * resolution: tool → toolbox → agent (method-level overrides class-level).
  */
-import { createDecorator } from '@theokit/http-decorators'
+import { createDecorator } from '@theokit/http'
 
 import type { ApprovalOptions, BudgetOptions, PolicyHandler } from '../types.js'
 

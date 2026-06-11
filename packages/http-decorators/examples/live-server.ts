@@ -118,7 +118,7 @@ class HealthController {
     return {
       status: 'ok',
       uptime: process.uptime(),
-      decorators: '@theokit/http-decorators v0.1.0-alpha.0',
+      decorators: '@theokit/http v0.1.0-alpha.0',
     }
   }
 }
@@ -139,7 +139,7 @@ const server = createDecoratorServer([CatsController, HealthController])
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║  @theokit/http-decorators v0.1.0-alpha.0 — LIVE SERVER  ║
+║  @theokit/http v0.1.0-alpha.0 — LIVE SERVER  ║
 ║  http://localhost:${PORT}                                  ║
 ╠══════════════════════════════════════════════════════════╣
 ║                                                          ║
