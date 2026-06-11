@@ -2,6 +2,7 @@
   "name": "theokit",
   "version": "0.4.0-beta.0",
   "type": "module",
+  "sideEffects": false,
   "license": "Apache-2.0",
   "scripts": {
     "build": "tsup",
