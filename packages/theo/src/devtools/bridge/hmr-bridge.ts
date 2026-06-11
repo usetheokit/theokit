@@ -16,10 +16,12 @@ import {
   CHANNEL_MANIFEST,
   CHANNEL_REQUEST,
   CHANNEL_ROUTE_MATCHED,
+  CHANNEL_AGENT_STREAM,
   type CsrfWarnPayload,
   type ErrorRecord,
   type RequestRecord,
   type RouteManifest,
+  type AgentStreamRecord,
 } from '../shared.js'
 
 import type { Dispatcher } from './dispatcher.js'
@@ -101,11 +103,16 @@ export function subscribeToServerEvents(dispatcher: Dispatcher): BridgeSubscript
     },
   )
 
+  const agentStreamHandler = wrap<AgentStreamRecord>('agent-stream', (event) => {
+    dispatcher.onAgentStreamEvent(event)
+  })
+
   hot.on(CHANNEL_REQUEST, reqHandler)
   hot.on(CHANNEL_ERROR, errHandler)
   hot.on(CHANNEL_CSRF_WARN, csrfHandler)
   hot.on(CHANNEL_MANIFEST, manifestHandler)
   hot.on(CHANNEL_ROUTE_MATCHED, routeMatchedHandler)
+  hot.on(CHANNEL_AGENT_STREAM, agentStreamHandler)
 
   // T3.1 — solicit the latest manifest. The initial manifest broadcast
   // happens during `load()` for the manifest virtual module, which fires
