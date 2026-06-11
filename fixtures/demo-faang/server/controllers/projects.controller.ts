@@ -5,7 +5,7 @@ import {
   Body, Param, HttpCode,
   UseGuards, UseInterceptors, UseFilters,
   NotFoundException,
-} from '../../../../packages/http-decorators/src/index.js'
+} from '../../../../packages/http/src/index.js'
 import { store } from '../store.js'
 import { RolesGuard, Roles, Role, IsPublic } from '../guards/roles.guard.js'
 import { TimingInterceptor } from '../interceptors/timing.interceptor.js'

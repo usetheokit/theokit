@@ -9,8 +9,8 @@
 import { resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-import { loadControllerWithSwc } from '../../packages/http-decorators/src/bridge/swc-loader.js'
-import { createDecoratorServer } from '../../packages/http-decorators/src/bridge/create-server.js'
+import { loadControllerWithSwc } from '../../packages/http/src/bridge/swc-loader.js'
+import { createDecoratorServer } from '../../packages/http/src/bridge/create-server.js'
 
 // ─── Middleware (no parameter decorators — tsx/esbuild handles fine) ───
 

@@ -1,4 +1,4 @@
-import type { Interceptor } from '../../../../packages/http-decorators/src/bridge/interceptor-chain.js'
+import type { Interceptor } from '../../../../packages/http/src/bridge/interceptor-chain.js'
 
 /**
  * TimingInterceptor — measures handler execution time.

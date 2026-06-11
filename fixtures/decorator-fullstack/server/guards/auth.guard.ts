@@ -1,4 +1,4 @@
-import type { ExecutionContext } from '../../../../packages/http-decorators/src/bridge/execution-context.js'
+import type { ExecutionContext } from '../../../../packages/http/src/bridge/execution-context.js'
 
 export class AuthGuard {
   canActivate(context: ExecutionContext): boolean {

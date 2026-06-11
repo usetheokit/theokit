@@ -93,8 +93,8 @@ export default defineConfig({
         // create-theo standalone CLI scaffolder — interactive prompts +
         // child_process spawn. The existing exclude `packages/*/src/cli/**`
         // does not match these because create-theo's CLI sits in `src/`.
-        'packages/create-theo/src/cli.ts',
-        'packages/create-theo/src/install.ts',
+        'packages/create-theokit/src/cli.ts',
+        'packages/create-theokit/src/install.ts',
       ],
       thresholds: {
         lines: 80,

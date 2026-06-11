@@ -1,5 +1,5 @@
-import { createDecorator, Reflector } from '../../../../packages/http-decorators/src/decorators/set-metadata.js'
-import type { CanActivate, ExecutionContext } from '../../../../packages/http-decorators/src/bridge/execution-context.js'
+import { createDecorator, Reflector } from '../../../../packages/http/src/decorators/set-metadata.js'
+import type { CanActivate, ExecutionContext } from '../../../../packages/http/src/bridge/execution-context.js'
 
 export enum Role { User = 'user', Admin = 'admin' }
 

@@ -1,5 +1,5 @@
-import type { ExceptionFilter, ArgumentsHost } from '../../../../packages/http-decorators/src/bridge/exception-filter-chain.js'
-import { HttpException, Catch } from '../../../../packages/http-decorators/src/index.js'
+import type { ExceptionFilter, ArgumentsHost } from '../../../../packages/http/src/bridge/exception-filter-chain.js'
+import { HttpException, Catch } from '../../../../packages/http/src/index.js'
 
 @Catch(HttpException)
 export class HttpErrorFilter implements ExceptionFilter {
