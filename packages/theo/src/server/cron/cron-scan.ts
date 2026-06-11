@@ -4,8 +4,8 @@
  */
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
+import { importUserModule } from '../../config/import-user-module.js'
 import { walkSourceFiles } from '../_internal/scan-walker.js'
 
 import type { CronConcurrencyPolicy, CronDefinition } from './cron-types.js'
@@ -76,7 +76,7 @@ export async function scanCrons(cronsDir: string): Promise<CronNode[]> {
   for (const filePath of filePaths) {
     let mod: CronModule
     try {
-      mod = (await import(pathToFileURL(filePath).href)) as CronModule
+      mod = await importUserModule(filePath)
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err)
       throw new Error(`Failed to import cron file "${filePath}": ${reason}`)

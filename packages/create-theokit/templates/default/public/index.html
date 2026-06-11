@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TheoKit App</title>
+<style>
+:root{--bg:#0a0a0a;--card:#141414;--border:#2a2a2a;--text:#e0e0e0;--muted:#888;--accent:#6366f1;--green:#22c55e;--red:#ef4444;--yellow:#eab308}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+#app{max-width:1200px;margin:0 auto;padding:20px}h1{font-size:1.6rem}.accent{color:var(--accent)}.subtitle{color:var(--muted);font-size:.85rem;margin-top:2px}
+.role-bar{margin:12px 0}.role-bar select{padding:6px 12px;background:#1a1a1a;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.8rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}@media(max-width:768px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+h2{font-size:1rem;margin-bottom:14px;display:flex;align-items:center;gap:8px}.badge{font-size:.65rem;padding:2px 8px;border-radius:99px;background:#6366f122;color:var(--accent)}.badge-ai{background:#eab30822;color:var(--yellow)}
+table{width:100%;border-collapse:collapse;font-size:.85rem}th{text-align:left;padding:8px 4px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:500}td{padding:8px 4px;border-bottom:1px solid var(--border)}
+tr.done td{opacity:.5;text-decoration:line-through}.prio{font-size:.7rem;padding:2px 8px;border-radius:99px}.prio-high{background:#ef444422;color:var(--red)}.prio-med{background:#eab30822;color:var(--yellow)}.prio-low{background:#22c55e22;color:var(--green)}
+.create-bar{display:flex;gap:8px;margin-top:14px}.create-bar input{flex:1;padding:8px 12px;background:#1a1a1a;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.85rem}
+.create-bar select{padding:8px;background:#1a1a1a;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.8rem}.create-bar button{padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600}
+.error{color:var(--red);font-size:.8rem;margin-top:4px}
+.chat-box{height:400px;overflow-y:auto;padding:12px;background:#0d0d0d;border-radius:8px;margin-bottom:10px;font-size:.85rem;line-height:1.6}
+.msg{margin-bottom:10px;padding:8px 12px;border-radius:8px}.msg.user{background:#6366f118;color:var(--accent)}.msg.agent{background:#1a1a1a}.msg.tool{background:#eab30810;color:var(--yellow);font-size:.78rem;font-family:monospace}.msg.system{color:var(--muted);font-size:.78rem;font-style:italic}.msg.error{color:var(--red)}
+.chat-bar{display:flex;gap:8px}.chat-bar input{flex:1;padding:10px 14px;background:#1a1a1a;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.9rem;outline:none}.chat-bar input:focus{border-color:var(--accent)}
+.chat-bar button{padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600}.chat-bar button:disabled{opacity:.4;cursor:not-allowed}
+.cost{color:var(--muted);font-size:.75rem;margin-top:6px;text-align:right}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+<h1><span class="accent">TheoKit</span> App</h1>
+<p class="subtitle">Controllers + AI Agent — same pipeline</p>
+<div class="role-bar"><label>Role: </label><select id="role"><option value="">None</option><option value="user" selected>User</option><option value="admin">Admin</option></select></div>
+</header>
+<main class="grid">
+<section class="card">
+<h2>📋 Tasks <span class="badge">@Controller</span></h2>
+<table><thead><tr><th>Task</th><th>Priority</th><th>Status</th></tr></thead><tbody id="task-list"></tbody></table>
+<form id="create-form" class="create-bar"><input id="new-title" placeholder="New task..." required minlength="3"><select id="new-priority"><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select><button type="submit">Add</button></form>
+<p id="form-error" class="error"></p>
+</section>
+<section class="card">
+<h2>🤖 AI Assistant <span class="badge badge-ai">@Agent + SSE</span></h2>
+<div id="chat" class="chat-box"><div class="msg system">Ask me to list, create, or complete tasks...</div></div>
+<div class="chat-bar"><input id="chat-input" placeholder="Message the AI assistant..."><button id="chat-send">Send</button></div>
+<p id="chat-cost" class="cost"></p>
+</section>
+</main>
+</div>
+<script>
+const getRole=()=>document.getElementById('role').value
+const headers=()=>{const h={'Content-Type':'application/json'};const r=getRole();if(r)h['x-role']=r;return h}
+let sessionId='s-'+Date.now()
+
+async function loadTasks(){const r=await fetch('/api/tasks');const t=await r.json();document.getElementById('task-list').innerHTML=t.map(t=>{const s=t.done?'done':'';const p=t.priority==='high'?'prio-high':t.priority==='low'?'prio-low':'prio-med';return'<tr class="'+s+'"><td>'+(t.done?'✅ ':'○ ')+t.title+'</td><td><span class="prio '+p+'">'+t.priority+'</span></td><td>'+(t.done?'Done':'To do')+'</td></tr>'}).join('')}
+
+document.getElementById('create-form').addEventListener('submit',async e=>{e.preventDefault();const t=document.getElementById('new-title').value.trim();const p=document.getElementById('new-priority').value;const err=document.getElementById('form-error');err.textContent='';if(!t)return;const r=await fetch('/api/tasks',{method:'POST',headers:headers(),body:JSON.stringify({title:t,priority:p})});if(r.status===403){err.textContent='403 — Need User role';return}if(r.status===422){const e=await r.json();err.textContent=e.error?.issues?.[0]?.message||'Validation error';return}if(!r.ok){err.textContent='Error '+r.status;return}document.getElementById('new-title').value='';loadTasks()})
+
+document.getElementById('chat-send').addEventListener('click',sendChat)
+document.getElementById('chat-input').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat()})
+
+async function sendChat(){const input=document.getElementById('chat-input');const msg=input.value.trim();if(!msg)return;input.value='';const chat=document.getElementById('chat');chat.innerHTML+='<div class="msg user">You: '+msg.replace(/</g,'&lt;')+'</div>';document.getElementById('chat-send').disabled=true
+try{const r=await fetch('/api/agents/assistant/chat',{method:'POST',headers:headers(),body:JSON.stringify({message:msg,sessionId})});if(r.status===403){chat.innerHTML+='<div class="msg system">403 — Need User role</div>';document.getElementById('chat-send').disabled=false;return}
+const reader=r.body.getReader();const dec=new TextDecoder();let div=document.createElement('div');div.className='msg agent';chat.appendChild(div);let buf=''
+while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop()||''
+for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='text_delta')div.innerHTML+=ev.content.replace(/</g,'&lt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');else if(ev.type==='tool_call'){const t=document.createElement('div');t.className='msg tool';t.textContent='🔧 '+ev.toolName;chat.insertBefore(t,div)}else if(ev.type==='tool_result'){const t=document.createElement('div');t.className='msg tool';t.textContent='✅ '+(ev.output||'').substring(0,80);chat.insertBefore(t,div)}else if(ev.type==='done'){document.getElementById('chat-cost').textContent=(ev.usage?.totalTokens||0)+' tokens · '+(ev.durationMs||0)+'ms'+(ev.cost?' · $'+ev.cost.toFixed(6):'')}else if(ev.type==='error'){chat.innerHTML+='<div class="msg error">'+ev.message+'</div>'}}catch{}}
+chat.scrollTop=chat.scrollHeight}loadTasks()}catch(e){chat.innerHTML+='<div class="msg error">'+e.message+'</div>'}document.getElementById('chat-send').disabled=false;chat.scrollTop=chat.scrollHeight}
+
+loadTasks()
+</script>
+</body>
+</html>

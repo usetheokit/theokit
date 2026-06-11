@@ -11,8 +11,8 @@
  * (Playwright) — this file is the unit-level contract.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dispatcher } from '../../packages/theo/src/devtools/dispatcher.js'
-import { devtoolsReducer } from '../../packages/theo/src/devtools/reducer.js'
+import { dispatcher } from '../../packages/theo/src/devtools/bridge/dispatcher.js'
+import { devtoolsReducer } from '../../packages/theo/src/devtools/state/reducer.js'
 import {
   type AgentRunRecord,
   RING_BUFFER_CAP,

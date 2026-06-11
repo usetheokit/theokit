@@ -1,17 +1,31 @@
 name: Release
 
+# Per technical-hardening-sprint plan v1.1 T1.1 (UPDATE):
+# Drop NPM_TOKEN env (EC-2 absorbed — disables OIDC trusted-publisher silently).
+# Add id-token: write permission so changesets/action exchanges OIDC token
+# with npm for provenance attestation.
+
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -26,4 +40,7 @@ jobs:
           version: pnpm changeset version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # NPM_TOKEN intentionally absent — per technical-hardening-sprint plan v1.1 EC-2
+          # absorbed: NPM_TOKEN env DISABLES OIDC trusted-publisher binding silently.
+          # Requires npm dashboard trusted-publisher binding at npmjs.com/package/<pkg>/settings.
+          NPM_CONFIG_PROVENANCE: true

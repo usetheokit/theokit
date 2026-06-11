@@ -72,8 +72,13 @@ function scanDir(dir: string, segment: string, routePath: string): RouteNode {
     if (!entry.isDirectory()) continue
     if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue
 
-    const childPath = routePath === '/' ? `/${entry.name}` : `${routePath}/${entry.name}`
-    const child = scanDir(join(dir, entry.name), entry.name, childPath)
+    // Route groups: (marketing), (shop) — organize without affecting URL
+    const isRouteGroup = entry.name.startsWith('(') && entry.name.endsWith(')')
+    const urlSegment = isRouteGroup ? '' : entry.name
+    const childPath = urlSegment
+      ? (routePath === '/' ? `/${urlSegment}` : `${routePath}/${urlSegment}`)
+      : routePath
+    const child = scanDir(join(dir, entry.name), isRouteGroup ? '' : entry.name, childPath)
 
     // Prune empty nodes — a directory with no route files AND no
     // children is irrelevant to the manifest.

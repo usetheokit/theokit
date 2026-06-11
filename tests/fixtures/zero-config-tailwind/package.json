@@ -7,7 +7,7 @@
     "build": "theokit build"
   },
   "dependencies": {
-    "@usetheo/ui": "workspace:*",
+    "@theokit/ui": "workspace:*",
     "theokit": "workspace:*"
   }
 }

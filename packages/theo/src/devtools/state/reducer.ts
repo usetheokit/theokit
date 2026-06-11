@@ -1,0 +1,95 @@
+/**
+ * Devtools reducer.
+ *
+ * EC-23 ring buffer cap 50 — requests/errors capped at RING_BUFFER_CAP.
+ *
+ * NEVER use dangerouslySetInnerHTML in any devtools component — see plan EC-20.
+ */
+import {
+  type DevtoolsAction,
+  type DevtoolsState,
+  type ErrorRecord,
+  RING_BUFFER_CAP,
+  initialState,
+} from '../shared.js'
+
+function appendCapped<T>(arr: T[], item: T, cap = RING_BUFFER_CAP): T[] {
+  return [item, ...arr].slice(0, cap)
+}
+
+function reduceAppend(state: DevtoolsState, action: DevtoolsAction): DevtoolsState | null {
+  switch (action.type) {
+    case 'REQUEST_ADD':
+      return { ...state, requests: appendCapped(state.requests, action.request) }
+    case 'ERROR_ADD':
+      return { ...state, errors: appendCapped(state.errors, action.error) }
+    case 'AGENT_RUN_ADD':
+      return { ...state, agentRuns: appendCapped(state.agentRuns, action.run) }
+    case 'ACTION_CALL_ADD':
+      return { ...state, actionCalls: appendCapped(state.actionCalls, action.record) }
+    case 'AGENT_STREAM_EVENT':
+      return { ...state, agentStreamEvents: appendCapped(state.agentStreamEvents, action.event) }
+    default:
+      return null
+  }
+}
+
+function reduceReset(state: DevtoolsState, action: DevtoolsAction): DevtoolsState | null {
+  switch (action.type) {
+    case 'RESET_REQUESTS':
+      return { ...state, requests: [] }
+    case 'RESET_ERRORS':
+      return { ...state, errors: [] }
+    case 'RESET_AGENT_RUNS':
+      return { ...state, agentRuns: [] }
+    case 'RESET_ACTION_CALLS':
+      return { ...state, actionCalls: [] }
+    case 'RESET_AGENT_STREAM':
+      return { ...state, agentStreamEvents: [] }
+    default:
+      return null
+  }
+}
+
+function csrfWarnToErrorRecord(payload: {
+  method: string
+  path: string
+  reason: string
+  code?: string
+  docsUrl?: string
+}): ErrorRecord {
+  return {
+    // eslint-disable-next-line sonarjs/pseudo-random -- non-secret correlation id for devtools UI
+    id: `csrf-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`,
+    type: 'csrf.warn',
+    message: `CSRF warn: ${payload.method} ${payload.path} — ${payload.reason}`,
+    code: payload.code,
+    docsUrl: payload.docsUrl,
+    timestamp: Date.now(),
+  }
+}
+
+export function devtoolsReducer(state: DevtoolsState, action: DevtoolsAction): DevtoolsState {
+  switch (action.type) {
+    case 'TOGGLE_PANEL':
+      return { ...state, open: !state.open }
+    case 'TOGGLE_VISIBLE':
+      return { ...state, visible: !state.visible }
+    case 'SET_TAB':
+      return { ...state, activeTab: action.tab }
+    case 'SET_POSITION':
+      return { ...state, position: action.position }
+    case 'SET_THEME':
+      return { ...state, theme: action.theme }
+    case 'CSRF_WARN':
+      return { ...state, errors: appendCapped(state.errors, csrfWarnToErrorRecord(action.payload)) }
+    case 'MANIFEST_UPDATED':
+      return { ...state, routeManifest: action.manifest }
+    case 'ROUTE_MATCHED':
+      return { ...state, activeRoutePath: action.path, activeChain: action.chain }
+    default:
+      return reduceAppend(state, action) ?? reduceReset(state, action) ?? state
+  }
+}
+
+export { initialState }

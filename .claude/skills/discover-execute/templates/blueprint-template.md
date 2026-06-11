@@ -1,0 +1,168 @@
+# Blueprint: {Title}
+
+> **Version 1.0** — one-paragraph executive summary explaining what this blueprint synthesizes, which reference projects were investigated, and what decisions it informs.
+
+**Slug:** `{kebab-case-slug}`
+**Source plan:** `.claude/knowledge-base/discoveries/plans/{slug}-plan.md`
+**Owner:** {name or handle}
+**Generated:** {YYYY-MM-DD} via `/discover-execute`
+**Confidence verdict:** {SHIPPABLE | SHIPPABLE_WITH_CAVEATS | NON_SHIPPABLE | INVALID} (updated by `/discover-confidence`)
+
+## Context
+
+What motivated this discovery, what evidence triggered it. (Inherited from the discovery plan.)
+
+## Objective
+
+One sentence: what the blueprint enables the reader to decide.
+
+---
+
+## Coverage Corner 1 — Integration Tests
+
+> One subsection per in-scope reference project. Each subsection populated by `/discover-execute` from research questions mapped to this corner. Empty subsections trigger a `discover-confidence` hard cap.
+
+### Project A
+
+How Project A tests integration scenarios:
+
+- **Pattern**: {description with citation `.claude/knowledge-base/references/project-a/project-a-ts/tests/...:line`}
+- **Fixtures**: {how they set up Postgres / pgvector / LLM stubs}
+- **Coverage**: {what they assert vs what they leave to unit tests}
+
+Code example (with citation):
+
+```ts
+// .claude/knowledge-base/references/project-a/project-a-ts/tests/example.test.ts:42
+{cited snippet}
+```
+
+### Project B
+
+{same shape}
+
+### Project C
+
+{same shape}
+
+---
+
+## Coverage Corner 2 — Dependencies
+
+### Project A
+
+Runtime + dev dependencies (with versions and justification):
+
+| Dependency | Version | Why | Citation |
+|---|---|---|---|
+| `pgvector` | `^X.Y` | embedding store | `.claude/knowledge-base/references/project-a/project-a-ts/package.json:N` |
+| `openai` | `^X.Y` | LLM extraction provider | `.claude/knowledge-base/references/project-a/project-a-ts/package.json:N` |
+
+### Project B
+
+{same shape — pyproject.toml or requirements.txt}
+
+### Project C
+
+{same shape}
+
+---
+
+## Coverage Corner 3 — Tools
+
+### Project A
+
+- **Build / test / lint**: {commands cited from README / package.json scripts / Makefile}
+- **Local dev story**: {Docker compose? Standalone Postgres? Setup steps}
+- **CI shape**: {GitHub Actions / GitLab / etc. — cite the workflow file}
+
+### Project B
+
+{same shape}
+
+### Project C
+
+{same shape}
+
+---
+
+## Coverage Corner 4 — Techniques
+
+### {Technique name 1} — {short tagline}
+
+How each project implements this technique:
+
+| Project | Approach | Citation |
+|---|---|---|
+| Project A | {description} | `.claude/knowledge-base/references/project-a/.../file.py:N` |
+| Project B | {description} | `.claude/knowledge-base/references/project-b/.../file.py:N` |
+| Project C | {description} | `.claude/knowledge-base/references/project-c/.../file.py:N` |
+
+Notable differences worth calling out: {one paragraph + citation per claim}.
+
+### {Technique name 2}
+
+{same shape — one technique per major investigation question}
+
+---
+
+## Cross-cutting Comparison
+
+A consolidated side-by-side view across the four corners:
+
+| Dimension | Project A | Project B | Project C |
+|---|---|---|---|
+| Integration-test style | {one line + citation} | {} | {} |
+| Primary deps | {} | {} | {} |
+| Local dev story | {} | {} | {} |
+| Signature technique | {} | {} | {} |
+
+## ADRs
+
+Decisions that emerged from the synthesis. Each MUST have alternatives + rationale + consequences.
+
+### D1 — {decision name}
+
+**Decision:** {what was decided based on the evidence above}.
+
+**Rationale:** {why this approach — citing the evidence above}.
+
+**Alternatives considered:** {what was rejected and why}.
+
+**Consequences:** {what this enables for the project / what it constrains}.
+
+### D2 — {decision name}
+
+{same shape}
+
+## Recommendations for the project
+
+Concrete next steps that the blueprint informs. Each recommendation links to:
+- The research question(s) it answers
+- The ADR(s) it implements
+- The project rule it respects (architecture.md, testing.md, etc.)
+
+| # | Recommendation | Linked to | Priority |
+|---|---|---|---|
+| 1 | {recommendation} | Q1, D1, architecture.md § X | HIGH / MEDIUM / LOW |
+| 2 | {recommendation} | Q2, D2 | HIGH / MEDIUM / LOW |
+
+## Blocked questions (if any)
+
+| Question | Reason | Suggested human follow-up |
+|---|---|---|
+| Q5 | `.claude/knowledge-base/references/project-b/project-b/services/memory.py:142` does not exist — file may have been renamed | Search for moved file; if not found, re-execute Q5 with revised path |
+
+## Halt-loop progress (audit trail)
+
+- Iterations used: N / max
+- Questions answered: N / total
+- Questions blocked: N
+- Citations verified: N
+- Promise emitted at iteration: {N}
+
+## Related
+
+- Discovery plan: `.claude/knowledge-base/discoveries/plans/{slug}-plan.md`
+- Confidence report: `.claude/knowledge-base/reviews/{slug}-confidence-{YYYY-MM-DD}.md` (generated by `/discover-confidence`)
+- Linked the project rules: `.claude/rules/architecture.md`, `.claude/rules/testing.md`, `.claude/rules/public-copy.md`

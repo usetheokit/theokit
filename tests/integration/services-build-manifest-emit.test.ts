@@ -15,7 +15,10 @@ describe('T1.2 — build.ts wires services manifest', () => {
 
   it('calls buildServicesManifest + writeServicesManifest', () => {
     const src = readFileSync(BUILD_TS, 'utf-8')
-    expect(src).toMatch(/buildServicesManifest\(config\.services\)/)
+    // Plan v1.2 T2.3 — buildServicesManifest now accepts an optional
+    // project name argument for v2 emit. Match the call regardless of
+    // whether the second arg is supplied.
+    expect(src).toMatch(/buildServicesManifest\(\s*config\.services\b/)
     expect(src).toMatch(/writeServicesManifest\(cwd,/)
   })
 

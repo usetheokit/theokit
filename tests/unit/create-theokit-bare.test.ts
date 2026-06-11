@@ -9,25 +9,25 @@ function makeTargetDir(): string {
 }
 
 describe('create-theokit --bare flag (T4.1)', () => {
-  it('without --bare: scaffold includes @usetheo/ui in deps', () => {
+  it('without --bare: scaffold includes @theokit/ui in deps', () => {
     const target = makeTargetDir()
     rmSync(target, { recursive: true, force: true })
     try {
       scaffold(target, 'demo-app', 'default')
       const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf-8'))
-      expect(pkg.dependencies['@usetheo/ui']).toBeDefined()
+      expect(pkg.dependencies['@theokit/ui']).toBeDefined()
     } finally {
       rmSync(target, { recursive: true, force: true })
     }
   })
 
-  it('with --bare: removes @usetheo/ui from deps', () => {
+  it('with --bare: removes @theokit/ui from deps', () => {
     const target = makeTargetDir()
     rmSync(target, { recursive: true, force: true })
     try {
       scaffold(target, 'demo-app', 'default', { bare: true })
       const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf-8'))
-      expect(pkg.dependencies['@usetheo/ui']).toBeUndefined()
+      expect(pkg.dependencies['@theokit/ui']).toBeUndefined()
     } finally {
       rmSync(target, { recursive: true, force: true })
     }
@@ -41,7 +41,7 @@ describe('create-theokit --bare flag (T4.1)', () => {
       const page = readFileSync(join(target, 'app/page.tsx'), 'utf-8')
       expect(page).toContain('Hello Theo')
       expect(page).not.toContain('AgentComposer')
-      expect(page).not.toContain('@usetheo/ui')
+      expect(page).not.toContain('@theokit/ui')
     } finally {
       rmSync(target, { recursive: true, force: true })
     }
@@ -79,15 +79,15 @@ describe('create-theokit --bare flag (T4.1)', () => {
     }
   })
 
-  // Dogfood gap 2026-05-22: @usetheo/sdk is operator-deferred from npm publish.
+  // Dogfood gap 2026-05-22: @theokit/sdk is operator-deferred from npm publish.
   // --bare must produce a scaffold that ALWAYS works without registry deps.
-  it('--bare: removes @usetheo/sdk (registry-deferred publish)', () => {
+  it('--bare: removes @theokit/sdk (registry-deferred publish)', () => {
     const target = makeTargetDir()
     rmSync(target, { recursive: true, force: true })
     try {
       scaffold(target, 'demo-app', 'default', { bare: true })
       const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf-8'))
-      expect(pkg.dependencies['@usetheo/sdk']).toBeUndefined()
+      expect(pkg.dependencies['@theokit/sdk']).toBeUndefined()
     } finally {
       rmSync(target, { recursive: true, force: true })
     }
@@ -134,7 +134,7 @@ describe('create-theokit --bare flag (T4.1)', () => {
       // theokit is the only @-scoped name (workspace-resolvable + soon-published).
       for (const name of Object.keys(allDeps)) {
         if (name === 'theokit') continue
-        expect(name).not.toMatch(/^@usetheo\//)
+        expect(name).not.toMatch(/^@theokit\//)
       }
     } finally {
       rmSync(target, { recursive: true, force: true })

@@ -1,7 +1,7 @@
 /**
  * T0.1 — SDK v1.1.0 exports smoke (Phase 0).
  *
- * Contract verification: the new primitives shipped in @usetheo/sdk v1.1.0
+ * Contract verification: the new primitives shipped in @theokit/sdk v1.1.0
  * are importable, structured, and instantiable.
  *
  * EC-4 (SHOULD TEST): use semver-aware version check (`^1.1.0`) instead of
@@ -16,7 +16,7 @@ import {
   type AgentRunErrorCode,
   FileSystemConversationStorage,
   InMemoryConversationStorage,
-} from '@usetheo/sdk'
+} from '@theokit/sdk'
 
 /**
  * Minimal caret-range check (`^1.1.0`).
@@ -34,9 +34,9 @@ function satisfiesCaret1_1_0(version: string): boolean {
 }
 
 describe('SDK v1.1.0 exports smoke (T0.1)', () => {
-  it('test_sdk_version_satisfies_caret_range (EC-4) — @usetheo/sdk version is in ^1.1.0', () => {
+  it('test_sdk_version_satisfies_caret_range (EC-4) — @theokit/sdk version is in ^1.1.0', () => {
     // Resolve via require to find the actually-installed package.json
-    const sdkPkgPath = require.resolve('@usetheo/sdk/package.json')
+    const sdkPkgPath = require.resolve('@theokit/sdk/package.json')
     const pkg = JSON.parse(readFileSync(sdkPkgPath, 'utf8')) as { version: string }
     expect(satisfiesCaret1_1_0(pkg.version)).toBe(true)
   })

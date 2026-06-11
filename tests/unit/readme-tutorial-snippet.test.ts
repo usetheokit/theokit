@@ -40,8 +40,8 @@ describe('README "Your first agent in 5 minutes"', () => {
     expect(TUTORIAL).not.toContain('result.status ===')
   })
 
-  it('snippet imports Agent from @usetheo/sdk', () => {
-    expect(TUTORIAL).toMatch(/import\s+\{\s*Agent\s*\}\s+from\s+['"]@usetheo\/sdk['"]/)
+  it('snippet imports Agent from @theokit/sdk', () => {
+    expect(TUTORIAL).toMatch(/import\s+\{\s*Agent\s*\}\s+from\s+['"]@theokit\/sdk['"]/)
   })
 
   it('tutorial section does NOT reference openai (anti-stack scoped)', () => {

@@ -3,7 +3,7 @@ import type { AgentEvent, AgentErrorEvent } from './agent-types.js'
 /**
  * Item #4 — `streamAgentRun`
  *
- * Adapter that consumes the `@usetheo/sdk` `Run.stream()` async generator
+ * Adapter that consumes the `@theokit/sdk` `Run.stream()` async generator
  * (SDKMessage variants) and yields TheoKit `AgentEvent`s suitable for SSE
  * via `defineAgentEndpoint`. One line at the consumer side:
  *
@@ -40,7 +40,7 @@ import type { AgentEvent, AgentErrorEvent } from './agent-types.js'
  * as the wider `{ type: string }`). Property access inside `streamAgentRun`
  * narrows via runtime type guards.
  *
- * `import type` from `@usetheo/sdk` would couple TheoKit to the SDK at type-
+ * `import type` from `@theokit/sdk` would couple TheoKit to the SDK at type-
  * resolution time even for consumers who never use the agent surface.
  */
 export interface AgentRunLike {

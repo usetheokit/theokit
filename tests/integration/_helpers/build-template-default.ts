@@ -73,7 +73,15 @@ export const buildTemplateDefaultOnce = (): void => {
     execSync('pnpm exec theokit build', {
       cwd: FIXTURE,
       stdio: 'pipe',
-      env: { ...process.env, NODE_ENV: 'production', CI: '1' },
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        CI: '1',
+        // T5a.2 prerequisite: template-default fixture doesn't install
+        // better-sqlite3 (CLI's hard-required native dep). Skip preflight
+        // ABI check — Node-floor check stays enforced.
+        THEOKIT_SKIP_NATIVE_PREFLIGHT: '1',
+      },
       timeout: 180_000,
     })
   } finally {

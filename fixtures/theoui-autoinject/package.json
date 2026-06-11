@@ -1,9 +1,0 @@
-{
-  "name": "theoui-autoinject",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@usetheo/ui": "^0.13.0"
-  },
-  "version": null
-}

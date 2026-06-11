@@ -1,0 +1,16 @@
+# CF Workers smoke harness for ADR-0028 R3a (Phase 5a).
+#
+# Real Cloudflare deploy NOT required: wrangler v3+ defaults to Miniflare
+# (local backend) which runs the worker without a Cloudflare account.
+# This fixture's purpose is to prove that the executeWebRequest +
+# defineRoute surface bundles cleanly for the CF Workers runtime and
+# serves real HTTP. The integration test
+# `tests/integration/wrangler-smoke.test.ts` drives `wrangler dev` and
+# asserts curl-able 200 responses (per T5a.1 AC#3).
+
+name = "handler-web-standards-smoke"
+main = "worker.ts"
+compatibility_date = "2026-06-07"
+# nodejs_compat NOT enabled by design — the smoke proves the bundle is
+# Node-free at the runtime level. Adding nodejs_compat would invalidate
+# the proof.

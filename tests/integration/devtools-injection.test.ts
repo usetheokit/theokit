@@ -42,6 +42,11 @@ describe('T1.2 — devtools injection (default — devtools enabled)', () => {
   let port: number
 
   beforeAll(async () => {
+    // Phase 6 prereq escape hatch — makeProject() creates a tmp dir
+    // without node_modules, so the native-binding ABI preflight
+    // (preflight-node-version.ts) would fire on `startDevServer`. Tests
+    // don't exercise better-sqlite3; opt out.
+    process.env.THEOKIT_SKIP_NATIVE_PREFLIGHT = '1'
     root = makeProject({})
     server = await startDevServer(root, { port: 0 })
     const addr = (server.httpServer as Server).address()
@@ -76,9 +81,12 @@ describe('T1.2 — devtools injection (default — devtools enabled)', () => {
     expect(ct.toLowerCase()).toMatch(/javascript|text\/jsx|jsx/)
     const body = await res.text()
     // The virtual module re-imports the real entry (Vite resolves the alias
-    // to an absolute path before serving). We just verify the module body
-    // is non-trivial JS that mentions devtools entry.
-    expect(body).toMatch(/devtools\/entry/)
+    // to an absolute path before serving). After T2.4 (M3 sub-org of
+    // devtools/), the entry moved from `devtools/entry.tsx` to
+    // `devtools/dom/entry.tsx`. Vite resolves `theokit/devtools/entry`
+    // to its absolute on-disk path, so the regex accepts either
+    // `devtools/entry` (legacy flat) OR `devtools/dom/entry` (post-T2.4 sub-org).
+    expect(body).toMatch(/devtools\/(dom\/)?entry/)
     expect(body).toContain('import')
   })
 

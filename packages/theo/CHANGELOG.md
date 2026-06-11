@@ -1,5 +1,29 @@
 # theo
 
+## 0.4.0-beta.0
+
+### Major Changes
+
+- **BREAKING — Router convention lockdown.** Scanner rejects dotted route basenames (`auth.[provider].login.ts`) with `RouterConventionError`. Use directory-nested form (`auth/[provider]/login.ts`). Codemod `theokit migrate router` handles the upgrade automatically. See [`docs/migration/0.3-to-0.4-router.md`](../../docs/migration/0.3-to-0.4-router.md).
+- **BREAKING — Bundled 0.3.0 security cutover.** CSRF default flips `warn` → `strict`; CSP default flips `report-only` → `enforce`. Apps not previously sending `X-Theo-Action: 1` on POSTs now get 403. Inline `<script>` without per-request nonce now blocks. Opt-out: `security.csrf: 'warn'` and `security.cspMode: 'report-only'` in `theo.config.ts`. See [`docs/migration/0.2-to-0.3.md`](../../docs/migration/0.2-to-0.3.md).
+- **Skips 0.3.0 → goes directly to 0.4.0-beta.0** because the 0.3.0 cutover calendar window was abandoned in favor of bundling both breaking surfaces in one release.
+
+### Added
+
+- **`theokit migrate router` CLI subcommand** — dotted-to-nested codemod with `--dry-run`, `--force` (skip EC-2 dev-server pre-flight), idempotent re-run, partial-failure observability, EC-5 case-insensitive collision detection, EC-4 test/spec file filter. Rewrites relative imports inside moved files automatically.
+- **`RouterConventionError` class** (`theokit/server/scan` barrel) emitted by `scanServerRoutes` when a dotted basename is encountered.
+- **`vite-plugin/server-routes-hmr.ts`** — Vite watcher invalidation for `server/routes/**` with 50 ms debounce (EC-6) so the codemod's rename storm doesn't crash the dev server.
+
+### Fixed
+
+- **23 routes silently transitioned from unreachable to working** in the canonical dogfood-app after migration. Every dotted route was producing either a wrong `paramNames` shape OR a URL pattern with a literal dot that the client code never hit (audit: [`docs/audit/g6-router-dogfood-app-migration-2026-06-04.md`](../../docs/audit/g6-router-dogfood-app-migration-2026-06-04.md)).
+
+## 0.2.1
+
+### Patch Changes
+
+- Align `theokit` version with `create-theokit@0.2.1` per the linked-changeset invariant. `create-theokit` was bumped on 2026-05-30 to ship the stranger-template fix (`openai/` model id prefix for OpenRouter routing); `theokit` was left at 0.2.0 by oversight. No functional changes — this is a version-sync patch only.
+
 ## 0.2.0
 
 ### Minor Changes
@@ -94,17 +118,17 @@
   - `defineAgentEndpoint({ handler })` (`theokit/server`) — sugar over `defineRoute` that turns an `async *handler(): AsyncGenerator<AgentEvent>` into a Server-Sent Events response. Standards-compliant `text/event-stream` framing; respects `request.signal` for prompt cancellation; emits a final `{ type: 'error', message }` event when the generator throws.
   - `useAgentStream(path, options?)` (`theokit/client`) — React hook returning `{ events, status, send, abort, reset }`. Transport is `fetch + ReadableStream` (not `EventSource` — POST + body required). Cleans up on unmount (StrictMode-safe).
   - `consumeAgentStream(path, options)` + `parseSSEChunk(line)` (`theokit/client`) — the pure primitive the hook glues, exposed for non-React consumers and for tests.
-  - Runtime `AgentEvent` discriminated union (`message | tool_call | tool_result | error`) exported from `theokit/server` and `theokit/client`. Server emits, client consumes — no cross-package type coupling with `@usetheo/ui`.
-  - Auto-injection of `@usetheo/ui` in the dev/build pipeline: when the user's project declares `@usetheo/ui` as a dependency and the package resolves, the Vite plugin emits `import '@usetheo/ui/styles.css'`, `import '@usetheo/ui/fonts.css'` (or `fonts-cdn.css` when configured), and wraps `RouterProvider` in `<TheoUIProvider theme={{ defaultTheme }}>`. New optional `ui` field in `theo.config.ts` (`false | { theme, fonts }`) for opt-out and theme selection. Conservative detection: package must be declared in `package.json` AND resolvable — prevents false positives in monorepos.
+  - Runtime `AgentEvent` discriminated union (`message | tool_call | tool_result | error`) exported from `theokit/server` and `theokit/client`. Server emits, client consumes — no cross-package type coupling with `@theokit/ui`.
+  - Auto-injection of `@theokit/ui` in the dev/build pipeline: when the user's project declares `@theokit/ui` as a dependency and the package resolves, the Vite plugin emits `import '@theokit/ui/styles.css'`, `import '@theokit/ui/fonts.css'` (or `fonts-cdn.css` when configured), and wraps `RouterProvider` in `<TheoUIProvider theme={{ defaultTheme }}>`. New optional `ui` field in `theo.config.ts` (`false | { theme, fonts }`) for opt-out and theme selection. Conservative detection: package must be declared in `package.json` AND resolvable — prevents false positives in monorepos.
 
   **`create-theokit`** (`0.1.0-alpha.2`)
-  - Default template now scaffolds an **agent surface**: `app/page.tsx` ships `AgentComposer` + `AgentTimeline` from `@usetheo/ui`, `server/routes/chat.ts` is a mock SSE endpoint emitting three `AgentEvent`s. Replace the mock with your real LLM provider.
+  - Default template now scaffolds an **agent surface**: `app/page.tsx` ships `AgentComposer` + `AgentTimeline` from `@theokit/ui`, `server/routes/chat.ts` is a mock SSE endpoint emitting three `AgentEvent`s. Replace the mock with your real LLM provider.
   - New `--bare` flag — skips the TheoUI defaults for users who want a minimal scaffold. Atomic rollback: if the bare transform fails for any reason (filesystem perms etc.), the entire target directory is removed so no half-scaffolded project is left behind. `--bare` is only valid with `--template=default`.
-  - `@usetheo/ui ^0.1.0-next.0` is now a direct dependency of the default template.
+  - `@theokit/ui ^0.1.0-next.0` is now a direct dependency of the default template.
 
 - ee1b596: **0.2.0 — Exit alpha + enforcement cutover (CSRF strict + CSP enforce).**
 
-  This release ends the `0.1.0-alpha.*` series and ships TheoKit's first `minor` on the `latest` npm tag. It combines the maturity work consolidated under the macro-roadmap convergence list (items #1-#6 done: scaffold + agent surface + canonical chat via `@usetheo/sdk` + `defineAgentTool` + `streamAgentRun` + `createConversationHistory` + example `full-stack-agent`) with the security defaults flip previously planned as 0.3.0 (commit `3ee9dac`).
+  This release ends the `0.1.0-alpha.*` series and ships TheoKit's first `minor` on the `latest` npm tag. It combines the maturity work consolidated under the macro-roadmap convergence list (items #1-#6 done: scaffold + agent surface + canonical chat via `@theokit/sdk` + `defineAgentTool` + `streamAgentRun` + `createConversationHistory` + example `full-stack-agent`) with the security defaults flip previously planned as 0.3.0 (commit `3ee9dac`).
 
   **BREAKING (per pre-1.0 semver — `minor` = breaking until 1.0):**
   - `config.security.csrf` default flipped from `'warn'` → **`'strict'`**. Every non-GET request without the `X-Theo-Action: 1` header now returns 403 `CSRF_INVALID`. The framework's own `useAgentStream` already attaches this header (`packages/theo/src/client/agent-stream-core.ts:75`); custom fetchers, raw `<form>` posts, third-party clients, and curl-based integrations must attach the header explicitly or set `csrf: 'warn'` / `csrf: 'off'` in `defineConfig` during migration.
@@ -197,7 +221,7 @@
   - **`theokit` framework** (theokit/packages/theo):
     - `vite-plugin/theoui-detect.ts` refatorado: substituído `createRequire(...).resolve()` por filesystem walk + leitura de `package.json:exports[subpath]`. **Resolve EC-S4 root cause** (Page não hidratava) — Chrome MCP confirmou `<main>`, `<header>`, `<textarea>` agora renderizam.
     - `vite-plugin/auto-detect.ts` refatorado: mesma técnica filesystem walk (eliminação de `createRequire`).
-    - D13 invariant gated por `tests/integration/no-require-on-esm-only-deps.test.ts` (2 BDD it()) — previne regressão de require em `@usetheo/ui` (ESM-only by design).
+    - D13 invariant gated por `tests/integration/no-require-on-esm-only-deps.test.ts` (2 BDD it()) — previne regressão de require em `@theokit/ui` (ESM-only by design).
     - Playwright spec `tests/e2e/scaffold-page-hydrates.spec.ts` (4 BDD it()) — required CI check para hydration regression.
 
   ADRs:
@@ -252,13 +276,13 @@
 
   Stranger executando `npx create-theokit my-app && cd my-app && pnpm install && pnpm dev` agora funciona end-to-end sem `pnpm approve-builds` interactive prompt.
 
-- ee1b596: **Template SDK bump → `@usetheo/sdk@^1.2.0` (D14 fault injection available).**
+- ee1b596: **Template SDK bump → `@theokit/sdk@^1.2.0` (D14 fault injection available).**
 
   New scaffolds get the SDK with `THEOKIT_TEST_RESPONSE_OVERRIDE` fault-injection seam built in. Documented in the SDK's `docs.md` § "Test fault injection (v1.22+)". Use in `dogfood-stranger` Phase 13 (rate-limit chaos) for zero-cost / zero-quota-burn deterministic 429 / 5xx / 401 scenarios.
 
   No theokit code changes — this is a template-side dep bump.
 
-- ee1b596: Bump `@usetheo/ui` peerDep range from `^0.11.0-next.0` to `^0.12.0-next.0` (alinha com create-theokit templates pós-T1.1 dist-tag move).
+- ee1b596: Bump `@theokit/ui` peerDep range from `^0.11.0-next.0` to `^0.12.0-next.0` (alinha com create-theokit templates pós-T1.1 dist-tag move).
 
 ## 0.1.0-alpha.17
 
@@ -374,7 +398,7 @@
 
 ### Patch Changes
 
-- **Template SDK bump → `@usetheo/sdk@^1.2.0` (D14 fault injection available).**
+- **Template SDK bump → `@theokit/sdk@^1.2.0` (D14 fault injection available).**
 
   New scaffolds get the SDK with `THEOKIT_TEST_RESPONSE_OVERRIDE` fault-injection seam built in. Documented in the SDK's `docs.md` § "Test fault injection (v1.22+)". Use in `dogfood-stranger` Phase 13 (rate-limit chaos) for zero-cost / zero-quota-burn deterministic 429 / 5xx / 401 scenarios.
 
@@ -407,7 +431,7 @@
 
 ### Patch Changes
 
-- Bump `@usetheo/ui` peerDep range from `^0.11.0-next.0` to `^0.12.0-next.0` (alinha com create-theokit templates pós-T1.1 dist-tag move).
+- Bump `@theokit/ui` peerDep range from `^0.11.0-next.0` to `^0.12.0-next.0` (alinha com create-theokit templates pós-T1.1 dist-tag move).
 
 ## 0.1.0-alpha.6
 
@@ -482,7 +506,7 @@
   - **`theokit` framework** (theokit/packages/theo):
     - `vite-plugin/theoui-detect.ts` refatorado: substituído `createRequire(...).resolve()` por filesystem walk + leitura de `package.json:exports[subpath]`. **Resolve EC-S4 root cause** (Page não hidratava) — Chrome MCP confirmou `<main>`, `<header>`, `<textarea>` agora renderizam.
     - `vite-plugin/auto-detect.ts` refatorado: mesma técnica filesystem walk (eliminação de `createRequire`).
-    - D13 invariant gated por `tests/integration/no-require-on-esm-only-deps.test.ts` (2 BDD it()) — previne regressão de require em `@usetheo/ui` (ESM-only by design).
+    - D13 invariant gated por `tests/integration/no-require-on-esm-only-deps.test.ts` (2 BDD it()) — previne regressão de require em `@theokit/ui` (ESM-only by design).
     - Playwright spec `tests/e2e/scaffold-page-hydrates.spec.ts` (4 BDD it()) — required CI check para hydration regression.
 
   ADRs:
@@ -531,13 +555,13 @@
   - `defineAgentEndpoint({ handler })` (`theokit/server`) — sugar over `defineRoute` that turns an `async *handler(): AsyncGenerator<AgentEvent>` into a Server-Sent Events response. Standards-compliant `text/event-stream` framing; respects `request.signal` for prompt cancellation; emits a final `{ type: 'error', message }` event when the generator throws.
   - `useAgentStream(path, options?)` (`theokit/client`) — React hook returning `{ events, status, send, abort, reset }`. Transport is `fetch + ReadableStream` (not `EventSource` — POST + body required). Cleans up on unmount (StrictMode-safe).
   - `consumeAgentStream(path, options)` + `parseSSEChunk(line)` (`theokit/client`) — the pure primitive the hook glues, exposed for non-React consumers and for tests.
-  - Runtime `AgentEvent` discriminated union (`message | tool_call | tool_result | error`) exported from `theokit/server` and `theokit/client`. Server emits, client consumes — no cross-package type coupling with `@usetheo/ui`.
-  - Auto-injection of `@usetheo/ui` in the dev/build pipeline: when the user's project declares `@usetheo/ui` as a dependency and the package resolves, the Vite plugin emits `import '@usetheo/ui/styles.css'`, `import '@usetheo/ui/fonts.css'` (or `fonts-cdn.css` when configured), and wraps `RouterProvider` in `<TheoUIProvider theme={{ defaultTheme }}>`. New optional `ui` field in `theo.config.ts` (`false | { theme, fonts }`) for opt-out and theme selection. Conservative detection: package must be declared in `package.json` AND resolvable — prevents false positives in monorepos.
+  - Runtime `AgentEvent` discriminated union (`message | tool_call | tool_result | error`) exported from `theokit/server` and `theokit/client`. Server emits, client consumes — no cross-package type coupling with `@theokit/ui`.
+  - Auto-injection of `@theokit/ui` in the dev/build pipeline: when the user's project declares `@theokit/ui` as a dependency and the package resolves, the Vite plugin emits `import '@theokit/ui/styles.css'`, `import '@theokit/ui/fonts.css'` (or `fonts-cdn.css` when configured), and wraps `RouterProvider` in `<TheoUIProvider theme={{ defaultTheme }}>`. New optional `ui` field in `theo.config.ts` (`false | { theme, fonts }`) for opt-out and theme selection. Conservative detection: package must be declared in `package.json` AND resolvable — prevents false positives in monorepos.
 
   **`create-theokit`** (`0.1.0-alpha.2`)
-  - Default template now scaffolds an **agent surface**: `app/page.tsx` ships `AgentComposer` + `AgentTimeline` from `@usetheo/ui`, `server/routes/chat.ts` is a mock SSE endpoint emitting three `AgentEvent`s. Replace the mock with your real LLM provider.
+  - Default template now scaffolds an **agent surface**: `app/page.tsx` ships `AgentComposer` + `AgentTimeline` from `@theokit/ui`, `server/routes/chat.ts` is a mock SSE endpoint emitting three `AgentEvent`s. Replace the mock with your real LLM provider.
   - New `--bare` flag — skips the TheoUI defaults for users who want a minimal scaffold. Atomic rollback: if the bare transform fails for any reason (filesystem perms etc.), the entire target directory is removed so no half-scaffolded project is left behind. `--bare` is only valid with `--template=default`.
-  - `@usetheo/ui ^0.1.0-next.0` is now a direct dependency of the default template.
+  - `@theokit/ui ^0.1.0-next.0` is now a direct dependency of the default template.
 
 ## [Unreleased]
 
@@ -545,7 +569,7 @@
 
 ### Added
 
-- **TheoUI default integration — Phase 6: Dogfood checks** — `scripts/dogfood-smoke.sh` extended from 15 to 19 checks. Four new theoui-specific gates: (#16) default template ships `@usetheo/ui` + `AgentTimeline` + `server/routes/chat.ts`, (#17) vite-plugin auto-detects TheoUI and injects CSS + `TheoUIProvider` wrap in entry.ts, (#18) `create-theokit --bare` opt-out with EC-4 atomic rollback (`applyBareTransform` + `rmSync`), (#19) `defineAgentEndpoint` + `useAgentStream` + `consumeAgentStream` surfaces all exported. Current run: **19/19 PASS**.
+- **TheoUI default integration — Phase 6: Dogfood checks** — `scripts/dogfood-smoke.sh` extended from 15 to 19 checks. Four new theoui-specific gates: (#16) default template ships `@theokit/ui` + `AgentTimeline` + `server/routes/chat.ts`, (#17) vite-plugin auto-detects TheoUI and injects CSS + `TheoUIProvider` wrap in entry.ts, (#18) `create-theokit --bare` opt-out with EC-4 atomic rollback (`applyBareTransform` + `rmSync`), (#19) `defineAgentEndpoint` + `useAgentStream` + `consumeAgentStream` surfaces all exported. Current run: **19/19 PASS**.
 - **TheoUI default integration — Phase 5: `defineAgentEndpoint` + `useAgentStream`** — closes the loop between server-emitted `AgentEvent`s and React state, with no manual SSE parser in user code.
   - **`defineAgentEndpoint({ handler })`** (server): sugar over `defineRoute` (ADR D4). Accepts `async *handler(ctx): AsyncGenerator<AgentEvent>` and returns a `RouteConfig` whose handler responds with `text/event-stream` (`data: <JSON>\n\n` framing, `cache-control: no-cache, no-transform`, `connection: keep-alive`). Observes `request.signal` and calls `generator.return()` on abort — infinite streams shut down in &lt; 100ms. Errors thrown mid-stream emit a final `{ type: 'error', message }` event before the stream closes. Re-exported via `theokit/server`.
   - **`useAgentStream(path, options?)`** (client): React hook returning `{ events, status, send, abort, reset }` where `status` is `idle | streaming | done | error`. Internally uses `fetch + ReadableStream` — **not `EventSource`** (EC-3: EventSource is GET-only and cannot carry a request body). New `send(body)` cancels any in-flight stream before opening a new connection; unmount cleanup aborts the controller (EC-8, StrictMode-safe). Re-exported via `theokit/client`.
@@ -576,7 +600,7 @@
 
 ### Changed
 
-- License set to **Apache-2.0** (was unset in `package.json`). Aligns with usetheo open-core pillars — see root `CLAUDE.md` strategic review of 2026-05-14.
+- License set to **Apache-2.0** (was unset in `package.json`). Aligns with Theo open-core pillars — see root `CLAUDE.md` strategic review of 2026-05-14.
 
 ## [0.1.0-alpha.0] - 2026-05-09
 

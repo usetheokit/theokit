@@ -34,9 +34,9 @@ export class BatchPathConflictError extends Error {
 const batchRequestSchema = z.object({
   path: z.string().min(1),
   method: z.string().min(1),
-  query: z.record(z.unknown()).optional(),
+  query: z.record(z.string(), z.unknown()).optional(),
   body: z.unknown().optional(),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 })
 
 const batchPayloadSchema = z.object({

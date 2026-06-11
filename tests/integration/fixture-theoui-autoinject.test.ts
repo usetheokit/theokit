@@ -8,11 +8,11 @@ import { safeClose } from './helpers/safe-close.js'
 const FIXTURE = resolve(__dirname, '../../fixtures/theoui-autoinject')
 
 describe('T9.1 — theoui-autoinject fixture (structure)', () => {
-  it('declares @usetheo/ui in package.json', () => {
+  it('declares @theokit/ui in package.json', () => {
     const pkg = JSON.parse(readFileSync(resolve(FIXTURE, 'package.json'), 'utf-8')) as {
       dependencies?: Record<string, string>
     }
-    expect(pkg.dependencies?.['@usetheo/ui']).toBeDefined()
+    expect(pkg.dependencies?.['@theokit/ui']).toBeDefined()
   })
 
   it('config enables ui with noir theme + cdn fonts', () => {
@@ -21,9 +21,9 @@ describe('T9.1 — theoui-autoinject fixture (structure)', () => {
     expect(src).toMatch(/fonts:\s*['"]cdn['"]/)
   })
 
-  it('app/page.tsx does NOT import @usetheo/ui directly', () => {
+  it('app/page.tsx does NOT import @theokit/ui directly', () => {
     const src = readFileSync(resolve(FIXTURE, 'app/page.tsx'), 'utf-8')
-    expect(src).not.toMatch(/from\s+['"]@usetheo\/ui['"]/)
+    expect(src).not.toMatch(/from\s+['"]@theokit\/ui['"]/)
   })
 
   it('has README + index.html', () => {

@@ -5,6 +5,9 @@ node_modules/
 # theo-ui link mode backup (ADR 0020) — never commit a backup workspace file
 pnpm-workspace.yaml.bak
 
+# SWC loader temp files (@theokit/http-decorators)
+*.__decorated__.mjs
+
 # Build output
 dist/
 .theo/
@@ -77,6 +80,12 @@ tmp/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/ralph-loop.local.md
+.claude/architecture-review-loop.local.md
+
+# Cycle infrastructure (per skill SoT — halt-loop driver files + per-slug progress trackers)
+.claude/halt-loop-prompts/
+.claude/knowledge-base/discoveries/.progress-*.json
+.claude/knowledge-base/implementations/.progress-*.json
 
 # Project-specific
 ONDAS.md
@@ -89,3 +98,11 @@ my-test/
 .gstack/
 fixtures/template-default/.theokit
 architecture-output
+architecture-output.old-*
+
+# Local backups (e.g., CLAUDE.md.bak, .claude/settings.json.bak from migrations)
+*.bak
+*.bak/.turbo/
+.turbo/
+code-review-output/
+architecture-output/

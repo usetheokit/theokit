@@ -35,4 +35,34 @@ describe('defineAction', () => {
     const result = defineAction(config)
     expect(result).toBe(config)
   })
+
+  // T1.2 (G3): accept field per ADR D1 — opt-in JSON vs FormData encoding
+  it('should preserve accept field when set to form', () => {
+    const config = {
+      input: z.object({ avatar: z.string() }),
+      accept: 'form' as const,
+      handler: () => ({ ok: true }),
+    }
+    const result = defineAction(config)
+    expect(result.accept).toBe('form')
+  })
+
+  it('should leave accept undefined when omitted (runtime defaults to json elsewhere)', () => {
+    const config = {
+      input: z.object({ name: z.string() }),
+      handler: () => ({ ok: true }),
+    }
+    const result = defineAction(config)
+    expect(result.accept).toBeUndefined()
+  })
+
+  it('should preserve accept field when explicitly set to json', () => {
+    const config = {
+      input: z.object({ name: z.string() }),
+      accept: 'json' as const,
+      handler: () => ({ ok: true }),
+    }
+    const result = defineAction(config)
+    expect(result.accept).toBe('json')
+  })
 })
