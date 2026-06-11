@@ -23,7 +23,7 @@
  * }
  * ```
  */
-import { createDecorator } from '@theokit/http-decorators'
+import { createDecorator } from '@theokit/http'
 
 export type EditFormatType =
   | 'search-replace'   // { file, search, replace } — Claude Code Edit pattern

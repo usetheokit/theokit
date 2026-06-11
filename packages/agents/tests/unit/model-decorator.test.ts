@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { Reflector } from '@theokit/http-decorators'
+import { Reflector } from '@theokit/http'
 import { Agent } from '../../src/decorators/agent.js'
 import { MainLoop } from '../../src/decorators/main-loop.js'
 import { Toolbox, Tool } from '../../src/decorators/tool.js'

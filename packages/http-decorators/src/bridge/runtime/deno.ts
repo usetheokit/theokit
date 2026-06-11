@@ -12,7 +12,7 @@ import type { RuntimeAdapter, ServerHandle } from './types.js'
 export function createDenoAdapter(): RuntimeAdapter {
   if (typeof globalThis.Deno === 'undefined') {
     throw new Error(
-      '[@theokit/http-decorators] createDenoAdapter() requires Deno runtime. ' +
+      '[@theokit/http] createDenoAdapter() requires Deno runtime. ' +
         'Use createNodeAdapter() for Node.js or createBunAdapter() for Bun.',
     )
   }

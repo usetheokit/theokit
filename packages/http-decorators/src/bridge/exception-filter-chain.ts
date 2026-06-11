@@ -41,7 +41,7 @@ export async function runExceptionFilters(
         return await filter.catch(exception, host)
       } catch (filterError) {
         // EC-1: filter itself threw — fall to global fallback
-        console.error('[@theokit/http-decorators] Exception filter threw:', filterError)
+        console.error('[@theokit/http] Exception filter threw:', filterError)
         return globalFallback(exception)
       }
     }
@@ -67,7 +67,7 @@ function builtInResponse(exception: unknown): Response {
 
 function globalFallback(exception: unknown): Response {
   const message = exception instanceof Error ? exception.message : 'Internal server error'
-  console.error('[@theokit/http-decorators] Unhandled exception:', exception)
+  console.error('[@theokit/http] Unhandled exception:', exception)
   return new Response(
     JSON.stringify({ error: { code: 'INTERNAL_SERVER_ERROR', message, statusCode: 500 } }),
     { status: 500, headers: { 'content-type': 'application/json' } },

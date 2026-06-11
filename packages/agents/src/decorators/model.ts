@@ -29,7 +29,7 @@
  * }
  * ```
  */
-import { createDecorator } from '@theokit/http-decorators'
+import { createDecorator } from '@theokit/http'
 
 /** Override the LLM model for an agent class or a specific tool method. */
 export const Model = createDecorator<string>()

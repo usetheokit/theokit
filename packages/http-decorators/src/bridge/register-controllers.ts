@@ -21,7 +21,7 @@ export function registerControllers(controllers: Function[]): RouteRegistration[
   for (const Ctor of controllers) {
     if (seen.has(Ctor)) {
       console.warn(
-        `[@theokit/http-decorators] Controller ${Ctor.name} registered multiple times — dropping duplicate`,
+        `[@theokit/http] Controller ${Ctor.name} registered multiple times — dropping duplicate`,
       )
       continue
     }

@@ -4,8 +4,8 @@ import { resolve } from 'node:path'
 export default defineConfig({
   resolve: {
     alias: {
-      '@theokit/http-decorators/runtime/node': resolve(__dirname, '../http-decorators/src/runtime-node.ts'),
-      '@theokit/http-decorators': resolve(__dirname, '../http-decorators/src/index.ts'),
+      '@theokit/http/runtime/node': resolve(__dirname, '../http-decorators/src/runtime-node.ts'),
+      '@theokit/http': resolve(__dirname, '../http-decorators/src/index.ts'),
     },
   },
   test: {

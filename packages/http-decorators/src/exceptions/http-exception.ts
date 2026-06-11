@@ -1,5 +1,5 @@
 /**
- * HttpException hierarchy for @theokit/http-decorators.
+ * HttpException hierarchy for @theokit/http.
  *
  * Per ADR D2: response shape {error: {code, message, statusCode}} matches
  * existing guard (401) and validation (422) format.
@@ -95,7 +95,7 @@ export class TooManyRequestsException extends factory(429, 'Too Many Requests') 
  *
  * @example
  * ```ts
- * import { HttpStatus } from '@theokit/http-decorators'
+ * import { HttpStatus } from '@theokit/http'
  *
  * @HttpCode(HttpStatus.CREATED)
  * @Post()
