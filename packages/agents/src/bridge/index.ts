@@ -55,7 +55,11 @@ export {
   type AgentRouteContext,
 } from './agent-route-generator.js'
 
-export { createRealAgentStream } from './llm-runner.js'
+export { createSdkAgentStream } from './sdk-adapter.js'
+export { translateSdkEvent, type SdkMessage } from './event-translator.js'
+
+// Legacy alias — will be removed in next major
+export { createSdkAgentStream as createRealAgentStream } from './sdk-adapter.js'
 
 export {
   delegate,
