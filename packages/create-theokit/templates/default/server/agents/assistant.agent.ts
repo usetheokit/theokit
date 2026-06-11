@@ -15,14 +15,11 @@ import { TimingInterceptor } from '../interceptors/timing.interceptor.js'
 import { TaskTools } from '../toolboxes/task.tools.js'
 
 @Agent({
-  name: 'assistant',
-  route: '/api/agents/assistant',
+  // Convention: AssistantAgent → name: 'assistant', route: /api/agents/assistant
   model: 'openai/gpt-4o-mini',
   systemPrompt: `You are a helpful task management assistant.
 Use the tasks.* tools to list, search, create, and complete tasks.
 Be concise and actionable.`,
-  stream: true,
-  maxIterations: 5,
 })
 @UseGuards(RolesGuard)
 @UseInterceptors(TimingInterceptor)
