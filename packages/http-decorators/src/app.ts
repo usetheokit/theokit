@@ -46,6 +46,11 @@ export interface TheoAppOptions {
 interface RouteEntry {
   walk: WalkResult
   instance: object
+  /** Pre-compiled regex + param names (Elysia-inspired: compile once at create, not per-request). */
+  compiledPattern?: RegExp
+  compiledParamNames?: string[]
+  /** Whether handler needs body parsing (skip for GET/DELETE without @Body). */
+  needsBody?: boolean
 }
 
 export class TheoApp {
@@ -145,6 +150,19 @@ export class TheoApp {
       if (aP !== bP) return aP ? 1 : -1
       return 0
     })
+
+    // Pre-compile route patterns (Elysia-inspired: regex built once, not per-request)
+    for (const entry of app.routes) {
+      const paramNames: string[] = []
+      const regexStr = entry.walk.fullPath.replace(/:(\w+)/g, (_m, name: string) => {
+        paramNames.push(name)
+        return '([^/]+)'
+      })
+      entry.compiledPattern = new RegExp(`^${regexStr}$`)
+      entry.compiledParamNames = paramNames
+      // Determine if handler needs body parsing (skip if no @Body decorator)
+      entry.needsBody = entry.walk.paramEntries.some((p) => p.source === 'body')
+    }
 
     // Bug #8: Store frontend HTML
     if (opts.html) app.frontendHtml = opts.html
@@ -370,9 +388,9 @@ export class TheoApp {
         }
       }
 
-      // Body
+      // Body — skip parsing entirely if handler has no @Body decorator (Elysia-inspired lazy parsing)
       let body: unknown
-      if (['POST', 'PUT', 'PATCH'].includes(method)) {
+      if (entry.needsBody && ['POST', 'PUT', 'PATCH'].includes(method)) {
         try {
           const text = await request.text()
           body = text ? JSON.parse(text) : undefined
@@ -431,15 +449,11 @@ export class TheoApp {
   private findRoute(method: string, pathname: string) {
     for (const entry of this.routes) {
       if (entry.walk.verb !== 'ALL' && entry.walk.verb !== method) continue
-      const paramNames: string[] = []
-      const regexStr = entry.walk.fullPath.replace(/:(\w+)/g, (_m, name: string) => {
-        paramNames.push(name)
-        return '([^/]+)'
-      })
-      const match = new RegExp(`^${regexStr}$`).exec(pathname)
+      // Use pre-compiled regex (built once at create time, not per-request)
+      const match = entry.compiledPattern!.exec(pathname)
       if (!match) continue
       const params: Record<string, string> = {}
-      paramNames.forEach((name, i) => { params[name] = match[i + 1] })
+      entry.compiledParamNames!.forEach((name, i) => { params[name] = match[i + 1] })
       return { entry, params }
     }
     return null
