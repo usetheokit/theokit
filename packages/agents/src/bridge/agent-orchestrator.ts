@@ -7,7 +7,7 @@
  */
 import { walkAgentMetadata } from './walk-agent-metadata.js'
 import { compileAgent } from './agent-compiler.js'
-import { createRealAgentStream } from './llm-runner.js'
+import { createSdkAgentStream } from './sdk-adapter.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import type { CompiledTool } from './agent-compiler.js'
 
@@ -92,7 +92,7 @@ export async function delegate(
   const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
 
   // 4. Create stream + collect (EC-4: randomUUID for session isolation)
-  const streamFactory = createRealAgentStream(walk, allTools, apiKey, walk.agentConfig.model)
+  const streamFactory = createSdkAgentStream(walk, allTools, apiKey, walk.agentConfig.model)
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
   let response = ''
