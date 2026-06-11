@@ -1,5 +1,7 @@
 # Plan: TheoKit File Conventions — Next.js-Level Project Structure
 
+> **Version 1.2** — Added T2.4: template ships favicon.ico, robots.txt, and system font stack via CSS @font-face in globals.css.
+>
 > **Version 1.1** — Absorbed EC-1 (static.ts must be CREATED, not just tested), EC-2 (app.ts + index.ts must be re-wired), EC-3 (explicit delete of app/globals.css duplicate), EC-4 (URL-encoded path test), EC-5 (query param test), EC-6 (--src-dir preserves public/).
 >
 > **Version 1.0** — Ship a professional project structure with static file serving from `public/`, CSS via `<link>` (not `node:fs` hacks), proper file conventions (loading.tsx, error.tsx, not-found.tsx), and a default template that matches create-next-app quality. Zero `node:fs` in React components. Runtime-agnostic (Node/Bun/Deno).
@@ -257,6 +259,28 @@ packages/create-theokit/src/cli.ts — update Tailwind CSS path from app/ to pub
 - [ ] `@import "tailwindcss"` is prepended, not overwritten
 - [ ] `--src-dir` flag does NOT move `public/` into `src/` (EC-6: public stays at root)
 
+### T2.4 — Ship favicon.ico, robots.txt, and professional font stack
+
+#### Objective
+Add essential static assets to the template: favicon, robots.txt, and a professional system font stack in globals.css (matching create-next-app's Geist pattern but with system fonts — no external download needed).
+
+#### Why this step
+Every professional template ships a favicon (browser tabs show a blank icon without it), robots.txt (SEO baseline), and a readable font stack. Next.js ships Geist via `next/font/google`. TheoKit uses system fonts (no build dependency) with the same CSS variable pattern.
+
+#### Files to edit
+```
+packages/create-theokit/templates/default/public/favicon.ico (NEW) — TheoKit favicon
+packages/create-theokit/templates/default/public/robots.txt (NEW) — allow all crawlers
+packages/create-theokit/templates/default/public/globals.css — add @font-face / font variables
+```
+
+#### Acceptance Criteria
+- [ ] `GET /favicon.ico` returns 200 with `image/x-icon`
+- [ ] `GET /robots.txt` returns 200 with `text/plain`
+- [ ] globals.css defines `--font-sans` and `--font-mono` CSS variables
+- [ ] `body` uses `font-family: var(--font-sans)`
+- [ ] `code`, `pre` use `font-family: var(--font-mono)`
+
 ---
 
 ## Phase 3: Integration Validation
@@ -289,8 +313,11 @@ tests/e2e/scaffold-to-request.test.ts — add static file assertions
 | 3 | Missing file conventions | T2.2 | Add loading.tsx, error.tsx, not-found.tsx |
 | 4 | Tailwind overwrites CSS | T2.3 | Fix path to public/globals.css |
 | 5 | No E2E for static serving | T3.1 | Add assertions to existing E2E test |
+| 6 | No favicon.ico in template | T2.4 | Ship favicon in public/ |
+| 7 | No robots.txt in template | T2.4 | Ship robots.txt in public/ |
+| 8 | No font CSS variables | T2.4 | Add --font-sans/--font-mono to globals.css |
 
-**Coverage: 5/5 gaps covered (100%)**
+**Coverage: 8/8 gaps covered (100%)**
 
 ## Global Definition of Done
 
