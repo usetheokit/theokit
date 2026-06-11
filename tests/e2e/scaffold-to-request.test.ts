@@ -183,8 +183,9 @@ describe('scaffold-to-request E2E', () => {
     expect(existsSync(join(projectDir, '.gitignore'))).toBe(true)
     expect(existsSync(join(projectDir, '_gitignore'))).toBe(false)
 
-    // Public assets
-    expect(existsSync(join(projectDir, 'public/index.html'))).toBe(true)
+    // React SSR — no public/index.html, React components ARE the frontend
+    expect(existsSync(join(projectDir, 'app/page.tsx'))).toBe(true)
+    expect(existsSync(join(projectDir, 'app/layout.tsx'))).toBe(true)
   })
 
   it('scaffold writes valid package.json with correct name and deps', () => {
@@ -200,6 +201,8 @@ describe('scaffold-to-request E2E', () => {
     // Required deps present
     expect(pkg.dependencies['@theokit/http']).toBeDefined()
     expect(pkg.dependencies['@theokit/agents']).toBeDefined()
+    expect(pkg.dependencies.react).toBeDefined()
+    expect(pkg.dependencies['react-dom']).toBeDefined()
     expect(pkg.dependencies['reflect-metadata']).toBeDefined()
     expect(pkg.dependencies.zod).toBeDefined()
 
