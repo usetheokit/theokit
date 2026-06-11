@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { Toolbox, Tool, Trace, Audit } from '@theokit/agents'
 import { taskStore } from '../store.js'
 
-@Toolbox({ namespace: 'tasks' })
+@Toolbox()  // Convention: TaskTools → namespace: 'task'
 @Trace(true)
 export class TaskTools {
   @Tool({
