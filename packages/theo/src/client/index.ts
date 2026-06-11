@@ -25,6 +25,10 @@ export type {
 } from './use-agent-stream.js'
 
 export { consumeAgentStream, parseSSEChunk } from './agent-stream-core.js'
+
+// Link with prefetch — instant navigation for multi-page apps
+export { Link } from './link.js'
+export type { LinkProps, PrefetchBehavior } from './link.js'
 export type { ConsumeOptions } from './agent-stream-core.js'
 
 // T1.1 — Re-export AgentEvent for client consumers (useAgentStream, etc.)
