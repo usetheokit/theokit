@@ -250,7 +250,7 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     pkg.devDependencies.tailwindcss = '^4.0.0'
     pkg.devDependencies['@tailwindcss/vite'] = '^4.0.0'
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-    const cssDir = existsSync(resolve(targetDir, 'src/app')) ? 'src/app' : 'app'
+    const cssDir = existsSync(resolve(targetDir, 'src/public')) ? 'src/public' : 'public'
     const cssPath = resolve(targetDir, `${cssDir}/globals.css`)
     const existing = existsSync(cssPath) ? readFileSync(cssPath, 'utf-8') : ''
     writeFileSync(cssPath, '@import "tailwindcss";\n\n' + existing)

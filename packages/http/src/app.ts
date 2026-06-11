@@ -1,4 +1,4 @@
-/* eslint-disable security/detect-non-literal-regexp, complexity, sonarjs/cognitive-complexity, max-depth, sonarjs/no-collapsible-if */
+/* eslint-disable security/detect-non-literal-regexp, complexity, sonarjs/cognitive-complexity, max-depth, sonarjs/no-collapsible-if, max-lines, max-lines-per-function */
 import 'reflect-metadata'
 
 import { createExecutionContext, type CanActivate } from './bridge/execution-context.js'
@@ -7,6 +7,7 @@ import type { ServerHandle } from './bridge/runtime/types.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
 import { ForbiddenException, HttpException } from './exceptions/http-exception.js'
+import { createStaticHandler } from './static.js'
 
 /**
  * TheoApp — NestJS/Spring Boot-style application bootstrap.
@@ -40,6 +41,8 @@ export interface TheoAppOptions {
   ) => (message: string, sessionId: string) => AsyncIterable<unknown>
   /** HTML string to serve at GET / (inline frontend). */
   html?: string
+  /** Directory for static file serving (default: 'public', false to disable). */
+  staticDir?: string | false
   /** Readiness checks for GET /__theo/ready (K8s readiness probe). */
   readinessChecks?: ReadinessCheck[]
   /** Custom health endpoint path (default: '/__theo/health'). */
@@ -62,6 +65,7 @@ export class TheoApp {
   private serverHandle: ServerHandle
   private readonly routes: RouteEntry[] = []
   private frontendHtml?: string
+  private staticHandler?: (request: Request) => Promise<Response | null>
   private readonly startTime = Date.now()
   private readonly healthPath: string
   private readonly readyPath: string
@@ -180,6 +184,11 @@ export class TheoApp {
 
     // Bug #8: Store frontend HTML
     if (opts.html) app.frontendHtml = opts.html
+
+    // Static file serving from public/ (default: enabled)
+    if (opts.staticDir !== false) {
+      app.staticHandler = createStaticHandler({ root: opts.staticDir ?? 'public' })
+    }
 
     // 4. Auto-wire agents (EC-2: AFTER providers and controllers)
     // The framework handles EVERYTHING — walk, compile, mount, stream.
@@ -422,6 +431,12 @@ export class TheoApp {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
+    }
+
+    // Static files from public/ (runtime-agnostic — Node/Bun/Deno)
+    if (this.staticHandler && (request.method === 'GET' || request.method === 'HEAD')) {
+      const staticResponse = await this.staticHandler(request)
+      if (staticResponse) return staticResponse
     }
 
     // Agent routes (auto-wired — checked first, with guard enforcement per Bug #4)
