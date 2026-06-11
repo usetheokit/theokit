@@ -4,18 +4,30 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun app.ts",
-    "dev:node": "npx tsx app.ts",
-    "test": "bun test"
+    "dev": "npx tsx --watch app.ts",
+    "dev:bun": "bun --watch app.ts",
+    "build": "npx tsup app.ts --format esm --out-dir dist",
+    "start": "node dist/app.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@theokit/http": "^0.1.0",
-    "@theokit/agents": "^0.1.0",
+    "@theokit/http": "^0.4.0",
+    "@theokit/agents": "^0.3.0",
     "reflect-metadata": "^0.2.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@swc/core": "^1.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.5.0",
-    "@swc/core": "^1.3.0"
+    "typescript-eslint": "^8.0.0"
   }
 }
