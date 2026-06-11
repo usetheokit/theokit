@@ -31,12 +31,12 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@theokit/http-decorators": ">=0.1.0-alpha.0",
+    "@theokit/http": ">=0.1.0-alpha.0",
     "reflect-metadata": ">=0.2.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@theokit/http-decorators": "workspace:*",
+    "@theokit/http": "workspace:*",
     "reflect-metadata": "^0.2.0",
     "zod": "^4.0.0",
     "tsup": "^8.0.0",

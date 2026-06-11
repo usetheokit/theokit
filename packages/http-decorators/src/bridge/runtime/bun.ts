@@ -20,7 +20,7 @@ import type { RuntimeAdapter, ServerHandle } from './types.js'
 export function createBunAdapter(): RuntimeAdapter {
   if (typeof globalThis.Bun === 'undefined') {
     throw new Error(
-      '[@theokit/http-decorators] createBunAdapter() requires Bun runtime. ' +
+      '[@theokit/http] createBunAdapter() requires Bun runtime. ' +
         'Use createNodeAdapter() for Node.js.',
     )
   }

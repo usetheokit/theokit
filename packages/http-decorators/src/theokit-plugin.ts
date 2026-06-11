@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-non-literal-regexp */
 /**
- * TheoKit integration plugin for @theokit/http-decorators.
+ * TheoKit integration plugin for @theokit/http.
  *
  * Two modes:
  *
@@ -12,7 +12,7 @@
  * ```ts
  * // theo.config.ts — NO controller import needed
  * import { defineConfig } from 'theokit/server'
- * import { httpDecoratorsPlugin } from '@theokit/http-decorators/theokit-plugin'
+ * import { httpDecoratorsPlugin } from '@theokit/http/theokit-plugin'
  *
  * export default defineConfig({
  *   plugins: [
@@ -104,14 +104,14 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
       buildRouteTable(routes, controllers, opts.container)
       initialized = true
       console.log(
-        `[@theokit/http-decorators] Loaded ${controllers.length} controller(s) ` +
+        `[@theokit/http] Loaded ${controllers.length} controller(s) ` +
           `with ${routes.length} route(s) via SWC.`,
       )
     })()
   }
 
   return {
-    name: '@theokit/http-decorators',
+    name: '@theokit/http',
     register(app: {
       addHook: (
         name: string,

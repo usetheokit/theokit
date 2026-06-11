@@ -1,5 +1,5 @@
 /**
- * Global Symbol-keyed metadata namespace constants for @theokit/http-decorators.
+ * Global Symbol-keyed metadata namespace constants for @theokit/http.
  *
  * Uses Symbol.for() (global Symbol registry) instead of Symbol() (local) because
  * the SWC loader imports controller files as separate module instances. With local

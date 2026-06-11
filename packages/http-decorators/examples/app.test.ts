@@ -1,6 +1,6 @@
 /**
  * ╔═══════════════════════════════════════════════════════════╗
- * ║       @theokit/http-decorators — Example App (TS)         ║
+ * ║       @theokit/http — Example App (TS)         ║
  * ╠═══════════════════════════════════════════════════════════╣
  * ║                                                           ║
  * ║  TypeScript REAL com @ syntax — NestJS-style full app     ║

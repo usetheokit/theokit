@@ -9,7 +9,7 @@
  * ```ts
  * // server/contracts.ts — shared between server and client
  * import { z } from 'zod'
- * import { contract } from '@theokit/http-decorators'
+ * import { contract } from '@theokit/http'
  *
  * export const zCreateTask = z.object({
  *   title: z.string().min(3),

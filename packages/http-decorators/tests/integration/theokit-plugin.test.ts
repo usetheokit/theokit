@@ -161,8 +161,8 @@ describe('TheoKit plugin integration — httpDecoratorsPlugin', () => {
     expect(data.error.message).toContain('No TheoKit file-route matched')
   })
 
-  it('plugin.name is @theokit/http-decorators', () => {
+  it('plugin.name is @theokit/http', () => {
     const plugin = httpDecoratorsPlugin({ controllers: [CatsCtrl] })
-    expect(plugin.name).toBe('@theokit/http-decorators')
+    expect(plugin.name).toBe('@theokit/http')
   })
 })

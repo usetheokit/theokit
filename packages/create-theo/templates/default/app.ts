@@ -10,7 +10,7 @@
  */
 import 'reflect-metadata'
 import { readFileSync } from 'node:fs'
-import { TheoApp } from '@theokit/http-decorators/app'
+import { TheoApp } from '@theokit/http/app'
 import { TasksController } from './server/controllers/tasks.controller.js'
 import { AssistantAgent } from './server/agents/assistant.agent.js'
 import { TaskTools } from './server/toolboxes/task.tools.js'

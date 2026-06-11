@@ -7,7 +7,7 @@
 import {
   createDecorator, Reflector,
   type CanActivate, type ExecutionContext,
-} from '@theokit/http-decorators'
+} from '@theokit/http'
 
 export enum Role {
   User = 'user',

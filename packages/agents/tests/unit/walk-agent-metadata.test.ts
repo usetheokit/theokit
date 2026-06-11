@@ -9,7 +9,7 @@ import { Trace } from '../../src/decorators/observability.js'
 import { walkAgentMetadata, validateUniqueRoutes } from '../../src/bridge/walk-agent-metadata.js'
 
 // Import UseGuards from http-decorators
-import { UseGuards } from '@theokit/http-decorators'
+import { UseGuards } from '@theokit/http'
 
 class AuthGuard { canActivate() { return true } }
 class AdminGuard { canActivate() { return false } }

@@ -71,7 +71,7 @@ function resolveBodySchema(
 
   // EC-4 relaxed: warn when @Body() has no schema and no paramtypes
   console.warn(
-    `[@theokit/http-decorators] method ${String(propertyKey)} on ` +
+    `[@theokit/http] method ${String(propertyKey)} on ` +
       `${ControllerClass.name}: @Body() without explicit schema and ` +
       `emitDecoratorMetadata is not active. Body will be passed raw (no validation). ` +
       `Fix: use @Body(zodSchema) for validation without metadata emission.`,
@@ -102,7 +102,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
   // Q4: host captured but enforcement deferred to v0.2.0
   if (host) {
     console.warn(
-      `[@theokit/http-decorators] @Controller host '${host}' captured but enforcement deferred to v0.2.0`,
+      `[@theokit/http] @Controller host '${host}' captured but enforcement deferred to v0.2.0`,
     )
   }
 
