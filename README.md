@@ -412,6 +412,27 @@ export default defineConfig({
 | [`@theokit/sdk-handoff`](https://www.npmjs.com/package/@theokit/sdk-handoff) | 0.1.0 | Agent-to-agent handoff protocol |
 | [`@theokit/codemod-sdk-2-0`](https://www.npmjs.com/package/@theokit/codemod-sdk-2-0) | 1.0.0 | Codemod for SDK v1 → v2 migration |
 
+### Auth providers (sibling repo)
+
+| Package | Version | Description |
+|---|---|---|
+| [`@theokit/auth-github`](https://www.npmjs.com/package/@theokit/auth-github) | 0.1.0 | GitHub OAuth provider |
+| [`@theokit/auth-google`](https://www.npmjs.com/package/@theokit/auth-google) | 0.1.0 | Google OAuth provider |
+| [`@theokit/auth-magic-link`](https://www.npmjs.com/package/@theokit/auth-magic-link) | 0.1.0 | Passwordless magic link auth |
+
+### Plugins (sibling repo)
+
+| Package | Version | Description |
+|---|---|---|
+| [`@theokit/plugin-canvas`](https://www.npmjs.com/package/@theokit/plugin-canvas) | 0.3.0 | Canvas/whiteboard UI plugin |
+| [`@theokit/plugin-copilot`](https://www.npmjs.com/package/@theokit/plugin-copilot) | 0.1.0 | In-app AI copilot assistant |
+| [`@theokit/plugin-db-drizzle`](https://www.npmjs.com/package/@theokit/plugin-db-drizzle) | 0.1.0 | Drizzle ORM integration |
+| [`@theokit/plugin-email`](https://www.npmjs.com/package/@theokit/plugin-email) | 0.1.0 | Transactional email (Resend/SendGrid) |
+| [`@theokit/plugin-forms`](https://www.npmjs.com/package/@theokit/plugin-forms) | 0.1.2 | Form builder + validation |
+| [`@theokit/plugin-payments`](https://www.npmjs.com/package/@theokit/plugin-payments) | 0.1.0 | Stripe payments integration |
+| [`@theokit/plugin-realtime`](https://www.npmjs.com/package/@theokit/plugin-realtime) | 0.1.0 | Real-time subscriptions (WebSocket/SSE) |
+| [`@theokit/plugin-voice`](https://www.npmjs.com/package/@theokit/plugin-voice) | 0.7.0 | Voice/audio agent interface |
+
 ### Gateways (messaging channels — sibling repo)
 
 | Package | Version | Description |
@@ -423,22 +444,23 @@ export default defineConfig({
 
 ## Ecosystem
 
-TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **self-contained** — builds, ships, and runs without any sibling project. The ecosystem spans **15 published npm packages** across 3 repos.
+TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **self-contained** — builds, ships, and runs without any sibling project. The ecosystem spans **27 published npm packages** across multiple repos.
 
 | Sibling | Direction | How it relates | Status |
 |---------|-----------|----------------|:------:|
 | **`@theokit/sdk` v1.7.0** — agent runtime | TheoKit ← sibling | SDK is the **only** agent runtime (rule: INQUEBRAVEL). `Agent.create()`, `Run.stream()`, `defineTool()`. 6 sub-packages (tools, budget, cache, memory, handoff, codemod). | ✅ Wired |
-| **`@theokit/gateway-*`** — messaging channels | TheoKit ← sibling | SMS, LINE, Matrix, Mattermost gateways. Each is an independent npm package. | ✅ Published |
+| **`@theokit/auth-*`** — auth providers | TheoKit ← sibling | GitHub, Google OAuth + magic link. Each is an independent npm package. | ✅ Published |
+| **`@theokit/plugin-*`** — 8 plugins | TheoKit → sibling | canvas, copilot, db-drizzle, email, forms, payments, realtime, voice. Apps install explicitly. | ✅ Published |
+| **`@theokit/gateway-*`** — 4 gateways | TheoKit ← sibling | SMS, LINE, Matrix, Mattermost. Each is an independent npm package. | ✅ Published |
 | **`@theokit/ui`** — React component library | TheoKit ← sibling | Chat surface, theme system. Auto-injected when detected. npm dep, not workspace link. | ✅ Wired |
 | **TheoCloud** — managed platform | TheoKit → sibling | **Principal deploy target.** Thin validator adapter shipped. K8s emission lives in TheoCloud (Go). | ✅ Adapter shipped |
-| **`theokit-plugins`** — plugin registry | TheoKit → sibling | `@theokit/plugin-cors` v0.1.0 shipping. Apps install explicitly. Zero framework coupling. | 🌱 First plugin |
 
 ## Status
 
 - **635+ tests passing** across 4 packages (319 HTTP + 239 agents + 71 create-theokit + 6 E2E). Zero lint errors, zero typecheck errors.
 - **31 decorators** (16 HTTP + 15 agent) with convention naming inference.
 - **14 agent stream event types** with discriminated union.
-- **15 npm packages published** across the Theo ecosystem.
+- **27 npm packages published** across the Theo ecosystem (4 core + 7 SDK + 3 auth + 8 plugins + 4 gateways + 1 codemod).
 - **13 system design guardrails** enforced on every interaction (G1-G13 including YAGNI, DRY, Feature Creep).
 - **Real E2E tests** — scaffold → install → dev server → HTTP request → 200 response.
 - **SDK integration complete** — all agent execution flows through `@theokit/sdk` v1.7.0.
