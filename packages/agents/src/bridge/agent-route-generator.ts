@@ -35,7 +35,11 @@ export function generateAgentRoutes(ctx: AgentRouteContext): AgentRoute[] {
     path: `${basePath}/chat`,
     handler: async (request) => {
       let body: Record<string, unknown> | null = null
-      try { body = await request.json() as Record<string, unknown> } catch { /* empty */ }
+      try {
+        body = (await request.json()) as Record<string, unknown>
+      } catch {
+        /* empty */
+      }
 
       const message = body?.message
       if (typeof message !== 'string' || message.length === 0) {
@@ -45,7 +49,8 @@ export function generateAgentRoutes(ctx: AgentRouteContext): AgentRoute[] {
         )
       }
 
-      const sessionId = (body?.sessionId as string) ?? `session-${Date.now()}`
+      const rawSessionId = body?.sessionId
+      const sessionId = typeof rawSessionId === 'string' ? rawSessionId : `session-${Date.now()}`
       return streamAgentResponse(createRun(message, sessionId))
     },
   })
@@ -64,7 +69,10 @@ export function generateAgentRoutes(ctx: AgentRouteContext): AgentRoute[] {
             { status: 404, headers: { 'content-type': 'application/json' } },
           )
         }
-        return new Response(JSON.stringify(run), { status: 200, headers: { 'content-type': 'application/json' } })
+        return new Response(JSON.stringify(run), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
       },
     })
   }

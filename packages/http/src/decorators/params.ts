@@ -1,4 +1,4 @@
-import type { ZodTypeAny } from 'zod'
+import type { z } from 'zod'
 
 import { setMeta, getMeta, ROUTE_PARAMS } from '../metadata/index.js'
 
@@ -20,11 +20,11 @@ export interface ParamEntry {
   passthrough?: boolean
   /** Explicit Zod schema — when set, bypasses design:paramtypes + DTO resolution.
    *  Preferred path: `@Body(zMySchema)` works without emitDecoratorMetadata. */
-  schema?: ZodTypeAny
+  schema?: z.ZodType
 }
 
 /** Detect whether a value is a Zod schema (has `.safeParse()` method). */
-function isZodSchema(v: unknown): v is ZodTypeAny {
+function isZodSchema(v: unknown): v is z.ZodType {
   return (
     v !== null &&
     v !== undefined &&
@@ -41,7 +41,7 @@ function makeParamDecorator(source: ParamSource) {
    *  - `@Body(zodSchema)` — whole-object with explicit Zod validation
    *    (works WITHOUT emitDecoratorMetadata — TheoKit "Zod is SSoT" alignment)
    */
-  return function (keyOrSchema?: string | ZodTypeAny): ParameterDecorator {
+  return function (keyOrSchema?: string | z.ZodType): ParameterDecorator {
     return (target, propertyKey, parameterIndex) => {
       if (propertyKey === undefined) return
       const map =

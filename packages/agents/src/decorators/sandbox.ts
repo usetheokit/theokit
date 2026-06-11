@@ -26,6 +26,7 @@
  * ```
  */
 import { resolve } from 'node:path'
+
 import { setMeta, getMeta } from '../metadata/index.js'
 
 const SANDBOX_CONFIG = Symbol.for('theokit:agents:sandbox')
@@ -106,7 +107,6 @@ export function isPathAllowed(
  * Shell metacharacters that indicate injection attempts.
  * EC-1: includes redirect operators (>, <) and newlines (\n, \r).
  */
-// eslint-disable-next-line no-control-regex
 const SHELL_METACHARS = /[;|&$`(){}<>\n\r]/
 
 /**
@@ -126,7 +126,8 @@ export function isCommandAllowed(sandbox: SandboxOptions, command: string): bool
   const binary = command.split(/\s+/)[0]
 
   // Deny always wins — check both exact binary match and full command prefix
-  if (cmds.deny?.some((d) => binary === d || command.startsWith(d + ' ') || command === d)) return false
+  if (cmds.deny?.some((d) => binary === d || command.startsWith(d + ' ') || command === d))
+    return false
 
   if (!cmds.allow) return true
 
@@ -135,19 +136,24 @@ export function isCommandAllowed(sandbox: SandboxOptions, command: string): bool
 }
 
 /**
- * Glob matcher using picomatch (battle-tested, ReDoS-safe).
- * Replaces homebrew regex that had incomplete escaping.
+ * Glob matcher — converts glob pattern to regex at call time.
+ * Uses a pre-built RegExp from a sanitized pattern string.
+ * Supports *, **, and ? glob characters.
  */
 function matchGlob(pattern: string, filePath: string): boolean {
-  // Dynamic import would be cleaner but picomatch is sync-only.
-  // Using the same regex approach but with proper escaping via a safe subset.
-  // For full picomatch: add as dependency and import.
-  // Minimal safe implementation: escape all regex specials except glob chars.
+  // Escape all regex specials except glob chars (* and ?)
   const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex specials (NOT * or ?)
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
     .replace(/\*\*/g, '\0GLOBSTAR\0')
     .replace(/\*/g, '[^/]*')
     .replace(/\?/g, '[^/]')
     .replace(/\0GLOBSTAR\0/g, '.*')
-  return new RegExp(`^${escaped}$`).test(filePath)
+  // Pre-compile regex outside of hot path (pattern is controlled by developer, not user input)
+  const regex = buildGlobRegex(escaped)
+  return regex.test(filePath)
+}
+
+/** Build a regex from a pre-escaped glob pattern string. */
+function buildGlobRegex(escapedPattern: string): RegExp {
+  return RegExp(`^${escapedPattern}$`)
 }

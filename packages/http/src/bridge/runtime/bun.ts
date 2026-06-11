@@ -25,13 +25,16 @@ export function createBunAdapter(): RuntimeAdapter {
     )
   }
 
+  // Capture in a const so TS narrows the type inside closures below.
+  const BunRuntime = globalThis.Bun
+
   return {
     createServer(handler) {
-      let server: ReturnType<typeof Bun.serve> | null = null
+      let server: ReturnType<typeof BunRuntime.serve> | null = null
 
       const handle: ServerHandle = {
         listen(port: number, callback?: () => void) {
-          server = Bun.serve({
+          server = BunRuntime.serve({
             port,
             fetch: handler,
           })
@@ -54,11 +57,12 @@ export function createBunAdapter(): RuntimeAdapter {
 
 // Bun global type augmentation for TypeScript
 declare global {
-   
-  var Bun: {
-    serve(options: {
-      port: number
-      fetch: (request: Request) => Response | Promise<Response>
-    }): { port: number; stop(): void }
-  } | undefined
+  var Bun:
+    | {
+        serve(options: {
+          port: number
+          fetch: (request: Request) => Response | Promise<Response>
+        }): { port: number; stop(): void }
+      }
+    | undefined
 }

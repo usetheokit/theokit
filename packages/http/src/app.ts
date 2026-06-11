@@ -240,7 +240,7 @@ export class TheoApp {
       compileAgent: Function,
       generateAgentRoutes: Function,
       getMixins: Function,
-      createSdkAgentStreamFn: Function | undefined
+      createSdkAgentStreamFn: Function
     try {
       const mod = await importFn('@theokit/agents')
       walkAgentMetadata = mod.walkAgentMetadata
@@ -289,8 +289,7 @@ export class TheoApp {
 
       if (opts.agentStreamFactory) {
         createRun = opts.agentStreamFactory(walk, compiled.tools, apiKey, opts.llmModel)
-      } else if (apiKey && createSdkAgentStreamFn !== undefined) {
-        // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- apiKey can be empty string
+      } else if (apiKey) {
         // SDK adapter: bridges @theokit/agents decorators → @theokit/sdk runtime
         createRun = createSdkAgentStreamFn(walk, compiled.tools, apiKey, opts.llmModel) as (
           m: string,

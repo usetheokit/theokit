@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import type { ZodTypeAny } from 'zod'
+import type { z } from 'zod'
 
 import type { ControllerMeta } from '../decorators/controller.js'
 import type { RouteMethodEntry, HttpVerb } from '../decorators/methods.js'
@@ -25,9 +25,9 @@ export interface WalkResult {
   verb: HttpVerb
   fullPath: string
   propertyKey: string | symbol
-  bodySchema?: ZodTypeAny
-  querySchema?: ZodTypeAny
-  paramsSchema?: ZodTypeAny
+  bodySchema?: z.ZodType
+  querySchema?: z.ZodType
+  paramsSchema?: z.ZodType
   paramEntries: ParamEntry[]
   status?: number
   headers: [string, string][]
@@ -55,7 +55,7 @@ function resolveBodySchema(
   paramEntries: ParamEntry[],
   ControllerClass: Function,
   propertyKey: string | symbol,
-): ZodTypeAny | undefined {
+): z.ZodType | undefined {
   const bodyParam = paramEntries.find((p) => p.source === 'body' && !p.key)
   if (!bodyParam) return undefined
 
