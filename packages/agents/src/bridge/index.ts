@@ -8,6 +8,7 @@ export {
 export {
   walkAgentMetadata,
   validateUniqueRoutes,
+  AgentWarningCode,
   type AgentWalkResult,
   type ToolboxWalkResult,
   type ToolWalkResult,
@@ -20,10 +21,7 @@ export {
   type CompiledAgentOptions,
 } from './agent-compiler.js'
 
-export {
-  streamAgentResponse,
-  type StreamEvent,
-} from './agent-sse-handler.js'
+export { streamAgentResponse, type StreamEvent } from './agent-sse-handler.js'
 
 export {
   type AgentStreamEvent,
@@ -57,9 +55,6 @@ export {
 
 export { createSdkAgentStream } from './sdk-adapter.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
-
-// Legacy alias — will be removed in next major
-export { createSdkAgentStream as createRealAgentStream } from './sdk-adapter.js'
 
 export {
   delegate,
