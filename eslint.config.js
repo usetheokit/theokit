@@ -48,6 +48,7 @@ export default tseslint.config(
       // confusing reports (the user will write their own version anyway)
       // and would break with every minor scaffold-style change.
       'packages/create-theo/templates/**',
+      'packages/create-theokit/templates/**',
       // Fixtures + examples have their own per-folder tsconfig that the
       // root project service does not own. They are end-user demo apps,
       // not framework code; linting them produces parser-only errors that
