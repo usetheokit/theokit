@@ -4,7 +4,8 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "build": "tsup"
+    "build": "tsup",
+    "test": "echo 'theokit tests run from root: pnpm test'"
   },
   "bin": {
     "theokit": "./dist/cli/index.js"
