@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
-export const VALID_TYPES = ['route', 'action', 'page', 'ws', 'controller'] as const
+export const VALID_TYPES = ['route', 'action', 'page', 'ws', 'controller', 'agent', 'toolbox'] as const
 export type GeneratorType = (typeof VALID_TYPES)[number]
 
 export interface GenerateOptions {
@@ -135,6 +135,49 @@ function generateActionTemplate(name: string): string {
  * plan Q4 cenário 1: roundtrip serialize). Skeleton uses vitest BDD shape
  * per testing.md.
  */
+function generateAgentTemplate(name: string): string {
+  const pascal = toPascalCase(name)
+  return [
+    `import 'reflect-metadata'`,
+    `import { Agent, MainLoop } from '@theokit/agents'`,
+    `import { UseGuards } from '@theokit/http'`,
+    ``,
+    `@Agent({`,
+    `  name: '${name}',`,
+    `  route: '/api/agents/${name}',`,
+    `  model: 'openai/gpt-4o-mini',`,
+    `  systemPrompt: 'You are a helpful ${name} assistant.',`,
+    `})`,
+    `export class ${pascal}Agent {`,
+    `  @MainLoop({ strategy: 'react', maxIterations: 5 })`,
+    `  async run() {}`,
+    `}`,
+    ``,
+  ].join('\n')
+}
+
+function generateToolboxTemplate(name: string): string {
+  const pascal = toPascalCase(name)
+  return [
+    `import 'reflect-metadata'`,
+    `import { z } from 'zod'`,
+    `import { Toolbox, Tool } from '@theokit/agents'`,
+    ``,
+    `@Toolbox({ namespace: '${name}' })`,
+    `export class ${pascal}Tools {`,
+    `  @Tool({`,
+    `    name: 'hello',`,
+    `    description: 'Say hello',`,
+    `    input: z.object({ name: z.string() }),`,
+    `  })`,
+    `  async hello(input: { name: string }) {`,
+    `    return \`Hello, \${input.name}!\``,
+    `  }`,
+    `}`,
+    ``,
+  ].join('\n')
+}
+
 function resolveTemplate(
   cwd: string,
   type: GeneratorType,
@@ -162,6 +205,16 @@ function resolveTemplate(
       return {
         filePath: resolve(cwd, 'server/controllers', `${name}.controller.ts`),
         content: generateControllerTemplate(name),
+      }
+    case 'agent':
+      return {
+        filePath: resolve(cwd, 'server/agents', `${name}.agent.ts`),
+        content: generateAgentTemplate(name),
+      }
+    case 'toolbox':
+      return {
+        filePath: resolve(cwd, 'server/toolboxes', `${name}.tools.ts`),
+        content: generateToolboxTemplate(name),
       }
     default:
       return null

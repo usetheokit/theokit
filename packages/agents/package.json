@@ -18,6 +18,10 @@
     "./bridge": {
       "import": "./dist/bridge.js",
       "types": "./dist/bridge.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
     }
   },
   "files": [
