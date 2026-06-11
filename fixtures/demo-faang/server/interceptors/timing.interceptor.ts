@@ -1,4 +1,4 @@
-import type { Interceptor } from '../../../../packages/http-decorators/src/bridge/interceptor-chain.js'
+import type { Interceptor } from '../../../../packages/http/src/bridge/interceptor-chain.js'
 
 export class TimingInterceptor implements Interceptor {
   async intercept(_request: Request, next: () => Promise<unknown>): Promise<unknown> {

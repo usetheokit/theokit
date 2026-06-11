@@ -1,4 +1,4 @@
-import type { NestMiddleware } from '../../../../packages/http-decorators/src/bridge/middleware-consumer.js'
+import type { NestMiddleware } from '../../../../packages/http/src/bridge/middleware-consumer.js'
 
 export class LoggerMiddleware implements NestMiddleware {
   use(request: Request, next: () => Promise<Response | null>): Promise<Response | null> {

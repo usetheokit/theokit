@@ -11,10 +11,10 @@ import {
   HttpCode,
   UseGuards,
   UseInterceptors,
-} from '../../packages/http-decorators/src/index.js'
-import { createDecoratorServer } from '../../packages/http-decorators/src/bridge/create-server.js'
-import type { Interceptor } from '../../packages/http-decorators/src/bridge/interceptor-chain.js'
-import type { NestMiddleware } from '../../packages/http-decorators/src/bridge/middleware-consumer.js'
+} from '../../packages/http/src/index.js'
+import { createDecoratorServer } from '../../packages/http/src/bridge/create-server.js'
+import type { Interceptor } from '../../packages/http/src/bridge/interceptor-chain.js'
+import type { NestMiddleware } from '../../packages/http/src/bridge/middleware-consumer.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 // ─── Interceptors ───

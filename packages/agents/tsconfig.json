@@ -9,8 +9,8 @@
     "declarationDir": "./dist",
     "strict": true,
     "paths": {
-      "@theokit/http": ["../http-decorators/src/index.ts"],
-      "@theokit/http/runtime/node": ["../http-decorators/src/runtime-node.ts"]
+      "@theokit/http": ["../http/src/index.ts"],
+      "@theokit/http/runtime/node": ["../http/src/runtime-node.ts"]
     }
   },
   "include": ["src/**/*.ts"],

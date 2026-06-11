@@ -16,8 +16,8 @@ import {
   SetMetadata,
   NotFoundException,
   ForbiddenException,
-} from '../../../../packages/http-decorators/src/index.js'
-import type { CanActivate, ExecutionContext } from '../../../../packages/http-decorators/src/bridge/execution-context.js'
+} from '../../../../packages/http/src/index.js'
+import type { CanActivate, ExecutionContext } from '../../../../packages/http/src/bridge/execution-context.js'
 import { taskStore } from '../routes/tasks/_store.js'
 import { TimingInterceptor } from '../interceptors/timing.interceptor.js'
 

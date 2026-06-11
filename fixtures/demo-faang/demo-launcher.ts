@@ -8,8 +8,8 @@
  * Controllers loaded via SWC (parameter decorators require legacy decorator support).
  */
 import { resolve } from 'node:path'
-import { loadControllerWithSwc } from '../../packages/http-decorators/src/bridge/swc-loader.js'
-import { createDecoratorServer } from '../../packages/http-decorators/src/bridge/create-server.js'
+import { loadControllerWithSwc } from '../../packages/http/src/bridge/swc-loader.js'
+import { createDecoratorServer } from '../../packages/http/src/bridge/create-server.js'
 import { walkAgentMetadata } from '../../packages/agents/src/bridge/walk-agent-metadata.js'
 import { compileAgent } from '../../packages/agents/src/bridge/agent-compiler.js'
 import { generateAgentRoutes } from '../../packages/agents/src/bridge/agent-route-generator.js'
@@ -71,13 +71,13 @@ const agentRoutes = generateAgentRoutes({
 
 // ─── Create unified HTTP server (controllers + agent routes) ────
 
-const { createNodeAdapter } = await import('../../packages/http-decorators/src/bridge/runtime/node.js')
-const walkMetaMod = await import('../../packages/http-decorators/src/bridge/walk-metadata.js')
-const { runMiddleware, MiddlewareConsumerImpl } = await import('../../packages/http-decorators/src/bridge/middleware-consumer.js')
-const { createExecutionContext } = await import('../../packages/http-decorators/src/bridge/execution-context.js')
-const { runInterceptors } = await import('../../packages/http-decorators/src/bridge/interceptor-chain.js')
-const { runExceptionFilters } = await import('../../packages/http-decorators/src/bridge/exception-filter-chain.js')
-const { ForbiddenException } = await import('../../packages/http-decorators/src/exceptions/http-exception.js')
+const { createNodeAdapter } = await import('../../packages/http/src/bridge/runtime/node.js')
+const walkMetaMod = await import('../../packages/http/src/bridge/walk-metadata.js')
+const { runMiddleware, MiddlewareConsumerImpl } = await import('../../packages/http/src/bridge/middleware-consumer.js')
+const { createExecutionContext } = await import('../../packages/http/src/bridge/execution-context.js')
+const { runInterceptors } = await import('../../packages/http/src/bridge/interceptor-chain.js')
+const { runExceptionFilters } = await import('../../packages/http/src/bridge/exception-filter-chain.js')
+const { ForbiddenException } = await import('../../packages/http/src/exceptions/http-exception.js')
 const walkControllerMetadata = walkMetaMod.walkControllerMetadata
 
 // Build controller routes

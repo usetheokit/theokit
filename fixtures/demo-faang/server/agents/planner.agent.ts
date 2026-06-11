@@ -4,7 +4,7 @@ import {
   Memory, Budget, Checkpoint,
   Hook, type HookPoint,
 } from '../../../../packages/agents/src/decorators/index.js'
-import { UseGuards, UseInterceptors, Throttle } from '../../../../packages/http-decorators/src/index.js'
+import { UseGuards, UseInterceptors, Throttle } from '../../../../packages/http/src/index.js'
 import { RolesGuard, Roles, Role } from '../guards/roles.guard.js'
 import { TimingInterceptor } from '../interceptors/timing.interceptor.js'
 import { ProjectTools } from '../toolboxes/project.tools.js'

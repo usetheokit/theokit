@@ -1,5 +1,5 @@
 import { defineConfig } from 'theokit'
-import { httpDecoratorsPlugin } from '../../packages/http-decorators/src/theokit-plugin.js'
+import { httpDecoratorsPlugin } from '../../packages/http/src/theokit-plugin.js'
 import { LoggerMiddleware } from './server/middleware/logger.middleware.js'
 
 export default defineConfig({
