@@ -32,7 +32,12 @@ export interface TheoAppOptions {
   /** LLM model override (default: from @Agent({ model }) metadata). */
   llmModel?: string
   /** Agent stream factory override (for testing or custom SDK wiring). */
-  agentStreamFactory?: (walk: unknown, tools: unknown[], apiKey: string, model?: string) => (message: string, sessionId: string) => AsyncIterable<unknown>
+  agentStreamFactory?: (
+    walk: unknown,
+    tools: unknown[],
+    apiKey: string,
+    model?: string,
+  ) => (message: string, sessionId: string) => AsyncIterable<unknown>
   /** HTML string to serve at GET / (inline frontend). */
   html?: string
   /** Readiness checks for GET /__theo/ready (K8s readiness probe). */
@@ -66,8 +71,14 @@ export class TheoApp {
     const hp = opts?.healthPath ?? '/__theo/health'
     const rp = opts?.readyPath ?? '/__theo/ready'
     // Security: prevent health paths from colliding with user API routes
-    if (hp.startsWith('/api/')) throw new Error(`[TheoApp] healthPath "${hp}" must not start with /api/ — would collide with user routes`)
-    if (rp.startsWith('/api/')) throw new Error(`[TheoApp] readyPath "${rp}" must not start with /api/ — would collide with user routes`)
+    if (hp.startsWith('/api/'))
+      throw new Error(
+        `[TheoApp] healthPath "${hp}" must not start with /api/ — would collide with user routes`,
+      )
+    if (rp.startsWith('/api/'))
+      throw new Error(
+        `[TheoApp] readyPath "${rp}" must not start with /api/ — would collide with user routes`,
+      )
     this.healthPath = hp
     this.readyPath = rp
     this.readinessChecks = opts?.readinessChecks ?? []
@@ -132,7 +143,10 @@ export class TheoApp {
 
       // Lifecycle: call @PostConstruct if present
       const postConstruct = Reflect.getMetadata('usetheo:di:post-construct', Controller)
-      if (postConstruct && typeof (instance as Record<string, Function>)[postConstruct] === 'function') {
+      if (
+        postConstruct &&
+        typeof (instance as Record<string, Function>)[postConstruct] === 'function'
+      ) {
         const result = (instance as Record<string, Function>)[postConstruct]()
         if (result instanceof Promise) await result // EC-1: await async PostConstruct
       }
@@ -192,30 +206,52 @@ export class TheoApp {
 
   async close(): Promise<void> {
     return new Promise((resolve) => {
-      this.serverHandle.close(() => { resolve(); })
+      this.serverHandle.close(() => {
+        resolve()
+      })
     })
   }
 
   // ── Auto-wire agents (the "SpringApplication.run()" moment) ──
 
-  private agentRoutes: { method: string; pattern: RegExp; paramNames: string[]; handler: (request: Request) => Promise<Response>; guards: Function[]; agentClass: Function; methodName: string | symbol }[] = []
+  private agentRoutes: {
+    method: string
+    pattern: RegExp
+    paramNames: string[]
+    handler: (request: Request) => Promise<Response>
+    guards: Function[]
+    agentClass: Function
+    methodName: string | symbol
+  }[] = []
 
-  private async autoWireAgents(agentClasses: Function[], registry: Map<Function, object>, opts: TheoAppOptions) {
+  private async autoWireAgents(
+    agentClasses: Function[],
+    registry: Map<Function, object>,
+    opts: TheoAppOptions,
+  ) {
     // Dynamic import — @theokit/agents is optional peer dependency
     // SECURITY: new Function used for dynamic import of optional peer dep.
     // Argument is HARDCODED ('@theokit/agents'), never user input. Safe.
     // eslint-disable-next-line @typescript-eslint/no-implied-eval -- dynamic import avoids compile-time dependency on optional peer
-    const importFn = new Function('specifier', 'return import(specifier)') as (s: string) => Promise<Record<string, Function>>
-    let walkAgentMetadata: Function, compileAgent: Function, generateAgentRoutes: Function, getMixins: Function, createRealAgentStreamFn: Function | undefined
+    const importFn = new Function('specifier', 'return import(specifier)') as (
+      s: string,
+    ) => Promise<Record<string, Function>>
+    let walkAgentMetadata: Function,
+      compileAgent: Function,
+      generateAgentRoutes: Function,
+      getMixins: Function,
+      createSdkAgentStreamFn: Function | undefined
     try {
       const mod = await importFn('@theokit/agents')
       walkAgentMetadata = mod.walkAgentMetadata
       compileAgent = mod.compileAgent
       generateAgentRoutes = mod.generateAgentRoutes
       getMixins = mod.getMixins
-      createRealAgentStreamFn = mod.createRealAgentStream
+      createSdkAgentStreamFn = mod.createSdkAgentStream
     } catch {
-      throw new Error('[TheoApp] @theokit/agents is required when agents[] is provided. Install: npm install @theokit/agents')
+      throw new Error(
+        '[TheoApp] @theokit/agents is required when agents[] is provided. Install: npm install @theokit/agents',
+      )
     }
 
     const apiKey = opts.llmApiKey ?? process.env.OPENROUTER_API_KEY ?? ''
@@ -248,14 +284,18 @@ export class TheoApp {
       // 3. Compile tools (decorator metadata → defineTool-compatible)
       const compiled = compileAgent(walk, toolboxInstances)
 
-      // 4. Create LLM stream factory
+      // 4. Create SDK agent stream factory
       let createRun: (message: string, sessionId: string) => AsyncIterable<unknown>
 
       if (opts.agentStreamFactory) {
         createRun = opts.agentStreamFactory(walk, compiled.tools, apiKey, opts.llmModel)
-      } else if (apiKey && createRealAgentStreamFn !== undefined) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- apiKey can be empty string
-        // Bug #5 fix: use built-in LLM runner from @theokit/agents
-        createRun = createRealAgentStreamFn(walk, compiled.tools, apiKey, opts.llmModel) as (m: string, s: string) => AsyncIterable<unknown>
+      } else if (apiKey && createSdkAgentStreamFn !== undefined) {
+        // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- apiKey can be empty string
+        // SDK adapter: bridges @theokit/agents decorators → @theokit/sdk runtime
+        createRun = createSdkAgentStreamFn(walk, compiled.tools, apiKey, opts.llmModel) as (
+          m: string,
+          s: string,
+        ) => AsyncIterable<unknown>
       } else {
         createRun = this.createFallbackStream(walk.agentConfig.name, apiKey)
       }
@@ -264,7 +304,10 @@ export class TheoApp {
       const routes = generateAgentRoutes({
         walkResult: walk,
         compiledOptions: compiled,
-        createRun: createRun as (message: string, sessionId: string) => AsyncIterable<{ type: string;[k: string]: unknown }>,
+        createRun: createRun as (
+          message: string,
+          sessionId: string,
+        ) => AsyncIterable<{ type: string; [k: string]: unknown }>,
       })
 
       // 6. Mount routes
@@ -285,7 +328,9 @@ export class TheoApp {
         })
       }
 
-      console.log(`  🤖 Agent "${walk.agentConfig.name}" mounted at ${walk.route}/chat (${compiled.tools.length} tools)`)
+      console.log(
+        `  🤖 Agent "${walk.agentConfig.name}" mounted at ${walk.route}/chat (${compiled.tools.length} tools)`,
+      )
     }
   }
 
@@ -293,20 +338,37 @@ export class TheoApp {
     if (this.readinessChecks.length === 0) {
       return jsonResponse(200, { status: 'ready', checks: [] })
     }
-    const results = await Promise.all(this.readinessChecks.map(async (check) => {
-      try {
-        return await Promise.race([
-          check(),
-          new Promise<{ name: string; healthy: boolean; message?: string }>((resolve) =>
-            setTimeout(() => resolve({ name: 'unknown', healthy: false, message: 'Readiness check timed out (5s)' }), 5000),
-          ),
-        ])
-      } catch (err) {
-        return { name: 'unknown', healthy: false, message: err instanceof Error ? err.message : 'Check failed' }
-      }
-    }))
+    const results = await Promise.all(
+      this.readinessChecks.map(async (check) => {
+        try {
+          return await Promise.race([
+            check(),
+            new Promise<{ name: string; healthy: boolean; message?: string }>((resolve) =>
+              setTimeout(
+                () =>
+                  resolve({
+                    name: 'unknown',
+                    healthy: false,
+                    message: 'Readiness check timed out (5s)',
+                  }),
+                5000,
+              ),
+            ),
+          ])
+        } catch (err) {
+          return {
+            name: 'unknown',
+            healthy: false,
+            message: err instanceof Error ? err.message : 'Check failed',
+          }
+        }
+      }),
+    )
     const allHealthy = results.every((r) => r.healthy)
-    return jsonResponse(allHealthy ? 200 : 503, { status: allHealthy ? 'ready' : 'not_ready', checks: results })
+    return jsonResponse(allHealthy ? 200 : 503, {
+      status: allHealthy ? 'ready' : 'not_ready',
+      checks: results,
+    })
   }
 
   private createFallbackStream(agentName: string, apiKey: string) {
@@ -321,7 +383,14 @@ export class TheoApp {
       return {
         [Symbol.asyncIterator]: () => {
           let i = 0
-          return { next: () => Promise.resolve(i < events.length ? { value: events[i++], done: false as const } : { value: undefined, done: true as const }) }
+          return {
+            next: () =>
+              Promise.resolve(
+                i < events.length
+                  ? { value: events[i++], done: false as const }
+                  : { value: undefined, done: true as const },
+              ),
+          }
         },
       }
     }
@@ -335,7 +404,11 @@ export class TheoApp {
     // ── Health & Readiness probes (bypass guards/interceptors) ──
     if (request.method === 'GET') {
       if (pathname === this.healthPath) {
-        return jsonResponse(200, { status: 'ok', uptime: (Date.now() - this.startTime) / 1000, timestamp: Date.now() })
+        return jsonResponse(200, {
+          status: 'ok',
+          uptime: (Date.now() - this.startTime) / 1000,
+          timestamp: Date.now(),
+        })
       }
       if (pathname === this.readyPath) {
         return this.handleReadinessCheck()
@@ -345,7 +418,10 @@ export class TheoApp {
     // Bug #8: Serve frontend HTML at GET /
     if (request.method === 'GET') {
       if ((pathname === '/' || pathname === '/index.html') && this.frontendHtml) {
-        return new Response(this.frontendHtml, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
+        return new Response(this.frontendHtml, {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
       }
     }
 
@@ -372,14 +448,20 @@ export class TheoApp {
 
     const match = this.findRoute(method, url.pathname)
     if (!match) {
-      return jsonResponse(404, { error: { code: 'NOT_FOUND', message: `No route for ${method} ${url.pathname}` } })
+      return jsonResponse(404, {
+        error: { code: 'NOT_FOUND', message: `No route for ${method} ${url.pathname}` },
+      })
     }
 
     const { entry, params } = match
 
     try {
       // Guards
-      const ctx = createExecutionContext(request, entry.instance.constructor, entry.walk.propertyKey)
+      const ctx = createExecutionContext(
+        request,
+        entry.instance.constructor,
+        entry.walk.propertyKey,
+      )
       for (const GuardCtor of entry.walk.guards) {
         const guard = new (GuardCtor as new () => CanActivate)()
         if (!(await guard.canActivate(ctx))) {
@@ -394,27 +476,42 @@ export class TheoApp {
         try {
           const text = await request.text()
           body = text ? JSON.parse(text) : undefined
-        } catch { body = undefined }
+        } catch {
+          body = undefined
+        }
 
         if (entry.walk.bodySchema && body !== undefined) {
           const result = entry.walk.bodySchema.safeParse(body)
           if (!result.success) {
-            return jsonResponse(422, { error: { code: 'VALIDATION_ERROR', issues: result.error.issues } })
+            return jsonResponse(422, {
+              error: { code: 'VALIDATION_ERROR', issues: result.error.issues },
+            })
           }
           body = result.data
         }
       }
 
       // Args
-      const args = this.buildArgs(entry.walk.paramEntries, request, body, params, Object.fromEntries(url.searchParams))
+      const args = this.buildArgs(
+        entry.walk.paramEntries,
+        request,
+        body,
+        params,
+        Object.fromEntries(url.searchParams),
+      )
 
       // Redirect
       if (entry.walk.redirect) {
-        return new Response(null, { status: entry.walk.redirect.status, headers: { location: entry.walk.redirect.url } })
+        return new Response(null, {
+          status: entry.walk.redirect.status,
+          headers: { location: entry.walk.redirect.url },
+        })
       }
 
       // Handler — wrapped by interceptor chain (Bug #2 fix)
-      const handlerFn = (entry.instance as Record<string | symbol, Function>)[entry.walk.propertyKey]
+      const handlerFn = (entry.instance as Record<string | symbol, Function>)[
+        entry.walk.propertyKey
+      ]
 
       let result: unknown
       if (entry.walk.interceptors.length > 0) {
@@ -442,7 +539,9 @@ export class TheoApp {
       }
       // Security: never leak raw error messages to clients
       console.error('[theokit] Internal error:', err instanceof Error ? err.message : err)
-      return jsonResponse(500, { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal Server Error' } })
+      return jsonResponse(500, {
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal Server Error' },
+      })
     }
   }
 
@@ -453,25 +552,48 @@ export class TheoApp {
       const match = entry.compiledPattern!.exec(pathname)
       if (!match) continue
       const params: Record<string, string> = {}
-      entry.compiledParamNames!.forEach((name, i) => { params[name] = match[i + 1] })
+      entry.compiledParamNames!.forEach((name, i) => {
+        params[name] = match[i + 1]
+      })
       return { entry, params }
     }
     return null
   }
 
-  private buildArgs(entries: ParamEntry[], request: Request, body: unknown, params: Record<string, string>, query: Record<string, string>): unknown[] {
+  private buildArgs(
+    entries: ParamEntry[],
+    request: Request,
+    body: unknown,
+    params: Record<string, string>,
+    query: Record<string, string>,
+  ): unknown[] {
     if (entries.length === 0) return []
-    const max = Math.max(...entries.map(p => p.index))
+    const max = Math.max(...entries.map((p) => p.index))
     const args: unknown[] = Array.from({ length: max + 1 }, () => undefined)
     for (const p of entries) {
       switch (p.source) {
-        case 'req': args[p.index] = request; break
-        case 'body': args[p.index] = p.key ? (body as Record<string, unknown>)[p.key] : body; break
-        case 'param': args[p.index] = p.key ? params[p.key] : params; break
-        case 'query': args[p.index] = p.key ? query[p.key] : query; break
-        case 'headers': args[p.index] = p.key ? request.headers.get(p.key.toLowerCase()) : Object.fromEntries(request.headers.entries()); break
-        case 'ip': args[p.index] = request.headers.get('x-forwarded-for') ?? '127.0.0.1'; break
-        default: args[p.index] = undefined
+        case 'req':
+          args[p.index] = request
+          break
+        case 'body':
+          args[p.index] = p.key ? (body as Record<string, unknown>)[p.key] : body
+          break
+        case 'param':
+          args[p.index] = p.key ? params[p.key] : params
+          break
+        case 'query':
+          args[p.index] = p.key ? query[p.key] : query
+          break
+        case 'headers':
+          args[p.index] = p.key
+            ? request.headers.get(p.key.toLowerCase())
+            : Object.fromEntries(request.headers.entries())
+          break
+        case 'ip':
+          args[p.index] = request.headers.get('x-forwarded-for') ?? '127.0.0.1'
+          break
+        default:
+          args[p.index] = undefined
       }
     }
     return args
