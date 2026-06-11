@@ -5,6 +5,7 @@ export default defineConfig({
     index: 'src/index.ts',
     decorators: 'src/decorators-entry.ts',
     bridge: 'src/bridge-entry.ts',
+    testing: 'src/testing/index.ts',
   },
   format: ['esm'],
   dts: true,
