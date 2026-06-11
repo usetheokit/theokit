@@ -1,5 +1,7 @@
 # Plan: TheoKit File Conventions — Next.js-Level Project Structure
 
+> **Version 1.1** — Absorbed EC-1 (static.ts must be CREATED, not just tested), EC-2 (app.ts + index.ts must be re-wired), EC-3 (explicit delete of app/globals.css duplicate), EC-4 (URL-encoded path test), EC-5 (query param test), EC-6 (--src-dir preserves public/).
+>
 > **Version 1.0** — Ship a professional project structure with static file serving from `public/`, CSS via `<link>` (not `node:fs` hacks), proper file conventions (loading.tsx, error.tsx, not-found.tsx), and a default template that matches create-next-app quality. Zero `node:fs` in React components. Runtime-agnostic (Node/Bun/Deno).
 
 ## Goal
@@ -20,7 +22,7 @@ TheoKit claims to be an opinionated React-first framework but the default templa
 
 | File | LoC today | Last commit | Why it exists | Invariants |
 |---|---|---|---|---|
-| `packages/http/src/static.ts` | 213 | `8db0f55` (2026-06-11) | Static file handler (MIME, traversal prevention, runtime-agnostic read) | `createStaticHandler()` signature; MIME map |
+| `packages/http/src/static.ts` (NEW — EC-1: file lost) | 0 | — | Static file handler to be created from scratch | — |
 | `packages/http/src/app.ts` | ~530 | `8db0f55` (2026-06-11) | TheoApp class — wires static handler, controllers, agents | Static handler called before API routes |
 | `packages/http/src/index.ts` | 10 | `8db0f55` (2026-06-11) | Public barrel | Exports `createStaticHandler` |
 | `packages/create-theokit/templates/default/app.tsx` | 29 | `f8f77c5` (2026-06-11) | SSR entry — renders React to HTML | `renderToString(<Layout><Page /></Layout>)` |
@@ -83,7 +85,7 @@ TheoKit claims to be an opinionated React-first framework but the default templa
 
 **Alternative rejected:** Vite CSS pipeline (`import './globals.css'`). Rejected because: requires full `theokit` framework with Vite plugin; the `@theokit/http` standalone mode (used by template) doesn't have Vite. Future path when template migrates to full framework.
 
-**Consequences:** CSS is a separate HTTP request (1 extra round trip). Acceptable for dev; production should use inline or bundler.
+**Consequences:** CSS is a separate HTTP request (1 extra round trip). Acceptable for dev; production should use inline or bundler. EC-7: brief FOUC (flash of unstyled content) on first load is accepted — Next.js avoids this via build pipeline; TheoKit standalone without Vite cannot. The tradeoff (runtime-agnostic + editable CSS file) is worth the minor flash.
 
 ### D2 — File conventions in template (loading, error, not-found)
 
@@ -123,26 +125,31 @@ All phases sequential — Phase 2 depends on static handler being tested, Phase 
 
 ---
 
-## Phase 1: Static File Handler Tests + Fix
+## Phase 1: Create Static File Handler + Wire + Test
 
-**Objective:** Verify static.ts works correctly with unit tests, fix any bugs found.
+**Objective:** Create `static.ts` from scratch (EC-1: file was lost), wire into TheoApp (EC-2: app.ts + index.ts), and validate with unit tests.
 
-### T1.1 — Unit tests for static file handler
+### T1.1 — Create static file handler + wire into TheoApp + unit tests
 
 #### Objective
-Create comprehensive tests for `createStaticHandler` covering MIME detection, path traversal prevention, 404 handling, and successful file serving.
+Create `packages/http/src/static.ts` with MIME detection, path traversal prevention, and runtime-agnostic file reading (Node/Bun/Deno). Wire into TheoApp via `staticDir` option. Export from barrel. Write 11+ unit tests.
 
 #### Why this step
-The static handler exists but has zero tests. It was never validated E2E with a published npm version. Tests prove the handler works before the template relies on it.
+EC-1: `static.ts` was created during a prior session but lost during lint-staged stash/revert cycles — it does not exist on disk or in git. EC-2: `app.ts` and `index.ts` references were also reverted. This task must create everything from scratch, then test it.
 
 #### Evidence
-- `packages/http/src/static.ts` exists (213 LoC) but `packages/http/tests/unit/static.test.ts` does not exist
-- Static handler returns 404 in E2E tests (observed in this session — root cause unclear without unit tests)
+- `ls packages/http/src/static.ts` → "FILE MISSING"
+- `grep createStaticHandler packages/http/src/app.ts` → no results
+- `grep createStaticHandler packages/http/src/index.ts` → no results
+- Hono pattern: `.claude/knowledge-base/references/hono/src/middleware/serve-static/index.ts:67` (traversal regex)
+- Hono MIME map: `.claude/knowledge-base/references/hono/src/utils/mime.ts`
 
 #### Files to edit
 ```
-packages/http/tests/unit/static.test.ts (NEW) — unit tests for createStaticHandler
-packages/http/src/static.ts — fix any bugs found during testing
+packages/http/src/static.ts (NEW) — static file handler: MIME, traversal, runtime-agnostic read
+packages/http/src/app.ts — add staticDir option, staticHandler field, wire in handleRequest
+packages/http/src/index.ts — export createStaticHandler, getMimeType, StaticOptions
+packages/http/tests/unit/static.test.ts (NEW) — 11+ unit tests
 ```
 
 #### TDD
@@ -156,19 +163,26 @@ RED:     test_handler_serves_existing_file() — handler returns Response with c
 RED:     test_handler_returns_null_for_missing() — handler returns null for non-existent file
 RED:     test_handler_skips_api_routes() — handler returns null for /api/tasks
 RED:     test_handler_skips_non_get() — handler returns null for POST requests
-GREEN:   Fix any failing tests
+RED:     test_handler_decodes_url_encoded_path() — handler serves file with %20 in URL (EC-4)
+RED:     test_handler_ignores_query_params() — handler serves /globals.css?v=123 correctly (EC-5)
+GREEN:   Implement static.ts + wire into app.ts + export from index.ts
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/http test
 ```
 
 #### Acceptance Criteria
-- [ ] 9+ unit tests covering MIME, traversal, serve, 404, skip
-- [ ] All tests pass
+- [ ] `static.ts` exists with MIME map (50+ types), traversal regex, runtime-agnostic read
+- [ ] `app.ts` has `staticDir` option in TheoAppOptions, `staticHandler` field, wired before API routes
+- [ ] `index.ts` exports `createStaticHandler`, `getMimeType`, `StaticOptions`
+- [ ] 11+ unit tests all passing
+- [ ] URL-encoded paths work (EC-4)
+- [ ] Query params stripped correctly (EC-5)
 - [ ] Zero lint errors
 
 #### DoD
 - [ ] `pnpm --filter @theokit/http test` green
-- [ ] `npx eslint packages/http/tests/unit/static.test.ts --max-warnings=0` clean
+- [ ] `pnpm --filter @theokit/http build` green (DTS emits without error)
+- [ ] `npx eslint packages/http/src/static.ts --max-warnings=0` clean
 
 ---
 
@@ -198,6 +212,10 @@ packages/create-theokit/templates/default/app/client.ts — DELETE (replaced by 
 - [ ] Zero `node:fs` imports in template `app/*.tsx`
 - [ ] `layout.tsx` uses `<link rel="stylesheet" href="/globals.css">`
 - [ ] `page.tsx` uses `<script src="/client.js" defer>`
+- [ ] `app/globals.css` does NOT exist (deleted — EC-3)
+- [ ] `app/client.ts` does NOT exist (deleted — EC-3)
+- [ ] `public/globals.css` is the ONLY CSS source
+- [ ] `public/client.js` is the ONLY client JS source
 - [ ] `pnpm --filter create-theokit test` green
 
 ### T2.2 — Add file conventions: loading, error, not-found
@@ -237,6 +255,7 @@ packages/create-theokit/src/cli.ts — update Tailwind CSS path from app/ to pub
 #### Acceptance Criteria
 - [ ] `create-theokit --yes` (with Tailwind) preserves globals.css content
 - [ ] `@import "tailwindcss"` is prepended, not overwritten
+- [ ] `--src-dir` flag does NOT move `public/` into `src/` (EC-6: public stays at root)
 
 ---
 
