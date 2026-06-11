@@ -40,7 +40,7 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'app/layout.tsx'))).toBe(true)
     expect(existsSync(join(targetDir, 'server'))).toBe(true)
     expect(existsSync(join(targetDir, 'tsconfig.json'))).toBe(true)
-    expect(existsSync(join(targetDir, 'app.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app.tsx'))).toBe(true)
 
     // .gitignore renamed from _gitignore
     expect(existsSync(join(targetDir, '.gitignore'))).toBe(true)
