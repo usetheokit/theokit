@@ -9,9 +9,22 @@
 import { setMeta, getMeta, TOOLBOX_CONFIG, TOOL_CONFIG, TOOL_METHODS } from '../metadata/index.js'
 import type { ToolboxOptions, ToolOptions } from '../types.js'
 
+/**
+ * Convention: TaskTools → namespace: 'tasks', ProjectTools → namespace: 'projects'
+ * Strips "Tools" suffix, converts to kebab-case.
+ */
+function inferNamespace(className: string): string {
+  const stripped = className.replace(/Tools$/, '')
+  return stripped
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase()
+}
+
 export function Toolbox(options: ToolboxOptions = {}): ClassDecorator {
   return (target: Function) => {
-    setMeta(TOOLBOX_CONFIG, target, options)
+    const ns = options.namespace ?? inferNamespace(target.name)
+    setMeta(TOOLBOX_CONFIG, target, { ...options, namespace: ns })
   }
 }
 

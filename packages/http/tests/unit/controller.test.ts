@@ -5,11 +5,11 @@ import { getMeta, CONTROLLER_PREFIX } from '../../src/metadata/index.js'
 import type { ControllerMeta } from '../../src/decorators/controller.js'
 
 describe('T1.4 — @Controller decorator', () => {
-  it('test_controller_no_args — stores empty prefix', () => {
+  it('test_controller_no_args — infers prefix from class name (convention naming)', () => {
     @Controller()
-    class TestCtrl {}
-    const meta = getMeta<ControllerMeta>(CONTROLLER_PREFIX, TestCtrl)
-    expect(meta).toEqual({ prefix: '', host: undefined })
+    class UsersController {}
+    const meta = getMeta<ControllerMeta>(CONTROLLER_PREFIX, UsersController)
+    expect(meta).toEqual({ prefix: 'api/users', host: undefined })
   })
 
   it('test_controller_with_prefix', () => {
