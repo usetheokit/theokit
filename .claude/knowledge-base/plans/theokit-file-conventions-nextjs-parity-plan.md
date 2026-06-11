@@ -1,5 +1,7 @@
 # Plan: TheoKit File Conventions — Next.js-Level Project Structure
 
+> **Version 1.3** — Absorbed EC-8 (Tailwind cssDir must target public/ not app/), EC-9 (HEAD request test), EC-10 (binary favicon copy documented).
+>
 > **Version 1.2** — Added T2.4: template ships favicon.ico, robots.txt, and system font stack via CSS @font-face in globals.css.
 >
 > **Version 1.1** — Absorbed EC-1 (static.ts must be CREATED, not just tested), EC-2 (app.ts + index.ts must be re-wired), EC-3 (explicit delete of app/globals.css duplicate), EC-4 (URL-encoded path test), EC-5 (query param test), EC-6 (--src-dir preserves public/).
@@ -167,6 +169,7 @@ RED:     test_handler_skips_api_routes() — handler returns null for /api/tasks
 RED:     test_handler_skips_non_get() — handler returns null for POST requests
 RED:     test_handler_decodes_url_encoded_path() — handler serves file with %20 in URL (EC-4)
 RED:     test_handler_ignores_query_params() — handler serves /globals.css?v=123 correctly (EC-5)
+RED:     test_handler_head_returns_headers_only() — HEAD returns 200 + Content-Type, empty body (EC-9)
 GREEN:   Implement static.ts + wire into app.ts + export from index.ts
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/http test
@@ -176,7 +179,7 @@ VERIFY:  pnpm --filter @theokit/http test
 - [ ] `static.ts` exists with MIME map (50+ types), traversal regex, runtime-agnostic read
 - [ ] `app.ts` has `staticDir` option in TheoAppOptions, `staticHandler` field, wired before API routes
 - [ ] `index.ts` exports `createStaticHandler`, `getMimeType`, `StaticOptions`
-- [ ] 11+ unit tests all passing
+- [ ] 12+ unit tests all passing (includes HEAD request test — EC-9)
 - [ ] URL-encoded paths work (EC-4)
 - [ ] Query params stripped correctly (EC-5)
 - [ ] Zero lint errors
@@ -247,14 +250,15 @@ packages/create-theokit/templates/default/app/not-found.tsx (NEW)
 Ensure Tailwind `--yes` flag prepends `@import "tailwindcss"` to `public/globals.css` instead of overwriting it.
 
 #### Why this step
-The scaffold's Tailwind logic currently writes to `app/globals.css` but CSS is now in `public/globals.css`. The path needs updating.
+The scaffold's Tailwind logic currently writes to `app/globals.css` but CSS is now in `public/globals.css`. EC-8: cssDir must change from `'app'` to `'public'`.
 
 #### Files to edit
 ```
-packages/create-theokit/src/cli.ts — update Tailwind CSS path from app/ to public/
+packages/create-theokit/src/cli.ts — change cssDir from app/ to public/; ensure --src-dir doesn't move public/
 ```
 
 #### Acceptance Criteria
+- [ ] Tailwind cssDir resolves to `'public'` (or `'src/public'` if --src-dir) — not `'app'` (EC-8)
 - [ ] `create-theokit --yes` (with Tailwind) preserves globals.css content
 - [ ] `@import "tailwindcss"` is prepended, not overwritten
 - [ ] `--src-dir` flag does NOT move `public/` into `src/` (EC-6: public stays at root)
