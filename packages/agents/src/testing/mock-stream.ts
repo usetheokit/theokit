@@ -49,6 +49,7 @@ export interface MockStreamEvent {
 export function createMockAgentStream(opts: MockAgentStreamOptions) {
   return (_message: string, _sessionId: string): AsyncIterable<MockStreamEvent> => ({
     async *[Symbol.asyncIterator]() {
+      await Promise.resolve() // yield to event loop for async contract
       const runId = `mock-${Date.now()}`
       yield { type: 'run_started', runId, agentName: opts.agentName ?? 'mock-agent', model: 'mock' }
 
@@ -61,10 +62,11 @@ export function createMockAgentStream(opts: MockAgentStreamOptions) {
             totalTokens += 2
           }
         } else if (r.type === 'tool_call') {
-          const callId = `tc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+          const callId = `tc-${Date.now()}-${crypto.randomUUID().slice(0, 4)}`
           yield { type: 'tool_call', callId, toolName: r.name ?? 'unknown', input: r.input ?? {} }
           yield {
-            type: 'tool_result', callId,
+            type: 'tool_result',
+            callId,
             toolName: r.name ?? 'unknown',
             output: r.output ?? '',
             durationMs: 0,
@@ -72,15 +74,27 @@ export function createMockAgentStream(opts: MockAgentStreamOptions) {
           }
           totalTokens += 10
         } else if (r.type === 'error') {
-          yield { type: 'error', code: 'MOCK_ERROR', message: r.message ?? 'Mock error', retryable: false }
+          yield {
+            type: 'error',
+            code: 'MOCK_ERROR',
+            message: r.message ?? 'Mock error',
+            retryable: false,
+          }
           return
         }
       }
 
       yield {
         type: 'done',
-        result: opts.responses.filter(r => r.type === 'text').map(r => r.content).join(' '),
-        usage: { inputTokens: totalTokens, outputTokens: totalTokens, totalTokens: totalTokens * 2 },
+        result: opts.responses
+          .filter((r) => r.type === 'text')
+          .map((r) => r.content)
+          .join(' '),
+        usage: {
+          inputTokens: totalTokens,
+          outputTokens: totalTokens,
+          totalTokens: totalTokens * 2,
+        },
         durationMs: 0,
         cost: opts.cost ?? 0,
       }

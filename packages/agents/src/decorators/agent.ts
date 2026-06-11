@@ -35,7 +35,7 @@ function inferAgentMeta(className: string): { name: string; route: string } {
   const stripped = className.replace(/Agent$/, '')
   const kebab = stripped
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
     .toLowerCase()
   return { name: kebab, route: `/api/agents/${kebab}` }
 }
