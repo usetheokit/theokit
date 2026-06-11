@@ -19,6 +19,10 @@ let server: Awaited<ReturnType<typeof startDevServer>>
 let port: number
 
 beforeAll(async () => {
+  // Phase 6 prereq escape hatch — tmpRoot has no node_modules, so the
+  // native-binding ABI preflight (preflight-node-version.ts) would fire
+  // on `startDevServer`. Tests don't exercise better-sqlite3; opt out.
+  process.env.THEOKIT_SKIP_NATIVE_PREFLIGHT = '1'
   tmpRoot = mkdtempSync(join(tmpdir(), 'theo-auto-inject-'))
   // Minimal project: index.html WITHOUT the script
   writeFileSync(

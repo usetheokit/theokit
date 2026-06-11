@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest'
  * T3.5 — Target-state contract.
  *
  * The actual deletion of `examples/full-stack-agent/tailwind.config.ts` and
- * `postcss.config.js` is BLOCKED on cross-repo `@usetheo/ui/vite-plugin` +
- * `@usetheo/ui/preset` shipping per the Phase 0 spike doc
+ * `postcss.config.js` is BLOCKED on cross-repo `@theokit/ui/vite-plugin` +
+ * `@theokit/ui/preset` shipping per the Phase 0 spike doc
  * (`docs/spikes/usetheo-ui-vite-plugin-shape.md`).
  *
  * This test file pins the FRAMEWORK CONTRACT — when the cross-repo work
@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest'
 
 const EXAMPLE = resolve(process.cwd(), 'examples/full-stack-agent')
 
-describe('T3.5 — example tailwind/postcss files DELETED (zero-config wired via @usetheo/ui@^0.5)', () => {
+describe('T3.5 — example tailwind/postcss files DELETED (zero-config wired via @theokit/ui@^0.5)', () => {
   it('tailwind.config.ts deleted', () => {
     expect(existsSync(resolve(EXAMPLE, 'tailwind.config.ts'))).toBe(false)
   })

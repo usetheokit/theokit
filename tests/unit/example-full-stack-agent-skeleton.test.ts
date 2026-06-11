@@ -23,10 +23,10 @@ describe('examples/full-stack-agent skeleton — T1.1', () => {
     const deps = pkg.dependencies ?? {}
     for (const name of [
       'theokit',
-      '@usetheo/sdk',
-      '@usetheo/ui',
-      '@usetheo/gateway',
-      '@usetheo/gateway-telegram',
+      '@theokit/sdk',
+      '@theokit/ui',
+      '@theokit/gateway',
+      '@theokit/gateway-telegram',
       'grammy',
       'zod',
       'react',

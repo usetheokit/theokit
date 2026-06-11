@@ -10,7 +10,7 @@
     "test:e2e": "playwright test --config playwright.config.ts",
     "test:coverage": "vitest run --coverage",
     "build": "pnpm -r run build",
-    "validate:publint": "npx publint packages/theo && npx publint packages/create-theo",
+    "validate:publint": "npx publint packages/theo && npx publint packages/create-theokit",
     "validate:attw": "npx @arethetypeswrong/cli --pack packages/theo --ignore-rules cjs-resolves-to-esm no-resolution",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
@@ -25,7 +25,7 @@
     "check:deps": "dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs",
     "check:naming": "ls-lint",
     "check:all": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm knip && pnpm check:licenses && pnpm check:audit",
-    "try:scaffold": "tsx packages/create-theo/src/cli.ts my-test",
+    "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test",
     "try:dev": "cd my-test && npx tsx ../packages/theo/src/cli/index.ts dev",
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
     "changeset": "changeset",
@@ -36,22 +36,24 @@
     "sync:templates": "node scripts/sync-template-versions.mjs --write",
     "check:templates": "node scripts/sync-template-versions.mjs",
     "theo-ui:link": "bash scripts/theo-ui-link.sh",
-    "theo-ui:unlink": "bash scripts/theo-ui-unlink.sh"
+    "theo-ui:unlink": "bash scripts/theo-ui-unlink.sh",
+    "openapi:regen-fixtures": "tsx scripts/regen-openapi-fixtures.ts"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
     "@arethetypeswrong/cli": "^0.18.2",
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^9",
     "@ls-lint/ls-lint": "^2.3.1",
     "@playwright/test": "^1.52.0",
+    "@theokit/sdk": "^1.5.0",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^25.6.2",
     "@types/pg": "^8.20.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/ws": "^8.18.1",
-    "@usetheo/sdk": "workspace:*",
-    "@vitest/coverage-v8": "^3",
+    "@vitest/coverage-v8": "^4.1.0",
     "autocannon": "^8.0.0",
     "better-sqlite3": "^12.10.0",
     "db0": "^0.3.0",
@@ -82,19 +84,22 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^7.0.0",
+    "reflect-metadata": "^0.2.2",
     "tsup": "^8.5.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8",
+    "unplugin-swc": "^1.5.9",
     "unstorage": "^1.10.0",
-    "vitest": "^3.0.0",
+    "vitest": "^4.1.0",
+    "wrangler": "4.58.0",
     "ws": "^8.20.1",
     "yaml": "^2.8.4",
-    "zod": "^3.24.0"
+    "zod": "^4.0.0"
   },
   "pnpm": {
     "overrides": {
-      "zod": "3.25.76"
+      "zod": "^4.0.0"
     }
   }
 }

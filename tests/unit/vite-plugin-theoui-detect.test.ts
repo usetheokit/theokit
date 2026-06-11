@@ -14,10 +14,10 @@ import {
  *
  * The resolver is injected (DIP) so tests can deterministically simulate
  * "present" / "absent" / "corrupted" without fighting Node's parent-dir
- * walk-up (which would always find @usetheo/ui in the monorepo's
+ * walk-up (which would always find @theokit/ui in the monorepo's
  * node_modules/.pnpm/ during test runs).
  *
- * Detect also requires `@usetheo/ui` to be DECLARED in the user's
+ * Detect also requires `@theokit/ui` to be DECLARED in the user's
  * package.json — this protects against false positives in pnpm monorepos
  * where the package may be present at the workspace root but a fixture
  * deeper in the tree didn't ask for it.
@@ -34,7 +34,7 @@ function makeProject(declared: boolean): string {
   writeFileSync(
     join(root, 'package.json'),
     JSON.stringify(
-      declared ? { name: 'test', dependencies: { '@usetheo/ui': '^0.1.0' } } : { name: 'test' },
+      declared ? { name: 'test', dependencies: { '@theokit/ui': '^0.1.0' } } : { name: 'test' },
     ),
   )
   return root
@@ -44,7 +44,7 @@ describe('detectTheoUi (T2.1)', () => {
   it('returns enabled true when declared in package.json + styles.css resolves', () => {
     const root = makeProject(true)
     try {
-      const result = detectTheoUi(root, undefined, presentResolver(['@usetheo/ui/styles.css']))
+      const result = detectTheoUi(root, undefined, presentResolver(['@theokit/ui/styles.css']))
       expect(result.enabled).toBe(true)
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -54,7 +54,7 @@ describe('detectTheoUi (T2.1)', () => {
   it('returns enabled true when only fonts.css resolves (fallback probe)', () => {
     const root = makeProject(true)
     try {
-      const result = detectTheoUi(root, undefined, presentResolver(['@usetheo/ui/fonts.css']))
+      const result = detectTheoUi(root, undefined, presentResolver(['@theokit/ui/fonts.css']))
       expect(result.enabled).toBe(true)
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -66,7 +66,7 @@ describe('detectTheoUi (T2.1)', () => {
     try {
       // resolver would return true (e.g., monorepo workspace has the dep)
       // but the conservative gate must still say "no"
-      const result = detectTheoUi(root, undefined, presentResolver(['@usetheo/ui/styles.css']))
+      const result = detectTheoUi(root, undefined, presentResolver(['@theokit/ui/styles.css']))
       expect(result.enabled).toBe(false)
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -86,7 +86,7 @@ describe('detectTheoUi (T2.1)', () => {
   it('force-disabled when config.ui === false even with TheoUI installed', () => {
     const root = makeProject(true)
     try {
-      const result = detectTheoUi(root, false, presentResolver(['@usetheo/ui/styles.css']))
+      const result = detectTheoUi(root, false, presentResolver(['@theokit/ui/styles.css']))
       expect(result.enabled).toBe(false)
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -96,7 +96,7 @@ describe('detectTheoUi (T2.1)', () => {
   it('returns enabled false when projectRoot has no package.json', () => {
     const root = mkdtempSync(join(tmpdir(), 'theo-no-pkg-'))
     try {
-      const result = detectTheoUi(root, undefined, presentResolver(['@usetheo/ui/styles.css']))
+      const result = detectTheoUi(root, undefined, presentResolver(['@theokit/ui/styles.css']))
       expect(result.enabled).toBe(false)
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -107,7 +107,7 @@ describe('detectTheoUi (T2.1)', () => {
     const root = mkdtempSync(join(tmpdir(), 'theo-bad-pkg-'))
     writeFileSync(join(root, 'package.json'), '{ this is not valid json')
     try {
-      const result = detectTheoUi(root, undefined, presentResolver(['@usetheo/ui/styles.css']))
+      const result = detectTheoUi(root, undefined, presentResolver(['@theokit/ui/styles.css']))
       expect(result.enabled).toBe(false)
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -120,11 +120,11 @@ describe('detectTheoUi (T2.1)', () => {
       join(root, 'package.json'),
       JSON.stringify({
         name: 'test',
-        devDependencies: { '@usetheo/ui': '^0.1.0' },
+        devDependencies: { '@theokit/ui': '^0.1.0' },
       }),
     )
     try {
-      const result = detectTheoUi(root, undefined, presentResolver(['@usetheo/ui/styles.css']))
+      const result = detectTheoUi(root, undefined, presentResolver(['@theokit/ui/styles.css']))
       expect(result.enabled).toBe(true)
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -148,7 +148,7 @@ describe('detectTheoUi (T2.1)', () => {
       const result = detectTheoUi(
         root,
         { theme: 'noir', fonts: 'cdn' },
-        presentResolver(['@usetheo/ui/styles.css']),
+        presentResolver(['@theokit/ui/styles.css']),
       )
       expect(result.enabled).toBe(true)
       expect(result.config.theme).toBe('noir')

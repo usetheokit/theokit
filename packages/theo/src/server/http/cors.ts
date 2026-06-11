@@ -144,3 +144,70 @@ export function createCorsHandler(config: CorsConfig): CorsHandler {
     },
   }
 }
+
+/**
+ * T5a.2 Phase B slice 5/6 — Web-Standards CORS handler.
+ *
+ * Mirror of `createCorsHandler(config): CorsHandler` for the Web `Request`
+ * shape. Same `CorsConfig`, same `matchesOrigin` logic (pure helper
+ * already), same security guarantees (echo matched origin only — never
+ * `'*'` when credentials enabled; EC-8 fail-closed on callback throw).
+ *
+ * Signature differences vs the IncomingMessage pair:
+ *   - `handlePreflightRequest(request, config): Response | null` — returns
+ *     `Response` when this is a CORS preflight; `null` when not. Caller
+ *     short-circuits accordingly (same control-flow semantic as boolean).
+ *   - `applyCorsHeaders(request, target, config): void` — mutates a
+ *     `Headers` instance in place. Caller passes the headers they're
+ *     building for their Response.
+ */
+export interface CorsWebHandler {
+  handlePreflightRequest(request: Request): Response | null
+  applyCorsHeaders(request: Request, target: Headers): void
+}
+
+export function createCorsWebHandler(config: CorsConfig): CorsWebHandler {
+  const methods = (config.methods ?? DEFAULT_METHODS).slice()
+  const allowedHeaders = (config.allowedHeaders ?? DEFAULT_ALLOWED_HEADERS).slice()
+  const maxAge = String(config.maxAge ?? DEFAULT_MAX_AGE)
+  const credentials = config.credentials === true
+
+  return {
+    handlePreflightRequest(request) {
+      if (request.method !== 'OPTIONS') return null
+      const acMethod = request.headers.get('access-control-request-method')
+      if (acMethod === null || acMethod.length === 0) return null
+      const origin = request.headers.get('origin')
+      if (origin === null || origin.length === 0) return null
+
+      if (!matchesOrigin(origin, config.origins)) {
+        return new Response(null, { status: 403 })
+      }
+
+      // Echo matched origin only (security: never `'*'` when credentials
+      // enabled — browsers reject per CORS spec).
+      const headers = new Headers({
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': methods.join(', '),
+        'Access-Control-Allow-Headers': allowedHeaders.join(', '),
+        'Access-Control-Max-Age': maxAge,
+        Vary: 'Origin',
+      })
+      if (credentials) headers.set('Access-Control-Allow-Credentials', 'true')
+      return new Response(null, { status: 204, headers })
+    },
+
+    applyCorsHeaders(request, target) {
+      const origin = request.headers.get('origin')
+      if (origin === null || origin.length === 0) return
+      if (!matchesOrigin(origin, config.origins)) return
+
+      target.set('Access-Control-Allow-Origin', origin)
+      target.set('Vary', 'Origin')
+      if (credentials) target.set('Access-Control-Allow-Credentials', 'true')
+      if (config.exposedHeaders !== undefined && config.exposedHeaders.length > 0) {
+        target.set('Access-Control-Expose-Headers', config.exposedHeaders.join(', '))
+      }
+    },
+  }
+}

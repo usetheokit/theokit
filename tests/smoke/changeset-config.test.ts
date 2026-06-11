@@ -35,7 +35,7 @@ describe('Changeset Configuration', () => {
 
   it('create-theo version should be valid stable semver (post-alpha exit)', () => {
     const pkg = JSON.parse(
-      readFileSync(resolve(rootDir, 'packages/create-theo/package.json'), 'utf-8'),
+      readFileSync(resolve(rootDir, 'packages/create-theokit/package.json'), 'utf-8'),
     )
     // eslint-disable-next-line security/detect-unsafe-regex -- bounded semver assertion; no nested quantifiers
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/)
@@ -45,7 +45,7 @@ describe('Changeset Configuration', () => {
   it('theo and create-theo versions are linked (stay in sync)', () => {
     const theo = JSON.parse(readFileSync(resolve(rootDir, 'packages/theo/package.json'), 'utf-8'))
     const create = JSON.parse(
-      readFileSync(resolve(rootDir, 'packages/create-theo/package.json'), 'utf-8'),
+      readFileSync(resolve(rootDir, 'packages/create-theokit/package.json'), 'utf-8'),
     )
     expect(theo.version).toBe(create.version)
   })
@@ -70,14 +70,14 @@ describe('CHANGELOG.md', () => {
   })
 
   it('create-theo CHANGELOG.md should exist', () => {
-    expect(existsSync(resolve(rootDir, 'packages/create-theo/CHANGELOG.md'))).toBe(true)
+    expect(existsSync(resolve(rootDir, 'packages/create-theokit/CHANGELOG.md'))).toBe(true)
   })
 
   it('create-theo CHANGELOG.md should mention the current package.json version', () => {
     const pkg = JSON.parse(
-      readFileSync(resolve(rootDir, 'packages/create-theo/package.json'), 'utf-8'),
+      readFileSync(resolve(rootDir, 'packages/create-theokit/package.json'), 'utf-8'),
     )
-    const content = readFileSync(resolve(rootDir, 'packages/create-theo/CHANGELOG.md'), 'utf-8')
+    const content = readFileSync(resolve(rootDir, 'packages/create-theokit/CHANGELOG.md'), 'utf-8')
     expect(content).toContain(pkg.version)
   })
 })

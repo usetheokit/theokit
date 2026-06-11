@@ -292,7 +292,14 @@ describe('PluginRunner — decorateRequest', () => {
     expect((ctx.ctx as { db: { query: () => string } }).db.query()).toBe('fake-db')
   })
 
-  it('throws DuplicateDecorationError when two plugins decorate the same key (EC-7)', async () => {
+  // MIGRATED 2026-06-06 (T3.1) — per ADR-0028 D1 + blueprint C1: cross-plugin
+  // decoration-key collisions are now PERMITTED because each plugin gets its
+  // own scope via Object.create(parentApp) (Fastify pattern, see
+  // plugin-runner.ts:buildPluginScope). The legacy DuplicateDecorationError
+  // is @deprecated and no longer thrown. This test replaces the prior
+  // "expects throw" assertion with the new invariant: same key, different
+  // values, both visible via per-plugin scoped introspection.
+  it('permits two plugins to decorate the same key with scope isolation (T3.1 migration of EC-7)', async () => {
     const runner = new PluginRunner()
     await runner.register(
       defineTheoPlugin({
@@ -302,6 +309,8 @@ describe('PluginRunner — decorateRequest', () => {
         },
       }),
     )
+    // Previously: rejects.toThrow(DuplicateDecorationError). Now: resolves
+    // because per-plugin Object.create(parentApp) isolates the decoration.
     await expect(
       runner.register(
         defineTheoPlugin({
@@ -311,6 +320,23 @@ describe('PluginRunner — decorateRequest', () => {
           },
         }),
       ),
-    ).rejects.toThrow(DuplicateDecorationError)
+    ).resolves.toBeUndefined()
+
+    // Each plugin's scope sees its OWN value (proof of isolation).
+    const scopeA = runner.getPluginScope('pluginA') as unknown as {
+      decorations: { user: { id: number } }
+    }
+    const scopeB = runner.getPluginScope('pluginB') as unknown as {
+      decorations: { user: { id: number } }
+    }
+    expect(scopeA.decorations.user.id).toBe(1)
+    expect(scopeB.decorations.user.id).toBe(2)
+
+    // DuplicateDecorationError class still exists (@deprecated) so prior
+    // consumers `instanceof`-checking continue to compile. No `new` happens.
+    // The deprecation warning here is INTENTIONAL — this test guards the
+    // backward-compat surface until the class removal in 0.x+2.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional: guard backward-compat surface
+    expect(DuplicateDecorationError).toBeDefined()
   })
 })

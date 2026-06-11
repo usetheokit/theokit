@@ -1,0 +1,26 @@
+{
+  "name": "create-theokit",
+  "version": "0.8.0",
+  "type": "module",
+  "description": "Scaffold a new TheoKit project",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "bin": {
+    "create-theokit": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "dependencies": {
+    "cross-spawn": "^7.0.6"
+  },
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  }
+}

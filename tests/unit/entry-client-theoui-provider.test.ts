@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { generateEntryClient } from '../../packages/theo/src/router/entry.js'
 
 describe('generateEntryClient — TheoUIProvider wrap (T2.3)', () => {
-  it('imports TheoUIProvider from @usetheo/ui when enabled', () => {
+  it('imports TheoUIProvider from @theokit/ui when enabled', () => {
     const out = generateEntryClient(false, {
       theoUi: { fonts: 'bundled', theme: 'violet-forge' },
     })
-    expect(out).toContain("import { TheoUIProvider } from '@usetheo/ui'")
+    expect(out).toContain("import { TheoUIProvider } from '@theokit/ui'")
   })
 
   it('wraps RouterProvider in TheoUIProvider when enabled', () => {
@@ -35,7 +35,7 @@ describe('generateEntryClient — TheoUIProvider wrap (T2.3)', () => {
   it('does NOT wrap when theoUi disabled', () => {
     const out = generateEntryClient(false)
     expect(out).not.toContain('TheoUIProvider')
-    expect(out).not.toContain('@usetheo/ui')
+    expect(out).not.toContain('@theokit/ui')
   })
 
   it('preserves SSR variant (hydrateRoot) with TheoUIProvider wrap', () => {

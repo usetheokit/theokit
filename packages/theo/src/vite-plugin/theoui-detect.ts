@@ -1,5 +1,5 @@
 /**
- * T2.1 — Detect `@usetheo/ui` presence in the user's project.
+ * T2.1 — Detect `@theokit/ui` presence in the user's project.
  *
  * Uses `require.resolve` with explicit `paths` instead of `existsSync` so
  * pnpm-hoist layouts (TheoUI at workspace root, app in `apps/<x>/`) still
@@ -7,10 +7,10 @@
  */
 
 /* eslint-disable security/detect-non-literal-fs-filename --
- * Reads `package.json` of `@usetheo/ui` via filesystem walk under `node_modules`.
+ * Reads `package.json` of `@theokit/ui` via filesystem walk under `node_modules`.
  * Paths come from a controlled CLI/config inputs; this is a build-time tool.
  *
- * D13 invariant (ADR 0021): @usetheo/ui is ESM-only by design (`type: "module"`,
+ * D13 invariant (ADR 0021): @theokit/ui is ESM-only by design (`type: "module"`,
  * exports['.'] sem `require` condition). Não usar `createRequire(...).resolve()` —
  * `ERR_PACKAGE_PATH_NOT_EXPORTED` em runtime. Usar filesystem walk direto.
  */
@@ -50,7 +50,7 @@ export function resolveTheoUiConfig(
 }
 
 /**
- * Detect whether `@usetheo/ui` is installed under `projectRoot` (or any
+ * Detect whether `@theokit/ui` is installed under `projectRoot` (or any
  * parent dir via Node module resolution — handles pnpm hoist).
  *
  * EC-1: uses `require.resolve` with `paths: [projectRoot]` not `existsSync`.
@@ -58,8 +58,8 @@ export function resolveTheoUiConfig(
  * EC-9: theme validation happens in the Zod schema, not here.
  *
  * Note: we resolve a known subpath (`./styles.css`) instead of `./package.json`
- * or the root specifier because (a) `@usetheo/ui` declares `exports` with no
- * CJS entry, so `require.resolve('@usetheo/ui')` fails inside CJS contexts,
+ * or the root specifier because (a) `@theokit/ui` declares `exports` with no
+ * CJS entry, so `require.resolve('@theokit/ui')` fails inside CJS contexts,
  * and (b) `./package.json` is not listed in `exports`. The `styles.css`
  * subpath IS exported and is exactly what entry-client imports — if it
  * resolves, the package is installed and usable.
@@ -70,7 +70,7 @@ export type SubpathResolver = (specifier: string, projectRoot: string) => boolea
 /**
  * D13 invariant: substituir `require.resolve` por filesystem walk que LÊ exports.
  *
- * Specifier shape: `<pkgScope>/<pkgName>/<subpath>` (e.g. `@usetheo/ui/styles.css`)
+ * Specifier shape: `<pkgScope>/<pkgName>/<subpath>` (e.g. `@theokit/ui/styles.css`)
  * OR `<pkgName>/<subpath>` (e.g. `react/jsx-runtime`).
  *
  * Algoritmo:
@@ -132,7 +132,7 @@ const defaultResolver: SubpathResolver = (specifier, projectRoot) => {
   return false
 }
 
-/** Reads `<projectRoot>/package.json` and returns whether `@usetheo/ui`
+/** Reads `<projectRoot>/package.json` and returns whether `@theokit/ui`
  *  is declared as a (dev)dependency. Conservative gate: pnpm hoist still
  *  works because pnpm rewrites the consumer's package.json to include the
  *  declared dep, even when the install lives at the workspace root. */
@@ -148,9 +148,9 @@ function isDeclaredInPackageJson(projectRoot: string): boolean {
     // counts as a declaration. `??` would let '' fall through, but version
     // strings are never empty.
     return Boolean(
-      pkg.dependencies?.['@usetheo/ui'] ??
-      pkg.devDependencies?.['@usetheo/ui'] ??
-      pkg.peerDependencies?.['@usetheo/ui'],
+      pkg.dependencies?.['@theokit/ui'] ??
+      pkg.devDependencies?.['@theokit/ui'] ??
+      pkg.peerDependencies?.['@theokit/ui'],
     )
   } catch {
     return false
@@ -179,7 +179,7 @@ export function detectTheoUi(
 
   // EC-1 + EC-5: prefer a subpath that's guaranteed to be in `exports`.
   // Try several known subpaths; success on any one means the package is usable.
-  const probes = ['@usetheo/ui/styles.css', '@usetheo/ui/fonts.css']
+  const probes = ['@theokit/ui/styles.css', '@theokit/ui/fonts.css']
   for (const probe of probes) {
     if (resolver(probe, projectRoot)) {
       return { enabled: true, config }

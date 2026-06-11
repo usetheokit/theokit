@@ -133,3 +133,70 @@ export function sendError(
     status,
   )
 }
+
+/**
+ * T5a.2 Phase G slice 4/N — Web-Standards response helpers.
+ *
+ * Mirror of `sendJson` + `sendError` for the Web `Request`/`Response`
+ * shape. Returns a native `Response` directly instead of mutating a
+ * `ServerResponse`.
+ *
+ * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
+ * v1.0 § Phase G.
+ *
+ * **Difference vs IncomingMessage path:**
+ *   - No `Content-Length` set explicitly — the runtime computes it from
+ *     the body when needed. CF Workers / Bun / Deno all do this; setting
+ *     it manually risks conflict if the body is a stream rather than a
+ *     fixed string.
+ *   - Custom 404/500 HTML options preserved (same opts shape).
+ *   - `requestId` flows into the response body's error envelope AND
+ *     surfaces as `x-request-id` header (parity with handleWebRequestError
+ *     Phase G slice 3/N).
+ */
+export function buildJsonResponse(
+  data: unknown,
+  status = 200,
+  transformer?: TheoTransformer,
+): Response {
+  const body = transformer ? transformer.serialize(data) : JSON.stringify(data)
+  return new Response(body, {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+export function buildErrorResponse(input: SendErrorInput): Response {
+  const { code, message, status, issues, requestId, options } = input
+  const errorMessage =
+    code === 'INTERNAL_ERROR' && process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : message
+
+  if (code === 'INTERNAL_ERROR') {
+    console.error(`[${requestId ?? 'no-id'}] ${message}`)
+  }
+
+  const headers: Record<string, string> = {}
+  if (requestId !== undefined) headers['x-request-id'] = requestId
+
+  if (status === 404 && options?.custom404Html !== undefined) {
+    headers['content-type'] = 'text/html; charset=utf-8'
+    return new Response(options.custom404Html, { status: 404, headers })
+  }
+  if (status === 500 && options?.custom500Html !== undefined) {
+    headers['content-type'] = 'text/html; charset=utf-8'
+    return new Response(options.custom500Html, { status: 500, headers })
+  }
+
+  headers['content-type'] = 'application/json'
+  const body = JSON.stringify({
+    error: {
+      code,
+      message: errorMessage,
+      ...(requestId ? { requestId } : {}),
+      ...(issues ? { issues } : {}),
+    },
+  })
+  return new Response(body, { status, headers })
+}

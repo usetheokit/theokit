@@ -1,4 +1,8 @@
-import { randomBytes } from 'node:crypto'
+// T5a.1a — Web Standards migration (leaf-first slice). Web Crypto's
+// `crypto.getRandomValues()` is available on globalThis in every supported
+// runtime per ADR-0028 (Node 22+, CF Workers, Bun, Deno, browsers). No
+// node:crypto import needed — Web Crypto returns a typed array filled with
+// CSPRNG bytes, which we hex-encode locally instead of relying on Buffer.
 
 /**
  * W3C Trace Context propagation helpers for non-HTTP carriers (job
@@ -79,10 +83,15 @@ export function generateNewTraceContext(): TraceContext {
 }
 
 function randomHex(bytes: number): string {
-  // randomBytes is overwhelmingly unlikely to produce all-zeros, but we
-  // guard anyway — the W3C spec rejects all-zeros and tests assert this.
+  // crypto.getRandomValues is overwhelmingly unlikely to produce all-zeros,
+  // but we guard anyway — the W3C spec rejects all-zeros and tests assert
+  // this. Web Crypto API returns a Uint8Array; we hex-encode without Buffer
+  // to stay runtime-agnostic (CF Workers / Bun / Deno have no Buffer global).
   for (;;) {
-    const hex = randomBytes(bytes).toString('hex')
+    const buf = new Uint8Array(bytes)
+    globalThis.crypto.getRandomValues(buf)
+    let hex = ''
+    for (const b of buf) hex += b.toString(16).padStart(2, '0')
     if (!/^0+$/.test(hex)) return hex
   }
 }

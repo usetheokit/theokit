@@ -110,9 +110,9 @@ description; the maintainer will queue the publish.
 For the 0.3.0 cutover specifically, see
 [docs/plans/theokit-0.3.0-cutover-execution-plan.md](docs/plans/theokit-0.3.0-cutover-execution-plan.md).
 
-## Cross-repo dev: linking @usetheo/ui
+## Cross-repo dev: linking @theokit/ui
 
-Por default, `@usetheo/ui` é consumido como npm dep (peerDep `^0.11.0-next.0`).
+Por default, `@theokit/ui` é consumido como npm dep (peerDep `^0.11.0-next.0`).
 Edições locais em `../theo-ui/` NÃO refletem sem publish.
 
 Para iterar nos dois repos simultaneamente (ADR
@@ -155,14 +155,14 @@ CI nunca usa esse modo. Veja [ADR 0020](docs/adr/0020-cross-repo-workspace-link-
 
 ### Assimetria intencional: SDK linked default, UI linked opt-in
 
-`@usetheo/sdk` permanece como workspace link permanente em
+`@theokit/sdk` permanece como workspace link permanente em
 `pnpm-workspace.yaml`. UI fica de fora por default. A assimetria reflete o
 perfil de acoplamento:
 
 | Pillar | Acoplamento ao runtime do theokit | Workspace mode |
 |---|---|---|
-| `@usetheo/sdk` | runtime de produção (`server/agent/*`) | **link permanente** |
-| `@usetheo/ui` | dep opcional via auto-detect | **link opt-in** |
+| `@theokit/sdk` | runtime de produção (`server/agent/*`) | **link permanente** |
+| `@theokit/ui` | dep opcional via auto-detect | **link opt-in** |
 
 Ver [ADR 0020](docs/adr/0020-cross-repo-workspace-link-opt-in.md) (theokit) +
 [ADR 0001](../theokit-sdk/docs/adr/0001-workspace-link-default-status-quo.md)

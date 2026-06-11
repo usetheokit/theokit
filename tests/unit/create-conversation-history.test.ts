@@ -255,11 +255,11 @@ describe('createConversationHistory', () => {
   })
 
   // EC-2 — SDK not installed
-  it('EC-2 — actionable error when @usetheo/sdk import fails', async () => {
+  it('EC-2 — actionable error when @theokit/sdk import fails', async () => {
     // Force the loader to simulate a missing SDK by setting null + clearing cache
     __setSdkForTests(null)
     await expect(createConversationHistory(makeArgs())).rejects.toThrow(
-      /requires @usetheo\/sdk.*pnpm add @usetheo\/sdk/,
+      /requires @theokit\/sdk.*pnpm add @theokit\/sdk/,
     )
   })
 

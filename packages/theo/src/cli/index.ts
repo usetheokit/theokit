@@ -7,6 +7,7 @@ interface CliOptions {
   json?: boolean
   allowWarnings?: boolean
   force?: boolean
+  dryRun?: boolean
 }
 
 const cli = cac('theokit')
@@ -38,7 +39,7 @@ cli
   .option('--port <port>', 'Port number')
   .action(async (options: CliOptions) => {
     try {
-      const { startCommand } = await import('./commands/start.js')
+      const { startCommand } = await import('./commands/start/index.js')
       await startCommand({ port: options.port ? Number(options.port) : undefined })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -48,7 +49,7 @@ cli
   })
 
 cli
-  .command('generate <type> <name>', 'Generate a route, action, page, or ws endpoint')
+  .command('generate <type> <name>', 'Generate a route, action, page, ws, or controller endpoint')
   .action(async (type: string, name: string) => {
     try {
       const { generateCommand } = await import('./commands/generate.js')
@@ -113,6 +114,60 @@ cli.command('info', 'Print environment info (runtime, config, routes)').action(a
   const { infoCommand } = await import('./commands/info.js')
   await infoCommand()
 })
+
+cli
+  .command(
+    'openapi',
+    'Generate <distDir>/openapi.json from route schemas (opt-in via config.openapi)',
+  )
+  .option('--dry-run', 'Print the document to stdout without writing to disk (EC-3)')
+  .action(async (options: CliOptions) => {
+    try {
+      const { openapiCommand } = await import('./commands/openapi.js')
+      await openapiCommand({ dryRun: Boolean(options.dryRun) })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
+
+cli
+  .command(
+    'migrate <kind>',
+    'Run a one-shot convention migration. Supported: router (G6 dotted→nested), services-json-v1-to-v2 (Plan v1.2 T2.3)',
+  )
+  .option('--dry-run', 'Print the migration plan but do not touch the filesystem')
+  .option('--force', 'Skip the dev-server port pre-flight check (CI / non-TTY)')
+  .option('--name <slug>', 'Explicit project name (DNS-1123). Services-json migrate only.')
+  .action(async (kind: string, options: CliOptions & { name?: string }) => {
+    try {
+      if (kind === 'router') {
+        const { routerMigrateCommand } = await import('./commands/migrate/router.js')
+        await routerMigrateCommand({
+          dryRun: Boolean(options.dryRun),
+          force: Boolean(options.force),
+        })
+        return
+      }
+      if (kind === 'services-json-v1-to-v2' || kind === 'services-json') {
+        const { servicesJsonMigrateCommand } = await import('./commands/migrate/services-json.js')
+        await servicesJsonMigrateCommand({
+          dryRun: Boolean(options.dryRun),
+          name: options.name,
+        })
+        return
+      }
+      console.error(
+        `\n  ✗ Unknown migration kind: ${kind}. Supported: router, services-json-v1-to-v2\n`,
+      )
+      process.exit(1)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
 
 cli
   .command('docker', 'Generate Dockerfile for production')

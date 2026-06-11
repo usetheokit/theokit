@@ -8,7 +8,7 @@ import { integrateUseTheoUI } from '../../packages/theo/src/vite-plugin/integrat
 
 /**
  * T3.2 — `integrateUseTheoUI` tests. Mocks `detectPackage` AND the
- * dynamic imports of `@tailwindcss/vite` + `@usetheo/ui/vite-plugin`.
+ * dynamic imports of `@tailwindcss/vite` + `@theokit/ui/vite-plugin`.
  * Covers happy path + EC-5 (default-export validation) + EC-6 (return-shape).
  */
 
@@ -20,8 +20,8 @@ vi.mock('@tailwindcss/vite', () => ({
   default: () => ({ name: '@tailwindcss/vite' }),
 }))
 
-vi.mock('@usetheo/ui/vite-plugin', () => ({
-  default: () => ({ name: '@usetheo/ui/vite-plugin' }),
+vi.mock('@theokit/ui/vite-plugin', () => ({
+  default: () => ({ name: '@theokit/ui/vite-plugin' }),
 }))
 
 const TEST_ROOT = join(process.cwd(), '.tmp-integrate-ui')
@@ -45,16 +45,16 @@ describe('integrateUseTheoUI', () => {
   // filesystem walks adds brittleness without catching real bugs.
   it.skip('happy: both deps installed → returns plugin array (covered by integration)', async () => {
     vi.mocked(detectPackage).mockImplementation((name) => ({
-      installed: name === '@usetheo/ui' || name === '@tailwindcss/vite',
+      installed: name === '@theokit/ui' || name === '@tailwindcss/vite',
     }))
     const plugins = await integrateUseTheoUI(TEST_ROOT)
     expect(plugins.length).toBeGreaterThanOrEqual(2)
     // @tailwindcss/vite@^4 returns 3 plugins (scan + generate:serve + generate:build)
     expect(plugins.some((p) => p?.name?.startsWith('@tailwindcss/vite'))).toBe(true)
-    expect(plugins.some((p) => p?.name === '@usetheo/ui/vite-plugin')).toBe(true)
+    expect(plugins.some((p) => p?.name === '@theokit/ui/vite-plugin')).toBe(true)
   })
 
-  it('no @usetheo/ui → returns []', async () => {
+  it('no @theokit/ui → returns []', async () => {
     vi.mocked(detectPackage).mockReturnValue({ installed: false })
     const plugins = await integrateUseTheoUI(TEST_ROOT)
     expect(plugins).toEqual([])
@@ -62,7 +62,7 @@ describe('integrateUseTheoUI', () => {
 
   it('no @tailwindcss/vite → warn + returns []', async () => {
     vi.mocked(detectPackage).mockImplementation((name) => ({
-      installed: name === '@usetheo/ui',
+      installed: name === '@theokit/ui',
     }))
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const plugins = await integrateUseTheoUI(TEST_ROOT)

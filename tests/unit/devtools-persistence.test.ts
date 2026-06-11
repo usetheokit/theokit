@@ -11,7 +11,7 @@ import {
   STORAGE_KEYS,
   loadFromStorage,
   writeToStorage,
-} from '../../packages/theo/src/devtools/persistence.js'
+} from '../../packages/theo/src/devtools/state/persistence.js'
 import { STORAGE_VERSION } from '../../packages/theo/src/devtools/shared.js'
 
 class MemoryStorage implements Storage {

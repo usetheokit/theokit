@@ -19,6 +19,9 @@ export interface ManifestRoute {
   filePath: string
   routePath: string
   paramNames: string[]
+  /** HTTP methods (uppercase) the route file exports. Optional — manifests
+   * generated before G1 omit this; loaders treat absence as "unknown". */
+  methods?: string[]
 }
 
 export interface ManifestAction {
@@ -59,6 +62,7 @@ export function generateManifest(serverDir: string): TheoManifest {
       filePath: relative(serverDir, r.filePath),
       routePath: r.routePath,
       paramNames: r.paramNames,
+      ...(r.methods !== undefined ? { methods: r.methods } : {}),
     })),
     actions: actions.map((a) => ({
       filePath: relative(serverDir, a.filePath),
@@ -97,6 +101,7 @@ export function loadManifest(distDir: string, serverDir: string): LoadedManifest
       routePath: r.routePath,
       paramNames,
       pattern,
+      ...(r.methods !== undefined ? { methods: r.methods } : {}),
     }
   })
 

@@ -5,15 +5,15 @@ import { describe, expect, it } from 'vitest'
 const CHANGELOG_PATH = resolve(__dirname, '../../CHANGELOG.md')
 
 describe('T5.2 — CHANGELOG entries for storage-modules-sdk-delegation', () => {
-  it('has definePlugin entry under [Unreleased] (happy path)', () => {
+  // 2026-06-05 update — originally gated against [Unreleased] only (to enforce
+  // PR-time doc updates during T5.2 active dev). Post-release the entries
+  // migrate into a versioned heading; the gate evolved into "entry exists in
+  // CHANGELOG" since the doc check survives the migration. The KAC bullet
+  // shape + ADR cross-links + character cap tests below still anchor the
+  // structural quality.
+  it('has definePlugin entry recorded in CHANGELOG (happy path)', () => {
     const content = readFileSync(CHANGELOG_PATH, 'utf8')
-    const unreleasedIdx = content.indexOf('## [Unreleased]')
-    const nextVersionIdx = content.indexOf('\n## [', unreleasedIdx + 16)
-    const sliceUntilNext =
-      nextVersionIdx > 0
-        ? content.slice(unreleasedIdx, nextVersionIdx)
-        : content.slice(unreleasedIdx)
-    expect(sliceUntilNext).toMatch(/definePlugin/)
+    expect(content).toMatch(/definePlugin/)
   })
 
   it('has useStorage entry (happy path)', () => {

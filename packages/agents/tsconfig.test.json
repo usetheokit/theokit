@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "noEmit": true,
+    "strict": true,
+    "paths": {
+      "@theokit/http": ["../http/src/index.ts"],
+      "@theokit/http/runtime/node": ["../http/src/runtime-node.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "tests/**/*.test.ts"]
+}

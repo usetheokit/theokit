@@ -21,13 +21,13 @@ function readChat(): string {
 }
 
 describe('fixtures/template-default canonical chat.ts (item #5)', () => {
-  it('uses @usetheo/sdk indirectly via createConversationHistory (no naked Agent import needed)', () => {
+  it('uses @theokit/sdk indirectly via createConversationHistory (no naked Agent import needed)', () => {
     const src = readChat()
     // item #5: agent acquisition is via createConversationHistory which
-    // dynamically imports the SDK. No direct `import { Agent } from '@usetheo/sdk'`
+    // dynamically imports the SDK. No direct `import { Agent } from '@theokit/sdk'`
     // line in the user-facing scaffold (kept clean).
     expect(src).toMatch(/createConversationHistory/)
-    expect(src).not.toMatch(/import\s+\{\s*Agent\s*\}\s+from\s+['"]@usetheo\/sdk['"]/)
+    expect(src).not.toMatch(/import\s+\{\s*Agent\s*\}\s+from\s+['"]@theokit\/sdk['"]/)
   })
 
   it('does NOT import the raw "openai" npm package (anti-stack guard)', () => {
@@ -118,12 +118,12 @@ describe('fixtures/template-default canonical chat.ts (item #5)', () => {
   })
 })
 
-describe('fixtures/template-default package.json — @usetheo/sdk dep', () => {
-  it('includes @usetheo/sdk in dependencies (workspace:* for the fixture)', () => {
+describe('fixtures/template-default package.json — @theokit/sdk dep', () => {
+  it('includes @theokit/sdk in dependencies (workspace:* for the fixture)', () => {
     expect(existsSync(PKG_PATH)).toBe(true)
     const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf-8')) as {
       dependencies?: Record<string, string>
     }
-    expect(pkg.dependencies?.['@usetheo/sdk']).toBe('workspace:*')
+    expect(pkg.dependencies?.['@theokit/sdk']).toBe('workspace:*')
   })
 })

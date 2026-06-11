@@ -141,7 +141,8 @@ describe('Security-hardening dogfood — composed end-to-end', () => {
   // ─────────────────────────────────────────────────────────────
   // Step 3b — rate-limit-exceeded fires audit (per-route, strict /login)
   // ─────────────────────────────────────────────────────────────
-  it('per-route rate limit + audit: /api/login locked after 3 failures, /api/users still loose', () => {
+  // T5a.1d — limiter became async (Web Crypto cascade in rate-limit-per-route).
+  it('per-route rate limit + audit: /api/login locked after 3 failures, /api/users still loose', async () => {
     const { logger, events } = recordingLogger()
     const limiter = createRouteRateLimiter({
       default: { windowMs: 60_000, max: 100 },
@@ -152,9 +153,9 @@ describe('Security-hardening dogfood — composed end-to-end', () => {
       ({ url, headers: {}, socket: { remoteAddress: ip } }) as unknown as IncomingMessage
 
     for (let i = 0; i < 3; i++) {
-      expect(limiter(mkReq('/api/login')).limited).toBe(false)
+      expect((await limiter(mkReq('/api/login'))).limited).toBe(false)
     }
-    const locked = limiter(mkReq('/api/login'))
+    const locked = await limiter(mkReq('/api/login'))
     expect(locked.limited).toBe(true)
     if (locked.limited) {
       safeAudit(logger, {
@@ -164,7 +165,7 @@ describe('Security-hardening dogfood — composed end-to-end', () => {
       })
     }
     // Other paths still loose
-    expect(limiter(mkReq('/api/users')).limited).toBe(false)
+    expect((await limiter(mkReq('/api/users'))).limited).toBe(false)
     expect(events.length).toBe(1)
     expect(events[0].action).toBe('rate-limit.exceeded')
   })
