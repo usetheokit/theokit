@@ -5,7 +5,9 @@
   "description": "Scaffold a new TheoKit project",
   "license": "Apache-2.0",
   "scripts": {
-    "build": "tsup"
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "bin": {
     "create-theokit": "./dist/cli.js"
