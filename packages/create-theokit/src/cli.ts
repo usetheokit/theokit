@@ -1,13 +1,22 @@
-import { resolve, join } from 'node:path'
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync, renameSync, existsSync, rmSync } from 'node:fs'
 import { execSync } from 'node:child_process'
+import {
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  mkdirSync,
+  renameSync,
+  existsSync,
+  rmSync,
+} from 'node:fs'
+import { resolve, join } from 'node:path'
 
 import { runInstall } from './install.js'
 import { detectPkgManager } from './pkg-manager.js'
 import { assertNodeVersion } from './preflight-node.js'
-import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
-import { scaffold } from './index.js'
 import { runPrompts, getDefaults, type ProjectOptions } from './prompts.js'
+import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
+
+import { scaffold } from './index.js'
 
 const VERSION = '0.8.0'
 
@@ -95,11 +104,11 @@ export async function main(): Promise<void> {
   const importAlias = getFlag(args, 'import-alias') ?? '@/*'
 
   // --use-npm/pnpm/yarn/bun override
-  const pkgManagerOverride = hasFlag(args, 'use-npm') ? 'npm'
-    : hasFlag(args, 'use-pnpm') ? 'pnpm'
-    : hasFlag(args, 'use-yarn') ? 'yarn'
-    : hasFlag(args, 'use-bun') ? 'bun'
-    : undefined
+  let pkgManagerOverride: string | undefined
+  if (hasFlag(args, 'use-npm')) pkgManagerOverride = 'npm'
+  else if (hasFlag(args, 'use-pnpm')) pkgManagerOverride = 'pnpm'
+  else if (hasFlag(args, 'use-yarn')) pkgManagerOverride = 'yarn'
+  else if (hasFlag(args, 'use-bun')) pkgManagerOverride = 'bun'
 
   let backends: BackendKind[] = []
   try {
@@ -145,7 +154,9 @@ export async function main(): Promise<void> {
   try {
     const suffix = bare ? ' [--bare]' : ''
     const backendsSuffix = backends.length > 0 ? ` [+services: ${backends.join(', ')}]` : ''
-    console.log(`\nCreating TheoKit project "${projectName}" (template: ${templateName})${suffix}${backendsSuffix}...\n`)
+    console.log(
+      `\nCreating TheoKit project "${projectName}" (template: ${templateName})${suffix}${backendsSuffix}...\n`,
+    )
 
     scaffold(targetDir, projectName, templateName, { bare })
 
@@ -181,7 +192,10 @@ export async function main(): Promise<void> {
 
 // ── Post-scaffold transforms ──
 
-interface ApplyOpts { importAlias: string; useBiome: boolean }
+interface ApplyOpts {
+  importAlias: string
+  useBiome: boolean
+}
 
 function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpts): void {
   const pkgPath = resolve(targetDir, 'package.json')
@@ -203,12 +217,19 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
 
     // Write biome.json
-    writeFileSync(resolve(targetDir, 'biome.json'), JSON.stringify({
-      $schema: 'https://biomejs.dev/schemas/1.9.0/schema.json',
-      organizeImports: { enabled: true },
-      linter: { enabled: true, rules: { recommended: true } },
-      formatter: { enabled: true, indentStyle: 'space', indentWidth: 2, lineWidth: 100 },
-    }, null, 2) + '\n')
+    writeFileSync(
+      resolve(targetDir, 'biome.json'),
+      JSON.stringify(
+        {
+          $schema: 'https://biomejs.dev/schemas/1.9.0/schema.json',
+          organizeImports: { enabled: true },
+          linter: { enabled: true, rules: { recommended: true } },
+          formatter: { enabled: true, indentStyle: 'space', indentWidth: 2, lineWidth: 100 },
+        },
+        null,
+        2,
+      ) + '\n',
+    )
   } else if (!options.eslint) {
     // No linter
     const eslintPath = resolve(targetDir, 'eslint.config.mjs')
@@ -225,8 +246,8 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
   // Tailwind
   if (options.tailwind) {
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    pkg.devDependencies = pkg.devDependencies || {}
-    pkg.devDependencies['tailwindcss'] = '^4.0.0'
+    pkg.devDependencies = pkg.devDependencies ?? {}
+    pkg.devDependencies.tailwindcss = '^4.0.0'
     pkg.devDependencies['@tailwindcss/vite'] = '^4.0.0'
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
     const cssDir = existsSync(resolve(targetDir, 'src/app')) ? 'src/app' : 'app'
@@ -288,7 +309,10 @@ function initGit(targetDir: string): void {
   try {
     execSync('git init', { cwd: targetDir, stdio: 'ignore' })
     execSync('git add -A', { cwd: targetDir, stdio: 'ignore' })
-    execSync('git commit -m "Initial commit from create-theokit" --no-verify', { cwd: targetDir, stdio: 'ignore' })
+    execSync('git commit -m "Initial commit from create-theokit" --no-verify', {
+      cwd: targetDir,
+      stdio: 'ignore',
+    })
   } catch {
     // git not installed — silently skip
   }
@@ -298,7 +322,9 @@ function initGit(targetDir: string): void {
 
 function cloneExample(example: string, targetDir: string): void {
   const isUrl = example.startsWith('http://') || example.startsWith('https://')
-  const repo = isUrl ? example : `https://github.com/usetheodev/theokit-examples/tree/main/${example}`
+  const repo = isUrl
+    ? example
+    : `https://github.com/usetheodev/theokit-examples/tree/main/${example}`
 
   if (isUrl) {
     // Full repo URL — shallow clone
@@ -308,18 +334,20 @@ function cloneExample(example: string, targetDir: string): void {
   } else {
     // Named example from theokit-examples repo — use degit pattern
     try {
-      execSync(`npx --yes degit usetheodev/theokit-examples/${example} ${targetDir}`, { stdio: 'inherit' })
+      execSync(`npx --yes degit usetheodev/theokit-examples/${example} ${targetDir}`, {
+        stdio: 'inherit',
+      })
     } catch {
       throw new Error(
         `Example "${example}" not found. ` +
-        `Browse available examples at https://github.com/usetheodev/theokit-examples`,
+          `Browse available examples at https://github.com/usetheodev/theokit-examples`,
       )
     }
   }
 }
 
 // Auto-execute
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error(err)
   process.exit(1)
 })
