@@ -1,30 +1,11 @@
 /**
- * Typed Client — end-to-end type inference from @Controller decorators.
+ * Typed Client — end-to-end type inference from route contracts.
  *
- * The developer defines route contracts on the server, and the client
- * gets full autocomplete + type checking — zero code generation, zero
- * runtime overhead.
- *
- * @example Server:
- * ```ts
- * const routes = {
- *   'GET /api/tasks':    { response: [] as Task[] },
- *   'POST /api/tasks':   { body: zCreateTask, response: {} as Task },
- *   'GET /api/tasks/:id': { params: { id: 'string' }, response: {} as Task },
- *   'DELETE /api/tasks/:id': { params: { id: 'string' }, response: void 0 as void },
- * } satisfies RouteMap
- * export type AppRoutes = typeof routes
- * ```
- *
- * @example Client:
- * ```ts
- * import type { AppRoutes } from '../server/routes.js'
- * const client = createTypedClient<AppRoutes>('http://localhost:3000')
- * const tasks = await client.get('/api/tasks')       // Task[]
- * const task = await client.post('/api/tasks', body)  // Task
- * ```
+ * Zero codegen, zero runtime overhead on types. The developer defines
+ * a route map using `contract()`, and `createTypedClient<T>()` infers
+ * request body + response types automatically.
  */
-import { z } from 'zod'
+import type { z } from 'zod'
 
 // ── Route Map types ──
 
@@ -37,42 +18,35 @@ export interface RouteDefinition {
 
 export type RouteMap = Record<string, RouteDefinition>
 
-// ── Type extraction helpers ──
+// ── Type extraction ──
 
-type ExtractRoutes<M extends RouteMap, Method extends string> = {
-  [K in keyof M & string as K extends `${Method} ${infer Path}` ? Path : never]: M[K]
-}
+type InferBody<D> = D extends { body: z.ZodType } ? z.infer<D['body']> : never
+type InferResponse<D> = D extends { response: infer R } ? R : unknown
 
-type InferBody<D extends RouteDefinition> = D['body'] extends z.ZodType ? z.infer<D['body']> : never
-type InferResponse<D extends RouteDefinition> = D['response']
-
-type HasBody<D extends RouteDefinition> = D['body'] extends z.ZodType ? true : false
-
-// ── Client interface ──
+// ── Client interface (simplified — works with strict DTS) ──
 
 export interface TypedClient<M extends RouteMap> {
-  get<P extends keyof ExtractRoutes<M, 'GET'> & string>(
+  get<P extends string & keyof M>(
     path: P,
     opts?: { query?: Record<string, string>; headers?: Record<string, string> },
-  ): Promise<InferResponse<ExtractRoutes<M, 'GET'>[P]>>
+  ): Promise<InferResponse<M[`GET ${P}`] extends never ? M[P] : M[`GET ${P}`]>>
 
-  post<P extends keyof ExtractRoutes<M, 'POST'> & string>(
+  post<P extends string>(
     path: P,
-    ...args: HasBody<ExtractRoutes<M, 'POST'>[P]> extends true
-      ? [body: InferBody<ExtractRoutes<M, 'POST'>[P]>, opts?: { headers?: Record<string, string> }]
-      : [opts?: { headers?: Record<string, string> }]
-  ): Promise<InferResponse<ExtractRoutes<M, 'POST'>[P]>>
-
-  put<P extends keyof ExtractRoutes<M, 'PUT'> & string>(
-    path: P,
-    body: InferBody<ExtractRoutes<M, 'PUT'>[P]>,
+    body?: InferBody<M[`POST ${P}`]>,
     opts?: { headers?: Record<string, string> },
-  ): Promise<InferResponse<ExtractRoutes<M, 'PUT'>[P]>>
+  ): Promise<InferResponse<M[`POST ${P}`]>>
 
-  delete<P extends keyof ExtractRoutes<M, 'DELETE'> & string>(
+  put<P extends string>(
+    path: P,
+    body?: InferBody<M[`PUT ${P}`]>,
+    opts?: { headers?: Record<string, string> },
+  ): Promise<InferResponse<M[`PUT ${P}`]>>
+
+  delete<P extends string>(
     path: P,
     opts?: { headers?: Record<string, string> },
-  ): Promise<InferResponse<ExtractRoutes<M, 'DELETE'>[P]>>
+  ): Promise<InferResponse<M[`DELETE ${P}`]>>
 }
 
 // ── Client factory ──
@@ -86,10 +60,7 @@ export function createTypedClient<M extends RouteMap>(
     if (opts?.query) {
       for (const [k, v] of Object.entries(opts.query)) url.searchParams.set(k, v)
     }
-    const headers: Record<string, string> = {
-      ...defaultHeaders,
-      ...opts?.headers,
-    }
+    const headers: Record<string, string> = { ...defaultHeaders, ...opts?.headers }
     if (body !== undefined) headers['content-type'] = 'application/json'
 
     const res = await fetch(url.toString(), {
@@ -108,16 +79,10 @@ export function createTypedClient<M extends RouteMap>(
   }
 
   return {
-    get: (path, opts) => request('GET', path, undefined, opts),
-    post: (path, ...args) => {
-      const hasBody = args.length > 0 && typeof args[0] !== 'object'
-        ? false
-        : args[0] !== undefined && !('headers' in (args[0] as Record<string, unknown> ?? {}))
-      if (hasBody) return request('POST', path, args[0], args[1] as { headers?: Record<string, string> })
-      return request('POST', path, undefined, args[0] as { headers?: Record<string, string> })
-    },
-    put: (path, body, opts) => request('PUT', path, body, opts),
-    delete: (path, opts) => request('DELETE', path, undefined, opts),
+    get: (path: string, opts?: Record<string, unknown>) => request('GET', path, undefined, opts as { headers?: Record<string, string>; query?: Record<string, string> }),
+    post: (path: string, body?: unknown, opts?: Record<string, unknown>) => request('POST', path, body, opts as { headers?: Record<string, string> }),
+    put: (path: string, body?: unknown, opts?: Record<string, unknown>) => request('PUT', path, body, opts as { headers?: Record<string, string> }),
+    delete: (path: string, opts?: Record<string, unknown>) => request('DELETE', path, undefined, opts as { headers?: Record<string, string> }),
   } as TypedClient<M>
 }
 
