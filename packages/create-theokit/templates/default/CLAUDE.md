@@ -12,6 +12,7 @@ This project includes TheoKit-aware skills that activate automatically when you 
 | theokit-agents | `**/*agent*`, `**/*tool*`, `**/*Agent*`, `**/*Tool*` | @Agent, @Tool, @Toolbox decorators, LLM integration |
 | theokit-database | `**/*schema*`, `**/*db*`, `**/drizzle*`, `**/*migration*`, `**/*seed*` | Drizzle ORM, SQLite, schema patterns, migrations |
 | theokit-frontend | `app/**` | File-based routing, layouts, theoFetch, useAgentStream |
+| theokit-ui | `app/**`, `**/*Chat*`, `**/*Sidebar*`, `**/*Theme*` | @theokit/ui components: ChatThread, ChatMessage, CodeBlock, Sidebar, theming |
 | theokit-config | `theo.config*`, `**/*config*` | defineConfig options, plugins, security, storage |
 
 ### Settings
