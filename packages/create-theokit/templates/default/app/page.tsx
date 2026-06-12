@@ -2,23 +2,17 @@
 
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 
-// ── Types ──
-
 interface Task {
   id: number
   title: string
   priority: 'high' | 'medium' | 'low'
   done: boolean
 }
-
 type Role = '' | 'user' | 'admin'
-
 interface ChatMsg {
   role: 'user' | 'agent' | 'tool' | 'system' | 'error'
   text: string
 }
-
-// ── Page ──
 
 export default function Page() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -33,13 +27,12 @@ export default function Page() {
   const [chatBusy, setChatBusy] = useState(false)
   const chatRef = useRef<HTMLDivElement>(null)
 
-  const headers = useCallback((): Record<string, string> => {
+  const hdrs = useCallback((): Record<string, string> => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
     if (role) h['x-role'] = role
     return h
   }, [role])
 
-  // Fetch tasks on mount + when role changes
   const loadTasks = useCallback(async () => {
     const res = await fetch('/api/tasks')
     if (res.ok) setTasks(await res.json())
@@ -49,14 +42,13 @@ export default function Page() {
     loadTasks()
   }, [loadTasks])
 
-  // Create task
   const createTask = async (e: FormEvent) => {
     e.preventDefault()
     setFormError('')
     if (!title.trim()) return
     const res = await fetch('/api/tasks', {
       method: 'POST',
-      headers: headers(),
+      headers: hdrs(),
       body: JSON.stringify({ title, priority }),
     })
     if (res.status === 403) {
@@ -72,31 +64,27 @@ export default function Page() {
     loadTasks()
   }
 
-  // AI Chat
   const sendChat = async () => {
     const msg = chatInput.trim()
     if (!msg || chatBusy) return
     setChatInput('')
     setChat((c) => [...c, { role: 'user', text: msg }])
     setChatBusy(true)
-
     try {
       const res = await fetch('/api/agents/assistant/chat', {
         method: 'POST',
-        headers: headers(),
+        headers: hdrs(),
         body: JSON.stringify({ message: msg, sessionId: 'session-' + Date.now() }),
       })
       if (res.status === 403) {
         setChat((c) => [...c, { role: 'error', text: '403 — Need User role' }])
         return
       }
-
       const reader = res.body?.getReader()
       if (!reader) return
       const decoder = new TextDecoder()
       let buf = '',
         agentText = ''
-
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -115,7 +103,7 @@ export default function Page() {
             else if (ev.type === 'error')
               setChat((c) => [...c, { role: 'error', text: ev.message }])
           } catch {
-            /* partial JSON */
+            /* partial */
           }
         }
       }
@@ -136,126 +124,124 @@ export default function Page() {
   }, [chat])
 
   return (
-    <>
-      {/* Hero */}
-      <header className="hero">
-        <img src="/logo.png" alt="TheoKit" width={80} height={80} />
-        <h1>TheoKit</h1>
-        <p className="tagline">Build the app your agent lives in.</p>
-        <nav className="hero-links">
-          <a
-            href="https://usetheo.dev"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn primary"
-          >
-            usetheo.dev
-          </a>
-          <a
-            href="https://github.com/usetheodev/theokit"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn secondary"
-          >
-            Documentation
-          </a>
-        </nav>
-        <p className="hint">
-          Edit <code>app/page.tsx</code> to get started. Changes hot-reload instantly.
-        </p>
-      </header>
-
-      {/* Role selector */}
-      <div className="role-bar">
-        <label htmlFor="role">Role:</label>
-        <select id="role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-          <option value="">None (public only)</option>
-          <option value="user">User</option>
-          <option value="admin">Admin</option>
-        </select>
-      </div>
-
-      {/* Main grid */}
-      <main className="grid">
-        {/* Tasks CRUD */}
-        <section className="card">
-          <h2>
-            Tasks <span className="badge">@Controller</span>
-          </h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Priority</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((t) => (
-                <tr key={t.id} className={t.done ? 'done' : ''}>
-                  <td>
-                    {t.done ? '✅ ' : '○ '}
-                    {t.title}
-                  </td>
-                  <td>
-                    <span className={`prio prio-${t.priority}`}>{t.priority}</span>
-                  </td>
-                  <td>{t.done ? 'Done' : 'To do'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <form onSubmit={createTask} className="create-bar">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="New task..."
-              required
-              minLength={3}
-            />
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Task['priority'])}
+    <div className="page">
+      <div className="main">
+        {/* Hero */}
+        <header className="hero">
+          <img src="/logo.png" alt="TheoKit" width={72} height={72} className="hero-logo" />
+          <h1>TheoKit</h1>
+          <p className="tagline">Build the app your agent lives in.</p>
+          <nav className="ctas">
+            <a
+              href="https://usetheo.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn primary"
             >
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="low">Low</option>
-            </select>
-            <button type="submit">Add</button>
-          </form>
-          {formError && <p className="error">{formError}</p>}
-        </section>
+              Get Started
+            </a>
+            <a
+              href="https://github.com/usetheodev/theokit"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn secondary"
+            >
+              Documentation
+            </a>
+          </nav>
+          <p className="hint">
+            Edit <code>app/page.tsx</code> to get started.
+          </p>
+        </header>
 
-        {/* AI Chat */}
-        <section className="card">
-          <h2>
-            AI Assistant <span className="badge badge-ai">@Agent + SSE</span>
-          </h2>
-          <div ref={chatRef} className="chat-box">
-            {chat.map((m, i) => (
-              <div key={i} className={`msg ${m.role}`}>
-                {m.role === 'user' ? `You: ${m.text}` : m.text}
-              </div>
-            ))}
-          </div>
-          <div className="chat-bar">
-            <input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && sendChat()}
-              placeholder="Message the AI assistant..."
-              disabled={chatBusy}
-            />
-            <button type="button" onClick={sendChat} disabled={chatBusy}>
-              Send
-            </button>
-          </div>
-        </section>
-      </main>
+        {/* Role */}
+        <div className="role-bar">
+          <label htmlFor="role">Role:</label>
+          <select id="role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+            <option value="">None (public)</option>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
 
-      {/* Footer */}
-      <footer className="footer">
-        <p>
+        {/* Content */}
+        <div className="grid">
+          <section className="card">
+            <h2>
+              Tasks <span className="badge">@Controller</span>
+            </h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((t) => (
+                  <tr key={t.id} className={t.done ? 'done' : ''}>
+                    <td>
+                      {t.done ? '✅ ' : '○ '}
+                      {t.title}
+                    </td>
+                    <td>
+                      <span className={`prio prio-${t.priority}`}>{t.priority}</span>
+                    </td>
+                    <td>{t.done ? 'Done' : 'To do'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <form onSubmit={createTask} className="create-bar">
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="New task..."
+                required
+                minLength={3}
+              />
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as Task['priority'])}
+              >
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="low">Low</option>
+              </select>
+              <button type="submit">Add</button>
+            </form>
+            {formError && <p className="error">{formError}</p>}
+          </section>
+
+          <section className="card">
+            <h2>
+              AI Assistant <span className="badge badge-ai">@Agent + SSE</span>
+            </h2>
+            <div ref={chatRef} className="chat-box">
+              {chat.map((m, i) => (
+                <div key={i} className={`msg ${m.role}`}>
+                  {m.role === 'user' ? `You: ${m.text}` : m.text}
+                </div>
+              ))}
+            </div>
+            <div className="chat-bar">
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendChat()}
+                placeholder="Message the AI assistant..."
+                disabled={chatBusy}
+              />
+              <button type="button" onClick={sendChat} disabled={chatBusy}>
+                Send
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {/* Footer */}
+        <footer className="footer">
           Powered by{' '}
           <a href="https://usetheo.dev" target="_blank" rel="noopener noreferrer">
             TheoKit
@@ -268,8 +254,8 @@ export default function Page() {
           <a href="https://discord.usetheo.dev" target="_blank" rel="noopener noreferrer">
             Discord
           </a>
-        </p>
-      </footer>
-    </>
+        </footer>
+      </div>
+    </div>
   )
 }
