@@ -1,51 +1,7 @@
-'use client'
-
-import { useState, useEffect, useCallback, type FormEvent } from 'react'
-
-interface Task {
-  id: number
-  title: string
-  priority: 'high' | 'medium' | 'low'
-  done: boolean
-}
-
 export default function Page() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState<Task['priority']>('medium')
-  const [formError, setFormError] = useState('')
-
-  const loadTasks = useCallback(async () => {
-    const res = await fetch('/api/tasks')
-    if (res.ok) setTasks(await res.json())
-  }, [])
-
-  useEffect(() => {
-    loadTasks()
-  }, [loadTasks])
-
-  const createTask = async (e: FormEvent) => {
-    e.preventDefault()
-    setFormError('')
-    if (!title.trim()) return
-    const res = await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, priority }),
-    })
-    if (!res.ok) {
-      const b = await res.json()
-      setFormError(b.error?.issues?.[0]?.message ?? `Error ${res.status}`)
-      return
-    }
-    setTitle('')
-    loadTasks()
-  }
-
   return (
     <div className="page">
       <div className="main">
-        {/* Hero */}
         <header className="hero">
           <img src="/logo.png" alt="TheoKit" width={72} height={72} className="hero-logo" />
           <h1>TheoKit</h1>
@@ -73,61 +29,11 @@ export default function Page() {
           </p>
         </header>
 
-        {/* Tasks */}
-        <section className="card">
-          <h2>
-            Tasks <span className="badge">defineRoute + Drizzle</span>
-          </h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Priority</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((t) => (
-                <tr key={t.id} className={t.done ? 'done' : ''}>
-                  <td>
-                    {t.done ? '✅ ' : '○ '}
-                    {t.title}
-                  </td>
-                  <td>
-                    <span className={`prio prio-${t.priority}`}>{t.priority}</span>
-                  </td>
-                  <td>{t.done ? 'Done' : 'To do'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <form onSubmit={createTask} className="create-bar">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="New task..."
-              required
-              minLength={3}
-            />
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Task['priority'])}
-            >
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="low">Low</option>
-            </select>
-            <button type="submit">Add</button>
-          </form>
-          {formError && <p className="error">{formError}</p>}
-        </section>
-
-        {/* Features */}
         <div className="grid features">
           <div className="feature">
             <h3>defineRoute</h3>
             <p>
-              Typed API routes with Zod validation. See <code>server/routes/tasks/</code>
+              Typed API routes with Zod validation. See <code>server/routes/</code>
             </p>
           </div>
           <div className="feature">
@@ -146,7 +52,6 @@ export default function Page() {
           </div>
         </div>
 
-        {/* Footer */}
         <footer className="footer">
           Powered by{' '}
           <a href="https://usetheo.dev" target="_blank" rel="noopener noreferrer">
@@ -155,10 +60,6 @@ export default function Page() {
           {' · '}
           <a href="https://github.com/usetheodev/theokit" target="_blank" rel="noopener noreferrer">
             GitHub
-          </a>
-          {' · '}
-          <a href="https://discord.usetheo.dev" target="_blank" rel="noopener noreferrer">
-            Discord
           </a>
         </footer>
       </div>
