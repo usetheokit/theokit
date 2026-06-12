@@ -128,6 +128,13 @@ export const theoConfigSchema = z
         }),
       ])
       .default(false),
+    /** Pre-transform files on startup for faster first page load. */
+    warmup: z
+      .object({
+        clientFiles: z.array(z.string()).optional(),
+        ssrFiles: z.array(z.string()).optional(),
+      })
+      .optional(),
     ssr: z.boolean().default(false),
     /** When true (and ssr === true), use renderToPipeableStream with progressive
      * shell flush instead of single-shot renderToString. Opt-in for streaming
