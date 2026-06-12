@@ -43,18 +43,21 @@ import { createAppClient } from 'theokit/client'
 
 const client = createAppClient()
 
-// Proxy pattern — method names match route structure
 const tasks = await client.tasks.GET()
 const task = await client.tasks[':id'].GET({ params: { id: 1 } })
 const created = await client.tasks.POST({ body: { title: 'New' } })
 ```
 
-## Agent Streaming (useAgentStream)
+## Agent Streaming
+
+Three client APIs, all from `theokit/client`:
+
+### useAgentStream (React hook — most common)
 
 ```typescript
 import { useAgentStream } from 'theokit/client'
 
-function ChatComponent() {
+function ChatUI() {
   const { status, events, send, reset } = useAgentStream('/api/agents/assistant')
 
   return (
@@ -66,10 +69,32 @@ function ChatComponent() {
           {event.type === 'tool_call' && <p>Using tool: {event.name}</p>}
         </div>
       ))}
-      <input onSubmit={e => send({ message: e.target.value })} />
+      <button onClick={() => send({ message: 'Hello' })}>Send</button>
     </div>
   )
 }
+```
+
+### consumeAgentStream (non-React, async iterable)
+
+```typescript
+import { consumeAgentStream } from 'theokit/client'
+
+const stream = consumeAgentStream('/api/agents/assistant', {
+  body: { message: 'Hello' },
+})
+for await (const event of stream) {
+  console.log(event.type, event.content)
+}
+```
+
+### parseSSEChunk (low-level SSE parser)
+
+```typescript
+import { parseSSEChunk } from 'theokit/client'
+
+// Parse a single SSE line into an AgentEvent (or null)
+const event = parseSSEChunk('data: {"type":"message","content":"Hello"}')
 ```
 
 ## Path Aliases
@@ -83,7 +108,7 @@ Configured in `tsconfig.json` — works in both server and app code.
 
 ## Anti-patterns
 
-- NEVER use `fetch('/api/...')` directly — use `theoFetch` for type safety
+- NEVER use raw `fetch('/api/...')` — use `theoFetch` for type safety
 - NEVER create pages outside `app/` — they won't be discovered by the router
 - NEVER import server code directly in `app/` — use theoFetch or server actions
 - NEVER use `useEffect` + `fetch` for data loading — use theoFetch or useAgentStream
