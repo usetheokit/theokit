@@ -18,3 +18,11 @@ export {
   tryGetRequestContext,
   type TheoRequestContext,
 } from './request-context.js'
+export { digestError, type ErrorContext, type DigestedError } from './error-digest.js'
+export { composeComponentTree, type RouteTree } from './component-tree.js'
+export {
+  renderToStream,
+  streamToResponse,
+  type StreamRenderOptions,
+  type StreamRenderResult,
+} from './stream-renderer.js'
