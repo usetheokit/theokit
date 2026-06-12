@@ -220,6 +220,7 @@ code, pre { font-family: var(--font-mono); }
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
+  width: 100%;
 }
 
 .card h2 {
@@ -313,6 +314,41 @@ tr.done td { opacity: 0.4; text-decoration: line-through; }
   outline: none; transition: border-color 0.2s;
 }
 .chat-bar input:focus { border-color: var(--accent); }
+
+/* ─── Features grid ─────────────────────────────────── */
+
+.features {
+  margin-top: 32px;
+}
+
+.feature {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.feature h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+.feature p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.feature code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
 
 /* ─── Footer ────────────────────────────────────────── */
 
