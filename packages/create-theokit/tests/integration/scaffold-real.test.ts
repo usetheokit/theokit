@@ -40,7 +40,9 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'app/layout.tsx'))).toBe(true)
     expect(existsSync(join(targetDir, 'server'))).toBe(true)
     expect(existsSync(join(targetDir, 'tsconfig.json'))).toBe(true)
-    expect(existsSync(join(targetDir, 'app.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app.tsx'))).toBe(false)
 
     // .gitignore renamed from _gitignore
     expect(existsSync(join(targetDir, '.gitignore'))).toBe(true)
@@ -113,6 +115,63 @@ describe('scaffold (integration — real template)', () => {
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
     expect(pkg.dependencies?.['@theokit/ui']).toBeUndefined()
     expect(pkg.dependencies?.['@theokit/sdk']).toBeUndefined()
+  })
+
+  it('should use theokit as main dep instead of standalone @theokit/http', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'framework-test')
+
+    const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+    // theokit is the main dep
+    expect(pkg.dependencies.theokit).toBe('^0.4.0')
+    // @theokit/http and @theokit/agents are NOT direct deps (transitive via theokit)
+    expect(pkg.dependencies['@theokit/http']).toBeUndefined()
+    expect(pkg.dependencies['@theokit/agents']).toBeUndefined()
+    // reflect-metadata is NOT a direct dep (theokit handles it internally)
+    expect(pkg.dependencies['reflect-metadata']).toBeUndefined()
+    // @swc/core is NOT a devDep (theokit handles decorator compilation)
+    expect(pkg.devDependencies['@swc/core']).toBeUndefined()
+    // Scripts use theokit CLI
+    expect(pkg.scripts.dev).toBe('theokit dev')
+    expect(pkg.scripts.build).toBe('theokit build')
+    expect(pkg.scripts.start).toBe('theokit start')
+  })
+
+  it('should include theo.config.ts and index.html, not app.tsx or client.js', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'structure-test')
+
+    expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app.tsx'))).toBe(false)
+    expect(existsSync(join(targetDir, 'public/client.js'))).toBe(false)
+    expect(existsSync(join(targetDir, 'server/routes/health.ts'))).toBe(true)
+  })
+
+  it('should import globals.css from app/ not public/', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'css-test')
+
+    expect(existsSync(join(targetDir, 'app/globals.css'))).toBe(true)
+    expect(existsSync(join(targetDir, 'public/globals.css'))).toBe(false)
+    const layout = readFileSync(join(targetDir, 'app/layout.tsx'), 'utf-8')
+    expect(layout).toContain("import './globals.css'")
+    expect(layout).not.toContain('<link rel="stylesheet"')
+  })
+
+  it('should have React hooks in page.tsx instead of vanilla JS', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'hooks-test')
+
+    const page = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
+    expect(page).toContain('useState')
+    expect(page).toContain('useEffect')
+    expect(page).toContain('onClick')
+    expect(page).not.toContain('<script src')
   })
 
   it('should preserve non-tmpl files from the template', () => {
