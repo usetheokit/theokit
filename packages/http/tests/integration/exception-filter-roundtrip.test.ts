@@ -1,7 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
-import http from 'node:http'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type http from 'node:http'
 import { Controller, Get, UseFilters, Catch } from '../../src/index.js'
 import {
   NotFoundException,
@@ -13,11 +12,15 @@ import type { ExceptionFilter, ArgumentsHost } from '../../src/bridge/exception-
 import { z } from 'zod'
 import { Body, Post } from '../../src/decorators/index.js'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 // ─── Custom filter ───
 
 @Catch(HttpException)
 class CustomErrorFilter implements ExceptionFilter {
-  catch(exception: unknown, host: ArgumentsHost) {
+  catch(exception: unknown, _host: ArgumentsHost) {
     const ex = exception as HttpException
     return new Response(JSON.stringify({ custom: true, code: ex.code, msg: ex.message }), {
       status: ex.statusCode,
@@ -59,7 +62,7 @@ class ItemsCtrl {
   }
 }
 
-describe('T3.1 — Exception filter HTTP roundtrip', () => {
+describe.skipIf(!isVitest)('T3.1 — Exception filter HTTP roundtrip', () => {
   let server: http.Server
   let port: number
 

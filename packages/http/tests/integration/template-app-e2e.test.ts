@@ -8,18 +8,37 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import 'reflect-metadata'
 import { z } from 'zod'
 import {
-  Controller, Get, Post, Put, Delete,
-  Body, Param, Query, HttpCode,
-  UseGuards, UseInterceptors, UseFilters,
-  NotFoundException, HttpStatus,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  UseGuards,
+  UseInterceptors,
+  UseFilters,
+  NotFoundException,
+  HttpStatus,
 } from '../../src/index.js'
-import {
-  Agent, MainLoop, Toolbox, Tool, Mixin, Budget,
-} from '../../../agents/src/index.js'
+import { Agent, MainLoop, Toolbox, Tool, Mixin, Budget } from '../../../agents/src/index.js'
 import { TheoApp } from '../../src/app.js'
-import { createTypedClient, TypedClientError } from '../../src/index.js'
-import type { CanActivate, ExecutionContext, NestInterceptor, ExceptionFilter, ArgumentsHost } from '../../src/index.js'
-import { HttpException } from '../../src/exceptions/http-exception.js'
+import { createTypedClient } from '../../src/index.js'
+import type { TypedClientError } from '../../src/index.js'
+import type {
+  CanActivate,
+  ExecutionContext,
+  NestInterceptor,
+  ExceptionFilter,
+  ArgumentsHost,
+} from '../../src/index.js'
+import type { HttpException } from '../../src/exceptions/http-exception.js'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ═══════════════════════════════════════
 //  EXACT REPLICA of create-theokit template
@@ -33,21 +52,21 @@ const tasks: { id: number; title: string; priority: string; done: boolean }[] = 
 let nextId = 3
 const taskStore = {
   list: () => [...tasks],
-  get: (id: number) => tasks.find(t => t.id === id),
-  search: (q: string) => tasks.filter(t => t.title.toLowerCase().includes(q.toLowerCase())),
+  get: (id: number) => tasks.find((t) => t.id === id),
+  search: (q: string) => tasks.filter((t) => t.title.toLowerCase().includes(q.toLowerCase())),
   create: (d: { title: string; priority?: string }) => {
     const t = { id: nextId++, title: d.title, priority: d.priority ?? 'medium', done: false }
     tasks.push(t)
     return t
   },
   update: (id: number, d: { done?: boolean }) => {
-    const t = tasks.find(t => t.id === id)
+    const t = tasks.find((t) => t.id === id)
     if (!t) return null
     if (d.done !== undefined) t.done = d.done
     return t
   },
   remove: (id: number) => {
-    const i = tasks.findIndex(t => t.id === id)
+    const i = tasks.findIndex((t) => t.id === id)
     if (i === -1) return false
     tasks.splice(i, 1)
     return true
@@ -69,10 +88,16 @@ const IsPublic = (val: boolean): MethodDecorator =>
 
 class AuthGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
-    const isPublic = Reflect.getMetadata(Symbol.for('template:public'), ctx.getClass(), ctx.getMethodName())
+    const isPublic = Reflect.getMetadata(
+      Symbol.for('template:public'),
+      ctx.getClass(),
+      ctx.getMethodName(),
+    )
     if (isPublic) return true
-    const roles = Reflect.getMetadata(ROLES_KEY, ctx.getClass(), ctx.getMethodName())
-      ?? Reflect.getMetadata(ROLES_KEY, ctx.getClass()) ?? []
+    const roles =
+      Reflect.getMetadata(ROLES_KEY, ctx.getClass(), ctx.getMethodName()) ??
+      Reflect.getMetadata(ROLES_KEY, ctx.getClass()) ??
+      []
     if (roles.length === 0) return true
     const role = ctx.getRequest().headers.get('x-role') ?? ''
     return roles.includes(role)
@@ -82,7 +107,7 @@ class AuthGuard implements CanActivate {
 // -- interceptors/timing.interceptor.ts
 class TimingInterceptor implements NestInterceptor {
   async intercept(_ctx: unknown, next: () => Promise<unknown>) {
-    const start = Date.now()
+    const _start = Date.now()
     const result = await next()
     // In real template, this sets X-Response-Time header
     return result
@@ -93,11 +118,14 @@ class TimingInterceptor implements NestInterceptor {
 class HttpErrorFilter implements ExceptionFilter {
   catch(exception: unknown, _host: ArgumentsHost): Response {
     const ex = exception as HttpException
-    return new Response(JSON.stringify({
-      success: false,
-      error: { code: ex.statusCode, message: ex.message },
-      timestamp: new Date().toISOString(),
-    }), { status: ex.statusCode, headers: { 'content-type': 'application/json' } })
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: { code: ex.statusCode, message: ex.message },
+        timestamp: new Date().toISOString(),
+      }),
+      { status: ex.statusCode, headers: { 'content-type': 'application/json' } },
+    )
   }
 }
 
@@ -115,11 +143,15 @@ const zCreateTask = z.object({
 class TasksController {
   @Get()
   @IsPublic(true)
-  list() { return taskStore.list() }
+  list() {
+    return taskStore.list()
+  }
 
   @Get('search')
   @IsPublic(true)
-  search(@Query('q') q: string) { return taskStore.search(q ?? '') }
+  search(@Query('q') q: string) {
+    return taskStore.search(q ?? '')
+  }
 
   @Get(':id')
   @IsPublic(true)
@@ -153,28 +185,48 @@ class TasksController {
 @Toolbox({ namespace: 'tasks' })
 class TaskTools {
   @Tool({ name: 'list', description: 'List all tasks', input: z.object({}) })
-  async list() { return JSON.stringify(taskStore.list()) }
+  async list() {
+    return JSON.stringify(taskStore.list())
+  }
 
-  @Tool({ name: 'create', description: 'Create a task', input: z.object({ title: z.string(), priority: z.enum(['low', 'medium', 'high']).default('medium') }) })
-  async create(input: { title: string; priority?: string }) { return JSON.stringify(taskStore.create(input)) }
+  @Tool({
+    name: 'create',
+    description: 'Create a task',
+    input: z.object({
+      title: z.string(),
+      priority: z.enum(['low', 'medium', 'high']).default('medium'),
+    }),
+  })
+  async create(input: { title: string; priority?: string }) {
+    return JSON.stringify(taskStore.create(input))
+  }
 }
 
 // -- agents/assistant.agent.ts
-@Agent({ name: 'assistant', route: '/api/agents/assistant', model: 'openai/gpt-4o-mini', systemPrompt: 'You are a task assistant.' })
+@Agent({
+  name: 'assistant',
+  route: '/api/agents/assistant',
+  model: 'openai/gpt-4o-mini',
+  systemPrompt: 'You are a task assistant.',
+})
 @UseGuards(AuthGuard)
 @Roles(['user', 'admin'])
-@Budget({ maxCostUsd: 1.00 })
+@Budget({ maxCostUsd: 1.0 })
 @Mixin(TaskTools)
 class AssistantAgent {
   @MainLoop({ strategy: 'react', maxIterations: 5 })
   async run() {}
 }
+// Exercises decorator metadata without booting the agent runtime.
+// Referenced here to satisfy no-unused-vars; agent E2E tested separately.
+const agentClasses: Function[] = [AssistantAgent]
+const _agentCount = agentClasses.length
 
 // ═══════════════════════════════════════
 //  TESTS — real HTTP against the template app
 // ═══════════════════════════════════════
 
-describe('Template App E2E — create-theokit default', () => {
+describe.skipIf(!isVitest)('Template App E2E — create-theokit default', () => {
   let app: TheoApp
   let base: string
   const userHeaders = { 'x-role': 'user' }
@@ -190,11 +242,13 @@ describe('Template App E2E — create-theokit default', () => {
       readinessChecks: [async () => ({ name: 'store', healthy: true })],
     })
     const h = app.getServerHandle()
-    await new Promise<void>(r => h.listen(0, r))
+    await new Promise<void>((r) => h.listen(0, r))
     base = `http://localhost:${h.address()?.port}`
   })
 
-  afterAll(async () => { await app.close() })
+  afterAll(async () => {
+    await app.close()
+  })
 
   const json = async (path: string, init?: RequestInit) => {
     const res = await fetch(`${base}${path}`, init)
@@ -301,19 +355,24 @@ describe('Template App E2E — create-theokit default', () => {
   // ── TypedClient against the real app ──
 
   it('TypedClient works against real app', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`)
-    const tasks = await client.get('/api/tasks') as unknown[]
+    const client = createTypedClient<Record<string, { response: unknown }>>(base)
+    const tasks = (await client.get('/api/tasks')) as unknown[]
     expect(Array.isArray(tasks)).toBe(true)
   })
 
   it('TypedClient POST with auth header', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`, { 'x-role': 'user' })
-    const task = await client.post('/api/tasks', { title: 'Via TypedClient', priority: 'high' }) as { title: string }
+    const client = createTypedClient<Record<string, { response: unknown }>>(base, {
+      'x-role': 'user',
+    })
+    const task = (await client.post('/api/tasks', {
+      title: 'Via TypedClient',
+      priority: 'high',
+    })) as { title: string }
     expect(task.title).toBe('Via TypedClient')
   })
 
   it('TypedClient 403 on guarded route', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`)
+    const client = createTypedClient<Record<string, { response: unknown }>>(base)
     try {
       await client.post('/api/tasks', { title: 'Should fail' })
       expect.fail('should throw')

@@ -15,7 +15,6 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   HttpCode,
   Header,
   UseGuards,
@@ -24,6 +23,10 @@ import {
   createDecoratorServer,
   type DiContainer,
 } from '../../src/index.js'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ═══════════════════════════════════════════════════════
 // Services (@Injectable — lógica de negócio)
@@ -66,11 +69,12 @@ class UserService {
 
 const zCreateUser = z.object({
   name: z.string().min(2),
-  email: z.string().email(),
+  email: z.email(),
   role: z.enum(['admin', 'user']).default('user'),
 })
 class CreateUserDto {
-  static schema = zCreateUser
+  static readonly schema = zCreateUser
+  name = 'CreateUserDto'
 }
 
 // ═══════════════════════════════════════════════════════
@@ -149,7 +153,7 @@ function wireParam(ctrl: Function, method: string, idx: number, src: string, key
 }
 
 wireParam(UsersController, 'findById', 0, 'param', 'id')
-wireParam(UsersController, 'create', 0, 'body', undefined)
+wireParam(UsersController, 'create', 0, 'body')
 wireParam(UsersController, 'remove', 0, 'param', 'id')
 Reflect.defineMetadata('design:paramtypes', [UserService], UsersController)
 Reflect.defineMetadata('design:paramtypes', [CreateUserDto], UsersController.prototype, 'create')
@@ -165,16 +169,16 @@ class SimpleContainer implements DiContainer {
     this.instances.set(token, instance)
   }
 
-  resolve<T>(token: Function): T {
+  resolve(token: Function): unknown {
     const existing = this.instances.get(token)
-    if (existing) return existing as T
+    if (existing) return existing
     const paramTypes: Function[] = Reflect.getMetadata('design:paramtypes', token) ?? []
     const args = paramTypes.map((pt: Function) => {
       const dep = this.instances.get(pt)
       if (!dep) throw new Error(`DI: ${pt.name} not registered`)
       return dep
     })
-    const instance = new (token as new (...a: unknown[]) => T)(...args)
+    const instance = new (token as new (...a: unknown[]) => unknown)(...args)
     this.instances.set(token, instance)
     return instance
   }
@@ -184,7 +188,7 @@ class SimpleContainer implements DiContainer {
 // Tests — prova o full app end-to-end
 // ═══════════════════════════════════════════════════════
 
-describe('Full TheoKit App Demo — @syntax TypeScript real', () => {
+describe.skipIf(!isVitest)('Full TheoKit App Demo — @syntax TypeScript real', () => {
   let server: ReturnType<typeof createDecoratorServer>
   let port: number
 
