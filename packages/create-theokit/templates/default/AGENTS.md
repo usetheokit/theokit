@@ -10,18 +10,14 @@ This is a **full-stack TypeScript app** built with TheoKit — a framework for A
 server/
   routes/             → HTTP API routes (defineRoute + Zod validation)
     health.ts         → GET /api/health
-    tasks/
-      index.ts        → GET /api/tasks (list) + POST /api/tasks (create)
-      [id].ts         → GET/PUT/DELETE /api/tasks/:id
   db/
-    schema.ts         → Drizzle ORM schema (SQLite)
-    index.ts          → DB connection + auto-create tables
-    seed.ts           → Seed data (run with `npm run seed`)
+    schema.ts         → Drizzle ORM schema (SQLite) — empty, add your tables
+    index.ts          → DB connection (better-sqlite3, WAL mode)
 app/
   page.tsx            → React frontend
   layout.tsx          → Root layout
 tests/
-  tasks.test.ts       → Example API smoke test
+  tasks.test.ts       → Example unit test
 ```
 
 ## Key Patterns
@@ -32,13 +28,13 @@ import { defineRoute } from 'theokit/server/define'
 import { z } from 'zod'
 
 export const GET = defineRoute({
-  handler: () => db.select().from(tasks).all(),
+  handler: () => db.select().from(posts).all(),
 })
 
 export const POST = defineRoute({
   body: z.object({ title: z.string().min(3) }),
   status: 201,
-  handler: ({ body }) => db.insert(tasks).values(body).returning().get(),
+  handler: ({ body }) => db.insert(posts).values(body).returning().get(),
 })
 ```
 
@@ -46,11 +42,17 @@ export const POST = defineRoute({
 ```typescript
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
 
-export const tasks = sqliteTable('tasks', {
+export const posts = sqliteTable('posts', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),
-  done: integer('done', { mode: 'boolean' }).notNull().default(false),
+  published: integer('published', { mode: 'boolean' }).notNull().default(false),
 })
+```
+
+### Scaffold a Resource
+```bash
+npx theokit generate resource posts title:string published:boolean
+# Creates: schema table + routes (CRUD) + test
 ```
 
 ### Validation
@@ -59,12 +61,11 @@ export const tasks = sqliteTable('tasks', {
 - Use `z.infer<typeof schema>` for TypeScript types
 
 ### Dynamic Routes
-- `server/routes/tasks/[id].ts` → `/api/tasks/:id`
+- `server/routes/posts/[id].ts` → `/api/posts/:id`
 - Params validated with `params: z.object({ id: z.coerce.number() })`
 
 ### Path Aliases
 - `@/*` → project root (configured in tsconfig.json)
-- `@/server/*` → `./server/*`
 
 ## Commands
 
@@ -73,10 +74,12 @@ npm run dev          # Start dev server
 npm run build        # Build for production
 npm run start        # Run production build
 npm run test         # Run tests (vitest)
-npm run seed         # Seed database with sample data
 npm run lint         # ESLint check
 npm run format       # Prettier format
 npm run typecheck    # TypeScript type check
+npx theokit generate resource <name> <fields...>  # Scaffold CRUD resource
+npx drizzle-kit push      # Apply schema changes (dev)
+npx drizzle-kit generate  # Generate migration files (prod)
 ```
 
 ## Don't
@@ -84,3 +87,5 @@ npm run typecheck    # TypeScript type check
 - Don't use `any` — use Zod schemas + `z.infer<>`
 - Don't write raw `res.status().json()` — use defineRoute with status option
 - Don't parse request body manually — use `body: z.object(...)` in defineRoute
+- Don't import from `theokit/dist/...` or `theokit/src/...` — use public exports only
+- Don't call LLM APIs directly — use @Agent + @Tool decorators
