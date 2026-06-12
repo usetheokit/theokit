@@ -45,7 +45,7 @@ export const theoConfigSchema = z
   .object({
     /**
      * Plan v1.2 T2.1 — project identifier propagated into
-     * `.theo/services.json` v2 `project` field. DNS-1123 compatible (drives
+     * `.theokit/services.json` v2 `project` field. DNS-1123 compatible (drives
      * Gitea repo + ArgoCD App naming on TheoCloud). When omitted, the build
      * emits services.json v1 with the legacy `services-bundle` fallback
      * (ADR D10) and logs a deprecation warning.
@@ -74,10 +74,10 @@ export const theoConfigSchema = z
      */
     distDir: z
       .string()
-      .default('.theo')
+      .default('.theokit')
       .refine(
         (d) => !/^([A-Za-z]:)?[/\\]/.test(d) && !d.startsWith('..'),
-        'distDir must be a relative path inside the project root (e.g., ".theo")',
+        'distDir must be a relative path inside the project root (e.g., ".theokit")',
       ),
     /**
      * Agent runtime configuration.
@@ -235,7 +235,7 @@ export const theoConfigSchema = z
      * opt in with defaults.
      *
      * Defaults: spec 3.1.0 · servers `http://localhost:3000` · title
-     * "TheoKit App" · version "0.0.0" · outDir ".theo" (next to dist).
+     * "TheoKit App" · version "0.0.0" · outDir ".theokit" (next to dist).
      *
      * The env var `THEOKIT_OPENAPI_SERVERS` (CSV of URLs) overrides
      * `servers[].url` at emit time without rebuilding the config.
@@ -245,7 +245,7 @@ export const theoConfigSchema = z
         servers: z
           .array(
             z.object({
-              url: z.string().url(),
+              url: z.url(),
               description: z.string().optional(),
             }),
           )
@@ -253,7 +253,7 @@ export const theoConfigSchema = z
         specVersion: z.enum(['3.1.0', '3.0.3']).default('3.1.0'),
         title: z.string().default('TheoKit App'),
         version: z.string().default('0.0.0'),
-        outDir: z.string().default('.theo'),
+        outDir: z.string().default('.theokit'),
       })
       .optional(),
     /**

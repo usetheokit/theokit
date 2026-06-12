@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-non-literal-fs-filename -- paths derived from build-time cwd, not user input */
 /**
  * Built-in OpenAPI docs — serves Scalar UI at /api/docs and the JSON spec
  * at /api/docs/openapi.json. Zero npm deps (Scalar loaded via CDN).
@@ -17,7 +18,7 @@ export interface OpenApiDocsOptions {
   docsPath?: string
   /** Path to serve the JSON spec (default: '/api/docs/openapi.json'). */
   openapiJsonPath?: string
-  /** Path to the spec file on disk (default: '.theo/openapi.json'). */
+  /** Path to the spec file on disk (default: '.theokit/openapi.json'). */
   specFilePath?: string
   /** Page title (default: 'API Reference'). */
   pageTitle?: string
@@ -35,7 +36,7 @@ const DEFAULT_CDN = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference'
 export function createOpenApiHandler(opts: OpenApiDocsOptions = {}) {
   const docsPath = opts.docsPath ?? '/api/docs'
   const jsonPath = opts.openapiJsonPath ?? '/api/docs/openapi.json'
-  const specFile = resolve(opts.specFilePath ?? '.theo/openapi.json')
+  const specFile = resolve(opts.specFilePath ?? '.theokit/openapi.json')
   const title = opts.pageTitle ?? 'API Reference'
   const cdn = opts.cdnUrl ?? DEFAULT_CDN
 
@@ -71,7 +72,11 @@ export function createOpenApiHandler(opts: OpenApiDocsOptions = {}) {
 // ── HTML renderer ──
 
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 function renderScalarHtml(title: string, specUrl: string, cdnUrl: string): string {
@@ -94,7 +99,10 @@ function renderScalarHtml(title: string, specUrl: string, cdnUrl: string): strin
 function serveSpecFile(filePath: string): Response {
   if (!existsSync(filePath)) {
     return jsonResponse(503, {
-      error: { code: 'OPENAPI_NOT_EMITTED', message: 'OpenAPI spec not generated yet. Start the dev server and visit a route first.' },
+      error: {
+        code: 'OPENAPI_NOT_EMITTED',
+        message: 'OpenAPI spec not generated yet. Start the dev server and visit a route first.',
+      },
     })
   }
 
@@ -102,7 +110,10 @@ function serveSpecFile(filePath: string): Response {
     const stat = statSync(filePath)
     if (stat.size > MAX_SPEC_BYTES) {
       return jsonResponse(413, {
-        error: { code: 'OPENAPI_TOO_LARGE', message: `Spec file exceeds ${MAX_SPEC_BYTES / 1024 / 1024}MB limit` },
+        error: {
+          code: 'OPENAPI_TOO_LARGE',
+          message: `Spec file exceeds ${MAX_SPEC_BYTES / 1024 / 1024}MB limit`,
+        },
       })
     }
 
@@ -112,8 +123,9 @@ function serveSpecFile(filePath: string): Response {
       headers: { 'content-type': 'application/json', 'cache-control': 'no-cache' },
     })
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to read OpenAPI spec file'
     return jsonResponse(500, {
-      error: { code: 'OPENAPI_READ_FAILED', message: 'Failed to read OpenAPI spec file' },
+      error: { code: 'OPENAPI_READ_FAILED', message },
     })
   }
 }

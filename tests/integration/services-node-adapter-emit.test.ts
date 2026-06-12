@@ -23,7 +23,7 @@ describe('T2.1 — node adapter wires services emission (structural)', () => {
     expect(src).toMatch(/if\s*\(\s*manifest\s*&&\s*manifest\.services\.length\s*>\s*0/)
   })
 
-  it('writes docker-compose.yml + Caddyfile inside .theo/', () => {
+  it('writes docker-compose.yml + Caddyfile inside .theokit/', () => {
     const src = readFileSync(NODE_ADAPTER_TS, 'utf-8')
     expect(src).toMatch(/docker-compose\.yml/)
     expect(src).toMatch(/Caddyfile/)
@@ -35,7 +35,7 @@ describe('T2.1 — node adapter emission (live, with stubbed Vite)', () => {
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'wave2-node-adapter-'))
-    mkdirSync(join(tmp, '.theo'), { recursive: true })
+    mkdirSync(join(tmp, '.theokit'), { recursive: true })
   })
 
   afterEach(() => {
@@ -65,17 +65,17 @@ describe('T2.1 — node adapter emission (live, with stubbed Vite)', () => {
     const { generateCaddyfile } = await import('../../packages/theo/src/services/index.js')
     const yaml = generateComposeYaml(manifest, { webPort: 3000 })
     const caddyfile = generateCaddyfile(manifest, { port: 3000, webHost: 'web' })
-    writeFileSync(join(tmp, '.theo', 'docker-compose.yml'), yaml)
-    writeFileSync(join(tmp, '.theo', 'Caddyfile'), caddyfile)
+    writeFileSync(join(tmp, '.theokit', 'docker-compose.yml'), yaml)
+    writeFileSync(join(tmp, '.theokit', 'Caddyfile'), caddyfile)
 
     // Assert files exist with expected shape
-    expect(existsSync(join(tmp, '.theo', 'docker-compose.yml'))).toBe(true)
-    expect(existsSync(join(tmp, '.theo', 'Caddyfile'))).toBe(true)
-    const yamlContent = readFileSync(join(tmp, '.theo', 'docker-compose.yml'), 'utf-8')
+    expect(existsSync(join(tmp, '.theokit', 'docker-compose.yml'))).toBe(true)
+    expect(existsSync(join(tmp, '.theokit', 'Caddyfile'))).toBe(true)
+    const yamlContent = readFileSync(join(tmp, '.theokit', 'docker-compose.yml'), 'utf-8')
     expect(yamlContent).toContain('caddy:')
     expect(yamlContent).toContain('web:')
     expect(yamlContent).toContain('agent:')
-    const caddyContent = readFileSync(join(tmp, '.theo', 'Caddyfile'), 'utf-8')
+    const caddyContent = readFileSync(join(tmp, '.theokit', 'Caddyfile'), 'utf-8')
     expect(caddyContent).toContain('tracing')
     expect(caddyContent).toContain('reverse_proxy /api/agent*')
   })

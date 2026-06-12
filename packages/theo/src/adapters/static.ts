@@ -124,7 +124,7 @@ const defaultLoadStaticPaths: LoadStaticPaths = async (paramsFilePath) => {
 }
 
 /**
- * Default renderer: loads the built SSR entry (`.theo/server/entry-server.js`)
+ * Default renderer: loads the built SSR entry (`.theokit/server/entry-server.js`)
  * and calls its `render(url)` export, wrapping the result in the client
  * `index.html` template. Falls back to a minimal HTML shell when no SSR build
  * is present (so the static adapter still emits something usable even without
@@ -132,9 +132,9 @@ const defaultLoadStaticPaths: LoadStaticPaths = async (paramsFilePath) => {
  */
 function createDefaultRenderHtml(cwd: string): (url: string) => Promise<string> {
   return async (url: string): Promise<string> => {
-    const clientDir = resolve(cwd, '.theo/client')
+    const clientDir = resolve(cwd, '.theokit/client')
     const indexPath = resolve(clientDir, 'index.html')
-    const ssrEntryPath = resolve(cwd, '.theo/server/entry-server.js')
+    const ssrEntryPath = resolve(cwd, '.theokit/server/entry-server.js')
 
     let baseHtml = '<!doctype html><html><body><div id="root"></div></body></html>'
     if (existsSync(indexPath)) {
@@ -202,7 +202,7 @@ export async function buildStatic(
   const ensureDir = deps.ensureDir ?? defaultEnsureDir
   const writeFile = deps.writeFile ?? defaultWriteFile
 
-  const outDir = resolve(cwd, '.theo/static')
+  const outDir = resolve(cwd, '.theokit/static')
   await ensureDir(outDir)
 
   for (const path of paths) {

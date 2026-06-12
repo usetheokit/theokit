@@ -23,10 +23,7 @@ function write(rel: string, content: string): string {
 }
 
 beforeEach(() => {
-  sandbox = join(
-    tmpdir(),
-    `theo-detect-http-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  )
+  sandbox = join(tmpdir(), `theo-detect-http-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   serverDir = join(sandbox, 'server')
   mkdirSync(join(serverDir, 'routes'), { recursive: true })
 })
@@ -133,7 +130,10 @@ export const OPTIONS = 1\n`,
 
 describe('scanServerRoutes propagates methods to ServerRouteNode', () => {
   it('populates methods for each route file', () => {
-    write('server/routes/users.ts', 'export const GET = () => ({})\nexport const POST = () => ({})\n')
+    write(
+      'server/routes/users.ts',
+      'export const GET = () => ({})\nexport const POST = () => ({})\n',
+    )
     write('server/routes/posts.ts', 'export const GET = () => ({})\n')
     write('server/routes/util.ts', `export const HELPER = 1\n`)
     const routes = scanServerRoutes(serverDir)
@@ -155,7 +155,7 @@ describe('manifest round-trip with methods field', () => {
   it('write + load preserves methods field', () => {
     write('server/routes/x.ts', 'export const GET = () => ({})\n')
     const manifest = generateManifest(serverDir)
-    const distDir = join(sandbox, '.theo')
+    const distDir = join(sandbox, '.theokit')
     writeManifest(manifest, distDir)
     const loaded = loadManifest(distDir, serverDir)
     const x = loaded.routes.find((r) => r.routePath === '/api/x')
@@ -163,7 +163,7 @@ describe('manifest round-trip with methods field', () => {
   })
 
   it('legacy manifest without methods loads with methods=undefined (backward-compat)', () => {
-    const distDir = join(sandbox, '.theo')
+    const distDir = join(sandbox, '.theokit')
     mkdirSync(distDir, { recursive: true })
     const legacy = {
       version: 1,

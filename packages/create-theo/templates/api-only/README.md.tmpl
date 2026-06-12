@@ -30,7 +30,7 @@ You should see `{"status":"ok"}`. The server is now serving the routes under `se
 ## What the framework auto-loads
 
 - **`.env` → `process.env`**. Edit `.env`; restart the dev server.
-- **`.theo/` build output cleanup** on every `theokit build`.
+- **`.theokit/` build output cleanup** on every `theokit build`.
 - **Route discovery** — every `server/routes/*.ts` becomes a wired endpoint.
 
 ## Project structure
@@ -64,7 +64,7 @@ curl http://localhost:3000/api/users
 | Command | What it does |
 |---|---|
 | `npx theokit dev` | Dev server with HMR + structured logs |
-| `npx theokit build` | Production build → `.theo/` |
+| `npx theokit build` | Production build → `.theokit/` |
 | `npx theokit start` | Serve the production build |
 | `npx theokit routes` | List all routes detected |
 | `npm run typecheck` | TypeScript strict check (no emit) |

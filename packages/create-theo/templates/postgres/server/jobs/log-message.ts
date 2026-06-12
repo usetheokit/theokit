@@ -17,7 +17,7 @@ export default defineJob('log-message', {
   handler: async ({ input, log }) => {
     // v1.1 EC-9: anchor path to process.cwd() — handler CWD may differ from
     // project root when running via external job runner.
-    const auditPath = resolve(process.cwd(), '.theo/audit.log')
+    const auditPath = resolve(process.cwd(), '.theokit/audit.log')
     await mkdir(dirname(auditPath), { recursive: true })
     const line = `${new Date().toISOString()} user=${input.userId} msg=${input.message}\n`
     await appendFile(auditPath, line)
