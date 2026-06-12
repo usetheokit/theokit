@@ -5,7 +5,6 @@
  *               edit app/page.tsx (page content)
  *               edit server/ (controllers, agents, toolboxes)
  */
-import 'reflect-metadata'
 import { TheoApp } from '@theokit/http/app'
 import { TasksController, AssistantAgent, TaskTools } from './server/index.js'
 import Layout from './app/layout.js'

@@ -5,12 +5,11 @@
  * to interact with the task data. Each @Tool method is
  * compiled to a defineTool() call at startup.
  */
-import 'reflect-metadata'
 import { z } from 'zod'
 import { Toolbox, Tool, Trace, Audit } from '@theokit/agents'
 import { taskStore } from '../store.js'
 
-@Toolbox()  // Convention: TaskTools → namespace: 'task'
+@Toolbox() // Convention: TaskTools → namespace: 'task'
 @Trace(true)
 export class TaskTools {
   @Tool({
