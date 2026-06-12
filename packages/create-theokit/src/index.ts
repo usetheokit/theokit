@@ -84,6 +84,13 @@ export function scaffold(
     renameSync(gitignoreSrc, gitignoreDest)
   }
 
+  // dot-claude/ → .claude/ (npm ignores dotfolders in published packages)
+  const dotClaudeSrc = join(targetDir, 'dot-claude')
+  const dotClaudeDest = join(targetDir, '.claude')
+  if (existsSync(dotClaudeSrc)) {
+    renameSync(dotClaudeSrc, dotClaudeDest)
+  }
+
   // Apply {{name}} substitution to every `*.tmpl` file in the target dir.
   // Each `foo.tmpl` becomes `foo` with placeholders replaced. Walks only
   // the project root (deeper subfolders don't currently need templating).
