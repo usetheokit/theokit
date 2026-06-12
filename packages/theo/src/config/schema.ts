@@ -112,6 +112,22 @@ export const theoConfigSchema = z
       })
       .optional(),
     port: z.number().int().min(1).max(65535).default(3000),
+    /** Listen on all addresses (0.0.0.0) for LAN/mobile testing. */
+    host: z.union([z.string(), z.boolean()]).default('localhost'),
+    /** Automatically open browser on `theokit dev`. */
+    open: z.union([z.boolean(), z.string()]).default(false),
+    /** Exit if port is already in use instead of trying next available. */
+    strictPort: z.boolean().default(false),
+    /** Forward browser console/errors to terminal — useful for AI agent dev. */
+    forwardConsole: z
+      .union([
+        z.boolean(),
+        z.object({
+          unhandledErrors: z.boolean().optional(),
+          logLevels: z.array(z.enum(['error', 'warn', 'info', 'log', 'debug'])).optional(),
+        }),
+      ])
+      .default(false),
     ssr: z.boolean().default(false),
     /** When true (and ssr === true), use renderToPipeableStream with progressive
      * shell flush instead of single-shot renderToString. Opt-in for streaming
