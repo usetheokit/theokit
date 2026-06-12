@@ -6,7 +6,7 @@
  * `depends_on: service_healthy`.
  *
  * Used by the Node adapter: `theokit build --target node` writes the
- * compose stack to `.theo/node/docker-compose.yml`.
+ * compose stack to `.theokit/node/docker-compose.yml`.
  */
 import type { ManifestServiceEntry, ServicesManifest } from '../adapters-bridge/manifest.js'
 

@@ -29,7 +29,7 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
-      '**/.theo/**',
+      '**/.theokit/**',
       '**/coverage/**',
       '**/test-results/**',
       'referencias/**',

@@ -14,7 +14,7 @@ function validateName(name: string): void {
 /**
  * Declare a background job. Pure identity helper — no registration side
  * effect; the build-time scanner (T2.3) discovers definitions by walking
- * `server/jobs/` and emits `.theo/jobs.json`.
+ * `server/jobs/` and emits `.theokit/jobs.json`.
  *
  * Per ADR-0003, handler returns `void` (or `Promise<void>`); no workflow
  * API. To run another job after this one, call `ctx.queue.enqueue` from

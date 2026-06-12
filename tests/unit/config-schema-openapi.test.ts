@@ -31,11 +31,11 @@ describe('theoConfigSchema — openapi block', () => {
     expect(parsed.openapi?.specVersion).toBe('3.1.0')
   })
 
-  it('openapi.title defaults to "TheoKit App" and version to "0.0.0" and outDir to ".theo"', () => {
+  it('openapi.title defaults to "TheoKit App" and version to "0.0.0" and outDir to ".theokit"', () => {
     const parsed = theoConfigSchema.parse({ openapi: {} })
     expect(parsed.openapi?.title).toBe('TheoKit App')
     expect(parsed.openapi?.version).toBe('0.0.0')
-    expect(parsed.openapi?.outDir).toBe('.theo')
+    expect(parsed.openapi?.outDir).toBe('.theokit')
   })
 
   it('openapi.specVersion rejects values not in ["3.1.0","3.0.3"] via ZodError', () => {
