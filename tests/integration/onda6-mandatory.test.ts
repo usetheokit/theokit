@@ -12,7 +12,7 @@ import { serveStaticFile } from '../../packages/theo/src/server/http/static.js'
 
 const FIXTURES = path.resolve(import.meta.dirname, '../../fixtures')
 const fixtureDir = path.join(FIXTURES, 'production-build')
-const distDir = resolve(fixtureDir, '.theo')
+const distDir = resolve(fixtureDir, '.theokit')
 const clientDir = resolve(distDir, 'client')
 const serverDir = resolve(fixtureDir, 'server')
 
@@ -76,7 +76,7 @@ afterAll(async () => {
 }, 15000)
 
 describe('Onda 6 — Build + Production', () => {
-  it('build generates .theo/client/index.html', () => {
+  it('build generates .theokit/client/index.html', () => {
     expect(existsSync(join(clientDir, 'index.html'))).toBe(true)
   })
 

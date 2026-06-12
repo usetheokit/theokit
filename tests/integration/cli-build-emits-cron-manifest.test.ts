@@ -90,14 +90,14 @@ afterEach(() => {
 // Slow tests — each invokes `npx tsx build`. Bump per-test timeout to 30s
 // (default 5s is insufficient under parallel-suite contention).
 describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
-  it('build emits .theo/crons.json when crons are declared', () => {
+  it('build emits .theokit/crons.json when crons are declared', () => {
     writeConfig()
     writeCron('morning', '0 9 * * *')
     // Manifests emit BEFORE Vite/adapter — verify manifest regardless of
     // adapter outcome (test fixture lacks node_modules → Vite fails, but
     // cron+job artifacts must be present).
     runBuild()
-    const manifestPath = join(projectDir, '.theo/crons.json')
+    const manifestPath = join(projectDir, '.theokit/crons.json')
     expect(existsSync(manifestPath)).toBe(true)
     const json = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       crons: { name: string; schedule: string }[]
@@ -109,7 +109,7 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
   it('build emits empty manifest when no crons exist', () => {
     writeConfig()
     runBuild()
-    const manifestPath = join(projectDir, '.theo/crons.json')
+    const manifestPath = join(projectDir, '.theokit/crons.json')
     expect(existsSync(manifestPath)).toBe(true)
     const json = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       crons: unknown[]

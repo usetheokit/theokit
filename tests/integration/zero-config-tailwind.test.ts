@@ -16,7 +16,7 @@ import { detectPackage } from '../../packages/theo/src/vite-plugin/auto-detect.j
  * chaining intent), not the CSS output.
  *
  * Once @theokit/ui ships its Vite plugin, expand this test to run
- * `vite build` against the fixture and assert that `.theo/client/assets/index-*.css`
+ * `vite build` against the fixture and assert that `.theokit/client/assets/index-*.css`
  * contains @theokit/ui-emitted utility classes.
  */
 

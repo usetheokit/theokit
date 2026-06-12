@@ -82,7 +82,7 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
   //      - was: `import { randomBytes } from 'node:crypto'`
   //      - now: `globalThis.crypto.getRandomValues(new Uint8Array(N))`
   //      - NOTE: keeps `node:fs` + `node:path` because this is a build-time
-  //        manifest-write leaf (`.theo/jobs.json` etc). Per ADR-0028 the
+  //        manifest-write leaf (`.theokit/jobs.json` etc). Per ADR-0028 the
   //        runtime-portable boundary is the request handler, not the scanner.
   //   4. packages/theo/src/server/http/trace-context.ts
   //      - was: `import { randomUUID } from 'node:crypto'`

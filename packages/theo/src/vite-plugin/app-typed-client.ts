@@ -8,7 +8,7 @@
  * Phase 2 + Phase 4 of G1 (g1-client-codegen-plan.md):
  *
  * 1. `generateClientDts(manifest, dtsOutPath)` — pure function emitting the
- *    `.theo/client.d.ts` shape (declared module `@theo/client`).
+ *    `.theokit/client.d.ts` shape (declared module `@theo/client`).
  * 2. `appTypedClientPlugin(opts)` — Vite plugin wrapper that calls (1),
  *    writes the file atomically, and rewrites on route file changes.
  *
@@ -278,7 +278,7 @@ export interface AppTypedClientPluginOptions {
   cwd: string
   /** Absolute path to the user's `server/` dir. */
   serverDir: string
-  /** Absolute path to the `.theo/` output dir (where `client.d.ts` lands). */
+  /** Absolute path to the `.theokit/` output dir (where `client.d.ts` lands). */
   distDir: string
   /**
    * Additional routes to merge into the typed client alongside file-system routes.

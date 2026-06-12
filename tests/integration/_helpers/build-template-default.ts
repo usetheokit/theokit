@@ -7,7 +7,7 @@
  *
  * Rationale: the previous race produced `dist/` disappearing between
  * `existsSync` and `readFileSync` because two `pnpm exec theokit build`
- * processes were deleting `.theo/` simultaneously.
+ * processes were deleting `.theokit/` simultaneously.
  */
 import { execSync } from 'node:child_process'
 import {
@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os'
 
 const ROOT = resolve(__dirname, '../../..')
 const FIXTURE = resolve(ROOT, 'fixtures/template-default')
-const ASSETS = resolve(FIXTURE, '.theo/client/assets')
+const ASSETS = resolve(FIXTURE, '.theokit/client/assets')
 const LOCK_DIR = resolve(tmpdir(), 'theokit-test-locks')
 const LOCK_FILE = resolve(LOCK_DIR, 'template-default-build.lock')
 const FRESH_WINDOW_MS = 5 * 60 * 1000

@@ -10,7 +10,7 @@ pnpm-workspace.yaml.bak
 
 # Build output
 dist/
-.theo/
+.theokit/
 .next/
 .output/
 .nitro/

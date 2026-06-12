@@ -1,7 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * CLI `theo docker`. Writes Dockerfile + .dockerignore under user's `cwd`.
- * Build-time tool. No HTTP input.
- */
 import { existsSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -52,7 +48,7 @@ function generateDockerfile(pkgManager: 'pnpm' | 'npm' | 'yarn'): string {
     'FROM node:22-alpine AS runner',
     'WORKDIR /app',
     'ENV NODE_ENV=production',
-    'COPY --from=builder /app/.theo ./.theo',
+    'COPY --from=builder /app/.theokit ./.theokit',
     'COPY --from=builder /app/server ./server',
     'COPY --from=builder /app/theo.config.ts ./theo.config.ts',
     'COPY --from=builder /app/package.json ./package.json',
@@ -69,7 +65,7 @@ function generateDockerignore(): string {
   return [
     'node_modules',
     '.git',
-    '.theo',
+    '.theokit',
     'dist',
     '.env',
     '.env.*',
