@@ -2,39 +2,20 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
 import { generateResource } from './generate-resource.js'
+import {
+  VALID_TYPES,
+  type GeneratorType,
+  type GenerateOptions,
+  type GenerateStatus,
+  type GenerateResult,
+} from './generate-types.js'
 
-export const VALID_TYPES = [
-  'route',
-  'action',
-  'page',
-  'ws',
-  'controller',
-  'agent',
-  'toolbox',
-  'resource',
-] as const
-export type GeneratorType = (typeof VALID_TYPES)[number]
-
-export interface GenerateOptions {
-  cwd: string
-  type: string
-  name: string
-  fields?: string[]
-}
-
-export type GenerateStatus =
-  | 'created'
-  | 'already_exists'
-  | 'invalid_kind'
-  | 'invalid_name'
-  | 'not_a_project'
-
-export interface GenerateResult {
-  status: GenerateStatus
-  filePath?: string
-  kind?: GeneratorType
-  name?: string
-  message?: string
+export {
+  VALID_TYPES,
+  type GeneratorType,
+  type GenerateOptions,
+  type GenerateStatus,
+  type GenerateResult,
 }
 
 function toKebabCase(name: string): boolean {
