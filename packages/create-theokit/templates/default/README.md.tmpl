@@ -1,6 +1,6 @@
 # {{name}}
 
-Built with [TheoKit](https://theokit.dev) — Full-Stack TypeScript for AI Agents.
+Built with [TheoKit](https://theokit.dev) — Build the app your agent lives in.
 
 ## Getting Started
 
@@ -8,57 +8,48 @@ Built with [TheoKit](https://theokit.dev) — Full-Stack TypeScript for AI Agent
 # Install dependencies
 npm install
 
-# Set your LLM API key
-cp .env.example .env
-# Edit .env with your OpenRouter/Anthropic/OpenAI key
+# Seed the database with sample data
+npm run seed
 
 # Start development server
-bun dev
-# or: npm run dev:node
+npm run dev
 ```
 
 ## Project Structure
 
 ```
 {{name}}/
-├── app.ts                          # Entry point (TheoApp.create)
+├── app/
+│   ├── page.tsx              # React frontend
+│   ├── layout.tsx            # Root layout
+│   └── globals.css           # Global styles
 ├── server/
-│   ├── controllers/
-│   │   └── tasks.controller.ts     # HTTP CRUD (@Controller)
-│   ├── agents/
-│   │   └── assistant.agent.ts      # AI Agent (@Agent + @MainLoop)
-│   ├── toolboxes/
-│   │   └── task.tools.ts           # Agent tools (@Toolbox + @Tool)
-│   ├── guards/
-│   │   └── auth.guard.ts           # RBAC (@Roles + RolesGuard)
-│   ├── interceptors/
-│   │   └── timing.interceptor.ts   # Request timing
-│   ├── filters/
-│   │   └── http-error.filter.ts    # Error formatting
-│   ├── middleware/
-│   │   └── logger.middleware.ts     # Request logging
-│   └── store.ts                    # In-memory data store
-└── .env.example                    # Environment variables
+│   ├── routes/
+│   │   ├── health.ts         # GET /api/health
+│   │   └── tasks/
+│   │       ├── index.ts      # GET /api/tasks + POST /api/tasks
+│   │       └── [id].ts       # GET/PUT/DELETE /api/tasks/:id
+│   ├── db/
+│   │   ├── schema.ts         # Drizzle ORM schema (SQLite)
+│   │   ├── index.ts          # DB connection + auto-create tables
+│   │   └── seed.ts           # Seed data
+│   └── index.ts              # Server barrel (routes auto-discovered)
+├── tests/
+│   └── tasks.test.ts         # API smoke test
+├── theo.config.ts            # TheoKit configuration
+└── .env.example              # Environment variables
 ```
 
 ## API Endpoints
 
-### HTTP Controllers
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | /api/tasks | Public | List all tasks |
-| GET | /api/tasks/search?q= | Public | Search tasks |
-| GET | /api/tasks/:id | Public | Get task by ID |
-| POST | /api/tasks | User | Create task |
-| PUT | /api/tasks/:id | User | Update task |
-| DELETE | /api/tasks/:id | Admin | Delete task |
-
-### AI Agent
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | /api/agents/assistant/chat | User | Chat with AI (SSE stream) |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/tasks | List all tasks |
+| GET | /api/tasks/:id | Get task by ID |
+| POST | /api/tasks | Create task |
+| PUT | /api/tasks/:id | Update task |
+| DELETE | /api/tasks/:id | Delete task |
+| GET | /api/health | Health check |
 
 ## Examples
 
@@ -66,24 +57,35 @@ bun dev
 # List tasks
 curl http://localhost:3000/api/tasks
 
-# Create a task (requires user role)
+# Create a task
 curl -X POST http://localhost:3000/api/tasks \
   -H "Content-Type: application/json" \
-  -H "x-role: user" \
   -d '{"title":"New task","priority":"high"}'
 
-# Chat with AI agent (SSE streaming)
-curl -N -X POST http://localhost:3000/api/agents/assistant/chat \
+# Update a task
+curl -X PUT http://localhost:3000/api/tasks/1 \
   -H "Content-Type: application/json" \
-  -H "x-role: user" \
-  -d '{"message":"List all tasks and mark the first one as done"}'
+  -d '{"done":true}'
+
+# Delete a task
+curl -X DELETE http://localhost:3000/api/tasks/1
 ```
 
 ## Key Concepts
 
-- **@Controller** — HTTP routes with Zod validation
-- **@Agent** — AI agent with LLM + tool calling + SSE streaming
-- **@Toolbox** + **@Tool** — Functions the AI can call
-- **@UseGuards** — Same auth for controllers AND agents
-- **@Mixin** — Compose toolboxes into agents
-- **TheoApp.create()** — Zero-wiring bootstrap (like NestFactory.create)
+- **defineRoute** — Typed API routes with Zod validation
+- **Drizzle + SQLite** — Type-safe database, zero config
+- **File-based routing** — `server/routes/tasks/[id].ts` → `/api/tasks/:id`
+- **Seeds** — `npm run seed` loads sample data
+
+## Commands
+
+```bash
+npm run dev          # Start dev server with HMR
+npm run build        # Build for production
+npm run start        # Run production build
+npm run test         # Run tests (vitest)
+npm run seed         # Seed database
+npm run lint         # ESLint check
+npm run typecheck    # TypeScript type check
+```
