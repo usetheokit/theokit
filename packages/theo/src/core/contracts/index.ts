@@ -60,3 +60,12 @@ export { TheoError, fromUnknown } from './theo-error.js'
 // point preserves class identity inside the codebase (no invasive
 // call-site rewrites).
 export { serverErrorToEnvelope } from './server-error-to-envelope.js'
+
+// Envelope code → HTTP status mapping (architecture-remediation T1.2).
+// Single source of truth — previously duplicated in web-handler.ts and
+// handle-request-error.ts.
+export { envelopeCodeToStatus } from './envelope-code-to-status.js'
+
+// Auth error guard (architecture-remediation T1.3). Shape-based detection
+// without class import — preserves core INVARIANT 1.
+export { isAuthRequiredError } from './auth-error-guard.js'

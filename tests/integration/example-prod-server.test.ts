@@ -69,7 +69,7 @@ async function runBuild(): Promise<void> {
 describe('examples/full-stack-agent — prod server (T5.2)', () => {
   beforeAll(async () => {
     // Clean any previous build artifacts.
-    rmSync(resolve(EXAMPLE_DIR, '.theo'), { recursive: true, force: true })
+    rmSync(resolve(EXAMPLE_DIR, '.theokit'), { recursive: true, force: true })
     await runBuild()
     serverProc = await spawnTsx(['start', '--port', PORT.toString()], {
       // Placeholder so resolveProvider doesn't shortcut before the route

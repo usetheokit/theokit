@@ -77,7 +77,7 @@ describe('buildDeno — orchestration', () => {
     expect(calls).toEqual(['node-build', 'write'])
   })
 
-  it('writes the entry as .theo/deno/server.ts', async () => {
+  it('writes the entry as .theokit/deno/server.ts', async () => {
     let writtenPath = ''
     await buildDeno(baseConfig, '/test', {
       runNodeBuild: async () => {},
@@ -86,7 +86,7 @@ describe('buildDeno — orchestration', () => {
       },
       ensureDir: () => {},
     })
-    expect(writtenPath).toContain('/.theo/deno/server.ts')
+    expect(writtenPath).toContain('/.theokit/deno/server.ts')
   })
 
   it('propagates node build errors', async () => {

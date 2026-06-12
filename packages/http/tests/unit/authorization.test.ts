@@ -11,9 +11,11 @@ import {
   Reflector,
 } from '../../src/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
-import { ForbiddenException } from '../../src/exceptions/index.js'
 import type { ExecutionContext, CanActivate } from '../../src/bridge/execution-context.js'
-import http from 'node:http'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ─── RBAC setup (NestJS pattern) ────────────────────────────
 
@@ -29,11 +31,7 @@ const reflector = new Reflector()
 /** NestJS-style RolesGuard — reads @Roles() metadata via Reflector + ExecutionContext. */
 class RolesGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const roles = reflector.getAllAndOverride(
-      Roles,
-      context.getClass(),
-      context.getMethodName(),
-    )
+    const roles = reflector.getAllAndOverride(Roles, context.getClass(), context.getMethodName())
     if (!roles) return true // no roles required → open access
 
     // Simulate user from request header (real app: JWT decode)
@@ -92,7 +90,7 @@ class PoliciesGuard implements CanActivate {
 
 // ─── Unit tests ─────────────────────────────────────────────
 
-describe('Authorization — RBAC, Claims, Policies', () => {
+describe.skipIf(!isVitest)('Authorization — RBAC, Claims, Policies', () => {
   describe('Reflector.getAllAndOverride', () => {
     it('test_method_level_overrides_class_level', () => {
       @Roles([Role.User])
@@ -438,7 +436,9 @@ describe('Authorization — RBAC, Claims, Policies', () => {
       try {
         const res = await fetch(`http://localhost:${port}/locked`)
         expect(res.status).toBe(403)
-        const body = (await res.json()) as { error: { code: string; message: string; statusCode: number } }
+        const body = (await res.json()) as {
+          error: { code: string; message: string; statusCode: number }
+        }
         expect(body.error.code).toBe('FORBIDDEN')
         expect(body.error.message).toBe('Forbidden resource')
         expect(body.error.statusCode).toBe(403)

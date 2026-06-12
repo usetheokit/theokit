@@ -14,7 +14,7 @@ let distDir: string
 beforeEach(() => {
   sandbox = join(tmpdir(), `theo-bridge-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   serverDir = join(sandbox, 'server')
-  distDir = join(sandbox, '.theo')
+  distDir = join(sandbox, '.theokit')
   mkdirSync(join(serverDir, 'routes'), { recursive: true })
   mkdirSync(join(serverDir, 'controllers'), { recursive: true })
 })

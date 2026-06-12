@@ -45,7 +45,7 @@ export const theoConfigSchema = z
   .object({
     /**
      * Plan v1.2 T2.1 — project identifier propagated into
-     * `.theo/services.json` v2 `project` field. DNS-1123 compatible (drives
+     * `.theokit/services.json` v2 `project` field. DNS-1123 compatible (drives
      * Gitea repo + ArgoCD App naming on TheoCloud). When omitted, the build
      * emits services.json v1 with the legacy `services-bundle` fallback
      * (ADR D10) and logs a deprecation warning.
@@ -74,10 +74,10 @@ export const theoConfigSchema = z
      */
     distDir: z
       .string()
-      .default('.theo')
+      .default('.theokit')
       .refine(
         (d) => !/^([A-Za-z]:)?[/\\]/.test(d) && !d.startsWith('..'),
-        'distDir must be a relative path inside the project root (e.g., ".theo")',
+        'distDir must be a relative path inside the project root (e.g., ".theokit")',
       ),
     /**
      * Agent runtime configuration.
@@ -112,6 +112,29 @@ export const theoConfigSchema = z
       })
       .optional(),
     port: z.number().int().min(1).max(65535).default(3000),
+    /** Listen on all addresses (0.0.0.0) for LAN/mobile testing. */
+    host: z.union([z.string(), z.boolean()]).default('localhost'),
+    /** Automatically open browser on `theokit dev`. */
+    open: z.union([z.boolean(), z.string()]).default(false),
+    /** Exit if port is already in use instead of trying next available. */
+    strictPort: z.boolean().default(false),
+    /** Forward browser console/errors to terminal — useful for AI agent dev. */
+    forwardConsole: z
+      .union([
+        z.boolean(),
+        z.object({
+          unhandledErrors: z.boolean().optional(),
+          logLevels: z.array(z.enum(['error', 'warn', 'info', 'log', 'debug'])).optional(),
+        }),
+      ])
+      .default(false),
+    /** Pre-transform files on startup for faster first page load. */
+    warmup: z
+      .object({
+        clientFiles: z.array(z.string()).optional(),
+        ssrFiles: z.array(z.string()).optional(),
+      })
+      .optional(),
     ssr: z.boolean().default(false),
     /** When true (and ssr === true), use renderToPipeableStream with progressive
      * shell flush instead of single-shot renderToString. Opt-in for streaming
@@ -235,7 +258,7 @@ export const theoConfigSchema = z
      * opt in with defaults.
      *
      * Defaults: spec 3.1.0 · servers `http://localhost:3000` · title
-     * "TheoKit App" · version "0.0.0" · outDir ".theo" (next to dist).
+     * "TheoKit App" · version "0.0.0" · outDir ".theokit" (next to dist).
      *
      * The env var `THEOKIT_OPENAPI_SERVERS` (CSV of URLs) overrides
      * `servers[].url` at emit time without rebuilding the config.
@@ -245,7 +268,7 @@ export const theoConfigSchema = z
         servers: z
           .array(
             z.object({
-              url: z.string().url(),
+              url: z.url(),
               description: z.string().optional(),
             }),
           )
@@ -253,7 +276,7 @@ export const theoConfigSchema = z
         specVersion: z.enum(['3.1.0', '3.0.3']).default('3.1.0'),
         title: z.string().default('TheoKit App'),
         version: z.string().default('0.0.0'),
-        outDir: z.string().default('.theo'),
+        outDir: z.string().default('.theokit'),
       })
       .optional(),
     /**

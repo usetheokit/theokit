@@ -15,7 +15,7 @@ import { execSync } from 'node:child_process'
  * tag explicitly (the plugin will dedupe it, so duplicates are harmless).
  *
  * Excludes:
- *   - `**\/.theo/**`        build artifacts (generated client output)
+ *   - `**\/.theokit/**`        build artifacts (generated client output)
  *   - `**\/node_modules/**` deps
  *   - `**\/dist/**`         build output
  */
@@ -26,7 +26,7 @@ const REPO_ROOT = resolve(__dirname, '../..')
 function listIndexHtmlFiles(): string[] {
   // Use git ls-files to skip ignored output. Falls back to find if not in a repo.
   const stdout = execSync(
-    `git ls-files '*/index.html' 'index.html' 2>/dev/null || find . -name index.html -type f -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/.theo/*'`,
+    `git ls-files '*/index.html' 'index.html' 2>/dev/null || find . -name index.html -type f -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/.theokit/*'`,
     { cwd: REPO_ROOT, encoding: 'utf-8' },
   )
   return stdout
@@ -43,7 +43,9 @@ function listIndexHtmlFiles(): string[] {
     })
     .filter((line) => {
       // Exclude generated build output
-      return !line.includes('.theo/') && !line.includes('node_modules/') && !line.includes('/dist/')
+      return (
+        !line.includes('.theokit/') && !line.includes('node_modules/') && !line.includes('/dist/')
+      )
     })
     .map((line) => resolve(REPO_ROOT, line))
 }

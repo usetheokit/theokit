@@ -1,7 +1,7 @@
 /**
  * T2.4 — Custom error pages loader.
  *
- * Loads optional `.theo/client/404.html` and `500.html` from disk so adapters
+ * Loads optional `.theokit/client/404.html` and `500.html` from disk so adapters
  * (Node, CF, Vercel, Bun, Netlify, AWS Lambda, Deno) can pass them to the
  * shared `sendError` pipeline.
  *
@@ -10,7 +10,7 @@
  */
 
 /* eslint-disable security/detect-non-literal-fs-filename --
- * Loads `.theo/client/404.html` and `500.html` from a directory `dir` that
+ * Loads `.theokit/client/404.html` and `500.html` from a directory `dir` that
  * is always the build output of the current project. The names are fixed
  * literals (`'404.html'` / `'500.html'`) — no HTTP input.
  */
@@ -43,7 +43,7 @@ function loadIfSafe(dir: string, name: string): string | undefined {
 }
 
 /**
- * Load `.theo/client/{404,500}.html` from the given client directory.
+ * Load `.theokit/client/{404,500}.html` from the given client directory.
  * Returns object with both fields when present; missing pages remain undefined.
  */
 export function loadCustomErrorPages(clientDir: string): CustomErrorPages {

@@ -148,7 +148,7 @@ describe('scaffold-to-request E2E', () => {
     expect(existsSync(join(projectDir, 'app/layout.tsx'))).toBe(true)
 
     // Entry point
-    expect(existsSync(join(projectDir, 'app.ts'))).toBe(true)
+    expect(existsSync(join(projectDir, 'app.tsx'))).toBe(true)
 
     // Server layer — controllers
     expect(existsSync(join(projectDir, 'server/controllers/tasks.controller.ts'))).toBe(true)
@@ -183,8 +183,9 @@ describe('scaffold-to-request E2E', () => {
     expect(existsSync(join(projectDir, '.gitignore'))).toBe(true)
     expect(existsSync(join(projectDir, '_gitignore'))).toBe(false)
 
-    // Public assets
-    expect(existsSync(join(projectDir, 'public/index.html'))).toBe(true)
+    // React SSR — no public/index.html, React components ARE the frontend
+    expect(existsSync(join(projectDir, 'app/page.tsx'))).toBe(true)
+    expect(existsSync(join(projectDir, 'app/layout.tsx'))).toBe(true)
   })
 
   it('scaffold writes valid package.json with correct name and deps', () => {
@@ -200,6 +201,8 @@ describe('scaffold-to-request E2E', () => {
     // Required deps present
     expect(pkg.dependencies['@theokit/http']).toBeDefined()
     expect(pkg.dependencies['@theokit/agents']).toBeDefined()
+    expect(pkg.dependencies.react).toBeDefined()
+    expect(pkg.dependencies['react-dom']).toBeDefined()
     expect(pkg.dependencies['reflect-metadata']).toBeDefined()
     expect(pkg.dependencies.zod).toBeDefined()
 
@@ -222,8 +225,8 @@ describe('scaffold-to-request E2E', () => {
     expect(tsconfig.compilerOptions.strict).toBe(true)
   })
 
-  it('scaffold app.ts imports from @theokit/http', () => {
-    const appTs = readFileSync(join(projectDir, 'app.ts'), 'utf8')
+  it('scaffold app.tsx imports from @theokit/http', () => {
+    const appTs = readFileSync(join(projectDir, 'app.tsx'), 'utf8')
     expect(appTs).toMatch(/@theokit\/http/)
     expect(appTs).toMatch(/TheoApp\.create/)
     expect(appTs).toMatch(/app\.listen/)
@@ -271,14 +274,14 @@ describe('scaffold-to-request E2E', () => {
 
       const port = await getFreePort()
 
-      // Patch app.ts to use the dynamic port instead of hardcoded 3000
-      const appTs = readFileSync(join(projectDir, 'app.ts'), 'utf8')
+      // Patch app.tsx to use the dynamic port instead of hardcoded 3000
+      const appTs = readFileSync(join(projectDir, 'app.tsx'), 'utf8')
       const patched = appTs.replace(/app\.listen\(\d+\)/, `app.listen(${port})`)
-      writeFileSync(join(projectDir, 'app.ts'), patched)
+      writeFileSync(join(projectDir, 'app.tsx'), patched)
 
       // Start dev server via tsx (the template's dev script, without --watch)
       // eslint-disable-next-line sonarjs/no-os-command-from-path -- E2E test deliberately runs npx in scaffolded project
-      devProcess = spawn('npx', ['tsx', 'app.ts'], {
+      devProcess = spawn('npx', ['tsx', 'app.tsx'], {
         cwd: projectDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: true,

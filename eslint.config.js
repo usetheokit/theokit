@@ -29,7 +29,7 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
-      '**/.theo/**',
+      '**/.theokit/**',
       '**/coverage/**',
       '**/test-results/**',
       'referencias/**',
@@ -48,6 +48,7 @@ export default tseslint.config(
       // confusing reports (the user will write their own version anyway)
       // and would break with every minor scaffold-style change.
       'packages/create-theo/templates/**',
+      'packages/create-theokit/templates/**',
       // Fixtures + examples have their own per-folder tsconfig that the
       // root project service does not own. They are end-user demo apps,
       // not framework code; linting them produces parser-only errors that
@@ -61,6 +62,8 @@ export default tseslint.config(
       'packages/http-decorators/examples/**',
       'packages/http-decorators/vitest.config.ts',
       'packages/http-decorators/tsup.config.ts',
+      'packages/http/tsup.config.ts',
+      'packages/agents/tsup.config.ts',
     ],
   },
 

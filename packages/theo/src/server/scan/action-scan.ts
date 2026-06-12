@@ -94,7 +94,7 @@ export function scanServerActions(serverDir: string): ActionNode[] {
  * on file/dir name collision (EC-2) or reserved JS identifier names.
  *
  * Output `ActionManifestEntry[]` is sorted by `name` for deterministic
- * `.theo/actions-manifest.json` emission.
+ * `.theokit/actions-manifest.json` emission.
  */
 export function scanServerActionsEnriched(serverDir: string): ActionManifestEntry[] {
   const actionsDir = join(serverDir, 'actions')

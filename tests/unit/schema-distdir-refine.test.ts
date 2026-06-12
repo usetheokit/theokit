@@ -4,17 +4,17 @@ import { theoConfigSchema } from '../../packages/theo/src/config/schema.js'
 
 /**
  * T2.2 / EC-4 — Zod refine on distDir rejects absolute + parent-relative.
- * Plus default `.theo`.
+ * Plus default `.theokit`.
  */
 
 describe('T2.2 — distDir Zod refine (EC-4)', () => {
-  it('defaults to .theo when omitted', () => {
+  it('defaults to .theokit when omitted', () => {
     const result = theoConfigSchema.parse({})
-    expect(result.distDir).toBe('.theo')
+    expect(result.distDir).toBe('.theokit')
   })
 
   it('accepts relative inside cwd', () => {
-    expect(() => theoConfigSchema.parse({ distDir: '.theo' })).not.toThrow()
+    expect(() => theoConfigSchema.parse({ distDir: '.theokit' })).not.toThrow()
     expect(() => theoConfigSchema.parse({ distDir: 'build/output' })).not.toThrow()
   })
 

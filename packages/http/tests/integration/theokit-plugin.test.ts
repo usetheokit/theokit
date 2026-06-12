@@ -4,17 +4,21 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { z } from 'zod'
 import { Controller } from '../../src/decorators/controller.js'
 import { Get, Post, Delete } from '../../src/decorators/methods.js'
-import { Body, Param, Query } from '../../src/decorators/params.js'
-import { HttpCode, Header } from '../../src/decorators/response.js'
+import { HttpCode } from '../../src/decorators/response.js'
 import { UseGuards } from '../../src/decorators/middleware.js'
 import { setMeta, ROUTE_PARAMS } from '../../src/metadata/index.js'
 import { httpDecoratorsPlugin } from '../../src/theokit-plugin.js'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ── Fixtures ──────────────────────────────────────────
 
 const zCreateCat = z.object({ name: z.string().min(1), age: z.number().min(0) })
 class CreateCatDto {
-  static schema = zCreateCat
+  static readonly schema = zCreateCat
+  name = 'CreateCatDto'
 }
 class RejectGuard {
   canActivate() {
@@ -52,7 +56,7 @@ function wireParam(ctrl: Function, method: string, index: number, source: string
 }
 wireParam(CatsCtrl, 'search', 0, 'query', 'breed')
 wireParam(CatsCtrl, 'findOne', 0, 'param', 'id')
-wireParam(CatsCtrl, 'create', 0, 'body', undefined)
+wireParam(CatsCtrl, 'create', 0, 'body')
 wireParam(CatsCtrl, 'remove', 0, 'param', 'id')
 Reflect.defineMetadata('design:paramtypes', [CreateCatDto], CatsCtrl.prototype, 'create')
 
@@ -61,7 +65,7 @@ Reflect.defineMetadata('design:paramtypes', [CreateCatDto], CatsCtrl.prototype, 
 // where app provides addHook('onRequest', fn). The fn receives
 // {request: IncomingMessage, response: ServerResponse, ctx, requestId}.
 
-describe('TheoKit plugin integration — httpDecoratorsPlugin', () => {
+describe.skipIf(!isVitest)('TheoKit plugin integration — httpDecoratorsPlugin', () => {
   let server: ReturnType<typeof createServer>
   let port: number
 
