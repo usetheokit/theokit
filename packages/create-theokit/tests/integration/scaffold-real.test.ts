@@ -73,7 +73,6 @@ describe('scaffold (integration — real template)', () => {
     expect(pkg.scripts.build).toBeDefined()
     expect(pkg.scripts.start).toBeDefined()
     expect(pkg.scripts.test).toBe('vitest run')
-    expect(pkg.scripts.seed).toBeDefined()
     expect(pkg.scripts['db:migrate']).toBeDefined()
   })
 
@@ -163,22 +162,20 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'server/store.ts'))).toBe(false)
   })
 
-  it('should include database and route files (Rails DX parity)', () => {
+  it('should include database layer and health route (clean template)', () => {
     const targetDir = createTargetDir()
 
-    scaffold(targetDir, 'rails-dx-test')
+    scaffold(targetDir, 'clean-template-test')
 
-    // Database layer
+    // Database layer (empty schema, connection ready)
     expect(existsSync(join(targetDir, 'server/db/schema.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'server/db/index.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'server/db/seed.ts'))).toBe(true)
+    // No demo seed — consumers create their own
+    expect(existsSync(join(targetDir, 'server/db/seed.ts'))).toBe(false)
 
-    // Routes with directory structure (EC-1)
-    expect(existsSync(join(targetDir, 'server/routes/tasks/index.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'server/routes/tasks/[id].ts'))).toBe(true)
-
-    // Tests
-    expect(existsSync(join(targetDir, 'tests/tasks.test.ts'))).toBe(true)
+    // Health route only — no demo tasks routes
+    expect(existsSync(join(targetDir, 'server/routes/health.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'server/routes/tasks'))).toBe(false)
 
     // .gitignore includes data/
     const gitignore = readFileSync(join(targetDir, '.gitignore'), 'utf-8')
@@ -207,15 +204,16 @@ describe('scaffold (integration — real template)', () => {
     expect(pkg.devDependencies['eslint-plugin-drizzle']).toBeDefined()
   })
 
-  it('should have db:migrate, db:seed, db:generate scripts', () => {
+  it('should have db:migrate and db:generate scripts', () => {
     const targetDir = createTargetDir()
 
     scaffold(targetDir, 'db-scripts-test')
 
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
     expect(pkg.scripts['db:migrate']).toBe('theokit db migrate')
-    expect(pkg.scripts['db:seed']).toBe('npx tsx server/db/seed.ts')
     expect(pkg.scripts['db:generate']).toBe('theokit db generate')
+    // No db:seed — consumers create their own seed script
+    expect(pkg.scripts['db:seed']).toBeUndefined()
   })
 
   it('should have eslint config with drizzle enforce rules', () => {
@@ -252,15 +250,45 @@ describe('scaffold (integration — real template)', () => {
     expect(layout).not.toContain('<link rel="stylesheet"')
   })
 
-  it('should have React hooks in page.tsx instead of vanilla JS', () => {
+  it('should have clean page.tsx without demo code', () => {
     const targetDir = createTargetDir()
 
-    scaffold(targetDir, 'hooks-test')
+    scaffold(targetDir, 'page-test')
 
     const page = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
-    expect(page).toContain('useState')
-    expect(page).toContain('useEffect')
-    expect(page).not.toContain('<script src')
+    expect(page).toContain('TheoKit')
+    expect(page).not.toContain('tasks')
+    expect(page).not.toContain('createTask')
+  })
+
+  it('should scaffold .claude/ with skills and settings', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'claude-test')
+
+    // .claude/ directory created (renamed from dot-claude/)
+    expect(existsSync(join(targetDir, '.claude'))).toBe(true)
+    expect(existsSync(join(targetDir, 'dot-claude'))).toBe(false)
+
+    // Settings
+    expect(existsSync(join(targetDir, '.claude/settings.json'))).toBe(true)
+    const settings = JSON.parse(readFileSync(join(targetDir, '.claude/settings.json'), 'utf-8'))
+    expect(settings.permissions.deny).toContain('Read(.env*)')
+
+    // Rules
+    expect(existsSync(join(targetDir, '.claude/rules/theokit-conventions.md'))).toBe(true)
+
+    // 5 skills
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-routes/SKILL.md'))).toBe(true)
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-agents/SKILL.md'))).toBe(true)
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-database/SKILL.md'))).toBe(true)
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-frontend/SKILL.md'))).toBe(true)
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-config/SKILL.md'))).toBe(true)
+
+    // CLAUDE.md
+    expect(existsSync(join(targetDir, 'CLAUDE.md'))).toBe(true)
+    const claudeMd = readFileSync(join(targetDir, 'CLAUDE.md'), 'utf-8')
+    expect(claudeMd).toContain('@AGENTS.md')
   })
 
   it('should preserve non-tmpl files from the template', () => {
