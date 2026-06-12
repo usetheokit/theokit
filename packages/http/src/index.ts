@@ -26,3 +26,9 @@ export {
   type StreamRenderOptions,
   type StreamRenderResult,
 } from './stream-renderer.js'
+export {
+  revalidateTag,
+  revalidatePath,
+  getRevalidationSignals,
+  type RevalidationSignal,
+} from './cache-signal.js'
