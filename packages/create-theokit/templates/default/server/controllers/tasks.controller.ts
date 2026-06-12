@@ -5,12 +5,20 @@
  * @Param, @Query, @HttpCode, @UseGuards, @Roles, @IsPublic,
  * @UseInterceptors, @UseFilters, NotFoundException.
  */
-import 'reflect-metadata'
 import { z } from 'zod'
 import {
-  Controller, Get, Post, Put, Delete,
-  Body, Param, Query, HttpCode,
-  UseGuards, UseInterceptors, UseFilters,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  UseGuards,
+  UseInterceptors,
+  UseFilters,
   NotFoundException,
 } from '@theokit/http'
 import { RolesGuard, Roles, Role, IsPublic } from '../guards/auth.guard.js'
@@ -23,7 +31,7 @@ const zCreateTask = z.object({
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
 })
 
-@Controller()  // → /api/tasks (convention: inferred from TasksController)
+@Controller() // → /api/tasks (convention: inferred from TasksController)
 @UseGuards(RolesGuard)
 @UseInterceptors(TimingInterceptor)
 @UseFilters(HttpErrorFilter)
