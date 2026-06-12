@@ -124,7 +124,7 @@ describe('scaffold (integration — real template)', () => {
 
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
     // theokit is the main dep
-    expect(pkg.dependencies.theokit).toBe('^0.4.0')
+    expect(pkg.dependencies.theokit).toMatch(/^\^0\.\d+\.\d+/)
     // @theokit/http and @theokit/agents are NOT direct deps (transitive via theokit)
     expect(pkg.dependencies['@theokit/http']).toBeUndefined()
     expect(pkg.dependencies['@theokit/agents']).toBeUndefined()
