@@ -1,5 +1,7 @@
 # Plan: Migrate Default Template to Full Framework (`theokit`)
 
+> **Version 1.1** — Absorbed EC-1 (theokit must add @theokit/http + @theokit/agents as deps), EC-2 (theo.config.ts must register httpDecoratorsPlugin for controllers), EC-3 (--src-dir CLI references to app.tsx updated), EC-4 (test useState in hydration), EC-5 (index.html not gitignored), EC-6 (theokit dev is Node/Bun-first documented).
+>
 > **Version 1.0** — Migrate the `create-theokit` default template from standalone `@theokit/http` (no hydration, vanilla JS) to the full `theokit` framework (Vite, React hydration, file-based routing, SSR streaming). Zero `public/client.js`. React components handle all interactivity. Rails-style project structure.
 
 ## Goal
@@ -103,6 +105,7 @@ The template currently uses `@theokit/http` directly with `renderToString` (stat
 | `theokit dev` may have bugs not seen in standalone mode | Medium | Run full E2E test: scaffold → theokit dev → HTTP requests | Template |
 | CSS import requires Vite — no standalone CSS serving | Low | Template is opinativo — Vite IS the dev tool | Framework |
 | `reflect-metadata` still needed for @Controller decorators | Low | Framework imports it internally — dev never sees it | Framework |
+| `theokit dev` is Node/Bun-first — Deno limited (EC-6) | Low | Same tradeoff as Next.js — Vite is Node-first | Framework |
 
 ## Unresolved Questions
 
@@ -112,8 +115,32 @@ The template currently uses `@theokit/http` directly with `renderToString` (stat
 ## Dependency Graph
 
 ```
-Phase 1 (package.json + config) ──▶ Phase 2 (frontend + routes) ──▶ Phase 3 (delete old + E2E)
+Phase 0 (theokit adds http+agents deps) ──▶ Phase 1 (template config) ──▶ Phase 2 (frontend) ──▶ Phase 3 (cleanup + E2E)
 ```
+
+---
+
+## Phase 0: Framework Dependency Fix (EC-1 — blocker)
+
+**Objective:** Add `@theokit/http` and `@theokit/agents` as dependencies of `theokit` package.json so the framework bundles its own layers.
+
+### T0.1 — Add @theokit/http + @theokit/agents as theokit dependencies
+
+#### Objective
+`theokit` must include `@theokit/http` and `@theokit/agents` as dependencies. Without this, any template that imports decorators from `@theokit/http` will crash with `Cannot find module`.
+
+#### Why this step (EC-1)
+Currently `theokit` package.json has ZERO dependency on `@theokit/http` or `@theokit/agents`. They are neither deps nor peerDeps. The template imports `@Controller` from `@theokit/http` — if the dev installs only `theokit`, the import fails. Next.js bundles all its layers internally. TheoKit must do the same.
+
+#### Files to edit
+```
+packages/theo/package.json — add @theokit/http and @theokit/agents to dependencies
+```
+
+#### Acceptance Criteria
+- [ ] `@theokit/http` in `packages/theo/package.json` dependencies
+- [ ] `@theokit/agents` in `packages/theo/package.json` dependencies
+- [ ] `npm install theokit` installs both transitively
 
 ---
 
@@ -174,8 +201,9 @@ VERIFY:  pnpm --filter create-theokit test
 ```
 
 #### Acceptance Criteria
-- [ ] `theo.config.ts` with `defineConfig({ port: 3000 })`
+- [ ] `theo.config.ts` with `defineConfig({ port: 3000 })` AND `httpDecoratorsPlugin({ controllersGlob: 'server/controllers/**/*.controller.ts' })` in plugins (EC-2: controllers need explicit plugin registration)
 - [ ] `index.html` with `<div id="root">` and `<script type="module" src="/@theo/entry-client">`
+- [ ] `index.html` NOT listed in `_gitignore` (EC-5)
 
 ---
 
@@ -219,6 +247,7 @@ packages/create-theokit/templates/default/public/client.js — DELETE
 - [ ] `page.tsx` has `onClick` handlers (not vanilla JS event listeners)
 - [ ] `public/client.js` deleted
 - [ ] No `<script src>` in any template file
+- [ ] `useState`/`useEffect` work after hydration in browser (EC-4)
 
 ---
 
@@ -257,7 +286,8 @@ packages/create-theokit/src/cli.ts — remove app.tsx references
 #### Acceptance Criteria
 - [ ] `app.tsx` does not exist in scaffolded project
 - [ ] `theokit dev` works without `app.tsx`
-- [ ] Scaffold CLI updated
+- [ ] Scaffold CLI `--src-dir` references to `app.tsx` removed/updated (EC-3)
+- [ ] `--src-dir` moves `theo.config.ts` and `index.html` correctly
 
 ---
 
@@ -284,6 +314,7 @@ tests/e2e/scaffold-to-request.test.ts — update for theokit dev
 
 | # | Gap / Requirement | Task(s) | Resolution |
 |---|---|---|---|
+| 0 | theokit missing @theokit/http + @theokit/agents deps (EC-1) | T0.1 | Add as deps to theokit |
 | 1 | Template uses standalone @theokit/http | T1.1 | Switch to theokit |
 | 2 | No theo.config.ts or index.html | T1.2 | Create both |
 | 3 | CSS via `<link>` not Vite | T2.1 | `import './globals.css'` |
@@ -292,7 +323,9 @@ tests/e2e/scaffold-to-request.test.ts — update for theokit dev
 | 6 | Manual app.tsx entry point | T3.1 | Delete — framework manages |
 | 7 | No E2E with theokit dev | T3.2 | Full E2E test |
 
-**Coverage: 7/7 gaps covered (100%)**
+| 8 | Controllers need httpDecoratorsPlugin (EC-2) | T1.2 | Register in theo.config.ts |
+
+**Coverage: 8/8 gaps covered (100%)**
 
 ## Global Definition of Done
 
