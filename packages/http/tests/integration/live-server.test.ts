@@ -10,7 +10,7 @@
  *   curl localhost:3333/users/stats -H "x-api-key: secret"
  */
 import 'reflect-metadata'
-import { describe, it } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import {
@@ -29,6 +29,10 @@ import {
   createDecoratorServer,
   type DiContainer,
 } from '../../src/index.js'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ── Services ───────────────────────────────────────────
 
@@ -79,11 +83,12 @@ class ProductService {
 
 const zCreateUser = z.object({
   name: z.string().min(2, 'Nome mínimo 2 chars'),
-  email: z.string().email('Email inválido'),
+  email: z.email({ message: 'Email inválido' }),
   role: z.enum(['admin', 'user']).default('user'),
 })
 class CreateUserDto {
-  static schema = zCreateUser
+  static readonly schema = zCreateUser
+  name = 'CreateUserDto'
 }
 
 // ── Guards ─────────────────────────────────────────────
@@ -168,7 +173,7 @@ function wp(ctrl: Function, method: string, idx: number, src: string, key?: stri
   setMeta(ROUTE_PARAMS, ctrl, map)
 }
 wp(UsersController, 'findById', 0, 'param', 'id')
-wp(UsersController, 'create', 0, 'body', undefined)
+wp(UsersController, 'create', 0, 'body')
 wp(UsersController, 'remove', 0, 'param', 'id')
 wp(ProductsController, 'search', 0, 'query', 'q')
 Reflect.defineMetadata('design:paramtypes', [UserService], UsersController)
@@ -182,16 +187,16 @@ class SimpleContainer implements DiContainer {
   register(token: Function, instance: object) {
     this.instances.set(token, instance)
   }
-  resolve<T>(token: Function): T {
+  resolve(token: Function): unknown {
     const existing = this.instances.get(token)
-    if (existing) return existing as T
+    if (existing) return existing
     const paramTypes: Function[] = Reflect.getMetadata('design:paramtypes', token) ?? []
     const args = paramTypes.map((pt: Function) => {
       const dep = this.instances.get(pt)
       if (!dep) throw new Error(`DI: ${pt.name} not registered`)
       return dep
     })
-    const inst = new (token as new (...a: unknown[]) => T)(...args)
+    const inst = new (token as new (...a: unknown[]) => unknown)(...args)
     this.instances.set(token, inst)
     return inst
   }
@@ -199,7 +204,7 @@ class SimpleContainer implements DiContainer {
 
 // ── Boot ───────────────────────────────────────────────
 
-describe('LIVE SERVER (TypeScript @ syntax)', () => {
+describe.skipIf(!isVitest)('LIVE SERVER (TypeScript @ syntax)', () => {
   it('boots and runs automated tests, then prints curl commands', async () => {
     const container = new SimpleContainer()
     container.register(UserService, new UserService())
@@ -313,6 +318,7 @@ describe('LIVE SERVER (TypeScript @ syntax)', () => {
       }
     }
 
+    expect(pass).toBe(tests.length)
     console.log(`\n  Results: ${pass}/${tests.length} passed`)
     console.log(`\n  📋 Try these in another terminal:`)
     console.log(`     curl localhost:3333/health`)
