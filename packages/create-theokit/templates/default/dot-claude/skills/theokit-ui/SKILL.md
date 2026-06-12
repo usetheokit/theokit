@@ -21,12 +21,15 @@ paths:
 The published package is `@theokit/ui` (NOT `@usetheo/ui` — that was the old name).
 
 ```bash
-# Install from npm
+# Install from npm (preferred)
 npm install @theokit/ui
 
-# Or link from source (development)
-npm link ../theo-ui    # if you have the source repo
+# Or from local tarball (when using source repo)
+cd ../theo-ui && npm pack    # produces theokit-ui-X.Y.Z.tgz
+cd ../my-app && npm install ../theo-ui/theokit-ui-X.Y.Z.tgz
 ```
+
+**WARNING: NEVER use `npm link ../theo-ui` or `file:../theo-ui`.** The symlink exposes the sibling's nested `node_modules/react` (typically a different version), causing dual-React: "React Element from an older version" errors, broken hooks (`useState` null), and silent render failures. `resolve.dedupe` in Vite does NOT fix this — the pnpm structure physically has two React copies. Use tarball (`npm pack` → `npm install .tgz`) instead.
 
 ## Provider Setup (required before using any component)
 
@@ -153,5 +156,6 @@ const myTheme = defineTheme({
 - NEVER build a custom markdown renderer — `ChatMessageContent` handles it (including streaming partial fences)
 - NEVER build a custom code highlighter — `CodeBlock` uses shiki (lazy-loaded)
 - NEVER import from `@usetheo/ui` — that's the deprecated package name; use `@theokit/ui`
+- NEVER use `npm link` or `file:../theo-ui` to install — causes dual-React (use tarball or npm registry)
 - NEVER install ALL peer deps — only install the peers for components you actually use
 - NEVER use components without wrapping in `TheoUIProvider` + `ThemeProvider` first
