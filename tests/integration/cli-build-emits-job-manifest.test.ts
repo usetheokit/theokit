@@ -77,11 +77,11 @@ afterEach(() => {
 })
 
 describe('CLI build emits job manifest (T1.2)', { timeout: 30_000 }, () => {
-  it('build emits .theo/jobs.json when jobs are declared', () => {
+  it('build emits .theokit/jobs.json when jobs are declared', () => {
     writeConfig()
     writeJob('process-doc')
     runBuild()
-    const manifestPath = join(projectDir, '.theo/jobs.json')
+    const manifestPath = join(projectDir, '.theokit/jobs.json')
     expect(existsSync(manifestPath)).toBe(true)
     const json = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       jobs: { name: string; maxAttempts: number }[]
@@ -93,7 +93,7 @@ describe('CLI build emits job manifest (T1.2)', { timeout: 30_000 }, () => {
   it('build emits empty jobs manifest when no jobs exist', () => {
     writeConfig()
     runBuild()
-    const json = JSON.parse(readFileSync(join(projectDir, '.theo/jobs.json'), 'utf8')) as {
+    const json = JSON.parse(readFileSync(join(projectDir, '.theokit/jobs.json'), 'utf8')) as {
       jobs: unknown[]
     }
     expect(json.jobs).toEqual([])
@@ -103,7 +103,7 @@ describe('CLI build emits job manifest (T1.2)', { timeout: 30_000 }, () => {
     writeConfig()
     writeJob('with-schema', true)
     runBuild()
-    const json = JSON.parse(readFileSync(join(projectDir, '.theo/jobs.json'), 'utf8')) as {
+    const json = JSON.parse(readFileSync(join(projectDir, '.theokit/jobs.json'), 'utf8')) as {
       jobs: { name: string; hasInputSchema: boolean }[]
     }
     expect(json.jobs[0].hasInputSchema).toBe(true)
@@ -113,7 +113,7 @@ describe('CLI build emits job manifest (T1.2)', { timeout: 30_000 }, () => {
     writeConfig()
     writeJob('no-schema')
     runBuild()
-    const json = JSON.parse(readFileSync(join(projectDir, '.theo/jobs.json'), 'utf8')) as {
+    const json = JSON.parse(readFileSync(join(projectDir, '.theokit/jobs.json'), 'utf8')) as {
       jobs: { name: string; hasInputSchema: boolean }[]
     }
     expect(json.jobs[0].hasInputSchema).toBe(false)
@@ -123,7 +123,7 @@ describe('CLI build emits job manifest (T1.2)', { timeout: 30_000 }, () => {
     writeConfig()
     writeJob('foo')
     runBuild()
-    const json = JSON.parse(readFileSync(join(projectDir, '.theo/jobs.json'), 'utf8')) as {
+    const json = JSON.parse(readFileSync(join(projectDir, '.theokit/jobs.json'), 'utf8')) as {
       schemaVersion: number
     }
     expect(json.schemaVersion).toBe(1)

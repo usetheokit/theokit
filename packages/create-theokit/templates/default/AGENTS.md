@@ -7,71 +7,60 @@ Guide for coding agents (Claude, Copilot, Cursor) working on this TheoKit projec
 This is a **full-stack TypeScript app** built with TheoKit — a framework for AI agent apps.
 
 ```
-app.ts              → Entry point: TheoApp.create({ controllers, agents, providers })
 server/
-  controllers/      → HTTP endpoints (@Controller + @Get/@Post/@Delete)
-  agents/           → AI agents (@Agent + @MainLoop + @Tool)
-  toolboxes/        → Agent tools (@Toolbox + @Tool with Zod schemas)
-  guards/           → Auth/RBAC (@UseGuards + canActivate)
-  interceptors/     → Request/response transforms (@UseInterceptors)
-  filters/          → Error formatting (@UseFilters + @Catch)
-  middleware/       → Request pipeline (NestMiddleware)
-  store.ts          → In-memory data store
+  routes/             → HTTP API routes (defineRoute + Zod validation)
+    health.ts         → GET /api/health
+    tasks/
+      index.ts        → GET /api/tasks (list) + POST /api/tasks (create)
+      [id].ts         → GET/PUT/DELETE /api/tasks/:id
+  db/
+    schema.ts         → Drizzle ORM schema (SQLite)
+    index.ts          → DB connection + auto-create tables
+    seed.ts           → Seed data (run with `npm run seed`)
 app/
-  page.tsx          → React frontend
-  layout.tsx        → Root layout
-public/
-  index.html        → Static HTML frontend with chat UI
+  page.tsx            → React frontend
+  layout.tsx          → Root layout
+tests/
+  tasks.test.ts       → Example API smoke test
 ```
 
 ## Key Patterns
 
-### Controllers (HTTP API)
+### Routes (defineRoute)
 ```typescript
-import { Controller, Get, Post, Body, Param } from '@theokit/http'
+import { defineRoute } from 'theokit/server/define'
 import { z } from 'zod'
 
-const zCreate = z.object({ title: z.string().min(3) })
+export const GET = defineRoute({
+  handler: () => db.select().from(tasks).all(),
+})
 
-@Controller('api/tasks')
-class TasksController {
-  @Get()
-  list() { return tasks }
-
-  @Post()
-  create(@Body(zCreate) body: z.infer<typeof zCreate>) {
-    return store.create(body)  // 201 automatic for POST
-  }
-}
+export const POST = defineRoute({
+  body: z.object({ title: z.string().min(3) }),
+  status: 201,
+  handler: ({ body }) => db.insert(tasks).values(body).returning().get(),
+})
 ```
 
-### Agents (AI with tools)
+### Database (Drizzle + SQLite)
 ```typescript
-import { Agent, MainLoop, Toolbox, Tool, Mixin } from '@theokit/agents'
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
 
-@Agent({ name: 'assistant', route: '/api/agents/assistant', model: 'openai/gpt-4o-mini' })
-@Mixin(TaskTools)
-class AssistantAgent {
-  @MainLoop({ strategy: 'react' })
-  async run() {}
-}
+export const tasks = sqliteTable('tasks', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  title: text('title').notNull(),
+  done: integer('done', { mode: 'boolean' }).notNull().default(false),
+})
 ```
 
 ### Validation
 - **Zod is the single source of truth** — define schema once, get types + validation + OpenAPI
-- `@Body(zodSchema)` validates automatically, returns 422 on failure
+- `body: z.object(...)` in defineRoute validates automatically, returns 422 on failure
 - Use `z.infer<typeof schema>` for TypeScript types
 
-### Error Handling
-- `throw new NotFoundException('...')` → 404
-- `throw new BadRequestException('...')` → 400
-- `@UseFilters(MyFilter)` for custom error format
-- 500 errors are scrubbed — raw messages never reach clients
-
-### Guards (Auth/RBAC)
-- `@UseGuards(AuthGuard)` on controller or agent
-- Guards apply to BOTH HTTP and agent routes (shared pipeline)
-- `canActivate(ctx: ExecutionContext): boolean`
+### Dynamic Routes
+- `server/routes/tasks/[id].ts` → `/api/tasks/:id`
+- Params validated with `params: z.object({ id: z.coerce.number() })`
 
 ### Path Aliases
 - `@/*` → project root (configured in tsconfig.json)
@@ -80,9 +69,11 @@ class AssistantAgent {
 ## Commands
 
 ```bash
-npm run dev          # Start dev server (tsx --watch)
-npm run build        # Build for production (tsup)
+npm run dev          # Start dev server
+npm run build        # Build for production
 npm run start        # Run production build
+npm run test         # Run tests (vitest)
+npm run seed         # Seed database with sample data
 npm run lint         # ESLint check
 npm run format       # Prettier format
 npm run typecheck    # TypeScript type check
@@ -91,6 +82,5 @@ npm run typecheck    # TypeScript type check
 ## Don't
 
 - Don't use `any` — use Zod schemas + `z.infer<>`
-- Don't write raw `res.status().json()` — use decorators (`@HttpCode`, `@Header`)
-- Don't create separate auth middleware for agents — use `@UseGuards` (same as controllers)
-- Don't parse request body manually — use `@Body(zodSchema)`
+- Don't write raw `res.status().json()` — use defineRoute with status option
+- Don't parse request body manually — use `body: z.object(...)` in defineRoute

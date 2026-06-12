@@ -27,12 +27,12 @@ const BUDGET_BYTES = 350 * 1024
 describe('Bundle budget — template-default <= 350 KB gzipped', () => {
   beforeAll(() => {
     // Shared mutex-guarded build to avoid clobbering another concurrent test
-    // (e.g. devtools-treeshake) writing to the same .theo/ directory.
+    // (e.g. devtools-treeshake) writing to the same .theokit/ directory.
     buildTemplateDefaultOnce()
   }, 200_000)
 
   it('main client bundle gzipped is under 350 KB (security primitives must not leak)', () => {
-    const assets = resolve(FIXTURE, '.theo/client/assets')
+    const assets = resolve(FIXTURE, '.theokit/client/assets')
     expect(existsSync(assets)).toBe(true)
 
     // The Vite build emits `index-<hash>.js` as the main client bundle.
@@ -55,7 +55,7 @@ describe('Bundle budget — template-default <= 350 KB gzipped', () => {
   })
 
   it('security-primitive modules are NOT present in the client bundle (server-only invariant)', () => {
-    // Read every JS chunk under .theo/client/assets and assert that none
+    // Read every JS chunk under .theokit/client/assets and assert that none
     // mention the names of the security primitives we added. These are
     // server-only by design; their leaking into the client would be a
     // boundary violation AND inflate the bundle.
@@ -66,7 +66,7 @@ describe('Bundle budget — template-default <= 350 KB gzipped', () => {
       'discoverOidcProvider',
       'rotateIfNeeded',
     ]
-    const assets = resolve(FIXTURE, '.theo/client/assets')
+    const assets = resolve(FIXTURE, '.theokit/client/assets')
     const jsFiles = readdirSync(assets).filter((f) => f.endsWith('.js'))
     const bundleText = jsFiles.map((f) => readFileSync(join(assets, f), 'utf8')).join('\n')
 

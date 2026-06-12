@@ -1,32 +1,21 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * CLI `theo generate`. Writes scaffolded files under `cwd` + a generator
- * name from CLI args. Build-time tool. No HTTP input.
- */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
-export const VALID_TYPES = ['route', 'action', 'page', 'ws', 'controller', 'agent', 'toolbox'] as const
-export type GeneratorType = (typeof VALID_TYPES)[number]
+import { generateResource } from './generate-resource.js'
+import {
+  VALID_TYPES,
+  type GeneratorType,
+  type GenerateOptions,
+  type GenerateStatus,
+  type GenerateResult,
+} from './generate-types.js'
 
-export interface GenerateOptions {
-  cwd: string
-  type: string
-  name: string
-}
-
-export type GenerateStatus =
-  | 'created'
-  | 'already_exists'
-  | 'invalid_kind'
-  | 'invalid_name'
-  | 'not_a_project'
-
-export interface GenerateResult {
-  status: GenerateStatus
-  filePath?: string
-  kind?: GeneratorType
-  name?: string
-  message?: string
+export {
+  VALID_TYPES,
+  type GeneratorType,
+  type GenerateOptions,
+  type GenerateStatus,
+  type GenerateResult,
 }
 
 function toKebabCase(name: string): boolean {
@@ -303,6 +292,11 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
     }
   }
 
+  // Resource generates multiple files — handle separately
+  if (type === 'resource') {
+    return generateResource(cwd, name, opts.fields ?? [])
+  }
+
   const resolved = resolveTemplate(cwd, type as GeneratorType, name)
   if (resolved === null) {
     return { status: 'invalid_kind', message: `Unknown type: ${type}` }
@@ -346,8 +340,12 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
  * CLI entry point — preserves the original surface (throws + console.log).
  * Wraps the programmatic `generate` function.
  */
-export async function generateCommand(type: string, name: string): Promise<void> {
-  const result = await generate({ cwd: process.cwd(), type, name })
+export async function generateCommand(
+  type: string,
+  name: string,
+  fields?: string[],
+): Promise<void> {
+  const result = await generate({ cwd: process.cwd(), type, name, fields })
   switch (result.status) {
     case 'not_a_project':
       throw new Error('Not a Theo project. Run this from a project root with theo.config.ts')

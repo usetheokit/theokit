@@ -47,7 +47,7 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   const config = await loadConfig(cwd)
   validateProjectStructure(cwd)
 
-  // T2.2 — Clean .theo/ at build start (Astro pattern). Skip .git*.
+  // T2.2 — Clean .theokit/ at build start (Astro pattern). Skip .git*.
   const distDirAbs = resolve(cwd, config.distDir)
   await cleanOutDir({ dir: distDirAbs })
 
@@ -95,7 +95,7 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   // T1.2 — job scan + manifest (no per-target translation needed)
   await emitJobArtifacts({ cwd, serverDir, distDir })
 
-  // Wave 2 (T1.2) — services manifest at <cwd>/.theo/services.json. Always
+  // Wave 2 (T1.2) — services manifest at <cwd>/.theokit/services.json. Always
   // emit (empty array when services: {} is empty) so adapters can rely on
   // the file existing. Topological order preserved by buildServicesManifest.
   //
@@ -196,7 +196,7 @@ async function emitCronArtifacts(opts: {
   target: BuildTarget
 }): Promise<void> {
   const cronsDir = resolve(opts.serverDir, 'crons')
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- known-internal path under project's own serverDir
+
   const cronNodes = existsSync(cronsDir) ? await scanCrons(cronsDir) : []
   const manifestPath = resolve(opts.distDir, 'crons.json')
   writeCronManifest(manifestPath, cronNodes, opts.cwd)
@@ -255,7 +255,7 @@ async function emitJobArtifacts(opts: {
   distDir: string
 }): Promise<void> {
   const jobsDir = resolve(opts.serverDir, 'jobs')
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- known-internal path under project's own serverDir
+
   const jobNodes = existsSync(jobsDir) ? await scanJobs(jobsDir) : []
   const manifestPath = resolve(opts.distDir, 'jobs.json')
   writeJobManifest(manifestPath, jobNodes, opts.cwd)

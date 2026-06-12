@@ -40,7 +40,8 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'app/layout.tsx'))).toBe(true)
     expect(existsSync(join(targetDir, 'server'))).toBe(true)
     expect(existsSync(join(targetDir, 'tsconfig.json'))).toBe(true)
-    expect(existsSync(join(targetDir, 'app.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
 
     // .gitignore renamed from _gitignore
     expect(existsSync(join(targetDir, '.gitignore'))).toBe(true)
@@ -71,6 +72,9 @@ describe('scaffold (integration — real template)', () => {
     expect(pkg.scripts.dev).toBeDefined()
     expect(pkg.scripts.build).toBeDefined()
     expect(pkg.scripts.start).toBeDefined()
+    expect(pkg.scripts.test).toBe('vitest run')
+    expect(pkg.scripts.seed).toBeDefined()
+    expect(pkg.scripts['db:migrate']).toBeDefined()
   })
 
   it('should produce a working package.json with expected dependencies', () => {
@@ -82,6 +86,13 @@ describe('scaffold (integration — real template)', () => {
     expect(pkg.dependencies).toBeDefined()
     expect(pkg.devDependencies).toBeDefined()
     expect(pkg.dependencies.zod).toBeDefined()
+    // Rails DX parity: Drizzle + SQLite
+    expect(pkg.dependencies['drizzle-orm']).toBeDefined()
+    expect(pkg.dependencies['better-sqlite3']).toBeDefined()
+    expect(pkg.devDependencies['@types/better-sqlite3']).toBeDefined()
+    expect(pkg.devDependencies.vitest).toBeDefined()
+    // No @swc/core (no controllers)
+    expect(pkg.devDependencies['@swc/core']).toBeUndefined()
   })
 
   it('should include AGENTS.md in the scaffold', () => {
@@ -113,6 +124,143 @@ describe('scaffold (integration — real template)', () => {
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
     expect(pkg.dependencies?.['@theokit/ui']).toBeUndefined()
     expect(pkg.dependencies?.['@theokit/sdk']).toBeUndefined()
+  })
+
+  it('should use theokit as main dep without controller-era packages', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'framework-test')
+
+    const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+    // theokit is the main dep
+    expect(pkg.dependencies.theokit).toMatch(/^\^0\.\d+\.\d+/)
+    // @theokit/http and @theokit/agents are NOT direct deps (transitive via theokit)
+    expect(pkg.dependencies['@theokit/http']).toBeUndefined()
+    expect(pkg.dependencies['@theokit/agents']).toBeUndefined()
+    // reflect-metadata is NOT a direct dep (theokit handles it internally)
+    expect(pkg.dependencies['reflect-metadata']).toBeUndefined()
+    // @swc/core is NOT needed (no controllers — defineRoute only)
+    expect(pkg.devDependencies['@swc/core']).toBeUndefined()
+    // Scripts use theokit CLI
+    expect(pkg.scripts.dev).toBe('theokit dev')
+    expect(pkg.scripts.build).toBe('theokit build')
+    expect(pkg.scripts.start).toBe('theokit start')
+  })
+
+  it('should include theo.config.ts and index.html, not controllers', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'structure-test')
+
+    expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
+    expect(existsSync(join(targetDir, 'server/routes/health.ts'))).toBe(true)
+    // EC-2: no controllers, agents, toolboxes, guards, interceptors, filters, middleware
+    expect(existsSync(join(targetDir, 'server/controllers'))).toBe(false)
+    expect(existsSync(join(targetDir, 'server/agents'))).toBe(false)
+    expect(existsSync(join(targetDir, 'server/toolboxes'))).toBe(false)
+    expect(existsSync(join(targetDir, 'server/guards'))).toBe(false)
+    expect(existsSync(join(targetDir, 'server/store.ts'))).toBe(false)
+  })
+
+  it('should include database and route files (Rails DX parity)', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'rails-dx-test')
+
+    // Database layer
+    expect(existsSync(join(targetDir, 'server/db/schema.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'server/db/index.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'server/db/seed.ts'))).toBe(true)
+
+    // Routes with directory structure (EC-1)
+    expect(existsSync(join(targetDir, 'server/routes/tasks/index.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'server/routes/tasks/[id].ts'))).toBe(true)
+
+    // Tests
+    expect(existsSync(join(targetDir, 'tests/tasks.test.ts'))).toBe(true)
+
+    // .gitignore includes data/
+    const gitignore = readFileSync(join(targetDir, '.gitignore'), 'utf-8')
+    expect(gitignore).toContain('data/')
+  })
+
+  it('should include drizzle.config.ts for migrations', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'drizzle-config-test')
+
+    expect(existsSync(join(targetDir, 'drizzle.config.ts'))).toBe(true)
+    const config = readFileSync(join(targetDir, 'drizzle.config.ts'), 'utf-8')
+    expect(config).toContain("dialect: 'sqlite'")
+    expect(config).toContain('./server/db/schema.ts')
+    expect(config).toContain('./data/dev.db')
+  })
+
+  it('should have drizzle-kit and eslint-plugin-drizzle as devDependencies', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'drizzle-deps-test')
+
+    const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+    expect(pkg.devDependencies['drizzle-kit']).toBeDefined()
+    expect(pkg.devDependencies['eslint-plugin-drizzle']).toBeDefined()
+  })
+
+  it('should have db:migrate, db:seed, db:generate scripts', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'db-scripts-test')
+
+    const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+    expect(pkg.scripts['db:migrate']).toBe('theokit db migrate')
+    expect(pkg.scripts['db:seed']).toBe('npx tsx server/db/seed.ts')
+    expect(pkg.scripts['db:generate']).toBe('theokit db generate')
+  })
+
+  it('should have eslint config with drizzle enforce rules', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'eslint-drizzle-test')
+
+    const eslintConfig = readFileSync(join(targetDir, 'eslint.config.mjs'), 'utf-8')
+    expect(eslintConfig).toContain('eslint-plugin-drizzle')
+    expect(eslintConfig).toContain('enforce-delete-with-where')
+    expect(eslintConfig).toContain('enforce-update-with-where')
+  })
+
+  it('should have theo.config.ts without httpDecoratorsPlugin', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'config-test')
+
+    const config = readFileSync(join(targetDir, 'theo.config.ts'), 'utf-8')
+    expect(config).toContain('defineConfig')
+    expect(config).not.toContain('httpDecoratorsPlugin')
+    expect(config).not.toContain('@theokit/http')
+  })
+
+  it('should import globals.css from app/ not public/', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'css-test')
+
+    expect(existsSync(join(targetDir, 'app/globals.css'))).toBe(true)
+    expect(existsSync(join(targetDir, 'public/globals.css'))).toBe(false)
+    const layout = readFileSync(join(targetDir, 'app/layout.tsx'), 'utf-8')
+    expect(layout).toContain("import './globals.css'")
+    expect(layout).not.toContain('<link rel="stylesheet"')
+  })
+
+  it('should have React hooks in page.tsx instead of vanilla JS', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'hooks-test')
+
+    const page = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
+    expect(page).toContain('useState')
+    expect(page).toContain('useEffect')
+    expect(page).not.toContain('<script src')
   })
 
   it('should preserve non-tmpl files from the template', () => {

@@ -6,17 +6,45 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import 'reflect-metadata'
 import { z } from 'zod'
 import {
-  Controller, Get, Post, Put, Delete, Patch,
-  Body, Param, Query, Headers, Ip,
-  HttpCode, Header, Redirect,
-  UseGuards, UseInterceptors, UseFilters,
-  HttpException, NotFoundException, BadRequestException, ForbiddenException,
-  ConflictException, TooManyRequestsException, UnprocessableEntityException,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Patch,
+  Body,
+  Param,
+  Query,
+  Headers,
+  Ip,
+  HttpCode,
+  Header,
+  Redirect,
+  UseGuards,
+  UseInterceptors,
+  UseFilters,
+  HttpException,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  ConflictException,
+  TooManyRequestsException,
+  UnprocessableEntityException,
   HttpStatus,
 } from '../../src/index.js'
-import type { CanActivate, NestInterceptor, ExceptionFilter, ArgumentsHost, ExecutionContext } from '../../src/index.js'
+import type {
+  CanActivate,
+  NestInterceptor,
+  ExceptionFilter,
+  ArgumentsHost,
+  ExecutionContext,
+} from '../../src/index.js'
 import { TheoApp } from '../../src/app.js'
 import { createTypedClient, TypedClientError } from '../../src/index.js'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ═══════════════════════════════════════
 //  FIXTURES — controllers, guards, etc.
@@ -38,7 +66,9 @@ const Roles = (roles: string[]): ClassDecorator & MethodDecorator =>
 
 class RoleGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
-    const methodRoles = Reflect.getMetadata(ROLES_KEY, ctx.getClass(), ctx.getMethodName()) as string[] | undefined
+    const methodRoles = Reflect.getMetadata(ROLES_KEY, ctx.getClass(), ctx.getMethodName()) as
+      | string[]
+      | undefined
     const classRoles = Reflect.getMetadata(ROLES_KEY, ctx.getClass()) as string[] | undefined
     const roles = methodRoles ?? classRoles ?? []
     if (roles.length === 0) return true
@@ -60,11 +90,14 @@ class TimingInterceptor implements NestInterceptor {
 class CustomErrorFilter implements ExceptionFilter {
   catch(exception: unknown, _host: ArgumentsHost): Response {
     const ex = exception as HttpException
-    return new Response(JSON.stringify({
-      custom: true,
-      status: ex.statusCode,
-      msg: ex.message,
-    }), { status: ex.statusCode, headers: { 'content-type': 'application/json' } })
+    return new Response(
+      JSON.stringify({
+        custom: true,
+        status: ex.statusCode,
+        msg: ex.message,
+      }),
+      { status: ex.statusCode, headers: { 'content-type': 'application/json' } },
+    )
   }
 }
 
@@ -73,20 +106,24 @@ class CustomErrorFilter implements ExceptionFilter {
 @Controller('api/items')
 class ItemsController {
   @Get()
-  list() { return store }
+  list() {
+    return store
+  }
 
   @Get('count')
-  count() { return { count: store.length } }
+  count() {
+    return { count: store.length }
+  }
 
   @Get('search')
   search(@Query('q') q: string, @Query('limit') limit: string) {
     const l = Number(limit) || 10
-    return store.filter(s => s.name.includes(q ?? '')).slice(0, l)
+    return store.filter((s) => s.name.includes(q ?? '')).slice(0, l)
   }
 
   @Get(':id')
   findById(@Param('id') id: string) {
-    const item = store.find(s => s.id === Number(id))
+    const item = store.find((s) => s.id === Number(id))
     if (!item) throw new NotFoundException(`Item ${id} not found`)
     return item
   }
@@ -100,7 +137,7 @@ class ItemsController {
 
   @Put(':id')
   replace(@Param('id') id: string, @Body(zCreate) body: { name: string }) {
-    const item = store.find(s => s.id === Number(id))
+    const item = store.find((s) => s.id === Number(id))
     if (!item) throw new NotFoundException(`Item ${id} not found`)
     item.name = body.name
     return item
@@ -108,7 +145,7 @@ class ItemsController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Body(zUpdate) body: { name?: string; done?: boolean }) {
-    const item = store.find(s => s.id === Number(id))
+    const item = store.find((s) => s.id === Number(id))
     if (!item) throw new NotFoundException(`Item ${id} not found`)
     if (body.name !== undefined) item.name = body.name
     if (body.done !== undefined) item.done = body.done
@@ -118,7 +155,7 @@ class ItemsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {
-    const idx = store.findIndex(s => s.id === Number(id))
+    const idx = store.findIndex((s) => s.id === Number(id))
     if (idx === -1) throw new NotFoundException(`Item ${id} not found`)
     store.splice(idx, 1)
   }
@@ -134,11 +171,15 @@ class HeadersController {
   @Get('set')
   @Header('x-powered-by', 'TheoKit')
   @Header('x-version', '1.0')
-  withHeaders() { return { ok: true } }
+  withHeaders() {
+    return { ok: true }
+  }
 
   @Get('redirect')
   @Redirect('https://theokit.dev', 302)
-  redirected() { return null }
+  redirected() {
+    return null
+  }
 }
 
 @Controller('api/guarded')
@@ -146,40 +187,66 @@ class HeadersController {
 @Roles(['admin'])
 class GuardedController {
   @Get()
-  adminOnly() { return { secret: 'admin-data' } }
+  adminOnly() {
+    return { secret: 'admin-data' }
+  }
 
   @Get('public')
   @Roles([]) // override: no role required
-  publicRoute() { return { public: true } }
+  publicRoute() {
+    return { public: true }
+  }
 }
 
 @Controller('api/intercepted')
 @UseInterceptors(TimingInterceptor)
 class InterceptedController {
   @Get()
-  data() { return { value: 42 } }
+  data() {
+    return { value: 42 }
+  }
 }
 
 @Controller('api/filtered')
 @UseFilters(CustomErrorFilter)
 class FilteredController {
   @Get('error')
-  throwError() { throw new BadRequestException('Custom filtered error') }
+  throwError() {
+    throw new BadRequestException('Custom filtered error')
+  }
 
   @Get('ok')
-  ok() { return { filtered: true } }
+  ok() {
+    return { filtered: true }
+  }
 }
 
 @Controller('api/exceptions')
 class ExceptionsController {
-  @Get('400') bad() { throw new BadRequestException() }
-  @Get('401') unauth() { throw new HttpException('Login required', 401) }
-  @Get('403') forbidden() { throw new ForbiddenException('Access denied') }
-  @Get('404') notfound() { throw new NotFoundException() }
-  @Get('409') conflict() { throw new ConflictException('Already exists') }
-  @Get('422') unprocessable() { throw new UnprocessableEntityException('Invalid data') }
-  @Get('429') ratelimit() { throw new TooManyRequestsException('Slow down') }
-  @Get('500') internal() { throw new Error('should be scrubbed') }
+  @Get('400') bad() {
+    throw new BadRequestException()
+  }
+  @Get('401') unauth() {
+    throw new HttpException('Login required', 401)
+  }
+  @Get('403') forbidden() {
+    throw new ForbiddenException('Access denied')
+  }
+  @Get('404') notfound() {
+    throw new NotFoundException()
+  }
+  @Get('409') conflict() {
+    throw new ConflictException('Already exists')
+  }
+  @Get('422') unprocessable() {
+    throw new UnprocessableEntityException('Invalid data')
+  }
+  @Get('429') ratelimit() {
+    throw new TooManyRequestsException('Slow down')
+  }
+  @Get('500') internal() {
+    throw new Error('should be scrubbed')
+  }
 
   @Get('custom')
   custom() {
@@ -191,53 +258,86 @@ class ExceptionsController {
 class StatusController {
   @Post('created')
   @HttpCode(HttpStatus.CREATED)
-  created(@Body(z.object({ v: z.number() })) body: { v: number }) { return { v: body.v } }
+  created(@Body(z.object({ v: z.number() })) body: { v: number }) {
+    return { v: body.v }
+  }
 
   @Post('accepted')
   @HttpCode(HttpStatus.ACCEPTED)
-  accepted() { return { queued: true } }
+  accepted() {
+    return { queued: true }
+  }
 
   @Delete('gone')
   @HttpCode(HttpStatus.NO_CONTENT)
-  gone() { return undefined }
+  gone() {
+    return undefined
+  }
 
   @Get('string')
-  text() { return 'plain text response' }
+  text() {
+    return 'plain text response'
+  }
 
   @Get('null')
-  empty() { return null }
+  empty() {
+    return null
+  }
 
   @Get('undefined')
-  nothing() { return undefined }
+  nothing() {
+    return undefined
+  }
 }
 
 @Controller('api/validation')
 class ValidationController {
   @Post('strict')
-  strict(@Body(z.object({
-    email: z.string().email(),
-    age: z.number().int().min(0).max(150),
-    role: z.enum(['user', 'admin']),
-  })) body: unknown) { return body }
+  strict(
+    @Body(
+      z.object({
+        email: z.email(),
+        age: z.number().int().min(0).max(150),
+        role: z.enum(['user', 'admin']),
+      }),
+    )
+    body: unknown,
+  ) {
+    return body
+  }
 
   @Post('nested')
-  nested(@Body(z.object({
-    user: z.object({ name: z.string(), tags: z.array(z.string()) }),
-  })) body: unknown) { return body }
+  nested(
+    @Body(
+      z.object({
+        user: z.object({ name: z.string(), tags: z.array(z.string()) }),
+      }),
+    )
+    body: unknown,
+  ) {
+    return body
+  }
 
   @Post('optional')
-  optional(@Body(z.object({
-    required: z.string(),
-    optional: z.string().optional(),
-    defaulted: z.string().default('fallback'),
-  })) body: unknown) { return body }
+  optional(
+    @Body(
+      z.object({
+        required: z.string(),
+        optional: z.string().optional(),
+        defaulted: z.string().default('fallback'),
+      }),
+    )
+    body: unknown,
+  ) {
+    return body
+  }
 }
 
 // ═══════════════════════════════════════
 //  TESTS
 // ═══════════════════════════════════════
 
-describe('Comprehensive E2E — TheoKit HTTP', () => {
+describe.skipIf(!isVitest)('Comprehensive E2E — TheoKit HTTP', () => {
   let app: TheoApp
   let base: string
 
@@ -246,20 +346,25 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
     nextId = 1
     app = await TheoApp.create({
       controllers: [
-        ItemsController, HeadersController, GuardedController,
-        InterceptedController, FilteredController, ExceptionsController,
-        StatusController, ValidationController,
+        ItemsController,
+        HeadersController,
+        GuardedController,
+        InterceptedController,
+        FilteredController,
+        ExceptionsController,
+        StatusController,
+        ValidationController,
       ],
-      readinessChecks: [
-        async () => ({ name: 'store', healthy: true }),
-      ],
+      readinessChecks: [async () => ({ name: 'store', healthy: true })],
     })
     const h = app.getServerHandle()
-    await new Promise<void>(r => h.listen(0, r))
+    await new Promise<void>((r) => h.listen(0, r))
     base = `http://localhost:${h.address()?.port}`
   })
 
-  afterAll(async () => { await app.close() })
+  afterAll(async () => {
+    await app.close()
+  })
 
   const json = async (path: string, init?: RequestInit) => {
     const res = await fetch(`${base}${path}`, init)
@@ -280,7 +385,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('POST /api/items creates item', async () => {
       const { status, body } = await json('/api/items', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: 'First' }),
       })
       expect(status).toBe(201)
@@ -289,7 +395,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('POST /api/items creates second item', async () => {
       const { status, body } = await json('/api/items', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: 'Second' }),
       })
       expect(status).toBe(201)
@@ -309,7 +416,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('PUT /api/items/1 replaces item', async () => {
       const { body } = await json('/api/items/1', {
-        method: 'PUT', headers: { 'content-type': 'application/json' },
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: 'Updated' }),
       })
       expect(body.name).toBe('Updated')
@@ -317,7 +425,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('PATCH /api/items/1 partially updates', async () => {
       const { body } = await json('/api/items/1', {
-        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ done: true }),
       })
       expect(body.done).toBe(true)
@@ -360,7 +469,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
   describe('Zod validation', () => {
     it('rejects empty body', async () => {
       const { status } = await json('/api/items', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({}),
       })
       expect(status).toBe(422)
@@ -368,7 +478,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('rejects name too short (empty string)', async () => {
       const { status } = await json('/api/items', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: '' }),
       })
       expect(status).toBe(422)
@@ -376,7 +487,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('rejects wrong type (number instead of string)', async () => {
       const { status } = await json('/api/items', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: 12345 }),
       })
       expect(status).toBe(422)
@@ -384,7 +496,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('rejects malformed JSON', async () => {
       const res = await fetch(`${base}/api/items`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: '{not json',
       })
       // Malformed JSON → body parse catch sets body=undefined → validation skips (no body to validate)
@@ -394,7 +507,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('accepts valid strict schema', async () => {
       const { status, body } = await json('/api/validation/strict', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: 'test@test.com', age: 25, role: 'user' }),
       })
       expect(status).toBe(201)
@@ -403,7 +517,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('rejects invalid email', async () => {
       const { status } = await json('/api/validation/strict', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: 'not-email', age: 25, role: 'user' }),
       })
       expect(status).toBe(422)
@@ -411,7 +526,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('rejects age out of range', async () => {
       const { status } = await json('/api/validation/strict', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: 'a@b.com', age: 200, role: 'user' }),
       })
       expect(status).toBe(422)
@@ -419,7 +535,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('rejects invalid enum value', async () => {
       const { status } = await json('/api/validation/strict', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: 'a@b.com', age: 25, role: 'superadmin' }),
       })
       expect(status).toBe(422)
@@ -427,7 +544,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('validates nested objects', async () => {
       const { status } = await json('/api/validation/nested', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ user: { name: 'test', tags: ['a', 'b'] } }),
       })
       expect(status).toBe(201)
@@ -435,7 +553,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('rejects invalid nested', async () => {
       const { status } = await json('/api/validation/nested', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ user: { name: 123 } }),
       })
       expect(status).toBe(422)
@@ -443,7 +562,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('handles optional fields', async () => {
       const { status, body } = await json('/api/validation/optional', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ required: 'yes' }),
       })
       expect(status).toBe(201)
@@ -457,7 +577,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
   describe('Status codes', () => {
     it('POST returns 201 by default', async () => {
       const { status } = await json('/api/items', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: 'StatusTest' }),
       })
       expect(status).toBe(201)
@@ -465,7 +586,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('@HttpCode(CREATED) returns 201', async () => {
       const { status } = await json('/api/status/created', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ v: 42 }),
       })
       expect(status).toBe(201)
@@ -473,7 +595,8 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
     it('@HttpCode(ACCEPTED) returns 202', async () => {
       const { status } = await json('/api/status/accepted', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: '{}',
       })
       expect(status).toBe(202)
@@ -678,25 +801,25 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
 
   describe('TypedClient', () => {
     it('GET works', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`)
-      const items = await client.get('/api/items') as unknown[]
+      const client = createTypedClient<Record<string, { response: unknown }>>(base)
+      const items = (await client.get('/api/items')) as unknown[]
       expect(Array.isArray(items)).toBe(true)
     })
 
     it('POST works', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`)
-      const item = await client.post('/api/items', { name: 'ClientItem' }) as { name: string }
+      const client = createTypedClient<Record<string, { response: unknown }>>(base)
+      const item = (await client.post('/api/items', { name: 'ClientItem' })) as { name: string }
       expect(item.name).toBe('ClientItem')
     })
 
     it('DELETE works', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`)
+      const client = createTypedClient<Record<string, { response: unknown }>>(base)
       const result = await client.delete('/api/items/1')
       expect(result).toBeUndefined()
     })
 
     it('error throws TypedClientError', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`)
+      const client = createTypedClient<Record<string, { response: unknown }>>(base)
       try {
         await client.get('/api/items/99999')
         expect.fail('should throw')
@@ -707,7 +830,7 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
     })
 
     it('validation error is TypedClientError', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`)
+      const client = createTypedClient<Record<string, { response: unknown }>>(base)
       try {
         await client.post('/api/items', { name: '' })
         expect.fail('should throw')
@@ -717,8 +840,10 @@ describe('Comprehensive E2E — TheoKit HTTP', () => {
     })
 
     it('custom headers forwarded', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(`${base}`, { 'x-custom': 'from-client' })
-      const result = await client.get('/api/headers/echo') as { custom: string }
+      const client = createTypedClient<Record<string, { response: unknown }>>(base, {
+        'x-custom': 'from-client',
+      })
+      const result = (await client.get('/api/headers/echo')) as { custom: string }
       expect(result.custom).toBe('from-client')
     })
   })

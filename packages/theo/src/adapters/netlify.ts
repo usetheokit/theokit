@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-non-literal-fs-filename --
  * Netlify deploy adapter. All paths derived from `cwd` and a fixed
- * `.theo/netlify/` output layout. Build-time tool — no HTTP input.
+ * `.theokit/netlify/` output layout. Build-time tool — no HTTP input.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'

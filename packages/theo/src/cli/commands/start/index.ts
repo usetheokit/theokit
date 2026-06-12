@@ -51,7 +51,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
   await configureAgentRegistryFromConfig(config.agents?.registry)
   await configureStorageManagerFromConfig(config.storage)
 
-  const distDir = resolve(cwd, '.theo')
+  const distDir = resolve(cwd, '.theokit')
   const clientDir = resolve(distDir, 'client')
   const serverDir = resolve(cwd, 'server')
 

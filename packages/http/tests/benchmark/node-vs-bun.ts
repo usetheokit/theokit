@@ -6,8 +6,8 @@
  *   bun tests/benchmark/node-vs-bun.ts
  */
 import 'reflect-metadata'
-import { Controller, Get } from '../../src/decorators/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
+import { Controller, Get } from '../../src/decorators/index.js'
 
 @Controller('bench')
 class BenchController {
@@ -25,7 +25,12 @@ await new Promise<void>((resolve) => {
 const port = (server.address() as { port: number }).port
 const url = `http://localhost:${port}/bench`
 
-const runtime = typeof globalThis.Deno !== 'undefined' ? 'Deno' : typeof globalThis.Bun !== 'undefined' ? 'Bun' : 'Node'
+function detectRuntime(): string {
+  if (typeof globalThis.Deno !== 'undefined') return 'Deno'
+  if (typeof globalThis.Bun !== 'undefined') return 'Bun'
+  return 'Node'
+}
+const runtime = detectRuntime()
 const WARMUP = 100
 const REQUESTS = 2000
 
@@ -43,10 +48,15 @@ for (let i = 0; i < REQUESTS; i++) {
 const elapsed = performance.now() - start
 const rps = Math.round((REQUESTS / elapsed) * 1000)
 
-const version = typeof globalThis.Deno !== 'undefined' ? Deno.version.deno : typeof globalThis.Bun !== 'undefined' ? Bun.version : process.version
-console.log(`\n=== ${runtime} v${version} ===`)
-console.log(`  ${REQUESTS} requests in ${elapsed.toFixed(0)}ms`)
-console.log(`  ${rps} req/s`)
-console.log(`  ${(elapsed / REQUESTS).toFixed(2)} ms/req avg`)
+function detectVersion(): string {
+  if (typeof globalThis.Deno !== 'undefined') return Deno.version.deno
+  if (typeof globalThis.Bun !== 'undefined') return Bun.version as string
+  return process.version
+}
+const version = detectVersion()
+console.warn(`\n=== ${runtime} v${version} ===`)
+console.warn(`  ${REQUESTS} requests in ${elapsed.toFixed(0)}ms`)
+console.warn(`  ${rps} req/s`)
+console.warn(`  ${(elapsed / REQUESTS).toFixed(2)} ms/req avg`)
 
 server.close()

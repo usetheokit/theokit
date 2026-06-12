@@ -50,10 +50,11 @@ interface BindingProbe {
 }
 
 const BINDINGS_TO_CHECK: readonly BindingProbe[] = [
-  // better-sqlite3 is the only HARD-required native dep at framework boot
-  // (cost ledger + cron persistence + memory index). Other native deps
-  // (@lancedb/lancedb) are opt-in peers — preflight skips them when absent.
-  { pkg: 'better-sqlite3', required: true },
+  // better-sqlite3 is optional — used by cost ledger, cron persistence, memory index
+  // when installed. Framework boots fine without it. The dev adds it to their
+  // project's package.json when they need persistence (Rails pattern: db is in
+  // Gemfile, not in rails gem).
+  { pkg: 'better-sqlite3', required: false },
   { pkg: '@lancedb/lancedb', required: false },
 ]
 
@@ -136,10 +137,9 @@ function checkBindingAbi(cwd: string): { ok: true } | { ok: false; reason: strin
  */
 function readNvmrcFloor(cwd: string): string | undefined {
   const path = join(cwd, '.nvmrc')
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- CLI reads consumer's own .nvmrc; consumer owns cwd
+
   if (!existsSync(path)) return undefined
   try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same
     return readFileSync(path, 'utf8').trim()
   } catch {
     return undefined

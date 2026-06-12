@@ -7,12 +7,17 @@ import { Body, Param } from '../../src/decorators/params.js'
 import { HttpCode } from '../../src/decorators/response.js'
 import { registerControllers } from '../../src/bridge/register-controllers.js'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 const zCreateCat = z.object({ name: z.string() })
 class CreateCatDto {
-  static schema = zCreateCat
+  static readonly schema = zCreateCat
+  name = 'CreateCatDto'
 }
 
-describe('T3.3 — registerControllers', () => {
+describe.skipIf(!isVitest)('T3.3 — registerControllers', () => {
   it('test_register_single_method', () => {
     @Controller('cats')
     class CatsCtrl {
@@ -41,7 +46,12 @@ describe('T3.3 — registerControllers', () => {
     }
     const regs = registerControllers([CatsCtrl])
     expect(regs).toHaveLength(4)
-    expect(regs.map((r) => r.verb).sort()).toEqual(['DELETE', 'GET', 'POST', 'PUT'])
+    expect(regs.map((r) => r.verb).sort((a, b) => a.localeCompare(b))).toEqual([
+      'DELETE',
+      'GET',
+      'POST',
+      'PUT',
+    ])
   })
 
   it('test_register_body_dto', () => {
@@ -83,7 +93,10 @@ describe('T3.3 — registerControllers', () => {
     }
     const regs = registerControllers([CatsCtrl, DogsCtrl])
     expect(regs).toHaveLength(2)
-    expect(regs.map((r) => r.fullPath).sort()).toEqual(['/cats', '/dogs'])
+    expect(regs.map((r) => r.fullPath).sort((a, b) => a.localeCompare(b))).toEqual([
+      '/cats',
+      '/dogs',
+    ])
   })
 
   it('test_register_duplicate_controllers_dedupes_with_warn (EC-5)', () => {

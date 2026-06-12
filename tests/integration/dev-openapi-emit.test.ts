@@ -1,5 +1,5 @@
 /**
- * T1.1 — theokit dev auto-emits .theo/openapi.json when config.openapi defined.
+ * T1.1 — theokit dev auto-emits .theokit/openapi.json when config.openapi defined.
  *
  * Per P#3 plan v1.3 T1.1 + ADRs D3 (hook in theokit core) + D4 (chokidar
  * watcher) + EC-8 absorbed (single-flight guard).
@@ -79,7 +79,7 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     const { reEmitOpenApi } =
       await import('../../packages/theo/src/vite-plugin/openapi-emit/dev-emit.js')
     const serverDir = join(tmpDir, 'server')
-    const distDir = join(tmpDir, '.theo')
+    const distDir = join(tmpDir, '.theokit')
     mkdirSync(serverDir, { recursive: true })
 
     await reEmitOpenApi(serverDir, distDir, {
@@ -99,7 +99,7 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     const { reEmitOpenApi } =
       await import('../../packages/theo/src/vite-plugin/openapi-emit/dev-emit.js')
     const serverDir = join(tmpDir, 'server')
-    const distDir = join(tmpDir, '.theo')
+    const distDir = join(tmpDir, '.theokit')
     mkdirSync(serverDir, { recursive: true })
 
     await reEmitOpenApi(serverDir, distDir, {
@@ -122,7 +122,7 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
 
     // Pass a serverDir that doesn't exist → generateManifest throws → swallowed
     await expect(
-      reEmitOpenApi(join(tmpDir, 'non-existent-dir'), join(tmpDir, '.theo'), {
+      reEmitOpenApi(join(tmpDir, 'non-existent-dir'), join(tmpDir, '.theokit'), {
         servers: [{ url: 'http://localhost:3000' }],
         specVersion: '3.1.0',
         title: 'T',
@@ -140,7 +140,7 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     _resetInFlightForTests()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const serverDir = join(tmpDir, 'server')
-    const distDir = join(tmpDir, '.theo')
+    const distDir = join(tmpDir, '.theokit')
     mkdirSync(serverDir, { recursive: true })
 
     // Fire 2 in rapid succession; second MUST detect inFlight and skip + warn.

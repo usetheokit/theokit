@@ -3,7 +3,7 @@ import type { RouteNode } from '../router/types.js'
 export interface ResolvedPath {
   /** URL path to render, e.g. '/blog/123' */
   url: string
-  /** Output file path relative to .theo/static/, e.g. 'blog/123.html' */
+  /** Output file path relative to .theokit/static/, e.g. 'blog/123.html' */
   filename: string
 }
 

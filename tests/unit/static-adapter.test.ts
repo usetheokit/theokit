@@ -125,11 +125,11 @@ describe('buildStatic — orchestration', () => {
       loadStaticPaths: async () => null,
     })
     expect(Object.keys(written).sort((a, b) => a.localeCompare(b))).toEqual([
-      '/fake/cwd/.theo/static/about.html',
-      '/fake/cwd/.theo/static/index.html',
+      '/fake/cwd/.theokit/static/about.html',
+      '/fake/cwd/.theokit/static/index.html',
     ])
-    expect(written['/fake/cwd/.theo/static/index.html']).toContain('<body>/</body>')
-    expect(written['/fake/cwd/.theo/static/about.html']).toContain('<body>/about</body>')
+    expect(written['/fake/cwd/.theokit/static/index.html']).toContain('<body>/</body>')
+    expect(written['/fake/cwd/.theokit/static/about.html']).toContain('<body>/about</body>')
   })
 
   it('runs node build before rendering', async () => {

@@ -5,13 +5,17 @@ import { getMeta, USE_FILTERS, CATCH_EXCEPTIONS } from '../../src/metadata/index
 import { Get } from '../../src/decorators/methods.js'
 import { Controller } from '../../src/decorators/controller.js'
 import { walkControllerMetadata } from '../../src/bridge/walk-metadata.js'
-import { HttpException, NotFoundException } from '../../src/exceptions/index.js'
+import { HttpException } from '../../src/exceptions/index.js'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 class MyFilter {
   catch() {}
 }
 
-describe('T2.1 — @Catch + @UseFilters decorators', () => {
+describe.skipIf(!isVitest)('T2.1 — @Catch + @UseFilters decorators', () => {
   it('test_catch_stores_exception_types', () => {
     @Catch(HttpException)
     class F {
@@ -39,7 +43,9 @@ describe('T2.1 — @Catch + @UseFilters decorators', () => {
 
   it('test_use_filters_class_level', () => {
     @UseFilters(MyFilter)
-    class Ctrl {}
+    class Ctrl {
+      name = 'Ctrl'
+    }
     expect(getMeta<Function[]>(USE_FILTERS, Ctrl)).toEqual([MyFilter])
   })
 

@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-non-literal-fs-filename --
  * Vercel deploy adapter. All paths derived from `cwd` and a fixed
- * `.theo/vercel/` output layout. Build-time tool — no HTTP input.
+ * `.theokit/vercel/` output layout. Build-time tool — no HTTP input.
  */
 import { existsSync, mkdirSync, writeFileSync, cpSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -136,7 +136,7 @@ export const vercelAdapter: DeployAdapter = {
     // 1. Run the standard Node build first (ctx forwarded so nodeAdapter has makeVitePlugins)
     await nodeAdapter.build(config, cwd, ctx)
 
-    const clientDir = resolve(cwd, '.theo/client')
+    const clientDir = resolve(cwd, '.theokit/client')
     const outputDir = resolve(cwd, '.vercel/output')
 
     // 2. Create .vercel/output structure

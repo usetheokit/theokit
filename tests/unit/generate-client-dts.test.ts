@@ -16,7 +16,7 @@ function mkManifest(routes: TheoManifest['routes']): TheoManifest {
   }
 }
 
-const DTS_OUT = '/proj/.theo/client.d.ts'
+const DTS_OUT = '/proj/.theokit/client.d.ts'
 const SERVER_DIR = '/proj/server'
 
 describe('generateClientDts', () => {

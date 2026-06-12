@@ -97,8 +97,8 @@ describe('T7.4 Sub-fase D — scaffold → build → start E2E', () => {
     } catch {
       // Vite step may fail (no node_modules installed) — manifests still emit
     }
-    const cronsJson = join(projectDir, '.theo/crons.json')
-    const jobsJson = join(projectDir, '.theo/jobs.json')
+    const cronsJson = join(projectDir, '.theokit/crons.json')
+    const jobsJson = join(projectDir, '.theokit/jobs.json')
     expect(existsSync(cronsJson)).toBe(true)
     expect(existsSync(jobsJson)).toBe(true)
     const crons = JSON.parse(readFileSync(cronsJson, 'utf8')) as {

@@ -3,7 +3,7 @@
  * reaches these fs calls.
  */
 // T5a.1b — Web Crypto migration. Build-time only; node:fs + node:path stay
-// because this is a manifest-write leaf (e.g. .theo/jobs.json) and per
+// because this is a manifest-write leaf (e.g. .theokit/jobs.json) and per
 // ADR-0028 the runtime-portable boundary is the request handler, not the
 // scanner. Only node:crypto is swapped out — Web Crypto's
 // getRandomValues works in every supported runtime.
@@ -19,7 +19,7 @@ import { dirname } from 'node:path'
  * filesystem.
  *
  * EC-106 (jobs-crons-webhooks-cost-tracking-plan) — shared helper for
- * `.theo/crons.json` and `.theo/jobs.json` manifest writes so a
+ * `.theokit/crons.json` and `.theokit/jobs.json` manifest writes so a
  * concurrent dev-server scan + build manifest emit never produces
  * partial JSON.
  *

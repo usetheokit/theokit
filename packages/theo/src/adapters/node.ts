@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-non-literal-fs-filename --
  * Node deploy adapter — derives all write paths from the trusted `cwd`
- * (CLI argument). The `.theo/docker-compose.yml` + `.theo/Caddyfile`
+ * (CLI argument). The `.theokit/docker-compose.yml` + `.theokit/Caddyfile`
  * outputs use a fixed sub-path. Build-time tool — no HTTP input.
  */
 import { writeFileSync } from 'node:fs'
@@ -35,7 +35,7 @@ export const nodeAdapter: DeployAdapter = {
       root: cwd,
       plugins: await ctx.makeVitePlugins({ root: cwd, ssr: config.ssr }),
       build: {
-        outDir: '.theo/client',
+        outDir: '.theokit/client',
         emptyOutDir: true,
       },
       logLevel: 'info',
@@ -50,7 +50,7 @@ export const nodeAdapter: DeployAdapter = {
         plugins: await ctx.makeVitePlugins({ root: cwd, ssr: true }),
         build: {
           ssr: true,
-          outDir: '.theo/server',
+          outDir: '.theokit/server',
           emptyOutDir: true,
           rollupOptions: {
             input: '/@theo/entry-server',
@@ -71,11 +71,11 @@ export const nodeAdapter: DeployAdapter = {
         port: config.port,
         webHost: 'web',
       })
-      writeFileSync(join(cwd, '.theo', 'docker-compose.yml'), yaml)
-      writeFileSync(join(cwd, '.theo', 'Caddyfile'), caddyfile)
+      writeFileSync(join(cwd, '.theokit', 'docker-compose.yml'), yaml)
+      writeFileSync(join(cwd, '.theokit', 'Caddyfile'), caddyfile)
       // eslint-disable-next-line no-console -- CLI build progress
       console.log(
-        `  ✓ TheoCloud-shaped harness: .theo/docker-compose.yml + .theo/Caddyfile ` +
+        `  ✓ TheoCloud-shaped harness: .theokit/docker-compose.yml + .theokit/Caddyfile ` +
           `(${String(manifest.services.length)} service(s))`,
       )
     }

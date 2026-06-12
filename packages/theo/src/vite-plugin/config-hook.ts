@@ -61,7 +61,7 @@ export function runConfigHook(ctx: ConfigHookCtx): Record<string, unknown> {
         ignored: [
           '**/referencias/**',
           '**/.theokit/**',
-          '**/.theo/**',
+          '**/.theokit/**',
           '**/dist/**',
           '**/node_modules/**',
         ],
