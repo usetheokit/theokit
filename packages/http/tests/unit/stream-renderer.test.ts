@@ -2,6 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import React from 'react'
 import { renderToString } from 'react-dom/server'
 
+// vi.doMock is vitest-only; skip mock-dependent tests on Bun
+const hasDoMock = typeof vi !== 'undefined' && typeof vi.doMock === 'function'
+
 // Simple test component
 function TestApp() {
   return React.createElement('html', null, React.createElement('body', null, 'Hello Stream'))
@@ -88,7 +91,7 @@ describe('Stream Renderer', () => {
     expect(body).toContain('id="root"')
   })
 
-  it('test_fallback_to_string_when_streaming_false', async () => {
+  it.skipIf(!hasDoMock)('test_fallback_to_string_when_streaming_false', async () => {
     // Given: renderToReadableStream is not available (simulating React 17 — EC-4)
     // We mock at the module level to replace the dynamic import result
     vi.doMock('react-dom/server', () => ({
@@ -116,7 +119,7 @@ describe('Stream Renderer', () => {
     vi.doUnmock('react-dom/server')
   })
 
-  it('test_stream_graceful_fallback_if_no_readable_stream', async () => {
+  it.skipIf(!hasDoMock)('test_stream_graceful_fallback_if_no_readable_stream', async () => {
     // Given: EC-4 — renderToReadableStream is not available
     vi.doMock('react-dom/server', () => ({
       renderToString,

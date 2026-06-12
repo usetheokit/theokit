@@ -1,10 +1,17 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { digestError } from '../../src/error-digest.js'
 import { NotFoundException } from '../../src/exceptions/http-exception.js'
 
 describe('Error Digest', () => {
+  let originalNodeEnv: string | undefined
+
   afterEach(() => {
-    vi.unstubAllEnvs()
+    // Restore original NODE_ENV (works on both vitest and Bun)
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV
+    } else {
+      process.env.NODE_ENV = originalNodeEnv
+    }
   })
 
   it('test_digest_produces_stable_hash', () => {
@@ -50,7 +57,8 @@ describe('Error Digest', () => {
 
   it('test_digest_strips_stack_in_production', () => {
     // Given: production environment
-    vi.stubEnv('NODE_ENV', 'production')
+    originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
     const err = new Error('production error')
 
     // When: digested
@@ -62,7 +70,8 @@ describe('Error Digest', () => {
 
   it('test_digest_keeps_stack_in_development', () => {
     // Given: development environment
-    vi.stubEnv('NODE_ENV', 'development')
+    originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
     const err = new Error('dev error')
 
     // When: digested

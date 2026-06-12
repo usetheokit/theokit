@@ -7,21 +7,27 @@ import type { ControllerMeta } from '../../src/decorators/controller.js'
 describe('T1.4 — @Controller decorator', () => {
   it('test_controller_no_args — infers prefix from class name (convention naming)', () => {
     @Controller()
-    class UsersController {}
+    class UsersController {
+      name = 'UsersController'
+    }
     const meta = getMeta<ControllerMeta>(CONTROLLER_PREFIX, UsersController)
     expect(meta).toEqual({ prefix: 'api/users', host: undefined })
   })
 
   it('test_controller_with_prefix', () => {
     @Controller('cats')
-    class CatsCtrl {}
+    class CatsCtrl {
+      name = 'CatsCtrl'
+    }
     const meta = getMeta<ControllerMeta>(CONTROLLER_PREFIX, CatsCtrl)
     expect(meta?.prefix).toBe('cats')
   })
 
   it('test_controller_with_host', () => {
     @Controller('admin', { host: ':account.example.com' })
-    class AdminCtrl {}
+    class AdminCtrl {
+      name = 'AdminCtrl'
+    }
     const meta = getMeta<ControllerMeta>(CONTROLLER_PREFIX, AdminCtrl)
     expect(meta?.prefix).toBe('admin')
     expect(meta?.host).toBe(':account.example.com')
@@ -29,10 +35,14 @@ describe('T1.4 — @Controller decorator', () => {
 
   it('test_controller_inheritance_last_wins', () => {
     @Controller('parent')
-    class ParentCtrl {}
+    class ParentCtrl {
+      name = 'ParentCtrl'
+    }
 
     @Controller('child')
-    class ChildCtrl extends ParentCtrl {}
+    class ChildCtrl extends ParentCtrl {
+      override name = 'ChildCtrl'
+    }
 
     const parentMeta = getMeta<ControllerMeta>(CONTROLLER_PREFIX, ParentCtrl)
     const childMeta = getMeta<ControllerMeta>(CONTROLLER_PREFIX, ChildCtrl)

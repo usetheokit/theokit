@@ -6,7 +6,7 @@
 
 /** DI container interface — structural match for @theokit/di Container. */
 export interface DiContainer {
-  resolve<T>(token: Function): T
+  resolve(token: Function): unknown
 }
 
 /**
@@ -16,7 +16,7 @@ export interface DiContainer {
 export function resolveOrNew(Ctor: Function, container?: DiContainer): object {
   if (container) {
     try {
-      return container.resolve(Ctor)
+      return container.resolve(Ctor) as object
     } catch {
       // MissingInjectableError or similar — fall back to bare new
     }

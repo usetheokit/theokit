@@ -14,20 +14,26 @@ import {
 describe('T1.2 — Metadata storage', () => {
   it('test_set_get_roundtrip', () => {
     const key = Symbol('test-roundtrip')
-    class Target {}
+    class Target {
+      name = 'Target'
+    }
     setMeta(key, Target, 'hello')
     expect(getMeta<string>(key, Target)).toBe('hello')
   })
 
   it('test_missing_key_returns_undefined', () => {
     const key = Symbol('test-missing')
-    class Target {}
+    class Target {
+      name = 'Target'
+    }
     expect(getMeta(key, Target)).toBeUndefined()
   })
 
   it('test_property_key_isolation', () => {
     const key = Symbol('test-isolation')
-    class Target {}
+    class Target {
+      name = 'Target'
+    }
     setMeta(key, Target, 'class-level')
     setMeta(key, Target, 'method-level', 'myMethod')
     expect(getMeta<string>(key, Target)).toBe('class-level')

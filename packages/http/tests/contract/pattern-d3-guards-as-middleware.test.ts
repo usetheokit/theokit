@@ -6,6 +6,10 @@ import { UseGuards, UseInterceptors } from '../../src/decorators/middleware.js'
 import { walkControllerMetadata } from '../../src/bridge/walk-metadata.js'
 import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 class AuthGuard {
   canActivate(_context: ExecutionContext) {
     return true
@@ -15,7 +19,7 @@ class LogInterceptor {
   intercept() {}
 }
 
-describe('Pattern D3 — Guards/Interceptors as defineMiddleware wraps', () => {
+describe.skipIf(!isVitest)('Pattern D3 — Guards/Interceptors as defineMiddleware wraps', () => {
   it('test_pattern_d3_use_guards_metadata_captured', () => {
     @Controller('secure')
     class SecureCtrl {

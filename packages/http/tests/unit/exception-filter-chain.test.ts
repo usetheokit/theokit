@@ -12,15 +12,19 @@ import {
   BadRequestException,
 } from '../../src/exceptions/index.js'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 const fakeReq = new Request('http://localhost/test')
 
-describe('T2.2 — Exception filter chain', () => {
+describe.skipIf(!isVitest)('T2.2 — Exception filter chain', () => {
   it('test_filter_catches_matching_exception', async () => {
     const log: string[] = []
 
     @Catch(NotFoundException)
     class NotFoundFilter implements ExceptionFilter {
-      catch(ex: unknown, host: ArgumentsHost) {
+      catch(_ex: unknown, _host: ArgumentsHost) {
         log.push('caught')
         return new Response(JSON.stringify({ custom: true }), { status: 404 })
       }
@@ -49,7 +53,7 @@ describe('T2.2 — Exception filter chain', () => {
 
     @Catch()
     class CatchAllFilter implements ExceptionFilter {
-      catch(_ex: unknown, host: ArgumentsHost) {
+      catch(_ex: unknown, _host: ArgumentsHost) {
         log.push('catch-all')
         return new Response('{}', { status: 500 })
       }
@@ -99,13 +103,15 @@ describe('T2.2 — Exception filter chain', () => {
     @Catch(HttpException)
     class DIFilter implements ExceptionFilter {
       constructor(public label: string) {}
-      catch(_ex: unknown, host: ArgumentsHost) {
+      catch(_ex: unknown, _host: ArgumentsHost) {
         return new Response(JSON.stringify({ label: this.label }), { status: 418 })
       }
     }
+    const registry = new Map<Function, unknown>([[DIFilter, new DIFilter('from-di')]])
     const container = {
-      resolve: <T>(token: Function): T => {
-        if (token === DIFilter) return new DIFilter('from-di') as T
+      resolve: (token: Function): unknown => {
+        const instance = registry.get(token)
+        if (instance) return instance
         throw new Error('not found')
       },
     }

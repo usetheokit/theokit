@@ -4,10 +4,14 @@ import { resolve } from 'node:path'
 import { loadControllerWithSwc, loadControllersFromGlob } from '../../src/bridge/swc-loader.js'
 import { walkControllerMetadata } from '../../src/bridge/walk-metadata.js'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 const FIXTURE_ROOT = resolve(__dirname, '../../../../fixtures/decorator-fullstack')
 const CONTROLLER_PATH = resolve(FIXTURE_ROOT, 'server/controllers/tasks.controller.ts')
 
-describe('SWC Loader', () => {
+describe.skipIf(!isVitest)('SWC Loader', () => {
   describe('loadControllerWithSwc', () => {
     it('should load a controller file with parameter decorators via SWC', async () => {
       const mod = await loadControllerWithSwc(CONTROLLER_PATH)
