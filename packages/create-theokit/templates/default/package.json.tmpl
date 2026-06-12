@@ -7,6 +7,8 @@
     "dev": "theokit dev",
     "build": "theokit build",
     "start": "theokit start",
+    "test": "vitest run",
+    "seed": "npx tsx server/db/seed.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -18,16 +20,19 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^7.0.0",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "drizzle-orm": "^0.44.0",
+    "better-sqlite3": "^12.0.0"
   },
   "devDependencies": {
-    "@swc/core": "^1.3.0",
+    "@types/better-sqlite3": "^7.6.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.5.0",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
   }
 }

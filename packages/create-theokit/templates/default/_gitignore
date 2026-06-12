@@ -25,6 +25,9 @@ pnpm-debug.log*
 *.pem
 *.tsbuildinfo
 
+# database
+data/
+
 # editors
 .vscode/
 .idea/

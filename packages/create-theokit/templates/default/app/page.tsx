@@ -8,20 +8,12 @@ interface Task {
   priority: 'high' | 'medium' | 'low'
   done: boolean
 }
-type Role = '' | 'user' | 'admin'
 
 export default function Page() {
   const [tasks, setTasks] = useState<Task[]>([])
-  const [role, setRole] = useState<Role>('user')
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<Task['priority']>('medium')
   const [formError, setFormError] = useState('')
-
-  const hdrs = useCallback((): Record<string, string> => {
-    const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (role) h['x-role'] = role
-    return h
-  }, [role])
 
   const loadTasks = useCallback(async () => {
     const res = await fetch('/api/tasks')
@@ -38,13 +30,9 @@ export default function Page() {
     if (!title.trim()) return
     const res = await fetch('/api/tasks', {
       method: 'POST',
-      headers: hdrs(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, priority }),
     })
-    if (res.status === 403) {
-      setFormError('403 — Need User role')
-      return
-    }
     if (!res.ok) {
       const b = await res.json()
       setFormError(b.error?.issues?.[0]?.message ?? `Error ${res.status}`)
@@ -85,20 +73,10 @@ export default function Page() {
           </p>
         </header>
 
-        {/* Role */}
-        <div className="role-bar">
-          <label htmlFor="role">Role:</label>
-          <select id="role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="">None (public)</option>
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-
         {/* Tasks */}
         <section className="card">
           <h2>
-            Tasks <span className="badge">@Controller</span>
+            Tasks <span className="badge">defineRoute + Drizzle</span>
           </h2>
           <table>
             <thead>
@@ -147,16 +125,15 @@ export default function Page() {
         {/* Features */}
         <div className="grid features">
           <div className="feature">
-            <h3>@Controller</h3>
+            <h3>defineRoute</h3>
             <p>
-              NestJS-style decorators with convention naming. <code>TasksController</code> →{' '}
-              <code>/api/tasks</code>
+              Typed API routes with Zod validation. See <code>server/routes/tasks/</code>
             </p>
           </div>
           <div className="feature">
-            <h3>defineRoute</h3>
+            <h3>Drizzle + SQLite</h3>
             <p>
-              Typed API routes with Zod validation. See <code>server/routes/health.ts</code>
+              Type-safe database with zero config. Schema in <code>server/db/schema.ts</code>
             </p>
           </div>
           <div className="feature">
