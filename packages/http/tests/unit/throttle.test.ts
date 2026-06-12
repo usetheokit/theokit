@@ -8,7 +8,11 @@ import {
 } from '../../src/decorators/throttle.js'
 import { Controller, Get, Post } from '../../src/index.js'
 
-describe('@Throttle + @SkipThrottle bridge decorators', () => {
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
+describe.skipIf(!isVitest)('@Throttle + @SkipThrottle bridge decorators', () => {
   it('test_throttle_on_class_stores_options', () => {
     @Throttle({ limit: 100, ttl: 60_000 })
     @Controller('tasks')

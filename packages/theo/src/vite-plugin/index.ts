@@ -163,18 +163,18 @@ export async function theoPluginAsync(
   const appClientPlugin = appTypedClientPlugin({
     cwd: projectRoot,
     serverDir: resolve(projectRoot, 'server'),
-    distDir: resolve(projectRoot, '.theo'),
+    distDir: resolve(projectRoot, '.theokit'),
   })
 
   // G3 — actions virtual module (`@theo/actions`). Always wired; the plugin
   // emits an empty `{}` facade when `server/actions/` is absent so consumers
   // can still `import { actions } from '@theo/actions'` without breakage.
-  // The `distDir` opt enables `.theo/actions.d.ts` emit so TS resolves the
+  // The `distDir` opt enables `.theokit/actions.d.ts` emit so TS resolves the
   // virtual module ambient declaration in consumer apps.
   const { actionsVirtualModule } = await import('./actions-virtual-module.js')
   const actionsPlugin = actionsVirtualModule({
     serverDir: resolve(projectRoot, 'server'),
-    distDir: resolve(projectRoot, '.theo'),
+    distDir: resolve(projectRoot, '.theokit'),
   })
 
   // G6 T1.2 — server-routes HMR. Watches `<serverDir>/routes/**` and
@@ -270,7 +270,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
   let devtoolsEnabled = true
   // P#3 T1.1 — OpenAPI dev-emit config. undefined = opt-out (no behavior).
   let resolvedOpenApi: ResolvedOpenApi | undefined
-  let resolvedDistDir = '.theo'
+  let resolvedDistDir = '.theokit'
   // Dev mode flag set in configureServer. transformIndexHtml runs in both
   // dev and build; we only want to inject during dev. Wrapped in a ref
   // struct so sub-hooks (configure-server-hook, transform-html-hook) can

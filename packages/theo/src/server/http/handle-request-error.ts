@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-import { AuthRequiredError } from '../auth/auth.js'
+import { isAuthRequiredError } from '../../core/contracts/auth-error-guard.js'
+import { envelopeCodeToStatus } from '../../core/contracts/envelope-code-to-status.js'
 import type { PluginContext } from '../plugin-types.js'
 import type { PluginRunner } from '../plugins/plugin-runner.js'
 
@@ -54,15 +55,8 @@ export async function handleRequestError(err: unknown, c: HandleRequestErrorCtx)
     }
   }
 
-  // 2. Auth error detection (instanceof + duck-type fallback)
-  const isAuthError =
-    err instanceof AuthRequiredError ||
-    (err !== null &&
-      typeof err === 'object' &&
-      (err as { code?: unknown }).code === 'AUTH_REQUIRED' &&
-      (err as { status?: unknown }).status === 401)
-
-  if (isAuthError) {
+  // 2. Auth error detection (shape-based guard from core/contracts)
+  if (isAuthRequiredError(err)) {
     const authErr = err as { code: string; message: string; status: number }
     sendError(c.res, authErr.code, authErr.message, authErr.status, undefined, c.requestId)
   } else {
@@ -128,16 +122,8 @@ export async function handleWebRequestError(
   // import pattern as web-handler.ts's parseBodyFull.
   const { serverErrorToEnvelope } = await import('../../core/contracts/server-error-to-envelope.js')
 
-  // 1. Auth-error detection (instanceof + duck-type fallback — same as
-  //    IncomingMessage path for cross-module class-identity safety).
-  const isAuthError =
-    err instanceof AuthRequiredError ||
-    (err !== null &&
-      typeof err === 'object' &&
-      (err as { code?: unknown }).code === 'AUTH_REQUIRED' &&
-      (err as { status?: unknown }).status === 401)
-
-  if (isAuthError) {
+  // 1. Auth-error detection (shape-based guard from core/contracts)
+  if (isAuthRequiredError(err)) {
     const authErr = err as { code?: string; message?: string; status?: number }
     return new Response(
       JSON.stringify({
@@ -157,7 +143,7 @@ export async function handleWebRequestError(
   // 2. Envelope translation for everything else (G5 D3 boundary).
   const envelope = serverErrorToEnvelope(err)
   return new Response(JSON.stringify(envelope), {
-    status: envelopeCodeToHttpStatus(envelope.code),
+    status: envelopeCodeToStatus(envelope.code),
     headers: {
       'content-type': 'application/json',
       ...(ctx.requestId !== undefined ? { 'x-request-id': ctx.requestId } : {}),
@@ -165,40 +151,5 @@ export async function handleWebRequestError(
   })
 }
 
-/**
- * T5a.2 Phase G slice 3/N — internal HTTP-status mapper for envelope codes.
- * Mirror of the inline `envelopeCodeToStatus` table in web-handler.ts;
- * duplicated to avoid a circular dep between handle-request-error and
- * web-handler. The two tables MUST stay in sync — Phase G slice 4/N may
- * consolidate them into a shared core/contracts module.
- */
-function envelopeCodeToHttpStatus(code: string): number {
-  switch (code) {
-    case 'BAD_REQUEST':
-      return 400
-    case 'UNAUTHORIZED':
-      return 401
-    case 'FORBIDDEN':
-      return 403
-    case 'NOT_FOUND':
-      return 404
-    case 'METHOD_NOT_ALLOWED':
-      return 405
-    case 'PAYLOAD_TOO_LARGE':
-      return 413
-    case 'UNPROCESSABLE_ENTITY':
-      return 422
-    case 'TOO_MANY_REQUESTS':
-    case 'RATE_LIMITED':
-      return 429
-    case 'BAD_GATEWAY':
-      return 502
-    case 'SERVICE_UNAVAILABLE':
-      return 503
-    case 'GATEWAY_TIMEOUT':
-      return 504
-    case 'INTERNAL_SERVER_ERROR':
-    default:
-      return 500
-  }
-}
+// envelopeCodeToStatus extracted to core/contracts/envelope-code-to-status.ts
+// (architecture-remediation T1.2, 2026-06-12)

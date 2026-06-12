@@ -30,7 +30,7 @@ export interface ActionsVirtualModuleOptions {
   /** Path to server directory (where `actions/` lives). */
   serverDir: string
   /**
-   * Optional `.theo/` output dir for emitting `actions.d.ts`. When provided,
+   * Optional `.theokit/` output dir for emitting `actions.d.ts`. When provided,
    * the plugin writes an ambient `declare module '@theo/actions'` so TS in
    * consumer apps can resolve the virtual module import. Mirrors the G1
    * `app-typed-client` emit pattern.
@@ -103,7 +103,7 @@ export function actionsVirtualModule(opts: ActionsVirtualModuleOptions): Plugin 
 }
 
 /**
- * Emit `.theo/actions.d.ts` — ambient declaration of `@theo/actions` so
+ * Emit `.theokit/actions.d.ts` — ambient declaration of `@theo/actions` so
  * consumer TS apps can `import { actions } from '@theo/actions'` and get
  * typed completions for each scanned action name. Each entry maps name to
  * a generic `(input: unknown) => Promise<{data, error}>` invoker — the full

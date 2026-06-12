@@ -5,57 +5,96 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import 'reflect-metadata'
 import { z } from 'zod'
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, NotFoundException } from '../../src/index.js'
+import { Controller, Get, Post, Put, Delete, Body, Param, HttpCode } from '../../src/index.js'
 import { TheoApp } from '../../src/app.js'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ── Convention controllers (NO explicit path) ──
 
 @Controller()
 class UsersController {
-  @Get() list() { return [{ id: 1, name: 'Alice' }] }
-  @Get(':id') find(@Param('id') id: string) { return { id: Number(id), name: 'Alice' } }
-  @Post() create(@Body(z.object({ name: z.string() })) b: { name: string }) { return { id: 2, ...b } }
-  @Put(':id') update(@Param('id') id: string, @Body(z.object({ name: z.string() })) b: { name: string }) { return { id: Number(id), ...b } }
-  @Delete(':id') @HttpCode(204) remove() { return undefined }
+  @Get() list() {
+    return [{ id: 1, name: 'Alice' }]
+  }
+  @Get(':id') find(@Param('id') id: string) {
+    return { id: Number(id), name: 'Alice' }
+  }
+  @Post() create(@Body(z.object({ name: z.string() })) b: { name: string }) {
+    return { id: 2, ...b }
+  }
+  @Put(':id') update(
+    @Param('id') id: string,
+    @Body(z.object({ name: z.string() })) b: { name: string },
+  ) {
+    return { id: Number(id), ...b }
+  }
+  @Delete(':id') @HttpCode(204) remove() {
+    return undefined
+  }
 }
 
 @Controller()
 class ProductsController {
-  @Get() list() { return [{ id: 1, title: 'Widget' }] }
-  @Get(':id') find(@Param('id') id: string) { return { id: Number(id), title: 'Widget' } }
-  @Post() create(@Body(z.object({ title: z.string(), price: z.number() })) b: { title: string; price: number }) { return { id: 2, ...b } }
+  @Get() list() {
+    return [{ id: 1, title: 'Widget' }]
+  }
+  @Get(':id') find(@Param('id') id: string) {
+    return { id: Number(id), title: 'Widget' }
+  }
+  @Post() create(
+    @Body(z.object({ title: z.string(), price: z.number() })) b: { title: string; price: number },
+  ) {
+    return { id: 2, ...b }
+  }
 }
 
 @Controller()
 class OrderItemsController {
-  @Get() list() { return [{ id: 1, orderId: 1, product: 'Widget' }] }
+  @Get() list() {
+    return [{ id: 1, orderId: 1, product: 'Widget' }]
+  }
 }
 
 @Controller()
 class HealthCheckController {
-  @Get() check() { return { status: 'ok' } }
+  @Get() check() {
+    return { status: 'ok' }
+  }
 }
 
 // ── Explicit override controller ──
 @Controller('api/v2/legacy')
 class LegacyController {
-  @Get() list() { return [{ legacy: true }] }
+  @Get() list() {
+    return [{ legacy: true }]
+  }
 }
 
-describe('Convention Naming E2E', () => {
+describe.skipIf(!isVitest)('Convention Naming E2E', () => {
   let app: TheoApp
   let base: string
 
   beforeAll(async () => {
     app = await TheoApp.create({
-      controllers: [UsersController, ProductsController, OrderItemsController, HealthCheckController, LegacyController],
+      controllers: [
+        UsersController,
+        ProductsController,
+        OrderItemsController,
+        HealthCheckController,
+        LegacyController,
+      ],
     })
     const h = app.getServerHandle()
-    await new Promise<void>(r => h.listen(0, r))
+    await new Promise<void>((r) => h.listen(0, r))
     base = `http://localhost:${h.address()?.port}`
   })
 
-  afterAll(async () => { await app.close() })
+  afterAll(async () => {
+    await app.close()
+  })
 
   const json = async (path: string, init?: RequestInit) => {
     const res = await fetch(`${base}${path}`, init)
@@ -78,7 +117,8 @@ describe('Convention Naming E2E', () => {
 
   it('POST /api/users → create', async () => {
     const { status, body } = await json('/api/users', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Bob' }),
     })
     expect(status).toBe(201)
@@ -87,7 +127,8 @@ describe('Convention Naming E2E', () => {
 
   it('PUT /api/users/1 → update', async () => {
     const { status, body } = await json('/api/users/1', {
-      method: 'PUT', headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Updated' }),
     })
     expect(status).toBe(200)
@@ -114,7 +155,8 @@ describe('Convention Naming E2E', () => {
 
   it('POST /api/products → create with validation', async () => {
     const { status } = await json('/api/products', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'Gadget', price: 29.99 }),
     })
     expect(status).toBe(201)
@@ -122,7 +164,8 @@ describe('Convention Naming E2E', () => {
 
   it('POST /api/products → 422 on invalid body', async () => {
     const { status } = await json('/api/products', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 123 }),
     })
     expect(status).toBe(422)

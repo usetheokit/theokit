@@ -14,12 +14,16 @@ import {
 import { getMeta, ROUTE_PARAMS } from '../../src/metadata/index.js'
 import type { ParamEntry } from '../../src/decorators/params.js'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 function getParams(target: Function, method: string): ParamEntry[] {
   const map = getMeta<Map<string | symbol, ParamEntry[]>>(ROUTE_PARAMS, target)
   return map?.get(method) ?? []
 }
 
-describe('T2.1 — Parameter decorators', () => {
+describe.skipIf(!isVitest)('T2.1 — Parameter decorators', () => {
   it('test_each_param_decorator stores correct source', () => {
     const cases: Array<[Function, string]> = [
       [Req, 'req'],

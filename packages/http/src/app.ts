@@ -1,4 +1,4 @@
-/* eslint-disable security/detect-non-literal-regexp, complexity, sonarjs/cognitive-complexity, max-depth, sonarjs/no-collapsible-if */
+/* eslint-disable security/detect-non-literal-regexp, complexity, sonarjs/cognitive-complexity, max-depth, sonarjs/no-collapsible-if, max-lines, max-lines-per-function */
 import 'reflect-metadata'
 
 import { createExecutionContext, type CanActivate } from './bridge/execution-context.js'
@@ -7,6 +7,9 @@ import type { ServerHandle } from './bridge/runtime/types.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
 import { ForbiddenException, HttpException } from './exceptions/http-exception.js'
+import { runWithRequestContext, type TheoRequestContext } from './request-context.js'
+import { createStaticHandler } from './static.js'
+import { renderToStream, streamToResponse } from './stream-renderer.js'
 
 /**
  * TheoApp — NestJS/Spring Boot-style application bootstrap.
@@ -40,12 +43,30 @@ export interface TheoAppOptions {
   ) => (message: string, sessionId: string) => AsyncIterable<unknown>
   /** HTML string to serve at GET / (inline frontend). */
   html?: string
+  /** React root element — framework renders SSR internally (preferred over html). */
+  root?: unknown
+  /** Directory for static file serving (default: 'public', false to disable). */
+  staticDir?: string | false
   /** Readiness checks for GET /__theo/ready (K8s readiness probe). */
   readinessChecks?: ReadinessCheck[]
   /** Custom health endpoint path (default: '/__theo/health'). */
   healthPath?: string
   /** Custom readiness endpoint path (default: '/__theo/ready'). */
   readyPath?: string
+  /**
+   * Enable streaming SSR via `renderToReadableStream` (default: false).
+   *
+   * When `true` AND `root` is provided, the app serves GET / with a streamed
+   * HTML response instead of a static `renderToString` result. This enables
+   * progressive rendering with React Suspense boundaries.
+   *
+   * **EC-7 — Error handling difference:** In streaming mode, errors inside
+   * Suspense boundaries are caught by React's streaming error handler and
+   * activate client-side error boundaries (the shell is already sent). In
+   * string mode, errors throw synchronously before any bytes are sent,
+   * allowing a full 500 error page.
+   */
+  streaming?: boolean
 }
 
 interface RouteEntry {
@@ -62,6 +83,8 @@ export class TheoApp {
   private serverHandle: ServerHandle
   private readonly routes: RouteEntry[] = []
   private frontendHtml?: string
+  private streamingRoot?: unknown
+  private staticHandler?: (request: Request) => Promise<Response | null>
   private readonly startTime = Date.now()
   private readonly healthPath: string
   private readonly readyPath: string
@@ -178,8 +201,21 @@ export class TheoApp {
       entry.needsBody = entry.walk.paramEntries.some((p) => p.source === 'body')
     }
 
-    // Bug #8: Store frontend HTML
-    if (opts.html) app.frontendHtml = opts.html
+    // Frontend HTML — from root (React SSR) or html string
+    if (opts.root && opts.streaming) {
+      // Streaming mode: store the root element; render per-request via renderToStream
+      app.streamingRoot = opts.root
+    } else if (opts.root) {
+      const { renderToString } = await import('react-dom/server')
+      app.frontendHtml = '<!DOCTYPE html>' + renderToString(opts.root as React.ReactElement)
+    } else if (opts.html) {
+      app.frontendHtml = opts.html
+    }
+
+    // Static file serving from public/ (default: enabled)
+    if (opts.staticDir !== false) {
+      app.staticHandler = createStaticHandler({ root: opts.staticDir ?? 'public' })
+    }
 
     // 4. Auto-wire agents (EC-2: AFTER providers and controllers)
     // The framework handles EVERYTHING — walk, compile, mount, stream.
@@ -400,6 +436,24 @@ export class TheoApp {
   private async handleRequest(request: Request): Promise<Response> {
     const pathname = new URL(request.url).pathname
 
+    // Wrap entire request in AsyncLocalStorage context
+    const reqCtx: TheoRequestContext = {
+      request,
+      pathname,
+      method: request.method,
+      params: {},
+      startedAt: Date.now(),
+    }
+    return runWithRequestContext(reqCtx, () =>
+      this.handleRequestInContext(request, pathname, reqCtx),
+    )
+  }
+
+  private async handleRequestInContext(
+    request: Request,
+    pathname: string,
+    _reqCtx: TheoRequestContext,
+  ): Promise<Response> {
     // ── Health & Readiness probes (bypass guards/interceptors) ──
     if (request.method === 'GET') {
       if (pathname === this.healthPath) {
@@ -416,12 +470,24 @@ export class TheoApp {
 
     // Bug #8: Serve frontend HTML at GET /
     if (request.method === 'GET') {
+      if ((pathname === '/' || pathname === '/index.html') && this.streamingRoot) {
+        const result = await renderToStream({
+          root: this.streamingRoot as React.ReactElement,
+        })
+        return streamToResponse(result)
+      }
       if ((pathname === '/' || pathname === '/index.html') && this.frontendHtml) {
         return new Response(this.frontendHtml, {
           status: 200,
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
+    }
+
+    // Static files from public/ (runtime-agnostic — Node/Bun/Deno)
+    if (this.staticHandler && (request.method === 'GET' || request.method === 'HEAD')) {
+      const staticResponse = await this.staticHandler(request)
+      if (staticResponse) return staticResponse
     }
 
     // Agent routes (auto-wired — checked first, with guard enforcement per Bug #4)

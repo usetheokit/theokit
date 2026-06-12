@@ -1,12 +1,8 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * Build-time codemod: paths are derived from `<cwd>/theo.config.ts` (or
- * the supplied `--config` arg). No HTTP input reaches these fs calls.
- */
 /**
  * Plan v1.2 T2.3 + EC-2 — `theokit migrate services-json-v1-to-v2`.
  *
  * Idempotent codemod that injects a top-level `name` field into
- * `theo.config.ts` (and refreshes `.theo/services.json` if a build artifact
+ * `theo.config.ts` (and refreshes `.theokit/services.json` if a build artifact
  * exists). When the resolved `name` would be `services-bundle`, the codemod
  * emits an actionable warning so the operator can decide between:
  *   a) keeping `services-bundle` (zero-downtime — preserves the Gitea repo

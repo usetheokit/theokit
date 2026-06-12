@@ -1,11 +1,15 @@
 import 'reflect-metadata'
-import { describe, it, expect, vi } from 'vitest'
-import http from 'node:http'
+import { describe, it, expect } from 'vitest'
+import type http from 'node:http'
 import { Controller, Get, Post, Body, UseInterceptors, UseGuards } from '../../src/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
 import type { Interceptor } from '../../src/bridge/interceptor-chain.js'
 import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import { z } from 'zod'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ─── Interceptors ───
 
@@ -13,7 +17,7 @@ const interceptorLog: string[] = []
 
 class TimingInterceptor implements Interceptor {
   async intercept(_req: Request, next: () => Promise<unknown>) {
-    const start = Date.now()
+    const _start = Date.now()
     const result = await next()
     interceptorLog.push('timing')
     return result
@@ -65,7 +69,7 @@ class ItemsController {
 
 // ─── Tests ───
 
-describe('T1.2 — Interceptor HTTP roundtrip', () => {
+describe.skipIf(!isVitest)('T1.2 — Interceptor HTTP roundtrip', () => {
   let server: http.Server
   let port: number
 

@@ -6,12 +6,17 @@ import { existsSync, readFileSync } from 'node:fs'
 import { z } from 'zod'
 import http from 'node:http'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 const PKG_ROOT = resolve(__dirname, '../..')
 const DIST = resolve(PKG_ROOT, 'dist')
 
-describe('dist build validation', () => {
+describe.skipIf(!isVitest)('dist build validation', () => {
   beforeAll(() => {
     // Build before tests — ensures dist/ is fresh
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- test deliberately runs build CLI to validate dist output
     execSync('npx tsup', { cwd: PKG_ROOT, stdio: 'pipe' })
   })
 
@@ -37,6 +42,7 @@ describe('dist build validation', () => {
     it('should not bundle @swc/core (externalized as dynamic import)', () => {
       // @swc/core is loaded via dynamic import() — it should appear as a
       // string reference (import("@swc/core")), not as inlined Rust bindings
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- test reads build output to verify externalized deps
       const allDist = execSync('cat dist/*.js dist/chunk-*.js 2>/dev/null', {
         cwd: PKG_ROOT,
         encoding: 'utf-8',
