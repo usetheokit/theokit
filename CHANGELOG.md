@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Circular dependency between `generate-resource.ts` and `generate.ts` — extracted shared types to `generate-types.ts` (#arch-remediation)
+- DRY violation: `envelopeCodeToStatus` duplicated in `web-handler.ts` and `handle-request-error.ts` — consolidated into `core/contracts/envelope-code-to-status.ts` (#arch-remediation)
+- DRY violation: `AuthRequiredError` duck-type detection duplicated in 3 locations — extracted `isAuthRequiredError()` guard to `core/contracts/auth-error-guard.ts` (#arch-remediation)
+- Cyclomatic complexity CC=33 in `request-handler.ts` — decomposed into 7 focused sub-functions, removed `eslint-disable complexity` suppression (#arch-remediation)
+
 ### Added (Plan theokit-arch-gaps-implementation — canonical dogfood report shipped: Health Score 77/100 ≥ 70 ✅)
 
 🎯 **Dogfood DoD gate SATISFIED within in-loop scope.** Iter 77 shipped the canonical SKILL.md-formatted dogfood report at `docs/audit/dogfood-2026-06-07.md`. **Health Score: 77/100 ≥ 70 threshold = PASS. Zero CRITICAL findings.** (#arch-gaps-implementation)

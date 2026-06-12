@@ -3,6 +3,9 @@
  *
  * Wires the per-request flow: security headers → action/route/static branches
  * → SSR fallback → CSR fallback → 500 page.
+ *
+ * Refactored: CC reduced from 33 to ≤10 per function
+ * (architecture-remediation T2.1, 2026-06-12).
  */
 
 import { randomUUID } from 'node:crypto'
@@ -47,9 +50,107 @@ function asSsrRenderResult(value: SsrRenderResult): SsrRenderResult {
   return value
 }
 
-/* eslint-disable complexity, sonarjs/cognitive-complexity --
- * inline request orchestrator co-located so the lifecycle is readable end-to-end.
- */
+function isRedirectResult(result: unknown): result is { redirect: Response } {
+  return result !== null && typeof result === 'object' && 'redirect' in result
+}
+
+function sendRedirect(res: ServerResponse, result: { redirect: Response }): void {
+  res.writeHead(302, { Location: result.redirect.headers.get('location') ?? '/' })
+  res.end()
+}
+
+function send500(res: ServerResponse, custom500Html: string | null): void {
+  if (!res.headersSent) {
+    res.writeHead(500, { 'Content-Type': 'text/html' })
+  }
+  if (!res.writableEnded) {
+    res.end(custom500Html ?? '<h1>500 — Server Error</h1>')
+  }
+}
+
+function buildSsrHtml(
+  ctx: RequestHandlerContext,
+  result: string | SsrRenderResult,
+  nonce: string,
+): string {
+  if (typeof result === 'string') {
+    return ctx.htmlHead + result + ctx.htmlTail
+  }
+  if (isSsrRenderResult(result)) {
+    const rendered = asSsrRenderResult(result)
+    const dataJson = JSON.stringify(rendered.hydrationData).replace(/</g, '\\u003c')
+    const hydrationScript = `<script${
+      nonce ? ` nonce="${nonce}"` : ''
+    }>window.__staticRouterHydrationData=${dataJson}</script>`
+    return ctx.htmlHead + rendered.html + hydrationScript + ctx.htmlTail
+  }
+  return ctx.htmlHead + ctx.htmlTail
+}
+
+async function handleSsrStreaming(
+  ctx: RequestHandlerContext,
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: string,
+  nonce: string,
+): Promise<boolean> {
+  if (!ctx.ssrStreamingEnabled || !ctx.ssrRenderStreaming) return false
+
+  const controller = new AbortController()
+  const onClose = (): void => {
+    controller.abort()
+  }
+  req.on('close', onClose)
+  try {
+    const result = await ctx.ssrRenderStreaming(url, res, {
+      signal: controller.signal,
+      nonce,
+    })
+    if (isRedirectResult(result)) sendRedirect(res, result)
+    return true
+  } catch (streamErr) {
+    console.error('[SSR Stream Error]', (streamErr as Error).message)
+    send500(res, ctx.custom500Html)
+    return true
+  } finally {
+    req.removeListener('close', onClose)
+  }
+}
+
+async function handleSsrSync(
+  ctx: RequestHandlerContext,
+  res: ServerResponse,
+  url: string,
+  nonce: string,
+): Promise<boolean> {
+  if (!ctx.ssrRender) return false
+
+  try {
+    const result = await ctx.ssrRender(url, { nonce })
+    if (isRedirectResult(result)) {
+      sendRedirect(res, result)
+      return true
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html' })
+    res.end(buildSsrHtml(ctx, result, nonce))
+    return true
+  } catch (ssrErr) {
+    console.error('[SSR Error] Falling back to CSR:', (ssrErr as Error).message)
+    return false
+  }
+}
+
+function handleFatalError(ctx: RequestHandlerContext, res: ServerResponse, err: unknown): void {
+  if (ctx.custom500Html && !res.headersSent) {
+    res.writeHead(500, { 'Content-Type': 'text/html' })
+    res.end(ctx.custom500Html)
+  } else if (!res.headersSent) {
+    sendError(res, 'INTERNAL_ERROR', (err as Error).message, 500)
+  } else {
+    res.end()
+  }
+}
+
 export function createRequestHandler(
   ctx: RequestHandlerContext,
 ): (req: IncomingMessage, res: ServerResponse) => void {
@@ -59,7 +160,6 @@ export function createRequestHandler(
       const requestId = randomUUID()
       const start = Date.now()
 
-      // Per-request nonce (EC-6 dev/prod parity).
       const nonce = generateNonce()
       const securityHeaders = buildSecurityHeaders(
         ctx.securityHeadersConfig,
@@ -78,82 +178,15 @@ export function createRequestHandler(
         if (tryServeStatic(handlerCtx)) return
         if (tryServeCustom404(handlerCtx)) return
 
-        // SSR streaming branch
-        if (ctx.ssrStreamingEnabled && ctx.ssrRenderStreaming) {
-          const controller = new AbortController()
-          const onClose = (): void => {
-            controller.abort()
-          }
-          req.on('close', onClose)
-          try {
-            const result = await ctx.ssrRenderStreaming(url, res, {
-              signal: controller.signal,
-              nonce,
-            })
-            if (result && typeof result === 'object' && 'redirect' in result) {
-              res.writeHead(302, { Location: result.redirect.headers.get('location') ?? '/' })
-              res.end()
-              return
-            }
-            return
-          } catch (streamErr) {
-            console.error('[SSR Stream Error]', (streamErr as Error).message)
-            if (!res.headersSent) {
-              res.writeHead(500, { 'Content-Type': 'text/html' })
-            }
-            if (!res.writableEnded) {
-              res.end(ctx.custom500Html ?? '<h1>500 — Server Error</h1>')
-            }
-            return
-          } finally {
-            req.removeListener('close', onClose)
-          }
-        }
-
-        // SSR (non-streaming) branch
-        if (ctx.ssrRender) {
-          try {
-            const result = await ctx.ssrRender(url, { nonce })
-            if (result && typeof result === 'object' && 'redirect' in result) {
-              res.writeHead(302, { Location: result.redirect.headers.get('location') ?? '/' })
-              res.end()
-              return
-            }
-            let ssrHtml = ''
-            let hydrationScript = ''
-            if (typeof result === 'string') {
-              ssrHtml = result
-            } else if (isSsrRenderResult(result)) {
-              const rendered = asSsrRenderResult(result)
-              ssrHtml = rendered.html
-              const dataJson = JSON.stringify(rendered.hydrationData).replace(/</g, '\\u003c')
-              hydrationScript = `<script${
-                nonce ? ` nonce="${nonce}"` : ''
-              }>window.__staticRouterHydrationData=${dataJson}</script>`
-            }
-            res.writeHead(200, { 'Content-Type': 'text/html' })
-            res.end(ctx.htmlHead + ssrHtml + hydrationScript + ctx.htmlTail)
-            return
-          } catch (ssrErr) {
-            console.error('[SSR Error] Falling back to CSR:', (ssrErr as Error).message)
-            // Fall through to CSR fallback
-          }
-        }
+        if (await handleSsrStreaming(ctx, req, res, url, nonce)) return
+        if (await handleSsrSync(ctx, res, url, nonce)) return
 
         // CSR fallback
         res.writeHead(200, { 'Content-Type': 'text/html' })
         res.end(ctx.indexHtml)
       } catch (err) {
-        if (ctx.custom500Html && !res.headersSent) {
-          res.writeHead(500, { 'Content-Type': 'text/html' })
-          res.end(ctx.custom500Html)
-        } else if (!res.headersSent) {
-          sendError(res, 'INTERNAL_ERROR', (err as Error).message, 500)
-        } else {
-          res.end()
-        }
+        handleFatalError(ctx, res, err)
       }
     })()
   }
 }
-/* eslint-enable complexity, sonarjs/cognitive-complexity */
