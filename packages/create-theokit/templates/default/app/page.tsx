@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
+import { useState, useEffect, useCallback, type FormEvent } from 'react'
 
 interface Task {
   id: number
@@ -9,10 +9,6 @@ interface Task {
   done: boolean
 }
 type Role = '' | 'user' | 'admin'
-interface ChatMsg {
-  role: 'user' | 'agent' | 'tool' | 'system' | 'error'
-  text: string
-}
 
 export default function Page() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -20,12 +16,6 @@ export default function Page() {
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<Task['priority']>('medium')
   const [formError, setFormError] = useState('')
-  const [chat, setChat] = useState<ChatMsg[]>([
-    { role: 'system', text: 'Ask me to list, create, or complete tasks...' },
-  ])
-  const [chatInput, setChatInput] = useState('')
-  const [chatBusy, setChatBusy] = useState(false)
-  const chatRef = useRef<HTMLDivElement>(null)
 
   const hdrs = useCallback((): Record<string, string> => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -64,65 +54,6 @@ export default function Page() {
     loadTasks()
   }
 
-  const sendChat = async () => {
-    const msg = chatInput.trim()
-    if (!msg || chatBusy) return
-    setChatInput('')
-    setChat((c) => [...c, { role: 'user', text: msg }])
-    setChatBusy(true)
-    try {
-      const res = await fetch('/api/agents/assistant/chat', {
-        method: 'POST',
-        headers: hdrs(),
-        body: JSON.stringify({ message: msg, sessionId: 'session-' + Date.now() }),
-      })
-      if (res.status === 403) {
-        setChat((c) => [...c, { role: 'error', text: '403 — Need User role' }])
-        return
-      }
-      const reader = res.body?.getReader()
-      if (!reader) return
-      const decoder = new TextDecoder()
-      let buf = '',
-        agentText = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const ev = JSON.parse(line.slice(6))
-            if (ev.type === 'text_delta') agentText += ev.content
-            else if (ev.type === 'tool_call')
-              setChat((c) => [...c, { role: 'tool', text: `🔧 ${ev.toolName}` }])
-            else if (ev.type === 'tool_result')
-              setChat((c) => [...c, { role: 'tool', text: `✅ ${(ev.output ?? '').slice(0, 80)}` }])
-            else if (ev.type === 'error')
-              setChat((c) => [...c, { role: 'error', text: ev.message }])
-          } catch {
-            /* partial */
-          }
-        }
-      }
-      if (agentText) setChat((c) => [...c, { role: 'agent', text: agentText }])
-      loadTasks()
-    } catch (err) {
-      setChat((c) => [
-        ...c,
-        { role: 'error', text: `Error: ${err instanceof Error ? err.message : String(err)}` },
-      ])
-    } finally {
-      setChatBusy(false)
-    }
-  }
-
-  useEffect(() => {
-    chatRef.current?.scrollTo(0, chatRef.current.scrollHeight)
-  }, [chat])
-
   return (
     <div className="page">
       <div className="main">
@@ -150,7 +81,7 @@ export default function Page() {
             </a>
           </nav>
           <p className="hint">
-            Edit <code>app/page.tsx</code> to get started.
+            Edit <code>app/page.tsx</code> to get started. Changes hot-reload instantly.
           </p>
         </header>
 
@@ -164,80 +95,78 @@ export default function Page() {
           </select>
         </div>
 
-        {/* Content */}
-        <div className="grid">
-          <section className="card">
-            <h2>
-              Tasks <span className="badge">@Controller</span>
-            </h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Task</th>
-                  <th>Priority</th>
-                  <th>Status</th>
+        {/* Tasks */}
+        <section className="card">
+          <h2>
+            Tasks <span className="badge">@Controller</span>
+          </h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Priority</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((t) => (
+                <tr key={t.id} className={t.done ? 'done' : ''}>
+                  <td>
+                    {t.done ? '✅ ' : '○ '}
+                    {t.title}
+                  </td>
+                  <td>
+                    <span className={`prio prio-${t.priority}`}>{t.priority}</span>
+                  </td>
+                  <td>{t.done ? 'Done' : 'To do'}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {tasks.map((t) => (
-                  <tr key={t.id} className={t.done ? 'done' : ''}>
-                    <td>
-                      {t.done ? '✅ ' : '○ '}
-                      {t.title}
-                    </td>
-                    <td>
-                      <span className={`prio prio-${t.priority}`}>{t.priority}</span>
-                    </td>
-                    <td>{t.done ? 'Done' : 'To do'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <form onSubmit={createTask} className="create-bar">
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="New task..."
-                required
-                minLength={3}
-              />
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as Task['priority'])}
-              >
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="low">Low</option>
-              </select>
-              <button type="submit">Add</button>
-            </form>
-            {formError && <p className="error">{formError}</p>}
-          </section>
-
-          <section className="card">
-            <h2>
-              AI Assistant <span className="badge badge-ai">@Agent + SSE</span>
-            </h2>
-            <div ref={chatRef} className="chat-box">
-              {chat.map((m, i) => (
-                <div key={i} className={`msg ${m.role}`}>
-                  {m.role === 'user' ? `You: ${m.text}` : m.text}
-                </div>
               ))}
-            </div>
-            <div className="chat-bar">
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendChat()}
-                placeholder="Message the AI assistant..."
-                disabled={chatBusy}
-              />
-              <button type="button" onClick={sendChat} disabled={chatBusy}>
-                Send
-              </button>
-            </div>
-          </section>
+            </tbody>
+          </table>
+          <form onSubmit={createTask} className="create-bar">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="New task..."
+              required
+              minLength={3}
+            />
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as Task['priority'])}
+            >
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="low">Low</option>
+            </select>
+            <button type="submit">Add</button>
+          </form>
+          {formError && <p className="error">{formError}</p>}
+        </section>
+
+        {/* Features */}
+        <div className="grid features">
+          <div className="feature">
+            <h3>@Controller</h3>
+            <p>
+              NestJS-style decorators with convention naming. <code>TasksController</code> →{' '}
+              <code>/api/tasks</code>
+            </p>
+          </div>
+          <div className="feature">
+            <h3>defineRoute</h3>
+            <p>
+              Typed API routes with Zod validation. See <code>server/routes/health.ts</code>
+            </p>
+          </div>
+          <div className="feature">
+            <h3>@Agent + @Tool</h3>
+            <p>AI agents with SSE streaming, budget control, and human-in-the-loop approval.</p>
+          </div>
+          <div className="feature">
+            <h3>React + Vite</h3>
+            <p>File-based routing, HMR, SSR streaming. Edit and see changes instantly.</p>
+          </div>
         </div>
 
         {/* Footer */}
