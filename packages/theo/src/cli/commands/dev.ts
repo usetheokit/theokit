@@ -81,6 +81,9 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
         open: config.open,
         strictPort: config.strictPort,
         forwardConsole: config.forwardConsole,
+        warmup: config.warmup ?? {
+          clientFiles: ['./app/**/*.tsx', './app/**/*.ts'],
+        },
       },
       logLevel: options?.port === 0 ? 'silent' : undefined,
     })
