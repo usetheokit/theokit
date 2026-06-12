@@ -1,12 +1,6 @@
 /**
- * TheoKit brand icon — "T" mark on transparent-friendly rounded square.
- * SVG encoded as data URI. Zero external assets. Crisp at any size.
+ * Theo brand icon — official logo from https://usetheo.dev/logo-128.png
+ * 128x128 PNG, 1KB. Embedded as base64 data URI.
  */
 export const THEO_LOGO_BASE64 =
-  'data:image/svg+xml,' +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-      '<rect width="32" height="32" rx="8" fill="#6366f1"/>' +
-      '<text x="16" y="22" font-family="system-ui,-apple-system,sans-serif" font-size="20" font-weight="700" fill="white" text-anchor="middle">T</text>' +
-      '</svg>',
-  )
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAA2FBMVEUAAACoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfeoVfcAAABkdl64AAAARnRSTlMAAAEMGh8bDgIFOIvD2uHcx5RDCBSJ7PKaHab+ugShCjnr9U+KpcLXGOoqFyvwMBwyMS3G2xkLk64G8fpbB5mxD7nL9tgsyIPHsQAAAAFiS0dEAIgFHUgAAAAHdElNRQfqBgoHKQWqlfphAAABwklEQVR42u2YXTcCYRSFe9VMQkUqJiqJhImkCKV8zf//SWaKZdSc05l583Gxn9u9zn6fFRezdiwGAAAAAAAAAAAAAP4raiWeMPyYyVVFxVw2F8ueT62tb6QzfrKbW7ltFRxz2Uwse17lC0Vnnp1dSyki5rKvWCqQL+05gewbbg0Rc9lnLHy/XCBKHKdSVWTMZdNYKnBQo0qcw7oiYy77iIX/AUcOzXGZjrlsGssE4g2m5aRZbUTJJrFQIJFmWk7PztNRMi+2hQJGhmlpXVxmomRe3IYABCAAAQgIBcws01K0GYGrJnvaEQokr5mWbs9iBG7YU1P6PXDLtPTL9F/I/Y3Z0zvhJ5HK3ZMlDwPFCvCnUoHhI9kyGvMC/KnsfdfAeiJKnm3FC/CnYgFlVF6CfsSRW7JAgDuVvu8ZVOul11rLT7HbH4y9L39WgD0Ng1Kp3lvbT8ccTjoWCHCny2GhwE8DAQhAAAIQgAAEIAABCEAAAhCAAAT+XoDeMaVLpKYAvWNKl0hNAXqMFC+RmgbUGClfIjUFqDEyxBKpaRA8RoZZIjUFgsbIkEukrsHMGBllidRV+DZGLneJBAAAAAAAAPwu7/kxXyzt9nwtAAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDI2LTA2LTEwVDA3OjQxOjA1KzAwOjAwFEfNYQAAACV0RVh0ZGF0ZTptb2RpZnkAMjAyNi0wNi0xMFQwNzo0MTowNSswMDowMGUadd0AAAAASUVORK5CYII='
