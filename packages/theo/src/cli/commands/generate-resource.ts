@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
-import type { GenerateResult } from './generate.js'
+import type { GenerateResult } from './generate-types.js'
 
 // --- Field parsing ---
 
