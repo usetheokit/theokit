@@ -250,7 +250,7 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     pkg.devDependencies.tailwindcss = '^4.0.0'
     pkg.devDependencies['@tailwindcss/vite'] = '^4.0.0'
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-    const cssDir = existsSync(resolve(targetDir, 'src/public')) ? 'src/public' : 'public'
+    const cssDir = existsSync(resolve(targetDir, 'src/app')) ? 'src/app' : 'app'
     const cssPath = resolve(targetDir, `${cssDir}/globals.css`)
     const existing = existsSync(cssPath) ? readFileSync(cssPath, 'utf-8') : ''
     writeFileSync(cssPath, '@import "tailwindcss";\n\n' + existing)
@@ -265,20 +265,16 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
       const to = resolve(srcDir, dir)
       if (existsSync(from)) renameSync(from, to)
     }
-    const appFrom = resolve(targetDir, 'app.tsx')
-    if (existsSync(appFrom)) renameSync(appFrom, resolve(srcDir, 'app.tsx'))
+    // Move theo.config.ts into src/ for --src-dir mode
+    const configFrom = resolve(targetDir, 'theo.config.ts')
+    if (existsSync(configFrom)) renameSync(configFrom, resolve(srcDir, 'theo.config.ts'))
+    // index.html stays at root — Vite expects it there
 
     const tscPath = resolve(targetDir, 'tsconfig.json')
     const tsc = JSON.parse(readFileSync(tscPath, 'utf-8'))
     tsc.compilerOptions.baseUrl = 'src'
     tsc.include = ['src/**/*.ts', 'src/**/*.tsx']
     writeFileSync(tscPath, JSON.stringify(tsc, null, 2) + '\n')
-
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    pkg.scripts.dev = 'npx tsx --watch src/app.tsx'
-    pkg.scripts['dev:bun'] = 'bun --watch src/app.tsx'
-    pkg.scripts.build = 'npx tsup src/app.tsx --format esm --out-dir dist'
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
   }
 
   // Import alias (custom or disabled)
