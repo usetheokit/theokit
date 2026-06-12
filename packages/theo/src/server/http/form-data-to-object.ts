@@ -2,8 +2,8 @@
  * FormData → ZodObject coercion driven by the declared schema.
  *
  * Per plan g3-server-actions-and-useaction v1.2 § Phase 1 / T1.3 + Astro
- * runtime/server.ts:323-397 pattern (adapted to zod v3 shape access via
- * `_def.shape()`). FormData entries arrive as strings (or File for binary);
+ * runtime/server.ts:323-397 pattern (adapted to Zod 4 shape access via
+ * `.def.shape`). FormData entries arrive as strings (or File for binary);
  * we walk the schema field-by-field and coerce to the declared zod type
  * before letting `safeParse` finalize validation.
  *
@@ -28,7 +28,8 @@ export function formDataToObject(
   schema: z.ZodObject<z.ZodRawShape>,
   prefix = '',
 ): Record<string, unknown> {
-  const shape = schema._def.shape()
+  // Zod 4: `.shape` is a direct property on ZodObject.
+  const shape = schema.shape as Record<string, z.ZodType>
   const out: Record<string, unknown> = {}
 
   for (const [key, rawValidator] of Object.entries(shape)) {
@@ -40,7 +41,7 @@ export function formDataToObject(
       const nestedPrefix = `${fullKey}.`
       const hasNestedKeys = [...formData.keys()].some((k) => k.startsWith(nestedPrefix))
       if (hasNestedKeys) {
-        out[key] = formDataToObject(formData, validator as z.ZodObject<z.ZodRawShape>, nestedPrefix)
+        out[key] = formDataToObject(formData, validator, nestedPrefix)
         continue
       }
       // No nested keys present — apply default / nullable / undefined semantics
@@ -50,7 +51,7 @@ export function formDataToObject(
 
     if (validator instanceof z.ZodArray) {
       const values = formData.getAll(fullKey)
-      out[key] = coerceArrayElements(values, validator as z.ZodArray<z.ZodTypeAny>)
+      out[key] = coerceArrayElements(values, validator as z.ZodArray<z.ZodType>)
       continue
     }
 
@@ -72,16 +73,26 @@ export function formDataToObject(
 }
 
 /** Strip ZodOptional / ZodNullable / ZodDefault to reach the inner validator. */
-function unwrapWrappers(validator: z.ZodTypeAny): z.ZodTypeAny {
-  let inner: z.ZodTypeAny = validator
+function unwrapWrappers(validator: z.ZodType): z.ZodType {
+  let inner: z.ZodType = validator
   while (
     inner instanceof z.ZodOptional ||
     inner instanceof z.ZodNullable ||
     inner instanceof z.ZodDefault
   ) {
-    inner = (inner._def as { innerType: z.ZodTypeAny }).innerType
+    inner = getInnerType(inner)
   }
   return inner
+}
+
+function getInnerType(wrapper: z.ZodType): z.ZodType {
+  // Zod 4 stores inner type in def.innerType
+  const def = wrapper.def as unknown as { innerType?: z.ZodType }
+  if (def.innerType) return def.innerType
+  // Fallback: try _def for cross-version compat
+  const legacyDef = (wrapper as unknown as { _def?: { innerType?: z.ZodType } })._def
+  if (legacyDef?.innerType) return legacyDef.innerType
+  return wrapper
 }
 
 /**
@@ -91,24 +102,26 @@ function unwrapWrappers(validator: z.ZodTypeAny): z.ZodTypeAny {
  *  - ZodOptional → undefined
  *  - else → undefined (consumer safeParse will likely error)
  */
-function unwrapMissingDefault(validator: z.ZodTypeAny): unknown {
-  let cursor: z.ZodTypeAny = validator
+function unwrapMissingDefault(validator: z.ZodType): unknown {
+  let cursor: z.ZodType = validator
   while (
     cursor instanceof z.ZodOptional ||
     cursor instanceof z.ZodNullable ||
     cursor instanceof z.ZodDefault
   ) {
     if (cursor instanceof z.ZodDefault) {
-      const def = (cursor._def as { defaultValue: unknown }).defaultValue
-      return typeof def === 'function' ? (def as () => unknown)() : def
+      const def = cursor.def as unknown as { defaultValue: unknown }
+      return typeof def.defaultValue === 'function'
+        ? (def.defaultValue as () => unknown)()
+        : def.defaultValue
     }
     if (cursor instanceof z.ZodNullable) return null
-    cursor = (cursor._def as { innerType: z.ZodTypeAny }).innerType
+    cursor = getInnerType(cursor)
   }
   return undefined
 }
 
-function coerceScalar(raw: FormDataEntryValue | null, validator: z.ZodTypeAny): unknown {
+function coerceScalar(raw: FormDataEntryValue | null, validator: z.ZodType): unknown {
   if (raw === null) return undefined
   if (validator instanceof z.ZodNumber) {
     return typeof raw === 'string' ? Number(raw) : raw
@@ -119,9 +132,10 @@ function coerceScalar(raw: FormDataEntryValue | null, validator: z.ZodTypeAny): 
 
 function coerceArrayElements(
   values: FormDataEntryValue[],
-  arrayValidator: z.ZodArray<z.ZodTypeAny>,
+  arrayValidator: z.ZodArray<z.ZodType>,
 ): unknown[] {
-  const elementType = unwrapWrappers(arrayValidator._def.type)
+  const def = arrayValidator.def as unknown as { type?: z.ZodType }
+  const elementType = def.type ? unwrapWrappers(def.type) : undefined
   if (elementType instanceof z.ZodNumber) {
     return values.map((v) => (typeof v === 'string' ? Number(v) : v))
   }
