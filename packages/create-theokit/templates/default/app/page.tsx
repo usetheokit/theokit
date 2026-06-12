@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 
+// ── Types ──
+
 interface Task {
-  id: string
+  id: number
   title: string
   priority: 'high' | 'medium' | 'low'
   done: boolean
@@ -11,212 +13,171 @@ interface Task {
 
 type Role = '' | 'user' | 'admin'
 
-interface ChatMessage {
-  type: 'user' | 'agent' | 'tool' | 'system' | 'error'
-  content: string
+interface ChatMsg {
+  role: 'user' | 'agent' | 'tool' | 'system' | 'error'
+  text: string
 }
 
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
+// ── Page ──
 
 export default function Page() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [role, setRole] = useState<Role>('user')
-  const [newTitle, setNewTitle] = useState('')
-  const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('medium')
+  const [title, setTitle] = useState('')
+  const [priority, setPriority] = useState<Task['priority']>('medium')
   const [formError, setFormError] = useState('')
-
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { type: 'system', content: 'Ask me to list, create, or complete tasks...' },
+  const [chat, setChat] = useState<ChatMsg[]>([
+    { role: 'system', text: 'Ask me to list, create, or complete tasks...' },
   ])
   const [chatInput, setChatInput] = useState('')
-  const [chatSending, setChatSending] = useState(false)
-  const [chatCost, setChatCost] = useState('')
-  const chatBoxRef = useRef<HTMLDivElement>(null)
-  const sessionId = useRef(`session-${Date.now()}`)
+  const [chatBusy, setChatBusy] = useState(false)
+  const chatRef = useRef<HTMLDivElement>(null)
 
-  const headers = useCallback(() => {
+  const headers = useCallback((): Record<string, string> => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
     if (role) h['x-role'] = role
     return h
   }, [role])
 
+  // Fetch tasks on mount + when role changes
   const loadTasks = useCallback(async () => {
-    try {
-      const res = await fetch('/api/tasks')
-      if (res.ok) {
-        const data = await res.json()
-        setTasks(data)
-      }
-    } catch {
-      // Network error — silently ignore on initial load
-    }
+    const res = await fetch('/api/tasks')
+    if (res.ok) setTasks(await res.json())
   }, [])
 
   useEffect(() => {
     loadTasks()
   }, [loadTasks])
 
-  useEffect(() => {
-    if (chatBoxRef.current) {
-      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight
-    }
-  }, [messages])
-
-  const handleCreateTask = async (e: FormEvent) => {
+  // Create task
+  const createTask = async (e: FormEvent) => {
     e.preventDefault()
     setFormError('')
-    const title = newTitle.trim()
-    if (!title) return
-
+    if (!title.trim()) return
     const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ title, priority: newPriority }),
+      body: JSON.stringify({ title, priority }),
     })
-
     if (res.status === 403) {
       setFormError('403 — Need User role')
       return
     }
-
     if (!res.ok) {
-      const data = await res.json()
-      setFormError(data.error?.issues?.[0]?.message ?? `Error ${res.status}`)
+      const b = await res.json()
+      setFormError(b.error?.issues?.[0]?.message ?? `Error ${res.status}`)
       return
     }
-
-    setNewTitle('')
+    setTitle('')
     loadTasks()
   }
 
-  const handleSendChat = async () => {
+  // AI Chat
+  const sendChat = async () => {
     const msg = chatInput.trim()
-    if (!msg || chatSending) return
+    if (!msg || chatBusy) return
     setChatInput('')
-    setChatSending(true)
-
-    setMessages((prev) => [...prev, { type: 'user', content: `You: ${msg}` }])
+    setChat((c) => [...c, { role: 'user', text: msg }])
+    setChatBusy(true)
 
     try {
       const res = await fetch('/api/agents/assistant/chat', {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ message: msg, sessionId: sessionId.current }),
+        body: JSON.stringify({ message: msg, sessionId: 'session-' + Date.now() }),
       })
-
       if (res.status === 403) {
-        setMessages((prev) => [
-          ...prev,
-          { type: 'system', content: '403 — Need User role to chat' },
-        ])
-        setChatSending(false)
+        setChat((c) => [...c, { role: 'error', text: '403 — Need User role' }])
         return
       }
 
       const reader = res.body?.getReader()
-      if (!reader) {
-        setChatSending(false)
-        return
-      }
-
+      if (!reader) return
       const decoder = new TextDecoder()
-      let buf = ''
-      let agentText = ''
-
-      setMessages((prev) => [...prev, { type: 'agent', content: '' }])
+      let buf = '',
+        agentText = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         buf += decoder.decode(value, { stream: true })
         const lines = buf.split('\n')
         buf = lines.pop() ?? ''
-
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           try {
             const ev = JSON.parse(line.slice(6))
-            if (ev.type === 'text_delta') {
-              agentText += ev.content
-              setMessages((prev) => {
-                const updated = [...prev]
-                updated[updated.length - 1] = { type: 'agent', content: agentText }
-                return updated
-              })
-            } else if (ev.type === 'tool_call') {
-              setMessages((prev) => {
-                const inserted = [...prev]
-                inserted.splice(inserted.length - 1, 0, {
-                  type: 'tool',
-                  content: `\uD83D\uDD27 ${ev.toolName}`,
-                })
-                return inserted
-              })
-            } else if (ev.type === 'tool_result') {
-              setMessages((prev) => {
-                const inserted = [...prev]
-                inserted.splice(inserted.length - 1, 0, {
-                  type: 'tool',
-                  content: `\u2705 ${(ev.output ?? '').substring(0, 80)}`,
-                })
-                return inserted
-              })
-            } else if (ev.type === 'thinking') {
-              setMessages((prev) => {
-                const inserted = [...prev]
-                inserted.splice(inserted.length - 1, 0, {
-                  type: 'system',
-                  content: `\uD83D\uDCAD ${ev.content}`,
-                })
-                return inserted
-              })
-            } else if (ev.type === 'done') {
-              const tokens = ev.usage?.totalTokens ?? 0
-              const costStr = ev.cost ? ` \u00B7 $${ev.cost.toFixed(6)}` : ''
-              setChatCost(`${tokens} tokens \u00B7 ${ev.durationMs}ms${costStr}`)
-            } else if (ev.type === 'error') {
-              setMessages((prev) => [...prev, { type: 'error', content: ev.message }])
-            }
+            if (ev.type === 'text_delta') agentText += ev.content
+            else if (ev.type === 'tool_call')
+              setChat((c) => [...c, { role: 'tool', text: `🔧 ${ev.toolName}` }])
+            else if (ev.type === 'tool_result')
+              setChat((c) => [...c, { role: 'tool', text: `✅ ${(ev.output ?? '').slice(0, 80)}` }])
+            else if (ev.type === 'error')
+              setChat((c) => [...c, { role: 'error', text: ev.message }])
           } catch {
-            /* partial JSON — skip */
+            /* partial JSON */
           }
         }
       }
-
+      if (agentText) setChat((c) => [...c, { role: 'agent', text: agentText }])
       loadTasks()
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setMessages((prev) => [...prev, { type: 'error', content: `Error: ${message}` }])
+      setChat((c) => [
+        ...c,
+        { role: 'error', text: `Error: ${err instanceof Error ? err.message : String(err)}` },
+      ])
+    } finally {
+      setChatBusy(false)
     }
-
-    setChatSending(false)
   }
 
+  useEffect(() => {
+    chatRef.current?.scrollTo(0, chatRef.current.scrollHeight)
+  }, [chat])
+
   return (
-    <div className="container">
-      <header>
-        <h1>
-          <span className="accent">TheoKit</span> Task Manager
-        </h1>
-        <p className="subtitle">
-          HTTP Controllers + AI Agent — same guards, distinct pipelines. Edit <code>server/</code>{' '}
-          to get started.
+    <>
+      {/* Hero */}
+      <header className="hero">
+        <img src="/logo.png" alt="TheoKit" width={80} height={80} />
+        <h1>TheoKit</h1>
+        <p className="tagline">Build the app your agent lives in.</p>
+        <nav className="hero-links">
+          <a
+            href="https://usetheo.dev"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn primary"
+          >
+            usetheo.dev
+          </a>
+          <a
+            href="https://github.com/usetheodev/theokit"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn secondary"
+          >
+            Documentation
+          </a>
+        </nav>
+        <p className="hint">
+          Edit <code>app/page.tsx</code> to get started. Changes hot-reload instantly.
         </p>
-        <div className="role-bar">
-          <label htmlFor="role">Role:</label>
-          <select id="role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="">None (public only)</option>
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
       </header>
 
+      {/* Role selector */}
+      <div className="role-bar">
+        <label htmlFor="role">Role:</label>
+        <select id="role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+          <option value="">None (public only)</option>
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      {/* Main grid */}
       <main className="grid">
-        {/* Left: CRUD Panel */}
+        {/* Tasks CRUD */}
         <section className="card">
           <h2>
             Tasks <span className="badge">@Controller</span>
@@ -230,41 +191,31 @@ export default function Page() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map((task) => (
-                <tr key={task.id} className={task.done ? 'done' : ''}>
+              {tasks.map((t) => (
+                <tr key={t.id} className={t.done ? 'done' : ''}>
                   <td>
-                    {task.done ? '\u2705 ' : '\u25CB '}
-                    {escapeHtml(task.title)}
+                    {t.done ? '✅ ' : '○ '}
+                    {t.title}
                   </td>
                   <td>
-                    <span
-                      className={`prio ${
-                        task.priority === 'high'
-                          ? 'prio-high'
-                          : task.priority === 'low'
-                            ? 'prio-low'
-                            : 'prio-med'
-                      }`}
-                    >
-                      {task.priority}
-                    </span>
+                    <span className={`prio prio-${t.priority}`}>{t.priority}</span>
                   </td>
-                  <td>{task.done ? 'Done' : 'To do'}</td>
+                  <td>{t.done ? 'Done' : 'To do'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <form onSubmit={handleCreateTask} className="create-bar">
+          <form onSubmit={createTask} className="create-bar">
             <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               placeholder="New task..."
               required
               minLength={3}
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
             />
             <select
-              value={newPriority}
-              onChange={(e) => setNewPriority(e.target.value as 'high' | 'medium' | 'low')}
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as Task['priority'])}
             >
               <option value="medium">Medium</option>
               <option value="high">High</option>
@@ -275,34 +226,50 @@ export default function Page() {
           {formError && <p className="error">{formError}</p>}
         </section>
 
-        {/* Right: AI Chat */}
+        {/* AI Chat */}
         <section className="card">
           <h2>
             AI Assistant <span className="badge badge-ai">@Agent + SSE</span>
           </h2>
-          <div ref={chatBoxRef} className="chat-box">
-            {messages.map((msg, i) => (
-              <div key={i} className={`msg ${msg.type}`}>
-                {msg.content}
+          <div ref={chatRef} className="chat-box">
+            {chat.map((m, i) => (
+              <div key={i} className={`msg ${m.role}`}>
+                {m.role === 'user' ? `You: ${m.text}` : m.text}
               </div>
             ))}
           </div>
           <div className="chat-bar">
             <input
-              placeholder="Message the AI assistant..."
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSendChat()
-              }}
+              onKeyDown={(e) => e.key === 'Enter' && sendChat()}
+              placeholder="Message the AI assistant..."
+              disabled={chatBusy}
             />
-            <button type="button" onClick={handleSendChat} disabled={chatSending}>
+            <button type="button" onClick={sendChat} disabled={chatBusy}>
               Send
             </button>
           </div>
-          {chatCost && <p className="cost">{chatCost}</p>}
         </section>
       </main>
-    </div>
+
+      {/* Footer */}
+      <footer className="footer">
+        <p>
+          Powered by{' '}
+          <a href="https://usetheo.dev" target="_blank" rel="noopener noreferrer">
+            TheoKit
+          </a>
+          {' · '}
+          <a href="https://github.com/usetheodev/theokit" target="_blank" rel="noopener noreferrer">
+            GitHub
+          </a>
+          {' · '}
+          <a href="https://discord.usetheo.dev" target="_blank" rel="noopener noreferrer">
+            Discord
+          </a>
+        </p>
+      </footer>
+    </>
   )
 }
