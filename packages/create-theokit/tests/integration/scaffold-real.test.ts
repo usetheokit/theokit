@@ -74,6 +74,7 @@ describe('scaffold (integration — real template)', () => {
     expect(pkg.scripts.start).toBeDefined()
     expect(pkg.scripts.test).toBe('vitest run')
     expect(pkg.scripts.seed).toBeDefined()
+    expect(pkg.scripts['db:migrate']).toBeDefined()
   })
 
   it('should produce a working package.json with expected dependencies', () => {
@@ -182,6 +183,50 @@ describe('scaffold (integration — real template)', () => {
     // .gitignore includes data/
     const gitignore = readFileSync(join(targetDir, '.gitignore'), 'utf-8')
     expect(gitignore).toContain('data/')
+  })
+
+  it('should include drizzle.config.ts for migrations', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'drizzle-config-test')
+
+    expect(existsSync(join(targetDir, 'drizzle.config.ts'))).toBe(true)
+    const config = readFileSync(join(targetDir, 'drizzle.config.ts'), 'utf-8')
+    expect(config).toContain("dialect: 'sqlite'")
+    expect(config).toContain('./server/db/schema.ts')
+    expect(config).toContain('./data/dev.db')
+  })
+
+  it('should have drizzle-kit and eslint-plugin-drizzle as devDependencies', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'drizzle-deps-test')
+
+    const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+    expect(pkg.devDependencies['drizzle-kit']).toBeDefined()
+    expect(pkg.devDependencies['eslint-plugin-drizzle']).toBeDefined()
+  })
+
+  it('should have db:migrate, db:seed, db:generate scripts', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'db-scripts-test')
+
+    const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+    expect(pkg.scripts['db:migrate']).toBe('theokit db migrate')
+    expect(pkg.scripts['db:seed']).toBe('theokit db seed')
+    expect(pkg.scripts['db:generate']).toBe('theokit db generate')
+  })
+
+  it('should have eslint config with drizzle enforce rules', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'eslint-drizzle-test')
+
+    const eslintConfig = readFileSync(join(targetDir, 'eslint.config.mjs'), 'utf-8')
+    expect(eslintConfig).toContain('eslint-plugin-drizzle')
+    expect(eslintConfig).toContain('enforce-delete-with-where')
+    expect(eslintConfig).toContain('enforce-update-with-where')
   })
 
   it('should have theo.config.ts without httpDecoratorsPlugin', () => {

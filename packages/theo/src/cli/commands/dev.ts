@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react'
-import { createServer, type ViteDevServer } from 'vite'
+import { createServer, type Plugin, type ViteDevServer } from 'vite'
 
 import { loadConfig } from '../../config/load-config.js'
 import { loadEnv } from '../../config/load-env.js'
@@ -74,13 +74,12 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
     })
     server = await createServer({
       root: cwd,
-      plugins: [react(), ...theoPlugins],
+      plugins: [react(), ...theoPlugins] as Plugin[],
       server: {
         port,
         host: config.host,
         open: config.open,
         strictPort: config.strictPort,
-        forwardConsole: config.forwardConsole,
         warmup: config.warmup ?? {
           clientFiles: ['./app/**/*.tsx', './app/**/*.ts'],
         },
