@@ -78,7 +78,7 @@ describe('Action Handler', () => {
     const request = new Request('http://localhost/', {
       method: 'POST',
       headers: { 'X-Theo-Action': 'createUser' },
-      body: JSON.stringify({ name: 'John', email: 'not-an-email' }),
+      body: JSON.stringify({ name: 123 }),
     })
 
     // When: handleAction is called
