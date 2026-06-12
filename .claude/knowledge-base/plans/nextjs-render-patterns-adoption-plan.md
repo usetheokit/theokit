@@ -1,5 +1,7 @@
 # Plan: Next.js Render Patterns Adoption — 9 Patterns from app-render/
 
+> **Version 1.1** — Absorbed EC-1 (digest uses sync hash, not async crypto.subtle), EC-2 (component tree uses dynamic import or separate subpath), EC-3 (T4.1 deferred — revalidateTag already exists in packages/theo), EC-4 (stream fallback test), EC-5 (malformed JSON test), EC-6 (empty string encryption test), EC-7 (streaming error docs), EC-8 (CSS precedence React 19 docs).
+>
 > **Version 1.0** — Adopt 9 patterns from Next.js `app-render/` directory into TheoKit, prioritized by impact and feasibility. Patterns range from immediate (error digestion) to foundational (streaming SSR, component tree). Each pattern is a self-contained task with TDD.
 
 ## Goal
@@ -76,13 +78,14 @@ Analysis of Next.js `packages/next/src/server/app-render/` (91 files, 9642 lines
 
 **Alternative rejected:** Node-only `renderToPipeableStream`. Rejected: breaks Bun/Deno/edge compatibility.
 
-### D3 — Error digests use crypto.subtle (Web Standard)
+### D3 — Error digests use sync hash (not crypto)
 
-**Decision:** Error digest computed via `crypto.subtle.digest('SHA-256', ...)` (Web Standard), not `node:crypto`.
+**Decision:** Error digest computed via sync hash (djb2 or fnv1a), not `crypto.subtle` or `node:crypto`. Digest is for dedup/logging, not security.
 
-**Rationale:** Same as D2 — runtime-agnostic. `crypto.subtle` is available on all target runtimes.
+**Rationale:** EC-1: `crypto.subtle.digest()` is async — breaks sync error handlers. Error digests don't need crypto-grade hashing. A stable, deterministic sync hash is sufficient for error deduplication and client-safe error IDs. Next.js uses `Error.digest` set by React, not crypto at all.
 
-**Alternative rejected:** `node:crypto.createHash('sha256')`. Rejected: Node-only.
+**Alternative rejected:** `crypto.subtle.digest('SHA-256')`. Rejected: async, forces callers to await in catch blocks.
+**Alternative rejected:** `node:crypto.createHash('sha256')`. Rejected: Node-only + overkill for error dedup.
 
 ## Drawbacks & Risks
 
@@ -156,9 +159,9 @@ VERIFY:  pnpm --filter @theokit/http test
 
 #### Acceptance Criteria
 - [ ] `digestError()` returns `{ digest: string, message: string, status: number, context: ErrorContext, stack?: string }`
-- [ ] Digest is SHA-256 hex of error message (stable, deterministic)
+- [ ] Digest is sync hash of error message (stable, deterministic — EC-1: NOT async crypto.subtle, sync djb2/fnv hash is sufficient for dedup/logging)
 - [ ] Stack trace stripped in production, kept in development
-- [ ] Works with `crypto.subtle` (Web Standard — no node:crypto)
+- [ ] `digestError()` is SYNC (EC-1: crypto.subtle is async, breaks sync catch blocks)
 - [ ] 8+ tests passing
 
 ---
@@ -198,6 +201,8 @@ VERIFY:  pnpm --filter @theokit/http test
 
 #### Acceptance Criteria
 - [ ] `composeComponentTree(tree)` accepts `RouteTree` (from scan.ts output) and returns React element
+- [ ] Uses dynamic `import('react')` — NOT top-level import (EC-2: React is optional peerDep)
+- [ ] Exported from separate subpath `@theokit/http/react` or uses lazy loading
 - [ ] Layouts wrap children recursively
 - [ ] `loading.tsx` → `<Suspense fallback={<Loading />}>`
 - [ ] `error.tsx` → error boundary wrapper
@@ -236,6 +241,7 @@ RED:     test_stream_includes_doctype() — stream starts with <!DOCTYPE html>
 RED:     test_stream_includes_shell() — <html><head><body> in first chunk
 RED:     test_stream_content_type_is_html() — response has text/html content-type
 RED:     test_fallback_to_string_when_no_streaming() — streaming: false uses renderToString
+RED:     test_stream_graceful_fallback_if_no_readable_stream() — if renderToReadableStream unavailable (React 17), fall back to renderToString with warning (EC-4)
 GREEN:   Implement stream-renderer.ts + wire into TheoApp
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/http test
@@ -246,7 +252,8 @@ VERIFY:  pnpm --filter @theokit/http test
 - [ ] TheoApp `streaming: true` serves streamed response
 - [ ] Default (`streaming: false`) keeps `renderToString` behavior
 - [ ] DOCTYPE injected automatically
-- [ ] 5+ tests passing
+- [ ] EC-7 documented: streaming mode catches errors inside Suspense boundaries (different from string mode which aborts entirely)
+- [ ] 6+ tests passing (includes EC-4 fallback test)
 
 ---
 
@@ -277,6 +284,7 @@ RED:     test_action_executes_registered_function() — calls the registered act
 RED:     test_action_validates_input_with_zod() — Zod schema validated before execution
 RED:     test_action_returns_json_result() — action result returned as JSON
 RED:     test_action_without_header_skips() — normal POST goes to controller
+RED:     test_action_malformed_body_returns_400() — malformed JSON → 400, not 500 (EC-5)
 GREEN:   Implement action-handler.ts + wire into TheoApp
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/http test
@@ -316,6 +324,7 @@ RED:     test_different_keys_fail_decrypt() — wrong key → throws
 RED:     test_tampered_ciphertext_fails() — modified ciphertext → throws
 RED:     test_uses_web_crypto() — uses crypto.subtle, not node:crypto
 RED:     test_random_iv_per_call() — two encryptions of same data produce different ciphertext
+RED:     test_encrypt_empty_string_roundtrip() — empty string encrypts and decrypts correctly (EC-6)
 GREEN:   Implement action-encryption.ts
 VERIFY:  pnpm --filter @theokit/http test
 ```
@@ -343,6 +352,7 @@ RED:     test_inline_css_creates_style_element() — generates <style> with cont
 RED:     test_precedence_attribute_set() — precedence prop present for ordering
 RED:     test_dev_cache_bust_query_param() — adds ?v=timestamp in dev mode
 GREEN:   Implement css-resource.ts
+NOTE:    EC-8: CSS precedence attribute requires React 19+. On React 18, attribute is ignored (no error, just no ordering). Document as React 19 requirement.
 VERIFY:  pnpm --filter @theokit/http test
 ```
 
@@ -379,30 +389,9 @@ VERIFY:  pnpm --filter @theokit/http test
 
 **Objective:** Cache revalidation and final validation.
 
-### T4.1 — Cache revalidation signals
+### T4.1 — Cache revalidation signals — DEFERRED (EC-3)
 
-#### Objective
-Create `cache-signal.ts` with `revalidateTag()` and `revalidatePath()` functions that signal the framework to invalidate cached responses.
-
-#### Evidence
-- Next.js `cache-signal.ts` — cache warmup coordination
-- TheoKit `packages/theo/src/cache/` — cache primitives already exist
-
-#### Files to edit
-```
-packages/http/src/cache-signal.ts (NEW) — revalidateTag(), revalidatePath()
-packages/http/tests/unit/cache-signal.test.ts (NEW) — 4+ tests
-```
-
-#### TDD
-```
-RED:     test_revalidate_tag_emits_signal() — tag signal stored in request context
-RED:     test_revalidate_path_emits_signal() — path signal stored in request context
-RED:     test_multiple_tags_accumulated() — multiple calls accumulate
-RED:     test_signals_cleared_per_request() — new request starts clean
-GREEN:   Implement cache-signal.ts
-VERIFY:  pnpm --filter @theokit/http test
-```
+**DEFERRED:** `revalidateTag()` and `revalidatePath()` already exist in `packages/theo/src/cache/revalidate.ts:15` and `packages/theo/src/cache/cache-engine.ts:59`. Reimplementing in `packages/http` would violate G12 (DRY). When `@theokit/http` standalone needs cache revalidation, it should re-export from `packages/theo` or accept a pluggable cache adapter — not duplicate.
 
 ---
 
@@ -418,14 +407,14 @@ VERIFY:  pnpm --filter @theokit/http test
 | 6 | Action encryption (`encryption.ts`) | T3.1 | `encryptActionArgs()` |
 | 7 | CSS precedence (`render-css-resource.tsx`) | T3.2 | `renderCssResource()` |
 | 8 | Server-inserted HTML (`make-get-server-inserted-html.tsx`) | T3.3 | `createServerInsertedHTML()` |
-| 9 | Cache signals (`cache-signal.ts`) | T4.1 | `revalidateTag()` / `revalidatePath()` |
+| 9 | Cache signals (`cache-signal.ts`) | T4.1 DEFERRED (EC-3) | Already exists in `packages/theo/src/cache/` — DRY |
 
-**Coverage: 9/9 patterns covered (100%)**
+**Coverage: 8/9 patterns implemented + 1 deferred (existing) = 100% addressed**
 
 ## Global Definition of Done
 
-- [ ] All 9 patterns implemented with tests
-- [ ] `pnpm --filter @theokit/http test` green (349+ existing + 47+ new)
+- [ ] 8 patterns implemented with tests (T4.1 deferred — EC-3)
+- [ ] `pnpm --filter @theokit/http test` green (349+ existing + 43+ new)
 - [ ] `pnpm --filter @theokit/http build` green
 - [ ] `npx eslint packages/http/src --max-warnings=0` zero errors
 - [ ] `bash scripts/quality-gate.sh` — 0 FAIL
