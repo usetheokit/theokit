@@ -99,8 +99,8 @@ describe('T1.4 — services manifest', () => {
   })
 
   it('readManifest throws actionable error on malformed JSON', () => {
-    const filePath = join(tmp, '.theo', 'services.json')
-    mkdirSync(join(tmp, '.theo'), { recursive: true })
+    const filePath = join(tmp, '.theokit', 'services.json')
+    mkdirSync(join(tmp, '.theokit'), { recursive: true })
     writeFileSync(filePath, '{not json')
     expect(() => readManifest(tmp)).toThrow(/services\.json/i)
   })
@@ -109,7 +109,7 @@ describe('T1.4 — services manifest', () => {
     const cfg: ServicesConfig = { agent: PYTHON_SERVICE }
     const m = buildManifest(cfg)
     writeManifest(tmp, m)
-    const raw = readFileSync(join(tmp, '.theo', 'services.json'), 'utf-8')
+    const raw = readFileSync(join(tmp, '.theokit', 'services.json'), 'utf-8')
     const parsed = JSON.parse(raw) as Record<string, unknown>
     expect(parsed).not.toHaveProperty('vercel')
     expect(parsed).not.toHaveProperty('cloudflare')
@@ -117,11 +117,11 @@ describe('T1.4 — services manifest', () => {
   })
 
   // EC-6
-  it('writeManifest creates .theo/ directory if absent (EC-6)', () => {
-    expect(existsSync(join(tmp, '.theo'))).toBe(false)
+  it('writeManifest creates .theokit/ directory if absent (EC-6)', () => {
+    expect(existsSync(join(tmp, '.theokit'))).toBe(false)
     const m = buildManifest({})
     writeManifest(tmp, m)
-    expect(existsSync(join(tmp, '.theo'))).toBe(true)
-    expect(existsSync(join(tmp, '.theo', 'services.json'))).toBe(true)
+    expect(existsSync(join(tmp, '.theokit'))).toBe(true)
+    expect(existsSync(join(tmp, '.theokit', 'services.json'))).toBe(true)
   })
 })

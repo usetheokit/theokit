@@ -1,7 +1,7 @@
 /**
  * T2.2 — `theokit build` wires `emitOpenApi()` into the build flow.
  *
- * Per G2 plan v1.1 T2.2: emit to BOTH `.theo/openapi.json` (dev surface)
+ * Per G2 plan v1.1 T2.2: emit to BOTH `.theokit/openapi.json` (dev surface)
  * AND `<distDir-from-vite>/openapi.json` (build artifact) when
  * `config.openapi` is defined. Skip entirely when `config.openapi` is
  * undefined (opt-in). Skip dist emit on Vite failure (EC-2).
@@ -33,7 +33,7 @@ describe('T2.2 — build.ts wires OpenAPI emit (source assertions)', () => {
     expect(src).toMatch(/emitOpenApi\(/)
   })
 
-  it('emits to .theo (config.distDir) BEFORE runAdapterBuild (dev surface)', () => {
+  it('emits to .theokit (config.distDir) BEFORE runAdapterBuild (dev surface)', () => {
     const src = readFileSync(BUILD_TS, 'utf-8')
     const idxDevEmit = src.indexOf('emitOpenApi')
     const idxAdapter = src.indexOf('runAdapterBuild(')
@@ -75,7 +75,7 @@ describe('T2.2 — loadRoutesForOpenApi (live helper test)', () => {
       default: {
         body: z.object({ name: z.string() }),
         query: z.object({ page: z.number().int().optional() }),
-        params: z.object({ id: z.string().uuid() }),
+        params: z.object({ id: z.uuid() }),
         handler: () => Promise.resolve(),
       },
     })

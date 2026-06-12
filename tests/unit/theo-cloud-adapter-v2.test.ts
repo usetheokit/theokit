@@ -2,7 +2,7 @@
  * Plan A v2.2 — theo-cloud adapter (Wave 3 thin) invariant tests.
  *
  * Validates that the OSS adapter NEVER emits K8s shape:
- *  - NO `.theo/theo-cloud/` dir creation
+ *  - NO `.theokit/theo-cloud/` dir creation
  *  - NO YAML file writes
  *  - Log emits the architectural mental model ("TheoCloud emits K8s manifests internally")
  *
@@ -28,7 +28,7 @@ const cfg = { port: 3000, ssr: false } as unknown as TheoConfig
 describe('Plan A v2.2 — theo-cloud adapter (thin Wave 3 v2.0)', () => {
   it('validates manifest via readManifest (handles null gracefully — no throw)', async () => {
     const cwd = tempCwd()
-    // No .theo/services.json present → readManifest returns null;
+    // No .theokit/services.json present → readManifest returns null;
     // prepareTheoCloudArtifacts returns empty services. Adapter must not throw.
     await expect(theoCloudAdapter.build(cfg, cwd)).resolves.toBeUndefined()
   })
@@ -47,10 +47,10 @@ describe('Plan A v2.2 — theo-cloud adapter (thin Wave 3 v2.0)', () => {
     consoleSpy.mockRestore()
   })
 
-  it('does NOT create .theo/theo-cloud/ dir (invariant — K8s emission lives in TheoCloud)', async () => {
+  it('does NOT create .theokit/theo-cloud/ dir (invariant — K8s emission lives in TheoCloud)', async () => {
     const cwd = tempCwd()
     await theoCloudAdapter.build(cfg, cwd)
-    expect(existsSync(join(cwd, '.theo', 'theo-cloud'))).toBe(false)
+    expect(existsSync(join(cwd, '.theokit', 'theo-cloud'))).toBe(false)
   })
 
   it('does NOT write any YAML files (invariant — OSS adapter is upload-only)', async () => {
@@ -60,8 +60,8 @@ describe('Plan A v2.2 — theo-cloud adapter (thin Wave 3 v2.0)', () => {
     expect(existsSync(join(cwd, 'deployment.yaml'))).toBe(false)
     expect(existsSync(join(cwd, 'service.yaml'))).toBe(false)
     expect(existsSync(join(cwd, 'ingress.yaml'))).toBe(false)
-    // No per-service manifests under .theo/theo-cloud/
-    expect(existsSync(join(cwd, '.theo', 'theo-cloud', 'deployment-web.yaml'))).toBe(false)
-    expect(existsSync(join(cwd, '.theo', 'theo-cloud', 'service-web.yaml'))).toBe(false)
+    // No per-service manifests under .theokit/theo-cloud/
+    expect(existsSync(join(cwd, '.theokit', 'theo-cloud', 'deployment-web.yaml'))).toBe(false)
+    expect(existsSync(join(cwd, '.theokit', 'theo-cloud', 'service-web.yaml'))).toBe(false)
   })
 })

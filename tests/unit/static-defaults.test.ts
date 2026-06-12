@@ -17,7 +17,7 @@ describe('buildStatic — default Vite SSR wiring (T1.5 closure)', () => {
   it('emits HTML using the client index template when no SSR build is present', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'theo-static-default-'))
     try {
-      const clientDir = resolve(cwd, '.theo/client')
+      const clientDir = resolve(cwd, '.theokit/client')
       mkdirSync(clientDir, { recursive: true })
       writeFileSync(
         resolve(clientDir, 'index.html'),
@@ -39,7 +39,7 @@ describe('buildStatic — default Vite SSR wiring (T1.5 closure)', () => {
         ensureDir: async () => {},
         // Do NOT inject renderHtml — exercise the default created in buildStatic
       })
-      const indexPath = resolve(cwd, '.theo/static/index.html')
+      const indexPath = resolve(cwd, '.theokit/static/index.html')
       expect(captured[indexPath]).toBeDefined()
       expect(captured[indexPath]).toContain('<div id="root">')
     } finally {
@@ -56,9 +56,9 @@ describe('buildStatic — default Vite SSR wiring (T1.5 closure)', () => {
         resolve(cwd, 'app/blog/[id]/static-paths.js'),
         'export default () => [{ id: "1" }, { id: "2" }]\n',
       )
-      mkdirSync(resolve(cwd, '.theo/client'), { recursive: true })
+      mkdirSync(resolve(cwd, '.theokit/client'), { recursive: true })
       writeFileSync(
-        resolve(cwd, '.theo/client/index.html'),
+        resolve(cwd, '.theokit/client/index.html'),
         '<!doctype html><html><body><div id="root"></div></body></html>',
       )
 
@@ -99,7 +99,7 @@ describe('buildStatic — default Vite SSR wiring (T1.5 closure)', () => {
         ensureDir: async () => {},
       })
 
-      const files = Object.keys(captured).filter((p) => p.includes('/.theo/static/blog/'))
+      const files = Object.keys(captured).filter((p) => p.includes('/.theokit/static/blog/'))
       expect(files.length).toBe(2)
     } finally {
       rmSync(cwd, { recursive: true, force: true })

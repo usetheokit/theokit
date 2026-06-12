@@ -124,7 +124,7 @@ describe('buildAwsLambda — orchestration', () => {
     expect(calls).toEqual(['node-build', 'write'])
   })
 
-  it('writes handler.mjs in .theo/aws/', async () => {
+  it('writes handler.mjs in .theokit/aws/', async () => {
     let path = ''
     await buildAwsLambda(baseConfig, '/test', {
       runNodeBuild: async () => {},
@@ -133,6 +133,6 @@ describe('buildAwsLambda — orchestration', () => {
       },
       ensureDir: () => {},
     })
-    expect(path).toContain('/.theo/aws/handler.mjs')
+    expect(path).toContain('/.theokit/aws/handler.mjs')
   })
 })

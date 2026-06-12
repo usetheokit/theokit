@@ -1,5 +1,5 @@
 /* eslint-disable security/detect-non-literal-fs-filename --
- * AWS Lambda adapter. Writes to `cwd/.theo/lambda/`. Build-time tool.
+ * AWS Lambda adapter. Writes to `cwd/.theokit/lambda/`. Build-time tool.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -192,7 +192,7 @@ export async function buildAwsLambda(
   const runNodeBuild = deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter)
   await runNodeBuild(config, cwd, ctx)
 
-  const outputDir = resolve(cwd, '.theo/aws')
+  const outputDir = resolve(cwd, '.theokit/aws')
   const ensureDir = deps.ensureDir ?? ((p: string) => mkdirSync(p, { recursive: true }))
   ensureDir(outputDir)
 
@@ -205,7 +205,7 @@ export async function buildAwsLambda(
   write(resolve(outputDir, 'handler.mjs'), entry)
 
   // eslint-disable-next-line no-console -- CLI build progress
-  console.log('\n  ✓ AWS Lambda output → .theo/aws/handler.mjs\n')
+  console.log('\n  ✓ AWS Lambda output → .theokit/aws/handler.mjs\n')
 }
 
 export const awsLambdaAdapter: DeployAdapter = {

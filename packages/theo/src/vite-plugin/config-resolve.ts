@@ -61,7 +61,7 @@ const DEFAULT_RESOLVED: ResolvedPluginConfig = {
   auditLogger: undefined,
   devtoolsEnabled: true,
   openapi: undefined,
-  distDir: '.theo',
+  distDir: '.theokit',
 }
 
 export async function resolvePluginConfig(projectRoot: string): Promise<ResolvedPluginConfig> {

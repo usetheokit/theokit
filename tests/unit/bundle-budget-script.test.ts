@@ -16,7 +16,7 @@ import { randomBytes } from 'node:crypto'
  * `BUNDLE_BUDGET_KB` env var (default 350).
  *
  * These tests exercise the script's branching by:
- *   1. Building a tmp fixture that mimics .theo/client/assets layout
+ *   1. Building a tmp fixture that mimics .theokit/client/assets layout
  *   2. Writing controllable-size dummy index-*.js files
  *   3. Invoking the script with BUNDLE_SKIP_BUILD=1 + BUNDLE_FIXTURE
  *
@@ -48,7 +48,7 @@ function runScript(env: Record<string, string>): ScriptResult {
 
 function makeFixture(chunks: Record<string, Buffer>): string {
   const dir = mkdtempSync(join(tmpdir(), 'theokit-bundle-budget-'))
-  const assetsDir = join(dir, '.theo', 'client', 'assets')
+  const assetsDir = join(dir, '.theokit', 'client', 'assets')
   mkdirSync(assetsDir, { recursive: true })
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'tmp', private: true }))
   for (const [name, content] of Object.entries(chunks)) {
@@ -110,7 +110,7 @@ describe('check-bundle-budget.sh — no build output', () => {
     rmSync(fixture, { recursive: true, force: true })
   })
 
-  it('Given no .theo/client/assets directory, Then exit 2 + clear error', () => {
+  it('Given no .theokit/client/assets directory, Then exit 2 + clear error', () => {
     const res = runScript({ BUNDLE_FIXTURE: fixture })
     expect(res.exitCode).toBe(2)
     expect(res.stderr).toContain('build output not found')

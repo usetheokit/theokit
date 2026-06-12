@@ -68,7 +68,7 @@ describe('buildBun — orchestration', () => {
     expect(calls).toEqual(['node-build', 'write'])
   })
 
-  it('writes server.mjs in .theo/bun/', async () => {
+  it('writes server.mjs in .theokit/bun/', async () => {
     let writtenPath = ''
     await buildBun(baseConfig, '/test-cwd', {
       runNodeBuild: async () => {},
@@ -77,7 +77,7 @@ describe('buildBun — orchestration', () => {
       },
       ensureDir: () => {},
     })
-    expect(writtenPath).toContain('/.theo/bun/server.mjs')
+    expect(writtenPath).toContain('/.theokit/bun/server.mjs')
   })
 
   it('propagates node build errors', async () => {

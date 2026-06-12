@@ -71,7 +71,7 @@ describe('T2.3 — openapiCommand (live)', () => {
           version: '0.1.0',
           servers: [{ url: 'http://localhost:9999' }],
           specVersion: '3.1.0',
-          outDir: '.theo'
+          outDir: '.theokit'
         }
       }`,
     )
@@ -79,7 +79,7 @@ describe('T2.3 — openapiCommand (live)', () => {
     const { openapiCommand } = await import('../../packages/theo/src/cli/commands/openapi.js')
     await openapiCommand({ cwd: tmpDir })
 
-    const out = join(tmpDir, '.theo', 'openapi.json')
+    const out = join(tmpDir, '.theokit', 'openapi.json')
     const raw = readFileSync(out, 'utf-8')
     const doc = JSON.parse(raw) as { openapi: string; info: { title: string } }
     expect(doc.openapi).toBe('3.1.0')
@@ -98,7 +98,7 @@ describe('T2.3 — openapiCommand (live)', () => {
     await openapiCommand({ cwd: tmpDir, dryRun: true })
 
     const { existsSync } = await import('node:fs')
-    expect(existsSync(join(tmpDir, '.theo', 'openapi.json'))).toBe(false)
+    expect(existsSync(join(tmpDir, '.theokit', 'openapi.json'))).toBe(false)
     const printed = logSpy.mock.calls.flat().join('\n')
     expect(printed).toMatch(/openapi/i)
   })
