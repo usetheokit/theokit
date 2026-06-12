@@ -72,6 +72,7 @@ The existing `theokit generate` command (367 LoC, 7 types) provides the extensio
 - [ ] `theokit db:generate` runs `drizzle-kit generate` to create SQL migration files (prod mode)
 - [ ] Template `package.json.tmpl` updated with `drizzle-kit` as devDependency
 - [ ] Template includes `drizzle.config.ts` for drizzle-kit configuration
+- [ ] Template `eslint.config.mjs` includes `eslint-plugin-drizzle` with `enforce-delete-with-where` and `enforce-update-with-where` rules
 - [ ] All existing 77 create-theokit tests remain GREEN
 
 ## ADRs
@@ -118,6 +119,16 @@ The existing `theokit generate` command (367 LoC, 7 types) provides the extensio
 **Rationale:** Rails uses `rails db:migrate`, `rails db:seed`, `rails db:create`. The `db:` prefix groups database operations logically and avoids collision with the existing `theokit migrate` command (which handles router + services-json migrations, not DB). Per SRP (CLAUDE.md §13.1) — database operations are a distinct responsibility from framework migrations.
 
 **Alternative rejected:** Extend existing `theokit migrate` with `theokit migrate db`. Rejected because it conflates two different migration domains (framework conventions vs database schema). The existing `migrate` command has its own options (`--dry-run`, `--force`, `--name`) that don't apply to DB migrations.
+
+### D5 — eslint-plugin-drizzle in default template
+
+**Decision:** Include `eslint-plugin-drizzle` as a devDependency in the default template with `enforce-delete-with-where` and `enforce-update-with-where` rules set to `error`.
+
+**Rationale:** `db.delete(tasks)` without `.where()` silently deletes ALL rows — a catastrophic dev mistake that compiles and runs without error. The Drizzle ESLint plugin catches this at lint time with zero false positives. Cost: 2 lines in `eslint.config.mjs` + 1 devDep (~50KB). A batteries-included framework should prevent data-loss footguns by default. Per Error Handling rules (CLAUDE.md §8 — Fail Fast, Fail Clear).
+
+**Alternative rejected:** Not including the plugin (leave it to the user). Rejected because the whole point of "batteries-included" is that the right defaults are pre-configured. A dev who forgets `.where()` on their first day with TheoKit loses all their seed data — terrible DX.
+
+**Alternative rejected:** Custom ESLint rule. Rejected per Unbreakable Rule 9 (Don't Reinvent) — `eslint-plugin-drizzle` already solves this.
 
 ## Drawbacks & Risks
 
@@ -441,7 +452,8 @@ Add `drizzle.config.ts` to the default template and add `drizzle-kit` as a devDe
 ```
 packages/create-theokit/templates/default/drizzle.config.ts (NEW) — drizzle-kit config
 packages/create-theokit/templates/default/server/db/index.ts — remove inline CREATE TABLE
-packages/create-theokit/templates/default/package.json.tmpl — add drizzle-kit devDep
+packages/create-theokit/templates/default/package.json.tmpl — add drizzle-kit + eslint-plugin-drizzle devDeps
+packages/create-theokit/templates/default/eslint.config.mjs — add drizzle plugin with enforce-delete/update-with-where
 packages/create-theokit/tests/integration/scaffold-real.test.ts — update assertions
 ```
 
@@ -579,8 +591,9 @@ VERIFY:  pnpm vitest run tests/integration/scaffold-resource.test.ts
 | 5 | `theokit db:generate` (SQL migration files) | T2.1 | db.ts generate action |
 | 6 | Template drizzle.config.ts | T3.1 | Template file + devDep + scripts |
 | 7 | E2E validation | T3.2 | Integration test scaffold → generate → verify |
+| 8 | ESLint plugin drizzle (prevent accidental bulk delete/update) | T3.1 | eslint-plugin-drizzle in template eslint.config.mjs + devDep |
 
-**Coverage: 7/7 requirements covered (100%)**
+**Coverage: 8/8 requirements covered (100%)**
 
 ## Global Definition of Done
 
