@@ -75,7 +75,13 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
     server = await createServer({
       root: cwd,
       plugins: [react(), ...theoPlugins],
-      server: { port },
+      server: {
+        port,
+        host: config.host,
+        open: config.open,
+        strictPort: config.strictPort,
+        forwardConsole: config.forwardConsole,
+      },
       logLevel: options?.port === 0 ? 'silent' : undefined,
     })
 
