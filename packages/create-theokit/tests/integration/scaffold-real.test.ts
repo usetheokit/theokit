@@ -130,8 +130,8 @@ describe('scaffold (integration — real template)', () => {
     expect(pkg.dependencies['@theokit/agents']).toBeUndefined()
     // reflect-metadata is NOT a direct dep (theokit handles it internally)
     expect(pkg.dependencies['reflect-metadata']).toBeUndefined()
-    // @swc/core is NOT a devDep (theokit handles decorator compilation)
-    expect(pkg.devDependencies['@swc/core']).toBeUndefined()
+    // @swc/core IS a devDep (required for parameter decorators @Body/@Param/@Query)
+    expect(pkg.devDependencies['@swc/core']).toBeDefined()
     // Scripts use theokit CLI
     expect(pkg.scripts.dev).toBe('theokit dev')
     expect(pkg.scripts.build).toBe('theokit build')
