@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-import { AuthRequiredError } from '../auth/auth.js'
+import { isAuthRequiredError } from '../../core/contracts/auth-error-guard.js'
 import { DuplicateContextKeyError } from '../jobs/duplicate-context-key-error.js'
 import { createOutbox } from '../jobs/outbox.js'
 import { createOutboxDispatcher, createQueueClient } from '../jobs/queue-client.js'
@@ -305,18 +305,9 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
         return
       }
     }
-    // Duck-type the auth error: under Vite dev / vitest the module-loader
-    // can produce a duplicate `AuthRequiredError` class identity, so
-    // `instanceof` returns false even though the thrown value carries the
-    // expected `code` + `status` fields. We fall back to a shape check.
-    const isAuthError =
-      err instanceof AuthRequiredError ||
-      (err !== null &&
-        typeof err === 'object' &&
-        (err as { code?: unknown }).code === 'AUTH_REQUIRED' &&
-        (err as { status?: unknown }).status === 401)
-
-    if (isAuthError) {
+    // Auth error detection (shape-based guard from core/contracts — Vite HMR
+    // can break instanceof, so shape check is the canonical path).
+    if (isAuthRequiredError(err)) {
       const authErr = err as { code: string; message: string; status: number }
       sendError(res, authErr.code, authErr.message, authErr.status, undefined, requestId)
       if (pluginRunner) {

@@ -4,7 +4,11 @@ import { HttpCode, Header, Redirect } from '../../src/decorators/response.js'
 import { getMeta, ROUTE_STATUS, ROUTE_HEADERS, ROUTE_REDIRECT } from '../../src/metadata/index.js'
 import type { RedirectMeta } from '../../src/decorators/response.js'
 
-describe('T2.2 — Response-shape decorators', () => {
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
+describe.skipIf(!isVitest)('T2.2 — Response-shape decorators', () => {
   it('test_http_code_stores_override', () => {
     class Ctrl {
       @HttpCode(204)

@@ -4,7 +4,7 @@
  * Emits a Caddyfile that fronts the TheoKit web app + declared services
  * with W3C trace context propagation enabled (Caddy 2.11+ `tracing` directive).
  *
- * Generated output sits at `<dist>/.theo/node/Caddyfile`, consumed by the
+ * Generated output sits at `<dist>/.theokit/node/Caddyfile`, consumed by the
  * docker-compose stack (T3.3 compose-generator).
  *
  * EC-23: `reverse_proxy` directives are ordered by prefix length DESC.

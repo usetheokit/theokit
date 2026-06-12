@@ -7,5 +7,14 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   // Peer deps + heavy optional deps externalized (not bundled)
-  external: ['theokit', 'reflect-metadata', 'zod', '@swc/core', '@theokit/agents'],
+  external: [
+    'theokit',
+    'reflect-metadata',
+    'zod',
+    '@swc/core',
+    '@theokit/agents',
+    'react',
+    'react-dom',
+    'react-dom/server',
+  ],
 })

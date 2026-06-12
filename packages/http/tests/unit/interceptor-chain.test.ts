@@ -96,20 +96,19 @@ describe('T1.1 — Interceptor chain runner', () => {
       }
     }
 
+    const registry = new Map<Function, unknown>([[DIInterceptor, new DIInterceptor('from-di')]])
     const container = {
-      resolve: <T>(token: Function): T => {
-        if (token === DIInterceptor) return new DIInterceptor('from-di') as T
+      resolve: (token: Function): unknown => {
+        const instance = registry.get(token)
+        if (instance) return instance
         throw new Error('not found')
       },
     }
 
     const handler = async () => ({ id: 1 })
-    const result = (await runInterceptors(
-      [DIInterceptor],
-      handler,
-      fakeReq,
-      container,
-    )) as { injected: string }
+    const result = (await runInterceptors([DIInterceptor], handler, fakeReq, container)) as {
+      injected: string
+    }
 
     expect(result.injected).toBe('from-di')
   })
@@ -168,7 +167,10 @@ describe('T1.1 — Interceptor chain runner', () => {
     }
 
     const handler = async () => ({ ok: true })
-    const result = await runInterceptors([TimingInterceptor], handler, fakeReq) as { ok: boolean; timing: string }
+    const result = (await runInterceptors([TimingInterceptor], handler, fakeReq)) as {
+      ok: boolean
+      timing: string
+    }
 
     expect(result.ok).toBe(true)
     expect(result.timing).toMatch(/\d+ms/)

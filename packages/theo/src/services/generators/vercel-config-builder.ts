@@ -49,8 +49,8 @@ export function buildVercelServicesBlock(
   const webEntry: VercelServiceEntry = {
     name: 'web',
     runtime: 'node',
-    src: '.theo/vercel/',
-    routes: [{ src: '/(.*)', dest: '.theo/vercel' }],
+    src: '.theokit/vercel/',
+    routes: [{ src: '/(.*)', dest: '.theokit/vercel' }],
   }
 
   return {

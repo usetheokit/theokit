@@ -3,7 +3,7 @@
  *
  * Per ADR-0012 (mission expansion) + 2026-06-05 owner architectural decision,
  * TheoKit OSS does NOT emit K8s manifests. This adapter is intentionally thin:
- *   1. Validates the `.theo/services.json` manifest shape (existing zod gate)
+ *   1. Validates the `.theokit/services.json` manifest shape (existing zod gate)
  *   2. Logs the services that will be deployed (visibility)
  *   3. Returns — bundle is ready for upload
  *

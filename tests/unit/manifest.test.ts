@@ -96,8 +96,8 @@ describe('writeManifest', () => {
     rmSync(TMP_DIR, { recursive: true, force: true })
   })
 
-  it('should write valid JSON file to .theo/manifest.json', () => {
-    const outputDir = join(TMP_DIR, '.theo')
+  it('should write valid JSON file to .theokit/manifest.json', () => {
+    const outputDir = join(TMP_DIR, '.theokit')
     const manifest = {
       version: 1 as const,
       generatedAt: new Date().toISOString(),
@@ -129,7 +129,7 @@ describe('loadManifest', () => {
   })
 
   it('should recompile RegExp patterns from routePaths', () => {
-    const distDir = join(TMP_DIR, '.theo')
+    const distDir = join(TMP_DIR, '.theokit')
     const serverDir = join(TMP_DIR, 'server')
     mkdirSync(distDir, { recursive: true })
     writeFileSync(
@@ -154,7 +154,7 @@ describe('loadManifest', () => {
   })
 
   it('should resolve filePaths relative to serverDir', () => {
-    const distDir = join(TMP_DIR, '.theo')
+    const distDir = join(TMP_DIR, '.theokit')
     const serverDir = join(TMP_DIR, 'server')
     mkdirSync(distDir, { recursive: true })
     writeFileSync(
@@ -175,7 +175,7 @@ describe('loadManifest', () => {
   })
 
   it('should resolve filePaths correctly with different serverDir (EC-2)', () => {
-    const distDir = join(TMP_DIR, '.theo')
+    const distDir = join(TMP_DIR, '.theokit')
     const deployServerDir = join(TMP_DIR, 'deploy', 'server')
     mkdirSync(distDir, { recursive: true })
     writeFileSync(
@@ -196,7 +196,7 @@ describe('loadManifest', () => {
   })
 
   it('should throw when manifest.json does not exist', () => {
-    const distDir = join(TMP_DIR, '.theo')
+    const distDir = join(TMP_DIR, '.theokit')
     const serverDir = join(TMP_DIR, 'server')
     mkdirSync(distDir, { recursive: true })
 

@@ -1,7 +1,7 @@
 /**
  * Manifest loading stage for `theokit start` (T4.2 architecture-cleanup).
  *
- * Loads pre-built manifest from `.theo/manifest.json` if present; otherwise
+ * Loads pre-built manifest from `.theokit/manifest.json` if present; otherwise
  * scans server/ for routes/actions/ws at startup with a structured warn.
  */
 
@@ -25,7 +25,7 @@ export interface LoadedRoutes {
 
 export function loadRoutesAndActions(distDir: string, serverDir: string): LoadedRoutes {
   const manifestPath = join(distDir, 'manifest.json')
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- distDir is from `theokit start`'s own caller-controlled cwd
+
   if (existsSync(manifestPath)) {
     const manifest = loadManifest(distDir, serverDir)
     return {

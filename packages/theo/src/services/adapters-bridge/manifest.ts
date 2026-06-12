@@ -1,7 +1,7 @@
 /**
  * Neutral cross-product manifest (T1.4).
  *
- * Emitted by `theokit build` at `<cwd>/.theo/services.json` (schemaVersion 1).
+ * Emitted by `theokit build` at `<cwd>/.theokit/services.json` (schemaVersion 1).
  * Consumed by EVERY deploy adapter (Vercel, Node, Cloudflare, future TheoCloud).
  *
  * Shape is INTENTIONALLY platform-neutral (ADR-0015 invariant + D5). No
@@ -14,7 +14,7 @@
  */
 /* eslint-disable security/detect-non-literal-fs-filename --
  * Manifest read/write paths are derived from the trusted `cwd` plus a fixed
- * subpath (`.theo/services.json`). No user input flows into the path.
+ * subpath (`.theokit/services.json`). No user input flows into the path.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -69,7 +69,7 @@ export interface ServicesManifestV2 {
 
 export type ServicesManifest = ServicesManifestV1 | ServicesManifestV2
 
-const MANIFEST_RELATIVE_PATH = ['.theo', 'services.json'] as const
+const MANIFEST_RELATIVE_PATH = ['.theokit', 'services.json'] as const
 
 /**
  * Topological sort using Kahn's algorithm.
@@ -152,9 +152,9 @@ function manifestPath(cwd: string): string {
 }
 
 /**
- * Write the manifest to `<cwd>/.theo/services.json`.
+ * Write the manifest to `<cwd>/.theokit/services.json`.
  *
- * EC-6 fix: creates `.theo/` recursively if absent (fresh project on first
+ * EC-6 fix: creates `.theokit/` recursively if absent (fresh project on first
  * `pnpm build` would otherwise hit ENOENT).
  */
 export function writeManifest(cwd: string, manifest: ServicesManifest): void {
@@ -164,7 +164,7 @@ export function writeManifest(cwd: string, manifest: ServicesManifest): void {
 }
 
 /**
- * Read the manifest from `<cwd>/.theo/services.json`.
+ * Read the manifest from `<cwd>/.theokit/services.json`.
  *
  * Returns null if the file does not exist (adapter's job to handle).
  * Throws with an actionable message if the file is malformed JSON.

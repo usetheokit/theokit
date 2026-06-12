@@ -49,11 +49,14 @@ cli
   })
 
 cli
-  .command('generate <type> <name>', 'Generate a route, action, page, ws, or controller endpoint')
-  .action(async (type: string, name: string) => {
+  .command(
+    'generate <type> <name> [...fields]',
+    'Generate a route, action, page, ws, controller, or resource (resource accepts field:type args)',
+  )
+  .action(async (type: string, name: string, fields: string[]) => {
     try {
       const { generateCommand } = await import('./commands/generate.js')
-      await generateCommand(type, name)
+      await generateCommand(type, name, fields.length > 0 ? fields : undefined)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`\n  ✗ ${msg}\n`)
@@ -176,6 +179,19 @@ cli
     try {
       const { dockerCommand } = await import('./commands/docker.js')
       await dockerCommand({ force: options.force })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
+
+cli
+  .command('db <action>', 'Database commands: migrate (push schema), generate (SQL files), seed')
+  .action(async (action: string) => {
+    try {
+      const { dbCommandCli } = await import('./commands/db.js')
+      dbCommandCli(action)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`\n  ✗ ${msg}\n`)

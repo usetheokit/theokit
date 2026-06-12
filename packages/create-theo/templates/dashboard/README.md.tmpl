@@ -27,7 +27,7 @@ Open the printed URL. The default surface is a dashboard shell with sidebar nav 
 ## What the framework auto-loads
 
 - **`.env` → `process.env`**. Edit `.env`; restart the dev server.
-- **`.theo/` build output cleanup** on every `theokit build`.
+- **`.theokit/` build output cleanup** on every `theokit build`.
 - **Tailwind + `@usetheo/ui` styling** auto-configured for the TheoUI surface.
 
 ## Project structure
@@ -52,7 +52,7 @@ tailwind.config.ts    Tailwind theme tokens
 | Command | What it does |
 |---|---|
 | `npx theokit dev` | Dev server with HMR + devtools overlay |
-| `npx theokit build` | Production build → `.theo/` |
+| `npx theokit build` | Production build → `.theokit/` |
 | `npx theokit start` | Serve the production build |
 | `npx theokit check` | Lint for upgrade-readiness |
 | `npx theokit routes` | List all routes + actions detected |

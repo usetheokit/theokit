@@ -21,7 +21,7 @@ beforeEach(() => {
     `theo-app-typed-plugin-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   )
   serverDir = join(sandbox, 'server')
-  distDir = join(sandbox, '.theo')
+  distDir = join(sandbox, '.theokit')
   mkdirSync(join(serverDir, 'routes'), { recursive: true })
 })
 
@@ -36,7 +36,7 @@ function writeRoute(rel: string, content: string): void {
 }
 
 describe('appTypedClientPlugin (Vite plugin)', () => {
-  it('emits .theo/client.d.ts on initial configResolved', () => {
+  it('emits .theokit/client.d.ts on initial configResolved', () => {
     writeRoute('users.ts', 'export const GET = () => ({})\n')
     const plugin = appTypedClientPlugin({ cwd: sandbox, serverDir, distDir })
     ;(plugin.configResolved as any)({} as any)
