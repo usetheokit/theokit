@@ -214,7 +214,7 @@ describe('scaffold (integration — real template)', () => {
 
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
     expect(pkg.scripts['db:migrate']).toBe('theokit db migrate')
-    expect(pkg.scripts['db:seed']).toBe('theokit db seed')
+    expect(pkg.scripts['db:seed']).toBe('npx tsx server/db/seed.ts')
     expect(pkg.scripts['db:generate']).toBe('theokit db generate')
   })
 
