@@ -9,6 +9,7 @@ import type { ParamEntry } from './decorators/params.js'
 import { ForbiddenException, HttpException } from './exceptions/http-exception.js'
 import { runWithRequestContext, type TheoRequestContext } from './request-context.js'
 import { createStaticHandler } from './static.js'
+import { renderToStream, streamToResponse } from './stream-renderer.js'
 
 /**
  * TheoApp — NestJS/Spring Boot-style application bootstrap.
@@ -52,6 +53,20 @@ export interface TheoAppOptions {
   healthPath?: string
   /** Custom readiness endpoint path (default: '/__theo/ready'). */
   readyPath?: string
+  /**
+   * Enable streaming SSR via `renderToReadableStream` (default: false).
+   *
+   * When `true` AND `root` is provided, the app serves GET / with a streamed
+   * HTML response instead of a static `renderToString` result. This enables
+   * progressive rendering with React Suspense boundaries.
+   *
+   * **EC-7 — Error handling difference:** In streaming mode, errors inside
+   * Suspense boundaries are caught by React's streaming error handler and
+   * activate client-side error boundaries (the shell is already sent). In
+   * string mode, errors throw synchronously before any bytes are sent,
+   * allowing a full 500 error page.
+   */
+  streaming?: boolean
 }
 
 interface RouteEntry {
@@ -68,6 +83,7 @@ export class TheoApp {
   private serverHandle: ServerHandle
   private readonly routes: RouteEntry[] = []
   private frontendHtml?: string
+  private streamingRoot?: unknown
   private staticHandler?: (request: Request) => Promise<Response | null>
   private readonly startTime = Date.now()
   private readonly healthPath: string
@@ -186,7 +202,10 @@ export class TheoApp {
     }
 
     // Frontend HTML — from root (React SSR) or html string
-    if (opts.root) {
+    if (opts.root && opts.streaming) {
+      // Streaming mode: store the root element; render per-request via renderToStream
+      app.streamingRoot = opts.root
+    } else if (opts.root) {
       const { renderToString } = await import('react-dom/server')
       app.frontendHtml = '<!DOCTYPE html>' + renderToString(opts.root as React.ReactElement)
     } else if (opts.html) {
@@ -451,6 +470,12 @@ export class TheoApp {
 
     // Bug #8: Serve frontend HTML at GET /
     if (request.method === 'GET') {
+      if ((pathname === '/' || pathname === '/index.html') && this.streamingRoot) {
+        const result = await renderToStream({
+          root: this.streamingRoot as React.ReactElement,
+        })
+        return streamToResponse(result)
+      }
       if ((pathname === '/' || pathname === '/index.html') && this.frontendHtml) {
         return new Response(this.frontendHtml, {
           status: 200,
