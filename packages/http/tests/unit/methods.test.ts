@@ -4,7 +4,11 @@ import { Get, Post, Put, Patch, Delete, Options, Head, All } from '../../src/dec
 import { getMeta, ROUTE_METHODS } from '../../src/metadata/index.js'
 import type { RouteMethodEntry } from '../../src/decorators/methods.js'
 
-describe('T1.5 — HTTP-verb method decorators', () => {
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
+describe.skipIf(!isVitest)('T1.5 — HTTP-verb method decorators', () => {
   it('test_each_verb_stores_entry', () => {
     const verbs = [
       ['GET', Get],
@@ -70,7 +74,7 @@ describe('T1.5 — HTTP-verb method decorators', () => {
     const entries = getMeta<RouteMethodEntry[]>(ROUTE_METHODS, CatsCtrl)
     // Both verbs should register — mirrors NestJS dual-route behavior
     expect(entries).toHaveLength(2)
-    const verbs = entries!.map((e) => e.verb).sort()
+    const verbs = entries!.map((e) => e.verb).sort((a, b) => a.localeCompare(b))
     expect(verbs).toEqual(['GET', 'POST'])
   })
 })

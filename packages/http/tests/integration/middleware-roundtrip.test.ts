@@ -1,13 +1,16 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
-import http from 'node:http'
 import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import { Controller, Get, UseGuards } from '../../src/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
 import {
   type NestMiddleware,
-  MiddlewareConsumerImpl,
+  type MiddlewareConsumerImpl,
 } from '../../src/bridge/middleware-consumer.js'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ─── Middleware ───
 
@@ -60,7 +63,7 @@ class UsersCtrl {
 
 // ─── Tests ───
 
-describe('T2.2 — Middleware HTTP roundtrip', () => {
+describe.skipIf(!isVitest)('T2.2 — Middleware HTTP roundtrip', () => {
   function createServer(configureFn: (c: MiddlewareConsumerImpl) => void) {
     return createDecoratorServer({
       controllers: [TasksCtrl, UsersCtrl],

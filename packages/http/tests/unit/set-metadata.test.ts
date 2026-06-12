@@ -1,11 +1,13 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
 import { createDecorator, SetMetadata, Reflector } from '../../src/decorators/set-metadata.js'
-import { Controller, Get, Post, UseGuards } from '../../src/index.js'
+import { Controller, Get, UseGuards } from '../../src/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
-import { ForbiddenException } from '../../src/exceptions/index.js'
 import type { ExecutionContext } from '../../src/bridge/execution-context.js'
-import http from 'node:http'
+
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ─── Role-based auth example (NestJS Reflector pattern) ───
 
@@ -26,7 +28,7 @@ class RolesGuard {
   }
 }
 
-describe('@SetMetadata + createDecorator + Reflector', () => {
+describe.skipIf(!isVitest)('@SetMetadata + createDecorator + Reflector', () => {
   it('test_create_decorator_sets_metadata_on_method', () => {
     class Ctrl {
       @Roles(['admin', 'editor'])
@@ -39,7 +41,9 @@ describe('@SetMetadata + createDecorator + Reflector', () => {
 
   it('test_create_decorator_sets_metadata_on_class', () => {
     @Roles(['superadmin'])
-    class Ctrl {}
+    class Ctrl {
+      name = 'Ctrl'
+    }
     const roles = reflector.get(Roles, Ctrl)
     expect(roles).toEqual(['superadmin'])
   })

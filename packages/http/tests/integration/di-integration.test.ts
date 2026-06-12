@@ -4,6 +4,10 @@ import { Controller } from '../../src/decorators/controller.js'
 import { Get } from '../../src/decorators/methods.js'
 import { createDecoratorServer, type DiContainer } from '../../src/bridge/create-server.js'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 // ── Simulate @theokit/di Container with a minimal structural match ──
 
 class CatsService {
@@ -38,10 +42,10 @@ class FakeContainer implements DiContainer {
     this.registry.set(token, instance)
   }
 
-  resolve<T>(token: Function): T {
+  resolve(token: Function): unknown {
     // If asking for a class we know, return its instance
     const instance = this.registry.get(token)
-    if (instance) return instance as T
+    if (instance) return instance
 
     // For controllers: construct with deps resolved from registry
     // This simulates @theokit/di's reflect-metadata-based constructor injection
@@ -51,14 +55,14 @@ class FakeContainer implements DiContainer {
       if (!dep) throw new Error(`MissingInjectableError: ${pt.name} not registered`)
       return dep
     })
-    return new (token as new (...a: unknown[]) => T)(...args)
+    return new (token as new (...a: unknown[]) => unknown)(...args)
   }
 }
 
 // Simulate tsc emitDecoratorMetadata — CatsController(CatsService)
 Reflect.defineMetadata('design:paramtypes', [CatsService], CatsController)
 
-describe('DI Integration — constructor injection via container', () => {
+describe.skipIf(!isVitest)('DI Integration — constructor injection via container', () => {
   let server: ReturnType<typeof createDecoratorServer>
   let port: number
 
@@ -100,7 +104,7 @@ describe('DI Integration — constructor injection via container', () => {
   })
 })
 
-describe('DI fallback — works without container (backward compat)', () => {
+describe.skipIf(!isVitest)('DI fallback — works without container (backward compat)', () => {
   it('createDecoratorServer([...]) still works with array syntax', async () => {
     @Controller('health')
     class HealthCtrl {

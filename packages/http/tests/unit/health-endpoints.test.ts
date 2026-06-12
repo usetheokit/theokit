@@ -3,29 +3,38 @@ import 'reflect-metadata'
 import { TheoApp } from '../../src/app.js'
 import { Controller, Get } from '../../src/index.js'
 
+// Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
+// decorator syntax require SWC compilation provided by vitest. Skip on Bun.
+const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
+
 // Minimal controller for TheoApp.create()
 @Controller('/api/noop')
 class NoopController {
   @Get('/')
-  index() { return 'ok' }
+  index() {
+    return 'ok'
+  }
 }
 
 async function createApp(opts: Record<string, unknown> = {}) {
   return TheoApp.create({ controllers: [NoopController], ...opts })
 }
 
-async function fetch(app: TheoApp, path: string): Promise<{ status: number; body: Record<string, unknown> }> {
+async function fetch(
+  app: TheoApp,
+  path: string,
+): Promise<{ status: number; body: Record<string, unknown> }> {
   const handle = app.getServerHandle()
   await new Promise<void>((r) => handle.listen(0, r))
   const addr = handle.address()
   const port = addr?.port ?? 0
   const res = await globalThis.fetch(`http://localhost:${port}${path}`)
-  const body = await res.json() as Record<string, unknown>
+  const body = (await res.json()) as Record<string, unknown>
   await new Promise<void>((r) => handle.close(r))
   return { status: res.status, body }
 }
 
-describe('Health & Readiness Endpoints', () => {
+describe.skipIf(!isVitest)('Health & Readiness Endpoints', () => {
   it('test_health_returns_200_ok', async () => {
     const app = await createApp()
     const { status, body } = await fetch(app, '/__theo/health')
@@ -80,7 +89,10 @@ describe('Health & Readiness Endpoints', () => {
   it('test_ready_check_timeout', async () => {
     const app = await createApp({
       readinessChecks: [
-        () => new Promise((resolve) => setTimeout(() => resolve({ name: 'slow', healthy: true }), 10_000)),
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ name: 'slow', healthy: true }), 10_000),
+          ),
       ],
     })
     const start = Date.now()
@@ -95,7 +107,9 @@ describe('Health & Readiness Endpoints', () => {
     // EC-3: readiness check that throws synchronously should not crash server
     const app = await createApp({
       readinessChecks: [
-        () => { throw new Error('sync boom') },
+        () => {
+          throw new Error('sync boom')
+        },
       ],
     })
     const { status, body } = await fetch(app, '/__theo/ready')
