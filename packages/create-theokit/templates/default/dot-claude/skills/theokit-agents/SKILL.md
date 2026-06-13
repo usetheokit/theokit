@@ -114,6 +114,19 @@ for await (const event of stream) {
 }
 ```
 
+## SDK Ecosystem — "you are here" map
+
+Before writing custom tools, check if they already exist:
+
+| Package | What it provides | When to use |
+|---------|-----------------|-------------|
+| `@theokit/sdk` | `Agent.create()`, `defineTool()` (primitive), `Run.stream()` | Core agent runtime — always installed |
+| `@theokit/sdk-tools` | Ready-made tools: `createReadFileTool`, `createWriteFileTool`, `createSearchTool`, etc. | **Check here FIRST** before writing custom tools for coding agents |
+| `@theokit/di-agent` | DI-powered agent with decorator injection | When using dependency injection pattern |
+| `@theokit/di` | Core DI container (`@Injectable`, `@Inject`) | When `@theokit/di-agent` needs explicit bindings |
+
+**`defineTool()` in `@theokit/sdk` is the primitive API.** For coding agents, `@theokit/sdk-tools` has batteries-included tools that wrap `defineTool()` with file system access, search, shell execution, etc. Don't reimplement what `sdk-tools` already provides.
+
 ## Rules
 
 - Tool `name` and `description` are ALWAYS explicit — never inferred from method names (G4)
@@ -122,11 +135,13 @@ for await (const event of stream) {
 - `@UseInterceptors()` and `@UseFilters()` on agents are metadata-only (emit warnings)
 - Agent runtime is `@theokit/sdk` — NEVER call LLM APIs directly via fetch
 - Pick ONE surface per endpoint — don't mix defineAgentEndpoint with @Agent for the same route
+- Check `@theokit/sdk-tools` BEFORE writing custom tools — it may already exist
 
 ## Anti-patterns
 
 - NEVER call OpenAI/Anthropic/OpenRouter APIs directly — use @Agent or defineAgentEndpoint
 - NEVER reimplement tool calling loop — the SDK handles it
+- NEVER reimplement file/search/shell tools — use `@theokit/sdk-tools` (readFile, writeFile, search, etc.)
 - NEVER store conversations manually — use @Memory (decorator) or SDK persistence
 - NEVER infer tool capability from method name — always provide explicit `name` + `description`
 - NEVER mix both surfaces for the same endpoint — pick manual OR decorator
