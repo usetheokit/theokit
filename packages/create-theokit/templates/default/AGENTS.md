@@ -82,6 +82,19 @@ npx drizzle-kit push      # Apply schema changes (dev)
 npx drizzle-kit generate  # Generate migration files (prod)
 ```
 
+## SDK Ecosystem
+
+| Package | Purpose | Install separately? |
+|---------|---------|-------------------|
+| `theokit` | Framework (routes, SSR, client, CLI) | Already installed |
+| `@theokit/sdk` | Agent runtime (Agent.create, defineTool primitive) | Already installed |
+| `@theokit/sdk-tools` | Ready-made tools (readFile, writeFile, search, shell) | Yes — `npm install @theokit/sdk-tools` |
+| `@theokit/agents` | Decorator surface (@Agent, @Tool, @Toolbox) | Already installed |
+| `@theokit/ui` | AI chat UI components (ChatThread, ChatComposer, CodeBlock) | Yes — `npm install @theokit/ui` |
+| `@theokit/di-agent` | DI-powered agent pattern | Yes — when using DI |
+
+**Before writing custom tools, check `@theokit/sdk-tools`** — it likely has what you need.
+
 ## Don't
 
 - Don't use `any` — use Zod schemas + `z.infer<>`
@@ -89,3 +102,5 @@ npx drizzle-kit generate  # Generate migration files (prod)
 - Don't parse request body manually — use `body: z.object(...)` in defineRoute
 - Don't import from `theokit/dist/...` or `theokit/src/...` — use public exports only
 - Don't call LLM APIs directly — use @Agent + @Tool decorators
+- Don't reimplement file/search/shell tools — use `@theokit/sdk-tools`
+- Don't use `npm link` for `@theokit/ui` — causes dual-React; use tarball or npm registry
