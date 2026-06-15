@@ -26,7 +26,9 @@ import type { ServiceDefinition, ServicesConfig } from '../schema.js'
  * `theo-cloud/api/internal/source/services.schema.json`. Optional in
  * services.json v2; TheoCloud Go-side defaults to `server` when absent.
  */
-export type ManifestServiceType = 'server' | 'worker' | 'frontend'
+// `frontend` removed in simplify-deploy-theokit-only v2.0 (D5) — TheoCloud
+// serves no static frontends; service shape is server | worker only.
+export type ManifestServiceType = 'server' | 'worker'
 
 export interface ManifestServiceEntry {
   name: string

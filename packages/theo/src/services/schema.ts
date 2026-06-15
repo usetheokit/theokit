@@ -14,10 +14,11 @@ import { z } from 'zod'
 const ServiceRuntimeSchema = z.enum(['python', 'node'])
 
 /**
- * Plan v1.2 T2.2 — service shape enum, mirrored from `services.schema.json`
- * server | worker | frontend. Optional; emitters default to "server".
+ * Service shape enum, mirrored from `services.schema.json`: server | worker.
+ * Optional; emitters default to "server". `frontend` removed in
+ * simplify-deploy-theokit-only v2.0 (D5) — TheoCloud serves no static frontends.
  */
-const ServiceTypeSchema = z.enum(['server', 'worker', 'frontend'])
+const ServiceTypeSchema = z.enum(['server', 'worker'])
 
 /** EC-3 fix: names that conflict with generated docker-compose entries. */
 const RESERVED_SERVICE_NAMES = ['web', 'caddy', 'postgres', 'redis'] as const
@@ -51,7 +52,7 @@ const ServiceDefinitionSchema = z.object({
   dev: z.string().min(1),
   build: z.string().optional(),
   start: z.string().min(1),
-  openapi: z.string().url().optional(),
+  openapi: z.url().optional(),
   healthcheck: z.string().regex(/^\//, 'healthcheck must start with /').default('/health'),
   cors: z.boolean().default(false),
   env: z.record(z.string(), z.string()).optional(),
