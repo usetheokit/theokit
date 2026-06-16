@@ -1,5 +1,7 @@
 ---
 name: roadmap-feature
+version: 0.1.0
+requires: []
 description: 'Add a new feature to an existing ROADMAP.md as the next M<N+1> milestone — without renumbering anything that came before. Reads the existing roadmap, detects the next free milestone ID, runs a 4-question focused grill (why now / dependencies / DoD / risks), cross-checks against the existing "Explicitly out of scope" section, optionally clones additional SOTA references when the feature needs peers not already covered, and appends one new `## M<N+1> — [ ]` block to ROADMAP.md plus a `[Unreleased] § Added` entry to CHANGELOG.md. Sister skill of /roadmap-init — same isolation contract, opposite trigger (refuses if ROADMAP.md does NOT exist). Cap is open at M9, M10, M11… extend freely.'
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit WebSearch WebFetch AskUserQuestion

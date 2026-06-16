@@ -1,5 +1,7 @@
 ---
 name: discover-edge-cases
+version: 0.1.0
+requires: [discover-plan]
 description: Analyzes a discovery plan and identifies unforeseen edge cases — focused on deep research over sources declared in the plan (local references under .claude/knowledge-base/references/ and/or allowlisted URLs). Pragmatic — flags real risks without complicating the plan. Use after /discover-plan or when reviewing any plan under .claude/knowledge-base/discoveries/plans/.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash

@@ -1,5 +1,7 @@
 ---
 name: discover-confidence
+version: 0.1.0
+requires: [discover-execute]
 description: Score a blueprint produced by /discover-execute for structural quality (M2 deterministic check). Mirrors /plan-confidence but with a blueprint-shape rubric (research coverage, reference citations, completeness, smells).
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write

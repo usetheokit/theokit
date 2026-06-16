@@ -1,5 +1,7 @@
 ---
 name: ast-grep
+version: 0.1.0
+requires: []
 description: Structural search and refactor across multi-language codebases via tree-sitter patterns. Use when you need queries Grep can't express — function signatures, class hierarchies, decorator + function, call sites, async patterns, type definitions. Especially useful inside knowledge-base/references/ during /discover-execute. Composable from any context.
 user-invocable: true
 allowed-tools: Bash Read Glob

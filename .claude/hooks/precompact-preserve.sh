@@ -9,17 +9,8 @@
 
 set -eu
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-cd "$PROJECT_DIR" || exit 0
-
-# Detect ecosystem layout: standalone (./) or plugin install (./.claude/)
-if [ -d ".claude/skills" ] && [ -d ".claude/rules" ] && [ -d ".claude/hooks" ]; then
-  ECO=".claude"
-elif [ -d "skills" ] && [ -d "rules" ] && [ -d "hooks" ]; then
-  ECO="."
-else
-  exit 0
-fi
+# shellcheck source=lib/detect-layout.sh
+source "$(dirname "$0")/lib/detect-layout.sh"
 
 echo "[precompact-preserve] Context compaction about to occur. Preserving state."
 

@@ -1,5 +1,7 @@
 ---
 name: plan-confidence
+version: 0.1.0
+requires: [edge-case-plan]
 description: Score a plan produced by /to-plan for structural quality (M2 deterministic check). Sibling of /discover-confidence with a plan-shape rubric. Use after /edge-case-plan, before /implement.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write

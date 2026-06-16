@@ -1,5 +1,7 @@
 ---
 name: deck
+version: 0.1.0
+requires: []
 description: Create complete presentation decks with diagrams. Orchestrates /marp-slide and /excalidraw into a single workflow — plans structure, creates diagrams, builds slides, renders HTML + PPTX. Use when the user wants a full presentation with visuals.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit
