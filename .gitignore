@@ -18,6 +18,7 @@ dist/
 .vercel/
 .wrangler/
 *.tsbuildinfo
+cross-validation-output/
 
 # Environment
 .env
