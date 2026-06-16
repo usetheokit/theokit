@@ -1,5 +1,7 @@
 ---
 name: skill-validator
+version: 0.1.0
+requires: [skill-writer]
 description: Validates a candidate skill in .claude/skills/generated/ produced by /skill-writer. Checks frontmatter conformance, citation existence, duplication against existing skills, description trigger-phrase clarity, and forbidden-pattern presence. Emits verdict PASS / NEEDS_REVIEW / REJECT. Invoke manually after /skill-writer produces a candidate.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash

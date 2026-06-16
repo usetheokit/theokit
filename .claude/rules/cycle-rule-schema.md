@@ -53,6 +53,7 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 | `cycle-auto-plan` | (delegates to each chained cycle's verdict) | — | (pause + ask human at any gate failure) | — |
 | `cycle-judge-codex` (optional, external plugin) | `SHIPPABLE` / `READY_TO_MERGE` (`:final` only) | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` / `NEEDS_FIXES` / `NEEDS_DEEPER` (`:final` only) | `FAIL_HARD` / `INVALID` / `META_DEFECT_FOUND` (`:final` only) / `AGGREGATOR_BUG_SUSPECTED` (`:final` only) |
 | `dogfood` (utility) | `EVIDENCE_SUFFICIENT` | `EVIDENCE_WITH_CAVEATS` | — | `EVIDENCE_INSUFFICIENT` |
+| `cycle-analysis` (opt-in, independent) | `ON_TRACK` | `ON_TRACK_WITH_RISKS` | `COURSE_CORRECTION_NEEDED` | `FUNDAMENTAL_RETHINK` / `INVALID` |
 
 ### Why each vocabulary differs
 
@@ -62,6 +63,7 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 - **code-quality** emits a **PASS/FAIL** because it is a binary quality gate: either every finding fits inside the severity ceiling or it does not.
 - **review** emits **merge-readiness**: `READY_TO_MERGE` is the only green; `NEEDS_FIXES` returns to `/implement`; `NEEDS_DEEPER` returns to `/to-plan` for re-scoping.
 - **dogfood** emits **evidence-readiness** because its decision is "is the v1.0 claim supported by recorded usage?"
+- **analysis** emits **trajectory assessment verdicts** because it answers "is this project heading in the right direction?" — a gradient that binary gates (`PASS`/`FAIL`) cannot capture. `ON_TRACK` vs `COURSE_CORRECTION_NEEDED` vs `FUNDAMENTAL_RETHINK` maps to the severity of course correction needed: none, targeted fixes, or architectural redesign. The cycle is opt-in (requires `analysis-config.txt` with `enabled = true`) and independent — it does not gate the main chain.
 - **judge-codex** mirrors the **upstream cycle's vocabulary** intentionally — `:discover`/`:plan` reuse the SHIPPABLE band; `:implementation` mirrors `cycle-implement` exit states adapted to a verdict; `:final` mirrors `cycle-review`'s merge-readiness plus two **meta-verdicts** (`META_DEFECT_FOUND`, `AGGREGATOR_BUG_SUSPECTED`) that exist only at the review-of-review stage. The plugin is **delivered externally** (`usetheodev/judge-codex-plugin-cc`) and consumes `plan`'s golden-rule files by path convention.
 
 Do NOT introduce a new verdict token without adding it to this matrix and explaining why an existing token does not fit.

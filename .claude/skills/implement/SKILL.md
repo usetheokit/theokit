@@ -1,5 +1,7 @@
 ---
 name: implement
+version: 0.1.0
+requires: [plan-confidence]
 description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + quality gates (SOLID, Clean Code, DRY, Design Patterns). Single entry-point for cycle-implement. Use after /to-plan chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `develop`.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill Agent

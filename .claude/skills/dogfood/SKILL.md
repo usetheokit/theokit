@@ -1,5 +1,7 @@
 ---
 name: dogfood
+version: 0.1.0
+requires: []
 description: Honesty gate that blocks any 'production-ready' / 'production-grade' / v1.0 claim without recorded evidence of sustained internal use. Reads the project's dogfood manifest at knowledge-base/dogfood/manifest.md plus evidence files at knowledge-base/dogfood/evidence/, applies the project-specific dogfood golden rule (rules/dogfood-golden-rule.md — created per project), and emits EVIDENCE_SUFFICIENT / EVIDENCE_WITH_CAVEATS / EVIDENCE_INSUFFICIENT. Invoke before any production claim, milestone promotion targeting v1.0, README/CHANGELOG edit that touches status language, or release decision.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit

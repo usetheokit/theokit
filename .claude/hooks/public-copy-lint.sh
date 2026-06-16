@@ -35,13 +35,8 @@
 
 set -uo pipefail
 
-# Detect ecosystem layout: standalone (./) or plugin install (./.claude/)
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-if [ -d "$PROJECT_DIR/.claude/rules" ]; then
-  ECO=".claude"
-else
-  ECO="."
-fi
+# shellcheck source=lib/detect-layout.sh
+source "$(dirname "$0")/lib/detect-layout.sh"
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.filePath // empty')
