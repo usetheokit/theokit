@@ -7,13 +7,15 @@ goal: Fix the 3 highest-impact non-doc gaps surfaced by the Next.js cross-valida
 
 # Plan: Cross-Validation P0/P1 Fixes — Native Bindings, Page Dynamic Routing, Web-Request Params
 
-> **Version 1.3** — The `/loop-cross-validation` run against Next.js surfaced three actionable, non-documentation gaps. The plan fixes them in dependency order: **(P0)** restore the native-bindings preflight whose unit test is currently RED on `develop` and add the missing `engines.node` floor; **(P1)** give file-system **page** routes dynamic-segment support (`[param]` / `[...slug]`) at parity with API routes; **(P1)** close the Web-Standards request handler's two concrete defects — hardcoded `params = {}` and no middleware execution — without attempting the full (multi-week, high-risk) Node→Web pipeline retirement. Outcome: green test suite, dynamic page routing, and a Web request path that resolves params + runs middleware.
+> **Version 1.4** — The `/loop-cross-validation` run against Next.js surfaced three actionable, non-documentation gaps. The plan fixes them in dependency order: **(P0)** restore the native-bindings preflight whose unit test is currently RED on `develop` and add the missing `engines.node` floor; **(P1)** give file-system **page** routes dynamic-segment support (`[param]` / `[...slug]`) at parity with API routes; **(P1)** close the Web-Standards request handler's two concrete defects — hardcoded `params = {}` and no middleware execution — without attempting the full (multi-week, high-risk) Node→Web pipeline retirement. Outcome: green test suite, dynamic page routing, and a Web request path that resolves params + runs middleware.
 >
 > **v1.1 changelog (edge-case absorption — `reviews/crossval-native-routing-web-fixes-edge-cases-2026-06-16.md`):** absorbed all 5 MUST FIX (EC-1 test-path under `tests/`; EC-2 executeWebRequest-vs-executeRoute scope honesty; EC-3 middleware/CSRF ordering; EC-4 reject `[[...]]`; EC-5 validate param charset) and folded the 9 SHOULD TEST cases (EC-6…EC-14) into the per-task TDD blocks. The 5 DOCUMENT cases (EC-15…EC-19) are recorded as accepted risks in Drawbacks / Unresolved.
 >
 > **v1.2 changelog (deps-audit — `audits/crossval-native-routing-web-fixes-deps-audit-2026-06-16.md`):** added the `## Dependencies` section (resolves `plan_missing_dependencies_section`). Plan adds no new deps; touched deps audited — `better-sqlite3` clean, `react-router` LOW (advisory), `zod`/`unstorage` clean. Deps verdict: `PASS_WITH_CAVEATS` (89). 20 HIGH standing-posture findings are repo-wide, not plan-introduced — deferred to a separate hygiene sweep.
 >
 > **v1.3 changelog (plan-confidence M2):** structural re-score 60 → 70 (`SHIPPABLE_WITH_CAVEATS`). Tightened prose smells (42 → 3 hits; structural_risk 0 → 91) — reworded technical jargon flagged as subjective (`fail-fast`→`fail-closed`, `fast-path`→`short-circuit`), `could`/`may`→`can`, dropped template boilerplate `(only when applicable)`, moved concurrency escapes to plain prose, fixed Unresolved bullet format. Single remaining soft cap: `vague_acceptance_criteria` (acceptable_ratio 0.667 < 0.80; vague_ratio 0.0 — no truly-vague criteria, only "weak" on the 3-axis heuristic). Coverage 100%, ADRs 4/4 w/ alternatives, evidence 13/13 resolved, baseline complete, concurrency + unresolved + drawbacks all pass.
+>
+> **v1.4 changelog (implement TDD-shape gate):** prefixed every RED/GUARD test name with `test_` so each satisfies the implement-side `check_tdd_shape.py` Shape-3 contract (`RED: test_<behavior>`). Names-only change to TDD blocks; no task semantics altered.
 
 ## Goal
 
@@ -255,11 +257,11 @@ function findRebuildCwd(failingBindingPath?: string, defaultCwd: string): string
 
 #### TDD
 ```
-RED:  (already exists) findRebuildCwd resolves symlink to sibling repo (EC-1) — test:43
-RED:  (already exists) returns default when binding is local — test:57
-RED:  (already exists) returns default when undefined — test:70
-RED:  (already exists) returns default when path missing — test:75
-RED:  find_rebuild_cwd_nested_node_modules (EC-14) — realpath with two '/node_modules/' segments resolves to the correct sibling root (decide first-vs-last index deliberately and assert it)
+RED: test_already_exists_findrebuildcwd_resolves_symlink_to — (already exists) findRebuildCwd resolves symlink to sibling repo (EC-1) — test:43
+RED: test_already_exists_returns_default_when_binding — (already exists) returns default when binding is local — test:57
+RED: test_already_exists_returns_default_when_undefined — (already exists) returns default when undefined — test:70
+RED: test_already_exists_returns_default_when_path — (already exists) returns default when path missing — test:75
+RED: test_find_rebuild_cwd_nested_node_modules (EC-14) — realpath with two '/node_modules/' segments resolves to the correct sibling root (decide first-vs-last index deliberately and assert it)
 GREEN: implement findRebuildCwd
 REFACTOR: extract realpath-prefix helper only if >1 use (else inline — Rule of 3)
 VERIFY: npx vitest run tests/unit/preflight-native-bindings.test.ts
@@ -328,11 +330,11 @@ async function ensureNativeBindings(): Promise<void>
 
 #### TDD
 ```
-RED:  (already exists) exports findRebuildCwd + ensureNativeBindings — test:83
-RED:  (already exists) ensureNativeBindings returns a Promise — test:88
-RED:  sentinel_invalidates_when_native_deps_change (EC-6) — sentinel for ABI X must still probe a newly-added NATIVE_DEPS entry → key sentinel on `${abi}-${hash(NATIVE_DEPS+versions)}`
-RED:  ensure_native_throws_actionable_when_rebuild_does_not_fix_abi (EC-7, resolves Q4) — re-probe still failing after rebuild → actionable error (Node version + `pnpm rebuild`), NOT raw NODE_MODULE_VERSION error; no recursive rebuild
-RED:  ensure_native_handles_missing_pnpm (EC-8) — execFileSync ENOENT → actionable message ("run your package manager's rebuild for better-sqlite3"), not a raw spawn crash
+RED: test_already_exists_exports_findrebuildcwd_ensurenativebindings_test — (already exists) exports findRebuildCwd + ensureNativeBindings — test:83
+RED: test_already_exists_ensurenativebindings_returns_a_promise — (already exists) ensureNativeBindings returns a Promise — test:88
+RED: test_sentinel_invalidates_when_native_deps_change (EC-6) — sentinel for ABI X must still probe a newly-added NATIVE_DEPS entry → key sentinel on `${abi}-${hash(NATIVE_DEPS+versions)}`
+RED: test_ensure_native_throws_actionable_when_rebuild_does_not_fix_abi (EC-7, resolves Q4) — re-probe still failing after rebuild → actionable error (Node version + `pnpm rebuild`), NOT raw NODE_MODULE_VERSION error; no recursive rebuild
+RED: test_ensure_native_handles_missing_pnpm (EC-8) — execFileSync ENOENT → actionable message ("run your package manager's rebuild for better-sqlite3"), not a raw spawn crash
 GREEN: implement ensureNativeBindings + NATIVE_DEPS + exerciseDep + sentinel-deps-hash + ENOENT/rebuild-failure handling
 REFACTOR: extract isAbiError + bindingPathFromError helpers (clarity)
 VERIFY: npx vitest run tests/unit/preflight-native-bindings.test.ts   (expect 9/9)
@@ -383,7 +385,7 @@ packages/create-theokit/package.json — add engines.node
 
 #### TDD
 ```
-RED:  tests/unit/engines-node-floor.test.ts (NEW) — asserts every workspace package.json declares engines.node === '>=22.12.0'
+RED: test_tests_unit_engines_node_floor_test — tests/unit/engines-node-floor.test.ts (NEW) — asserts every workspace package.json declares engines.node === '>=22.12.0'
 GREEN: add the field to all 5 manifests
 REFACTOR: None expected
 VERIFY: npx vitest run tests/unit/engines-node-floor.test.ts
@@ -463,13 +465,13 @@ function checked(kind, paramName, name):                                        
 
 #### TDD
 ```
-RED:  scan_marks_single_dynamic_segment_with_paramName — [slug] → node.dynamic.paramName==='slug', catchAll===false
-RED:  scan_marks_catchall_segment — [...path] → node.dynamic.paramName==='path', catchAll===true
-RED:  scan_leaves_static_segment_without_dynamic_field — 'blog' → node.dynamic===undefined
-RED:  scan_preserves_route_group_behavior — (marketing) still contributes no URL segment
-RED:  scan_distinguishes_catchall_from_dynamic (EC: order) — [...slug] is catchall, NOT dynamic with paramName '...slug'
-RED:  scan_rejects_optional_catchall (EC-4) — [[...slug]] throws "optional catch-all not supported"
-RED:  scan_rejects_invalid_param_charset (EC-5) — [user-id] throws "invalid route param"
+RED: test_scan_marks_single_dynamic_segment_with — scan_marks_single_dynamic_segment_with_paramName — [slug] → node.dynamic.paramName==='slug', catchAll===false
+RED: test_scan_marks_catchall_segment — [...path] → node.dynamic.paramName==='path', catchAll===true
+RED: test_scan_leaves_static_segment_without_dynamic_field — 'blog' → node.dynamic===undefined
+RED: test_scan_preserves_route_group_behavior — (marketing) still contributes no URL segment
+RED: test_scan_distinguishes_catchall_from_dynamic (EC: order) — [...slug] is catchall, NOT dynamic with paramName '...slug'
+RED: test_scan_rejects_optional_catchall (EC-4) — [[...slug]] throws "optional catch-all not supported"
+RED: test_scan_rejects_invalid_param_charset (EC-5) — [user-id] throws "invalid route param"
 GREEN: implement parseSegment + checked() + RouteNode field
 REFACTOR: None expected
 VERIFY: npx vitest run tests/unit/router-dynamic-segments.test.ts
@@ -533,10 +535,10 @@ function segmentToPath(node): string
 
 #### TDD
 ```
-RED:  generate_emits_colon_param_for_dynamic — config contains path 'blog/:slug'
-RED:  generate_emits_splat_for_catchall — config contains 'docs/*'
-RED:  generate_catchall_is_terminal (EC-9) — a [...slug] node with children either rejects at build OR emits the splat last; assert react-router config validity (splat must be the last segment in its branch)
-GUARD: generate_static_output_unchanged (EC-13) — golden snapshot committed BEFORE editing generate.ts (must pass against unchanged generate.ts first), then re-run after the change to prove static output byte-stable
+RED: test_generate_emits_colon_param_for_dynamic — config contains path 'blog/:slug'
+RED: test_generate_emits_splat_for_catchall — config contains 'docs/*'
+RED: test_generate_catchall_is_terminal (EC-9) — a [...slug] node with children either rejects at build OR emits the splat last; assert react-router config validity (splat must be the last segment in its branch)
+GUARD: test_generate_static_output_unchanged (EC-13) — golden snapshot committed BEFORE editing generate.ts (must pass against unchanged generate.ts first), then re-run after the change to prove static output byte-stable
 GREEN: implement segmentToPath
 REFACTOR: None expected
 VERIFY: npx vitest run tests/unit/router-dynamic-segments.test.ts tests/unit/router-generate-golden.test.ts
@@ -577,7 +579,7 @@ tests/e2e/app-router-dynamic-routes.spec.ts (NEW) — navigate to /blog/hello, a
 
 #### TDD
 ```
-RED:  e2e: visiting /blog/hello renders the page with slug 'hello' visible
+RED: test_e2e_visiting_blog_hello_renders_the — e2e: visiting /blog/hello renders the page with slug 'hello' visible
 GREEN: (passes once T2.1+T2.2 land + fixture page reads useParams)
 REFACTOR: None expected
 VERIFY: npx playwright test tests/e2e/app-router-dynamic-routes.spec.ts
@@ -643,10 +645,10 @@ interface ExecuteWebRequestOptions { ...; params?: Record<string,string> }
 
 #### TDD
 ```
-RED:  web_handler_receives_resolved_params — GET /users/:id with {id:'42'} → handler sees params.id==='42'
-RED:  web_handler_validates_params_via_zod — invalid param → 422 VALIDATION_ERROR (params)
-RED:  web_handler_params_default_empty_preserves_compat — no opts.params → paramsRaw {} (existing behavior)
-RED:  web_handler_catchall_param_preserves_slashes (EC-10) — /docs/a/b/c on [...path] → handler sees params.path==='a/b/c'; Zod (if present) validates the joined string
+RED: test_web_handler_receives_resolved_params — GET /users/:id with {id:'42'} → handler sees params.id==='42'
+RED: test_web_handler_validates_params_via_zod — invalid param → 422 VALIDATION_ERROR (params)
+RED: test_web_handler_params_default_empty_preserves_compat — no opts.params → paramsRaw {} (existing behavior)
+RED: test_web_handler_catchall_param_preserves_slashes (EC-10) — /docs/a/b/c on [...path] → handler sees params.path==='a/b/c'; Zod (if present) validates the joined string
 GREEN: add opts.params + wire node-web-adapter
 REFACTOR: extract paramsRaw resolution if it pushes complexity caps
 VERIFY: npx vitest run tests/integration/web-handler-params.test.ts
@@ -713,12 +715,12 @@ if opts.middleware:
 
 #### TDD
 ```
-RED:  web_middleware_runs_before_handler — middleware sets ctx; handler observes it
-RED:  web_middleware_can_short_circuit — middleware returns Response; handler NOT called
-RED:  web_no_middleware_is_zero_overhead — without opts.middleware, behavior == today
-RED:  web_csrf_runs_before_user_middleware (EC-3) — CSRF gate fires before user middleware; a middleware cannot bypass CSRF
-RED:  web_middleware_shortcircuit_preserves_set_cookie (EC-11) — short-circuit Response with Set-Cookie → header survives (via mergeHookHeaders/getSetCookie)
-RED:  middleware_contract_parity_node_vs_web (EC-12) — one middleware module run through both runners yields the same ctx mutation + short-circuit behavior
+RED: test_web_middleware_runs_before_handler — middleware sets ctx; handler observes it
+RED: test_web_middleware_can_short_circuit — middleware returns Response; handler NOT called
+RED: test_web_no_middleware_is_zero_overhead — without opts.middleware, behavior == today
+RED: test_web_csrf_runs_before_user_middleware (EC-3) — CSRF gate fires before user middleware; a middleware cannot bypass CSRF
+RED: test_web_middleware_shortcircuit_preserves_set_cookie (EC-11) — short-circuit Response with Set-Cookie → header survives (via mergeHookHeaders/getSetCookie)
+RED: test_middleware_contract_parity_node_vs_web (EC-12) — one middleware module run through both runners yields the same ctx mutation + short-circuit behavior
 GREEN: implement runWebMiddleware (CSRF-before-middleware order) + wire into executeWebRequest
 REFACTOR: keep web-handler.ts under budget (extract runner to sibling file)
 VERIFY: npx vitest run tests/integration/web-handler-params.test.ts
