@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Removed
 
+- Removed 9 orphan tests for the discontinued `examples/full-stack-agent` demo (gutted by the stale-cleanup commit `fc3f49b`) — `example-{chat-route,echo-tool,pure-tools,web-tools,workspace-tools,full-stack-agent-skeleton,shim-deleted,tailwind-files-deleted}` (unit) + `example-full-stack-agent.spec.ts` (e2e). Each asserted files (`server/tools/*`, `server/routes/chat.ts`, a deleted spike doc) that no longer exist. Governed by ADR 0024 (remove orphan tests left by the stale cleanup) — not a silent skip. (#remove-orphan-tests)
 - Narrowed the scaffold template set to **`default` only** (ADR 0023). Removed the `create-theo` extras `api-only`, `dashboard`, `postgres`, `saas` (the published `create-theokit` scaffolder already shipped only `default`), plus the tests that exclusively exercised them (`scaffold-saas-template`, `template-postgres`, `all-templates-primitives-dogfood`, and the `template-{api-only,dashboard,postgres,saas}` e2e specs). Polyglot backends are delivered via the `--backend` flag on `create-theokit`, not separate templates. (#default-only-template-set)
 
 ### Fixed
