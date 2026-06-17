@@ -172,14 +172,16 @@ describe.skipIf(!isVitest)('Real E2E — TheoKit Full-Stack', () => {
   // ── TypedClient ──
 
   it('TypedClient.get() returns typed response', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(baseUrl)
+    const client =
+      createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(baseUrl)
     const tasks = (await client.get('/api/tasks')) as unknown[]
     expect(Array.isArray(tasks)).toBe(true)
     expect(tasks.length).toBeGreaterThanOrEqual(2)
   })
 
   it('TypedClient.post() sends body and returns typed response', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(baseUrl)
+    const client =
+      createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(baseUrl)
     const task = (await client.post('/api/tasks', { title: 'Client Task', priority: 'low' })) as {
       id: number
       title: string
@@ -189,7 +191,8 @@ describe.skipIf(!isVitest)('Real E2E — TheoKit Full-Stack', () => {
   })
 
   it('TypedClient throws TypedClientError on 422', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(baseUrl)
+    const client =
+      createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(baseUrl)
     await expect(client.post('/api/tasks', { title: 'ab' })).rejects.toThrow(TypedClientError)
   })
 
