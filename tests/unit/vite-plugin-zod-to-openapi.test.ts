@@ -1,10 +1,9 @@
 /**
- * T1.1 — In-house Zod → OpenAPI Schema conversion (build-time only).
+ * Zod → OpenAPI Schema conversion (build-time only).
  *
- * Per G2 plan v1.1 ADR D1 + EC-1: installed zod is 3.25.76 (no native
- * `.toJSONSchema()`). Algorithm is in-house, modelled on encore's
- * `pkg/clientgen/openapi/schema.go` recursive descent + seen-map for
- * cycle detection.
+ * Installed zod is v4 (`z.toJSONSchema()` native). The converter delegates to
+ * `z.toJSONSchema()` and normalizes the draft-2020-12 output to OpenAPI 3.0/3.1
+ * (nullable/oneOf/const→enum/discriminator/etc. — see zod-to-openapi.ts).
  *
  * Pure function — no I/O, no module loading. Caller is responsible for
  * extracting the Zod schemas from `defineRoute()` config objects.
@@ -37,15 +36,15 @@ describe('zodToOpenApiSchema — primitives', () => {
     expect(zodToOpenApiSchema(z.boolean())).toEqual({ type: 'boolean' })
   })
 
-  it('z.string().email() → { type: "string", format: "email" }', () => {
-    expect(zodToOpenApiSchema(z.string().email())).toEqual({
+  it('z.email() → { type: "string", format: "email" }', () => {
+    expect(zodToOpenApiSchema(z.email())).toEqual({
       type: 'string',
       format: 'email',
     })
   })
 
-  it('z.string().uuid() → { type: "string", format: "uuid" }', () => {
-    expect(zodToOpenApiSchema(z.string().uuid())).toEqual({
+  it('z.uuid() → { type: "string", format: "uuid" }', () => {
+    expect(zodToOpenApiSchema(z.uuid())).toEqual({
       type: 'string',
       format: 'uuid',
     })
@@ -132,7 +131,7 @@ describe('zodToOpenApiSchema — unsupported types', () => {
   it('z.function() throws ZodToOpenApiError with descriptive message', () => {
     // z.function() is a ZodType at the type level, so no @ts-expect-error
     // needed; the rejection is runtime via the switch's default arm.
-    expect(() => zodToOpenApiSchema(z.function() as unknown as z.ZodType)).toThrowError(
+    expect(() => zodToOpenApiSchema(z.function() as unknown as z.ZodType)).toThrow(
       ZodToOpenApiError,
     )
     expect(() => zodToOpenApiSchema(z.function() as unknown as z.ZodType)).toThrow(/z\.function/i)
