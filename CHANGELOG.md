@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - DRY violation: `AuthRequiredError` duck-type detection duplicated in 3 locations — extracted `isAuthRequiredError()` guard to `core/contracts/auth-error-guard.ts` (#arch-remediation)
 - Cyclomatic complexity CC=33 in `request-handler.ts` — decomposed into 7 focused sub-functions, removed `eslint-disable complexity` suppression (#arch-remediation)
 - Restored the missing `fixtures/upgrade-readiness-{clean,dirty}` fixtures the upgrade-readiness scanner suite depends on — `clean` is a 0.3-ready app (theoFetch only), `dirty` carries one of each anticipated 0.3 violation (raw fetch POST, inline `<script>`, `dangerouslySetInnerHTML`). Turns the previously-RED `tests/unit/cli-upgrade-readiness.test.ts` green (8 fixture-backed tests). (#restore-upgrade-readiness-fixtures)
+- Restored the local E2E harness — `playwright.config.ts` (referenced by `pnpm test:e2e` but missing on `develop`) plus the four dependency-free routing fixtures it serves (`onda1-hello-theo`, `app-router-nested-layouts`, `app-router-errors`, `app-router-not-found`). Each project boots a real TheoKit dev server and drives it with Chromium; the four projects pass 13/13. Heavier specs (template-*, services-*, devtools, websocket, ssr-nonce) remain unwired pending per-fixture setup (`@theokit/ui`/postgres/python/LLM creds or the not-yet-built templates). (#restore-e2e-harness)
 
 ### Security
 
