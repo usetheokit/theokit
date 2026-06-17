@@ -61,3 +61,90 @@ describe('executeWebRequest route params (T3.1)', () => {
     expect(await res.json()).toEqual({ path: 'a/b/c' })
   })
 })
+
+import { CSRF_PROTECTED_METHODS } from '../../packages/theo/src/server/web-handler.js'
+
+/**
+ * T3.2 — the Web path must run a middleware chain (the no-hooks branch ran
+ * none). Order: CSRF gate fires BEFORE user middleware (EC-3). Short-circuit
+ * returns the middleware Response verbatim (Set-Cookie preserved, EC-11).
+ */
+describe('executeWebRequest middleware chain (T3.2)', () => {
+  it('test_web_middleware_runs_before_handler', async () => {
+    const route = {
+      GET: {
+        handler: ({ context }: { context: Record<string, unknown> }) => ({ user: context.user }),
+      },
+    }
+    const res = await executeWebRequest(new Request('http://x/me'), route, {
+      middleware: [
+        (_req, ctx) => {
+          ctx.user = 'alice'
+        },
+      ],
+    })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ user: 'alice' })
+  })
+
+  it('test_web_middleware_can_short_circuit', async () => {
+    let handlerCalled = false
+    const route = {
+      GET: {
+        handler: () => {
+          handlerCalled = true
+          return { ok: true }
+        },
+      },
+    }
+    const res = await executeWebRequest(new Request('http://x/admin'), route, {
+      middleware: [() => new Response('forbidden', { status: 403 })],
+    })
+    expect(res.status).toBe(403)
+    expect(handlerCalled).toBe(false)
+  })
+
+  it('test_web_middleware_shortcircuit_preserves_set_cookie', async () => {
+    const route = { GET: { handler: () => ({ ok: true }) } }
+    const res = await executeWebRequest(new Request('http://x/login'), route, {
+      middleware: [
+        () =>
+          new Response('redirecting', {
+            status: 302,
+            headers: { 'set-cookie': 'sid=abc; HttpOnly', location: '/' },
+          }),
+      ],
+    })
+    expect(res.status).toBe(302)
+    expect(res.headers.get('set-cookie')).toBe('sid=abc; HttpOnly')
+  })
+
+  it('test_web_no_middleware_is_zero_overhead', async () => {
+    // Without opts.middleware, behavior is unchanged (handler runs directly).
+    const route = { GET: { handler: () => ({ ok: true }) } }
+    const res = await executeWebRequest(new Request('http://x/'), route)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+  })
+
+  it('test_web_csrf_runs_before_user_middleware', async () => {
+    // CSRF strict + protected method without token → CSRF blocks BEFORE middleware.
+    expect(CSRF_PROTECTED_METHODS.has('POST')).toBe(true)
+    let middlewareRan = false
+    const route = {
+      POST: {
+        handler: () => ({ ok: true }),
+      },
+    }
+    const res = await executeWebRequest(new Request('http://x/write', { method: 'POST' }), route, {
+      csrfMode: 'strict',
+      middleware: [
+        () => {
+          middlewareRan = true
+        },
+      ],
+    })
+    expect(res.status).toBeGreaterThanOrEqual(400) // CSRF rejected
+    expect(middlewareRan).toBe(false) // middleware never ran — CSRF gate is first
+  })
+})
