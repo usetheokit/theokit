@@ -54,23 +54,22 @@ export interface DefineAgentToolSpec<T extends z.ZodType> {
 const TOOL_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
 
 function isZodObject(schema: z.ZodType): boolean {
-  // Zod 3 stores the typeName at `_def.typeName`. ZodObject has 'ZodObject'.
   // Refinements (`.refine`), transforms (`.transform`), and defaults wrap the
-  // underlying schema in ZodEffects / ZodDefault / etc. — walk the chain via
-  // `_def.schema` / `_def.innerType` until we hit ZodObject (or give up).
-  // Avoids importing the ZodObject class to keep the runtime import surface
-  // minimal.
+  // underlying schema — walk the chain until we hit a ZodObject (or give up).
+  // Supports both zod 4 (`instanceof z.ZodObject`, `def.type === 'object'`,
+  // wrappers via `def.innerType` / pipe via `def.in`) and zod 3
+  // (`_def.typeName === 'ZodObject'`, wrappers via `_def.schema`/`_def.innerType`).
   let current: unknown = schema
   for (let depth = 0; depth < 10; depth++) {
-    const def = (current as { _def?: { typeName?: string; schema?: unknown; innerType?: unknown } })
+    if (current instanceof z.ZodObject) return true
+    const z4 = (current as { def?: { type?: string; innerType?: unknown; in?: unknown } }).def
+    if (z4?.type === 'object') return true
+    const z3 = (current as { _def?: { typeName?: string; schema?: unknown; innerType?: unknown } })
       ._def
-    if (def?.typeName === 'ZodObject') return true
-    if (def?.schema !== undefined) {
-      current = def.schema
-      continue
-    }
-    if (def?.innerType !== undefined) {
-      current = def.innerType
+    if (z3?.typeName === 'ZodObject') return true
+    const next = z4?.innerType ?? z4?.in ?? z3?.schema ?? z3?.innerType
+    if (next !== undefined) {
+      current = next
       continue
     }
     return false
@@ -113,7 +112,10 @@ export function defineAgentTool<T extends z.ZodType>(spec: DefineAgentToolSpec<T
 
   // Zod v4 native JSON Schema conversion — replaces zod-to-json-schema dep.
   // Strip $schema (Anthropic + some providers reject it).
-  const { $schema: _$schema, ...inputSchema } = z.toJSONSchema(spec.inputSchema) as Record<string, unknown> & {
+  const { $schema: _$schema, ...inputSchema } = z.toJSONSchema(spec.inputSchema) as Record<
+    string,
+    unknown
+  > & {
     $schema?: unknown
   }
 
@@ -122,7 +124,7 @@ export function defineAgentTool<T extends z.ZodType>(spec: DefineAgentToolSpec<T
     description: spec.description,
     inputSchema,
     handler: async (input: Record<string, unknown>): Promise<string> => {
-      const parsed = spec.inputSchema.parse(input) as z.infer<T>
+      const parsed = spec.inputSchema.parse(input)
       return await spec.handler(parsed)
     },
   }
