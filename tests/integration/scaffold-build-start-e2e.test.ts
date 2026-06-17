@@ -63,7 +63,11 @@ describe('T7.4 Sub-fase D — scaffold → build → start E2E', () => {
 
   it('scaffolded app uses `theokit` imports (not `theo`) — locked stack', () => {
     const health = readFileSync(join(projectDir, 'server/routes/health.ts'), 'utf8')
-    expect(health).toMatch(/from ['"]theokit\/server['"]/)
+    // Accept the canonical barrel OR a documented subpath (`theokit/server`,
+    // `theokit/server/define`, …) — the locked-stack invariant is the
+    // `theokit` scope, not a specific subpath. (server/index.ts documents
+    // `import { defineRoute } from 'theokit/server/define'`.)
+    expect(health).toMatch(/from ['"]theokit\/server[/'"]/)
     expect(health).not.toMatch(/from ['"]theo\/server['"]/)
   })
 
