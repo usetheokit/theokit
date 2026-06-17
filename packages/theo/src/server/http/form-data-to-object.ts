@@ -134,8 +134,11 @@ function coerceArrayElements(
   values: FormDataEntryValue[],
   arrayValidator: z.ZodArray<z.ZodType>,
 ): unknown[] {
-  const def = arrayValidator.def as unknown as { type?: z.ZodType }
-  const elementType = def.type ? unwrapWrappers(def.type) : undefined
+  // zod 4 stores the array element schema in `def.element` (`def.type` is the
+  // discriminator string 'array'). Fall back to `def.type` for older shapes.
+  const def = arrayValidator.def as unknown as { element?: z.ZodType; type?: unknown }
+  const elementSchema = def.element ?? (def.type instanceof z.ZodType ? def.type : undefined)
+  const elementType = elementSchema ? unwrapWrappers(elementSchema) : undefined
   if (elementType instanceof z.ZodNumber) {
     return values.map((v) => (typeof v === 'string' ? Number(v) : v))
   }
