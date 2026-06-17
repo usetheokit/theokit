@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { detectPkgManager } from '../../packages/create-theo/src/pkg-manager.js'
+import { detectPkgManager } from '../../packages/create-theokit/src/pkg-manager.js'
 
 const originalAgent = process.env.npm_config_user_agent
 

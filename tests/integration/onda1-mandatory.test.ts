@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { scaffold } from '../../packages/create-theo/src/index.js'
+import { scaffold } from '../../packages/create-theokit/src/index.js'
 import { startDevServer } from '../../packages/theo/src/cli/commands/dev.js'
 import { validateProjectStructure } from 'theokit'
 import { existsSync, mkdirSync } from 'node:fs'

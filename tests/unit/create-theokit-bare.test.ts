@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { scaffold } from '../../packages/create-theo/src/index.js'
+import { scaffold } from '../../packages/create-theokit/src/index.js'
 
 function makeTargetDir(): string {
   return mkdtempSync(join(tmpdir(), 'theokit-bare-test-'))

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { scaffold } from '../../packages/create-theo/src/index.js'
+import { scaffold } from '../../packages/create-theokit/src/index.js'
 
 /**
  * Dogfood polish 2026-05-22:
