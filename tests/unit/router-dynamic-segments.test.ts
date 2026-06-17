@@ -128,3 +128,22 @@ describe('generateRouteManifest dynamic emission (T2.2)', () => {
     expect(generateRouteManifest(staticTree)).toMatchSnapshot()
   })
 })
+
+describe('generate catch-all is terminal (EC-9)', () => {
+  it('test_generate_catchall_is_terminal', () => {
+    // A catch-all leaf emits react-router splat '*' (terminal match), never a
+    // nested literal segment. react-router requires the splat to be the last
+    // segment in its branch; a catch-all page is a leaf by construction.
+    const tree: RouteNode = {
+      segment: '',
+      path: '/',
+      children: [
+        leaf('[...path]', '/app/docs/[...path]/page.tsx', { paramName: 'path', catchAll: true }),
+      ],
+    }
+    const out = generateRouteManifest(tree)
+    expect(out).toContain("path: '*'")
+    // no nested child path emitted after the splat (terminal)
+    expect(out).not.toMatch(/path: '\*'[^}]*children: \[\{[^]]*path:/)
+  })
+})
