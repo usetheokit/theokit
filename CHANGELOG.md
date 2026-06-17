@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The `create-theokit` **default template is now the agent chat-surface** (ADR 0026), not the decorator-REST app. `npm create theokit && npm run dev` immediately shows a working agent chat UI (`@theokit/ui` ChatThread/ChatComposer + a streaming `chat.ts` wired to `@theokit/sdk`'s `createConversationHistory`/`streamAgentRun`). Removed the decorator scaffolding (controllers/toolboxes/guards/db). `--bare` still strips the UI/SDK/Tailwind and ships a minimal "Hello Theo". Resolves the suite self-contradiction (decorator-default e2e `scaffold-to-request` removed; chat-surface unit tests repointed to `create-theokit/templates/default` and passing). (#default-chat-surface)
 
+### Changed (0.3.0 cohort, 2026-06-02)
+
+- CSRF protection defaults to **strict** — mutating requests without the `X-Theo-Action` header are now blocked with `403` instead of warned. ([0.3.0 migration guidance](https://theokit.dev/migration/0.2-to-0.3#csrf-default-strict))
+- Content-Security-Policy defaults to **enforce** — inline `<script>` (no `src=`) and `dangerouslySetInnerHTML` payloads are blocked (no `'unsafe-inline'`). ([0.3.0 migration guidance](https://theokit.dev/migration/0.2-to-0.3#csp-default-enforce))
+
 ### Removed
 
 - Removed 24 more orphan tests left by the `fc3f49b` stale-cleanup, each asserting a deleted artifact (ADR 0024). Unit: `adr-{0007,0008,0009,0010,0011}-*`, `adr-0023-structure`, `architecture-rules-v2`, `blog-0-3-0-voice-and-tone`, `changelog-wave-2-completion`, `concept-doc-{plugins,services,storage-manager,storage-manager-v2}`, `dead-code-audit-decisions`, `docs-{auth-providers,caching,zero-config-exists}`, `load-test-script`, `migration-envelope-codemod`, `migration-guide-shape`, `runbook-0-3-0-rollback` (deleted ADR/concept/blog/runbook docs + removed scripts). Integration: `docs-conversation-history`, plus the `theoui-provider-wrapping` / `ui-message-migration` regressions — their ThemeScript/TheoUIProvider contract was bound entirely to the discontinued chat-surface demos (openrouter-demo, full-stack-agent); no live surface uses `ThemeScript`. If a live template re-adopts `@theokit/ui`'s ThemeScript, the regression is re-added via TDD. (#remove-orphan-tests)
