@@ -1,15 +1,28 @@
 /**
- * TheoKit App — manual bootstrap (optional).
+ * TheoKit App — convention over configuration.
  *
- * `theokit dev` auto-discovers server/routes/ — you don't need this file
- * for basic usage. Use it when you need explicit controller/agent registration.
+ * "The framework that reduces noise for humans + AI."
  *
- * Example with controllers + agents:
- *
- *   import 'reflect-metadata'
- *   import { TheoApp } from '@theokit/http/app'
- *   import { MyController } from './server/controllers/my.controller.js'
- *
- *   const app = await TheoApp.create({ controllers: [MyController] })
- *   await app.listen(3000)
+ * Backend classes registered in server/index.ts (one barrel, like Rails).
+ * Routes inferred from class names. Zero manual wiring.
  */
+import 'reflect-metadata'
+import { readFileSync } from 'node:fs'
+import { TheoApp } from '@theokit/http/app'
+import { TasksController, AssistantAgent, TaskTools } from './server/index.js'
+
+let html: string | undefined
+try {
+  html = readFileSync(new URL('./public/index.html', import.meta.url), 'utf-8')
+} catch {
+  /* no frontend */
+}
+
+const app = await TheoApp.create({
+  controllers: [TasksController],
+  agents: [AssistantAgent],
+  providers: [TaskTools],
+  html,
+})
+
+await app.listen(3000)
