@@ -6,6 +6,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Entry-client script (has src=) — required by the template-html-validator
+         tripwire; the upgrade-readiness scanner ignores it (only flags inline
+         <script> WITHOUT src). -->
+    <script type="module" src="/@theo/entry-client"></script>
     <!-- Inline <script> WITHOUT a src= attribute → `inline-script` violation
          under 0.3 enforce-CSP (no 'unsafe-inline'). -->
     <script>
