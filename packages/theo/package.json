@@ -160,5 +160,8 @@
   "publishConfig": {
     "provenance": true,
     "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
