@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Native-bindings preflight was a no-op stub while its type declaration and unit test referenced a missing `findRebuildCwd` — restored the real ABI-mismatch preflight (workspace-link realpath routing, abi+deps-hash sentinel, CI fail-closed, single-rebuild-then-actionable-error, pnpm-missing handling). Turns the previously-RED `tests/unit/preflight-native-bindings.test.ts` green. (#crossval-native-routing-web-fixes)
 - Circular dependency between `generate-resource.ts` and `generate.ts` — extracted shared types to `generate-types.ts` (#arch-remediation)
 - DRY violation: `envelopeCodeToStatus` duplicated in `web-handler.ts` and `handle-request-error.ts` — consolidated into `core/contracts/envelope-code-to-status.ts` (#arch-remediation)
 - DRY violation: `AuthRequiredError` duck-type detection duplicated in 3 locations — extracted `isAuthRequiredError()` guard to `core/contracts/auth-error-guard.ts` (#arch-remediation)
