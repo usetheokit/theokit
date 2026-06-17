@@ -53,9 +53,7 @@ export function scaffold(
   const templateDir = getTemplateDir(templateName)
 
   if (!existsSync(templateDir)) {
-    throw new Error(
-      `Template "${templateName}" not found. Available templates: default, dashboard, api-only, postgres, saas`,
-    )
+    throw new Error(`Template "${templateName}" not found. Available templates: default`)
   }
 
   // Bug #1 fix: "." means current directory — use dir basename as project name

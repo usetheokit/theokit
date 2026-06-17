@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Web-Standards request handler now resolves route params — `executeWebRequest` accepts `opts.params` (from `matchRoute`) and threads them to the handler + Zod `params` validation, replacing the previously hardcoded empty `{}`. Backward-compatible (params default to `{}`). (#crossval-native-routing-web-fixes)
 - Dynamic page routing — file-system **page** routes now support `[param]` and catch-all `[...slug]` segments (parity with API routes), emitted as react-router `:param` / `*`. Invalid param charset and optional catch-all `[[...]]` fail at build time with a clear error. (#crossval-native-routing-web-fixes)
 
+### Removed
+
+- Narrowed the scaffold template set to **`default` only** (ADR 0023). Removed the `create-theo` extras `api-only`, `dashboard`, `postgres`, `saas` (the published `create-theokit` scaffolder already shipped only `default`), plus the tests that exclusively exercised them (`scaffold-saas-template`, `template-postgres`, `all-templates-primitives-dogfood`, and the `template-{api-only,dashboard,postgres,saas}` e2e specs). Polyglot backends are delivered via the `--backend` flag on `create-theokit`, not separate templates. (#default-only-template-set)
+
 ### Fixed
 
 - OpenAPI emitter migrated to zod v4 internals — the zod→OpenAPI converter now normalizes zod 4's `z.toJSONSchema` output (collapse `anyOf`+null → `nullable`, union `anyOf` → `oneOf`, strip redundant `pattern`/safe-integer bounds, `const`→`enum` for 3.0 compat, re-attach discriminated-union `discriminator`, emit transform input shape, throw on `z.function()`); and query/path `required` is computed via `safeParse(undefined)` instead of the removed `_def.typeName`. Fixes the zod-3→4 drift across the converter, operation param builder, spec-compliance, and golden-fixture suites. (#repo-test-failure-landscape)
