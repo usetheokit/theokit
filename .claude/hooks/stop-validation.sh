@@ -127,7 +127,17 @@ fi
 # ----------------------------------------------------------------------------
 # 2b. Secret leak (HARD GATE — cycle-review BLOCKER)
 # ----------------------------------------------------------------------------
-SECRET_HITS=$(echo "$ALL_FILES" \
+# Only consider files that are PRESENT (added/modified) — a DELETED file cannot
+# leak a secret, so `--diff-filter=d` (exclude deletions) is applied to each of
+# the three diff windows. Without this, removing a placeholder `.env.example`
+# (or rotating any secret-pattern file out of the tree) would BLOCK the stop on
+# a phantom "leak" that no longer exists on disk.
+UNSTAGED_PRESENT=$(git diff --name-only --diff-filter=d 2>/dev/null || true)
+STAGED_PRESENT=$(git diff --cached --name-only --diff-filter=d 2>/dev/null || true)
+LAST_COMMIT_PRESENT=$(git diff --name-only --diff-filter=d HEAD~1..HEAD 2>/dev/null || true)
+PRESENT_FILES=$(echo -e "${UNSTAGED_PRESENT}\n${STAGED_PRESENT}\n${LAST_COMMIT_PRESENT}" | sort -u | grep -v '^$' || true)
+
+SECRET_HITS=$(echo "$PRESENT_FILES" \
   | grep -E '(^|/)(\.env(\.[a-z0-9_-]+)?|credentials([._-][a-z0-9]+)?|[a-z0-9_-]*secret[s]?(\.[a-z0-9_-]+)?\.(ya?ml|json|env|txt))$|\.(pem|key|p12|pfx|jks)$' \
   || true)
 if [ -n "$SECRET_HITS" ]; then
