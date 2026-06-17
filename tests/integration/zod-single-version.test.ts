@@ -6,29 +6,31 @@ import { execSync } from 'node:child_process'
 const REPO = resolve(__dirname, '../..')
 
 describe('Zod single-version invariant (T0.1)', () => {
-  it('package.json contains pnpm.overrides.zod === 3.25.76', () => {
+  // Repo migrated to Zod v4 (commit 264449e "monorepo infra upgrades — Zod v4").
+  // The single-version invariant stands; only the pinned major flipped 3 → 4.
+  it('package.json contains pnpm.overrides.zod === ^4.0.0', () => {
     const pkg = JSON.parse(readFileSync(resolve(REPO, 'package.json'), 'utf8')) as {
       pnpm?: { overrides?: Record<string, string> }
     }
-    expect(pkg.pnpm?.overrides?.zod).toBe('3.25.76')
+    expect(pkg.pnpm?.overrides?.zod).toBe('^4.0.0')
   })
 
   it('exactly ONE zod version installed in node_modules/.pnpm/', () => {
     const pnpmDir = resolve(REPO, 'node_modules/.pnpm')
     const entries = readdirSync(pnpmDir).filter((e) => /^zod@\d/.test(e))
     expect(entries.length).toBe(1)
-    expect(entries[0]).toBe('zod@3.25.76')
+    expect(entries[0]).toMatch(/^zod@4\./)
   })
 
-  it('require("zod/package.json").version === 3.25.76', () => {
+  it('require("zod/package.json").version is 4.x', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const zodPkg = require('zod/package.json') as { version: string }
-    expect(zodPkg.version).toBe('3.25.76')
+    expect(zodPkg.version).toMatch(/^4\./)
   })
 
-  it('no zod@4 directory anywhere in node_modules/.pnpm/', () => {
+  it('no zod@3 directory anywhere in node_modules/.pnpm/', () => {
     const pnpmDir = resolve(REPO, 'node_modules/.pnpm')
-    const entries = readdirSync(pnpmDir).filter((e) => e.startsWith('zod@4'))
+    const entries = readdirSync(pnpmDir).filter((e) => e.startsWith('zod@3'))
     expect(entries.length).toBe(0)
   })
 
