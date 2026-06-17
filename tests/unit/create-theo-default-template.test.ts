@@ -14,8 +14,11 @@ import { resolve } from 'node:path'
 
 const ROOT = resolve(__dirname, '../..')
 const FIXTURE_CHAT = resolve(ROOT, 'fixtures/template-default/server/routes/chat.ts')
-const TEMPLATE_CHAT = resolve(ROOT, 'packages/create-theo/templates/default/server/routes/chat.ts')
-const TEMPLATE_PKG = resolve(ROOT, 'packages/create-theo/templates/default/package.json.tmpl')
+const TEMPLATE_CHAT = resolve(
+  ROOT,
+  'packages/create-theokit/templates/default/server/routes/chat.ts',
+)
+const TEMPLATE_PKG = resolve(ROOT, 'packages/create-theokit/templates/default/package.json.tmpl')
 
 function normalize(s: string): string {
   // Strip trailing whitespace per line + collapse multiple blank lines
