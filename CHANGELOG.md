@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Web-Standards request path now runs a middleware chain — `executeWebRequest` accepts `opts.middleware` (runs after the CSRF gate, before the handler); a middleware can short-circuit with a `Response` (cookies preserved) or populate a per-request `context` passed to the handler. Closes the no-middleware gap on the Web path. (#crossval-native-routing-web-fixes)
 - Web-Standards request handler now resolves route params — `executeWebRequest` accepts `opts.params` (from `matchRoute`) and threads them to the handler + Zod `params` validation, replacing the previously hardcoded empty `{}`. Backward-compatible (params default to `{}`). (#crossval-native-routing-web-fixes)
 - Dynamic page routing — file-system **page** routes now support `[param]` and catch-all `[...slug]` segments (parity with API routes), emitted as react-router `:param` / `*`. Invalid param charset and optional catch-all `[[...]]` fail at build time with a clear error. (#crossval-native-routing-web-fixes)
 
