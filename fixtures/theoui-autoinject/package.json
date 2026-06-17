@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@theokit/ui": "^0.1.0-next.0"
+    "@theokit/ui": "^0.14.0"
   }
 }
