@@ -1,5 +1,12 @@
 # create-theo
 
+## 1.0.15
+
+### Patch Changes
+
+- Default template now boots end-to-end. Pinned `theokit` to `^0.6.0` and `zod` to `^4.0.0` (the framework requires zod 4 / `z.url()` — apps previously crashed at config load with `z.url is not a function`). Aligned `@theokit/ui` to `^0.14.0`, fixing the `ERESOLVE` peer conflict that aborted `npm install` on a fresh scaffold. Added `pnpm.onlyBuiltDependencies` so pnpm 11 pre-approves native build scripts.
+- Default template is the agent chat surface (`@theokit/ui` chat thread + a streaming `chat.ts` wired to `@theokit/sdk`).
+
 ## 0.4.0-beta.0
 
 ### Major Changes
