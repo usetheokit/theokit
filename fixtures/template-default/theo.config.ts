@@ -1,3 +1,5 @@
-import { defineConfig } from 'theokit'
-
-export default defineConfig({})
+export default {
+  appDir: 'app',
+  serverDir: 'server',
+  port: 3000,
+}
