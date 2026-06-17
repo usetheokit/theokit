@@ -148,3 +148,53 @@ describe('executeWebRequest middleware chain (T3.2)', () => {
     expect(middlewareRan).toBe(false) // middleware never ran — CSRF gate is first
   })
 })
+
+import { runWebMiddleware } from '../../packages/theo/src/server/http/web-middleware-runner.js'
+
+/**
+ * EC-12 — direct coverage of the Web middleware runner contract (ctx mutation +
+ * ordered short-circuit). Full cross-runner parity with the Node defineMiddleware
+ * contract is part of the deferred Node->Web convergence (D4), not this slice.
+ */
+describe('runWebMiddleware contract (EC-12)', () => {
+  it('test_runner_runs_in_order_and_mutates_context', async () => {
+    const order: number[] = []
+    const ctx: Record<string, unknown> = {}
+    const res = await runWebMiddleware(
+      new Request('http://x/'),
+      [
+        (_r, c) => {
+          order.push(1)
+          c.a = 1
+        },
+        (_r, c) => {
+          order.push(2)
+          c.b = 2
+        },
+      ],
+      ctx,
+    )
+    expect(res).toBeUndefined() // no short-circuit → handler should run
+    expect(order).toEqual([1, 2])
+    expect(ctx).toEqual({ a: 1, b: 2 })
+  })
+
+  it('test_runner_short_circuits_and_skips_rest', async () => {
+    const order: number[] = []
+    const res = await runWebMiddleware(
+      new Request('http://x/'),
+      [
+        () => {
+          order.push(1)
+          return new Response('stop', { status: 401 })
+        },
+        () => {
+          order.push(2)
+        },
+      ],
+      {},
+    )
+    expect(res?.status).toBe(401)
+    expect(order).toEqual([1]) // second middleware never ran
+  })
+})
