@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - DRY violation: `AuthRequiredError` duck-type detection duplicated in 3 locations — extracted `isAuthRequiredError()` guard to `core/contracts/auth-error-guard.ts` (#arch-remediation)
 - Cyclomatic complexity CC=33 in `request-handler.ts` — decomposed into 7 focused sub-functions, removed `eslint-disable complexity` suppression (#arch-remediation)
 
+### Security
+
+- OpenAPI docs serving — the `..` path-traversal guard in `createOpenApiHandler` was ineffective: it checked the path *after* `resolve()` collapsed the `..` segments, so a traversing `specFilePath` slipped through. The guard now validates the raw input before resolving and rejects any `..` segment (POSIX or Windows separator); legitimate absolute paths remain allowed. Turns the previously-RED `tests/unit/openapi-serve-docs.test.ts > path traversal` green and adds embedded-`..`/Windows-separator regression tests. (#serve-docs-path-traversal-guard)
+
 ### Added (Plan theokit-arch-gaps-implementation — canonical dogfood report shipped: Health Score 77/100 ≥ 70 ✅)
 
 🎯 **Dogfood DoD gate SATISFIED within in-loop scope.** Iter 77 shipped the canonical SKILL.md-formatted dogfood report at `docs/audit/dogfood-2026-06-07.md`. **Health Score: 77/100 ≥ 70 threshold = PASS. Zero CRITICAL findings.** (#arch-gaps-implementation)
