@@ -30,7 +30,7 @@ import type { TypedClientError } from '../../src/index.js'
 import type {
   CanActivate,
   ExecutionContext,
-  NestInterceptor,
+  Interceptor,
   ExceptionFilter,
   ArgumentsHost,
 } from '../../src/index.js'
@@ -105,7 +105,7 @@ class AuthGuard implements CanActivate {
 }
 
 // -- interceptors/timing.interceptor.ts
-class TimingInterceptor implements NestInterceptor {
+class TimingInterceptor implements Interceptor {
   async intercept(_ctx: unknown, next: () => Promise<unknown>) {
     const _start = Date.now()
     const result = await next()
@@ -355,13 +355,13 @@ describe.skipIf(!isVitest)('Template App E2E — create-theokit default', () => 
   // ── TypedClient against the real app ──
 
   it('TypedClient works against real app', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(base)
+    const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(base)
     const tasks = (await client.get('/api/tasks')) as unknown[]
     expect(Array.isArray(tasks)).toBe(true)
   })
 
   it('TypedClient POST with auth header', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(base, {
+    const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(base, {
       'x-role': 'user',
     })
     const task = (await client.post('/api/tasks', {
@@ -372,7 +372,7 @@ describe.skipIf(!isVitest)('Template App E2E — create-theokit default', () => 
   })
 
   it('TypedClient 403 on guarded route', async () => {
-    const client = createTypedClient<Record<string, { response: unknown }>>(base)
+    const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(base)
     try {
       await client.post('/api/tasks', { title: 'Should fail' })
       expect.fail('should throw')

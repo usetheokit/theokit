@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
-import type http from 'node:http'
+import type { ServerHandle } from '../../src/runtime-node.js'
 import { Controller, Get, UseFilters, Catch } from '../../src/index.js'
 import {
   NotFoundException,
@@ -63,7 +63,7 @@ class ItemsCtrl {
 }
 
 describe.skipIf(!isVitest)('T3.1 — Exception filter HTTP roundtrip', () => {
-  let server: http.Server
+  let server: ServerHandle
   let port: number
 
   async function start() {

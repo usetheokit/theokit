@@ -22,7 +22,7 @@ export interface ActionDefinition<T extends z.ZodType = z.ZodType> {
 
 /** Registry that stores and retrieves action definitions by id. */
 export interface ActionRegistry {
-  register(action: ActionDefinition): void
+  register<T extends z.ZodType>(action: ActionDefinition<T>): void
   get(id: string): ActionDefinition | undefined
 }
 
@@ -39,8 +39,15 @@ export function createActionRegistry(): ActionRegistry {
   const actions = new Map<string, ActionDefinition>()
 
   return {
-    register(action: ActionDefinition): void {
-      actions.set(action.id, action)
+    register<T extends z.ZodType>(action: ActionDefinition<T>): void {
+      // Erase the input type at the storage boundary. The handler is only ever
+      // invoked with data already validated by `action.input` (see handleAction
+      // below), so narrowing the validated payload back to `z.infer<T>` is sound.
+      actions.set(action.id, {
+        id: action.id,
+        input: action.input,
+        handler: (input: unknown) => action.handler(input as z.infer<T>),
+      })
     },
     get(id: string): ActionDefinition | undefined {
       return actions.get(id)
