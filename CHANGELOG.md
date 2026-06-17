@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- OpenAPI emitter migrated to zod v4 internals — the zod→OpenAPI converter now normalizes zod 4's `z.toJSONSchema` output (collapse `anyOf`+null → `nullable`, union `anyOf` → `oneOf`, strip redundant `pattern`/safe-integer bounds, `const`→`enum` for 3.0 compat, re-attach discriminated-union `discriminator`, emit transform input shape, throw on `z.function()`); and query/path `required` is computed via `safeParse(undefined)` instead of the removed `_def.typeName`. Fixes the zod-3→4 drift across the converter, operation param builder, spec-compliance, and golden-fixture suites. (#repo-test-failure-landscape)
 - Native-bindings preflight was a no-op stub while its type declaration and unit test referenced a missing `findRebuildCwd` — restored the real ABI-mismatch preflight (workspace-link realpath routing, abi+deps-hash sentinel, CI fail-closed, single-rebuild-then-actionable-error, pnpm-missing handling). Turns the previously-RED `tests/unit/preflight-native-bindings.test.ts` green. (#crossval-native-routing-web-fixes)
 - `engines.node` `>=22.12.0` declared in all workspace manifests (root + theo/agents/http/create-theokit) — pnpm now warns consumers on a Node version mismatch, completing the native-bindings discipline. (#crossval-native-routing-web-fixes)
 - Circular dependency between `generate-resource.ts` and `generate.ts` — extracted shared types to `generate-types.ts` (#arch-remediation)
