@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dirty fixture</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Inline <script> WITHOUT a src= attribute → `inline-script` violation
+         under 0.3 enforce-CSP (no 'unsafe-inline'). -->
+    <script>
+      console.log('inline bootstrap, no src')
+    </script>
+  </body>
+</html>

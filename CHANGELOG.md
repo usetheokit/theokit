@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - DRY violation: `envelopeCodeToStatus` duplicated in `web-handler.ts` and `handle-request-error.ts` — consolidated into `core/contracts/envelope-code-to-status.ts` (#arch-remediation)
 - DRY violation: `AuthRequiredError` duck-type detection duplicated in 3 locations — extracted `isAuthRequiredError()` guard to `core/contracts/auth-error-guard.ts` (#arch-remediation)
 - Cyclomatic complexity CC=33 in `request-handler.ts` — decomposed into 7 focused sub-functions, removed `eslint-disable complexity` suppression (#arch-remediation)
+- Restored the missing `fixtures/upgrade-readiness-{clean,dirty}` fixtures the upgrade-readiness scanner suite depends on — `clean` is a 0.3-ready app (theoFetch only), `dirty` carries one of each anticipated 0.3 violation (raw fetch POST, inline `<script>`, `dangerouslySetInnerHTML`). Turns the previously-RED `tests/unit/cli-upgrade-readiness.test.ts` green (8 fixture-backed tests). (#restore-upgrade-readiness-fixtures)
 
 ### Security
 
