@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Dynamic page routing — file-system **page** routes now support `[param]` and catch-all `[...slug]` segments (parity with API routes), emitted as react-router `:param` / `*`. Invalid param charset and optional catch-all `[[...]]` fail at build time with a clear error. (#crossval-native-routing-web-fixes)
+
 ### Fixed
 
 - Native-bindings preflight was a no-op stub while its type declaration and unit test referenced a missing `findRebuildCwd` — restored the real ABI-mismatch preflight (workspace-link realpath routing, abi+deps-hash sentinel, CI fail-closed, single-rebuild-then-actionable-error, pnpm-missing handling). Turns the previously-RED `tests/unit/preflight-native-bindings.test.ts` green. (#crossval-native-routing-web-fixes)
