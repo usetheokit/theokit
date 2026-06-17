@@ -119,11 +119,14 @@ describe('fixtures/template-default canonical chat.ts (item #5)', () => {
 })
 
 describe('fixtures/template-default package.json — @theokit/sdk dep', () => {
-  it('includes @theokit/sdk in dependencies (workspace:* for the fixture)', () => {
+  it('includes @theokit/sdk in dependencies (npm registry ^1.x — SDK left the workspace 2026-06-10)', () => {
     expect(existsSync(PKG_PATH)).toBe(true)
     const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf-8')) as {
       dependencies?: Record<string, string>
     }
-    expect(pkg.dependencies?.['@theokit/sdk']).toBe('workspace:*')
+    // `@theokit/sdk` is consumed from the npm registry (workspace links were
+    // removed 2026-06-10 — Turborepo requires all workspace packages in-root),
+    // so the fixture pins a registry range, not `workspace:*`.
+    expect(pkg.dependencies?.['@theokit/sdk']).toMatch(/^\^1\./)
   })
 })
