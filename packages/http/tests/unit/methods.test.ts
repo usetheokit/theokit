@@ -23,7 +23,7 @@ describe.skipIf(!isVitest)('T1.5 — HTTP-verb method decorators', () => {
 
     for (const [expected, decorator] of verbs) {
       class TestCtrl {
-        @((decorator as ReturnType<typeof Get>)())
+        @((decorator as typeof Get)())
         handler() {
           return 'ok'
         }
