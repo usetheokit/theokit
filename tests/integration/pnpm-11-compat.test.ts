@@ -21,7 +21,7 @@ import { tmpdir as osTmpdir } from 'node:os'
  * v1.1 EC-7 SHOULD TEST: pre-flight port collision check actionable.
  */
 
-const TEMPLATES = ['default', 'dashboard', 'api-only', 'postgres', 'saas'] as const
+const TEMPLATES = ['default'] as const
 
 function hasCorepack(): boolean {
   try {
