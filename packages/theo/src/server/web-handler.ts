@@ -188,15 +188,16 @@ async function runHandler(
   config: WebRouteHandlerConfig,
   request: Request,
   bodyParser: 'inline' | 'full' = 'inline',
+  paramsInput: Record<string, string> = {},
 ): Promise<{ ok: true; result: unknown } | { ok: false; response: Response }> {
   const url = new URL(request.url)
   const queryRaw = searchParamsToObject(url.searchParams)
   const bodyRaw =
     bodyParser === 'full' ? await parseBodyFull(request) : await parseBodyInline(request)
-  // No params support yet at the Web-Request entry-point (no router scan in
-  // scope per Phase A). Pass `{}` as the params input; Zod schemas requiring
-  // params will fail validation.
-  const paramsRaw = {}
+  // T3.1 — route params resolved upstream (matchRoute) and threaded via
+  // opts.params. Defaults to `{}` so callers that don't supply params keep the
+  // prior behavior (a route declaring config.params then fails validation).
+  const paramsRaw = paramsInput
 
   // Validate input via Zod schemas when present.
   let query: unknown = queryRaw
@@ -281,6 +282,13 @@ function handlerErrorResponse(err: unknown): Response {
  */
 export interface ExecuteWebRequestOptions {
   csrfMode?: 'off' | 'strict'
+  /**
+   * T3.1 — route params resolved upstream by `matchRoute` (e.g. `{ id: '42' }`
+   * for `/users/:id`). Threaded to the handler's `params` input and validated
+   * against `config.params` (Zod) when declared. Defaults to `{}` — callers
+   * that don't supply params keep the prior behavior (additive, backward-compat).
+   */
+  params?: Record<string, string>
   /**
    * T5a.2 Phase E — body parser strategy.
    *
@@ -439,7 +447,12 @@ export async function executeWebRequest(
       if (!csrfCheck.valid) return csrfFailedResponse(csrfCheck.reason)
     }
     try {
-      const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
+      const outcome = await runHandler(
+        config,
+        request,
+        opts.bodyParser ?? 'inline',
+        opts.params ?? {},
+      )
       if (!outcome.ok) return outcome.response
       return toResponse(outcome.result)
     } catch (err) {
@@ -501,7 +514,12 @@ async function runPreHandlerPipeline(
       hookCtx.response = methodNotAllowedResponse(method)
       return
     }
-    const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
+    const outcome = await runHandler(
+      config,
+      request,
+      opts.bodyParser ?? 'inline',
+      opts.params ?? {},
+    )
     hookCtx.response = outcome.ok ? toResponse(outcome.result) : outcome.response
   }
 }
