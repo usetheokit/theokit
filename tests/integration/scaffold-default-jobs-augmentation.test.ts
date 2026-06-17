@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const REPO = resolve(__dirname, '../..')
-const TEMPLATE = resolve(REPO, 'packages/create-theo/templates/default')
+const TEMPLATE = resolve(REPO, 'packages/create-theokit/templates/default')
 
 describe('default template — JobRegistry augmentation example (T2.2)', () => {
   it('types/jobs.d.ts exists in scaffold template', () => {
