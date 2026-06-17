@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- Implemented the missing `scripts/prevent-secrets.sh` — the CI "Secret scan" job and the `.githooks/pre-commit` GATE 1 both invoked it, but the script was never committed, so the CI step failed with exit 127 (`command not found`) and local commits silently skipped secret scanning. The new scanner runs `git grep` once over tracked text files for high-confidence patterns (PEM private keys, `npm_`/`ghp_`/`gho_`/`ghs_`/`github_pat_`/`glpat-` tokens, `AKIA`/`ASIA` AWS keys, `sk_live_`/`rk_live_` Stripe, `xox*` Slack, `AIza` Google, and `postgres://user:pass@` URLs), honors an inline `pragma: allowlist secret` escape, skips env-interpolated values + placeholder DB creds, and — critically — distinguishes "no matches" (clean) from a `git grep` error (exit > 1) so a tooling failure can never be silently treated as clean. (#release-0.6.0)
+
 ## [0.6.0] - 2026-06-17
 
 ### Added
