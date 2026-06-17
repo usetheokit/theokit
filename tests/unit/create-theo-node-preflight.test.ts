@@ -4,7 +4,7 @@ import {
   assertNodeVersion,
   compareSemver,
   MIN_NODE_VERSION,
-} from '../../packages/create-theo/src/preflight-node.js'
+} from '../../packages/create-theokit/src/preflight-node.js'
 
 /**
  * T4.1 — Node ≥ 22.12 preflight in create-theokit CLI.
