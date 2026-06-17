@@ -278,6 +278,12 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // module — they pass native Web Request through executeWebRequest
       // directly without the bridge.
       'packages/theo/src/server/http/node-web-adapter.ts',
+      // Static-file boundary: the built-in OpenAPI docs server reads the
+      // emitted spec file from disk (node:fs) and resolves its path
+      // (node:path). Like static.ts, this is Node-adapter scope per
+      // ADR-0028 — CF Workers / Bun / Deno serve the spec from their own
+      // asset layer, not this module.
+      'packages/theo/src/server/openapi/serve-docs.ts',
     ])
 
     /**
