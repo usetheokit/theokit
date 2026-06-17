@@ -23,7 +23,8 @@ describe('scaffold', () => {
     expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'tsconfig.json'))).toBe(true)
     expect(existsSync(join(targetDir, 'package.json'))).toBe(true)
-    expect(existsSync(join(targetDir, 'public/.gitkeep'))).toBe(true)
+    // Live create-theokit default ships real public assets (not a .gitkeep stub).
+    expect(existsSync(join(targetDir, 'public/robots.txt'))).toBe(true)
   })
 
   it('should rename _gitignore to .gitignore', () => {
