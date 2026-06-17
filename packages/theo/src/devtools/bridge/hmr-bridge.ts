@@ -132,6 +132,7 @@ export function subscribeToServerEvents(dispatcher: Dispatcher): BridgeSubscript
       hot.off?.(CHANNEL_CSRF_WARN, csrfHandler)
       hot.off?.(CHANNEL_MANIFEST, manifestHandler)
       hot.off?.(CHANNEL_ROUTE_MATCHED, routeMatchedHandler)
+      hot.off?.(CHANNEL_AGENT_STREAM, agentStreamHandler)
     },
   }
 }
