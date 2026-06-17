@@ -136,8 +136,11 @@ function appendObjectAsParameters(
   const shape = (schema as unknown as { shape?: Record<string, z.ZodType> }).shape
   if (shape === undefined) return
   for (const [name, child] of Object.entries(shape)) {
-    const childDef = (child as unknown as { _def: { typeName?: string } })._def
-    const optional = childDef.typeName === 'ZodOptional' || childDef.typeName === 'ZodDefault'
+    // A field is optional iff the schema accepts `undefined` (covers
+    // `.optional()` + `.default()`). Runtime check via safeParse — robust
+    // across zod versions, unlike reading the changed `_def.typeName` internal
+    // (zod 3) / `def.type` (zod 4).
+    const optional = child.safeParse(undefined).success
     out.push({
       name,
       in: location,
