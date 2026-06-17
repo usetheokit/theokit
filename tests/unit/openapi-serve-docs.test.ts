@@ -10,8 +10,12 @@ function makeRequest(path: string, method = 'GET'): Request {
 }
 
 describe('OpenAPI serve-docs', () => {
-  beforeEach(() => { mkdirSync(TMP, { recursive: true }) })
-  afterEach(() => { rmSync(TMP, { recursive: true, force: true }) })
+  beforeEach(() => {
+    mkdirSync(TMP, { recursive: true })
+  })
+  afterEach(() => {
+    rmSync(TMP, { recursive: true, force: true })
+  })
 
   it('GET /api/docs returns Scalar HTML', () => {
     const handler = createOpenApiHandler()
@@ -47,12 +51,15 @@ describe('OpenAPI serve-docs', () => {
 
   it('GET /api/docs/openapi.json returns spec when file exists', async () => {
     const specPath = join(TMP, 'openapi.json')
-    writeFileSync(specPath, JSON.stringify({ openapi: '3.0.0', info: { title: 'Test', version: '1.0' } }))
+    writeFileSync(
+      specPath,
+      JSON.stringify({ openapi: '3.0.0', info: { title: 'Test', version: '1.0' } }),
+    )
 
     const handler = createOpenApiHandler({ specFilePath: specPath })
     const res = handler(makeRequest('/api/docs/openapi.json'))!
     expect(res.status).toBe(200)
-    const body = await res.json() as { openapi: string }
+    const body = (await res.json()) as { openapi: string }
     expect(body.openapi).toBe('3.0.0')
   })
 
@@ -60,7 +67,7 @@ describe('OpenAPI serve-docs', () => {
     const handler = createOpenApiHandler({ specFilePath: join(TMP, 'nonexistent.json') })
     const res = handler(makeRequest('/api/docs/openapi.json'))!
     expect(res.status).toBe(503)
-    const body = await res.json() as { error: { code: string } }
+    const body = (await res.json()) as { error: { code: string } }
     expect(body.error.code).toBe('OPENAPI_NOT_EMITTED')
   })
 
@@ -72,7 +79,7 @@ describe('OpenAPI serve-docs', () => {
     const handler = createOpenApiHandler({ specFilePath: specPath })
     const res = handler(makeRequest('/api/docs/openapi.json'))!
     expect(res.status).toBe(413)
-    const body = await res.json() as { error: { code: string } }
+    const body = (await res.json()) as { error: { code: string } }
     expect(body.error.code).toBe('OPENAPI_TOO_LARGE')
   })
 
@@ -117,7 +124,29 @@ describe('OpenAPI serve-docs', () => {
   })
 
   it('path traversal in specFilePath throws', () => {
-    expect(() => createOpenApiHandler({ specFilePath: '../../../etc/passwd' }))
-      .toThrow('must not contain ".."')
+    expect(() => createOpenApiHandler({ specFilePath: '../../../etc/passwd' })).toThrow(
+      'must not contain ".."',
+    )
+  })
+
+  it('embedded ".." segment in specFilePath throws (resolve() would collapse it)', () => {
+    // The old post-resolve guard missed this: resolve('a/../../etc/passwd')
+    // normalizes the '..' away, leaving no '..' to detect.
+    expect(() => createOpenApiHandler({ specFilePath: 'a/../../etc/passwd' })).toThrow(
+      'must not contain ".."',
+    )
+  })
+
+  it('".." with a Windows separator in specFilePath throws', () => {
+    expect(() => createOpenApiHandler({ specFilePath: '..\\..\\windows\\system32' })).toThrow(
+      'must not contain ".."',
+    )
+  })
+
+  it('legitimate absolute specFilePath (no "..") is accepted', () => {
+    const specPath = join(TMP, 'abs-spec.json')
+    writeFileSync(specPath, '{"openapi":"3.0.0"}')
+    // join() produces an absolute path with no '..' — must NOT throw.
+    expect(() => createOpenApiHandler({ specFilePath: specPath })).not.toThrow()
   })
 })
