@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync }
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { scaffold } from '../../packages/create-theo/src/index.js'
+import { scaffold } from '../../packages/create-theokit/src/index.js'
 
 const REPO = resolve(__dirname, '../..')
 const CLI = resolve(REPO, 'packages/theo/src/cli/index.ts')

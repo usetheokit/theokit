@@ -9,7 +9,7 @@ import {
   injectServicesIntoConfig,
   injectHeyApiDep,
   parseBackendFlags,
-} from '../../packages/create-theo/src/scaffold-services.js'
+} from '../../packages/create-theokit/src/scaffold-services.js'
 
 let tmp: string
 
