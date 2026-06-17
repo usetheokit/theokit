@@ -30,7 +30,7 @@ const ROOT = resolve(__dirname, '../..')
 
 const FILES_TO_SCAN = [
   'fixtures/template-default/server/routes/chat.ts',
-  'packages/create-theo/templates/default/server/routes/chat.ts',
+  'packages/create-theokit/templates/default/server/routes/chat.ts',
 ] as const
 
 describe('scaffold anti-stack lint — no raw OpenAI in default chat.ts', () => {

@@ -29,7 +29,7 @@ function findLLMDeps(depNames: string[]): string[] {
 
 describe('Bundle Audit: zero LLM dependencies', () => {
   const theoPkgPath = resolve(__dirname, '../../packages/theo/package.json')
-  const createTheoPkgPath = resolve(__dirname, '../../packages/create-theo/package.json')
+  const createTheoPkgPath = resolve(__dirname, '../../packages/create-theokit/package.json')
 
   it('blocklist should be comprehensive (8+ providers)', () => {
     expect(LLM_PROVIDER_BLOCKLIST.length).toBeGreaterThanOrEqual(8)
@@ -47,7 +47,7 @@ describe('Bundle Audit: zero LLM dependencies', () => {
     expect(found, `Found LLM peer deps: ${found.join(', ')}`).toHaveLength(0)
   })
 
-  it('create-theo should have zero LLM providers in dependencies', () => {
+  it('create-theokit should have zero LLM providers in dependencies', () => {
     const { deps } = getPackageDeps(createTheoPkgPath)
     const found = findLLMDeps(deps)
     expect(found, `Found LLM deps: ${found.join(', ')}`).toHaveLength(0)
