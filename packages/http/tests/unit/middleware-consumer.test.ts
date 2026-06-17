@@ -27,7 +27,7 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
   })
 
   it('test_consumer_apply_functional_middleware', () => {
-    const logger = (_req: IncomingMessage, _res: ServerResponse, next: () => void) => next()
+    const logger = (_request: Request, next: () => Promise<Response | null>) => next()
     const consumer = new MiddlewareConsumerImpl()
     consumer.apply(logger).forRoutes('items')
     const entries = consumer.getEntries()
@@ -37,7 +37,7 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
   })
 
   it('test_consumer_forRoutes_string', () => {
-    const fn = (_r: IncomingMessage, _s: ServerResponse, next: () => void) => next()
+    const fn = (_request: Request, next: () => Promise<Response | null>) => next()
     const consumer = new MiddlewareConsumerImpl()
     consumer.apply(fn).forRoutes('cats', 'dogs')
     const entries = consumer.getEntries()
@@ -46,7 +46,7 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
   })
 
   it('test_consumer_exclude', () => {
-    const fn = (_r: IncomingMessage, _s: ServerResponse, next: () => void) => next()
+    const fn = (_request: Request, next: () => Promise<Response | null>) => next()
     const consumer = new MiddlewareConsumerImpl()
     consumer.apply(fn).exclude('cats/admin').forRoutes('cats')
     const entries = consumer.getEntries()
@@ -56,8 +56,8 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
   })
 
   it('test_consumer_chain', () => {
-    const a = (_r: IncomingMessage, _s: ServerResponse, next: () => void) => next()
-    const b = (_r: IncomingMessage, _s: ServerResponse, next: () => void) => next()
+    const a = (_request: Request, next: () => Promise<Response | null>) => next()
+    const b = (_request: Request, next: () => Promise<Response | null>) => next()
     const consumer = new MiddlewareConsumerImpl()
     consumer.apply(a).forRoutes('x')
     consumer.apply(b).forRoutes('y')
@@ -70,7 +70,7 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
 
   it('test_middleware_matches_route', () => {
     const entry: ResolvedMiddleware = {
-      handler: () => {},
+      handler: (_request, next) => next(),
       routePatterns: ['api/v2/tasks'],
       excludePatterns: [],
     }
@@ -81,7 +81,7 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
 
   it('test_middleware_excludes_route', () => {
     const entry: ResolvedMiddleware = {
-      handler: () => {},
+      handler: (_request, next) => next(),
       routePatterns: ['api/v2/tasks'],
       excludePatterns: ['api/v2/tasks/stats'],
     }
@@ -92,7 +92,7 @@ describe('T2.1 — MiddlewareConsumer builder', () => {
 
   it('test_middleware_wildcard_matches_all', () => {
     const entry: ResolvedMiddleware = {
-      handler: () => {},
+      handler: (_request, next) => next(),
       routePatterns: ['*'],
       excludePatterns: [],
     }

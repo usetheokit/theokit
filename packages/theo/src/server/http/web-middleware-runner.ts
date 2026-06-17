@@ -19,7 +19,12 @@
 export type WebMiddleware = (
   request: Request,
   context: Record<string, unknown>,
-) => Promise<Response | undefined> | Response | undefined
+  // A middleware may mutate `context` and return nothing (void) OR return a
+  // `Response` to short-circuit (Express/Koa-style). `void` in this union is
+  // intentional — `runWebMiddleware` only inspects `instanceof Response`, so a
+  // void return means "continue to the next middleware / handler".
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+) => Promise<Response | undefined> | Response | undefined | void
 
 /**
  * Run middleware in order against a shared mutable `context`. The first
