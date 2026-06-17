@@ -1,22 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "strict": true,
-    "jsx": "react-jsx",
+    "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "dist",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"],
-      "@/server/*": ["./server/*"],
-      "@/app/*": ["./app/*"]
-    }
+    "jsx": "react-jsx",
+    "isolatedModules": true,
+    "resolveJsonModule": true
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["app/**/*.ts", "app/**/*.tsx", "server/**/*.ts"]
 }
