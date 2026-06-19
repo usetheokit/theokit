@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 import { VALID_TARGETS, type BuildTarget, type AdapterBuildContext } from '../../adapters/types.js'
 import { loadConfig } from '../../config/load-config.js'
 import { loadEnv } from '../../config/load-env.js'
-import { validateProjectStructure } from '../../core/validate-structure.js'
+import { validateProjectStructure } from '../../config/validate-structure.js'
 import {
   ExistingConfigUnparseableError,
   translateCronToAws,
