@@ -43,7 +43,11 @@ jobs:
         uses: changesets/action@v1
         with:
           publish: pnpm changeset publish
-          version: pnpm changeset version
+          # Use the repo's version-packages script (changeset version + sync:templates),
+          # NOT bare `changeset version`. Bumping packages/theo/package.json triggers the
+          # pre-commit `check:templates` gate; without syncing template versions first, the
+          # "Version Packages" commit is rejected with "Template drift detected".
+          version: pnpm version-packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # NPM_TOKEN intentionally absent — per technical-hardening-sprint plan v1.1 EC-2
