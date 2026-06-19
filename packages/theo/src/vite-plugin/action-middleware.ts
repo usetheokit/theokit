@@ -2,14 +2,17 @@ import { randomUUID } from 'node:crypto'
 
 import type { ViteDevServer, Connect } from 'vite'
 
-import { executeAction } from '../server/http/action-execute.js'
-import { sendError } from '../server/http/execute.js'
-import { logRequest } from '../server/observability/logger.js'
-import { findSuggestion } from '../server/observability/suggest.js'
-import type { PluginRunner } from '../server/plugins/plugin-runner.js'
-import { scanServerActions } from '../server/scan/action-scan.js'
-import { createViteLoader } from '../server/scan/module-loader.js'
-import type { CsrfMode, DisallowedConfig } from '../server/security/csrf.js'
+import {
+  createViteLoader,
+  executeAction,
+  findSuggestion,
+  logRequest,
+  scanServerActions,
+  sendError,
+  type CsrfMode,
+  type DisallowedConfig,
+  type PluginRunner,
+} from '../server/internal-api.js'
 
 const PREFIX = '/api/__actions/'
 

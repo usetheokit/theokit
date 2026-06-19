@@ -11,7 +11,7 @@ import {
 import { resolve, join } from 'node:path'
 
 import { runInstall } from './install.js'
-import { detectPkgManager } from './pkg-manager.js'
+import { detectPkgManager, type PkgManager } from './pkg-manager.js'
 import { assertNodeVersion } from './preflight-node.js'
 import { runPrompts, getDefaults, type ProjectOptions } from './prompts.js'
 import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
@@ -104,7 +104,7 @@ export async function main(): Promise<void> {
   const importAlias = getFlag(args, 'import-alias') ?? '@/*'
 
   // --use-npm/pnpm/yarn/bun override
-  let pkgManagerOverride: string | undefined
+  let pkgManagerOverride: PkgManager | undefined
   if (hasFlag(args, 'use-npm')) pkgManagerOverride = 'npm'
   else if (hasFlag(args, 'use-pnpm')) pkgManagerOverride = 'pnpm'
   else if (hasFlag(args, 'use-yarn')) pkgManagerOverride = 'yarn'

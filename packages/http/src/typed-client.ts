@@ -26,10 +26,10 @@ type InferResponse<D> = D extends { response: infer R } ? R : unknown
 // ── Client interface (simplified — works with strict DTS) ──
 
 export interface TypedClient<M extends RouteMap> {
-  get<P extends string & keyof M>(
+  get<P extends string>(
     path: P,
     opts?: { query?: Record<string, string>; headers?: Record<string, string> },
-  ): Promise<InferResponse<M[`GET ${P}`] extends never ? M[P] : M[`GET ${P}`]>>
+  ): Promise<InferResponse<M[`GET ${P}`]>>
 
   post<P extends string>(
     path: P,

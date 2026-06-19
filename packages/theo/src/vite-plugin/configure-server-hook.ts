@@ -5,13 +5,15 @@ import type { ViteDevServer } from 'vite'
 import { broadcastRouteManifest } from '../devtools/server-side/route-manifest.js'
 import { scanRoutes } from '../router/scan.js'
 import { isRouteFile } from '../router/types.js'
-import type { CorsConfig } from '../server/http/cors.js'
-import type { AuditLogger } from '../server/observability/audit-log.js'
-import type { PluginRunner } from '../server/plugins/plugin-runner.js'
-import type { RateLimitConfig } from '../server/rate-limit/rate-limit.js'
-import { CsrfReadinessStore } from '../server/security/csrf-readiness-store.js'
-import type { DisallowedConfig } from '../server/security/csrf.js'
-import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
+import {
+  CsrfReadinessStore,
+  type AuditLogger,
+  type CorsConfig,
+  type DisallowedConfig,
+  type PluginRunner,
+  type RateLimitConfig,
+  type SecurityHeadersConfig,
+} from '../server/internal-api.js'
 import type { TheoTransformer } from '../server/transformer.js'
 import type { ServicesConfig } from '../services/index.js'
 

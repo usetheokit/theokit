@@ -42,10 +42,13 @@
   },
   "devDependencies": {
     "@theokit/http": "workspace:*",
-    "reflect-metadata": "^0.2.0",
-    "zod": "^4.0.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.5.0",
-    "vitest": "^3.0.0"
+    "reflect-metadata": "^0.2.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.6",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

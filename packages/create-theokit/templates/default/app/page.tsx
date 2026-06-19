@@ -1,167 +1,288 @@
 'use client'
 
-import { useState, useEffect, useCallback, type FormEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  ChatThread,
+  ChatMessage,
+  ChatComposer,
+  ToolCallCard,
+  AgentStreaming,
+  AgentErrorCard,
+  EmptyState,
+  QuickActionChips,
+  ContextWindowBar,
+  CommandPalette,
+  Avatar,
+  Tooltip,
+  Button,
+  ScrollArea,
+  type Message,
+  type QuickAction,
+  type CommandItem,
+  type ToolCallStatus,
+} from '@theokit/ui'
+import { Sparkles, Wrench, RotateCcw, Command } from 'lucide-react'
+import { useAgentStream } from 'theokit/client'
 
-interface Task {
-  id: number
-  title: string
-  priority: 'high' | 'medium' | 'low'
-  done: boolean
-}
+/**
+ * Default scaffold — an Agent Surface, composed entirely from TheoUI.
+ *
+ *   ChatThread / ChatMessage  → conversation
+ *   ToolCallCard              → expandable tool invocations
+ *   AgentStreaming            → streaming indicator
+ *   AgentErrorCard            → error display
+ *   ChatComposer              → bottom input bar
+ *   EmptyState                → first-load screen
+ *   ContextWindowBar          → context usage at top
+ *   CommandPalette            → ⌘K quick actions
+ *   Avatar                    → assistant face in messages
+ *   Tooltip                   → hints on icons
+ *
+ * `useAgentStream` handles SSE consumption, AbortController cleanup, and
+ * StrictMode safety. Replace the mock at server/routes/chat.ts with your
+ * real LLM provider (OpenAI / Anthropic / local).
+ */
+
+type ConversationItem =
+  | { kind: 'message'; id: string; role: 'user' | 'assistant'; content: string; timestamp: string }
+  | {
+      kind: 'tool'
+      id: string
+      tool: string
+      target?: string
+      status: ToolCallStatus
+      output?: string
+      timestamp: string
+    }
+  | { kind: 'error'; id: string; message: string; timestamp: string }
+
+const QUICK_ACTIONS: QuickAction[] = [
+  { id: 'summarize', label: 'Summarize this page', icon: Sparkles },
+  { id: 'tools', label: 'Show available tools', icon: Wrench },
+  { id: 'reset', label: 'Start a new conversation', icon: RotateCcw },
+]
+
+const COMMAND_ITEMS: CommandItem[] = QUICK_ACTIONS.map((a) => ({
+  id: a.id,
+  label: a.label,
+  icon: a.icon,
+  group: 'Quick actions',
+}))
+
+// Mock context-window usage — replace with real model state.
+const CONTEXT_USED = 4_200
+const CONTEXT_TOTAL = 200_000
+const MODEL_NAME = 'mock-llm'
+
+const ASSISTANT_AVATAR = (
+  <Avatar size="sm" tone="primary">
+    <Avatar.Fallback>TH</Avatar.Fallback>
+  </Avatar>
+)
+const USER_AVATAR = (
+  <Avatar size="sm" tone="muted">
+    <Avatar.Fallback>YOU</Avatar.Fallback>
+  </Avatar>
+)
 
 export default function Page() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState<Task['priority']>('medium')
-  const [formError, setFormError] = useState('')
+  const [composerValue, setComposerValue] = useState('')
+  const [userMessages, setUserMessages] = useState<ConversationItem[]>([])
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const { events, send, status, reset } = useAgentStream<{ message: string }>('/api/chat')
 
-  const loadTasks = useCallback(async () => {
-    const res = await fetch('/api/tasks')
-    if (res.ok) setTasks(await res.json())
+  // ⌘K / Ctrl+K opens the CommandPalette.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  useEffect(() => {
-    loadTasks()
-  }, [loadTasks])
-
-  const createTask = async (e: FormEvent) => {
-    e.preventDefault()
-    setFormError('')
-    if (!title.trim()) return
-    const res = await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, priority }),
+  const items = useMemo<ConversationItem[]>(() => {
+    const ts = new Date().toISOString()
+    const agentItems: ConversationItem[] = events.map((event, i) => {
+      const id = `e-${i}`
+      switch (event.type) {
+        case 'message':
+          return { kind: 'message', id, role: 'assistant', content: event.content, timestamp: ts }
+        case 'tool_call':
+          return {
+            kind: 'tool',
+            id,
+            tool: event.name,
+            target:
+              typeof event.args === 'object' && event.args !== null
+                ? Object.entries(event.args as Record<string, unknown>)
+                    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+                    .join(' ')
+                : undefined,
+            status: 'running',
+            timestamp: ts,
+          }
+        case 'tool_result':
+          return {
+            kind: 'tool',
+            id,
+            tool: event.name,
+            status: 'success',
+            output:
+              typeof event.data === 'string' ? event.data : JSON.stringify(event.data, null, 2),
+            timestamp: ts,
+          }
+        case 'error':
+          return { kind: 'error', id, message: event.message, timestamp: ts }
+      }
     })
-    if (!res.ok) {
-      const b = await res.json()
-      setFormError(b.error?.issues?.[0]?.message ?? `Error ${res.status}`)
-      return
-    }
-    setTitle('')
-    loadTasks()
+    return [...userMessages, ...agentItems]
+  }, [userMessages, events])
+
+  function handleSubmit(value: string) {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    const id = `u-${userMessages.length}`
+    setUserMessages((prev) => [
+      ...prev,
+      { kind: 'message', id, role: 'user', content: trimmed, timestamp: new Date().toISOString() },
+    ])
+    send({ message: trimmed })
+    setComposerValue('')
   }
 
+  function handleQuickAction(id: string) {
+    setPaletteOpen(false)
+    if (id === 'reset') {
+      setUserMessages([])
+      reset()
+      return
+    }
+    const action = QUICK_ACTIONS.find((a) => a.id === id)
+    if (action) handleSubmit(action.label)
+  }
+
+  const isStreaming = status === 'streaming'
+  const isEmpty = items.length === 0 && !isStreaming
+  const hasError = status === 'error'
+
   return (
-    <div className="page">
-      <div className="main">
-        {/* Hero */}
-        <header className="hero">
-          <img src="/logo.png" alt="TheoKit" width={72} height={72} className="hero-logo" />
-          <h1>TheoKit</h1>
-          <p className="tagline">Build the app your agent lives in.</p>
-          <nav className="ctas">
-            <a
-              href="https://usetheo.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn primary"
-            >
-              Get Started
-            </a>
-            <a
-              href="https://github.com/usetheodev/theokit"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn secondary"
-            >
-              Documentation
-            </a>
-          </nav>
-          <p className="hint">
-            Edit <code>app/page.tsx</code> to get started. Changes hot-reload instantly.
-          </p>
-        </header>
+    <>
+      <ContextWindowBar
+        used={CONTEXT_USED}
+        total={CONTEXT_TOTAL}
+        trailing={MODEL_NAME}
+        label="Context window"
+        compact
+        className="border-border/60 border-b px-6 py-2"
+      />
 
-        {/* Tasks */}
-        <section className="card">
-          <h2>
-            Tasks <span className="badge">defineRoute + Drizzle</span>
-          </h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Priority</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((t) => (
-                <tr key={t.id} className={t.done ? 'done' : ''}>
-                  <td>
-                    {t.done ? '✅ ' : '○ '}
-                    {t.title}
-                  </td>
-                  <td>
-                    <span className={`prio prio-${t.priority}`}>{t.priority}</span>
-                  </td>
-                  <td>{t.done ? 'Done' : 'To do'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <form onSubmit={createTask} className="create-bar">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="New task..."
-              required
-              minLength={3}
+      <ScrollArea className="flex-1">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-6">
+          {isEmpty ? (
+            <EmptyState
+              eyebrow="Theo Agent"
+              icon={Sparkles}
+              title="What should we build today?"
+              description="Ask anything. This scaffold ships with a mock LLM at server/routes/chat.ts so you can see the wiring before plugging in a real model."
+              action={<QuickActionChips actions={QUICK_ACTIONS} onSelect={handleQuickAction} />}
             />
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Task['priority'])}
-            >
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="low">Low</option>
-            </select>
-            <button type="submit">Add</button>
-          </form>
-          {formError && <p className="error">{formError}</p>}
-        </section>
-
-        {/* Features */}
-        <div className="grid features">
-          <div className="feature">
-            <h3>defineRoute</h3>
-            <p>
-              Typed API routes with Zod validation. See <code>server/routes/tasks/</code>
-            </p>
-          </div>
-          <div className="feature">
-            <h3>Drizzle + SQLite</h3>
-            <p>
-              Type-safe database with zero config. Schema in <code>server/db/schema.ts</code>
-            </p>
-          </div>
-          <div className="feature">
-            <h3>@Agent + @Tool</h3>
-            <p>AI agents with SSE streaming, budget control, and human-in-the-loop approval.</p>
-          </div>
-          <div className="feature">
-            <h3>React + Vite</h3>
-            <p>File-based routing, HMR, SSR streaming. Edit and see changes instantly.</p>
-          </div>
+          ) : (
+            <ChatThread>
+              {items.map((item) => {
+                if (item.kind === 'message') {
+                  const message: Message = {
+                    id: item.id,
+                    role: item.role,
+                    content: item.content,
+                    timestamp: item.timestamp,
+                    model: item.role === 'assistant' ? MODEL_NAME : undefined,
+                  }
+                  return (
+                    <ChatMessage
+                      key={item.id}
+                      message={message}
+                      avatar={item.role === 'assistant' ? ASSISTANT_AVATAR : USER_AVATAR}
+                    />
+                  )
+                }
+                if (item.kind === 'tool') {
+                  return (
+                    <ToolCallCard
+                      key={item.id}
+                      tool={item.tool}
+                      icon={Wrench}
+                      target={item.target}
+                      status={item.status}
+                      output={item.output}
+                      timestamp={item.timestamp}
+                    />
+                  )
+                }
+                return (
+                  <AgentErrorCard
+                    key={item.id}
+                    kind="model"
+                    title="Agent error"
+                    description={item.message}
+                  />
+                )
+              })}
+              {isStreaming && <AgentStreaming model={MODEL_NAME} />}
+            </ChatThread>
+          )}
         </div>
+      </ScrollArea>
 
-        {/* Footer */}
-        <footer className="footer">
-          Powered by{' '}
-          <a href="https://usetheo.dev" target="_blank" rel="noopener noreferrer">
-            TheoKit
-          </a>
-          {' · '}
-          <a href="https://github.com/usetheodev/theokit" target="_blank" rel="noopener noreferrer">
-            GitHub
-          </a>
-          {' · '}
-          <a href="https://discord.usetheo.dev" target="_blank" rel="noopener noreferrer">
-            Discord
-          </a>
-        </footer>
+      <div className="border-border/60 border-t bg-background/50 backdrop-blur">
+        <div className="mx-auto w-full max-w-3xl px-6 py-4">
+          {hasError && (
+            <div className="mb-3">
+              <AgentErrorCard
+                kind="network"
+                title="Stream ended with an error"
+                description="The connection to the agent endpoint was interrupted. Reset to try again."
+                action={
+                  <Button variant="ghost" size="sm" onClick={() => reset()}>
+                    Reset
+                  </Button>
+                }
+              />
+            </div>
+          )}
+          <ChatComposer
+            value={composerValue}
+            onValueChange={setComposerValue}
+            onSubmit={handleSubmit}
+            running={isStreaming}
+            placeholder="Ask the agent…"
+            leadingActions={
+              <Tooltip label="Open command palette (⌘K)" side="top">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setPaletteOpen(true)}
+                  aria-label="Open command palette"
+                >
+                  <Command className="size-4" />
+                </Button>
+              </Tooltip>
+            }
+          />
+        </div>
       </div>
-    </div>
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        items={COMMAND_ITEMS}
+        onSelect={handleQuickAction}
+        placeholder="Run a command…"
+        emptyMessage="No matching commands."
+      />
+    </>
   )
 }

@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
-import type http from 'node:http'
+import type { ServerHandle } from '../../src/runtime-node.js'
 import { Controller, Get, Post, Body, UseInterceptors, UseGuards } from '../../src/index.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
 import type { Interceptor } from '../../src/bridge/interceptor-chain.js'
@@ -70,7 +70,7 @@ class ItemsController {
 // ─── Tests ───
 
 describe.skipIf(!isVitest)('T1.2 — Interceptor HTTP roundtrip', () => {
-  let server: http.Server
+  let server: ServerHandle
   let port: number
 
   async function startServer() {

@@ -81,7 +81,7 @@ describe.skipIf(!isVitest)('T2.2 — Exception filter chain', () => {
   it('test_filter_that_throws_falls_to_global', async () => {
     @Catch(HttpException)
     class BrokenFilter implements ExceptionFilter {
-      catch() {
+      catch(_exception: unknown, _host: ArgumentsHost): Response {
         throw new Error('filter-crash')
       }
     }

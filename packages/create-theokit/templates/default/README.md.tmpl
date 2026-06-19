@@ -1,6 +1,10 @@
 # {{name}}
 
-Built with [TheoKit](https://theokit.dev) — Build the app your agent lives in.
+Built with [TheoKit](https://theokit.dev) — **Build the app your agent lives in.**
+
+This is the default template: a working **agent chat surface** wired to a mock
+streaming agent, ready for you to plug in your LLM. Run it and you immediately
+see your agent talking — that's the point.
 
 ## Getting Started
 
@@ -8,75 +12,59 @@ Built with [TheoKit](https://theokit.dev) — Build the app your agent lives in.
 # Install dependencies
 npm install
 
-# Seed the database with sample data
-npm run seed
-
-# Start development server
+# Start development server (HMR)
 npm run dev
 ```
+
+Open the app and chat with the agent. Swap the mock in `server/routes/chat.ts`
+for your provider (the `@theokit/sdk` runtime resolves OpenRouter / Anthropic /
+Ollama / OpenAI from env vars — see the file's header comment).
 
 ## Project Structure
 
 ```
 {{name}}/
 ├── app/
-│   ├── page.tsx              # React frontend
-│   ├── layout.tsx            # Root layout
-│   └── globals.css           # Global styles
+│   ├── page.tsx              # Chat surface (@theokit/ui: ChatThread, ChatComposer, …)
+│   └── layout.tsx            # Root layout
 ├── server/
-│   ├── routes/
-│   │   ├── health.ts         # GET /api/health
-│   │   └── tasks/
-│   │       ├── index.ts      # GET /api/tasks + POST /api/tasks
-│   │       └── [id].ts       # GET/PUT/DELETE /api/tasks/:id
-│   ├── db/
-│   │   ├── schema.ts         # Drizzle ORM schema (SQLite)
-│   │   ├── index.ts          # DB connection + auto-create tables
-│   │   └── seed.ts           # Seed data
-│   └── index.ts              # Server barrel (routes auto-discovered)
-├── tests/
-│   └── tasks.test.ts         # API smoke test
+│   └── routes/
+│       ├── chat.ts           # Streaming agent endpoint (mock — replace with your LLM)
+│       └── health.ts         # GET /api/health
+├── tailwind.config.ts        # TheoUI design tokens
 ├── theo.config.ts            # TheoKit configuration
 └── .env.example              # Environment variables
 ```
 
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /api/tasks | List all tasks |
-| GET | /api/tasks/:id | Get task by ID |
-| POST | /api/tasks | Create task |
-| PUT | /api/tasks/:id | Update task |
-| DELETE | /api/tasks/:id | Delete task |
-| GET | /api/health | Health check |
-
-## Examples
-
-```bash
-# List tasks
-curl http://localhost:3000/api/tasks
-
-# Create a task
-curl -X POST http://localhost:3000/api/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title":"New task","priority":"high"}'
-
-# Update a task
-curl -X PUT http://localhost:3000/api/tasks/1 \
-  -H "Content-Type: application/json" \
-  -d '{"done":true}'
-
-# Delete a task
-curl -X DELETE http://localhost:3000/api/tasks/1
-```
-
 ## Key Concepts
 
-- **defineRoute** — Typed API routes with Zod validation
-- **Drizzle + SQLite** — Type-safe database, zero config
-- **File-based routing** — `server/routes/tasks/[id].ts` → `/api/tasks/:id`
-- **Seeds** — `npm run seed` loads sample data
+- **Agent chat surface** — `app/page.tsx` renders `@theokit/ui` chat components
+  driven by the streaming endpoint.
+- **`createConversationHistory` + `streamAgentRun`** — the `@theokit/sdk` runtime
+  owns conversation persistence + provider resolution; `server/routes/chat.ts`
+  just yields its events.
+- **`defineAgentTool`** — declare typed tools (the template ships a
+  `current_time` example).
+
+## About `@theokit/sdk`
+
+`@theokit/sdk` is the agent runtime this template depends on. Its publish to the
+public npm registry is **operator-deferred** — if `npm install` cannot resolve
+it yet, scaffold the registry-free variant instead (see Bare mode below) and add
+the SDK once it is published.
+
+## Bare mode (`--bare`)
+
+Want the minimal "Hello Theo" scaffold with **no** agent UI and **no** unpublished
+registry dependencies? Scaffold with `--bare`:
+
+```bash
+npm create theokit my-app -- --template=default --bare
+```
+
+`--bare` strips `@theokit/ui`, `@theokit/sdk`, `lucide-react`, and the Tailwind
+toolchain, replaces `app/page.tsx` with a plain "Hello Theo" page, and removes
+the mock chat route — a scaffold that always installs without registry access.
 
 ## Commands
 
@@ -85,7 +73,6 @@ npm run dev          # Start dev server with HMR
 npm run build        # Build for production
 npm run start        # Run production build
 npm run test         # Run tests (vitest)
-npm run seed         # Seed database
 npm run lint         # ESLint check
 npm run typecheck    # TypeScript type check
 ```

@@ -1,0 +1,17 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`generateRouteManifest dynamic emission (T2.2) > test_generate_static_output_unchanged (golden guard, EC-13) 1`] = `
+"import React, { Suspense } from 'react'
+import { Outlet } from 'react-router'
+
+import Layout_about from '/app/about/layout.tsx'
+const Page_blog = React.lazy(() => import('/app/blog/page.tsx'))
+const Page_about = React.lazy(() => import('/app/about/page.tsx'))
+
+export const __theoPreloadMap = {
+  '/blog': () => import('/app/blog/page.tsx'),
+  '/about': () => import('/app/about/page.tsx'),
+}
+
+export const routes = [{ path: '/', children: [{ path: 'blog', element: React.createElement(Suspense, { fallback: null }, React.createElement(Page_blog)) }, { path: 'about', element: React.createElement(Layout_about, { children: React.createElement(Outlet) }), children: [{ index: true, element: React.createElement(Suspense, { fallback: null }, React.createElement(Page_about)) }] }] }]"
+`;
