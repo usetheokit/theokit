@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, stat, writeFile, rm } from 'node:fs/promises'
 import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
@@ -71,6 +71,56 @@ describe('architecture-guards CI (T1.1)', () => {
   // test_check_deps_passes_today above; kept as a tagged duplicate for the
   // EC traceability matrix).
   it('test_dep_cruiser_baseline_passes (EC-2) — config matches reality', () => {
+    const stdout = execSync(
+      // eslint-disable-next-line sonarjs/no-os-command-from-path
+      'node_modules/.bin/dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs --no-progress',
+      { cwd: REPO, encoding: 'utf8' },
+    )
+    expect(stdout).toMatch(/no dependency violations found/)
+  }, 30_000)
+
+  // architecture-report cleanup Step 1 — `_internal/` privacy boundary is
+  // enforced (architecture.md Invariant 3). Closes the gap where direction
+  // rules allowed e.g. vite-plugin→server but did NOT forbid reaching into
+  // server/_internal across the module boundary.
+  it('test_dep_cruiser_config_has_cross_module_internal_rule', async () => {
+    const content = await readFile(resolve(REPO, '.dependency-cruiser.cjs'), 'utf8')
+    expect(content).toMatch(/no-cross-module-internal-import/)
+  })
+
+  it('test_dependency_cruiser_forbids_cross_module_internal_import — vite-plugin→server/_internal is caught', async () => {
+    // Given: a file in a module (vite-plugin) that IS allowed to depend on
+    // server (direction-wise), but reaches into server/_internal (private).
+    const probe = resolve(REPO, 'packages/theo/src/vite-plugin/__internal_privacy_probe.ts')
+    await writeFile(
+      probe,
+      "import { writeAtomic } from '../server/_internal/atomic-write.js'\nexport const _p = writeAtomic\n",
+      'utf8',
+    )
+    try {
+      // When: dependency-cruiser runs — Then: it MUST flag the privacy breach.
+      let caught = false
+      let output = ''
+      try {
+        output = execSync(
+          // eslint-disable-next-line sonarjs/no-os-command-from-path
+          'node_modules/.bin/dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs --no-progress',
+          { cwd: REPO, encoding: 'utf8' },
+        )
+      } catch (e) {
+        caught = true
+        output = (e as { stdout?: string }).stdout ?? ''
+      }
+      expect(caught).toBe(true)
+      expect(output).toMatch(/no-cross-module-internal-import/)
+    } finally {
+      await rm(probe, { force: true })
+    }
+  }, 30_000)
+
+  it('test_intra_module_internal_import_allowed — server→server/_internal passes', () => {
+    // server/scan/scan.ts already imports ../_internal/scan-walker.js — the
+    // clean tree must still pass (intra-module access is allowed).
     const stdout = execSync(
       // eslint-disable-next-line sonarjs/no-os-command-from-path
       'node_modules/.bin/dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs --no-progress',
