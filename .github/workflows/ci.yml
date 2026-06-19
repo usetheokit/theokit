@@ -9,6 +9,11 @@ on:
 # Quality gates — every job runs on every PR. Failing job blocks merge.
 # See CLAUDE.md "Quality Gates" for the rationale per gate.
 
+# tsup DTS build for theokit's ~24 entrypoints OOMs the runner's default worker
+# heap (ERR_WORKER_OUT_OF_MEMORY). Raise it workflow-wide.
+env:
+  NODE_OPTIONS: --max-old-space-size=8192
+
 jobs:
   lint-and-format:
     name: Lint + Format
