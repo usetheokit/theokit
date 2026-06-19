@@ -34,7 +34,7 @@ import {
 } from '../../src/index.js'
 import type {
   CanActivate,
-  NestInterceptor,
+  Interceptor,
   ExceptionFilter,
   ArgumentsHost,
   ExecutionContext,
@@ -78,7 +78,7 @@ class RoleGuard implements CanActivate {
 }
 
 // Interceptor: adds x-timing header
-class TimingInterceptor implements NestInterceptor {
+class TimingInterceptor implements Interceptor {
   async intercept(_ctx: unknown, next: () => Promise<unknown>) {
     const start = Date.now()
     const result = await next()
@@ -801,25 +801,25 @@ describe.skipIf(!isVitest)('Comprehensive E2E — TheoKit HTTP', () => {
 
   describe('TypedClient', () => {
     it('GET works', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(base)
+      const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(base)
       const items = (await client.get('/api/items')) as unknown[]
       expect(Array.isArray(items)).toBe(true)
     })
 
     it('POST works', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(base)
+      const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(base)
       const item = (await client.post('/api/items', { name: 'ClientItem' })) as { name: string }
       expect(item.name).toBe('ClientItem')
     })
 
     it('DELETE works', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(base)
+      const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(base)
       const result = await client.delete('/api/items/1')
       expect(result).toBeUndefined()
     })
 
     it('error throws TypedClientError', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(base)
+      const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(base)
       try {
         await client.get('/api/items/99999')
         expect.fail('should throw')
@@ -830,7 +830,7 @@ describe.skipIf(!isVitest)('Comprehensive E2E — TheoKit HTTP', () => {
     })
 
     it('validation error is TypedClientError', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(base)
+      const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(base)
       try {
         await client.post('/api/items', { name: '' })
         expect.fail('should throw')
@@ -840,9 +840,12 @@ describe.skipIf(!isVitest)('Comprehensive E2E — TheoKit HTTP', () => {
     })
 
     it('custom headers forwarded', async () => {
-      const client = createTypedClient<Record<string, { response: unknown }>>(base, {
-        'x-custom': 'from-client',
-      })
+      const client = createTypedClient<Record<string, { body: z.ZodType; response: unknown }>>(
+        base,
+        {
+          'x-custom': 'from-client',
+        },
+      )
       const result = (await client.get('/api/headers/echo')) as { custom: string }
       expect(result.custom).toBe('from-client')
     })

@@ -19,6 +19,34 @@ cd my-app
 pnpm dev
 ```
 
+## Your first agent in 5 minutes
+
+1. Point TheoKit at an Anthropic model — set your key:
+
+   ```bash
+   export ANTHROPIC_API_KEY=sk-ant-...
+   ```
+
+2. Create an agent and send it a message. The canonical 6-line essence uses
+   `throwOnError: true` so failures surface as exceptions you handle with
+   `try`/`catch` — no status-code checking:
+
+   ```ts
+   import { Agent } from '@theokit/sdk'
+
+   const agent = await Agent.create({ model: 'claude-sonnet-4-6' })
+
+   try {
+     const result = await agent.send('Write a haiku about TypeScript.', { throwOnError: true })
+     console.log(result.text)
+   } catch (err) {
+     console.error('agent failed:', err)
+   }
+   ```
+
+That is the whole loop: create, send, read the text. Everything else —
+streaming, tools, conversation history — is sugar over this.
+
 ## What You Get
 
 - **Routes are just files** — `app/page.tsx` → `/`. Layouts, errors, loading, not-found — no config.

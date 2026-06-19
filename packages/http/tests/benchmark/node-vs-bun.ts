@@ -49,8 +49,12 @@ const elapsed = performance.now() - start
 const rps = Math.round((REQUESTS / elapsed) * 1000)
 
 function detectVersion(): string {
-  if (typeof globalThis.Deno !== 'undefined') return Deno.version.deno
-  if (typeof globalThis.Bun !== 'undefined') return Bun.version as string
+  const g = globalThis as {
+    Deno?: { version: { deno: string } }
+    Bun?: { version: string }
+  }
+  if (g.Deno) return g.Deno.version.deno
+  if (g.Bun) return g.Bun.version
   return process.version
 }
 const version = detectVersion()

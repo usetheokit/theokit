@@ -178,7 +178,7 @@ class SimpleContainer implements DiContainer {
       if (!dep) throw new Error(`DI: ${pt.name} not registered`)
       return dep
     })
-    const instance = new (token as new (...a: unknown[]) => unknown)(...args)
+    const instance = new (token as new (...a: unknown[]) => object)(...args)
     this.instances.set(token, instance)
     return instance
   }

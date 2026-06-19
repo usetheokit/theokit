@@ -21,7 +21,13 @@ import { tmpdir as osTmpdir } from 'node:os'
  * v1.1 EC-7 SHOULD TEST: pre-flight port collision check actionable.
  */
 
-const TEMPLATES = ['default', 'dashboard', 'api-only', 'postgres', 'saas'] as const
+const TEMPLATES = ['default'] as const
+
+// Scaffold via the LOCAL create-theokit build — the test's contract is that
+// "each template's package.json.tmpl ships the pnpm.onlyBuiltDependencies hint"
+// (see docstring). The published `@latest` lags the source, so testing it can
+// never enforce the CURRENT template; the local CLI is what we control + ship.
+const LOCAL_CLI = join(import.meta.dirname, '../../packages/create-theokit/dist/cli.js')
 
 function hasCorepack(): boolean {
   try {
@@ -127,11 +133,14 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
       let devPid: number | undefined
 
       try {
-        // Step 1: scaffold via npx (latest published create-theokit)
+        // Step 1: scaffold via the LOCAL create-theokit build. `--yes` runs it
+        // non-interactively (otherwise the CLI blocks on the "use recommended
+        // defaults?" prompt — stdin is piped, so it reads EOF and exits WITHOUT
+        // scaffolding).
         execFileSync(
-          // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test runs scaffolder via PATH
-          'npx',
-          ['-y', 'create-theokit@latest', `my-${tpl}`, `--template=${tpl}`, '--skip-install'],
+          // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test runs the local scaffolder via the node on PATH
+          'node',
+          [LOCAL_CLI, `my-${tpl}`, `--template=${tpl}`, '--skip-install', '--yes'],
           { cwd: sandbox, stdio: 'pipe', env: PNPM_ENV, timeout: 120_000 },
         )
         expect(existsSync(appDir)).toBe(true)

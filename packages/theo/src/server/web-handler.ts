@@ -40,6 +40,7 @@ import { envelopeCodeToStatus } from '../core/contracts/envelope-code-to-status.
 import type { TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
 import { serverErrorToEnvelope } from '../core/contracts/server-error-to-envelope.js'
 
+import { runWebMiddleware, type WebMiddleware } from './http/web-middleware-runner.js'
 import type {
   WebOnErrorHook,
   WebOnRequestHook,
@@ -49,6 +50,8 @@ import type {
   WebPreHandlerHook,
 } from './plugin-types.js'
 import { validateCsrfRequest } from './security/csrf.js'
+
+export type { WebMiddleware }
 
 /**
  * Minimal structural type for a `defineRoute` config. Mirrors
@@ -60,7 +63,14 @@ interface WebRouteHandlerConfig {
   query?: z.ZodType
   body?: z.ZodType
   params?: z.ZodType
-  handler: (ctx: { query: unknown; body: unknown; params: unknown; request: Request }) => unknown
+  handler: (ctx: {
+    query: unknown
+    body: unknown
+    params: unknown
+    request: Request
+    /** Mutable per-request context populated by the Web middleware chain (T3.2). */
+    context: Record<string, unknown>
+  }) => unknown
 }
 
 /**
@@ -188,15 +198,17 @@ async function runHandler(
   config: WebRouteHandlerConfig,
   request: Request,
   bodyParser: 'inline' | 'full' = 'inline',
+  paramsInput: Record<string, string> = {},
+  context: Record<string, unknown> = {},
 ): Promise<{ ok: true; result: unknown } | { ok: false; response: Response }> {
   const url = new URL(request.url)
   const queryRaw = searchParamsToObject(url.searchParams)
   const bodyRaw =
     bodyParser === 'full' ? await parseBodyFull(request) : await parseBodyInline(request)
-  // No params support yet at the Web-Request entry-point (no router scan in
-  // scope per Phase A). Pass `{}` as the params input; Zod schemas requiring
-  // params will fail validation.
-  const paramsRaw = {}
+  // T3.1 — route params resolved upstream (matchRoute) and threaded via
+  // opts.params. Defaults to `{}` so callers that don't supply params keep the
+  // prior behavior (a route declaring config.params then fails validation).
+  const paramsRaw = paramsInput
 
   // Validate input via Zod schemas when present.
   let query: unknown = queryRaw
@@ -221,7 +233,7 @@ async function runHandler(
     params = parsed.data
   }
 
-  const result = await config.handler({ query, body, params, request })
+  const result = await config.handler({ query, body, params, request, context })
   return { ok: true, result }
 }
 
@@ -281,6 +293,20 @@ function handlerErrorResponse(err: unknown): Response {
  */
 export interface ExecuteWebRequestOptions {
   csrfMode?: 'off' | 'strict'
+  /**
+   * T3.1 — route params resolved upstream by `matchRoute` (e.g. `{ id: '42' }`
+   * for `/users/:id`). Threaded to the handler's `params` input and validated
+   * against `config.params` (Zod) when declared. Defaults to `{}` — callers
+   * that don't supply params keep the prior behavior (additive, backward-compat).
+   */
+  params?: Record<string, string>
+  /**
+   * T3.2 — Web-Standards middleware chain. Runs in order AFTER the CSRF gate
+   * (EC-3) and BEFORE the handler. A middleware returning a `Response`
+   * short-circuits (handler not reached); mutating `context` passes data to
+   * the handler. Omitted → zero overhead (handler runs directly).
+   */
+  middleware?: readonly WebMiddleware[]
   /**
    * T5a.2 Phase E — body parser strategy.
    *
@@ -345,7 +371,7 @@ export interface ExecuteWebRequestOptions {
  * model is state-changing requests forged via cross-origin POSTs); OPTIONS
  * is the CORS preflight and also bypasses.
  */
-const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 /**
  * Web-Standards entry-point for executing a route module against a native
@@ -439,7 +465,19 @@ export async function executeWebRequest(
       if (!csrfCheck.valid) return csrfFailedResponse(csrfCheck.reason)
     }
     try {
-      const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
+      // T3.2 — middleware runs AFTER the CSRF gate (EC-3), BEFORE the handler.
+      const context: Record<string, unknown> = {}
+      if (opts.middleware?.length) {
+        const shortCircuit = await runWebMiddleware(request, opts.middleware, context)
+        if (shortCircuit) return shortCircuit
+      }
+      const outcome = await runHandler(
+        config,
+        request,
+        opts.bodyParser ?? 'inline',
+        opts.params ?? {},
+        context,
+      )
       if (!outcome.ok) return outcome.response
       return toResponse(outcome.result)
     } catch (err) {
@@ -496,14 +534,43 @@ async function runPreHandlerPipeline(
     await runList(hooks.preHandler)
   }
   if (hookCtx.response === undefined) {
-    // 405 if route module doesn't export this method.
-    if (config === undefined || typeof config.handler !== 'function') {
-      hookCtx.response = methodNotAllowedResponse(method)
+    await runHandlerStage(hookCtx, request, config, opts, method)
+  }
+}
+
+/**
+ * T3.2 — the middleware + handler stage of the hook pipeline. Extracted from
+ * `runPreHandlerPipeline` to keep its cyclomatic complexity under the lint cap.
+ * Order: 405 check → user middleware (after CSRF + preHandler) → handler.
+ */
+async function runHandlerStage(
+  hookCtx: WebPluginContext,
+  request: Request,
+  config: WebRouteHandlerConfig | undefined,
+  opts: ExecuteWebRequestOptions,
+  method: string,
+): Promise<void> {
+  // 405 if route module doesn't export this method.
+  if (config === undefined || typeof config.handler !== 'function') {
+    hookCtx.response = methodNotAllowedResponse(method)
+    return
+  }
+  // hookCtx.ctx is the shared per-request context the middleware mutates.
+  if (opts.middleware?.length) {
+    const shortCircuit = await runWebMiddleware(request, opts.middleware, hookCtx.ctx)
+    if (shortCircuit) {
+      hookCtx.response = shortCircuit
       return
     }
-    const outcome = await runHandler(config, request, opts.bodyParser ?? 'inline')
-    hookCtx.response = outcome.ok ? toResponse(outcome.result) : outcome.response
   }
+  const outcome = await runHandler(
+    config,
+    request,
+    opts.bodyParser ?? 'inline',
+    opts.params ?? {},
+    hookCtx.ctx,
+  )
+  hookCtx.response = outcome.ok ? toResponse(outcome.result) : outcome.response
 }
 
 async function runWithHooks(

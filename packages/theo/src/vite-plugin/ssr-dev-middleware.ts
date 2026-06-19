@@ -19,11 +19,11 @@ import { resolve } from 'node:path'
 
 import type { ViteDevServer } from 'vite'
 
-import { generateNonce } from '../server/auth/nonce.js'
 import {
   applySecurityHeaders,
+  generateNonce,
   type SecurityHeadersConfig,
-} from '../server/security/security-headers.js'
+} from '../server/internal-api.js'
 
 interface SsrRenderResult {
   html: string

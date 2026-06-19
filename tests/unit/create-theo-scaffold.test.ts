@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { scaffold } from '../../packages/create-theo/src/index.js'
+import { scaffold } from '../../packages/create-theokit/src/index.js'
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -23,7 +23,8 @@ describe('scaffold', () => {
     expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'tsconfig.json'))).toBe(true)
     expect(existsSync(join(targetDir, 'package.json'))).toBe(true)
-    expect(existsSync(join(targetDir, 'public/.gitkeep'))).toBe(true)
+    // Live create-theokit default ships real public assets (not a .gitkeep stub).
+    expect(existsSync(join(targetDir, 'public/robots.txt'))).toBe(true)
   })
 
   it('should rename _gitignore to .gitignore', () => {

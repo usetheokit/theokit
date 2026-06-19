@@ -144,7 +144,7 @@ describe.skipIf(!isVitest)('dist build validation', () => {
         // GET
         const r1 = await fetch(`http://localhost:${port}/items`)
         expect(r1.status).toBe(200)
-        const items = (await r1.json()) as { id: number }[]
+        const items = (await r1.json()) as { id: number; title: string }[]
         expect(items[0].title).toBe('from-dist')
 
         // POST valid

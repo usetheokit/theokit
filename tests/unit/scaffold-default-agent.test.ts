@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const TEMPLATE_ROOT = resolve(__dirname, '../../packages/create-theo/templates/default')
+const TEMPLATE_ROOT = resolve(__dirname, '../../packages/create-theokit/templates/default')
 
 function read(rel: string): string {
   return readFileSync(resolve(TEMPLATE_ROOT, rel), 'utf-8')
