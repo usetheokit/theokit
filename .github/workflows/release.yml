@@ -37,6 +37,11 @@ jobs:
           node-version: 22
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
+      # Node 22 bundles npm 10.x, which signs provenance but CANNOT authenticate
+      # via OIDC trusted-publisher (tokenless publish needs npm >= 11.5.1). Without
+      # this, `changeset publish` 404s on PUT even with a trusted publisher configured.
+      - name: Upgrade npm for OIDC trusted-publisher (needs >= 11.5.1)
+        run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Create Release Pull Request or Publish
