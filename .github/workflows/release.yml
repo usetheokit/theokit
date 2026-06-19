@@ -12,6 +12,12 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+# tsup builds DTS for theokit's ~24 entrypoints in a worker; the runner's default
+# heap OOMs it (ERR_WORKER_OUT_OF_MEMORY). Raise the heap workflow-wide so the
+# build step (and the changesets publish build) succeeds. Workers inherit NODE_OPTIONS.
+env:
+  NODE_OPTIONS: --max-old-space-size=8192
+
 jobs:
   release:
     runs-on: ubuntu-latest
