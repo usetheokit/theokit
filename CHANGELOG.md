@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `release.yml` agora usa `version: pnpm version-packages` (não `pnpm changeset version`). O bump de `packages/theo/package.json` dispara o gate `check:templates` do pre-commit; sem rodar `sync:templates` antes, o commit "Version Packages" do `changesets/action` era rejeitado com "Template drift detected". O script `version-packages` (`changeset version && pnpm sync:templates`) já existia para isso. (#arch-report-cleanup)
 - CI release/build OOM: `release.yml`, `ci.yml` e `release-coordinated.yml` agora setam `NODE_OPTIONS=--max-old-space-size=8192` workflow-wide. O `pnpm build` do `theokit` (tsup gerando DTS para ~24 entrypoints num worker) estourava o heap default do runner com `ERR_WORKER_OUT_OF_MEMORY`, fazendo o `release.yml` falhar **antes** do `changesets/action` (por isso a PR "Version Packages" do 0.6.1 não era criada — e os runs de release de #7/#8 já falhavam pelo mesmo motivo). Bug pré-existente de infra, não relacionado às mudanças de código. (#arch-report-cleanup)
 
 ### Security
