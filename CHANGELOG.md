@@ -25,6 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- CI release/build OOM: `release.yml`, `ci.yml` e `release-coordinated.yml` agora setam `NODE_OPTIONS=--max-old-space-size=8192` workflow-wide. O `pnpm build` do `theokit` (tsup gerando DTS para ~24 entrypoints num worker) estourava o heap default do runner com `ERR_WORKER_OUT_OF_MEMORY`, fazendo o `release.yml` falhar **antes** do `changesets/action` (por isso a PR "Version Packages" do 0.6.1 não era criada — e os runs de release de #7/#8 já falhavam pelo mesmo motivo). Bug pré-existente de infra, não relacionado às mudanças de código. (#arch-report-cleanup)
+
 ### Security
 
 - Reduzidas as vulnerabilidades reportadas por `pnpm audit` de **26 para 6**. O `pnpm -r update` fechou os CVEs de `vite` (`server.fs.deny` bypass + NTLMv2 disclosure), `ws` (DoS por fragmentos), `react-router` (CSRF em PUT/PATCH/DELETE), `form-data`, `js-yaml`/swagger-parser, `undici`/wrangler e `@babel/core`. Adicionado override escopado `eslint-plugin-sonarjs>minimatch: ^10.2.3` (sobe 10.1.2→10.2.5, mesma major) para fechar 3 ReDoS de `minimatch` sem prender o `minimatch@3` legado de outras libs. Os 6 findings restantes (`valibot` 0.42 via `@theokit/ui`; `esbuild`/`uuid`/`js-yaml` via `drizzle-kit`/`autocannon`/`changesets`) exigem **major bump em dependência transitiva de dev/fixture** e são deixados como risco aceito — todos sem caller de produção exposto; o fix correto é upstream (bump dos siblings/ferramentas), não um override que quebraria o pacote-pai. (#deps-update-2026-06-19)

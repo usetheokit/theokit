@@ -19,6 +19,11 @@ on:
           - latest
           - next
 
+# tsup DTS build for theokit's ~24 entrypoints OOMs the runner's default worker
+# heap (ERR_WORKER_OUT_OF_MEMORY). Raise it workflow-wide.
+env:
+  NODE_OPTIONS: --max-old-space-size=8192
+
 jobs:
   publish:
     runs-on: ubuntu-latest
