@@ -149,6 +149,21 @@ module.exports = {
     ),
 
     {
+      name: 'no-cross-module-internal-import',
+      severity: 'error',
+      comment:
+        "A module's `_internal/` is PRIVATE to that module (architecture.md Invariant 3 — " +
+        "privacy boundary). Importing another module's `_internal/` reaches past its public " +
+        'surface. Intra-module imports of own `_internal/` are allowed. ' +
+        "Move the symbol to the module's barrel (or `internal-api.ts`) if it is needed across modules.",
+      from: { path: '^packages/theo/src/([^/]+)/' },
+      to: {
+        path: '^packages/theo/src/([^/]+)/_internal/',
+        // `$1` references the FROM module capture group — allow same-module access only.
+        pathNot: '^packages/theo/src/$1/',
+      },
+    },
+    {
       name: 'no-orphans',
       severity: 'info',
       comment: 'Orphaned modules (no consumer) may be dead code.',
