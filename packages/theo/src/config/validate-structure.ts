@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { TheoProjectError } from './errors.js'
+import { TheoProjectError } from '../core/errors.js'
 
 interface ValidationRule {
   path: string

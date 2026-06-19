@@ -3,7 +3,7 @@ import { createServer, type Plugin, type ViteDevServer } from 'vite'
 
 import { loadConfig } from '../../config/load-config.js'
 import { loadEnv } from '../../config/load-env.js'
-import { validateProjectStructure } from '../../core/validate-structure.js'
+import { validateProjectStructure } from '../../config/validate-structure.js'
 import { orchestrateDev } from '../../services/index.js'
 import { theoPluginAsync } from '../../vite-plugin/index.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
