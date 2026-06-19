@@ -6,7 +6,7 @@ Part of the [Theo](https://usetheo.dev) family of products. TheoKit is the **web
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow?style=flat-square)](#status)
-[![Tests](https://img.shields.io/badge/tests-566%20passing-brightgreen?style=flat-square)](#)
+[![Tests](https://img.shields.io/badge/tests-717%20passing-brightgreen?style=flat-square)](#)
 [![npm](https://img.shields.io/npm/v/theokit?style=flat-square&label=theokit)](https://www.npmjs.com/package/theokit)
 [![npm](https://img.shields.io/npm/v/@theokit/http?style=flat-square&label=@theokit/http)](https://www.npmjs.com/package/@theokit/http)
 [![npm](https://img.shields.io/npm/v/@theokit/agents?style=flat-square&label=@theokit/agents)](https://www.npmjs.com/package/@theokit/agents)
@@ -79,7 +79,7 @@ streaming, tools, conversation history — is sugar over this.
 │  theokit     │    │  @theokit/http   │    │@theokit/agents│
 │  Framework   │    │  HTTP Pipeline   │    │  AI Pipeline  │
 │  core/config │    │  16 decorators   │    │  15 decorators│
-│  router/cli  │    │  329 tests       │    │  237 tests    │
+│  router/cli  │    │  395 tests       │    │  239 tests    │
 └──────────────┘    └──────────────────┘    └──────────────┘
                               │                     │
                          Guards shared          @theokit/sdk
@@ -423,16 +423,16 @@ export default defineConfig({
 
 | Package | Version | Description |
 |---|---|---|
-| [`theokit`](https://www.npmjs.com/package/theokit) | 0.4.0 | Framework core — routing, server, CLI, config, adapters |
-| [`@theokit/http`](https://www.npmjs.com/package/@theokit/http) | 0.5.0 | NestJS-style HTTP decorators + pipeline |
+| [`theokit`](https://www.npmjs.com/package/theokit) | 0.6.1 | Framework core — routing, server, CLI, config, adapters |
+| [`@theokit/http`](https://www.npmjs.com/package/@theokit/http) | 0.5.4 | NestJS-style HTTP decorators + pipeline |
 | [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | 0.4.0 | AI agent decorators + SDK adapter + orchestration |
-| [`create-theokit`](https://www.npmjs.com/package/create-theokit) | 0.8.0 | Project scaffolding CLI |
+| [`create-theokit`](https://www.npmjs.com/package/create-theokit) | 1.0.15 | Project scaffolding CLI |
 
 ### SDK (agent runtime — sibling repo)
 
 | Package | Version | Description |
 |---|---|---|
-| [`@theokit/sdk`](https://www.npmjs.com/package/@theokit/sdk) | 1.7.0 | Agent runtime — `Agent.create()`, `Run.stream()`, providers, persistence |
+| [`@theokit/sdk`](https://www.npmjs.com/package/@theokit/sdk) | 2.0.1 | Agent runtime — `Agent.create()`, `Run.stream()`, providers, persistence |
 | [`@theokit/sdk-tools`](https://www.npmjs.com/package/@theokit/sdk-tools) | 0.1.0 | Tool definition helpers for SDK agents |
 | [`@theokit/sdk-budget`](https://www.npmjs.com/package/@theokit/sdk-budget) | 0.1.0 | Cost tracking + budget enforcement for agent runs |
 | [`@theokit/sdk-cache`](https://www.npmjs.com/package/@theokit/sdk-cache) | 0.1.0 | Response caching layer for agent calls |
@@ -476,7 +476,7 @@ TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **se
 
 | Sibling | Direction | How it relates | Status |
 |---------|-----------|----------------|:------:|
-| **`@theokit/sdk` v1.7.0** — agent runtime | TheoKit ← sibling | SDK is the **only** agent runtime (rule: INQUEBRAVEL). `Agent.create()`, `Run.stream()`, `defineTool()`. 6 sub-packages (tools, budget, cache, memory, handoff, codemod). | ✅ Wired |
+| **`@theokit/sdk` v2.0.1** — agent runtime | TheoKit ← sibling | SDK is the **only** agent runtime (rule: INQUEBRAVEL). `Agent.create()`, `Run.stream()`, `defineTool()`. 6 sub-packages (tools, budget, cache, memory, handoff, codemod). | ✅ Wired |
 | **`@theokit/auth-*`** — auth providers | TheoKit ← sibling | GitHub, Google OAuth + magic link. Each is an independent npm package. | ✅ Published |
 | **`@theokit/plugin-*`** — 8 plugins | TheoKit → sibling | canvas, copilot, db-drizzle, email, forms, payments, realtime, voice. Apps install explicitly. | ✅ Published |
 | **`@theokit/gateway-*`** — 4 gateways | TheoKit ← sibling | SMS, LINE, Matrix, Mattermost. Each is an independent npm package. | ✅ Published |
@@ -485,13 +485,13 @@ TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **se
 
 ## Status
 
-- **635+ tests passing** across 4 packages (319 HTTP + 239 agents + 71 create-theokit + 6 E2E). Zero lint errors, zero typecheck errors.
+- **717 tests passing** across the decorator + scaffolder suites (395 `@theokit/http` + 239 `@theokit/agents` + 77 `create-theokit` + 6 E2E), in addition to the `theokit` framework suite (`tests/`). Zero lint errors, zero typecheck errors.
 - **31 decorators** (16 HTTP + 15 agent) with convention naming inference.
 - **14 agent stream event types** with discriminated union.
 - **27 npm packages published** across the Theo ecosystem (4 core + 7 SDK + 3 auth + 8 plugins + 4 gateways + 1 codemod).
 - **13 system design guardrails** enforced on every interaction (G1-G13 including YAGNI, DRY, Feature Creep).
 - **Real E2E tests** — scaffold → install → dev server → HTTP request → 200 response.
-- **SDK integration complete** — all agent execution flows through `@theokit/sdk` v1.7.0.
+- **SDK integration complete** — all agent execution flows through `@theokit/sdk` v2.0.1.
 - **TheoCloud adapter shipped** — thin validator that bundles + uploads `services.json`.
 - **Honest warnings** — `@UseInterceptors`, `@UseFilters`, `@Budget` on agents emit stable warning codes when enforcement is metadata-only.
 
