@@ -1,0 +1,60 @@
+# Analysis cycle configuration — opt-in per project.
+#
+# /analysis only runs when 'enabled' is uncommented and set to 'true'.
+# Projects without this file or with enabled = false are skipped with
+# INFO "analysis not enabled for this project".
+#
+# Format: key = value (one per line). Lines starting with '#' are comments.
+#
+# ─── Required ────────────────────────────────────────────────────────
+#
+# enabled = true
+#
+# ─── Profile ─────────────────────────────────────────────────────────
+#
+# Determines which analysis modules (A1-A6) are activated and how they
+# weight findings. Pick the profile closest to your project's nature.
+#
+#   engine         — database/runtime/compiler: heavy on A1 (perf benchmarks),
+#                    A4 (memory), A5 (scalability). Expects criterion/go-bench.
+#   api            — HTTP/gRPC service: A1 (latency/throughput), A3 (architecture),
+#                    A5 (load projection). Expects autocannon/k6/locust.
+#   library        — reusable crate/package: A2 (complexity), A3 (API surface),
+#                    A4 (allocation overhead). Expects micro-benchmarks.
+#   cli            — command-line tool: A1 (startup time), A2 (complexity),
+#                    A4 (memory footprint). Expects hyperfine.
+#   infrastructure — IaC/platform: A3 (architecture), A6 (reference comparison).
+#                    Benchmarks optional.
+#
+# profile = engine
+#
+# ─── Benchmark paths ─────────────────────────────────────────────────
+#
+# Where to find benchmark suites (relative to repo root).
+# Comma-separated if multiple directories.
+#
+# benchmark_dir = benches/
+#
+# ─── Baseline directory ──────────────────────────────────────────────
+#
+# Where to store/read baseline results for regression detection.
+# Created automatically on first run if missing.
+#
+# baseline_dir = .benchmarks/baselines/
+#
+# ─── Reference repositories ─────────────────────────────────────────
+#
+# Paths to cloned reference projects for A6 comparative analysis.
+# Comma-separated. Optional — A6 is skipped when empty.
+#
+# reference_repos = knowledge-base/references/neo4j,knowledge-base/references/memgraph
+#
+# ─── Scalability targets ─────────────────────────────────────────────
+#
+# Expected scale for A5 projection. Format: metric = target_value
+# Used to validate whether current trajectory reaches the goal.
+#
+# scale_vertices = 10_000_000
+# scale_edges = 100_000_000
+# scale_concurrent_readers = 100
+# scale_p99_latency_ms = 10

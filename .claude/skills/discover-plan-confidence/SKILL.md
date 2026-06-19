@@ -1,5 +1,7 @@
 ---
 name: discover-plan-confidence
+version: 0.1.0
+requires: [discover-edge-cases]
 description: Score a discovery plan produced by /discover-plan for structural quality (M2 deterministic check). Sibling of /discover-confidence with a discovery-plan-shape rubric (research coverage, reference citations, plan completeness, smells). Use after /discover-edge-cases, before /discover-execute.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write

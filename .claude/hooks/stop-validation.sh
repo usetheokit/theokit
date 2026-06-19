@@ -1,16 +1,35 @@
 #!/bin/bash
-# Stop hook: validates that modified packages have passing tests and features are wired.
-# Any stdout output is fed back to Claude as context, preventing premature stop.
-# If no issues are found, output is empty and Claude stops normally.
+# Stop hook: end-of-session sanity checks (agnostic).
+#
+# Behavior:
+#   1. TDD gate (warn-first): for every changed production source file, warn
+#      if no sibling test file is detected in the same directory (heuristic;
+#      supports common *_test.* / *.test.* / *.spec.* / test_*.* naming).
+#   2. CHANGELOG discipline (HARD GATE — Inquebrável Rule 6 + cycle-review BLOCKER):
+#      if production source changed but CHANGELOG.md did not, BLOCK.
+#   3. Secret leak (HARD GATE — cycle-review BLOCKER): if newly tracked files
+#      match secret patterns (.env / credentials* / *.pem / *.key), BLOCK.
+#   4. Pre-release honesty (warn-first): if README.md was modified, scan for
+#      unverified production-ready / SLA claims.
+#
+# Hard gates align with rules/cycle-review.md § Hard gates (BLOCKER-level).
+# Warn-first items are advisory — output is fed to Claude as context.
+#
+# Exit codes:
+#   0 — clean OR only advisory warnings emitted
+#   2 — hard-gate violation (CHANGELOG missing or secrets committed)
+#
+# Override: setting STOP_VALIDATION_WARN_ONLY=1 reverts every gate to warn-first
+# (escape hatch for legitimate bulk reorgs; document the rationale in CHANGELOG).
 
 set -uo pipefail
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-cd "$PROJECT_DIR"
+# shellcheck source=lib/detect-layout.sh
+source "$(dirname "$0")/lib/detect-layout.sh"
 
-# ---------------------------------------------------------------------------
-# 1. Collect ALL modified files (unstaged + staged + last commit)
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# Collect ALL modified files (unstaged + staged + last commit)
+# ----------------------------------------------------------------------------
 UNSTAGED=$(git diff --name-only 2>/dev/null || true)
 STAGED=$(git diff --cached --name-only 2>/dev/null || true)
 LAST_COMMIT=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
@@ -21,155 +40,163 @@ if [ -z "$ALL_FILES" ]; then
   exit 0
 fi
 
-# Only care about source files
-TS_CHANGED=$(echo "$ALL_FILES" | grep -E '\.(ts|tsx)$' || true)
-
-if [ -z "$TS_CHANGED" ]; then
-  exit 0
-fi
-
-ISSUES=()
-TESTED_PKGS=()
 WARNINGS=()
+BLOCKERS=()
 
-# ---------------------------------------------------------------------------
-# 2. Extract affected packages
-# ---------------------------------------------------------------------------
-PKGS=""
-if [ -n "$TS_CHANGED" ]; then
-  PKGS=$(echo "$TS_CHANGED" | sed -n 's|^packages/\([^/]*\)/.*|\1|p' | sort -u || true)
-fi
+# Escape hatch
+WARN_ONLY="${STOP_VALIDATION_WARN_ONLY:-0}"
 
-# ---------------------------------------------------------------------------
-# 3. Run tests for each affected package (cap at 5)
-# ---------------------------------------------------------------------------
-PKG_COUNT=0
-if [ -n "$PKGS" ]; then
-  while IFS= read -r pkg; do
-    [ -z "$pkg" ] && continue
-    PKG_COUNT=$((PKG_COUNT + 1))
-    if [ "$PKG_COUNT" -gt 5 ]; then
-      WARNINGS+=("More than 5 packages changed — tested only the first 5. Run 'npm test' manually.")
-      break
-    fi
+# ----------------------------------------------------------------------------
+# 1. TDD gate (warn-first) — heuristic test pairing
+# ----------------------------------------------------------------------------
+# Recognized source extensions: .go .py .ts .tsx .js .jsx .rs .java .kt .rb .cs
+# Recognized test-name patterns in the same directory:
+#   <name>_test.<ext>          (Go, Python, etc.)
+#   <name>.test.<ext>          (TS/JS Jest convention)
+#   <name>.spec.<ext>          (TS/JS Jasmine/RSpec)
+#   test_<name>.<ext>          (Python pytest)
+# Falls back to "ANY test file in the same directory" (idiomatic in some langs).
+# Skips generated/doc files and obvious vendored/third-party trees.
+SRC_CHANGED=$(echo "$ALL_FILES" \
+  | grep -E '\.(go|py|ts|tsx|js|jsx|rs|java|kt|rb|cs)$' \
+  | grep -vE '(^|/)(node_modules|vendor|dist|build|target|\.venv|__pycache__|\.next|\.nuxt)/' \
+  | grep -vE '(_test|\.test|\.spec)\.[a-z]+$' \
+  | grep -vE '(^|/)test_[^/]+\.[a-z]+$' \
+  | grep -vE '(^|/)zz_generated[^/]*\.go$' \
+  | grep -vE '(^|/)doc\.go$' \
+  || true)
 
-    PKG_DIR="packages/$pkg"
-    if [ ! -d "$PKG_DIR" ]; then
+if [ -n "$SRC_CHANGED" ]; then
+  MISSING_TESTS=()
+  while IFS= read -r src_file; do
+    [ -z "$src_file" ] && continue
+
+    pkg_dir=$(dirname "$src_file")
+    base_no_ext="${src_file##*/}"
+    base_no_ext="${base_no_ext%.*}"
+    ext="${src_file##*.}"
+
+    # Candidate file names in same directory
+    if [ -f "${pkg_dir}/${base_no_ext}_test.${ext}" ] || \
+       [ -f "${pkg_dir}/${base_no_ext}.test.${ext}" ] || \
+       [ -f "${pkg_dir}/${base_no_ext}.spec.${ext}" ] || \
+       [ -f "${pkg_dir}/test_${base_no_ext}.${ext}" ]; then
       continue
     fi
 
-    TESTED_PKGS+=("$pkg")
-
-    # Check if package has test script
-    if [ -f "$PKG_DIR/package.json" ] && grep -q '"test"' "$PKG_DIR/package.json" 2>/dev/null; then
-      TEST_OUTPUT=$(cd "$PKG_DIR" && npm test --if-present 2>&1 || true)
-
-      if echo "$TEST_OUTPUT" | grep -qiE 'FAIL|failed|error|✗|×'; then
-        FAILURES=$(echo "$TEST_OUTPUT" | grep -iE 'FAIL|failed|error|✗|×' | head -10)
-        ISSUES+=("TESTS FAILING in $pkg:\n$FAILURES")
-      fi
+    # Fallback: ANY test-named file in the same package directory
+    found=$(find "$pkg_dir" -maxdepth 1 \( \
+        -name "*_test.${ext}" -o -name "*.test.${ext}" -o -name "*.spec.${ext}" -o -name "test_*.${ext}" \
+      \) -print -quit 2>/dev/null || true)
+    if [ -n "$found" ]; then
+      continue
     fi
-  done <<< "$PKGS"
-fi
 
-# ---------------------------------------------------------------------------
-# 4. Check for orphaned exports (new exports referenced nowhere else)
-# ---------------------------------------------------------------------------
-if [ -n "$TS_CHANGED" ]; then
-  NEW_EXPORTS=$(git diff HEAD -- '*.ts' '*.tsx' 2>/dev/null | \
-    grep -E '^\+\s*export\s+(function|class|interface|type|const|enum)\s+' | \
-    sed 's/^+\s*//' || true)
+    MISSING_TESTS+=("$src_file")
+  done <<< "$SRC_CHANGED"
 
-  STAGED_EXPORTS=$(git diff --cached -- '*.ts' '*.tsx' 2>/dev/null | \
-    grep -E '^\+\s*export\s+(function|class|interface|type|const|enum)\s+' | \
-    sed 's/^+\s*//' || true)
-
-  ALL_EXPORTS=$(echo -e "${NEW_EXPORTS}\n${STAGED_EXPORTS}" | sort -u | grep -v '^$' || true)
-
-  if [ -n "$ALL_EXPORTS" ]; then
-    while IFS= read -r line; do
-      [ -z "$line" ] && continue
-
-      ITEM_NAME=$(echo "$line" | grep -oP '(function|class|interface|type|const|enum)\s+\K\w+' || true)
-      [ -z "$ITEM_NAME" ] && continue
-
-      # Skip common/trivial names
-      if echo "$ITEM_NAME" | grep -qiE '^(default|Props|Options|Config|Context|Provider|Error|Type|Schema|test_|describe|it|expect)'; then
-        continue
-      fi
-
-      if [ ${#ITEM_NAME} -le 3 ]; then
-        continue
-      fi
-
-      # Count files referencing this item
-      REF_COUNT=$(grep -rl "\b${ITEM_NAME}\b" packages/ --include='*.ts' --include='*.tsx' 2>/dev/null | wc -l || echo "0")
-
-      if [ "$REF_COUNT" -le 1 ]; then
-        ITEM_TYPE=$(echo "$line" | grep -oP 'export\s+\K(function|class|interface|type|const|enum)' || echo "item")
-        WARNINGS+=("POSSIBLY UNWIRED: export $ITEM_TYPE '$ITEM_NAME' found in only $REF_COUNT file(s). Is it integrated?")
-      fi
-    done <<< "$ALL_EXPORTS"
+  if [ ${#MISSING_TESTS[@]} -gt 0 ]; then
+    msg="TDD gate (warn-first) — Inquebrável Rule 7: the following production source files have no sibling test file detected:"
+    for f in "${MISSING_TESTS[@]}"; do
+      msg+="\n    - $f"
+    done
+    msg+="\n  See $ECO/rules/testing.md for the project's test pairing convention."
+    WARNINGS+=("$msg")
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# 5. TypeScript check on changed packages
-# ---------------------------------------------------------------------------
-if [ -n "$PKGS" ]; then
-  while IFS= read -r pkg; do
-    [ -z "$pkg" ] && continue
-    PKG_DIR="packages/$pkg"
-    if [ -f "$PKG_DIR/tsconfig.json" ]; then
-      TSC_OUTPUT=$(npx tsc --noEmit --project "$PKG_DIR/tsconfig.json" 2>&1 || true)
-      if echo "$TSC_OUTPUT" | grep -qE 'error TS'; then
-        TSC_ERRORS=$(echo "$TSC_OUTPUT" | grep -E 'error TS' | head -5)
-        ISSUES+=("TYPE ERRORS in $pkg:\n$TSC_ERRORS")
-      fi
+# ----------------------------------------------------------------------------
+# 2. CHANGELOG discipline (HARD GATE — Inquebrável Rule 6 + cycle-review BLOCKER)
+# ----------------------------------------------------------------------------
+if [ -f "CHANGELOG.md" ]; then
+  CODE_CHANGED=$(echo "$ALL_FILES" \
+    | grep -E '\.(go|py|ts|tsx|js|jsx|rs|java|kt|rb|cs)$' \
+    | grep -vE '(_test|\.test|\.spec)\.[a-z]+$' \
+    | grep -vE '(^|/)(node_modules|vendor|dist|build|target|\.venv|__pycache__)/' \
+    || true)
+  if [ -n "$CODE_CHANGED" ] && ! echo "$ALL_FILES" | grep -qE '^CHANGELOG\.md$'; then
+    msg="CHANGELOG.md not updated despite production source changes (Inquebrável Rule 6; cycle-review BLOCKER). Add an entry to [Unreleased] before stopping. Override with STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg with the rationale documented separately."
+    if [ "$WARN_ONLY" = "1" ]; then
+      WARNINGS+=("$msg")
+    else
+      BLOCKERS+=("$msg")
     fi
-  done <<< "$PKGS"
+  fi
 fi
 
-# ---------------------------------------------------------------------------
-# 6. Report
-# ---------------------------------------------------------------------------
-HAS_OUTPUT=false
+# ----------------------------------------------------------------------------
+# 2b. Secret leak (HARD GATE — cycle-review BLOCKER)
+# ----------------------------------------------------------------------------
+# Only consider files that are PRESENT (added/modified) — a DELETED file cannot
+# leak a secret, so `--diff-filter=d` (exclude deletions) is applied to each of
+# the three diff windows. Without this, removing a placeholder `.env.example`
+# (or rotating any secret-pattern file out of the tree) would BLOCK the stop on
+# a phantom "leak" that no longer exists on disk.
+UNSTAGED_PRESENT=$(git diff --name-only --diff-filter=d 2>/dev/null || true)
+STAGED_PRESENT=$(git diff --cached --name-only --diff-filter=d 2>/dev/null || true)
+LAST_COMMIT_PRESENT=$(git diff --name-only --diff-filter=d HEAD~1..HEAD 2>/dev/null || true)
+PRESENT_FILES=$(echo -e "${UNSTAGED_PRESENT}\n${STAGED_PRESENT}\n${LAST_COMMIT_PRESENT}" | sort -u | grep -v '^$' || true)
 
-if [ ${#ISSUES[@]} -gt 0 ]; then
-  HAS_OUTPUT=true
-  echo "============================================"
-  echo "  INTEGRATION VALIDATION FAILED"
-  echo "============================================"
-  echo ""
-  for issue in "${ISSUES[@]}"; do
-    echo -e "  [BLOCK] $issue"
-    echo ""
+SECRET_HITS=$(echo "$PRESENT_FILES" \
+  | grep -E '(^|/)(\.env(\.[a-z0-9_-]+)?|credentials([._-][a-z0-9]+)?|[a-z0-9_-]*secret[s]?(\.[a-z0-9_-]+)?\.(ya?ml|json|env|txt))$|\.(pem|key|p12|pfx|jks)$' \
+  || true)
+if [ -n "$SECRET_HITS" ]; then
+  msg="Secret-pattern files appear in this session's diff (cycle-review BLOCKER). Verify they are intentionally NOT secrets, or remove them before stopping:"
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    msg+="\n    - $f"
+  done <<< "$SECRET_HITS"
+  if [ "$WARN_ONLY" = "1" ]; then
+    WARNINGS+=("$msg")
+  else
+    BLOCKERS+=("$msg")
+  fi
+fi
+
+# ----------------------------------------------------------------------------
+# 3. README.md production claims
+# ----------------------------------------------------------------------------
+if echo "$ALL_FILES" | grep -qE '(^|/)README\.md$'; then
+  README_DIFF=$(git diff -- '*README.md' 2>/dev/null || true)
+  if echo "$README_DIFF" | grep -qiE '^\+.*\bproduction[[:space:]]?-?[[:space:]]?(ready|grade)\b'; then
+    WARNINGS+=("README.md introduces a 'production-ready' claim. Until v1.0 with measured evidence, prefer 'designed for' or 'targeted at' framings ($ECO/rules/public-copy.md).")
+  fi
+  if echo "$README_DIFF" | grep -qiE '^\+.*\b(99\.9|99\.95|99\.99)[[:space:]]?%[[:space:]]?(uptime|sla)'; then
+    WARNINGS+=("README.md introduces a specific SLA/uptime number. Per the honesty rule, specific SLAs require sustained production measurement. Remove or qualify with 'target SLO' / 'designed to support'.")
+  fi
+fi
+
+# ----------------------------------------------------------------------------
+# Report
+# ----------------------------------------------------------------------------
+if [ ${#BLOCKERS[@]} -gt 0 ]; then
+  echo "============================================" >&2
+  echo "  STOP VALIDATION — HARD-GATE VIOLATION" >&2
+  echo "============================================" >&2
+  echo "" >&2
+  for b in "${BLOCKERS[@]}"; do
+    echo -e "  [BLOCK] $b" >&2
+    echo "" >&2
   done
+  echo "--------------------------------------------" >&2
+  echo "Resolve every BLOCK above before stopping. To override for a documented reason, re-run with STOP_VALIDATION_WARN_ONLY=1." >&2
 fi
 
 if [ ${#WARNINGS[@]} -gt 0 ]; then
-  HAS_OUTPUT=true
-  if [ ${#ISSUES[@]} -eq 0 ]; then
-    echo "============================================"
-    echo "  INTEGRATION VALIDATION — WARNINGS"
-    echo "============================================"
-    echo ""
-  fi
-  for warning in "${WARNINGS[@]}"; do
-    echo -e "  [WARN] $warning"
+  echo "============================================"
+  echo "  STOP VALIDATION — ADVISORY WARNINGS"
+  echo "============================================"
+  echo ""
+  for w in "${WARNINGS[@]}"; do
+    echo -e "  [WARN] $w"
     echo ""
   done
+  echo "--------------------------------------------"
+  echo "These are advisory (warn-first). Address them or document why they are intentional before considering the session complete."
 fi
 
-if [ "$HAS_OUTPUT" = true ]; then
-  echo "--------------------------------------------"
-  echo "Packages tested: ${TESTED_PKGS[*]}"
-  echo ""
-  if [ ${#ISSUES[@]} -gt 0 ]; then
-    echo "ACTION REQUIRED: Fix the [BLOCK] issues above before finishing."
-  else
-    echo "No blocking issues. Warnings are advisory — verify they are intentional."
-  fi
+if [ ${#BLOCKERS[@]} -gt 0 ]; then
+  exit 2
 fi
 
 exit 0

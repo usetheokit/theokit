@@ -7,6 +7,18 @@
  * edge (replacing the prior `devtools → router` violation).
  */
 
+/**
+ * Dynamic-segment metadata for a file-system route node.
+ * Set when the directory name is `[param]` (single segment) or `[...slug]`
+ * (catch-all). `generate.ts` turns this into react-router `:param` / `*` syntax.
+ */
+export interface RouteNodeDynamic {
+  /** The param name (`slug` for `[slug]` / `[...slug]`). Always `[A-Za-z0-9_]+`. */
+  paramName: string
+  /** True for catch-all `[...slug]`, false for single dynamic `[slug]`. */
+  catchAll: boolean
+}
+
 export interface RouteNode {
   segment: string
   path: string
@@ -15,5 +27,7 @@ export interface RouteNode {
   error?: string
   loading?: string
   notFound?: string
+  /** Present only for dynamic / catch-all segments (additive — static routes omit it). */
+  dynamic?: RouteNodeDynamic
   children: RouteNode[]
 }

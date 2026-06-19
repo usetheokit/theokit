@@ -1,7 +1,7 @@
 import { resolve, relative } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
-import { validateProjectStructure } from '../../core/validate-structure.js'
+import { validateProjectStructure } from '../../config/validate-structure.js'
 import { scanServerActions } from '../../server/scan/action-scan.js'
 import { scanServerRoutes } from '../../server/scan/scan.js'
 import { scanWebSocketRoutes } from '../../server/scan/ws-scan.js'

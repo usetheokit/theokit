@@ -27,19 +27,21 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-export type BackendKind = 'python' | 'node'
+// node-only polyglot backend (decision 2026-06-17). Python scaffolding was
+// deferred — only the Node (Hono) sidecar template ships. Re-adding Python
+// requires restoring its template + an ADR with demand evidence.
+export type BackendKind = 'node'
 
-const VALID_BACKENDS = ['python', 'node'] as const
+const VALID_BACKENDS = ['node'] as const
 
 /**
- * Parse `--backend python` / `--backend node` (multi-value) from argv.
+ * Parse `--backend node` (multi-value) from argv.
  *
  * Accepts:
- *   --backend python
- *   --backend=python
- *   --backend python --backend node
+ *   --backend node
+ *   --backend=node
  *
- * Throws on unknown backend name.
+ * Throws on unknown backend name (incl. `python`, which is not shipped).
  */
 export function parseBackendFlags(args: string[]): BackendKind[] {
   const out: BackendKind[] = []
@@ -74,14 +76,6 @@ const BACKEND_CONFIG: Record<
     start: string
   }
 > = {
-  python: {
-    templateDir: 'agent-python',
-    serviceName: 'agent',
-    port: 8001,
-    proxy: '/api/agent',
-    dev: 'uvicorn main:app --reload --port 8001',
-    start: 'uvicorn main:app --port 8001 --workers 4',
-  },
   node: {
     templateDir: 'agent-node',
     serviceName: 'worker',

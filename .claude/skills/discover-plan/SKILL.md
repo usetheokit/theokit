@@ -1,5 +1,7 @@
 ---
 name: discover-plan
+version: 0.1.0
+requires: []
 description: Turn the current context + any reference projects under knowledge-base/references/ + allowlisted external sources into a discovery plan saved at knowledge-base/discoveries/plans/{slug}-plan.md. Use when you want to plan a deep-research investigation into a technology or pattern before producing a blueprint.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write

@@ -1,5 +1,7 @@
 ---
 name: plan-improve
+version: 0.1.0
+requires: [plan-confidence]
 description: Iteratively improve a /to-plan plan's M2 score by applying deterministic fixes + LLM-driven semantic fixes via a ralph-loop-style autonomous iteration. Use after /plan-confidence returns a verdict below SHIPPABLE_WITH_CAVEATS (NON_SHIPPABLE or INVALID) and you want the system to attempt auto-improvement before human intervention.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill

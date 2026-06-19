@@ -12,26 +12,17 @@ describe('parseBackendFlags', () => {
     expect(parseBackendFlags(['--yes', '--template=default'])).toEqual([])
   })
 
-  it('should parse --backend python (space-separated)', () => {
-    expect(parseBackendFlags(['--backend', 'python'])).toEqual(['python'])
+  it('should parse --backend node (space-separated)', () => {
+    expect(parseBackendFlags(['--backend', 'node'])).toEqual(['node'])
   })
 
-  it('should parse --backend=python (equals-separated)', () => {
-    expect(parseBackendFlags(['--backend=python'])).toEqual(['python'])
-  })
-
-  it('should parse --backend=node', () => {
+  it('should parse --backend=node (equals-separated)', () => {
     expect(parseBackendFlags(['--backend=node'])).toEqual(['node'])
   })
 
-  it('should parse multiple --backend flags', () => {
-    const result = parseBackendFlags(['--backend', 'python', '--backend', 'node'])
-    expect(result).toEqual(['python', 'node'])
-  })
-
-  it('should parse mixed formats', () => {
-    const result = parseBackendFlags(['--backend=python', '--backend', 'node'])
-    expect(result).toEqual(['python', 'node'])
+  it('should parse repeated --backend node flags', () => {
+    const result = parseBackendFlags(['--backend', 'node', '--backend', 'node'])
+    expect(result).toEqual(['node', 'node'])
   })
 
   it('should throw for unknown backend value', () => {
@@ -40,13 +31,19 @@ describe('parseBackendFlags', () => {
     )
   })
 
+  it('should throw for python (node-only; python deferred)', () => {
+    expect(() => parseBackendFlags(['--backend', 'python'])).toThrow(
+      /unknown --backend value: 'python'/,
+    )
+  })
+
   it('should throw for invalid backend with equals format', () => {
     expect(() => parseBackendFlags(['--backend=go'])).toThrow(/unknown --backend value: 'go'/)
   })
 
   it('should ignore unrelated flags', () => {
-    const result = parseBackendFlags(['--yes', '--backend=python', '--template=default', '--bare'])
-    expect(result).toEqual(['python'])
+    const result = parseBackendFlags(['--yes', '--backend=node', '--template=default', '--bare'])
+    expect(result).toEqual(['node'])
   })
 })
 
@@ -57,36 +54,6 @@ describe('buildServicesSnippet', () => {
 
   it('should build a services snippet for a single backend', () => {
     const snippet = buildServicesSnippet([
-      {
-        name: 'agent',
-        entry: {
-          runtime: 'python',
-          port: 8001,
-          proxy: '/api/agent',
-          dev: 'uvicorn main:app --reload --port 8001',
-          start: 'uvicorn main:app --port 8001 --workers 4',
-        },
-      },
-    ])
-
-    expect(snippet).toContain("runtime: 'python'")
-    expect(snippet).toContain('port: 8001')
-    expect(snippet).toContain("proxy: '/api/agent'")
-    expect(snippet).toContain('services:')
-  })
-
-  it('should build a services snippet for multiple backends', () => {
-    const snippet = buildServicesSnippet([
-      {
-        name: 'agent',
-        entry: {
-          runtime: 'python',
-          port: 8001,
-          proxy: '/api/agent',
-          dev: 'uvicorn main:app --reload',
-          start: 'uvicorn main:app',
-        },
-      },
       {
         name: 'worker',
         entry: {
@@ -99,9 +66,38 @@ describe('buildServicesSnippet', () => {
       },
     ])
 
-    expect(snippet).toContain('agent:')
+    expect(snippet).toContain("runtime: 'node'")
+    expect(snippet).toContain('port: 8002')
+    expect(snippet).toContain("proxy: '/api/worker'")
+    expect(snippet).toContain('services:')
+  })
+
+  it('should build a services snippet for multiple backends', () => {
+    const snippet = buildServicesSnippet([
+      {
+        name: 'worker',
+        entry: {
+          runtime: 'node',
+          port: 8002,
+          proxy: '/api/worker',
+          dev: 'pnpm dev',
+          start: 'pnpm start',
+        },
+      },
+      {
+        name: 'worker2',
+        entry: {
+          runtime: 'node',
+          port: 8003,
+          proxy: '/api/worker2',
+          dev: 'pnpm dev',
+          start: 'pnpm start',
+        },
+      },
+    ])
+
     expect(snippet).toContain('worker:')
-    expect(snippet).toContain("runtime: 'python'")
+    expect(snippet).toContain('worker2:')
     expect(snippet).toContain("runtime: 'node'")
   })
 })
@@ -122,13 +118,13 @@ describe('injectServicesIntoConfig', () => {
 export default defineConfig({
   name: 'test'
 })`
-    const snippet = `  services: {\n    agent: { runtime: 'python' },\n  },\n`
+    const snippet = `  services: {\n    worker: { runtime: 'node' },\n  },\n`
 
     const result = injectServicesIntoConfig(source, snippet)
 
     expect(result).toContain('services:')
     expect(result).toContain("name: 'test'")
-    expect(result).toContain("runtime: 'python'")
+    expect(result).toContain("runtime: 'node'")
   })
 
   it('should return source unchanged when no defineConfig found', () => {

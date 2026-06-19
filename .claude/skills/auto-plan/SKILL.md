@@ -1,5 +1,7 @@
 ---
 name: auto-plan
+version: 0.1.0
+requires: [to-plan, implement, code-quality, review, release]
 description: End-to-end autonomous orchestrator for cycle-discover + cycle-plan + cycle-implement + cycle-code-quality + cycle-review + cycle-release. Single entry-point chains the whole pipeline from idea to a release PR awaiting human approval. Default is full-pipeline; --plan-only retains the legacy discover+plan behavior. Depth (none/light/full) is derived deterministically from a confidence score against repo state — no interactive prompts. MUST-FIX items from /edge-case-plan are auto-injected into the plan before /plan-confidence re-scores. Inspired by planning-with-files v2.43.0 autonomy + composes Claude Code primitives (/plan-goal, /plan-loop) absorbed 2026-05-26.
 user-invocable: true
 allowed-tools: Read Write Edit Bash Glob Grep Skill

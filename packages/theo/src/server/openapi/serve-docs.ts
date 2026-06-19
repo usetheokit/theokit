@@ -36,14 +36,19 @@ const DEFAULT_CDN = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference'
 export function createOpenApiHandler(opts: OpenApiDocsOptions = {}) {
   const docsPath = opts.docsPath ?? '/api/docs'
   const jsonPath = opts.openapiJsonPath ?? '/api/docs/openapi.json'
-  const specFile = resolve(opts.specFilePath ?? '.theokit/openapi.json')
+  const rawSpecFile = opts.specFilePath ?? '.theokit/openapi.json'
   const title = opts.pageTitle ?? 'API Reference'
   const cdn = opts.cdnUrl ?? DEFAULT_CDN
 
-  // Path-traversal defense
-  if (specFile.includes('..')) {
-    throw new Error(`[theokit:openapi] specFilePath must not contain ".." segments: ${specFile}`)
+  // Path-traversal defense — validate the RAW input, BEFORE resolve().
+  // resolve() normalizes `..` away (e.g. '../../../etc/passwd' becomes an
+  // absolute path with no '..' left), so checking the resolved string is a
+  // dead guard. Reject any `..` path segment in the input instead; absolute
+  // paths without traversal segments stay allowed.
+  if (hasDotDotSegment(rawSpecFile)) {
+    throw new Error(`[theokit:openapi] specFilePath must not contain ".." segments: ${rawSpecFile}`)
   }
+  const specFile = resolve(rawSpecFile)
 
   return (request: Request): Response | null => {
     if (request.method !== 'GET') return null
@@ -67,6 +72,11 @@ export function createOpenApiHandler(opts: OpenApiDocsOptions = {}) {
 
     return null
   }
+}
+
+/** True if the raw path contains a `..` segment (POSIX `/` or Windows `\` separator). */
+function hasDotDotSegment(p: string): boolean {
+  return p.split(/[/\\]/).includes('..')
 }
 
 // ── HTML renderer ──

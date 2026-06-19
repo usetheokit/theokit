@@ -1,7 +1,17 @@
 #!/bin/bash
-# PreToolUse hook for Edit/Write: checks architectural boundaries
-# Validates that files being edited respect package boundaries
-# Exit 0 = allow, Exit 2 = block
+# PreToolUse hook for Edit/Write: enforces filesystem boundaries (agnostic).
+#
+# Boundaries enforced:
+#   1. knowledge-base/references/ (similar projects — inspiration) AND
+#      knowledge-base/tools/ (tools we depend on) are both read-only study
+#      material — never edit either. Capture findings in
+#      knowledge-base/discoveries/blueprints/.
+#
+# Additional architectural boundaries (e.g., DIP between domain and adapter
+# layers) are project-specific and belong in rules/architecture.md as
+# conventions enforced by code review, not by this hook.
+#
+# Exit 0 = allow, Exit 2 = block.
 
 set -euo pipefail
 
@@ -12,39 +22,11 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-CONTENT=$(echo "$INPUT" | jq -r '.tool_input.new_string // .tool_input.content // empty')
-
-# Extract package name from path
-PKG=""
-if echo "$FILE_PATH" | grep -q "packages/"; then
-  PKG=$(echo "$FILE_PATH" | sed -n 's|.*packages/\([^/]*\)/.*|\1|p')
-fi
-
-# Guard: agents/ directory — RELAXED 2026-06-09 per user authorization
-# packages/agents/ is now allowed (Phase 2 work authorized).
-# src/agents/ inside other packages remains blocked.
-if echo "$FILE_PATH" | grep -qE '^(.*/)?(src/agents)/'; then
-  echo '{"decision":"block","reason":"SCOPE VIOLATION: src/agents/ inside framework packages is not allowed. Use packages/agents/ instead."}' >&2
+# --- knowledge-base/{references,tools}/ are read-only ---
+# Matches both standalone (knowledge-base/) and plugin install (.claude/knowledge-base/) layouts.
+if echo "$FILE_PATH" | grep -qE '(^|/)(\.claude/)?knowledge-base/(references|tools)/'; then
+  echo '{"decision":"block","reason":"BOUNDARY VIOLATION: knowledge-base/references/ (similar projects — inspiration) and knowledge-base/tools/ (tools we depend on) are read-only. Never edit/create files there. Capture findings in knowledge-base/discoveries/blueprints/."}' >&2
   exit 2
-fi
-
-# Guard: app/ files should not import from server/ internals as RUNTIME values.
-# `import type {...} from '../server/...'` is fine — it's erased at compile time
-# and is the canonical TheoKit pattern for `theoFetch<typeof GET>` inference.
-if echo "$FILE_PATH" | grep -qE 'packages/theo-frontend/|packages/theo-app/|app/.*\.(ts|tsx)$'; then
-  # Find lines with `from '.*/server/...'` that are NOT type-only imports
-  if echo "$CONTENT" | grep -E "from\s+['\"].*server/(routes|actions|middleware|context)" | grep -vE "^\s*import\s+type\b" | grep -q .; then
-    echo '{"decision":"block","reason":"BOUNDARY VIOLATION: Frontend code must NOT import server runtime values directly. Use the typed client or server actions. (Type-only imports via `import type {...}` are allowed for theoFetch<typeof GET> inference.)"}' >&2
-    exit 2
-  fi
-fi
-
-# Guard: core packages should not depend on CLI/DX packages
-if echo "$FILE_PATH" | grep -qE 'packages/theo-(core|router|server)/'; then
-  if echo "$CONTENT" | grep -qE "from\s+['\"]@theo/(cli|create-theo|dx)"; then
-    echo '{"decision":"block","reason":"BOUNDARY VIOLATION: Core packages must NOT depend on CLI/DX packages. Dependency flows downward only."}' >&2
-    exit 2
-  fi
 fi
 
 exit 0

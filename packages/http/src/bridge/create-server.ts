@@ -9,8 +9,13 @@ import type { ParamEntry } from '../decorators/params.js'
 import { ForbiddenException } from '../exceptions/http-exception.js'
 
 import { resolveOrNew, type DiContainer } from './di-resolve.js'
+export type { DiContainer } from './di-resolve.js'
 import { runExceptionFilters } from './exception-filter-chain.js'
-import { createExecutionContext, type CanActivate, type ExecutionContext } from './execution-context.js'
+import {
+  createExecutionContext,
+  type CanActivate,
+  type ExecutionContext,
+} from './execution-context.js'
 import { runInterceptors } from './interceptor-chain.js'
 import {
   MiddlewareConsumerImpl,
@@ -89,7 +94,9 @@ async function handleRequest(
 
   const match = findRoute(routes, method, pathname)
   if (!match) {
-    return jsonResponse(404, { error: { code: 'NOT_FOUND', message: `No route for ${method} ${pathname}` } })
+    return jsonResponse(404, {
+      error: { code: 'NOT_FOUND', message: `No route for ${method} ${pathname}` },
+    })
   }
 
   const { walk, instance, params } = match
@@ -109,11 +116,19 @@ async function handleRequest(
     if (body instanceof Response) return body // validation error response
 
     // Build args
-    const args = buildArgs(walk.paramEntries, { request, body, params, query: Object.fromEntries(url.searchParams) })
+    const args = buildArgs(walk.paramEntries, {
+      request,
+      body,
+      params,
+      query: Object.fromEntries(url.searchParams),
+    })
 
     // Redirect
     if (walk.redirect) {
-      return new Response(null, { status: walk.redirect.status, headers: { location: walk.redirect.url } })
+      return new Response(null, {
+        status: walk.redirect.status,
+        headers: { location: walk.redirect.url },
+      })
     }
 
     const handlerFn = (instance as Record<string | symbol, Function>)[walk.propertyKey]
@@ -231,7 +246,9 @@ function matchPath(pattern: string, pathname: string): Record<string, string> | 
   const match = new RegExp(`^${regexStr}$`).exec(pathname)
   if (!match) return null
   const params: Record<string, string> = {}
-  paramNames.forEach((name, i) => { params[name] = match[i + 1] })
+  paramNames.forEach((name, i) => {
+    params[name] = match[i + 1]
+  })
   return params
 }
 
@@ -263,7 +280,9 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
         args[p.index] = p.key ? ctx.query[p.key] : ctx.query
         break
       case 'headers':
-        args[p.index] = p.key ? ctx.request.headers.get(p.key.toLowerCase()) : Object.fromEntries(ctx.request.headers.entries())
+        args[p.index] = p.key
+          ? ctx.request.headers.get(p.key.toLowerCase())
+          : Object.fromEntries(ctx.request.headers.entries())
         break
       case 'ip':
         args[p.index] = ctx.request.headers.get('x-forwarded-for') ?? '127.0.0.1'

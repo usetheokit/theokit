@@ -23,6 +23,13 @@ export interface ActionConfig<TInput extends z.ZodType, TCtx = unknown> {
    * boolean string / number / array coercion (Astro pattern).
    */
   accept?: ActionAccept
+  /**
+   * Opt OUT of CSRF enforcement for this action. Default (omitted) keeps the
+   * multi-header CSRF gate active. Set `false` for endpoints intentionally
+   * callable without the `X-Theo-Action` header (e.g. public webhooks). The
+   * runtime in `server/http/action-execute.ts` reads this flag.
+   */
+  csrf?: false
   handler: (ctx: { input: z.infer<TInput>; ctx: TCtx }) => unknown
 }
 

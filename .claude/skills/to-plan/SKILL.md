@@ -1,5 +1,7 @@
 ---
 name: to-plan
+version: 0.1.0
+requires: []
 description: Turn the current conversation context into an implementation plan and save it to knowledge-base/plans/. Use when user wants to create a plan from the current context.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Skill

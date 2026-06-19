@@ -9,6 +9,18 @@ function safeVarName(segment: string, prefix: string): string {
   return `${prefix}_${safe}`
 }
 
+/**
+ * Map a route node to its react-router path segment. Dynamic `[slug]` →
+ * `:slug`; catch-all `[...slug]` → `*` (react-router splat — param read via
+ * `params['*']`); static segments pass through unchanged. (T2.2 — the page
+ * router uses react-router's own matcher, NOT the server regex; see plan D3.)
+ */
+function segmentPath(node: RouteNode): string {
+  if (node.dynamic?.catchAll) return '*'
+  if (node.dynamic) return `:${node.dynamic.paramName}`
+  return node.segment
+}
+
 interface ImportEntry {
   varName: string
   importPath: string
@@ -38,7 +50,7 @@ function pushIf(staticImports: ImportEntry[], filePath: string | undefined, varN
 
 function walkRouteTree(node: RouteNode, parents: string[], acc: WalkAccumulator): void {
   const seg = node.segment || 'root'
-  const routePath = buildRoutePath(parents, node.segment)
+  const routePath = buildRoutePath(parents, segmentPath(node))
 
   if (node.page !== undefined) {
     acc.lazyPages.push({
@@ -53,7 +65,8 @@ function walkRouteTree(node: RouteNode, parents: string[], acc: WalkAccumulator)
   pushIf(acc.staticImports, node.loading, safeVarName(seg, 'Loading'))
   pushIf(acc.staticImports, node.notFound, safeVarName(seg, 'NotFound'))
   for (const child of node.children) {
-    const nextParents = node.segment ? [...parents, node.segment] : parents
+    const childSegPath = segmentPath(node)
+    const nextParents = childSegPath ? [...parents, childSegPath] : parents
     walkRouteTree(child, nextParents, acc)
   }
 }
@@ -156,7 +169,7 @@ export function generateRouteManifest(tree: RouteNode): string {
     // Build route object
     if (node.layout) {
       const layoutVar = safeVarName(seg, 'Layout')
-      const pathPart = isRoot ? `path: '/'` : `path: '${node.segment}'`
+      const pathPart = isRoot ? `path: '/'` : `path: '${segmentPath(node)}'`
       // Layout receives `<Outlet />` as `children` prop. This supports BOTH
       // conventions: Next.js-style layouts that render `{children}` AND
       // layouts that call `<Outlet />` directly (the prop is the same element,
@@ -181,11 +194,11 @@ export function generateRouteManifest(tree: RouteNode): string {
         ? `React.createElement(${safeVarName(seg, 'Loading')})`
         : 'null'
       const pageElement = `React.createElement(Suspense, { fallback: ${fallbackEl} }, React.createElement(${pageVar}))`
-      return `{ path: '${node.segment}', element: ${pageElement} }`
+      return `{ path: '${segmentPath(node)}', element: ${pageElement} }`
     }
 
     // Child with children but no layout
-    return `{ path: '${node.segment}', children: ${childrenArray} }`
+    return `{ path: '${segmentPath(node)}', children: ${childrenArray} }`
   }
 
   const routeConfig = genRouteConfig(tree, true)

@@ -73,8 +73,7 @@ describe('scaffold (integration — real template)', () => {
     expect(pkg.scripts.build).toBeDefined()
     expect(pkg.scripts.start).toBeDefined()
     expect(pkg.scripts.test).toBe('vitest run')
-    expect(pkg.scripts.seed).toBeDefined()
-    expect(pkg.scripts['db:migrate']).toBeDefined()
+    expect(pkg.scripts.lint).toBeDefined()
   })
 
   it('should produce a working package.json with expected dependencies', () => {
@@ -86,21 +85,14 @@ describe('scaffold (integration — real template)', () => {
     expect(pkg.dependencies).toBeDefined()
     expect(pkg.devDependencies).toBeDefined()
     expect(pkg.dependencies.zod).toBeDefined()
-    // Rails DX parity: Drizzle + SQLite
-    expect(pkg.dependencies['drizzle-orm']).toBeDefined()
-    expect(pkg.dependencies['better-sqlite3']).toBeDefined()
-    expect(pkg.devDependencies['@types/better-sqlite3']).toBeDefined()
+    // Chat-surface default (ADR 0026): @theokit/sdk runtime + @theokit/ui components
+    expect(pkg.dependencies['@theokit/sdk']).toBeDefined()
+    expect(pkg.dependencies['@theokit/ui']).toBeDefined()
+    expect(pkg.devDependencies.tailwindcss).toBeDefined()
+    expect(pkg.devDependencies['@tailwindcss/vite']).toBeDefined()
     expect(pkg.devDependencies.vitest).toBeDefined()
     // No @swc/core (no controllers)
     expect(pkg.devDependencies['@swc/core']).toBeUndefined()
-  })
-
-  it('should include AGENTS.md in the scaffold', () => {
-    const targetDir = createTargetDir()
-
-    scaffold(targetDir, 'agents-test')
-
-    expect(existsSync(join(targetDir, 'AGENTS.md'))).toBe(true)
   })
 
   it('should include .env.example', () => {
@@ -163,70 +155,40 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'server/store.ts'))).toBe(false)
   })
 
-  it('should include database and route files (Rails DX parity)', () => {
+  it('should include chat + health routes and no database layer (chat-surface default, ADR 0026)', () => {
     const targetDir = createTargetDir()
 
-    scaffold(targetDir, 'rails-dx-test')
+    scaffold(targetDir, 'clean-template-test')
 
-    // Database layer
-    expect(existsSync(join(targetDir, 'server/db/schema.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'server/db/index.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'server/db/seed.ts'))).toBe(true)
-
-    // Routes with directory structure (EC-1)
-    expect(existsSync(join(targetDir, 'server/routes/tasks/index.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'server/routes/tasks/[id].ts'))).toBe(true)
-
-    // Tests
-    expect(existsSync(join(targetDir, 'tests/tasks.test.ts'))).toBe(true)
-
-    // .gitignore includes data/
-    const gitignore = readFileSync(join(targetDir, '.gitignore'), 'utf-8')
-    expect(gitignore).toContain('data/')
+    // Chat-surface default ships the canonical chat route + a health route.
+    expect(existsSync(join(targetDir, 'server/routes/chat.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'server/routes/health.ts'))).toBe(true)
+    // No demo tasks routes
+    expect(existsSync(join(targetDir, 'server/routes/tasks'))).toBe(false)
+    // No bundled database layer — the chat surface is db-agnostic (consumers
+    // wire their own persistence). Drizzle/SQLite were removed with the
+    // default-only (ADR 0023) + chat-surface (ADR 0026) reshape.
+    expect(existsSync(join(targetDir, 'server/db'))).toBe(false)
+    expect(existsSync(join(targetDir, 'drizzle.config.ts'))).toBe(false)
   })
 
-  it('should include drizzle.config.ts for migrations', () => {
+  it('should NOT ship Drizzle deps, scripts, or eslint rules (db removed, ADR 0023/0026)', () => {
     const targetDir = createTargetDir()
 
-    scaffold(targetDir, 'drizzle-config-test')
-
-    expect(existsSync(join(targetDir, 'drizzle.config.ts'))).toBe(true)
-    const config = readFileSync(join(targetDir, 'drizzle.config.ts'), 'utf-8')
-    expect(config).toContain("dialect: 'sqlite'")
-    expect(config).toContain('./server/db/schema.ts')
-    expect(config).toContain('./data/dev.db')
-  })
-
-  it('should have drizzle-kit and eslint-plugin-drizzle as devDependencies', () => {
-    const targetDir = createTargetDir()
-
-    scaffold(targetDir, 'drizzle-deps-test')
+    scaffold(targetDir, 'no-drizzle-test')
 
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
-    expect(pkg.devDependencies['drizzle-kit']).toBeDefined()
-    expect(pkg.devDependencies['eslint-plugin-drizzle']).toBeDefined()
-  })
+    expect(pkg.dependencies['drizzle-orm']).toBeUndefined()
+    expect(pkg.dependencies['better-sqlite3']).toBeUndefined()
+    expect(pkg.devDependencies['drizzle-kit']).toBeUndefined()
+    expect(pkg.devDependencies['eslint-plugin-drizzle']).toBeUndefined()
+    expect(pkg.scripts['db:migrate']).toBeUndefined()
+    expect(pkg.scripts['db:generate']).toBeUndefined()
 
-  it('should have db:migrate, db:seed, db:generate scripts', () => {
-    const targetDir = createTargetDir()
-
-    scaffold(targetDir, 'db-scripts-test')
-
-    const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
-    expect(pkg.scripts['db:migrate']).toBe('theokit db migrate')
-    expect(pkg.scripts['db:seed']).toBe('npx tsx server/db/seed.ts')
-    expect(pkg.scripts['db:generate']).toBe('theokit db generate')
-  })
-
-  it('should have eslint config with drizzle enforce rules', () => {
-    const targetDir = createTargetDir()
-
-    scaffold(targetDir, 'eslint-drizzle-test')
-
+    // eslint.config.mjs must not reference the (uninstalled) drizzle plugin —
+    // otherwise `npm run lint` in the scaffolded app would crash.
     const eslintConfig = readFileSync(join(targetDir, 'eslint.config.mjs'), 'utf-8')
-    expect(eslintConfig).toContain('eslint-plugin-drizzle')
-    expect(eslintConfig).toContain('enforce-delete-with-where')
-    expect(eslintConfig).toContain('enforce-update-with-where')
+    expect(eslintConfig).not.toContain('drizzle')
   })
 
   it('should have theo.config.ts without httpDecoratorsPlugin', () => {
@@ -240,27 +202,59 @@ describe('scaffold (integration — real template)', () => {
     expect(config).not.toContain('@theokit/http')
   })
 
-  it('should import globals.css from app/ not public/', () => {
+  it('should import @theokit/ui styles in the layout (chat-surface default)', () => {
     const targetDir = createTargetDir()
 
     scaffold(targetDir, 'css-test')
 
-    expect(existsSync(join(targetDir, 'app/globals.css'))).toBe(true)
-    expect(existsSync(join(targetDir, 'public/globals.css'))).toBe(false)
+    // Chat-surface default uses Tailwind v4 + @theokit/ui's bundled stylesheet
+    // (zero-config) — there is no hand-written app/globals.css to maintain.
     const layout = readFileSync(join(targetDir, 'app/layout.tsx'), 'utf-8')
-    expect(layout).toContain("import './globals.css'")
+    expect(layout).toContain("import '@theokit/ui/styles.css'")
     expect(layout).not.toContain('<link rel="stylesheet"')
   })
 
-  it('should have React hooks in page.tsx instead of vanilla JS', () => {
+  it('should ship a chat-surface page.tsx without demo CRUD code', () => {
     const targetDir = createTargetDir()
 
-    scaffold(targetDir, 'hooks-test')
+    scaffold(targetDir, 'page-test')
 
     const page = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
-    expect(page).toContain('useState')
-    expect(page).toContain('useEffect')
-    expect(page).not.toContain('<script src')
+    // Chat surface composed from @theokit/ui + the streaming hook
+    expect(page).toContain('@theokit/ui')
+    expect(page).toContain('useAgentStream')
+    // No leftover task-CRUD demo code
+    expect(page).not.toContain('createTask')
+  })
+
+  it('should scaffold .claude/ with skills and settings', () => {
+    const targetDir = createTargetDir()
+
+    scaffold(targetDir, 'claude-test')
+
+    // .claude/ directory created (renamed from dot-claude/)
+    expect(existsSync(join(targetDir, '.claude'))).toBe(true)
+    expect(existsSync(join(targetDir, 'dot-claude'))).toBe(false)
+
+    // Settings
+    expect(existsSync(join(targetDir, '.claude/settings.json'))).toBe(true)
+    const settings = JSON.parse(readFileSync(join(targetDir, '.claude/settings.json'), 'utf-8'))
+    expect(settings.permissions.deny).toContain('Read(.env*)')
+
+    // Rules
+    expect(existsSync(join(targetDir, '.claude/rules/theokit-conventions.md'))).toBe(true)
+
+    // 5 skills
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-routes/SKILL.md'))).toBe(true)
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-agents/SKILL.md'))).toBe(true)
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-database/SKILL.md'))).toBe(true)
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-frontend/SKILL.md'))).toBe(true)
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-config/SKILL.md'))).toBe(true)
+
+    // CLAUDE.md
+    expect(existsSync(join(targetDir, 'CLAUDE.md'))).toBe(true)
+    const claudeMd = readFileSync(join(targetDir, 'CLAUDE.md'), 'utf-8')
+    expect(claudeMd).toContain('@AGENTS.md')
   })
 
   it('should preserve non-tmpl files from the template', () => {

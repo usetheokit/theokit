@@ -1,5 +1,7 @@
 ---
 name: code-quality
+version: 0.1.0
+requires: [implement]
 description: Audit project code for dead symbols, fabricated APIs, cross-package orphans, and weak test quality across Go, Python, TypeScript, and Rust (per rules/code-quality-languages.txt enablement). Auto-detects manifests; runs knip + vulture + cargo-udeps + deadcode + tree-sitter symbol fabrication checks + ast-grep cross-package wiring + stryker/mutmut mutation testing. Read-only by design (never edits code). Use after /implement completes its halt-loop, before /review begins — or standalone for periodic audits.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit

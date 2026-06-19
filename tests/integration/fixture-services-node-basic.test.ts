@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 import { theoConfigSchema } from 'theokit'
 
 const FIXTURE = resolve(__dirname, '../../fixtures/services-node-basic')
-const TEMPLATE = resolve(__dirname, '../../packages/create-theo/templates/services/agent-node')
+const TEMPLATE = resolve(__dirname, '../../packages/create-theokit/templates/services/agent-node')
 
 function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')

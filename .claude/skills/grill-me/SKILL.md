@@ -1,5 +1,7 @@
 ---
 name: grill-me
+version: 0.1.0
+requires: []
 description: Interview the user one question at a time until shared understanding on a plan/feature/design is reached. Walks the decision tree branch by branch, resolving dependencies between decisions. For every question, explores the codebase first (Grep/Read) if the answer is there; only asks the user when the answer requires intent/preference/business context. Persists the conversation to knowledge-base/grills/{slug}-grill.md as input for /to-plan. Use BEFORE /to-plan when the feature is non-trivial AND the user has not yet articulated requirements precisely, or when the user explicitly says "grill me". SKIP for trivial fixes or when /to-plan can already synthesize from context.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write

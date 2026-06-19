@@ -1,11 +1,45 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "CLAUDE_DEBUG_HOOKS": "0"
+  },
   "statusLine": {
     "type": "command",
     "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/scripts/statusline.sh\""
   },
   "permissions": {
+    "defaultMode": "default",
     "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(ls *)",
+      "Bash(tree *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(find *)",
+      "Bash(cat *)",
+      "Bash(mkdir *)",
+      "Bash(mv *)",
+      "Bash(cp *)",
+      "Bash(rm *)",
+      "Bash(jq *)",
+      "Bash(yq *)",
+      "Bash(ast-grep *)",
+      "Bash(sg *)",
+      "Bash(python3 *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git stash *)",
+      "Bash(git add *)",
+      "Bash(git restore --staged *)",
+      "Bash(git show *)",
+      "Bash(git remote -v)",
+      "Bash(git ls-files *)",
+      "Bash(git switch *)",
       "Bash(npm run *)",
       "Bash(npm install *)",
       "Bash(npm test *)",
@@ -18,31 +52,29 @@
       "Bash(playwright *)",
       "Bash(tsc *)",
       "Bash(eslint *)",
-      "Bash(prettier *)",
-      "Bash(git status *)",
-      "Bash(git diff *)",
-      "Bash(git log *)",
-      "Bash(git branch *)",
-      "Bash(git stash *)",
-      "Bash(ls *)",
-      "Bash(tree *)",
-      "Bash(wc *)",
-      "Bash(head *)",
-      "Bash(tail *)",
-      "Read",
-      "Glob",
-      "Grep"
+      "Bash(prettier *)"
     ],
+    "ask": ["Bash(curl *)", "Bash(wget *)", "Bash(docker *)"],
     "deny": [
       "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf $HOME)",
+      "Bash(rm -rf *)",
       "Bash(sudo *)",
-      "Bash(git checkout main)",
+      "Bash(git checkout *)",
       "Bash(git revert *)",
       "Bash(git push --force *)",
+      "Bash(git push -f *)",
       "Bash(git reset --hard *)",
-      "Read(.env*)",
-      "Read(*credentials*)",
-      "Read(*secret*)",
+      "Bash(git rebase -i *)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/credentials*)",
+      "Read(**/*secret*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
       "Edit(.claude/knowledge-base/references/**)",
       "Write(.claude/knowledge-base/references/**)",
       "Edit(.claude/knowledge-base/tools/**)",
@@ -78,7 +110,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.sh\""
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.sh\"",
+            "timeout": 10
           }
         ]
       },
@@ -87,7 +120,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/boundary-check.sh\""
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/boundary-check.sh\"",
+            "timeout": 10
           }
         ]
       }
@@ -98,7 +132,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.sh\""
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.sh\"",
+            "timeout": 60
           },
           {
             "type": "command",
@@ -119,7 +154,7 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-validation.sh\"",
-            "timeout": 300
+            "timeout": 120
           }
         ]
       }

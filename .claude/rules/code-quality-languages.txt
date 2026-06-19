@@ -12,7 +12,7 @@
 #
 # go
 # python
-# typescript
+typescript
 # javascript
 # rust
 # java

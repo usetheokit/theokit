@@ -1,5 +1,7 @@
 ---
 name: review
+version: 0.1.0
+requires: [code-quality]
 description: Most rigorous gate of the ecosystem. Validates quality gates + line-by-line plan vs implementation + 100% integration + integration test depth + edge-case coverage. Before starting, generates specialized review agents for the plan's domain (architecture, tests, wiring, cross-validation, domain-specific) and spawns them in parallel. Single entry-point for cycle-review. Use after /implement passed on `develop` and recent commits are ready to be audited (typically before a release cut).
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Agent Skill

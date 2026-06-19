@@ -37,7 +37,7 @@ describe.skipIf(!isVitest)('T2.1 — Parameter decorators', () => {
     ]
     for (const [decorator, expectedSource] of cases) {
       class Ctrl {
-        handler(@((decorator as ReturnType<typeof Req>)()) _val: unknown) {}
+        handler(@((decorator as typeof Req)()) _val: unknown) {}
       }
       const entries = getParams(Ctrl, 'handler')
       expect(entries).toHaveLength(1)
