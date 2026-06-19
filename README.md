@@ -6,7 +6,7 @@ Part of the [Theo](https://usetheo.dev) family of products. TheoKit is the **web
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow?style=flat-square)](#status)
-[![Tests](https://img.shields.io/badge/tests-566%20passing-brightgreen?style=flat-square)](#)
+[![Tests](https://img.shields.io/badge/tests-717%20passing-brightgreen?style=flat-square)](#)
 [![npm](https://img.shields.io/npm/v/theokit?style=flat-square&label=theokit)](https://www.npmjs.com/package/theokit)
 [![npm](https://img.shields.io/npm/v/@theokit/http?style=flat-square&label=@theokit/http)](https://www.npmjs.com/package/@theokit/http)
 [![npm](https://img.shields.io/npm/v/@theokit/agents?style=flat-square&label=@theokit/agents)](https://www.npmjs.com/package/@theokit/agents)
@@ -79,7 +79,7 @@ streaming, tools, conversation history — is sugar over this.
 │  theokit     │    │  @theokit/http   │    │@theokit/agents│
 │  Framework   │    │  HTTP Pipeline   │    │  AI Pipeline  │
 │  core/config │    │  16 decorators   │    │  15 decorators│
-│  router/cli  │    │  329 tests       │    │  237 tests    │
+│  router/cli  │    │  395 tests       │    │  239 tests    │
 └──────────────┘    └──────────────────┘    └──────────────┘
                               │                     │
                          Guards shared          @theokit/sdk
@@ -485,7 +485,7 @@ TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **se
 
 ## Status
 
-- **635+ tests passing** across 4 packages (319 HTTP + 239 agents + 71 create-theokit + 6 E2E). Zero lint errors, zero typecheck errors.
+- **717 tests passing** across the decorator + scaffolder suites (395 `@theokit/http` + 239 `@theokit/agents` + 77 `create-theokit` + 6 E2E), in addition to the `theokit` framework suite (`tests/`). Zero lint errors, zero typecheck errors.
 - **31 decorators** (16 HTTP + 15 agent) with convention naming inference.
 - **14 agent stream event types** with discriminated union.
 - **27 npm packages published** across the Theo ecosystem (4 core + 7 SDK + 3 auth + 8 plugins + 4 gateways + 1 codemod).
