@@ -21,7 +21,7 @@ import type { Duplex } from 'node:stream'
 
 import type { ViteDevServer } from 'vite'
 
-import { scanWebSocketRoutes } from '../server/scan/ws-scan.js'
+import { scanWebSocketRoutes } from '../server/internal-api.js'
 
 interface WsHandler {
   onOpen?: (ws: unknown, request: unknown) => void | Promise<void>

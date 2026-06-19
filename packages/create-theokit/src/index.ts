@@ -53,9 +53,7 @@ export function scaffold(
   const templateDir = getTemplateDir(templateName)
 
   if (!existsSync(templateDir)) {
-    throw new Error(
-      `Template "${templateName}" not found. Available templates: default, dashboard, api-only, postgres, saas`,
-    )
+    throw new Error(`Template "${templateName}" not found. Available templates: default`)
   }
 
   // Bug #1 fix: "." means current directory — use dir basename as project name
@@ -82,6 +80,13 @@ export function scaffold(
   const gitignoreDest = join(targetDir, '.gitignore')
   if (existsSync(gitignoreSrc)) {
     renameSync(gitignoreSrc, gitignoreDest)
+  }
+
+  // dot-claude/ → .claude/ (npm ignores dotfolders in published packages)
+  const dotClaudeSrc = join(targetDir, 'dot-claude')
+  const dotClaudeDest = join(targetDir, '.claude')
+  if (existsSync(dotClaudeSrc)) {
+    renameSync(dotClaudeSrc, dotClaudeDest)
   }
 
   // Apply {{name}} substitution to every `*.tmpl` file in the target dir.

@@ -1,5 +1,7 @@
 ---
 name: marp-slide
+version: 0.1.0
+requires: []
 description: Create Marp presentation slides with embedded CSS theme — outputs self-contained .md + rendered .html + .pptx. Use when the user wants slides only (no full deck with diagrams; for that use /deck).
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit

@@ -1,5 +1,18 @@
 # theo
 
+## 0.6.0
+
+### Minor Changes
+
+- Dynamic **page** routing — file-system page routes now support `[param]` and catch-all `[...slug]` segments (parity with API routes).
+- Web-Standards request path resolves route params and runs a middleware chain (`executeWebRequest` accepts `opts.params` + `opts.middleware`; middleware may mutate `context` or short-circuit with a `Response`).
+
+### Patch Changes
+
+- `defineAgentTool` now accepts a zod 4 `z.object(...)` input schema (the previous check only recognized the removed zod 3 `_def.typeName`, so every agent tool was rejected under zod 4 with "inputSchema must be a ZodObject"). This unblocks the default chat surface end-to-end.
+- Server-action `FormData` → Zod coercion now coerces array elements; OpenAPI emitter migrated to zod 4 internals; `csrf?: false` exposed on `ActionConfig`.
+- Native-bindings preflight restored (ABI-mismatch safeguard) and `engines.node >=22.12.0` declared.
+
 ## 0.4.0-beta.0
 
 ### Major Changes

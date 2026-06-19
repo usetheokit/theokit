@@ -1,5 +1,7 @@
 ---
 name: skill-writer
+version: 0.1.0
+requires: []
 description: Extracts patterns + ADRs + recommendations from a /discover blueprint and generates a candidate SKILL.md at .claude/skills/generated/{topic}-patterns/. Output is a STAGING artifact — must pass /skill-validator before /skill-register promotes it. Invoke manually after /discover-confidence returns SHIPPABLE_WITH_CAVEATS or higher.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write

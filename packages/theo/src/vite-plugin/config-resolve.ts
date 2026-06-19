@@ -12,12 +12,14 @@
  */
 
 import { loadConfig } from '../config/load-config.js'
-import type { CorsConfig } from '../server/http/cors.js'
-import type { AuditLogger } from '../server/observability/audit-log.js'
-import { createPluginRunnerFromConfig } from '../server/plugins/load-plugins.js'
-import type { PluginRunner } from '../server/plugins/plugin-runner.js'
-import type { DisallowedConfig } from '../server/security/csrf.js'
-import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
+import {
+  createPluginRunnerFromConfig,
+  type AuditLogger,
+  type CorsConfig,
+  type DisallowedConfig,
+  type PluginRunner,
+  type SecurityHeadersConfig,
+} from '../server/internal-api.js'
 import { resolveTransformer, type TheoTransformer } from '../server/transformer.js'
 
 import { detectTheoUi, type TheoUiDetectResult } from './theoui-detect.js'

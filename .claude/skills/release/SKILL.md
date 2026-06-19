@@ -1,5 +1,7 @@
 ---
 name: release
+version: 0.1.0
+requires: [review]
 description: Cuts a semver-tagged release from develop → main after /review returns READY_TO_MERGE. Auto-derives version from CHANGELOG sections (major/minor/patch), rewrites [Unreleased] under the new version header, commits chore(release), opens a PR develop→main with rendered release notes, and waits for human approval (the only manual gate — Unbreakable Rule 4). On merge, creates an annotated tag and a GitHub release. Single entry-point for cycle-release. Use after /review {slug} returned READY_TO_MERGE.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill

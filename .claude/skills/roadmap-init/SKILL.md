@@ -1,5 +1,7 @@
 ---
 name: roadmap-init
+version: 0.1.0
+requires: []
 description: Bootstrap a new project from a one-line idea into a macro ROADMAP.md + a curated set of SOTA reference repositories cloned under knowledge-base/references/. Runs a 7-question Socratic interview (problem → users → in-scope → out-of-scope → constraints → success criterion → north-star metric), then researches state-of-the-art peers via web search, gates them by license (warns on GPL/AGPL/BUSL/no-license), clones the approved ones with shallow blob-filter clones, and writes ROADMAP.md (M0-M8 cap, checkbox per milestone) at the repo root. Use ONLY at project inception, BEFORE any /grill-me, /discover-plan, /to-plan or /implement work. REFUSES to run if ROADMAP.md already exists.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write WebSearch WebFetch AskUserQuestion

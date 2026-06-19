@@ -19,8 +19,8 @@ paths:
 
 | Module | Kind | Public API entry | Notes |
 |---|---|---|---|
-| `core/` | foundation | `theokit` (root) | Foundational types; depends on NOTHING intra-monorepo. Houses `_internal/`, `contracts/` (shared types), `build-helpers.ts`. May import npm packages (vite, react, zod, etc). |
-| `config/` | shared | none (internal) | `theo.config.ts` schema + loader |
+| `core/` | foundation | `theokit` (root) | Foundational types; depends on NOTHING intra-monorepo. Houses `_internal/`, `contracts/` (shared types), `build-helpers.ts`. May import npm packages (vite, react, zod, etc) but is **free of `node:` builtins** (enforced by `tests/unit/core-purity.test.ts` — ADR 0027). |
+| `config/` | shared | none (internal) | `theo.config.ts` schema + loader; hosts `validate-structure.ts` (CLI-time project-structure validator, public `validateProjectStructure`; moved out of `core/` per ADR 0027). |
 | `adapters/` | infrastructure | `theokit/adapters/web-shim`, `theokit/adapters/ws-shim` | Runtime adapters (Node, Vercel, CF Workers, etc.) |
 | `router/` | shared | none (internal) | App-router internals (file-system routing) |
 | `client/` | shared | `theokit/client` | Typed client (`theoFetch`) |

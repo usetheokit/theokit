@@ -1,5 +1,7 @@
 ---
 name: discover-execute
+version: 0.1.0
+requires: [discover-plan-confidence]
 description: Executes a discovery plan via halt-loop (ralph-loop-style autonomous iteration) over the sources declared in the plan — local references under knowledge-base/references/ e/ou URLs allowlisted via rules/discover-web-allowlist.txt. Produces a technical blueprint at knowledge-base/discoveries/blueprints/{slug}-blueprint.md. Use after /discover-edge-cases has approved the plan.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill

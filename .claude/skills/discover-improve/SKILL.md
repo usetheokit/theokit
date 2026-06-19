@@ -1,5 +1,7 @@
 ---
 name: discover-improve
+version: 0.1.0
+requires: [discover-confidence]
 description: Iteratively improve a blueprint's discover-confidence score by applying deterministic fixes + LLM-driven semantic fixes via a halt-loop (ralph-loop-style autonomous iteration). Mirrors /plan-improve but for blueprints.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill

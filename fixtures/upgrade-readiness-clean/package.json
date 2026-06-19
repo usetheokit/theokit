@@ -1,0 +1,8 @@
+{
+  "name": "upgrade-readiness-clean",
+  "private": true,
+  "description": "Fixture: a TheoKit app that is already 0.3-ready (theoFetch only, no inline scripts). scanUpgradeReadiness() MUST report status='ready' with zero violations.",
+  "dependencies": {
+    "theokit": "^0.2.0"
+  }
+}

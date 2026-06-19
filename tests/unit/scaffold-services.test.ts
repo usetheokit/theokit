@@ -9,7 +9,7 @@ import {
   injectServicesIntoConfig,
   injectHeyApiDep,
   parseBackendFlags,
-} from '../../packages/create-theo/src/scaffold-services.js'
+} from '../../packages/create-theokit/src/scaffold-services.js'
 
 let tmp: string
 
@@ -48,48 +48,6 @@ describe('T4.1/T4.2 — scaffoldServices', () => {
     expect(readFileSync(join(tmp, 'theo.config.ts'), 'utf-8')).toBe(BARE_THEO_CONFIG)
   })
 
-  it('--backend python scaffolds services/agent/main.py', () => {
-    writeFileSync(join(tmp, 'theo.config.ts'), BARE_THEO_CONFIG)
-    writeFileSync(join(tmp, 'package.json'), BARE_PACKAGE_JSON)
-    scaffoldServices({ targetDir: tmp, projectName: 'my-app', backends: ['python'] })
-    const mainPath = join(tmp, 'services', 'agent', 'main.py')
-    expect(existsSync(mainPath)).toBe(true)
-    const main = readFileSync(mainPath, 'utf-8')
-    expect(main).toContain('@app.get("/health")')
-    expect(main).toContain('traceparent')
-    expect(main).toContain('JsonFormatter')
-  })
-
-  it('--backend python substitutes name in pyproject.toml.tmpl → pyproject.toml', () => {
-    writeFileSync(join(tmp, 'theo.config.ts'), BARE_THEO_CONFIG)
-    writeFileSync(join(tmp, 'package.json'), BARE_PACKAGE_JSON)
-    scaffoldServices({ targetDir: tmp, projectName: 'my-cool-app', backends: ['python'] })
-    const pyprojectPath = join(tmp, 'services', 'agent', 'pyproject.toml')
-    expect(existsSync(pyprojectPath)).toBe(true)
-    expect(existsSync(`${pyprojectPath}.tmpl`)).toBe(false)
-    expect(readFileSync(pyprojectPath, 'utf-8')).toContain('my-cool-app-agent-python')
-  })
-
-  it('--backend python writes Dockerfile with HEALTHCHECK', () => {
-    writeFileSync(join(tmp, 'theo.config.ts'), BARE_THEO_CONFIG)
-    writeFileSync(join(tmp, 'package.json'), BARE_PACKAGE_JSON)
-    scaffoldServices({ targetDir: tmp, projectName: 'app', backends: ['python'] })
-    const dockerfile = join(tmp, 'services', 'agent', 'Dockerfile')
-    expect(existsSync(dockerfile)).toBe(true)
-    expect(readFileSync(dockerfile, 'utf-8')).toContain('HEALTHCHECK')
-  })
-
-  it('--backend python writes services config to theo.config.ts', () => {
-    writeFileSync(join(tmp, 'theo.config.ts'), BARE_THEO_CONFIG)
-    writeFileSync(join(tmp, 'package.json'), BARE_PACKAGE_JSON)
-    scaffoldServices({ targetDir: tmp, projectName: 'app', backends: ['python'] })
-    const cfg = readFileSync(join(tmp, 'theo.config.ts'), 'utf-8')
-    expect(cfg).toContain('services:')
-    expect(cfg).toContain('agent:')
-    expect(cfg).toContain("runtime: 'python'")
-    expect(cfg).toContain('8001')
-  })
-
   it('--backend node scaffolds services/worker/src/index.ts using Hono', () => {
     writeFileSync(join(tmp, 'theo.config.ts'), BARE_THEO_CONFIG)
     writeFileSync(join(tmp, 'package.json'), BARE_PACKAGE_JSON)
@@ -117,29 +75,8 @@ describe('T4.1/T4.2 — scaffoldServices', () => {
     expect(pkg.dependencies.hono).toBeDefined()
   })
 
-  it('multi-backend (python + node) scaffolds both', () => {
-    writeFileSync(join(tmp, 'theo.config.ts'), BARE_THEO_CONFIG)
-    writeFileSync(join(tmp, 'package.json'), BARE_PACKAGE_JSON)
-    scaffoldServices({ targetDir: tmp, projectName: 'app', backends: ['python', 'node'] })
-    expect(existsSync(join(tmp, 'services', 'agent', 'main.py'))).toBe(true)
-    expect(existsSync(join(tmp, 'services', 'worker', 'src', 'index.ts'))).toBe(true)
-    const cfg = readFileSync(join(tmp, 'theo.config.ts'), 'utf-8')
-    expect(cfg).toContain('agent:')
-    expect(cfg).toContain('worker:')
-  })
-
   // EC-10: inject @hey-api/client-fetch
-  it('EC-10: --backend python injects @hey-api/client-fetch into app package.json', () => {
-    writeFileSync(join(tmp, 'theo.config.ts'), BARE_THEO_CONFIG)
-    writeFileSync(join(tmp, 'package.json'), BARE_PACKAGE_JSON)
-    scaffoldServices({ targetDir: tmp, projectName: 'app', backends: ['python'] })
-    const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
-      dependencies: Record<string, string>
-    }
-    expect(pkg.dependencies['@hey-api/client-fetch']).toBeDefined()
-  })
-
-  it('EC-10: --backend node also injects @hey-api/client-fetch', () => {
+  it('EC-10: --backend node injects @hey-api/client-fetch', () => {
     writeFileSync(join(tmp, 'theo.config.ts'), BARE_THEO_CONFIG)
     writeFileSync(join(tmp, 'package.json'), BARE_PACKAGE_JSON)
     scaffoldServices({ targetDir: tmp, projectName: 'app', backends: ['node'] })
@@ -158,19 +95,19 @@ describe('helper functions', () => {
   it('buildServicesSnippet produces valid TypeScript record', () => {
     const snippet = buildServicesSnippet([
       {
-        name: 'agent',
+        name: 'worker',
         entry: {
-          runtime: 'python',
-          port: 8001,
-          proxy: '/api/agent',
-          dev: 'uvicorn main:app',
-          start: 'uvicorn main:app --workers 4',
+          runtime: 'node',
+          port: 8002,
+          proxy: '/api/worker',
+          dev: 'pnpm dev',
+          start: 'pnpm start',
         },
       },
     ])
     expect(snippet).toContain('services:')
-    expect(snippet).toContain('agent:')
-    expect(snippet).toContain("runtime: 'python'")
+    expect(snippet).toContain('worker:')
+    expect(snippet).toContain("runtime: 'node'")
   })
 
   it('injectServicesIntoConfig is idempotent', () => {
@@ -202,21 +139,17 @@ describe('parseBackendFlags', () => {
     expect(parseBackendFlags(['my-app'])).toEqual([])
   })
 
-  it('parses --backend python', () => {
-    expect(parseBackendFlags(['my-app', '--backend', 'python'])).toEqual(['python'])
-  })
-
-  it('parses --backend=python (= form)', () => {
-    expect(parseBackendFlags(['my-app', '--backend=python'])).toEqual(['python'])
-  })
-
   it('parses --backend node', () => {
     expect(parseBackendFlags(['my-app', '--backend', 'node'])).toEqual(['node'])
   })
 
-  it('parses multi-value: --backend python --backend node', () => {
-    expect(parseBackendFlags(['my-app', '--backend', 'python', '--backend', 'node'])).toEqual([
-      'python',
+  it('parses --backend=node (= form)', () => {
+    expect(parseBackendFlags(['my-app', '--backend=node'])).toEqual(['node'])
+  })
+
+  it('parses repeated --backend node', () => {
+    expect(parseBackendFlags(['my-app', '--backend', 'node', '--backend', 'node'])).toEqual([
+      'node',
       'node',
     ])
   })
@@ -225,13 +158,16 @@ describe('parseBackendFlags', () => {
     expect(() => parseBackendFlags(['my-app', '--backend', 'go'])).toThrow(/unknown.*go/i)
   })
 
-  it('error message lists valid options', () => {
+  it('rejects python (node-only; python deferred)', () => {
+    expect(() => parseBackendFlags(['my-app', '--backend', 'python'])).toThrow(/unknown.*python/i)
+  })
+
+  it('error message lists valid options (node)', () => {
     try {
       parseBackendFlags(['my-app', '--backend', 'rust'])
       throw new Error('should have thrown')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      expect(msg).toContain('python')
       expect(msg).toContain('node')
     }
   })

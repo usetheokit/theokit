@@ -1,5 +1,7 @@
 ---
 name: edge-case-plan
+version: 0.1.0
+requires: [to-plan]
 description: Analyzes an implementation plan and identifies unforeseen edge cases. Pragmatic — flags real risks without complicating the design. Use after /to-plan or when reviewing any plan in knowledge-base/plans/.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash

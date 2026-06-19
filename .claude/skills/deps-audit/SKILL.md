@@ -1,5 +1,7 @@
 ---
 name: deps-audit
+version: 0.1.0
+requires: [edge-case-plan]
 description: Audit project dependencies for known vulnerabilities (CVEs) and outdated versions across npm, Python, Rust, Go. Auto-detects manifests; runs osv-scanner + npm audit + npm outdated + pip-audit + cargo audit + govulncheck; cross-references a plan's ## Dependencies section; produces diff-style bump suggestions. NEVER edits manifests. Use after /edge-case-plan, before /plan-confidence — or standalone for periodic audits.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit

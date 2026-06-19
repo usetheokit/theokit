@@ -1,5 +1,7 @@
 ---
 name: excalidraw
+version: 0.1.0
+requires: []
 description: Create Excalidraw diagram JSON files that make visual arguments. Use when the user wants to visualize workflows, architectures, or concepts (standalone or as input to /marp-slide and /deck).
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit

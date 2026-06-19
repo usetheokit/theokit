@@ -1,0 +1,8 @@
+{
+  "name": "theoui-autoinject",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@theokit/ui": "^0.14.4"
+  }
+}

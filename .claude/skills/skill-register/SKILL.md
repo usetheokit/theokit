@@ -1,5 +1,7 @@
 ---
 name: skill-register
+version: 0.1.0
+requires: [skill-validator]
 description: Promotes a candidate skill from .claude/skills/generated/ to .claude/skills/ (first-class). Requires a PASS verdict from /skill-validator. Writes audit trail at .claude/knowledge-base/reviews/skill-register-{name}-{date}.md before the move. Refuses to act on REJECT or NEEDS_REVIEW (without override).
 user-invocable: true
 allowed-tools: Read Glob Bash Write Edit
