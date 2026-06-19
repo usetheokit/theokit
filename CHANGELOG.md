@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Privacy-boundary guard in `.dependency-cruiser.cjs` (`no-cross-module-internal-import`): a module's `_internal/` is now CI-enforced as private to that module. The existing direction rules allowed e.g. `vite-plugin → server` but did not stop reaching into `server/_internal`; this closes that gap (architecture.md Invariant 3) using dependency-cruiser group-matching (`$1` allows intra-module access only). Current tree has zero violations. Regression tests added in `tests/unit/architecture-guards-ci.test.ts` (RED/GREEN via a temp probe). (#arch-report-cleanup)
+- `packages/theo/src/server/internal-api.ts` — explicit internal contract that `server/` exposes to its build-time consumers (`vite-plugin/`), distinct from the public `server/index.ts` barrel. The 9 `vite-plugin/` modules previously reached into `server/<subdir>/<file>.ts` directly (52 deep imports coupling them to server's internal file layout); they now import the same ~40 symbols from the single stable `../server/internal-api.js` path (architecture.md Invariant 3). Reorganizing server internals now touches only this one file. behavior_change=none; contract test `tests/unit/server-internal-api.test.ts` asserts re-exports are the same object refs as their source. (#arch-report-cleanup)
 
 ### Changed
 

@@ -21,7 +21,7 @@ import { dirname, join, posix, resolve } from 'node:path'
 
 import type { Plugin, ViteDevServer } from 'vite'
 
-import { scanServerActionsEnriched, type ActionManifestEntry } from '../server/scan/action-scan.js'
+import { scanServerActionsEnriched, type ActionManifestEntry } from '../server/internal-api.js'
 
 const VIRTUAL_ID = '@theo/actions'
 const RESOLVED_ID = `\0${VIRTUAL_ID}`
