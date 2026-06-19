@@ -2,29 +2,33 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import type { ViteDevServer, Connect } from 'vite'
 
-import { handleBatchRequest, BATCH_PATH } from '../server/http/batch-handler.js'
-import { createCorsHandler, type CorsConfig } from '../server/http/cors.js'
-import { executeRoute, sendError } from '../server/http/execute.js'
-import { extractTraceId, TRACE_HEADER } from '../server/http/trace-context.js'
-import type { AuditLogger } from '../server/observability/audit-log.js'
-import { logRequest } from '../server/observability/logger.js'
-import { findSuggestion } from '../server/observability/suggest.js'
-import type { PluginRunner } from '../server/plugins/plugin-runner.js'
-import { createRateLimiter } from '../server/rate-limit/rate-limit.js'
-import type { RateLimitConfig } from '../server/rate-limit/rate-limit.js'
-import { matchRoute } from '../server/scan/match.js'
-import { createViteLoader } from '../server/scan/module-loader.js'
-import { scanServerRoutes } from '../server/scan/scan.js'
 import {
+  BATCH_PATH,
   CSP_REPORT_PATH,
+  TRACE_HEADER,
+  applySecurityHeaders,
+  createCorsHandler,
+  createRateLimiter,
+  createViteLoader,
+  executeRoute,
+  extractTraceId,
+  findSuggestion,
+  handleBatchRequest,
   handleCspReport,
+  handleCsrfReadiness,
+  logRequest,
+  matchRoute,
+  scanServerRoutes,
+  sendError,
+  type AuditLogger,
+  type CorsConfig,
   type CspReportHandlerOptions,
-} from '../server/security/csp-report.js'
-import { handleCsrfReadiness } from '../server/security/csrf-readiness-endpoint.js'
-import type { CsrfReadinessStore } from '../server/security/csrf-readiness-store.js'
-import type { DisallowedConfig } from '../server/security/csrf.js'
-import { applySecurityHeaders } from '../server/security/security-headers.js'
-import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
+  type CsrfReadinessStore,
+  type DisallowedConfig,
+  type PluginRunner,
+  type RateLimitConfig,
+  type SecurityHeadersConfig,
+} from '../server/internal-api.js'
 import type { TheoTransformer } from '../server/transformer.js'
 
 export interface ApiMiddlewareOptions {
