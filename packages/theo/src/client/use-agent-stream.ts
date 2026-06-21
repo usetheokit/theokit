@@ -1,8 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { AgentEvent } from '../core/contracts/agent-events.js'
+import type { AgentErrorEvent, AgentEvent } from '../core/contracts/agent-events.js'
 
 import { consumeAgentStream } from './agent-stream-core.js'
+
+/**
+ * Accumulated assistant text (M5-1): the concatenation of every `message`
+ * event's `content`. Pure. Assumes append/delta semantics — a server that
+ * emits full-snapshot messages should read `events` directly.
+ */
+export function deriveLiveText(events: readonly AgentEvent[]): string {
+  let text = ''
+  for (const event of events) {
+    if (event.type === 'message') text += event.content
+  }
+  return text
+}
+
+/**
+ * The current error (M5-1): the last `error` event, or `undefined`. Surfaces
+ * the full `AgentErrorEvent` (with `code`/`retriable`) so the UI can branch.
+ * Pure.
+ */
+export function deriveError(events: readonly AgentEvent[]): AgentErrorEvent | undefined {
+  let last: AgentErrorEvent | undefined
+  for (const event of events) {
+    if (event.type === 'error') last = event
+  }
+  return last
+}
 
 /**
  * T5.2 — useAgentStream
@@ -28,6 +54,10 @@ export type AgentStreamStatus = 'idle' | 'streaming' | 'done' | 'error'
 export interface UseAgentStreamReturn<TBody = unknown> {
   events: AgentEvent[]
   status: AgentStreamStatus
+  /** Accumulated assistant text — concatenation of all `message` contents (M5-1). */
+  liveText: string
+  /** The last `error` event, or `undefined` (M5-1). */
+  error: AgentErrorEvent | undefined
   send: (body: TBody) => void
   abort: () => void
   reset: () => void
@@ -103,5 +133,9 @@ export function useAgentStream<TBody = unknown>(
     }
   }, [])
 
-  return { events, status, send, abort, reset }
+  // M5-1: derived views over the accumulated events.
+  const liveText = useMemo(() => deriveLiveText(events), [events])
+  const error = useMemo(() => deriveError(events), [events])
+
+  return { events, status, liveText, error, send, abort, reset }
 }
