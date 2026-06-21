@@ -17,12 +17,22 @@ export type {
 export { stableQueryKey, buildUseTheoQueryConfig } from './react-query-adapter.js'
 
 // T5.2 — Agent stream hook + pure SSE primitive
-export { useAgentStream } from './use-agent-stream.js'
+export { deriveError, deriveLiveText, useAgentStream } from './use-agent-stream.js'
 export type {
   UseAgentStreamReturn,
   UseAgentStreamOptions,
   AgentStreamStatus,
 } from './use-agent-stream.js'
+
+// M5-2 — tool-card correlator (pure) + hook
+export { defaultResolveEnvelope, foldAgentToolCards } from './agent-tool-cards.js'
+export type {
+  AgentToolCard,
+  FoldAgentToolCardsOptions,
+  ToolEnvelopeResolver,
+} from './agent-tool-cards.js'
+export { useAgentToolCards } from './use-agent-tool-cards.js'
+export type { UseAgentToolCardsReturn } from './use-agent-tool-cards.js'
 
 export { consumeAgentStream, parseSSEChunk } from './agent-stream-core.js'
 
