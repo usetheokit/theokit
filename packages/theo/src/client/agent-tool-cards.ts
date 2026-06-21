@@ -77,8 +77,10 @@ export function foldAgentToolCards(
         status: 'running',
       }
       cards.push(card)
+      // Index by id (when present) AND by name FIFO — the two indexes overlap so
+      // a result can correlate even when call/result disagree on carrying an id.
       if (event.id !== undefined) byId.set(event.id, card)
-      else pushRunning(runningByName, event.name, card)
+      pushRunning(runningByName, event.name, card)
     } else if (event.type === 'tool_result') {
       const card = matchResultCard(event, index, byId, runningByName, cards)
       card.result = event.data
@@ -99,6 +101,17 @@ function pushRunning(
   else runningByName.set(name, [card])
 }
 
+function removeRunning(
+  runningByName: Map<string, AgentToolCard[]>,
+  name: string,
+  card: AgentToolCard,
+): void {
+  const queue = runningByName.get(name)
+  if (!queue) return
+  const at = queue.indexOf(card)
+  if (at >= 0) queue.splice(at, 1)
+}
+
 function matchResultCard(
   event: Extract<AgentEvent, { type: 'tool_result' }>,
   index: number,
@@ -106,14 +119,23 @@ function matchResultCard(
   runningByName: Map<string, AgentToolCard[]>,
   cards: AgentToolCard[],
 ): AgentToolCard {
+  // 1. Exact id match — consume from both indexes so it is matched at most once.
   if (event.id !== undefined) {
     const byIdCard = byId.get(event.id)
-    if (byIdCard) return byIdCard
+    if (byIdCard) {
+      byId.delete(event.id)
+      removeRunning(runningByName, byIdCard.name, byIdCard)
+      return byIdCard
+    }
   }
-  const queue = runningByName.get(event.name)
-  const fifo = queue?.shift()
-  if (fifo) return fifo
-  // Orphan result — surface it as its own finished card (never drop a result).
+  // 2. FIFO-by-name fallback — works even if the call carried an id the result
+  //    omits (or vice-versa). Drop the matched card's id entry too.
+  const fifo = runningByName.get(event.name)?.shift()
+  if (fifo) {
+    byId.delete(fifo.id)
+    return fifo
+  }
+  // 3. Orphan result — surface it as its own finished card (never drop a result).
   const orphan: AgentToolCard = {
     id: event.id ?? `tool-${index}`,
     name: event.name,
