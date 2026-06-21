@@ -34,6 +34,20 @@ describe('deriveError (M5-1)', () => {
   it('returns undefined when there is no error', () => {
     expect(deriveError([{ type: 'message', content: 'a' }])).toBeUndefined()
   })
+
+  it('returns the LAST error when several occur (retry replaces the prior error)', () => {
+    const events: AgentEvent[] = [
+      { type: 'error', message: 'rate limited', code: 'rate_limit' },
+      { type: 'message', content: 'retrying' },
+      { type: 'error', message: 'unauthorized', code: 'auth' },
+    ]
+    expect(deriveError(events)).toEqual({ type: 'error', message: 'unauthorized', code: 'auth' })
+  })
+
+  it('is empty over zero events', () => {
+    expect(deriveLiveText([])).toBe('')
+    expect(deriveError([])).toBeUndefined()
+  })
 })
 
 describe('defaultResolveEnvelope (M5-2, EC-1)', () => {
@@ -76,6 +90,73 @@ describe('foldAgentToolCards (M5-2)', () => {
     expect(cards[0]?.result).toBeUndefined()
   })
 
+  it('matches two concurrent same-name id-less calls in FIFO order', () => {
+    const events: AgentEvent[] = [
+      { type: 'tool_call', name: 'read', args: { path: 'A' } },
+      { type: 'tool_call', name: 'read', args: { path: 'B' } },
+      { type: 'tool_result', name: 'read', data: 'first' },
+      { type: 'tool_result', name: 'read', data: 'second' },
+    ]
+    const cards = foldAgentToolCards(events)
+    expect(cards).toHaveLength(2)
+    // oldest call (path A) pairs with the first result
+    expect(cards[0]?.args).toEqual({ path: 'A' })
+    expect(cards[0]?.result).toBe('first')
+    expect(cards[1]?.args).toEqual({ path: 'B' })
+    expect(cards[1]?.result).toBe('second')
+  })
+
+  it('correlates results that arrive out of order by id', () => {
+    const events: AgentEvent[] = [
+      { type: 'tool_call', name: 'read', args: { path: 'A' }, id: '1' },
+      { type: 'tool_call', name: 'read', args: { path: 'B' }, id: '2' },
+      { type: 'tool_result', name: 'read', data: 'for-2', id: '2' },
+      { type: 'tool_result', name: 'read', data: 'for-1', id: '1' },
+    ]
+    const cards = foldAgentToolCards(events)
+    expect(cards.find((c) => c.id === '1')?.result).toBe('for-1')
+    expect(cards.find((c) => c.id === '2')?.result).toBe('for-2')
+    expect(cards).toHaveLength(2)
+  })
+
+  it('(M1) correlates when the call carries an id but the result omits it', () => {
+    const events: AgentEvent[] = [
+      { type: 'tool_call', name: 'read', args: { path: 'A' }, id: '1' },
+      { type: 'tool_result', name: 'read', data: { ok: true } },
+    ]
+    const cards = foldAgentToolCards(events)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toEqual({
+      id: '1',
+      name: 'read',
+      args: { path: 'A' },
+      status: 'success',
+      result: { ok: true },
+    })
+  })
+
+  it('(M1) correlates when the call omits the id but the result carries it', () => {
+    const events: AgentEvent[] = [
+      { type: 'tool_call', name: 'read', args: { path: 'A' } },
+      { type: 'tool_result', name: 'read', data: { ok: true }, id: '1' },
+    ]
+    const cards = foldAgentToolCards(events)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.args).toEqual({ path: 'A' })
+    expect(cards[0]?.status).toBe('success')
+  })
+
+  it('leaves an unresolved call running while a sibling call resolves', () => {
+    const events: AgentEvent[] = [
+      { type: 'tool_call', name: 'read', args: { path: 'A' }, id: '1' },
+      { type: 'tool_call', name: 'write', args: { path: 'B' }, id: '2' },
+      { type: 'tool_result', name: 'write', data: { ok: true }, id: '2' },
+    ]
+    const cards = foldAgentToolCards(events)
+    expect(cards.find((c) => c.id === '1')?.status).toBe('running')
+    expect(cards.find((c) => c.id === '2')?.status).toBe('success')
+  })
+
   it('correlates by name FIFO when id is absent', () => {
     const events: AgentEvent[] = [
       { type: 'tool_call', name: 'read', args: {} },
@@ -90,8 +171,9 @@ describe('foldAgentToolCards (M5-2)', () => {
     const cards = foldAgentToolCards([
       { type: 'tool_result', name: 'read', data: { ok: true }, id: '9' },
     ])
-    expect(cards).toHaveLength(1)
-    expect(cards[0]?.status).toBe('success')
+    expect(cards).toEqual([
+      { id: '9', name: 'read', args: {}, status: 'success', result: { ok: true } },
+    ])
   })
 
   it('empty events → []', () => {
