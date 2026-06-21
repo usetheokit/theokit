@@ -2,7 +2,7 @@
 slug: m5-client-stream
 milestone_id: M5
 created_at: 2026-06-21
-goal: Add liveText + error derived fields to useAgentStream (M5-1) and a foldAgentToolCards(events)/useAgentToolCards() correlator (M5-2) to theokit/client, measured by tests/client/agent-stream-derivations.test.ts passing green.
+goal: Add liveText + error derived fields to useAgentStream (M5-1) and a foldAgentToolCards(events)/useAgentToolCards() correlator (M5-2) to theokit/client, measured by tests/unit/agent-stream-derivations.test.ts passing green.
 ---
 
 # Plan: M5-1 + M5-2 — `theokit/client` stream derivations
@@ -11,7 +11,7 @@ goal: Add liveText + error derived fields to useAgentStream (M5-1) and a foldAge
 
 ## Goal
 
-> "Add `liveText`/`error` to `useAgentStream` and a `foldAgentToolCards`/`useAgentToolCards` correlator so the template + showcase stop hand-rolling `switch(event.type)`, measured by `pnpm exec vitest run tests/client/agent-stream-derivations.test.ts` reporting all tests passed."
+> "Add `liveText`/`error` to `useAgentStream` and a `foldAgentToolCards`/`useAgentToolCards` correlator so the template + showcase stop hand-rolling `switch(event.type)`, measured by `pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts` reporting all tests passed."
 
 ## Context
 
@@ -27,7 +27,7 @@ Roadmap gaps M5-1 (`docs/gap-audit/ROADMAP.md:161`, med/S) + M5-2 (`:162`, high/
 | `packages/theo/src/client/agent-tool-cards.ts` (NEW) | 0 | — | `foldAgentToolCards` + `AgentToolCard` + resolver | — |
 | `packages/theo/src/client/use-agent-tool-cards.ts` (NEW) | 0 | — | `useAgentToolCards` hook | — |
 | `packages/theo/src/client/index.ts` | 56 | (theo) | `theokit/client` barrel | additive exports only |
-| `packages/theo/tests/client/agent-stream-derivations.test.ts` (NEW) | 0 | — | unit tests — RED first | — |
+| `tests/unit/agent-stream-derivations.test.ts` (NEW) | 0 | — | unit tests — RED first | — |
 | `CHANGELOG.md` + `.changeset/` (NEW) | — | — | changelog + changeset (theokit has no public-API doc file; CHANGELOG is the contract) | additive `Added` entry |
 
 ### Current callers / dependents
@@ -61,7 +61,7 @@ Per `rules/architecture.md`: `agent-tool-cards.ts` is a pure reducer (no React, 
 - [ ] `useAgentToolCards(path, options?)` returns the `useAgentStream` result plus `toolCards: AgentToolCard[]`.
 - [ ] All barrel-exported from `theokit/client`; CHANGELOG + changeset (+ docs note).
 - [ ] Existing `useAgentStream` fields/behavior unchanged (backward-compat).
-- [ ] `tests/client/agent-stream-derivations.test.ts` green; typecheck + Biome clean.
+- [ ] `tests/unit/agent-stream-derivations.test.ts` green; typecheck + Biome clean.
 
 ## ADRs
 
@@ -137,7 +137,7 @@ Two pure derived fields on the hook.
 #### Files to edit
 ```
 packages/theo/src/client/use-agent-stream.ts — add liveText + error (useMemo over events) + to the return type
-packages/theo/tests/client/agent-stream-derivations.test.ts — RED tests (liveText concat; error from error event; none → "" / undefined)
+tests/unit/agent-stream-derivations.test.ts — RED tests (liveText concat; error from error event; none → "" / undefined)
 ```
 
 #### Deep file dependency analysis
@@ -159,16 +159,16 @@ RED:     liveText_empty_without_messages() — no message events → ""
 RED:     error_returns_last_error_event() — error event surfaced (with code); none → undefined
 GREEN:   add liveText/error to the hook
 REFACTOR: extract pure deriveLiveText/deriveError(events) helpers for testability
-VERIFY:  pnpm exec vitest run tests/client/agent-stream-derivations.test.ts
+VERIFY:  pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts
 ```
 
 #### Acceptance Criteria
-- [ ] RED tests pass — `pnpm exec vitest run tests/client/agent-stream-derivations.test.ts` reports all tests passed.
+- [ ] RED tests pass — `pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts` reports all tests passed.
 - [ ] Existing `useAgentStream` behavior unchanged (its fields still present).
 - [ ] Pass: lint — `pnpm exec biome check packages/theo/src/client/use-agent-stream.ts` reports 0 warnings.
 
 #### DoD
-- [ ] `pnpm exec vitest run tests/client/agent-stream-derivations.test.ts` exits 0
+- [ ] `pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts` exits 0
 - [ ] Zero type errors — `pnpm exec tsc -p packages/theo/tsconfig.json --noEmit` exits 0 (or the repo's typecheck) 
 
 ### T1.2 — `foldAgentToolCards` + `useAgentToolCards` (M5-2)
@@ -187,7 +187,7 @@ A pure tool-card correlator + its hook.
 ```
 packages/theo/src/client/agent-tool-cards.ts — NEW: AgentToolCard + ToolEnvelopeResolver + foldAgentToolCards
 packages/theo/src/client/use-agent-tool-cards.ts — NEW: useAgentToolCards
-packages/theo/tests/client/agent-stream-derivations.test.ts — add RED tests (correlate by id; FIFO-by-name fallback; running/success/error; envelope resolver)
+tests/unit/agent-stream-derivations.test.ts — add RED tests (correlate by id; FIFO-by-name fallback; running/success/error; envelope resolver)
 ```
 
 #### Deep file dependency analysis
@@ -232,16 +232,16 @@ RED:     fold_orphan_result_creates_card() — tool_result with no prior call �
 RED:     fold_empty_is_empty() — [] → []
 GREEN:   Implement agent-tool-cards.ts + use-agent-tool-cards.ts
 REFACTOR: extract defaultResolveEnvelope if cyclomatic > 10
-VERIFY:  pnpm exec vitest run tests/client/agent-stream-derivations.test.ts
+VERIFY:  pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts
 ```
 
 #### Acceptance Criteria
-- [ ] RED tests pass — `pnpm exec vitest run tests/client/agent-stream-derivations.test.ts` reports all tests passed.
+- [ ] RED tests pass — `pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts` reports all tests passed.
 - [ ] Pass: complexity — `pnpm exec biome check packages/theo/src/client/agent-tool-cards.ts` reports 0 warnings (cyclomatic ≤ 10).
 - [ ] Pass: size — each new file ≤ 500 lines.
 
 #### DoD
-- [ ] `pnpm exec vitest run tests/client/agent-stream-derivations.test.ts` exits 0
+- [ ] `pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts` exits 0
 - [ ] Zero type errors — repo typecheck exits 0
 
 ---
@@ -282,7 +282,7 @@ docs (best-effort) — note liveText/error + tool cards if a client docs section
 RED:     (wiring test) — import foldAgentToolCards + useAgentToolCards from theokit/client resolves
 GREEN:   barrel exports (this task)
 REFACTOR: None expected
-VERIFY:  pnpm exec vitest run tests/client/agent-stream-derivations.test.ts
+VERIFY:  pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts
 ```
 
 #### Acceptance Criteria
@@ -313,7 +313,7 @@ VERIFY:  pnpm exec vitest run tests/client/agent-stream-derivations.test.ts
 ## Global Definition of Done
 
 - [ ] All phases completed
-- [ ] All tests passing — `pnpm exec vitest run tests/client/agent-stream-derivations.test.ts` green
+- [ ] All tests passing — `pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts` green
 - [ ] Zero type errors — repo typecheck exits 0
 - [ ] Zero lint warnings — `pnpm exec biome check` clean on changed files
 - [ ] File-size budget respected (per `rules/architecture.md`)
@@ -328,14 +328,14 @@ VERIFY:  pnpm exec vitest run tests/client/agent-stream-derivations.test.ts
 
 ### Execution
 ```
-pnpm exec vitest run tests/client/agent-stream-derivations.test.ts
+pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts
 pnpm exec biome check packages/theo/src/client
 # repo typecheck + build
 pnpm -w build  (or the theo package build)
 ```
 
 ### Acceptance Criteria
-- [ ] All test suites green — `pnpm exec vitest run tests/client/agent-stream-derivations.test.ts` exits 0
+- [ ] All test suites green — `pnpm exec vitest run tests/unit/agent-stream-derivations.test.ts` exits 0
 - [ ] Coverage ≥ 90% on changed files (`agent-tool-cards.ts` — critical paths 100%)
 - [ ] Zero type/lint errors — repo typecheck + `pnpm exec biome check packages/theo/src/client` each exit 0
 - [ ] No regression — `pnpm exec vitest run` reports the theo test suite passing
