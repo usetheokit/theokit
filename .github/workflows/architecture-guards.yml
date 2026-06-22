@@ -18,6 +18,8 @@ on:
       - '.dependency-cruiser.cjs'
       - '.ls-lint.yml'
       - '.claude/rules/architecture.md'
+      - 'packages/*/package.json'
+      - 'scripts/check-package-direction.mjs'
   pull_request:
     branches: [main]
     paths:
@@ -25,8 +27,21 @@ on:
       - '.dependency-cruiser.cjs'
       - '.ls-lint.yml'
       - '.claude/rules/architecture.md'
+      - 'packages/*/package.json'
+      - 'scripts/check-package-direction.mjs'
 
 jobs:
+  direction:
+    name: dependency direction (libs never depend on principal theokit — ADR 0030)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Pure package.json scan — no install / no cross-repo sibling needed.
+      - run: node scripts/check-package-direction.mjs
+
   dep-cruiser:
     name: dependency-cruiser (architecture rules)
     runs-on: ubuntu-latest
