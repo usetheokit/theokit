@@ -4,7 +4,8 @@ milestone_id: M7
 date: 2026-06-22
 plan: .claude/knowledge-base/plans/m7-http-dual-surface-plan.md
 blueprint: .claude/knowledge-base/discoveries/blueprints/m7-http-dual-surface-blueprint.md
-status: IMPLEMENTATION_COMPLETE
+status: READY_TO_MERGE
+review: .claude/knowledge-base/reviews/m7-http-dual-surface-review-2026-06-22.md
 ---
 
 # M7 — HTTP dual-surface consolidation (theokit slice) — Implementation Summary
