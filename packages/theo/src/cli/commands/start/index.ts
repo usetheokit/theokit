@@ -17,6 +17,7 @@ import { join, resolve } from 'node:path'
 
 import { loadConfig } from '../../../config/load-config.js'
 import { loadEnv } from '../../../config/load-env.js'
+import { defineHealthRoute } from '../../../server/define/health-route.js'
 import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
 import { createRateLimiter } from '../../../server/rate-limit/rate-limit.js'
 import { createProductionLoader } from '../../../server/scan/module-loader.js'
@@ -119,6 +120,10 @@ export async function startCommand(options: StartOptions): Promise<void> {
       htmlTail: ssr.htmlTail,
       indexHtml,
       custom500Html,
+      // M7-2: serve a built-in liveness route on the Node listener. Readiness
+      // probe wiring from theo.config.ts is a documented follow-up (see the M7
+      // implementation summary § Scope note).
+      reservedRoutes: { health: defineHealthRoute() },
     }),
   )
 

@@ -113,6 +113,18 @@ function sanitizeMeta(meta: Record<string, unknown>): Record<string, unknown> | 
  * Use at framework boundaries (route handler catch-all, middleware catch,
  * SDK egress) to ensure every error crossing the wire carries an envelope.
  */
+/**
+ * `NotFoundError` — typed 404. A `TheoError` with code `NOT_FOUND`, so it
+ * carries a stable `code` (not a bare status literal) and maps to HTTP 404 via
+ * `envelopeCodeToStatus`. Throw it from a `defineRoute` handler for ergonomic
+ * 404s (M7-1).
+ */
+export class NotFoundError extends TheoError {
+  constructor(message = 'Not Found', meta?: Record<string, unknown>) {
+    super({ code: 'NOT_FOUND', message, ...(meta !== undefined ? { meta } : {}) })
+  }
+}
+
 export function fromUnknown(value: unknown): TheoError {
   if (value instanceof TheoError) return value
   if (value instanceof Error) {
