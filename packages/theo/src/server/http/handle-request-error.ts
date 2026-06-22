@@ -61,19 +61,32 @@ export async function handleRequestError(err: unknown, c: HandleRequestErrorCtx)
     const authErr = err as { code: string; message: string; status: number }
     sendError(c.res, authErr.code, authErr.message, authErr.status, undefined, c.requestId)
   } else {
-    // M7-1: mirror handleWebRequestError — route every other error through the
-    // typed envelope so a thrown TheoError (incl. NotFoundError) carries its
-    // code + mapped status instead of a generic 500. envelopeCodeToStatus has
-    // no sub-400 entries, so the status is always >= 400 (defaults to 500).
+    // M7-1: a thrown TheoError (incl. NotFoundError) carries a typed code that
+    // maps to a real status — emit it. An untyped/unknown error has no typed
+    // code (serverErrorToEnvelope falls back to INTERNAL_SERVER_ERROR), so we
+    // preserve the legacy INTERNAL_ERROR path, which `sendError` special-cases
+    // for production message masking + structured logging. This keeps generic
+    // 500s backward-compatible while giving typed errors their proper envelope.
     const envelope = serverErrorToEnvelope(err)
-    sendError(
-      c.res,
-      envelope.code,
-      envelope.message,
-      envelopeCodeToStatus(envelope.code),
-      undefined,
-      c.requestId,
-    )
+    if (envelope.code === 'INTERNAL_SERVER_ERROR') {
+      sendError(
+        c.res,
+        'INTERNAL_ERROR',
+        err instanceof Error ? err.message : 'Internal server error',
+        500,
+        undefined,
+        c.requestId,
+      )
+    } else {
+      sendError(
+        c.res,
+        envelope.code,
+        envelope.message,
+        envelopeCodeToStatus(envelope.code),
+        undefined,
+        c.requestId,
+      )
+    }
   }
 
   // 3. onResponse(inErrorPath) — swallowed on failure (EC-9)

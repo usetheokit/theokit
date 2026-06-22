@@ -69,12 +69,14 @@ describe('M7-1 handleRequestError (legacy Node path) — typed envelopes', () =>
     expect((cap.body as { error: { code: string } }).error.code).toBe('NOT_FOUND')
   })
 
-  it('coerces an unknown thrown value to a 500 envelope (no crash)', async () => {
+  it('coerces an unknown thrown value to a 500 (legacy INTERNAL_ERROR preserved)', async () => {
+    // Untyped errors keep the battle-tested legacy code + masking path; only
+    // typed TheoErrors get the new envelope code (M7-1 backward-compat).
     const cap = mockRes()
     await handleRequestError('boom-string', ctx(cap))
     expect(cap.status).toBe(500)
     const body = cap.body as { error: { code: string } }
-    expect(body.error.code).toBe('INTERNAL_SERVER_ERROR')
+    expect(body.error.code).toBe('INTERNAL_ERROR')
   })
 
   it('NotFoundError envelope maps to 404 via the public primitives', () => {
