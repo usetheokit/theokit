@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { isAuthRequiredError } from '../../core/contracts/auth-error-guard.js'
 import { envelopeCodeToStatus } from '../../core/contracts/envelope-code-to-status.js'
+import { serverErrorToEnvelope } from '../../core/contracts/server-error-to-envelope.js'
 import type { PluginContext } from '../plugin-types.js'
 import type { PluginRunner } from '../plugins/plugin-runner.js'
 
@@ -60,11 +61,16 @@ export async function handleRequestError(err: unknown, c: HandleRequestErrorCtx)
     const authErr = err as { code: string; message: string; status: number }
     sendError(c.res, authErr.code, authErr.message, authErr.status, undefined, c.requestId)
   } else {
+    // M7-1: mirror handleWebRequestError — route every other error through the
+    // typed envelope so a thrown TheoError (incl. NotFoundError) carries its
+    // code + mapped status instead of a generic 500. envelopeCodeToStatus has
+    // no sub-400 entries, so the status is always >= 400 (defaults to 500).
+    const envelope = serverErrorToEnvelope(err)
     sendError(
       c.res,
-      'INTERNAL_ERROR',
-      err instanceof Error ? err.message : 'Internal server error',
-      500,
+      envelope.code,
+      envelope.message,
+      envelopeCodeToStatus(envelope.code),
       undefined,
       c.requestId,
     )
