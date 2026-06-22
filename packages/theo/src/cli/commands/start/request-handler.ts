@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { generateNonce } from '../../../server/auth/nonce.js'
+import { type ReservedRoutes, serveReservedRoute } from '../../../server/define/health-route.js'
 import { sendError } from '../../../server/http/send-response.js'
 import { buildSecurityHeaders } from '../../../server/security/security-headers.js'
 
@@ -44,6 +45,29 @@ export interface RequestHandlerContext {
   htmlTail: string
   indexHtml: string
   custom500Html: string | null
+  /** M7-2: reserved health/ready routes served before the user catch-all. */
+  reservedRoutes?: ReservedRoutes
+}
+
+/**
+ * M7-2: serve a reserved `/__theo/*` route (health/ready) before any user
+ * branch. Returns true when the request was handled.
+ */
+async function tryServeReserved(
+  ctx: RequestHandlerContext,
+  url: string,
+  res: ServerResponse,
+): Promise<boolean> {
+  const pathname = new URL(url, 'http://localhost').pathname
+  const reserved = await serveReservedRoute(pathname, ctx.reservedRoutes ?? {})
+  if (reserved === null) return false
+  const payload = JSON.stringify(reserved.body)
+  res.writeHead(reserved.status, {
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(payload),
+  })
+  res.end(payload)
+  return true
 }
 
 function asSsrRenderResult(value: SsrRenderResult): SsrRenderResult {
@@ -173,6 +197,7 @@ export function createRequestHandler(
       const handlerCtx = ctx.buildCtx(req, res, requestId, start)
 
       try {
+        if (await tryServeReserved(ctx, url, res)) return
         if (await tryServeAction(handlerCtx)) return
         if (await tryServeApiRoute(handlerCtx)) return
         if (tryServeStatic(handlerCtx)) return
