@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [f0f8270]
+  - theokit@0.7.0
+
 ## [Unreleased]
 
 ## [0.1.0-alpha.0] - 2026-06-08

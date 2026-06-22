@@ -1,6 +1,6 @@
 {
   "name": "@theokit/http",
-  "version": "0.5.4",
+  "version": "1.0.0",
   "description": "NestJS-style decorators (@Controller, @Get, @Post, @Body, @UseGuards) bridging to TheoKit's defineRoute + defineMiddleware",
   "type": "module",
   "sideEffects": false,
@@ -40,7 +40,7 @@
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0",
     "reflect-metadata": "^0.2.2",
-    "theokit": ">=0.2.0",
+    "theokit": ">=0.7.0",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
