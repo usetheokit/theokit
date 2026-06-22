@@ -4,6 +4,8 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
+      // M7-3: public programmatic boot subpath (theokit/boot) — convention-server fetch handler.
+      'boot/index': 'src/server/boot.ts',
       'server/index': 'src/server/index.ts',
       // T4.4 (architecture-cleanup) — subpath entrypoints per ADR-0001 v3.
       // Consumers should migrate to these; `theokit/server` keeps re-exporting
