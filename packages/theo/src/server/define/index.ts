@@ -6,3 +6,5 @@ export * from './define-agent-tool.js'
 export * from './define-websocket.js'
 export * from './define-channel.js'
 export * from './define-plugin.js'
+// M7-2: health/ready reserved routes for the convention server.
+export * from './health-route.js'

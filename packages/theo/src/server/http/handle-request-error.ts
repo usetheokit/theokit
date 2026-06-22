@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { isAuthRequiredError } from '../../core/contracts/auth-error-guard.js'
 import { envelopeCodeToStatus } from '../../core/contracts/envelope-code-to-status.js'
+import { serverErrorToEnvelope } from '../../core/contracts/server-error-to-envelope.js'
 import type { PluginContext } from '../plugin-types.js'
 import type { PluginRunner } from '../plugins/plugin-runner.js'
 
@@ -60,14 +61,32 @@ export async function handleRequestError(err: unknown, c: HandleRequestErrorCtx)
     const authErr = err as { code: string; message: string; status: number }
     sendError(c.res, authErr.code, authErr.message, authErr.status, undefined, c.requestId)
   } else {
-    sendError(
-      c.res,
-      'INTERNAL_ERROR',
-      err instanceof Error ? err.message : 'Internal server error',
-      500,
-      undefined,
-      c.requestId,
-    )
+    // M7-1: a thrown TheoError (incl. NotFoundError) carries a typed code that
+    // maps to a real status — emit it. An untyped/unknown error has no typed
+    // code (serverErrorToEnvelope falls back to INTERNAL_SERVER_ERROR), so we
+    // preserve the legacy INTERNAL_ERROR path, which `sendError` special-cases
+    // for production message masking + structured logging. This keeps generic
+    // 500s backward-compatible while giving typed errors their proper envelope.
+    const envelope = serverErrorToEnvelope(err)
+    if (envelope.code === 'INTERNAL_SERVER_ERROR') {
+      sendError(
+        c.res,
+        'INTERNAL_ERROR',
+        err instanceof Error ? err.message : 'Internal server error',
+        500,
+        undefined,
+        c.requestId,
+      )
+    } else {
+      sendError(
+        c.res,
+        envelope.code,
+        envelope.message,
+        envelopeCodeToStatus(envelope.code),
+        undefined,
+        c.requestId,
+      )
+    }
   }
 
   // 3. onResponse(inErrorPath) — swallowed on failure (EC-9)
