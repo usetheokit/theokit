@@ -50,7 +50,10 @@ export function createConventionFetchHandler(
       if (reserved !== null) {
         return Response.json(reserved.body, { status: reserved.status })
       }
-      const envelope = serverErrorToEnvelope(new NotFoundError(`No route for ${pathname}`))
+      // Use a constant message — do NOT echo the raw request path into the wire
+      // body (avoids reflecting attacker-controlled URL content to any consumer
+      // that renders the envelope message). The path stays in the caller's logs.
+      const envelope = serverErrorToEnvelope(new NotFoundError('Not Found'))
       return Response.json(envelope, { status: envelopeCodeToStatus(envelope.code) })
     },
     // The in-process handler holds no socket, so teardown is a pure no-op
