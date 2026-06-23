@@ -303,11 +303,11 @@ importers:
   packages/theo:
     dependencies:
       '@theokit/agents':
-        specifier: ^0.4.0
-        version: 0.4.0(@theokit/http@0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.0(myvfktzfj3gqfse4rnggfqi2nm))(zod@4.4.3))(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(reflect-metadata@0.2.2)(zod@4.4.3)
+        specifier: ^0.5.0
+        version: 0.5.0(@theokit/http@0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.1(oq2jtgin2ckbdlkulv27cbt4fy))(zod@4.4.3))(@theokit/sdk-tools@0.2.0(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(vitest@4.1.9)(zod@4.4.3))(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(reflect-metadata@0.2.2)(zod@4.4.3)
       '@theokit/http':
         specifier: ^0.5.4
-        version: 0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.0(myvfktzfj3gqfse4rnggfqi2nm))(zod@4.4.3)
+        version: 0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.1(oq2jtgin2ckbdlkulv27cbt4fy))(zod@4.4.3)
       '@theokit/ui':
         specifier: ^0.14.0
         version: 0.14.4(@tailwindcss/vite@4.3.1(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.16.47)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(mermaid@11.15.0)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.1)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))(yaml@2.9.0)
@@ -1743,7 +1743,6 @@ packages:
 
   '@ls-lint/ls-lint@2.3.1':
     resolution: {integrity: sha512-vPe6IDByQnQRTxcAYjTxrmga/tSIui50VBFTB5KIJWY3OOFmxE2VtymjeSEfQfiMbhZV/ZPAqYy2lt8pZFQ0Rw==}
-    cpu: [x64, arm64, s390x, ppc64le]
     os: [darwin, linux, win32]
     hasBin: true
 
@@ -2711,13 +2710,18 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@theokit/agents@0.4.0':
-    resolution: {integrity: sha512-74133Og/LG5hcB/0agPbqkN/xr/ZNVz/cdoZZVPLm9CN2ik7hb+BlN4mlnxSzc9AfDgMHHa8pPdd0fqyiVtLJw==}
+  '@theokit/agents@0.5.0':
+    resolution: {integrity: sha512-usqqD7YnohjHp0XuCRmXejw1bzQ1REW1LRrwFzRuAfta+epDG+NEjnovmRwVEykGDcMhSi6kEblQMcpkqa7gOQ==}
+    engines: {node: '>=22.12.0'}
     peerDependencies:
       '@theokit/http': '>=0.1.0-alpha.0'
-      '@theokit/sdk': '>=1.5.0'
+      '@theokit/sdk': '>=2.5.0'
+      '@theokit/sdk-tools': '>=0.2.0'
       reflect-metadata: '>=0.2.0'
       zod: ^4.0.0
+    peerDependenciesMeta:
+      '@theokit/sdk-tools':
+        optional: true
 
   '@theokit/http@0.5.4':
     resolution: {integrity: sha512-zFaBIC4ztdYtHiE2uXaeMoo/Xk7Wan/AGpVbzAcw/A6eemG09qWPOY4C1BjQWxxBRuQ13KN5uBjH2nSHb1jJYg==}
@@ -6670,8 +6674,8 @@ packages:
   thenify@3.3.1:
     resolution: {integrity: sha512-RVZSIV5IG10Hk3enotrhvz0T9em6cyHBLkH/YAZuKqd8hRkKhSfCGIcP2KUY0EPxndzANBmNllzWPwak+bheSw==}
 
-  theokit@0.8.0:
-    resolution: {integrity: sha512-7je6wi+FKhfFTa1P9I64CDhpFtjvJ/XuffkHMf0MbvK4bQTjLjJ7oYyIYnRF5E/B8XhjSqLq1B8VJVvfK8pXfg==}
+  theokit@0.8.1:
+    resolution: {integrity: sha512-SeNCWYYBSlgkclVQiE8GsEGHwQIWzEONuFwOid3l3I/Pyq83DdHrRK52BaMECnVlPrboKHYmxbti5S/jvA+RqQ==}
     engines: {node: '>=22.12.0'}
     hasBin: true
     peerDependencies:
@@ -9318,17 +9322,19 @@ snapshots:
       tailwindcss: 4.3.1
       vite: 7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
 
-  '@theokit/agents@0.4.0(@theokit/http@0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.0(myvfktzfj3gqfse4rnggfqi2nm))(zod@4.4.3))(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(reflect-metadata@0.2.2)(zod@4.4.3)':
+  '@theokit/agents@0.5.0(@theokit/http@0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.1(oq2jtgin2ckbdlkulv27cbt4fy))(zod@4.4.3))(@theokit/sdk-tools@0.2.0(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(vitest@4.1.9)(zod@4.4.3))(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(reflect-metadata@0.2.2)(zod@4.4.3)':
     dependencies:
-      '@theokit/http': 0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.0(myvfktzfj3gqfse4rnggfqi2nm))(zod@4.4.3)
+      '@theokit/http': 0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.1(oq2jtgin2ckbdlkulv27cbt4fy))(zod@4.4.3)
       '@theokit/sdk': 2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3)
       reflect-metadata: 0.2.2
       zod: 4.4.3
+    optionalDependencies:
+      '@theokit/sdk-tools': 0.2.0(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(vitest@4.1.9)(zod@4.4.3)
 
-  '@theokit/http@0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.0(myvfktzfj3gqfse4rnggfqi2nm))(zod@4.4.3)':
+  '@theokit/http@0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.1(oq2jtgin2ckbdlkulv27cbt4fy))(zod@4.4.3)':
     dependencies:
       reflect-metadata: 0.2.2
-      theokit: 0.8.0(myvfktzfj3gqfse4rnggfqi2nm)
+      theokit: 0.8.1(oq2jtgin2ckbdlkulv27cbt4fy)
       zod: 4.4.3
     optionalDependencies:
       '@swc/core': 1.15.41(@swc/helpers@0.5.23)
@@ -9341,6 +9347,14 @@ snapshots:
       zod: 4.4.3
     optionalDependencies:
       vitest: 3.2.6(@types/debug@4.1.13)(@types/node@25.9.3)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.3)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0)
+
+  '@theokit/sdk-tools@0.2.0(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(vitest@4.1.9)(zod@4.4.3)':
+    dependencies:
+      '@theokit/sdk': 2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3)
+      zod: 4.4.3
+    optionalDependencies:
+      vitest: 4.1.9(@types/node@25.9.3)(@vitest/coverage-v8@4.1.9)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.3)(typescript@5.9.3))(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+    optional: true
 
   '@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3)':
     dependencies:
@@ -9965,6 +9979,16 @@ snapshots:
     optionalDependencies:
       msw: 2.14.6(@types/node@25.9.3)(typescript@5.9.3)
       vite: 7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
+
+  '@vitest/mocker@4.1.9(msw@2.14.6(@types/node@25.9.3)(typescript@5.9.3))(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.1.9
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      msw: 2.14.6(@types/node@25.9.3)(typescript@5.9.3)
+      vite: 6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
+    optional: true
 
   '@vitest/mocker@4.1.9(msw@2.14.6(@types/node@25.9.3)(typescript@5.9.3))(vite@7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
@@ -14119,10 +14143,10 @@ snapshots:
     dependencies:
       any-promise: 1.3.0
 
-  theokit@0.8.0(myvfktzfj3gqfse4rnggfqi2nm):
+  theokit@0.8.1(oq2jtgin2ckbdlkulv27cbt4fy):
     dependencies:
-      '@theokit/agents': 0.4.0(@theokit/http@0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.0(myvfktzfj3gqfse4rnggfqi2nm))(zod@4.4.3))(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(reflect-metadata@0.2.2)(zod@4.4.3)
-      '@theokit/http': 0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.0(myvfktzfj3gqfse4rnggfqi2nm))(zod@4.4.3)
+      '@theokit/agents': 0.5.0(@theokit/http@0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.1(oq2jtgin2ckbdlkulv27cbt4fy))(zod@4.4.3))(@theokit/sdk-tools@0.2.0(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(vitest@4.1.9)(zod@4.4.3))(@theokit/sdk@2.5.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(reflect-metadata@0.2.2)(zod@4.4.3)
+      '@theokit/http': 0.5.4(@swc/core@1.15.41(@swc/helpers@0.5.23))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(theokit@0.8.1(oq2jtgin2ckbdlkulv27cbt4fy))(zod@4.4.3)
       '@vitejs/plugin-react': 4.7.0(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
       busboy: 1.6.0
       cac: 6.7.14
@@ -14149,6 +14173,7 @@ snapshots:
     transitivePeerDependencies:
       - '@swc/core'
       - '@theokit/sdk'
+      - '@theokit/sdk-tools'
       - '@types/node'
       - csstype
       - jiti
@@ -14626,6 +14651,36 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  vitest@4.1.9(@types/node@25.9.3)(@vitest/coverage-v8@4.1.9)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.3)(typescript@5.9.3))(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.9
+      '@vitest/mocker': 4.1.9(msw@2.14.6(@types/node@25.9.3)(typescript@5.9.3))(vite@6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.9
+      '@vitest/runner': 4.1.9
+      '@vitest/snapshot': 4.1.9
+      '@vitest/spy': 4.1.9
+      '@vitest/utils': 4.1.9
+      es-module-lexer: 2.1.0
+      expect-type: 1.3.0
+      magic-string: 0.30.21
+      obug: 2.1.3
+      pathe: 2.0.3
+      picomatch: 4.0.4
+      std-env: 4.1.0
+      tinybench: 2.9.0
+      tinyexec: 1.2.4
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.0
+      vite: 6.4.3(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 25.9.3
+      '@vitest/coverage-v8': 4.1.9(vitest@4.1.9)
+      happy-dom: 20.9.0
+    transitivePeerDependencies:
+      - msw
+    optional: true
 
   vitest@4.1.9(@types/node@25.9.3)(@vitest/coverage-v8@4.1.9)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.3)(typescript@5.9.3))(vite@7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
