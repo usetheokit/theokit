@@ -12,6 +12,7 @@ import * as loopBarrel from '../../src/loop/index.js'
 import { type LoopOutcome, resolveLoopStrategy } from '../../src/loop/loop-strategy.js'
 import {
   ladderReflectionStrategy,
+  noopReflectionStrategy,
   reflectionStrategyConfigSchema,
 } from '../../src/loop/reflection-strategy.js'
 import { runReflectiveLoop } from '../../src/loop/run-reflective-loop.js'
@@ -115,6 +116,20 @@ describe('ladderReflectionStrategy', () => {
   })
 })
 
+describe('noopReflectionStrategy (L4 — react path)', () => {
+  it('test_noop_returns_continue_true_no_feedback — defers the decision to LoopStrategy.shouldContinue', () => {
+    // react uses noop so the round-continuation decision is delegated entirely to the
+    // LoopStrategy (loop while finishReason==='tool-calls' under the ceiling). It must
+    // NOT short-circuit react to single-shot by returning continue:false.
+    const onToolCalls = noopReflectionStrategy.reflect(outcome({ finishReason: 'tool-calls' }))
+    expect(onToolCalls.continue).toBe(true)
+    expect(onToolCalls.feedback).toBeUndefined()
+    const onStop = noopReflectionStrategy.reflect(outcome({ finishReason: 'stop' }))
+    expect(onStop.continue).toBe(true) // noop is indifferent; the LoopStrategy stops on 'stop'
+    expect(onStop.feedback).toBeUndefined()
+  })
+})
+
 describe('loop barrel (T1.3)', () => {
   it('test_loop_barrel_exports_contracts — public surface re-exported from loop/index', () => {
     // The barrel re-exports the SAME references (proves the barrel chain, INVARIANT #3)
@@ -137,6 +152,17 @@ describe('runReflectiveLoop (T2.1)', () => {
     })
     expect(prompts).toHaveLength(2)
     expect(result.toolCalls).toHaveLength(1)
+  })
+
+  it('test_mainloop_real_sdk_shape_loops — B1: tool_result+done(no finishReason) continues, pure-answer stops', async () => {
+    // REAL adapter shape (event-translator + sdk-adapter): a tool-using turn emits
+    // tool_result events AND a terminal `done` WITHOUT finishReason; a pure-answer turn
+    // emits `done` with no tool_result. round1 = tool-using (continue), round2 = answer (stop).
+    const realDone: StreamEvent = { type: 'done', cost: 0.01 }
+    const { factory, prompts } = mockFactory([[toolResult, realDone], [realDone]])
+    const loop = resolveLoopStrategy('plan-act-reflect', 3)
+    await runReflectiveLoop(factory, 'msg', 's', { loop, reflection: ladderReflectionStrategy })
+    expect(prompts).toHaveLength(2) // pre-B1-fix this was 1 (done short-circuited to 'stop')
   })
 
   it('test_mainloop_simple_chat_runs_one_round — single-shot even on tool_result (EC-2)', async () => {
@@ -216,11 +242,70 @@ describe('runReflectiveLoop (T2.1)', () => {
       })()
     }
     const loop = resolveLoopStrategy('react', 8)
-    await runReflectiveLoop(factory, 'msg', 's', {
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
       loop,
       reflection: ladderReflectionStrategy,
       signal: ctrl.signal,
     })
     expect(call).toBe(1) // did not re-enter after abort
+    expect(result.rounds).toBe(1) // L1: abort-exit still records the round that ran (metric not lost)
+  })
+
+  it('test_loop_accumulates_text_delta — EC: text_delta content concatenated into response', async () => {
+    const { factory } = mockFactory([
+      [
+        { type: 'text_delta', content: 'Hello, ' },
+        { type: 'text_delta', content: 'world' },
+        doneStop,
+      ],
+    ])
+    const loop = resolveLoopStrategy('react', 3)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.response).toBe('Hello, world')
+  })
+
+  it('test_loop_budget_boundary_equal_does_not_throw — cost == budget passes (check is strictly >)', async () => {
+    // round costs exactly 0.5 then stops; budget 0.5 ⇒ acc.cost (0.5) is NOT > budget (0.5) ⇒ OK
+    const costlyStop: StreamEvent = { type: 'done', cost: 0.5 }
+    const { factory } = mockFactory([[costlyStop]])
+    const loop = resolveLoopStrategy('react', 3)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+      budget: 0.5,
+    })
+    expect(result.cost).toBe(0.5)
+  })
+
+  it('test_loop_budget_zero_throws_on_any_cost — budget 0 + positive cost ⇒ BudgetExceededError', async () => {
+    const { factory } = mockFactory([[{ type: 'done', cost: 0.01, finishReason: 'tool-calls' }]])
+    const loop = resolveLoopStrategy('react', 8)
+    await expect(
+      runReflectiveLoop(factory, 'msg', 's', {
+        loop,
+        reflection: ladderReflectionStrategy,
+        budget: 0,
+      }),
+    ).rejects.toBeInstanceOf(BudgetExceededError)
+  })
+
+  it('test_loop_aborts_mid_stream — signal during event iteration stops accumulating (vs between-rounds)', async () => {
+    const ctrl = new AbortController()
+    const factory = (_message: string, _s: string): AsyncIterable<StreamEvent> =>
+      (async function* () {
+        yield { type: 'text_delta', content: 'a' }
+        ctrl.abort() // abort mid-stream, before the next event is consumed
+        yield { type: 'text_delta', content: 'b' }
+      })()
+    const loop = resolveLoopStrategy('react', 8)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+      signal: ctrl.signal,
+    })
+    expect(result.response).toBe('a') // 'b' arrived after abort ⇒ loop broke before accumulating it
   })
 })

@@ -62,9 +62,22 @@ interface RoundResult {
 }
 
 /**
- * Derive the round's terminal signal. EC-1: anything other than the explicit
- * signals defaults to `'stop'` (terminal), NEVER `'tool-calls'` — so a
- * degenerate/empty round can never spin the loop.
+ * Derive the round's terminal signal from the events seen this round.
+ *
+ * Precedence (B1 — the load-bearing fix):
+ *  1. error event           ⇒ 'error'
+ *  2. explicit done.finishReason==='tool-calls' ⇒ 'tool-calls' (if a future SDK adapter sets it)
+ *  3. ANY tool_result seen  ⇒ 'tool-calls' — the turn USED TOOLS ("still working"), so the
+ *     outer reflective loop should reflect + re-prompt. The real `@theokit/sdk` adapter ALWAYS
+ *     appends a terminal `done` WITHOUT finishReason after a turn (sdk-adapter.ts / event-translator.ts);
+ *     letting that `done` short-circuit a tool-using turn to 'stop' is exactly what made the loop
+ *     dead in production (single-round). tool_result therefore OUTRANKS the bare done. Bounded by
+ *     `maxIterations` so it can never spin.
+ *  4. otherwise (pure-answer `done`, text-only, or empty round) ⇒ 'stop' (terminal). EC-1: a
+ *     degenerate/empty round defaults to 'stop', NEVER 'tool-calls'.
+ *
+ * This is an honest heuristic: the SDK runs the inner tool loop to completion per turn, so the
+ * outer loop treats a tool-using turn as "continue/reflect" and a pure-text answer as "done".
  */
 function deriveFinishReason(signals: {
   sawError: boolean
@@ -73,7 +86,7 @@ function deriveFinishReason(signals: {
   sawToolResult: boolean
 }): LoopFinishReason {
   if (signals.sawError) return 'error'
-  if (signals.sawDone) return signals.doneFinishReason === 'tool-calls' ? 'tool-calls' : 'stop'
+  if (signals.sawDone && signals.doneFinishReason === 'tool-calls') return 'tool-calls'
   if (signals.sawToolResult) return 'tool-calls'
   return 'stop'
 }
@@ -147,8 +160,18 @@ export async function runReflectiveLoop(
   let feedback: string | undefined
 
   while (!signal?.aborted) {
-    const prompt = round === 1 ? message : `${message}\n\n[reflection] ${feedback ?? ''}`
-    const r = await consumeOneRound(factory, prompt, sessionId, signal)
+    // L2: only append the [reflection] block when there is actual feedback (react's
+    // noop reflection returns no feedback — avoid polluting its prompt with an empty marker).
+    const prompt = round === 1 || !feedback ? message : `${message}\n\n[reflection] ${feedback}`
+    // M2: wrap the round so a RAW stream/iterator exception (not an `error` event — e.g. the
+    // SDK dynamic import rejecting) surfaces as a typed DelegationError, matching the single-shot path.
+    let r: RoundResult
+    try {
+      r = await consumeOneRound(factory, prompt, sessionId, signal)
+    } catch (err) {
+      if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
+      throw new DelegationError(agentName, err)
+    }
 
     acc.response += r.responseText
     acc.toolCalls.push(...r.toolCalls)
@@ -179,5 +202,8 @@ export async function runReflectiveLoop(
     round += 1
   }
 
-  return acc // aborted before (re-)entering a round
+  // Aborted before (re-)entering a round. L1: record the rounds that DID run
+  // (round is 1-indexed and points at the next round, so `round - 1` ran).
+  acc.rounds = round - 1
+  return acc
 }
