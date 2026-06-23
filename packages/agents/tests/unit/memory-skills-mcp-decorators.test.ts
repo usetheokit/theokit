@@ -1,12 +1,10 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
-import { z } from 'zod'
 import { Agent } from '../../src/decorators/agent.js'
 import { MainLoop } from '../../src/decorators/main-loop.js'
 import { Memory, getMemoryConfig } from '../../src/decorators/memory.js'
 import { Skills, getSkillsConfig } from '../../src/decorators/skills.js'
 import { MCP, getMcpConfig } from '../../src/decorators/mcp.js'
-import { Toolbox, Tool } from '../../src/decorators/tool.js'
 import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
 import { compileAgent } from '../../src/bridge/agent-compiler.js'
 import { generateAgentManifest } from '../../src/manifest/agent-manifest.js'
@@ -189,7 +187,9 @@ describe('Walk/Compile/Manifest with Memory/Skills/MCP', () => {
 
     const compiled = compileAgent(walkAgentMetadata(FullAgent))
     expect(compiled.memory!.provider).toBe('mem0')
-    expect(compiled.skills!.include).toEqual(['customer-service'])
+    // M8-3: skills now compiles to the SDK's SkillsSettings shape ({ enabled, autoInject }),
+    // not the decorator's { include } shape (ADR D4 — Agent.create({ skills }) runtime).
+    expect(compiled.skills).toEqual({ enabled: ['customer-service'], autoInject: true })
     expect(compiled.mcpServers!.fs.command).toBe('npx')
   })
 
