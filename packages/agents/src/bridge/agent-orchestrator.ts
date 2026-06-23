@@ -2,13 +2,28 @@
  * Multi-agent orchestration runtime.
  *
  * Provides `delegate()` — a function that lets a parent agent invoke a
- * sub-agent and receive its result. Handles budget clamping (D4),
- * tool sharing, and toolbox auto-instantiation (EC-1).
+ * sub-agent and receive its result. Handles budget clamping (D4), tool sharing,
+ * toolbox auto-instantiation (EC-1), and (T2.2) routes the resolved `@MainLoop`
+ * strategy to the multi-round reflective loop — `simple-chat` keeps the
+ * single-shot path; `react`/`plan-act-reflect` drive `runReflectiveLoop`.
  */
+import {
+  ladderReflectionStrategy,
+  type LoopStrategy,
+  noopReflectionStrategy,
+  resolveLoopStrategy,
+} from '../loop/index.js'
+import { type RoundStreamFactory, runReflectiveLoop } from '../loop/run-reflective-loop.js'
+
 import type { CompiledTool } from './agent-compiler.js'
 import { compileAgent } from './agent-compiler.js'
+import { BudgetExceededError, type DelegationResult, DelegationError } from './delegation-types.js'
 import { createSdkAgentStream } from './sdk-adapter.js'
 import { walkAgentMetadata } from './walk-agent-metadata.js'
+
+// Re-export the delegation value types for backward compatibility — they moved
+// to delegation-types.js to break the orchestrator↔loop import cycle (G1).
+export { BudgetExceededError, type DelegationResult, DelegationError } from './delegation-types.js'
 
 export interface DelegateOptions {
   /** Max USD for this sub-agent call. */
@@ -21,38 +36,6 @@ export interface DelegateOptions {
   apiKey?: string
   /** Session ID override (default: crypto.randomUUID for isolation). */
   sessionId?: string
-}
-
-export interface DelegationResult {
-  response: string
-  toolCalls: { name: string; input: unknown; output: string }[]
-  cost: number
-  tokens: number
-}
-
-export class BudgetExceededError extends Error {
-  constructor(
-    public readonly agentName: string,
-    public readonly actualCost: number,
-    public readonly budgetLimit: number,
-  ) {
-    super(
-      `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > $${budgetLimit.toFixed(4)}`,
-    )
-    this.name = 'BudgetExceededError'
-  }
-}
-
-export class DelegationError extends Error {
-  constructor(
-    public readonly agentName: string,
-    public readonly cause: unknown,
-  ) {
-    super(
-      `Delegation to agent "${agentName}" failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-    )
-    this.name = 'DelegationError'
-  }
 }
 
 /** Safely coerce unknown to string. */
@@ -127,6 +110,56 @@ function processStreamEvent(
   }
 }
 
+/** Shared run context for the strategy dispatch paths. */
+interface RunContext {
+  readonly streamFactory: RoundStreamFactory
+  readonly message: string
+  readonly sessionId: string
+  readonly budget: number
+  readonly agentName: string
+}
+
+/** Multi-round reflective path (`react`/`plan-act-reflect`) — T2.2. */
+async function runReflective(
+  ctx: RunContext,
+  loopStrategy: LoopStrategy,
+): Promise<DelegationResult> {
+  const reflection =
+    loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy
+  // Wiring triad — runtime metric: observable proof the strategy runtime fired (G10).
+  console.debug('[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]', {
+    strategy: loopStrategy.name,
+    maxIterations: loopStrategy.maxIterations,
+  })
+  const result = await runReflectiveLoop(ctx.streamFactory, ctx.message, ctx.sessionId, {
+    loop: loopStrategy,
+    reflection,
+    budget: ctx.budget,
+    agentName: ctx.agentName,
+  })
+  if (Number.isFinite(ctx.budget) && result.cost > ctx.budget) {
+    throw new BudgetExceededError(ctx.agentName, result.cost, ctx.budget)
+  }
+  return result
+}
+
+/** Single-shot path (`simple-chat`) — unchanged behavior (EC-2 backward-compat). */
+async function runSingleShot(ctx: RunContext): Promise<DelegationResult> {
+  const acc: StreamAccumulator = { response: '', toolCalls: [], cost: 0, tokens: 0 }
+  try {
+    for await (const event of ctx.streamFactory(ctx.message, ctx.sessionId)) {
+      processStreamEvent(event, acc, ctx.budget, ctx.agentName)
+    }
+  } catch (err) {
+    if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
+    throw new DelegationError(ctx.agentName, err)
+  }
+  if (Number.isFinite(ctx.budget) && acc.cost > ctx.budget) {
+    throw new BudgetExceededError(ctx.agentName, acc.cost, ctx.budget)
+  }
+  return acc
+}
+
 /**
  * Delegate a task to a sub-agent and collect its result.
  *
@@ -134,6 +167,8 @@ function processStreamEvent(
  * - Tool sharing: parent tools merged with sub-agent tools (sub wins on collision)
  * - Toolbox auto-instantiation: sub-agent toolboxes instantiated without DI (EC-1)
  * - Session isolation: each delegation gets a unique session ID (EC-4)
+ * - `@MainLoop` strategy runtime (T2.2): `simple-chat` ⇒ single-shot; otherwise
+ *   the multi-round reflective loop (closes V4-A's metadata-only gap)
  */
 export async function delegate(
   SubAgentClass: Function,
@@ -155,25 +190,19 @@ export async function delegate(
   // 3. Budget clamping (D4)
   const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
 
-  // 4. Create stream + collect (EC-4: randomUUID for session isolation)
+  // 4. Create stream + session (EC-4: randomUUID for session isolation)
   const streamFactory = createSdkAgentStream(compiled, allTools, apiKey, walk.agentConfig.model)
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
-  const acc: StreamAccumulator = { response: '', toolCalls: [], cost: 0, tokens: 0 }
-
-  try {
-    for await (const event of streamFactory(message, sessionId)) {
-      processStreamEvent(event, acc, budget, SubAgentClass.name)
-    }
-  } catch (err) {
-    if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
-    throw new DelegationError(SubAgentClass.name, err)
+  // 5. Resolve the @MainLoop strategy and dispatch (T2.2 — closes the metadata-only gap):
+  //    simple-chat ⇒ single-shot (unchanged); react/plan-act-reflect ⇒ reflective loop.
+  const ctx: RunContext = {
+    streamFactory,
+    message,
+    sessionId,
+    budget,
+    agentName: SubAgentClass.name,
   }
-
-  // 5. Budget enforcement (post-run check)
-  if (Number.isFinite(budget) && acc.cost > budget) {
-    throw new BudgetExceededError(SubAgentClass.name, acc.cost, budget)
-  }
-
-  return acc
+  const loopStrategy = resolveLoopStrategy(walk.mainLoop.strategy, walk.mainLoop.maxIterations)
+  return loopStrategy.name === 'simple-chat' ? runSingleShot(ctx) : runReflective(ctx, loopStrategy)
 }
