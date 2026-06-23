@@ -65,17 +65,34 @@ const STEP_LIMIT_HINT =
   'This is your final round — do not call any more tools; summarize the work done so far and list any remaining tasks.'
 
 /**
+ * Deterministic JSON: object keys are emitted in sorted order so two semantically
+ * equal tool inputs serialize identically regardless of key insertion order (a
+ * stuck-loop detector must not be fooled by re-ordered keys — review NF, robustness).
+ */
+function stableStringify(value: unknown): string {
+  if (value === undefined) return 'undefined'
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  const obj = value as Record<string, unknown>
+  const entries = Object.keys(obj)
+    .sort((a, b) => a.localeCompare(b))
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
+  return `{${entries.join(',')}}`
+}
+
+/**
  * A round's progress fingerprint = its tool-call set (name+input, SORTED so call
- * ORDER is irrelevant — EC-3) plus the assistant text. Two consecutive rounds with
- * an equal signature made no new progress. Tool `output` is excluded: repeating the
- * same call is no-progress even if the result text wobbles. (V4-D, ADR D2)
+ * ORDER is irrelevant — EC-3; input keys canonicalized so KEY order is irrelevant too)
+ * plus the assistant text. Two consecutive rounds with an equal signature made no new
+ * progress. Tool `output` is excluded: repeating the same call is no-progress even if
+ * the result text wobbles. (V4-D, ADR D2)
  */
 function roundSignature(
   toolCalls: readonly { name: string; input: unknown }[],
   text: string,
 ): string {
   const calls = toolCalls
-    .map((tc) => `${tc.name}:${JSON.stringify(tc.input)}`)
+    .map((tc) => `${tc.name}:${stableStringify(tc.input)}`)
     .sort((a, b) => a.localeCompare(b))
     .join(',')
   return `${calls}|${text}`
@@ -92,9 +109,13 @@ function terminalReason(
   round: number,
   maxIterations: number,
 ): LoopFinishReason {
-  return reflectionContinue && roundReason === TOOL_CALLS && round >= maxIterations
-    ? 'step_limit'
-    : roundReason
+  if (reflectionContinue && roundReason === TOOL_CALLS && round >= maxIterations)
+    return 'step_limit'
+  // A tool-using round that terminates BELOW the ceiling means a (custom) reflection chose to
+  // stop while the turn could have continued — surface 'stop', never leak the per-round
+  // 'tool-calls' signal as the loop's terminal reason (review NF; shipped ladder/noop never hit this).
+  if (roundReason === TOOL_CALLS) return 'stop'
+  return roundReason
 }
 
 /** Build the round's prompt: final-round summary hint (V4-D) + the reflection block when feedback exists (L2). */
