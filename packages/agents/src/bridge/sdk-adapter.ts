@@ -6,10 +6,56 @@
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
+import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
+
 import type { CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
+import { compileContextWindow } from './compile-context-window.js'
+import { compileProjectContext } from './compile-project-context.js'
+import { compileSkills } from './compile-skills.js'
 import { translateSdkEvent, type SdkMessage } from './event-translator.js'
 import type { AgentWalkResult } from './walk-agent-metadata.js'
+
+/** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
+interface M8CreateOptions {
+  skills?: SkillsSettings
+  context?: ContextSettings
+  systemPrompt?: string | SystemPromptResolver
+  /** Settings source so the SDK can discover SKILL.md files (EC-1). */
+  local?: { settingSources: string[] }
+}
+
+/**
+ * Compile the M8 decorators (`@Skills`, `@ContextWindow`, `@ProjectContext`) into
+ * the `Agent.create()` fields the SDK executes. `applied` lists which decorators
+ * contributed, for the observability log (wiring triad — runtime metric).
+ */
+function assembleM8CreateOptions(agentWalk: AgentWalkResult): {
+  options: M8CreateOptions
+  applied: string[]
+} {
+  const options: M8CreateOptions = {}
+  const applied: string[] = []
+  const base = agentWalk.agentConfig.systemPrompt
+
+  if (agentWalk.skills) {
+    options.skills = compileSkills(agentWalk.skills)
+    options.local = { settingSources: ['project'] }
+    applied.push('skills')
+  }
+  if (agentWalk.contextWindow) {
+    options.context = compileContextWindow(agentWalk.contextWindow).context
+    applied.push('context')
+  }
+  if (agentWalk.projectContext) {
+    options.systemPrompt = compileProjectContext(agentWalk.projectContext, base)
+    applied.push('projectContext')
+  } else if (base !== undefined) {
+    options.systemPrompt = base
+  }
+
+  return { options, applied }
+}
 
 /**
  * Creates an agent stream factory using @theokit/sdk as the runtime.
@@ -32,9 +78,7 @@ export function createSdkAgentStream(
 
       // Dynamic import — @theokit/sdk is optional peer dep
       let Agent: {
-        create: (
-          opts: Record<string, unknown>,
-        ) => Promise<{
+        create: (opts: Record<string, unknown>) => Promise<{
           send: (msg: string) => Promise<{ stream: () => AsyncGenerator<SdkMessage> }>
           dispose: () => Promise<void>
         }>
@@ -71,12 +115,23 @@ export function createSdkAgentStream(
       )
 
       try {
-        // Create SDK agent
+        // Compile the M8 declarative decorators into native Agent.create fields.
+        const { options: m8, applied } = assembleM8CreateOptions(agentWalk)
+        if (applied.length > 0) {
+          // Wiring triad — runtime metric: observable proof the decorators fired.
+          console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
+            skills: applied.includes('skills'),
+            context: applied.includes('context'),
+            projectContext: applied.includes('projectContext'),
+          })
+        }
+
+        // Create SDK agent (M8 fields spread; absent decorators add no keys)
         const agent = await Agent.create({
           apiKey,
           model: { id: model },
           tools: sdkTools,
-          systemPrompt: agentWalk.agentConfig.systemPrompt,
+          ...m8,
         })
 
         // Send message + stream response
