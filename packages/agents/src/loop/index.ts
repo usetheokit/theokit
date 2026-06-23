@@ -17,6 +17,7 @@ export {
 } from './loop-strategy.js'
 export {
   ladderReflectionStrategy,
+  noopReflectionStrategy,
   type ReflectionResult,
   type ReflectionStrategy,
   type ReflectionStrategyConfig,
