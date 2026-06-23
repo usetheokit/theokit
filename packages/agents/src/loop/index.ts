@@ -4,8 +4,10 @@
  * Per architecture.md INVARIANT #3, public API flows through barrels only.
  * `runReflectiveLoop` is INTERNAL (Drawback #4) — it is the bridge's loop
  * driver, consumed by `delegate()`/`AgentRunner`, never imported by consumers.
- * `AgentRunner` is added here in T3.1.
+ * `AgentRunner` (T3.1) — the imperative twin builder — is exported; the loop
+ * DRIVER `runReflectiveLoop` stays internal.
  */
+export { AgentRunner, AgentRunnerBuilder, type AgentRunnerRunOptions } from './agent-runner.js'
 export {
   DEFAULT_MAX_ITERATIONS,
   type LoopFinishReason,
