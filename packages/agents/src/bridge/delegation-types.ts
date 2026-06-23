@@ -4,9 +4,12 @@
  * Extracted from `agent-orchestrator.ts` so BOTH the orchestrator (`delegate`)
  * and the loop driver (`loop/run-reflective-loop.ts`) can import them WITHOUT a
  * cycle (orchestrator → loop → delegation-types; orchestrator → delegation-types;
- * delegation-types depends on nothing — Acyclic Dependencies Principle, G1).
+ * delegation-types has only a TYPE-ONLY import of `LoopFinishReason` (erased at
+ * runtime → no runtime edge; `loop-strategy.ts` is a leaf importing only zod, so
+ * no cycle — Acyclic Dependencies Principle, G1).
  * `agent-orchestrator.ts` re-exports these for backward compatibility.
  */
+import type { LoopFinishReason } from '../loop/loop-strategy.js'
 
 export interface DelegationResult {
   response: string
@@ -15,6 +18,11 @@ export interface DelegationResult {
   tokens: number
   /** Rounds the reflective loop ran (set by `runReflectiveLoop`; absent for the single-shot path). */
   rounds?: number
+  /**
+   * The loop's terminal reason (set by `runReflectiveLoop`): `'stop'`/`'length'` natural end,
+   * `'step_limit'` (hit maxIterations), `'no_progress'` (stuck). Absent for the single-shot path. (V4-D)
+   */
+  finishReason?: LoopFinishReason
 }
 
 export class BudgetExceededError extends Error {

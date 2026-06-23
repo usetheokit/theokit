@@ -51,6 +51,97 @@ function asNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' ? value : fallback
 }
 
+/** Consecutive no-progress rounds before terminating with `'no_progress'` (K=2 tolerates one retry — V4-D). */
+const NO_PROGRESS_THRESHOLD = 2
+
+/** Runtime metric key (wiring triad — G10): observable proof the loop ran, with terminal + round count. */
+const MAINLOOP_METRIC = '[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]'
+
+/** The "still working" continuation signal — a tool-using turn re-enters the loop. */
+const TOOL_CALLS: LoopFinishReason = 'tool-calls'
+
+/** Final-round graceful-degradation hint (V4-D step_limit — modeled on opencode MAX_STEPS_PROMPT). */
+const STEP_LIMIT_HINT =
+  'This is your final round — do not call any more tools; summarize the work done so far and list any remaining tasks.'
+
+/**
+ * A round's progress fingerprint = its tool-call set (name+input, SORTED so call
+ * ORDER is irrelevant — EC-3) plus the assistant text. Two consecutive rounds with
+ * an equal signature made no new progress. Tool `output` is excluded: repeating the
+ * same call is no-progress even if the result text wobbles. (V4-D, ADR D2)
+ */
+function roundSignature(
+  toolCalls: readonly { name: string; input: unknown }[],
+  text: string,
+): string {
+  const calls = toolCalls
+    .map((tc) => `${tc.name}:${JSON.stringify(tc.input)}`)
+    .sort((a, b) => a.localeCompare(b))
+    .join(',')
+  return `${calls}|${text}`
+}
+
+/**
+ * The loop's terminal reason: `'step_limit'` when the round wanted to continue
+ * (tool-calls + reflection continue) but the `maxIterations` ceiling stopped it;
+ * otherwise the round's own natural reason (`'stop'`/`'length'`). (V4-D, ADR D1)
+ */
+function terminalReason(
+  reflectionContinue: boolean,
+  roundReason: LoopFinishReason,
+  round: number,
+  maxIterations: number,
+): LoopFinishReason {
+  return reflectionContinue && roundReason === TOOL_CALLS && round >= maxIterations
+    ? 'step_limit'
+    : roundReason
+}
+
+/** Build the round's prompt: final-round summary hint (V4-D) + the reflection block when feedback exists (L2). */
+function buildPrompt(
+  round: number,
+  maxIterations: number,
+  message: string,
+  feedback: string | undefined,
+): string {
+  const hint = round === maxIterations ? `${STEP_LIMIT_HINT}\n\n` : ''
+  const body = round === 1 || !feedback ? message : `${message}\n\n[reflection] ${feedback}`
+  return hint + body
+}
+
+/**
+ * Consume one round, normalizing a RAW stream/iterator exception (not an `error` event —
+ * e.g. the SDK dynamic import rejecting) into a typed `DelegationError` (M2). Typed errors
+ * (`BudgetExceededError`/`DelegationError`) propagate unchanged.
+ */
+async function consumeRoundOrThrow(
+  factory: RoundStreamFactory,
+  prompt: string,
+  sessionId: string,
+  signal: AbortSignal | undefined,
+  agentName: string,
+): Promise<RoundResult> {
+  try {
+    return await consumeOneRound(factory, prompt, sessionId, signal)
+  } catch (err) {
+    if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
+    throw new DelegationError(agentName, err)
+  }
+}
+
+/** Stamp the terminal state on the accumulator + emit the runtime metric (DRY for the 2 exit points). */
+function finalize(
+  acc: DelegationResult,
+  round: number,
+  reason: LoopFinishReason,
+  strategyName: string,
+): DelegationResult {
+  acc.rounds = round
+  acc.finishReason = reason
+  console.debug(MAINLOOP_METRIC, { strategy: strategyName, rounds: round, terminal: reason })
+  return acc
+}
+
 /** One round's accumulated facts + the signals needed to derive `finishReason`. */
 interface RoundResult {
   responseText: string
@@ -86,8 +177,8 @@ function deriveFinishReason(signals: {
   sawToolResult: boolean
 }): LoopFinishReason {
   if (signals.sawError) return 'error'
-  if (signals.sawDone && signals.doneFinishReason === 'tool-calls') return 'tool-calls'
-  if (signals.sawToolResult) return 'tool-calls'
+  if (signals.sawDone && signals.doneFinishReason === TOOL_CALLS) return TOOL_CALLS
+  if (signals.sawToolResult) return TOOL_CALLS
   return 'stop'
 }
 
@@ -158,20 +249,12 @@ export async function runReflectiveLoop(
   const acc: DelegationResult = { response: '', toolCalls: [], cost: 0, tokens: 0, rounds: 0 }
   let round = 1
   let feedback: string | undefined
+  let prevSig: string | undefined // V4-D: prior round's progress signature (no_progress detection)
+  let stuck = 0 // V4-D: consecutive no-progress rounds
 
   while (!signal?.aborted) {
-    // L2: only append the [reflection] block when there is actual feedback (react's
-    // noop reflection returns no feedback — avoid polluting its prompt with an empty marker).
-    const prompt = round === 1 || !feedback ? message : `${message}\n\n[reflection] ${feedback}`
-    // M2: wrap the round so a RAW stream/iterator exception (not an `error` event — e.g. the
-    // SDK dynamic import rejecting) surfaces as a typed DelegationError, matching the single-shot path.
-    let r: RoundResult
-    try {
-      r = await consumeOneRound(factory, prompt, sessionId, signal)
-    } catch (err) {
-      if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
-      throw new DelegationError(agentName, err)
-    }
+    const prompt = buildPrompt(round, loop.maxIterations, message, feedback)
+    const r = await consumeRoundOrThrow(factory, prompt, sessionId, signal, agentName)
 
     acc.response += r.responseText
     acc.toolCalls.push(...r.toolCalls)
@@ -183,6 +266,15 @@ export async function runReflectiveLoop(
       throw new BudgetExceededError(agentName, acc.cost, budget)
     }
 
+    // V4-D no_progress: only on would-continue rounds (EC-1: stop/error/length/empty already
+    // terminate with their own reason), evaluated BEFORE the ceiling (EC-4: the earlier signal wins).
+    if (r.finishReason === TOOL_CALLS) {
+      const sig = roundSignature(r.toolCalls, r.responseText)
+      stuck = sig === prevSig ? stuck + 1 : 0
+      if (stuck >= NO_PROGRESS_THRESHOLD) return finalize(acc, round, 'no_progress', loop.name)
+      prevSig = sig
+    }
+
     const outcome: LoopOutcome = {
       finishReason: r.finishReason,
       round,
@@ -191,11 +283,13 @@ export async function runReflectiveLoop(
     }
     const reflectionResult = reflection.reflect(outcome)
     if (!(reflectionResult.continue && loop.shouldContinue(outcome))) {
-      acc.rounds = round
-      // Wiring triad — runtime metric (G10): observable proof the loop ran, with round count.
-      // Fires for BOTH on-ramps (delegate + AgentRunner) since both share this driver.
-      console.debug('[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]', { strategy: loop.name, rounds: round })
-      return acc
+      const reason = terminalReason(
+        reflectionResult.continue,
+        r.finishReason,
+        round,
+        loop.maxIterations,
+      )
+      return finalize(acc, round, reason, loop.name)
     }
 
     feedback = reflectionResult.feedback
