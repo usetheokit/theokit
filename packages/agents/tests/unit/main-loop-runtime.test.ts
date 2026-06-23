@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { type LoopOutcome, resolveLoopStrategy } from '../../src/loop/loop-strategy.js'
+import { ladderReflectionStrategy } from '../../src/loop/reflection-strategy.js'
 
 /** Minimal LoopOutcome factory for table tests. */
 function outcome(partial: Partial<LoopOutcome>): LoopOutcome {
@@ -57,5 +58,25 @@ describe('resolveLoopStrategy', () => {
     // maxIterations = 1 ⇒ exactly one round (degenerates to single-shot)
     const one = resolveLoopStrategy('react', 1)
     expect(one.shouldContinue(outcome({ finishReason: 'tool-calls', round: 1 }))).toBe(false)
+  })
+})
+
+describe('ladderReflectionStrategy', () => {
+  it('test_ladder_reflects_continue_on_toolcalls — feedback + continue on tool-calls', () => {
+    const r = ladderReflectionStrategy.reflect(outcome({ finishReason: 'tool-calls', round: 1 }))
+    expect(r.continue).toBe(true)
+    expect(r.feedback).toBeTruthy()
+    expect(typeof r.feedback).toBe('string')
+    expect((r.feedback ?? '').length).toBeGreaterThan(0)
+  })
+
+  it('test_ladder_stops_on_stop — terminate, no continue', () => {
+    const r = ladderReflectionStrategy.reflect(outcome({ finishReason: 'stop', round: 2 }))
+    expect(r.continue).toBe(false)
+  })
+
+  it('test_ladder_stops_on_error — terminate on error', () => {
+    const r = ladderReflectionStrategy.reflect(outcome({ finishReason: 'error', round: 1 }))
+    expect(r.continue).toBe(false)
   })
 })
