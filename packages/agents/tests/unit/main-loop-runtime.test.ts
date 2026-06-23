@@ -7,8 +7,12 @@
  * `maxSteps` ceiling per plan ADR D1. Zod config (ADR D3).
  */
 import { describe, expect, it } from 'vitest'
+import * as loopBarrel from '../../src/loop/index.js'
 import { type LoopOutcome, resolveLoopStrategy } from '../../src/loop/loop-strategy.js'
-import { ladderReflectionStrategy } from '../../src/loop/reflection-strategy.js'
+import {
+  ladderReflectionStrategy,
+  reflectionStrategyConfigSchema,
+} from '../../src/loop/reflection-strategy.js'
 
 /** Minimal LoopOutcome factory for table tests. */
 function outcome(partial: Partial<LoopOutcome>): LoopOutcome {
@@ -78,5 +82,18 @@ describe('ladderReflectionStrategy', () => {
   it('test_ladder_stops_on_error — terminate on error', () => {
     const r = ladderReflectionStrategy.reflect(outcome({ finishReason: 'error', round: 1 }))
     expect(r.continue).toBe(false)
+  })
+
+  it('test_reflection_config_rejects_empty_name — Zod min(1)', () => {
+    expect(() => reflectionStrategyConfigSchema.parse({ name: '' })).toThrow()
+  })
+})
+
+describe('loop barrel (T1.3)', () => {
+  it('test_loop_barrel_exports_contracts — public surface re-exported from loop/index', () => {
+    // The barrel re-exports the SAME references (proves the barrel chain, INVARIANT #3)
+    expect(loopBarrel.resolveLoopStrategy).toBe(resolveLoopStrategy)
+    expect(loopBarrel.ladderReflectionStrategy).toBe(ladderReflectionStrategy)
+    expect(typeof loopBarrel.resolveLoopStrategy).toBe('function')
   })
 })
