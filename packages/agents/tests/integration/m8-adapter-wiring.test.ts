@@ -25,11 +25,12 @@ import { Skills } from '../../src/decorators/skills.js'
 import { ContextWindow } from '../../src/decorators/context-window.js'
 import { ProjectContext } from '../../src/decorators/project-context.js'
 import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
+import { compileAgent } from '../../src/bridge/agent-compiler.js'
 import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
 
 async function drain(AgentClass: Function) {
-  const walk = walkAgentMetadata(AgentClass)
-  const factory = createSdkAgentStream(walk, [], 'test-key', 'openai/gpt-4o-mini')
+  const compiled = compileAgent(walkAgentMetadata(AgentClass))
+  const factory = createSdkAgentStream(compiled, [], 'test-key', 'openai/gpt-4o-mini')
   for await (const _ of factory('hello', 'session-1')) {
     // drain — triggers Agent.create()
   }
@@ -96,6 +97,20 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
     expect(opts.context).toBeUndefined()
     expect(opts.local).toBeUndefined()
     expect(opts.systemPrompt).toBe('PLAIN_PROMPT')
+  })
+
+  it('test_adapter_absent_no_systemprompt_omits_key', async () => {
+    // Agent with neither M8 decorators nor a systemPrompt: no systemPrompt key.
+    @Agent({ name: 'bare', route: '/bare' })
+    class BareAgent {
+      @MainLoop()
+      async run() {}
+    }
+    const opts = await drain(BareAgent)
+    expect(opts.skills).toBeUndefined()
+    expect(opts.context).toBeUndefined()
+    expect(opts.local).toBeUndefined()
+    expect('systemPrompt' in opts).toBe(false)
   })
 
   it('test_adapter_emits_runtime_applied_log', async () => {
