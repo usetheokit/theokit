@@ -32,3 +32,28 @@
 
 # Example (commented):
 # dead_code_unallowlisted_python | src/legacy/migrator.py:128 | 2026-09-01 | Legacy migration helper retained for v0.9 rollback path; remove after v1.0 release.
+#
+# NOTE on column format: the live parser (`load_allowlist` in
+# skills/code-quality/scripts/_shared.py) requires SIX pipe-separated columns,
+# NOT the four shown in the header above:
+#   ECOSYSTEM | FILE-PATH | FINDING-TYPE | SYMBOL-OR-LINE | REASON | SUNSET (YYYY-MM-DD)
+#   ECOSYSTEM    — one of: python | typescript | rust | go
+#   FILE-PATH    — fnmatch glob against the finding's repo-relative path
+#   FINDING-TYPE — one of: dead_code | symbol_fab | orphan_export | mutation_low
+#   SYMBOL-OR-LINE — substring (or glob) matched against the finding's symbol_or_line
+#   REASON       — non-empty justification (enforced by parser)
+#   SUNSET       — ISO date, ≤ 90 days from entry creation
+# The four-column header above is documentation drift; entries MUST be 6 columns.
+
+# --- @theokit/* monorepo subpath false-positives (D2 symbol-fab, unverifiable) ---
+# These are NOT fabrications: each import resolves to a real in-tree workspace
+# subpath (verified to exist on disk). The npm-registry probe returns an
+# ambiguous response for `@theokit/*` deep subpaths because the package's
+# `exports` subpath map is not introspectable via the registry endpoint, so D2
+# classifies them as SOFT_FLOOR "could not verify". Allowlisting downgrades to INFO.
+# Verified in-tree:
+#   - @theokit/http/runtime/node  -> packages/http/src/runtime-node.ts (exports "./runtime/node")
+#   - @theokit/ui/styles.css      -> published @theokit/ui peerDep stylesheet subpath
+typescript | *packages/agents/tests/unit/agent-route-generator.test.ts | symbol_fab | @theokit/http/runtime/node | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (packages/http exports ./runtime/node) | 2026-09-20
+typescript | *packages/agents/tests/integration/theokit-plugin.test.ts | symbol_fab | @theokit/http/runtime/node | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (packages/http exports ./runtime/node) | 2026-09-20
+typescript | *packages/create-theokit/templates/default/app/layout.tsx | symbol_fab | @theokit/ui/styles.css | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (@theokit/ui published stylesheet subpath) | 2026-09-20
