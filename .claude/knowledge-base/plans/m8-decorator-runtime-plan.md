@@ -7,7 +7,7 @@ goal: Give SDK-backed runtime to the @ContextWindow, @ProjectContext and @Skills
 
 # Plan: M8 — Camada declarativa: dar runtime aos decorators (Tema F / Seção 6)
 
-> **Version 1.1** (absorbed edge-case EC-1: settingSources for skills discovery) — The `@theokit/agents` decorators `@ContextWindow`, `@ProjectContext` and `@Skills` currently store config via `setMeta` but nothing ever reads it into the agent runtime (the "decorator-without-runtime" anti-pattern). This plan compiles each decorator's metadata into real `@theokit/sdk` `AgentOptions` fields (`skills` → `SkillsSettings`, `@ContextWindow` → `ContextSettings`, `@ProjectContext` → a composed `systemPrompt`) and wires them through `sdk-adapter.ts` into `Agent.create()`, honoring `sdk-runtime.md` (the SDK executes; the bridge only compiles). Knobs with no native SDK mapping emit an explicit `metadata-only` warning instead of silently lying. M8-4 ships a standalone ADR resolving the strategic future of di/gateways/plugins in light of the SDK's decorators-optional decision (`theokit-sdk` CLAUDE.md rule 9, 2026-06-18).
+> **Version 1.2** (EC-1 settingSources; cwd-deviation reconciled to G8 no-process.cwd) — The `@theokit/agents` decorators `@ContextWindow`, `@ProjectContext` and `@Skills` currently store config via `setMeta` but nothing ever reads it into the agent runtime (the "decorator-without-runtime" anti-pattern). This plan compiles each decorator's metadata into real `@theokit/sdk` `AgentOptions` fields (`skills` → `SkillsSettings`, `@ContextWindow` → `ContextSettings`, `@ProjectContext` → a composed `systemPrompt`) and wires them through `sdk-adapter.ts` into `Agent.create()`, honoring `sdk-runtime.md` (the SDK executes; the bridge only compiles). Knobs with no native SDK mapping emit an explicit `metadata-only` warning instead of silently lying. M8-4 ships a standalone ADR resolving the strategic future of di/gateways/plugins in light of the SDK's decorators-optional decision (`theokit-sdk` CLAUDE.md rule 9, 2026-06-18).
 
 ## Goal
 
@@ -118,7 +118,7 @@ The `sdk-runtime.md` rule (INQUEBRÁVEL) governs the shape of the fix: decorator
 - **Consequences:** `@ContextWindow` is no longer metadata-only (maxTokens drives runtime); the gap between declared and executed knobs is explicit and testable.
 
 ### D3 — `@ProjectContext` compiles to a `SystemPromptResolver` composing sdk-tools primitives
-- **Decision:** Compile `@ProjectContext` into a `SystemPromptResolver` that, at send time, prepends `buildEnvContext(cwd)` + `buildRepoMap(cwd, { ignore: ignorePatterns })` + `readProjectInstructions(cwd)` output to the agent's base `systemPrompt`. `cwd` is taken from `SystemPromptContext.cwd` (falling back to `process.cwd()`). Knobs without a primitive mapping (`indexStrategy`, `relevanceStrategy`, `maxFilesInContext`, `includeExtensions`, `rootMarkers`) emit `AgentWarningCode.PROJECT_CONTEXT_KNOB_METADATA_ONLY`.
+- **Decision:** Compile `@ProjectContext` into a `SystemPromptResolver` that, at send time, prepends `buildEnvContext(cwd)` + `buildRepoMap(cwd, { ignore: ignorePatterns })` + `readProjectInstructions(cwd)` output to the agent's base `systemPrompt`. `cwd` is taken from `SystemPromptContext.cwd` (which the SDK resolves to `process.cwd()` internally via `resolveCwd`); when absent the resolver returns the base prompt (no `process.cwd()` in `packages/agents/src` per G8). Knobs without a primitive mapping (`indexStrategy`, `relevanceStrategy`, `maxFilesInContext`, `includeExtensions`, `rootMarkers`) emit `AgentWarningCode.PROJECT_CONTEXT_KNOB_METADATA_ONLY`.
 - **Rationale:** No native `AgentOptions` field carries a repo map; `systemPrompt` resolver is the documented composition seam (`AgentOptions.systemPrompt: string | SystemPromptResolver`). The primitives are first-party (`@theokit/sdk-tools`, `@theokit/sdk/project`) — Rule 9 (don't reinvent).
 - **Alternatives considered:** Map onto `ContextSettings` (file-context manager) — REJECTED: `ContextSettings` governs context-file budgeting, not an on-demand repo map; semantics don't match. Build the repo map at create-time (eager) — REJECTED: resolver is lazy + receives the real `cwd`, avoiding an fs walk when the agent is only constructed.
 - **Consequences:** `@ProjectContext` gains real runtime; adds `@theokit/sdk-tools` as an `@theokit/agents` dependency; repo-map cost is paid per send (mitigated by `buildRepoMap` being char-bounded + the resolver only running when the decorator is present).
@@ -143,7 +143,7 @@ The `sdk-runtime.md` rule (INQUEBRÁVEL) governs the shape of the fix: decorator
 | Adding `@theokit/sdk-tools` dependency to `@theokit/agents` enlarges its dep tree | Low | sdk-tools is zero-runtime-dep + first-party; justified by Rule 9 in `## Dependencies`; only `buildRepoMap`/`buildEnvContext` imported | impl |
 | `buildRepoMap` runs an fs walk per send when `@ProjectContext` is present — latency on large repos | Low | Resolver is lazy (only when decorator present); `buildRepoMap` is char-bounded + never-throws (M3-3 contract); document in ADR | impl |
 | Metadata-only warnings could be noisy if emitted per send | Low | Emit context/project warnings at **walk/compile time** (once per class), not per send — mirrors existing `AgentWarningCode` emission site | impl |
-| `SystemPromptContext.cwd` may be `undefined` (SDK type allows it) | Medium | Resolver falls back to `process.cwd()`; covered by a dedicated edge test | impl |
+| `SystemPromptContext.cwd` may be `undefined` (SDK type allows it) | Low | Resolver returns the base prompt (no repo map) when cwd absent; the SDK defaults cwd to `process.cwd()` via `resolveCwd`, so production runs receive one. Covered by `test_project_context_resolver_no_cwd_returns_base` | impl |
 
 ## Unresolved Questions
 
@@ -397,7 +397,7 @@ packages/agents/tests/unit/m8-project-context-compile.test.ts (NEW) — RED test
 
 #### Deep Dives
 - Resolver composition order (Q1): `resolver(ctx) = [envBlock, repoMap, instructions, basePrompt].filter(Boolean).join('\n\n')`. `basePrompt` is the agent's declared string `systemPrompt` (if any); if the agent declared its OWN resolver, M8 wraps by awaiting it first then prepending.
-- `cwd` fallback (Q3/edge): `const cwd = ctx.cwd ?? process.cwd()`.
+- `cwd` (Q3/edge): use `ctx.cwd`; when absent, return `base` (no `process.cwd()` in agents/src per G8 — the SDK already defaults `SystemPromptContext.cwd` to `process.cwd()` via `resolveCwd`, so production runs always receive a cwd).
 - Unsupported knobs → `metadataOnlyKnobs = ['indexStrategy','relevanceStrategy','maxFilesInContext','includeExtensions','rootMarkers'].filter(set)`; warn once at walk time.
 - `ignorePatterns` → `buildRepoMap(cwd,{ignore: o.ignorePatterns})`.
 - Invariant: resolver is never-throw — `buildRepoMap`/`buildEnvContext` are never-throw by contract (M3-3); wrap `readProjectInstructions` in try/catch returning `''` on failure so a missing `THEO.md` never breaks a send.
@@ -409,7 +409,8 @@ import { readProjectInstructions } from '@theokit/sdk/project'
 import type { SystemPromptResolver } from '@theokit/sdk'
 export function compileProjectContext(o: ProjectContextOptions, base?: string): SystemPromptResolver {
   return async (ctx) => {
-    const cwd = ctx.cwd ?? process.cwd()
+    const cwd = ctx.cwd
+    if (!cwd) return base ?? ''   // G8: no process.cwd() in agents/src; SDK already defaults it
     const env = buildEnvContext(cwd)
     const map = buildRepoMap(cwd, { ignore: o.ignorePatterns })
     let instr = ''
@@ -421,7 +422,7 @@ export function compileProjectContext(o: ProjectContextOptions, base?: string): 
 
 #### TDD
 - **RED `test_project_context_resolver_prepends_repo_map`:** call the resolver with `{cwd: fixtureRepo}` (a temp dir with a `package.json`) ⇒ output contains the repo-map block + the base prompt.
-- **RED `test_project_context_resolver_cwd_fallback`:** resolver with `ctx.cwd===undefined` uses `process.cwd()` and does not throw.
+- **RED `test_project_context_resolver_no_cwd_returns_base`:** resolver with `ctx.cwd===undefined` returns the base prompt and does not throw (G8 — no `process.cwd()` in agents/src).
 - **RED `test_project_context_missing_instructions_is_safe`:** temp dir without `THEO.md` ⇒ resolver returns env+map+base, no throw.
 - **RED `test_project_context_unsupported_knobs_metadata_only`:** `@ProjectContext({indexStrategy:'tree-sitter'})` triggers one `THEO_AGENT_PROJECT_CONTEXT_KNOB_METADATA_ONLY` warning.
 - **GREEN:** implement compiler + walk wiring.
