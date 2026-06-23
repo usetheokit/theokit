@@ -11,6 +11,7 @@ import type { ContextSettings, SkillsSettings } from '@theokit/sdk'
 import { getAgentConfig } from '../decorators/agent.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import type { MemoryOptions } from '../decorators/memory.js'
+import type { ProjectContextOptions } from '../decorators/project-context.js'
 
 import { compileContextWindow } from './compile-context-window.js'
 import { compileSkills } from './compile-skills.js'
@@ -82,6 +83,8 @@ export interface CompiledAgentOptions {
   memory?: MemoryOptions
   skills?: SkillsSettings
   context?: ContextSettings
+  /** Raw @ProjectContext config; the adapter builds the (async) systemPrompt resolver from it. */
+  projectContext?: ProjectContextOptions
   mcpServers?: McpServersMap
   maxIterations?: number
   timeoutMs?: number
@@ -127,6 +130,7 @@ export function compileAgent(
     context: walkResult.contextWindow
       ? compileContextWindow(walkResult.contextWindow).context
       : undefined,
+    projectContext: walkResult.projectContext,
     mcpServers: walkResult.mcpServers,
     maxIterations: walkResult.mainLoop.maxIterations ?? walkResult.agentConfig.maxIterations,
     timeoutMs: walkResult.mainLoop.timeoutMs ?? walkResult.agentConfig.timeoutMs,
