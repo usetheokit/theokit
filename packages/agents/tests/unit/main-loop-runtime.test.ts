@@ -401,6 +401,58 @@ describe('runReflectiveLoop (T2.1)', () => {
     expect(result.rounds).toBe(3)
   })
 
+  it('test_loop_no_progress_counter_resets_then_reaccumulates — A,A,B,A,A ⇒ no_progress at round 5 (T2.1)', async () => {
+    // A progress step (B) in the middle MUST reset the stuck counter to 0, so no_progress
+    // only fires after 2 fresh consecutive repeats — guards against a "reset to 1" mutation.
+    const a: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'read',
+      input: { p: 'a' },
+      output: 'ok',
+    }
+    const b: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'read',
+      input: { p: 'b' },
+      output: 'ok',
+    }
+    // mockFactory repeats the last round ([a]) past the script, so R6 = a too.
+    const { factory } = mockFactory([[a], [a], [b], [a], [a]])
+    const loop = resolveLoopStrategy('react', 8)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).toBe('no_progress')
+    // R1 a(stuck0) R2 a(1) R3 b(RESET→0) R4 a(0) R5 a(1) R6 a(2⇒terminate). A buggy "reset→1"
+    // would instead fire at round 5 — so this exact count pins the reset-to-ZERO semantics.
+    expect(result.rounds).toBe(6)
+  })
+
+  it('test_loop_signature_key_order_independent — same input, different key order = no progress (T2.1 robustness)', async () => {
+    // stableStringify canonicalizes input keys: {a,b} and {b,a} are the same call → no progress.
+    const k1: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'x',
+      input: { a: 1, b: 2 },
+      output: 'r',
+    }
+    const k2: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'x',
+      input: { b: 2, a: 1 },
+      output: 'r',
+    }
+    const { factory } = mockFactory([[k1], [k2], [k1]])
+    const loop = resolveLoopStrategy('react', 8)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).toBe('no_progress')
+    expect(result.rounds).toBe(3)
+  })
+
   it('test_loop_signature_is_tool_order_independent — re-ordered same calls = no progress (T2.1/EC-3)', async () => {
     const readA: StreamEvent = {
       type: 'tool_result',
