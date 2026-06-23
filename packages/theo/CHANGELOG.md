@@ -1,5 +1,12 @@
 # theo
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [fa1518b]
+  - @theokit/agents@0.5.0
+
 ## 0.8.0
 
 ### Minor Changes
