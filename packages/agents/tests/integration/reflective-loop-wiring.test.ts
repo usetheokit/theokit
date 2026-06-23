@@ -84,6 +84,24 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
     expect(h.prompts[1]).toContain('reflection')
   })
 
+  it('test_plan_act_reflect_real_adapter_shape_loops_twice — H1/B1: round emits tool_result AND a terminal done WITHOUT finishReason (the shape createSdkAgentStream actually produces); a tool-using turn must still continue', async () => {
+    // The REAL adapter (sdk-adapter.ts + event-translator.ts) ALWAYS appends a terminal
+    // `done` (no finishReason) after a turn — even one that used tools. The H1 finding was
+    // that every prior test scripted continuing rounds as [toolResult] with NO done, a shape
+    // the adapter never emits, masking B1. This test uses the production shape:
+    //   round1 = [tool_result, done(no finishReason)]  → tool-using turn ⇒ continue
+    //   round2 = [done(no finishReason)]               → pure answer       ⇒ stop
+    script([[toolResult, done], [done]])
+    await delegate(PlanActReflectAgent, 'task', { apiKey: 'test' })
+    expect(h.calls).toBe(2) // pre-B1-fix this collapsed to 1 (the bare done short-circuited to stop)
+    expect(h.prompts[1]).toContain('reflection')
+
+    // D4 parity: the AgentRunner on-ramp loops identically on the same production shape.
+    script([[toolResult, done], [done]])
+    await AgentRunner.builder(PlanActReflectAgent).build().run('task', { apiKey: 'test' })
+    expect(h.calls).toBe(2)
+  })
+
   it('test_plan_act_reflect_loops_twice_via_agentrunner — 2 rounds (D4 parity)', async () => {
     script([[toolResult], [done]])
     await AgentRunner.builder(PlanActReflectAgent).build().run('task', { apiKey: 'test' })
@@ -119,6 +137,27 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
     script([[toolResult]])
     await AgentRunner.builder(CeilingAgent).build().run('task', { apiKey: 'test' })
     expect(h.calls).toBe(4)
+  })
+
+  it('test_delegate_missing_apikey_throws_typed_error — L4: no apiKey ⇒ DelegationError, before any round', async () => {
+    const { DelegationError } = await import('../../src/index.js')
+    script([[toolResult], [done]])
+    await expect(delegate(PlanActReflectAgent, 'task', {})).rejects.toBeInstanceOf(DelegationError)
+    expect(h.calls).toBe(0) // failed fast at the boundary — never opened a stream
+  })
+
+  it('test_delegate_clamps_parent_budget — D4/L4: parentBudgetRemaining < budget ⇒ min wins, throws when crossed', async () => {
+    const { BudgetExceededError } = await import('../../src/index.js')
+    // each round costs 0.5 and continues; budget 10 but parentBudgetRemaining 0.4 ⇒ clamp to 0.4 ⇒ throws round 1
+    const costlyContinue: StreamEvent = { type: 'done', cost: 0.5, finishReason: 'tool-calls' }
+    script([[costlyContinue]])
+    await expect(
+      delegate(PlanActReflectAgent, 'task', {
+        apiKey: 'test',
+        budget: 10,
+        parentBudgetRemaining: 0.4,
+      }),
+    ).rejects.toBeInstanceOf(BudgetExceededError)
   })
 
   it('test_reflective_loop_cancellation_integration — abort stops re-entry (both on-ramps)', async () => {
