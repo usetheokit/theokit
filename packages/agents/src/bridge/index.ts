@@ -21,6 +21,8 @@ export {
   type CompiledAgentOptions,
 } from './agent-compiler.js'
 
+export { compileSkills } from './compile-skills.js'
+
 export { streamAgentResponse, type StreamEvent } from './agent-sse-handler.js'
 
 export {
