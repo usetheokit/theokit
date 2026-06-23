@@ -156,7 +156,7 @@ export async function delegate(
   const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
 
   // 4. Create stream + collect (EC-4: randomUUID for session isolation)
-  const streamFactory = createSdkAgentStream(walk, allTools, apiKey, walk.agentConfig.model)
+  const streamFactory = createSdkAgentStream(compiled, allTools, apiKey, walk.agentConfig.model)
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
   const acc: StreamAccumulator = { response: '', toolCalls: [], cost: 0, tokens: 0 }
