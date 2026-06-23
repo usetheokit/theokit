@@ -57,3 +57,21 @@ export const ladderReflectionStrategy: ReflectionStrategy = {
     return { continue: false }
   },
 }
+
+/**
+ * No-op reflection for `'react'` (multi-round WITHOUT reflection feedback).
+ *
+ * Returns `{ continue: true }` (no feedback) so the round-continuation decision
+ * is delegated entirely to `LoopStrategy.shouldContinue` (i.e. `react` loops
+ * while `finishReason === 'tool-calls'` under the ceiling). NOTE: the plan's
+ * pseudo-code (Files-to-edit) sketched `{ continue: false }`, which would make
+ * `react` single-shot — that contradicts the plan's own Deep Dives ("`react`
+ * still multi-rounds while finishReason==='tool-calls'"); `continue: true` is
+ * the behavior the resolved react LoopStrategy requires.
+ */
+export const noopReflectionStrategy: ReflectionStrategy = {
+  name: 'noop',
+  reflect(): ReflectionResult {
+    return { continue: true }
+  },
+}
