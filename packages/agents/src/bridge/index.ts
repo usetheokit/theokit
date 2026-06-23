@@ -22,6 +22,7 @@ export {
 } from './agent-compiler.js'
 
 export { compileSkills } from './compile-skills.js'
+export { compileContextWindow, type CompiledContextWindow } from './compile-context-window.js'
 
 export { streamAgentResponse, type StreamEvent } from './agent-sse-handler.js'
 
