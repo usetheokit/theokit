@@ -6,11 +6,15 @@
  *
  * EC-3: throws if toolbox instance is missing from the instances map.
  */
+import type { ContextSettings, SkillsSettings } from '@theokit/sdk'
+
 import { getAgentConfig } from '../decorators/agent.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import type { MemoryOptions } from '../decorators/memory.js'
-import type { SkillsOptions } from '../decorators/skills.js'
+import type { ProjectContextOptions } from '../decorators/project-context.js'
 
+import { compileContextWindow } from './compile-context-window.js'
+import { compileSkills } from './compile-skills.js'
 import type { ToolboxWalkResult, AgentWalkResult } from './walk-agent-metadata.js'
 
 /** Minimal interface matching defineTool() result shape. */
@@ -50,9 +54,7 @@ export function compileTools(
         )
       }
 
-      const name = tb.namespace
-        ? `${tb.namespace}.${tool.config.name}`
-        : tool.config.name
+      const name = tb.namespace ? `${tb.namespace}.${tool.config.name}` : tool.config.name
 
       tools.push({
         name,
@@ -79,7 +81,10 @@ export interface CompiledAgentOptions {
   tools: CompiledTool[]
   agents: Record<string, CompiledSubAgent>
   memory?: MemoryOptions
-  skills?: SkillsOptions
+  skills?: SkillsSettings
+  context?: ContextSettings
+  /** Raw @ProjectContext config; the adapter builds the (async) systemPrompt resolver from it. */
+  projectContext?: ProjectContextOptions
   mcpServers?: McpServersMap
   maxIterations?: number
   timeoutMs?: number
@@ -121,7 +126,11 @@ export function compileAgent(
     tools,
     agents,
     memory: walkResult.memory,
-    skills: walkResult.skills,
+    skills: walkResult.skills ? compileSkills(walkResult.skills) : undefined,
+    context: walkResult.contextWindow
+      ? compileContextWindow(walkResult.contextWindow).context
+      : undefined,
+    projectContext: walkResult.projectContext,
     mcpServers: walkResult.mcpServers,
     maxIterations: walkResult.mainLoop.maxIterations ?? walkResult.agentConfig.maxIterations,
     timeoutMs: walkResult.mainLoop.timeoutMs ?? walkResult.agentConfig.timeoutMs,

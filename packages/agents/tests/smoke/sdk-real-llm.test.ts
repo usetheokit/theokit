@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest'
 import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 import type { AgentWalkResult } from '../../src/bridge/walk-agent-metadata.js'
-import type { CompiledTool } from '../../src/bridge/agent-compiler.js'
+import { compileAgent, type CompiledTool } from '../../src/bridge/agent-compiler.js'
 
 // ---------------------------------------------------------------------------
 // Valid event types from the AgentStreamEvent discriminated union
@@ -80,7 +80,7 @@ describe('SDK adapter — SDK import error path', () => {
     // is structurally covered by the unit test below.
 
     const agentWalk = makeMinimalAgentWalk()
-    const factory = createSdkAgentStream(agentWalk, [], 'fake-key')
+    const factory = createSdkAgentStream(compileAgent(agentWalk), [], 'fake-key')
     expect(factory).toBeTypeOf('function')
 
     // Verify it returns an async iterable (structural check)
@@ -121,7 +121,7 @@ describe.skipIf(!apiKey)('SDK Real LLM Smoke', () => {
 
   it('should return at least one text_delta and one done event', async () => {
     const agentWalk = makeMinimalAgentWalk({ model })
-    const factory = createSdkAgentStream(agentWalk, [], apiKey, model)
+    const factory = createSdkAgentStream(compileAgent(agentWalk), [], apiKey, model)
     const stream = factory('Say hello in one word.', `smoke-${Date.now()}`)
     const events = await collectEvents(stream)
 
@@ -144,7 +144,7 @@ describe.skipIf(!apiKey)('SDK Real LLM Smoke', () => {
 
   it('should produce only events with valid type fields', async () => {
     const agentWalk = makeMinimalAgentWalk({ model })
-    const factory = createSdkAgentStream(agentWalk, [], apiKey, model)
+    const factory = createSdkAgentStream(compileAgent(agentWalk), [], apiKey, model)
     const stream = factory('Reply with just the word "ok".', `smoke-${Date.now()}`)
     const events = await collectEvents(stream)
 
@@ -178,7 +178,7 @@ describe.skipIf(!apiKey)('SDK Real LLM Smoke', () => {
       handler: () => new Date().toISOString(),
     }
 
-    const factory = createSdkAgentStream(agentWalk, [timeTool], apiKey, model)
+    const factory = createSdkAgentStream(compileAgent(agentWalk), [timeTool], apiKey, model)
     const stream = factory('What time is it right now?', `smoke-tool-${Date.now()}`)
     const events = await collectEvents(stream)
 
