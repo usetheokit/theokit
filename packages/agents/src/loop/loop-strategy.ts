@@ -15,8 +15,15 @@ import { z } from 'zod'
 
 import type { MainLoopMeta } from '../types.js'
 
-/** Why a single round ended. Derived in the bridge from the SDK stream events. */
-export type LoopFinishReason = 'tool-calls' | 'stop' | 'length' | 'error'
+/** Why a single round ended (or, for the V4-D terminals, why the whole loop ended). */
+export type LoopFinishReason =
+  | 'tool-calls'
+  | 'stop'
+  | 'length'
+  | 'error'
+  // V4-D outer-loop terminals — set by runReflectiveLoop, not derived from a single round:
+  | 'step_limit' // hit the maxIterations ceiling while the round still wanted to continue
+  | 'no_progress' // the agent repeated the same round signature for K consecutive rounds
 
 /** Value object describing one round's result. */
 export interface LoopOutcome {
