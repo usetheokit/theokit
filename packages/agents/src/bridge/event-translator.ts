@@ -32,7 +32,9 @@ function translateSystemEvent(msg: SdkMessage, runId: string): StreamEvent[] {
 
 function translateAssistantEvent(msg: SdkMessage): StreamEvent[] {
   const events: StreamEvent[] = []
-  const content = msg.content as unknown[] | undefined
+  // Real SDKAssistantMessage (messages.ts:58): content lives at msg.message.content.
+  const message = msg.message as { content?: unknown } | undefined
+  const content = message?.content
   if (!Array.isArray(content)) return events
 
   for (const block of content) {
@@ -53,13 +55,17 @@ function translateAssistantEvent(msg: SdkMessage): StreamEvent[] {
 }
 
 function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
+  // Real SDKToolUseMessage (messages.ts:89): call_id (not id), status running|completed|error,
+  // tool output in `result` (no separate `error` field).
   const status = msg.status as string
+  const callId = asString(msg.call_id, `tc-${Date.now()}`)
+  const toolName = asString(msg.name, 'unknown')
   if (status === 'completed') {
     return [
       {
         type: 'tool_result',
-        callId: asString(msg.id, `tc-${Date.now()}`),
-        toolName: asString(msg.name, 'unknown'),
+        callId,
+        toolName,
         output: asString(msg.result, ''),
         durationMs: 0,
         isError: false,
@@ -70,9 +76,9 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
     return [
       {
         type: 'tool_result',
-        callId: asString(msg.id, `tc-${Date.now()}`),
-        toolName: asString(msg.name, 'unknown'),
-        output: asString(msg.error, 'Tool failed'),
+        callId,
+        toolName,
+        output: asString(msg.result, 'Tool failed'),
         durationMs: 0,
         isError: true,
       },
@@ -82,8 +88,12 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
 }
 
 function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
+  // Real SDKStatusMessage (messages.ts:106): status is UPPERCASE cloud-run lifecycle;
+  // error text (when present) is in `msg.message`. FINISHED/CANCELLED are terminal-clean;
+  // ERROR/EXPIRED are terminal-failure (must surface — fail-loud, Unbreakable Rule 8);
+  // CREATING/RUNNING are in-progress.
   const s = msg.status as string
-  if (s === 'done' || s === 'completed') {
+  if (s === 'FINISHED' || s === 'CANCELLED') {
     return [
       {
         type: 'done',
@@ -94,12 +104,12 @@ function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
       },
     ]
   }
-  if (s === 'error') {
+  if (s === 'ERROR' || s === 'EXPIRED') {
     return [
       {
         type: 'error',
         code: 'AGENT_ERROR',
-        message: asString(msg.error, 'Agent error'),
+        message: asString(msg.message, 'Agent error'),
         retryable: false,
       },
     ]
@@ -120,7 +130,8 @@ export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
     case 'tool_call':
       return translateToolCallEvent(msg)
     case 'thinking':
-      return [{ type: 'thinking', content: asString(msg.content, '') }]
+      // Real SDKThinkingMessage (messages.ts:73): reasoning text is in msg.text.
+      return [{ type: 'thinking', content: asString(msg.text, '') }]
     case 'status':
       return translateStatusEvent(msg)
     default:
