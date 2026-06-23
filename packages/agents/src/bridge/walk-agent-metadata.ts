@@ -9,6 +9,8 @@ import 'reflect-metadata'
 
 import { Reflector } from '@theokit/http'
 
+import { getContextWindowConfig } from '../decorators/context-window.js'
+import type { ContextWindowOptions } from '../decorators/context-window.js'
 import type { GatewayOptions } from '../decorators/gateway.js'
 import { getGatewayConfig } from '../decorators/gateway.js'
 import { getMcpConfig } from '../decorators/mcp.js'
@@ -17,6 +19,8 @@ import { getMemoryConfig } from '../decorators/memory.js'
 import type { MemoryOptions } from '../decorators/memory.js'
 import { Trace, Audit } from '../decorators/observability.js'
 import { RequiresApproval, Budget } from '../decorators/policies.js'
+import type { ProjectContextOptions } from '../decorators/project-context.js'
+import { getProjectContextConfig } from '../decorators/project-context.js'
 import { getSkillsConfig } from '../decorators/skills.js'
 import type { SkillsOptions } from '../decorators/skills.js'
 import { getSubAgents } from '../decorators/sub-agents.js'
@@ -37,6 +41,9 @@ import type {
   BudgetOptions,
 } from '../types.js'
 
+import { compileContextWindow } from './compile-context-window.js'
+import { projectContextMetadataOnlyKnobs } from './compile-project-context.js'
+
 // http-decorators metadata keys for pipeline reuse
 const USE_GUARDS = Symbol.for('theokit:http-decorators:use-guards')
 const USE_INTERCEPTORS = Symbol.for('theokit:http-decorators:use-interceptors')
@@ -50,6 +57,8 @@ export const AgentWarningCode = {
   INTERCEPTOR_METADATA_ONLY: 'THEO_AGENT_INTERCEPTOR_METADATA_ONLY',
   FILTER_METADATA_ONLY: 'THEO_AGENT_FILTER_METADATA_ONLY',
   BUDGET_TOP_LEVEL_METADATA_ONLY: 'THEO_AGENT_BUDGET_TOP_LEVEL_METADATA_ONLY',
+  CONTEXT_STRATEGY_METADATA_ONLY: 'THEO_AGENT_CONTEXT_STRATEGY_METADATA_ONLY',
+  PROJECT_CONTEXT_KNOB_METADATA_ONLY: 'THEO_AGENT_PROJECT_CONTEXT_KNOB_METADATA_ONLY',
 } as const
 
 const reflectorInstance = new Reflector()
@@ -66,6 +75,8 @@ export interface AgentWalkResult {
   subAgentClasses: Function[]
   memory?: MemoryOptions
   skills?: SkillsOptions
+  contextWindow?: ContextWindowOptions
+  projectContext?: ProjectContextOptions
   mcpServers?: McpServersMap
 }
 
@@ -129,6 +140,41 @@ function walkToolbox(ToolboxClass: Function): ToolboxWalkResult {
     namespace: config.namespace ?? '',
     tools,
     guards: classGuards,
+  }
+}
+
+/**
+ * Emit one `metadata-only` warning per M8 decorator whose declared knobs have no
+ * native SDK mapping. Extracted from {@link walkAgentMetadata} to keep its
+ * cyclomatic complexity within budget (G6).
+ */
+function warnUnmappedDecoratorKnobs(
+  agentName: string,
+  contextWindow: ContextWindowOptions | undefined,
+  projectContext: ProjectContextOptions | undefined,
+): void {
+  if (contextWindow) {
+    const { metadataOnlyKnobs } = compileContextWindow(contextWindow)
+    if (metadataOnlyKnobs.length > 0) {
+      console.warn(
+        `[${AgentWarningCode.CONTEXT_STRATEGY_METADATA_ONLY}] Agent ${agentName}: ` +
+          `@ContextWindow knob(s) ${metadataOnlyKnobs.join(', ')} are metadata-only — ` +
+          `the SDK manages transcript compaction internally. Only maxTokens is forwarded ` +
+          `to Agent.create({ context }).`,
+      )
+    }
+  }
+
+  if (projectContext) {
+    const unmapped = projectContextMetadataOnlyKnobs(projectContext)
+    if (unmapped.length > 0) {
+      console.warn(
+        `[${AgentWarningCode.PROJECT_CONTEXT_KNOB_METADATA_ONLY}] Agent ${agentName}: ` +
+          `@ProjectContext knob(s) ${unmapped.join(', ')} are metadata-only — ` +
+          `the repo map is composed via buildRepoMap/buildEnvContext/readProjectInstructions; ` +
+          `only ignorePatterns is forwarded.`,
+      )
+    }
   }
 }
 
@@ -211,6 +257,12 @@ export function walkAgentMetadata(
   const skills = getSkillsConfig(AgentClass)
   const mcpServers = getMcpConfig(AgentClass)
 
+  // M8: @ContextWindow + @ProjectContext have native SDK mappings for only a
+  // subset of their knobs; warn once for the rest (honest enforcement, G10).
+  const contextWindow = getContextWindowConfig(AgentClass)
+  const projectContext = getProjectContextConfig(AgentClass)
+  warnUnmappedDecoratorKnobs(AgentClass.name, contextWindow, projectContext)
+
   const result: AgentWalkResult = {
     agentConfig,
     mainLoop,
@@ -223,6 +275,8 @@ export function walkAgentMetadata(
     subAgentClasses,
     memory,
     skills,
+    contextWindow,
+    projectContext,
     mcpServers,
   }
 
