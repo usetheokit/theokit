@@ -18,7 +18,7 @@ import {
   BudgetExceededError,
   type DelegationResult,
   DelegationError,
-} from '../bridge/agent-orchestrator.js'
+} from '../bridge/delegation-types.js'
 
 import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strategy.js'
 import type { ReflectionStrategy } from './reflection-strategy.js'
