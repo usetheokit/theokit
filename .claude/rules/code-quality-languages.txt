@@ -1,7 +1,8 @@
 # Languages enabled for /code-quality and post-edit-check.sh.
 #
-# Format: one language identifier per line. Lines starting with '#' are comments.
-# Identifiers match the file extensions handled by hooks/post-edit-check.sh.
+# Format (matches run_code_quality.py / _shared.py parser): pipe-delimited
+#   language | manifest | STATUS [| notes]
+# Lines starting with '#' are comments. STATUS is ENABLED or DISABLED.
 #
 # Default policy: empty file = no language-specific quality checks run. Each
 # project enables the languages it actually uses. Adding a language here is a
@@ -10,12 +11,8 @@
 #
 # Supported identifiers (uncomment the ones your project uses):
 #
-# go
-# python
-typescript
-# javascript
-# rust
-# java
-# kotlin
-# ruby
-# csharp
+# go         | go.mod         | ENABLED
+# python     | pyproject.toml | ENABLED
+typescript | package.json | ENABLED
+# rust       | Cargo.toml     | ENABLED
+# java       | pom.xml        | ENABLED
