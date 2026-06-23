@@ -46,7 +46,7 @@ silently no-op'ing. M8-4 strategic decision recorded in ADR 0031.
 
 - [x] Zero of the three decorators remains metadata-only — each compiles to a non-empty `AgentOptions` field reaching `Agent.create()`.
 - [x] Un-forwardable knobs warn (stable codes), never silent.
-- [x] Backward compatible — decorator option shapes unchanged; absent-decorator `Agent.create` adds no keys.
+- [x] Backward compatible — decorator option shapes unchanged; absent-decorator `Agent.create` adds no M8 keys (behaviorally equivalent to today; a bare agent with no `systemPrompt` now omits the `systemPrompt` key instead of passing `undefined` — a harmless key omission, asserted by `test_adapter_absent_no_systemprompt_omits_key`).
 - [x] CHANGELOG updated (`[Unreleased]` Added + Changed, M8).
 - [x] ADR 0031 present.
 - [x] Dependency direction main→libs preserved (ADR 0030); agents→sdk / agents→sdk-tools only.
@@ -54,6 +54,12 @@ silently no-op'ing. M8-4 strategic decision recorded in ADR 0031.
 ## Deviations from plan
 
 - **`@ProjectContext` cwd fallback (Q3/EC-3):** the plan said fall back to `process.cwd()` when `SystemPromptContext.cwd` is undefined. Implemented instead as **return the base prompt** (no repo map) — `process.cwd()` is a Node API and G8 keeps `packages/agents/src` free of direct `process` access; a resolver without a known cwd should not guess. Strictly more correct + guardrail-compliant. Test updated to `test_project_context_resolver_no_cwd_returns_base`.
+
+## Post-review fixes (review 2026-06-23, READY_TO_MERGE)
+
+- **M-1 (dual compile path, 2 reviewers):** refactored so `agent-compiler.ts` is the single compile site; `createSdkAgentStream` now consumes `CompiledAgentOptions` instead of re-deriving from the walk (commit `04d8b40`). Orchestrator + smoke test updated to the new signature.
+- **H-1/H-2 (cwd no-op concern):** disproven against the SDK contract — `resolveCwd` defaults cwd to `process.cwd()` and `SystemPromptContext.cwd = workspaceCwd`, so the resolver + skills discovery receive a real cwd at runtime. No code change needed.
+- **M-3 / L-1:** added `test_adapter_absent_no_systemprompt_omits_key`; reconciled the plan (v1.2) to the shipped G8 no-`process.cwd()` decision.
 
 ## Follow-ups (out of M8 scope)
 
