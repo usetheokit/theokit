@@ -225,10 +225,25 @@ describe('runReflectiveLoop (T2.1)', () => {
 
   // Concurrency tests (structural invariants — plan § Concurrency tests)
   it('test_loop_maxiterations_ceiling_invariant — never unbounded', async () => {
-    const { factory, prompts } = mockFactory([[toolResult]]) // never emits done
+    // Distinct tool input per round (progress) so the CEILING — not no_progress — is what
+    // stops it (an identical stream would now trip no_progress at round 3, EC-4).
+    const prompts: string[] = []
+    let n = 0
+    const factory = (message: string, _s: string): AsyncIterable<StreamEvent> => {
+      prompts.push(message)
+      n += 1
+      const ev: StreamEvent = { type: 'tool_result', toolName: 'read', input: { n }, output: 'ok' }
+      return (async function* () {
+        yield ev
+      })()
+    }
     const loop = resolveLoopStrategy('react', 4)
-    await runReflectiveLoop(factory, 'msg', 's', { loop, reflection: ladderReflectionStrategy })
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
     expect(prompts).toHaveLength(4) // exactly maxIterations
+    expect(result.finishReason).toBe('step_limit') // ceiling-bound stop is observable (V4-D)
   })
 
   it('test_loop_propagates_abort_signal — aborts stop re-entry (cancellation propagation)', async () => {
@@ -307,5 +322,109 @@ describe('runReflectiveLoop (T2.1)', () => {
       signal: ctrl.signal,
     })
     expect(result.response).toBe('a') // 'b' arrived after abort ⇒ loop broke before accumulating it
+  })
+
+  // ── V4-D terminals: step_limit + no_progress ──────────────────────────────
+
+  it('test_loop_step_limit_finish_reason — ceiling-bound stop ⇒ finishReason step_limit (T1.2)', async () => {
+    const { factory, prompts } = mockFactory([[toolResult]]) // never stops; maxIterations=2 → ceiling
+    const loop = resolveLoopStrategy('react', 2)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).toBe('step_limit')
+    expect(prompts).toHaveLength(2)
+  })
+
+  it('test_loop_natural_stop_is_not_step_limit — round-1 pure done ⇒ finishReason stop (T1.2)', async () => {
+    const { factory } = mockFactory([[doneStop]])
+    const loop = resolveLoopStrategy('react', 8)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).toBe('stop')
+  })
+
+  it('test_loop_final_round_prompt_carries_summary_hint — graceful degradation on the final round (T1.2)', async () => {
+    const { factory, prompts } = mockFactory([[toolResult]])
+    const loop = resolveLoopStrategy('react', 2)
+    await runReflectiveLoop(factory, 'task', 's', { loop, reflection: ladderReflectionStrategy })
+    // round 2 is the final allowed round (round === maxIterations) → carries the summary hint
+    expect(prompts[1].toLowerCase()).toMatch(/final round|summariz/)
+    expect(prompts[0].toLowerCase()).not.toMatch(/final round/)
+  })
+
+  it('test_loop_terminates_on_no_progress — identical tool-calls rounds ⇒ no_progress at round 3, K=2 (T2.1)', async () => {
+    const { factory } = mockFactory([[toolResult]]) // SAME signature every round, finishReason tool-calls
+    const loop = resolveLoopStrategy('react', 8) // ceiling high so no_progress (round 3) wins
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).toBe('no_progress')
+    expect(result.rounds).toBe(3) // round1 (stuck0) → round2 (stuck1) → round3 (stuck2 ⇒ terminate)
+  })
+
+  it('test_loop_empty_round_terminates_as_stop_not_no_progress — empty is stop, not no_progress (T2.1/EC-1)', async () => {
+    const { factory, prompts } = mockFactory([[]]) // empty round
+    const loop = resolveLoopStrategy('react', 8)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).toBe('stop')
+    expect(prompts).toHaveLength(1)
+  })
+
+  it('test_loop_different_tool_input_is_progress — distinct inputs reset the stuck counter (T2.1)', async () => {
+    const readA: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'read',
+      input: { p: 'a' },
+      output: 'ok',
+    }
+    const readB: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'read',
+      input: { p: 'b' },
+      output: 'ok',
+    }
+    const { factory } = mockFactory([[readA], [readB], [doneStop]])
+    const loop = resolveLoopStrategy('react', 8)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).toBe('stop') // ran to natural stop — different inputs = progress
+    expect(result.rounds).toBe(3)
+  })
+
+  it('test_loop_signature_is_tool_order_independent — re-ordered same calls = no progress (T2.1/EC-3)', async () => {
+    const readA: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'read',
+      input: { p: 'a' },
+      output: 'ok',
+    }
+    const writeB: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'write',
+      input: { p: 'b' },
+      output: 'ok',
+    }
+    const { factory } = mockFactory([
+      [readA, writeB],
+      [writeB, readA], // same calls, different order → equal signature
+      [readA, writeB],
+    ])
+    const loop = resolveLoopStrategy('react', 8)
+    const result = await runReflectiveLoop(factory, 'msg', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).toBe('no_progress')
+    expect(result.rounds).toBe(3)
   })
 })

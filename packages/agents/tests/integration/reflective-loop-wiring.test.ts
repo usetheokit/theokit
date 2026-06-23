@@ -130,13 +130,61 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
   })
 
   it('test_reflective_loop_no_unbounded_rounds_integration — ceiling at 4 (no hang)', async () => {
-    script([[toolResult]]) // never emits done → would loop forever without the ceiling
+    // Distinct tool input per round (progress) so the CEILING — not no_progress — bounds it
+    // (an identical stream now trips no_progress at round 3, EC-4).
+    const tr = (n: number): StreamEvent => ({
+      type: 'tool_result',
+      toolName: 'x',
+      input: { n },
+      output: 'r',
+    })
+    script([[tr(1)], [tr(2)], [tr(3)], [tr(4)], [tr(5)]]) // never emits done → ceiling stops it at 4
     await delegate(CeilingAgent, 'task', { apiKey: 'test' })
     expect(h.calls).toBe(4)
 
-    script([[toolResult]])
+    script([[tr(1)], [tr(2)], [tr(3)], [tr(4)], [tr(5)]])
     await AgentRunner.builder(CeilingAgent).build().run('task', { apiKey: 'test' })
     expect(h.calls).toBe(4)
+  })
+
+  it('test_no_progress_via_delegate_and_runner — V4-D: identical rounds ⇒ no_progress at round 3, both on-ramps', async () => {
+    const same: StreamEvent = {
+      type: 'tool_result',
+      toolName: 'read',
+      input: { p: 'x' },
+      output: 'r',
+    }
+    script([[same]]) // SAME signature every round; CeilingAgent maxIterations=4 ⇒ no_progress (3) < ceiling (4)
+    const viaDelegate = await delegate(CeilingAgent, 'task', { apiKey: 'test' })
+    expect(viaDelegate.finishReason).toBe('no_progress')
+    expect(h.calls).toBe(3)
+
+    script([[same]])
+    const viaRunner = await AgentRunner.builder(CeilingAgent)
+      .build()
+      .run('task', { apiKey: 'test' })
+    expect(viaRunner.finishReason).toBe('no_progress') // on-ramp parity
+    expect(h.calls).toBe(3)
+  })
+
+  it('test_step_limit_via_delegate_and_runner — V4-D: progressing-but-unbounded ⇒ step_limit at ceiling, both on-ramps', async () => {
+    const tr = (n: number): StreamEvent => ({
+      type: 'tool_result',
+      toolName: 'x',
+      input: { n },
+      output: 'r',
+    })
+    script([[tr(1)], [tr(2)], [tr(3)], [tr(4)], [tr(5)]]) // distinct → no no_progress → ceiling
+    const viaDelegate = await delegate(CeilingAgent, 'task', { apiKey: 'test' })
+    expect(viaDelegate.finishReason).toBe('step_limit')
+    expect(viaDelegate.rounds).toBe(4)
+
+    script([[tr(1)], [tr(2)], [tr(3)], [tr(4)], [tr(5)]])
+    const viaRunner = await AgentRunner.builder(CeilingAgent)
+      .build()
+      .run('task', { apiKey: 'test' })
+    expect(viaRunner.finishReason).toBe('step_limit') // on-ramp parity
+    expect(viaRunner.rounds).toBe(4)
   })
 
   it('test_delegate_missing_apikey_throws_typed_error — L4: no apiKey ⇒ DelegationError, before any round', async () => {
