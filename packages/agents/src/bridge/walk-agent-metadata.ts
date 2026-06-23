@@ -9,6 +9,8 @@ import 'reflect-metadata'
 
 import { Reflector } from '@theokit/http'
 
+import { getContextWindowConfig } from '../decorators/context-window.js'
+import type { ContextWindowOptions } from '../decorators/context-window.js'
 import type { GatewayOptions } from '../decorators/gateway.js'
 import { getGatewayConfig } from '../decorators/gateway.js'
 import { getMcpConfig } from '../decorators/mcp.js'
@@ -37,6 +39,8 @@ import type {
   BudgetOptions,
 } from '../types.js'
 
+import { compileContextWindow } from './compile-context-window.js'
+
 // http-decorators metadata keys for pipeline reuse
 const USE_GUARDS = Symbol.for('theokit:http-decorators:use-guards')
 const USE_INTERCEPTORS = Symbol.for('theokit:http-decorators:use-interceptors')
@@ -50,6 +54,8 @@ export const AgentWarningCode = {
   INTERCEPTOR_METADATA_ONLY: 'THEO_AGENT_INTERCEPTOR_METADATA_ONLY',
   FILTER_METADATA_ONLY: 'THEO_AGENT_FILTER_METADATA_ONLY',
   BUDGET_TOP_LEVEL_METADATA_ONLY: 'THEO_AGENT_BUDGET_TOP_LEVEL_METADATA_ONLY',
+  CONTEXT_STRATEGY_METADATA_ONLY: 'THEO_AGENT_CONTEXT_STRATEGY_METADATA_ONLY',
+  PROJECT_CONTEXT_KNOB_METADATA_ONLY: 'THEO_AGENT_PROJECT_CONTEXT_KNOB_METADATA_ONLY',
 } as const
 
 const reflectorInstance = new Reflector()
@@ -66,6 +72,7 @@ export interface AgentWalkResult {
   subAgentClasses: Function[]
   memory?: MemoryOptions
   skills?: SkillsOptions
+  contextWindow?: ContextWindowOptions
   mcpServers?: McpServersMap
 }
 
@@ -211,6 +218,21 @@ export function walkAgentMetadata(
   const skills = getSkillsConfig(AgentClass)
   const mcpServers = getMcpConfig(AgentClass)
 
+  // @ContextWindow (M8-1): only maxTokens maps to a native SDK field. Warn once
+  // for the strategy knobs the SDK manages internally (honest enforcement, G10).
+  const contextWindow = getContextWindowConfig(AgentClass)
+  if (contextWindow) {
+    const { metadataOnlyKnobs } = compileContextWindow(contextWindow)
+    if (metadataOnlyKnobs.length > 0) {
+      console.warn(
+        `[${AgentWarningCode.CONTEXT_STRATEGY_METADATA_ONLY}] Agent ${AgentClass.name}: ` +
+          `@ContextWindow knob(s) ${metadataOnlyKnobs.join(', ')} are metadata-only — ` +
+          `the SDK manages transcript compaction internally. Only maxTokens is forwarded ` +
+          `to Agent.create({ context }).`,
+      )
+    }
+  }
+
   const result: AgentWalkResult = {
     agentConfig,
     mainLoop,
@@ -223,6 +245,7 @@ export function walkAgentMetadata(
     subAgentClasses,
     memory,
     skills,
+    contextWindow,
     mcpServers,
   }
 

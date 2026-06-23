@@ -6,12 +6,13 @@
  *
  * EC-3: throws if toolbox instance is missing from the instances map.
  */
-import type { SkillsSettings } from '@theokit/sdk'
+import type { ContextSettings, SkillsSettings } from '@theokit/sdk'
 
 import { getAgentConfig } from '../decorators/agent.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import type { MemoryOptions } from '../decorators/memory.js'
 
+import { compileContextWindow } from './compile-context-window.js'
 import { compileSkills } from './compile-skills.js'
 import type { ToolboxWalkResult, AgentWalkResult } from './walk-agent-metadata.js'
 
@@ -80,6 +81,7 @@ export interface CompiledAgentOptions {
   agents: Record<string, CompiledSubAgent>
   memory?: MemoryOptions
   skills?: SkillsSettings
+  context?: ContextSettings
   mcpServers?: McpServersMap
   maxIterations?: number
   timeoutMs?: number
@@ -122,6 +124,9 @@ export function compileAgent(
     agents,
     memory: walkResult.memory,
     skills: walkResult.skills ? compileSkills(walkResult.skills) : undefined,
+    context: walkResult.contextWindow
+      ? compileContextWindow(walkResult.contextWindow).context
+      : undefined,
     mcpServers: walkResult.mcpServers,
     maxIterations: walkResult.mainLoop.maxIterations ?? walkResult.agentConfig.maxIterations,
     timeoutMs: walkResult.mainLoop.timeoutMs ?? walkResult.agentConfig.timeoutMs,
