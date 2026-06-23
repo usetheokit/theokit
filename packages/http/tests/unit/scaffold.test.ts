@@ -11,8 +11,15 @@ describe('T1.1 — Package scaffold', () => {
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+/)
     expect(pkg.type).toBe('module')
     expect(pkg.peerDependencies).toHaveProperty('reflect-metadata')
-    expect(pkg.peerDependencies).toHaveProperty('theokit')
     expect(pkg.peerDependencies).toHaveProperty('zod')
+    // ADR 0030: library sub-packages must NEVER depend on the principal `theokit`
+    // (the dependency was spurious — http has no executable import of theokit, only
+    // JSDoc — and it created a circular graph + spurious major cascade). The old test
+    // asserted `theokit` as a peerDep; this assertion is the regression guard that
+    // mirrors scripts/check-package-direction.mjs.
+    expect(pkg.peerDependencies).not.toHaveProperty('theokit')
+    expect(pkg.dependencies ?? {}).not.toHaveProperty('theokit')
+    expect(pkg.devDependencies ?? {}).not.toHaveProperty('theokit')
   })
 
   it('test_scaffold_tsconfig_has_decorator_flags', () => {
