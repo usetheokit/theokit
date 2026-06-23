@@ -36,6 +36,8 @@ export interface DelegateOptions {
   apiKey?: string
   /** Session ID override (default: crypto.randomUUID for isolation). */
   sessionId?: string
+  /** Cancellation — aborts stop the reflective loop from re-entering. */
+  signal?: AbortSignal
 }
 
 /** Safely coerce unknown to string. */
@@ -117,6 +119,7 @@ interface RunContext {
   readonly sessionId: string
   readonly budget: number
   readonly agentName: string
+  readonly signal?: AbortSignal
 }
 
 /** Multi-round reflective path (`react`/`plan-act-reflect`) — T2.2. */
@@ -126,16 +129,14 @@ async function runReflective(
 ): Promise<DelegationResult> {
   const reflection =
     loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy
-  // Wiring triad — runtime metric: observable proof the strategy runtime fired (G10).
-  console.debug('[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]', {
-    strategy: loopStrategy.name,
-    maxIterations: loopStrategy.maxIterations,
-  })
+  // The runtime metric (THEO_AGENT_MAINLOOP_RUNTIME_APPLIED) fires inside
+  // runReflectiveLoop — the shared driver — so both on-ramps emit it (G10).
   const result = await runReflectiveLoop(ctx.streamFactory, ctx.message, ctx.sessionId, {
     loop: loopStrategy,
     reflection,
     budget: ctx.budget,
     agentName: ctx.agentName,
+    signal: ctx.signal,
   })
   if (Number.isFinite(ctx.budget) && result.cost > ctx.budget) {
     throw new BudgetExceededError(ctx.agentName, result.cost, ctx.budget)
@@ -202,6 +203,7 @@ export async function delegate(
     sessionId,
     budget,
     agentName: SubAgentClass.name,
+    signal: opts.signal,
   }
   const loopStrategy = resolveLoopStrategy(walk.mainLoop.strategy, walk.mainLoop.maxIterations)
   return loopStrategy.name === 'simple-chat' ? runSingleShot(ctx) : runReflective(ctx, loopStrategy)

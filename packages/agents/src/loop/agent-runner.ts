@@ -31,6 +31,8 @@ export interface AgentRunnerRunOptions {
   readonly sessionId?: string
   /** Cumulative USD budget across rounds. */
   readonly budget?: number
+  /** Cancellation — aborts stop the reflective loop from re-entering. */
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -73,6 +75,7 @@ export class AgentRunner {
       reflection: this.reflectionStrategy,
       budget: opts.budget,
       agentName: this.agentName,
+      signal: opts.signal,
     })
   }
 }
