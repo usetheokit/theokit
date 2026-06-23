@@ -13,6 +13,8 @@ export interface DelegationResult {
   toolCalls: { name: string; input: unknown; output: string }[]
   cost: number
   tokens: number
+  /** Rounds the reflective loop ran (set by `runReflectiveLoop`; absent for the single-shot path). */
+  rounds?: number
 }
 
 export class BudgetExceededError extends Error {

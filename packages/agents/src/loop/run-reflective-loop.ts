@@ -142,7 +142,7 @@ export async function runReflectiveLoop(
     signal,
     agentName = loop.name,
   } = config
-  const acc: DelegationResult = { response: '', toolCalls: [], cost: 0, tokens: 0 }
+  const acc: DelegationResult = { response: '', toolCalls: [], cost: 0, tokens: 0, rounds: 0 }
   let round = 1
   let feedback: string | undefined
 
@@ -167,7 +167,13 @@ export async function runReflectiveLoop(
       responseText: r.responseText,
     }
     const reflectionResult = reflection.reflect(outcome)
-    if (!(reflectionResult.continue && loop.shouldContinue(outcome))) return acc
+    if (!(reflectionResult.continue && loop.shouldContinue(outcome))) {
+      acc.rounds = round
+      // Wiring triad — runtime metric (G10): observable proof the loop ran, with round count.
+      // Fires for BOTH on-ramps (delegate + AgentRunner) since both share this driver.
+      console.debug('[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]', { strategy: loop.name, rounds: round })
+      return acc
+    }
 
     feedback = reflectionResult.feedback
     round += 1
