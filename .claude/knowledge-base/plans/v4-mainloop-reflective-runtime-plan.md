@@ -165,6 +165,33 @@ Phase 1 is a hard blocker for Phase 2 (the loop consumes the contracts). Phase 2
 
 ---
 
+## Dependencies
+
+Este plano **NÃO adiciona nenhuma dependência nova** — toda a runtime (loop + strategies + builder) é construída sobre peers JÁ declarados em `packages/agents/package.json`. A direção `@theokit/agents → @theokit/sdk` (ADR 0030) é preservada.
+
+### Existing — use as-is
+
+| Package | Version | Ecosystem | Why |
+|---|---|---|---|
+| `@theokit/sdk` | `>=2.5.0` (peer) | npm | A ÚNICA runtime de LLM — `Agent.create()` + `Run.stream()` por round (ADR 0031: o bridge compila, o SDK executa). Já é peer de `packages/agents`. |
+| `zod` | `^4.0.0` (peer) | npm | Schemas das configs `LoopStrategy`/`ReflectionStrategy` (SSoT por `type-safety.md`). Já é peer. |
+| `@theokit/sdk-tools` | `>=0.2.0` (peerOptional) | npm | Usado por `@ProjectContext` (M8) já existente; o loop não adiciona uso novo. Já é peer opcional. |
+| `reflect-metadata` | `>=0.2.0` (peer) | npm | Metadata dos decorators (Legacy/TC39) — já é peer; o `@MainLoop` já o usa. |
+
+### New — to be introduced
+
+| Package | Version | Ecosystem | Rule 9 rationale | Why this one |
+|---|---|---|---|---|
+| (none) | — | — | Nenhuma lib nova avaliada porque nenhuma é necessária — o loop multi-round + strategies são lógica de domínio fina sobre o `Run.stream()` do SDK; reinventar/importar um runtime de loop (ex: a própria AI-SDK `stopWhen`) violaria a direção agents→sdk e o ADR 0031 (sem segundo runtime). | — |
+
+### Removed
+
+| Package | Last version | Why removed |
+|---|---|---|
+| (none) | — | — |
+
+---
+
 ## Phase 1: Contracts (LoopStrategy + ReflectionStrategy + Zod schemas)
 
 **Objective:** Introduce the Zod-validated `LoopStrategy`/`ReflectionStrategy` contracts + `LoopOutcome` value object + the strategy resolver, with zero runtime behavior change yet (pure, table-testable).
