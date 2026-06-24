@@ -1,5 +1,12 @@
 # services-python-basic-fixture
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [65266c1]
+  - theokit@0.9.0
+
 ## 0.0.6
 
 ### Patch Changes
