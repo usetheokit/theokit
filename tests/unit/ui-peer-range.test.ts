@@ -47,6 +47,14 @@ describe('@theokit/ui peer range (V3-2)', () => {
     expect(rangeAccepts(range!, '0.18.0')).toBe(true)
   })
 
+  it('test_ui_peer_accepts_0_19', () => {
+    // The actual @theokit/ui V3-2 release shipped as 0.19.0 (its [Unreleased] also
+    // carried Added entries → minor bump). The peer MUST cover the published line.
+    expect(rangeAccepts(range!, '0.19.0')).toBe(true)
+    // Still excludes the next unvalidated 0.x line — explicit OR, not an open range.
+    expect(rangeAccepts(range!, '0.20.0')).toBe(false)
+  })
+
   it('test_ui_peer_still_accepts_0_14', () => {
     // No regression for existing 0.14.x consumers.
     expect(rangeAccepts(range!, '0.14.4')).toBe(true)
