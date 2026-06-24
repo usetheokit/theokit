@@ -1,5 +1,11 @@
 # theo
 
+## 0.9.1
+
+### Patch Changes
+
+- V3-2 follow-up — extend the `@theokit/ui` peer to also accept `^0.19.0`. The V3-2 valibot security bump shipped as `@theokit/ui@0.19.0` (its `[Unreleased]` carried Added entries → minor), but the peer published in `theokit@0.9.0` only covered `^0.14.0 || ^0.18.0`, which excludes `0.19.0` (`^0.18.0` := `>=0.18.0 <0.19.0`) — re-opening the ERESOLVE the slice set out to fix. Peer is now `^0.14.0 || ^0.18.0 || ^0.19.0`; the loop (`theokit + @theokit/ui@0.19.0`) resolves without `--force`.
+
 ## 0.9.0
 
 ### Minor Changes

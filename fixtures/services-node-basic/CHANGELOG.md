@@ -1,5 +1,12 @@
 # services-node-basic-fixture
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies
+  - theokit@0.9.1
+
 ## 0.0.7
 
 ### Patch Changes
