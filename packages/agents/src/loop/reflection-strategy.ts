@@ -22,12 +22,26 @@ export interface ReflectionResult {
   readonly continue: boolean
 }
 
+/**
+ * V4-K: a per-run mutable scratch bag threaded to every `reflect()` call within one
+ * `runReflectiveLoopStream` run, so a STATEFUL strategy can accumulate cumulative state
+ * (counters, one-shot flags) across rounds. The framework owns the lifecycle (creates
+ * one per run, passes the SAME ref each round) but writes NOTHING into it — the strategy
+ * owns the contents. Generic by design: the framework cannot know app semantics (e.g.
+ * what an "edit" is). A consumer narrows it locally (`ctx as MyState`).
+ */
+export type ReflectionContext = Record<string, unknown>
+
 /** Pluggable between-round reflection. Pure — never performs I/O. */
 export interface ReflectionStrategy {
   /** Strategy identifier (e.g. `'ladder'`). */
   readonly name: string
-  /** Inspect the round outcome; return feedback + continue hint. */
-  reflect(outcome: LoopOutcome): ReflectionResult
+  /**
+   * Inspect the round outcome; return feedback + continue hint. `ctx` (V4-K) is the
+   * per-run mutable scratch — optional for backward compatibility (shipped strategies
+   * ignore it; stateful custom strategies accumulate in it across rounds).
+   */
+  reflect(outcome: LoopOutcome, ctx?: ReflectionContext): ReflectionResult
 }
 
 /** Serializable config for a ReflectionStrategy. SSoT per type-safety.md (ADR D3). */
