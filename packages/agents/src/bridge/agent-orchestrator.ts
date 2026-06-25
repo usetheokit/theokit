@@ -86,7 +86,9 @@ export async function delegate(
   const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
 
   // 3. Build the stream factory (the model call stays in the SDK — ADR 0031) + session
-  const streamFactory = createSdkAgentStream(compiled, allTools, apiKey, walk.agentConfig.model)
+  const streamFactory = createSdkAgentStream(compiled, allTools, apiKey, {
+    model: walk.agentConfig.model,
+  })
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
   // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
