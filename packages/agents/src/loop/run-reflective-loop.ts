@@ -116,7 +116,19 @@ function terminalReason(
   return roundReason
 }
 
-/** Build the round's prompt: final-round summary hint (V4-D) + the reflection block when feedback exists (L2). */
+/**
+ * Default round-2+ continuation when the reflection produced no feedback (V4-M): the
+ * persisted session (getOrCreate, sdk-adapter) already holds the prior turns, so a short
+ * nudge is enough — re-sending the original task would duplicate it in the session.
+ */
+const CONTINUE_PROMPT =
+  'Continue from the prior turns above; finish the task and give a final answer.'
+
+/**
+ * Build the round's prompt. V4-M: rounds carry conversation via the persisted SDK session,
+ * so round 1 sends the original `message`; rounds 2+ send the reflection `feedback` (or a
+ * default continuation) WITHOUT re-sending `message`. Final-round summary hint preserved (V4-D).
+ */
 function buildPrompt(
   round: number,
   maxIterations: number,
@@ -124,7 +136,10 @@ function buildPrompt(
   feedback: string | undefined,
 ): string {
   const hint = round === maxIterations ? `${STEP_LIMIT_HINT}\n\n` : ''
-  const body = round === 1 || !feedback ? message : `${message}\n\n[reflection] ${feedback}`
+  // Round 1 sends the original task; rounds 2+ rely on the persisted session (V4-M) and send
+  // ONLY the reflection block (tag preserved) or a default continuation — never re-sending `message`.
+  const continuation = feedback ? `[reflection] ${feedback}` : CONTINUE_PROMPT
+  const body = round === 1 ? message : continuation
   return hint + body
 }
 
