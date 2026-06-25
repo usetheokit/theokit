@@ -1,3 +1,4 @@
+import type { SystemPromptResolver } from '@theokit/sdk'
 import type { z } from 'zod'
 
 /** Configuration stored by @Agent() decorator. */
@@ -14,8 +15,12 @@ export interface AgentOptions {
   maxIterations?: number
   /** Timeout in milliseconds for the entire agent run. */
   timeoutMs?: number
-  /** System prompt for the agent. */
-  systemPrompt?: string
+  /**
+   * System prompt for the agent. Either a static string OR a
+   * {@link SystemPromptResolver} computed per request (V4-L.1, Axis-B) — the SDK
+   * invokes the resolver each send with the run's `SystemPromptContext` (cwd, etc.).
+   */
+  systemPrompt?: string | SystemPromptResolver
 }
 
 /** Configuration stored by @MainLoop() decorator. */

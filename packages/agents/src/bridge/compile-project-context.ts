@@ -34,18 +34,22 @@ export function projectContextMetadataOnlyKnobs(options: ProjectContextOptions):
 
 /**
  * Build a `SystemPromptResolver` that prepends env + repo map + project
- * instructions to `base`. When the SDK provides no `cwd`, the resolver returns
- * `base` unchanged (no filesystem guess — keeps `packages/agents/src` free of
- * direct Node `process` access per G8; the repo map needs a real cwd).
+ * instructions to `base`. `base` may itself be a {@link SystemPromptResolver}
+ * (V4-L.1, ADR D2): it is resolved once with the same `promptCtx` and composed
+ * (resolve-then-prepend). A failing base resolver propagates (fail-loud). When the
+ * SDK provides no `cwd`, the resolver returns the resolved base unchanged (no
+ * filesystem guess — keeps `packages/agents/src` free of direct Node `process`
+ * access per G8; the repo map needs a real cwd).
  */
 export function compileProjectContext(
   options: ProjectContextOptions,
-  base?: string,
+  base?: string | SystemPromptResolver,
 ): SystemPromptResolver {
   return async (promptCtx) => {
+    const resolvedBase = typeof base === 'function' ? await base(promptCtx) : base
     const cwd = promptCtx.cwd
     if (!cwd) {
-      return base ?? ''
+      return resolvedBase ?? ''
     }
 
     const { buildEnvContext, buildRepoMap } = await import('@theokit/sdk-tools')
@@ -63,6 +67,6 @@ export function compileProjectContext(
       instructions = ''
     }
 
-    return [env, repoMap, instructions, base].filter(Boolean).join('\n\n')
+    return [env, repoMap, instructions, resolvedBase].filter(Boolean).join('\n\n')
   }
 }

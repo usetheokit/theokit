@@ -6,7 +6,7 @@
  *
  * EC-3: throws if toolbox instance is missing from the instances map.
  */
-import type { ContextSettings, SkillsSettings } from '@theokit/sdk'
+import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
 
 import { getAgentConfig } from '../decorators/agent.js'
 import type { McpServersMap } from '../decorators/mcp.js'
@@ -71,13 +71,21 @@ export function compileTools(
 /** Compiled sub-agent definition matching SDK AgentDefinition shape. */
 export interface CompiledSubAgent {
   model?: string
-  systemPrompt?: string
+  /**
+   * V4-L.1: typed as the union for consistency with `AgentOptions.systemPrompt`,
+   * so `compileSubAgents` carries whatever the sub-agent declared. Sub-agent
+   * resolver EXECUTION is out of scope this slice (ADR D3): `compiled.agents` is
+   * not spread into `Agent.create` by `createSdkAgentStream`; a resolver here is
+   * carried, not invoked. Top-level agent resolvers are the supported path.
+   */
+  systemPrompt?: string | SystemPromptResolver
 }
 
 /** Compiled agent options ready for SDK Agent.create(). */
 export interface CompiledAgentOptions {
   model?: string
-  systemPrompt?: string
+  /** Static prompt OR a per-request {@link SystemPromptResolver} (V4-L.1, Axis-B). */
+  systemPrompt?: string | SystemPromptResolver
   tools: CompiledTool[]
   agents: Record<string, CompiledSubAgent>
   memory?: MemoryOptions
