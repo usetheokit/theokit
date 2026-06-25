@@ -49,6 +49,23 @@ export interface AgentRunnerRunOptions {
    * request mode/permission). Absent ⇒ the agent's compiled tools (unchanged).
    */
   readonly tools?: readonly CompiledTool[]
+  /**
+   * V4-L.2 (Axis-A SWAP): per-run model override. Merge-over-compiled —
+   * `opts.model ?? compiled.model ?? default`. Absent ⇒ the compiled model.
+   */
+  readonly model?: string
+  /**
+   * V4-L.2 (Axis-A SWAP): per-run working directory, forwarded into
+   * `Agent.create({ local: { cwd } })` so the SDK populates `SystemPromptContext.cwd`
+   * (read by a `SystemPromptResolver` / `@ProjectContext`). Absent ⇒ no `local.cwd`.
+   */
+  readonly cwd?: string
+  /**
+   * V4-L.2 (Axis-A SWAP): per-run loop-ceiling override. When provided, the loop
+   * strategy is re-resolved with this ceiling for this call only (zod-validated —
+   * `< 1` throws, never a silent unbounded loop). Absent ⇒ the build-time ceiling.
+   */
+  readonly maxIterations?: number
 }
 
 /**
@@ -118,15 +135,17 @@ export class AgentRunner {
   ): AsyncGenerator<StreamEvent, DelegationResult> {
     // V4-J: per-run tool override replaces compiled.tools for this call only.
     const tools = opts.tools ? [...opts.tools] : this.compiled.tools
-    const streamFactory = createSdkAgentStream(
-      this.compiled,
-      tools,
-      opts.apiKey,
-      this.compiled.model,
-    )
+    // V4-L.2 (Axis-A SWAP): merge-over-compiled per-run overrides.
+    const model = opts.model ?? this.compiled.model
+    // Re-resolve the ceiling per call (zod fail-loud on `< 1`); preserve the strategy name.
+    const loop =
+      opts.maxIterations != null
+        ? resolveLoopStrategy(this.loopStrategy.name, opts.maxIterations)
+        : this.loopStrategy
+    const streamFactory = createSdkAgentStream(this.compiled, tools, opts.apiKey, model, opts.cwd)
     const sessionId = opts.sessionId ?? `runner-${crypto.randomUUID()}`
     return runReflectiveLoopStream(streamFactory, message, sessionId, {
-      loop: this.loopStrategy,
+      loop,
       reflection: this.reflectionStrategy,
       budget: opts.budget,
       agentName: this.agentName,

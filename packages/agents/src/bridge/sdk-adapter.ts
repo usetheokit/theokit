@@ -18,8 +18,8 @@ interface M8CreateOptions {
   skills?: SkillsSettings
   context?: ContextSettings
   systemPrompt?: string | SystemPromptResolver
-  /** Settings source so the SDK can discover SKILL.md files (EC-1). */
-  local?: { settingSources: string[] }
+  /** SDK local options: settings source for SKILL.md discovery (EC-1) + per-run cwd (V4-L.2). */
+  local?: { settingSources?: string[]; cwd?: string }
 }
 
 /**
@@ -67,6 +67,8 @@ export function createSdkAgentStream(
   compiledTools: CompiledTool[],
   apiKey: string,
   envModel?: string,
+  /** V4-L.2: per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
+  cwd?: string,
 ) {
   const model = envModel ?? compiled.model ?? 'openai/gpt-4o-mini'
 
@@ -116,6 +118,8 @@ export function createSdkAgentStream(
       try {
         // Project the compiled M8 decorator fields into native Agent.create args.
         const { options: m8, applied } = assembleM8CreateOptions(compiled)
+        // V4-L.2: merge the per-run cwd into local (preserving any settingSources).
+        if (cwd !== undefined) m8.local = { ...m8.local, cwd }
         if (applied.length > 0) {
           // Wiring triad — runtime metric: observable proof the decorators fired.
           console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
