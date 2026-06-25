@@ -6,7 +6,15 @@
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
-import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
+import type {
+  AgentDefinition,
+  BudgetTracker,
+  ContextSettings,
+  PluginsSettings,
+  ProviderRoutingSettings,
+  SkillsSettings,
+  SystemPromptResolver,
+} from '@theokit/sdk'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
@@ -57,6 +65,26 @@ function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
 }
 
 /**
+ * Per-request overrides forwarded into `Agent.create` (V4-L.2 + V4-L.3). Bundled into
+ * one object (rather than positional params) so the per-request surface can grow without
+ * a parameter explosion. Each field is Axis-A SWAP — a value the app holds at call time.
+ */
+export interface RuntimeOverrides {
+  /** Overrides the model for this call (`?? compiled.model ?? default`). */
+  model?: string
+  /** Per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
+  cwd?: string
+  /** Per-run plugins (e.g. permission gate selected by request mode). */
+  plugins?: PluginsSettings
+  /** Per-run provider routing. */
+  providers?: ProviderRoutingSettings
+  /** Per-run sub-agent definitions (opts-only; `compiled.agents` stays deferred — ADR D3). */
+  agents?: Record<string, AgentDefinition>
+  /** Per-run SDK budget tracker (inner tool-loop cap; distinct from the loop's USD `budget`). */
+  budgetTracker?: BudgetTracker
+}
+
+/**
  * Creates an agent stream factory using @theokit/sdk as the runtime.
  *
  * Returns a function that, given a message + sessionId, yields TheoKit
@@ -66,11 +94,9 @@ export function createSdkAgentStream(
   compiled: CompiledAgentOptions,
   compiledTools: CompiledTool[],
   apiKey: string,
-  envModel?: string,
-  /** V4-L.2: per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
-  cwd?: string,
+  overrides: RuntimeOverrides = {},
 ) {
-  const model = envModel ?? compiled.model ?? 'openai/gpt-4o-mini'
+  const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
 
   return (message: string, _sessionId: string): AsyncIterable<StreamEvent> => ({
     async *[Symbol.asyncIterator]() {
@@ -119,7 +145,13 @@ export function createSdkAgentStream(
         // Project the compiled M8 decorator fields into native Agent.create args.
         const { options: m8, applied } = assembleM8CreateOptions(compiled)
         // V4-L.2: merge the per-run cwd into local (preserving any settingSources).
-        if (cwd !== undefined) m8.local = { ...m8.local, cwd }
+        if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
+        // V4-L.3: forward the remaining per-request Agent.create surface (absent ⇒ no key).
+        const extra: Record<string, unknown> = {}
+        if (overrides.plugins !== undefined) extra.plugins = overrides.plugins
+        if (overrides.providers !== undefined) extra.providers = overrides.providers
+        if (overrides.agents !== undefined) extra.agents = overrides.agents
+        if (overrides.budgetTracker !== undefined) extra.budgetTracker = overrides.budgetTracker
         if (applied.length > 0) {
           // Wiring triad — runtime metric: observable proof the decorators fired.
           console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
@@ -129,12 +161,13 @@ export function createSdkAgentStream(
           })
         }
 
-        // Create SDK agent (M8 fields spread; absent decorators add no keys)
+        // Create SDK agent (M8 fields + per-request extra spread; absent ⇒ no key)
         const agent = await Agent.create({
           apiKey,
           model: { id: model },
           tools: sdkTools,
           ...m8,
+          ...extra,
         })
 
         // Send message + stream response
