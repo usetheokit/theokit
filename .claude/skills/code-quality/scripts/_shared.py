@@ -38,6 +38,7 @@ DEFAULT_SKIP_DIRS: frozenset[str] = frozenset(
         "build",
         "out",
         "referencia",  # read-only zone per cycle-discover.md
+        "fixtures",  # test scaffolding — intentionally contains synthetic imports (e.g. Vite virtual modules); audit the PRODUCT, not fixtures
         ".mypy_cache",
         ".pytest_cache",
         ".ruff_cache",

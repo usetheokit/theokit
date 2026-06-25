@@ -1,0 +1,86 @@
+/**
+ * LoopStrategy — the per-round terminal-decision contract that gives runtime to
+ * `@MainLoop({ strategy })`.
+ *
+ * V4-A proved `@MainLoop`'s `strategy` field was metadata-only (declared +
+ * compiled, never executed). This module is the foundation Phase 2's
+ * `runReflectiveLoop` branches on. Modeled on Mastra's `agentic-loop`/`stopWhen`
+ * (inverted) + `maxSteps` ceiling — NOT Spring's per-call Advisor (plan ADR D1).
+ * Config is Zod-validated so an invalid `maxIterations` fails fast at resolve
+ * time, never as a silent infinite loop at runtime (plan ADR D3).
+ *
+ * referencia: knowledge-base/references/mastra agentic-loop/index.ts (stopWhen + maxSteps).
+ */
+import { z } from 'zod'
+
+import type { MainLoopMeta } from '../types.js'
+
+/** Why a single round ended (or, for the V4-D terminals, why the whole loop ended). */
+export type LoopFinishReason =
+  | 'tool-calls'
+  | 'stop'
+  | 'length'
+  | 'error'
+  // V4-D outer-loop terminals — set by runReflectiveLoop, not derived from a single round:
+  | 'step_limit' // hit the maxIterations ceiling while the round still wanted to continue
+  | 'no_progress' // the agent repeated the same round signature for K consecutive rounds
+
+/** Value object describing one round's result. */
+export interface LoopOutcome {
+  /** Why the round ended (the continuation signal). */
+  readonly finishReason: LoopFinishReason
+  /** 1-indexed round number that just completed. */
+  readonly round: number
+  /** Tool calls executed during the round. */
+  readonly toolCalls: readonly { name: string; input: unknown; output: string }[]
+  /** Accumulated assistant text for the round. */
+  readonly responseText: string
+}
+
+/** The terminal-decision contract. `shouldContinue` is the inverted `stopWhen`. */
+export interface LoopStrategy {
+  /** The originating `@MainLoop` strategy name. */
+  readonly name: MainLoopMeta['strategy']
+  /** Hard ceiling on rounds — guarantees termination. */
+  readonly maxIterations: number
+  /** True ⇒ re-enter for another round; false ⇒ terminate. Never true forever. */
+  shouldContinue(outcome: LoopOutcome): boolean
+}
+
+/** Default round ceiling when `@MainLoop` declares no `maxIterations` (EC-3: finite, never Infinity). */
+export const DEFAULT_MAX_ITERATIONS = 8
+
+/** Serializable config for a LoopStrategy. SSoT per type-safety.md (ADR D3). */
+export const loopStrategyConfigSchema = z.object({
+  name: z.enum(['simple-chat', 'plan-act-reflect', 'react']),
+  maxIterations: z.number().int().min(1),
+})
+
+export type LoopStrategyConfig = z.infer<typeof loopStrategyConfigSchema>
+
+/**
+ * Map a `@MainLoop` strategy + ceiling to a concrete {@link LoopStrategy}.
+ *
+ * - `simple-chat` ⇒ exactly one round (`shouldContinue` always false).
+ * - `plan-act-reflect` / `react` ⇒ continue while the round ended on `tool-calls`
+ *   AND the ceiling has not been reached (`round < maxIterations`).
+ *
+ * Throws (Zod) when `maxIterations < 1` — fail fast, never a silent infinite loop.
+ */
+export function resolveLoopStrategy(
+  strategy: MainLoopMeta['strategy'],
+  maxIterations: number = DEFAULT_MAX_ITERATIONS,
+): LoopStrategy {
+  const cfg = loopStrategyConfigSchema.parse({ name: strategy, maxIterations })
+
+  if (cfg.name === 'simple-chat') {
+    return { name: cfg.name, maxIterations: cfg.maxIterations, shouldContinue: () => false }
+  }
+
+  return {
+    name: cfg.name,
+    maxIterations: cfg.maxIterations,
+    shouldContinue: (outcome: LoopOutcome): boolean =>
+      outcome.finishReason === 'tool-calls' && outcome.round < cfg.maxIterations,
+  }
+}
