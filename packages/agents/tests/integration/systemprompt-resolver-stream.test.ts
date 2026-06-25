@@ -21,8 +21,12 @@ interface CapturedCreate {
 const h = vi.hoisted(() => ({ captured: null as CapturedCreate | null }))
 
 vi.mock('@theokit/sdk', () => ({
+  InMemoryConversationStorage: class {
+    getMessages = async () => []
+    appendMessage = async () => {}
+  },
   Agent: {
-    create: vi.fn(async (opts: CapturedCreate) => {
+    getOrCreate: vi.fn(async (_id: string, opts: CapturedCreate) => {
       h.captured = opts
       return {
         // empty stream → createSdkAgentStream emits its fallback terminal and finishes
