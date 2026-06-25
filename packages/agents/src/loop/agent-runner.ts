@@ -11,7 +11,11 @@
  *
  * referencia: knowledge-base/references/spring-ai DefaultChatClientBuilder.java (build() returns standalone).
  */
-import { type CompiledAgentOptions, compileAgent } from '../bridge/agent-compiler.js'
+import {
+  type CompiledAgentOptions,
+  type CompiledTool,
+  compileAgent,
+} from '../bridge/agent-compiler.js'
 import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
@@ -39,6 +43,12 @@ export interface AgentRunnerRunOptions {
   readonly budget?: number
   /** Cancellation — aborts stop the reflective loop from re-entering. */
   readonly signal?: AbortSignal
+  /**
+   * V4-J: per-run tool override. When provided, REPLACES the build-time
+   * `compiled.tools` for this call only (e.g. a consumer that selects tools by
+   * request mode/permission). Absent ⇒ the agent's compiled tools (unchanged).
+   */
+  readonly tools?: readonly CompiledTool[]
 }
 
 /**
@@ -106,9 +116,11 @@ export class AgentRunner {
     message: string,
     opts: AgentRunnerRunOptions,
   ): AsyncGenerator<StreamEvent, DelegationResult> {
+    // V4-J: per-run tool override replaces compiled.tools for this call only.
+    const tools = opts.tools ? [...opts.tools] : this.compiled.tools
     const streamFactory = createSdkAgentStream(
       this.compiled,
-      this.compiled.tools,
+      tools,
       opts.apiKey,
       this.compiled.model,
     )

@@ -31,6 +31,7 @@ export {
 export {
   ladderReflectionStrategy,
   noopReflectionStrategy,
+  type ReflectionContext,
   type ReflectionResult,
   type ReflectionStrategy,
   type ReflectionStrategyConfig,
