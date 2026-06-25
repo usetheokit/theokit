@@ -6,8 +6,9 @@
  * All merge-over-compiled; absent ⇒ build-time defaults (parallel to V4-J `tools`).
  *
  * Mocks @theokit/sdk: Agent.create captures its options (model/cwd/tools) and returns
- * a stream that yields a UNIQUE tool_result per round (so the no_progress detector never
- * fires — isolating the maxIterations ceiling) then a `done`.
+ * a stream of SDK-native messages per round — a UNIQUE assistant text (so the round
+ * signature differs and no_progress never masks the maxIterations ceiling), a completed
+ * tool_call (⇒ tool_result ⇒ finishReason 'tool-calls'), and a FINISHED status (⇒ done).
  */
 import 'reflect-metadata'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
