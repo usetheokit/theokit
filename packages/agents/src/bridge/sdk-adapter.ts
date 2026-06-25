@@ -10,6 +10,7 @@ import type {
   AgentDefinition,
   BudgetTracker,
   ContextSettings,
+  ConversationStorageAdapter,
   PluginsSettings,
   ProviderRoutingSettings,
   SkillsSettings,
@@ -82,6 +83,25 @@ export interface RuntimeOverrides {
   agents?: Record<string, AgentDefinition>
   /** Per-run SDK budget tracker (inner tool-loop cap; distinct from the loop's USD `budget`). */
   budgetTracker?: BudgetTracker
+  /**
+   * V4-M: conversation store shared across the loop's rounds so history persists
+   * (round N+1 sees rounds 1..N). Default `InMemoryConversationStorage` (per-run,
+   * no disk). Pass a `FileSystemConversationStorage`/custom adapter for durable history.
+   */
+  conversationStorage?: ConversationStorageAdapter
+}
+
+/**
+ * Project the V4-L.3 per-request fields into the `Agent.create` extra surface (absent ⇒ no
+ * key). Extracted from the stream generator to keep its cyclomatic complexity within budget (G6).
+ */
+function buildExtraCreateOptions(overrides: RuntimeOverrides): Record<string, unknown> {
+  const extra: Record<string, unknown> = {}
+  if (overrides.plugins !== undefined) extra.plugins = overrides.plugins
+  if (overrides.providers !== undefined) extra.providers = overrides.providers
+  if (overrides.agents !== undefined) extra.agents = overrides.agents
+  if (overrides.budgetTracker !== undefined) extra.budgetTracker = overrides.budgetTracker
+  return extra
 }
 
 /**
@@ -97,15 +117,22 @@ export function createSdkAgentStream(
   overrides: RuntimeOverrides = {},
 ) {
   const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
+  // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
+  // so history persists across the per-round agent create/dispose. Defaults lazily to the
+  // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
+  let storage: ConversationStorageAdapter | undefined = overrides.conversationStorage
 
-  return (message: string, _sessionId: string): AsyncIterable<StreamEvent> => ({
+  return (message: string, sessionId: string): AsyncIterable<StreamEvent> => ({
     async *[Symbol.asyncIterator]() {
       const runId = `run-${Date.now()}`
       const t0 = Date.now()
 
       // Dynamic import — @theokit/sdk is optional peer dep
       let Agent: {
-        create: (opts: Record<string, unknown>) => Promise<{
+        getOrCreate: (
+          id: string,
+          opts: Record<string, unknown>,
+        ) => Promise<{
           send: (msg: string) => Promise<{ stream: () => AsyncGenerator<SdkMessage> }>
           dispose: () => Promise<void>
         }>
@@ -116,11 +143,13 @@ export function createSdkAgentStream(
         inputSchema: unknown
         handler: (input: unknown) => string | Promise<string>
       }) => unknown
+      let InMemoryConversationStorage: new () => ConversationStorageAdapter
 
       try {
         const sdk = await import('@theokit/sdk')
         Agent = sdk.Agent as typeof Agent
         defineTool = sdk.defineTool as typeof defineTool
+        InMemoryConversationStorage = sdk.InMemoryConversationStorage
       } catch {
         yield {
           type: 'error',
@@ -147,11 +176,9 @@ export function createSdkAgentStream(
         // V4-L.2: merge the per-run cwd into local (preserving any settingSources).
         if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
         // V4-L.3: forward the remaining per-request Agent.create surface (absent ⇒ no key).
-        const extra: Record<string, unknown> = {}
-        if (overrides.plugins !== undefined) extra.plugins = overrides.plugins
-        if (overrides.providers !== undefined) extra.providers = overrides.providers
-        if (overrides.agents !== undefined) extra.agents = overrides.agents
-        if (overrides.budgetTracker !== undefined) extra.budgetTracker = overrides.budgetTracker
+        const extra = buildExtraCreateOptions(overrides)
+        // V4-M: the shared store is the cross-round memory (survives per-round dispose).
+        storage ??= new InMemoryConversationStorage()
         if (applied.length > 0) {
           // Wiring triad — runtime metric: observable proof the decorators fired.
           console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
@@ -161,13 +188,15 @@ export function createSdkAgentStream(
           })
         }
 
-        // Create SDK agent (M8 fields + per-request extra spread; absent ⇒ no key)
-        const agent = await Agent.create({
+        // V4-M: getOrCreate(sessionId) resumes the shared session so this round sees prior
+        // rounds (M8 fields + per-request extra spread; absent ⇒ no key).
+        const agent = await Agent.getOrCreate(sessionId, {
           apiKey,
           model: { id: model },
           tools: sdkTools,
           ...m8,
           ...extra,
+          conversationStorage: storage,
         })
 
         // Send message + stream response
