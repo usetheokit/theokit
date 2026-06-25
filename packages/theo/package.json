@@ -151,7 +151,7 @@
     }
   },
   "devDependencies": {
-    "@theokit/sdk": "^2.5.0",
+    "@theokit/sdk": "^2.9.0",
     "@types/busboy": "^1.5.4",
     "@types/pg": "^8.20.0",
     "@types/picomatch": "^4.0.3",
