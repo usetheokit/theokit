@@ -1,5 +1,11 @@
 # services-both-fixture
 
+## 0.0.11
+
+### Patch Changes
+
+- theokit@0.9.4
+
 ## 0.0.10
 
 ### Patch Changes
