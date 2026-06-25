@@ -121,7 +121,7 @@ describe.skipIf(!apiKey)('SDK Real LLM Smoke', () => {
 
   it('should return at least one text_delta and one done event', async () => {
     const agentWalk = makeMinimalAgentWalk({ model })
-    const factory = createSdkAgentStream(compileAgent(agentWalk), [], apiKey, model)
+    const factory = createSdkAgentStream(compileAgent(agentWalk), [], apiKey, { model })
     const stream = factory('Say hello in one word.', `smoke-${Date.now()}`)
     const events = await collectEvents(stream)
 
@@ -144,7 +144,7 @@ describe.skipIf(!apiKey)('SDK Real LLM Smoke', () => {
 
   it('should produce only events with valid type fields', async () => {
     const agentWalk = makeMinimalAgentWalk({ model })
-    const factory = createSdkAgentStream(compileAgent(agentWalk), [], apiKey, model)
+    const factory = createSdkAgentStream(compileAgent(agentWalk), [], apiKey, { model })
     const stream = factory('Reply with just the word "ok".', `smoke-${Date.now()}`)
     const events = await collectEvents(stream)
 
@@ -178,7 +178,7 @@ describe.skipIf(!apiKey)('SDK Real LLM Smoke', () => {
       handler: () => new Date().toISOString(),
     }
 
-    const factory = createSdkAgentStream(compileAgent(agentWalk), [timeTool], apiKey, model)
+    const factory = createSdkAgentStream(compileAgent(agentWalk), [timeTool], apiKey, { model })
     const stream = factory('What time is it right now?', `smoke-tool-${Date.now()}`)
     const events = await collectEvents(stream)
 

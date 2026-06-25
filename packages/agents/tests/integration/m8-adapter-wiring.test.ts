@@ -30,7 +30,7 @@ import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
 
 async function drain(AgentClass: Function) {
   const compiled = compileAgent(walkAgentMetadata(AgentClass))
-  const factory = createSdkAgentStream(compiled, [], 'test-key', 'openai/gpt-4o-mini')
+  const factory = createSdkAgentStream(compiled, [], 'test-key', { model: 'openai/gpt-4o-mini' })
   for await (const _ of factory('hello', 'session-1')) {
     // drain — triggers Agent.create()
   }

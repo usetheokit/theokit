@@ -11,6 +11,13 @@
  *
  * referencia: knowledge-base/references/spring-ai DefaultChatClientBuilder.java (build() returns standalone).
  */
+import type {
+  AgentDefinition,
+  BudgetTracker,
+  PluginsSettings,
+  ProviderRoutingSettings,
+} from '@theokit/sdk'
+
 import {
   type CompiledAgentOptions,
   type CompiledTool,
@@ -66,6 +73,17 @@ export interface AgentRunnerRunOptions {
    * `< 1` throws, never a silent unbounded loop). Absent ⇒ the build-time ceiling.
    */
   readonly maxIterations?: number
+  /** V4-L.3 (Axis-A SWAP): per-run plugins (e.g. permission gate by request mode). */
+  readonly plugins?: PluginsSettings
+  /** V4-L.3 (Axis-A SWAP): per-run provider routing. */
+  readonly providers?: ProviderRoutingSettings
+  /** V4-L.3 (Axis-A SWAP): per-run sub-agent definitions (opts-only; @SubAgents stays deferred). */
+  readonly agents?: Record<string, AgentDefinition>
+  /**
+   * V4-L.3 (Axis-A SWAP): per-run SDK budget tracker — caps the INNER SDK tool-loop per
+   * send. Distinct from {@link AgentRunnerRunOptions.budget} (the OUTER reflective-loop USD ceiling).
+   */
+  readonly budgetTracker?: BudgetTracker
 }
 
 /**
@@ -135,14 +153,21 @@ export class AgentRunner {
   ): AsyncGenerator<StreamEvent, DelegationResult> {
     // V4-J: per-run tool override replaces compiled.tools for this call only.
     const tools = opts.tools ? [...opts.tools] : this.compiled.tools
-    // V4-L.2 (Axis-A SWAP): merge-over-compiled per-run overrides.
-    const model = opts.model ?? this.compiled.model
     // Re-resolve the ceiling per call (zod fail-loud on `< 1`); preserve the strategy name.
     const loop =
       opts.maxIterations != null
         ? resolveLoopStrategy(this.loopStrategy.name, opts.maxIterations)
         : this.loopStrategy
-    const streamFactory = createSdkAgentStream(this.compiled, tools, opts.apiKey, model, opts.cwd)
+    // V4-L.2 + V4-L.3 (Axis-A SWAP): the per-request overrides forwarded to Agent.create.
+    // `model` resolves against compiled.model in the adapter (single resolution site).
+    const streamFactory = createSdkAgentStream(this.compiled, tools, opts.apiKey, {
+      model: opts.model,
+      cwd: opts.cwd,
+      plugins: opts.plugins,
+      providers: opts.providers,
+      agents: opts.agents,
+      budgetTracker: opts.budgetTracker,
+    })
     const sessionId = opts.sessionId ?? `runner-${crypto.randomUUID()}`
     return runReflectiveLoopStream(streamFactory, message, sessionId, {
       loop,

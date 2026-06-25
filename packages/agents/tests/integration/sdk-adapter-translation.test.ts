@@ -51,7 +51,7 @@ class TrAgent {
 async function drain(messages: SdkMsg[]) {
   h.messages = messages
   const compiled = compileAgent(walkAgentMetadata(TrAgent))
-  const factory = createSdkAgentStream(compiled, [], 'test-key', 'openai/gpt-4o-mini')
+  const factory = createSdkAgentStream(compiled, [], 'test-key', { model: 'openai/gpt-4o-mini' })
   const out: { type: string; [k: string]: unknown }[] = []
   for await (const ev of factory('hi', 's1')) out.push(ev)
   return out
