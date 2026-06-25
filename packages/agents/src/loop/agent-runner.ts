@@ -5,12 +5,14 @@
  * compiles the agent and resolves the SAME `{ compiled, loopStrategy }` that
  * `delegate()` resolves for the decorator path (two on-ramps, one runtime).
  * `build()` is the compile boundary (no I/O, no IoC — standalone, mirrors
- * Spring's `ChatClient.builder(...).build()`); `run()` does the I/O via
- * `runReflectiveLoop` (the SAME loop `delegate()` uses — DRY, ADR 0031).
+ * Spring's `ChatClient.builder(...).build()`); `stream()`/`run()` do the I/O via
+ * `runReflectiveLoopStream` (the SAME loop `delegate()` drains — DRY, ADR 0031).
+ * V4-D-stream: `stream()` yields events live (SSE-first); `run()` drains it to a result.
  *
  * referencia: knowledge-base/references/spring-ai DefaultChatClientBuilder.java (build() returns standalone).
  */
 import { type CompiledAgentOptions, compileAgent } from '../bridge/agent-compiler.js'
+import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
 import { walkAgentMetadata } from '../bridge/walk-agent-metadata.js'
@@ -21,7 +23,7 @@ import {
   noopReflectionStrategy,
   type ReflectionStrategy,
 } from './reflection-strategy.js'
-import { runReflectiveLoop } from './run-reflective-loop.js'
+import { runReflectiveLoopStream } from './run-reflective-loop.js'
 
 /** Options for {@link AgentRunner.run}. */
 export interface AgentRunnerRunOptions {
@@ -61,8 +63,17 @@ export class AgentRunner {
     return new AgentRunnerBuilder(AgentClass)
   }
 
-  /** Run the agent to a terminal result via the shared reflective loop. */
-  run(message: string, opts: AgentRunnerRunOptions): Promise<DelegationResult> {
+  /**
+   * V4-D-stream: stream the agent's events LIVE across the reflective loop, returning
+   * the aggregated {@link DelegationResult} as the generator's return value. This is the
+   * on-ramp for streaming-first apps (SSE) — `runReflectiveLoopStream` yields every
+   * round's events before the loop terminates. `streamEnabled` is honored: when the
+   * builder set `.stream(false)`, callers should use {@link run} instead.
+   */
+  stream(
+    message: string,
+    opts: AgentRunnerRunOptions,
+  ): AsyncGenerator<StreamEvent, DelegationResult> {
     const streamFactory = createSdkAgentStream(
       this.compiled,
       this.compiled.tools,
@@ -70,13 +81,21 @@ export class AgentRunner {
       this.compiled.model,
     )
     const sessionId = opts.sessionId ?? `runner-${crypto.randomUUID()}`
-    return runReflectiveLoop(streamFactory, message, sessionId, {
+    return runReflectiveLoopStream(streamFactory, message, sessionId, {
       loop: this.loopStrategy,
       reflection: this.reflectionStrategy,
       budget: opts.budget,
       agentName: this.agentName,
       signal: opts.signal,
     })
+  }
+
+  /** Run the agent to a terminal result via the shared reflective loop (collect mode). */
+  async run(message: string, opts: AgentRunnerRunOptions): Promise<DelegationResult> {
+    const gen = this.stream(message, opts)
+    let res = await gen.next()
+    while (!res.done) res = await gen.next()
+    return res.value
   }
 }
 

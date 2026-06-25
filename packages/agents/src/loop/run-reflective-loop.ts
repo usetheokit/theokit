@@ -14,6 +14,7 @@
  *
  * referencia: knowledge-base/references/mastra agent.ts (re-enter the loop with feedback).
  */
+import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import {
   BudgetExceededError,
   type DelegationResult,
@@ -24,10 +25,7 @@ import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strateg
 import type { ReflectionStrategy } from './reflection-strategy.js'
 
 /** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
-export type RoundStreamFactory = (
-  message: string,
-  sessionId: string,
-) => AsyncIterable<{ type: string; [key: string]: unknown }>
+export type RoundStreamFactory = (message: string, sessionId: string) => AsyncIterable<StreamEvent>
 
 /** Strategies + options for {@link runReflectiveLoop}. */
 export interface RunReflectiveLoopConfig {
@@ -135,15 +133,15 @@ function buildPrompt(
  * e.g. the SDK dynamic import rejecting) into a typed `DelegationError` (M2). Typed errors
  * (`BudgetExceededError`/`DelegationError`) propagate unchanged.
  */
-async function consumeRoundOrThrow(
+async function* consumeRoundOrThrow(
   factory: RoundStreamFactory,
   prompt: string,
   sessionId: string,
   signal: AbortSignal | undefined,
   agentName: string,
-): Promise<RoundResult> {
+): AsyncGenerator<StreamEvent, RoundResult> {
   try {
-    return await consumeOneRound(factory, prompt, sessionId, signal)
+    return yield* consumeOneRound(factory, prompt, sessionId, signal)
   } catch (err) {
     if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
     throw new DelegationError(agentName, err)
@@ -203,13 +201,18 @@ function deriveFinishReason(signals: {
   return 'stop'
 }
 
-/** Consume exactly one SDK stream turn and derive its {@link LoopFinishReason}. */
-async function consumeOneRound(
+/**
+ * Consume exactly one SDK stream turn and derive its {@link LoopFinishReason}.
+ * V4-D-stream: an async generator — it `yield`s each event to the consumer LIVE
+ * (so SSE-first apps see tokens/tool-calls incrementally) AND returns the
+ * aggregated {@link RoundResult} as the generator's return value.
+ */
+async function* consumeOneRound(
   factory: RoundStreamFactory,
   prompt: string,
   sessionId: string,
   signal: AbortSignal | undefined,
-): Promise<RoundResult> {
+): AsyncGenerator<StreamEvent, RoundResult> {
   const r: RoundResult = {
     responseText: '',
     toolCalls: [],
@@ -222,6 +225,7 @@ async function consumeOneRound(
 
   for await (const event of factory(prompt, sessionId)) {
     if (signal?.aborted) break // cancellation: stop advancing the iterator
+    yield event // V4-D-stream: surface the event to the consumer before accumulating
     if (event.type === 'text_delta' && typeof event.content === 'string') {
       r.responseText += event.content
     } else if (event.type === 'tool_result') {
@@ -254,12 +258,12 @@ async function consumeOneRound(
  * resolves to `stop`. Throws `DelegationError` on a mid-round error event
  * (fail-fast, typed) and `BudgetExceededError` when cumulative cost crosses `budget`.
  */
-export async function runReflectiveLoop(
+export async function* runReflectiveLoopStream(
   factory: RoundStreamFactory,
   message: string,
   sessionId: string,
   config: RunReflectiveLoopConfig,
-): Promise<DelegationResult> {
+): AsyncGenerator<StreamEvent, DelegationResult> {
   const {
     loop,
     reflection,
@@ -275,7 +279,7 @@ export async function runReflectiveLoop(
 
   while (!signal?.aborted) {
     const prompt = buildPrompt(round, loop.maxIterations, message, feedback)
-    const r = await consumeRoundOrThrow(factory, prompt, sessionId, signal, agentName)
+    const r = yield* consumeRoundOrThrow(factory, prompt, sessionId, signal, agentName)
 
     acc.response += r.responseText
     acc.toolCalls.push(...r.toolCalls)
@@ -321,4 +325,21 @@ export async function runReflectiveLoop(
   // (round is 1-indexed and points at the next round, so `round - 1` ran).
   acc.rounds = round - 1
   return acc
+}
+
+/**
+ * Collect-mode wrapper (backward-compatible): drains {@link runReflectiveLoopStream}
+ * and returns ONLY the aggregated {@link DelegationResult}. `delegate()` and
+ * `AgentRunner.run()` use this; streaming-first consumers use the generator directly.
+ */
+export async function runReflectiveLoop(
+  factory: RoundStreamFactory,
+  message: string,
+  sessionId: string,
+  config: RunReflectiveLoopConfig,
+): Promise<DelegationResult> {
+  const gen = runReflectiveLoopStream(factory, message, sessionId, config)
+  let res = await gen.next()
+  while (!res.done) res = await gen.next()
+  return res.value
 }
