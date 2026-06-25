@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "type": "module",
   "sideEffects": false,
   "license": "Apache-2.0",
@@ -127,6 +127,7 @@
     "vite": "^6.4.3"
   },
   "peerDependencies": {
+    "@theokit/sdk": ">=2.9.0",
     "@theokit/ui": "^0.14.0 || ^0.18.0 || ^0.19.0",
     "db0": "^0.3.0",
     "react": "^19.0.0",
@@ -137,6 +138,9 @@
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "@theokit/sdk": {
+      "optional": true
+    },
     "@theokit/ui": {
       "optional": true
     },
@@ -151,7 +155,7 @@
     }
   },
   "devDependencies": {
-    "@theokit/sdk": "^2.5.0",
+    "@theokit/sdk": "^2.9.0",
     "@types/busboy": "^1.5.4",
     "@types/pg": "^8.20.0",
     "@types/picomatch": "^4.0.3",
