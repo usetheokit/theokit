@@ -22,15 +22,35 @@ export type { CompressibleMessage }
 /** Token budget mirrored from theocode's proven `DEFAULT_KEEP_TOKENS` (server/lib/compaction.ts). */
 export const DEFAULT_KEEP_TOKENS = 8000
 
-/** App-supplied summarizer: collapse the older window into one turn (the app's LLM). */
-export type Summarize = (older: CompressibleMessage[]) => Promise<CompressibleMessage>
+/**
+ * App-supplied summarizer: collapse the older window into one turn (the app's LLM).
+ * Signature matches the SDK `compactTranscript` contract — receives the older window
+ * AND the (optionally overridden) summary template.
+ */
+export type Summarize = (
+  older: CompressibleMessage[],
+  template: string,
+) => Promise<CompressibleMessage>
 
-/** Per-call options for {@link TranscriptCompactionStrategy.compact}. */
+/**
+ * Per-call options for {@link TranscriptCompactionStrategy.compact} — a faithful
+ * pass-through of the SDK `CompactTranscriptOptions` knobs the app controls. Defaults
+ * are the SDK's, EXCEPT `failSafe` which defaults `true` here: a thrown `summarize`
+ * returns the ORIGINAL transcript + a structured warn instead of losing it — compaction
+ * is an optimization, never a cause of data loss (error-handling discipline). The app
+ * passes `failSafe: false` to opt into fail-fast propagation.
+ */
 export interface CompactionCallOptions {
   /** Override the strategy's configured `keepTokens` for this call. */
   readonly keepTokens?: number
   /** Summarize the older window; if omitted, the SDK drops it (its documented contract). */
   readonly summarize?: Summarize
+  /** Checkpoint marker (SDK default when omitted). */
+  readonly marker?: string
+  /** Summary template passed to `summarize` (SDK default when omitted). */
+  readonly summaryTemplate?: string
+  /** When true (DEFAULT here), a thrown `summarize` returns the original transcript + a warn. */
+  readonly failSafe?: boolean
 }
 
 /** A named, callable compaction strategy. Pure of I/O except the delegated SDK call. */
@@ -79,6 +99,10 @@ export function resolveCompactionStrategy(
       compactTranscript(messages, {
         keepTokens: options?.keepTokens ?? cfg.keepTokens,
         summarize: options?.summarize,
+        marker: options?.marker,
+        summaryTemplate: options?.summaryTemplate,
+        // Default-safe: a thrown summarize keeps the transcript (app opts out via failSafe:false).
+        failSafe: options?.failSafe ?? true,
       }),
   }
 }

@@ -41,9 +41,31 @@ describe('V4-F CompactionStrategy — token-budget delegates to SDK compactTrans
       summarize: summarize as never,
     })
     // Given a transcript, When compact runs, Then compactTranscript got (msgs, {keepTokens, summarize})
-    expect((h.lastArgs as { options: { keepTokens: number } }).options.keepTokens).toBe(8000)
-    expect((h.lastArgs as { options: { summarize: unknown } }).options.summarize).toBe(summarize)
+    const opts = (
+      h.lastArgs as { options: { keepTokens: number; summarize: unknown; failSafe: boolean } }
+    ).options
+    expect(opts.keepTokens).toBe(8000)
+    expect(opts.summarize).toBe(summarize)
+    // default-safe: failSafe defaults true (a thrown summarize must not lose the transcript)
+    expect(opts.failSafe).toBe(true)
     expect(out).toEqual([msg('kept')])
+  })
+
+  it('test_compact_forwards_failSafe_marker_summaryTemplate', async () => {
+    h.lastArgs = null
+    h.returnValue = []
+    await tokenBudgetCompactionStrategy.compact([msg('a')] as never, {
+      summarize: summarize as never,
+      marker: '<<cp>>',
+      summaryTemplate: 'TPL',
+      failSafe: false,
+    })
+    const opts = (
+      h.lastArgs as { options: { marker: string; summaryTemplate: string; failSafe: boolean } }
+    ).options
+    expect(opts.marker).toBe('<<cp>>')
+    expect(opts.summaryTemplate).toBe('TPL')
+    expect(opts.failSafe).toBe(false) // app opt-out of fail-safe is honored
   })
 
   it('test_resolveCompactionStrategy_returns_token_budget_by_name', () => {
