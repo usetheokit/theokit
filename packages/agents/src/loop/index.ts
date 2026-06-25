@@ -9,6 +9,17 @@
  */
 export { AgentRunner, AgentRunnerBuilder, type AgentRunnerRunOptions } from './agent-runner.js'
 export {
+  DEFAULT_KEEP_TOKENS,
+  type CompactionCallOptions,
+  type CompactionStrategyConfig,
+  type CompressibleMessage,
+  compactionStrategyConfigSchema,
+  resolveCompactionStrategy,
+  type Summarize,
+  tokenBudgetCompactionStrategy,
+  type TranscriptCompactionStrategy,
+} from './compaction-strategy.js'
+export {
   DEFAULT_MAX_ITERATIONS,
   type LoopFinishReason,
   type LoopOutcome,
