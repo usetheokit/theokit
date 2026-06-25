@@ -12,6 +12,12 @@
  */
 import 'reflect-metadata'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
+import type {
+  PluginsSettings,
+  ProviderRoutingSettings,
+  AgentDefinition,
+  BudgetTracker,
+} from '@theokit/sdk'
 
 const h = vi.hoisted(() => ({
   captured: null as Record<string, unknown> | null,
@@ -147,5 +153,89 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
     const local = h.captured?.local as { settingSources?: string[]; cwd?: string }
     expect(local.cwd).toBe('/proj')
     expect(local.settingSources).toEqual(['project'])
+  })
+})
+
+// V4-L.3 — the remaining per-request Agent.create surface: plugins / providers / agents /
+// budgetTracker. Each is a flat AgentRunnerRunOptions field forwarded (when present) to
+// Agent.create; absent ⇒ no key. Reuses the same @theokit/sdk capture mock above.
+const PLUGINS = [{ name: 'perm' }] as unknown as PluginsSettings
+const PROVIDERS = {
+  routes: [{ capability: 'chat', provider: 'openrouter' }],
+} as unknown as ProviderRoutingSettings
+const AGENTS = { helper: { description: 'd', prompt: 'p' } } as unknown as Record<
+  string,
+  AgentDefinition
+>
+const TRACKER = { onStep: () => {} } as unknown as BudgetTracker
+
+describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
+  beforeEach(() => {
+    h.captured = null
+    h.round = 0
+  })
+
+  it('test_plugins_override_reaches_agent_create', async () => {
+    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k', plugins: PLUGINS })
+    expect(h.captured?.plugins).toBe(PLUGINS)
+  })
+
+  it('test_providers_override_reaches_agent_create', async () => {
+    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k', providers: PROVIDERS })
+    expect(h.captured?.providers).toBe(PROVIDERS)
+  })
+
+  it('test_agents_override_reaches_agent_create', async () => {
+    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k', agents: AGENTS })
+    expect(h.captured?.agents).toBe(AGENTS)
+  })
+
+  it('test_budgetTracker_override_reaches_agent_create', async () => {
+    await AgentRunner.builder(SimpleAgent)
+      .build()
+      .run('hi', { apiKey: 'k', budgetTracker: TRACKER })
+    expect(h.captured?.budgetTracker).toBe(TRACKER)
+  })
+
+  it('test_v4l3_compose_all_reach_agent_create', async () => {
+    await AgentRunner.builder(SimpleAgent).build().run('hi', {
+      apiKey: 'k',
+      model: 'anthropic/claude-x',
+      cwd: '/proj',
+      plugins: PLUGINS,
+      providers: PROVIDERS,
+      agents: AGENTS,
+      budgetTracker: TRACKER,
+    })
+    expect((h.captured?.model as { id: string }).id).toBe('anthropic/claude-x')
+    expect((h.captured?.local as { cwd: string }).cwd).toBe('/proj')
+    expect(h.captured?.plugins).toBe(PLUGINS)
+    expect(h.captured?.providers).toBe(PROVIDERS)
+    expect(h.captured?.agents).toBe(AGENTS)
+    expect(h.captured?.budgetTracker).toBe(TRACKER)
+  })
+
+  it('test_no_v4l3_overrides_omits_keys', async () => {
+    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k' })
+    expect(h.captured?.plugins).toBeUndefined()
+    expect(h.captured?.providers).toBeUndefined()
+    expect(h.captured?.agents).toBeUndefined()
+    expect(h.captured?.budgetTracker).toBeUndefined()
+  })
+
+  it('test_budget_and_budgetTracker_coexist', async () => {
+    // EC-1: outer-loop `budget` (USD) and inner-SDK `budgetTracker` are different layers.
+    const result = await AgentRunner.builder(SimpleAgent)
+      .build()
+      .run('hi', { apiKey: 'k', budget: 10, budgetTracker: TRACKER })
+    expect(h.captured?.budgetTracker).toBe(TRACKER) // inner cap reaches Agent.create
+    expect(result.rounds).toBe(1) // outer budget (10 USD) not exceeded at zero cost
+  })
+
+  it('test_empty_plugins_array_is_forwarded', async () => {
+    // EC-2: `plugins: []` is a deliberate "no plugins" — guarded by `!== undefined`, not truthiness.
+    const empty = [] as unknown as PluginsSettings
+    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k', plugins: empty })
+    expect(h.captured?.plugins).toEqual([])
   })
 })
