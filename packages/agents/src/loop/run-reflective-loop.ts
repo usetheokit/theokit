@@ -22,7 +22,7 @@ import {
 } from '../bridge/delegation-types.js'
 
 import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strategy.js'
-import type { ReflectionStrategy } from './reflection-strategy.js'
+import type { ReflectionContext, ReflectionStrategy } from './reflection-strategy.js'
 
 /** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
 export type RoundStreamFactory = (message: string, sessionId: string) => AsyncIterable<StreamEvent>
@@ -272,6 +272,9 @@ export async function* runReflectiveLoopStream(
     agentName = loop.name,
   } = config
   const acc: DelegationResult = { response: '', toolCalls: [], cost: 0, tokens: 0, rounds: 0 }
+  // V4-K: one mutable scratch bag per run, threaded to every reflect() so a stateful
+  // strategy accumulates across rounds. The framework writes NOTHING into it.
+  const reflectionContext: ReflectionContext = {}
   let round = 1
   let feedback: string | undefined
   let prevSig: string | undefined // V4-D: prior round's progress signature (no_progress detection)
@@ -306,7 +309,7 @@ export async function* runReflectiveLoopStream(
       toolCalls: r.toolCalls,
       responseText: r.responseText,
     }
-    const reflectionResult = reflection.reflect(outcome)
+    const reflectionResult = reflection.reflect(outcome, reflectionContext)
     if (!(reflectionResult.continue && loop.shouldContinue(outcome))) {
       const reason = terminalReason(
         reflectionResult.continue,
