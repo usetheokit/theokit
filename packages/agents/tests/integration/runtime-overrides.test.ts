@@ -55,6 +55,7 @@ vi.mock('@theokit/sdk', () => ({
 const { AgentRunner } = await import('../../src/index.js')
 const { Agent } = await import('../../src/decorators/agent.js')
 const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { Skills } = await import('../../src/decorators/skills.js')
 
 @Agent({ name: 'simple', route: '/simple', model: 'compiled-model' })
 class SimpleAgent {
@@ -65,6 +66,13 @@ class SimpleAgent {
 @Agent({ name: 'react', route: '/react', model: 'compiled-model' })
 class ReactAgent {
   @MainLoop({ strategy: 'react', maxIterations: 8 })
+  async run() {}
+}
+
+@Agent({ name: 'skilled', route: '/skilled', model: 'compiled-model' })
+@Skills(['code-review'])
+class SkilledAgent {
+  @MainLoop({ strategy: 'simple-chat' })
   async run() {}
 }
 
@@ -129,5 +137,15 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
     const runner = AgentRunner.builder(SimpleAgent).build()
     const result = await runner.run('hi', { apiKey: 'k', maxIterations: 5 })
     expect(result.rounds).toBe(1)
+  })
+
+  it('test_cwd_override_preserves_skills_settingSources_in_local', async () => {
+    // Review M1: a skills agent sets local.settingSources; a cwd override must MERGE
+    // (both present), never clobber. Guards `m8.local = { ...m8.local, cwd }`.
+    const runner = AgentRunner.builder(SkilledAgent).build()
+    await runner.run('hi', { apiKey: 'k', cwd: '/proj' })
+    const local = h.captured?.local as { settingSources?: string[]; cwd?: string }
+    expect(local.cwd).toBe('/proj')
+    expect(local.settingSources).toEqual(['project'])
   })
 })
