@@ -136,20 +136,27 @@ export function createSdkAgentStream(
         // Send message + stream response
         const run = await agent.send(message)
 
+        let sawTerminal = false
         for await (const sdkEvent of run.stream()) {
           const translated = translateSdkEvent(sdkEvent, runId)
           for (const event of translated) {
+            if (event.type === 'done' || event.type === 'error') sawTerminal = true
             yield event
           }
         }
 
-        // Emit done if SDK didn't emit status:done
-        yield {
-          type: 'done',
-          result: '',
-          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-          durationMs: Date.now() - t0,
-          cost: 0,
+        // Fallback terminal: only when the SDK stream did NOT already yield one
+        // (a real run ends in a `status: FINISHED`/`ERROR` message → translated to
+        // done/error). The loop's B1 guarantee relies on a terminal existing; this
+        // keeps exactly-one-terminal without double-emitting to SSE consumers.
+        if (!sawTerminal) {
+          yield {
+            type: 'done',
+            result: '',
+            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+            durationMs: Date.now() - t0,
+            cost: 0,
+          }
         }
 
         await agent.dispose()

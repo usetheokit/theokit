@@ -9,6 +9,8 @@ import 'reflect-metadata'
 
 import { Reflector } from '@theokit/http'
 
+import { getCompactionConfig } from '../decorators/compaction.js'
+import type { CompactionDecoratorConfig } from '../decorators/compaction.js'
 import { getContextWindowConfig } from '../decorators/context-window.js'
 import type { ContextWindowOptions } from '../decorators/context-window.js'
 import type { GatewayOptions } from '../decorators/gateway.js'
@@ -78,6 +80,7 @@ export interface AgentWalkResult {
   contextWindow?: ContextWindowOptions
   projectContext?: ProjectContextOptions
   mcpServers?: McpServersMap
+  compaction?: CompactionDecoratorConfig
 }
 
 export interface ToolboxWalkResult {
@@ -262,6 +265,7 @@ export function walkAgentMetadata(
   const contextWindow = getContextWindowConfig(AgentClass)
   const projectContext = getProjectContextConfig(AgentClass)
   warnUnmappedDecoratorKnobs(AgentClass.name, contextWindow, projectContext)
+  const compaction = getCompactionConfig(AgentClass)
 
   const result: AgentWalkResult = {
     agentConfig,
@@ -278,6 +282,7 @@ export function walkAgentMetadata(
     contextWindow,
     projectContext,
     mcpServers,
+    compaction,
   }
 
   if (toolboxClasses.length === 0) {
