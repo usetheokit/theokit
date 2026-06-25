@@ -17,6 +17,10 @@ import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
 import { walkAgentMetadata } from '../bridge/walk-agent-metadata.js'
 
+import {
+  resolveCompactionStrategy,
+  type TranscriptCompactionStrategy,
+} from './compaction-strategy.js'
 import { type LoopStrategy, resolveLoopStrategy } from './loop-strategy.js'
 import {
   ladderReflectionStrategy,
@@ -41,22 +45,50 @@ export interface AgentRunnerRunOptions {
  * A built, runnable agent. Construct via {@link AgentRunner.builder} — the
  * constructor takes already-resolved state and is an internal detail.
  */
+/** Already-resolved state handed to the {@link AgentRunner} constructor (internal). */
+export interface AgentRunnerState {
+  readonly compiled: CompiledAgentOptions
+  readonly agentName: string
+  /** The resolved terminal-decision strategy (parity with `delegate()`). */
+  readonly loopStrategy: LoopStrategy
+  /** The resolved between-round reflection (default or `.reflection(custom)` override). */
+  readonly reflectionStrategy: ReflectionStrategy
+  /** Recorded streaming preference (see {@link AgentRunner.streamEnabled}). */
+  readonly streamEnabled: boolean
+  /** The resolved compaction strategy, or `undefined` when none is declared (EC-4). */
+  readonly compaction?: TranscriptCompactionStrategy
+}
+
 export class AgentRunner {
-  constructor(
-    private readonly compiled: CompiledAgentOptions,
-    private readonly agentName: string,
-    /** The resolved terminal-decision strategy (parity with `delegate()`). */
-    readonly loopStrategy: LoopStrategy,
-    /** The resolved between-round reflection (default or `.reflection(custom)` override). */
-    readonly reflectionStrategy: ReflectionStrategy,
-    /**
-     * Recorded streaming preference. The reflective loop currently always
-     * streams via the SDK `Run.stream()`; a non-streaming collect mode is future
-     * work — the flag is captured + exposed here, not yet branched on (honest
-     * per G10: documented, not a silent no-op).
-     */
-    readonly streamEnabled: boolean,
-  ) {}
+  private readonly compiled: CompiledAgentOptions
+  private readonly agentName: string
+  /** The resolved terminal-decision strategy (parity with `delegate()`). */
+  readonly loopStrategy: LoopStrategy
+  /** The resolved between-round reflection (default or `.reflection(custom)` override). */
+  readonly reflectionStrategy: ReflectionStrategy
+  /**
+   * Recorded streaming preference. The reflective loop currently always streams via
+   * the SDK `Run.stream()`; a non-streaming collect mode is future work — the flag is
+   * captured + exposed here, not yet branched on (honest per G10: documented, not a
+   * silent no-op).
+   */
+  readonly streamEnabled: boolean
+  /**
+   * V4-F: the resolved compaction strategy (from `@Compaction` or `.compaction()`),
+   * or `undefined` when neither is declared — compaction is opt-in (EC-4). CALLABLE
+   * by the app (ADR D1: `runner.compaction?.compact(messages, { summarize })`); the
+   * reflective loop does NOT auto-invoke it (the SDK owns per-turn context).
+   */
+  readonly compaction?: TranscriptCompactionStrategy
+
+  constructor(state: AgentRunnerState) {
+    this.compiled = state.compiled
+    this.agentName = state.agentName
+    this.loopStrategy = state.loopStrategy
+    this.reflectionStrategy = state.reflectionStrategy
+    this.streamEnabled = state.streamEnabled
+    this.compaction = state.compaction
+  }
 
   /** Start a fluent builder for `AgentClass`. */
   static builder(AgentClass: Function): AgentRunnerBuilder {
@@ -103,6 +135,7 @@ export class AgentRunner {
 export class AgentRunnerBuilder {
   private reflectionOverride?: ReflectionStrategy
   private streamEnabled = true
+  private compactionOverride?: { name: string; keepTokens?: number }
 
   constructor(private readonly AgentClass: Function) {}
 
@@ -115,6 +148,16 @@ export class AgentRunnerBuilder {
   /** Record the streaming preference (see {@link AgentRunner.streamEnabled}). */
   stream(enabled = true): this {
     this.streamEnabled = enabled
+    return this
+  }
+
+  /**
+   * V4-F: declare the compaction strategy (e.g. `.compaction('token-budget', { keepTokens: 8000 })`).
+   * Resolved + validated at {@link build} (EC-5 — fail-fast there, not here). This builder
+   * call WINS over a `@Compaction` decorator on the same agent (EC-1 — explicit override).
+   */
+  compaction(name: string, options: { keepTokens?: number } = {}): this {
+    this.compactionOverride = { name, keepTokens: options.keepTokens }
     return this
   }
 
@@ -131,12 +174,19 @@ export class AgentRunnerBuilder {
       (walk.mainLoop.strategy === 'plan-act-reflect'
         ? ladderReflectionStrategy
         : noopReflectionStrategy)
-    return new AgentRunner(
+    // V4-F: builder override WINS over the @Compaction decorator (EC-1); undefined when
+    // neither declares it (EC-4 — opt-in). resolveCompactionStrategy fails fast (EC-5/EC-2).
+    const compactionDecl = this.compactionOverride ?? walk.compaction
+    const compaction = compactionDecl
+      ? resolveCompactionStrategy(compactionDecl.name, { keepTokens: compactionDecl.keepTokens })
+      : undefined
+    return new AgentRunner({
       compiled,
-      walk.agentConfig.name,
+      agentName: walk.agentConfig.name,
       loopStrategy,
       reflectionStrategy,
-      this.streamEnabled,
-    )
+      streamEnabled: this.streamEnabled,
+      compaction,
+    })
   }
 }
