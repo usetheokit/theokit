@@ -1,5 +1,15 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignore": [
+    ".claude/**",
+    "**/templates/**",
+    "**/examples/**",
+    "**/tests/**",
+    "**/fixtures/**",
+    "**/*.bench.ts",
+    "**/tests/benchmark/**",
+    "**/*.d.mts"
+  ],
   "workspaces": {
     ".": {
       "entry": ["scripts/**/*.{ts,js,mjs,sh}"],
@@ -16,11 +26,38 @@
         "src/adapters/aws-lambda.ts",
         "src/adapters/static.ts",
         "src/devtools/entry.tsx",
-        "src/devtools/index.ts"
+        "src/devtools/index.ts",
+        "src/core/contracts/index.ts",
+        "src/server/webhook/providers/index.ts"
       ],
       "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/create-theo": {
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/http": {
+      "entry": [
+        "src/index.ts",
+        "src/theokit-plugin.ts",
+        "src/app.ts",
+        "src/runtime-node.ts",
+        "src/bridge/runtime/bun.ts",
+        "src/bridge/runtime/deno.ts"
+      ],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/agents": {
+      "entry": [
+        "src/index.ts",
+        "src/decorators-entry.ts",
+        "src/bridge-entry.ts",
+        "src/testing/index.ts",
+        "src/theokit-plugin.ts"
+      ],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/create-theokit": {
+      "entry": ["src/cli.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     }
   },

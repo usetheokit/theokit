@@ -2,13 +2,27 @@
  * Multi-agent orchestration runtime.
  *
  * Provides `delegate()` — a function that lets a parent agent invoke a
- * sub-agent and receive its result. Handles budget clamping (D4),
- * tool sharing, and toolbox auto-instantiation (EC-1).
+ * sub-agent and receive its result. Handles budget clamping (D4), tool sharing,
+ * toolbox auto-instantiation (EC-1), and routes the resolved `@MainLoop` strategy
+ * through `runReflectiveLoop` — the SAME driver `AgentRunner.run()` uses, so both
+ * on-ramps are one runtime (ADR D4). `simple-chat` ⇒ `shouldContinue:()=>false`
+ * ⇒ exactly one round; `react`/`plan-act-reflect` ⇒ multi-round reflective loop.
  */
-import type { CompiledTool } from './agent-compiler.js'
-import { compileAgent } from './agent-compiler.js'
+import {
+  ladderReflectionStrategy,
+  noopReflectionStrategy,
+  resolveLoopStrategy,
+} from '../loop/index.js'
+import { runReflectiveLoop } from '../loop/run-reflective-loop.js'
+
+import { compileAgent, type CompiledTool } from './agent-compiler.js'
+import { type DelegationResult, DelegationError } from './delegation-types.js'
 import { createSdkAgentStream } from './sdk-adapter.js'
 import { walkAgentMetadata } from './walk-agent-metadata.js'
+
+// Re-export the delegation value types for backward compatibility — they moved
+// to delegation-types.js to break the orchestrator↔loop import cycle (G1).
+export { BudgetExceededError, type DelegationResult, DelegationError } from './delegation-types.js'
 
 export interface DelegateOptions {
   /** Max USD for this sub-agent call. */
@@ -21,50 +35,8 @@ export interface DelegateOptions {
   apiKey?: string
   /** Session ID override (default: crypto.randomUUID for isolation). */
   sessionId?: string
-}
-
-export interface DelegationResult {
-  response: string
-  toolCalls: { name: string; input: unknown; output: string }[]
-  cost: number
-  tokens: number
-}
-
-export class BudgetExceededError extends Error {
-  constructor(
-    public readonly agentName: string,
-    public readonly actualCost: number,
-    public readonly budgetLimit: number,
-  ) {
-    super(
-      `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > $${budgetLimit.toFixed(4)}`,
-    )
-    this.name = 'BudgetExceededError'
-  }
-}
-
-export class DelegationError extends Error {
-  constructor(
-    public readonly agentName: string,
-    public readonly cause: unknown,
-  ) {
-    super(
-      `Delegation to agent "${agentName}" failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-    )
-    this.name = 'DelegationError'
-  }
-}
-
-/** Safely coerce unknown to string. */
-function asString(value: unknown, fallback: string): string {
-  if (typeof value === 'string') return value
-  return fallback
-}
-
-/** Safely coerce unknown to number. */
-function asNumber(value: unknown, fallback: number): number {
-  if (typeof value === 'number') return value
-  return fallback
+  /** Cancellation — aborts stop the reflective loop from re-entering. */
+  signal?: AbortSignal
 }
 
 /** Validate API key and throw DelegationError if missing. */
@@ -83,50 +55,6 @@ function mergeTools(parentTools: CompiledTool[], subTools: CompiledTool[]): Comp
   return [...inherited, ...subTools]
 }
 
-/** Mutable accumulator for stream event processing. */
-interface StreamAccumulator {
-  response: string
-  toolCalls: { name: string; input: unknown; output: string }[]
-  cost: number
-  tokens: number
-}
-
-/** Process a single stream event into the accumulator. Throws on budget exceeded or error. */
-function processStreamEvent(
-  event: { type: string; [key: string]: unknown },
-  acc: StreamAccumulator,
-  budget: number,
-  agentName: string,
-): void {
-  if (event.type === 'text_delta' && typeof event.content === 'string') {
-    acc.response += event.content
-    return
-  }
-  if (event.type === 'tool_result') {
-    acc.toolCalls.push({
-      name: asString(event.toolName, 'unknown'),
-      input: event.input ?? {},
-      output: asString(event.output, ''),
-    })
-    return
-  }
-  if (event.type === 'done') {
-    acc.cost = asNumber(event.cost, 0)
-    const usage = event.usage as { totalTokens?: number } | undefined
-    acc.tokens = usage?.totalTokens ?? 0
-    if (Number.isFinite(budget) && acc.cost > budget) {
-      throw new BudgetExceededError(agentName, acc.cost, budget)
-    }
-    return
-  }
-  if (event.type === 'error') {
-    throw new DelegationError(
-      agentName,
-      asString((event as { message?: unknown }).message, 'Unknown agent error'),
-    )
-  }
-}
-
 /**
  * Delegate a task to a sub-agent and collect its result.
  *
@@ -134,6 +62,10 @@ function processStreamEvent(
  * - Tool sharing: parent tools merged with sub-agent tools (sub wins on collision)
  * - Toolbox auto-instantiation: sub-agent toolboxes instantiated without DI (EC-1)
  * - Session isolation: each delegation gets a unique session ID (EC-4)
+ * - `@MainLoop` strategy runtime: routes through `runReflectiveLoop` (the same loop
+ *   `AgentRunner.run` uses — one runtime for both on-ramps, ADR D4). The runtime
+ *   metric (`THEO_AGENT_MAINLOOP_RUNTIME_APPLIED`) + typed-error + cumulative budget
+ *   all live in the shared driver, so they fire identically on both paths.
  */
 export async function delegate(
   SubAgentClass: Function,
@@ -149,31 +81,23 @@ export async function delegate(
   )
   const compiled = compileAgent(walk, toolboxInstances)
 
-  // 2. Merge parent tools
+  // 2. Merge parent tools + clamp budget (D4)
   const allTools = mergeTools(opts.parentTools ?? [], compiled.tools)
-
-  // 3. Budget clamping (D4)
   const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
 
-  // 4. Create stream + collect (EC-4: randomUUID for session isolation)
+  // 3. Build the stream factory (the model call stays in the SDK — ADR 0031) + session
   const streamFactory = createSdkAgentStream(compiled, allTools, apiKey, walk.agentConfig.model)
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
-  const acc: StreamAccumulator = { response: '', toolCalls: [], cost: 0, tokens: 0 }
-
-  try {
-    for await (const event of streamFactory(message, sessionId)) {
-      processStreamEvent(event, acc, budget, SubAgentClass.name)
-    }
-  } catch (err) {
-    if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
-    throw new DelegationError(SubAgentClass.name, err)
-  }
-
-  // 5. Budget enforcement (post-run check)
-  if (Number.isFinite(budget) && acc.cost > budget) {
-    throw new BudgetExceededError(SubAgentClass.name, acc.cost, budget)
-  }
-
-  return acc
+  // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
+  const loopStrategy = resolveLoopStrategy(walk.mainLoop.strategy, walk.mainLoop.maxIterations)
+  const reflection =
+    loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy
+  return runReflectiveLoop(streamFactory, message, sessionId, {
+    loop: loopStrategy,
+    reflection,
+    budget,
+    agentName: SubAgentClass.name,
+    signal: opts.signal,
+  })
 }

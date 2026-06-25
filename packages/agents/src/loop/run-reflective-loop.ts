@@ -1,0 +1,345 @@
+/**
+ * runReflectiveLoop — the multi-round reflective driver that gives `@MainLoop`
+ * its runtime (closes the metadata-only gap, V4-A / plan ADR D2).
+ *
+ * Per round it consumes ONE SDK stream turn (the model call stays in the SDK —
+ * the factory is `createSdkAgentStream(...)`, injected for testability), derives
+ * a {@link LoopOutcome}, asks the {@link ReflectionStrategy} for feedback, then
+ * the {@link LoopStrategy} whether to continue. Bounded by `maxIterations`
+ * (forced terminal at the ceiling — never an infinite loop). The bridge owns the
+ * loop; the SDK owns the model call (sdk-runtime.md / ADR 0031 — no second runtime).
+ *
+ * `runReflectiveLoop` is INTERNAL (not re-exported from the package barrel,
+ * Drawback #4) — consumed by `delegate()` (T2.2) and `AgentRunner` (T3.1).
+ *
+ * referencia: knowledge-base/references/mastra agent.ts (re-enter the loop with feedback).
+ */
+import type { StreamEvent } from '../bridge/agent-sse-handler.js'
+import {
+  BudgetExceededError,
+  type DelegationResult,
+  DelegationError,
+} from '../bridge/delegation-types.js'
+
+import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strategy.js'
+import type { ReflectionStrategy } from './reflection-strategy.js'
+
+/** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
+export type RoundStreamFactory = (message: string, sessionId: string) => AsyncIterable<StreamEvent>
+
+/** Strategies + options for {@link runReflectiveLoop}. */
+export interface RunReflectiveLoopConfig {
+  /** The terminal-decision strategy (resolved from `@MainLoop.strategy`). */
+  readonly loop: LoopStrategy
+  /** Between-round reflection (default `'ladder'` for `'plan-act-reflect'`). */
+  readonly reflection: ReflectionStrategy
+  /** Cumulative USD budget across ALL rounds (EC-4). Exceeding throws BudgetExceededError. */
+  readonly budget?: number
+  /** Cancellation — when aborted, the loop stops re-entering and advancing the in-flight stream. */
+  readonly signal?: AbortSignal
+  /** Name surfaced in typed errors. */
+  readonly agentName?: string
+}
+
+function asString(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function asNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' ? value : fallback
+}
+
+/** Consecutive no-progress rounds before terminating with `'no_progress'` (K=2 tolerates one retry — V4-D). */
+const NO_PROGRESS_THRESHOLD = 2
+
+/** Runtime metric key (wiring triad — G10): observable proof the loop ran, with terminal + round count. */
+const MAINLOOP_METRIC = '[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]'
+
+/** The "still working" continuation signal — a tool-using turn re-enters the loop. */
+const TOOL_CALLS: LoopFinishReason = 'tool-calls'
+
+/** Final-round graceful-degradation hint (V4-D step_limit — modeled on opencode MAX_STEPS_PROMPT). */
+const STEP_LIMIT_HINT =
+  'This is your final round — do not call any more tools; summarize the work done so far and list any remaining tasks.'
+
+/**
+ * Deterministic JSON: object keys are emitted in sorted order so two semantically
+ * equal tool inputs serialize identically regardless of key insertion order (a
+ * stuck-loop detector must not be fooled by re-ordered keys — review NF, robustness).
+ */
+function stableStringify(value: unknown): string {
+  if (value === undefined) return 'undefined'
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  const obj = value as Record<string, unknown>
+  const entries = Object.keys(obj)
+    .sort((a, b) => a.localeCompare(b))
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
+  return `{${entries.join(',')}}`
+}
+
+/**
+ * A round's progress fingerprint = its tool-call set (name+input, SORTED so call
+ * ORDER is irrelevant — EC-3; input keys canonicalized so KEY order is irrelevant too)
+ * plus the assistant text. Two consecutive rounds with an equal signature made no new
+ * progress. Tool `output` is excluded: repeating the same call is no-progress even if
+ * the result text wobbles. (V4-D, ADR D2)
+ */
+function roundSignature(
+  toolCalls: readonly { name: string; input: unknown }[],
+  text: string,
+): string {
+  const calls = toolCalls
+    .map((tc) => `${tc.name}:${stableStringify(tc.input)}`)
+    .sort((a, b) => a.localeCompare(b))
+    .join(',')
+  return `${calls}|${text}`
+}
+
+/**
+ * The loop's terminal reason: `'step_limit'` when the round wanted to continue
+ * (tool-calls + reflection continue) but the `maxIterations` ceiling stopped it;
+ * otherwise the round's own natural reason (`'stop'`/`'length'`). (V4-D, ADR D1)
+ */
+function terminalReason(
+  reflectionContinue: boolean,
+  roundReason: LoopFinishReason,
+  round: number,
+  maxIterations: number,
+): LoopFinishReason {
+  if (reflectionContinue && roundReason === TOOL_CALLS && round >= maxIterations)
+    return 'step_limit'
+  // A tool-using round that terminates BELOW the ceiling means a (custom) reflection chose to
+  // stop while the turn could have continued — surface 'stop', never leak the per-round
+  // 'tool-calls' signal as the loop's terminal reason (review NF; shipped ladder/noop never hit this).
+  if (roundReason === TOOL_CALLS) return 'stop'
+  return roundReason
+}
+
+/** Build the round's prompt: final-round summary hint (V4-D) + the reflection block when feedback exists (L2). */
+function buildPrompt(
+  round: number,
+  maxIterations: number,
+  message: string,
+  feedback: string | undefined,
+): string {
+  const hint = round === maxIterations ? `${STEP_LIMIT_HINT}\n\n` : ''
+  const body = round === 1 || !feedback ? message : `${message}\n\n[reflection] ${feedback}`
+  return hint + body
+}
+
+/**
+ * Consume one round, normalizing a RAW stream/iterator exception (not an `error` event —
+ * e.g. the SDK dynamic import rejecting) into a typed `DelegationError` (M2). Typed errors
+ * (`BudgetExceededError`/`DelegationError`) propagate unchanged.
+ */
+async function* consumeRoundOrThrow(
+  factory: RoundStreamFactory,
+  prompt: string,
+  sessionId: string,
+  signal: AbortSignal | undefined,
+  agentName: string,
+): AsyncGenerator<StreamEvent, RoundResult> {
+  try {
+    return yield* consumeOneRound(factory, prompt, sessionId, signal)
+  } catch (err) {
+    if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
+    throw new DelegationError(agentName, err)
+  }
+}
+
+/** Stamp the terminal state on the accumulator + emit the runtime metric (DRY for the 2 exit points). */
+function finalize(
+  acc: DelegationResult,
+  round: number,
+  reason: LoopFinishReason,
+  strategyName: string,
+): DelegationResult {
+  acc.rounds = round
+  acc.finishReason = reason
+  console.debug(MAINLOOP_METRIC, { strategy: strategyName, rounds: round, terminal: reason })
+  return acc
+}
+
+/** One round's accumulated facts + the signals needed to derive `finishReason`. */
+interface RoundResult {
+  responseText: string
+  toolCalls: { name: string; input: unknown; output: string }[]
+  cost: number
+  tokens: number
+  finishReason: LoopFinishReason
+  errorMessage: string
+}
+
+/**
+ * Derive the round's terminal signal from the events seen this round.
+ *
+ * Precedence (B1 — the load-bearing fix):
+ *  1. error event           ⇒ 'error'
+ *  2. explicit done.finishReason==='tool-calls' ⇒ 'tool-calls' (if a future SDK adapter sets it)
+ *  3. ANY tool_result seen  ⇒ 'tool-calls' — the turn USED TOOLS ("still working"), so the
+ *     outer reflective loop should reflect + re-prompt. The real `@theokit/sdk` adapter ALWAYS
+ *     appends a terminal `done` WITHOUT finishReason after a turn (sdk-adapter.ts / event-translator.ts);
+ *     letting that `done` short-circuit a tool-using turn to 'stop' is exactly what made the loop
+ *     dead in production (single-round). tool_result therefore OUTRANKS the bare done. Bounded by
+ *     `maxIterations` so it can never spin.
+ *  4. otherwise (pure-answer `done`, text-only, or empty round) ⇒ 'stop' (terminal). EC-1: a
+ *     degenerate/empty round defaults to 'stop', NEVER 'tool-calls'.
+ *
+ * This is an honest heuristic: the SDK runs the inner tool loop to completion per turn, so the
+ * outer loop treats a tool-using turn as "continue/reflect" and a pure-text answer as "done".
+ */
+function deriveFinishReason(signals: {
+  sawError: boolean
+  sawDone: boolean
+  doneFinishReason: string
+  sawToolResult: boolean
+}): LoopFinishReason {
+  if (signals.sawError) return 'error'
+  if (signals.sawDone && signals.doneFinishReason === TOOL_CALLS) return TOOL_CALLS
+  if (signals.sawToolResult) return TOOL_CALLS
+  return 'stop'
+}
+
+/**
+ * Consume exactly one SDK stream turn and derive its {@link LoopFinishReason}.
+ * V4-D-stream: an async generator — it `yield`s each event to the consumer LIVE
+ * (so SSE-first apps see tokens/tool-calls incrementally) AND returns the
+ * aggregated {@link RoundResult} as the generator's return value.
+ */
+async function* consumeOneRound(
+  factory: RoundStreamFactory,
+  prompt: string,
+  sessionId: string,
+  signal: AbortSignal | undefined,
+): AsyncGenerator<StreamEvent, RoundResult> {
+  const r: RoundResult = {
+    responseText: '',
+    toolCalls: [],
+    cost: 0,
+    tokens: 0,
+    finishReason: 'stop',
+    errorMessage: '',
+  }
+  const signals = { sawError: false, sawDone: false, doneFinishReason: '', sawToolResult: false }
+
+  for await (const event of factory(prompt, sessionId)) {
+    if (signal?.aborted) break // cancellation: stop advancing the iterator
+    yield event // V4-D-stream: surface the event to the consumer before accumulating
+    if (event.type === 'text_delta' && typeof event.content === 'string') {
+      r.responseText += event.content
+    } else if (event.type === 'tool_result') {
+      signals.sawToolResult = true
+      r.toolCalls.push({
+        name: asString(event.toolName, 'unknown'),
+        input: event.input ?? {},
+        output: asString(event.output, ''),
+      })
+    } else if (event.type === 'done') {
+      signals.sawDone = true
+      signals.doneFinishReason = asString(event.finishReason, '')
+      r.cost = asNumber(event.cost, 0)
+      r.tokens = (event.usage as { totalTokens?: number } | undefined)?.totalTokens ?? 0
+    } else if (event.type === 'error') {
+      signals.sawError = true
+      r.errorMessage = asString((event as { message?: unknown }).message, 'Unknown agent error')
+    }
+  }
+
+  r.finishReason = deriveFinishReason(signals)
+  return r
+}
+
+/**
+ * Drive the reflective loop to a terminal {@link DelegationResult}.
+ *
+ * Terminates when: the reflection/strategy says stop, the `maxIterations` ceiling
+ * is reached (via `loop.shouldContinue`), the signal aborts, or a degenerate round
+ * resolves to `stop`. Throws `DelegationError` on a mid-round error event
+ * (fail-fast, typed) and `BudgetExceededError` when cumulative cost crosses `budget`.
+ */
+export async function* runReflectiveLoopStream(
+  factory: RoundStreamFactory,
+  message: string,
+  sessionId: string,
+  config: RunReflectiveLoopConfig,
+): AsyncGenerator<StreamEvent, DelegationResult> {
+  const {
+    loop,
+    reflection,
+    budget = Number.POSITIVE_INFINITY,
+    signal,
+    agentName = loop.name,
+  } = config
+  const acc: DelegationResult = { response: '', toolCalls: [], cost: 0, tokens: 0, rounds: 0 }
+  let round = 1
+  let feedback: string | undefined
+  let prevSig: string | undefined // V4-D: prior round's progress signature (no_progress detection)
+  let stuck = 0 // V4-D: consecutive no-progress rounds
+
+  while (!signal?.aborted) {
+    const prompt = buildPrompt(round, loop.maxIterations, message, feedback)
+    const r = yield* consumeRoundOrThrow(factory, prompt, sessionId, signal, agentName)
+
+    acc.response += r.responseText
+    acc.toolCalls.push(...r.toolCalls)
+    acc.cost += r.cost
+    acc.tokens += r.tokens
+
+    if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
+    if (Number.isFinite(budget) && acc.cost > budget) {
+      throw new BudgetExceededError(agentName, acc.cost, budget)
+    }
+
+    // V4-D no_progress: only on would-continue rounds (EC-1: stop/error/length/empty already
+    // terminate with their own reason), evaluated BEFORE the ceiling (EC-4: the earlier signal wins).
+    if (r.finishReason === TOOL_CALLS) {
+      const sig = roundSignature(r.toolCalls, r.responseText)
+      stuck = sig === prevSig ? stuck + 1 : 0
+      if (stuck >= NO_PROGRESS_THRESHOLD) return finalize(acc, round, 'no_progress', loop.name)
+      prevSig = sig
+    }
+
+    const outcome: LoopOutcome = {
+      finishReason: r.finishReason,
+      round,
+      toolCalls: r.toolCalls,
+      responseText: r.responseText,
+    }
+    const reflectionResult = reflection.reflect(outcome)
+    if (!(reflectionResult.continue && loop.shouldContinue(outcome))) {
+      const reason = terminalReason(
+        reflectionResult.continue,
+        r.finishReason,
+        round,
+        loop.maxIterations,
+      )
+      return finalize(acc, round, reason, loop.name)
+    }
+
+    feedback = reflectionResult.feedback
+    round += 1
+  }
+
+  // Aborted before (re-)entering a round. L1: record the rounds that DID run
+  // (round is 1-indexed and points at the next round, so `round - 1` ran).
+  acc.rounds = round - 1
+  return acc
+}
+
+/**
+ * Collect-mode wrapper (backward-compatible): drains {@link runReflectiveLoopStream}
+ * and returns ONLY the aggregated {@link DelegationResult}. `delegate()` and
+ * `AgentRunner.run()` use this; streaming-first consumers use the generator directly.
+ */
+export async function runReflectiveLoop(
+  factory: RoundStreamFactory,
+  message: string,
+  sessionId: string,
+  config: RunReflectiveLoopConfig,
+): Promise<DelegationResult> {
+  const gen = runReflectiveLoopStream(factory, message, sessionId, config)
+  let res = await gen.next()
+  while (!res.done) res = await gen.next()
+  return res.value
+}
