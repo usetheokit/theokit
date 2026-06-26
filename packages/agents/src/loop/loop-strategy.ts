@@ -62,8 +62,14 @@ export type LoopStrategyConfig = z.infer<typeof loopStrategyConfigSchema>
  * Map a `@MainLoop` strategy + ceiling to a concrete {@link LoopStrategy}.
  *
  * - `simple-chat` ⇒ exactly one round (`shouldContinue` always false).
- * - `plan-act-reflect` / `react` ⇒ continue while the round ended on `tool-calls`
- *   AND the ceiling has not been reached (`round < maxIterations`).
+ * - `react` ⇒ continue while the round ended on `tool-calls` AND the ceiling has not been reached
+ *   (`round < maxIterations`) — the reflection is `noop` (no feedback), so the strategy IS the gate.
+ * - `plan-act-reflect` ⇒ DEFER continuation to the reflection (V4-S): `shouldContinue` is
+ *   `round < maxIterations`, so the loop continues iff the (custom) `ReflectionStrategy` returns
+ *   `continue: true` within the ceiling — letting a reflection extend even a terminal (`stop`)
+ *   round (e.g. "you answered without editing — make the edit now"). Backward-compatible with the
+ *   default `ladderReflectionStrategy`, which itself returns `continue: true` only on `tool-calls`,
+ *   so the observable behavior with the shipped ladder is unchanged.
  *
  * Throws (Zod) when `maxIterations < 1` — fail fast, never a silent infinite loop.
  */
@@ -75,6 +81,16 @@ export function resolveLoopStrategy(
 
   if (cfg.name === 'simple-chat') {
     return { name: cfg.name, maxIterations: cfg.maxIterations, shouldContinue: () => false }
+  }
+
+  if (cfg.name === 'plan-act-reflect') {
+    // V4-S: defer to the reflection — the ceiling is the only hard bound; the ReflectionStrategy
+    // decides whether to continue (so a custom strategy can extend a terminal round).
+    return {
+      name: cfg.name,
+      maxIterations: cfg.maxIterations,
+      shouldContinue: (outcome: LoopOutcome): boolean => outcome.round < cfg.maxIterations,
+    }
   }
 
   return {
