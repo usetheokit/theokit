@@ -14,6 +14,10 @@
  *
  * referencia: knowledge-base/references/mastra agent.ts (re-enter the loop with feedback).
  */
+// V4-P: type-only import (erased at runtime) so the loop stays SDK-optional; the `withRetry`
+// VALUE is dynamic-imported inside consumeOneRound only when `retry` is configured.
+import type { RetryOptions } from '@theokit/sdk/retry'
+
 import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import {
   BudgetExceededError,
@@ -27,6 +31,15 @@ import type { ReflectionContext, ReflectionStrategy } from './reflection-strateg
 /** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
 export type RoundStreamFactory = (message: string, sessionId: string) => AsyncIterable<StreamEvent>
 
+/** Per-round inputs bundled to keep helper signatures within the parameter budget (G6). */
+interface RoundInputs {
+  factory: RoundStreamFactory
+  prompt: string
+  sessionId: string
+  signal: AbortSignal | undefined
+  retry: RetryOptions | undefined
+}
+
 /** Strategies + options for {@link runReflectiveLoop}. */
 export interface RunReflectiveLoopConfig {
   /** The terminal-decision strategy (resolved from `@MainLoop.strategy`). */
@@ -39,6 +52,12 @@ export interface RunReflectiveLoopConfig {
   readonly signal?: AbortSignal
   /** Name surfaced in typed errors. */
   readonly agentName?: string
+  /**
+   * V4-P: per-round transient retry. When set, the START of each round (factory creation + first
+   * event, before any event is yielded → no re-applied edit) is wrapped in the SDK `withRetry`.
+   * Absent ⇒ single attempt (backward-compatible). Default `isRetryable` is the SDK `isTransientError`.
+   */
+  readonly retry?: RetryOptions
 }
 
 function asString(value: unknown, fallback: string): string {
@@ -149,14 +168,17 @@ function buildPrompt(
  * (`BudgetExceededError`/`DelegationError`) propagate unchanged.
  */
 async function* consumeRoundOrThrow(
-  factory: RoundStreamFactory,
-  prompt: string,
-  sessionId: string,
-  signal: AbortSignal | undefined,
+  inputs: RoundInputs,
   agentName: string,
 ): AsyncGenerator<StreamEvent, RoundResult> {
   try {
-    return yield* consumeOneRound(factory, prompt, sessionId, signal)
+    return yield* consumeOneRound(
+      inputs.factory,
+      inputs.prompt,
+      inputs.sessionId,
+      inputs.signal,
+      inputs.retry,
+    )
   } catch (err) {
     if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
     throw new DelegationError(agentName, err)
@@ -321,11 +343,34 @@ function accumulateEvent(
  * (so SSE-first apps see tokens/tool-calls incrementally) AND returns the
  * aggregated {@link RoundResult} as the generator's return value.
  */
+/**
+ * V4-P: open the round's stream + read its first event. When `retry` is set, the whole START
+ * (creation + first `next()`) is wrapped in the SDK `withRetry` (dynamic-imported to keep the
+ * loop SDK-optional) — a transient before any event is yielded is recovered without re-applying
+ * an edit. Once the first event is obtained, the caller iterates WITHOUT retry.
+ */
+async function startRound(
+  factory: RoundStreamFactory,
+  prompt: string,
+  sessionId: string,
+  signal: AbortSignal | undefined,
+  retry: RetryOptions | undefined,
+): Promise<{ it: AsyncIterator<StreamEvent>; first: IteratorResult<StreamEvent> }> {
+  const open = async () => {
+    const it = factory(prompt, sessionId)[Symbol.asyncIterator]()
+    return { it, first: await it.next() }
+  }
+  if (!retry) return open()
+  const { withRetry } = await import('@theokit/sdk/retry')
+  return withRetry(open, { ...retry, signal: retry.signal ?? signal })
+}
+
 async function* consumeOneRound(
   factory: RoundStreamFactory,
   prompt: string,
   sessionId: string,
   signal: AbortSignal | undefined,
+  retry: RetryOptions | undefined,
 ): AsyncGenerator<StreamEvent, RoundResult> {
   const r: RoundResult = {
     responseText: '',
@@ -350,10 +395,15 @@ async function* consumeOneRound(
   // `output` on the paired `tool_result`. Correlate by callId so toolCalls is faithful.
   const callInputs = new Map<string, { name: string; input: unknown }>()
 
-  for await (const event of factory(prompt, sessionId)) {
+  // V4-P: the round START (creation + first event) is retried when `retry` is set; once an
+  // event is yielded we iterate without retry (a mid-stream throw may have applied an edit).
+  const { it, first } = await startRound(factory, prompt, sessionId, signal, retry)
+  let next = first
+  while (!next.done) {
     if (signal?.aborted) break // cancellation: stop advancing the iterator
-    yield event // V4-D-stream: surface the event to the consumer before accumulating
-    accumulateEvent(event, r, signals, callInputs)
+    yield next.value // V4-D-stream: surface the event to the consumer before accumulating
+    accumulateEvent(next.value, r, signals, callInputs)
+    next = await it.next()
   }
 
   r.finishReason = deriveFinishReason(signals)
@@ -380,6 +430,7 @@ export async function* runReflectiveLoopStream(
     budget = Number.POSITIVE_INFINITY,
     signal,
     agentName = loop.name,
+    retry,
   } = config
   const acc: DelegationResult = {
     response: '',
@@ -403,7 +454,7 @@ export async function* runReflectiveLoopStream(
 
   while (!signal?.aborted) {
     const prompt = buildPrompt(round, loop.maxIterations, message, feedback)
-    const r = yield* consumeRoundOrThrow(factory, prompt, sessionId, signal, agentName)
+    const r = yield* consumeRoundOrThrow({ factory, prompt, sessionId, signal, retry }, agentName)
 
     acc.response += r.responseText
     acc.toolCalls.push(...r.toolCalls)

@@ -18,6 +18,7 @@ import type {
   PluginsSettings,
   ProviderRoutingSettings,
 } from '@theokit/sdk'
+import type { RetryOptions } from '@theokit/sdk/retry'
 
 import {
   type CompiledAgentOptions,
@@ -91,6 +92,13 @@ export interface AgentRunnerRunOptions {
    * `FileSystemConversationStorage`/custom adapter for durable cross-run history.
    */
   readonly conversationStorage?: ConversationStorageAdapter
+  /**
+   * V4-P: per-round transient retry. When set, the START of each reflective round (factory
+   * creation + first event, before any event is yielded) is wrapped in the SDK `withRetry` —
+   * a 429/5xx/network blip is recovered without re-applying an edit. Absent ⇒ single attempt.
+   * Default `isRetryable` is the SDK `isTransientError`.
+   */
+  readonly retry?: RetryOptions
 }
 
 /**
@@ -183,6 +191,7 @@ export class AgentRunner {
       budget: opts.budget,
       agentName: this.agentName,
       signal: opts.signal,
+      retry: opts.retry, // V4-P: per-round transient retry (opt-in)
     })
   }
 
