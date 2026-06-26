@@ -358,7 +358,14 @@ async function startRound(
 ): Promise<{ it: AsyncIterator<StreamEvent>; first: IteratorResult<StreamEvent> }> {
   const open = async () => {
     const it = factory(prompt, sessionId)[Symbol.asyncIterator]()
-    return { it, first: await it.next() }
+    try {
+      return { it, first: await it.next() }
+    } catch (err) {
+      // The first event threw — release THIS attempt's iterator (run its finally → SDK dispose)
+      // before `withRetry` opens a fresh stream, so a failed retry attempt leaks nothing.
+      await it.return?.(undefined)
+      throw err
+    }
   }
   if (!retry) return open()
   const { withRetry } = await import('@theokit/sdk/retry')
