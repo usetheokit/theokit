@@ -54,6 +54,12 @@ class SubAgent {
   async run() {}
 }
 
+@Agent({ name: 'reactsub', route: '/reactsub', model: 'decorator-model' })
+class ReactSubAgent {
+  @MainLoop({ strategy: 'react', maxIterations: 4 })
+  async run() {}
+}
+
 const customReflection = { name: 'custom', reflect: () => ({ continue: false }) }
 
 describe('V4-T delegate() forwards per-run config', () => {
@@ -105,5 +111,19 @@ describe('V4-T delegate() forwards per-run config', () => {
     await delegate(SubAgent, 'hi', { apiKey: 'k' })
     expect((h.loopConfig?.reflection as { name: string }).name).toBe('ladder')
     expect(h.loopConfig?.retry).toBeUndefined()
+  })
+
+  it('test_reflection_defaults_to_noop_for_react', async () => {
+    await delegate(ReactSubAgent, 'hi', { apiKey: 'k' })
+    expect((h.loopConfig?.reflection as { name: string }).name).toBe('noop')
+  })
+
+  it('test_maxIterations_override_re_resolves_the_loop_ceiling', async () => {
+    // V4-T parity with AgentRunner.stream: opts.maxIterations re-resolves the loop ceiling.
+    await delegate(SubAgent, 'hi', { apiKey: 'k', maxIterations: 9 })
+    expect((h.loopConfig?.loop as { maxIterations: number }).maxIterations).toBe(9)
+    // absent ⇒ decorator ceiling (4)
+    await delegate(SubAgent, 'hi', { apiKey: 'k' })
+    expect((h.loopConfig?.loop as { maxIterations: number }).maxIterations).toBe(4)
   })
 })
