@@ -140,6 +140,36 @@ describe('V4-N loop outcome fidelity', () => {
     expect(result.cacheWriteTokens).toBe(4)
   })
 
+  it('test_plan_act_reflect_defers_continuation_to_reflection', async () => {
+    // V4-S: plan-act-reflect's shouldContinue is `round < max`, so a custom reflection can extend
+    // even a terminal `stop` round (e.g. "you answered without editing — edit now").
+    let calls = 0
+    const factory = factoryFrom([
+      [
+        { type: 'text_delta', content: 'no edit' },
+        { type: 'done', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+      ],
+      [
+        { type: 'text_delta', content: 'edited' },
+        { type: 'done', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+      ],
+    ])
+    const once: ReflectionStrategy = {
+      name: 'once',
+      reflect(outcome) {
+        calls += 1
+        return { continue: outcome.round < 2, feedback: 'edit now' }
+      },
+    }
+    const result = await runReflectiveLoop(factory, 'task', 's', {
+      loop: resolveLoopStrategy('plan-act-reflect', 5),
+      reflection: once,
+    })
+    expect(calls).toBe(2) // round 1 was a `stop` round, yet the reflection extended it to round 2
+    expect(result.rounds).toBe(2)
+    expect(result.response).toBe('no editedited')
+  })
+
   it('test_reflection_strategy_sees_tool_input', async () => {
     let seen: LoopOutcome | undefined
     const capture: ReflectionStrategy = {
