@@ -69,6 +69,10 @@ export interface DoneEvent {
     inputTokens: number
     outputTokens: number
     totalTokens: number
+    /** V4-O: SDK reasoning/cache token buckets (0 when the provider omits them). */
+    reasoningTokens?: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
   }
   durationMs: number
   /** Total cost in USD for this agent run (EC-2: added for budget tracking). */
@@ -146,9 +150,21 @@ export type AgentStreamEvent =
   | DoneEvent
 
 /** Type guard helpers. */
-export function isTextDelta(e: AgentStreamEvent): e is TextDeltaEvent { return e.type === 'text_delta' }
-export function isToolCall(e: AgentStreamEvent): e is ToolCallEvent { return e.type === 'tool_call' }
-export function isToolResult(e: AgentStreamEvent): e is ToolResultEvent { return e.type === 'tool_result' }
-export function isDone(e: AgentStreamEvent): e is DoneEvent { return e.type === 'done' }
-export function isError(e: AgentStreamEvent): e is ErrorEvent { return e.type === 'error' }
-export function isApprovalRequired(e: AgentStreamEvent): e is ApprovalRequiredEvent { return e.type === 'approval_required' }
+export function isTextDelta(e: AgentStreamEvent): e is TextDeltaEvent {
+  return e.type === 'text_delta'
+}
+export function isToolCall(e: AgentStreamEvent): e is ToolCallEvent {
+  return e.type === 'tool_call'
+}
+export function isToolResult(e: AgentStreamEvent): e is ToolResultEvent {
+  return e.type === 'tool_result'
+}
+export function isDone(e: AgentStreamEvent): e is DoneEvent {
+  return e.type === 'done'
+}
+export function isError(e: AgentStreamEvent): e is ErrorEvent {
+  return e.type === 'error'
+}
+export function isApprovalRequired(e: AgentStreamEvent): e is ApprovalRequiredEvent {
+  return e.type === 'approval_required'
+}

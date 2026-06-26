@@ -1,5 +1,48 @@
 # theo
 
+## 0.9.14
+
+### Patch Changes
+
+- Updated dependencies [01e9ea8]
+  - @theokit/agents@0.19.0
+
+## 0.9.13
+
+### Patch Changes
+
+- Updated dependencies [6d02c56]
+  - @theokit/agents@0.18.0
+
+## 0.9.12
+
+### Patch Changes
+
+- Updated dependencies [6ec6124]
+  - @theokit/agents@0.17.0
+
+## 0.9.11
+
+### Patch Changes
+
+- Updated dependencies [208ea7f]
+  - @theokit/agents@0.16.0
+
+## 0.9.10
+
+### Patch Changes
+
+- Updated dependencies [d69f7b4]
+  - @theokit/agents@0.15.0
+
+## 0.9.9
+
+### Patch Changes
+
+- Updated dependencies [6f1a757]
+- Updated dependencies [a4e1c25]
+  - @theokit/agents@0.14.0
+
 ## 0.9.8
 
 ### Patch Changes

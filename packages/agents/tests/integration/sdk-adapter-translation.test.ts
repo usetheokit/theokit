@@ -32,6 +32,7 @@ vi.mock('@theokit/sdk', () => ({
             stream: async function* () {
               for (const m of h.messages) yield m
             },
+            wait: async () => ({}),
           }),
         dispose: () => Promise.resolve(),
       }),
