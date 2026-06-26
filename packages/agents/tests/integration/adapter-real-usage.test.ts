@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   streamMsgs: [] as { type: string; [k: string]: unknown }[],
   waitCalls: 0,
   waitReject: false,
+  disposeCalls: 0,
 }))
 
 vi.mock('@theokit/sdk', () => ({
@@ -32,7 +33,9 @@ vi.mock('@theokit/sdk', () => ({
           return { usage: h.usage, result: '' }
         },
       }),
-      dispose: async () => {},
+      dispose: async () => {
+        h.disposeCalls++
+      },
     })),
   },
   defineTool: (s: unknown) => s,
@@ -67,6 +70,7 @@ describe('V4-N.1 adapter emits real SDK usage', () => {
     h.streamMsgs = []
     h.waitCalls = 0
     h.waitReject = false
+    h.disposeCalls = 0
   })
 
   it('test_done_carries_real_usage_from_wait', async () => {
@@ -96,5 +100,6 @@ describe('V4-N.1 adapter emits real SDK usage', () => {
     h.waitReject = true
     const events = await drain()
     expect(events.some((e) => e.type === 'error')).toBe(true)
+    expect(h.disposeCalls).toBe(1) // LOW-1: dispose runs in finally even on a wait() reject
   })
 })
