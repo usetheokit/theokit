@@ -15,6 +15,7 @@ import type {
   AgentDefinition,
   BudgetTracker,
   ConversationStorageAdapter,
+  CustomTool,
   PluginsSettings,
   ProviderRoutingSettings,
 } from '@theokit/sdk'
@@ -92,6 +93,13 @@ export interface AgentRunnerRunOptions {
    * `FileSystemConversationStorage`/custom adapter for durable cross-run history.
    */
   readonly conversationStorage?: ConversationStorageAdapter
+  /**
+   * V4-Q: pre-built SDK `CustomTool[]` forwarded RAW to `Agent.create.tools` (appended after the
+   * agent's compiled tools), bypassing `defineTool`. For an app whose tools come from imperative
+   * SDK factories (no `@Tool` compile path / no recoverable Zod schema). Distinct from `tools`
+   * (which REPLACES the compiled `CompiledTool[]`).
+   */
+  readonly sdkTools?: readonly CustomTool[]
   /**
    * V4-P: per-round transient retry. When set, the START of each reflective round (factory
    * creation + first event, before any event is yielded) is wrapped in the SDK `withRetry` —
@@ -183,6 +191,7 @@ export class AgentRunner {
       agents: opts.agents,
       budgetTracker: opts.budgetTracker,
       conversationStorage: opts.conversationStorage,
+      sdkTools: opts.sdkTools, // V4-Q: pre-built SDK tools forwarded raw
     })
     const sessionId = opts.sessionId ?? `runner-${crypto.randomUUID()}`
     return runReflectiveLoopStream(streamFactory, message, sessionId, {

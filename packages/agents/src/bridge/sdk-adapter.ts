@@ -11,6 +11,7 @@ import type {
   BudgetTracker,
   ContextSettings,
   ConversationStorageAdapter,
+  CustomTool,
   PluginsSettings,
   ProviderRoutingSettings,
   SkillsSettings,
@@ -89,6 +90,12 @@ export interface RuntimeOverrides {
    * no disk). Pass a `FileSystemConversationStorage`/custom adapter for durable history.
    */
   conversationStorage?: ConversationStorageAdapter
+  /**
+   * V4-Q: pre-built SDK `CustomTool[]` forwarded RAW to `Agent.create.tools` (appended after the
+   * compiled tools), bypassing `defineTool` (which requires a Zod schema). Lets an app whose tools
+   * come from imperative SDK factories supply them without the `@Tool` compile path.
+   */
+  sdkTools?: readonly CustomTool[]
 }
 
 /**
@@ -215,15 +222,19 @@ export function createSdkAgentStream(
         return
       }
 
-      // Convert compiled tools → SDK defineTool format
-      const sdkTools = compiledTools.map((t) =>
-        defineTool({
-          name: t.name,
-          description: t.description,
-          inputSchema: t.inputSchema,
-          handler: t.handler,
-        }),
-      )
+      // Convert compiled tools → SDK defineTool format; V4-Q: append pre-built SDK CustomTool[]
+      // RAW (already defined — must NOT be re-run through defineTool, which requires a Zod schema).
+      const sdkTools = [
+        ...compiledTools.map((t) =>
+          defineTool({
+            name: t.name,
+            description: t.description,
+            inputSchema: t.inputSchema,
+            handler: t.handler,
+          }),
+        ),
+        ...(overrides.sdkTools ?? []),
+      ]
 
       // V4-N.1: declared outside the try so `finally` can dispose even when `run.wait()` rejects.
       let agent: Awaited<ReturnType<typeof Agent.getOrCreate>> | undefined
