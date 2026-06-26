@@ -27,9 +27,9 @@ import type { RouteConfig } from './define-route.js'
  */
 
 export interface AgentEndpointHandlerArgs<
-  TParams extends z.ZodType = z.ZodUndefined,
   TCtx = unknown,
   TBody = unknown,
+  TParams extends z.ZodType = z.ZodUndefined,
 > {
   query: undefined
   body: TBody
@@ -65,9 +65,9 @@ export interface AgentEndpointHandlerArgs<
 }
 
 export interface AgentEndpointConfig<
-  TParams extends z.ZodType = z.ZodUndefined,
   TCtx = unknown,
   TBody = unknown,
+  TParams extends z.ZodType = z.ZodUndefined,
 > {
   /**
    * Optional Zod schema for path params (e.g. `z.object({ id: z.string() })`).
@@ -77,7 +77,7 @@ export interface AgentEndpointConfig<
    */
   params?: TParams
   handler: (
-    args: AgentEndpointHandlerArgs<TParams, TCtx, TBody>,
+    args: AgentEndpointHandlerArgs<TCtx, TBody, TParams>,
   ) => AsyncGenerator<AgentEvent, void, unknown>
 }
 
@@ -137,7 +137,7 @@ export function defineAgentEndpoint<
   TCtx = unknown,
   TParams extends z.ZodType = z.ZodUndefined,
 >(
-  config: AgentEndpointConfig<TParams, TCtx, TBody>,
+  config: AgentEndpointConfig<TCtx, TBody, TParams>,
 ): RouteConfig<z.ZodUndefined, z.ZodUndefined, TParams, TCtx, Response> {
   return {
     params: config.params,
