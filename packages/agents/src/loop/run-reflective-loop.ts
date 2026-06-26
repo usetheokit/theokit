@@ -218,12 +218,6 @@ function deriveFinishReason(signals: {
   return 'stop'
 }
 
-/**
- * Consume exactly one SDK stream turn and derive its {@link LoopFinishReason}.
- * V4-D-stream: an async generator — it `yield`s each event to the consumer LIVE
- * (so SSE-first apps see tokens/tool-calls incrementally) AND returns the
- * aggregated {@link RoundResult} as the generator's return value.
- */
 /** Mutable round signals used to derive the round's {@link LoopFinishReason}. */
 interface RoundSignals {
   sawError: boolean
@@ -291,6 +285,12 @@ function accumulateEvent(
   }
 }
 
+/**
+ * Consume exactly one SDK stream turn and derive its {@link LoopFinishReason}.
+ * V4-D-stream: an async generator — it `yield`s each event to the consumer LIVE
+ * (so SSE-first apps see tokens/tool-calls incrementally) AND returns the
+ * aggregated {@link RoundResult} as the generator's return value.
+ */
 async function* consumeOneRound(
   factory: RoundStreamFactory,
   prompt: string,
