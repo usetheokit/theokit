@@ -163,6 +163,21 @@ async function* consumeRoundOrThrow(
   }
 }
 
+/**
+ * V4-N/V4-O: fold one round's usage into the accumulator — cost + total/split tokens (V4-N) and
+ * the reasoning/cache buckets (V4-O). Extracted from the loop body to keep its complexity within
+ * budget (G6); the optional `acc` fields default to 0 before adding.
+ */
+function accumulateUsage(acc: DelegationResult, r: RoundResult): void {
+  acc.cost += r.cost
+  acc.tokens += r.tokens
+  acc.tokensInput = (acc.tokensInput ?? 0) + r.tokensInput
+  acc.tokensOutput = (acc.tokensOutput ?? 0) + r.tokensOutput
+  acc.reasoningTokens = (acc.reasoningTokens ?? 0) + r.reasoningTokens
+  acc.cacheReadTokens = (acc.cacheReadTokens ?? 0) + r.cacheReadTokens
+  acc.cacheWriteTokens = (acc.cacheWriteTokens ?? 0) + r.cacheWriteTokens
+}
+
 /** Stamp the terminal state on the accumulator + emit the runtime metric (DRY for the 2 exit points). */
 function finalize(
   acc: DelegationResult,
@@ -184,6 +199,10 @@ interface RoundResult {
   tokens: number
   tokensInput: number
   tokensOutput: number
+  // V4-O: reasoning/cache token buckets folded from the done event.
+  reasoningTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
   finishReason: LoopFinishReason
   errorMessage: string
 }
@@ -244,15 +263,26 @@ function pushToolResult(
   })
 }
 
-/** V4-N: fold a `done` event's cost + split/total token usage into the round. */
+/** V4-N: fold a `done` event's cost + split/total token usage into the round (V4-O: + buckets). */
 function applyDone(event: StreamEvent, r: RoundResult): void {
   r.cost = asNumber(event.cost, 0)
   const usage = event.usage as
-    | { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+    | {
+        totalTokens?: number
+        inputTokens?: number
+        outputTokens?: number
+        reasoningTokens?: number
+        cacheReadTokens?: number
+        cacheWriteTokens?: number
+      }
     | undefined
   r.tokens = usage?.totalTokens ?? 0
   r.tokensInput = usage?.inputTokens ?? 0
   r.tokensOutput = usage?.outputTokens ?? 0
+  // V4-O: fold the reasoning/cache buckets (0 when the provider/adapter omits them).
+  r.reasoningTokens = usage?.reasoningTokens ?? 0
+  r.cacheReadTokens = usage?.cacheReadTokens ?? 0
+  r.cacheWriteTokens = usage?.cacheWriteTokens ?? 0
 }
 
 /**
@@ -304,6 +334,9 @@ async function* consumeOneRound(
     tokens: 0,
     tokensInput: 0,
     tokensOutput: 0,
+    reasoningTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
     finishReason: 'stop',
     errorMessage: '',
   }
@@ -355,6 +388,9 @@ export async function* runReflectiveLoopStream(
     tokens: 0,
     tokensInput: 0,
     tokensOutput: 0,
+    reasoningTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
     rounds: 0,
   }
   // V4-K: one mutable scratch bag per run, threaded to every reflect() so a stateful
@@ -371,10 +407,7 @@ export async function* runReflectiveLoopStream(
 
     acc.response += r.responseText
     acc.toolCalls.push(...r.toolCalls)
-    acc.cost += r.cost
-    acc.tokens += r.tokens
-    acc.tokensInput = (acc.tokensInput ?? 0) + r.tokensInput // V4-N split usage
-    acc.tokensOutput = (acc.tokensOutput ?? 0) + r.tokensOutput
+    accumulateUsage(acc, r)
 
     if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
     if (Number.isFinite(budget) && acc.cost > budget) {

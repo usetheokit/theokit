@@ -9,7 +9,14 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 
 const h = vi.hoisted(() => ({
-  usage: { inputTokens: 12, outputTokens: 7 } as { inputTokens?: number; outputTokens?: number },
+  usage: { inputTokens: 12, outputTokens: 7 } as {
+    inputTokens?: number
+    outputTokens?: number
+    // V4-O: optional reasoning/cache buckets forwarded by realUsageDone.
+    reasoningTokens?: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
+  },
   streamMsgs: [] as { type: string; [k: string]: unknown }[],
   waitCalls: 0,
   waitReject: false,
@@ -76,7 +83,50 @@ describe('V4-N.1 adapter emits real SDK usage', () => {
   it('test_done_carries_real_usage_from_wait', async () => {
     const events = await drain()
     const done = events.find((e) => e.type === 'done')
-    expect(done?.usage).toEqual({ inputTokens: 12, outputTokens: 7, totalTokens: 19 })
+    // V4-O: the done.usage now always carries the reasoning/cache buckets (0 when the
+    // provider omits them, as here — h.usage has no buckets by default).
+    expect(done?.usage).toEqual({
+      inputTokens: 12,
+      outputTokens: 7,
+      totalTokens: 19,
+      reasoningTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    })
+  })
+
+  it('test_done_carries_reasoning_cache_buckets', async () => {
+    // V4-O: when the SDK RunResult.usage reports reasoning/cache buckets, the adapter
+    // forwards them on the done event (passthrough — ADR D1).
+    h.usage = {
+      inputTokens: 12,
+      outputTokens: 7,
+      reasoningTokens: 3,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 2,
+    }
+    const events = await drain()
+    const done = events.find((e) => e.type === 'done')
+    expect(done?.usage).toMatchObject({
+      reasoningTokens: 3,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 2,
+    })
+  })
+
+  it('test_delegationresult_carries_reasoning_cache_buckets', async () => {
+    // V4-O: the buckets accumulate through the loop into DelegationResult (end-to-end).
+    h.usage = {
+      inputTokens: 12,
+      outputTokens: 7,
+      reasoningTokens: 3,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 2,
+    }
+    const result = await AgentRunner.builder(UsageAgent).build().run('hi', { apiKey: 'k' })
+    expect(result.reasoningTokens).toBe(3)
+    expect(result.cacheReadTokens).toBe(5)
+    expect(result.cacheWriteTokens).toBe(2)
   })
 
   it('test_delegationresult_reports_real_split_usage', async () => {
