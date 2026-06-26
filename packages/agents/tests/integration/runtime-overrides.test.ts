@@ -54,6 +54,7 @@ vi.mock('@theokit/sdk', () => ({
             }
             yield { type: 'status', status: 'FINISHED' }
           },
+          wait: async () => ({}),
         }),
         dispose: async () => {},
       }
