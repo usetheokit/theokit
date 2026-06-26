@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { isAuthRequiredError } from '../../core/contracts/auth-error-guard.js'
+import { TheoError } from '../../core/contracts/theo-error.js'
 import { DuplicateContextKeyError } from '../jobs/duplicate-context-key-error.js'
 import { createOutbox } from '../jobs/outbox.js'
 import { createOutboxDispatcher, createQueueClient } from '../jobs/queue-client.js'
@@ -11,7 +12,7 @@ import { dispatchCsrfWarn } from '../security/csrf-warn-dispatch.js'
 import { enforceCsrf } from '../security/csrf.js'
 
 import type { ExecuteRouteContext } from './execute-context.js'
-import { parseQueryAndBody, runZodValidation } from './execute-stages.js'
+import { isZodLike, parseQueryAndBody, runZodValidation } from './execute-stages.js'
 import { runMiddlewareAndContext } from './middleware-runner.js'
 import { sendError, sendJson } from './send-response.js'
 
@@ -287,7 +288,22 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
       return
     }
 
-    sendJson(res, handlerResult, (rc.status as number | undefined) ?? 200, transformer)
+    // Validate the plain-object return against config.response when declared
+    // (D1/D2). A mismatch is a SERVER fault → throw TheoError, routed to a 500
+    // by the catch below. Response-instance + 204 branches above are untouched.
+    let responseBody: unknown = handlerResult
+    if (isZodLike(rc.response)) {
+      const parsed = rc.response.safeParse(handlerResult)
+      if (!parsed.success) {
+        throw new TheoError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'response validation failed',
+          ext: { issues: parsed.error?.issues },
+        })
+      }
+      responseBody = parsed.data
+    }
+    sendJson(res, responseBody, (rc.status as number | undefined) ?? 200, transformer)
     if (pluginRunner) await pluginRunner.runOnResponse(buildPluginCtx(ctx))
   } catch (err) {
     // T4.4 — onError hook (runs before default error response)

@@ -39,7 +39,9 @@ import type { z } from 'zod'
 import { envelopeCodeToStatus } from '../core/contracts/envelope-code-to-status.js'
 import type { TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
 import { serverErrorToEnvelope } from '../core/contracts/server-error-to-envelope.js'
+import { TheoError } from '../core/contracts/theo-error.js'
 
+import { isZodLike } from './http/execute-stages.js'
 import { runWebMiddleware, type WebMiddleware } from './http/web-middleware-runner.js'
 import type {
   WebOnErrorHook,
@@ -63,6 +65,10 @@ interface WebRouteHandlerConfig {
   query?: z.ZodType
   body?: z.ZodType
   params?: z.ZodType
+  /** Optional Zod schema validating a plain-object handler return (D1/D2). */
+  response?: z.ZodType
+  /** Honored for plain-object returns to match the Node runner (D3). */
+  status?: number
   handler: (ctx: {
     query: unknown
     body: unknown
@@ -234,7 +240,30 @@ async function runHandler(
   }
 
   const result = await config.handler({ query, body, params, request, context })
-  return { ok: true, result }
+  return validateResponseOutput(config.response, result) ?? { ok: true, result }
+}
+
+/**
+ * Validate a plain-object handler return against `config.response` (D1/D2). A
+ * mismatch is a SERVER fault → 500 envelope. `Response`-instance returns and
+ * `undefined`/`null` (→ 204) skip validation — parity with the Node runner,
+ * which validates only in its plain-object branch. Returns `undefined` when no
+ * validation applies (caller forwards the raw result).
+ */
+function validateResponseOutput(
+  response: unknown,
+  result: unknown,
+): { ok: true; result: unknown } | { ok: false; response: Response } | undefined {
+  const validatable = result !== undefined && result !== null && !(result instanceof Response)
+  if (!validatable || !isZodLike(response)) return undefined
+  const parsed = response.safeParse(result)
+  if (parsed.success) return { ok: true, result: parsed.data }
+  const err = new TheoError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'response validation failed',
+    ext: { issues: parsed.error?.issues },
+  })
+  return { ok: false, response: handlerErrorResponse(err) }
 }
 
 /**
@@ -243,7 +272,7 @@ async function runHandler(
  *   - existing `Response` instance → pass through unchanged.
  *   - everything else → 200 JSON.
  */
-function toResponse(result: unknown): Response {
+function toResponse(result: unknown, status?: number): Response {
   if (result === undefined) {
     return new Response(null, { status: 204 })
   }
@@ -251,7 +280,7 @@ function toResponse(result: unknown): Response {
     return result
   }
   return new Response(JSON.stringify(result), {
-    status: 200,
+    status: status ?? 200,
     headers: { 'content-type': 'application/json' },
   })
 }
@@ -479,7 +508,7 @@ export async function executeWebRequest(
         context,
       )
       if (!outcome.ok) return outcome.response
-      return toResponse(outcome.result)
+      return toResponse(outcome.result, config.status)
     } catch (err) {
       return handlerErrorResponse(err)
     }
@@ -570,7 +599,7 @@ async function runHandlerStage(
     opts.params ?? {},
     hookCtx.ctx,
   )
-  hookCtx.response = outcome.ok ? toResponse(outcome.result) : outcome.response
+  hookCtx.response = outcome.ok ? toResponse(outcome.result, config.status) : outcome.response
 }
 
 async function runWithHooks(

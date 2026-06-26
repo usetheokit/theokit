@@ -26,10 +26,14 @@ import type { RouteConfig } from './define-route.js'
  * immediately.
  */
 
-export interface AgentEndpointHandlerArgs<TCtx = unknown, TBody = unknown> {
+export interface AgentEndpointHandlerArgs<
+  TParams extends z.ZodType = z.ZodUndefined,
+  TCtx = unknown,
+  TBody = unknown,
+> {
   query: undefined
   body: TBody
-  params: undefined
+  params: z.infer<TParams>
   request: Request
   ctx: TCtx
   /**
@@ -60,9 +64,20 @@ export interface AgentEndpointHandlerArgs<TCtx = unknown, TBody = unknown> {
   signal: AbortSignal
 }
 
-export interface AgentEndpointConfig<TCtx = unknown, TBody = unknown> {
+export interface AgentEndpointConfig<
+  TParams extends z.ZodType = z.ZodUndefined,
+  TCtx = unknown,
+  TBody = unknown,
+> {
+  /**
+   * Optional Zod schema for path params (e.g. `z.object({ id: z.string() })`).
+   * When present, the runner validates path params and returns 400 on mismatch
+   * BEFORE the generator runs; the validated params are threaded to the
+   * generator typed as `z.infer<TParams>` (D4).
+   */
+  params?: TParams
   handler: (
-    args: AgentEndpointHandlerArgs<TCtx, TBody>,
+    args: AgentEndpointHandlerArgs<TParams, TCtx, TBody>,
   ) => AsyncGenerator<AgentEvent, void, unknown>
 }
 
@@ -117,10 +132,15 @@ function resolveAbortSignal(request: unknown): AbortSignal {
   return controller.signal
 }
 
-export function defineAgentEndpoint<TBody = unknown, TCtx = unknown>(
-  config: AgentEndpointConfig<TCtx, TBody>,
-): RouteConfig<z.ZodUndefined, z.ZodUndefined, z.ZodUndefined, TCtx, Response> {
+export function defineAgentEndpoint<
+  TBody = unknown,
+  TCtx = unknown,
+  TParams extends z.ZodType = z.ZodUndefined,
+>(
+  config: AgentEndpointConfig<TParams, TCtx, TBody>,
+): RouteConfig<z.ZodUndefined, z.ZodUndefined, TParams, TCtx, Response> {
   return {
+    params: config.params,
     handler: async ({ request, ctx, body, query, params }) => {
       const cookieHeaders = new Headers()
       const signal = resolveAbortSignal(request)
