@@ -41,7 +41,7 @@ import {
   noopReflectionStrategy,
   type ReflectionStrategy,
 } from './reflection-strategy.js'
-import { runReflectiveLoopStream } from './run-reflective-loop.js'
+import { type RoundStreamFactory, runReflectiveLoopStream } from './run-reflective-loop.js'
 
 /** Options for {@link AgentRunner.run}. */
 export interface AgentRunnerRunOptions {
@@ -100,6 +100,13 @@ export interface AgentRunnerRunOptions {
    * (which REPLACES the compiled `CompiledTool[]`).
    */
   readonly sdkTools?: readonly CustomTool[]
+  /**
+   * V4-R: inject the per-round stream factory, driving the reflective loop with a caller-provided
+   * stream INSTEAD of the SDK adapter (tests / custom transport). When set, the SDK-create options
+   * (`tools`/`sdkTools`/`model`/`cwd`/`plugins`/...) are NOT used for this call — the consumer owns
+   * the stream. Absent ⇒ `createSdkAgentStream` (the default runtime).
+   */
+  readonly streamFactory?: RoundStreamFactory
   /**
    * V4-P: per-round transient retry. When set, the START of each reflective round (factory
    * creation + first event, before any event is yielded) is wrapped in the SDK `withRetry` —
@@ -181,18 +188,21 @@ export class AgentRunner {
       opts.maxIterations != null
         ? resolveLoopStrategy(this.loopStrategy.name, opts.maxIterations)
         : this.loopStrategy
-    // V4-L.2 + V4-L.3 (Axis-A SWAP): the per-request overrides forwarded to Agent.create.
+    // V4-R: a caller-injected factory drives the loop directly (tests / custom transport); absent ⇒
+    // the SDK adapter. V4-L.2 + V4-L.3 (Axis-A SWAP): the per-request overrides forwarded to Agent.create.
     // `model` resolves against compiled.model in the adapter (single resolution site).
-    const streamFactory = createSdkAgentStream(this.compiled, tools, opts.apiKey, {
-      model: opts.model,
-      cwd: opts.cwd,
-      plugins: opts.plugins,
-      providers: opts.providers,
-      agents: opts.agents,
-      budgetTracker: opts.budgetTracker,
-      conversationStorage: opts.conversationStorage,
-      sdkTools: opts.sdkTools, // V4-Q: pre-built SDK tools forwarded raw
-    })
+    const streamFactory =
+      opts.streamFactory ??
+      createSdkAgentStream(this.compiled, tools, opts.apiKey, {
+        model: opts.model,
+        cwd: opts.cwd,
+        plugins: opts.plugins,
+        providers: opts.providers,
+        agents: opts.agents,
+        budgetTracker: opts.budgetTracker,
+        conversationStorage: opts.conversationStorage,
+        sdkTools: opts.sdkTools, // V4-Q: pre-built SDK tools forwarded raw
+      })
     const sessionId = opts.sessionId ?? `runner-${crypto.randomUUID()}`
     return runReflectiveLoopStream(streamFactory, message, sessionId, {
       loop,
