@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "type": "module",
   "sideEffects": false,
   "license": "Apache-2.0",
@@ -109,7 +109,7 @@
     "dist"
   ],
   "dependencies": {
-    "@theokit/agents": "^0.12.0",
+    "@theokit/agents": "^0.13.0",
     "@theokit/http": "^0.5.4",
     "@vitejs/plugin-react": "^4.7.0",
     "busboy": "^1.6.0",

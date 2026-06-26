@@ -199,7 +199,9 @@ describe('runReflectiveLoop (T2.1)', () => {
       reflection: ladderReflectionStrategy,
     })
     expect(prompts[1]).toContain('reflection')
-    expect(prompts[1]).toContain('original-task')
+    // V4-M: round 2 no longer re-sends the original task — the persisted SDK session carries
+    // it (rounds share state via getOrCreate); the round-2 prompt is the reflection block only.
+    expect(prompts[1]).not.toContain('original-task')
   })
 
   it('test_mainloop_empty_round_terminates_as_stop — EC-1: degenerate round ⇒ stop, 1 round', async () => {

@@ -30,8 +30,12 @@ const h = vi.hoisted(() => ({
 // tool_call (⇒ tool_result ⇒ finishReason 'tool-calls', the "still working" signal), and
 // a FINISHED status (⇒ done).
 vi.mock('@theokit/sdk', () => ({
+  InMemoryConversationStorage: class {
+    getMessages = async () => []
+    appendMessage = async () => {}
+  },
   Agent: {
-    create: vi.fn(async (opts: Record<string, unknown>) => {
+    getOrCreate: vi.fn(async (_id: string, opts: Record<string, unknown>) => {
       h.captured = opts
       return {
         send: async () => ({
