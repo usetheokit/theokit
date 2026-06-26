@@ -1,6 +1,6 @@
 {
   "name": "@theokit/agents",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Unified decorator runtime — AI agents as first-class citizens of the TheoKit pipeline. @Agent() compiles to SDK Agent.create(), @Tool() compiles to defineTool().",
   "type": "module",
   "sideEffects": false,
