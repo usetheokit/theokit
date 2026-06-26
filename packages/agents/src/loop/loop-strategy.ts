@@ -31,8 +31,8 @@ export interface LoopOutcome {
   readonly finishReason: LoopFinishReason
   /** 1-indexed round number that just completed. */
   readonly round: number
-  /** Tool calls executed during the round. */
-  readonly toolCalls: readonly { name: string; input: unknown; output: string }[]
+  /** Tool calls executed during the round (V4-N: `id` correlates the call to its result). */
+  readonly toolCalls: readonly { id: string; name: string; input: unknown; output: string }[]
   /** Accumulated assistant text for the round. */
   readonly responseText: string
 }
