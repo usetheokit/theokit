@@ -95,7 +95,7 @@ theocode's loop-adoption discover proved every loop capability is covered (V4-M/
 
 | Drawback / Risk | Severity | Mitigation | Owner |
 |---|---|---|---|
-| Name collision between a compiled tool and an sdkTool | Low | Same risk as any tool set; the SDK validates tool-name uniqueness at create | maintainer |
+| Name collision between a compiled tool and an sdkTool | Low | The SDK resolves tools first-match-wins (`tools.find(t => t.name === ...)`, no create-time uniqueness check) — a colliding name silently shadows the appended sdkTool (compiled wins, being first). Same semantics as the existing `tools` override; not introduced by V4-Q. | maintainer |
 | `sdkTools` typed `CustomTool` couples the option to the SDK type | Low | The whole adapter already depends on the SDK runtime (G2); `CustomTool` is the SDK's public tool type | maintainer |
 
 ## Unresolved Questions

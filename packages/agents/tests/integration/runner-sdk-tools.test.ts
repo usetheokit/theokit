@@ -59,4 +59,23 @@ describe('V4-Q AgentRunner forwards pre-built sdkTools', () => {
     // STAgent has no @Tool → compiled tools empty → no sdkTools appended → empty tools array.
     expect(h.captured?.tools).toEqual([])
   })
+
+  it('test_sdktools_append_after_run_options_tools_override', async () => {
+    // sdkTools append AFTER the per-run `tools` (CompiledTool) override — both reach the agent.
+    const compiled = { name: 'c', description: 'd', inputSchema: {}, handler: () => 'ok' }
+    const fakeTool = { name: 'x', description: 'd', inputSchema: {}, handler: () => 'ok' }
+    await AgentRunner.builder(STAgent)
+      .build()
+      .run('hi', { apiKey: 'k', tools: [compiled] as never, sdkTools: [fakeTool] as never })
+    const tools = h.captured?.tools ?? []
+    // compiled `tools` are run through defineTool (mock marks __defined); sdkTools stay raw.
+    expect(
+      tools.some(
+        (t) =>
+          (t as { __defined?: boolean; name?: string }).__defined &&
+          (t as { name?: string }).name === 'c',
+      ),
+    ).toBe(true)
+    expect(tools).toContain(fakeTool)
+  })
 })
