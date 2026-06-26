@@ -201,6 +201,8 @@ export function createSdkAgentStream(
         }),
       )
 
+      // V4-N.1: declared outside the try so `finally` can dispose even when `run.wait()` rejects.
+      let agent: Awaited<ReturnType<typeof Agent.getOrCreate>> | undefined
       try {
         // Project the compiled M8 decorator fields into native Agent.create args.
         const { options: m8, applied } = assembleM8CreateOptions(compiled)
@@ -221,7 +223,7 @@ export function createSdkAgentStream(
 
         // V4-M: getOrCreate(sessionId) resumes the shared session so this round sees prior
         // rounds (M8 fields + per-request extra spread; absent ⇒ no key).
-        const agent = await Agent.getOrCreate(sessionId, {
+        agent = await Agent.getOrCreate(sessionId, {
           apiKey,
           model: { id: model },
           tools: sdkTools,
@@ -249,8 +251,6 @@ export function createSdkAgentStream(
         if (!sawError) {
           yield realUsageDone(await run.wait(), t0)
         }
-
-        await agent.dispose()
       } catch (err) {
         yield {
           type: 'error',
@@ -258,6 +258,9 @@ export function createSdkAgentStream(
           message: err instanceof Error ? err.message : 'SDK agent error',
           retryable: false,
         }
+      } finally {
+        // V4-N.1: always dispose — covers the new `run.wait()` reject path (LOW-1).
+        await agent?.dispose()
       }
     },
   })
