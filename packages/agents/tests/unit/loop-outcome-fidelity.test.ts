@@ -97,6 +97,49 @@ describe('V4-N loop outcome fidelity', () => {
     expect(result.toolCalls[0]).toMatchObject({ id: 'cX', name: 't', input: {}, output: 'ok' })
   })
 
+  it('test_reasoning_cache_buckets_accumulated_across_rounds', async () => {
+    // V4-O: each round's done carries reasoning/cache buckets; the loop sums them into
+    // DelegationResult (mirrors the V4-N split-usage accumulation).
+    const twoRounds = resolveLoopStrategy('react', 2)
+    const factory = factoryFrom([
+      [
+        { type: 'tool_call', callId: 'c1', toolName: 't', input: { a: 1 } },
+        { type: 'tool_result', callId: 'c1', toolName: 't', output: 'ok' },
+        {
+          type: 'done',
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+            reasoningTokens: 3,
+            cacheReadTokens: 5,
+            cacheWriteTokens: 2,
+          },
+        },
+      ],
+      [
+        {
+          type: 'done',
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+            reasoningTokens: 3,
+            cacheReadTokens: 5,
+            cacheWriteTokens: 2,
+          },
+        },
+      ],
+    ])
+    const result = await runReflectiveLoop(factory, 'task', 's', {
+      loop: twoRounds,
+      reflection: noopReflectionStrategy,
+    })
+    expect(result.reasoningTokens).toBe(6)
+    expect(result.cacheReadTokens).toBe(10)
+    expect(result.cacheWriteTokens).toBe(4)
+  })
+
   it('test_reflection_strategy_sees_tool_input', async () => {
     let seen: LoopOutcome | undefined
     const capture: ReflectionStrategy = {

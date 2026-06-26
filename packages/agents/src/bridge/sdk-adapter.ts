@@ -98,17 +98,34 @@ export interface RuntimeOverrides {
 function realUsageDone(
   result: {
     result?: string
-    usage?: { inputTokens?: number; outputTokens?: number }
+    usage?: {
+      inputTokens?: number
+      outputTokens?: number
+      // V4-O: optional reasoning/cache buckets from the SDK TokenUsage.
+      reasoningTokens?: number
+      cacheReadTokens?: number
+      cacheWriteTokens?: number
+    }
     cost?: { amount?: number }
   },
   t0: number,
 ): StreamEvent {
-  const inputTokens = result.usage?.inputTokens ?? 0
-  const outputTokens = result.usage?.outputTokens ?? 0
+  const u = result.usage
+  const inputTokens = u?.inputTokens ?? 0
+  const outputTokens = u?.outputTokens ?? 0
   return {
     type: 'done',
     result: result.result ?? '',
-    usage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
+    // V4-O: forward the SDK reasoning/cache buckets (0 when the provider omits them) so a
+    // consumer keeps full per-turn usage through the loop into DelegationResult (passthrough — ADR D1).
+    usage: {
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      reasoningTokens: u?.reasoningTokens ?? 0,
+      cacheReadTokens: u?.cacheReadTokens ?? 0,
+      cacheWriteTokens: u?.cacheWriteTokens ?? 0,
+    },
     durationMs: Date.now() - t0,
     cost: result.cost?.amount ?? 0,
   }
@@ -159,9 +176,16 @@ export function createSdkAgentStream(
           send: (msg: string) => Promise<{
             stream: () => AsyncGenerator<SdkMessage>
             // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
+            // V4-O: usage also carries optional reasoning/cache buckets (forwarded by realUsageDone).
             wait: () => Promise<{
               result?: string
-              usage?: { inputTokens?: number; outputTokens?: number }
+              usage?: {
+                inputTokens?: number
+                outputTokens?: number
+                reasoningTokens?: number
+                cacheReadTokens?: number
+                cacheWriteTokens?: number
+              }
               cost?: { amount?: number }
             }>
           }>
