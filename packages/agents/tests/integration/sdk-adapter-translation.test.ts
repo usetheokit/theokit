@@ -20,8 +20,12 @@ interface SdkMsg {
 const h = vi.hoisted(() => ({ messages: [] as SdkMsg[] }))
 
 vi.mock('@theokit/sdk', () => ({
+  InMemoryConversationStorage: class {
+    getMessages = async () => []
+    appendMessage = async () => {}
+  },
   Agent: {
-    create: () =>
+    getOrCreate: () =>
       Promise.resolve({
         send: () =>
           Promise.resolve({
