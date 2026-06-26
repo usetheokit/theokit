@@ -71,6 +71,8 @@ export interface DelegateOptions {
   retry?: RetryOptions
   /** Custom between-round reflection (default: ladder for `plan-act-reflect`, else noop). */
   reflection?: ReflectionStrategy
+  /** Per-run loop-ceiling override (`?? SubAgent @MainLoop maxIterations`). */
+  maxIterations?: number
 }
 
 /** Validate API key and throw DelegationError if missing. */
@@ -135,7 +137,11 @@ export async function delegate(
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
   // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
-  const loopStrategy = resolveLoopStrategy(walk.mainLoop.strategy, walk.mainLoop.maxIterations)
+  // V4-T: per-run maxIterations override (parity with AgentRunner.stream); absent ⇒ decorator ceiling.
+  const loopStrategy = resolveLoopStrategy(
+    walk.mainLoop.strategy,
+    opts.maxIterations ?? walk.mainLoop.maxIterations,
+  )
   // V4-T: a custom reflection wins; absent ⇒ the strategy-derived default (ladder/noop).
   const reflection =
     opts.reflection ??
