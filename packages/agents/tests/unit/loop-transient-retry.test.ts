@@ -92,6 +92,54 @@ describe('V4-P loop transient retry', () => {
     expect(cleaned).toBe(true) // the iterator's finally ran on abort (no leaked SDK stream)
   })
 
+  it('test_mid_stream_throw_propagates_without_retry', async () => {
+    // G2: a throw AFTER the first event is yielded must NOT be retried (it may have applied an
+    // edit) — it propagates as DelegationError, and the stream is opened exactly once.
+    let opens = 0
+    const factory: RoundStreamFactory = () => {
+      opens += 1
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'tool_result', callId: 'c1', toolName: 't', output: 'ok' }
+          throw new Error('mid-stream boom') // after an event was yielded
+        },
+      }
+    }
+    await expect(
+      runReflectiveLoop(factory, 'task', 's', {
+        loop: oneShot,
+        reflection: noopReflectionStrategy,
+        retry: { retries: 3, isRetryable: () => true, ...noWait },
+      }),
+    ).rejects.toThrow()
+    expect(opens).toBe(1) // mid-stream throw is NOT retried (no re-applied edit)
+  })
+
+  it('test_failed_retry_attempt_releases_its_iterator', async () => {
+    // LOW (adversarial review): when a RETRIED attempt's first event throws, that attempt's
+    // iterator must be released (finally runs) before withRetry opens a fresh stream.
+    let finallies = 0
+    let calls = 0
+    const factory: RoundStreamFactory = () => ({
+      async *[Symbol.asyncIterator]() {
+        calls += 1
+        try {
+          if (calls === 1) throw new Error('transient at first event')
+          yield { type: 'done', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }
+        } finally {
+          finallies += 1
+        }
+      },
+    })
+    await runReflectiveLoop(factory, 'task', 's', {
+      loop: oneShot,
+      reflection: noopReflectionStrategy,
+      retry: { retries: 2, isRetryable: () => true, ...noWait },
+    })
+    expect(calls).toBe(2)
+    expect(finallies).toBe(2) // BOTH the failed attempt and the successful one ran their finally
+  })
+
   it('test_no_retry_config_is_single_attempt', async () => {
     const counter = { calls: 0 }
     await expect(
