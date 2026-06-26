@@ -27,6 +27,20 @@ export interface RouteConfig<
   params?: TParams
   status?: number
   /**
+   * Optional Zod schema for the handler's plain-object return value. When
+   * present, BOTH runtimes (Node `executeRoute` + Web `executeWebRequest`)
+   * validate the handler's plain-object return against it BEFORE serializing.
+   *
+   * A mismatch is a SERVER fault (the handler violated its own declared
+   * contract) → 500 `INTERNAL_SERVER_ERROR`, distinct from the 400 used for
+   * input (`query`/`body`/`params`) validation failures.
+   *
+   * `Response`-instance returns (and `undefined`/`null` → 204) are NOT
+   * validated. This is a plain optional field — runtime validation only; the
+   * handler return type is NOT statically inferred from `response` (YAGNI).
+   */
+  response?: z.ZodType
+  /**
    * Opt out of CSRF enforcement for this route. Use for endpoints that
    * legitimately receive third-party POSTs (Stripe webhooks, GitHub
    * webhooks, OAuth callbacks). Defaults to enforced per `config.security.csrf`.
