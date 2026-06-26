@@ -58,14 +58,14 @@ export async function parseQueryAndBody(
  * On validation failure, sends 400 with Zod issues + returns `{ ok: false }`.
  * On success, returns the (possibly-transformed) values from `schema.safeParse(...).data`.
  */
-interface ZodLike {
+export interface ZodLike {
   safeParse: (value: unknown) => {
     success: boolean
     data?: unknown
     error?: { issues: unknown[] }
   }
 }
-const isZodLike = (value: unknown): value is ZodLike =>
+export const isZodLike = (value: unknown): value is ZodLike =>
   typeof value === 'object' &&
   value !== null &&
   typeof (value as { safeParse?: unknown }).safeParse === 'function'
