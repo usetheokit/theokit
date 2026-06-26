@@ -29,11 +29,12 @@ vi.mock('@theokit/sdk', () => ({
     getOrCreate: vi.fn(async (_id: string, opts: CapturedCreate) => {
       h.captured = opts
       return {
-        // empty stream → createSdkAgentStream emits its fallback terminal and finishes
+        // empty stream → createSdkAgentStream emits its real-usage done from run.wait()
         send: async () => ({
           stream: async function* () {
             /* no events */
           },
+          wait: async () => ({}),
         }),
         dispose: async () => {},
       }
