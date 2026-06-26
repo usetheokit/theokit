@@ -14,6 +14,10 @@
  *
  * referencia: knowledge-base/references/mastra agent.ts (re-enter the loop with feedback).
  */
+// V4-P: type-only import (erased at runtime) so the loop stays SDK-optional; the `withRetry`
+// VALUE is dynamic-imported inside consumeOneRound only when `retry` is configured.
+import type { RetryOptions } from '@theokit/sdk/retry'
+
 import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import {
   BudgetExceededError,
@@ -27,6 +31,15 @@ import type { ReflectionContext, ReflectionStrategy } from './reflection-strateg
 /** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
 export type RoundStreamFactory = (message: string, sessionId: string) => AsyncIterable<StreamEvent>
 
+/** Per-round inputs bundled to keep helper signatures within the parameter budget (G6). */
+interface RoundInputs {
+  factory: RoundStreamFactory
+  prompt: string
+  sessionId: string
+  signal: AbortSignal | undefined
+  retry: RetryOptions | undefined
+}
+
 /** Strategies + options for {@link runReflectiveLoop}. */
 export interface RunReflectiveLoopConfig {
   /** The terminal-decision strategy (resolved from `@MainLoop.strategy`). */
@@ -39,6 +52,12 @@ export interface RunReflectiveLoopConfig {
   readonly signal?: AbortSignal
   /** Name surfaced in typed errors. */
   readonly agentName?: string
+  /**
+   * V4-P: per-round transient retry. When set, the START of each round (factory creation + first
+   * event, before any event is yielded → no re-applied edit) is wrapped in the SDK `withRetry`.
+   * Absent ⇒ single attempt (backward-compatible). Default `isRetryable` is the SDK `isTransientError`.
+   */
+  readonly retry?: RetryOptions
 }
 
 function asString(value: unknown, fallback: string): string {
@@ -149,18 +168,36 @@ function buildPrompt(
  * (`BudgetExceededError`/`DelegationError`) propagate unchanged.
  */
 async function* consumeRoundOrThrow(
-  factory: RoundStreamFactory,
-  prompt: string,
-  sessionId: string,
-  signal: AbortSignal | undefined,
+  inputs: RoundInputs,
   agentName: string,
 ): AsyncGenerator<StreamEvent, RoundResult> {
   try {
-    return yield* consumeOneRound(factory, prompt, sessionId, signal)
+    return yield* consumeOneRound(
+      inputs.factory,
+      inputs.prompt,
+      inputs.sessionId,
+      inputs.signal,
+      inputs.retry,
+    )
   } catch (err) {
     if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
     throw new DelegationError(agentName, err)
   }
+}
+
+/**
+ * V4-N/V4-O: fold one round's usage into the accumulator — cost + total/split tokens (V4-N) and
+ * the reasoning/cache buckets (V4-O). Extracted from the loop body to keep its complexity within
+ * budget (G6); the optional `acc` fields default to 0 before adding.
+ */
+function accumulateUsage(acc: DelegationResult, r: RoundResult): void {
+  acc.cost += r.cost
+  acc.tokens += r.tokens
+  acc.tokensInput = (acc.tokensInput ?? 0) + r.tokensInput
+  acc.tokensOutput = (acc.tokensOutput ?? 0) + r.tokensOutput
+  acc.reasoningTokens = (acc.reasoningTokens ?? 0) + r.reasoningTokens
+  acc.cacheReadTokens = (acc.cacheReadTokens ?? 0) + r.cacheReadTokens
+  acc.cacheWriteTokens = (acc.cacheWriteTokens ?? 0) + r.cacheWriteTokens
 }
 
 /** Stamp the terminal state on the accumulator + emit the runtime metric (DRY for the 2 exit points). */
@@ -179,9 +216,15 @@ function finalize(
 /** One round's accumulated facts + the signals needed to derive `finishReason`. */
 interface RoundResult {
   responseText: string
-  toolCalls: { name: string; input: unknown; output: string }[]
+  toolCalls: { id: string; name: string; input: unknown; output: string }[]
   cost: number
   tokens: number
+  tokensInput: number
+  tokensOutput: number
+  // V4-O: reasoning/cache token buckets folded from the done event.
+  reasoningTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
   finishReason: LoopFinishReason
   errorMessage: string
 }
@@ -216,49 +259,163 @@ function deriveFinishReason(signals: {
   return 'stop'
 }
 
+/** Mutable round signals used to derive the round's {@link LoopFinishReason}. */
+interface RoundSignals {
+  sawError: boolean
+  sawDone: boolean
+  doneFinishReason: string
+  sawToolResult: boolean
+}
+
+/** V4-N: push a faithful `{id,name,input,output}` toolCall, correlating input from the tool_call. */
+function pushToolResult(
+  event: StreamEvent,
+  r: RoundResult,
+  callInputs: Map<string, { name: string; input: unknown }>,
+): void {
+  const id = asString(event.callId, '')
+  const call = callInputs.get(id)
+  r.toolCalls.push({
+    id,
+    name: call?.name ?? asString(event.toolName, 'unknown'),
+    // Prefer the correlated tool_call input (real SDK shape); fall back to an input on the
+    // result event itself (some streams/tests carry it there), else {}.
+    input: call?.input ?? event.input ?? {},
+    output: asString(event.output, ''),
+  })
+}
+
+/** V4-N: fold a `done` event's cost + split/total token usage into the round (V4-O: + buckets). */
+function applyDone(event: StreamEvent, r: RoundResult): void {
+  r.cost = asNumber(event.cost, 0)
+  const usage = event.usage as
+    | {
+        totalTokens?: number
+        inputTokens?: number
+        outputTokens?: number
+        reasoningTokens?: number
+        cacheReadTokens?: number
+        cacheWriteTokens?: number
+      }
+    | undefined
+  r.tokens = usage?.totalTokens ?? 0
+  r.tokensInput = usage?.inputTokens ?? 0
+  r.tokensOutput = usage?.outputTokens ?? 0
+  // V4-O: fold the reasoning/cache buckets (0 when the provider/adapter omits them).
+  r.reasoningTokens = usage?.reasoningTokens ?? 0
+  r.cacheReadTokens = usage?.cacheReadTokens ?? 0
+  r.cacheWriteTokens = usage?.cacheWriteTokens ?? 0
+}
+
+/**
+ * Fold ONE stream event into the round accumulator (V4-N: extracted from `consumeOneRound`
+ * to keep its complexity within budget — G6).
+ */
+function accumulateEvent(
+  event: StreamEvent,
+  r: RoundResult,
+  signals: RoundSignals,
+  callInputs: Map<string, { name: string; input: unknown }>,
+): void {
+  if (event.type === 'text_delta' && typeof event.content === 'string') {
+    r.responseText += event.content
+  } else if (event.type === 'tool_call') {
+    callInputs.set(asString(event.callId, ''), {
+      name: asString(event.toolName, 'unknown'),
+      input: event.input ?? {},
+    })
+  } else if (event.type === 'tool_result') {
+    signals.sawToolResult = true
+    pushToolResult(event, r, callInputs)
+  } else if (event.type === 'done') {
+    signals.sawDone = true
+    signals.doneFinishReason = asString(event.finishReason, '')
+    applyDone(event, r)
+  } else if (event.type === 'error') {
+    signals.sawError = true
+    r.errorMessage = asString((event as { message?: unknown }).message, 'Unknown agent error')
+  }
+}
+
 /**
  * Consume exactly one SDK stream turn and derive its {@link LoopFinishReason}.
  * V4-D-stream: an async generator — it `yield`s each event to the consumer LIVE
  * (so SSE-first apps see tokens/tool-calls incrementally) AND returns the
  * aggregated {@link RoundResult} as the generator's return value.
  */
+/**
+ * V4-P: open the round's stream + read its first event. When `retry` is set, the whole START
+ * (creation + first `next()`) is wrapped in the SDK `withRetry` (dynamic-imported to keep the
+ * loop SDK-optional) — a transient before any event is yielded is recovered without re-applying
+ * an edit. Once the first event is obtained, the caller iterates WITHOUT retry.
+ */
+async function startRound(
+  factory: RoundStreamFactory,
+  prompt: string,
+  sessionId: string,
+  signal: AbortSignal | undefined,
+  retry: RetryOptions | undefined,
+): Promise<{ it: AsyncIterator<StreamEvent>; first: IteratorResult<StreamEvent> }> {
+  const open = async () => {
+    const it = factory(prompt, sessionId)[Symbol.asyncIterator]()
+    try {
+      return { it, first: await it.next() }
+    } catch (err) {
+      // The first event threw — release THIS attempt's iterator (run its finally → SDK dispose)
+      // before `withRetry` opens a fresh stream, so a failed retry attempt leaks nothing.
+      await it.return?.(undefined)
+      throw err
+    }
+  }
+  if (!retry) return open()
+  const { withRetry } = await import('@theokit/sdk/retry')
+  return withRetry(open, { ...retry, signal: retry.signal ?? signal })
+}
+
 async function* consumeOneRound(
   factory: RoundStreamFactory,
   prompt: string,
   sessionId: string,
   signal: AbortSignal | undefined,
+  retry: RetryOptions | undefined,
 ): AsyncGenerator<StreamEvent, RoundResult> {
   const r: RoundResult = {
     responseText: '',
     toolCalls: [],
     cost: 0,
     tokens: 0,
+    tokensInput: 0,
+    tokensOutput: 0,
+    reasoningTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
     finishReason: 'stop',
     errorMessage: '',
   }
-  const signals = { sawError: false, sawDone: false, doneFinishReason: '', sawToolResult: false }
+  const signals: RoundSignals = {
+    sawError: false,
+    sawDone: false,
+    doneFinishReason: '',
+    sawToolResult: false,
+  }
+  // V4-N: the tool-call `input` (command/args) lives ONLY on the `tool_call` event; the
+  // `output` on the paired `tool_result`. Correlate by callId so toolCalls is faithful.
+  const callInputs = new Map<string, { name: string; input: unknown }>()
 
-  for await (const event of factory(prompt, sessionId)) {
-    if (signal?.aborted) break // cancellation: stop advancing the iterator
-    yield event // V4-D-stream: surface the event to the consumer before accumulating
-    if (event.type === 'text_delta' && typeof event.content === 'string') {
-      r.responseText += event.content
-    } else if (event.type === 'tool_result') {
-      signals.sawToolResult = true
-      r.toolCalls.push({
-        name: asString(event.toolName, 'unknown'),
-        input: event.input ?? {},
-        output: asString(event.output, ''),
-      })
-    } else if (event.type === 'done') {
-      signals.sawDone = true
-      signals.doneFinishReason = asString(event.finishReason, '')
-      r.cost = asNumber(event.cost, 0)
-      r.tokens = (event.usage as { totalTokens?: number } | undefined)?.totalTokens ?? 0
-    } else if (event.type === 'error') {
-      signals.sawError = true
-      r.errorMessage = asString((event as { message?: unknown }).message, 'Unknown agent error')
+  // V4-P: the round START (creation + first event) is retried when `retry` is set; once an
+  // event is yielded we iterate without retry (a mid-stream throw may have applied an edit).
+  const { it, first } = await startRound(factory, prompt, sessionId, signal, retry)
+  let next = first
+  while (!next.done) {
+    if (signal?.aborted) {
+      // Cancellation: release the underlying iterator (parity with `for await`'s `.return()`
+      // on break — runs the factory generator's `finally`, e.g. the SDK adapter's dispose).
+      await it.return?.(undefined)
+      break
     }
+    yield next.value // V4-D-stream: surface the event to the consumer before accumulating
+    accumulateEvent(next.value, r, signals, callInputs)
+    next = await it.next()
   }
 
   r.finishReason = deriveFinishReason(signals)
@@ -285,8 +442,20 @@ export async function* runReflectiveLoopStream(
     budget = Number.POSITIVE_INFINITY,
     signal,
     agentName = loop.name,
+    retry,
   } = config
-  const acc: DelegationResult = { response: '', toolCalls: [], cost: 0, tokens: 0, rounds: 0 }
+  const acc: DelegationResult = {
+    response: '',
+    toolCalls: [],
+    cost: 0,
+    tokens: 0,
+    tokensInput: 0,
+    tokensOutput: 0,
+    reasoningTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    rounds: 0,
+  }
   // V4-K: one mutable scratch bag per run, threaded to every reflect() so a stateful
   // strategy accumulates across rounds. The framework writes NOTHING into it.
   const reflectionContext: ReflectionContext = {}
@@ -297,12 +466,11 @@ export async function* runReflectiveLoopStream(
 
   while (!signal?.aborted) {
     const prompt = buildPrompt(round, loop.maxIterations, message, feedback)
-    const r = yield* consumeRoundOrThrow(factory, prompt, sessionId, signal, agentName)
+    const r = yield* consumeRoundOrThrow({ factory, prompt, sessionId, signal, retry }, agentName)
 
     acc.response += r.responseText
     acc.toolCalls.push(...r.toolCalls)
-    acc.cost += r.cost
-    acc.tokens += r.tokens
+    accumulateUsage(acc, r)
 
     if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
     if (Number.isFinite(budget) && acc.cost > budget) {

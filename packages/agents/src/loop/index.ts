@@ -8,6 +8,9 @@
  * DRIVER `runReflectiveLoop` stays internal.
  */
 export { AgentRunner, AgentRunnerBuilder, type AgentRunnerRunOptions } from './agent-runner.js'
+// V4-R: the per-round stream factory type — public so a consumer can type an injected `streamFactory`
+// (the loop DRIVER `runReflectiveLoop` stays internal; only the factory contract is exported).
+export type { RoundStreamFactory } from './run-reflective-loop.js'
 export {
   DEFAULT_KEEP_TOKENS,
   type CompactionCallOptions,

@@ -11,6 +11,7 @@ import type {
   BudgetTracker,
   ContextSettings,
   ConversationStorageAdapter,
+  CustomTool,
   PluginsSettings,
   ProviderRoutingSettings,
   SkillsSettings,
@@ -89,6 +90,52 @@ export interface RuntimeOverrides {
    * no disk). Pass a `FileSystemConversationStorage`/custom adapter for durable history.
    */
   conversationStorage?: ConversationStorageAdapter
+  /**
+   * V4-Q: pre-built SDK `CustomTool[]` forwarded RAW to `Agent.create.tools` (appended after the
+   * compiled tools), bypassing `defineTool` (which requires a Zod schema). Lets an app whose tools
+   * come from imperative SDK factories supply them without the `@Tool` compile path.
+   */
+  sdkTools?: readonly CustomTool[]
+}
+
+/**
+ * V4-N.1: build the terminal `done` event from the SDK `RunResult` (real per-run token usage +
+ * cost). Extracted from the stream generator to keep its complexity within budget (G6).
+ */
+function realUsageDone(
+  result: {
+    result?: string
+    usage?: {
+      inputTokens?: number
+      outputTokens?: number
+      // V4-O: optional reasoning/cache buckets from the SDK TokenUsage.
+      reasoningTokens?: number
+      cacheReadTokens?: number
+      cacheWriteTokens?: number
+    }
+    cost?: { amount?: number }
+  },
+  t0: number,
+): StreamEvent {
+  const u = result.usage
+  const inputTokens = u?.inputTokens ?? 0
+  const outputTokens = u?.outputTokens ?? 0
+  return {
+    type: 'done',
+    result: result.result ?? '',
+    // V4-O: forward the SDK reasoning/cache buckets (0 when the provider omits them) so a
+    // consumer keeps full per-turn usage through the loop into DelegationResult (passthrough — ADR D1).
+    usage: {
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      reasoningTokens: u?.reasoningTokens ?? 0,
+      cacheReadTokens: u?.cacheReadTokens ?? 0,
+      cacheWriteTokens: u?.cacheWriteTokens ?? 0,
+    },
+    durationMs: Date.now() - t0,
+    cost: result.cost?.amount ?? 0,
+  }
 }
 
 /**
@@ -133,7 +180,22 @@ export function createSdkAgentStream(
           id: string,
           opts: Record<string, unknown>,
         ) => Promise<{
-          send: (msg: string) => Promise<{ stream: () => AsyncGenerator<SdkMessage> }>
+          send: (msg: string) => Promise<{
+            stream: () => AsyncGenerator<SdkMessage>
+            // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
+            // V4-O: usage also carries optional reasoning/cache buckets (forwarded by realUsageDone).
+            wait: () => Promise<{
+              result?: string
+              usage?: {
+                inputTokens?: number
+                outputTokens?: number
+                reasoningTokens?: number
+                cacheReadTokens?: number
+                cacheWriteTokens?: number
+              }
+              cost?: { amount?: number }
+            }>
+          }>
           dispose: () => Promise<void>
         }>
       }
@@ -147,7 +209,7 @@ export function createSdkAgentStream(
 
       try {
         const sdk = await import('@theokit/sdk')
-        Agent = sdk.Agent as typeof Agent
+        Agent = sdk.Agent
         defineTool = sdk.defineTool as typeof defineTool
         InMemoryConversationStorage = sdk.InMemoryConversationStorage
       } catch {
@@ -160,16 +222,22 @@ export function createSdkAgentStream(
         return
       }
 
-      // Convert compiled tools → SDK defineTool format
-      const sdkTools = compiledTools.map((t) =>
-        defineTool({
-          name: t.name,
-          description: t.description,
-          inputSchema: t.inputSchema,
-          handler: t.handler,
-        }),
-      )
+      // Convert compiled tools → SDK defineTool format; V4-Q: append pre-built SDK CustomTool[]
+      // RAW (already defined — must NOT be re-run through defineTool, which requires a Zod schema).
+      const sdkTools = [
+        ...compiledTools.map((t) =>
+          defineTool({
+            name: t.name,
+            description: t.description,
+            inputSchema: t.inputSchema,
+            handler: t.handler,
+          }),
+        ),
+        ...(overrides.sdkTools ?? []),
+      ]
 
+      // V4-N.1: declared outside the try so `finally` can dispose even when `run.wait()` rejects.
+      let agent: Awaited<ReturnType<typeof Agent.getOrCreate>> | undefined
       try {
         // Project the compiled M8 decorator fields into native Agent.create args.
         const { options: m8, applied } = assembleM8CreateOptions(compiled)
@@ -190,7 +258,7 @@ export function createSdkAgentStream(
 
         // V4-M: getOrCreate(sessionId) resumes the shared session so this round sees prior
         // rounds (M8 fields + per-request extra spread; absent ⇒ no key).
-        const agent = await Agent.getOrCreate(sessionId, {
+        agent = await Agent.getOrCreate(sessionId, {
           apiKey,
           model: { id: model },
           tools: sdkTools,
@@ -202,30 +270,22 @@ export function createSdkAgentStream(
         // Send message + stream response
         const run = await agent.send(message)
 
-        let sawTerminal = false
+        // V4-N.1: the stream's `done` carries zero usage (the FINISHED status has no token
+        // totals). Suppress it and emit ONE real-usage `done` after `run.wait()` (which carries
+        // the SDK RunResult.usage + cost). Errors pass through and short-circuit the re-emit.
+        let sawError = false
         for await (const sdkEvent of run.stream()) {
-          const translated = translateSdkEvent(sdkEvent, runId)
-          for (const event of translated) {
-            if (event.type === 'done' || event.type === 'error') sawTerminal = true
+          for (const event of translateSdkEvent(sdkEvent, runId)) {
+            if (event.type === 'done') continue // suppressed; the real one is emitted below
+            if (event.type === 'error') sawError = true
             yield event
           }
         }
 
-        // Fallback terminal: only when the SDK stream did NOT already yield one
-        // (a real run ends in a `status: FINISHED`/`ERROR` message → translated to
-        // done/error). The loop's B1 guarantee relies on a terminal existing; this
-        // keeps exactly-one-terminal without double-emitting to SSE consumers.
-        if (!sawTerminal) {
-          yield {
-            type: 'done',
-            result: '',
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            durationMs: Date.now() - t0,
-            cost: 0,
-          }
+        // Exactly-one-terminal: on a clean run, read the SDK RunResult for real usage + cost.
+        if (!sawError) {
+          yield realUsageDone(await run.wait(), t0)
         }
-
-        await agent.dispose()
       } catch (err) {
         yield {
           type: 'error',
@@ -233,6 +293,9 @@ export function createSdkAgentStream(
           message: err instanceof Error ? err.message : 'SDK agent error',
           retryable: false,
         }
+      } finally {
+        // V4-N.1: always dispose — covers the new `run.wait()` reject path (LOW-1).
+        await agent?.dispose()
       }
     },
   })

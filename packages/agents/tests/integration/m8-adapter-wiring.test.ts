@@ -15,7 +15,7 @@ vi.mock('@theokit/sdk', () => ({
     getOrCreate: (_id: string, opts: Record<string, unknown>) => {
       createSpy(opts)
       return Promise.resolve({
-        send: async () => ({ stream: async function* () {} }),
+        send: async () => ({ stream: async function* () {}, wait: async () => ({}) }),
         dispose: async () => {},
       })
     },

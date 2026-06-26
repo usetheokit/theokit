@@ -13,9 +13,16 @@ import type { LoopFinishReason } from '../loop/loop-strategy.js'
 
 export interface DelegationResult {
   response: string
-  toolCalls: { name: string; input: unknown; output: string }[]
+  toolCalls: { id: string; name: string; input: unknown; output: string }[]
   cost: number
   tokens: number
+  /** V4-N: split token usage accumulated across rounds (`tokens` stays as the total). Absent for the single-shot path. */
+  tokensInput?: number
+  tokensOutput?: number
+  /** V4-O: reasoning/cache token buckets accumulated across rounds (0 on any loop-driven run; the loop seeds them). Optional for type compat. */
+  reasoningTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
   /** Rounds the reflective loop ran (set by `runReflectiveLoop`; absent for the single-shot path). */
   rounds?: number
   /**
