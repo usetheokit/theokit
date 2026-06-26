@@ -19,7 +19,7 @@ export interface DelegationResult {
   /** V4-N: split token usage accumulated across rounds (`tokens` stays as the total). Absent for the single-shot path. */
   tokensInput?: number
   tokensOutput?: number
-  /** V4-O: reasoning/cache token buckets accumulated across rounds. Absent for the single-shot path. */
+  /** V4-O: reasoning/cache token buckets accumulated across rounds (0 on any loop-driven run; the loop seeds them). Optional for type compat. */
   reasoningTokens?: number
   cacheReadTokens?: number
   cacheWriteTokens?: number
