@@ -70,10 +70,21 @@ describe('resolveLoopStrategy', () => {
   })
 
   it('test_resolve_terminates_on_stop_and_error', () => {
-    const s = resolveLoopStrategy('plan-act-reflect', 8)
+    // react gates on tool-calls (the reflection is noop), so it terminates on stop/error/length.
+    const s = resolveLoopStrategy('react', 8)
     expect(s.shouldContinue(outcome({ finishReason: 'stop', round: 1 }))).toBe(false)
     expect(s.shouldContinue(outcome({ finishReason: 'error', round: 1 }))).toBe(false)
     expect(s.shouldContinue(outcome({ finishReason: 'length', round: 1 }))).toBe(false)
+  })
+
+  it('test_plan_act_reflect_defers_to_reflection (V4-S)', () => {
+    // V4-S: plan-act-reflect's shouldContinue is `round < max` — it defers the stop/continue decision
+    // to the ReflectionStrategy (the loop ANDs reflect.continue with this), so it returns true even on
+    // a `stop` round within the ceiling, and false only at/after the ceiling.
+    const s = resolveLoopStrategy('plan-act-reflect', 8)
+    expect(s.shouldContinue(outcome({ finishReason: 'stop', round: 1 }))).toBe(true)
+    expect(s.shouldContinue(outcome({ finishReason: 'error', round: 1 }))).toBe(true)
+    expect(s.shouldContinue(outcome({ finishReason: 'tool-calls', round: 8 }))).toBe(false) // ceiling
   })
 
   it('test_resolve_rejects_zero_maxiterations — Zod min(1) fail-fast', () => {
