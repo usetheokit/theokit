@@ -179,9 +179,11 @@ function finalize(
 /** One round's accumulated facts + the signals needed to derive `finishReason`. */
 interface RoundResult {
   responseText: string
-  toolCalls: { name: string; input: unknown; output: string }[]
+  toolCalls: { id: string; name: string; input: unknown; output: string }[]
   cost: number
   tokens: number
+  tokensInput: number
+  tokensOutput: number
   finishReason: LoopFinishReason
   errorMessage: string
 }
@@ -222,6 +224,73 @@ function deriveFinishReason(signals: {
  * (so SSE-first apps see tokens/tool-calls incrementally) AND returns the
  * aggregated {@link RoundResult} as the generator's return value.
  */
+/** Mutable round signals used to derive the round's {@link LoopFinishReason}. */
+interface RoundSignals {
+  sawError: boolean
+  sawDone: boolean
+  doneFinishReason: string
+  sawToolResult: boolean
+}
+
+/** V4-N: push a faithful `{id,name,input,output}` toolCall, correlating input from the tool_call. */
+function pushToolResult(
+  event: StreamEvent,
+  r: RoundResult,
+  callInputs: Map<string, { name: string; input: unknown }>,
+): void {
+  const id = asString(event.callId, '')
+  const call = callInputs.get(id)
+  r.toolCalls.push({
+    id,
+    name: call?.name ?? asString(event.toolName, 'unknown'),
+    // Prefer the correlated tool_call input (real SDK shape); fall back to an input on the
+    // result event itself (some streams/tests carry it there), else {}.
+    input: call?.input ?? event.input ?? {},
+    output: asString(event.output, ''),
+  })
+}
+
+/** V4-N: fold a `done` event's cost + split/total token usage into the round. */
+function applyDone(event: StreamEvent, r: RoundResult): void {
+  r.cost = asNumber(event.cost, 0)
+  const usage = event.usage as
+    | { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+    | undefined
+  r.tokens = usage?.totalTokens ?? 0
+  r.tokensInput = usage?.inputTokens ?? 0
+  r.tokensOutput = usage?.outputTokens ?? 0
+}
+
+/**
+ * Fold ONE stream event into the round accumulator (V4-N: extracted from `consumeOneRound`
+ * to keep its complexity within budget — G6).
+ */
+function accumulateEvent(
+  event: StreamEvent,
+  r: RoundResult,
+  signals: RoundSignals,
+  callInputs: Map<string, { name: string; input: unknown }>,
+): void {
+  if (event.type === 'text_delta' && typeof event.content === 'string') {
+    r.responseText += event.content
+  } else if (event.type === 'tool_call') {
+    callInputs.set(asString(event.callId, ''), {
+      name: asString(event.toolName, 'unknown'),
+      input: event.input ?? {},
+    })
+  } else if (event.type === 'tool_result') {
+    signals.sawToolResult = true
+    pushToolResult(event, r, callInputs)
+  } else if (event.type === 'done') {
+    signals.sawDone = true
+    signals.doneFinishReason = asString(event.finishReason, '')
+    applyDone(event, r)
+  } else if (event.type === 'error') {
+    signals.sawError = true
+    r.errorMessage = asString((event as { message?: unknown }).message, 'Unknown agent error')
+  }
+}
+
 async function* consumeOneRound(
   factory: RoundStreamFactory,
   prompt: string,
@@ -233,32 +302,25 @@ async function* consumeOneRound(
     toolCalls: [],
     cost: 0,
     tokens: 0,
+    tokensInput: 0,
+    tokensOutput: 0,
     finishReason: 'stop',
     errorMessage: '',
   }
-  const signals = { sawError: false, sawDone: false, doneFinishReason: '', sawToolResult: false }
+  const signals: RoundSignals = {
+    sawError: false,
+    sawDone: false,
+    doneFinishReason: '',
+    sawToolResult: false,
+  }
+  // V4-N: the tool-call `input` (command/args) lives ONLY on the `tool_call` event; the
+  // `output` on the paired `tool_result`. Correlate by callId so toolCalls is faithful.
+  const callInputs = new Map<string, { name: string; input: unknown }>()
 
   for await (const event of factory(prompt, sessionId)) {
     if (signal?.aborted) break // cancellation: stop advancing the iterator
     yield event // V4-D-stream: surface the event to the consumer before accumulating
-    if (event.type === 'text_delta' && typeof event.content === 'string') {
-      r.responseText += event.content
-    } else if (event.type === 'tool_result') {
-      signals.sawToolResult = true
-      r.toolCalls.push({
-        name: asString(event.toolName, 'unknown'),
-        input: event.input ?? {},
-        output: asString(event.output, ''),
-      })
-    } else if (event.type === 'done') {
-      signals.sawDone = true
-      signals.doneFinishReason = asString(event.finishReason, '')
-      r.cost = asNumber(event.cost, 0)
-      r.tokens = (event.usage as { totalTokens?: number } | undefined)?.totalTokens ?? 0
-    } else if (event.type === 'error') {
-      signals.sawError = true
-      r.errorMessage = asString((event as { message?: unknown }).message, 'Unknown agent error')
-    }
+    accumulateEvent(event, r, signals, callInputs)
   }
 
   r.finishReason = deriveFinishReason(signals)
@@ -286,7 +348,15 @@ export async function* runReflectiveLoopStream(
     signal,
     agentName = loop.name,
   } = config
-  const acc: DelegationResult = { response: '', toolCalls: [], cost: 0, tokens: 0, rounds: 0 }
+  const acc: DelegationResult = {
+    response: '',
+    toolCalls: [],
+    cost: 0,
+    tokens: 0,
+    tokensInput: 0,
+    tokensOutput: 0,
+    rounds: 0,
+  }
   // V4-K: one mutable scratch bag per run, threaded to every reflect() so a stateful
   // strategy accumulates across rounds. The framework writes NOTHING into it.
   const reflectionContext: ReflectionContext = {}
@@ -303,6 +373,8 @@ export async function* runReflectiveLoopStream(
     acc.toolCalls.push(...r.toolCalls)
     acc.cost += r.cost
     acc.tokens += r.tokens
+    acc.tokensInput = (acc.tokensInput ?? 0) + r.tokensInput // V4-N split usage
+    acc.tokensOutput = (acc.tokensOutput ?? 0) + r.tokensOutput
 
     if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
     if (Number.isFinite(budget) && acc.cost > budget) {
