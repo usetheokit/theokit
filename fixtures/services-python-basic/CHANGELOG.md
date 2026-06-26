@@ -1,5 +1,11 @@
 # services-python-basic-fixture
 
+## 0.0.17
+
+### Patch Changes
+
+- theokit@0.9.10
+
 ## 0.0.16
 
 ### Patch Changes
