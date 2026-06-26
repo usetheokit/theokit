@@ -92,6 +92,29 @@ export interface RuntimeOverrides {
 }
 
 /**
+ * V4-N.1: build the terminal `done` event from the SDK `RunResult` (real per-run token usage +
+ * cost). Extracted from the stream generator to keep its complexity within budget (G6).
+ */
+function realUsageDone(
+  result: {
+    result?: string
+    usage?: { inputTokens?: number; outputTokens?: number }
+    cost?: { amount?: number }
+  },
+  t0: number,
+): StreamEvent {
+  const inputTokens = result.usage?.inputTokens ?? 0
+  const outputTokens = result.usage?.outputTokens ?? 0
+  return {
+    type: 'done',
+    result: result.result ?? '',
+    usage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
+    durationMs: Date.now() - t0,
+    cost: result.cost?.amount ?? 0,
+  }
+}
+
+/**
  * Project the V4-L.3 per-request fields into the `Agent.create` extra surface (absent ⇒ no
  * key). Extracted from the stream generator to keep its cyclomatic complexity within budget (G6).
  */
@@ -133,7 +156,15 @@ export function createSdkAgentStream(
           id: string,
           opts: Record<string, unknown>,
         ) => Promise<{
-          send: (msg: string) => Promise<{ stream: () => AsyncGenerator<SdkMessage> }>
+          send: (msg: string) => Promise<{
+            stream: () => AsyncGenerator<SdkMessage>
+            // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
+            wait: () => Promise<{
+              result?: string
+              usage?: { inputTokens?: number; outputTokens?: number }
+              cost?: { amount?: number }
+            }>
+          }>
           dispose: () => Promise<void>
         }>
       }
@@ -147,7 +178,7 @@ export function createSdkAgentStream(
 
       try {
         const sdk = await import('@theokit/sdk')
-        Agent = sdk.Agent as typeof Agent
+        Agent = sdk.Agent
         defineTool = sdk.defineTool as typeof defineTool
         InMemoryConversationStorage = sdk.InMemoryConversationStorage
       } catch {
@@ -202,27 +233,21 @@ export function createSdkAgentStream(
         // Send message + stream response
         const run = await agent.send(message)
 
-        let sawTerminal = false
+        // V4-N.1: the stream's `done` carries zero usage (the FINISHED status has no token
+        // totals). Suppress it and emit ONE real-usage `done` after `run.wait()` (which carries
+        // the SDK RunResult.usage + cost). Errors pass through and short-circuit the re-emit.
+        let sawError = false
         for await (const sdkEvent of run.stream()) {
-          const translated = translateSdkEvent(sdkEvent, runId)
-          for (const event of translated) {
-            if (event.type === 'done' || event.type === 'error') sawTerminal = true
+          for (const event of translateSdkEvent(sdkEvent, runId)) {
+            if (event.type === 'done') continue // suppressed; the real one is emitted below
+            if (event.type === 'error') sawError = true
             yield event
           }
         }
 
-        // Fallback terminal: only when the SDK stream did NOT already yield one
-        // (a real run ends in a `status: FINISHED`/`ERROR` message → translated to
-        // done/error). The loop's B1 guarantee relies on a terminal existing; this
-        // keeps exactly-one-terminal without double-emitting to SSE consumers.
-        if (!sawTerminal) {
-          yield {
-            type: 'done',
-            result: '',
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            durationMs: Date.now() - t0,
-            cost: 0,
-          }
+        // Exactly-one-terminal: on a clean run, read the SDK RunResult for real usage + cost.
+        if (!sawError) {
+          yield realUsageDone(await run.wait(), t0)
         }
 
         await agent.dispose()
