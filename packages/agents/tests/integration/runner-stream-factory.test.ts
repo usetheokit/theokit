@@ -17,6 +17,12 @@ class SFAgent {
   async run() {}
 }
 
+@Agent({ name: 'rf', route: '/rf', model: 'm' })
+class ReactAgent {
+  @MainLoop({ strategy: 'react', maxIterations: 5 })
+  async run() {}
+}
+
 describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
   it('test_injected_factory_drives_the_loop_without_sdk', async () => {
     const factory: RoundStreamFactory = () => ({
@@ -50,5 +56,32 @@ describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
       .run('do it', { apiKey: 'k', sessionId: 'sess-1', streamFactory: factory })
     expect(seen.message).toBe('do it')
     expect(seen.sessionId).toBe('sess-1')
+  })
+
+  it('test_injected_factory_drives_multiple_rounds_under_react', async () => {
+    // LOW (review): prove streamFactory composes with loop options — a react agent re-enters the
+    // injected factory while a round ends on tool-calls, terminating when a round answers.
+    let round = 0
+    const factory: RoundStreamFactory = () => {
+      const r = round++
+      return {
+        async *[Symbol.asyncIterator]() {
+          if (r === 0) {
+            yield { type: 'tool_call', callId: 'c1', toolName: 't', input: {} }
+            yield { type: 'tool_result', callId: 'c1', toolName: 't', output: 'ok' }
+            yield { type: 'done', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }
+          } else {
+            yield { type: 'text_delta', content: 'final' }
+            yield { type: 'done', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }
+          }
+        },
+      }
+    }
+    const r = await AgentRunner.builder(ReactAgent)
+      .build()
+      .run('go', { apiKey: 'k', streamFactory: factory, maxIterations: 5 })
+    expect(round).toBe(2) // round 1 (tool-calls → continue) then round 2 (stop)
+    expect(r.tokens).toBe(4) // accumulated across both rounds
+    expect(r.response).toBe('final')
   })
 })
