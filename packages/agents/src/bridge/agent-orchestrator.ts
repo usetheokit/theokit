@@ -8,9 +8,20 @@
  * on-ramps are one runtime (ADR D4). `simple-chat` ⇒ `shouldContinue:()=>false`
  * ⇒ exactly one round; `react`/`plan-act-reflect` ⇒ multi-round reflective loop.
  */
+import type {
+  AgentDefinition,
+  BudgetTracker,
+  ConversationStorageAdapter,
+  CustomTool,
+  PluginsSettings,
+  ProviderRoutingSettings,
+} from '@theokit/sdk'
+import type { RetryOptions } from '@theokit/sdk/retry'
+
 import {
   ladderReflectionStrategy,
   noopReflectionStrategy,
+  type ReflectionStrategy,
   resolveLoopStrategy,
 } from '../loop/index.js'
 import { runReflectiveLoop } from '../loop/run-reflective-loop.js'
@@ -37,6 +48,29 @@ export interface DelegateOptions {
   sessionId?: string
   /** Cancellation — aborts stop the reflective loop from re-entering. */
   signal?: AbortSignal
+  // V4-T: per-run config parity with `AgentRunnerRunOptions` — a sub-agent inherits the parent's
+  // runtime config (all optional; absent ⇒ today's behavior). Each field is already accepted by
+  // `createSdkAgentStream`'s `RuntimeOverrides` / the loop's `RunReflectiveLoopConfig`.
+  /** Per-run model override (`?? SubAgent @Agent model`). */
+  model?: string
+  /** Per-run working directory → `Agent.create({ local: { cwd } })`. */
+  cwd?: string
+  /** Per-run plugins (e.g. a read-only permission gate for an explore sub-agent). */
+  plugins?: PluginsSettings
+  /** Per-run provider routing (e.g. OpenRouter). */
+  providers?: ProviderRoutingSettings
+  /** Per-run sub-agent definitions. */
+  agents?: Record<string, AgentDefinition>
+  /** Per-run SDK budget tracker (inner tool-loop cap). */
+  budgetTracker?: BudgetTracker
+  /** Per-run conversation store (cross-round history). */
+  conversationStorage?: ConversationStorageAdapter
+  /** Per-run pre-built SDK tools forwarded raw (V4-Q). */
+  sdkTools?: readonly CustomTool[]
+  /** Per-round transient retry (V4-P). */
+  retry?: RetryOptions
+  /** Custom between-round reflection (default: ladder for `plan-act-reflect`, else noop). */
+  reflection?: ReflectionStrategy
 }
 
 /** Validate API key and throw DelegationError if missing. */
@@ -85,21 +119,33 @@ export async function delegate(
   const allTools = mergeTools(opts.parentTools ?? [], compiled.tools)
   const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
 
-  // 3. Build the stream factory (the model call stays in the SDK — ADR 0031) + session
+  // 3. Build the stream factory (the model call stays in the SDK — ADR 0031) + session.
+  // V4-T: forward the per-run config (parity with AgentRunner.stream); model opt wins over the
+  // decorator; absent fields ⇒ no key (byte-identical to the pre-V4-T `{ model }`-only override).
   const streamFactory = createSdkAgentStream(compiled, allTools, apiKey, {
-    model: walk.agentConfig.model,
+    model: opts.model ?? walk.agentConfig.model,
+    cwd: opts.cwd,
+    plugins: opts.plugins,
+    providers: opts.providers,
+    agents: opts.agents,
+    budgetTracker: opts.budgetTracker,
+    conversationStorage: opts.conversationStorage,
+    sdkTools: opts.sdkTools,
   })
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
   // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
   const loopStrategy = resolveLoopStrategy(walk.mainLoop.strategy, walk.mainLoop.maxIterations)
+  // V4-T: a custom reflection wins; absent ⇒ the strategy-derived default (ladder/noop).
   const reflection =
-    loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy
+    opts.reflection ??
+    (loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy)
   return runReflectiveLoop(streamFactory, message, sessionId, {
     loop: loopStrategy,
     reflection,
     budget,
     agentName: SubAgentClass.name,
     signal: opts.signal,
+    retry: opts.retry, // V4-T: per-round transient retry (V4-P) on the delegate path
   })
 }
