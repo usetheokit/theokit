@@ -14,6 +14,7 @@
 import type {
   AgentDefinition,
   BudgetTracker,
+  ConversationStorageAdapter,
   PluginsSettings,
   ProviderRoutingSettings,
 } from '@theokit/sdk'
@@ -84,6 +85,12 @@ export interface AgentRunnerRunOptions {
    * send. Distinct from {@link AgentRunnerRunOptions.budget} (the OUTER reflective-loop USD ceiling).
    */
   readonly budgetTracker?: BudgetTracker
+  /**
+   * V4-M: conversation store shared across the loop's rounds so history persists (round N+1
+   * sees rounds 1..N). Default `InMemoryConversationStorage` (per-run, no disk). Pass a
+   * `FileSystemConversationStorage`/custom adapter for durable cross-run history.
+   */
+  readonly conversationStorage?: ConversationStorageAdapter
 }
 
 /**
@@ -167,6 +174,7 @@ export class AgentRunner {
       providers: opts.providers,
       agents: opts.agents,
       budgetTracker: opts.budgetTracker,
+      conversationStorage: opts.conversationStorage,
     })
     const sessionId = opts.sessionId ?? `runner-${crypto.randomUUID()}`
     return runReflectiveLoopStream(streamFactory, message, sessionId, {

@@ -7,8 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Capture the options handed to Agent.create() by the adapter.
 const createSpy = vi.fn()
 vi.mock('@theokit/sdk', () => ({
+  InMemoryConversationStorage: class {
+    getMessages = async () => []
+    appendMessage = async () => {}
+  },
   Agent: {
-    create: (opts: Record<string, unknown>) => {
+    getOrCreate: (_id: string, opts: Record<string, unknown>) => {
       createSpy(opts)
       return Promise.resolve({
         send: async () => ({ stream: async function* () {} }),
