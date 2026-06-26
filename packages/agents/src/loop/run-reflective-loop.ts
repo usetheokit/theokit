@@ -400,7 +400,12 @@ async function* consumeOneRound(
   const { it, first } = await startRound(factory, prompt, sessionId, signal, retry)
   let next = first
   while (!next.done) {
-    if (signal?.aborted) break // cancellation: stop advancing the iterator
+    if (signal?.aborted) {
+      // Cancellation: release the underlying iterator (parity with `for await`'s `.return()`
+      // on break — runs the factory generator's `finally`, e.g. the SDK adapter's dispose).
+      await it.return?.(undefined)
+      break
+    }
     yield next.value // V4-D-stream: surface the event to the consumer before accumulating
     accumulateEvent(next.value, r, signals, callInputs)
     next = await it.next()
