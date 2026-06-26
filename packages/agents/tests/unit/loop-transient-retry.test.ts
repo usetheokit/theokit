@@ -7,7 +7,11 @@
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 
-import { runReflectiveLoop, type RoundStreamFactory } from '../../src/loop/run-reflective-loop.js'
+import {
+  runReflectiveLoop,
+  runReflectiveLoopStream,
+  type RoundStreamFactory,
+} from '../../src/loop/run-reflective-loop.js'
 import { resolveLoopStrategy } from '../../src/loop/loop-strategy.js'
 import { noopReflectionStrategy } from '../../src/loop/reflection-strategy.js'
 
@@ -59,6 +63,33 @@ describe('V4-P loop transient retry', () => {
       }),
     ).rejects.toThrow()
     expect(counter.calls).toBe(3) // 1 initial + 2 retries, all threw
+  })
+
+  it('test_abort_mid_round_releases_iterator_finally', async () => {
+    // V4-P refactor parity: aborting mid-round must release the underlying iterator (run the
+    // factory generator's finally — e.g. the SDK adapter's dispose), like `for await`'s .return().
+    let cleaned = false
+    const factory: RoundStreamFactory = () => ({
+      async *[Symbol.asyncIterator]() {
+        try {
+          yield { type: 'tool_result', callId: 'c1', toolName: 't', output: 'ok' }
+          yield { type: 'done', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }
+        } finally {
+          cleaned = true
+        }
+      },
+    })
+    const ac = new AbortController()
+    const gen = runReflectiveLoopStream(factory, 'task', 's', {
+      loop: resolveLoopStrategy('react', 3),
+      reflection: noopReflectionStrategy,
+      signal: ac.signal,
+    })
+    await gen.next() // first event yielded; generator suspended at the yield
+    ac.abort()
+    let res = await gen.next()
+    while (!res.done) res = await gen.next()
+    expect(cleaned).toBe(true) // the iterator's finally ran on abort (no leaked SDK stream)
   })
 
   it('test_no_retry_config_is_single_attempt', async () => {
