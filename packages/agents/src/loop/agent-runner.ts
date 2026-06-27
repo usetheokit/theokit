@@ -16,6 +16,7 @@ import type {
   BudgetTracker,
   ConversationStorageAdapter,
   CustomTool,
+  Plugin,
   PluginsSettings,
   ProviderRoutingSettings,
 } from '@theokit/sdk'
@@ -76,8 +77,14 @@ export interface AgentRunnerRunOptions {
    * `< 1` throws, never a silent unbounded loop). Absent ⇒ the build-time ceiling.
    */
   readonly maxIterations?: number
-  /** V4-L.3 (Axis-A SWAP): per-run plugins (e.g. permission gate by request mode). */
-  readonly plugins?: PluginsSettings
+  /**
+   * V4-L.3 (Axis-A SWAP): per-run plugins (e.g. permission gate by request mode).
+   * Accepts EITHER named-plugin discovery settings (`{ enabled: [...] }`) OR an
+   * array of code `Plugin` objects (`[permissionPlugin, cachePlugin]`). Both are
+   * forwarded RAW through the duck-typed `Agent.create` bridge to the SDK runtime,
+   * which accepts either form (mirrors the @theokit/sdk `AgentOptions.plugins` widen).
+   */
+  readonly plugins?: PluginsSettings | readonly Plugin[]
   /** V4-L.3 (Axis-A SWAP): per-run provider routing. */
   readonly providers?: ProviderRoutingSettings
   /** V4-L.3 (Axis-A SWAP): per-run sub-agent definitions (opts-only; @SubAgents stays deferred). */
