@@ -12,6 +12,7 @@ import type {
   ContextSettings,
   ConversationStorageAdapter,
   CustomTool,
+  Plugin,
   PluginsSettings,
   ProviderRoutingSettings,
   SkillsSettings,
@@ -76,8 +77,13 @@ export interface RuntimeOverrides {
   model?: string
   /** Per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
   cwd?: string
-  /** Per-run plugins (e.g. permission gate selected by request mode). */
-  plugins?: PluginsSettings
+  /**
+   * Per-run plugins (e.g. permission gate selected by request mode). Accepts EITHER
+   * named-plugin discovery settings (`{ enabled: [...] }`) OR an array of code `Plugin`
+   * objects, forwarded RAW through the duck-typed `Agent.create` bridge (mirrors the
+   * @theokit/sdk `AgentOptions.plugins` widen).
+   */
+  plugins?: PluginsSettings | readonly Plugin[]
   /** Per-run provider routing. */
   providers?: ProviderRoutingSettings
   /** Per-run sub-agent definitions (opts-only; `compiled.agents` stays deferred — ADR D3). */
