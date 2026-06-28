@@ -62,6 +62,11 @@ export {
 
 export { createSdkAgentStream } from './sdk-adapter.js'
 export { buildModelSelection } from './model-selection.js'
+export {
+  createThinkTagExtractor,
+  extractThinkTagStream,
+  type Segment,
+} from './think-tag-extractor.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
 
 export {
