@@ -12,6 +12,7 @@ import { getAgentConfig } from '../decorators/agent.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import type { MemoryOptions } from '../decorators/memory.js'
 import type { ProjectContextOptions } from '../decorators/project-context.js'
+import type { ReasoningEffort } from '../types.js'
 
 import { compileContextWindow } from './compile-context-window.js'
 import { compileSkills } from './compile-skills.js'
@@ -84,6 +85,8 @@ export interface CompiledSubAgent {
 /** Compiled agent options ready for SDK Agent.create(). */
 export interface CompiledAgentOptions {
   model?: string
+  /** Extended-thinking effort declared via `@Agent({ reasoningEffort })`; mapped to SDK ModelSelection.params. */
+  reasoningEffort?: ReasoningEffort
   /** Static prompt OR a per-request {@link SystemPromptResolver} (V4-L.1, Axis-B). */
   systemPrompt?: string | SystemPromptResolver
   tools: CompiledTool[]
@@ -130,6 +133,7 @@ export function compileAgent(
 
   return {
     model: walkResult.agentConfig.model,
+    reasoningEffort: walkResult.agentConfig.reasoningEffort,
     systemPrompt: walkResult.agentConfig.systemPrompt,
     tools,
     agents,

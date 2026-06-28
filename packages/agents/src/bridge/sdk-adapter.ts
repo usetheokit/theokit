@@ -13,12 +13,15 @@ import type {
   ConversationStorageAdapter,
   CustomTool,
   InteractionUpdate,
+  ModelSelection,
   Plugin,
   PluginsSettings,
   ProviderRoutingSettings,
   SkillsSettings,
   SystemPromptResolver,
 } from '@theokit/sdk'
+
+import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
@@ -77,9 +80,24 @@ function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
  * one object (rather than positional params) so the per-request surface can grow without
  * a parameter explosion. Each field is Axis-A SWAP — a value the app holds at call time.
  */
+/**
+ * Build the SDK `ModelSelection` for a model id + optional reasoning effort. With no (or empty)
+ * effort it returns the bare `{ id }` — byte-identical to the prior behavior (backward-compat). With
+ * an effort it adds the canonical reasoning param `{ id: 'thinking', value: effort }`. Pure.
+ */
+export function buildModelSelection(modelId: string, effort?: ReasoningEffort): ModelSelection {
+  if (!effort) return { id: modelId }
+  return { id: modelId, params: [{ id: 'thinking', value: effort }] }
+}
+
 export interface RuntimeOverrides {
   /** Overrides the model for this call (`?? compiled.model ?? default`). */
   model?: string
+  /**
+   * Per-run extended-thinking effort (`?? compiled.reasoningEffort`). Mapped to the SDK
+   * `ModelSelection.params` so the provider produces reasoning (surfaced as `thinking` StreamEvents).
+   */
+  reasoningEffort?: ReasoningEffort
   /** Per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
   cwd?: string
   /**
@@ -337,6 +355,8 @@ export function createSdkAgentStream(
   overrides: RuntimeOverrides = {},
 ) {
   const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
+  // M1 reasoning-visibility: per-run effort overrides the compiled @Agent effort (mirrors `model`).
+  const reasoningEffort = overrides.reasoningEffort ?? compiled.reasoningEffort
   // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
   // so history persists across the per-round agent create/dispose. Defaults lazily to the
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
@@ -440,7 +460,7 @@ export function createSdkAgentStream(
         // rounds (M8 fields + per-request extra spread; absent ⇒ no key).
         agent = await Agent.getOrCreate(sessionId, {
           apiKey,
-          model: { id: model },
+          model: buildModelSelection(model, reasoningEffort),
           tools: sdkTools,
           ...m8,
           ...extra,
