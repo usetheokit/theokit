@@ -5,15 +5,27 @@ import type {
   AgentToolCallEvent,
   AgentToolResultEvent,
   AgentErrorEvent,
+  AgentThinkingEvent,
   AgentRunErrorCode,
 } from '../../packages/theo/src/server/agent/agent-types.js'
 import type { AgentEvent as AgentEventClient } from '../../packages/theo/src/client/index.js'
 
 describe('AgentEvent runtime variant (T1.1 — standalone in TheoKit, no TheoUI coupling)', () => {
-  it('AgentEvent is a discriminated union of 4 variants', () => {
+  it('AgentEvent is a discriminated union of 5 variants', () => {
     expectTypeOf<AgentEvent>().toExtend<
-      AgentMessageEvent | AgentToolCallEvent | AgentToolResultEvent | AgentErrorEvent
+      | AgentMessageEvent
+      | AgentToolCallEvent
+      | AgentToolResultEvent
+      | AgentErrorEvent
+      | AgentThinkingEvent
     >()
+  })
+
+  it('thinking event has type and content fields', () => {
+    expectTypeOf<AgentThinkingEvent>().toExtend<{
+      type: 'thinking'
+      content: string
+    }>()
   })
 
   it('message event has type and content fields', () => {

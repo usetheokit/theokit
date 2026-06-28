@@ -5,6 +5,7 @@ import {
   foldAgentToolCards,
 } from '../../packages/theo/src/client/agent-tool-cards.js'
 import { deriveError, deriveLiveText } from '../../packages/theo/src/client/use-agent-stream.js'
+import { parseSSEChunk } from '../../packages/theo/src/client/agent-stream-core.js'
 import type { AgentEvent } from '../../packages/theo/src/core/contracts/agent-events.js'
 
 describe('deriveLiveText (M5-1)', () => {
@@ -187,6 +188,37 @@ describe('foldAgentToolCards (M5-2)', () => {
     ]
     const cards = foldAgentToolCards(events, { resolveEnvelope: () => ({ error: true }) })
     expect(cards[0]?.status).toBe('error')
+  })
+})
+
+describe('AgentThinkingEvent additivity (agents-thinking-event-contract)', () => {
+  it('parseSSEChunk round-trips a thinking SSE line into the typed shape', () => {
+    const ev = parseSSEChunk('data: {"type":"thinking","content":"I will list the files"}')
+    expect(ev).toEqual({ type: 'thinking', content: 'I will list the files' })
+  })
+
+  it('deriveLiveText IGNORES thinking (reasoning never leaks into assistant text)', () => {
+    const events: AgentEvent[] = [
+      { type: 'message', content: 'Hi' },
+      { type: 'thinking', content: 'internal reasoning that must not render as text' },
+      { type: 'message', content: '!' },
+    ]
+    expect(deriveLiveText(events)).toBe('Hi!')
+  })
+
+  it('foldAgentToolCards IGNORES thinking (no spurious card)', () => {
+    const events: AgentEvent[] = [
+      { type: 'thinking', content: 'deciding to read' },
+      { type: 'tool_call', name: 'read', args: { path: 'a' }, id: '1' },
+      { type: 'tool_result', name: 'read', data: { ok: true }, id: '1' },
+    ]
+    const cards = foldAgentToolCards(events)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.status).toBe('success')
+  })
+
+  it('deriveLiveText over a thinking-only stream is empty', () => {
+    expect(deriveLiveText([{ type: 'thinking', content: 'reason' }])).toBe('')
   })
 })
 
