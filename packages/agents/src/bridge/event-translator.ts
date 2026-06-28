@@ -5,6 +5,8 @@
  * TheoKit devtools + SSE handler expect AgentStreamEvent (run_started/text_delta/tool_call/done).
  * This module bridges the two — Adapter pattern (per sdk-integration-blueprint ADR-D2).
  */
+import type { InteractionUpdate } from '@theokit/sdk'
+
 import type { StreamEvent } from './agent-sse-handler.js'
 
 /** Minimal SDK message shape — duck-typed to avoid hard import of @theokit/sdk types. */
@@ -157,5 +159,45 @@ export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
       return translateStatusEvent(msg)
     default:
       return [] // Unknown message types silently ignored
+  }
+}
+
+/**
+ * #44 — Translate ONE real-time `onDelta` `InteractionUpdate` to zero or more StreamEvents, in
+ * arrival order. This is the chronological path: routing `tool-call-started/completed` (and
+ * `thinking-delta`) through `onDelta` — alongside `text-delta` — keeps tool/text/thinking
+ * interleaved in true model order, instead of all-text-then-all-tools (the run.stream() buffer is
+ * post-completion). Shapes per @theokit/sdk types/updates.ts: `ToolCall { callId, name, args?, result? }`.
+ * `partial-tool-call` is intentionally ignored (incremental args would duplicate the tool_call).
+ * Reuses `serializeToolOutput` for the tool-result `output` wire contract (#41 / DRY).
+ */
+export function translateInteractionUpdate(update: InteractionUpdate): StreamEvent[] {
+  switch (update.type) {
+    case 'text-delta':
+      return update.text ? [{ type: 'text_delta', content: update.text }] : []
+    case 'thinking-delta':
+      return update.text ? [{ type: 'thinking', content: update.text }] : []
+    case 'tool-call-started':
+      return [
+        {
+          type: 'tool_call',
+          callId: update.callId,
+          toolName: update.toolCall.name,
+          input: update.toolCall.args ?? {},
+        },
+      ]
+    case 'tool-call-completed':
+      return [
+        {
+          type: 'tool_result',
+          callId: update.callId,
+          toolName: update.toolCall.name,
+          output: serializeToolOutput(update.toolCall.result, ''),
+          durationMs: 0,
+          isError: false,
+        },
+      ]
+    default:
+      return [] // partial-tool-call, thinking-completed, token-delta, step-*, etc. — not surfaced
   }
 }
