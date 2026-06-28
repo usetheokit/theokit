@@ -11,8 +11,10 @@ import type {
 import type { AgentEvent as AgentEventClient } from '../../packages/theo/src/client/index.js'
 
 describe('AgentEvent runtime variant (T1.1 — standalone in TheoKit, no TheoUI coupling)', () => {
-  it('AgentEvent is a discriminated union of 5 variants', () => {
-    expectTypeOf<AgentEvent>().toExtend<
+  it('AgentEvent is EXACTLY the discriminated union of 5 variants (catches add AND remove)', () => {
+    // toEqualTypeOf (not toExtend) so the guard fails on BOTH a 6th variant
+    // being added AND an existing variant being removed — a true regression guard.
+    expectTypeOf<AgentEvent>().toEqualTypeOf<
       | AgentMessageEvent
       | AgentToolCallEvent
       | AgentToolResultEvent
