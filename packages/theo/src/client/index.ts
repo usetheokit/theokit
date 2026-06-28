@@ -57,6 +57,7 @@ export type {
   AgentToolCallEvent,
   AgentToolResultEvent,
   AgentErrorEvent,
+  AgentThinkingEvent,
 } from '../core/contracts/agent-events.js'
 export type {
   Fetcher,

@@ -87,7 +87,26 @@ export interface AgentErrorEvent {
 }
 
 /**
- * Runtime AgentEvent — discriminated union of the 4 variants emitted by
+ * Extended thinking / reasoning event.
+ *
+ * Carries the model's reasoning text (when the model supports extended
+ * thinking). Mirrors the `@theokit/agents` stream-layer `ThinkingEvent`
+ * (`packages/agents/src/bridge/agent-stream-events.ts`) so the two layers
+ * agree on the wire form; defined here (not imported) to keep `core/contracts`
+ * free of a dependency on `@theokit/agents` (G1 dependency direction).
+ *
+ * Consumers that switch only on the other variants are unaffected (additive);
+ * a consumer that wants to surface reasoning opts in by handling `'thinking'`.
+ */
+export interface AgentThinkingEvent {
+  type: 'thinking'
+  content: string
+  /** Optional id for client-side dedup / animation keys. */
+  id?: string
+}
+
+/**
+ * Runtime AgentEvent — discriminated union of the 5 variants emitted by
  * agent endpoints. Server produces; client consumes.
  */
 export type AgentEvent =
@@ -95,3 +114,4 @@ export type AgentEvent =
   | AgentToolCallEvent
   | AgentToolResultEvent
   | AgentErrorEvent
+  | AgentThinkingEvent
