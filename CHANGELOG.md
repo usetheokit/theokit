@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **code-quality allowlist:** exempted the D2 symbol-fab false-positive `virtual:integration:banner` (`fixtures/define-integration/app/page.tsx`) — a Vite virtual module (`virtual:` prefix) the npm-registry probe cannot resolve by design, not a real fabrication (HARD → SOFT_CAP; sunset 2026-09-20; rationale in ADR 0033). Pre-existing finding in an untouched fixture, surfaced by the whole-repo D2 scan. (agents-thinking-event-contract)
 - `@theokit/sdk` atualizado de **2.0.1 para 2.5.0** (minor, aditivo) e adicionada a dependência `@theokit/sdk-tools@^0.2.0` (optional peer) ao `@theokit/agents`, habilitando os sub-paths `@theokit/sdk/compaction`/`skills`/`project` + `buildRepoMap`/`buildEnvContext` que o runtime dos decorators M8 consome. Bump aplicado nos manifests fixos (root, `packages/theo`); o peer floor de `@theokit/agents` subiu para `>=2.5.0`. Mudança aditiva — superfície existente do SDK inalterada. (M8)
 
 - Changesets: `theokit` e `create-theokit` **desvinculados** (`linked: []`) — os pacotes já estavam em linhas de versão divergentes (0.6.0 vs 1.0.15) e são publicados separadamente; o `linked` fazia um patch de `theokit` saltar 0.6.0→1.0.16 (sinal falso de major). Agora versionam de forma independente. Changeset patch de `theokit` adicionado para o release **0.6.1** (limpeza de arquitetura behavior-preserving). O publish ocorre via CI (`release.yml`, provenance OIDC) no merge para `main`. ADR 0029. (#arch-report-cleanup)
