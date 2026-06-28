@@ -75,6 +75,30 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
     })
   })
 
+  it('test_tool_call_completed_serializes_object_result — non-string result becomes JSON', () => {
+    // #41: object tool results were dropped (asString → ''); now serialized to JSON.
+    const events = translateSdkEvent(
+      {
+        type: 'tool_call',
+        agent_id: 'a',
+        run_id: RUN,
+        call_id: 'c1',
+        name: 'glob',
+        status: 'completed',
+        result: { ok: true, files: ['a'] },
+      },
+      RUN,
+    )
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      type: 'tool_result',
+      callId: 'c1',
+      toolName: 'glob',
+      output: '{"ok":true,"files":["a"]}',
+      isError: false,
+    })
+  })
+
   it('test_tool_call_error_uses_call_id_and_result', () => {
     const events = translateSdkEvent(
       {
@@ -97,20 +121,22 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
     })
   })
 
-  it('test_tool_call_running_emits_nothing', () => {
+  it('test_tool_call_running_emits_tool_call — running status emits a tool_call card with args', () => {
+    // #42: running status now emits a tool_call so the UI shows a running card with input args.
     expect(
       translateSdkEvent(
         {
           type: 'tool_call',
           agent_id: 'a',
           run_id: RUN,
-          call_id: 'c-3',
-          name: 'read',
+          call_id: 'c1',
+          name: 'glob',
           status: 'running',
+          input: { p: '*' },
         },
         RUN,
       ),
-    ).toEqual([])
+    ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'glob', input: { p: '*' } }])
   })
 
   it('test_status_FINISHED_maps_to_done — uppercase enum (messages.ts:110)', () => {
