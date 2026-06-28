@@ -20,6 +20,8 @@ import type {
   SystemPromptResolver,
 } from '@theokit/sdk'
 
+import type { ReasoningEffort } from '../types.js'
+
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { compileProjectContext } from './compile-project-context.js'
@@ -28,6 +30,7 @@ import {
   translateSdkEvent,
   type SdkMessage,
 } from './event-translator.js'
+import { buildModelSelection } from './model-selection.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
 interface M8CreateOptions {
@@ -80,6 +83,11 @@ function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
 export interface RuntimeOverrides {
   /** Overrides the model for this call (`?? compiled.model ?? default`). */
   model?: string
+  /**
+   * Per-run extended-thinking effort (`?? compiled.reasoningEffort`). Mapped to the SDK
+   * `ModelSelection.params` so the provider produces reasoning (surfaced as `thinking` StreamEvents).
+   */
+  reasoningEffort?: ReasoningEffort
   /** Per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
   cwd?: string
   /**
@@ -337,6 +345,8 @@ export function createSdkAgentStream(
   overrides: RuntimeOverrides = {},
 ) {
   const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
+  // M1 reasoning-visibility: per-run effort overrides the compiled @Agent effort (mirrors `model`).
+  const reasoningEffort = overrides.reasoningEffort ?? compiled.reasoningEffort
   // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
   // so history persists across the per-round agent create/dispose. Defaults lazily to the
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
@@ -440,7 +450,7 @@ export function createSdkAgentStream(
         // rounds (M8 fields + per-request extra spread; absent ⇒ no key).
         agent = await Agent.getOrCreate(sessionId, {
           apiKey,
-          model: { id: model },
+          model: buildModelSelection(model, reasoningEffort),
           tools: sdkTools,
           ...m8,
           ...extra,
