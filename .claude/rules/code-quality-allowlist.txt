@@ -57,3 +57,14 @@
 typescript | *packages/agents/tests/unit/agent-route-generator.test.ts | symbol_fab | @theokit/http/runtime/node | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (packages/http exports ./runtime/node) | 2026-09-20
 typescript | *packages/agents/tests/integration/theokit-plugin.test.ts | symbol_fab | @theokit/http/runtime/node | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (packages/http exports ./runtime/node) | 2026-09-20
 typescript | *packages/create-theokit/templates/default/app/layout.tsx | symbol_fab | @theokit/ui/styles.css | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (@theokit/ui published stylesheet subpath) | 2026-09-20
+
+# --- Vite virtual module false-positive (D2 symbol-fab, HARD) ---
+# `virtual:` is Vite's reserved prefix for plugin-provided virtual modules,
+# resolved at build time by a Vite plugin — NOT an npm package. D2's npm-registry
+# probe reports "fabricated npm package (not found on registry)" because no such
+# package exists by design. The define-integration fixture's Vite plugin provides
+# `virtual:integration:banner/*`. Pre-existing finding in an untouched fixture
+# (unrelated to agents-thinking-event-contract; surfaced by a whole-repo D2 scan).
+# Allowlist downgrades HARD -> SOFT_CAP. ADR 0033. Proper fix: D2 should skip the
+# `virtual:` specifier prefix (tracked as a code-quality detector follow-up).
+typescript | *fixtures/define-integration/app/page.tsx | symbol_fab | virtual:integration:banner | known false-positive — Vite virtual module ('virtual:' prefix) resolved by the define-integration Vite plugin at build time, not an npm package; D2 npm-registry check cannot resolve virtual specifiers (ADR 0033) | 2026-09-20
