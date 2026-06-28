@@ -151,6 +151,7 @@ Add the `interface AgentThinkingEvent { type:'thinking'; content:string; id?:str
 packages/theo/src/core/contracts/agent-events.ts — add AgentThinkingEvent interface + add it to the AgentEvent union
 packages/theo/src/core/contracts/index.ts — add AgentThinkingEvent to the agent-events re-export block
 packages/theo/src/client/index.ts — add AgentThinkingEvent to the agent-events re-export block
+packages/theo/src/server/agent/agent-types.ts — add AgentThinkingEvent to the agent-events re-export block (third re-export site identified in Baseline Context § Current callers)
 tests/type/agent-thinking-event.test-d.ts — (NEW) RED type test, added first (TDD)
 ```
 
