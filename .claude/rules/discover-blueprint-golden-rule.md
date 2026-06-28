@@ -49,19 +49,18 @@ This rule forces minimum structural state PRESENT before the aggregate matters.
 
 | Verdict | Score cap | Meaning | Downstream action |
 |---|---|---|---|
-| `SHIPPABLE` | 100 | Blueprint passes all gates with high confidence | Optional skill-promotion via `/skill-writer` |
-| `SHIPPABLE_WITH_CAVEATS` | 89 | Passes hard caps; some soft caps flagged | Promotion allowed; caveats logged |
+| `SHIPPABLE` | 100 | Blueprint passes all gates with high confidence | Optional skill distillation via the standalone `/skill-creator` |
+| `SHIPPABLE_WITH_CAVEATS` | 89 | Passes hard caps; some soft caps flagged | Distillation allowed; caveats logged |
 | `NEEDS_REVISION` | 70 | Soft caps fire; structurally OK | Loop to `/discover-improve` |
 | `INVALID` | 49 (capped) | Hard cap triggered (this rule fired) | Loop back to `/discover-plan` — rewrite, not improve |
 
 ## § 6 — When this rule may change
 
-Only via explicit ADR signed by the project owner. Any change that softens enforcement MUST:
+Per `cycle-rule-schema.md § Golden Rule Change Protocol` (ADR signed by the project
+owner). Rule-specific deviations:
 
-1. Cite the ADR in `knowledge-base/adrs/`.
-2. Document the change in `## § 3 — Rules that cannot be bent`.
-3. Bump `rules/discover-blueprint-thresholds.txt` reference to the new ADR (when that file exists).
-4. Add CHANGELOG entry under `[Unreleased] § Changed`.
+- Document the change in `## § 3 — Rules that cannot be bent`.
+- Bump the `rules/discover-blueprint-thresholds.txt` reference to the new ADR.
 
 ## § 7 — Failure modes the rule guards against
 

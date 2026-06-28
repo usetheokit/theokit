@@ -18,15 +18,7 @@ DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ANAL
                                                               feedback loop
 ```
 
-When enabled, `/analysis` is the **last cycle** before the roadmap super-loop selects the next milestone. Its verdict drives the shape of the next iteration:
-
-| Verdict | Next iteration |
-|---|---|
-| `ON_TRACK` | Proceed to next milestone normally. |
-| `ON_TRACK_WITH_RISKS` | Next milestone proceeds, but risk mitigation tasks are injected into the next `/to-plan`. |
-| `COURSE_CORRECTION_NEEDED` | Before next feature work, run `/to-plan` for corrective tasks addressing the falsified hypotheses. Then `/implement` the corrections. |
-| `FUNDAMENTAL_RETHINK` | Run `/discover-plan` to investigate alternatives, then `/to-plan` for architectural redesign. Write ADR explaining why the current approach failed. |
-| `INVALID` | Stop. Surface to human. Fix config/golden-rule before proceeding. |
+When enabled, `/analysis` is the **last cycle** before the roadmap super-loop selects the next milestone. Its verdict drives the shape of the next iteration — see § Verdicts below for the full token → feedback-action mapping.
 
 ## Pre-conditions
 
@@ -97,18 +89,7 @@ Six modules, each producing quantitative evidence. Modules run in order A1→A6.
 
 ### Feedback loop integration with cycle-roadmap
 
-When running inside the `cycle-roadmap` super-loop:
-
-```
-ROADMAP selects milestone M<N>
-  → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE
-  → ANALYSIS (if enabled)
-  → verdict determines shape of M<N+1>:
-       ON_TRACK              → ROADMAP selects next milestone normally
-       ON_TRACK_WITH_RISKS   → ROADMAP selects next milestone; /to-plan includes risk mitigations
-       COURSE_CORRECTION     → ROADMAP inserts corrective milestone before next feature milestone
-       FUNDAMENTAL_RETHINK   → ROADMAP pauses; human decides whether to redesign or pivot
-```
+When running inside the `cycle-roadmap` super-loop, the verdict shapes milestone M\<N+1\>: `ON_TRACK` / `ON_TRACK_WITH_RISKS` → roadmap selects the next milestone (risk mitigations injected into `/to-plan` for the latter); `COURSE_CORRECTION_NEEDED` → roadmap inserts a corrective milestone before the next feature milestone; `FUNDAMENTAL_RETHINK` → roadmap pauses for a human redesign/pivot decision.
 
 The analysis report is persisted at `knowledge-base/audits/` and referenced by the next milestone's `/to-plan` as prior art (same as `/discover` blueprints).
 

@@ -49,7 +49,7 @@ Aligned with `cycle-rule-schema.md`:
 
 ## § 6 — When this rule may change
 
-Only via explicit ADR. Requires CHANGELOG entry and passing `check_xrefs.py` + `test_e2e_smoke.py`.
+Per `cycle-rule-schema.md § Golden Rule Change Protocol`. No rule-specific deviations.
 
 ## Cross-references
 

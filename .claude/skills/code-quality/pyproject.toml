@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Multi-language wiring + dead-code + symbol-fabrication gate (Claude skill)"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "planning-ecosystem" }]
+authors = [{ name = "cycle-ecosystem" }]
 
 dependencies = [
     "tree-sitter>=0.25,<0.26",

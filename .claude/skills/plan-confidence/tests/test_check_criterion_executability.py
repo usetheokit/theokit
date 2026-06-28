@@ -1,13 +1,10 @@
 """Tests for check_criterion_executability."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_criterion_executability import (  # noqa: E402
     CriterionScore,

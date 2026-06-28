@@ -6,10 +6,15 @@ from pathlib import Path
 
 import pytest
 
-# Make scripts/ importable as a package for tests
+# Make scripts/ importable as a package for tests (e.g. `from scripts.detectors.go import ...`)
 _SKILL_ROOT = Path(__file__).resolve().parent.parent
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
+
+# Also make scripts/ itself importable for bare-module imports (e.g. `import cq_invoke`)
+_SCRIPTS_DIR = _SKILL_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
 
 
 @pytest.fixture

@@ -1,11 +1,8 @@
 """T1.2 — integration tests for M3 wiring into run_structural."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from run_structural import run_structural  # noqa: E402
 
@@ -114,10 +111,6 @@ def test_merge_verdict_integration_via_run_structural_caps_fail_hard(tmp_path: P
     exercises the merge through the public production path (run_structural's main flow),
     not just direct unit calls.
     """
-    import sys
-    SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-    if str(SCRIPTS_DIR) not in sys.path:
-        sys.path.insert(0, str(SCRIPTS_DIR))
     from run_structural import _merge_code_quality_verdict
 
     out = {
@@ -140,10 +133,6 @@ def test_merge_verdict_integration_via_run_structural_caps_fail_hard(tmp_path: P
 
 def test_merge_verdict_integration_via_run_structural_caps_with_caveats(tmp_path: Path) -> None:
     """End-to-end: PASS_WITH_CAVEATS downgrades SHIPPABLE → SHIPPABLE_WITH_CAVEATS."""
-    import sys
-    SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-    if str(SCRIPTS_DIR) not in sys.path:
-        sys.path.insert(0, str(SCRIPTS_DIR))
     from run_structural import _merge_code_quality_verdict
 
     out = {
@@ -164,10 +153,6 @@ def test_merge_verdict_integration_via_run_structural_caps_with_caveats(tmp_path
 
 def test_merge_verdict_pass_does_not_modify(tmp_path: Path) -> None:
     """End-to-end: CQ PASS (score_cap 100) MUST leave plan-confidence verdict untouched."""
-    import sys
-    SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-    if str(SCRIPTS_DIR) not in sys.path:
-        sys.path.insert(0, str(SCRIPTS_DIR))
     from run_structural import _merge_code_quality_verdict
 
     out = {

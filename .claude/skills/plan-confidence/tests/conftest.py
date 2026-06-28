@@ -3,24 +3,30 @@
 PORTABLE: paths are auto-detected via walk-up from the skill location, with
 layout fallback so the test suite runs in BOTH layouts:
 
-  - **standalone**: plan source repo itself — `rules/`, `skills/`, `knowledge-base/`
+  - **standalone**: Cycle source repo itself — `rules/`, `skills/`, `knowledge-base/`
     live at the top level (no `.claude/` wrapper).
-  - **consumer install**: plan ecosystem copied into a consumer project under
+  - **consumer install**: Cycle ecosystem copied into a consumer project under
     `<consumer>/.claude/` (this is what `scripts/install.sh` and
     `scripts/patch_install.sh` produce).
 
 Without the fallback every test asserting `<root>/.claude/rules/foo.md` exists
-fails when the suite runs against the plan source itself — because the plan
+fails when the suite runs against the Cycle source itself — because the plan
 source keeps its canonical files at `<root>/rules/foo.md`. The fixtures below
 detect which layout is in use and route to the correct directory.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
 SKILL_ROOT = Path(__file__).parent.parent
+SCRIPTS_DIR = SKILL_ROOT / "scripts"
+
+# Make scripts/ importable (e.g. `from check_adr_completeness import ...`)
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 
 def _find_project_root(start: Path) -> Path:
@@ -55,7 +61,7 @@ def _find_project_root(start: Path) -> Path:
 def _resolve_rules_dir(project_root: Path) -> Path:
     """Return whichever of `<root>/.claude/rules/` or `<root>/rules/` actually exists.
 
-    Consumer install populates `.claude/rules/`. Standalone plan source keeps
+    Consumer install populates `.claude/rules/`. Standalone Cycle source keeps
     `rules/` at the top level. Prefer consumer-install when both are present
     (consumers may also have a top-level `rules/` from prior conventions).
     """

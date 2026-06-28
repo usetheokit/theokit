@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/paulohenriquevn/cycle/skills/implement/progress-schema.json",
+  "title": "Implement halt-loop progress checkpoint",
+  "description": "Canonical shape of .claude/knowledge-base/implementations/.progress-{slug}.json — the runtime checkpoint the /implement halt-loop writes each iteration and every gate reads. This file is the SINGLE SOURCE OF TRUTH for the schema: implementation-prompt.md's PROGRESS step and check_progress_schema.py both follow it. The gates read `data['tasks']` (an array) and filter each task by `phase`, so a bare task object or a task without `phase`/`id` is NOT consumable.",
+  "type": "object",
+  "required": ["tasks"],
+  "additionalProperties": true,
+  "properties": {
+    "slug": {
+      "type": "string",
+      "description": "Plan slug this checkpoint belongs to."
+    },
+    "tasks": {
+      "type": "array",
+      "description": "One entry per plan task, in dependency order. Gates iterate this array — it MUST be present even with a single task.",
+      "items": { "$ref": "#/$defs/task" }
+    },
+    "previous_halt": {
+      "type": "object",
+      "description": "Set on resume after a recovered blocker (resume-protocol.md step 3).",
+      "properties": {
+        "reason": { "type": "string" },
+        "resolved_date": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "required": ["id", "phase", "status"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Plan task id, e.g. 'T1.1'. Read by check_phase_completeness as t['id'] — NOT 'task_id'.",
+          "pattern": "^T\\d+\\.\\d+$"
+        },
+        "phase": {
+          "type": ["string", "integer"],
+          "description": "Phase number, e.g. '1'. Gates filter by str(task['phase']); omitting it makes the task invisible to every phase-scoped gate."
+        },
+        "status": {
+          "type": "string",
+          "description": "Current TDD-cycle stage. A task is complete only at 'committed' (or honestly 'blocked').",
+          "enum": ["pending", "red", "green", "refactor", "wired", "committed", "blocked", "done"]
+        },
+        "files": {
+          "type": "array",
+          "description": "Files this task created/edited. Read by check_diff_cohesion to detect scope drift. Should match the plan task's '#### Files to edit'.",
+          "items": { "type": "string" }
+        },
+        "commit_sha": {
+          "type": ["string", "null"],
+          "description": "Commit SHA once status='committed'. Read by check_diff_cohesion and diff_symbols to derive the real diff. Null/absent until committed."
+        },
+        "wiring": {
+          "type": "object",
+          "description": "Self-reported wiring triad result. NOTE: run_validation re-verifies pillar (a) independently — this field is an audited claim, not trusted evidence.",
+          "properties": {
+            "a": { "enum": ["pass", "fail", "defer", null] },
+            "b": { "enum": ["pass", "fail", "defer", "n/a", null] },
+            "c": { "enum": ["pass", "fail", "n/a", null] }
+          }
+        },
+        "iterations_used": { "type": "integer", "minimum": 0 },
+        "phases_completed": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blocked_reason": {
+          "type": "string",
+          "description": "Required when status='blocked' — explicit reason + recommended human action."
+        },
+        "retries": { "type": "integer", "minimum": 0 },
+        "previous_blocked_reason": { "type": "string" }
+      }
+    }
+  }
+}

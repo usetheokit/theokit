@@ -1,13 +1,10 @@
 """T4.1 — check_coverage_matrix.py tests (v1.1 EC-4 fix: orphan exclusion)."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_coverage_matrix import (  # noqa: E402
     CoverageReport,

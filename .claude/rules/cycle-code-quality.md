@@ -30,7 +30,7 @@ Do NOT trigger when:
      ↓ detect languages from manifests (go.mod, package.json, pyproject.toml, Cargo.toml)
      ↓ run per-language detectors (dead-code, fabrication, wiring)
      ↓ consolidate findings into severity-classified report
-     ↓ verdict: PASS / PASS_WITH_CAVEATS / FAIL
+     ↓ verdict: PASS / PASS_WITH_CAVEATS / FAIL_SOFT / FAIL_HARD / INVALID
 ```
 
 ## Phase contracts
@@ -40,25 +40,28 @@ Do NOT trigger when:
 | detect | repo tree | list of enabled languages | at least one manifest present (else NOOP) |
 | analyze | per-language detector run | structured findings (file:line, severity, kind) | detector toolchain available for enabled language |
 | consolidate | per-language findings | unified report at `knowledge-base/audits/{slug-or-date}-code-quality.md` | report references real file:line — no fabricated citations |
-| verdict | report | PASS / PASS_WITH_CAVEATS / FAIL | severity rubric below |
+| verdict | report | PASS / PASS_WITH_CAVEATS / FAIL_SOFT / FAIL_HARD / INVALID | severity rubric (`code-quality-golden-rule.md` § 1–2) |
 
 ## Severity rubric
 
-| Finding | Verdict cap | Stable identifier |
+The Source of Truth for the rubric — score caps **and** the stable finding
+identifiers — is `code-quality-golden-rule.md` § 1–2 (LOCKED). This cycle does not
+redefine them. The verdict is the smallest cap among the findings:
+
+| Verdict | Cap | When |
 |---|---|---|
-| Symbol fabrication (production code references undefined symbol) | FAIL | `fabricated_symbol` |
-| Dead exported symbol (public API with no caller AND no test exercising it) | FAIL | `dead_public_export` |
-| Dead internal symbol (private function with no caller) | PASS_WITH_CAVEATS | `dead_internal_symbol` |
-| Wiring triad incomplete (new public symbol missing caller OR integration test OR metric) | FAIL when plan declared the triad; PASS_WITH_CAVEATS when triad was ADR-deferred | `wiring_triad_incomplete` |
-| Unused parameter (often a refactor leftover) | PASS_WITH_CAVEATS | `unused_parameter` |
-| Toolchain missing for an enabled language | PASS_WITH_CAVEATS (≤ 70) | `detector_unavailable_{lang}` |
+| `PASS` | 100 | No finding above INFO. |
+| `PASS_WITH_CAVEATS` | 89 | Soft-floor only (dead internal symbol, unused parameter, mutation 60–79%). |
+| `FAIL_SOFT` | 70 | Soft-cap (orphan export, mutation < 60%, auditor/toolchain unavailable). |
+| `FAIL_HARD` | 49 | Hard-cap (`symbol_fabrication_{language}`, `dead_code_unallowlisted_{language}`). |
+| `INVALID` | 0 | Structural integrity broken (golden rule missing/corrupt, allowlist malformed). |
 
-## Hard gates (FAIL-level)
+## Hard gates (`FAIL_HARD`)
 
-- `fabricated_symbol` — at least one production reference points to a name that does not exist in the source tree or in any imported dependency.
-- `dead_public_export` — a symbol exported from a public package surface has no caller and no test.
+- `symbol_fabrication_{language}` — at least one production reference points to a name that does not exist in the source tree or in any imported dependency.
+- `dead_code_unallowlisted_{language}` — a symbol exported from a public package surface has no caller and no test, and is not allowlisted.
 
-A FAIL verdict blocks `/review`. The fix path is back to `/implement` (or a targeted fix branch).
+A `FAIL_HARD` verdict blocks `/review`; `INVALID` halts the cycle (surface to human). The fix path for `FAIL_HARD` is back to `/implement` (or a targeted fix branch). A `FAIL_SOFT` MAY proceed to `/review` only with an ADR dismissing each soft cap (per golden rule § 1).
 
 ## Stop conditions
 
@@ -75,7 +78,7 @@ A FAIL verdict blocks `/review`. The fix path is back to `/implement` (or a targ
 ## Output
 
 - `knowledge-base/audits/{slug-or-date}-code-quality.md` — consolidated report with severity matrix, file:line evidence, and remediation suggestions.
-- Exit code 0 (PASS), 1 (PASS_WITH_CAVEATS), 2 (FAIL).
+- The verdict is emitted in the report and in the structured JSON (`verdict` field). The process exits non-zero on blocking verdicts (`FAIL_HARD` / `INVALID`).
 
 ## Cross-references
 
