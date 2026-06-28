@@ -220,6 +220,18 @@ describe('AgentThinkingEvent additivity (agents-thinking-event-contract)', () =>
   it('deriveLiveText over a thinking-only stream is empty', () => {
     expect(deriveLiveText([{ type: 'thinking', content: 'reason' }])).toBe('')
   })
+
+  it('(edge) parseSSEChunk round-trips a thinking event with empty content', () => {
+    expect(parseSSEChunk('data: {"type":"thinking","content":""}')).toEqual({
+      type: 'thinking',
+      content: '',
+    })
+  })
+
+  it('(negative) parseSSEChunk returns null for a malformed thinking line', () => {
+    // missing closing brace → invalid JSON → null (no throw, no corrupt event)
+    expect(parseSSEChunk('data: {"type":"thinking","content":')).toBeNull()
+  })
 })
 
 describe('theokit/client barrel (M5-1/M5-2 wiring)', () => {
