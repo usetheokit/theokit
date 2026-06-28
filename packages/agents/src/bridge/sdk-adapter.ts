@@ -13,7 +13,6 @@ import type {
   ConversationStorageAdapter,
   CustomTool,
   InteractionUpdate,
-  ModelSelection,
   Plugin,
   PluginsSettings,
   ProviderRoutingSettings,
@@ -31,6 +30,7 @@ import {
   translateSdkEvent,
   type SdkMessage,
 } from './event-translator.js'
+import { buildModelSelection } from './model-selection.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
 interface M8CreateOptions {
@@ -80,16 +80,6 @@ function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
  * one object (rather than positional params) so the per-request surface can grow without
  * a parameter explosion. Each field is Axis-A SWAP — a value the app holds at call time.
  */
-/**
- * Build the SDK `ModelSelection` for a model id + optional reasoning effort. With no (or empty)
- * effort it returns the bare `{ id }` — byte-identical to the prior behavior (backward-compat). With
- * an effort it adds the canonical reasoning param `{ id: 'thinking', value: effort }`. Pure.
- */
-export function buildModelSelection(modelId: string, effort?: ReasoningEffort): ModelSelection {
-  if (!effort) return { id: modelId }
-  return { id: modelId, params: [{ id: 'thinking', value: effort }] }
-}
-
 export interface RuntimeOverrides {
   /** Overrides the model for this call (`?? compiled.model ?? default`). */
   model?: string
