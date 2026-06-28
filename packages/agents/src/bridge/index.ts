@@ -61,6 +61,7 @@ export {
 } from './agent-route-generator.js'
 
 export { createSdkAgentStream } from './sdk-adapter.js'
+export { buildModelSelection } from './model-selection.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
 
 export {

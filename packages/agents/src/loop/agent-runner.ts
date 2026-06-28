@@ -31,6 +31,7 @@ import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
 import { walkAgentMetadata } from '../bridge/walk-agent-metadata.js'
+import type { ReasoningEffort } from '../types.js'
 
 import {
   resolveCompactionStrategy,
@@ -65,6 +66,13 @@ export interface AgentRunnerRunOptions {
    * `opts.model ?? compiled.model ?? default`. Absent ⇒ the compiled model.
    */
   readonly model?: string
+  /**
+   * M1 (Axis-A SWAP): per-run extended-thinking effort. Merge-over-compiled —
+   * `opts.reasoningEffort ?? compiled.reasoningEffort` (resolved in the adapter, single site).
+   * Mapped to the SDK `ModelSelection.params` so the provider reasons (surfaced as `thinking`
+   * StreamEvents). Absent ⇒ the compiled `@Agent({ reasoningEffort })` (or none).
+   */
+  readonly reasoningEffort?: ReasoningEffort
   /**
    * V4-L.2 (Axis-A SWAP): per-run working directory, forwarded into
    * `Agent.create({ local: { cwd } })` so the SDK populates `SystemPromptContext.cwd`
@@ -202,6 +210,7 @@ export class AgentRunner {
       opts.streamFactory ??
       createSdkAgentStream(this.compiled, tools, opts.apiKey, {
         model: opts.model,
+        reasoningEffort: opts.reasoningEffort, // M1: per-run extended-thinking effort
         cwd: opts.cwd,
         plugins: opts.plugins,
         providers: opts.providers,
