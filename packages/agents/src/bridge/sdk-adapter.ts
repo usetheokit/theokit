@@ -12,6 +12,7 @@ import type {
   ContextSettings,
   ConversationStorageAdapter,
   CustomTool,
+  InteractionUpdate,
   Plugin,
   PluginsSettings,
   ProviderRoutingSettings,
@@ -157,6 +158,86 @@ function buildExtraCreateOptions(overrides: RuntimeOverrides): Record<string, un
   return extra
 }
 
+/** #40: tagged item flowing through the merge queue — an incremental delta or a complete SDK message. */
+type MergeItem = { kind: 'delta'; event: StreamEvent } | { kind: 'sdk'; msg: SdkMessage }
+
+/** Minimal single-producer/single-consumer async queue (#40 — merge onDelta tokens with run.stream()). */
+interface AsyncQueue<T> {
+  push: (item: T) => void
+  close: () => void
+  [Symbol.asyncIterator]: () => AsyncIterator<T>
+}
+
+function createAsyncQueue<T>(): AsyncQueue<T> {
+  const items: T[] = []
+  let wake: (() => void) | null = null
+  let closed = false
+  return {
+    push(item: T) {
+      items.push(item)
+      if (wake) {
+        wake()
+        wake = null
+      }
+    },
+    close() {
+      closed = true
+      if (wake) {
+        wake()
+        wake = null
+      }
+    },
+    async *[Symbol.asyncIterator]() {
+      for (;;) {
+        while (items.length > 0) {
+          const next = items.shift()
+          if (next !== undefined) yield next
+        }
+        if (closed) return
+        await new Promise<void>((resolve) => {
+          wake = resolve
+        })
+      }
+    },
+  }
+}
+
+/**
+ * #40: merge incremental `text_delta` deltas (queued via onDelta) with the complete SDK messages
+ * from `run.stream()`. Deltas are yielded as they arrive; complete messages are translated and the
+ * complete-assistant `text_delta` is deduped when deltas already streamed it (`state.sawDelta`).
+ * The `done` SDK event stays suppressed (the real-usage `done` is emitted by the caller after
+ * `run.wait()`); errors set `state.sawError` to short-circuit that re-emit. Extracted to keep the
+ * stream generator within the G6 size budget.
+ */
+async function* mergeDeltaStream(
+  stream: AsyncGenerator<SdkMessage>,
+  queue: AsyncQueue<MergeItem>,
+  runId: string,
+  state: { sawDelta: boolean; sawError: boolean },
+): AsyncGenerator<StreamEvent> {
+  const pump = (async () => {
+    try {
+      for await (const msg of stream) queue.push({ kind: 'sdk', msg })
+    } finally {
+      queue.close()
+    }
+  })()
+  for await (const item of queue) {
+    if (item.kind === 'delta') {
+      yield item.event
+      continue
+    }
+    for (const out of translateSdkEvent(item.msg, runId)) {
+      if (out.type === 'done') continue // suppressed; the real-usage done is emitted by the caller
+      if (out.type === 'text_delta' && state.sawDelta) continue // #40 dedup — already streamed
+      if (out.type === 'error') state.sawError = true
+      yield out
+    }
+  }
+  await pump // surface any run.stream() error (caught by the generator's try/catch)
+}
+
 /**
  * Creates an agent stream factory using @theokit/sdk as the runtime.
  *
@@ -186,7 +267,14 @@ export function createSdkAgentStream(
           id: string,
           opts: Record<string, unknown>,
         ) => Promise<{
-          send: (msg: string) => Promise<{
+          // #40: the SDK token-streams ONLY via send's onDelta callback (proven empirically);
+          // run.stream() yields complete messages. The adapter merges both.
+          send: (
+            msg: string,
+            // The SDK's onDelta receives `{ update: InteractionUpdate }` (the SDK union); the
+            // handler narrows on the discriminant (`text-delta`) to pull the token text.
+            opts?: { onDelta?: (d: { update: InteractionUpdate }) => void },
+          ) => Promise<{
             stream: () => AsyncGenerator<SdkMessage>
             // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
             // V4-O: usage also carries optional reasoning/cache buckets (forwarded by realUsageDone).
@@ -273,23 +361,32 @@ export function createSdkAgentStream(
           conversationStorage: storage,
         })
 
-        // Send message + stream response
-        const run = await agent.send(message)
+        // #40: token streaming. The SDK streams incremental tokens ONLY via send's onDelta;
+        // run.stream() yields complete messages. Queue the deltas + merge with run.stream(),
+        // deduping the complete-assistant text (sawDelta) so it is not double-emitted. A
+        // provider that never calls onDelta falls back to translateAssistantEvent's full text.
+        const queue = createAsyncQueue<MergeItem>()
+        const state = { sawDelta: false, sawError: false }
+        const onDelta = (d: { update: InteractionUpdate }) => {
+          // The SDK streams assistant tokens as `TextDeltaUpdate` (type 'text-delta'); narrow on
+          // the discriminant so only those become text_delta events (thinking/tool/step updates
+          // flow through run.stream() instead).
+          if (d.update.type === 'text-delta' && d.update.text) {
+            state.sawDelta = true
+            queue.push({ kind: 'delta', event: { type: 'text_delta', content: d.update.text } })
+          }
+        }
+        const run = await agent.send(message, { onDelta })
 
         // V4-N.1: the stream's `done` carries zero usage (the FINISHED status has no token
-        // totals). Suppress it and emit ONE real-usage `done` after `run.wait()` (which carries
-        // the SDK RunResult.usage + cost). Errors pass through and short-circuit the re-emit.
-        let sawError = false
-        for await (const sdkEvent of run.stream()) {
-          for (const event of translateSdkEvent(sdkEvent, runId)) {
-            if (event.type === 'done') continue // suppressed; the real one is emitted below
-            if (event.type === 'error') sawError = true
-            yield event
-          }
+        // totals). It is suppressed in mergeDeltaStream; ONE real-usage `done` is emitted after
+        // `run.wait()` (which carries the SDK RunResult.usage + cost). Errors short-circuit it.
+        for await (const event of mergeDeltaStream(run.stream(), queue, runId, state)) {
+          yield event
         }
 
         // Exactly-one-terminal: on a clean run, read the SDK RunResult for real usage + cost.
-        if (!sawError) {
+        if (!state.sawError) {
           yield realUsageDone(await run.wait(), t0)
         }
       } catch (err) {
