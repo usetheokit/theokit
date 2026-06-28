@@ -1,6 +1,14 @@
 import type { SystemPromptResolver } from '@theokit/sdk'
 import type { z } from 'zod'
 
+/**
+ * Provider-agnostic extended-thinking knob (M1 reasoning-visibility). The common set autocompletes;
+ * `(string & {})` accepts provider-specific values forward-compat (mirrors `AgentRunErrorCode`) — the
+ * SDK validates the value against the model's catalog. Defined in this leaf module so every layer
+ * (`@Agent` config, compiler, runner, sdk-adapter) imports it without an import cycle.
+ */
+export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | (string & {})
+
 /** Configuration stored by @Agent() decorator. */
 export interface AgentOptions {
   /** Unique agent name (kebab-case). */
@@ -9,6 +17,8 @@ export interface AgentOptions {
   route: string
   /** LLM model identifier (e.g., 'claude-sonnet-4-5-20250929'). */
   model?: string
+  /** Extended-thinking effort; mapped to the SDK `ModelSelection.params` so the provider reasons. */
+  reasoningEffort?: ReasoningEffort
   /** Enable SSE streaming (default: true). */
   stream?: boolean
   /** Maximum loop iterations before forcing a terminal response. */
