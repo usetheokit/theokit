@@ -19,6 +19,23 @@ function asString(value: unknown, fallback: string): string {
   return fallback
 }
 
+/**
+ * Serialize a tool's `result` into the `string` wire contract of ToolResultEvent.output (#41).
+ * String passthrough; null/undefined → fallback; otherwise JSON (String() on throw — BigInt/circular).
+ */
+function serializeToolOutput(value: unknown, fallback: string): string {
+  if (typeof value === 'string') return value
+  if (value === undefined || value === null) return fallback
+  try {
+    return JSON.stringify(value)
+  } catch {
+    // JSON.stringify throws on BigInt and circular refs. Preserve a BigInt's real value;
+    // for anything non-serializable (circular object) base-to-string is uninformative, so
+    // return the fallback rather than '[object Object]'.
+    return typeof value === 'bigint' ? value.toString() : fallback
+  }
+}
+
 function translateSystemEvent(msg: SdkMessage, runId: string): StreamEvent[] {
   return [
     {
@@ -66,7 +83,7 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
         type: 'tool_result',
         callId,
         toolName,
-        output: asString(msg.result, ''),
+        output: serializeToolOutput(msg.result, ''),
         durationMs: 0,
         isError: false,
       },
@@ -78,13 +95,17 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
         type: 'tool_result',
         callId,
         toolName,
-        output: asString(msg.result, 'Tool failed'),
+        output: serializeToolOutput(msg.result, 'Tool failed'),
         durationMs: 0,
         isError: true,
       },
     ]
   }
-  return [] // 'running' status → no event (in progress)
+  if (status === 'running') {
+    // #42: emit a tool_call at tool start so the UI shows the running card with its args.
+    return [{ type: 'tool_call', callId, toolName, input: msg.input ?? msg.arguments ?? {} }]
+  }
+  return [] // unknown status → no event
 }
 
 function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
