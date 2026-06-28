@@ -4,7 +4,7 @@
 Supports dual-mode layouts:
   - Standalone — the ecosystem repo itself (skills/+rules/+hooks/ directly).
   - User config — <home>/.claude/.
-  - Plugin install — <root>/.claude/plugins/plan/.
+  - Plugin install — <root>/.claude/plugins/cycle/.
 
 Validates:
   1. All Python scripts have valid syntax (py_compile)
@@ -33,30 +33,15 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Ensure scripts/ is on sys.path for shared module imports
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-def _is_ecosystem_layout(d: Path) -> bool:
-    return (d / "skills").is_dir() and (d / "rules").is_dir() and (d / "hooks").is_dir()
+from ecosystem_utils import find_ecosystem_dir  # noqa: E402
 
 
 def _find_ecosystem_dir() -> Path:
-    """Locate ecosystem directory across the three supported layouts."""
-    current = Path.cwd().resolve()
-    for _ in range(20):
-        if _is_ecosystem_layout(current):
-            return current
-        claude_sub = current / ".claude"
-        if _is_ecosystem_layout(claude_sub):
-            return claude_sub
-        plugin_sub = current / ".claude" / "plugins" / "plan"
-        if _is_ecosystem_layout(plugin_sub):
-            return plugin_sub
-        if current == current.parent:
-            break
-        current = current.parent
-    raise FileNotFoundError(
-        "Ecosystem directory not found. Expected one of: <cwd>/{skills,rules,hooks}, "
-        "<cwd>/.claude/{skills,rules,hooks}, or <cwd>/.claude/plugins/plan/{skills,rules,hooks}."
-    )
+    """Locate ecosystem directory (delegates to shared module)."""
+    return find_ecosystem_dir(require=True)  # type: ignore[return-value]
 
 
 def check_python_syntax(ecosystem_dir: Path) -> tuple[bool, list[str]]:

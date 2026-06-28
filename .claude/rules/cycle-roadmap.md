@@ -88,7 +88,7 @@ When invoked autonomously (rare — only the `/auto-plan --until=ROADMAP_COMPLET
 - `MILESTONE_BLOCKED` emitted with no recoverable next step (the human cannot resolve auto-plan's block) — outer loop halts.
 - Human invokes any cycle skill directly (manual override) — the outer loop is paused; the human is driving.
 
-## Plan metadata contract (new)
+## Plan metadata contract
 
 For `cycle-release` to know **which** milestone to flip, the plan at `knowledge-base/plans/{slug}-plan.md` MUST carry `milestone_id` in its frontmatter:
 
@@ -109,7 +109,7 @@ Population paths:
 
 A plan without `milestone_id` releases normally but skips the checkbox flip (with a WARN, not a BLOCK). Roadmap traceability degrades but the release itself is not impeded — by design, so urgent hotfixes are not gated on roadmap metadata.
 
-## Roadmap run-file contract (new)
+## Roadmap run-file contract
 
 Every milestone run gets one file at `knowledge-base/roadmap-runs/{milestone-id}-{YYYY-MM-DD}.md`:
 

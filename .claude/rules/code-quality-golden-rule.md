@@ -92,16 +92,11 @@ Each project SHOULD:
 
 ## § 7 — When this rule may change
 
-This file is LOCKED. Changes require ALL of:
+Per `cycle-rule-schema.md § Golden Rule Change Protocol`. Rule-specific deviations:
 
-1. An ADR proposing the change (in `knowledge-base/adrs/`).
-2. CHANGELOG entry under `[Unreleased] § Changed`.
-3. Re-running `python3 scripts/check_xrefs.py` and `python3 scripts/test_e2e_smoke.py` — both MUST PASS before the change merges.
-
-Specifically:
 - Changing a verdict token = breaking the cycle contract (requires ADR).
-- Adding a new detector = expanding D-series (requires ADR + implementation).
-- Loosening a hard cap to soft cap = downgrading the gate (requires ADR with risk assessment).
+- Adding a new detector = expanding the D-series (requires ADR + implementation in `skills/code-quality/scripts/detectors/`).
+- Loosening a hard cap to a soft cap = downgrading the gate (requires ADR with risk assessment).
 
 ## § 8 — Failure modes the rule guards against
 

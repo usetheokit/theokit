@@ -1,14 +1,11 @@
 """Tests for check_concurrency_tests (SOTA upgrade Phase 2)."""
 from __future__ import annotations
 
-import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_concurrency_tests import check_concurrency_tests  # noqa: E402
 

@@ -98,33 +98,9 @@ A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** unt
 - `knowledge-base/judge-codex/{slug}-auto-judge-{date}.json` for `:auto` runs.
 - `knowledge-base/judge-codex/{slug}-{stage}-disagreement-{date}.json` when Claude vs Codex differ.
 
-## Install + first run
-
-```bash
-# Once per environment
-npm install -g @openai/codex
-codex login
-
-# Install the plugin
-/plugin marketplace add usetheodev/judge-codex-plugin-cc
-/plugin install judge-codex@judge-codex
-/reload-plugins
-
-# Verify
-/judge-codex:setup
-
-# Use after any plan cycle stage
-/judge-codex:plan my-slug
-# OR end-to-end after a slice completes:
-/judge-codex:auto my-slug
-```
-
-## Validated against
-
-- **Live integration test (2026-06-04)** against `knowledge-base/plans/harden-fabrication-and-cq-gate-plan.md`:
-  - Claude side `plan-confidence` (M3 v0.1): `SHIPPABLE` 98.8 — only structural check on `#### Evidence` blocks.
-  - Codex side `judge-codex:plan`: `INVALID` 49 — caught fabricated `ADR D9` reference in plan prose outside Evidence blocks, plus 2 medium-severity soft caps (`goal_not_smart_timebound`, `risks_section_missing`).
-  - Disagreement persisted as the **proof-of-value** for the cycle.
+Install/setup commands live in the plugin repo README (and the Pre-conditions
+above); a dated record of the proof-of-value integration run is in the project
+`CHANGELOG.md` / `README.md`, not restated here.
 
 ## Cross-references
 

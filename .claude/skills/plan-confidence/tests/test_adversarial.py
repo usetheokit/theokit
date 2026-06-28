@@ -1,14 +1,11 @@
 """L4 — Adversarial inputs. System MUST degrade gracefully, never crash."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_coverage_matrix import check_coverage_matrix  # noqa: E402
 from check_spec_smells import check_spec_smells  # noqa: E402

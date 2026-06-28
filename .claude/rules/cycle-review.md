@@ -9,7 +9,7 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 ## Pre-conditions
 
 - Implementation output exists at `knowledge-base/implementations/{slug}-implementation.md`.
-- Code-quality audit exists at `knowledge-base/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} (per `rules/cycle-code-quality.md`).
+- Code-quality audit exists at `knowledge-base/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} — or `FAIL_SOFT` accompanied by an ADR dismissing each soft cap (per `code-quality-golden-rule.md` § 1). `FAIL_HARD` and `INVALID` block this cycle.
 - Working branch has commits ahead of the base branch.
 - No uncommitted changes (review reads a stable state).
 
@@ -66,4 +66,4 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 - Public-copy lint: `rules/public-copy.md`
 - Macro super-loop: `rules/cycle-roadmap.md` — `READY_TO_MERGE` here unblocks the release that flips the milestone checkbox
 - Upstream: `rules/cycle-code-quality.md` (consumes the audit verdict)
-- Conventions: `rules/architecture.md`, `rules/testing.md`
+- Conventions: `rules/architecture.md`, `rules/testing.md`, `rules/error-handling.md`, `rules/git-safety.md`

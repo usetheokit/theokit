@@ -85,26 +85,23 @@ def _is_definition_only(path: Path, symbol: str) -> bool:
 
 
 def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], exclude_dirs: list[str]) -> list[Path]:
-    """Find files containing the symbol. Uses grep; falls back to manual scan if grep unavailable."""
+    """Find files containing the symbol as a whole word. Returns [] if grep is unavailable."""
+    # `-E` for ERE so `\b` word boundaries are honored. The symbol is escaped so a name
+    # containing regex metacharacters can't widen or break the search.
+    pattern = rf"\b{re.escape(symbol)}\b"
+    cmd = ["grep", "-rlE"]
+    for inc in include_globs:
+        cmd.extend(["--include", inc])
+    for exc in exclude_dirs:
+        cmd.extend(["--exclude-dir", exc])
+    cmd.extend([pattern, str(project_root)])
     try:
-        cmd = ["grep", "-rl"]
-        for inc in include_globs:
-            cmd.extend(["--include", inc])
-        for exc in exclude_dirs:
-            cmd.extend(["--exclude-dir", exc])
-        cmd.extend([f"\\b{symbol}\\b", str(project_root)])
-        # Use word-boundary-ish via shell regex; grep -E for ERE
-        result = subprocess.run(
-            ["grep", "-rlE"] + [arg for arg in cmd[2:]],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode > 1:
-            return []
-        return [Path(p) for p in result.stdout.strip().splitlines() if p]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except (subprocess.SubprocessError, FileNotFoundError):
         return []
+    if result.returncode > 1:  # 0 = match, 1 = no match, >1 = real error
+        return []
+    return [Path(p) for p in result.stdout.strip().splitlines() if p]
 
 
 def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, Any]:
@@ -242,7 +239,7 @@ def check_pillar_c_runtime_metric(project_root: Path, metric: str | None) -> dic
             "pillar": "c_runtime_metric",
             "status": "FAIL",
             "reason": f".wiring-evidence.json does not exist; cannot verify metric '{metric}'",
-            "recommended_action": f"Run an integration test that emits the metric, OR add evidence collection infrastructure; or use ADR to defer pillar (c)",
+            "recommended_action": "Run an integration test that emits the metric, OR add evidence collection infrastructure; or use ADR to defer pillar (c)",
         }
 
     try:
@@ -311,7 +308,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    project_root = args.project_root if args.project_root else _find_project_root(Path.cwd())
+    # Resolve to an absolute path: pillar (a)/(b) call `path.relative_to(project_root)`,
+    # which raises ValueError if project_root is relative while grep returns absolute paths.
+    project_root = args.project_root.resolve() if args.project_root else _find_project_root(Path.cwd())
 
     pillar_a = check_pillar_a_static_caller(project_root, args.symbol)
     pillar_b = check_pillar_b_integration_test(project_root, args.symbol, args.deferral_path)

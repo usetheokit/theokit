@@ -1,11 +1,8 @@
 """TDD for apply_fixes.py — deterministic plan-improve fixes."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from apply_fixes import (  # noqa: E402
     FixReport,

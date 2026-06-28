@@ -158,11 +158,7 @@ Every `/analysis` report MUST contain:
 
 ## § 9 — When this rule may change
 
-This file is LOCKED. Changes require ALL of:
-
-1. An ADR proposing the change (in `knowledge-base/adrs/`).
-2. CHANGELOG entry under `[Unreleased] § Changed`.
-3. Re-running `python3 scripts/check_xrefs.py` and `python3 scripts/test_e2e_smoke.py` — both MUST PASS.
+Per `cycle-rule-schema.md § Golden Rule Change Protocol`. No rule-specific deviations.
 
 ## Cross-references
 

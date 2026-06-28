@@ -1,11 +1,8 @@
 """L5 — Conservative floor / fail-closed asymmetric bias."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from run_structural import run_structural  # noqa: E402
 

@@ -1,13 +1,10 @@
 """TDD for check_architecture_compliance.py — verifies plans READ .claude/rules/."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_architecture_compliance import (  # noqa: E402
     ComplianceReport,

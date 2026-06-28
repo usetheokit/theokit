@@ -40,49 +40,62 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from check_checkpoint_consistency import (
+    check_checkpoint_consistency,
+    plan_task_ids_from_text,
+)
 from check_diff_cohesion import check_diff_cohesion
 from check_phase_completeness import check_phase_completeness
+from diff_symbols import added_symbols_from_shas, shas_from_progress
+from wiring_recheck import recheck_pillar_a
 
 
 SEVERITY_RANK = {"INFO": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3, "BLOCKER": 4}
 
 
-def _aggregate_wiring(progress_path: Path, phase: str, repo_root: Path) -> dict[str, Any]:
-    """Aggregate check_wiring.py results across every symbol committed in the phase.
+def _stem_symbols(data: dict, phase: str) -> set[str]:
+    """Fallback symbol derivation: filename stems of a phase's task files.
 
-    For each task in the phase, derive symbol names from declared files
-    (heuristic: filename stem). Run check_wiring.py per symbol. Aggregate.
-
-    Honest fallback: if no symbols are derivable (e.g., infra tasks like
-    `setup-ci`), report `n/a` rather than `FAIL`.
+    Weaker than diff derivation (a stem rarely equals an exported symbol), used only
+    when no commit SHA is recorded yet so the diff path cannot run.
     """
-    script = Path(__file__).parent / "check_wiring.py"
-    if not script.exists():
-        return {
-            "status": "SKIP",
-            "reason": "check_wiring.py not found",
-            "findings": [],
-        }
+    symbols: set[str] = set()
+    for task in data.get("tasks", []):
+        if str(task.get("phase")) != str(phase):
+            continue
+        for f in task.get("files", []):
+            stem = Path(f).stem
+            if stem and not stem.startswith(".") and not stem.endswith("_test"):
+                symbols.add(stem)
+    return symbols
 
+
+def _aggregate_wiring(progress_path: Path, phase: str, repo_root: Path) -> dict[str, Any]:
+    """Re-verify pillar (a) for every public symbol the phase committed.
+
+    Symbols are derived authoritatively from the phase's committed diffs
+    (`diff_symbols`); the filename-stem heuristic is a fallback for the (rare) case
+    where no SHA is recorded yet. Verification re-runs `check_wiring.py` via the
+    shared `wiring_recheck` helper — never trusts the progress file's `wiring` field.
+
+    Honest fallback: when no symbol is derivable or resolvable (infra-only phase,
+    pre-source), report `N/A` rather than `FAIL`.
+    """
     try:
         data = json.loads(progress_path.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError) as exc:
         return {"status": "SKIP", "reason": f"progress unreadable: {exc}", "findings": []}
 
-    phase_tasks = [t for t in data.get("tasks", []) if str(t.get("phase")) == str(phase)]
-    symbols: list[tuple[str, str]] = []  # (task_id, symbol)
-    for task in phase_tasks:
-        for f in task.get("files", []):
-            stem = Path(f).stem
-            if stem and not stem.startswith(".") and not stem.endswith("_test"):
-                symbols.append((task.get("id", "?"), stem))
+    symbols = added_symbols_from_shas(repo_root, shas_from_progress(data, phase))
+    derivation = "diff"
+    if not symbols:
+        symbols = _stem_symbols(data, phase)
+        derivation = "filename_stem"
 
     if not symbols:
         return {
@@ -91,56 +104,33 @@ def _aggregate_wiring(progress_path: Path, phase: str, repo_root: Path) -> dict[
             "findings": [],
         }
 
-    findings: list[dict[str, str]] = []
-    pillar_a_fails = 0
-    symbols_resolved = 0
-    for tid, sym in symbols:
-        try:
-            result = subprocess.run(
-                ["python3", str(script), "--symbol", sym, "--project-root", str(repo_root)],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode == 2:
-                continue  # script error — skip symbol
-            payload = json.loads(result.stdout) if result.stdout.strip() else {}
-            for pillar in payload.get("pillars", []):
-                if pillar.get("pillar") != "a_static_caller":
-                    continue
-                # Distinguish "symbol not found anywhere" (callers=0 AND definition_only=[])
-                # from "symbol exists but has no caller". Only the latter is a true wiring fail.
-                callers_count = pillar.get("callers_count", 0)
-                def_only = pillar.get("definition_only_excluded", [])
-                if callers_count == 0 and not def_only:
-                    # Symbol not detectable in source tree — likely filename-stem heuristic
-                    # picked a name that does not match a real exported symbol. Skip, not fail.
-                    continue
-                symbols_resolved += 1
-                if pillar.get("status") == "FAIL":
-                    pillar_a_fails += 1
-                    findings.append({
-                        "severity": "HIGH",
-                        "code": "wiring_pillar_a_fail",
-                        "message": f"Task {tid}: symbol `{sym}` is defined but has no production caller "
-                                   "(pillar a is non-negotiable per cycle-implement).",
-                    })
-        except (subprocess.SubprocessError, json.JSONDecodeError):
-            continue
-
-    if symbols_resolved == 0:
+    recheck = recheck_pillar_a(repo_root, symbols)
+    if recheck.symbols_resolved == 0:
         return {
             "status": "N/A",
-            "reason": "no symbols from phase tasks could be resolved against source tree "
-                      "(filename-stem heuristic produced no real matches)",
-            "symbols_checked": len(symbols),
+            "reason": "no symbols from phase tasks could be resolved against source tree",
+            "derivation": derivation,
+            "symbols_checked": recheck.symbols_checked,
             "pillar_a_fails": 0,
             "findings": [],
         }
 
+    findings = [
+        {
+            "severity": "HIGH",
+            "code": "wiring_pillar_a_fail",
+            "message": f"Symbol `{sym}` is defined but has no production caller "
+                       "(pillar a is non-negotiable per cycle-implement).",
+        }
+        for sym in recheck.fail_symbols
+    ]
+
     return {
-        "status": "FAIL" if pillar_a_fails > 0 else "PASS",
-        "symbols_checked": len(symbols),
-        "symbols_resolved": symbols_resolved,
-        "pillar_a_fails": pillar_a_fails,
+        "status": "FAIL" if recheck.pillar_a_fails > 0 else "PASS",
+        "derivation": derivation,
+        "symbols_checked": recheck.symbols_checked,
+        "symbols_resolved": recheck.symbols_resolved,
+        "pillar_a_fails": recheck.pillar_a_fails,
         "findings": findings,
     }
 
@@ -154,21 +144,35 @@ def _invoke_code_quality_on_delta(
     """Invoke /code-quality scoped to files modified in this phase only.
 
     Honest behavior: cq_invoke today scores the whole plan, not a file subset.
-    Until cq_invoke supports `--files`, we record this as a SKIP rather than
-    fake a delta-scoped audit. The full audit still runs at Step 5.
+    Until cq_invoke supports `--files`, this is an unconditional SKIP rather than
+    a faked delta-scoped audit. The full audit still runs at Step 5. The function
+    keeps its signature so the wiring is ready the day cq_invoke gains `--files`.
     """
-    cq_invoke = project_root / "skills" / "code-quality" / "scripts" / "cq_invoke.py"
-    if not cq_invoke.exists():
-        return {
-            "status": "SKIP",
-            "reason": "cq_invoke.py not available",
-            "findings": [],
-        }
     return {
         "status": "SKIP",
         "reason": "delta-scoped code-quality not implemented yet; full audit runs at Step 5",
         "findings": [],
     }
+
+
+def _phase_checkpoint_findings(
+    plan_path: Path,
+    progress_path: Path,
+    phase: str,
+    repo_root: Path,
+) -> list[dict[str, str]]:
+    """Cross-check this phase's tasks against git: a task committed in git but not
+    recorded `committed` in the checkpoint is surfaced here, on the phase boundary,
+    rather than only at the final validation gate."""
+    try:
+        progress = json.loads(progress_path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    all_ids = plan_task_ids_from_text(plan_path.read_text(encoding="utf-8-sig"))
+    phase_ids = [tid for tid in all_ids if tid.startswith(f"T{phase}.")]
+    report = check_checkpoint_consistency(progress, repo_root, phase_ids)
+    return [{"severity": f.severity, "code": f.code, "message": f.message}
+            for f in report.findings]
 
 
 def _collect_all_findings(
@@ -235,24 +239,24 @@ to `/review` (which runs once at the end of all phases).
         md += f"### [{f['severity']}] {f['code']}\n\n{f['message']}\n\n"
 
     md += "## Check details\n\n"
-    md += f"### 1. Phase completeness\n\n"
+    md += "### 1. Phase completeness\n\n"
     md += f"- total_tasks_in_phase: {phase_completeness.total_tasks_in_phase}\n"
     md += f"- committed: {phase_completeness.committed_count}\n"
     md += f"- blocked: {phase_completeness.blocked_count}\n"
     md += f"- pending: {phase_completeness.pending_count}\n"
     md += f"- phase_dod_present: {phase_completeness.phase_dod_present}\n\n"
-    md += f"### 2. Diff cohesion\n\n"
-    md += f"- declared_files: {len(phase_completeness.findings) and len(diff_cohesion.declared_files)}\n"
+    md += "### 2. Diff cohesion\n\n"
+    md += f"- declared_files: {len(diff_cohesion.declared_files)}\n"
     md += f"- modified_files: {len(diff_cohesion.modified_files)}\n"
     md += f"- drift_files: {len(diff_cohesion.drift_files)}\n"
     md += f"- diff_source: `{diff_cohesion.diff_source}`\n\n"
-    md += f"### 3. Wiring summary\n\n"
+    md += "### 3. Wiring summary\n\n"
     md += f"- status: `{wiring.get('status')}`\n"
     md += f"- symbols_checked: {wiring.get('symbols_checked', 'n/a')}\n"
     md += f"- pillar_a_fails: {wiring.get('pillar_a_fails', 'n/a')}\n"
     if wiring.get("reason"):
         md += f"- reason: {wiring['reason']}\n"
-    md += f"\n### 4. Code-quality delta\n\n"
+    md += "\n### 4. Code-quality delta\n\n"
     md += f"- status: `{cq.get('status')}`\n"
     if cq.get("reason"):
         md += f"- reason: {cq['reason']}\n"
@@ -283,6 +287,7 @@ def run_mini_review(
     cq = _invoke_code_quality_on_delta(slug, progress_path, phase, project_root)
 
     findings = _collect_all_findings(pc, dc, wiring, cq)
+    findings.extend(_phase_checkpoint_findings(plan_path, progress_path, phase, project_root))
     verdict, max_severity = _compute_verdict(findings)
 
     output_dir.mkdir(parents=True, exist_ok=True)
