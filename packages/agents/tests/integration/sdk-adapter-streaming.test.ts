@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
   // #44 — richer onDelta driver: full InteractionUpdate objects fired in arrival order.
   updates: [] as { type: string; [k: string]: unknown }[],
   rejectSend: false,
+  throwInStream: false,
   disposed: 0,
 }))
 
@@ -50,6 +51,7 @@ vi.mock('@theokit/sdk', () => ({
           return Promise.resolve({
             stream: async function* () {
               for (const m of h.messages) yield m
+              if (h.throwInStream) throw new Error('stream failed')
             },
             wait: async () => ({
               result: 'final',
@@ -106,6 +108,7 @@ afterEach(() => {
   h.messages = []
   h.updates = []
   h.rejectSend = false
+  h.throwInStream = false
   h.disposed = 0
 })
 
@@ -186,17 +189,19 @@ describe('createSdkAgentStream × onDelta token streaming (#40)', () => {
 
 // #44 — events MUST be emitted in true chronological arrival order (text/tool interleaved),
 // not all-text-then-all-tools. Tool + thinking updates flow through onDelta in arrival order.
+// Inner toolCall.callId is DISTINCT from the top-level callId on purpose: production reads the
+// top-level `update.callId` for the event id (not `toolCall.callId`), so the assertions are load-bearing.
 const tcStarted = (callId: string, name: string, args: unknown) => ({
   type: 'tool-call-started',
   callId,
   modelCallId: `m-${callId}`,
-  toolCall: { callId, name, args },
+  toolCall: { callId: `inner-${callId}`, name, args },
 })
 const tcCompleted = (callId: string, name: string, result: unknown) => ({
   type: 'tool-call-completed',
   callId,
   modelCallId: `m-${callId}`,
-  toolCall: { callId, name, result },
+  toolCall: { callId: `inner-${callId}`, name, result },
 })
 const td = (text: string) => ({ type: 'text-delta', text })
 
@@ -225,6 +230,82 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
       },
       { type: 'text_delta', content: 'Pronto' },
     ])
+    expect(h.disposed).toBeGreaterThanOrEqual(1) // L4: clean run disposes the agent
+  })
+
+  it('test_multiple_tool_calls_interleave_in_order_no_cross_callid_contamination', async () => {
+    // M2: >1 callId exercises emittedToolCallIds/emittedToolResultIds with multiple entries.
+    const out = await drainUpdates(
+      [
+        td('A'),
+        tcStarted('c1', 'write_file', { path: 'a' }),
+        tcStarted('c2', 'glob', { p: '*' }),
+        tcCompleted('c1', 'write_file', { ok: true }),
+        tcCompleted('c2', 'glob', { files: [] }),
+        td('B'),
+      ],
+      [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' }],
+    )
+    const content = out.filter((e) => e.type !== 'done' && e.type !== 'run_started')
+    expect(content).toEqual([
+      { type: 'text_delta', content: 'A' },
+      { type: 'tool_call', callId: 'c1', toolName: 'write_file', input: { path: 'a' } },
+      { type: 'tool_call', callId: 'c2', toolName: 'glob', input: { p: '*' } },
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'write_file',
+        output: '{"ok":true}',
+        durationMs: 0,
+        isError: false,
+      },
+      {
+        type: 'tool_result',
+        callId: 'c2',
+        toolName: 'glob',
+        output: '{"files":[]}',
+        durationMs: 0,
+        isError: false,
+      },
+      { type: 'text_delta', content: 'B' },
+    ])
+  })
+
+  it('test_run_stream_error_status_emits_error_and_suppresses_done', async () => {
+    // H1: run-level ERROR via run.stream() surfaces an error event AND suppresses the real-usage done.
+    const out = await drainUpdates(
+      [],
+      [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'ERROR', message: 'run failed' }],
+    )
+    expect(out.filter((e) => e.type === 'done')).toHaveLength(0)
+    const errs = out.filter((e) => e.type === 'error')
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toMatchObject({ type: 'error', message: 'run failed' })
+  })
+
+  it('test_run_stream_throw_mid_iteration_emits_content_then_error', async () => {
+    // M1 + HIGH-1: run.stream() yields a tool message then throws; the queued content drains BEFORE
+    // the error surfaces (no lost event), the error is yielded (no unhandled rejection), dispose runs.
+    h.throwInStream = true
+    const out = await drainUpdates(
+      [],
+      [
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          call_id: 'c1',
+          name: 'glob',
+          status: 'running',
+          input: {},
+        },
+      ],
+    )
+    const errIdx = out.findIndex((e) => e.type === 'error')
+    expect(errIdx).toBeGreaterThanOrEqual(0)
+    expect(out.slice(0, errIdx).some((e) => e.type === 'tool_call' && e.callId === 'c1')).toBe(true)
+    expect(out.filter((e) => e.type === 'done')).toHaveLength(0)
+    expect(h.disposed).toBeGreaterThanOrEqual(1)
   })
 
   it('test_thinking_delta_streams_via_onDelta_in_order', async () => {
