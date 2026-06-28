@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { buildModelSelection } from '../../src/bridge/sdk-adapter.js'
+import { buildModelSelection } from '../../src/bridge/model-selection.js'
 import type { ReasoningEffort } from '../../src/types.js'
 
 describe('buildModelSelection (M1 reasoning-effort mapping)', () => {
