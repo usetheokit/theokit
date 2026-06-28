@@ -74,6 +74,12 @@ export interface AgentRunnerRunOptions {
    */
   readonly reasoningEffort?: ReasoningEffort
   /**
+   * M2 (Axis-A SWAP): per-run opt-in to convert inline `<think>…</think>` text into `thinking`
+   * events. Merge-over-compiled (`opts.parseThinkTags ?? compiled.parseThinkTags ?? false`). For
+   * models that emit reasoning as inline tags (qwen/deepseek) instead of a native reasoning param.
+   */
+  readonly parseThinkTags?: boolean
+  /**
    * V4-L.2 (Axis-A SWAP): per-run working directory, forwarded into
    * `Agent.create({ local: { cwd } })` so the SDK populates `SystemPromptContext.cwd`
    * (read by a `SystemPromptResolver` / `@ProjectContext`). Absent ⇒ no `local.cwd`.
@@ -211,6 +217,7 @@ export class AgentRunner {
       createSdkAgentStream(this.compiled, tools, opts.apiKey, {
         model: opts.model,
         reasoningEffort: opts.reasoningEffort, // M1: per-run extended-thinking effort
+        parseThinkTags: opts.parseThinkTags, // M2: per-run <think>-tag extraction opt-in
         cwd: opts.cwd,
         plugins: opts.plugins,
         providers: opts.providers,
