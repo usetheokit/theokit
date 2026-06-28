@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from run_structural import (  # noqa: E402
     M2_ACTIVE_DIMENSIONS,
@@ -291,3 +290,49 @@ def test_merge_cq_smallest_cap_wins() -> None:
     assert out["final_score_after_caps"] == 49
     # But identifier is appended to the cap list (audit trail)
     assert "symbol_fab_unverifiable_typescript" in out["hard_caps_triggered"]
+
+
+# T1.2 — patterns-skill consumption hard cap (patterns-consumption-gate-plan)
+
+import tempfile  # noqa: E402
+
+
+def _eco_with_pgvector_patterns(plan_body: str) -> Path:
+    """Synthesize a tmp ecosystem (plugin.json marker + one *-patterns skill) + a plan."""
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "plugin.json").write_text("{}")
+    sk = tmp / "skills" / "pgvector-patterns"
+    sk.mkdir(parents=True)
+    (sk / "SKILL.md").write_text(
+        "---\nname: pgvector-patterns\n"
+        "description: Use when planning pgvector schema or indexing.\n"
+        "user-invocable: true\n---\n# pgvector-patterns\n"
+    )
+    plan = tmp / "x-plan.md"
+    # Minimal Coverage Matrix so run_structural's coverage checker does not raise.
+    plan.write_text(
+        plan_body
+        + "\n## Coverage Matrix\n| # | Gap | Task(s) | Resolution |\n"
+        "|---|---|---|---|\n| 1 | demo | T1.1 | done |\n"
+    )
+    return plan
+
+
+def test_ignored_patterns_skill_caps_invalid() -> None:
+    plan = _eco_with_pgvector_patterns(
+        "# Plan: pgvector schema migration\n## Goal\nEnable pgvector indexing so queries are fast.\n"
+    )
+    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    assert "patterns_skill_ignored" in report.hard_caps_triggered
+    assert report.final_score_after_caps <= 49
+    assert report.verdict == "INVALID"
+
+
+def test_overridden_patterns_skill_not_capped() -> None:
+    plan = _eco_with_pgvector_patterns(
+        "# Plan: pgvector schema migration\n## Goal\nEnable pgvector indexing.\n"
+        "## ADRs\n### D1 — Diverge from pgvector-patterns\n"
+        "- **Decision:** override `pgvector-patterns` Pattern P1 because Y.\n"
+    )
+    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    assert "patterns_skill_ignored" not in report.hard_caps_triggered

@@ -69,13 +69,10 @@ Missing any field → evidence file ignored by hard cap #3.
 
 ## § 6 — When this rule may change
 
-This file is locked. Changes require ALL of:
+Per `cycle-rule-schema.md § Golden Rule Change Protocol`, plus one extra requirement:
+sign-off from at least one operator who has logged anchor evidence. Rule-specific
+deviations:
 
-1. An ADR proposing the change (in `knowledge-base/adrs/`).
-2. Sign-off from at least one operator who has logged anchor evidence.
-3. CHANGELOG entry under `[Unreleased] § Changed`.
-
-Specifically:
 - Changing the anchor slug = abandoning the previous anchor (requires ADR).
 - Loosening the freshness threshold = downgrading the gate (requires ADR).
 - Adding a new `Status` value or new hard cap = expanding the contract (requires ADR).

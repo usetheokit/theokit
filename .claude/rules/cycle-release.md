@@ -126,5 +126,5 @@ If the rule cannot pick deterministically, the chain pauses and the human choose
 - Skill: `skills/release/SKILL.md`
 - Upstream: `cycle-review.md` (consumes its `READY_TO_MERGE` verdict)
 - Macro super-loop: `rules/cycle-roadmap.md` — defines the single-flip invariant + the roadmap-runs file contract
-- Conventions: `architecture.md`, `public-copy.md` (release notes lint), `audit-trail-rotation.md`
-- Unbreakable rules consumed: Rule 4 (no commit to `main`; release is the only path), Rule 6 (CHANGELOG discipline)
+- Conventions: `architecture.md`, `public-copy.md` (release notes lint), `audit-trail-rotation.md`, `git-safety.md`
+- Unbreakable rules consumed: Rule 4 (no commit to `main`; release is the only path — see `git-safety.md`), Rule 6 (CHANGELOG discipline)

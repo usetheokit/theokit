@@ -26,7 +26,7 @@ User explicitly invokes `/discover-plan {topic-slug}` when they want to:
 
 This skill is **phase 1** of [`cycle-discover`](../../rules/cycle-discover.md). The cycle rule is the **source of truth** for:
 
-- Chain order (this skill → `/discover-edge-cases` → `/discover-execute` → `/discover-confidence` → optional `/discover-improve` → skill-distillation tail `/skill-writer` → `/skill-validator` → `/skill-register`)
+- Chain order (this skill → `/discover-edge-cases` → `/discover-execute` → `/discover-confidence` → optional `/discover-improve`; the blueprint is terminal — optional out-of-cycle skill distillation via the standalone `/skill-creator`)
 - Hard gates, soft gates, stop conditions
 - Anti-patterns at the cycle level
 - Rollback procedures

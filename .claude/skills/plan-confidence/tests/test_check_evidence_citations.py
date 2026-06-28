@@ -1,13 +1,10 @@
 """T1.1 — tests for check_evidence_citations (M3 v0.1 detector)."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_evidence_citations import (  # noqa: E402
     Citation,

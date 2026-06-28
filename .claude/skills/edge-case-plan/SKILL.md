@@ -10,7 +10,7 @@ argument-hint: "[plan-slug|plan-file-path]"
 
 # Edge Case Plan Review
 
-Analyze the plan and identify edge cases that were NOT foreseen. Be pragmatic — flag real risks, not fantastical scenarios.
+Analyze the plan and identify the cases that were NOT foreseen, through **two lenses** (`rules/testing.md` § 4.1): **edge cases** (extremes of valid input — "does it hold at the boundary?") and **negative cases** (invalid input / failures — "does it fail-fast and recover with a typed error?"). Be pragmatic — flag real risks, not fantastical scenarios.
 
 ## Cycle contract
 
@@ -26,7 +26,8 @@ This skill is **phase 2** of [`cycle-plan`](../../rules/cycle-plan.md). The cycl
 **You are NOT the agent that complicates things.** You are the agent that asks: "what if this goes wrong?"
 
 Golden rules:
-1. **Only flag edge cases that can actually happen** — not scenarios with 0.001% probability
+0. **Cover both lenses** — for every input boundary, ask the EDGE question (largest/smallest valid) AND the NEGATIVE question (first invalid past it). Covering only one is half a review.
+1. **Only flag cases that can actually happen** — not scenarios with 0.001% probability
 2. **Never suggest adding layers of abstraction** — the fix for an edge case is an `if`, a test, or a `match` arm — never a new module
 3. **KISS prevails** — if the fix for an edge case is more complex than the damage of the edge case itself, document the risk and move on
 4. **Each flagged edge case MUST come with a suggested fix in ≤3 lines of code or ≤1 sentence of plan change**
@@ -58,33 +59,37 @@ Edge cases live at boundaries. Internal code that processes already-validated da
 
 ### Step 3 — Apply the Pragmatic Checklist
 
-For each task, walk through this checklist. Mark ✅ if the plan already covers it, ❌ if not:
+Walk each task through **two distinct lenses** — see `rules/testing.md` § 4.1. Cover **both**; a plan reviewed for only one is half reviewed.
+
+- **EDGE** = an extreme of a **valid** scenario. Question: *"does it hold at the boundary?"* Passing behavior: correct result at the extreme.
+- **NEGATIVE** = an **invalid / wrong / unexpected** input or a failure. Question: *"does it fail-fast and recover gracefully?"* Passing behavior: a **typed error + clear message, no corruption** — this is where Error Handling (fail-fast, fail-clear, typed errors, validate at the boundary) is proven.
+
+Mark ✅ if the plan already covers it, ❌ if not:
 
 ```
 INPUTS:
-  [ ] What happens with empty/null input?
-  [ ] What happens with input at the maximum boundary?
-  [ ] What happens with malformed input? (wrong type, bad encoding)
+  EDGE     [ ] Largest/smallest VALID value? (exactly min, exactly max, empty-but-valid, single element)
+  NEGATIVE [ ] First INVALID value past the boundary? (null, wrong type, bad encoding, out of range, over max size)
 
 STATE:
-  [ ] What happens if the operation fails midway? (crash recovery)
-  [ ] Is the operation idempotent? (does running twice produce the same result?)
+  EDGE     [ ] Idempotent? (does running twice at the limit produce the same result?)
+  NEGATIVE [ ] What happens if the operation fails midway? (crash recovery, partial-write rollback)
 
 I/O:
-  [ ] What happens if disk/network fails?
-  [ ] What happens on timeout?
+  EDGE     [ ] Largest valid payload / slowest acceptable response still handled?
+  NEGATIVE [ ] Disk/network failure or timeout → typed error, not a hang or a silent swallow?
 
 CONCURRENCY:
-  [ ] Do two simultaneous calls cause problems?
-  [ ] Is mid-operation cancellation safe?
+  EDGE     [ ] Do two simultaneous VALID calls at the limit interleave correctly?
+  NEGATIVE [ ] Is mid-operation cancellation safe? (no corruption / partial state)
 
 INTEGRATION:
-  [ ] Does the caller receive typed errors (not generic / not panics)?
-  [ ] Is the dependency contract (DIP in `rules/architecture.md`, enforced by `hooks/boundary-check.sh`) respected?
-  [ ] Is the public API surface explicit and versioned?
+  NEGATIVE [ ] Does the caller receive typed errors (not generic / not panics)?
+  EDGE     [ ] Is the dependency contract (DIP in `rules/architecture.md`, enforced by `hooks/boundary-check.sh`) respected at its limits?
+  EDGE     [ ] Is the public API surface explicit and versioned?
 ```
 
-**Skip checks that do not apply.** Not every task has I/O. Not every task has concurrency. Mark only what is relevant.
+**Skip checks that do not apply.** Not every task has I/O. Not every task has concurrency. Mark only what is relevant — but for any input boundary, ask **both** the EDGE and the NEGATIVE question.
 
 ### Step 4 — Classify and Report
 
@@ -116,12 +121,13 @@ Create the `reviews/` directory if it does not yet exist. The report serves as t
 
 Date: YYYY-MM-DD
 Tasks analyzed: N
-Edge cases found: N (MUST FIX: N, SHOULD TEST: N, DOCUMENT: N)
+Cases found: N (EDGE: N, NEGATIVE: N | MUST FIX: N, SHOULD TEST: N, DOCUMENT: N)
 
 ## MUST FIX
 
 ### EC-{N}: {short description}
 - **Affected task:** T{N}.{M}
+- **Kind:** EDGE (extreme of valid) | NEGATIVE (invalid input / failure)
 - **Family:** Input / Boundary / Resource / Timing / State / Permission / Format
 - **Scenario:** {how it happens}
 - **Impact:** {what breaks}
@@ -131,19 +137,25 @@ Edge cases found: N (MUST FIX: N, SHOULD TEST: N, DOCUMENT: N)
 
 ### EC-{N}: {short description}
 - **Affected task:** T{N}.{M}
-- **Suggested test:** `test_{function}_{edge_description}` — {what to assert}
+- **Kind:** EDGE | NEGATIVE
+- **Suggested test:** `test_{function}_{case_description}` — {what to assert}
+  - EDGE → assert the *correct result at the boundary*.
+  - NEGATIVE → assert the *specific typed error + message* (not just "it throws").
 
 ## DOCUMENT
 
 ### EC-{N}: {short description}
+- **Kind:** EDGE | NEGATIVE
 - **Accepted risk:** {why it is OK not to address now}
 
 ## Summary
 
-| Task | Edges found | MUST FIX | SHOULD TEST | DOCUMENT |
-|------|-------------|----------|-------------|----------|
-| T1.1 | N | N | N | N |
-| T1.2 | N | N | N | N |
+| Task | EDGE | NEGATIVE | MUST FIX | SHOULD TEST | DOCUMENT |
+|------|------|----------|----------|-------------|----------|
+| T1.1 | N | N | N | N | N |
+| T1.2 | N | N | N | N | N |
+
+**Coverage check:** every task touching an input boundary should have at least one EDGE **and** one NEGATIVE case considered (or an explicit note why a lens does not apply).
 
 **Verdict:** PLAN OK / PLAN NEEDS ADJUSTMENT
 ```

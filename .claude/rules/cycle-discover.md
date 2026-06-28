@@ -29,13 +29,11 @@ Do NOT trigger DISCOVER for:
 /discover-execute {topic-slug}
      ↓ (produces: knowledge-base/discoveries/blueprints/{slug}-blueprint.md)
 /discover-confidence {topic-slug}
-     ↓ (blueprint score; if ≥ SHIPPABLE_WITH_CAVEATS, optional skill promotion follows)
+     ↓ (blueprint score; INVALID returns to /discover-plan)
 /discover-improve {topic-slug}  [optional — only if blueprint score is NEEDS_REVISION]
-     ↓
-/skill-writer {topic-slug}      [optional — promotes blueprint to a *-patterns skill]
-/skill-validator {topic-slug}   [optional]
-/skill-register {topic-slug}    [optional]
 ```
+
+A blueprint is the terminal artifact of this cycle. Distilling a SHIPPABLE blueprint into a reusable skill is **out of the cycle** and entirely optional: invoke the standalone `/skill-creator` (`skills/skill-creator/`) on demand to author a first-class skill at `skills/{purpose}/`. The former in-cycle `skill-writer → skill-validator → skill-register` tail (and its `skills/generated/` staging area) has been retired.
 
 ## Phase contracts
 
@@ -47,7 +45,6 @@ Do NOT trigger DISCOVER for:
 | execute | annotated + scored plan | blueprint (patterns, trade-offs, references) | no fabricated citations |
 | confidence | blueprint | score + verdict (INVALID / NEEDS_REVISION / SHIPPABLE_WITH_CAVEATS / SHIPPABLE) | INVALID returns to plan |
 | improve (opt.) | NEEDS_REVISION blueprint | revised blueprint | bumped verdict on re-score |
-| writer/validator/register (opt.) | SHIPPABLE blueprint | first-class `*-patterns` skill in `skills/` | passes skill-validator gates |
 
 ## Halt-loop contracts (rigorous promises with measurable exit criteria)
 
@@ -81,18 +78,13 @@ Either loop emitting a BLOCKED report blocks downstream: `/discover-confidence` 
 
 ## Rollback
 
-A registered skill that turns out wrong can be demoted:
-
-```
-mv skills/{name}/ skills/generated/{name}/
-```
-
-`/to-plan`'s Step 0 stops discovering it; the audit in `knowledge-base/reviews/skill-register-*.md` stays for the record.
+A blueprint that turns out wrong is simply not consumed downstream — delete or supersede the file under `knowledge-base/discoveries/blueprints/`. If a skill was later authored from it via the standalone `/skill-creator`, remove that skill with `rm -rf skills/{purpose}/`; `/to-plan`'s Step 0 stops discovering it on the next run.
 
 ## Cross-references
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
-- Skills: `skills/discover-plan/SKILL.md`, `skills/discover-edge-cases/SKILL.md`, `skills/discover-plan-confidence/SKILL.md`, `skills/discover-execute/SKILL.md`, `skills/discover-confidence/SKILL.md`, `skills/discover-improve/SKILL.md`, `skills/skill-writer/SKILL.md`, `skills/skill-validator/SKILL.md`, `skills/skill-register/SKILL.md`
+- Skills: `skills/discover-plan/SKILL.md`, `skills/discover-edge-cases/SKILL.md`, `skills/discover-plan-confidence/SKILL.md`, `skills/discover-execute/SKILL.md`, `skills/discover-confidence/SKILL.md`, `skills/discover-improve/SKILL.md`
+- Optional skill distillation (out of cycle): `skills/skill-creator/SKILL.md`
 - Allowlist: `rules/discover-web-allowlist.txt`
 - Macro super-loop: `rules/cycle-roadmap.md` — seeds `knowledge-base/references/` at project inception via `/roadmap-init`
 - Downstream: `rules/cycle-plan.md` (consumes blueprints as input to `/to-plan`)

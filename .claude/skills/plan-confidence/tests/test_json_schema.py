@@ -11,7 +11,6 @@ import jsonschema
 import pytest
 
 SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from run_structural import run_structural  # noqa: E402
 

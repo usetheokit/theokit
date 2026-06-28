@@ -5,7 +5,7 @@ Supports dual-mode layouts:
   - Standalone — running from inside the ecosystem repo itself (the directory
     contains skills/ + rules/ + hooks/ directly, no .claude/ wrapper).
   - User config — installed as <home>/.claude/.
-  - Plugin install — installed as <root>/.claude/plugins/plan/.
+  - Plugin install — installed as <root>/.claude/plugins/cycle/.
 
 Validates that:
   1. Each cycle-*.md references SKILL.md files that exist
@@ -38,6 +38,9 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+# Ensure scripts/ is on sys.path for shared module imports
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 
 # Skills documented as "auxiliary" (not bound to any cycle)
 # - ast-grep: structural search utility
@@ -48,7 +51,13 @@ from typing import Any
 #   and cycle-discover; the SKILL itself is never invoked mid-cycle)
 # - roadmap-feature: sister of roadmap-init for adding one milestone to an existing roadmap
 #   (same isolation contract; opposite pre-condition — refuses if ROADMAP.md is missing)
-AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "roadmap-init", "roadmap-feature"}
+# - quality-init: one-shot rigorous initializer (same isolation contract as roadmap-init);
+#   walks a target codebase and emits calibrated quality-gate hooks. Leaves no state behind,
+#   is invoked BEFORE a coding session, and is intentionally absent from every cycle-*.md.
+# - skill-creator: standalone skill-authoring tool (the official Anthropic skill-creator);
+#   invoked on demand to create/improve any skill at skills/{purpose}/. Deliberately decoupled
+#   from every cycle (replaced the retired skill-writer/validator/register discover tail).
+AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "roadmap-init", "roadmap-feature", "plan-help", "quality-init", "skill-creator", "frontend-design"}
 
 # Patterns to detect file references in markdown
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
@@ -68,35 +77,12 @@ RULES_REF_RE = re.compile(
 )
 
 
-def _is_ecosystem_layout(d: Path) -> bool:
-    """A directory is an ecosystem layout if it has skills/ + rules/ + hooks/ directly."""
-    return (d / "skills").is_dir() and (d / "rules").is_dir() and (d / "hooks").is_dir()
+from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl, is_ecosystem_layout as _is_ecosystem_layout  # noqa: E402
 
 
 def _find_ecosystem_dir(start: Path) -> Path | None:
-    """Locate the ecosystem directory in any of the three supported layouts.
-
-    Order of probing at each level (CWD upward):
-      1. Standalone — `current/` itself is the ecosystem (this is the plan/ repo).
-      2. User config — `current/.claude/` is the ecosystem.
-      3. Plugin install — `current/.claude/plugins/plan/` is the ecosystem.
-
-    Returns the matching directory or None if no layout resolves.
-    """
-    current = start.resolve() if not start.is_file() else start.resolve().parent
-    for _ in range(20):
-        if _is_ecosystem_layout(current):
-            return current
-        claude_sub = current / ".claude"
-        if _is_ecosystem_layout(claude_sub):
-            return claude_sub
-        plugin_sub = current / ".claude" / "plugins" / "plan"
-        if _is_ecosystem_layout(plugin_sub):
-            return plugin_sub
-        if current == current.parent:
-            break
-        current = current.parent
-    return None
+    """Locate the ecosystem directory (delegates to shared module)."""
+    return _find_ecosystem_dir_impl(start, require=False)
 
 
 def _list_existing_skills(ecosystem_dir: Path) -> set[str]:
@@ -106,7 +92,7 @@ def _list_existing_skills(ecosystem_dir: Path) -> set[str]:
     return {
         d.name
         for d in skills_dir.iterdir()
-        if d.is_dir() and (d / "SKILL.md").exists() and d.name != "generated"
+        if d.is_dir() and (d / "SKILL.md").exists()
     }
 
 
@@ -164,7 +150,7 @@ def _extract_cycle_phases(cycle_rule_content: str) -> set[str]:
         # Match /skill-name in the chain. Accept either:
         #   - kebab-case skills (e.g. /to-plan, /edge-case-plan)
         #   - single-word skills explicitly listed (release, implement, review)
-        for m in re.finditer(r"/([a-z][a-z0-9]+(?:-[a-z0-9]+)+|to-plan|implement|review|release)[\s{]", chain):
+        for m in re.finditer(r"/([a-z][a-z0-9]+(?:-[a-z0-9]+)+|to-plan|implement|review|release|analysis)[\s{]", chain):
             skills.add(m.group(1))
 
     return skills
@@ -389,7 +375,7 @@ def main() -> int:
     if ecosystem_dir is None or not ecosystem_dir.exists():
         print(json.dumps({
             "error": "ecosystem directory not found",
-            "hint": "expected one of: <cwd>/{skills,rules,hooks}, <cwd>/.claude/{skills,rules,hooks}, or <cwd>/.claude/plugins/plan/{skills,rules,hooks}",
+            "hint": "expected one of: <cwd>/{skills,rules,hooks}, <cwd>/.claude/{skills,rules,hooks}, or <cwd>/.claude/plugins/cycle/{skills,rules,hooks}",
         }), file=sys.stderr)
         return 2
 

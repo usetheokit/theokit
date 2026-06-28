@@ -48,6 +48,14 @@ Append SEPA's response to `.claude/knowledge-base/implementations/{PLAN_SLUG}/se
 
 ### GREEN phase
 
+- **Walk the parsimony ladder FIRST** (`.claude/rules/parsimony-ladder.md`), top-down, stopping at the first rung that resolves the need — this is a deliberation step BEFORE you type code:
+  1. Does this need to exist? → no: skip it (YAGNI) — if the RED test can pass without new code, do not write any.
+  2. Does the stdlib do it? → use it.
+  3. Native platform / framework feature? → use it.
+  4. Dependency already installed? → reuse it; do NOT add a redundant dependency.
+  5. One line? → one line.
+  6. Only then: the minimum that makes the test pass.
+- The ladder NEVER justifies skipping the failing test, input validation, error handling, security, or accessibility (`parsimony-ladder.md § Never on the chopping block`). A "fewer lines" argument that weakens correctness is a Rule 3 honesty violation — state the need explicitly and write the necessary code.
 - Write the MINIMAL production code that makes the RED test pass
 - Run `npm test -- {test-file-path}` and confirm PASS
 - If still failing after a reasonable attempt, increment task retry counter (max 3 per task)
@@ -141,18 +149,34 @@ Update progress file: task status → `committed`, log SHA + iteration outcome.
 
 ### PROGRESS update
 
-Append to `.claude/knowledge-base/implementations/.progress-{PLAN_SLUG}.json`:
+Update `.claude/knowledge-base/implementations/.progress-{PLAN_SLUG}.json`. The file
+is a SINGLE JSON object with a top-level `tasks` ARRAY — find the entry for this task
+and set its fields (do NOT append a bare object; the gates read `data["tasks"]`).
+Canonical shape: `.claude/skills/implement/templates/progress-schema.json`.
 
 ```json
 {
-  "task_id": "T1.1",
-  "status": "committed",
-  "wiring": {"a": "pass", "b": "pass", "c": "n/a"},
-  "commit_sha": "abc123...",
-  "iterations_used": 7,
-  "phases_completed": ["red", "green", "refactor", "wiring", "commit"]
+  "slug": "{PLAN_SLUG}",
+  "tasks": [
+    {
+      "id": "T1.1",
+      "phase": "1",
+      "status": "committed",
+      "files": ["src/foo.ts", "src/foo.test.ts"],
+      "commit_sha": "abc123...",
+      "wiring": {"a": "pass", "b": "pass", "c": "n/a"},
+      "iterations_used": 7,
+      "phases_completed": ["red", "green", "refactor", "wiring", "commit"]
+    }
+  ]
 }
 ```
+
+**Required per task** (the gates depend on these exact keys): `id` (NOT `task_id`),
+`phase` (gates filter by it), `status`, and — once committed — `commit_sha` + `files`.
+A `blocked` task MUST also carry `blocked_reason`. Getting these wrong does not error
+loudly on write, but `run_validation.py`'s `progress_schema` gate will FAIL the
+validation, so write them right the first time.
 
 ## Re-evaluate halt conditions
 

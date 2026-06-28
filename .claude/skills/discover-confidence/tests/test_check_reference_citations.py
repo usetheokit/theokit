@@ -8,8 +8,38 @@ import pytest
 from check_reference_citations import check_reference_citations  # noqa: E402
 
 
-def test_good_blueprint_all_citations_verified(good_blueprint: Path) -> None:
-    report = check_reference_citations(good_blueprint)
+def test_good_blueprint_all_citations_verified(tmp_path: Path) -> None:
+    """A blueprint citing EXISTING .claude/knowledge-base/references/ paths yields
+    verified > 0 and fabricated == 0.
+
+    Hermetic: the cited reference file is created under a tmp project root whose
+    .claude/ dir anchors _find_project_root's walk-up. The test must not depend on
+    repo-resident (gitignored/absent) .claude/knowledge-base/references/** files.
+    """
+    # Arrange: build a self-contained project root with a real reference file.
+    project_root = tmp_path / "project"
+    ref_file = project_root / ".claude" / "knowledge-base" / "references" / "project-a" / "README.md"
+    ref_file.parent.mkdir(parents=True, exist_ok=True)
+    ref_file.write_text("# Project A reference\n", encoding="utf-8")
+
+    bp = project_root / "blueprint.md"
+    bp.write_text(
+        "# Blueprint: Test\n\n"
+        "We cite a real path: .claude/knowledge-base/references/project-a/README.md\n",
+        encoding="utf-8",
+    )
+
+    # Act: anchor the lookup to our tmp root so existence checks are deterministic.
+    import check_reference_citations as crc
+
+    original_find_root = crc._find_project_root
+    crc._find_project_root = lambda _start: project_root
+    try:
+        report = check_reference_citations(bp)
+    finally:
+        crc._find_project_root = original_find_root
+
+    # Assert
     assert report["fabricated"] == 0
     assert report["verified"] > 0
 
