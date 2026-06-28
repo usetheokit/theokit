@@ -13,7 +13,9 @@ describe('Agent compiler', () => {
       @Toolbox({ namespace: 'support' })
       class SupportTools {
         @Tool({ name: 'search', description: 'Search tickets', input: z.object({ q: z.string() }) })
-        async search(input: { q: string }) { return `found: ${input.q}` }
+        async search(input: { q: string }) {
+          return `found: ${input.q}`
+        }
       }
 
       @Agent({ name: 'test', route: '/test' })
@@ -35,10 +37,14 @@ describe('Agent compiler', () => {
       @Toolbox({ namespace: 'billing' })
       class BillingTools {
         @Tool({ name: 'charge', description: 'Charge', input: z.object({}) })
-        async charge() { return 'charged' }
+        async charge() {
+          return 'charged'
+        }
 
         @Tool({ name: 'refund', description: 'Refund', input: z.object({}) })
-        async refund() { return 'refunded' }
+        async refund() {
+          return 'refunded'
+        }
       }
 
       @Agent({ name: 'test', route: '/test' })
@@ -50,18 +56,24 @@ describe('Agent compiler', () => {
       const result = walkAgentMetadata(TestAgent, [BillingTools])
       const tools = compileTools(result.toolboxes, new Map([[BillingTools, new BillingTools()]]))
 
-      expect(tools.map(t => t.name)).toEqual(['billing.charge', 'billing.refund'])
+      expect(tools.map((t) => t.name)).toEqual(['billing.charge', 'billing.refund'])
     })
 
     it('test_handler_bound_to_instance', async () => {
-      class DB { query() { return 'db-result' } }
+      class DB {
+        query() {
+          return 'db-result'
+        }
+      }
 
       @Toolbox()
       class Tools {
         db = new DB()
 
         @Tool({ name: 'lookup', description: 'Lookup', input: z.object({}) })
-        async lookup() { return this.db.query() }
+        async lookup() {
+          return this.db.query()
+        }
       }
 
       @Agent({ name: 'test', route: '/test' })
@@ -83,7 +95,9 @@ describe('Agent compiler', () => {
       @Toolbox()
       class MissingTools {
         @Tool({ name: 'x', description: 'X', input: z.object({}) })
-        async x() { return '' }
+        async x() {
+          return ''
+        }
       }
 
       @Agent({ name: 'test', route: '/test' })
@@ -101,7 +115,9 @@ describe('Agent compiler', () => {
       @Toolbox()
       class Tools {
         @Tool({ name: 'ping', description: 'Ping', input: z.object({}) })
-        async ping() { return 'pong' }
+        async ping() {
+          return 'pong'
+        }
       }
 
       @Agent({ name: 'test', route: '/test' })
@@ -143,7 +159,9 @@ describe('Agent compiler', () => {
       @Toolbox({ namespace: 'ns' })
       class Tools {
         @Tool({ name: 'a', description: 'A', input: z.object({}) })
-        async a() { return '' }
+        async a() {
+          return ''
+        }
       }
 
       const result = walkAgentMetadata(TestAgent, [Tools])
@@ -165,6 +183,32 @@ describe('Agent compiler', () => {
 
       expect(options.tools).toEqual([]) // EC-7
       expect(options.stream).toBe(false)
+    })
+
+    it('test_agent_config_reasoningEffort_compiles', () => {
+      // M1 T2.1: @Agent({ reasoningEffort }) is carried verbatim onto CompiledAgentOptions.
+      @Agent({ name: 'thinker', route: '/thinker', reasoningEffort: 'medium' })
+      class ThinkerAgent {
+        @MainLoop()
+        async run() {}
+      }
+
+      const options = compileAgent(walkAgentMetadata(ThinkerAgent))
+
+      expect(options.reasoningEffort).toBe('medium')
+    })
+
+    it('test_agent_config_no_reasoningEffort_is_undefined', () => {
+      // Backward-compat: an agent that declares no effort compiles with reasoningEffort undefined.
+      @Agent({ name: 'plain', route: '/plain' })
+      class PlainAgent {
+        @MainLoop()
+        async run() {}
+      }
+
+      const options = compileAgent(walkAgentMetadata(PlainAgent))
+
+      expect(options.reasoningEffort).toBeUndefined()
     })
   })
 })

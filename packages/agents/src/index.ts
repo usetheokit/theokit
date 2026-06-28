@@ -12,4 +12,5 @@ export type {
   BudgetOptions,
   ApprovalOptions,
   PolicyHandler,
+  ReasoningEffort,
 } from './types.js'
