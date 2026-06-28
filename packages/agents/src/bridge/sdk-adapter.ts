@@ -224,12 +224,23 @@ function streamCallId(ev: StreamEvent): string {
   return typeof ev.callId === 'string' ? ev.callId : ''
 }
 
-/** #44 — skip a run.stream() content event ONLY when onDelta already drove that exact (category, id). */
+/**
+ * #44 — skip a run.stream() content event ONLY when onDelta already drove that exact (category, id).
+ * Tool dedup is keyed by callId; an empty/missing callId never matches (returns false) so two distinct
+ * id-less tool events cannot collide and wrongly suppress each other (favours a visible double-emit
+ * over silent loss — fail-loud).
+ */
 function isDuplicatedByDelta(ev: StreamEvent, state: MergeState): boolean {
   if (ev.type === 'text_delta') return state.sawTextDelta
   if (ev.type === 'thinking') return state.sawThinkingDelta
-  if (ev.type === 'tool_call') return state.emittedToolCallIds.has(streamCallId(ev))
-  if (ev.type === 'tool_result') return state.emittedToolResultIds.has(streamCallId(ev))
+  if (ev.type === 'tool_call') {
+    const id = streamCallId(ev)
+    return id !== '' && state.emittedToolCallIds.has(id)
+  }
+  if (ev.type === 'tool_result') {
+    const id = streamCallId(ev)
+    return id !== '' && state.emittedToolResultIds.has(id)
+  }
   return false
 }
 
@@ -248,6 +259,11 @@ async function* mergeDeltaStream(
   runId: string,
   state: MergeState,
 ): AsyncGenerator<StreamEvent> {
+  // The catch is attached AT CREATION (not deferred to `await pump`): the consumer loop below is
+  // paced by the external puller (SSE backpressure), so a send()/stream() rejection could otherwise
+  // sit unhandled across macrotask gaps and crash the process (Node unhandledRejection). The captured
+  // error is re-thrown after the drain so it still surfaces in the caller's try/catch as one error event.
+  let pumpError: { thrown: unknown } | undefined
   const pump = (async () => {
     try {
       const stream = await openStream()
@@ -255,7 +271,9 @@ async function* mergeDeltaStream(
     } finally {
       queue.close()
     }
-  })()
+  })().catch((thrown: unknown) => {
+    pumpError = { thrown }
+  })
   for await (const item of queue) {
     if (item.kind === 'delta') {
       yield item.event
@@ -268,7 +286,8 @@ async function* mergeDeltaStream(
       yield out
     }
   }
-  await pump // surface any send()/run.stream() error (caught by the generator's try/catch)
+  await pump // settled (handled at creation); re-throw any captured error into the generator's try/catch
+  if (pumpError) throw pumpError.thrown
 }
 
 /**
@@ -292,8 +311,13 @@ function createDeltaSink(queue: AsyncQueue<MergeItem>): {
     for (const event of translateInteractionUpdate(d.update)) {
       if (event.type === 'text_delta') state.sawTextDelta = true
       else if (event.type === 'thinking') state.sawThinkingDelta = true
-      else if (event.type === 'tool_call') state.emittedToolCallIds.add(streamCallId(event))
-      else if (event.type === 'tool_result') state.emittedToolResultIds.add(streamCallId(event))
+      else if (event.type === 'tool_call') {
+        const id = streamCallId(event)
+        if (id !== '') state.emittedToolCallIds.add(id)
+      } else if (event.type === 'tool_result') {
+        const id = streamCallId(event)
+        if (id !== '') state.emittedToolResultIds.add(id)
+      }
       queue.push({ kind: 'delta', event })
     }
   }

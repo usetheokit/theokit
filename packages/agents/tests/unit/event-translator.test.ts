@@ -203,6 +203,30 @@ describe('translateInteractionUpdate — real-time InteractionUpdate shapes (#44
     ])
   })
 
+  it('test_translate_empty_thinking_delta_emits_nothing', () => {
+    expect(translateInteractionUpdate({ type: 'thinking-delta', text: '' })).toEqual([])
+  })
+
+  it('test_translate_tool_call_completed_null_result_falls_back_to_empty', () => {
+    expect(
+      translateInteractionUpdate({
+        type: 'tool-call-completed',
+        callId: 'c4',
+        modelCallId: 'm4',
+        toolCall: { callId: 'c4', name: 'noop' },
+      }),
+    ).toEqual([
+      {
+        type: 'tool_result',
+        callId: 'c4',
+        toolName: 'noop',
+        output: '',
+        durationMs: 0,
+        isError: false,
+      },
+    ])
+  })
+
   it('test_translate_tool_call_started_emits_tool_call', () => {
     expect(
       translateInteractionUpdate({
