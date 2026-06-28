@@ -37,13 +37,20 @@ def templates_dir() -> Path:
 
 @pytest.fixture
 def sample_plan(tmp_path: Path) -> Path:
-    """A minimal but realistic discovery plan with edge cases + pgvector keywords."""
+    """A minimal but realistic discovery plan with edge cases + agnostic `database` domain keywords.
+
+    The domain keywords (schema, migration, CREATE TABLE, INDEX, FOREIGN KEY, ORM,
+    connection pool, Alembic) belong to the real agnostic ``database`` domain shipped
+    by ``scripts/detect_domain.py``. The edge-case bullets are preserved so the
+    edge-case-coverage tests continue to extract ≥ 2 edge cases.
+    """
     plan = tmp_path / "sample-plan.md"
     plan.write_text(
         "# Plan: Sample for testing\n\n"
-        "## Context\n\nPgvector schema investigation, src/local/ adapter design.\n\n"
-        "## Objective\n\nProduce pgvector-shaped blueprint.\n\n"
-        "## ADRs\n\n### D1 — Adopt pgvector schema patterns\n\nProject B uses pgvector.\n\n"
+        "## Context\n\nDatabase schema investigation, src/local/ adapter design.\n\n"
+        "## Objective\n\nProduce an Alembic migration with CREATE TABLE and an INDEX.\n\n"
+        "## ADRs\n\n### D1 — Adopt connection pool tuning\n\n"
+        "Add a FOREIGN KEY and route access through the ORM.\n\n"
         "## Phase 1\n\n### T1.1 — Schema design\n\n"
         "#### Deep Dives\n\n"
         "- Edge case: empty embedding vector\n"

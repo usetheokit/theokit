@@ -38,6 +38,19 @@ Refuse to start when any pre-condition fails — surface the missing piece hones
 
 These are the rules that EVERY task in the halt-loop honors. Phase-specific enforcement:
 
+### Parsimony (GREEN phase — pre-write deliberation)
+
+Before writing GREEN-phase code, walk the parsimony ladder (`rules/parsimony-ladder.md`) top-down, stop at the first rung that resolves the need:
+
+1. Does this need to exist? → no: skip it (YAGNI)
+2. Stdlib does it? → use it
+3. Native platform feature? → use it
+4. Dependency already installed? → reuse it (no redundant dep)
+5. One line? → one line
+6. Only then: the minimum that makes the RED test pass
+
+This is the proactive counterpart to the reactive dead-code (`/code-quality`) and scope-creep (`/review`) gates. The ladder NEVER justifies skipping a test, input validation, error handling, security, or accessibility — those are necessary correctness, not avoidable complexity (`rules/parsimony-ladder.md § Never on the chopping block`).
+
 ### SOLID
 
 Each new module/class/function checked against SOLID at REFACTOR phase of TDD:
@@ -75,7 +88,7 @@ Common patterns to recognize and use deliberately:
 - **Pipeline** — sequential stages with explicit fallbacks
 - **State machine / Reconciler** — declarative desired-state convergence
 
-When a `*-patterns` skill from `cycle-discover` is registered AND its trigger phrases match the current task, the halt-loop SHOULD consult it as documented in `to-plan/SKILL.md § Step 0`. Override of a pattern requires an ADR.
+When a `*-patterns` skill (authored on demand via the standalone `/skill-creator`) is present in `skills/` AND its trigger phrases match the current task, the halt-loop SHOULD consult it as documented in `to-plan/SKILL.md § Step 0`. Override of a pattern requires an ADR.
 
 ### WIRING (HARD GATE — the main rule)
 
@@ -193,9 +206,9 @@ Each iteration, ralph-loop replays the short positional prompt; Claude reads the
 Each iteration executes ONE task's complete TDD cycle:
 
 1. **RED phase:** write the failing test from the plan's TDD section, run it, confirm FAIL
-2. **GREEN phase:** write minimal production code, run test, confirm PASS
+2. **GREEN phase:** walk the parsimony ladder (`rules/parsimony-ladder.md`), then write minimal production code, run test, confirm PASS
 3. **REFACTOR phase:** review code against SOLID/Clean Code/DRY rules; clean up; tests stay green
-4. **WIRING phase:** run `python3 skills/implement/scripts/check_wiring.py {symbol-name}` — HALT if any pillar fails
+4. **WIRING phase:** run `python3 skills/implement/scripts/check_wiring.py --symbol {symbol-name}` — HALT if any pillar fails
 5. **COMMIT phase:** atomic commit with conventional-commit format (`feat(scope): description`, `fix(scope): description`, etc.) referencing plan task ID
 6. **PROGRESS:** update `.progress-{slug}.json` audit trail
 7. **PHASE BOUNDARY CHECK** (Step 4.7 — see below): if this commit closed a phase, run mini review BEFORE accepting the next task
@@ -224,6 +237,7 @@ The orchestrator aggregates four checks:
 | `phase_completeness` | Every task of phase N has `status=committed`; phase-level DoD non-empty if declared |
 | `diff_cohesion` | Files modified in phase N appear in each task's `#### Files to edit` declaration |
 | `wiring_summary` | `check_wiring.py` PASS for every symbol resolvable from phase files (pillar a non-negotiable) |
+| `checkpoint_consistency` | every phase task referenced by a real commit (`T{N.M}` in the message) is recorded `committed` in `.progress` — catches a finished task whose checkpoint update was skipped |
 | `code_quality_delta` | `/code-quality` on the phase's file delta (today: SKIP — delta-scoped CQ not implemented; full audit still runs at Step 5) |
 
 **Verdict (severity-aggregated using `/review` vocabulary):**
@@ -255,10 +269,14 @@ python3 skills/implement/scripts/run_validation.py {slug}
 
 This script consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-implementation gate into one report:
 
+- **Progress-schema gate (`check_progress_schema.py`)** — validates the checkpoint itself FIRST (fail-fast). A malformed `.progress-{slug}.json` (missing `tasks` envelope, `task_id` instead of `id`, missing `phase`/`commit_sha`) makes every phase-scoped gate degrade silently — this gate turns that into a loud `FAIL`. Canonical shape: `templates/progress-schema.json`. SKIP when no checkpoint exists (pre-code phase).
+- **Checkpoint-consistency gate (`check_checkpoint_consistency.py`)** — cross-checks the checkpoint against git in both directions: every `committed` task points at a SHA that EXISTS, and every plan task referenced by a real commit (`T{N.M}` in the message) is recorded `committed`. This is the deterministic answer to "is the checkpoint forced to be updated per task?": no write-time hook forces it, but a task finished + committed without a matching `.progress` entry FAILs here, so the omission cannot reach handoff. The same check runs on each phase boundary (Step 4.7) for earlier detection. Heuristic limit: relies on the `T{N.M}` commit convention.
 - Project test runner — exit 0 (skip if no manifest detected — pre-code phase)
 - Project type-checker / strict linter — exit 0
 - Coverage gate — ≥ 90% on changed files; 100% on critical paths declared in plan
-- Wiring summary — aggregated `check_wiring.py` across all changed symbols
+- **Wiring summary — INDEPENDENT re-verification, not self-report.** The gate derives the public symbols actually added in the committed diffs (`diff_symbols.py`) and RE-RUNS `check_wiring.py` per symbol (`wiring_recheck.py`). The `wiring` field of the progress file is treated as a CLAIM to be audited: a task self-reporting `wiring.a == "pass"` while the recheck finds an uncalled symbol is flagged `fabricated_wiring_evidence` → check `FAIL`. If no symbol can be re-verified (no SHAs, git unavailable), the check is `N/A` — never a PASS laundered from a claim.
+- **Acceptance-criteria gate (`check_acceptance_criteria.py`)** — parses the plan's AC/DoD checkboxes and enforces the mechanizable ones run_validation doesn't otherwise cover: file-size budget (`≤ N lines` per changed file, measured from the diff) and CHANGELOG-updated. Non-mechanizable criteria (e.g. "backward compatibility preserved") are surfaced as `criterion_requires_human_evidence` (LOW) — visible for review, never silently accepted as a ticked box. File-size violation → check `FAIL`.
+- **Test-obligation gate (`check_test_obligations.py`)** — when the plan declares `#### Concurrency tests` or `## Failure scenarios` (and did NOT use the explicit `(none …)` escape), confirms at least one matching test exists in the tree. Total absence of any concurrency/failure test when the plan promised them → check `FAIL`. Heuristic (cannot confirm the test ran), so it fires HIGH only on total absence, not partial coverage.
 - `/code-quality` verdict (invoked internally by the script via `cq_invoke`) — `FAIL_HARD` / `INVALID` map to check `FAIL` and BLOCK handoff; `FAIL_SOFT` / `PASS_WITH_CAVEATS` map to `WARN` (non-blocking)
 
 **Outputs:**
@@ -392,9 +410,9 @@ In all BLOCKED cases, `/review` and `/release` MUST NOT run until the human reso
 - Cycle rule (SoT): [`cycle-implement.md`](../../rules/cycle-implement.md)
 - Upstream cycle: [`cycle-plan.md`](../../rules/cycle-plan.md) — consumes its output
 - Downstream cycle: [`cycle-review.md`](../../rules/cycle-review.md) — consumes this skill's output (when built)
-- Templates: `templates/implementation-task-template.md`
+- Templates: `templates/implementation-task-template.md`, `templates/progress-schema.json` (canonical `.progress-{slug}.json` checkpoint shape — single source of truth for the halt-loop writer and every gate reader)
 - Prompts: `prompts/implementation-prompt.md` (Step 4 TDD halt-loop driver), `prompts/validation-fix-prompt.md` (Step 5.5 validation halt-loop driver)
-- Scripts: `scripts/check_wiring.py`, `scripts/run_validation.py`
+- Scripts: `scripts/check_wiring.py`, `scripts/run_validation.py`, `scripts/check_progress_schema.py` (checkpoint shape) + `scripts/check_checkpoint_consistency.py` (checkpoint vs git), `scripts/diff_symbols.py` + `scripts/wiring_recheck.py` (independent wiring re-verification), `scripts/check_acceptance_criteria.py`, `scripts/check_test_obligations.py`
 - Loop engine: `ralph-loop` plugin (must be enabled in `~/.claude/settings.json`)
 - Project rules consumed: `architecture.md` (DIP, naming, hygiene), `testing.md` (TDD pyramid)
 - Hooks enforced: `hooks/validate-command.sh` (git safety), `hooks/boundary-check.sh` (read-only `knowledge-base/references/` and `knowledge-base/tools/`). DIP is a convention enforced by code review per `rules/architecture.md § 4`, not by a hook.

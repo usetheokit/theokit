@@ -105,10 +105,10 @@ Per [`code-quality-golden-rule.md § Severity rubric`](../../rules/code-quality-
 
 | Finding | Cap | Stable identifier |
 |---|---|---|
-| Dead code unallowlisted | 49 (INVALID) | `dead_code_unallowlisted_{language}` |
-| Symbol fabrication | 49 (INVALID) | `symbol_fabrication_{language}` |
-| Plan missing `## Critical paths` (Mode 2 + D4) | 70 | `plan_missing_critical_paths_section` |
-| Allowlist entry malformed | 49 | `allowlist_malformed_entry` |
+| Dead code unallowlisted | 49 (FAIL_HARD) | `dead_code_unallowlisted_{language}` |
+| Symbol fabrication | 49 (FAIL_HARD) | `symbol_fabrication_{language}` |
+| Plan missing `## Critical paths` (Mode 2 + D4) | 70 (FAIL_SOFT) | `plan_missing_critical_paths_section` |
+| Allowlist entry malformed | 49 (FAIL_HARD) | `allowlist_malformed_entry` |
 | Orphan export | 70 | `soft_cap_orphan_export_{language}` |
 | Mutation score < 60% | 70 | `soft_cap_mutation_score_low_{language}` |
 | Mutation score 60-79% | 89 | `soft_floor_mutation_score_medium_{language}` |
@@ -121,7 +121,7 @@ Per [`code-quality-golden-rule.md § Severity rubric`](../../rules/code-quality-
 ```json
 {
   "verdict": "PASS | PASS_WITH_CAVEATS | FAIL_SOFT | FAIL_HARD | INVALID",
-  "score_cap": 49 | 70 | 89 | 100,
+  "score_cap": 0 | 49 | 70 | 89 | 100,
   "hard_caps_triggered": ["..."],
   "soft_caps_triggered": ["..."],
   "findings_by_detector": {...},

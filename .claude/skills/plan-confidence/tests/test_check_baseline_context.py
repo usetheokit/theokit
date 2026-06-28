@@ -1,14 +1,11 @@
 """Tests for check_baseline_context (SOTA upgrade)."""
 from __future__ import annotations
 
-import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_baseline_context import check_baseline_context  # noqa: E402
 

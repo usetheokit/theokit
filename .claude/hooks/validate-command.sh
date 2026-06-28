@@ -36,10 +36,18 @@ if echo "$COMMAND" | grep -qE 'git[[:space:]]+reset[[:space:]]+--hard'; then
 fi
 
 # --- No work directly on main (CLAUDE.md §4) ---
+# main receives release merges ONLY, via PR. Block every local command that
+# mutates the main ref: commit, plus merge/rebase/reset/cherry-pick. (push is not
+# blocked here — release legitimately pushes tags; `push --force` is already
+# blocked globally above for every branch.)
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 if [ "$BRANCH" = "main" ]; then
   if echo "$COMMAND" | grep -qE 'git[[:space:]]+commit([[:space:]]|$)'; then
     echo "BLOCKED: never commit directly to main (Inquebrável Rule 4). Work on 'develop' (single-trunk) or a feature branch." >&2
+    exit 2
+  fi
+  if echo "$COMMAND" | grep -qE 'git[[:space:]]+(merge|rebase|reset|cherry-pick)([[:space:]]|$)'; then
+    echo "BLOCKED: never mutate 'main' directly (Inquebrável Rule 4). main receives release merges only, via a develop→main PR. Switch to 'develop' first." >&2
     exit 2
   fi
 fi

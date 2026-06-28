@@ -1,11 +1,8 @@
 """Fix #4 — ADR completeness with expanded fallback patterns."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_adr_completeness import check_adr_completeness  # noqa: E402
 

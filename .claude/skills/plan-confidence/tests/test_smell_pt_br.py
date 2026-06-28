@@ -1,11 +1,8 @@
 """Fix #3 — pt-BR smell detection tests."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_spec_smells import check_spec_smells  # noqa: E402
 

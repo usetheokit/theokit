@@ -1,14 +1,11 @@
 """Tests for check_drawbacks_section (SOTA upgrade)."""
 from __future__ import annotations
 
-import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
 
 from check_drawbacks_section import check_drawbacks_section  # noqa: E402
 

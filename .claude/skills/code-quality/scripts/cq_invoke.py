@@ -66,7 +66,8 @@ def merge_verdict_into_plan_confidence(out: dict, cq_summary: dict) -> None:
       PASS                → 100          → no change
       PASS_WITH_CAVEATS   → 89           → cap at 89; SHIPPABLE → SHIPPABLE_WITH_CAVEATS
       FAIL_SOFT           → 70           → cap at 70; SHIPPABLE* → NON_SHIPPABLE
-      FAIL_HARD / INVALID → 49           → force INVALID; cap at 49
+      FAIL_HARD           → 49           → force INVALID; cap at 49
+      INVALID             → 0            → force INVALID; cap at 0 (golden rule § 1)
 
     The CQ `hard_caps_triggered` identifiers are always appended to the plan's
     list for audit visibility, regardless of severity tier.

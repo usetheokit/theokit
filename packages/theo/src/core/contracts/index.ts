@@ -15,6 +15,7 @@ export type {
   AgentToolCallEvent,
   AgentToolResultEvent,
   AgentErrorEvent,
+  AgentThinkingEvent,
   AgentEvent,
 } from './agent-events.js'
 export type { RouteConfig } from './route-config.js'

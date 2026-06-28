@@ -45,7 +45,7 @@ You are the knowledge layer for the domain-{DOMAIN}-reviewer agent. Your domain 
 
 {REFERENCIA_BLUEPRINTS}
 
-**Patterns skill registered for this domain (cycle-discover → /skill-register output):**
+**Patterns skill for this domain (a `skills/*-patterns/` skill, authored via /skill-creator), if any:**
 
 {PATTERNS_SKILL_NAME}
 

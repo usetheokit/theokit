@@ -28,13 +28,14 @@ from typing import Any
 from _rubric_loader import load_rubric
 from check_adr_completeness import ADRReport, check_adr_completeness
 from check_architecture_compliance import check_architecture_compliance
-from check_baseline_context import BaselineContextReport, check_baseline_context
-from check_concurrency_tests import ConcurrencyReport, check_concurrency_tests
+from check_baseline_context import check_baseline_context
+from check_concurrency_tests import check_concurrency_tests
 from check_coverage_matrix import CoverageReport, check_coverage_matrix
 from check_criterion_executability import ExecutabilityReport, check_criterion_executability
-from check_drawbacks_section import DrawbacksReport, check_drawbacks_section
+from check_drawbacks_section import check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
-from check_failure_scenarios import FailureScenariosReport, check_failure_scenarios
+from check_failure_scenarios import check_failure_scenarios
+from check_patterns_consumption import PatternsConsumptionReport, check_patterns_consumption
 from check_spec_smells import SmellReport, check_spec_smells
 from check_tdd_in_bugfix import TDDReport, check_tdd_in_bugfix
 
@@ -220,6 +221,7 @@ def _detect_hard_caps(
     tdd: TDDReport,
     evidence: EvidenceReport | None = None,
     executability: ExecutabilityReport | None = None,
+    patterns_consumption: PatternsConsumptionReport | None = None,
 ) -> list[tuple[str, int]]:
     """Return list of (cap_id, cap_value) for triggered caps.
 
@@ -239,6 +241,12 @@ def _detect_hard_caps(
         # Heuristic-grade soft cap — Acceptance Criteria not executable enough.
         # See check_criterion_executability.py for the gate thresholds.
         triggered.append(("vague_acceptance_criteria", 70))
+    if patterns_consumption is not None and not patterns_consumption.is_clean:
+        # An applicable *-patterns skill was neither cited nor ADR-overridden.
+        # Hard cap at 49 (INVALID) — silently skipping applicable domain
+        # knowledge is as corrosive to plan integrity as a fabricated citation.
+        # Escape hatch: a one-line override ADR naming the skill.
+        triggered.append(("patterns_skill_ignored", 49))
     return triggered
 
 
@@ -299,6 +307,7 @@ def run_structural(
     drawbacks = check_drawbacks_section(plan_path)
     concurrency = check_concurrency_tests(plan_path)
     failure_scenarios = check_failure_scenarios(plan_path)
+    patterns_consumption = check_patterns_consumption(plan_path, _find_repo_root_from_plan(plan_path))
 
     # Compute per-dimension scores
     completeness, completude_motivos = _compute_completude(cov, adr, tdd)
@@ -315,7 +324,7 @@ def run_structural(
     )
 
     # Hard caps (strict, fail-closed)
-    triggered = _detect_hard_caps(cov, adr, tdd, evidence, executability)
+    triggered = _detect_hard_caps(cov, adr, tdd, evidence, executability, patterns_consumption)
     hard_cap_ids = [t[0] for t in triggered]
     if triggered:
         smallest_cap = min(t[1] for t in triggered)
@@ -371,7 +380,11 @@ def run_structural(
 
     verdict = _lookup_verdict(final_score, bands)
     # Hard caps "coverage_lt_100" and "fabricated_citation" force INVALID regardless of bands.
-    if "coverage_lt_100" in hard_cap_ids or "fabricated_citation" in hard_cap_ids:
+    if (
+        "coverage_lt_100" in hard_cap_ids
+        or "fabricated_citation" in hard_cap_ids
+        or "patterns_skill_ignored" in hard_cap_ids
+    ):
         verdict = "INVALID"
 
     evidence_motivos: list[Motivo] = []
@@ -503,6 +516,14 @@ def run_structural(
                 "tasks_failing": list(concurrency.tasks_failing),
                 "is_complete": concurrency.is_complete,
                 "reasons": list(concurrency.reasons),
+            },
+            "patterns_consumption": {
+                "applicable": list(patterns_consumption.applicable),
+                "cited": list(patterns_consumption.cited),
+                "overridden": list(patterns_consumption.overridden),
+                "ignored": list(patterns_consumption.ignored),
+                "is_clean": patterns_consumption.is_clean,
+                "reasons": list(patterns_consumption.reasons),
             },
             "failure_scenarios": {
                 "external_io_detected": failure_scenarios.external_io_detected,

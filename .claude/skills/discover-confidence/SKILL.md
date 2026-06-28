@@ -24,7 +24,7 @@ Sibling of `/plan-confidence` — same architecture (Python deterministic + soft
 - After incorporating fixes from `/discover-improve`, BEFORE merging the blueprint into `docs/`.
 - User explicitly invokes `/discover-confidence {blueprint-slug}`.
 
-This skill is **phase 4** of [`cycle-discover`](../../rules/cycle-discover.md). The cycle rule is the source of truth for chain order (this skill scores blueprints from `/discover-execute`; if verdict ≥ SHIPPABLE_WITH_CAVEATS, the skill-distillation tail `/skill-writer → /skill-validator → /skill-register` runs next), hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (the scoring rubric, hard caps, output schema, exit codes).
+This skill is **phase 4** of [`cycle-discover`](../../rules/cycle-discover.md). The cycle rule is the source of truth for chain order (this skill scores blueprints from `/discover-execute`; the blueprint is the cycle's terminal artifact, and distilling a SHIPPABLE blueprint into a reusable skill is optional and out of cycle via the standalone `/skill-creator`), hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (the scoring rubric, hard caps, output schema, exit codes).
 
 ## What this skill checks (M2 active dimensions)
 

@@ -20,11 +20,24 @@ Each task runs as a halt-loop iteration:
 
 ```
 RED      — write the failing test that captures the task's acceptance criterion
-GREEN    — minimal code to pass the test
+GREEN    — walk the parsimony ladder, then write the minimal code to pass the test
 REFACTOR — improve structure; tests stay green
 WIRING   — caller + integration test + runtime metric (the "wiring triad")
 COMMIT   — atomic commit referencing the plan slug and task ID
 ```
+
+## Parsimony gate (GREEN-phase deliberation — pre-write)
+
+Before writing any production code in the GREEN phase, the halt-loop walks the
+**parsimony ladder** (`rules/parsimony-ladder.md`) top-down and stops at the first
+rung that resolves the need. The six rungs are defined once in that file — not
+restated here, per DRY (`parsimony-ladder.md § How each rung is enforced`).
+
+This is a **deliberation, not a detector** — it is the proactive counterpart to the
+reactive dead-code / scope-creep gates downstream. The ladder NEVER justifies
+skipping a test, input validation, error handling, security, or accessibility — see
+`rules/parsimony-ladder.md § Never on the chopping block`. A parsimony argument that
+weakens correctness is a Rule 3 (honesty) violation, not a win.
 
 ## Wiring triad
 
@@ -40,6 +53,7 @@ A task is **not** complete until all three are present:
 
 ## Hard gates (per iteration)
 
+- Parsimony ladder walked before GREEN-phase code is written (`rules/parsimony-ladder.md`) — guardrail items (tests/validation/error-handling/security/accessibility) never sacrificed.
 - Test suite green before commit.
 - Linter clean (project-specific — see `rules/code-quality-languages.txt`).
 - No new symbols left dangling (every new function/class has a caller or a test exercising it).
@@ -62,8 +76,12 @@ Skipping mini review on phase boundary is a documented anti-pattern: design prob
 
 `scripts/run_validation.py` runs after the promise marker and BEFORE the handoff. It consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-implementation gate into one report:
 
+- **Progress-checkpoint schema — validated fail-fast, before any gate that reads it.** `check_progress_schema.py` confirms `.progress-{slug}.json` matches the canonical shape (`skills/implement/templates/progress-schema.json`): a `tasks` array of objects keyed by `id` (not `task_id`), each with `phase`/`status` and, once committed, `commit_sha`/`files`. A malformed checkpoint FAILs loudly instead of letting phase-scoped gates degrade silently.
+- **Checkpoint-vs-git consistency.** `check_checkpoint_consistency.py` cross-checks the checkpoint against the real git history both ways: every `committed` task points at a SHA that exists, and every plan task referenced by a real commit (`T{N.M}` convention in the message) is recorded `committed`. Nothing forces the halt-loop to update `.progress` at write time, but a task finished + committed without a matching checkpoint entry FAILs here (and on each phase boundary), so the omission cannot reach handoff. Heuristic limit: relies on the commit-message task-id convention.
 - npm test / typecheck / lint / coverage gates (when applicable).
-- Wiring triad summary (caller + integration test + runtime metric).
+- **Wiring summary — independently re-verified, never self-reported.** Symbols are derived from the committed diffs and `check_wiring.py` is re-run per symbol; a progress file claiming pillar (a) pass over an actually-uncalled symbol is caught as fabricated evidence (FAIL). Trusting the self-reported `wiring` field is the bypass this closes.
+- **Acceptance-criteria gate** — enforces the plan's mechanizable AC/DoD that the command gates miss (file-size budget per changed file, CHANGELOG-updated) and surfaces non-mechanizable criteria (backward-compat) for human evidence instead of accepting a self-ticked box.
+- **Test-obligation gate** — declared concurrency tests / failure scenarios must have at least one matching test in the tree; total absence when the plan promised them is a FAIL (a generic green suite never exercised them).
 - **`/code-quality` verdict ∉ {FAIL_HARD, INVALID}** — invoked internally by the script. FAIL_SOFT and PASS_WITH_CAVEATS surface as WARN in the report but do not block. Override only with `--no-code-quality` (pre-code phase or CQ not installed).
 
 Exit codes: `0` = `PASS` or `PARTIAL` (proceed); `1` = `FAIL` (trigger validation halt-loop — see below); `2` = invocation error (escalate to human).
@@ -107,6 +125,7 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
 ## Output
 
 - Commits on the working branch.
+- `knowledge-base/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
 - `knowledge-base/implementations/{slug}/` — per-iteration logs.
 - `knowledge-base/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
 
@@ -114,7 +133,7 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Skill: `skills/implement/SKILL.md`
-- Conventions: `rules/architecture.md`, `rules/testing.md`, `rules/loop-engine-convention.md`
+- Conventions: `rules/architecture.md`, `rules/testing.md`, `rules/error-handling.md`, `rules/git-safety.md`, `rules/loop-engine-convention.md`, `rules/parsimony-ladder.md`
 - Macro super-loop: `rules/cycle-roadmap.md` — one cycle-implement run per milestone in the super-loop
 - Upstream: `rules/cycle-plan.md` (plan must reach verdict ≥ SHIPPABLE_WITH_CAVEATS)
 - Downstream: `rules/cycle-code-quality.md` (runs after `IMPLEMENTATION_COMPLETE`)

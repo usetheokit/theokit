@@ -72,11 +72,7 @@ Missing binary → emit `auditor_unavailable_{tool}` soft-cap finding; never fab
 
 ## § 7 — When this rule may change
 
-This file is LOCKED. Changes require ALL of:
-
-1. ADR in `knowledge-base/adrs/`.
-2. CHANGELOG entry under `[Unreleased] § Changed`.
-3. `scripts/check_xrefs.py` and `scripts/test_e2e_smoke.py` PASS after the change.
+Per `cycle-rule-schema.md § Golden Rule Change Protocol`. No rule-specific deviations.
 
 ## § 8 — Failure modes the rule guards against
 

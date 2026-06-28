@@ -1,137 +1,80 @@
----
-paths:
-  - "packages/**/*.ts"
-  - "packages/**/*.tsx"
-  - "tests/**/*.ts"
-  - "app/**/*.ts"
-  - "app/**/*.tsx"
-  - "server/**/*.ts"
----
+# Testing
 
-# Testing Rules
+Source of Truth for test discipline. Stack-agnostic.
 
-## Core Rule — TDD + BDD são OBRIGATÓRIOS
+## § 1 — Philosophy
 
-- **TDD (Test-Driven Development)** e **BDD (Behavior-Driven Development)** não são opcionais. São o método de trabalho padrão.
-- Every non-trivial logic change needs a test or explicit reason why not.
-- Bug fixes add regression test before/alongside the fix.
-- Framework features need fixture projects.
+- Tests protect **behavior**, not lines. 100% coverage with empty assertions is worse than 60% coverage with meaningful tests.
+- Tests are **executable documentation**. A good test describes what the system does without reading production code.
+- A broken test is the **highest-priority bug**. Once red tests are ignored, all tests lose value.
 
-## TDD — Red-Green-Refactor
-
-O ciclo é inviolável:
-
-1. **RED** — Escreva o teste PRIMEIRO. Ele DEVE falhar.
-2. **GREEN** — Escreva o código MÍNIMO para o teste passar.
-3. **REFACTOR** — Limpe o código mantendo os testes verdes.
+## § 2 — Pyramid
 
 ```
-Nunca escreva código de produção sem um teste falhando que justifique sua existência.
+        /  E2E  \        Few — critical end-to-end flows only
+       /----------\
+      / Integration\     Moderate — system boundaries (DB, APIs, queues)
+     /--------------\
+    /   Unit         \   Many — pure business logic, fast, deterministic
+   /------------------\
 ```
 
-- Commit do teste falhando ANTES do commit da implementação (quando prático).
-- Se o teste não falhou primeiro, o ciclo foi quebrado.
-- Code review deve verificar: "o teste existia antes da implementação?"
+- **Unit** — pure business logic, no I/O. Run in milliseconds. The foundation.
+- **Integration** — boundaries: repositories against a real DB, clients against real APIs, consumers against real queues. DIP pays off here: unit tests mock, integration tests use real implementations.
+- **E2E** — critical user-visible flows. Few, stable, representative. Don't chase edge cases here.
 
-## BDD — Comportamento como Especificação
+## § 3 — Rules
 
-Testes descrevem COMPORTAMENTO do ponto de vista do usuário/consumidor, não implementação interna.
+- Every business rule MUST have a unit test. No exceptions.
+- Every bug fix starts with a **failing regression test**, then the fix.
+- Tests MUST be deterministic. Flaky tests are bugs — fix or delete.
+- Each test exercises ONE behavior. "and" in the test name is a smell.
+- Tests are independent. No shared mutable state, no order dependency.
+- Use Arrange-Act-Assert (AAA) or Given-When-Then. Pick one per repo.
+- Test names describe behavior, not method: `transfer_fails_when_balance_insufficient`, not `test_transfer_1`.
 
-### Formato obrigatório: Given-When-Then (ou Arrange-Act-Assert)
+## § 4 — What to test vs. what NOT to test
 
-```typescript
-describe('defineRoute POST /api/users', () => {
-  it('should create a user when valid body is provided', () => {
-    // Given: a valid user payload
-    const body = { name: 'John', email: 'john@example.com' }
-
-    // When: POST /api/users is called
-    const response = await api.users.POST({ body })
-
-    // Then: user is created with correct data
-    expect(response.status).toBe(201)
-    expect(response.data.name).toBe('John')
-  })
-
-  it('should return 422 when email is invalid', () => {
-    // Given: payload with invalid email
-    const body = { name: 'John', email: 'not-an-email' }
-
-    // When: POST /api/users is called
-    const response = await api.users.POST({ body })
-
-    // Then: validation error is returned
-    expect(response.status).toBe(422)
-    expect(response.error.code).toBe('VALIDATION_ERROR')
-  })
-})
-```
-
-### Regras BDD
-
-- `describe` = feature ou componente sendo testado
-- `it`/`test` = comportamento esperado em linguagem de negócio
-- Nomes legíveis: `'should reject transfer when balance is insufficient'`, não `'test_transfer_2'`
-- Cada `it` testa UM cenário (happy path OU edge case OU erro)
-- Cenários de erro são tão importantes quanto happy paths
-- Testes são documentação viva — alguém deve entender o sistema lendo apenas os testes
-
-### Cenários obrigatórios por feature
-
-| Tipo | Exemplo |
+| Test | Don't test |
 |---|---|
-| Happy path | `should create user with valid data` |
-| Validation error | `should reject when email is missing` |
-| Auth error | `should return 401 when not authenticated` |
-| Not found | `should return 404 when user does not exist` |
-| Edge case | `should handle empty string name` |
-| Concurrency | `should not create duplicate users` (quando relevante) |
+| Business rules, calculations | Trivial getters/setters |
+| Validation, edge cases | Framework-generated code |
+| Integration with external systems | Internal structure (test behavior, not implementation) |
+| Error / fallback scenarios | Third-party libraries (they have their own tests) |
+| API contracts (request/response) | Layout/CSS unless it's a product requirement |
 
-## What Kind of Test
+## § 4.1 — Edge cases vs negative cases
 
-- Business logic / pure functions → unit test (Vitest) — TDD obrigatório
-- Router / build pipeline → integration test — TDD obrigatório
-- Server routes / actions → integration test — TDD + BDD obrigatório
-- Full user flows → E2E test (Playwright) — BDD obrigatório
-- Type inference → type test (`expectTypeOf`) — TDD obrigatório
+Two distinct lenses. Cover **both** — not just whichever is easier to imagine. A suite with only edge cases is half done.
 
-## Test Quality
+| | **Edge case** | **Negative case** |
+|---|---|---|
+| What it is | An extreme of a **valid** scenario | An **invalid / wrong / unexpected** input |
+| Why it happens | Caller pushes a limit; a rare-but-real event occurs | Caller makes a mistake; a system fails |
+| Question it answers | "Does it hold **at the boundary**?" | "Does it **fail-fast and recover gracefully**?" |
+| Passing behavior | Correct result at the extreme | Typed error + clear message, no corruption |
+| Examples | password of exactly 8 or 16 chars; empty-but-valid list; leap day (Feb 29); max int | letters in a phone field; missing required email; network down on submit; `null` where a value is required |
 
-- One behavior per test. If the name has "and", split it.
-- Descriptive names: `test_dynamic_route_resolves_slug`, not `test_1`.
-- Arrange-Act-Assert pattern. No exceptions.
-- Tests must be deterministic. Flaky test = P0 bug.
-- Tests must be independent. No shared mutable state.
+- **Edge cases test boundaries; negative cases test error handling.** They fail differently: an unhandled edge produces a *wrong answer*; an unhandled negative produces a *crash or a silent swallow*.
+- Negative cases are where **Error Handling** is proven (fail-fast, fail-clear, **typed errors**, validate at the boundary). A negative-case test asserts the *specific typed error and message* — not merely "it throws".
+- For every input boundary, ask both questions: "what is the largest/smallest **valid** value?" (edge) **and** "what is the first **invalid** value past it?" (negative).
 
-## Fixtures
+## § 5 — Test pairing convention
 
-Every framework feature needs a mini-project fixture:
+The default convention assumed by stop-validation.sh:
 
-```
-tests/fixtures/
-├── basic-app/          # Minimal page + layout
-├── nested-layouts/     # Multi-level layouts
-├── server-routes/      # API routes with Zod
-├── server-actions/     # Server actions + forms
-├── middleware/         # Middleware stack
-├── dynamic-routes/    # [param] and [...catchAll]
-├── error-boundaries/  # Error handling per segment
-└── loading-states/    # Suspense + streaming
-```
+- `<name>_test.<ext>` (same directory) — Go, Python (pytest), most languages
+- `<name>.test.<ext>` — JS/TS (Jest)
+- `<name>.spec.<ext>` — JS/TS (Jasmine), Ruby
+- `test_<name>.<ext>` — Python (pytest alternative)
 
-## What NOT to Test
+If your project uses a different convention (e.g., separate `tests/` mirror tree), document it here so the hook knows where to look.
 
-- Trivial getters/setters
-- Framework/library internals
-- CSS layout (unless business requirement)
-- Third-party library behavior
+## § 6 — Anti-patterns
 
-## Running Tests
-
-```bash
-npm test                                    # All tests
-npx vitest run tests/unit/router.test.ts    # Specific test
-npx tsc --noEmit                            # Type check
-npx playwright test                         # E2E
-npm run lint                                # Lint
-```
+- Tests depending on execution order or shared state.
+- Tests asserting on internal structure (break on every refactor).
+- Excessive mocking: if you need 10 mocks to test a function, the design is wrong (revisit SRP).
+- Commented-out or permanently `@skip`'d tests — invisible technical debt.
+- Testing only the happy path. Bugs live in edge cases **and** negative cases (see § 4.1) — covering one lens while ignoring the other is half a suite.
+- Time/randomness in unit tests — inject a clock/RNG so the test is deterministic.
