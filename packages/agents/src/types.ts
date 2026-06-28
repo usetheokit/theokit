@@ -19,6 +19,12 @@ export interface AgentOptions {
   model?: string
   /** Extended-thinking effort; mapped to the SDK `ModelSelection.params` so the provider reasons. */
   reasoningEffort?: ReasoningEffort
+  /**
+   * Opt-in (default false): convert inline `<think>…</think>` in the text stream into `thinking`
+   * events (M2) — for models that emit reasoning as inline tags (qwen/deepseek) rather than via a
+   * native reasoning param. Off by default since a code assistant may emit literal `<think>` in text.
+   */
+  parseThinkTags?: boolean
   /** Enable SSE streaming (default: true). */
   stream?: boolean
   /** Maximum loop iterations before forcing a terminal response. */
