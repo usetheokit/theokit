@@ -23,7 +23,11 @@ import type {
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import { compileProjectContext } from './compile-project-context.js'
-import { translateSdkEvent, type SdkMessage } from './event-translator.js'
+import {
+  translateInteractionUpdate,
+  translateSdkEvent,
+  type SdkMessage,
+} from './event-translator.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
 interface M8CreateOptions {
@@ -203,26 +207,73 @@ function createAsyncQueue<T>(): AsyncQueue<T> {
 }
 
 /**
- * #40: merge incremental `text_delta` deltas (queued via onDelta) with the complete SDK messages
- * from `run.stream()`. Deltas are yielded as they arrive; complete messages are translated and the
- * complete-assistant `text_delta` is deduped when deltas already streamed it (`state.sawDelta`).
- * The `done` SDK event stays suppressed (the real-usage `done` is emitted by the caller after
- * `run.wait()`); errors set `state.sawError` to short-circuit that re-emit. Extracted to keep the
- * stream generator within the G6 size budget.
+ * #44 dedup state — text/thinking by category flag (no per-event id); tool by callId Set, so a
+ * `run.stream()` tool result whose callId onDelta only reported as `tool-call-started` (e.g. a tool
+ * ERROR surfaced only via the stream) is NOT suppressed. `sawError` short-circuits the real-usage done.
+ */
+interface MergeState {
+  sawTextDelta: boolean
+  sawThinkingDelta: boolean
+  emittedToolCallIds: Set<string>
+  emittedToolResultIds: Set<string>
+  sawError: boolean
+}
+
+/** Read a StreamEvent's `callId` as a string (the union is index-typed `unknown`). */
+function streamCallId(ev: StreamEvent): string {
+  return typeof ev.callId === 'string' ? ev.callId : ''
+}
+
+/**
+ * #44 — skip a run.stream() content event ONLY when onDelta already drove that exact (category, id).
+ * Tool dedup is keyed by callId; an empty/missing callId never matches (returns false) so two distinct
+ * id-less tool events cannot collide and wrongly suppress each other (favours a visible double-emit
+ * over silent loss — fail-loud).
+ */
+function isDuplicatedByDelta(ev: StreamEvent, state: MergeState): boolean {
+  if (ev.type === 'text_delta') return state.sawTextDelta
+  if (ev.type === 'thinking') return state.sawThinkingDelta
+  if (ev.type === 'tool_call') {
+    const id = streamCallId(ev)
+    return id !== '' && state.emittedToolCallIds.has(id)
+  }
+  if (ev.type === 'tool_result') {
+    const id = streamCallId(ev)
+    return id !== '' && state.emittedToolResultIds.has(id)
+  }
+  return false
+}
+
+/**
+ * #44: merge real-time content events (queued via onDelta — text/tool/thinking in chronological
+ * arrival order) with the complete SDK messages from `run.stream()`. Deltas are yielded as they
+ * arrive; the pump opens `run.stream()` (post-completion) for structural events (`run_started`/`done`)
+ * + the no-onDelta fallback, deduped per-category (`isDuplicatedByDelta`) so nothing double-emits.
+ * The `done` SDK event stays suppressed (real-usage `done` emitted by the caller after `run.wait()`);
+ * errors set `state.sawError`. `openStream` is a thunk so the consumer drains CONCURRENTLY with
+ * `send()` (the run only resolves after the loop completes). Extracted to keep the generator within G6.
  */
 async function* mergeDeltaStream(
-  stream: AsyncGenerator<SdkMessage>,
   queue: AsyncQueue<MergeItem>,
+  openStream: () => Promise<AsyncGenerator<SdkMessage>>,
   runId: string,
-  state: { sawDelta: boolean; sawError: boolean },
+  state: MergeState,
 ): AsyncGenerator<StreamEvent> {
+  // The catch is attached AT CREATION (not deferred to `await pump`): the consumer loop below is
+  // paced by the external puller (SSE backpressure), so a send()/stream() rejection could otherwise
+  // sit unhandled across macrotask gaps and crash the process (Node unhandledRejection). The captured
+  // error is re-thrown after the drain so it still surfaces in the caller's try/catch as one error event.
+  let pumpError: { thrown: unknown } | undefined
   const pump = (async () => {
     try {
+      const stream = await openStream()
       for await (const msg of stream) queue.push({ kind: 'sdk', msg })
     } finally {
       queue.close()
     }
-  })()
+  })().catch((thrown: unknown) => {
+    pumpError = { thrown }
+  })
   for await (const item of queue) {
     if (item.kind === 'delta') {
       yield item.event
@@ -230,12 +281,47 @@ async function* mergeDeltaStream(
     }
     for (const out of translateSdkEvent(item.msg, runId)) {
       if (out.type === 'done') continue // suppressed; the real-usage done is emitted by the caller
-      if (out.type === 'text_delta' && state.sawDelta) continue // #40 dedup — already streamed
+      if (isDuplicatedByDelta(out, state)) continue // #44 per-category/callId dedup vs onDelta
       if (out.type === 'error') state.sawError = true
       yield out
     }
   }
-  await pump // surface any run.stream() error (caught by the generator's try/catch)
+  await pump // settled (handled at creation); re-throw any captured error into the generator's try/catch
+  if (pumpError) throw pumpError.thrown
+}
+
+/**
+ * #44 — build the onDelta sink: a fresh per-run dedup `MergeState` + the callback that routes every
+ * content update (text/tool/thinking) into the merge queue in chronological arrival order, recording
+ * per-category flags + per-callId Sets so the run.stream() fallback is deduped without losing
+ * stream-only tool results. Extracted to keep `createSdkAgentStream` within the function-size budget.
+ */
+function createDeltaSink(queue: AsyncQueue<MergeItem>): {
+  state: MergeState
+  onDelta: (d: { update: InteractionUpdate }) => void
+} {
+  const state: MergeState = {
+    sawTextDelta: false,
+    sawThinkingDelta: false,
+    emittedToolCallIds: new Set<string>(),
+    emittedToolResultIds: new Set<string>(),
+    sawError: false,
+  }
+  const onDelta = (d: { update: InteractionUpdate }) => {
+    for (const event of translateInteractionUpdate(d.update)) {
+      if (event.type === 'text_delta') state.sawTextDelta = true
+      else if (event.type === 'thinking') state.sawThinkingDelta = true
+      else if (event.type === 'tool_call') {
+        const id = streamCallId(event)
+        if (id !== '') state.emittedToolCallIds.add(id)
+      } else if (event.type === 'tool_result') {
+        const id = streamCallId(event)
+        if (id !== '') state.emittedToolResultIds.add(id)
+      }
+      queue.push({ kind: 'delta', event })
+    }
+  }
+  return { state, onDelta }
 }
 
 /**
@@ -361,33 +447,30 @@ export function createSdkAgentStream(
           conversationStorage: storage,
         })
 
-        // #40: token streaming. The SDK streams incremental tokens ONLY via send's onDelta;
-        // run.stream() yields complete messages. Queue the deltas + merge with run.stream(),
-        // deduping the complete-assistant text (sawDelta) so it is not double-emitted. A
-        // provider that never calls onDelta falls back to translateAssistantEvent's full text.
+        // #44: token streaming in CHRONOLOGICAL ORDER. The SDK streams ALL content updates
+        // (text/tool/thinking) in real time via send's onDelta; run.stream() replays the complete
+        // messages post-completion. Route every content update through onDelta in arrival order so
+        // the merge queue records them interleaved (not all-text-then-all-tools), and consume the
+        // queue CONCURRENTLY with send (the run only resolves after the loop). run.stream() supplies
+        // structural events + the no-onDelta fallback, deduped per-category/callId (isDuplicatedByDelta).
         const queue = createAsyncQueue<MergeItem>()
-        const state = { sawDelta: false, sawError: false }
-        const onDelta = (d: { update: InteractionUpdate }) => {
-          // The SDK streams assistant tokens as `TextDeltaUpdate` (type 'text-delta'); narrow on
-          // the discriminant so only those become text_delta events (thinking/tool/step updates
-          // flow through run.stream() instead).
-          if (d.update.type === 'text-delta' && d.update.text) {
-            state.sawDelta = true
-            queue.push({ kind: 'delta', event: { type: 'text_delta', content: d.update.text } })
-          }
-        }
-        const run = await agent.send(message, { onDelta })
+        const { state, onDelta } = createDeltaSink(queue)
+        // Do NOT await send() before draining — onDelta fills the queue in real time during the run;
+        // the consumer yields concurrently. openStream awaits the resolved Run for its post-completion
+        // run.stream(). On send() rejection, openStream throws → pump closes the queue → the awaited
+        // pump re-throws into the outer catch (error event) after any queued deltas have drained.
+        const sendPromise = agent.send(message, { onDelta })
+        const openStream = async () => (await sendPromise).stream()
 
-        // V4-N.1: the stream's `done` carries zero usage (the FINISHED status has no token
-        // totals). It is suppressed in mergeDeltaStream; ONE real-usage `done` is emitted after
-        // `run.wait()` (which carries the SDK RunResult.usage + cost). Errors short-circuit it.
-        for await (const event of mergeDeltaStream(run.stream(), queue, runId, state)) {
+        for await (const event of mergeDeltaStream(queue, openStream, runId, state)) {
           yield event
         }
 
-        // Exactly-one-terminal: on a clean run, read the SDK RunResult for real usage + cost.
+        // V4-N.1: the stream's `done` carries zero usage; it is suppressed in mergeDeltaStream and
+        // ONE real-usage `done` is emitted after `run.wait()` (SDK RunResult.usage + cost). Errors
+        // short-circuit it. Exactly-one-terminal on a clean run.
         if (!state.sawError) {
-          yield realUsageDone(await run.wait(), t0)
+          yield realUsageDone(await (await sendPromise).wait(), t0)
         }
       } catch (err) {
         yield {

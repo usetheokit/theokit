@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { translateSdkEvent } from '../../src/bridge/event-translator.js'
+import { translateInteractionUpdate, translateSdkEvent } from '../../src/bridge/event-translator.js'
 
 const RUN = 'run-1'
 
@@ -180,5 +180,128 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
       RUN,
     )
     expect(events).toEqual([{ type: 'thinking', content: 'reasoning…' }])
+  })
+})
+
+// #44 — real-time onDelta InteractionUpdate → StreamEvent mapping (chronological ordering fix).
+// Shapes verified against theokit-sdk/packages/sdk/src/types/updates.ts:
+//   text-delta {text}, thinking-delta {text}, tool-call-started/completed {callId, toolCall:{callId,name,args?,result?}, modelCallId}.
+describe('translateInteractionUpdate — real-time InteractionUpdate shapes (#44)', () => {
+  it('test_translate_text_delta_emits_text_delta', () => {
+    expect(translateInteractionUpdate({ type: 'text-delta', text: 'hi' })).toEqual([
+      { type: 'text_delta', content: 'hi' },
+    ])
+  })
+
+  it('test_translate_empty_text_delta_emits_nothing', () => {
+    expect(translateInteractionUpdate({ type: 'text-delta', text: '' })).toEqual([])
+  })
+
+  it('test_translate_thinking_delta_emits_thinking', () => {
+    expect(translateInteractionUpdate({ type: 'thinking-delta', text: 'reason' })).toEqual([
+      { type: 'thinking', content: 'reason' },
+    ])
+  })
+
+  it('test_translate_empty_thinking_delta_emits_nothing', () => {
+    expect(translateInteractionUpdate({ type: 'thinking-delta', text: '' })).toEqual([])
+  })
+
+  it('test_translate_tool_call_completed_null_result_falls_back_to_empty', () => {
+    expect(
+      translateInteractionUpdate({
+        type: 'tool-call-completed',
+        callId: 'c4',
+        modelCallId: 'm4',
+        toolCall: { callId: 'c4', name: 'noop' },
+      }),
+    ).toEqual([
+      {
+        type: 'tool_result',
+        callId: 'c4',
+        toolName: 'noop',
+        output: '',
+        durationMs: 0,
+        isError: false,
+      },
+    ])
+  })
+
+  it('test_translate_tool_call_started_emits_tool_call', () => {
+    expect(
+      translateInteractionUpdate({
+        type: 'tool-call-started',
+        callId: 'c1',
+        modelCallId: 'm1',
+        toolCall: { callId: 'c1', name: 'write_file', args: { path: 'a.txt' } },
+      }),
+    ).toEqual([
+      { type: 'tool_call', callId: 'c1', toolName: 'write_file', input: { path: 'a.txt' } },
+    ])
+  })
+
+  it('test_translate_tool_call_started_defaults_missing_args_to_empty', () => {
+    expect(
+      translateInteractionUpdate({
+        type: 'tool-call-started',
+        callId: 'c2',
+        modelCallId: 'm2',
+        toolCall: { callId: 'c2', name: 'glob_files' },
+      }),
+    ).toEqual([{ type: 'tool_call', callId: 'c2', toolName: 'glob_files', input: {} }])
+  })
+
+  it('test_translate_tool_call_completed_serializes_object_result', () => {
+    const events = translateInteractionUpdate({
+      type: 'tool-call-completed',
+      callId: 'c1',
+      modelCallId: 'm1',
+      toolCall: { callId: 'c1', name: 'glob_files', result: { ok: true, count: 2 } },
+    })
+    expect(events).toEqual([
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'glob_files',
+        output: '{"ok":true,"count":2}',
+        durationMs: 0,
+        isError: false,
+      },
+    ])
+  })
+
+  it('test_translate_tool_call_completed_string_result_passthrough', () => {
+    const events = translateInteractionUpdate({
+      type: 'tool-call-completed',
+      callId: 'c3',
+      modelCallId: 'm3',
+      toolCall: { callId: 'c3', name: 'shell', result: 'done' },
+    })
+    expect(events).toEqual([
+      {
+        type: 'tool_result',
+        callId: 'c3',
+        toolName: 'shell',
+        output: 'done',
+        durationMs: 0,
+        isError: false,
+      },
+    ])
+  })
+
+  it('test_translate_unknown_update_emits_nothing', () => {
+    expect(
+      translateInteractionUpdate({
+        type: 'partial-tool-call',
+        callId: 'c1',
+        modelCallId: 'm1',
+        toolCall: { callId: 'c1', name: 'x' },
+      }),
+    ).toEqual([])
+    expect(translateInteractionUpdate({ type: 'token-delta', tokens: 5 })).toEqual([])
+    expect(
+      translateInteractionUpdate({ type: 'thinking-completed', thinkingDurationMs: 10 }),
+    ).toEqual([])
+    expect(translateInteractionUpdate({ type: 'step-started', stepId: 1 })).toEqual([])
   })
 })
