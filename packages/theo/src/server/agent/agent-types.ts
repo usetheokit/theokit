@@ -16,5 +16,6 @@ export type {
   AgentToolCallEvent,
   AgentToolResultEvent,
   AgentErrorEvent,
+  AgentThinkingEvent,
   AgentEvent,
 } from '../../core/contracts/agent-events.js'
