@@ -1,0 +1,174 @@
+{
+  "plan_slug": "agents-think-tag-middleware",
+  "plan_path": ".claude/knowledge-base/plans/agents-think-tag-middleware-plan.md",
+  "plan_version": "1.1",
+  "scored_at": "2026-06-28T23:41:02+00:00",
+  "completude_score": 100.0,
+  "risco_estrutural_score": 80.0,
+  "active_dimensions": ["completeness", "structural_risk"],
+  "weight_normalization_factor": 2.0,
+  "weighted_avg": 92.0,
+  "hard_caps_triggered": [],
+  "final_score_after_caps": 92.0,
+  "verdict": "SHIPPABLE",
+  "reasons": {
+    "completeness": [
+      {
+        "sign": "positive",
+        "label": "Coverage Matrix 100%",
+        "weight": 60.0
+      },
+      {
+        "sign": "positive",
+        "label": "ADR alternatives (4/4)",
+        "weight": 20.0
+      },
+      {
+        "sign": "positive",
+        "label": "TDD in bug-fix (0/0)",
+        "weight": 20.0
+      }
+    ],
+    "evidence": [
+      {
+        "sign": "positive",
+        "label": "21 citations resolved",
+        "weight": 21.0
+      }
+    ],
+    "calibration": [],
+    "structural_risk": [
+      {
+        "sign": "negative",
+        "label": "3 loopholes hits",
+        "weight": -3.0
+      },
+      {
+        "sign": "negative",
+        "label": "3 weak_imperatives hits",
+        "weight": -3.0
+      },
+      {
+        "sign": "negative",
+        "label": "1 vague_pronouns hits",
+        "weight": -1.0
+      }
+    ]
+  },
+  "sub_reports": {
+    "coverage_matrix": {
+      "total_gaps": 9,
+      "mapped_gaps": 9,
+      "coverage_ratio": 1.0,
+      "is_complete": true,
+      "orphan_tasks": [],
+      "unmapped_gaps": []
+    },
+    "adr_completeness": {
+      "total_adrs": 4,
+      "with_alternatives": 4,
+      "completeness_ratio": 1.0,
+      "missing_alternatives": []
+    },
+    "tdd_in_bugfix": {
+      "total_bugfix_tasks": 0,
+      "with_tdd": 0,
+      "coverage_ratio": 1.0,
+      "missing_tdd": []
+    },
+    "spec_smells": {
+      "total_hits": 7,
+      "by_category": {
+        "loopholes": 3,
+        "vague_pronouns": 1,
+        "weak_imperatives": 3
+      },
+      "total_penalty": -20
+    },
+    "architecture_compliance": {
+      "compliance_score": 1.0,
+      "project_rules_found_count": 32,
+      "fallback_to_defaults": false,
+      "rules_referenced_in_plan": ["sdk-runtime.md"],
+      "principles_cited": ["ISP", "YAGNI", "TDD"],
+      "has_dod_quality_signal": true,
+      "has_size_budget_signal": true,
+      "reasons": [
+        "References 1 project rule(s): ['sdk-runtime.md']",
+        "Cites 3 principle(s): ['ISP', 'YAGNI', 'TDD']",
+        "Global DoD references quality gates (lint/complexity/size)",
+        "Plan mentions file-size budget"
+      ]
+    },
+    "evidence": {
+      "total_citations": 21,
+      "unresolved_citations": []
+    },
+    "criterion_executability": {
+      "total_criteria": 18,
+      "vague_count": 0,
+      "weak_count": 2,
+      "acceptable_count": 1,
+      "executable_count": 15,
+      "vague_ratio": 0.0,
+      "acceptable_ratio": 0.889,
+      "executable_ratio": 0.833,
+      "soft_cap_triggered": false,
+      "vague_criteria_sample": []
+    },
+    "baseline_context": {
+      "section_present": true,
+      "is_complete": true,
+      "missing_subsections": [],
+      "file_table_rows": 10,
+      "file_table_placeholder_hits": 0,
+      "glossary_entries": 4,
+      "glossary_placeholder_hits": 0,
+      "reasons": []
+    },
+    "drawbacks_and_unresolved": {
+      "drawbacks_section_present": true,
+      "drawbacks_entries": 5,
+      "drawbacks_placeholder_hits": 0,
+      "drawbacks_is_complete": true,
+      "drawbacks_reasons": [],
+      "unresolved_section_present": true,
+      "unresolved_entries": 0,
+      "unresolved_explicit_none": true,
+      "unresolved_is_complete": true,
+      "unresolved_reasons": []
+    },
+    "concurrency_tests": {
+      "signals_detected": true,
+      "signals_sample": ["await ", "Concurrency"],
+      "tasks_with_concurrency_subsection": 3,
+      "tasks_with_acceptable_test_or_escape": 3,
+      "tasks_failing": [],
+      "is_complete": true,
+      "reasons": []
+    },
+    "patterns_consumption": {
+      "applicable": [],
+      "cited": [],
+      "overridden": [],
+      "ignored": [],
+      "is_clean": true,
+      "reasons": []
+    },
+    "failure_scenarios": {
+      "external_io_detected": false,
+      "signals_sample": [],
+      "section_present": false,
+      "explicit_none": false,
+      "scenarios_count": 0,
+      "is_complete": true,
+      "reasons": ["no external-I/O signals detected; check skipped"]
+    }
+  },
+  "calibration": {
+    "status": "PROVISIONAL_v1",
+    "holdout_count": 0,
+    "holdout_target": 30,
+    "kappa_measured": false
+  }
+}
