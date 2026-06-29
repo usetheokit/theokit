@@ -360,7 +360,12 @@ export function createSdkAgentStream(
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
   let storage: ConversationStorageAdapter | undefined = overrides.conversationStorage
 
-  return (message: string, sessionId: string): AsyncIterable<StreamEvent> => ({
+  // `factoryOpts.disableTools` (step-cap force-close) → `tool_choice:"none"` at send-time.
+  return (
+    message: string,
+    sessionId: string,
+    factoryOpts?: { disableTools?: boolean },
+  ): AsyncIterable<StreamEvent> => ({
     async *[Symbol.asyncIterator]() {
       const runId = `run-${Date.now()}`
       const t0 = Date.now()
@@ -375,9 +380,11 @@ export function createSdkAgentStream(
           // run.stream() yields complete messages. The adapter merges both.
           send: (
             msg: string,
-            // The SDK's onDelta receives `{ update: InteractionUpdate }` (the SDK union); the
-            // handler narrows on the discriminant (`text-delta`) to pull the token text.
-            opts?: { onDelta?: (d: { update: InteractionUpdate }) => void },
+            // onDelta receives `{ update: InteractionUpdate }`; toolChoice gates tools for this send.
+            opts?: {
+              onDelta?: (d: { update: InteractionUpdate }) => void
+              toolChoice?: 'auto' | 'none' | 'required'
+            },
           ) => Promise<{
             stream: () => AsyncGenerator<SdkMessage>
             // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
@@ -477,7 +484,11 @@ export function createSdkAgentStream(
         // the consumer yields concurrently. openStream awaits the resolved Run for its post-completion
         // run.stream(). On send() rejection, openStream throws → pump closes the queue → the awaited
         // pump re-throws into the outer catch (error event) after any queued deltas have drained.
-        const sendPromise = agent.send(message, { onDelta })
+        // Step-cap force-close: a ceiling round passes `disableTools` → `tool_choice:"none"` for this send.
+        const sendPromise = agent.send(
+          message,
+          factoryOpts?.disableTools === true ? { onDelta, toolChoice: 'none' } : { onDelta },
+        )
         const openStream = async () => (await sendPromise).stream()
 
         // M2: when opted in, extract inline `<think>…</think>` from the text stream into thinking
