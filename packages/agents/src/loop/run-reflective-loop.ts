@@ -29,7 +29,17 @@ import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strateg
 import type { ReflectionContext, ReflectionStrategy } from './reflection-strategy.js'
 
 /** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
-export type RoundStreamFactory = (message: string, sessionId: string) => AsyncIterable<StreamEvent>
+/**
+ * Opens one round's SDK stream. `opts.disableTools` (step-cap force-close) asks the factory to
+ * gate tools OFF for THIS round (the SDK adapter maps it to `tool_choice:"none"` at send-time, so a
+ * cached agent — whose tools can't be un-registered — is still forced to a text summary). Optional +
+ * ignored by injected test factories ⇒ backward-compatible.
+ */
+export type RoundStreamFactory = (
+  message: string,
+  sessionId: string,
+  opts?: { disableTools?: boolean },
+) => AsyncIterable<StreamEvent>
 
 /** Per-round inputs bundled to keep helper signatures within the parameter budget (G6). */
 interface RoundInputs {
@@ -430,7 +440,22 @@ async function* consumeOneRound(
  * resolves to `stop`. Throws `DelegationError` on a mid-round error event
  * (fail-fast, typed) and `BudgetExceededError` when cumulative cost crosses `budget`.
  */
-export async function* runReflectiveLoopStream(
+export /**
+ * Step-cap force-close: on the ceiling round (`round === maxIterations`) wrap the factory so it is
+ * called with `disableTools: true` (the adapter maps it to `tool_choice:"none"` at send-time),
+ * forcing the model to emit the closing summary STEP_LIMIT_HINT requests instead of more tool calls.
+ * Below the ceiling, the factory is returned unchanged.
+ */
+function ceilingRoundFactory(
+  factory: RoundStreamFactory,
+  round: number,
+  maxIterations: number,
+): RoundStreamFactory {
+  if (round !== maxIterations) return factory
+  return (m, s) => factory(m, s, { disableTools: true })
+}
+
+async function* runReflectiveLoopStream(
   factory: RoundStreamFactory,
   message: string,
   sessionId: string,
@@ -466,7 +491,11 @@ export async function* runReflectiveLoopStream(
 
   while (!signal?.aborted) {
     const prompt = buildPrompt(round, loop.maxIterations, message, feedback)
-    const r = yield* consumeRoundOrThrow({ factory, prompt, sessionId, signal, retry }, agentName)
+    const roundFactory = ceilingRoundFactory(factory, round, loop.maxIterations)
+    const r = yield* consumeRoundOrThrow(
+      { factory: roundFactory, prompt, sessionId, signal, retry },
+      agentName,
+    )
 
     acc.response += r.responseText
     acc.toolCalls.push(...r.toolCalls)
