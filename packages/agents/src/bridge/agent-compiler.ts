@@ -87,6 +87,8 @@ export interface CompiledAgentOptions {
   model?: string
   /** Extended-thinking effort declared via `@Agent({ reasoningEffort })`; mapped to SDK ModelSelection.params. */
   reasoningEffort?: ReasoningEffort
+  /** Opt-in `<think>`-tag extraction declared via `@Agent({ parseThinkTags })` (M2); wraps the stream when true. */
+  parseThinkTags?: boolean
   /** Static prompt OR a per-request {@link SystemPromptResolver} (V4-L.1, Axis-B). */
   systemPrompt?: string | SystemPromptResolver
   tools: CompiledTool[]
@@ -134,6 +136,7 @@ export function compileAgent(
   return {
     model: walkResult.agentConfig.model,
     reasoningEffort: walkResult.agentConfig.reasoningEffort,
+    parseThinkTags: walkResult.agentConfig.parseThinkTags,
     systemPrompt: walkResult.agentConfig.systemPrompt,
     tools,
     agents,
