@@ -31,6 +31,7 @@ import {
   type SdkMessage,
 } from './event-translator.js'
 import { buildModelSelection } from './model-selection.js'
+import { extractThinkTagStream } from './think-tag-extractor.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
 interface M8CreateOptions {
@@ -88,6 +89,11 @@ export interface RuntimeOverrides {
    * `ModelSelection.params` so the provider produces reasoning (surfaced as `thinking` StreamEvents).
    */
   reasoningEffort?: ReasoningEffort
+  /**
+   * Per-run opt-in (`?? compiled.parseThinkTags`): when true, wrap the event stream with the M2
+   * `<think>`-tag extractor so inline `<think>…</think>` text becomes `thinking` StreamEvents.
+   */
+  parseThinkTags?: boolean
   /** Per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
   cwd?: string
   /**
@@ -347,6 +353,8 @@ export function createSdkAgentStream(
   const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
   // M1 reasoning-visibility: per-run effort overrides the compiled @Agent effort (mirrors `model`).
   const reasoningEffort = overrides.reasoningEffort ?? compiled.reasoningEffort
+  // M2 reasoning-visibility: per-run opt-in overrides the compiled @Agent flag (mirrors `model`).
+  const parseThinkTags = overrides.parseThinkTags ?? compiled.parseThinkTags ?? false
   // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
   // so history persists across the per-round agent create/dispose. Defaults lazily to the
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
@@ -472,7 +480,11 @@ export function createSdkAgentStream(
         const sendPromise = agent.send(message, { onDelta })
         const openStream = async () => (await sendPromise).stream()
 
-        for await (const event of mergeDeltaStream(queue, openStream, runId, state)) {
+        // M2: when opted in, extract inline `<think>…</think>` from the text stream into thinking
+        // events. Off by default ⇒ the merged stream is yielded unchanged (byte-identical).
+        const merged = mergeDeltaStream(queue, openStream, runId, state)
+        const events = parseThinkTags ? extractThinkTagStream(merged) : merged
+        for await (const event of events) {
           yield event
         }
 
