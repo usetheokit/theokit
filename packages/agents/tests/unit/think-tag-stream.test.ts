@@ -89,6 +89,27 @@ describe('extractThinkTagStream', () => {
     ])
   })
 
+  it('test_think_stream_flushes_buffer_when_source_errors', async () => {
+    // Mid-stream source error: the buffered unclosed <think> is flushed (finally) BEFORE the error
+    // re-propagates — partial reasoning is surfaced, the error is not swallowed (Rule 8).
+    async function* erroring(): AsyncGenerator<StreamEvent> {
+      yield { type: 'text_delta', content: 'x<think>partial' }
+      throw new Error('boom')
+    }
+    const out: StreamEvent[] = []
+    let caught: unknown
+    try {
+      for await (const e of extractThinkTagStream(erroring())) out.push(e)
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect(out).toEqual([
+      { type: 'text_delta', content: 'x' },
+      { type: 'thinking', content: 'partial' },
+    ])
+  })
+
   it('test_think_stream_handles_nonstring_content', async () => {
     // EC-3: a text_delta with non-string/empty content does not throw + yields no thinking.
     const out = await collect([

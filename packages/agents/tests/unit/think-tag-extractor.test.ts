@@ -87,6 +87,18 @@ describe('createThinkTagExtractor', () => {
     ])
   })
 
+  it('test_extractor_unclosed_open_prefix_flushed_as_text', () => {
+    // A held OPEN-tag prefix at stream end is text (it never became `<think>`), not thinking.
+    const ex = createThinkTagExtractor()
+    expect(ex.write('hi<thi')).toEqual([{ kind: 'text', content: 'hi' }]) // '<thi' held
+    expect(ex.end()).toEqual([{ kind: 'text', content: '<thi' }]) // flushed as text (still text mode)
+  })
+
+  it('test_extractor_close_without_open_stays_text', () => {
+    // A stray `</think>` in text mode is just text (text mode only scans for the OPEN tag).
+    expect(run(['answer</think>more'])).toEqual([{ kind: 'text', content: 'answer</think>more' }])
+  })
+
   it('test_extractor_partial_tag_prefix_then_mismatch', () => {
     // EC-1: '<thinkers>' is NOT a tag — no thinking is extracted; the text is preserved verbatim.
     // Whole-input ⇒ one segment; split-input ⇒ may chunk into ≥1 text segments (a stream detail),
