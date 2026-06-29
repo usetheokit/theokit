@@ -182,6 +182,8 @@ RED: test_extractor_empty_think_block_emits_nothing — write('<think></think>ok
 RED: test_extractor_lone_lt_is_text — write('a < b </think? c') → [{text,'a < b </think? c'}] (non-matching '<' is text)
 RED: test_extractor_adjacent_blocks — '<think>a</think><think>b</think>' → thinking a, thinking b
 RED: test_extractor_partial_tag_prefix_then_mismatch — write('a<thinkers>b') → [{text,'a<thinkers>b'}]; split form write('a<thin'),write('kers>b') → text 'a<thinkers>b' (EC-1: a buffered delimiter-prefix that cannot extend to the full tag is flushed as text, re-scanning from the next possible '<')
+RED: test_extractor_unclosed_open_prefix_flushed_as_text — write('hi<thi'); end() → held OPEN-prefix flushed as TEXT (review gap)
+RED: test_extractor_close_without_open_stays_text — 'answer</think>more' → text (text mode only scans OPEN) (review gap)
 GREEN: implement the incremental splitter (mode + buffer; emit on delimiter; hold ONLY a tail that is still a viable prefix of the active delimiter; on divergence flush the non-matching portion as the current mode's content and re-scan from the next '<'; flush in end())
 VERIFY: pnpm --filter @theokit/agents test think-tag-extractor
 ```
@@ -190,7 +192,7 @@ VERIFY: pnpm --filter @theokit/agents test think-tag-extractor
 (none — single-threaded) — a pure synchronous splitter; one extractor instance per stream (no shared state).
 
 #### Acceptance Criteria
-- [ ] `pnpm --filter @theokit/agents test think-tag-extractor` exits 0 (all 10 tests green).
+- [ ] `pnpm --filter @theokit/agents test think-tag-extractor` exits 0 (all 13 tests green).
 - [ ] Chunk-straddle proven — `test_extractor_open_tag_split_across_chunks` + `test_extractor_close_tag_split_across_chunks` green.
 - [ ] Prefix-mismatch proven — `test_extractor_partial_tag_prefix_then_mismatch` green (EC-1).
 - [ ] Pass: lint — `npx eslint packages/agents/src/bridge/think-tag-extractor.ts` exits 0.
@@ -235,7 +237,8 @@ RED: test_think_stream_flushes_unclosed_thinking_at_end — [text_delta 'x<think
 RED: test_think_stream_native_thinking_untouched — a native {type:'thinking'} event passes through unchanged (not re-extracted)
 RED: test_think_stream_thinking_persists_across_tool_event — [text_delta '<think>r1', tool_call X, text_delta 'r2</think>done'] → [thinking 'r1', tool_call X, thinking 'r2', text_delta 'done'] (EC-2: mode persists across a non-text event)
 RED: test_think_stream_handles_nonstring_content — a {type:'text_delta'} with content undefined/empty yields no thinking + does not throw (EC-3: guard typeof content === 'string' before write)
-GREEN: implement the async generator over source using a per-stream extractor + end()-flush (guard non-string content)
+RED: test_think_stream_flushes_buffer_when_source_errors — source throws mid-stream after 'x<think>partial' → flushes [text 'x', thinking 'partial'] BEFORE the error re-propagates (end()-in-finally; Rule 8 no-swallow) (review gap — matches the Failure-scenarios row)
+GREEN: implement the async generator over source using a per-stream extractor + end()-flush IN A `finally` (so an error mid-stream still flushes the buffer before re-throwing; guard non-string content)
 VERIFY: pnpm --filter @theokit/agents test think-tag-stream
 ```
 
@@ -243,7 +246,7 @@ VERIFY: pnpm --filter @theokit/agents test think-tag-stream
 (none — single-threaded) — sequential async iteration; per-call extractor instance, no shared mutable state across streams.
 
 #### Acceptance Criteria
-- [ ] `pnpm --filter @theokit/agents test think-tag-stream` exits 0 (all 8 tests green).
+- [ ] `pnpm --filter @theokit/agents test think-tag-stream` exits 0 (all 9 tests green).
 - [ ] Interleaving with non-text events proven — `test_think_stream_preserves_interleaved_tool_event_order` + `test_think_stream_thinking_persists_across_tool_event` green.
 - [ ] Native thinking untouched — `test_think_stream_native_thinking_untouched` green.
 - [ ] Pass: lint — `npx eslint packages/agents/src/bridge/think-tag-extractor.ts` exits 0.
@@ -364,7 +367,7 @@ grep -vcE '^\s*$|^\s*//|^\s*/\*|^\s*\*' packages/agents/src/bridge/think-tag-ext
 ### Acceptance Criteria
 - [ ] Full agents suite green (existing tests + new extractor/stream/integration/config tests).
 - [ ] tsc 0; eslint clean on touched files; both modules ≤ 500 code-LoC (G6 metric excl. blanks+comments).
-- [ ] extractor (10) + stream (8) + integration/config (4) tests all green.
+- [ ] extractor (13) + stream (9) + integration/config (4) tests all green.
 - [ ] After READY_TO_MERGE: changeset (`@theokit/agents` minor) + release so theocode M3 consumes it.
 
 ### If Validation Fails

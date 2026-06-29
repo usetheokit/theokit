@@ -107,18 +107,24 @@ function segmentToEvent(seg: Segment): StreamEvent {
  * across interleaved non-text events (a reasoning block split by a tool call is not corrupted). On
  * source end, the extractor is flushed so a truncated `<think>` is still surfaced (as `thinking`).
  *
- * Non-string `text_delta.content` is passed through untouched (defensive — never throws).
+ * Non-string `text_delta.content` is passed through untouched (defensive — never throws). The
+ * `end()` flush runs in a `finally`, so a buffered unclosed `<think>` is surfaced as `thinking`
+ * even when the source errors mid-stream (the flushed segments are delivered before the error
+ * re-propagates) — never silently dropped (Unbreakable Rule 8: fail loud, lose nothing).
  */
 export async function* extractThinkTagStream(
   source: AsyncIterable<StreamEvent>,
 ): AsyncGenerator<StreamEvent> {
   const extractor = createThinkTagExtractor()
-  for await (const event of source) {
-    if (event.type === 'text_delta' && typeof event.content === 'string') {
-      for (const seg of extractor.write(event.content)) yield segmentToEvent(seg)
-    } else {
-      yield event
+  try {
+    for await (const event of source) {
+      if (event.type === 'text_delta' && typeof event.content === 'string') {
+        for (const seg of extractor.write(event.content)) yield segmentToEvent(seg)
+      } else {
+        yield event
+      }
     }
+  } finally {
+    for (const seg of extractor.end()) yield segmentToEvent(seg)
   }
-  for (const seg of extractor.end()) yield segmentToEvent(seg)
 }
