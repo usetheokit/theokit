@@ -41,6 +41,32 @@ describe('T3.5 — TheoCloud adapter scaffolding (Wave 2 stub)', () => {
     expect(out.services).toEqual(['agent', 'worker'])
   })
 
+  it('accepts a v2 manifest (project field) and reports manifestVersion 2 — issue #9', () => {
+    // Regression for usetheodev/theokit#9: buildManifest() emits v2 when a
+    // project name is supplied, but the adapter rejected anything !== 1,
+    // breaking `theokit build --target theo-cloud` before any artifact.
+    const m: ServicesManifest = {
+      version: 2,
+      project: 'theokit-example',
+      services: [
+        {
+          name: 'agent',
+          runtime: 'python',
+          port: 8001,
+          proxy: '/api/agent',
+          dev: 'uvicorn main:app',
+          start: 'uvicorn main:app --workers 4',
+          healthcheck: '/health',
+          cors: false,
+          passSetCookie: false,
+        },
+      ],
+    }
+    const out = prepareTheoCloudArtifacts(m)
+    expect(out.manifestVersion).toBe(2)
+    expect(out.services).toEqual(['agent'])
+  })
+
   it('throws on unexpected manifest version (Wave 3 forward-compat guard)', () => {
     const bogus = { version: 99, services: [] } as unknown as ServicesManifest
     expect(() => prepareTheoCloudArtifacts(bogus)).toThrow(/unsupported manifest version/i)
