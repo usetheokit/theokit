@@ -195,6 +195,25 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
     ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'shell_exec', input: {} }])
   })
 
+  it('test_running_tool_call_nonobject_args_passthrough — primitive args pass through, no throw (theokit#58 failure-scenario)', () => {
+    // Failure scenario (plan): a non-object `args` (e.g. a raw string) must pass through
+    // as-is (?? only short-circuits on nullish) — no throw; downstream coerces.
+    expect(
+      translateSdkEvent(
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: RUN,
+          call_id: 'c1',
+          name: 'shell_exec',
+          status: 'running',
+          args: 'raw-string',
+        },
+        RUN,
+      ),
+    ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'shell_exec', input: 'raw-string' }])
+  })
+
   it('test_status_FINISHED_maps_to_done — uppercase enum (messages.ts:110)', () => {
     const events = translateSdkEvent(
       { type: 'status', agent_id: 'a', run_id: RUN, status: 'FINISHED' },
