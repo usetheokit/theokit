@@ -14,8 +14,8 @@
 import type { ServicesManifest } from './manifest.js'
 
 export interface TheoCloudAdapterArtifacts {
-  /** Manifest schemaVersion the adapter consumed. */
-  manifestVersion: 1
+  /** Manifest schemaVersion the adapter consumed (v1 deprecated, v2 current). */
+  manifestVersion: 1 | 2
   /** Service names that will be deployed. */
   services: string[]
   /** Wave 3 will populate K8s manifests here. */
@@ -36,17 +36,26 @@ export function prepareTheoCloudArtifacts(
   if (manifest === null) {
     return { manifestVersion: 1, services: [] }
   }
-  // Forward-compat: when Wave 3 evolves the manifest schema, the adapter
-  // must bump version handling explicitly.
-
-  if (manifest.version !== 1) {
+  // v1 (deprecated, sunset 0.6.0) and v2 (current, adds `project`) share the
+  // same `services[]` shape the adapter consumes — both are accepted. Any
+  // other version is a forward-compat guard: bump handling here before the
+  // builder emits a newer schema. (Regression: usetheodev/theokit#9 — the
+  // builder emits v2 when a project name is supplied; rejecting v2 broke
+  // every `theokit build --target theo-cloud`.)
+  //
+  // The type says `1 | 2`, but the manifest is read from disk (`readManifest`)
+  // so a malformed/newer file can carry any number at runtime — read through a
+  // numeric local so the guard stays reachable (narrowing `manifest.version`
+  // directly would collapse the guard body to `never`).
+  const version: number = manifest.version
+  if (version !== 1 && version !== 2) {
     throw new Error(
-      `TheoCloud adapter: unsupported manifest version ${String(manifest.version)}. ` +
-        `Wave 2/3 expects schemaVersion 1. Update the adapter before bumping.`,
+      `TheoCloud adapter: unsupported manifest version ${String(version)}. ` +
+        `Supported: schemaVersion 1 (deprecated) or 2. Update the adapter before bumping.`,
     )
   }
   return {
-    manifestVersion: 1,
+    manifestVersion: manifest.version,
     services: manifest.services.map((s) => s.name),
   }
 }
