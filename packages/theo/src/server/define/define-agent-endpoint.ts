@@ -93,13 +93,29 @@ function encodeSSE(event: AgentEvent): Uint8Array {
 
 /**
  * Resolve an AbortSignal from either a Web `Request` (`.signal`) or a
- * Node `IncomingMessage` (`.aborted` flag + `'close'`/'aborted' events).
+ * Node `IncomingMessage` (`.socket` close + `'aborted'`/'close' events).
  *
  * The framework's `executeRoute` passes IncomingMessage to route handlers
  * today, but `defineAgentEndpoint` was designed for the Web Standards
  * `Request` shape. This helper bridges both — preventing a runtime crash
  * (`Cannot read properties of undefined (reading 'aborted')`) that would
  * otherwise abort the SSE stream silently before the first yield.
+ *
+ * Node ≥23 regression (empty-SSE-stream): Node 23 added
+ * `http.IncomingMessage.prototype.signal` — a Web `AbortSignal` that fires
+ * `abort` the instant the request body is fully received (`req.complete ===
+ * true`), NOT when the client disconnects. The earlier duck-type
+ * ("has `.signal` with `aborted` + `addEventListener`") matched a genuine Web
+ * `Request` AND, on Node ≥23, the Node `IncomingMessage` — so the helper
+ * returned the request-lifecycle signal, already aborted by the time the
+ * handler primes, and EVERY agent stream produced 0 bytes on Node 24.
+ *
+ * Discriminator: a Node `IncomingMessage` is an `EventEmitter` (`typeof
+ * r.on === 'function'`); a Web `Request` is not. So `r.signal` is trusted
+ * directly ONLY when this is not a Node request. For the Node path the only
+ * lifecycle event that means "client disconnected" (rather than "request body
+ * finished") is the underlying SOCKET closing — `req`'s own `.signal`/`'close'`
+ * fire at body-end on Node ≥23 and would kill a long-lived SSE response.
  */
 function resolveAbortSignal(request: unknown): AbortSignal {
   if (typeof request !== 'object' || request === null) {
@@ -108,9 +124,15 @@ function resolveAbortSignal(request: unknown): AbortSignal {
   const r = request as {
     signal?: unknown
     aborted?: boolean
+    complete?: boolean
     on?: (event: string, cb: () => void) => void
+    socket?: { on?: (event: string, cb: () => void) => void }
   }
+
+  // A genuine Web `Request` exposes `.signal` and is NOT a Node EventEmitter.
+  const isNodeRequest = typeof r.on === 'function'
   if (
+    !isNodeRequest &&
     typeof r.signal === 'object' &&
     r.signal !== null &&
     'aborted' in r.signal &&
@@ -120,14 +142,26 @@ function resolveAbortSignal(request: unknown): AbortSignal {
   }
 
   const controller = new AbortController()
+  const abort = () => {
+    if (!controller.signal.aborted) controller.abort()
+  }
   if (r.aborted === true) controller.abort()
   if (typeof r.on === 'function') {
+    // Explicit client abort (request reset mid-flight).
+    r.on('aborted', abort)
+    // `req`'s own 'close' fires at request-completion on Node ≥23 (body fully
+    // received), which is NOT a disconnect — guard with `complete`. A close
+    // while the request already completed normally is body-end noise.
     r.on('close', () => {
-      if (!controller.signal.aborted) controller.abort()
+      if (r.complete !== true) abort()
     })
-    r.on('aborted', () => {
-      if (!controller.signal.aborted) controller.abort()
-    })
+  }
+  // The underlying socket closes only on real connection teardown (client
+  // gone), never at request-body-end — the correct disconnect signal for a
+  // long-lived SSE response.
+  const socket = r.socket
+  if (socket && typeof socket.on === 'function') {
+    socket.on('close', abort)
   }
   return controller.signal
 }
