@@ -80,6 +80,13 @@ export interface AgentRunnerRunOptions {
    */
   readonly parseThinkTags?: boolean
   /**
+   * theocode#32 (Axis-A SWAP): per-run opt-in to strip a leaked Hermes `<function=…></tool_call>`
+   * tool-call dialect out of the text stream. Merge-over-compiled
+   * (`opts.stripToolDialect ?? compiled.stripToolDialect ?? false`). For models (qwen/qwen3-coder)
+   * that leak tool calls as text instead of native `tool_calls`.
+   */
+  readonly stripToolDialect?: boolean
+  /**
    * V4-L.2 (Axis-A SWAP): per-run working directory, forwarded into
    * `Agent.create({ local: { cwd } })` so the SDK populates `SystemPromptContext.cwd`
    * (read by a `SystemPromptResolver` / `@ProjectContext`). Absent ⇒ no `local.cwd`.
@@ -218,6 +225,7 @@ export class AgentRunner {
         model: opts.model,
         reasoningEffort: opts.reasoningEffort, // M1: per-run extended-thinking effort
         parseThinkTags: opts.parseThinkTags, // M2: per-run <think>-tag extraction opt-in
+        stripToolDialect: opts.stripToolDialect, // theocode#32: per-run tool-dialect strip opt-in
         cwd: opts.cwd,
         plugins: opts.plugins,
         providers: opts.providers,

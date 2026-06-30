@@ -25,6 +25,13 @@ export interface AgentOptions {
    * native reasoning param. Off by default since a code assistant may emit literal `<think>` in text.
    */
   parseThinkTags?: boolean
+  /**
+   * Opt-in (default false): strip a leaked Hermes `<function=…></tool_call>` tool-call dialect out of
+   * the visible text (theocode#32) — for models (qwen/qwen3-coder) that intermittently emit tool calls
+   * as text instead of native `tool_calls`. Off by default since a code assistant may emit a literal
+   * `<function=` in answer/code text. Sibling of {@link parseThinkTags}.
+   */
+  stripToolDialect?: boolean
   /** Enable SSE streaming (default: true). */
   stream?: boolean
   /** Maximum loop iterations before forcing a terminal response. */
