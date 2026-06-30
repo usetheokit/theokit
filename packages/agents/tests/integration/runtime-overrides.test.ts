@@ -6,9 +6,10 @@
  * All merge-over-compiled; absent ⇒ build-time defaults (parallel to V4-J `tools`).
  *
  * Mocks @theokit/sdk: Agent.create captures its options (model/cwd/tools) and returns
- * a stream of SDK-native messages per round — a UNIQUE assistant text (so the round
- * signature differs and no_progress never masks the maxIterations ceiling), a completed
- * tool_call (⇒ tool_result ⇒ finishReason 'tool-calls'), and a FINISHED status (⇒ done).
+ * a stream of SDK-native messages per round — an assistant text plus a completed
+ * tool_call with a UNIQUE input per round (so the round signature differs and no_progress
+ * never masks the maxIterations ceiling; post theokit#53 the signature keys on tool
+ * name+input only), a tool_result (⇒ finishReason 'tool-calls'), and a FINISHED status (⇒ done).
  */
 import 'reflect-metadata'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
@@ -25,10 +26,10 @@ const h = vi.hoisted(() => ({
 }))
 
 // The mock yields SDK-NATIVE messages (createSdkAgentStream runs them through
-// translateSdkEvent): a unique assistant text per round (so the round signature differs
-// and the no_progress detector never masks the maxIterations ceiling), a completed
-// tool_call (⇒ tool_result ⇒ finishReason 'tool-calls', the "still working" signal), and
-// a FINISHED status (⇒ done).
+// translateSdkEvent): an assistant text + a completed tool_call with a UNIQUE input per
+// round (so the round signature differs and the no_progress detector never masks the
+// maxIterations ceiling; post theokit#53 the signature keys on tool name+input only),
+// ⇒ finishReason 'tool-calls' (the "still working" signal), and a FINISHED status (⇒ done).
 vi.mock('@theokit/sdk', () => ({
   InMemoryConversationStorage: class {
     getMessages = async () => []
@@ -49,7 +50,13 @@ vi.mock('@theokit/sdk', () => ({
               type: 'tool_call',
               status: 'completed',
               call_id: `c-${i}`,
-              name: 't',
+              // UNIQUE tool name per round so the no_progress signature differs (genuine progress —
+              // a different action each round) → the loop legitimately reaches the maxIterations
+              // ceiling (step_limit). Post theokit#53 the round signature keys on tool name+input
+              // ONLY (not narration), so varying the assistant text is no longer enough to simulate
+              // progress. (A completed SDKToolUseMessage maps to a tool_result whose toolName feeds
+              // the signature; input is correlated only from a preceding running tool_call.)
+              name: `t-${i}`,
               result: 'r',
             }
             yield { type: 'status', status: 'FINISHED' }
