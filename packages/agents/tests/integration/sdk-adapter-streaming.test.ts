@@ -429,4 +429,60 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     ])
     expect(h.disposed).toBeGreaterThanOrEqual(1)
   })
+
+  it('test_adapter_emits_tool_call_with_populated_input — run.stream tool_call surfaces msg.args (theokit#58)', async () => {
+    // theokit#58 end-to-end: a running tool_call SDKMessage carrying real `args` must reach the
+    // consumer with `input` populated (was `{}` because the bridge read msg.input/arguments).
+    const out = await drain(
+      [],
+      [
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          call_id: 'c1',
+          name: 'shell_exec',
+          status: 'running',
+          args: { command: 'ls -la' },
+        },
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          call_id: 'c1',
+          name: 'shell_exec',
+          status: 'completed',
+          result: 'total 0',
+        },
+        { type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' },
+      ],
+    )
+    const toolCalls = out.filter((e) => e.type === 'tool_call')
+    // Exactly one tool_call for the call id, and it carries the assembled args (not {}).
+    expect(toolCalls).toEqual([
+      { type: 'tool_call', callId: 'c1', toolName: 'shell_exec', input: { command: 'ls -la' } },
+    ])
+    // The completed message still surfaces the tool_result (no regression).
+    expect(out.some((e) => e.type === 'tool_result' && e.callId === 'c1')).toBe(true)
+  })
+
+  it('test_adapter_running_tool_call_without_args_is_empty_no_throw (theokit#58 negative)', async () => {
+    const out = await drain(
+      [],
+      [
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          call_id: 'c2',
+          name: 'shell_exec',
+          status: 'running',
+        },
+        { type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' },
+      ],
+    )
+    expect(out.filter((e) => e.type === 'tool_call')).toEqual([
+      { type: 'tool_call', callId: 'c2', toolName: 'shell_exec', input: {} },
+    ])
+  })
 })
