@@ -73,4 +73,32 @@ describe('createToolDialectStripper', () => {
   it('test_stripper_empty_input_emits_nothing', () => {
     expect(run([''])).toEqual([])
   })
+
+  it('test_stripper_unclosed_open_prefix_flushed_as_text', () => {
+    // The end() TEXT-mode arm: a held OPEN-prefix that never completes is flushed as text (lossless).
+    // Mirrors think-tag-extractor.test.ts:test_extractor_unclosed_open_prefix_flushed_as_text.
+    const s = createToolDialectStripper()
+    expect(s.write('hi<func')).toEqual([{ kind: 'text', content: 'hi' }]) // '<func' held
+    expect(s.end()).toEqual([{ kind: 'text', content: '<func' }]) // flushed as text (still text mode)
+  })
+
+  it('test_stripper_open_split_three_chunks', () => {
+    // INFO-2: the OPEN delimiter straddling THREE chunks still carries via the held-prefix buffer.
+    expect(visible(['<fun', 'cti', 'on=w></tool_call>z'])).toBe('z')
+  })
+
+  it('test_stripper_stripping_mode_close_prefix_then_mismatch_flushed', () => {
+    // INFO-5: inside a leak, a held CLOSE-prefix that turns out NOT to be CLOSE keeps accumulating;
+    // with no real close, end() flushes the whole unconfirmed leak as text (lossless, Rule 8).
+    expect(visible(['<function=p</tool', 'XYZ'])).toBe('<function=p</toolXYZ')
+  })
+
+  it('test_stripper_embedded_close_early_closes_then_text', () => {
+    // EC-5 (accepted best-effort limit): a `</tool_call>` embedded inside the leak closes the strip
+    // EARLY; the trailing real `</function></tool_call>` re-emits as text. Errs toward MORE text
+    // (never silently drops) — pinned so a future refactor cannot regress it unnoticed.
+    expect(
+      visible(['<function=f><parameter=p></tool_call></parameter></function></tool_call>rest']),
+    ).toBe('</parameter></function></tool_call>rest')
+  })
 })

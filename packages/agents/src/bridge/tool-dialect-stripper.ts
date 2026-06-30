@@ -16,6 +16,12 @@
  * Sibling of `think-tag-extractor.ts` (same incremental-splitter shape): the only deltas are the
  * delimiter (a two-string OPEN…CLOSE pair, not a single `<think>` tag) and the disposition of matched
  * content (dropped, not re-routed to a `thinking` segment).
+ *
+ * Accepted best-effort limit (EC-5): if a leaked block's parameter value contains the literal substring
+ * `</tool_call>`, the scanner closes at that inner occurrence and the trailing real `</function></tool_call>`
+ * re-emits as text. This errs toward showing MORE text (never silently drops), matching the lossless
+ * contract — same class as the think-tag scanner being fooled by `<thinkers>`-shaped content. Pinned by
+ * `tool-dialect-stripper.test.ts:test_stripper_embedded_close_early_closes_then_text`.
  */
 import type { StreamEvent } from './agent-sse-handler.js'
 
