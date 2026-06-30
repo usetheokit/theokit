@@ -108,21 +108,20 @@ function stableStringify(value: unknown): string {
 }
 
 /**
- * A round's progress fingerprint = its tool-call set (name+input, SORTED so call
- * ORDER is irrelevant — EC-3; input keys canonicalized so KEY order is irrelevant too)
- * plus the assistant text. Two consecutive rounds with an equal signature made no new
- * progress. Tool `output` is excluded: repeating the same call is no-progress even if
- * the result text wobbles. (V4-D, ADR D2)
+ * A round's progress fingerprint = its tool-call set ONLY (name+input, SORTED so call
+ * ORDER is irrelevant — EC-3; input keys canonicalized so KEY order is irrelevant too).
+ * Two consecutive rounds with an equal signature made no new progress. The assistant
+ * narration text is DELIBERATELY excluded (theokit#53): a model that re-runs identical
+ * tool calls while rephrasing its prose ("…e executá-lo." → "Agora vou executar…") would
+ * otherwise evade the detector and spin. Mirrors opencode's `doom_loop`, which compares
+ * tool name + JSON.stringify(input) and nothing else. Tool `output` is also excluded:
+ * repeating the same call is no-progress even if the result text wobbles. (V4-D, ADR D2)
  */
-function roundSignature(
-  toolCalls: readonly { name: string; input: unknown }[],
-  text: string,
-): string {
-  const calls = toolCalls
+function roundSignature(toolCalls: readonly { name: string; input: unknown }[]): string {
+  return toolCalls
     .map((tc) => `${tc.name}:${stableStringify(tc.input)}`)
     .sort((a, b) => a.localeCompare(b))
     .join(',')
-  return `${calls}|${text}`
 }
 
 /**
@@ -508,8 +507,13 @@ export async function* runReflectiveLoopStream(
 
     // V4-D no_progress: only on would-continue rounds (EC-1: stop/error/length/empty already
     // terminate with their own reason), evaluated BEFORE the ceiling (EC-4: the earlier signal wins).
-    if (r.finishReason === TOOL_CALLS) {
-      const sig = roundSignature(r.toolCalls, r.responseText)
+    // Require ≥1 tool call: a TOOL_CALLS round with an empty tool-call set (reachable only via the
+    // dormant deriveFinishReason path 2 — done.finishReason==='tool-calls' with no tool_result) has
+    // an empty signature; without this guard two such rounds would collide ('' === '') into a false
+    // no_progress (theokit#53 review, architecture+tests LOW). An empty round made no tool progress
+    // to compare — skip it (don't accumulate or reset).
+    if (r.finishReason === TOOL_CALLS && r.toolCalls.length > 0) {
+      const sig = roundSignature(r.toolCalls)
       stuck = sig === prevSig ? stuck + 1 : 0
       if (stuck >= NO_PROGRESS_THRESHOLD) return finalize(acc, round, 'no_progress', loop.name)
       prevSig = sig
