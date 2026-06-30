@@ -32,6 +32,7 @@ import {
 } from './event-translator.js'
 import { buildModelSelection } from './model-selection.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
+import { stripToolDialectStream } from './tool-dialect-stripper.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
 interface M8CreateOptions {
@@ -94,6 +95,11 @@ export interface RuntimeOverrides {
    * `<think>`-tag extractor so inline `<think>…</think>` text becomes `thinking` StreamEvents.
    */
   parseThinkTags?: boolean
+  /**
+   * Per-run opt-in (`?? compiled.stripToolDialect`): when true, strip a leaked Hermes
+   * `<function=…></tool_call>` tool-call dialect out of the assistant text stream (theocode#32).
+   */
+  stripToolDialect?: boolean
   /** Per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
   cwd?: string
   /**
@@ -339,6 +345,61 @@ function createDeltaSink(queue: AsyncQueue<MergeItem>): {
 }
 
 /**
+ * Resolve the per-run opt-in text-transform flags, each `override ?? compiled ?? false` (mirrors `model`).
+ */
+function resolveTextTransformFlags(
+  compiled: CompiledAgentOptions,
+  overrides: RuntimeOverrides,
+): { parseThinkTags: boolean; stripToolDialect: boolean } {
+  return {
+    parseThinkTags: overrides.parseThinkTags ?? compiled.parseThinkTags ?? false,
+    stripToolDialect: overrides.stripToolDialect ?? compiled.stripToolDialect ?? false,
+  }
+}
+
+/**
+ * Compose the opt-in text-stream transforms over the merged event stream, in fixed order:
+ * `<think>`-tag extraction (M2) first, then tool-dialect stripping (theocode#32) on the post-think
+ * `text_delta`. Both default off ⇒ the merged stream is returned unchanged (byte-identical).
+ */
+function applyTextTransforms(
+  events: AsyncIterable<StreamEvent>,
+  opts: { parseThinkTags: boolean; stripToolDialect: boolean },
+): AsyncIterable<StreamEvent> {
+  let out = opts.parseThinkTags ? extractThinkTagStream(events) : events
+  if (opts.stripToolDialect) out = stripToolDialectStream(out)
+  return out
+}
+
+/**
+ * Build the SDK tool list: compiled `@Tool`s lowered via `defineTool`, then any pre-built SDK
+ * `CustomTool[]` appended RAW (V4-Q — already defined, must NOT re-run through `defineTool`).
+ * Extracted from the stream generator to keep its function-size within budget (G6).
+ */
+function buildSdkTools(
+  compiledTools: CompiledTool[],
+  defineTool: (spec: {
+    name: string
+    description: string
+    inputSchema: unknown
+    handler: (input: unknown) => string | Promise<string>
+  }) => unknown,
+  extraSdkTools: readonly CustomTool[] = [],
+): unknown[] {
+  return [
+    ...compiledTools.map((t) =>
+      defineTool({
+        name: t.name,
+        description: t.description,
+        inputSchema: t.inputSchema,
+        handler: t.handler,
+      }),
+    ),
+    ...extraSdkTools,
+  ]
+}
+
+/**
  * Creates an agent stream factory using @theokit/sdk as the runtime.
  *
  * Returns a function that, given a message + sessionId, yields TheoKit
@@ -353,8 +414,9 @@ export function createSdkAgentStream(
   const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
   // M1 reasoning-visibility: per-run effort overrides the compiled @Agent effort (mirrors `model`).
   const reasoningEffort = overrides.reasoningEffort ?? compiled.reasoningEffort
-  // M2 reasoning-visibility: per-run opt-in overrides the compiled @Agent flag (mirrors `model`).
-  const parseThinkTags = overrides.parseThinkTags ?? compiled.parseThinkTags ?? false
+  // Per-run opt-in text-stream transforms (each overrides the compiled @Agent flag, mirrors `model`):
+  // parseThinkTags (M2, <think> extraction), stripToolDialect (theocode#32, leaked-dialect strip).
+  const { parseThinkTags, stripToolDialect } = resolveTextTransformFlags(compiled, overrides)
   // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
   // so history persists across the per-round agent create/dispose. Defaults lazily to the
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
@@ -427,19 +489,7 @@ export function createSdkAgentStream(
         return
       }
 
-      // Convert compiled tools → SDK defineTool format; V4-Q: append pre-built SDK CustomTool[]
-      // RAW (already defined — must NOT be re-run through defineTool, which requires a Zod schema).
-      const sdkTools = [
-        ...compiledTools.map((t) =>
-          defineTool({
-            name: t.name,
-            description: t.description,
-            inputSchema: t.inputSchema,
-            handler: t.handler,
-          }),
-        ),
-        ...(overrides.sdkTools ?? []),
-      ]
+      const sdkTools = buildSdkTools(compiledTools, defineTool, overrides.sdkTools)
 
       // V4-N.1: declared outside the try so `finally` can dispose even when `run.wait()` rejects.
       let agent: Awaited<ReturnType<typeof Agent.getOrCreate>> | undefined
@@ -491,11 +541,13 @@ export function createSdkAgentStream(
         )
         const openStream = async () => (await sendPromise).stream()
 
-        // M2: when opted in, extract inline `<think>…</think>` from the text stream into thinking
-        // events. Off by default ⇒ the merged stream is yielded unchanged (byte-identical).
+        // Opt-in text-stream transforms (parseThinkTags / stripToolDialect). Both off ⇒ the merged
+        // stream is yielded unchanged (byte-identical) — see applyTextTransforms.
         const merged = mergeDeltaStream(queue, openStream, runId, state)
-        const events = parseThinkTags ? extractThinkTagStream(merged) : merged
-        for await (const event of events) {
+        for await (const event of applyTextTransforms(merged, {
+          parseThinkTags,
+          stripToolDialect,
+        })) {
           yield event
         }
 
