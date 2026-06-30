@@ -51,6 +51,24 @@ function textOnlyFactory(): RoundStreamFactory {
   })
 }
 
+/**
+ * Yields a `done` carrying finishReason 'tool-calls' with NO tool_call/tool_result → a TOOL_CALLS
+ * round with an EMPTY tool-call set (deriveFinishReason path 2). The empty signature ('') must NOT
+ * accumulate no_progress across consecutive rounds (theokit#53 review hardening — empty rounds made
+ * no tool progress to compare).
+ */
+function emptyToolCallsContinueFactory(): RoundStreamFactory {
+  return () => ({
+    async *[Symbol.asyncIterator]() {
+      yield {
+        type: 'done',
+        finishReason: 'tool-calls',
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      }
+    },
+  })
+}
+
 describe('theokit#53 — no_progress keys on tool-calls only (ignores narration drift)', () => {
   it('fires no_progress on identical tool-calls despite drifting assistant text', async () => {
     const loop = resolveLoopStrategy('plan-act-reflect', 5)
@@ -84,5 +102,17 @@ describe('theokit#53 — no_progress keys on tool-calls only (ignores narration 
       reflection: ladderReflectionStrategy,
     })
     expect(result.finishReason).toBe('stop')
+  })
+
+  it('empty-toolCalls TOOL_CALLS rounds do NOT collide into a false no_progress', async () => {
+    // deriveFinishReason path 2 yields TOOL_CALLS with an empty tool-call set → signature ''.
+    // The >=1-tool-call guard means consecutive empty rounds are skipped (no accumulate), so the
+    // loop reaches its ceiling honestly (step_limit) instead of a bogus no_progress. (review hardening)
+    const loop = resolveLoopStrategy('plan-act-reflect', 3)
+    const result = await runReflectiveLoop(emptyToolCallsContinueFactory(), 'task', 's', {
+      loop,
+      reflection: ladderReflectionStrategy,
+    })
+    expect(result.finishReason).not.toBe('no_progress')
   })
 })
