@@ -7,7 +7,7 @@
  *
  * Mocks @theokit/sdk: Agent.create captures its options (model/cwd/tools) and returns
  * a stream of SDK-native messages per round — an assistant text plus a completed
- * tool_call with a UNIQUE input per round (so the round signature differs and no_progress
+ * tool_call with a UNIQUE tool name per round (so the round signature differs and no_progress
  * never masks the maxIterations ceiling; post theokit#53 the signature keys on tool
  * name+input only), a tool_result (⇒ finishReason 'tool-calls'), and a FINISHED status (⇒ done).
  */
@@ -26,7 +26,7 @@ const h = vi.hoisted(() => ({
 }))
 
 // The mock yields SDK-NATIVE messages (createSdkAgentStream runs them through
-// translateSdkEvent): an assistant text + a completed tool_call with a UNIQUE input per
+// translateSdkEvent): an assistant text + a completed tool_call with a UNIQUE tool name per
 // round (so the round signature differs and the no_progress detector never masks the
 // maxIterations ceiling; post theokit#53 the signature keys on tool name+input only),
 // ⇒ finishReason 'tool-calls' (the "still working" signal), and a FINISHED status (⇒ done).

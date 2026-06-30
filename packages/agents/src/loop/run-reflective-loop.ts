@@ -507,7 +507,12 @@ export async function* runReflectiveLoopStream(
 
     // V4-D no_progress: only on would-continue rounds (EC-1: stop/error/length/empty already
     // terminate with their own reason), evaluated BEFORE the ceiling (EC-4: the earlier signal wins).
-    if (r.finishReason === TOOL_CALLS) {
+    // Require ≥1 tool call: a TOOL_CALLS round with an empty tool-call set (reachable only via the
+    // dormant deriveFinishReason path 2 — done.finishReason==='tool-calls' with no tool_result) has
+    // an empty signature; without this guard two such rounds would collide ('' === '') into a false
+    // no_progress (theokit#53 review, architecture+tests LOW). An empty round made no tool progress
+    // to compare — skip it (don't accumulate or reset).
+    if (r.finishReason === TOOL_CALLS && r.toolCalls.length > 0) {
       const sig = roundSignature(r.toolCalls)
       stuck = sig === prevSig ? stuck + 1 : 0
       if (stuck >= NO_PROGRESS_THRESHOLD) return finalize(acc, round, 'no_progress', loop.name)
