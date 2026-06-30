@@ -455,7 +455,7 @@ function ceilingRoundFactory(
   return (m, s) => factory(m, s, { disableTools: true })
 }
 
-async function* runReflectiveLoopStream(
+export async function* runReflectiveLoopStream(
   factory: RoundStreamFactory,
   message: string,
   sessionId: string,
