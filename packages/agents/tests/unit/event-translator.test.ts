@@ -139,6 +139,62 @@ describe('translateSdkEvent — real SDKMessage shapes (NF-1)', () => {
     ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'glob', input: { p: '*' } }])
   })
 
+  it('test_running_tool_call_surfaces_args_as_input — real SDK field is msg.args (theokit#58)', () => {
+    // theokit#58: the real SDKToolUseMessage carries the tool args in `args`
+    // (run-D22b53SU.d.ts:486; live TC-DIAG confirmed `args={"command":...}`),
+    // NOT `input`/`arguments`. Reading the wrong field surfaced an empty card.
+    expect(
+      translateSdkEvent(
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: RUN,
+          call_id: 'c1',
+          name: 'shell_exec',
+          status: 'running',
+          args: { command: 'echo hi' },
+        },
+        RUN,
+      ),
+    ).toEqual([
+      { type: 'tool_call', callId: 'c1', toolName: 'shell_exec', input: { command: 'echo hi' } },
+    ])
+  })
+
+  it('test_running_tool_call_args_takes_precedence_over_legacy_fields — args wins (theokit#58)', () => {
+    expect(
+      translateSdkEvent(
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: RUN,
+          call_id: 'c1',
+          name: 'shell_exec',
+          status: 'running',
+          args: { a: 1 },
+          input: { b: 2 },
+        },
+        RUN,
+      ),
+    ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'shell_exec', input: { a: 1 } }])
+  })
+
+  it('test_running_tool_call_absent_args_is_empty_object — defensive default, no throw (theokit#58)', () => {
+    expect(
+      translateSdkEvent(
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: RUN,
+          call_id: 'c1',
+          name: 'shell_exec',
+          status: 'running',
+        },
+        RUN,
+      ),
+    ).toEqual([{ type: 'tool_call', callId: 'c1', toolName: 'shell_exec', input: {} }])
+  })
+
   it('test_status_FINISHED_maps_to_done — uppercase enum (messages.ts:110)', () => {
     const events = translateSdkEvent(
       { type: 'status', agent_id: 'a', run_id: RUN, status: 'FINISHED' },
