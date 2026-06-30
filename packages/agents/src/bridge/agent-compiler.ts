@@ -89,6 +89,8 @@ export interface CompiledAgentOptions {
   reasoningEffort?: ReasoningEffort
   /** Opt-in `<think>`-tag extraction declared via `@Agent({ parseThinkTags })` (M2); wraps the stream when true. */
   parseThinkTags?: boolean
+  /** Opt-in tool-dialect stripping declared via `@Agent({ stripToolDialect })` (theocode#32); strips leaked `<function=…></tool_call>` from text when true. */
+  stripToolDialect?: boolean
   /** Static prompt OR a per-request {@link SystemPromptResolver} (V4-L.1, Axis-B). */
   systemPrompt?: string | SystemPromptResolver
   tools: CompiledTool[]
@@ -137,6 +139,7 @@ export function compileAgent(
     model: walkResult.agentConfig.model,
     reasoningEffort: walkResult.agentConfig.reasoningEffort,
     parseThinkTags: walkResult.agentConfig.parseThinkTags,
+    stripToolDialect: walkResult.agentConfig.stripToolDialect,
     systemPrompt: walkResult.agentConfig.systemPrompt,
     tools,
     agents,
