@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# pre-push hook — local build + typecheck gate.
+#
+# Closes usetheodev/theokit#9-class regressions: a build-breaking change
+# (e.g. a dropped `export` on an internal symbol — #51) used to reach
+# `develop` because theokit had NO local pre-push gate. The package build
+# (tsup DTS = tsc) is the deterministic catch — the unit suites run in CI.
+# See packages/*/tsup.config.ts and .github/workflows/ci.yml.
+#
+# CI skip: this is a DEVELOPER push-protection hook. In CI (and the
+# changesets release action's internal git push of Version PR branches/tags)
+# the workflow runs its own explicit gates. core.hooksPath is re-applied by
+# the `prepare` script on every `pnpm install`, so without this guard the
+# hook would otherwise gate CI git operations.
+if [ "${CI:-}" = "true" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+  echo "→ pre-push: CI detected — skipping local dev gate (CI runs its own gates)."
+  exit 0
+fi
+
+set -e
+
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1 || true
+  nvm use --silent >/dev/null 2>&1 || true
+fi
+
+# Node 22.12+ gate — theokit is validated only in its declared engine.
+node_version="$(node --version 2>/dev/null || echo "v0.0.0")"
+node_major="$(echo "$node_version" | sed -E 's/^v([0-9]+)\..*/\1/')"
+if [ "${node_major:-0}" -lt 22 ]; then
+  echo "✗ pre-push: Node ${node_version} detected, but >=v22.12.0 is required (see engines + CLAUDE.md)."
+  echo "  Run: nvm use   (respects .nvmrc)"
+  exit 1
+fi
+
+# tsup DTS build for theokit's ~24 entrypoints OOMs the runner's default
+# worker count; cap turbo concurrency so the build stays within memory and
+# does not segfault under parallel native-binding contention.
+export TURBO_CONCURRENCY="${TURBO_CONCURRENCY:-1}"
+
+echo "→ pre-push: build (--filter ./packages/*) + typecheck (~30-90s). Full suite runs in CI."
+echo ""
+
+# Build first — this is the gate that catches a dropped export / fabricated
+# symbol (tsup DTS = tsc fails). Filter to packages/* so `pnpm -r build`
+# does not walk examples/fixtures.
+if ! pnpm --filter "./packages/*" build; then
+  echo ""
+  echo "✗ pre-push: package build failed (see error above)."
+  echo "  A build break must NOT reach develop. Fix it, or push anyway"
+  echo "  (emergencies only): git push --no-verify"
+  exit 1
+fi
+
+if ! pnpm typecheck; then
+  echo ""
+  echo "✗ pre-push: typecheck failed (see error above)."
+  echo "  To push anyway (emergencies only): git push --no-verify"
+  exit 1
+fi
+
+echo ""
+echo "✓ pre-push gates passed (build + typecheck)"
