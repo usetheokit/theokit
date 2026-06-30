@@ -1,5 +1,11 @@
 # @theokit/agents
 
+## 0.25.0
+
+### Minor Changes
+
+- Strip a leaked tool-call dialect out of the visible answer (theocode#32). When a model emits its Hermes `<function=NAME>…</function></tool_call>` XML as assistant TEXT instead of a native `tool_calls` (observed live with `qwen/qwen3-coder`), the raw XML used to render verbatim as the reply. A new opt-in `stripToolDialect` knob (`@Agent({ stripToolDialect: true })` or per-run `AgentRunner.run(msg, { stripToolDialect: true })`, per-run wins) wraps the agent's text stream with a streaming stripper that removes the leaked `<function=…></tool_call>` block from `text_delta`. It is chunk-straddle-safe (both the `<function=` open and the `</tool_call>` close split across stream deltas are recognized) and lossless on a truncated leak (an unclosed `<function=` at stream end is flushed back as text, never silently dropped). The leak is STRIPPED, never parsed back into a tool call — parsing a provider-broken channel would re-introduce the no-progress spin closed in #53. Off by default (zero behavior change for existing agents — a code assistant may legitimately emit a literal `<function=` in answer/code text). Sibling of `parseThinkTags`. New exports: `createToolDialectStripper`, `stripToolDialectStream`.
+
 ## 0.24.1
 
 ### Patch Changes
