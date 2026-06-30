@@ -105,7 +105,13 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
   }
   if (status === 'running') {
     // #42: emit a tool_call at tool start so the UI shows the running card with its args.
-    return [{ type: 'tool_call', callId, toolName, input: msg.input ?? msg.arguments ?? {} }]
+    // theokit#58: the real SDKToolUseMessage carries the args in `args` (run-D22b53SU.d.ts:486;
+    // live TC-DIAG confirmed `args={"command":…}`); `input`/`arguments` were never the SDK field
+    // and resolved to `{}`, blanking the tool card. Read `args` first, keep the others as
+    // defensive cross-shape fallbacks (error-handling.md).
+    return [
+      { type: 'tool_call', callId, toolName, input: msg.args ?? msg.input ?? msg.arguments ?? {} },
+    ]
   }
   return [] // unknown status → no event
 }
