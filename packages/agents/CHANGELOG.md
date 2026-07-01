@@ -1,5 +1,11 @@
 # @theokit/agents
 
+## 0.26.0
+
+### Minor Changes
+
+- c85145d: Add opt-in `recoverLeakedToolCalls` knob (`@Agent({ recoverLeakedToolCalls })` + per-run `AgentRunner.stream({ recoverLeakedToolCalls })`, default off). It is the execution sibling of `stripToolDialect` (theocode#32): where `stripToolDialect` only HIDES a leaked Hermes `<function=…></tool_call>` dialect from the visible text, `recoverLeakedToolCalls` makes the leaked call actually EXECUTE. When enabled, the adapter clones the per-run `providers.routes` with the SDK's `extractToolCallsFromContent` flag, so a `chat_completions` finish with ZERO native `tool_calls` has its assistant text scanned for the dialect and any recovered calls are dispatched by the loop — for models (qwen3-coder via OpenRouter) that intermittently leak tool calls as text (theokit#58 follow-up). Has effect only when a provider is routed via `providers.routes`; fail-open and default-off, so a non-leaking route is unaffected. Requires `@theokit/sdk >=2.13.0` (the per-route flag); the peer floor is bumped accordingly.
+
 ## 0.25.1
 
 ### Patch Changes
