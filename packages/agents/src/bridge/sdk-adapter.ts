@@ -100,6 +100,13 @@ export interface RuntimeOverrides {
    * `<function=…></tool_call>` tool-call dialect out of the assistant text stream (theocode#32).
    */
   stripToolDialect?: boolean
+  /**
+   * Per-run opt-in (`?? compiled.recoverLeakedToolCalls`): when true, enable the SDK chat route's
+   * `extractToolCallsFromContent` so a leaked Hermes `<function=…></tool_call>` dialect is recovered
+   * and EXECUTED (theokit#58). Sibling of {@link stripToolDialect}; has effect only when {@link providers}
+   * routes a provider.
+   */
+  recoverLeakedToolCalls?: boolean
   /** Per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
   cwd?: string
   /**
@@ -170,13 +177,37 @@ function realUsageDone(
 }
 
 /**
+ * theokit#58: clone provider routing with `extractToolCallsFromContent` enabled on every route, so the
+ * SDK recovers a leaked Hermes `<function=…></tool_call>` dialect that would otherwise be lost. The SDK
+ * reads the flag off the chat route (routes[0]); marking all routes is fail-open — a non-leaking route
+ * is unaffected (recovery only fires on a finish with ZERO native tool_calls carrying the dialect).
+ */
+function withLeakedDialectRecovery(providers: ProviderRoutingSettings): ProviderRoutingSettings {
+  return {
+    ...providers,
+    routes: providers.routes.map((route) => ({ ...route, extractToolCallsFromContent: true })),
+  }
+}
+
+/**
  * Project the V4-L.3 per-request fields into the `Agent.create` extra surface (absent ⇒ no
  * key). Extracted from the stream generator to keep its cyclomatic complexity within budget (G6).
+ * theokit#58: per-run `recoverLeakedToolCalls` (overrides compiled) opts the routed provider into
+ * SDK leaked-dialect recovery by cloning the routes with `extractToolCallsFromContent`.
  */
-function buildExtraCreateOptions(overrides: RuntimeOverrides): Record<string, unknown> {
+function buildExtraCreateOptions(
+  overrides: RuntimeOverrides,
+  compiled: CompiledAgentOptions,
+): Record<string, unknown> {
+  const recoverLeakedToolCalls =
+    overrides.recoverLeakedToolCalls ?? compiled.recoverLeakedToolCalls ?? false
   const extra: Record<string, unknown> = {}
   if (overrides.plugins !== undefined) extra.plugins = overrides.plugins
-  if (overrides.providers !== undefined) extra.providers = overrides.providers
+  if (overrides.providers !== undefined) {
+    extra.providers = recoverLeakedToolCalls
+      ? withLeakedDialectRecovery(overrides.providers)
+      : overrides.providers
+  }
   if (overrides.agents !== undefined) extra.agents = overrides.agents
   if (overrides.budgetTracker !== undefined) extra.budgetTracker = overrides.budgetTracker
   return extra
@@ -499,7 +530,7 @@ export function createSdkAgentStream(
         // V4-L.2: merge the per-run cwd into local (preserving any settingSources).
         if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
         // V4-L.3: forward the remaining per-request Agent.create surface (absent ⇒ no key).
-        const extra = buildExtraCreateOptions(overrides)
+        const extra = buildExtraCreateOptions(overrides, compiled)
         // V4-M: the shared store is the cross-round memory (survives per-round dispose).
         storage ??= new InMemoryConversationStorage()
         if (applied.length > 0) {
