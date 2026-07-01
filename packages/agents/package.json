@@ -36,7 +36,7 @@
   },
   "peerDependencies": {
     "@theokit/http": ">=0.1.0-alpha.0",
-    "@theokit/sdk": ">=2.11.2",
+    "@theokit/sdk": ">=2.13.0",
     "@theokit/sdk-tools": ">=0.2.0",
     "reflect-metadata": ">=0.2.0",
     "zod": "^4.0.0"
