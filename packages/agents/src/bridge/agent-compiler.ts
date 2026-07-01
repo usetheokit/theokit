@@ -91,6 +91,8 @@ export interface CompiledAgentOptions {
   parseThinkTags?: boolean
   /** Opt-in tool-dialect stripping declared via `@Agent({ stripToolDialect })` (theocode#32); strips leaked `<function=…></tool_call>` from text when true. */
   stripToolDialect?: boolean
+  /** Opt-in leaked-dialect recovery declared via `@Agent({ recoverLeakedToolCalls })` (theokit#58); enables the SDK route's `extractToolCallsFromContent` so leaked tool calls EXECUTE when true. */
+  recoverLeakedToolCalls?: boolean
   /** Static prompt OR a per-request {@link SystemPromptResolver} (V4-L.1, Axis-B). */
   systemPrompt?: string | SystemPromptResolver
   tools: CompiledTool[]
@@ -140,6 +142,7 @@ export function compileAgent(
     reasoningEffort: walkResult.agentConfig.reasoningEffort,
     parseThinkTags: walkResult.agentConfig.parseThinkTags,
     stripToolDialect: walkResult.agentConfig.stripToolDialect,
+    recoverLeakedToolCalls: walkResult.agentConfig.recoverLeakedToolCalls,
     systemPrompt: walkResult.agentConfig.systemPrompt,
     tools,
     agents,
