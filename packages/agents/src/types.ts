@@ -32,6 +32,17 @@ export interface AgentOptions {
    * `<function=` in answer/code text. Sibling of {@link parseThinkTags}.
    */
   stripToolDialect?: boolean
+  /**
+   * Opt-in (default false): recover a leaked Hermes `<function=…></tool_call>` tool-call dialect so the
+   * call actually EXECUTES (theokit#58 follow-up). Where {@link stripToolDialect} only hides the leaked
+   * block from the visible text, this enables the SDK's `extractToolCallsFromContent` on the chat route,
+   * so a `chat_completions` finish with ZERO native `tool_calls` has its text scanned for the dialect and
+   * any recovered calls are dispatched by the loop. For models (qwen/qwen3-coder via OpenRouter) that
+   * leak tool calls as text. Off by default (a code assistant may print a literal `<function=`); fail-open.
+   * Has effect only when {@link AgentOptions} routes a provider via `providers.routes`. Sibling of
+   * {@link stripToolDialect} — typically enabled together.
+   */
+  recoverLeakedToolCalls?: boolean
   /** Enable SSE streaming (default: true). */
   stream?: boolean
   /** Maximum loop iterations before forcing a terminal response. */

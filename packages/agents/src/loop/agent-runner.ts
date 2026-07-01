@@ -87,6 +87,14 @@ export interface AgentRunnerRunOptions {
    */
   readonly stripToolDialect?: boolean
   /**
+   * theokit#58 (Axis-A SWAP): per-run opt-in to RECOVER a leaked Hermes `<function=…></tool_call>`
+   * tool-call dialect so the call EXECUTES (enables the SDK route's `extractToolCallsFromContent`).
+   * Merge-over-compiled (`opts.recoverLeakedToolCalls ?? compiled.recoverLeakedToolCalls ?? false`).
+   * Sibling of {@link stripToolDialect} (display-only); typically enabled together. Has effect only
+   * when {@link providers} routes a provider.
+   */
+  readonly recoverLeakedToolCalls?: boolean
+  /**
    * V4-L.2 (Axis-A SWAP): per-run working directory, forwarded into
    * `Agent.create({ local: { cwd } })` so the SDK populates `SystemPromptContext.cwd`
    * (read by a `SystemPromptResolver` / `@ProjectContext`). Absent ⇒ no `local.cwd`.
@@ -226,6 +234,7 @@ export class AgentRunner {
         reasoningEffort: opts.reasoningEffort, // M1: per-run extended-thinking effort
         parseThinkTags: opts.parseThinkTags, // M2: per-run <think>-tag extraction opt-in
         stripToolDialect: opts.stripToolDialect, // theocode#32: per-run tool-dialect strip opt-in
+        recoverLeakedToolCalls: opts.recoverLeakedToolCalls, // theokit#58: per-run leaked-dialect recovery opt-in
         cwd: opts.cwd,
         plugins: opts.plugins,
         providers: opts.providers,
