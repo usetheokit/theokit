@@ -174,7 +174,8 @@ export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
  * `thinking-delta`) through `onDelta` — alongside `text-delta` — keeps tool/text/thinking
  * interleaved in true model order, instead of all-text-then-all-tools (the run.stream() buffer is
  * post-completion). Shapes per @theokit/sdk types/updates.ts: `ToolCall { callId, name, args?, result? }`.
- * `partial-tool-call` is intentionally ignored (incremental args would duplicate the tool_call).
+ * `partial-tool-call` is surfaced as a DISTINCT `partial_tool_call` event (theokit-sdk#70) so
+ * consumers can stream tool-input; it never duplicates `tool_call` (different lifecycle points).
  * Reuses `serializeToolOutput` for the tool-result `output` wire contract (#41 / DRY).
  */
 export function translateInteractionUpdate(update: InteractionUpdate): StreamEvent[] {
@@ -192,6 +193,18 @@ export function translateInteractionUpdate(update: InteractionUpdate): StreamEve
           input: update.toolCall.args ?? {},
         },
       ]
+    case 'partial-tool-call':
+      // theokit-sdk#70 — surface the incremental args so consumers can stream tool-input.
+      // A DISTINCT event type (not another `tool_call`): the partial fills the arg-streaming
+      // window that `tool-call-started` (args committed) closes — it never duplicates `tool_call`.
+      return [
+        {
+          type: 'partial_tool_call',
+          callId: update.callId,
+          toolName: update.toolCall.name,
+          input: update.toolCall.args ?? {},
+        },
+      ]
     case 'tool-call-completed':
       return [
         {
@@ -204,6 +217,6 @@ export function translateInteractionUpdate(update: InteractionUpdate): StreamEve
         },
       ]
     default:
-      return [] // partial-tool-call, thinking-completed, token-delta, step-*, etc. — not surfaced
+      return [] // thinking-completed, token-delta, step-*, etc. — not surfaced
   }
 }
