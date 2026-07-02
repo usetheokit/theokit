@@ -19,6 +19,19 @@ export interface ToolCallEvent {
   input: unknown
 }
 
+/**
+ * Tool-call arguments streaming in incrementally (theokit-sdk#70). Emitted repeatedly as the
+ * model generates a tool call's args, BEFORE they are committed. The same `callId` correlates to
+ * the later `tool_call` (args committed) and `tool_result`. Consumers opt in to render tool-input
+ * progressively; those that don't simply ignore this variant (it never replaces `tool_call`).
+ */
+export interface PartialToolCallEvent {
+  type: 'partial_tool_call'
+  callId: string
+  toolName: string
+  input: unknown
+}
+
 /** Tool execution completed. */
 export interface ToolResultEvent {
   type: 'tool_result'
@@ -137,6 +150,7 @@ export type AgentStreamEvent =
   | RunStartedEvent
   | TextDeltaEvent
   | ToolCallEvent
+  | PartialToolCallEvent
   | ToolResultEvent
   | ThinkingEvent
   | IterationEvent
@@ -155,6 +169,9 @@ export function isTextDelta(e: AgentStreamEvent): e is TextDeltaEvent {
 }
 export function isToolCall(e: AgentStreamEvent): e is ToolCallEvent {
   return e.type === 'tool_call'
+}
+export function isPartialToolCall(e: AgentStreamEvent): e is PartialToolCallEvent {
+  return e.type === 'partial_tool_call'
 }
 export function isToolResult(e: AgentStreamEvent): e is ToolResultEvent {
   return e.type === 'tool_result'
