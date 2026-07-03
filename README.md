@@ -480,7 +480,7 @@ TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **se
 | **`@theokit/auth-*`** — auth providers | TheoKit ← sibling | GitHub, Google OAuth + magic link. Each is an independent npm package. | ✅ Published |
 | **`@theokit/plugin-*`** — 8 plugins | TheoKit → sibling | canvas, copilot, db-drizzle, email, forms, payments, realtime, voice. Apps install explicitly. | ✅ Published |
 | **`@theokit/gateway-*`** — 4 gateways | TheoKit ← sibling | SMS, LINE, Matrix, Mattermost. Each is an independent npm package. | ✅ Published |
-| **`@theokit/ui`** — React component library | TheoKit ← sibling | Chat surface, theme system. Auto-injected when detected. npm dep, not workspace link. | ✅ Wired |
+| **`@theokit/ui`** — AI-native React component library | TheoKit ← sibling | Chat + agent surfaces (ChatMessage, ChatThread, AgentEvent, ToolCallCard, DiffViewer), theme system. Generic primitives moved to `@usetheo/ui`. Auto-injected when detected. npm dep, not workspace link. | ✅ Wired |
 | **TheoCloud** — managed platform | TheoKit → sibling | **Principal deploy target.** Thin validator adapter shipped. K8s emission lives in TheoCloud (Go). | ✅ Adapter shipped |
 
 ## Status
