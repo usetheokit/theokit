@@ -8,8 +8,9 @@
  *   start → text-start{id} → text-delta{id,delta}* → text-end{id} → finish
  *
  * - Empty run (no text_delta): [start, finish] — no orphan text-start/text-end.
- * - Error mid-stream (event OR thrown iterable): close an OPEN text with
- *   text-end, then finish; NEVER throw past the boundary (error-handling.md).
+ * - Error mid-stream (event OR thrown iterable): SURFACE an ai-sdk error chunk
+ *   ({ type:'error', errorText }), close an OPEN text with text-end, then finish;
+ *   NEVER throw past the boundary (error-handling.md — surface, don't swallow).
  * - One shared `id` for the whole text block, injected via opts.textId
  *   for determinism (D3).
  *
@@ -75,7 +76,7 @@ describe('translateToUIMessageStream — text (M0)', () => {
     expect(chunks).toEqual([{ type: 'start' }, { type: 'finish' }])
   })
 
-  it('test_stream_error_event_closes_open_text_gracefully', async () => {
+  it('test_stream_error_event_surfaces_error_chunk_then_closes_open_text', async () => {
     const events: AgentStreamEvent[] = [
       { type: 'text_delta', content: 'partial' },
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
@@ -85,15 +86,16 @@ describe('translateToUIMessageStream — text (M0)', () => {
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
       { type: 'text-delta', id: TEXT_ID, delta: 'partial' },
+      { type: 'error', errorText: 'boom' },
       { type: 'text-end', id: TEXT_ID },
       { type: 'finish' },
     ])
   })
 
-  it('test_thrown_iterable_closes_open_text_without_throwing', async () => {
+  it('test_thrown_iterable_surfaces_error_chunk_without_throwing', async () => {
     const events: AgentStreamEvent[] = [{ type: 'text_delta', content: 'partial' }]
-    // Must NOT reject — the boundary swallows the underlying stream error and
-    // closes the open text gracefully (failure-scenario row in the plan).
+    // Must NOT reject — the boundary surfaces the underlying stream error as an
+    // error chunk and closes the open text gracefully (failure-scenario row).
     const chunks = await collect(
       translateToUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
     )
@@ -101,17 +103,22 @@ describe('translateToUIMessageStream — text (M0)', () => {
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
       { type: 'text-delta', id: TEXT_ID, delta: 'partial' },
+      { type: 'error', errorText: 'Error: stream aborted' },
       { type: 'text-end', id: TEXT_ID },
       { type: 'finish' },
     ])
   })
 
-  it('test_error_before_any_text_emits_no_orphan_text_end', async () => {
+  it('test_error_before_any_text_surfaces_error_chunk_with_no_orphan_text_end', async () => {
     const events: AgentStreamEvent[] = [
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
     ]
     const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
-    expect(chunks).toEqual([{ type: 'start' }, { type: 'finish' }])
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'error', errorText: 'boom' },
+      { type: 'finish' },
+    ])
   })
 
   it('test_every_emitted_chunk_validates_against_ui_message_chunk_schema', async () => {
@@ -130,6 +137,23 @@ describe('translateToUIMessageStream — text (M0)', () => {
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
     const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+
+  it('test_surfaced_error_chunk_validates_against_ui_message_chunk_schema', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'partial' },
+      { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
+    ]
+    const schema = uiMessageChunkSchema()
+    const validate = schema.validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    // Prove the run actually produced the error chunk, then validate every chunk.
+    expect(chunks).toContainEqual({ type: 'error', errorText: 'boom' })
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
