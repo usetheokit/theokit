@@ -1,6 +1,6 @@
 ---
 name: theokit-ui
-description: "@theokit/ui component library — chat UI (ChatThread, ChatMessage, ChatComposer, CodeBlock), theming, providers, sidebar"
+description: "@theokit/ui AI-native component library — AI-agent surfaces (ChatThread, ChatMessage, ChatComposer, ToolCallCard, AgentStream), theming, providers; generic primitives (CodeBlock, Sidebar, Button) come from @usetheo/ui"
 user-invocable: false
 paths:
   - "app/**"
@@ -12,13 +12,13 @@ paths:
   - "**/*Theme*"
 ---
 
-# @theokit/ui — AI Chat Component Library
+# @theokit/ui — AI-native Component Library (AI-agent surfaces)
 
-`@theokit/ui` is an optional peer dependency. If installed, it provides ready-made components for chat UIs, theming, and layout. **Never build custom equivalents** of components `@theokit/ui` provides.
+`@theokit/ui` is an optional peer dependency. If installed, it provides ready-made AI components for chat + coding-agent surfaces (chat thread, agent events, tool calls, diff viewer, build logs), plus theming. **Never build custom equivalents** of components it provides. Generic primitives (Button, Input, Card, CodeBlock, PageShell, Sidebar, Avatar, Alert, etc.) live in `@usetheo/ui`, which `@theokit/ui` depends on — import those from `@usetheo/ui`.
 
 ## Package Identity
 
-The published package is `@theokit/ui` (NOT `@usetheo/ui` — that was the old name).
+`@theokit/ui` (AI-native, currently `1.0.0`) provides the AI-agent-surface components. Its generic foundation was split into `@usetheo/ui` in the 2026-07-03 AI-exclusive pivot; `@theokit/ui` depends on `@usetheo/ui`, so installing `@theokit/ui` pulls the foundation transitively.
 
 ```bash
 # Install from npm (preferred)
@@ -54,15 +54,15 @@ export default function Layout({ children }) {
 ### Full Chat Page (typical assembly)
 
 ```typescript
+// AI-agent-surface components live in @theokit/ui
 import {
-  PageShell,
-  Sidebar,
-  SessionListItem,
   ChatThread,
   ChatMessage,
   ChatMessageContent,
   ChatComposer,
 } from '@theokit/ui'
+// Generic layout primitives moved to @usetheo/ui (2026-07-03 pivot)
+import { PageShell, Sidebar, SessionListItem } from '@usetheo/ui'
 import { useAgentStream } from 'theokit/client'
 
 function ChatPage() {
@@ -93,29 +93,29 @@ function ChatPage() {
 }
 ```
 
-### Individual Components
+### AI-agent-surface components (from `@theokit/ui`)
 
 | Component | Purpose | Key Props |
 |-----------|---------|-----------|
 | `ChatThread` | Scrollable message container | `children` (ChatMessage elements) |
 | `ChatMessage` | Single message bubble | `role: 'user' \| 'assistant'`, `children` |
 | `ChatMessageContent` | Markdown + code rendering | `markdown: string` (handles streaming partial) |
-| `CodeBlock` | Syntax-highlighted code | `code: string`, `language?: string` (uses shiki, lazy-loaded) |
 | `ChatComposer` | Message input + submit | `onSubmit: (text) => void`, `disabled?: boolean` |
+| `ToolCallCard` | Display agent tool invocations | — |
+| `AgentStream` | Lower-level stream renderer | — |
+
+### Generic primitives (from `@usetheo/ui`)
+
+Moved out of `@theokit/ui` in the 2026-07-03 AI-exclusive pivot. Import these from `@usetheo/ui`.
+
+| Component | Purpose | Key Props |
+|-----------|---------|-----------|
+| `CodeBlock` | Syntax-highlighted code | `code: string`, `language?: string` (uses shiki, lazy-loaded) |
 | `PageShell` | App layout with sidebar slot | `sidebar?: ReactNode`, `children` |
 | `Sidebar` | Collapsible side panel | `children` |
-| `SessionListItem` | Session entry in sidebar | `title: string`, `onClick`, `active?: boolean` |
-
-### Other Useful Components
-
-| Component | Purpose |
-|-----------|---------|
-| `Button`, `Input`, `Textarea` | Form primitives (themed) |
-| `ToolCallCard` | Display agent tool invocations |
-| `AgentStream` | Lower-level stream renderer |
-| `ThemeSwitcher` | Light/dark mode toggle |
-| `Avatar` | User/agent avatar |
-| `Alert` | Status messages |
+| `Button`, `Input`, `Textarea` | Form primitives (themed) | — |
+| `Avatar` | User/agent avatar | — |
+| `Alert` | Status messages | — |
 
 ## Peer Dependencies (install only what you use)
 
@@ -154,8 +154,8 @@ const myTheme = defineTheme({
 
 - NEVER build a custom chat message component — use `ChatMessage` + `ChatMessageContent`
 - NEVER build a custom markdown renderer — `ChatMessageContent` handles it (including streaming partial fences)
-- NEVER build a custom code highlighter — `CodeBlock` uses shiki (lazy-loaded)
-- NEVER import from `@usetheo/ui` — that's the deprecated package name; use `@theokit/ui`
+- NEVER build a custom code highlighter — `CodeBlock` (from `@usetheo/ui`) uses shiki (lazy-loaded)
+- Import AI-agent-surface components (ChatThread, ChatMessage, ToolCallCard, etc.) from `@theokit/ui`; import generic primitives (Button, Input, CodeBlock, PageShell, Sidebar, Avatar, Alert) from `@usetheo/ui` — both are live packages since the 2026-07-03 pivot (`@theokit/ui` depends on `@usetheo/ui`)
 - NEVER use `npm link` or `file:../theo-ui` to install — causes dual-React (use tarball or npm registry)
 - NEVER install ALL peer deps — only install the peers for components you actually use
 - NEVER use components without wrapping in `TheoUIProvider` + `ThemeProvider` first
