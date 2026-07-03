@@ -365,18 +365,48 @@ describe('translateInteractionUpdate — real-time InteractionUpdate shapes (#44
   })
 
   it('test_translate_unknown_update_emits_nothing', () => {
-    expect(
-      translateInteractionUpdate({
-        type: 'partial-tool-call',
-        callId: 'c1',
-        modelCallId: 'm1',
-        toolCall: { callId: 'c1', name: 'x' },
-      }),
-    ).toEqual([])
     expect(translateInteractionUpdate({ type: 'token-delta', tokens: 5 })).toEqual([])
     expect(
       translateInteractionUpdate({ type: 'thinking-completed', thinkingDurationMs: 10 }),
     ).toEqual([])
     expect(translateInteractionUpdate({ type: 'step-started', stepId: 1 })).toEqual([])
+  })
+
+  // theokit-sdk#70 — surface the SDK's partial-tool-call so consumers can stream tool-input.
+  it('test_partial_tool_call_update_is_translated', () => {
+    const out = translateInteractionUpdate({
+      type: 'partial-tool-call',
+      callId: 'c1',
+      modelCallId: 'm1',
+      toolCall: { callId: 'c1', name: 'write_file', args: { path: 'a.ts' } },
+    })
+    expect(out).toEqual([
+      { type: 'partial_tool_call', callId: 'c1', toolName: 'write_file', input: { path: 'a.ts' } },
+    ])
+  })
+
+  it('test_partial_tool_call_defaults_missing_args_to_empty', () => {
+    const out = translateInteractionUpdate({
+      type: 'partial-tool-call',
+      callId: 'c2',
+      modelCallId: 'm2',
+      toolCall: { callId: 'c2', name: 'glob_files' },
+    })
+    expect(out).toEqual([
+      { type: 'partial_tool_call', callId: 'c2', toolName: 'glob_files', input: {} },
+    ])
+  })
+
+  it('test_partial_tool_call_emits_no_tool_call', () => {
+    // D1 invariant: the partial update must NOT duplicate the `tool_call` event
+    // (that comes only from `tool-call-started`, args-committed).
+    const out = translateInteractionUpdate({
+      type: 'partial-tool-call',
+      callId: 'c3',
+      modelCallId: 'm3',
+      toolCall: { callId: 'c3', name: 'edit_file', args: { old: 'x' } },
+    })
+    const toolCalls = out.filter((e) => e.type === 'tool_call')
+    expect(toolCalls).toHaveLength(0)
   })
 })
