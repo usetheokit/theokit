@@ -157,6 +157,7 @@
   "devDependencies": {
     "@theokit/sdk": "^2.13.0",
     "@types/busboy": "^1.5.4",
+    "ai": "^7.0.14",
     "@types/pg": "^8.20.0",
     "@types/picomatch": "^4.0.3",
     "better-sqlite3": "^12.11.1",
