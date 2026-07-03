@@ -83,6 +83,9 @@ tmp/
 .claude/ralph-loop.local.md
 .claude/architecture-review-loop.local.md
 
+# Python bytecode cache from .claude skill scripts
+**/__pycache__/
+
 # Cycle infrastructure (per skill SoT — halt-loop driver files + per-slug progress trackers)
 .claude/halt-loop-prompts/
 .claude/knowledge-base/discoveries/.progress-*.json
@@ -96,6 +99,11 @@ my-test/
 
 # Reference framework implementations (cloned for SOTA research)
 # referencias/
+# SOTA peer clones from /roadmap-init — study-only, heavy (~850MB), never commit.
+# The curated catalog (knowledge-base/references-catalog.md) lives OUTSIDE this
+# folder and IS versioned; only the raw clones are ignored.
+knowledge-base/references/
+.claude/knowledge-base/references/
 .gstack/
 fixtures/template-default/.theokit
 architecture-output
