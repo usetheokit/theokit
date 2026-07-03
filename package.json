@@ -55,6 +55,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.9",
+    "ai": "^7.0.14",
     "autocannon": "^8.0.0",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
