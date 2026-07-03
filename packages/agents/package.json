@@ -38,11 +38,15 @@
     "@theokit/http": ">=0.1.0-alpha.0",
     "@theokit/sdk": ">=2.13.0",
     "@theokit/sdk-tools": ">=0.2.0",
+    "ai": ">=7.0.0",
     "reflect-metadata": ">=0.2.0",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@theokit/sdk-tools": {
+      "optional": true
+    },
+    "ai": {
       "optional": true
     }
   },
@@ -50,6 +54,7 @@
     "@theokit/http": "workspace:*",
     "@theokit/sdk": "^2.13.0",
     "@theokit/sdk-tools": "^0.2.0",
+    "ai": "^7.0.14",
     "reflect-metadata": "^0.2.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",

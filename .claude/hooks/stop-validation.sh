@@ -6,7 +6,10 @@
 #      if no sibling test file is detected in the same directory (heuristic;
 #      supports common *_test.* / *.test.* / *.spec.* / test_*.* naming).
 #   2. CHANGELOG discipline (HARD GATE — Inquebrável Rule 6 + cycle-review BLOCKER):
-#      if production source changed but CHANGELOG.md did not, BLOCK.
+#      if production source changed but neither CHANGELOG.md nor a Changesets
+#      entry (a new .changeset/*.md, excluding .changeset/README.md) was touched,
+#      BLOCK. Changesets are this repo's release-notes source of truth — a
+#      changeset satisfies Rule 6 the same as a hand-edited [Unreleased] entry.
 #   3. Secret leak (HARD GATE — cycle-review BLOCKER): if newly tracked files
 #      match secret patterns (.env / credentials* / *.pem / *.key), BLOCK.
 #   4. Pre-release honesty (warn-first): if README.md was modified, scan for
@@ -114,8 +117,13 @@ if [ -f "CHANGELOG.md" ]; then
     | grep -vE '(_test|\.test|\.spec)\.[a-z]+$' \
     | grep -vE '(^|/)(node_modules|vendor|dist|build|target|\.venv|__pycache__)/' \
     || true)
-  if [ -n "$CODE_CHANGED" ] && ! echo "$ALL_FILES" | grep -qE '^CHANGELOG\.md$'; then
-    msg="CHANGELOG.md not updated despite production source changes (Inquebrável Rule 6; cycle-review BLOCKER). Add an entry to [Unreleased] before stopping. Override with STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg with the rationale documented separately."
+  # A change is documented if EITHER CHANGELOG.md was touched OR a Changesets
+  # entry was added (any .changeset/*.md other than the .changeset/README.md
+  # template). Changesets are this repo's release-notes source of truth.
+  CHANGELOG_TOUCHED=$(echo "$ALL_FILES" | grep -E '^CHANGELOG\.md$' || true)
+  CHANGESET_ADDED=$(echo "$ALL_FILES" | grep -E '^\.changeset/.+\.md$' | grep -vE '^\.changeset/README\.md$' || true)
+  if [ -n "$CODE_CHANGED" ] && [ -z "$CHANGELOG_TOUCHED" ] && [ -z "$CHANGESET_ADDED" ]; then
+    msg="CHANGELOG.md not updated despite production source changes (Inquebrável Rule 6; cycle-review BLOCKER). Add an entry to [Unreleased] OR a Changesets entry (.changeset/*.md) before stopping. Override with STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg with the rationale documented separately."
     if [ "$WARN_ONLY" = "1" ]; then
       WARNINGS+=("$msg")
     else
