@@ -34,6 +34,7 @@ export {
   type AgentStreamEvent,
   type TextDeltaEvent,
   type ToolCallEvent,
+  type PartialToolCallEvent,
   type ToolResultEvent,
   type ThinkingEvent,
   type IterationEvent,
@@ -43,6 +44,7 @@ export {
   type RunStartedEvent,
   isTextDelta,
   isToolCall,
+  isPartialToolCall,
   isToolResult,
   isDone,
   isError,
@@ -68,6 +70,7 @@ export {
   type Segment,
 } from './think-tag-extractor.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
+export { translateToUIMessageStream } from './ui-message-stream-translator.js'
 
 export {
   delegate,

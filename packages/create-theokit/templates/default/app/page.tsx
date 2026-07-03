@@ -8,19 +8,21 @@ import {
   ToolCallCard,
   AgentStreaming,
   AgentErrorCard,
-  EmptyState,
   QuickActionChips,
   ContextWindowBar,
+  type Message,
+  type QuickAction,
+  type ToolCallStatus,
+} from '@theokit/ui'
+import {
+  EmptyState,
   CommandPalette,
   Avatar,
   Tooltip,
   Button,
   ScrollArea,
-  type Message,
-  type QuickAction,
   type CommandItem,
-  type ToolCallStatus,
-} from '@theokit/ui'
+} from '@usetheo/ui'
 import { Sparkles, Wrench, RotateCcw, Command } from 'lucide-react'
 import { useAgentStream } from 'theokit/client'
 
