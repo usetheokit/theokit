@@ -1,16 +1,8 @@
 import '@theokit/ui/styles.css'
 
 import { Outlet } from 'react-router'
-import {
-  Sidebar,
-  TopNav,
-  AgentProfile,
-  ThemeSwitcher,
-  Tooltip,
-  Badge,
-  CostMeter,
-  type AgentProfileDescriptor,
-} from '@theokit/ui'
+import { AgentProfile, ThemeSwitcher, CostMeter, type AgentProfileDescriptor } from '@theokit/ui'
+import { Sidebar, TopNav, Tooltip, Badge } from '@usetheo/ui'
 import { Bot, MessageSquare, History, Settings } from 'lucide-react'
 
 const AGENTS: AgentProfileDescriptor[] = [
