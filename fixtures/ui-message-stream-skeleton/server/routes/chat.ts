@@ -35,10 +35,18 @@ async function* echoAgentStream(message: string): AsyncIterable<AgentStreamEvent
 }
 
 export const POST = defineRoute({
-  body: z.object({ messages: z.array(z.object({ role: z.string() })).optional() }),
-  handler: async ({ request }): Promise<Response> => {
-    const body = (await request.json()) as { messages?: { parts?: { text?: string }[] }[] }
-    const last = body.messages?.at(-1)
+  body: z.object({
+    messages: z
+      .array(
+        z.object({
+          role: z.string(),
+          parts: z.array(z.object({ type: z.string(), text: z.string().optional() })).optional(),
+        }),
+      )
+      .optional(),
+  }),
+  handler: async ({ body }): Promise<Response> => {
+    const last = body?.messages?.at(-1)
     const prompt = last?.parts?.map((p) => p.text ?? '').join('') ?? ''
     const events = echoAgentStream(prompt)
     // One shared id per assistant message; randomUUID (G8), not Math.random.

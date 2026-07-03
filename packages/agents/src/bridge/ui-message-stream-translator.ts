@@ -23,10 +23,12 @@ import type { AgentStreamEvent } from './agent-stream-events.js'
  * - Every emitted chunk carries ONLY the fields required by ai-sdk's
  *   `uiMessageChunkSchema` (a z.strictObject union — extra keys are rejected).
  *
- * Error handling (error-handling.md — fail-clear, never throw past the boundary):
- * an `error` event OR a thrown/aborted underlying iterable closes an open text
- * (`text-end`) and terminates with `finish`. The error is not re-thrown — the
- * transport still produces a well-formed, terminated stream.
+ * Error handling (error-handling.md — fail-clear, surface don't swallow, never
+ * throw past the boundary): an `error` event OR a thrown/aborted underlying
+ * iterable is SURFACED as an ai-sdk `error` chunk (`{ type: 'error', errorText }`),
+ * then closes an open text (`text-end`) and terminates with `finish`. The error is
+ * not re-thrown — the transport still produces a well-formed, terminated stream the
+ * client can render as a failed turn.
  *
  * Tool / reasoning / file chunks are intentionally out of scope for M0 (YAGNI);
  * non-text events are ignored here and widen the mapping in M1.
@@ -46,14 +48,19 @@ export async function* translateToUIMessageStream(
         }
         yield { type: 'text-delta', id: opts.textId, delta: event.content }
       } else if (event.type === 'error') {
+        // Surface the agent-reported failure to the client as an ai-sdk error
+        // chunk instead of silently swallowing it, then close gracefully.
+        yield { type: 'error', errorText: event.message }
         break
       }
       // Non-text events (run_started, done, tool_*, thinking, …) produce no
       // text chunk in M0. `done`/end-of-stream close naturally below.
     }
-  } catch {
-    // The underlying stream aborted/errored. Swallow at the boundary and fall
-    // through to a graceful close — never throw past the transport.
+  } catch (err) {
+    // The underlying stream aborted/errored. Surface the failure as an error
+    // chunk (structured, not console noise), then fall through to a graceful
+    // close — never throw past the transport.
+    yield { type: 'error', errorText: String(err) }
   }
   if (textOpen) {
     yield { type: 'text-end', id: opts.textId }
