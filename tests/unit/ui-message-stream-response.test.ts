@@ -75,4 +75,18 @@ describe('uiMessageStreamResponse — SSE transport (M0)', () => {
     const body = await readBody(res)
     expect(body).toBe('data: [DONE]\n\n')
   })
+
+  it('test_source_that_throws_mid_stream_still_terminates_with_done', async () => {
+    // A chunk source that emits one frame then aborts mid-iteration. The
+    // transport must NOT hang or reject — it flushes [DONE] and closes cleanly
+    // (fail-clear: guarantee a terminated stream — error-handling.md).
+    async function* throwsMidStream(): AsyncIterable<UIMessageChunk> {
+      yield { type: 'start' }
+      throw new Error('source aborted')
+    }
+    const res = uiMessageStreamResponse(throwsMidStream())
+    const body = await readBody(res) // resolves ⇒ no hang, no unhandled rejection
+    expect(body).toContain('data: {"type":"start"}\n\n')
+    expect(body.endsWith('data: [DONE]\n\n')).toBe(true)
+  })
 })
