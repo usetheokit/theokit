@@ -112,7 +112,7 @@ For the 0.3.0 cutover specifically, see
 
 ## Cross-repo dev: linking @theokit/ui
 
-Por default, `@theokit/ui` é consumido como npm dep (peerDep `^0.11.0-next.0`).
+Por default, `@theokit/ui` é consumido como npm dep (peerDep estável `1.0.0`).
 Edições locais em `../theo-ui/` NÃO refletem sem publish.
 
 Para iterar nos dois repos simultaneamente (ADR
