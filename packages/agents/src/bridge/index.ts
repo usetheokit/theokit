@@ -70,6 +70,7 @@ export {
   type Segment,
 } from './think-tag-extractor.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
+export { translateToUIMessageStream } from './ui-message-stream-translator.js'
 
 export {
   delegate,
