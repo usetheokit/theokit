@@ -1,6 +1,11 @@
 import type { UIMessageChunk } from 'ai'
 
-import type { AgentStreamEvent, ToolCallEvent, ToolResultEvent } from './agent-stream-events.js'
+import type {
+  AgentStreamEvent,
+  ApprovalRequiredEvent,
+  ToolCallEvent,
+  ToolResultEvent,
+} from './agent-stream-events.js'
 
 /**
  * M1 (theokit-ai-first) — translate a theokit `AgentStreamEvent` stream into the
@@ -100,6 +105,29 @@ function* emitToolResult(event: ToolResultEvent, seen: Set<string>): Generator<U
   }
 }
 
+/**
+ * Emit a HITL approval request (M4): first synthesize the tool-input part (EC-1) so the
+ * client has a tool to gate, then the ai-sdk-native `tool-approval-request` chunk referencing
+ * the same toolCallId. The client renders the approval + responds via `tool-approval-response`
+ * (out-of-band POST resolves the paused SDK `pre_tool_call` hook — the run is genuinely paused).
+ */
+function* emitApprovalRequest(
+  event: ApprovalRequiredEvent,
+  seen: Set<string>,
+): Generator<UIMessageChunk> {
+  if (!seen.has(event.callId)) {
+    seen.add(event.callId)
+    yield {
+      type: 'tool-input-available',
+      toolCallId: event.callId,
+      toolName: event.toolName,
+      input: event.input ?? {},
+      dynamic: true,
+    }
+  }
+  yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId: event.callId }
+}
+
 export async function* translateToUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
   opts: { textId: string },
@@ -129,6 +157,9 @@ export async function* translateToUIMessageStream(
       } else if (event.type === 'tool_call') {
         yield* closeOpenBlock(state, opts.textId)
         yield* emitToolCall(event, seenToolCallIds)
+      } else if (event.type === 'approval_required') {
+        yield* closeOpenBlock(state, opts.textId)
+        yield* emitApprovalRequest(event, seenToolCallIds)
       } else if (event.type === 'tool_result') {
         yield* closeOpenBlock(state, opts.textId)
         yield* emitToolResult(event, seenToolCallIds)
