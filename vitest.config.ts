@@ -113,6 +113,10 @@ export default defineConfig({
       'theokit/client': path.resolve(__dirname, 'packages/theo/src/client/index.ts'),
       'theokit/server': path.resolve(__dirname, 'packages/theo/src/server/index.ts'),
       theokit: path.resolve(__dirname, 'packages/theo/src/index.ts'),
+      // M2 — resolve the workspace agent runtime to its SOURCE under vitest, so theo
+      // production code (mount-agent.ts) and root tests share ONE module instance and
+      // never hit a stale dist (mirrors the `theokit → src` aliases above).
+      '@theokit/agents': path.resolve(__dirname, 'packages/agents/src/index.ts'),
     },
   },
 })
