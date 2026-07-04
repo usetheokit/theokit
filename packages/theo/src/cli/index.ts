@@ -64,6 +64,22 @@ cli
     }
   })
 
+cli
+  .command(
+    'agent <name> [message]',
+    'Run an agent in the terminal (stream + tool calls + approval)',
+  )
+  .action(async (name: string, message: string | undefined) => {
+    try {
+      const { agentCommand } = await import('./commands/agent.js')
+      await agentCommand(name, message)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
+
 cli.command('routes', 'List all routes, actions, and WebSocket endpoints').action(async () => {
   try {
     const { routesCommand } = await import('./commands/routes.js')
