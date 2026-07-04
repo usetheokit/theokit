@@ -19,7 +19,6 @@ To scaffold a real standalone app instead, use `npm create theokit` (the
 |---|---|---|
 | adapter-static | Fixture app exercising the `adapter-static` scenario | — |
 | adapter-targets | Fixture app exercising the `adapter-targets` scenario | — |
-| agent-endpoint-mock | Fixture app exercising the `agent-endpoint-mock` scenario | — |
 | agents-dir-ignored | Fixture app exercising the `agents-dir-ignored` scenario | — |
 | app-router-basic | Fixture app exercising the `app-router-basic` scenario | — |
 | app-router-errors | Fixture app exercising the `app-router-errors` scenario | — |
@@ -60,11 +59,11 @@ To scaffold a real standalone app instead, use `npm create theokit` (the
 | ssr-basic | Fixture app exercising the `ssr-basic` scenario | — |
 | ssr-streaming | Fixture app exercising the `ssr-streaming` scenario | — |
 | template-default | Fixture app exercising the `template-default` scenario | — |
+| ui-message-stream-skeleton | Fixture app exercising the `ui-message-stream-skeleton` scenario (M0/M1 UIMessageStream wire) | — |
 | theoui-autoinject | Fixture app exercising the `theoui-autoinject` scenario | — |
 | typed-client | Fixture app exercising the `typed-client` scenario | — |
 | upgrade-readiness-clean | Fixture app exercising the `upgrade-readiness-clean` scenario | — |
 | upgrade-readiness-dirty | Fixture app exercising the `upgrade-readiness-dirty` scenario | — |
-| use-agent-stream-react | Fixture app exercising the `use-agent-stream-react` scenario | — |
 | webhook-github | GitHub webhook signature verification | — |
 | webhook-slack | Slack webhook signature verification | — |
 | webhook-stripe | Stripe webhook signature verification | — |

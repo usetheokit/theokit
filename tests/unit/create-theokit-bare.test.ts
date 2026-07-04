@@ -47,12 +47,12 @@ describe('create-theokit --bare flag (T4.1)', () => {
     }
   })
 
-  it('with --bare: removes mock chat route (depends on AgentEvent)', () => {
+  it('with --bare: removes the demo agent (agents/chat.ts)', () => {
     const target = makeTargetDir()
     rmSync(target, { recursive: true, force: true })
     try {
       scaffold(target, 'demo-app', 'default', { bare: true })
-      expect(existsSync(join(target, 'server/routes/chat.ts'))).toBe(false)
+      expect(existsSync(join(target, 'agents/chat.ts'))).toBe(false)
     } finally {
       rmSync(target, { recursive: true, force: true })
     }

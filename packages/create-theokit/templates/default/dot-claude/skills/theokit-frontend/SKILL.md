@@ -1,6 +1,6 @@
 ---
 name: theokit-frontend
-description: TheoKit frontend — file-based routing, layouts, theoFetch typed client, useAgentStream, React patterns
+description: TheoKit frontend — file-based routing, layouts, theoFetch typed client, useAgent, React patterns
 user-invocable: false
 paths:
   - "app/**"
@@ -50,23 +50,24 @@ const created = await client.tasks.POST({ body: { title: 'New' } })
 
 ## Agent Streaming
 
-Three client APIs, all from `theokit/client`:
+Two client APIs from `theokit/client`:
 
-### useAgentStream (React hook — most common)
+### useAgent (React hook — most common)
 
 ```typescript
-import { useAgentStream } from 'theokit/client'
+import { useAgent } from 'theokit/client'
 
 function ChatUI() {
-  const { status, events, send, reset } = useAgentStream('/api/agents/assistant')
+  const { messages, status, send, reset } = useAgent<{ message: string }>('/api/agents/chat')
 
   return (
     <div>
       {status === 'streaming' && <p>Thinking...</p>}
-      {events.map(event => (
-        <div key={event.id}>
-          {event.type === 'message' && <p>{event.content}</p>}
-          {event.type === 'tool_call' && <p>Using tool: {event.name}</p>}
+      {messages.map(message => (
+        <div key={message.id}>
+          {message.parts.map((part, i) =>
+            part.type === 'text' ? <p key={i}>{part.text}</p> : null
+          )}
         </div>
       ))}
       <button onClick={() => send({ message: 'Hello' })}>Send</button>
@@ -75,26 +76,23 @@ function ChatUI() {
 }
 ```
 
-### consumeAgentStream (non-React, async iterable)
+`messages` is `UIMessage[]` (ai-sdk). Render `message.parts`: text parts
+(`part.type === 'text'`, `part.text`) and tool parts (`part.type === 'dynamic-tool'`,
+`part.toolName`, `part.state`, `part.output`). Do NOT switch on an `events`/`event.type`
+pattern — the wire is `UIMessageStream`, not SSE events.
+
+### consumeUIMessageStream (non-React)
 
 ```typescript
-import { consumeAgentStream } from 'theokit/client'
+import { consumeUIMessageStream } from 'theokit/client'
 
-const stream = consumeAgentStream('/api/agents/assistant', {
-  body: { message: 'Hello' },
+const response = await fetch('/api/agents/chat', {
+  method: 'POST',
+  body: JSON.stringify({ message: 'Hello' }),
 })
-for await (const event of stream) {
-  console.log(event.type, event.content)
-}
-```
-
-### parseSSEChunk (low-level SSE parser)
-
-```typescript
-import { parseSSEChunk } from 'theokit/client'
-
-// Parse a single SSE line into an AgentEvent (or null)
-const event = parseSSEChunk('data: {"type":"message","content":"Hello"}')
+consumeUIMessageStream(response, (message) => {
+  console.log(message.parts)
+})
 ```
 
 ## Path Aliases
@@ -111,4 +109,4 @@ Configured in `tsconfig.json` — works in both server and app code.
 - NEVER use raw `fetch('/api/...')` — use `theoFetch` for type safety
 - NEVER create pages outside `app/` — they won't be discovered by the router
 - NEVER import server code directly in `app/` — use theoFetch or server actions
-- NEVER use `useEffect` + `fetch` for data loading — use theoFetch or useAgentStream
+- NEVER use `useEffect` + `fetch` for data loading — use theoFetch or `useAgent`
