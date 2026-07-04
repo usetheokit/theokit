@@ -1,8 +1,8 @@
 ---
-"theokit": major
+"theokit": minor
 ---
 
-BREAKING — remove the pre-M2 proprietary agent surface (M3 clean break, no compat layer).
+BREAKING — remove the pre-M2 proprietary agent surface (M3 clean break, no compat layer). Pre-1.0 convention: a breaking change rides a MINOR bump (0.13.0 → 0.14.0) until the deliberate 1.0 stability milestone — see the ROADMAP 1.0 stability lock. This is NOT the 1.0 release.
 
 Deleted: the `AgentEvent` SSE protocol (`theokit/core/contracts` `AgentEvent` + variants), the server producers `defineAgentEndpoint` / `streamAgentRun` / `createConversationHistory` (and the `theokit/server/agent` subpath export, removed entirely), and the client cluster `useAgentStream` / `deriveLiveText` / `deriveError` / `consumeAgentStream` / `parseSSEChunk` / `useAgentToolCards` / `foldAgentToolCards` / `defaultResolveEnvelope` (`theokit/client`).
 
