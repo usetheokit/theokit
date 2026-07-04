@@ -90,6 +90,10 @@ export default defineConfig({
         // logic is covered by agent-stream-core.ts unit tests; the hook is
         // covered end-to-end by the default-template Playwright spec.
         'packages/theo/src/client/use-agent-stream.ts',
+        // M2 — same rationale: React hook (fetch + ReadableStream) needs jsdom
+        // the project does not set up. The wire-protocol core is covered by
+        // consume-ui-message-stream.ts unit tests; the hook is covered E2E.
+        'packages/theo/src/client/use-agent.ts',
         // create-theo standalone CLI scaffolder — interactive prompts +
         // child_process spawn. The existing exclude `packages/*/src/cli/**`
         // does not match these because create-theo's CLI sits in `src/`.
