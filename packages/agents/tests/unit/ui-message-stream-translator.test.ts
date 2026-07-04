@@ -160,3 +160,127 @@ describe('translateToUIMessageStream — text (M0)', () => {
     }
   })
 })
+
+/** Locate the single reasoning-start chunk's minted id (crypto.randomUUID, non-deterministic). */
+function reasoningIdOf(chunks: UIMessageChunk[]): string {
+  const start = chunks.find((c) => c.type === 'reasoning-start')
+  if (!start || !('id' in start)) throw new Error('no reasoning-start chunk found')
+  return start.id
+}
+
+describe('translateToUIMessageStream — reasoning + open-block state machine (M1 / T1.1)', () => {
+  it('test_reasoning_run_emits_one_block', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'thinking', content: 'let me ' },
+      { type: 'thinking', content: 'think' },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    // Exactly one reasoning block (single -start/-end) wrapping N deltas (EC-3).
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'let me ' },
+      { type: 'reasoning-delta', id: rid, delta: 'think' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_text_then_reasoning_closes_text_first', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'hi' },
+      { type: 'thinking', content: 'hmm' },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    // EC-2: the open text block is closed (text-end) before the reasoning block opens.
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'text-start', id: TEXT_ID },
+      { type: 'text-delta', id: TEXT_ID, delta: 'hi' },
+      { type: 'text-end', id: TEXT_ID },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'hmm' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_reasoning_then_text_interleaves_three_blocks', async () => {
+    // Q1 (Unresolved): text → reasoning → text must produce three closed blocks.
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'a' },
+      { type: 'thinking', content: 'r' },
+      { type: 'text_delta', content: 'b' },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'text-start', id: TEXT_ID },
+      { type: 'text-delta', id: TEXT_ID, delta: 'a' },
+      { type: 'text-end', id: TEXT_ID },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'r' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'text-start', id: TEXT_ID },
+      { type: 'text-delta', id: TEXT_ID, delta: 'b' },
+      { type: 'text-end', id: TEXT_ID },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_done_closes_open_reasoning_block_then_finish', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'thinking', content: 'x' },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    // reasoning-end precedes finish; no orphan open block.
+    expect(chunks.slice(-2)).toEqual([{ type: 'reasoning-end', id: rid }, { type: 'finish' }])
+  })
+
+  it('test_reasoning_id_is_a_uuid_not_math_random', async () => {
+    // G8: id minted via crypto.randomUUID() — assert RFC-4122 v4 shape.
+    const events: AgentStreamEvent[] = [{ type: 'thinking', content: 'x' }]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(reasoningIdOf(chunks)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    )
+  })
+
+  it('test_reasoning_chunks_validate_against_ui_message_chunk_schema', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'a' },
+      { type: 'thinking', content: 'r' },
+      { type: 'text_delta', content: 'b' },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+      },
+    ]
+    const schema = uiMessageChunkSchema()
+    const validate = schema.validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+})
