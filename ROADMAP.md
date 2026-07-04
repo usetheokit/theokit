@@ -118,7 +118,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M3 — [ ] Clean break — remove the proprietary surface + migration guide
+### M3 — [x] Clean break — remove the proprietary surface + migration guide
 
 **Objective:** Remove the old proprietary protocol/surface entirely; hard migration, no compat layer.
 
