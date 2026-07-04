@@ -48,6 +48,20 @@ describe('createInProcessApprovalRegistry (M4)', () => {
     }
   })
 
+  it('test_times_out_per_onTimeout_retry_denies_retry_is_not_implemented', async () => {
+    // Honest contract (review MEDIUM): the registry implements no retry semantics — a timed-out
+    // 'retry' denies, exactly like 'abort'. Only 'proceed' auto-approves.
+    vi.useFakeTimers()
+    try {
+      const reg = createInProcessApprovalRegistry()
+      const pending = reg.register('a4b', { timeoutMs: 1000, onTimeout: 'retry' })
+      vi.advanceTimersByTime(1001)
+      await expect(pending).resolves.toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('test_times_out_per_onTimeout_proceed_approves', async () => {
     vi.useFakeTimers()
     try {

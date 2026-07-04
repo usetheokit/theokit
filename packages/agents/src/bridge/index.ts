@@ -17,8 +17,6 @@ export {
 export {
   compileTools,
   compileAgent,
-  compileHitlGates,
-  toolRuntimeName,
   type CompiledTool,
   type CompiledAgentOptions,
 } from './agent-compiler.js'
@@ -87,7 +85,6 @@ export {
   streamAgentUIMessages,
   AgentDefinitionError,
 } from './agent-endpoint.js'
-export { createHitlPlugin, type HitlPlugin, type HitlWiring } from './hitl-plugin.js'
 
 export {
   delegate,
