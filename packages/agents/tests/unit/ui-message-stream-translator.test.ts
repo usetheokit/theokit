@@ -283,6 +283,63 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
     }
   })
+
+  it('test_error_event_mid_open_reasoning_surfaces_error_then_closes_reasoning', async () => {
+    // Error-path closeOpenBlock must handle the reasoning branch: the error chunk
+    // is surfaced FIRST, then the open reasoning block is closed, then finish.
+    const events: AgentStreamEvent[] = [
+      { type: 'thinking', content: 'let me think' },
+      { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'let me think' },
+      { type: 'error', errorText: 'boom' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_thrown_iterable_mid_open_reasoning_surfaces_error_without_throwing', async () => {
+    // catch-path closeOpenBlock closes the open reasoning block; no throw past
+    // the boundary. errorText mirrors the thrown-iterable format (String(err)).
+    const events: AgentStreamEvent[] = [{ type: 'thinking', content: 'partial reasoning' }]
+    const chunks = await collect(
+      translateToUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
+    )
+    const rid = reasoningIdOf(chunks)
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'partial reasoning' },
+      { type: 'error', errorText: 'Error: stream aborted' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_reasoning_tool_reasoning_produces_two_distinct_blocks', async () => {
+    // A tool call closes the reasoning block; the next thinking opens a FRESH one
+    // with a distinct id — never two reasoning blocks sharing an id (EC-3).
+    const events: AgentStreamEvent[] = [
+      { type: 'thinking', content: 'first' },
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: {} },
+      { type: 'thinking', content: 'second' },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const starts = chunks.filter((c) => c.type === 'reasoning-start')
+    const ends = chunks.filter((c) => c.type === 'reasoning-end')
+    expect(starts).toHaveLength(2)
+    expect(ends).toHaveLength(2)
+    const firstId = 'id' in starts[0] ? starts[0].id : undefined
+    const secondId = 'id' in starts[1] ? starts[1].id : undefined
+    expect(firstId).toBeDefined()
+    expect(secondId).toBeDefined()
+    expect(firstId).not.toBe(secondId)
+  })
 })
 
 describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
