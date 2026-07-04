@@ -284,3 +284,150 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
     }
   })
 })
+
+describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
+  it('test_tool_call_then_result_maps_to_input_and_output_available', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'search',
+        output: 'hit',
+        durationMs: 3,
+        isError: false,
+      },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    // dynamic:true (EC-1) so the consumer produces a dynamic-tool part whose
+    // toolName survives to the parsed part (ui-messages.ts:384-396).
+    expect(chunks).toEqual([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'search',
+        input: { q: 'x' },
+        dynamic: true,
+      },
+      { type: 'tool-output-available', toolCallId: 'c1', output: 'hit' },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_tool_result_error_maps_to_output_error', async () => {
+    // EC-4 (negative case): isError:true → tool-output-error with errorText.
+    const events: AgentStreamEvent[] = [
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: {} },
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'search',
+        output: 'boom',
+        durationMs: 3,
+        isError: true,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toEqual([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'search',
+        input: {},
+        dynamic: true,
+      },
+      { type: 'tool-output-error', toolCallId: 'c1', errorText: 'boom' },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_orphan_tool_result_synthesizes_input_available_first', async () => {
+    // EC-1: a tool_result with no preceding tool_call must synthesize
+    // tool-input-available first, else the consumer throws
+    // (process-ui-message-stream.ts:115 "No tool invocation found").
+    const events: AgentStreamEvent[] = [
+      {
+        type: 'tool_result',
+        callId: 'c9',
+        toolName: 'lookup',
+        output: 'late',
+        durationMs: 3,
+        isError: false,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toEqual([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c9',
+        toolName: 'lookup',
+        input: {},
+        dynamic: true,
+      },
+      { type: 'tool-output-available', toolCallId: 'c9', output: 'late' },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_tool_after_open_text_closes_text_first', async () => {
+    // EC-2: an open text block is closed before the tool chunk is emitted.
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'thinking about it' },
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'text-start', id: TEXT_ID },
+      { type: 'text-delta', id: TEXT_ID, delta: 'thinking about it' },
+      { type: 'text-end', id: TEXT_ID },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'search',
+        input: { q: 'x' },
+        dynamic: true,
+      },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_tool_chunks_validate_against_ui_message_chunk_schema', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'search',
+        output: 'hit',
+        durationMs: 3,
+        isError: false,
+      },
+      {
+        type: 'tool_result',
+        callId: 'c2',
+        toolName: 'other',
+        output: 'err',
+        durationMs: 3,
+        isError: true,
+      },
+    ]
+    const schema = uiMessageChunkSchema()
+    const validate = schema.validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+})
