@@ -36,6 +36,11 @@ export type { UseAgentToolCardsReturn } from './use-agent-tool-cards.js'
 
 export { consumeAgentStream, parseSSEChunk } from './agent-stream-core.js'
 
+// M2 — agents/*.ts convention: typed UIMessageStream hook + pure reader.
+export { consumeUIMessageStream } from './consume-ui-message-stream.js'
+export { useAgent } from './use-agent.js'
+export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from './use-agent.js'
+
 // Link with prefetch — instant navigation for multi-page apps
 export { Link } from './link.js'
 export type { LinkProps, PrefetchBehavior } from './link.js'
