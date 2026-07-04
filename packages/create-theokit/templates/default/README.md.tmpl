@@ -40,9 +40,10 @@ Ollama / OpenAI from env vars — see the file's header comment).
 
 - **Agent chat surface** — `app/page.tsx` renders `@theokit/ui` chat components
   driven by the streaming endpoint.
-- **`createConversationHistory` + `streamAgentRun`** — the `@theokit/sdk` runtime
-  owns conversation persistence + provider resolution; `server/routes/chat.ts`
-  just yields its events.
+- **`agents/chat.ts` (`defineAgent`)** — one file auto-served at `POST /api/agents/chat`,
+  streaming the ai-sdk `UIMessageStream` wire; `useAgent('/api/agents/chat')` on the client
+  reconstructs `UIMessage[]` you render via `message.parts`. `@theokit/sdk` owns
+  conversation persistence and provider resolution.
 - **`defineAgentTool`** — declare typed tools (the template ships a
   `current_time` example).
 

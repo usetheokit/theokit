@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const TEMPLATE_ROOT = resolve(__dirname, '../../packages/create-theokit/templates/default')
@@ -103,80 +103,60 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     )
   })
 
-  it('T1.2: page.tsx uses useAgentStream hook', () => {
-    const page = read('app/page.tsx')
-    expect(page).toMatch(/useAgentStream/)
-    expect(page).toMatch(/from ['"]theokit\/client['"]/)
+  // M3 (clean break) — the default scaffold's chat agent is now the zero-config
+  // `agents/chat.ts` convention. The pre-M2 `server/routes/chat.ts` +
+  // `defineAgentEndpoint` surface was removed entirely. Tests below assert the
+  // new shape and the absence of the old surface.
+
+  it('M3: server/routes/chat.ts is absent (removed in clean break)', () => {
+    expect(existsSync(resolve(TEMPLATE_ROOT, 'server/routes/chat.ts'))).toBe(false)
   })
 
-  it('T1.2: page.tsx does NOT manually parse SSE (no getReader / TextDecoder)', () => {
+  it('M3: agents/chat.ts exists and default-exports defineAgent from @theokit/agents', () => {
+    const agent = read('agents/chat.ts')
+    expect(agent).toMatch(/export\s+default\s+defineAgent\(/)
+    expect(agent).toMatch(/from\s+['"]@theokit\/agents['"]/)
+  })
+
+  it('M3: agents/chat.ts declares a Zod input schema (typed end-to-end client)', () => {
+    const agent = read('agents/chat.ts')
+    expect(agent).toMatch(/input:\s*z\.object\(/)
+  })
+
+  it('M3: agents/chat.ts declares a model', () => {
+    const agent = read('agents/chat.ts')
+    expect(agent).toMatch(/model:\s*['"]/)
+  })
+
+  it('M3: agents/chat.ts does NOT reference the removed proprietary surface', () => {
+    const agent = read('agents/chat.ts')
+    expect(agent).not.toMatch(
+      /defineAgentEndpoint|streamAgentRun|createConversationHistory|AgentEvent/,
+    )
+  })
+
+  it('M3: agents/chat.ts does NOT import a raw LLM SDK (anti-stack guard — the SDK owns the provider)', () => {
+    const agent = read('agents/chat.ts')
+    const rawSdkImport =
+      /(?:from|require\(|import\()\s*['"]openai['"]/i.test(agent) ||
+      /from\s+['"]@anthropic-ai\/sdk['"]/i.test(agent)
+    expect(rawSdkImport).toBe(false)
+  })
+
+  it('M3: page.tsx uses useAgent hook (not the removed useAgentStream) and references /api/agents/chat', () => {
+    const page = read('app/page.tsx')
+    expect(page).toMatch(/useAgent\b/)
+    expect(page).not.toMatch(/useAgentStream/)
+    expect(page).toMatch(/from\s+['"]theokit\/client['"]/)
+    expect(page).toMatch(/\/api\/agents\/chat/)
+  })
+
+  it('M3: page.tsx does NOT manually parse SSE (no getReader / TextDecoder)', () => {
+    // useAgent handles the UIMessageStream internally — the page never touches
+    // the raw SSE reader or text decoder.
     const page = read('app/page.tsx')
     expect(page).not.toMatch(/getReader\(\)/)
     expect(page).not.toMatch(/new TextDecoder/)
-  })
-
-  it('T1.2: page.tsx maps runtime AgentEvent to chat items', () => {
-    const page = read('app/page.tsx')
-    // The page must transform runtime events into visual items
-    expect(page).toMatch(/events\.map|events\s*\.\s*map/)
-  })
-
-  it('server/routes/chat.ts exists and exports POST handler', () => {
-    const chat = read('server/routes/chat.ts')
-    expect(chat).toContain("from 'theokit/server'")
-    expect(chat).toMatch(/export const POST/)
-  })
-
-  it('server/routes/chat.ts has clear documentation as the canonical agent endpoint (EC-11, updated for item #3)', () => {
-    // Updated 2026-05-22 (item #3): chat.ts is no longer a mock with
-    // "replace with X" comments — it's the canonical SDK wiring. Comment now
-    // explains the SDK-shaped contract (Agent.prompt, throwOnError, providers).
-    const chat = read('server/routes/chat.ts')
-    expect(chat).toMatch(/agent|@theokit\/sdk|Agent\.prompt|throwOnError/i)
-  })
-
-  it('T1.1: chat.ts uses defineAgentEndpoint helper (not manual SSE)', () => {
-    const chat = read('server/routes/chat.ts')
-    expect(chat).toMatch(/defineAgentEndpoint/)
-  })
-
-  it('T1.1: chat.ts does NOT manually build a Response with text/event-stream', () => {
-    const chat = read('server/routes/chat.ts')
-    // Helper handles the response shape now — no manual construction
-    expect(chat).not.toMatch(/new Response\([^)]*text\/event-stream/s)
-    expect(chat).not.toMatch(/'Content-Type':\s*'text\/event-stream'/)
-  })
-
-  it('T1.1: chat.ts handler is an async generator yielding AgentEvent', () => {
-    const chat = read('server/routes/chat.ts')
-    expect(chat).toMatch(/async\s*\*\s*handler/)
-    // Either bare `yield { type: ... }` OR yield-delegate to a generator
-    // (e.g., `yield* streamAgentRun(run)` since item #4). Both shapes
-    // satisfy the AgentEvent contract.
-    expect(chat).toMatch(/yield\s*\{\s*type:|yield\*\s+streamAgentRun\(/)
-  })
-
-  it('regression — chat.ts does NOT call request.json() (smoke 2026-05-18)', () => {
-    // Live demo failure 2026-05-18: handler called `await request.json()` but
-    // `request` is the underlying Node IncomingMessage (no `.json` method).
-    // The framework already parses the body via `parseRequestBody` and passes
-    // it as `body` — handlers must use the `body` parameter, not request.json().
-    //
-    // Match call sites only (skip doc-comment lines starting with ` *`) so the
-    // educational "use body instead of request.json()" note in the template
-    // header is not flagged as a regression.
-    const chat = read('server/routes/chat.ts')
-    const callSiteLines = chat
-      .split('\n')
-      .filter((line) => !/^\s*\*/.test(line) && !/^\s*\/\//.test(line))
-      .join('\n')
-    expect(callSiteLines).not.toMatch(/request\.json\s*\(/)
-  })
-
-  it('regression — chat.ts uses the framework-parsed body parameter', () => {
-    const chat = read('server/routes/chat.ts')
-    // Handler destructures or uses body from the context object
-    expect(chat).toMatch(/handler\s*\(\s*\{[^}]*\bbody\b/)
   })
 
   it('layout.tsx does not manually wrap ThemeProvider (auto-injected via entry-client)', () => {

@@ -13,6 +13,12 @@ import { test, expect, type ConsoleMessage, type Page } from '@playwright/test'
  *   - request.json() crash on Node IncomingMessage in dev.
  *   - Hydration mismatch from divergent SSR/CSR trees.
  *
+ * M3 (clean break): the agent endpoint is now `POST /api/agents/chat` (served
+ * by `agents/chat.ts` via `defineAgent`). Tests that exercise the chat surface
+ * intercept the route with a Playwright mock that emits a UIMessageStream
+ * response (`x-vercel-ai-ui-message-stream: v1`) so CI does not need a real
+ * LLM key to validate the render path.
+ *
  * Every assertion here would have caught at least one of those bugs at
  * commit-time. Failing this spec ships visible regressions.
  */
@@ -38,6 +44,33 @@ function collectConsoleErrors(page: Page) {
     errors.push(err.message)
   })
   return errors
+}
+
+/**
+ * Fulfills a Playwright route with a UIMessageStream SSE response that emits a
+ * single text reply "Hi". Correct wire format for `useAgent` consumers:
+ *   header: x-vercel-ai-ui-message-stream: v1
+ *   body:   data: {json}\n\n  ×5  +  data: [DONE]\n\n
+ */
+async function mockAgentRoute(page: Page): Promise<void> {
+  await page.route('**/api/agents/chat', async (route) => {
+    const chunks = [
+      { type: 'start' },
+      { type: 'text-start', id: 't0' },
+      { type: 'text-delta', id: 't0', delta: 'Hi' },
+      { type: 'text-end', id: 't0' },
+      { type: 'finish' },
+    ]
+    const body = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n'
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'content-type': 'text/event-stream',
+        'x-vercel-ai-ui-message-stream': 'v1',
+      },
+      body,
+    })
+  })
 }
 
 test.describe('Default template — agent surface', () => {
@@ -74,18 +107,20 @@ test.describe('Default template — agent surface', () => {
     await expect(page.locator('h1, [class*="font-display"]').first()).toBeVisible()
   })
 
-  test('chat composer accepts input + auto-attaches X-Theo-Action header (T1.1)', async ({
+  test('chat composer accepts input + auto-attaches X-Theo-Action header (M3)', async ({
     page,
   }) => {
     const errors = collectConsoleErrors(page)
 
-    // T1.1 — Phase 1 BLOCKING fix: consumeAgentStream now attaches
-    // X-Theo-Action: '1' on the POST so 0.3.0 strict CSRF accepts the request
-    // without per-route opt-out. This assertion was previously inverted
-    // (documenting the pre-fix behavior); flipping it locks the fix.
+    // Mock the agent endpoint before navigation so the route is captured
+    // from the first POST. The mock emits a UIMessageStream reply "Hi".
+    await mockAgentRoute(page)
+
+    // M3: useAgent POSTs to /api/agents/chat with X-Theo-Action: 1 so the
+    // 0.3.0 strict CSRF gate accepts the request without per-route opt-out.
     let chatHadCsrfHeader = false
     page.on('request', (req) => {
-      if (req.url().endsWith('/api/chat') && req.method() === 'POST') {
+      if (req.url().includes('/api/agents/chat') && req.method() === 'POST') {
         const headerValue = req.headers()['x-theo-action']
         if (headerValue === '1') chatHadCsrfHeader = true
       }
@@ -97,45 +132,35 @@ test.describe('Default template — agent surface', () => {
     await composer.fill('e2e test message')
     await page.getByRole('button', { name: 'Send message' }).click()
 
-    // Assistant card should appear with the mock's echoed content.
-    await expect(page.getByText('Recebi: "e2e test message"')).toBeVisible({ timeout: 5000 })
-
-    // Tool call card should appear.
-    await expect(page.getByText('search')).toBeVisible()
-
-    // Final message.
-    await expect(page.getByText(/Pronto.*mock/)).toBeVisible()
+    // The mocked UIMessageStream reply should appear in the chat thread.
+    await expect(page.getByText('Hi')).toBeVisible({ timeout: 5000 })
 
     expect(errors).toEqual([])
 
-    // T1.1: useAgentStream MUST attach the header. Inverts the previous
-    // assertion `.toBe(false)` which documented the BUG. Now the test
-    // locks the FIX.
+    // useAgent MUST attach X-Theo-Action: 1 for CSRF acceptance.
     expect(chatHadCsrfHeader).toBe(true)
   })
 
-  test('streaming response arrives as 3 SSE events in order', async ({ page }) => {
+  test('streaming response arrives and renders reply in the chat thread (M3)', async ({ page }) => {
+    await mockAgentRoute(page)
     await page.goto('/')
 
     await page.getByRole('textbox', { name: 'Chat message' }).fill('order check')
     await page.getByRole('button', { name: 'Send message' }).click()
 
-    // The mock yields message → tool_call → message. Verify presence + order.
-    const echoLocator = page.getByText('Recebi: "order check"')
-    const toolLocator = page.getByText('search')
-    const finalLocator = page.getByText(/Pronto/)
+    // The mocked UIMessageStream reply "Hi" must be visible.
+    const replyLocator = page.getByText('Hi')
+    await expect(replyLocator).toBeVisible({ timeout: 5000 })
 
-    await expect(echoLocator).toBeVisible({ timeout: 5000 })
-    await expect(toolLocator).toBeVisible()
-    await expect(finalLocator).toBeVisible()
-
-    // Order: each subsequent element should appear AFTER the previous in DOM.
-    const echoBox = await echoLocator.boundingBox()
-    const finalBox = await finalLocator.boundingBox()
-    expect(echoBox).toBeTruthy()
-    expect(finalBox).toBeTruthy()
-    if (echoBox && finalBox) {
-      expect(finalBox.y).toBeGreaterThan(echoBox.y)
+    // Reply must appear below the user message in the chat thread.
+    const userMsg = page.getByText('order check').first()
+    const replyMsg = replyLocator.first()
+    const userBox = await userMsg.boundingBox()
+    const replyBox = await replyMsg.boundingBox()
+    expect(userBox).toBeTruthy()
+    expect(replyBox).toBeTruthy()
+    if (userBox && replyBox) {
+      expect(replyBox.y).toBeGreaterThan(userBox.y)
     }
   })
 
@@ -180,13 +205,13 @@ test.describe('Default template — agent surface', () => {
     page,
   }) => {
     // No header → generated UUID propagates as x-trace-id (and x-request-id).
-    const generatedResp = await page.request.get('/api/chat')
+    const generatedResp = await page.request.get('/api/agents/chat')
     const generatedTrace = generatedResp.headers()['x-trace-id']
     expect(generatedTrace).toBeTruthy()
     expect(generatedTrace).toBe(generatedResp.headers()['x-request-id'])
 
     // Honors a W3C traceparent header by extracting the 32-hex trace-id.
-    const traced = await page.request.post('/api/chat', {
+    const traced = await page.request.post('/api/agents/chat', {
       headers: {
         'content-type': 'application/json',
         traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
@@ -198,10 +223,13 @@ test.describe('Default template — agent surface', () => {
 
   test('no unhandled console errors during full session', async ({ page }) => {
     const errors = collectConsoleErrors(page)
+
+    await mockAgentRoute(page)
+
     await page.goto('/')
     await page.getByRole('textbox', { name: 'Chat message' }).fill('no errors check')
     await page.getByRole('button', { name: 'Send message' }).click()
-    await expect(page.getByText(/Pronto/)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Hi')).toBeVisible({ timeout: 5000 })
 
     expect(errors, `unexpected errors:\n${errors.join('\n')}`).toEqual([])
   })
