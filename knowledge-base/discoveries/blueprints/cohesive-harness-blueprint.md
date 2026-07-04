@@ -1,0 +1,1 @@
+../../../.claude/knowledge-base/discoveries/blueprints/cohesive-harness-blueprint.md
