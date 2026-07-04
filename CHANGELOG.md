@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Cohesive agent harness — HITL groundwork** (M4, Eixo C): `@theokit/agents` gains `createHitlPlugin` — a `pre_tool_call` plugin that makes the shipped-but-dead `@HumanInTheLoop` decorator functional by pausing the SDK run for a human approval (the SDK's own async `pre_tool_call` hook is awaited, so a pending Promise genuinely pauses the run — no parallel runtime, ADR 0038). The M1 `UIMessageStream` translator now maps `approval_required` onto the ai-sdk-native `tool-approval-request` chunk (the client renders the approval via `useChat`; M1 deferred these chunks to M4). The endpoint wiring (approval route + session/resume) lands in the same milestone. The harness is an adapter over `@theokit/sdk` — it calls no LLM, dispatches no tool, and reuses the SDK's conversation storage. (theokit-ai-first M4)
+
 ### Removed
 
 - **BREAKING — the pre-M2 proprietary agent surface is removed** (M3 clean break, `theokit` major). Deleted: the `AgentEvent` SSE protocol (`theokit/core/contracts` `AgentEvent` + variants), the server producers `defineAgentEndpoint` / `streamAgentRun` / `createConversationHistory` (`theokit/server/define` + the `theokit/server/agent` subpath, which is removed entirely), and the client cluster `useAgentStream` / `deriveLiveText` / `deriveError` / `consumeAgentStream` / `parseSSEChunk` / `useAgentToolCards` / `foldAgentToolCards` / `defaultResolveEnvelope` (`theokit/client`). The replacement shipped in M2: the `agents/<name>.ts` convention (`defineAgent`) auto-served as `POST /api/agents/<name>` on the ai-sdk `UIMessageStream` wire, consumed by `useAgent` / `consumeUIMessageStream`. `defineAgentTool`, `provider-resolver`, and the M2 surface are unchanged. Migration guide: `docs/migration/0.13-to-0.14-agent-surface.md`. (theokit-ai-first M3)
