@@ -60,6 +60,9 @@ function* closeOpenBlock(state: BlockState, textId: string): Generator<UIMessage
     yield { type: 'reasoning-end', id: state.reasoningId }
   }
   state.openBlock = null
+  // Reset the just-closed block's stale reasoning id so it can never be reused
+  // by a later thinking event (reasoningId is always re-minted before read).
+  state.reasoningId = null
 }
 
 /** Emit a tool-input-available for a committed tool call (EC-1: `dynamic:true`). */
