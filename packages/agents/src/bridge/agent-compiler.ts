@@ -9,6 +9,7 @@
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
 
 import { getAgentConfig } from '../decorators/agent.js'
+import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import type { MemoryOptions } from '../decorators/memory.js'
 import type { ProjectContextOptions } from '../decorators/project-context.js'
@@ -24,6 +25,35 @@ export interface CompiledTool {
   description: string
   inputSchema: unknown
   handler: (input: unknown) => string | Promise<string>
+}
+
+/**
+ * The runtime name the SDK loop reports in `pre_tool_call` — `namespace.tool` when a toolbox
+ * declares a namespace, else the bare tool name. Single source of this convention (DRY): both
+ * {@link compileTools} and {@link compileHitlGates} key off it, so the HITL gate map and the SDK
+ * tool registry can never disagree on a name.
+ */
+export function toolRuntimeName(namespace: string, toolName: string): string {
+  return namespace ? `${namespace}.${toolName}` : toolName
+}
+
+/**
+ * Build the HITL gate map: runtime tool name → its `@HumanInTheLoop` config, for every gated tool.
+ * The HITL plugin ({@link createHitlPlugin}) pauses the run only for tools present here. Empty map
+ * ⇒ no gated tools ⇒ the non-HITL stream path (M2, byte-unchanged).
+ */
+export function compileHitlGates(
+  toolboxes: ToolboxWalkResult[],
+): Map<string, HumanInTheLoopOptions> {
+  const gates = new Map<string, HumanInTheLoopOptions>()
+  for (const tb of toolboxes) {
+    for (const tool of tb.tools) {
+      if (tool.hitl) {
+        gates.set(toolRuntimeName(tb.namespace, tool.config.name), tool.hitl)
+      }
+    }
+  }
+  return gates
 }
 
 /**
@@ -55,7 +85,7 @@ export function compileTools(
         )
       }
 
-      const name = tb.namespace ? `${tb.namespace}.${tool.config.name}` : tool.config.name
+      const name = toolRuntimeName(tb.namespace, tool.config.name)
 
       tools.push({
         name,
@@ -106,6 +136,11 @@ export interface CompiledAgentOptions {
   maxIterations?: number
   timeoutMs?: number
   stream: boolean
+  /**
+   * HITL gate map (M4): runtime tool name → `@HumanInTheLoop` config. Absent/empty ⇒ no gated
+   * tools. The harness (`mountAgent`) turns this into the `pre_tool_call` pause wiring.
+   */
+  hitl?: Map<string, HumanInTheLoopOptions>
 }
 
 /**
@@ -136,6 +171,7 @@ export function compileAgent(
 ): CompiledAgentOptions {
   const tools = compileTools(walkResult.toolboxes, toolboxInstances)
   const agents = compileSubAgents(walkResult.subAgentClasses)
+  const hitl = compileHitlGates(walkResult.toolboxes)
 
   return {
     model: walkResult.agentConfig.model,
@@ -156,5 +192,6 @@ export function compileAgent(
     maxIterations: walkResult.mainLoop.maxIterations ?? walkResult.agentConfig.maxIterations,
     timeoutMs: walkResult.mainLoop.timeoutMs ?? walkResult.agentConfig.timeoutMs,
     stream: walkResult.agentConfig.stream ?? true,
+    hitl: hitl.size > 0 ? hitl : undefined,
   }
 }

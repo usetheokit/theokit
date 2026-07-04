@@ -5,7 +5,13 @@ import { Agent } from '../../src/decorators/agent.js'
 import { MainLoop } from '../../src/decorators/main-loop.js'
 import { Toolbox, Tool } from '../../src/decorators/tool.js'
 import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
-import { compileTools, compileAgent } from '../../src/bridge/agent-compiler.js'
+import {
+  compileTools,
+  compileAgent,
+  compileHitlGates,
+  toolRuntimeName,
+} from '../../src/bridge/agent-compiler.js'
+import { HumanInTheLoop } from '../../src/decorators/human-in-the-loop.js'
 
 describe('Agent compiler', () => {
   describe('compileTools', () => {
@@ -209,6 +215,88 @@ describe('Agent compiler', () => {
       const options = compileAgent(walkAgentMetadata(PlainAgent))
 
       expect(options.reasoningEffort).toBeUndefined()
+    })
+  })
+
+  describe('compileHitlGates (M4)', () => {
+    it('test_toolRuntimeName_namespaced_and_bare', () => {
+      expect(toolRuntimeName('ops', 'deploy')).toBe('ops.deploy')
+      expect(toolRuntimeName('', 'deploy')).toBe('deploy')
+    })
+
+    it('test_gated_tool_keyed_by_runtime_name_with_its_config', () => {
+      @Toolbox({ namespace: 'ops' })
+      class OpsTools {
+        @Tool({ name: 'deploy', description: 'Deploy', input: z.object({}) })
+        @HumanInTheLoop({ question: 'Deploy to prod?', onTimeout: 'abort' })
+        async deploy() {
+          return 'deployed'
+        }
+
+        @Tool({ name: 'status', description: 'Status', input: z.object({}) })
+        async status() {
+          return 'ok'
+        }
+      }
+
+      @Agent({ name: 'ops', route: '/ops' })
+      class OpsAgent {
+        @MainLoop()
+        async run() {}
+      }
+
+      const walk = walkAgentMetadata(OpsAgent, [OpsTools])
+      const gates = compileHitlGates(walk.toolboxes)
+
+      // Only the @HumanInTheLoop-decorated tool is gated, keyed by its runtime name.
+      expect([...gates.keys()]).toEqual(['ops.deploy'])
+      expect(gates.get('ops.deploy')).toMatchObject({
+        question: 'Deploy to prod?',
+        onTimeout: 'abort',
+      })
+      expect(gates.has('ops.status')).toBe(false)
+    })
+
+    it('test_compileAgent_sets_hitl_only_when_a_tool_is_gated', () => {
+      @Toolbox({ namespace: 'ops' })
+      class GatedTools {
+        @Tool({ name: 'deploy', description: 'Deploy', input: z.object({}) })
+        @HumanInTheLoop({ question: 'ok?' })
+        async deploy() {
+          return ''
+        }
+      }
+      @Toolbox({ namespace: 'safe' })
+      class SafeTools {
+        @Tool({ name: 'read', description: 'Read', input: z.object({}) })
+        async read() {
+          return ''
+        }
+      }
+
+      @Agent({ name: 'a', route: '/a' })
+      class GatedAgent {
+        @MainLoop()
+        async run() {}
+      }
+      @Agent({ name: 'b', route: '/b' })
+      class SafeAgent {
+        @MainLoop()
+        async run() {}
+      }
+
+      const gated = compileAgent(
+        walkAgentMetadata(GatedAgent, [GatedTools]),
+        new Map([[GatedTools, new GatedTools()]]),
+      )
+      const safe = compileAgent(
+        walkAgentMetadata(SafeAgent, [SafeTools]),
+        new Map([[SafeTools, new SafeTools()]]),
+      )
+
+      expect(gated.hitl?.get('ops.deploy')).toBeDefined()
+      // No gated tool ⇒ hitl stays undefined ⇒ the non-HITL stream path.
+      expect(safe.hitl).toBeUndefined()
     })
   })
 })

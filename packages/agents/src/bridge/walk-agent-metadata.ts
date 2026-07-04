@@ -15,6 +15,8 @@ import { getContextWindowConfig } from '../decorators/context-window.js'
 import type { ContextWindowOptions } from '../decorators/context-window.js'
 import type { GatewayOptions } from '../decorators/gateway.js'
 import { getGatewayConfig } from '../decorators/gateway.js'
+import { getHumanInTheLoopConfig } from '../decorators/human-in-the-loop.js'
+import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import { getMcpConfig } from '../decorators/mcp.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import { getMemoryConfig } from '../decorators/memory.js'
@@ -99,6 +101,8 @@ export interface ToolWalkResult {
   budget?: BudgetOptions
   trace: boolean
   audit: boolean
+  /** `@HumanInTheLoop` config when the tool method is gated (M4); absent ⇒ not gated. */
+  hitl?: HumanInTheLoopOptions
 }
 
 function walkToolbox(ToolboxClass: Function): ToolboxWalkResult {
@@ -135,6 +139,7 @@ function walkToolbox(ToolboxClass: Function): ToolboxWalkResult {
       budget: undefined, // read via Budget when needed
       trace: traceVal ?? false,
       audit: auditVal ?? false,
+      hitl: getHumanInTheLoopConfig(ToolboxClass, propertyKey),
     }
   })
 
