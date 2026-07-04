@@ -34,71 +34,74 @@ export interface TerminalRenderOptions {
   onApproval: (req: { approvalId: string; toolName: string }) => Promise<void>
 }
 
-/** Read a string field off a loosely-typed chunk (the `ai` union is wide). */
-function str(chunk: Record<string, unknown>, key: string): string {
-  const v = chunk[key]
-  return typeof v === 'string' ? v : ''
+/** Render an `unknown` tool output/input for display (string as-is; other JSON-ish values stringified). */
+function display(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value ?? {})
 }
 
 /**
  * Map a single (non-approval) `UIMessageChunk` to its terminal line(s), or `''` for chunks that render
  * nothing (`start`/`text-start`/`reasoning-start`/…). Pure — the async loop owns approval + I/O.
+ * Narrows the `ai` discriminated union directly on `chunk.type` (no cast; G3).
  */
-function renderChunkLine(c: Record<string, unknown>, tty: boolean | undefined): string {
-  switch (c.type) {
+function renderChunkLine(chunk: UIMessageChunk, tty: boolean | undefined): string {
+  switch (chunk.type) {
     case 'text-delta':
-      return str(c, 'delta')
+      return chunk.delta
     case 'text-end':
     case 'finish':
       return '\n'
     case 'reasoning-delta':
-      return paint(str(c, 'delta'), 'dim', tty)
+      return paint(chunk.delta, 'dim', tty)
     case 'reasoning-end':
       return '\n'
     case 'tool-input-available':
-      return paint(`\n▸ ${str(c, 'toolName')}(${JSON.stringify(c.input ?? {})})\n`, 'cyan', tty)
+      return paint(`\n▸ ${chunk.toolName}(${display(chunk.input)})\n`, 'cyan', tty)
     case 'tool-output-available':
-      return paint(`  ✓ ${str(c, 'output')}\n`, 'green', tty)
+      return paint(`  ✓ ${display(chunk.output)}\n`, 'green', tty)
     case 'tool-output-error':
-      return paint(`  ✗ ${str(c, 'errorText')}\n`, 'red', tty)
-    case 'data-checkpoint':
-      return paint('\n⎇ checkpoint saved — resume with the same session id\n', 'dim', tty)
+      return paint(`  ✗ ${chunk.errorText}\n`, 'red', tty)
     case 'error':
-      return paint(`\n✗ ${str(c, 'errorText')}\n`, 'red', tty)
+      return paint(`\n✗ ${chunk.errorText}\n`, 'red', tty)
     default:
-      return ''
+      // ai-sdk `data-*` transient parts (e.g. the M4 `data-checkpoint` resume handle).
+      return chunk.type === 'data-checkpoint'
+        ? paint('\n⎇ checkpoint saved — resume with the same session id\n', 'dim', tty)
+        : ''
   }
 }
 
 /**
  * Render the `UIMessageChunk` stream to `stdout`. Sequential: one chunk → its line(s). The SDK run is
  * already paused inside the awaited `pre_tool_call` hook when a `tool-approval-request` arrives, so a
- * blocking `await onApproval(...)` here is correct — no frame buffer, no concurrency.
+ * blocking `await onApproval(...)` here is correct — no frame buffer, no concurrency. Returns whether
+ * an `error` chunk was seen so the caller can signal a non-zero exit (fail-loud, not silent exit 0).
  */
 export async function renderAgentStreamToTerminal(
   chunks: AsyncIterable<UIMessageChunk>,
   opts: TerminalRenderOptions,
-): Promise<void> {
+): Promise<{ sawError: boolean }> {
   const tty = opts.stdout.isTTY
   const write = (s: string): void => {
     if (s) opts.stdout.write(s)
   }
   // toolCallId → toolName, so the approval prompt (whose chunk carries only ids) can name the tool.
   const toolNames = new Map<string, string>()
+  let sawError = false
 
   for await (const chunk of chunks) {
-    const c = chunk as unknown as Record<string, unknown>
-    if (c.type === 'tool-approval-request') {
-      const toolName = toolNames.get(str(c, 'toolCallId'))
-      await opts.onApproval({ approvalId: str(c, 'approvalId'), toolName: toolName ?? 'tool' })
+    if (chunk.type === 'tool-approval-request') {
+      const toolName = toolNames.get(chunk.toolCallId)
+      await opts.onApproval({ approvalId: chunk.approvalId, toolName: toolName ?? 'tool' })
       continue
     }
-    if (c.type === 'tool-input-available') {
-      const id = str(c, 'toolCallId')
-      if (id) toolNames.set(id, str(c, 'toolName'))
+    if (chunk.type === 'tool-input-available' && chunk.toolCallId) {
+      toolNames.set(chunk.toolCallId, chunk.toolName)
     }
-    write(renderChunkLine(c, tty))
+    if (chunk.type === 'error') sawError = true
+    write(renderChunkLine(chunk, tty))
   }
+  return { sawError }
 }
 
 /** Injectable I/O for the approval prompt (defaults to the process streams at the CLI entry). */
@@ -108,21 +111,40 @@ export interface PromptIO {
 }
 
 /**
- * Prompt `Approve <tool>? (y/n)` and resolve to the decision. A non-interactive environment (piped /
+ * Prompt `Approve <tool>? (y/N)` and resolve to the decision. A non-interactive environment (piped /
  * CI — either stream is not a TTY) AUTO-DENIES without prompting (ADR-M5b fail-safe: a decision that
  * cannot be obtained is a deny, never an auto-approve; mirrors HITL `onTimeout: 'abort'`).
+ *
+ * `timeoutMs` (the gated tool's `@HumanInTheLoop` timeout) auto-denies + closes the prompt when the
+ * human walks away — WITHOUT it the readline question would outlive the SDK run (the registry settles
+ * the run at its own timeout but readline has no timer), hanging the CLI on a now-irrelevant prompt.
  */
-export function promptTerminalApproval(req: { toolName: string }, io: PromptIO): Promise<boolean> {
+export function promptTerminalApproval(
+  req: { toolName: string },
+  io: PromptIO,
+  timeoutMs?: number,
+): Promise<boolean> {
   if (!io.input.isTTY || !io.output.isTTY) {
     io.output.write(`\n⚠ Non-interactive terminal — auto-denying approval for '${req.toolName}'.\n`)
     return Promise.resolve(false)
   }
   return new Promise<boolean>((resolve) => {
     const rl = createInterface({ input: io.input, output: io.output })
-    rl.question(`\n❔ Approve ${req.toolName}? (y/N) `, (answer) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const settle = (approved: boolean): void => {
+      if (timer) clearTimeout(timer)
       rl.close()
+      resolve(approved)
+    }
+    if (timeoutMs !== undefined && timeoutMs > 0) {
+      timer = setTimeout(() => {
+        io.output.write(`\n⚠ Approval timed out — denying '${req.toolName}'.\n`)
+        settle(false)
+      }, timeoutMs)
+    }
+    rl.question(`\n❔ Approve ${req.toolName}? (y/N) `, (answer) => {
       const a = answer.trim().toLowerCase()
-      resolve(a === 'y' || a === 'yes')
+      settle(a === 'y' || a === 'yes')
     })
   })
 }
