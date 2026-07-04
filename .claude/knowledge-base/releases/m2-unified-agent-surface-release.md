@@ -1,13 +1,14 @@
 # Release — unified agent surface (M2)
 
 **Date:** 2026-07-04
-**Verdict:** PR_OPEN_AWAITING_APPROVAL
+**Verdict:** RELEASED
 **Flow:** Changesets (per-package tags; CI publishes on Version Packages merge)
 **Source review:** .claude/knowledge-base/reviews/unified-agent-surface-review-2026-07-04.md (READY_TO_MERGE)
 **Changeset:** .changeset/unified-agent-surface-m2.md (@theokit/agents minor, theokit minor)
 **Bumps:** @theokit/agents 0.28.0 → 0.29.0 · theokit 0.12.1 → 0.13.0
 **Feature PR:** https://github.com/usetheodev/theokit/pull/68 (develop → main) — MERGED (6f9462f)
-**Version Packages PR:** https://github.com/usetheodev/theokit/pull/69 (changeset-release/main → main) — OPEN, awaiting approval
+**Version Packages PR:** https://github.com/usetheodev/theokit/pull/69 — MERGED (c1dc583)
+**Published (manual — blocker #3 npm OIDC 404):** @theokit/agents@0.29.0 + theokit@0.13.0
 **Milestone:** M2 (plan frontmatter milestone_id: M2)
 
 ## Next steps (post-approval)

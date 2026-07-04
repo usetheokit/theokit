@@ -99,7 +99,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M2 — [ ] Eixo B — Unified zero-config agent surface
+### M2 — [x] Eixo B — Unified zero-config agent surface
 
 **Objective:** A single zero-config convention `agents/*.ts` → SSE endpoint + generated typed client hook; the dual path is resolved into one canonical surface.
 
