@@ -75,6 +75,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
     routes: cachedRoutes,
     actions: cachedActions,
     wsRoutes: cachedWsRoutes,
+    agents: cachedAgents,
   } = loadRoutesAndActions(distDir, serverDir)
 
   // Rate limiter (legacy flat form only — per-route variant is handled in
@@ -104,6 +105,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
         custom404Html,
         cachedRoutes,
         cachedActions,
+        cachedAgents,
         loadModule,
         serverDir,
         pluginRunner,
