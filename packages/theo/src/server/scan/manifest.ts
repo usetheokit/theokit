@@ -3,10 +3,12 @@
  * + `serverDir`, themselves resolved from `process.cwd()`. No HTTP input.
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { join, resolve, relative } from 'node:path'
+import { join, resolve, relative, dirname } from 'node:path'
 
 import { scanServerActions } from './action-scan.js'
 import type { ActionNode } from './action-scan.js'
+import { scanAgents } from './agent-scan.js'
+import type { AgentNode } from './agent-scan.js'
 import { compilePattern } from './match.js'
 import type { ServerRouteNode } from './match.js'
 import { scanServerRoutes } from './scan.js'
@@ -34,26 +36,43 @@ export interface ManifestWebSocket {
   wsPath: string
 }
 
+/** M2 — a top-level `agents/*.ts` convention entry. `filePath` is relative to the
+ * project root (agents live OUTSIDE `serverDir`), unlike routes/actions/ws. */
+export interface ManifestAgent {
+  filePath: string
+  agentPath: string
+  name: string
+}
+
 export interface TheoManifest {
   version: 1
   generatedAt: string
   routes: ManifestRoute[]
   actions: ManifestAction[]
   websockets: ManifestWebSocket[]
+  /** M2 — optional for backward compat: manifests generated before M2 omit it. */
+  agents?: ManifestAgent[]
 }
 
 export interface LoadedManifest {
   routes: ServerRouteNode[]
   actions: ActionNode[]
   websockets: WebSocketRouteNode[]
+  agents: AgentNode[]
 }
 
 // --- Generate ---
 
-export function generateManifest(serverDir: string): TheoManifest {
+export function generateManifest(
+  serverDir: string,
+  // Agents live at `<projectRoot>/agents`, a sibling of `serverDir` (LOCKED naming).
+  // Defaults to the server dir's parent; overridable for tests / non-standard layouts.
+  projectRoot: string = dirname(serverDir),
+): TheoManifest {
   const routes = scanServerRoutes(serverDir)
   const actions = scanServerActions(serverDir)
   const websockets = scanWebSocketRoutes(serverDir)
+  const agents = scanAgents(projectRoot)
 
   return {
     version: 1,
@@ -71,6 +90,12 @@ export function generateManifest(serverDir: string): TheoManifest {
     websockets: websockets.map((w) => ({
       filePath: relative(serverDir, w.filePath),
       wsPath: w.wsPath,
+    })),
+    agents: agents.map((a) => ({
+      // Relative to projectRoot (agents/ is outside serverDir).
+      filePath: relative(projectRoot, a.filePath),
+      agentPath: a.agentPath,
+      name: a.name,
     })),
   }
 }
@@ -115,5 +140,14 @@ export function loadManifest(distDir: string, serverDir: string): LoadedManifest
     wsPath: w.wsPath,
   }))
 
-  return { routes, actions, websockets }
+  // M2 — agents resolve relative to the project root (sibling of serverDir).
+  // `?? []` keeps pre-M2 manifests (no `agents` field) loadable (fail-safe).
+  const projectRoot = dirname(serverDir)
+  const agents: AgentNode[] = (raw.agents ?? []).map((a) => ({
+    filePath: resolve(projectRoot, a.filePath),
+    agentPath: a.agentPath,
+    name: a.name,
+  }))
+
+  return { routes, actions, websockets, agents }
 }
