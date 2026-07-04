@@ -17,6 +17,8 @@ export {
 export {
   compileTools,
   compileAgent,
+  compileHitlGates,
+  toolRuntimeName,
   type CompiledTool,
   type CompiledAgentOptions,
 } from './agent-compiler.js'
