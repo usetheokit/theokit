@@ -3,21 +3,18 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /**
- * T3.1 — Canonical chat.ts + @theokit/sdk dep in `create-theokit` template.
+ * M3 (clean break) — canonical agents/chat.ts + @theokit/sdk dep in `create-theokit` template.
  *
  * Mirrors fixtures/template-default. Verified via:
- *   - Byte-identical chat.ts bodies (defends drift)
+ *   - Byte-identical agents/chat.ts bodies (defends drift)
  *   - regex grep on package.json.tmpl (NOT JSON.parse — Mustache placeholders
  *     `{{name}}` make the template invalid JSON; EC-7)
- *   - throwOnError + no-openai assertions repeated for the template path
+ *   - defineAgent shape assertions (no proprietary surface references)
  */
 
 const ROOT = resolve(__dirname, '../..')
-const FIXTURE_CHAT = resolve(ROOT, 'fixtures/template-default/server/routes/chat.ts')
-const TEMPLATE_CHAT = resolve(
-  ROOT,
-  'packages/create-theokit/templates/default/server/routes/chat.ts',
-)
+const FIXTURE_CHAT = resolve(ROOT, 'fixtures/template-default/agents/chat.ts')
+const TEMPLATE_CHAT = resolve(ROOT, 'packages/create-theokit/templates/default/agents/chat.ts')
 const TEMPLATE_PKG = resolve(ROOT, 'packages/create-theokit/templates/default/package.json.tmpl')
 
 function normalize(s: string): string {
@@ -30,24 +27,25 @@ function normalize(s: string): string {
     .trim()
 }
 
-describe('create-theokit default template — chat.ts parity with fixture', () => {
-  it('chat.ts bodies are identical (whitespace-normalised) — defends drift', () => {
+describe('create-theokit default template — agents/chat.ts parity with fixture (M3)', () => {
+  it('agents/chat.ts bodies are identical (whitespace-normalised) — defends drift', () => {
     const fixture = normalize(readFileSync(FIXTURE_CHAT, 'utf-8'))
     const template = normalize(readFileSync(TEMPLATE_CHAT, 'utf-8'))
     expect(template).toBe(fixture)
   })
 
-  it('template chat.ts uses defineAgentTool (item #4)', () => {
+  it('template agents/chat.ts default-exports defineAgent (M3 — replaces defineAgentEndpoint)', () => {
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
-    expect(src).toMatch(/defineAgentTool\(/)
+    expect(src).toMatch(/export\s+default\s+defineAgent\(/)
+    expect(src).toMatch(/from\s+['"]@theokit\/agents['"]/)
   })
 
-  it('template chat.ts yield-delegates to streamAgentRun (item #4)', () => {
+  it('template agents/chat.ts declares a Zod input schema (typed end-to-end client)', () => {
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
-    expect(src).toMatch(/yield\*\s+streamAgentRun\(/)
+    expect(src).toMatch(/input:\s*z\.object\(/)
   })
 
-  it('template chat.ts does NOT import the raw openai npm package', () => {
+  it('template agents/chat.ts does NOT import the raw openai npm package', () => {
     // FAANG-precise: comments mentioning "OpenAI Chat Completions" (the wire
     // protocol) + env var names like OPENAI_API_KEY are domain reality.
     // The anti-stack rule blocks actual imports/requires of the openai pkg.
@@ -58,14 +56,16 @@ describe('create-theokit default template — chat.ts parity with fixture', () =
     expect(rawSdkImport).toBe(false)
   })
 
-  it('item #5 — template chat.ts uses createConversationHistory (no dispose per request)', () => {
+  it('template agents/chat.ts does NOT reference the removed proprietary surface', () => {
+    // M3: defineAgentEndpoint, streamAgentRun, createConversationHistory, and
+    // AgentEvent are all removed. The new surface is defineAgent + useAgent.
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
-    expect(src).toMatch(/createConversationHistory/)
-    const codeOnly = src
-      .split('\n')
-      .map((line) => line.replace(/\/\/.*$/, ''))
-      .join('\n')
-    expect(codeOnly).not.toMatch(/agent\.dispose\(/)
+    expect(src).not.toMatch(/defineAgentEndpoint|streamAgentRun|createConversationHistory/)
+  })
+
+  it('template agents/chat.ts declares a model', () => {
+    const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
+    expect(src).toMatch(/model:\s*['"]/)
   })
 })
 

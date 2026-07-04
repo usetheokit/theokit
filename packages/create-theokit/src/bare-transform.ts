@@ -79,8 +79,8 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     writeFileSync(pagePath, HELLO_PAGE)
   }
 
-  // 3. Remove the mock chat agent (the demo agent + its TheoUI-based page)
-  const chatPath = join(targetDir, 'server/routes/chat.ts')
+  // 3. Remove the demo chat agent (the `agents/chat.ts` file + its TheoUI page)
+  const chatPath = join(targetDir, 'agents/chat.ts')
   if (existsSync(chatPath)) {
     unlinkSync(chatPath)
   }
