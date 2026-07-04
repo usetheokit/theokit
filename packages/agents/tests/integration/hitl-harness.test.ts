@@ -53,7 +53,7 @@ async function reconstructParts(
 // The stub captures the injected HITL plugin from `overrides.plugins`, fires its `pre_tool_call`
 // hook for a gated tool (which emits `approval_required` + AWAITS the human decision), then emits
 // the tool run (allow) or the SDK's denial tool result (deny), then `done`.
-const hoisted = vi.hoisted(() => ({ toolCallId: 'sdk-tool-1' }))
+const hoisted = vi.hoisted(() => ({ toolCallId: 'sdk-tool-1', throwAfterApproval: false }))
 
 vi.mock('../../src/bridge/sdk-adapter.js', () => ({
   createSdkAgentStream:
@@ -80,6 +80,10 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
           ? await handler({ name: 'ops.deploy', args: { env: 'prod' }, agentId: 'a', runId: 'r' })
           : undefined
         const callId = hoisted.toolCallId
+        if (hoisted.throwAfterApproval) {
+          // Simulate the SDK stream rejecting mid-run (e.g. dispose() throwing) after the pause.
+          throw new Error('sdk stream blew up')
+        }
         if (decision === undefined) {
           // Approved → the SDK dispatches the tool and streams its result.
           yield { type: 'tool_call', callId, toolName: 'ops.deploy', input: { env: 'prod' } }
@@ -217,6 +221,19 @@ describe('HITL harness E2E (M4 / DoD-3)', () => {
     const pending = parts.find((p) => p.state === 'approval-requested')
     expect(pending, 'a tool part must reconstruct in approval-requested state').toBeDefined()
     expect(typeof pending?.approval?.id).toBe('string')
+  })
+
+  it('test_e2e_sdk_stream_error_in_hitl_path_surfaces_as_error_chunk', async () => {
+    // Review MEDIUM: a thrown SDK stream in the HITL path must NOT be a silent clean end (a swallowed
+    // pump rejection) — the pump captures it and surfaces an `error` chunk, then the stream finishes.
+    hoisted.throwAfterApproval = true
+    try {
+      const chunks = await runWithDecision(true)
+      expect(chunks.some((c) => c.type === 'error')).toBe(true)
+      expect(chunks.at(-1)).toEqual({ type: 'finish' })
+    } finally {
+      hoisted.throwAfterApproval = false
+    }
   })
 
   it('test_e2e_non_gated_agent_never_pauses', async () => {
