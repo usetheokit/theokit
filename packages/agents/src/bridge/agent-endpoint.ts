@@ -20,7 +20,8 @@ import { compileAgent, type CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 import { compileAgentDefinition, isAgentDefinition } from './define-agent.js'
-import { createSdkAgentStream } from './sdk-adapter.js'
+import { createHitlPlugin, type HitlWiring } from './hitl-plugin.js'
+import { createSdkAgentStream, type RuntimeOverrides } from './sdk-adapter.js'
 import { translateToUIMessageStream } from './ui-message-stream-translator.js'
 import { walkAgentMetadata } from './walk-agent-metadata.js'
 
@@ -75,18 +76,100 @@ async function* asAgentStream(
 }
 
 /**
- * Run a compiled agent and yield the M0/M1 `UIMessageStream` chunks. `apiKey` is resolved
- * by the caller (`resolveProvider`). One `textId` per run (G8: `crypto.randomUUID`).
+ * A minimal single-consumer async queue for merging the SDK event stream with the HITL
+ * plugin's out-of-band `approval_required` events (M4). Both the SDK-stream pump and the
+ * plugin's `emit` push here; the translator drains it. When a gated tool pauses the SDK run
+ * (the awaited `pre_tool_call` hook), the pump blocks with no SDK events — but the plugin's
+ * approval event is already queued, so the client sees the approval request while paused.
+ */
+class EventQueue<T> {
+  #items: T[] = []
+  #resolvers: ((v: IteratorResult<T>) => void)[] = []
+  #closed = false
+  push(item: T): void {
+    if (this.#closed) return
+    const r = this.#resolvers.shift()
+    if (r) r({ value: item, done: false })
+    else this.#items.push(item)
+  }
+  close(): void {
+    this.#closed = true
+    for (const r of this.#resolvers.splice(0)) r({ value: undefined as never, done: true })
+  }
+  async *drain(): AsyncGenerator<T> {
+    for (;;) {
+      if (this.#items.length > 0) {
+        yield this.#items.shift() as T
+        continue
+      }
+      if (this.#closed) return
+      const next = await new Promise<IteratorResult<T>>((resolve) => this.#resolvers.push(resolve))
+      if (next.done) return
+      yield next.value
+    }
+  }
+}
+
+/** HITL wiring supplied by the harness (mount-agent): the gated-tool map + the approval resolver. */
+export interface StreamHitlOptions {
+  gated: HitlWiring['gated']
+  awaitApproval: HitlWiring['awaitApproval']
+}
+
+export interface StreamAgentOptions {
+  message: string
+  sessionId: string
+  /** Enable human-in-the-loop tool approval (M4). Absent ⇒ the M2 non-HITL path, byte-unchanged. */
+  hitl?: StreamHitlOptions
+  /** Durable conversation storage for resume (M4); defaults to the SDK per-run in-memory store. */
+  conversationStorage?: RuntimeOverrides['conversationStorage']
+}
+
+/**
+ * Run a compiled agent and yield the M0/M1 `UIMessageStream` chunks. `apiKey` is resolved by the
+ * caller (`resolveProvider`). One `textId` per run (G8: `crypto.randomUUID`). When `hitl` is
+ * supplied (M4), a HITL `pre_tool_call` plugin pauses the run for gated tools — the pause is the
+ * SDK's own awaited hook, never a second loop (ADR 0038).
  */
 export function streamAgentUIMessages(
   compiled: CompiledAgentOptions,
   apiKey: string,
-  input: { message: string; sessionId: string },
+  input: StreamAgentOptions,
 ): AsyncGenerator<UIMessageChunk> {
-  const events = createSdkAgentStream(
-    compiled,
-    compiled.tools,
-    apiKey,
-  )(input.message, input.sessionId)
-  return translateToUIMessageStream(asAgentStream(events), { textId: crypto.randomUUID() })
+  const overrides: RuntimeOverrides = {}
+  if (input.conversationStorage) overrides.conversationStorage = input.conversationStorage
+
+  if (!input.hitl || input.hitl.gated.size === 0) {
+    // M2 non-HITL path — unchanged.
+    const events = createSdkAgentStream(
+      compiled,
+      compiled.tools,
+      apiKey,
+      overrides,
+    )(input.message, input.sessionId)
+    return translateToUIMessageStream(asAgentStream(events), { textId: crypto.randomUUID() })
+  }
+
+  // M4 HITL path — inject the plugin + merge its approval events with the SDK stream.
+  const queue = new EventQueue<AgentStreamEvent>()
+  const plugin = createHitlPlugin({
+    gated: input.hitl.gated,
+    emit: (e) => queue.push(e),
+    awaitApproval: input.hitl.awaitApproval,
+  })
+  const sdkStream = createSdkAgentStream(compiled, compiled.tools, apiKey, {
+    ...overrides,
+    // The HITL plugin is a structural @theokit/sdk Plugin (createHitlPlugin returns the
+    // { name, register } shape); the RuntimeOverrides.plugins union is widened at the SDK edge.
+    plugins: [plugin] as unknown as RuntimeOverrides['plugins'],
+  })(input.message, input.sessionId)
+  // Pump the SDK stream into the shared queue; close when it ends.
+  void (async () => {
+    try {
+      for await (const e of sdkStream) queue.push(e as unknown as AgentStreamEvent)
+    } finally {
+      queue.close()
+    }
+  })()
+  return translateToUIMessageStream(queue.drain(), { textId: crypto.randomUUID() })
 }
