@@ -7,6 +7,7 @@
  * runs it in the terminal via the M4 harness (`runAgentInTerminal`). A dev-time surface (ADR 0039 D1),
  * not a CLI product. `deps` is injectable so the fail-fast branches are tested without Vite/an LLM.
  */
+import { loadEnv } from '../../config/load-env.js'
 import { resolveProvider } from '../../server/agent/provider-resolver.js'
 import { runAgentInTerminal } from '../../server/agent/run-terminal-agent.js'
 import { scanAgents } from '../../server/scan/agent-scan.js'
@@ -23,7 +24,7 @@ export async function agentCommand(
   name: string,
   message: string | undefined,
   deps: AgentCommandDeps = {},
-): Promise<void> {
+): Promise<{ sawError: boolean }> {
   if (!message || message.trim().length === 0) {
     throw new Error('theokit agent: a message is required. Usage: theokit agent <name> "<message>"')
   }
@@ -36,7 +37,15 @@ export async function agentCommand(
   }
 
   const runAgent = deps.runAgent ?? runAgentInTerminal
-  const apiKey = (deps.resolveApiKey ?? (() => resolveProvider().apiKey))()
+  // Load .env into process.env BEFORE resolving the provider key — parity with `theokit dev`
+  // (dev.ts loadEnv), so an app with OPENROUTER_API_KEY in .env works here too (review H1). Skipped
+  // when the key is injected (tests) — a temp project has no .env anyway.
+  const apiKey =
+    deps.resolveApiKey?.() ??
+    (() => {
+      loadEnv({ cwd: projectRoot, mode: 'development' })
+      return resolveProvider().apiKey
+    })()
 
   let loadModule = deps.loadModule
   let dispose: (() => Promise<void>) | undefined
@@ -48,7 +57,7 @@ export async function agentCommand(
 
   try {
     const mod = await loadModule(agent.filePath)
-    await runAgent(mod, apiKey, { message, source: agent.filePath })
+    return await runAgent(mod, apiKey, { message, source: agent.filePath })
   } finally {
     if (dispose) await dispose()
   }
@@ -59,16 +68,23 @@ export async function agentCommand(
  * uses (`cli/commands/dev.ts`) — so a class-decorated `agents/<name>.ts` transpiles identically. No
  * HTTP listen, no service orchestration, silent — just `ssrLoadModule`. Caller MUST `dispose()`.
  */
-async function createAgentSsrLoader(
-  projectRoot: string,
-): Promise<{
+async function createAgentSsrLoader(projectRoot: string): Promise<{
   load: (p: string) => Promise<Record<string, unknown>>
   dispose: () => Promise<void>
 }> {
   const { createServer } = await import('vite')
   const react = (await import('@vitejs/plugin-react')).default
   const { theoPluginAsync } = await import('../../vite-plugin/index.js')
-  const theoPlugins = await theoPluginAsync(projectRoot)
+  const { loadConfig } = await import('../../config/load-config.js')
+  // Pass the project's ssr/services/optimizeDeps config through, exactly as dev.ts does — so an app
+  // that customizes ssr.noExternal transpiles here identically to `theokit dev` (review L1).
+  const config = await loadConfig(projectRoot)
+  const theoPlugins = await theoPluginAsync({
+    root: projectRoot,
+    ssr: config.ssr,
+    services: config.services,
+    viteOptimizeDeps: config.viteOptimizeDeps,
+  })
   const server = await createServer({
     root: projectRoot,
     plugins: [react(), ...theoPlugins],
@@ -79,8 +95,10 @@ async function createAgentSsrLoader(
   return {
     load: (p) => server.ssrLoadModule(p) as Promise<Record<string, unknown>>,
     dispose: async () => {
-      await server.close().catch(() => {
-        /* best-effort cleanup */
+      // Surface a cleanup failure instead of swallowing it (error-handling.md) — non-fatal, the run
+      // already finished, so warn rather than throw past the CLI boundary.
+      await server.close().catch((err: unknown) => {
+        console.warn('[theokit agent] Vite server cleanup error:', err)
       })
     },
   }

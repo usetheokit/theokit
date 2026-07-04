@@ -72,7 +72,9 @@ cli
   .action(async (name: string, message: string | undefined) => {
     try {
       const { agentCommand } = await import('./commands/agent.js')
-      await agentCommand(name, message)
+      const { sawError } = await agentCommand(name, message)
+      // The run ended with an error chunk (already rendered) — exit non-zero so `$?` / CI reflects it.
+      if (sawError) process.exit(1)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`\n  ✗ ${msg}\n`)
