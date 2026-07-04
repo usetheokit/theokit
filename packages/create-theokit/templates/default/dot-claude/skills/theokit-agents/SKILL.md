@@ -1,6 +1,6 @@
 ---
 name: theokit-agents
-description: TheoKit agent/LLM integration — two streaming surfaces (decorator vs manual), @Tool, @Toolbox, memory
+description: TheoKit agent/LLM integration — agents/*.ts convention (defineAgent), @Agent decorator (advanced/DI), defineAgentTool, useAgent client hook
 user-invocable: false
 paths:
   - "**/*agent*"
@@ -13,37 +13,38 @@ paths:
 
 # TheoKit Agents & Tools
 
-## Two Streaming Surfaces — pick one per endpoint
+## Server Surface — agents/*.ts (zero-config convention)
 
-TheoKit ships two ways to create agent endpoints. Use ONE per endpoint, not both.
-
-| Surface | Server | Events | Client | When to use |
-|---------|--------|--------|--------|-------------|
-| **Manual** (recommended for most apps) | `defineAgentEndpoint({ handler: async function* })` | `AgentEvent` (Message, ToolCall, Result, Error) | `useAgentStream()` / `consumeAgentStream()` | Full control over the LLM loop — you write the generator |
-| **Decorator** (`@theokit/agents`) | `@Agent` class → auto-generated route | `AgentStreamEvent` (TextDelta, ToolCall, Done...) | (same client hooks work) | Declarative — framework manages LLM loop via `@MainLoop` |
-
-### Surface 1: Manual (defineAgentEndpoint)
+Create an `agents/<name>.ts` file at the project root. It is automatically served at
+`POST /api/agents/<name>` (dev + build) with no manual route wiring.
 
 ```typescript
-// server/routes/agents/assistant.ts
-import { defineAgentEndpoint } from 'theokit/server/define'
-import type { AgentEvent } from 'theokit'
+// agents/chat.ts
+import { defineAgent } from '@theokit/agents'
+import { z } from 'zod'
 
-export const POST = defineAgentEndpoint({
-  handler: async function* ({ body }): AsyncGenerator<AgentEvent> {
-    // You control the LLM loop
-    yield { type: 'message', content: 'Thinking...' }
-    const result = await callLLM(body.message)
-    yield { type: 'message', content: result }
-  },
+export default defineAgent({
+  input: z.object({ message: z.string() }),
+  model: 'openai/gpt-4o-mini',
+  system: 'You are a helpful assistant.',
 })
 ```
 
-### Surface 2: Decorator (@Agent)
+The endpoint streams the ai-sdk `UIMessageStream` that `useAgent` (client hook) consumes.
+`@theokit/sdk` runs the agent; conversation turns auto-persist per session — the SDK owns storage.
+
+**Provider resolution:** `OPENROUTER_API_KEY` (preferred — routes to many models) OR
+`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. Set one in `.env`.
+
+## Advanced Surface — @Agent Decorator (DI / class-based)
+
+When you need dependency injection or class-based composition, use the `@Agent` class
+decorator from `@theokit/agents`. The class name determines the route:
+`AssistantAgent` → `POST /api/agents/assistant`.
 
 ```typescript
 // server/agents/assistant.agent.ts
-import { Agent, MainLoop, Tool, Toolbox } from '@theokit/agents'
+import { Agent, MainLoop } from '@theokit/agents'
 
 @Agent({
   model: 'openai/gpt-4o-mini',
@@ -57,9 +58,33 @@ export class AssistantAgent {
 }
 ```
 
-Convention: `AssistantAgent` → `POST /api/agents/assistant`
+## Tools — defineAgentTool
 
-## @Tool Decorator
+Declare typed tools with `defineAgentTool` (from `theokit/server`) and pass them to
+`defineAgent`'s `tools` array.
+
+```typescript
+// agents/chat.ts
+import { defineAgent } from '@theokit/agents'
+import { defineAgentTool } from 'theokit/server'
+import { z } from 'zod'
+
+const currentTimeTool = defineAgentTool({
+  name: 'current_time',
+  description: 'Return the current ISO timestamp',
+  input: z.object({}),
+  execute: async () => ({ time: new Date().toISOString() }),
+})
+
+export default defineAgent({
+  input: z.object({ message: z.string() }),
+  model: 'openai/gpt-4o-mini',
+  system: 'You are a helpful assistant.',
+  tools: [currentTimeTool],
+})
+```
+
+### @Tool Decorator (advanced / class-based)
 
 ```typescript
 import { Toolbox, Tool } from '@theokit/agents'
@@ -78,23 +103,26 @@ export class TaskTools {
 }
 ```
 
-## Client — useAgentStream (React hook)
-
-Works with BOTH surfaces. Transport: `fetch` POST + `ReadableStream` (SSE).
+## Client — useAgent (React hook)
 
 ```typescript
-import { useAgentStream } from 'theokit/client'
+import { useAgent } from 'theokit/client'
 
 function ChatUI() {
-  const { status, events, send, reset } = useAgentStream('/api/agents/assistant')
+  const { messages, status, send, reset } = useAgent<{ message: string }>('/api/agents/chat')
 
   return (
     <div>
       {status === 'streaming' && <p>Thinking...</p>}
-      {events.map(e => (
-        <div key={e.id}>
-          {e.type === 'message' && <p>{e.content}</p>}
-          {e.type === 'tool_call' && <p>Using tool: {e.name}</p>}
+      {messages.map(message => (
+        <div key={message.id}>
+          {message.parts.map((part, i) => (
+            part.type === 'text'
+              ? <p key={i}>{part.text}</p>
+              : part.type === 'dynamic-tool'
+                ? <p key={i}>Using tool: {part.toolName}</p>
+                : null
+          ))}
         </div>
       ))}
       <button onClick={() => send({ message: 'Hello' })}>Send</button>
@@ -103,15 +131,23 @@ function ChatUI() {
 }
 ```
 
-### Non-React: consumeAgentStream
+`messages` is `UIMessage[]` (ai-sdk). Render `message.parts` — text parts
+(`part.type === 'text'`, `part.text`) and tool parts (`part.type === 'dynamic-tool'`,
+`part.toolName`, `part.state`, `part.output`). Do NOT switch on an `events`/`event.type`
+pattern — the wire is `UIMessageStream`, not SSE events.
+
+### Non-React: consumeUIMessageStream
 
 ```typescript
-import { consumeAgentStream } from 'theokit/client'
+import { consumeUIMessageStream } from 'theokit/client'
 
-const stream = consumeAgentStream('/api/agents/assistant', { body: { message: 'Hi' } })
-for await (const event of stream) {
-  console.log(event.type, event.content)
-}
+const response = await fetch('/api/agents/chat', {
+  method: 'POST',
+  body: JSON.stringify({ message: 'Hello' }),
+})
+consumeUIMessageStream(response, (message) => {
+  console.log(message.parts)
+})
 ```
 
 ## SDK Ecosystem — "you are here" map
@@ -134,14 +170,12 @@ Before writing custom tools, check if they already exist:
 - `@UseGuards()` works on agents (shared with HTTP pipeline)
 - `@UseInterceptors()` and `@UseFilters()` on agents are metadata-only (emit warnings)
 - Agent runtime is `@theokit/sdk` — NEVER call LLM APIs directly via fetch
-- Pick ONE surface per endpoint — don't mix defineAgentEndpoint with @Agent for the same route
 - Check `@theokit/sdk-tools` BEFORE writing custom tools — it may already exist
 
 ## Anti-patterns
 
-- NEVER call OpenAI/Anthropic/OpenRouter APIs directly — use @Agent or defineAgentEndpoint
+- NEVER call OpenAI/Anthropic/OpenRouter APIs directly — use `defineAgent` or `@Agent`
 - NEVER reimplement tool calling loop — the SDK handles it
 - NEVER reimplement file/search/shell tools — use `@theokit/sdk-tools` (readFile, writeFile, search, etc.)
-- NEVER store conversations manually — use @Memory (decorator) or SDK persistence
+- NEVER store conversations manually — SDK persistence is automatic (the SDK owns storage)
 - NEVER infer tool capability from method name — always provide explicit `name` + `description`
-- NEVER mix both surfaces for the same endpoint — pick manual OR decorator
