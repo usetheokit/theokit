@@ -5,7 +5,7 @@
 
 ## Vision
 
-TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring ergonomics at the framework layer** — without becoming an SDK. An agent is exposed by a single file (`server/agents/*.ts`), emits the canonical `UIMessageStream` (`message.parts`) consumable by any ai-sdk-ecosystem UI (`useChat`, assistant-ui, ai-elements), and gains a cohesive **harness** (statefull loop, resume, human-in-the-loop) built as an **adapter over `@theokit/sdk`** — which remains the *only* runtime. The proprietary `AgentEvent` / `useAgentStream` surface is **removed** (clean break, no compat layer). The differentiator is preserved and extended: the "home" with auth, sessions, deploy — and now a terminal harness — that the ai-sdk does not offer.
+TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring ergonomics at the framework layer** — without becoming an SDK. An agent is exposed by a single file (`agents/*.ts`), emits the canonical `UIMessageStream` (`message.parts`) consumable by any ai-sdk-ecosystem UI (`useChat`, assistant-ui, ai-elements), and gains a cohesive **harness** (statefull loop, resume, human-in-the-loop) built as an **adapter over `@theokit/sdk`** — which remains the *only* runtime. The proprietary `AgentEvent` / `useAgentStream` surface is **removed** (clean break, no compat layer). The differentiator is preserved and extended: the "home" with auth, sessions, deploy — and now a terminal harness — that the ai-sdk does not offer.
 
 ## Problem
 
@@ -23,7 +23,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 ### In scope (V1 — required to call this project alive)
 
 - **Eixo A — Protocol:** the bridge emits `UIMessageStream` / `message.parts` as the canonical streaming format (interop with the ai-sdk ecosystem).
-- **Eixo B — Unified surface:** a single zero-config convention (`server/agents/*.ts` → SSE endpoint + generated typed client hook); the dual path (`@Agent` vs `defineAgentEndpoint` + `useAgentStream`) is resolved into one canonical surface.
+- **Eixo B — Unified surface:** a single zero-config convention (`agents/*.ts` → SSE endpoint + generated typed client hook); the dual path (`@Agent` vs `defineAgentEndpoint` + `useAgentStream`) is resolved into one canonical surface.
 - **Eixo C — Harness:** a cohesive harness (statefull loop, resume/approval, tool cards, human-in-the-loop) packaged as an **adapter/wiring over `@theokit/sdk`**, NOT a parallel runtime — gated by an accepted scope ADR before any code.
 - **Eixo D — Terminal harness:** a terminal surface rendering stream + tool calls + approval of a local agent — gated by a documented wedge decision.
 - **Clean break + dogfood:** the old proprietary surface is removed (no compat layer); examples + default template migrate; `/dogfood` emits `EVIDENCE_SUFFICIENT` for the new-surface agent-chat anchor.
@@ -51,9 +51,9 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ## Success criteria
 
-**V1 ship criterion (measurable):** A composite of binary oracles — (A) a TheoKit app consumes a TheoKit agent with `@ai-sdk/react`'s `useChat` **without a custom adapter**, proven by a green Playwright E2E rendering text + a tool-call via `message.parts`; (B) exposing an agent = **1 file** (`server/agents/x.ts`) + **0 lines of manual client wiring** (generated typed hook), and `grep -r "AgentEvent\|useAgentStream" packages/*/src` returns **0** (clean-break proof); (C) `agent-saas` runs the statefull loop with resume + HITL approval E2E, scope ADR merged before code; (D) `theokit` exposes a terminal harness rendering stream + tool calls + approval of a local agent (wedge decision documented); dogfood: `create-theokit` default + `agent-saas` migrated and `/dogfood` emits `EVIDENCE_SUFFICIENT` for the anchor "agent chat on the new surface".
+**V1 ship criterion (measurable):** A composite of binary oracles — (A) a TheoKit app consumes a TheoKit agent with `@ai-sdk/react`'s `useChat` **without a custom adapter**, proven by a green Playwright E2E rendering text + a tool-call via `message.parts`; (B) exposing an agent = **1 file** (`agents/x.ts`) + **0 lines of manual client wiring** (generated typed hook), and `grep -r "AgentEvent\|useAgentStream" packages/*/src` returns **0** (clean-break proof); (C) `agent-saas` runs the statefull loop with resume + HITL approval E2E, scope ADR merged before code; (D) `theokit` exposes a terminal harness rendering stream + tool calls + approval of a local agent (wedge decision documented); dogfood: `create-theokit` default + `agent-saas` migrated and `/dogfood` emits `EVIDENCE_SUFFICIENT` for the anchor "agent chat on the new surface".
 
-**North-star metric (tracked post-launch):** **Time-to-shipped-agent** — time/lines from `npx create-theokit` to an agent with streaming chat + tool calls running on a real URL. Target: match the ai-sdk's perceived fluidity AND deliver what it does not (the app with auth/deploy) — "5 minutes to an agent your friends actually use". Observable proxies: agent-wiring lines per app (should fall to ~1 file) and adoption of the new surface (# of apps/examples on `server/agents/*` vs zero on the old protocol). Ties to the locked HERO "build the app your agent lives in".
+**North-star metric (tracked post-launch):** **Time-to-shipped-agent** — time/lines from `npx create-theokit` to an agent with streaming chat + tool calls running on a real URL. Target: match the ai-sdk's perceived fluidity AND deliver what it does not (the app with auth/deploy) — "5 minutes to an agent your friends actually use". Observable proxies: agent-wiring lines per app (should fall to ~1 file) and adoption of the new surface (# of apps/examples on `agents/*` vs zero on the old protocol). Ties to the locked HERO "build the app your agent lives in".
 
 ---
 
@@ -67,7 +67,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 **Definition of done (all must hold):**
 
-- [ ] A prototype `server/agents/<name>.ts` exposes an agent through the new surface that emits `UIMessageStream` from a real provider (Anthropic / OpenRouter) via the `bridge`.
+- [ ] A prototype `agents/<name>.ts` exposes an agent through the new surface that emits `UIMessageStream` from a real provider (Anthropic / OpenRouter) via the `bridge`.
 - [ ] A TheoKit app/example consumes it with `@ai-sdk/react`'s `useChat` rendering streaming text **without a custom adapter** — proven by a green test.
 - [ ] The path is documented as the spine of the new architecture: request → SDK `run.stream()` → bridge → `UIMessageStream` → SSE → `useChat`.
 
@@ -80,7 +80,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M1 — [ ] Eixo A — Canonical protocol (UIMessageStream)
+### M1 — [x] Eixo A — Canonical protocol (UIMessageStream)
 
 **Objective:** The bridge emits `UIMessageStream` / `message.parts` as the canonical wire format, covering every part type — not just text.
 
@@ -101,11 +101,11 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ### M2 — [ ] Eixo B — Unified zero-config agent surface
 
-**Objective:** A single zero-config convention `server/agents/*.ts` → SSE endpoint + generated typed client hook; the dual path is resolved into one canonical surface.
+**Objective:** A single zero-config convention `agents/*.ts` → SSE endpoint + generated typed client hook; the dual path is resolved into one canonical surface.
 
 **Definition of done:**
 
-- [ ] `server/agents/<name>.ts` auto-generates the SSE route (file-based, like pages) — 1 file, 0 manual server wiring.
+- [ ] `agents/<name>.ts` auto-generates the SSE route (file-based, like pages) — 1 file, 0 manual server wiring.
 - [ ] The client obtains a typed hook/binding from the agent route with no manual wiring (types inferred end-to-end from the server definition).
 - [ ] The `@Agent` decorator and the file-based convention converge: ONE documented canonical surface; the relationship between `@Agent` (http-decorators) and the convention is decided and recorded in an ADR.
 

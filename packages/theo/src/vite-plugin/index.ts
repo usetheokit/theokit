@@ -179,6 +179,19 @@ export async function theoPluginAsync(
     distDir: resolve(projectRoot, '.theokit'),
   })
 
+  // M2 — agents typed client (`@theo/agents`). Emits `.theokit/agents.d.ts` mapping each
+  // top-level `agents/<name>.ts` to its `defineAgent({ input })` type, so `useAgent('name')`
+  // is typed end-to-end with zero manual wiring. Watches `agents/*`.
+  const { agentsTypedClientPlugin } = await import('./agents-typed-client.js')
+  const { generateManifest } = await import('../server/internal-api.js')
+  const agentsClientPlugin = agentsTypedClientPlugin({
+    projectRoot,
+    distDir: resolve(projectRoot, '.theokit'),
+    // Agents live at <projectRoot>/agents; generateManifest scans them via the server dir's
+    // parent, which is projectRoot for the canonical layout.
+    scanManifest: () => generateManifest(resolve(projectRoot, 'server'), projectRoot),
+  })
+
   // G6 T1.2 — server-routes HMR. Watches `<serverDir>/routes/**` and
   // invalidates SSR module cache + sends full-reload on any add/change/unlink
   // with a 50 ms debounce per EC-6.
@@ -193,6 +206,7 @@ export async function theoPluginAsync(
     ...servicesPlugins,
     appClientPlugin,
     actionsPlugin,
+    agentsClientPlugin,
     routesHmrPlugin,
   ]
 }

@@ -1,14 +1,21 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { extname } from 'node:path'
 
+import { mountAgent } from '../../../server/agent/mount-agent.js'
+import { resolveProvider } from '../../../server/agent/provider-resolver.js'
 import { executeAction } from '../../../server/http/action-execute.js'
 import { executeRoute } from '../../../server/http/execute.js'
+import {
+  incomingMessageToWebRequest,
+  writeWebResponseToServerResponse,
+} from '../../../server/http/node-web-adapter.js'
 import { sendError } from '../../../server/http/send-response.js'
 import { serveStaticFile } from '../../../server/http/static.js'
 import { logRequest } from '../../../server/observability/logger.js'
 import { findSuggestion } from '../../../server/observability/suggest.js'
 import type { PluginRunner } from '../../../server/plugins/plugin-runner.js'
 import type { ActionNode } from '../../../server/scan/action-scan.js'
+import type { AgentNode } from '../../../server/scan/agent-scan.js'
 import { matchRoute } from '../../../server/scan/match.js'
 import type { ServerRouteNode } from '../../../server/scan/match.js'
 import type { LoadModule } from '../../../server/scan/module-loader.js'
@@ -35,6 +42,7 @@ export interface RequestHandlerCtx {
   // Manifest-resolved tables
   cachedRoutes: ServerRouteNode[]
   cachedActions: ActionNode[]
+  cachedAgents: AgentNode[]
   // Runtime infra
   loadModule: LoadModule
   serverDir: string
@@ -126,6 +134,67 @@ export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
   )
   logRequest({
     method: c.req.method ?? 'POST',
+    url: c.url,
+    status: c.res.statusCode,
+    duration: Date.now() - c.startTime,
+    requestId: c.requestId,
+  })
+  return true
+}
+
+/**
+ * Branch 1.5: agent convention routes (`/api/agents/<name>`, M2). Runs BEFORE the
+ * generic `/api/*` branch so a scanned `agents/<name>.ts` owns its path (parity with
+ * dev). Loads the module, resolves the provider apiKey (fail-fast), and streams the
+ * M0/M1 UIMessageStream via `mountAgent` (the single dev+prod wiring point).
+ */
+export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
+  if (!c.url.startsWith('/api/agents/')) return false
+  const urlPath = c.url.split('?')[0]
+  const agent = c.cachedAgents.find((a) => a.agentPath === urlPath)
+  if (!agent) return false // fall through to the generic /api/* branch (may 404 there)
+
+  c.res.setHeader('x-request-id', c.requestId)
+  if (applyRateLimit(c, c.req.method ?? 'POST')) return true
+
+  const method = (c.req.method ?? 'POST').toUpperCase()
+  if (method !== 'POST') {
+    sendError(
+      c.res,
+      'METHOD_NOT_ALLOWED',
+      'Agent endpoints accept POST',
+      405,
+      undefined,
+      c.requestId,
+    )
+    logRequest({
+      method,
+      url: c.url,
+      status: 405,
+      duration: Date.now() - c.startTime,
+      requestId: c.requestId,
+    })
+    return true
+  }
+
+  try {
+    const mod = await c.loadModule(agent.filePath)
+    const apiKey = resolveProvider().apiKey
+    const request = incomingMessageToWebRequest(c.req)
+    const response = await mountAgent(mod, request, apiKey, agent.filePath, c.csrfMode)
+    await writeWebResponseToServerResponse(response, c.res)
+  } catch (err) {
+    sendError(
+      c.res,
+      'INTERNAL',
+      err instanceof Error ? err.message : 'Agent handler failed',
+      500,
+      undefined,
+      c.requestId,
+    )
+  }
+  logRequest({
+    method,
     url: c.url,
     status: c.res.statusCode,
     duration: Date.now() - c.startTime,
