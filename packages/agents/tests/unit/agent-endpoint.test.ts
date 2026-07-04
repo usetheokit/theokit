@@ -44,6 +44,10 @@ const { compileAgentModule, streamAgentUIMessages, AgentDefinitionError } =
 const { Agent } = await import('../../src/decorators/agent.js')
 const { MainLoop } = await import('../../src/decorators/main-loop.js')
 const { Checkpoint } = await import('../../src/decorators/checkpoint.js')
+const { Mixin } = await import('../../src/decorators/mixin.js')
+const { Toolbox, Tool } = await import('../../src/decorators/tool.js')
+const { HumanInTheLoop } = await import('../../src/decorators/human-in-the-loop.js')
+const { z } = await import('zod')
 
 const DONE: FakeStreamEvent = {
   type: 'done',
@@ -82,6 +86,29 @@ describe('compileAgentModule (M2)', () => {
     expect(() => compileAgentModule({ default: { hello: 1 } }, 'agents/bad.ts')).toThrow(
       /agents\/bad\.ts/,
     )
+  })
+
+  it('test_gathers_mixin_toolboxes_and_gates_hitl_tool', () => {
+    // The M2 file convention associates a class agent's tools via @Mixin (like app.ts). A gated
+    // tool on the mixin must reach compiled.tools AND compiled.hitl so the endpoint pauses (M4).
+    @Toolbox({ namespace: 'ops' })
+    class OpsTools {
+      @Tool({ name: 'deploy', description: 'Deploy', input: z.object({ env: z.string() }) })
+      @HumanInTheLoop({ question: 'Deploy?' })
+      async deploy(): Promise<string> {
+        return 'ok'
+      }
+    }
+    @Agent({ name: 'ops', route: '/ops' })
+    @Mixin(OpsTools)
+    class OpsAgent {
+      @MainLoop({ strategy: 'simple-chat' })
+      async run(): Promise<void> {}
+    }
+
+    const compiled = compileAgentModule({ default: OpsAgent })
+    expect(compiled.tools.map((t) => t.name)).toContain('ops.deploy')
+    expect(compiled.hitl?.get('ops.deploy')).toMatchObject({ question: 'Deploy?' })
   })
 })
 
