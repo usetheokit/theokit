@@ -121,5 +121,7 @@ export async function mountAgent(
         }
       : undefined
 
-  return uiMessageStreamResponse(streamAgentUIMessages(compiled, apiKey, { ...input, hitl }))
+  return uiMessageStreamResponse(
+    streamAgentUIMessages(compiled, apiKey, { ...input, hitl, signal: request.signal }),
+  )
 }

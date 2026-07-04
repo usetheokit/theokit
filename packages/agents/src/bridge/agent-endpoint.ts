@@ -162,6 +162,13 @@ export interface StreamAgentOptions {
   hitl?: StreamHitlOptions
   /** Durable conversation storage for resume (M4); defaults to the SDK per-run in-memory store. */
   conversationStorage?: RuntimeOverrides['conversationStorage']
+  /**
+   * The request's abort signal (M4). On client disconnect, the HITL merge queue is closed so the
+   * detached SDK pump stops buffering (bounded memory) and the client stream terminates at once.
+   * The paused SDK run itself is released by the approval timeout, not instantly — a durable-store
+   * follow-up. The non-HITL path is pull-based and already tears down on the consumer's return.
+   */
+  signal?: AbortSignal
 }
 
 /**
@@ -192,6 +199,9 @@ export function streamAgentUIMessages(
   } else {
     // M4 HITL path — inject the plugin + merge its approval events with the SDK stream.
     const queue = new EventQueue<AgentStreamEvent>()
+    // On client disconnect, stop buffering into the detached pump's queue (bounded memory) and
+    // terminate the client stream at once; `EventQueue.push` no-ops once closed.
+    input.signal?.addEventListener('abort', () => queue.close(), { once: true })
     const plugin = createHitlPlugin({
       gated: input.hitl.gated,
       emit: (e) => queue.push(e),
@@ -203,10 +213,20 @@ export function streamAgentUIMessages(
       // { name, register } shape); the RuntimeOverrides.plugins union is widened at the SDK edge.
       plugins: [plugin] as unknown as RuntimeOverrides['plugins'],
     })(input.message, input.sessionId)
-    // Pump the SDK stream into the shared queue; close when it ends.
+    // Pump the SDK stream into the shared queue; close when it ends. A thrown SDK stream (e.g.
+    // dispose() rejecting) is SURFACED as an `error` event into the queue — never a `void`-IIFE
+    // unhandled rejection (mirrors sdk-adapter's mergeDeltaStream capture), so the client still gets
+    // a well-formed error chunk + a terminated stream instead of a silent clean end.
     void (async () => {
       try {
         for await (const e of sdkStream) queue.push(e as unknown as AgentStreamEvent)
+      } catch (err) {
+        queue.push({
+          type: 'error',
+          code: 'SDK_STREAM_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+          retryable: false,
+        })
       } finally {
         queue.close()
       }
@@ -214,8 +234,11 @@ export function streamAgentUIMessages(
     source = queue.drain()
   }
 
-  // M4 @Checkpoint: emit `checkpoint_saved` (→ `data-checkpoint`) when the agent declares it, so a
-  // same-`sessionId` request resumes from the SDK-persisted history. Absent ⇒ no checkpoint chunk.
-  const events = compiled.checkpoint ? appendCheckpointSaved(source, input.sessionId) : source
+  // M4 @Checkpoint: emit `checkpoint_saved` (→ `data-checkpoint`) ONLY for durable ('filesystem')
+  // storage — that is the only config the harness actually resumes across requests (sdk-adapter
+  // selects FileSystemConversationStorage). Emitting a resume handle for a per-run in-memory store
+  // would promise a resume that never works (G10 honesty; walkAgentMetadata warns for the rest).
+  const durableCheckpoint = compiled.checkpoint?.storage === 'filesystem'
+  const events = durableCheckpoint ? appendCheckpointSaved(source, input.sessionId) : source
   return translateToUIMessageStream(events, { textId })
 }

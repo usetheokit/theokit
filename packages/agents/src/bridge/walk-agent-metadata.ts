@@ -65,6 +65,7 @@ export const AgentWarningCode = {
   BUDGET_TOP_LEVEL_METADATA_ONLY: 'THEO_AGENT_BUDGET_TOP_LEVEL_METADATA_ONLY',
   CONTEXT_STRATEGY_METADATA_ONLY: 'THEO_AGENT_CONTEXT_STRATEGY_METADATA_ONLY',
   PROJECT_CONTEXT_KNOB_METADATA_ONLY: 'THEO_AGENT_PROJECT_CONTEXT_KNOB_METADATA_ONLY',
+  CHECKPOINT_STORAGE_METADATA_ONLY: 'THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY',
 } as const
 
 const reflectorInstance = new Reflector()
@@ -190,6 +191,25 @@ function warnUnmappedDecoratorKnobs(
   }
 }
 
+/**
+ * G10 honesty: only `storage: 'filesystem'` resumes across requests in the M2 harness (the SDK's
+ * durable adapter). `memory` (the decorator default) is per-run; `drizzle`/`redis` are not shipped
+ * by the SDK. Warn so a declared @Checkpoint that CANNOT resume is never a silent no-op.
+ */
+function warnNonDurableCheckpoint(
+  agentName: string,
+  checkpoint: CheckpointOptions | undefined,
+): void {
+  if (checkpoint && checkpoint.storage !== 'filesystem') {
+    console.warn(
+      `[${AgentWarningCode.CHECKPOINT_STORAGE_METADATA_ONLY}] Agent ${agentName}: ` +
+        `@Checkpoint({ storage: '${checkpoint.storage ?? 'memory'}' }) does NOT resume across ` +
+        `requests — only 'filesystem' selects the SDK's durable conversation store. Use ` +
+        `@Checkpoint({ storage: 'filesystem' }) for cross-request resume.`,
+    )
+  }
+}
+
 /** WeakMap cache — metadata is immutable; walk once per class. */
 const agentWalkCache = new WeakMap<Function, AgentWalkResult>()
 
@@ -276,6 +296,7 @@ export function walkAgentMetadata(
   warnUnmappedDecoratorKnobs(AgentClass.name, contextWindow, projectContext)
   const compaction = getCompactionConfig(AgentClass)
   const checkpoint = getCheckpointConfig(AgentClass)
+  warnNonDurableCheckpoint(AgentClass.name, checkpoint)
 
   const result: AgentWalkResult = {
     agentConfig,

@@ -197,6 +197,34 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
     expect(chunks.some((c) => c.type === 'data-checkpoint')).toBe(false)
   })
 
+  it('test_non_filesystem_checkpoint_emits_no_handle_and_warns', async () => {
+    // G10 honesty (review HIGH-2): a 'memory' @Checkpoint cannot resume across requests, so it must
+    // NOT emit a resume handle — and it warns at walk time so the no-op is never silent.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      h.events = [{ type: 'text_delta', content: 'hi' }, DONE]
+      h.calls = []
+      h.overrides = []
+
+      @Agent({ model: 'm' })
+      @Checkpoint({ storage: 'memory' })
+      class MemAgent {
+        @MainLoop({ strategy: 'simple-chat' })
+        async run(): Promise<void> {}
+      }
+      const compiled = compileAgentModule({ default: MemAgent })
+      const chunks = await collectStream(
+        streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),
+      )
+      expect(chunks.some((c) => c.type === 'data-checkpoint')).toBe(false)
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY'),
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('test_resume_by_sessionId_threads_session_and_storage_into_sdk', async () => {
     // Resume is SDK-owned: getOrCreate(sessionId, {conversationStorage}) re-hydrates. The harness's
     // job is to THREAD both faithfully — proven here: two requests with the same sessionId + a shared

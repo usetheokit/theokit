@@ -41,6 +41,8 @@ describe('examples/agent-saas — harness wiring (M4 / DoD-3)', () => {
     expect(src).toContain('useAgent(')
     // The approval round-trip targets the real approve route.
     expect(src).toContain('/api/agents/ops/approve/')
-    expect(src).toContain('tool-approval-request')
+    // ai reconstructs the approval by mutating the tool part to state 'approval-requested' — the
+    // page must scan for THAT, not a non-existent 'tool-approval-request' part (review HIGH-1).
+    expect(src).toContain('approval-requested')
   })
 })

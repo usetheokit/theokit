@@ -11,12 +11,19 @@
  * registry — the interface is injectable so a durable impl (Redis, etc.) slots in without touching
  * the harness. We do NOT build a durable store now (YAGNI).
  */
-export type TimeoutAction = 'abort' | 'proceed' | 'retry'
+// The timeout policy vocabulary is owned by the `@HumanInTheLoop` decorator (DRY / G12) — reuse it
+// rather than re-declaring the union, so the two can never drift.
+import type { TimeoutAction } from '@theokit/agents'
+
+export type { TimeoutAction }
 
 export interface RegisterOptions {
   /** Milliseconds before the approval auto-settles per `onTimeout`. */
   timeoutMs: number
-  /** What a timeout means: 'abort'/'retry' → deny (false); 'proceed' → approve (true). */
+  /**
+   * What a timeout means. Only `'proceed'` auto-approves; `'abort'` and `'retry'` both deny — the
+   * registry does NOT implement retry semantics (a timed-out `'retry'` is a deny, not a re-prompt).
+   */
   onTimeout: TimeoutAction
 }
 
