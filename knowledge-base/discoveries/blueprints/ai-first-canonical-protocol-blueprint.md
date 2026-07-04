@@ -1,0 +1,1 @@
+../../../.claude/knowledge-base/discoveries/blueprints/ai-first-canonical-protocol-blueprint.md
