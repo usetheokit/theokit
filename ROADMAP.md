@@ -61,7 +61,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 > Each milestone has a checkbox in its header. Flip `[ ]` → `[x]` as you complete it. Status lives in this document; no external tracker required.
 
-### M0 — [ ] Walking skeleton
+### M0 — [x] Walking skeleton
 
 **Objective:** Prove the new architecture end-to-end on the thinnest slice — one agent file emitting `UIMessageStream` (text only), consumed by ai-sdk's `useChat` in a TheoKit app, one provider, one endpoint, one consumer.
 
