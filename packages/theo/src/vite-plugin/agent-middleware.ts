@@ -20,13 +20,20 @@ import {
   incomingMessageToWebRequest,
   writeWebResponseToServerResponse,
 } from '../server/http/node-web-adapter.js'
-import { createViteLoader, logRequest, scanAgents, sendError } from '../server/internal-api.js'
+import {
+  createViteLoader,
+  logRequest,
+  scanAgents,
+  sendError,
+  type CsrfMode,
+} from '../server/internal-api.js'
 
 const PREFIX = '/api/agents/'
 
 export function createAgentMiddleware(
   vite: ViteDevServer,
   projectRoot: string,
+  csrfMode: CsrfMode = 'strict',
 ): Connect.NextHandleFunction {
   const loadModule = createViteLoader(vite)
   return (req, res, next) => {
@@ -67,7 +74,7 @@ export function createAgentMiddleware(
         const mod = await loadModule(agent.filePath)
         const apiKey = resolveProvider().apiKey
         const request = incomingMessageToWebRequest(req)
-        const response = await mountAgent(mod, request, apiKey, agent.filePath)
+        const response = await mountAgent(mod, request, apiKey, agent.filePath, csrfMode)
         await writeWebResponseToServerResponse(response, res)
       } catch (err) {
         sendError(

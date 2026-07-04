@@ -49,6 +49,27 @@ endpoint + typed client, wired to the M0/M1 `UIMessageStream` that `@ai-sdk/reac
   (`.claude/knowledge-base/reference/agent-surface-naming-system-design.md`): agents get a
   top-level `agents/` (sibling of `server/`, Mastra-aligned), `server/` is unchanged.
 
+## Security + routing decisions (from M2 review)
+
+- **`/api/agents/` is a RESERVED prefix (EC-3).** The agent branch runs before the generic
+  `/api/*` branch in BOTH dev (`agent-middleware` before `api-middleware`) and prod
+  (`tryServeAgent` before `tryServeApiRoute`), so a scanned `agents/<name>.ts` deterministically
+  owns `/api/agents/<name>` — exactly as `server/actions/` owns `/api/__actions/`. A manual
+  `server/routes/api/agents/<name>.ts` at the same path is shadowed **by design** (agent wins,
+  consistently dev+prod); we do NOT emit a hard collision error (the action prefix does not
+  either — YAGNI). A bare `agents/index.ts` (empty name) is rejected by `scanAgents` — an agent
+  needs an explicit name for the typed `useAgent(name)` binding.
+- **CSRF is enforced on agent endpoints.** An agent run spends real LLM tokens, so `mountAgent`
+  (the single dev+prod wiring point) validates the `X-Theo-Action` header + Origin at the same
+  `csrfMode` as routes/actions (strict by default) BEFORE compiling — a cross-origin POST is
+  rejected with 403 before it reaches the SDK. The `useAgent` client sends the header. This was
+  a HIGH finding in review (agent endpoints previously had no CSRF).
+- **The `StreamEvent → AgentStreamEvent` narrowing** in `agent-endpoint.ts` (`asAgentStream`) is
+  the single sanctioned unchecked cast: `createSdkAgentStream` yields `AgentStreamEvent`-shaped
+  values (its `type` IS the union tag), but `StreamEvent`'s index signature does not structurally
+  overlap the discriminated union, so tsc requires the `unknown` hop. The translator ignores any
+  variant it does not map — an unrecognized `type` produces no chunk, never a crash.
+
 ## Consequences
 
 - `defineAgentEndpoint` + the proprietary `AgentEvent` are now legacy — **M3 is a pure deletion
