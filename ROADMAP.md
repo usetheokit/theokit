@@ -80,7 +80,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M1 — [ ] Eixo A — Canonical protocol (UIMessageStream)
+### M1 — [x] Eixo A — Canonical protocol (UIMessageStream)
 
 **Objective:** The bridge emits `UIMessageStream` / `message.parts` as the canonical wire format, covering every part type — not just text.
 
