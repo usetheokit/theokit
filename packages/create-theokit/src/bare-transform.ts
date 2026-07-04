@@ -8,8 +8,9 @@
  * Applied AFTER the default template is copied. Removes:
  *   - `@theokit/ui` from `package.json` dependencies (TheoUI bundled components)
  *   - `@theokit/sdk` from `package.json` dependencies (agent SDK — see below)
+ *   - `@theokit/agents` from `package.json` dependencies (only agents/chat.ts used it)
  *   - `app/page.tsx` agent-surface content (replaces with Hello Theo)
- *   - `server/routes/chat.ts` (mock chat — depends on SDK + TheoUI events)
+ *   - `agents/chat.ts` (the demo agent — depends on the SDK + TheoUI page)
  *   - `tailwind.config.ts` + `postcss.config.js` (Tailwind toolchain — only
  *     needed by the @theokit/ui-driven default surface)
  *   - tailwind* + postcss* from devDependencies (toolchain cleanup)
@@ -58,6 +59,9 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
       // Without removal, `npm install` hits 404 for any consumer outside
       // the workspace.
       delete pkg.dependencies['@theokit/sdk']
+      // --bare removes the demo agent (agents/chat.ts), so its runtime dep
+      // (@theokit/agents, imported only by that file) goes with it.
+      delete pkg.dependencies['@theokit/agents']
       // lucide-react ships with the TheoUI surface; --bare doesn't render
       // any icons so it's safe to drop.
       delete pkg.dependencies['lucide-react']
@@ -79,8 +83,8 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     writeFileSync(pagePath, HELLO_PAGE)
   }
 
-  // 3. Remove mock chat route (depends on AgentEvent type and TheoUI deps)
-  const chatPath = join(targetDir, 'server/routes/chat.ts')
+  // 3. Remove the demo chat agent (the `agents/chat.ts` file + its TheoUI page)
+  const chatPath = join(targetDir, 'agents/chat.ts')
   if (existsSync(chatPath)) {
     unlinkSync(chatPath)
   }
