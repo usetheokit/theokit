@@ -86,17 +86,47 @@ describe('renderAgentStreamToTerminal (M5)', () => {
     expect(onApproval).toHaveBeenCalledWith({ approvalId: 'c1', toolName: 'ops.deploy' })
   })
 
-  it('test_renderer_surfaces_error_chunk', async () => {
+  it('test_renderer_surfaces_error_chunk_and_returns_sawError', async () => {
     const out = captureStdout()
     const chunks = [
       { type: 'error', errorText: 'kaboom' },
+      { type: 'finish' },
+    ] as unknown as UIMessageChunk[]
+    const result = await renderAgentStreamToTerminal(fromChunks(chunks), {
+      stdout: out.stream,
+      onApproval: vi.fn(),
+    })
+    expect(out.get()).toContain('✗ kaboom')
+    // The error signal is returned so the CLI can exit non-zero (fail-loud, not silent exit 0).
+    expect(result).toEqual({ sawError: true })
+  })
+
+  it('test_clean_run_returns_sawError_false', async () => {
+    const out = captureStdout()
+    const chunks = [
+      { type: 'text-delta', id: 't0', delta: 'ok' },
+      { type: 'finish' },
+    ] as unknown as UIMessageChunk[]
+    const result = await renderAgentStreamToTerminal(fromChunks(chunks), {
+      stdout: out.stream,
+      onApproval: vi.fn(),
+    })
+    expect(result).toEqual({ sawError: false })
+  })
+
+  it('test_renders_non_string_tool_output_as_json', async () => {
+    // The SDK types tool output as `unknown`; a non-string output must not render blank (review LOW).
+    const out = captureStdout()
+    const chunks = [
+      { type: 'tool-input-available', toolCallId: 'c1', toolName: 't', input: {}, dynamic: true },
+      { type: 'tool-output-available', toolCallId: 'c1', output: { status: 'ok', count: 3 } },
       { type: 'finish' },
     ] as unknown as UIMessageChunk[]
     await renderAgentStreamToTerminal(fromChunks(chunks), {
       stdout: out.stream,
       onApproval: vi.fn(),
     })
-    expect(out.get()).toContain('✗ kaboom')
+    expect(out.get()).toContain('"status":"ok"')
   })
 
   it('test_tool_output_error_renders_error_line', async () => {
@@ -159,6 +189,25 @@ describe('promptTerminalApproval (M5)', () => {
     )
     io.input.write('\n')
     expect(await p).toBe(false) // capital N default — empty is a deny
+  })
+
+  it('test_prompt_times_out_and_denies_so_the_cli_never_hangs', async () => {
+    // The prompt shares the gated tool's timeout so it can't outlive the registry-settled run (review
+    // M1). No input arrives → the timer fires → deny. Uses fake timers for determinism.
+    vi.useFakeTimers()
+    try {
+      const io = ttyIO()
+      const p = promptTerminalApproval(
+        { toolName: 'ops.deploy' },
+        { input: io.input, output: io.output },
+        1000,
+      )
+      vi.advanceTimersByTime(1001)
+      expect(await p).toBe(false)
+      expect(io.get()).toContain('timed out')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('test_prompt_non_tty_auto_denies_without_prompting', async () => {
