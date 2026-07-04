@@ -12,6 +12,7 @@
 import { compileAgentModule, streamAgentUIMessages } from '@theokit/agents'
 
 import { uiMessageStreamResponse } from '../define/ui-message-stream-response.js'
+import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 /** The message + session extracted from a chat request, or `null` when the body is invalid. */
 export interface AgentRequestInput {
@@ -70,7 +71,19 @@ export async function mountAgent(
   request: Request,
   apiKey: string,
   source = 'agent module',
+  csrfMode: CsrfMode = 'strict',
 ): Promise<Response> {
+  // Enforce CSRF BEFORE any work — an agent run spends real LLM tokens, so a cross-origin
+  // POST must be rejected before it reaches the SDK (parity with actions/routes). The custom
+  // `X-Theo-Action` header + Origin match is the same defense `executeRoute`/`executeAction`
+  // apply; the `useAgent` client sends the header. `off` skips; `warn` never blocks.
+  if (csrfMode !== 'off') {
+    const csrf = validateCsrfRequest(request)
+    if (!csrf.valid && csrfMode === 'strict') {
+      return jsonError(403, 'CSRF_FAILED', `CSRF check failed: ${csrf.reason}`)
+    }
+  }
+
   const compiled = compileAgentModule(mod, source)
 
   let body: unknown = null

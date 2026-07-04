@@ -20,10 +20,11 @@ import {
   parseAgentRequestBody,
 } from '../../packages/theo/src/server/agent/mount-agent.js'
 
+/** A CSRF-valid request (mirrors what the `useAgent` client sends: X-Theo-Action). */
 function jsonRequest(body: unknown): Request {
   return new Request('http://localhost/api/agents/echo', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'X-Theo-Action': '1' },
     body: JSON.stringify(body),
   })
 }
@@ -75,13 +76,49 @@ describe('mountAgent (M2)', () => {
   })
 
   it('test_fails_fast_on_non_agent_module', async () => {
-    await expect(
-      mountAgent(
-        { default: { not: 'an agent' } },
-        jsonRequest({ message: 'x' }),
-        'k',
-        'agents/bad.ts',
-      ),
-    ).rejects.toBeInstanceOf(AgentDefinitionError)
+    const err = await mountAgent(
+      { default: { not: 'an agent' } },
+      jsonRequest({ message: 'x' }),
+      'k',
+      'agents/bad.ts',
+    ).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(AgentDefinitionError)
+    // Negative case asserts the SPECIFIC message (names the source file), not just "throws".
+    expect((err as Error).message).toContain('agents/bad.ts')
+  })
+
+  it('test_rejects_cross_origin_post_without_csrf_header_in_strict_mode', async () => {
+    // No X-Theo-Action header — a cross-origin POST that would spend LLM tokens.
+    const request = new Request('http://localhost/api/agents/echo', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'hi' }),
+    })
+    const res = await mountAgent(
+      { default: defineAgent({ model: 'm' }) },
+      request,
+      'k',
+      'agents/echo.ts',
+    )
+    expect(res.status).toBe(403)
+    const json = (await res.json()) as { error: { code: string } }
+    expect(json.error.code).toBe('CSRF_FAILED')
+  })
+
+  it('test_csrf_off_mode_allows_missing_header', async () => {
+    const request = new Request('http://localhost/api/agents/echo', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    // csrfMode 'off' skips the check → reaches body parsing → 400 (not 403).
+    const res = await mountAgent(
+      { default: defineAgent({ model: 'm' }) },
+      request,
+      'k',
+      'agents/echo.ts',
+      'off',
+    )
+    expect(res.status).toBe(400)
   })
 })

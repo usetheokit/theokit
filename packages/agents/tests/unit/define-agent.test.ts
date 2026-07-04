@@ -69,4 +69,14 @@ describe('defineAgent (M2)', () => {
     type Input = InferAgentInput<typeof def>
     expectTypeOf<Input>().toEqualTypeOf<{ message: string; n: number }>()
   })
+
+  it('test_agent_without_input_infers_unknown_not_any', () => {
+    // EC-2: an agent with no `input` schema degrades to `unknown` (type-safe — the caller
+    // must narrow before use), NEVER `any`. This deviates from the blueprint's `{message}`
+    // nicety in favor of the honest safe default (a no-schema agent has no known shape).
+    const def = defineAgent({ model: 'm' })
+    expect(isAgentDefinition(def)).toBe(true)
+    type Input = InferAgentInput<typeof def>
+    expectTypeOf<Input>().toEqualTypeOf<unknown>()
+  })
 })
