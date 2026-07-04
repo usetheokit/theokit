@@ -18,6 +18,7 @@ import type { TheoTransformer } from '../server/transformer.js'
 import type { ServicesConfig } from '../services/index.js'
 
 import { createActionMiddleware } from './action-middleware.js'
+import { createAgentMiddleware } from './agent-middleware.js'
 import { createApiMiddleware } from './api-middleware.js'
 import type { ResolvedOpenApi } from './config-resolve.js'
 import { setupSsrDevMiddleware } from './ssr-dev-middleware.js'
@@ -88,6 +89,9 @@ export async function runConfigureServer(
       disallowed: ctx.disallowed,
     }),
   )
+  // M2 — agent convention (`/api/agents/<name>`) before the generic api-middleware
+  // (mirrors the action prefix). Agents live at <projectRoot>/agents (LOCKED naming).
+  server.middlewares.use(createAgentMiddleware(server, ctx.projectRoot))
   // Wave 2 completion — services-proxy prefixes flow through to the
   // api-middleware so it can call `next()` for paths that should be
   // forwarded to a sidecar by Vite's proxyMiddleware.
