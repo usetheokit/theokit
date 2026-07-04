@@ -76,6 +76,33 @@ async function reconstructText(response: Response): Promise<string> {
   return text
 }
 
+/** Minimal shape of a parsed UIMessage.part we assert on (ai-sdk yields richer objects). */
+type ParsedPart = { type: string } & Record<string, unknown>
+
+/**
+ * Consume the SSE Response with the REAL ai-sdk consumer and return the parts of
+ * the final (fully-reconstructed) assistant message — the same parts `useChat`
+ * exposes to a renderer.
+ */
+async function readLastMessageParts(response: Response): Promise<ParsedPart[]> {
+  if (!response.body) throw new Error('response has no body')
+  const parsed = parseJsonEventStream({ stream: response.body, schema: uiMessageChunkSchema })
+  const chunkStream = new ReadableStream({
+    async start(controller) {
+      for await (const result of parsed) {
+        if (!result.success) throw new Error(`ai-sdk rejected a chunk: ${String(result.error)}`)
+        controller.enqueue(result.value)
+      }
+      controller.close()
+    },
+  })
+  let parts: ParsedPart[] = []
+  for await (const message of readUIMessageStream({ stream: chunkStream })) {
+    parts = message.parts as ParsedPart[]
+  }
+  return parts
+}
+
 describe('UIMessageStream end-to-end (M0)', () => {
   it('test_usechat_transport_parses_theokit_text_without_custom_adapter', async () => {
     const response = uiMessageStreamResponse(
@@ -90,5 +117,54 @@ describe('UIMessageStream end-to-end (M0)', () => {
       translateToUIMessageStream(mockRunStream(FIXTURE_EVENTS), { textId: TEXT_ID }),
     )
     expect(response.headers.get('x-vercel-ai-ui-message-stream')).toBe('v1')
+  })
+})
+
+/** A fixed agent run that calls a tool, gets a result, then reasons — the M1 Goal fixture. */
+const TOOL_FIXTURE_EVENTS: AgentStreamEvent[] = [
+  { type: 'run_started', runId: 'run-2', agentName: 'searcher' },
+  { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'ai' } },
+  {
+    type: 'tool_result',
+    callId: 'c1',
+    toolName: 'search',
+    output: 'result-text',
+    durationMs: 5,
+    isError: false,
+  },
+  { type: 'thinking', content: 'hmm' },
+  {
+    type: 'done',
+    result: '',
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    durationMs: 1,
+  },
+]
+
+describe('UIMessageStream end-to-end — tool + reasoning (M1)', () => {
+  it('test_usechat_renders_theokit_tool_call_part', async () => {
+    const response = uiMessageStreamResponse(
+      translateToUIMessageStream(mockRunStream(TOOL_FIXTURE_EVENTS), { textId: TEXT_ID }),
+    )
+    const parts = await readLastMessageParts(response)
+    // EC-1: locate by the STABLE toolCallId — theokit runtime tools parse as a
+    // `dynamic-tool` part (NOT `tool-<name>`), so the part `type` is not stable.
+    const toolPart = parts.find((p) => p.toolCallId === 'c1')
+    expect(toolPart, `no tool part for c1 in ${JSON.stringify(parts)}`).toBeDefined()
+    expect(toolPart?.type).toBe('dynamic-tool')
+    expect(toolPart?.state).toBe('output-available')
+    expect(toolPart?.toolName).toBe('search')
+    expect(toolPart?.input).toEqual({ q: 'ai' })
+    expect(toolPart?.output).toBe('result-text')
+  })
+
+  it('test_usechat_renders_theokit_reasoning_part', async () => {
+    const response = uiMessageStreamResponse(
+      translateToUIMessageStream(mockRunStream(TOOL_FIXTURE_EVENTS), { textId: TEXT_ID }),
+    )
+    const parts = await readLastMessageParts(response)
+    const reasoning = parts.find((p) => p.type === 'reasoning')
+    expect(reasoning, `no reasoning part in ${JSON.stringify(parts)}`).toBeDefined()
+    expect(reasoning?.text).toBe('hmm')
   })
 })
