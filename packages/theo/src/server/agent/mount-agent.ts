@@ -9,10 +9,16 @@
  * Request body — accepts the `@ai-sdk/react` `useChat` shape (`{ id, messages: UIMessage[] }`,
  * the typed-client path) AND a simple `{ message, sessionId? }` shape (M0/M1-style clients).
  */
-import { compileAgentModule, streamAgentUIMessages } from '@theokit/agents'
+import {
+  compileAgentModule,
+  streamAgentUIMessages,
+  type HumanInTheLoopOptions,
+} from '@theokit/agents'
 
 import { uiMessageStreamResponse } from '../define/ui-message-stream-response.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
+
+import { getApprovalRegistry } from './approval-registry.js'
 
 /** The message + session extracted from a chat request, or `null` when the body is invalid. */
 export interface AgentRequestInput {
@@ -98,5 +104,22 @@ export async function mountAgent(
     return jsonError(400, 'BAD_REQUEST', 'Request must contain a non-empty message or messages[].')
   }
 
-  return uiMessageStreamResponse(streamAgentUIMessages(compiled, apiKey, input))
+  // When the agent has @HumanInTheLoop-gated tools (M4), wire the pause: the plugin's `awaitApproval`
+  // registers a pending approval in the shared registry (the Promise that PAUSES the run); the
+  // approve route (`handleAgentApproval`) resolves it. No gated tools ⇒ the M2 stream path unchanged.
+  const gated = compiled.hitl
+  const registry = getApprovalRegistry()
+  const hitl =
+    gated && gated.size > 0
+      ? {
+          gated,
+          awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions) =>
+            registry.register(approvalId, {
+              timeoutMs: opts.timeout ?? 300_000,
+              onTimeout: opts.onTimeout ?? 'abort',
+            }),
+        }
+      : undefined
+
+  return uiMessageStreamResponse(streamAgentUIMessages(compiled, apiKey, { ...input, hitl }))
 }
