@@ -72,6 +72,22 @@ describe('generateManifest', () => {
     expect(manifest.websockets[0].wsPath).toBe('/ws/chat')
   })
 
+  it('should scan top-level agents/ and include in manifest (M2)', () => {
+    const serverDir = join(TMP_DIR, 'server')
+    setupFixture({
+      'server/routes/health.ts': 'export const GET = { handler: () => ({}) }',
+      'agents/support.ts': 'export default {}',
+    })
+
+    const manifest = generateManifest(serverDir)
+
+    expect(manifest.agents).toHaveLength(1)
+    expect(manifest.agents![0].agentPath).toBe('/api/agents/support')
+    expect(manifest.agents![0].name).toBe('support')
+    // filePath is relative to projectRoot (agents/ is outside serverDir).
+    expect(manifest.agents![0].filePath).toBe('agents/support.ts')
+  })
+
   it('should return empty arrays when server dir has no routes/actions/ws', () => {
     const serverDir = join(TMP_DIR, 'server')
     mkdirSync(serverDir, { recursive: true })
