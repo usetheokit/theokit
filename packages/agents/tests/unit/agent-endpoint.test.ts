@@ -18,13 +18,20 @@ interface FakeStreamEvent {
 const h = vi.hoisted(() => ({
   events: [] as FakeStreamEvent[],
   calls: [] as { apiKey: string; message: string; sessionId: string }[],
+  overrides: [] as { conversationStorage?: unknown }[],
 }))
 
 vi.mock('../../src/bridge/sdk-adapter.js', () => ({
   createSdkAgentStream:
-    (_compiled: unknown, _tools: unknown, apiKey: string) =>
+    (
+      _compiled: unknown,
+      _tools: unknown,
+      apiKey: string,
+      overrides: { conversationStorage?: unknown } = {},
+    ) =>
     (message: string, sessionId: string): AsyncIterable<FakeStreamEvent> => {
       h.calls.push({ apiKey, message, sessionId })
+      h.overrides.push(overrides)
       return (async function* () {
         for (const e of h.events) yield e
       })()
@@ -36,6 +43,14 @@ const { compileAgentModule, streamAgentUIMessages, AgentDefinitionError } =
   await import('../../src/bridge/agent-endpoint.js')
 const { Agent } = await import('../../src/decorators/agent.js')
 const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { Checkpoint } = await import('../../src/decorators/checkpoint.js')
+
+const DONE: FakeStreamEvent = {
+  type: 'done',
+  result: 'hi',
+  usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+  durationMs: 1,
+}
 
 describe('compileAgentModule (M2)', () => {
   it('test_compiles_defineAgent_default_export', () => {
@@ -109,6 +124,93 @@ describe('streamAgentUIMessages (M2)', () => {
       chunks.push(c)
     }
     expect(chunks.some((c) => c.type === 'error' && c.errorText === 'kaboom')).toBe(true)
+    expect(chunks.at(-1)).toEqual({ type: 'finish' })
+  })
+})
+
+async function collectStream(gen: AsyncIterable<{ type: string; [k: string]: unknown }>) {
+  const chunks: { type: string; [k: string]: unknown }[] = []
+  for await (const c of gen) chunks.push(c)
+  return chunks
+}
+
+describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
+  it('test_checkpoint_saved_emitted_when_checkpoint_declared', async () => {
+    h.events = [{ type: 'text_delta', content: 'hi' }, DONE]
+    h.calls = []
+    h.overrides = []
+
+    @Agent({ model: 'm' })
+    @Checkpoint({ storage: 'filesystem' })
+    class CheckpointedAgent {
+      @MainLoop({ strategy: 'simple-chat' })
+      async run(): Promise<void> {}
+    }
+    const compiled = compileAgentModule({ default: CheckpointedAgent })
+    expect(compiled.checkpoint?.storage).toBe('filesystem')
+
+    const chunks = await collectStream(
+      streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),
+    )
+    // The resume handle rides an ai-sdk-native transient `data-checkpoint` part, keyed by sessionId.
+    const cp = chunks.find((c) => c.type === 'data-checkpoint')
+    expect(cp).toBeDefined()
+    expect((cp?.data as { resumeToken: string }).resumeToken).toBe('s1')
+    expect(cp?.transient).toBe(true)
+  })
+
+  it('test_no_checkpoint_chunk_when_not_declared', async () => {
+    h.events = [{ type: 'text_delta', content: 'hi' }, DONE]
+    h.calls = []
+    h.overrides = []
+    const compiled = compileAgentModule(defineAgent({ model: 'm' })) // no @Checkpoint
+    const chunks = await collectStream(
+      streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),
+    )
+    expect(chunks.some((c) => c.type === 'data-checkpoint')).toBe(false)
+  })
+
+  it('test_resume_by_sessionId_threads_session_and_storage_into_sdk', async () => {
+    // Resume is SDK-owned: getOrCreate(sessionId, {conversationStorage}) re-hydrates. The harness's
+    // job is to THREAD both faithfully — proven here: two requests with the same sessionId + a shared
+    // storage adapter both reach the SDK factory with s1 and the same storage object.
+    h.events = [{ type: 'text_delta', content: 'a' }, DONE]
+    h.calls = []
+    h.overrides = []
+    const sharedStorage = { __fake: 'conversation-storage' }
+    const compiled = compileAgentModule(defineAgent({ model: 'm' }))
+
+    await collectStream(
+      streamAgentUIMessages(compiled, 'k', {
+        message: 'A',
+        sessionId: 's1',
+        conversationStorage: sharedStorage as never,
+      }),
+    )
+    await collectStream(
+      streamAgentUIMessages(compiled, 'k', {
+        message: 'B',
+        sessionId: 's1',
+        conversationStorage: sharedStorage as never,
+      }),
+    )
+
+    expect(h.calls.map((c) => c.sessionId)).toEqual(['s1', 's1'])
+    expect(h.overrides[0].conversationStorage).toBe(sharedStorage)
+    expect(h.overrides[1].conversationStorage).toBe(sharedStorage)
+  })
+
+  it('test_resume_missing_storage_falls_back_deterministically', async () => {
+    // No storage adapter → the override is absent (the SDK adapter defaults to its per-run in-memory
+    // store); the stream still completes cleanly (no crash).
+    h.events = [{ type: 'text_delta', content: 'a' }, DONE]
+    h.calls = []
+    h.overrides = []
+    const compiled = compileAgentModule(defineAgent({ model: 'm' }))
+    const chunks = await collectStream(
+      streamAgentUIMessages(compiled, 'k', { message: 'A', sessionId: 's1' }),
+    )
+    expect(h.overrides[0].conversationStorage).toBeUndefined()
     expect(chunks.at(-1)).toEqual({ type: 'finish' })
   })
 })
