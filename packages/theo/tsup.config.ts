@@ -10,7 +10,8 @@ export default defineConfig([
       // T4.4 (architecture-cleanup) — subpath entrypoints per ADR-0001 v3.
       // Consumers should migrate to these; `theokit/server` keeps re-exporting
       // them for backwards compat until 1.0.
-      'server/agent/index': 'src/server/agent/index.ts',
+      // (server/agent/index removed in the M3 clean break — the subpath held only
+      // the proprietary surface; its survivors are internal.)
       'server/auth/index': 'src/server/auth/index.ts',
       'server/cost/index': 'src/server/cost/index.ts',
       'server/cron/index': 'src/server/cron/index.ts',

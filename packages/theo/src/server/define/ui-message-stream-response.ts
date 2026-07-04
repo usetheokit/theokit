@@ -12,7 +12,7 @@ import type { UIMessageChunk } from 'ai'
  * - a terminal `data: [DONE]\n\n` after the last chunk (ignored by the parser)
  *
  * Web Standards only — `Response` + `ReadableStream` (G8, no node:http). The
- * headers commit before the stream starts (mirrors define-agent-endpoint.ts).
+ * headers commit before the stream starts.
  *
  * Fail-clear (error-handling.md): if the source iterable throws mid-stream, the
  * `[DONE]` terminal is still flushed and the stream is closed — never left

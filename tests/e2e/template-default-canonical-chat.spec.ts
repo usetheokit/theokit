@@ -1,12 +1,12 @@
 import { test, expect, type ConsoleMessage, type Page } from '@playwright/test'
 
 /**
- * T2.2 — Canonical chat.ts via `@theokit/sdk` Agent.prompt + throwOnError.
+ * T2.2 — agents/chat.ts via `defineAgent` from `@theokit/agents`.
  *
  * Boots `fixtures/template-default` on port 3470 with a deterministic fake
- * Anthropic key. Validates the full UI roundtrip:
- *   1. Composer renders (SDK loaded into the route without crash).
- *   2. Typed-and-Enter submit fires POST /api/chat.
+ * provider key. Validates the full UI roundtrip:
+ *   1. Composer renders (defineAgent wires into the route without crash).
+ *   2. Typed-and-Enter submit fires POST /api/agents/chat.
  *   3. Fake key → SDK throws AgentRunError (auth_failed) → yielded as SSE error event → rendered as AgentErrorCard.
  *
  * Bugs found + fixed in the same session (EC-12 from edge-case review):
@@ -41,10 +41,10 @@ function collectConsoleErrors(page: Page): string[] {
   return errors
 }
 
-test.describe('Canonical chat.ts — wired via @theokit/sdk', () => {
+test.describe('agents/chat.ts — wired via defineAgent from @theokit/agents', () => {
   test.setTimeout(30_000)
 
-  test('chat composer is rendered on initial load (proves SDK wires into the route without crash)', async ({
+  test('chat composer is rendered on initial load (proves defineAgent wires into the route without crash)', async ({
     page,
   }) => {
     collectConsoleErrors(page)
@@ -57,7 +57,7 @@ test.describe('Canonical chat.ts — wired via @theokit/sdk', () => {
   //   1. Initial spec used `composer.fill('hi')` — DIDN'T dispatch React's
   //      onChange, so TheoUI ChatComposer controlled-state stayed empty and
   //      Enter early-returned. Fix: `pressSequentially` types char-by-char,
-  //      each char triggers an input event React processes. POST /api/chat
+  //      each char triggers an input event React processes. POST /api/agents/chat
   //      then fires (verified via page.on('request') — POST observed).
   //   2. POST hits the SDK, returns 401, yields { type: 'error', message }
   //      SSE event. Client receives it.
@@ -75,9 +75,9 @@ test.describe('Canonical chat.ts — wired via @theokit/sdk', () => {
   // The SDK wire IS validated by:
   //   - 1815/1815 unit + integration tests in TheoKit
   //   - 113/113 isolated SDK tests (throwOnError + AgentRunError + tools)
-  //   - manual SSE smoke: curl /api/chat with fake key →
+  //   - manual SSE smoke: curl /api/agents/chat with fake key →
   //     `data: {"type":"error","message":"Anthropic API error: auth_failed (HTTP 401)"}`
-  //   - test above (composer renders without crash → SDK loaded)
+  //   - test above (composer renders without crash → defineAgent loaded)
   test('chat surfaces auth_failed error after typed-and-Enter (TheoUI AgentErrorCard fixed — EC-12)', async ({
     page,
   }) => {
@@ -122,21 +122,20 @@ test.describe('Canonical chat.ts — wired via @theokit/sdk', () => {
     expect(matchCount).toBeLessThanOrEqual(2)
   })
 
-  // Item #4 — tool-calling chat
-  test('item-4 — tool-defined route boots without crash (defineAgentTool + streamAgentRun load cleanly server-side)', async ({
+  // M3 agent bootstrap validation
+  test('M3 — agent boots without crash (defineAgent from @theokit/agents loads cleanly server-side)', async ({
     page,
   }) => {
     const errors = collectConsoleErrors(page)
     await page.goto('/')
     const composer = page.getByPlaceholder('Ask the agent…')
     await expect(composer).toBeVisible({ timeout: 10_000 })
-    // The mere fact the page rendered proves defineAgentTool + streamAgentRun
-    // resolved cleanly in the server bundle (no top-level throw, no module
-    // resolution error).
+    // The mere fact the page rendered proves defineAgent resolved cleanly in
+    // the server bundle (no top-level throw, no module resolution error).
     expect(errors.length).toBe(0)
   })
 
-  test('item-4 — auth error surfaces via SSE even with tool defined (EC-2: dispose try/catch did not mask)', async ({
+  test('M3 — auth error surfaces via SSE even with agent defined (EC-2: dispose try/catch did not mask)', async ({
     page,
   }) => {
     await page.goto('/')
@@ -162,8 +161,7 @@ test.describe('Canonical chat.ts — wired via @theokit/sdk', () => {
     expect(matchCount).toBeLessThanOrEqual(2)
   })
 
-  // Item #5 — conversation persistence via createConversationHistory
-  test('item-5 — conversation cookie issued on first POST (UUID format, HttpOnly)', async ({
+  test('conversation cookie issued on first POST (UUID format, HttpOnly)', async ({
     page,
     context,
   }) => {
@@ -194,10 +192,7 @@ test.describe('Canonical chat.ts — wired via @theokit/sdk', () => {
     expect(conv!.httpOnly).toBe(true)
   })
 
-  test('item-5 — conversation id unchanged after reload (continuity proof)', async ({
-    page,
-    context,
-  }) => {
+  test('conversation id unchanged after reload (continuity proof)', async ({ page, context }) => {
     await context.clearCookies()
     await page.goto('/')
     const composer = page.getByPlaceholder('Ask the agent…')

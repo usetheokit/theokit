@@ -1,7 +1,6 @@
 export * from './define-route.js'
 export * from './define-action.js'
 export * from './define-middleware.js'
-export * from './define-agent-endpoint.js'
 export * from './ui-message-stream-response.js'
 export * from './define-agent-tool.js'
 export * from './define-websocket.js'
