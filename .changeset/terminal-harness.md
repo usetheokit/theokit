@@ -14,3 +14,6 @@ Node-stdlib render surface (no new runtime, no TUI dependency; ADR 0039).
   singleton's exact fit). A non-interactive terminal auto-denies (fail-safe).
 - New: `renderAgentStreamToTerminal` + `promptTerminalApproval` + `runAgentInTerminal` (injectable
   I/O for testability). Additive — the M2/M4 surface is unchanged.
+- `theokit agent` loads `.env` before resolving the provider key (parity with `theokit dev`), exits
+  non-zero when the run ends in an error, and the approval prompt shares the gated tool's
+  `@HumanInTheLoop` timeout so it can never hang the CLI after the run has settled.
