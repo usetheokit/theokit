@@ -6,18 +6,9 @@
  * `core/contracts/<file>.js`.
  *
  * This barrel exists for convenience. Consumers may use it OR import the
- * specific file (`core/contracts/agent-events.js`) — both are legal.
+ * specific file — both are legal.
  */
 
-export type {
-  AgentRunErrorCode,
-  AgentMessageEvent,
-  AgentToolCallEvent,
-  AgentToolResultEvent,
-  AgentErrorEvent,
-  AgentThinkingEvent,
-  AgentEvent,
-} from './agent-events.js'
 export type { RouteConfig } from './route-config.js'
 export type { RouteNode } from './route-node.js'
 

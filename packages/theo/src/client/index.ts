@@ -16,27 +16,10 @@ export type {
 
 export { stableQueryKey, buildUseTheoQueryConfig } from './react-query-adapter.js'
 
-// T5.2 — Agent stream hook + pure SSE primitive
-export { deriveError, deriveLiveText, useAgentStream } from './use-agent-stream.js'
-export type {
-  UseAgentStreamReturn,
-  UseAgentStreamOptions,
-  AgentStreamStatus,
-} from './use-agent-stream.js'
-
-// M5-2 — tool-card correlator (pure) + hook
-export { defaultResolveEnvelope, foldAgentToolCards } from './agent-tool-cards.js'
-export type {
-  AgentToolCard,
-  FoldAgentToolCardsOptions,
-  ToolEnvelopeResolver,
-} from './agent-tool-cards.js'
-export { useAgentToolCards } from './use-agent-tool-cards.js'
-export type { UseAgentToolCardsReturn } from './use-agent-tool-cards.js'
-
-export { consumeAgentStream, parseSSEChunk } from './agent-stream-core.js'
-
 // M2 — agents/*.ts convention: typed UIMessageStream hook + pure reader.
+// (The pre-M2 proprietary agent client surface — the old stream hook, its SSE
+// parser, and the tool-card correlator — was removed in the M3 clean break; the
+// canonical agent client is `useAgent` over the ai-sdk UIMessageStream wire.)
 export { consumeUIMessageStream } from './consume-ui-message-stream.js'
 export { useAgent } from './use-agent.js'
 export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from './use-agent.js'
@@ -52,18 +35,6 @@ export type { MetadataProps } from './metadata.js'
 // Image — lazy loading + responsive
 export { Image } from './image.js'
 export type { ImageProps } from './image.js'
-export type { ConsumeOptions } from './agent-stream-core.js'
-
-// T1.1 — Re-export AgentEvent for client consumers (useAgentStream, etc.)
-// T2.2 (architecture-cleanup) — types now live in core/contracts/ (per ADR-0001 v3).
-export type {
-  AgentEvent,
-  AgentMessageEvent,
-  AgentToolCallEvent,
-  AgentToolResultEvent,
-  AgentErrorEvent,
-  AgentThinkingEvent,
-} from '../core/contracts/agent-events.js'
 export type {
   Fetcher,
   FetchOptionsLike,

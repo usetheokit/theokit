@@ -13,8 +13,8 @@ import { z } from 'zod'
  * Handler error propagation:
  *   `defineAgentTool` parses the input via the Zod schema BEFORE calling the
  *   user handler. Invalid input throws a `ZodError`, which the SDK's tool-
- *   dispatcher (or the `streamAgentRun` adapter) sees as a tool failure and
- *   surfaces as an `error` AgentEvent on the SSE wire (ADR D3).
+ *   dispatcher treats as a tool failure and surfaces to the model as a tool
+ *   error (the SDK owns the wire; ADR D3).
  */
 
 /**
