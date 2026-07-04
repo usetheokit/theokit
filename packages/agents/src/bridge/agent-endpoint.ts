@@ -15,6 +15,7 @@
 import type { UIMessageChunk } from 'ai'
 
 import { getAgentConfig } from '../decorators/agent.js'
+import { getMixins } from '../decorators/mixin.js'
 
 import { compileAgent, type CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
@@ -48,6 +49,11 @@ function extractDefaultExport(mod: unknown): unknown {
  * Compile a loaded `agents/` module to SDK-ready options. Accepts a `defineAgent` value
  * (zero-config surface) OR an `@Agent`-decorated class (advanced surface). `source` labels
  * the fail-fast error (typically the file path).
+ *
+ * For a class agent, its `@Mixin(...)` toolboxes are gathered (the declared tool-association
+ * mechanism, same as `app.ts`/`theokit-plugin.ts`) and instantiated with a no-arg `new` — the
+ * zero-config file convention has no DI container. This is what makes a `@HumanInTheLoop`-gated
+ * tool on a mixin actually gate through the M2 endpoint (M4): its config reaches `compiled.hitl`.
  */
 export function compileAgentModule(mod: unknown, source = 'agent module'): CompiledAgentOptions {
   const def = extractDefaultExport(mod)
@@ -55,7 +61,12 @@ export function compileAgentModule(mod: unknown, source = 'agent module'): Compi
     return compileAgentDefinition(def)
   }
   if (typeof def === 'function' && getAgentConfig(def) !== undefined) {
-    return compileAgent(walkAgentMetadata(def))
+    const walk = walkAgentMetadata(def, getMixins(def))
+    const instances = new Map<Function, object>()
+    for (const tb of walk.toolboxes) {
+      instances.set(tb.class, new (tb.class as new () => object)())
+    }
+    return compileAgent(walk, instances)
   }
   throw new AgentDefinitionError(source)
 }
