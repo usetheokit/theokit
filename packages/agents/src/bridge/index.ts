@@ -80,6 +80,11 @@ export {
   type DefineAgentConfig,
   type InferAgentInput,
 } from './define-agent.js'
+export {
+  compileAgentModule,
+  streamAgentUIMessages,
+  AgentDefinitionError,
+} from './agent-endpoint.js'
 
 export {
   delegate,

@@ -37,6 +37,8 @@ export type { RateLimitConfig } from './rate-limit/rate-limit.js'
 // --- scan ---
 export { scanServerActions, scanServerActionsEnriched } from './scan/action-scan.js'
 export type { ActionManifestEntry } from './scan/action-scan.js'
+export { scanAgents } from './scan/agent-scan.js'
+export type { AgentNode } from './scan/agent-scan.js'
 export { createViteLoader } from './scan/module-loader.js'
 export { matchRoute } from './scan/match.js'
 export { scanServerRoutes } from './scan/scan.js'
