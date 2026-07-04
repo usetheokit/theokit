@@ -109,8 +109,8 @@
     "dist"
   ],
   "dependencies": {
-    "@theokit/agents": "^0.27.0",
-    "@theokit/http": "^0.5.4",
+    "@theokit/agents": "workspace:^",
+    "@theokit/http": "workspace:^",
     "@vitejs/plugin-react": "^4.7.0",
     "busboy": "^1.6.0",
     "cac": "^6.7.14",
