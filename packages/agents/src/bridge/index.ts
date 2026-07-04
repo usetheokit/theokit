@@ -71,6 +71,15 @@ export {
 } from './think-tag-extractor.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
 export { translateToUIMessageStream } from './ui-message-stream-translator.js'
+export {
+  defineAgent,
+  compileAgentDefinition,
+  isAgentDefinition,
+  AGENT_BRAND,
+  type AgentDefinition,
+  type DefineAgentConfig,
+  type InferAgentInput,
+} from './define-agent.js'
 
 export {
   delegate,
