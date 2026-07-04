@@ -98,13 +98,13 @@ describe('applyBareTransform', () => {
     expect(content).toContain('Hello Theo')
   })
 
-  it('should remove server/routes/chat.ts', () => {
-    mkdirSync(join(targetDir, 'server/routes'), { recursive: true })
-    writeFileSync(join(targetDir, 'server/routes/chat.ts'), 'export const chatRoute = {}')
+  it('should remove agents/chat.ts', () => {
+    mkdirSync(join(targetDir, 'agents'), { recursive: true })
+    writeFileSync(join(targetDir, 'agents/chat.ts'), 'export default {}')
 
     applyBareTransform(targetDir)
 
-    expect(existsSync(join(targetDir, 'server/routes/chat.ts'))).toBe(false)
+    expect(existsSync(join(targetDir, 'agents/chat.ts'))).toBe(false)
   })
 
   it('should remove tailwind.config.ts', () => {

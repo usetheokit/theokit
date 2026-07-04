@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@theokit/agents": "workspace:*",
     "@theokit/sdk": "^2.5.0",
     "@theokit/ui": "^0.14.4",
     "lucide-react": "^0.469.0",

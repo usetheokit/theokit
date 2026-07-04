@@ -24,7 +24,7 @@ import {
   type CommandItem,
 } from '@usetheo/ui'
 import { Sparkles, Wrench, RotateCcw, Command } from 'lucide-react'
-import { useAgentStream } from 'theokit/client'
+import { useAgent } from 'theokit/client'
 
 /**
  * Default scaffold — an Agent Surface, composed entirely from TheoUI.
@@ -40,9 +40,9 @@ import { useAgentStream } from 'theokit/client'
  *   Avatar                    → assistant face in messages
  *   Tooltip                   → hints on icons
  *
- * `useAgentStream` handles SSE consumption, AbortController cleanup, and
- * StrictMode safety. Replace the mock at server/routes/chat.ts with your
- * real LLM provider (OpenAI / Anthropic / local).
+ * `useAgent` binds to the `agents/chat.ts` endpoint, consumes the ai-sdk
+ * `UIMessageStream`, and handles AbortController cleanup + StrictMode safety.
+ * Edit `agents/chat.ts` to pick your model / add tools.
  */
 
 type ConversationItem =
@@ -91,7 +91,7 @@ export default function Page() {
   const [composerValue, setComposerValue] = useState('')
   const [userMessages, setUserMessages] = useState<ConversationItem[]>([])
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const { events, send, status, reset } = useAgentStream<{ message: string }>('/api/chat')
+  const { messages, send, status, reset } = useAgent<{ message: string }>('/api/agents/chat')
 
   // ⌘K / Ctrl+K opens the CommandPalette.
   useEffect(() => {
@@ -105,43 +105,55 @@ export default function Page() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Derive the conversation view from the reconstructed assistant UIMessages
+  // (ai-sdk `UIMessageStream`): text parts → messages, tool parts → tool cards.
   const items = useMemo<ConversationItem[]>(() => {
     const ts = new Date().toISOString()
-    const agentItems: ConversationItem[] = events.map((event, i) => {
-      const id = `e-${i}`
-      switch (event.type) {
-        case 'message':
-          return { kind: 'message', id, role: 'assistant', content: event.content, timestamp: ts }
-        case 'tool_call':
-          return {
+    const agentItems: ConversationItem[] = []
+    for (const message of messages) {
+      if (message.role !== 'assistant') continue
+      message.parts.forEach((part, i) => {
+        const id = `${message.id}-${i}`
+        if (part.type === 'text') {
+          agentItems.push({
+            kind: 'message',
+            id,
+            role: 'assistant',
+            content: part.text,
+            timestamp: ts,
+          })
+        } else if (part.type === 'dynamic-tool') {
+          agentItems.push({
             kind: 'tool',
             id,
-            tool: event.name,
+            tool: part.toolName,
             target:
-              typeof event.args === 'object' && event.args !== null
-                ? Object.entries(event.args as Record<string, unknown>)
+              part.input && typeof part.input === 'object'
+                ? Object.entries(part.input as Record<string, unknown>)
                     .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
                     .join(' ')
                 : undefined,
-            status: 'running',
-            timestamp: ts,
-          }
-        case 'tool_result':
-          return {
-            kind: 'tool',
-            id,
-            tool: event.name,
-            status: 'success',
+            status:
+              part.state === 'output-available'
+                ? 'success'
+                : part.state === 'output-error'
+                  ? 'error'
+                  : 'running',
             output:
-              typeof event.data === 'string' ? event.data : JSON.stringify(event.data, null, 2),
+              part.state === 'output-available'
+                ? typeof part.output === 'string'
+                  ? part.output
+                  : JSON.stringify(part.output, null, 2)
+                : part.state === 'output-error'
+                  ? part.errorText
+                  : undefined,
             timestamp: ts,
-          }
-        case 'error':
-          return { kind: 'error', id, message: event.message, timestamp: ts }
-      }
-    })
+          })
+        }
+      })
+    }
     return [...userMessages, ...agentItems]
-  }, [userMessages, events])
+  }, [userMessages, messages])
 
   function handleSubmit(value: string) {
     const trimmed = value.trim()
@@ -188,7 +200,7 @@ export default function Page() {
               eyebrow="Theo Agent"
               icon={Sparkles}
               title="What should we build today?"
-              description="Ask anything. This scaffold ships with a mock LLM at server/routes/chat.ts so you can see the wiring before plugging in a real model."
+              description="Ask anything. This scaffold ships an agent at agents/chat.ts — edit it to pick your model or add tools."
               action={<QuickActionChips actions={QUICK_ACTIONS} onSelect={handleQuickAction} />}
             />
           ) : (

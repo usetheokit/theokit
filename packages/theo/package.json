@@ -24,10 +24,6 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
     },
-    "./server/agent": {
-      "types": "./dist/server/agent/index.d.ts",
-      "import": "./dist/server/agent/index.js"
-    },
     "./server/auth": {
       "types": "./dist/server/auth/index.d.ts",
       "import": "./dist/server/auth/index.js"

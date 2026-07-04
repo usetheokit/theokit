@@ -15,7 +15,7 @@ const AGENTS: AgentProfileDescriptor[] = [
   {
     id: 'theo',
     name: 'Theo',
-    description: 'Mock LLM — replace at server/routes/chat.ts.',
+    description: 'Edit the agent at agents/chat.ts.',
     tone: 'primary',
     initials: 'TH',
     badge: 'Online',
