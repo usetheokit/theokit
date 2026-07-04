@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { extname } from 'node:path'
 
+import { getApprovalRegistry } from '../../../server/agent/approval-registry.js'
+import { handleAgentApproval, isApprovalPath } from '../../../server/agent/approve-agent.js'
 import { mountAgent } from '../../../server/agent/mount-agent.js'
 import { resolveProvider } from '../../../server/agent/provider-resolver.js'
 import { executeAction } from '../../../server/http/action-execute.js'
@@ -151,6 +153,60 @@ export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
 export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
   if (!c.url.startsWith('/api/agents/')) return false
   const urlPath = c.url.split('?')[0]
+
+  // HITL approve route (`/api/agents/<name>/approve/<id>`, M4) — resolve the pending approval.
+  // Handled BEFORE the agent-path exact match (the approve path never equals an `agentPath`).
+  if (isApprovalPath(urlPath)) {
+    c.res.setHeader('x-request-id', c.requestId)
+    if (applyRateLimit(c, c.req.method ?? 'POST')) return true
+    const method = (c.req.method ?? 'POST').toUpperCase()
+    if (method !== 'POST') {
+      sendError(
+        c.res,
+        'METHOD_NOT_ALLOWED',
+        'Approve endpoints accept POST',
+        405,
+        undefined,
+        c.requestId,
+      )
+      logRequest({
+        method,
+        url: c.url,
+        status: 405,
+        duration: Date.now() - c.startTime,
+        requestId: c.requestId,
+      })
+      return true
+    }
+    try {
+      const request = incomingMessageToWebRequest(c.req)
+      const response = await handleAgentApproval(
+        request,
+        urlPath,
+        getApprovalRegistry(),
+        c.csrfMode,
+      )
+      await writeWebResponseToServerResponse(response, c.res)
+    } catch (err) {
+      sendError(
+        c.res,
+        'INTERNAL',
+        err instanceof Error ? err.message : 'Approve handler failed',
+        500,
+        undefined,
+        c.requestId,
+      )
+    }
+    logRequest({
+      method,
+      url: c.url,
+      status: c.res.statusCode,
+      duration: Date.now() - c.startTime,
+      requestId: c.requestId,
+    })
+    return true
+  }
+
   const agent = c.cachedAgents.find((a) => a.agentPath === urlPath)
   if (!agent) return false // fall through to the generic /api/* branch (may 404 there)
 

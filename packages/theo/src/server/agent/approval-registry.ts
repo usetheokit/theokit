@@ -32,6 +32,21 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>
 }
 
+/**
+ * The one process-wide registry the stream mount (`mountAgent`) and the approve route share.
+ *
+ * The in-process impl holds LIVE Promise resolvers in memory — the approval a request awaits and
+ * the approval the route resolves MUST be the same object, so a single instance per process is not
+ * a convenience but a correctness requirement. Lazily created; a durable/multi-instance deploy
+ * swaps this accessor for a shared-store impl (ADR 0038 / plan Drawback 2) without touching callers.
+ * Tests use {@link createInProcessApprovalRegistry} directly — never this singleton.
+ */
+let serverRegistry: ApprovalRegistry | undefined
+export function getApprovalRegistry(): ApprovalRegistry {
+  serverRegistry ??= createInProcessApprovalRegistry()
+  return serverRegistry
+}
+
 export function createInProcessApprovalRegistry(): ApprovalRegistry {
   const pending = new Map<string, Pending>()
 
