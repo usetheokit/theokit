@@ -8,6 +8,7 @@
  * Applied AFTER the default template is copied. Removes:
  *   - `@theokit/ui` from `package.json` dependencies (TheoUI bundled components)
  *   - `@theokit/sdk` from `package.json` dependencies (agent SDK — see below)
+ *   - `@theokit/agents` from `package.json` dependencies (only agents/chat.ts used it)
  *   - `app/page.tsx` agent-surface content (replaces with Hello Theo)
  *   - `agents/chat.ts` (the demo agent — depends on the SDK + TheoUI page)
  *   - `tailwind.config.ts` + `postcss.config.js` (Tailwind toolchain — only
@@ -58,6 +59,9 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
       // Without removal, `npm install` hits 404 for any consumer outside
       // the workspace.
       delete pkg.dependencies['@theokit/sdk']
+      // --bare removes the demo agent (agents/chat.ts), so its runtime dep
+      // (@theokit/agents, imported only by that file) goes with it.
+      delete pkg.dependencies['@theokit/agents']
       // lucide-react ships with the TheoUI surface; --bare doesn't render
       // any icons so it's safe to drop.
       delete pkg.dependencies['lucide-react']
