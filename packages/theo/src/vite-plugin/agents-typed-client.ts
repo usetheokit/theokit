@@ -119,7 +119,7 @@ function writeIfChanged(filePath: string, content: string): void {
   renameSync(tmp, filePath)
 }
 
-export function emitAgentsDts(opts: AgentsTypedClientPluginOptions): string {
+function emitAgentsDts(opts: AgentsTypedClientPluginOptions): string {
   const dtsOutPath = posix.join(opts.distDir.replace(/\\/g, '/'), 'agents.d.ts')
   const content = generateAgentsDts({
     manifest: opts.scanManifest(opts.projectRoot),
@@ -187,5 +187,3 @@ export function agentsTypedClientPlugin(opts: AgentsTypedClientPluginOptions): P
     },
   }
 }
-
-export { VIRTUAL_AGENTS_ID, RESOLVED_AGENTS_ID }
