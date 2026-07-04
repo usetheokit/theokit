@@ -85,6 +85,7 @@ export {
   streamAgentUIMessages,
   AgentDefinitionError,
 } from './agent-endpoint.js'
+export { createHitlPlugin, type HitlPlugin, type HitlWiring } from './hitl-plugin.js'
 
 export {
   delegate,
