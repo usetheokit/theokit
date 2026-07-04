@@ -160,3 +160,331 @@ describe('translateToUIMessageStream — text (M0)', () => {
     }
   })
 })
+
+/** Locate the single reasoning-start chunk's minted id (crypto.randomUUID, non-deterministic). */
+function reasoningIdOf(chunks: UIMessageChunk[]): string {
+  const start = chunks.find((c) => c.type === 'reasoning-start')
+  if (!start || !('id' in start)) throw new Error('no reasoning-start chunk found')
+  return start.id
+}
+
+describe('translateToUIMessageStream — reasoning + open-block state machine (M1 / T1.1)', () => {
+  it('test_reasoning_run_emits_one_block', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'thinking', content: 'let me ' },
+      { type: 'thinking', content: 'think' },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    // Exactly one reasoning block (single -start/-end) wrapping N deltas (EC-3).
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'let me ' },
+      { type: 'reasoning-delta', id: rid, delta: 'think' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_text_then_reasoning_closes_text_first', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'hi' },
+      { type: 'thinking', content: 'hmm' },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    // EC-2: the open text block is closed (text-end) before the reasoning block opens.
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'text-start', id: TEXT_ID },
+      { type: 'text-delta', id: TEXT_ID, delta: 'hi' },
+      { type: 'text-end', id: TEXT_ID },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'hmm' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_reasoning_then_text_interleaves_three_blocks', async () => {
+    // Q1 (Unresolved): text → reasoning → text must produce three closed blocks.
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'a' },
+      { type: 'thinking', content: 'r' },
+      { type: 'text_delta', content: 'b' },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'text-start', id: TEXT_ID },
+      { type: 'text-delta', id: TEXT_ID, delta: 'a' },
+      { type: 'text-end', id: TEXT_ID },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'r' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'text-start', id: TEXT_ID },
+      { type: 'text-delta', id: TEXT_ID, delta: 'b' },
+      { type: 'text-end', id: TEXT_ID },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_done_closes_open_reasoning_block_then_finish', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'thinking', content: 'x' },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    // reasoning-end precedes finish; no orphan open block.
+    expect(chunks.slice(-2)).toEqual([{ type: 'reasoning-end', id: rid }, { type: 'finish' }])
+  })
+
+  it('test_reasoning_id_is_a_uuid_not_math_random', async () => {
+    // G8: id minted via crypto.randomUUID() — assert RFC-4122 v4 shape.
+    const events: AgentStreamEvent[] = [{ type: 'thinking', content: 'x' }]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(reasoningIdOf(chunks)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    )
+  })
+
+  it('test_reasoning_chunks_validate_against_ui_message_chunk_schema', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'a' },
+      { type: 'thinking', content: 'r' },
+      { type: 'text_delta', content: 'b' },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+      },
+    ]
+    const schema = uiMessageChunkSchema()
+    const validate = schema.validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+
+  it('test_error_event_mid_open_reasoning_surfaces_error_then_closes_reasoning', async () => {
+    // Error-path closeOpenBlock must handle the reasoning branch: the error chunk
+    // is surfaced FIRST, then the open reasoning block is closed, then finish.
+    const events: AgentStreamEvent[] = [
+      { type: 'thinking', content: 'let me think' },
+      { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const rid = reasoningIdOf(chunks)
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'let me think' },
+      { type: 'error', errorText: 'boom' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_thrown_iterable_mid_open_reasoning_surfaces_error_without_throwing', async () => {
+    // catch-path closeOpenBlock closes the open reasoning block; no throw past
+    // the boundary. errorText mirrors the thrown-iterable format (String(err)).
+    const events: AgentStreamEvent[] = [{ type: 'thinking', content: 'partial reasoning' }]
+    const chunks = await collect(
+      translateToUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
+    )
+    const rid = reasoningIdOf(chunks)
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'reasoning-start', id: rid },
+      { type: 'reasoning-delta', id: rid, delta: 'partial reasoning' },
+      { type: 'error', errorText: 'Error: stream aborted' },
+      { type: 'reasoning-end', id: rid },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_reasoning_tool_reasoning_produces_two_distinct_blocks', async () => {
+    // A tool call closes the reasoning block; the next thinking opens a FRESH one
+    // with a distinct id — never two reasoning blocks sharing an id (EC-3).
+    const events: AgentStreamEvent[] = [
+      { type: 'thinking', content: 'first' },
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: {} },
+      { type: 'thinking', content: 'second' },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const starts = chunks.filter((c) => c.type === 'reasoning-start')
+    const ends = chunks.filter((c) => c.type === 'reasoning-end')
+    expect(starts).toHaveLength(2)
+    expect(ends).toHaveLength(2)
+    const firstId = 'id' in starts[0] ? starts[0].id : undefined
+    const secondId = 'id' in starts[1] ? starts[1].id : undefined
+    expect(firstId).toBeDefined()
+    expect(secondId).toBeDefined()
+    expect(firstId).not.toBe(secondId)
+  })
+})
+
+describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
+  it('test_tool_call_then_result_maps_to_input_and_output_available', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'search',
+        output: 'hit',
+        durationMs: 3,
+        isError: false,
+      },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    // dynamic:true (EC-1) so the consumer produces a dynamic-tool part whose
+    // toolName survives to the parsed part (ui-messages.ts:384-396).
+    expect(chunks).toEqual([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'search',
+        input: { q: 'x' },
+        dynamic: true,
+      },
+      { type: 'tool-output-available', toolCallId: 'c1', output: 'hit' },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_tool_result_error_maps_to_output_error', async () => {
+    // EC-4 (negative case): isError:true → tool-output-error with errorText.
+    const events: AgentStreamEvent[] = [
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: {} },
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'search',
+        output: 'boom',
+        durationMs: 3,
+        isError: true,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toEqual([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'search',
+        input: {},
+        dynamic: true,
+      },
+      { type: 'tool-output-error', toolCallId: 'c1', errorText: 'boom' },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_orphan_tool_result_synthesizes_input_available_first', async () => {
+    // EC-1: a tool_result with no preceding tool_call must synthesize
+    // tool-input-available first, else the consumer throws
+    // (process-ui-message-stream.ts:115 "No tool invocation found").
+    const events: AgentStreamEvent[] = [
+      {
+        type: 'tool_result',
+        callId: 'c9',
+        toolName: 'lookup',
+        output: 'late',
+        durationMs: 3,
+        isError: false,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toEqual([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c9',
+        toolName: 'lookup',
+        input: {},
+        dynamic: true,
+      },
+      { type: 'tool-output-available', toolCallId: 'c9', output: 'late' },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_tool_after_open_text_closes_text_first', async () => {
+    // EC-2: an open text block is closed before the tool chunk is emitted.
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'thinking about it' },
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toEqual([
+      { type: 'start' },
+      { type: 'text-start', id: TEXT_ID },
+      { type: 'text-delta', id: TEXT_ID, delta: 'thinking about it' },
+      { type: 'text-end', id: TEXT_ID },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'search',
+        input: { q: 'x' },
+        dynamic: true,
+      },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_tool_chunks_validate_against_ui_message_chunk_schema', async () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
+      {
+        type: 'tool_result',
+        callId: 'c1',
+        toolName: 'search',
+        output: 'hit',
+        durationMs: 3,
+        isError: false,
+      },
+      {
+        type: 'tool_result',
+        callId: 'c2',
+        toolName: 'other',
+        output: 'err',
+        durationMs: 3,
+        isError: true,
+      },
+    ]
+    const schema = uiMessageChunkSchema()
+    const validate = schema.validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+})
