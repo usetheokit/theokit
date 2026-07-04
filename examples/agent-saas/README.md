@@ -29,8 +29,22 @@ the SDK loop `await`s). No polling, no second connection: one open stream, pause
 the approve request. On approve the tool runs; on deny or timeout the model receives the denial and
 the run continues coherently.
 
+## Run it in the terminal (M5)
+
+The same agent runs in your terminal — the harness with a different render surface:
+
+```bash
+theokit agent ops "Deploy the billing service to production"
+```
+
+You'll see the streaming reply, a `▸ ops.deploy(...)` tool card, and — because `deploy` is gated —
+an inline `Approve ops.deploy? (y/N)` prompt. Approve and the tool runs; deny (or a non-interactive
+terminal) and the model gets the denial and continues. It reuses the exact same `@HumanInTheLoop`
+approval + `@Checkpoint` resume as the web page above (ADR 0039).
+
 ## Status
 
 Pattern reference, not a published package. The end-to-end behavior (pause → approve → run → done,
 the deny path, and resume) is covered by the deterministic harness E2E in
-`packages/agents/tests/integration/hitl-harness.test.ts`.
+`packages/agents/tests/integration/hitl-harness.test.ts` (web) and
+`tests/unit/run-terminal-agent.test.ts` (terminal).
