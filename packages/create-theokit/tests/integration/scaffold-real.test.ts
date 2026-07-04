@@ -126,9 +126,11 @@ describe('scaffold (integration — real template)', () => {
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
     // theokit is the main dep
     expect(pkg.dependencies.theokit).toMatch(/^\^0\.\d+\.\d+/)
-    // @theokit/http and @theokit/agents are NOT direct deps (transitive via theokit)
+    // @theokit/http is NOT a direct dep (transitive via theokit).
     expect(pkg.dependencies['@theokit/http']).toBeUndefined()
-    expect(pkg.dependencies['@theokit/agents']).toBeUndefined()
+    // @theokit/agents IS a direct dep since M3 — the agents/*.ts convention
+    // imports `defineAgent` from it (the proprietary in-theokit surface was removed).
+    expect(pkg.dependencies['@theokit/agents']).toMatch(/^\^\d+\.\d+\.\d+/)
     // reflect-metadata is NOT a direct dep (theokit handles it internally)
     expect(pkg.dependencies['reflect-metadata']).toBeUndefined()
     // @swc/core is NOT needed (no controllers — defineRoute only)
@@ -160,8 +162,8 @@ describe('scaffold (integration — real template)', () => {
 
     scaffold(targetDir, 'clean-template-test')
 
-    // Chat-surface default ships the canonical chat route + a health route.
-    expect(existsSync(join(targetDir, 'server/routes/chat.ts'))).toBe(true)
+    // Chat-surface default ships the canonical agents/chat.ts + a health route.
+    expect(existsSync(join(targetDir, 'agents/chat.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'server/routes/health.ts'))).toBe(true)
     // No demo tasks routes
     expect(existsSync(join(targetDir, 'server/routes/tasks'))).toBe(false)
@@ -220,9 +222,10 @@ describe('scaffold (integration — real template)', () => {
     scaffold(targetDir, 'page-test')
 
     const page = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
-    // Chat surface composed from @theokit/ui + the streaming hook
+    // Chat surface composed from @theokit/ui + the M2 useAgent hook
     expect(page).toContain('@theokit/ui')
-    expect(page).toContain('useAgentStream')
+    expect(page).toContain('useAgent')
+    expect(page).not.toContain('useAgentStream')
     // No leftover task-CRUD demo code
     expect(page).not.toContain('createTask')
   })

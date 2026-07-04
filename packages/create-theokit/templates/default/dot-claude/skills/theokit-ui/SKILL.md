@@ -63,10 +63,10 @@ import {
 } from '@theokit/ui'
 // Generic layout primitives moved to @usetheo/ui (2026-07-03 pivot)
 import { PageShell, Sidebar, SessionListItem } from '@usetheo/ui'
-import { useAgentStream } from 'theokit/client'
+import { useAgent } from 'theokit/client'
 
 function ChatPage() {
-  const { status, events, send } = useAgentStream('/api/agents/assistant')
+  const { messages, status, send } = useAgent('/api/agents/assistant')
 
   return (
     <PageShell sidebar={
@@ -77,9 +77,13 @@ function ChatPage() {
       </Sidebar>
     }>
       <ChatThread>
-        {messages.map(m => (
-          <ChatMessage key={m.id} role={m.role}>
-            <ChatMessageContent markdown={m.content} />
+        {messages.map(message => (
+          <ChatMessage key={message.id} role={message.role}>
+            {message.parts.map((part, i) =>
+              part.type === 'text'
+                ? <ChatMessageContent key={i} markdown={part.text} />
+                : null
+            )}
           </ChatMessage>
         ))}
       </ChatThread>

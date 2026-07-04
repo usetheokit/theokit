@@ -6,8 +6,13 @@ import { resolve } from 'node:path'
  * T2.3 — Anti-stack lint gate (FAANG-precise).
  *
  * The locked stack assumption (memory: project-stack-deps) says TheoKit's
- * default scaffold ALWAYS wires `@theokit/sdk`, never a raw provider SDK
- * (OpenAI/Anthropic/etc).
+ * default scaffold ALWAYS wires `@theokit/agents` / `defineAgent`, never a raw
+ * provider SDK (OpenAI/Anthropic/etc).
+ *
+ * M3 (clean break): the scaffold agent file is now `agents/chat.ts` (not the
+ * removed `server/routes/chat.ts`). The indirection changes from
+ * `createConversationHistory|streamAgentRun` to `defineAgent|defineAgentTool`
+ * — `defineAgent` compiles to the SDK at mount time (the new bridge).
  *
  * Precision: this gate checks for actual IMPORTS of the `openai` npm package
  * (or `@anthropic-ai/sdk`, etc), NOT casual mentions. The wire protocol IS
@@ -29,11 +34,11 @@ import { resolve } from 'node:path'
 const ROOT = resolve(__dirname, '../..')
 
 const FILES_TO_SCAN = [
-  'fixtures/template-default/server/routes/chat.ts',
-  'packages/create-theokit/templates/default/server/routes/chat.ts',
+  'fixtures/template-default/agents/chat.ts',
+  'packages/create-theokit/templates/default/agents/chat.ts',
 ] as const
 
-describe('scaffold anti-stack lint — no raw OpenAI in default chat.ts', () => {
+describe('scaffold anti-stack lint — no raw OpenAI in default agents/chat.ts (M3)', () => {
   it('declares exactly 2 files to scan (defends against missing file in array)', () => {
     expect(FILES_TO_SCAN.length).toBe(2)
   })
@@ -55,20 +60,17 @@ describe('scaffold anti-stack lint — no raw OpenAI in default chat.ts', () => 
         /from\s+['"]@anthropic-ai\/sdk['"]/i.test(content)
       expect(
         rawSdkImport,
-        `${relativePath} must not import raw provider SDKs (locked stack: @theokit/sdk via createConversationHistory)`,
+        `${relativePath} must not import raw provider SDKs (locked stack: @theokit/agents via defineAgent)`,
       ).toBe(false)
     })
 
-    it(`${relativePath} uses @theokit/sdk (directly OR indirectly via createConversationHistory)`, () => {
+    it(`${relativePath} uses @theokit/agents (directly OR indirectly via defineAgent/defineAgentTool)`, () => {
       const content = readFileSync(absPath, 'utf-8')
-      // Item #3 / #4 imported Agent directly. Item #5 routes via
-      // createConversationHistory (which dynamically imports the SDK).
-      // Either path proves the locked stack — accept both.
-      const directImport = /import\s+\{\s*Agent\s*\}\s+from\s+['"]@theokit\/sdk['"]/.test(content)
-      const indirectViaTheokit = /createConversationHistory|defineAgentTool|streamAgentRun/.test(
-        content,
-      )
-      expect(directImport || indirectViaTheokit).toBe(true)
+      // M3: the new indirection is defineAgent (compiles to the SDK at mount time)
+      // or defineAgentTool (still valid for tool-equipped agents).
+      // Either proves the locked stack — accept both.
+      const indirectViaTheokit = /defineAgent|defineAgentTool/.test(content)
+      expect(indirectViaTheokit).toBe(true)
     })
   }
 })

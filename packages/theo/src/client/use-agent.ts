@@ -12,9 +12,8 @@ import { consumeUIMessageStream } from './consume-ui-message-stream.js'
  * so the request shape is inferred end-to-end from the server `defineAgent({ input })` with
  * ZERO manual wiring (DoD line 2).
  *
- * Transport mirrors `useAgentStream`: fetch + ReadableStream (POST needs a body; EventSource
- * is GET-only). `ai` is loaded lazily by `consumeUIMessageStream` so non-agent apps never
- * pay for it.
+ * Transport: fetch + ReadableStream (POST needs a body; EventSource is GET-only). `ai` is
+ * loaded lazily by `consumeUIMessageStream` so non-agent apps never pay for it.
  */
 export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
 
