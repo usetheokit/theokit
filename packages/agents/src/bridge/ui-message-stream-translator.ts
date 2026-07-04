@@ -1,6 +1,6 @@
 import type { UIMessageChunk } from 'ai'
 
-import type { AgentStreamEvent } from './agent-stream-events.js'
+import type { AgentStreamEvent, ToolCallEvent, ToolResultEvent } from './agent-stream-events.js'
 
 /**
  * M1 (theokit-ai-first) — translate a theokit `AgentStreamEvent` stream into the
@@ -62,12 +62,48 @@ function* closeOpenBlock(state: BlockState, textId: string): Generator<UIMessage
   state.openBlock = null
 }
 
+/** Emit a tool-input-available for a committed tool call (EC-1: `dynamic:true`). */
+function* emitToolCall(event: ToolCallEvent, seen: Set<string>): Generator<UIMessageChunk> {
+  seen.add(event.callId)
+  yield {
+    type: 'tool-input-available',
+    toolCallId: event.callId,
+    toolName: event.toolName,
+    input: event.input,
+    dynamic: true,
+  }
+}
+
+/**
+ * Emit the tool output; for a callId never introduced by a `tool_call`, first
+ * synthesize `tool-input-available` (EC-1) so the consumer has a part to update.
+ */
+function* emitToolResult(event: ToolResultEvent, seen: Set<string>): Generator<UIMessageChunk> {
+  if (!seen.has(event.callId)) {
+    seen.add(event.callId)
+    yield {
+      type: 'tool-input-available',
+      toolCallId: event.callId,
+      toolName: event.toolName,
+      input: {},
+      dynamic: true,
+    }
+  }
+  if (event.isError) {
+    // ToolResultEvent.output is already a string (agent-stream-events.ts:40).
+    yield { type: 'tool-output-error', toolCallId: event.callId, errorText: event.output }
+  } else {
+    yield { type: 'tool-output-available', toolCallId: event.callId, output: event.output }
+  }
+}
+
 export async function* translateToUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
   opts: { textId: string },
 ): AsyncGenerator<UIMessageChunk, void, unknown> {
   yield { type: 'start' }
   const state: BlockState = { openBlock: null, reasoningId: null }
+  const seenToolCallIds = new Set<string>()
   try {
     for await (const event of events) {
       if (event.type === 'text_delta') {
@@ -87,6 +123,12 @@ export async function* translateToUIMessageStream(
           state.openBlock = 'reasoning'
         }
         yield { type: 'reasoning-delta', id: reasoningId, delta: event.content }
+      } else if (event.type === 'tool_call') {
+        yield* closeOpenBlock(state, opts.textId)
+        yield* emitToolCall(event, seenToolCallIds)
+      } else if (event.type === 'tool_result') {
+        yield* closeOpenBlock(state, opts.textId)
+        yield* emitToolResult(event, seenToolCallIds)
       } else if (event.type === 'error') {
         // Surface the agent-reported failure to the client instead of swallowing
         // it (M0 order: error chunk, then close the open block below, then finish).
