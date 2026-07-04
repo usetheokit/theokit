@@ -9,7 +9,7 @@
  *   - `@theokit/ui` from `package.json` dependencies (TheoUI bundled components)
  *   - `@theokit/sdk` from `package.json` dependencies (agent SDK — see below)
  *   - `app/page.tsx` agent-surface content (replaces with Hello Theo)
- *   - `server/routes/chat.ts` (mock chat — depends on SDK + TheoUI events)
+ *   - `agents/chat.ts` (the demo agent — depends on the SDK + TheoUI page)
  *   - `tailwind.config.ts` + `postcss.config.js` (Tailwind toolchain — only
  *     needed by the @theokit/ui-driven default surface)
  *   - tailwind* + postcss* from devDependencies (toolchain cleanup)
