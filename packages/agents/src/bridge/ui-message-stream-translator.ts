@@ -3,67 +3,105 @@ import type { UIMessageChunk } from 'ai'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 
 /**
- * M0 (theokit-ai-first) — translate a theokit `AgentStreamEvent` stream into the
- * Vercel ai-sdk `UIMessageStream` protocol, TEXT ONLY.
+ * M1 (theokit-ai-first) — translate a theokit `AgentStreamEvent` stream into the
+ * Vercel ai-sdk `UIMessageStream` protocol: TEXT (M0) + REASONING + TOOL chunks.
  *
  * This is a PURE mapping (D1): it consumes the ALREADY-deduped bridge event
  * stream (downstream of `mergeDeltaStream`) and yields `UIMessageChunk`s. It
  * NEVER calls an LLM and does NOT re-run the agent loop (sdk-runtime.md / G2) —
  * `@theokit/sdk` remains the only runtime.
  *
- * Chunk sequence for a text run:
+ * Chunk sequences:
  *
- *   start → text-start{id} → text-delta{id,delta}* → text-end{id} → finish
+ *   text run:      start → text-start{id} → text-delta{id,delta}* → text-end{id} → finish
+ *   reasoning run: start → reasoning-start{id} → reasoning-delta{id,delta}* → reasoning-end{id} → finish
+ *   tool run:      start → tool-input-available{callId,name,input} → tool-output-available{callId,output} → finish
+ *
+ * Open-block state machine (EC-2): at most ONE streaming block (text OR
+ * reasoning) is open at a time; before emitting a chunk of a DIFFERENT kind
+ * (the other block, a tool chunk, or `finish`) the current block is closed
+ * (`text-end` / `reasoning-end`) via `closeOpenBlock`. Consecutive `thinking`
+ * events collapse into ONE reasoning block (EC-3).
+ *
+ * Tool chunks (EC-1): theokit tools are runtime-discovered, so tool chunks
+ * carry `dynamic: true` — the ai-sdk consumer then materializes a `dynamic-tool`
+ * UIPart (`process-ui-message-stream.ts:626`) whose explicit `toolName` survives
+ * to the parsed part (a static `tool-<name>` part carries the name only in its
+ * `type`; `ui-messages.ts:384-396`). A `tool_result` for a callId that never had
+ * a preceding `tool_call` FIRST synthesizes `tool-input-available` — otherwise
+ * the consumer throws `No tool invocation found` (`process-ui-message-stream.ts:115`).
  *
  * Invariants:
  * - Exactly one `start` and one `finish` per run.
- * - `text-end` is emitted ONLY if a `text-start` was emitted (no orphan close).
- * - A single shared `id` (`opts.textId`) for the whole text block — injected for
- *   deterministic tests (D3).
+ * - A single shared `id` (`opts.textId`) for every text block — injected for
+ *   deterministic tests (D3). Reasoning ids are minted per-block via
+ *   `crypto.randomUUID()` (G8).
  * - Every emitted chunk carries ONLY the fields required by ai-sdk's
  *   `uiMessageChunkSchema` (a z.strictObject union — extra keys are rejected).
  *
  * Error handling (error-handling.md — fail-clear, surface don't swallow, never
  * throw past the boundary): an `error` event OR a thrown/aborted underlying
- * iterable is SURFACED as an ai-sdk `error` chunk (`{ type: 'error', errorText }`),
- * then closes an open text (`text-end`) and terminates with `finish`. The error is
- * not re-thrown — the transport still produces a well-formed, terminated stream the
- * client can render as a failed turn.
- *
- * Tool / reasoning / file chunks are intentionally out of scope for M0 (YAGNI);
- * non-text events are ignored here and widen the mapping in M1.
+ * iterable is SURFACED as an ai-sdk `error` chunk, then the open block is closed
+ * and the stream terminates with `finish`. The error is not re-thrown — the
+ * transport still produces a well-formed, terminated stream the client renders as
+ * a failed turn.
  */
+
+interface BlockState {
+  openBlock: 'text' | 'reasoning' | null
+  reasoningId: string | null
+}
+
+/** Close the currently-open text/reasoning block (EC-2). Idempotent when none open. */
+function* closeOpenBlock(state: BlockState, textId: string): Generator<UIMessageChunk> {
+  if (state.openBlock === 'text') {
+    yield { type: 'text-end', id: textId }
+  } else if (state.openBlock === 'reasoning' && state.reasoningId) {
+    yield { type: 'reasoning-end', id: state.reasoningId }
+  }
+  state.openBlock = null
+}
+
 export async function* translateToUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
   opts: { textId: string },
 ): AsyncGenerator<UIMessageChunk, void, unknown> {
   yield { type: 'start' }
-  let textOpen = false
+  const state: BlockState = { openBlock: null, reasoningId: null }
   try {
     for await (const event of events) {
       if (event.type === 'text_delta') {
-        if (!textOpen) {
+        if (state.openBlock !== 'text') {
+          yield* closeOpenBlock(state, opts.textId)
           yield { type: 'text-start', id: opts.textId }
-          textOpen = true
+          state.openBlock = 'text'
         }
         yield { type: 'text-delta', id: opts.textId, delta: event.content }
+      } else if (event.type === 'thinking') {
+        let reasoningId = state.openBlock === 'reasoning' ? state.reasoningId : null
+        if (reasoningId === null) {
+          yield* closeOpenBlock(state, opts.textId)
+          reasoningId = crypto.randomUUID()
+          state.reasoningId = reasoningId
+          yield { type: 'reasoning-start', id: reasoningId }
+          state.openBlock = 'reasoning'
+        }
+        yield { type: 'reasoning-delta', id: reasoningId, delta: event.content }
       } else if (event.type === 'error') {
-        // Surface the agent-reported failure to the client as an ai-sdk error
-        // chunk instead of silently swallowing it, then close gracefully.
+        // Surface the agent-reported failure to the client instead of swallowing
+        // it (M0 order: error chunk, then close the open block below, then finish).
         yield { type: 'error', errorText: event.message }
         break
+      } else if (event.type === 'done') {
+        break
       }
-      // Non-text events (run_started, done, tool_*, thinking, …) produce no
-      // text chunk in M0. `done`/end-of-stream close naturally below.
+      // Other events (run_started, iteration, …) produce no chunk.
     }
   } catch (err) {
-    // The underlying stream aborted/errored. Surface the failure as an error
-    // chunk (structured, not console noise), then fall through to a graceful
-    // close — never throw past the transport.
+    // The underlying stream aborted/errored. Surface it as an error chunk, then
+    // fall through to a graceful close — never throw past the transport.
     yield { type: 'error', errorText: String(err) }
   }
-  if (textOpen) {
-    yield { type: 'text-end', id: opts.textId }
-  }
+  yield* closeOpenBlock(state, opts.textId)
   yield { type: 'finish' }
 }
