@@ -110,6 +110,34 @@ class EventQueue<T> {
   }
 }
 
+/**
+ * Append a `checkpoint_saved` event just before the terminal `done` (M4). The translator breaks on
+ * `done`, so the checkpoint MUST precede it to reach the wire. `resumeToken` is the `sessionId` a
+ * follow-up request replays through the SDK conversation storage. On a run that ends without a clean
+ * `done` (e.g. error — the translator already broke), the trailing emit is inert. The SDK genuinely
+ * persisted the turns via its conversation storage; this is the resume-handle signal, not a new store.
+ */
+async function* appendCheckpointSaved(
+  source: AsyncGenerator<AgentStreamEvent>,
+  sessionId: string,
+): AsyncGenerator<AgentStreamEvent> {
+  let emitted = false
+  const checkpoint = (): AgentStreamEvent => ({
+    type: 'checkpoint_saved',
+    checkpointId: crypto.randomUUID(),
+    step: 0,
+    resumeToken: sessionId,
+  })
+  for await (const ev of source) {
+    if (ev.type === 'done' && !emitted) {
+      emitted = true
+      yield checkpoint()
+    }
+    yield ev
+  }
+  if (!emitted) yield checkpoint()
+}
+
 /** HITL wiring supplied by the harness (mount-agent): the gated-tool map + the approval resolver. */
 export interface StreamHitlOptions {
   gated: HitlWiring['gated']
@@ -136,9 +164,11 @@ export function streamAgentUIMessages(
   apiKey: string,
   input: StreamAgentOptions,
 ): AsyncGenerator<UIMessageChunk> {
+  const textId = crypto.randomUUID()
   const overrides: RuntimeOverrides = {}
   if (input.conversationStorage) overrides.conversationStorage = input.conversationStorage
 
+  let source: AsyncGenerator<AgentStreamEvent>
   if (!input.hitl || input.hitl.gated.size === 0) {
     // M2 non-HITL path — unchanged.
     const events = createSdkAgentStream(
@@ -147,29 +177,34 @@ export function streamAgentUIMessages(
       apiKey,
       overrides,
     )(input.message, input.sessionId)
-    return translateToUIMessageStream(asAgentStream(events), { textId: crypto.randomUUID() })
+    source = asAgentStream(events)
+  } else {
+    // M4 HITL path — inject the plugin + merge its approval events with the SDK stream.
+    const queue = new EventQueue<AgentStreamEvent>()
+    const plugin = createHitlPlugin({
+      gated: input.hitl.gated,
+      emit: (e) => queue.push(e),
+      awaitApproval: input.hitl.awaitApproval,
+    })
+    const sdkStream = createSdkAgentStream(compiled, compiled.tools, apiKey, {
+      ...overrides,
+      // The HITL plugin is a structural @theokit/sdk Plugin (createHitlPlugin returns the
+      // { name, register } shape); the RuntimeOverrides.plugins union is widened at the SDK edge.
+      plugins: [plugin] as unknown as RuntimeOverrides['plugins'],
+    })(input.message, input.sessionId)
+    // Pump the SDK stream into the shared queue; close when it ends.
+    void (async () => {
+      try {
+        for await (const e of sdkStream) queue.push(e as unknown as AgentStreamEvent)
+      } finally {
+        queue.close()
+      }
+    })()
+    source = queue.drain()
   }
 
-  // M4 HITL path — inject the plugin + merge its approval events with the SDK stream.
-  const queue = new EventQueue<AgentStreamEvent>()
-  const plugin = createHitlPlugin({
-    gated: input.hitl.gated,
-    emit: (e) => queue.push(e),
-    awaitApproval: input.hitl.awaitApproval,
-  })
-  const sdkStream = createSdkAgentStream(compiled, compiled.tools, apiKey, {
-    ...overrides,
-    // The HITL plugin is a structural @theokit/sdk Plugin (createHitlPlugin returns the
-    // { name, register } shape); the RuntimeOverrides.plugins union is widened at the SDK edge.
-    plugins: [plugin] as unknown as RuntimeOverrides['plugins'],
-  })(input.message, input.sessionId)
-  // Pump the SDK stream into the shared queue; close when it ends.
-  void (async () => {
-    try {
-      for await (const e of sdkStream) queue.push(e as unknown as AgentStreamEvent)
-    } finally {
-      queue.close()
-    }
-  })()
-  return translateToUIMessageStream(queue.drain(), { textId: crypto.randomUUID() })
+  // M4 @Checkpoint: emit `checkpoint_saved` (→ `data-checkpoint`) when the agent declares it, so a
+  // same-`sessionId` request resumes from the SDK-persisted history. Absent ⇒ no checkpoint chunk.
+  const events = compiled.checkpoint ? appendCheckpointSaved(source, input.sessionId) : source
+  return translateToUIMessageStream(events, { textId })
 }
