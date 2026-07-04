@@ -19,15 +19,27 @@ interface PendingApproval {
   question: string
 }
 
-/** Scan the reconstructed messages for an unresolved `tool-approval-request` part. */
+/**
+ * Scan the reconstructed messages for a tool part awaiting approval.
+ *
+ * `ai`'s `readUIMessageStream` (which `useAgent` runs) does NOT surface a `tool-approval-request`
+ * as a part of its own — it MUTATES the tool part to `state: 'approval-requested'` and hangs the id
+ * off `part.approval.id`. That id is the `approvalId` the approve route resolves.
+ */
 function findPendingApproval(messages: { parts?: unknown[] }[]): PendingApproval | null {
   for (const message of messages) {
     for (const part of message.parts ?? []) {
-      const p = part as { type?: string; approvalId?: string; toolName?: string }
-      if (p.type === 'tool-approval-request' && typeof p.approvalId === 'string') {
+      const p = part as {
+        type?: string
+        state?: string
+        toolName?: string
+        approval?: { id?: string }
+      }
+      if (p.state === 'approval-requested' && typeof p.approval?.id === 'string') {
         return {
-          approvalId: p.approvalId,
-          toolName: p.toolName ?? 'tool',
+          approvalId: p.approval.id,
+          // Dynamic tool parts carry `toolName`; static parts encode it in `type` (`tool-<name>`).
+          toolName: p.toolName ?? p.type?.replace(/^tool-/, '') ?? 'tool',
           question: 'Approve this action?',
         }
       }

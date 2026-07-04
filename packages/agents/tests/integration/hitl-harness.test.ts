@@ -14,11 +14,40 @@
  * run, done — and deny surfaces + continues.
  */
 import 'reflect-metadata'
+import { readUIMessageStream, type UIMessageChunk } from 'ai'
 import { describe, expect, it, vi } from 'vitest'
 
 interface FakeEvent {
   type: string
   [k: string]: unknown
+}
+
+/** Minimal shape of a reconstructed UIMessage part we assert on (ai yields richer objects). */
+type ParsedPart = { type: string; state?: string; approval?: { id?: string } } & Record<
+  string,
+  unknown
+>
+
+/**
+ * Replay already-collected chunks through ai's REAL `readUIMessageStream` — the exact reader
+ * `useAgent` runs — and return the final assistant message's parts. This is what a renderer sees;
+ * it is NOT the same as the raw chunk list (ai mutates a tool part to `state:'approval-requested'`
+ * rather than surfacing a `tool-approval-request` part of its own).
+ */
+async function reconstructParts(
+  chunks: { type: string; [k: string]: unknown }[],
+): Promise<ParsedPart[]> {
+  const stream = new ReadableStream<UIMessageChunk>({
+    start(controller) {
+      for (const c of chunks) controller.enqueue(c as unknown as UIMessageChunk)
+      controller.close()
+    },
+  })
+  let parts: ParsedPart[] = []
+  for await (const message of readUIMessageStream({ stream })) {
+    parts = message.parts as ParsedPart[]
+  }
+  return parts
 }
 
 // The stub captures the injected HITL plugin from `overrides.plugins`, fires its `pre_tool_call`
@@ -176,6 +205,18 @@ describe('HITL harness E2E (M4 / DoD-3)', () => {
     ).toBe(true)
     // The stream still terminates cleanly (loop continued to completion).
     expect(chunks.at(-1)).toEqual({ type: 'finish' })
+  })
+
+  it('test_e2e_approval_surfaces_as_approval_requested_part_through_the_real_reader', async () => {
+    // The client (`useAgent` → readUIMessageStream) must be able to FIND the pending approval. ai
+    // reconstructs the `tool-approval-request` chunk by mutating the tool part to
+    // `state: 'approval-requested'` with `approval.id` — it does NOT emit a `tool-approval-request`
+    // part. This is exactly what the example page scans for; assert it through the real reader.
+    const chunks = await runWithDecision(true)
+    const parts = await reconstructParts(chunks)
+    const pending = parts.find((p) => p.state === 'approval-requested')
+    expect(pending, 'a tool part must reconstruct in approval-requested state').toBeDefined()
+    expect(typeof pending?.approval?.id).toBe('string')
   })
 
   it('test_e2e_non_gated_agent_never_pauses', async () => {
