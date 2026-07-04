@@ -71,7 +71,8 @@ export {
 } from '../core/contracts/action-protocol.js'
 
 // Subdomain sub-barrels (consumers can also import direct: theokit/server/<sub>)
-export * from './agent/index.js'
+// (server/agent had only the proprietary surface — removed in the M3 clean break;
+// its survivors mount-agent/provider-resolver/configure-agent-registry are internal.)
 export * from './auth/index.js'
 export * from './cost/index.js'
 export * from './cron/index.js'
