@@ -48,9 +48,9 @@ describe('agentCommand (M5)', () => {
   it('test_loads_the_agent_and_runs_it_in_the_terminal', async () => {
     const fakeMod = { default: {} }
     const loadModule = vi.fn().mockResolvedValue(fakeMod)
-    const runAgent = vi.fn().mockResolvedValue(undefined)
+    const runAgent = vi.fn().mockResolvedValue({ sawError: false })
 
-    await agentCommand('ops', 'deploy billing', {
+    const result = await agentCommand('ops', 'deploy billing', {
       projectRoot: root,
       loadModule,
       runAgent,
@@ -64,5 +64,7 @@ describe('agentCommand (M5)', () => {
       'sk-test',
       expect.objectContaining({ message: 'deploy billing' }),
     )
+    // The run result (error signal for the CLI exit code) is threaded back.
+    expect(result).toEqual({ sawError: false })
   })
 })

@@ -30,7 +30,7 @@ export interface RunTerminalAgentInput {
   /** Injectable shared registry (defaults to the process singleton). */
   registry?: ApprovalRegistry
   /** Injectable approval prompt (defaults to the readline prompt over the process streams). */
-  promptApproval?: (req: { toolName: string }) => Promise<boolean>
+  promptApproval?: (req: { toolName: string; timeoutMs?: number }) => Promise<boolean>
   /** Labels a fail-fast `AgentDefinitionError` (the file path). */
   source?: string
 }
@@ -44,15 +44,15 @@ export async function runAgentInTerminal(
   mod: unknown,
   apiKey: string,
   input: RunTerminalAgentInput,
-): Promise<void> {
+): Promise<{ sawError: boolean }> {
   const compiled = compileAgentModule(mod, input.source)
   const stdout = input.stdout ?? process.stdout
   const registry = input.registry ?? getApprovalRegistry()
   const sessionId = input.sessionId ?? crypto.randomUUID()
   const promptApproval =
     input.promptApproval ??
-    ((req: { toolName: string }) =>
-      promptTerminalApproval(req, { input: process.stdin, output: process.stdout }))
+    ((req: { toolName: string; timeoutMs?: number }) =>
+      promptTerminalApproval(req, { input: process.stdin, output: process.stdout }, req.timeoutMs))
 
   // Mirror mount-agent's HITL wiring; absent ⇒ the non-HITL stream path (M2), unchanged.
   const gated = compiled.hitl
@@ -73,12 +73,14 @@ export async function runAgentInTerminal(
     sessionId,
     hitl,
   })
-  await renderAgentStreamToTerminal(chunks, {
+  return renderAgentStreamToTerminal(chunks, {
     stdout,
     onApproval: async ({ approvalId, toolName }) => {
       // The renderer paused here (the SDK run is paused in its awaited pre_tool_call hook); prompt,
       // then resolve the SAME registry the stream registered into — the run resumes with the decision.
-      const approved = await promptApproval({ toolName })
+      // The prompt shares the gated tool's timeout so it can never outlive the registry-settled run.
+      const timeoutMs = gated?.get(toolName)?.timeout ?? 300_000
+      const approved = await promptApproval({ toolName, timeoutMs })
       registry.resolve(approvalId, approved)
     },
   })
