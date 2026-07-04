@@ -37,8 +37,11 @@ export function scanAgents(projectRoot: string): AgentNode[] {
     rel = rel.replace(/\\/g, '/')
     rel = rel.slice(0, -extname(rel).length)
     if (TEST_FILE.test(rel)) return
+    // Unlike routes/ws, an agent needs an explicit name — a bare `agents/index.ts`
+    // (name `''` → `/api/agents/`) is nonsensical for a typed `useAgent(name)` binding.
+    // `agents/foo/index.ts` still collapses to `foo` (a named nested agent).
     if (rel.endsWith('/index')) rel = rel.slice(0, -6)
-    else if (rel === 'index') rel = ''
+    if (rel === 'index' || rel === '') return
     results.push({
       filePath: absPath,
       agentPath: `/api/agents/${rel}`,

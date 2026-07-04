@@ -97,7 +97,8 @@ describe('agents/*.ts convention — end to end (M2)', () => {
 
     const request = new Request('http://localhost/api/agents/echo', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      // X-Theo-Action is what the useAgent client sends (CSRF strict-mode passes).
+      headers: { 'content-type': 'application/json', 'X-Theo-Action': '1' },
       body: JSON.stringify({ message: 'hi' }),
     })
 

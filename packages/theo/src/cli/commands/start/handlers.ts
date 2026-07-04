@@ -181,7 +181,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
     const mod = await c.loadModule(agent.filePath)
     const apiKey = resolveProvider().apiKey
     const request = incomingMessageToWebRequest(c.req)
-    const response = await mountAgent(mod, request, apiKey, agent.filePath)
+    const response = await mountAgent(mod, request, apiKey, agent.filePath, c.csrfMode)
     await writeWebResponseToServerResponse(response, c.res)
   } catch (err) {
     sendError(

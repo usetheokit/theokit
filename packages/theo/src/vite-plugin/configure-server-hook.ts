@@ -91,7 +91,8 @@ export async function runConfigureServer(
   )
   // M2 — agent convention (`/api/agents/<name>`) before the generic api-middleware
   // (mirrors the action prefix). Agents live at <projectRoot>/agents (LOCKED naming).
-  server.middlewares.use(createAgentMiddleware(server, ctx.projectRoot))
+  // CSRF is enforced in `mountAgent` (shared dev+prod point) at the same mode as routes.
+  server.middlewares.use(createAgentMiddleware(server, ctx.projectRoot, ctx.csrfMode))
   // Wave 2 completion — services-proxy prefixes flow through to the
   // api-middleware so it can call `next()` for paths that should be
   // forwarded to a sidecar by Vite's proxyMiddleware.
