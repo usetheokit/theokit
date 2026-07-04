@@ -542,3 +542,45 @@ describe('translateToUIMessageStream — HITL approval (M4)', () => {
     }
   })
 })
+
+describe('translateToUIMessageStream — @Checkpoint (M4)', () => {
+  it('test_maps_checkpoint_saved_to_transient_data_checkpoint_part', async () => {
+    // A `@Checkpoint` agent emits `checkpoint_saved`; the translator maps it to an ai-sdk-native
+    // `data-checkpoint` part carrying the resume handle, `transient` (kept out of message history).
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'hi' },
+      { type: 'checkpoint_saved', checkpointId: 'chk-1', step: 0, resumeToken: 's1' },
+      {
+        type: 'done',
+        result: 'hi',
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        durationMs: 1,
+        cost: 0,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toContainEqual({
+      type: 'data-checkpoint',
+      data: { checkpointId: 'chk-1', resumeToken: 's1', step: 0 },
+      transient: true,
+    })
+    // The open text block is closed before the checkpoint part (state machine, EC-2).
+    const idx = chunks.findIndex((c) => c.type === 'data-checkpoint')
+    expect(chunks[idx - 1]).toEqual({ type: 'text-end', id: TEXT_ID })
+  })
+
+  it('test_checkpoint_chunk_validates_against_ai_schema', async () => {
+    const schema = uiMessageChunkSchema()
+    const validate = (schema as { validate?: (c: unknown) => Promise<{ success: boolean }> })
+      .validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const events: AgentStreamEvent[] = [
+      { type: 'checkpoint_saved', checkpointId: 'chk-1', step: 2, resumeToken: 's1' },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+})

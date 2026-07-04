@@ -3,6 +3,7 @@ import type { UIMessageChunk } from 'ai'
 import type {
   AgentStreamEvent,
   ApprovalRequiredEvent,
+  CheckpointSavedEvent,
   ToolCallEvent,
   ToolResultEvent,
 } from './agent-stream-events.js'
@@ -128,6 +129,19 @@ function* emitApprovalRequest(
   yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId: event.callId }
 }
 
+/**
+ * Emit a `@Checkpoint` signal (M4) as an ai-sdk-native `data-checkpoint` part. `transient: true`
+ * keeps it OUT of the persisted message history (it is a resume-handle signal, not turn content).
+ * `resumeToken` is the sessionId a follow-up request replays via the SDK conversation storage.
+ */
+function* emitCheckpointSaved(event: CheckpointSavedEvent): Generator<UIMessageChunk> {
+  yield {
+    type: 'data-checkpoint',
+    data: { checkpointId: event.checkpointId, resumeToken: event.resumeToken, step: event.step },
+    transient: true,
+  }
+}
+
 export async function* translateToUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
   opts: { textId: string },
@@ -163,6 +177,9 @@ export async function* translateToUIMessageStream(
       } else if (event.type === 'tool_result') {
         yield* closeOpenBlock(state, opts.textId)
         yield* emitToolResult(event, seenToolCallIds)
+      } else if (event.type === 'checkpoint_saved') {
+        yield* closeOpenBlock(state, opts.textId)
+        yield* emitCheckpointSaved(event)
       } else if (event.type === 'error') {
         // Surface the agent-reported failure to the client instead of swallowing
         // it (M0 order: error chunk, then close the open block below, then finish).

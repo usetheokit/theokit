@@ -213,6 +213,90 @@ function buildExtraCreateOptions(
   return extra
 }
 
+/** The `@theokit/sdk` `Agent` surface the adapter drives (dynamic-import shape, kept minimal). */
+interface SdkAgentApi {
+  getOrCreate: (
+    id: string,
+    opts: Record<string, unknown>,
+  ) => Promise<{
+    // #40: the SDK token-streams ONLY via send's onDelta callback (proven empirically);
+    // run.stream() yields complete messages. The adapter merges both.
+    send: (
+      msg: string,
+      // onDelta receives `{ update: InteractionUpdate }`; toolChoice gates tools for this send.
+      opts?: {
+        onDelta?: (d: { update: InteractionUpdate }) => void
+        toolChoice?: 'auto' | 'none' | 'required'
+      },
+    ) => Promise<{
+      stream: () => AsyncGenerator<SdkMessage>
+      // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
+      // V4-O: usage also carries optional reasoning/cache buckets (forwarded by realUsageDone).
+      wait: () => Promise<{
+        result?: string
+        usage?: {
+          inputTokens?: number
+          outputTokens?: number
+          reasoningTokens?: number
+          cacheReadTokens?: number
+          cacheWriteTokens?: number
+        }
+        cost?: { amount?: number }
+      }>
+    }>
+    dispose: () => Promise<void>
+  }>
+}
+
+/** The resolved `@theokit/sdk` runtime symbols the adapter needs, bound after the dynamic import. */
+interface SdkRuntime {
+  Agent: SdkAgentApi
+  defineTool: (spec: {
+    name: string
+    description: string
+    inputSchema: unknown
+    handler: (input: unknown) => string | Promise<string>
+  }) => unknown
+  InMemoryConversationStorage: new () => ConversationStorageAdapter
+  FileSystemConversationStorage: new () => ConversationStorageAdapter
+}
+
+/**
+ * Dynamically import `@theokit/sdk` (optional peer dep) and bind the runtime symbols; `null` when it
+ * is not installed (the caller emits `SDK_NOT_INSTALLED`). FS storage is guarded with `in` so an SDK
+ * build (or a test mock) that omits the export does not throw the whole import — it falls back to
+ * in-memory (no durable resume). Only used for `@Checkpoint({ storage: 'filesystem' })`.
+ */
+async function loadSdkRuntime(): Promise<SdkRuntime | null> {
+  try {
+    const sdk = await import('@theokit/sdk')
+    const InMemory = sdk.InMemoryConversationStorage
+    return {
+      Agent: sdk.Agent as SdkAgentApi,
+      defineTool: sdk.defineTool as SdkRuntime['defineTool'],
+      InMemoryConversationStorage: InMemory,
+      FileSystemConversationStorage:
+        'FileSystemConversationStorage' in sdk ? sdk.FileSystemConversationStorage : InMemory,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Pick the shared conversation store (M4). `@Checkpoint({ storage: 'filesystem' })` selects the
+ * SDK's durable FS adapter so a same-`sessionId` follow-up request RESUMES from persisted history
+ * (no new store — the SDK owns persistence). Everything else keeps the per-run in-memory store
+ * ('drizzle'/'redis' are not shipped by the SDK → in-memory fallback).
+ */
+function newConversationStorage(
+  compiled: CompiledAgentOptions,
+  InMemory: new () => ConversationStorageAdapter,
+  FileSystem: new () => ConversationStorageAdapter,
+): ConversationStorageAdapter {
+  return compiled.checkpoint?.storage === 'filesystem' ? new FileSystem() : new InMemory()
+}
+
 /** #40: tagged item flowing through the merge queue — an incremental delta or a complete SDK message. */
 type MergeItem = { kind: 'delta'; event: StreamEvent } | { kind: 'sdk'; msg: SdkMessage }
 
@@ -463,54 +547,9 @@ export function createSdkAgentStream(
       const runId = `run-${Date.now()}`
       const t0 = Date.now()
 
-      // Dynamic import — @theokit/sdk is optional peer dep
-      let Agent: {
-        getOrCreate: (
-          id: string,
-          opts: Record<string, unknown>,
-        ) => Promise<{
-          // #40: the SDK token-streams ONLY via send's onDelta callback (proven empirically);
-          // run.stream() yields complete messages. The adapter merges both.
-          send: (
-            msg: string,
-            // onDelta receives `{ update: InteractionUpdate }`; toolChoice gates tools for this send.
-            opts?: {
-              onDelta?: (d: { update: InteractionUpdate }) => void
-              toolChoice?: 'auto' | 'none' | 'required'
-            },
-          ) => Promise<{
-            stream: () => AsyncGenerator<SdkMessage>
-            // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
-            // V4-O: usage also carries optional reasoning/cache buckets (forwarded by realUsageDone).
-            wait: () => Promise<{
-              result?: string
-              usage?: {
-                inputTokens?: number
-                outputTokens?: number
-                reasoningTokens?: number
-                cacheReadTokens?: number
-                cacheWriteTokens?: number
-              }
-              cost?: { amount?: number }
-            }>
-          }>
-          dispose: () => Promise<void>
-        }>
-      }
-      let defineTool: (spec: {
-        name: string
-        description: string
-        inputSchema: unknown
-        handler: (input: unknown) => string | Promise<string>
-      }) => unknown
-      let InMemoryConversationStorage: new () => ConversationStorageAdapter
-
-      try {
-        const sdk = await import('@theokit/sdk')
-        Agent = sdk.Agent
-        defineTool = sdk.defineTool as typeof defineTool
-        InMemoryConversationStorage = sdk.InMemoryConversationStorage
-      } catch {
+      // Dynamic import — @theokit/sdk is optional peer dep (null ⇒ not installed).
+      const rt = await loadSdkRuntime()
+      if (!rt) {
         yield {
           type: 'error',
           code: 'SDK_NOT_INSTALLED',
@@ -519,6 +558,7 @@ export function createSdkAgentStream(
         }
         return
       }
+      const { Agent, defineTool, InMemoryConversationStorage, FileSystemConversationStorage } = rt
 
       const sdkTools = buildSdkTools(compiledTools, defineTool, overrides.sdkTools)
 
@@ -531,8 +571,13 @@ export function createSdkAgentStream(
         if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
         // V4-L.3: forward the remaining per-request Agent.create surface (absent ⇒ no key).
         const extra = buildExtraCreateOptions(overrides, compiled)
-        // V4-M: the shared store is the cross-round memory (survives per-round dispose).
-        storage ??= new InMemoryConversationStorage()
+        // V4-M/M4: the shared store is cross-round memory (survives per-round dispose); a
+        // `@Checkpoint` filesystem agent gets the durable FS store so resume re-hydrates.
+        storage ??= newConversationStorage(
+          compiled,
+          InMemoryConversationStorage,
+          FileSystemConversationStorage,
+        )
         if (applied.length > 0) {
           // Wiring triad — runtime metric: observable proof the decorators fired.
           console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {

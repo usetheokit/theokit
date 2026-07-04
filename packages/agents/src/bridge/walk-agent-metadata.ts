@@ -9,6 +9,8 @@ import 'reflect-metadata'
 
 import { Reflector } from '@theokit/http'
 
+import { getCheckpointConfig } from '../decorators/checkpoint.js'
+import type { CheckpointOptions } from '../decorators/checkpoint.js'
 import { getCompactionConfig } from '../decorators/compaction.js'
 import type { CompactionDecoratorConfig } from '../decorators/compaction.js'
 import { getContextWindowConfig } from '../decorators/context-window.js'
@@ -83,6 +85,8 @@ export interface AgentWalkResult {
   projectContext?: ProjectContextOptions
   mcpServers?: McpServersMap
   compaction?: CompactionDecoratorConfig
+  /** `@Checkpoint` config (M4) when the agent declares resumable execution; absent ⇒ no checkpoint. */
+  checkpoint?: CheckpointOptions
 }
 
 export interface ToolboxWalkResult {
@@ -271,6 +275,7 @@ export function walkAgentMetadata(
   const projectContext = getProjectContextConfig(AgentClass)
   warnUnmappedDecoratorKnobs(AgentClass.name, contextWindow, projectContext)
   const compaction = getCompactionConfig(AgentClass)
+  const checkpoint = getCheckpointConfig(AgentClass)
 
   const result: AgentWalkResult = {
     agentConfig,
@@ -288,6 +293,7 @@ export function walkAgentMetadata(
     projectContext,
     mcpServers,
     compaction,
+    checkpoint,
   }
 
   if (toolboxClasses.length === 0) {

@@ -9,6 +9,7 @@
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
 
 import { getAgentConfig } from '../decorators/agent.js'
+import type { CheckpointOptions } from '../decorators/checkpoint.js'
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import type { MemoryOptions } from '../decorators/memory.js'
@@ -141,6 +142,11 @@ export interface CompiledAgentOptions {
    * tools. The harness (`mountAgent`) turns this into the `pre_tool_call` pause wiring.
    */
   hitl?: Map<string, HumanInTheLoopOptions>
+  /**
+   * `@Checkpoint` config (M4): when present the harness emits `checkpoint_saved` and selects the
+   * durable SDK conversation storage (`storage: 'filesystem'`) so a same-`sessionId` request resumes.
+   */
+  checkpoint?: CheckpointOptions
 }
 
 /**
@@ -193,5 +199,6 @@ export function compileAgent(
     timeoutMs: walkResult.mainLoop.timeoutMs ?? walkResult.agentConfig.timeoutMs,
     stream: walkResult.agentConfig.stream ?? true,
     hitl: hitl.size > 0 ? hitl : undefined,
+    checkpoint: walkResult.checkpoint,
   }
 }
