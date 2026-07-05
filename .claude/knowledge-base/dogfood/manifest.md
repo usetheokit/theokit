@@ -18,6 +18,12 @@ maintainer's own machine. Not a stubbed SDK.
 streamed a real chat and ran a real `add` tool call (`137 + 456 → 593`) against `openai/gpt-4o-mini`
 via OpenRouter. The run surfaced (and fixed) two real v1 bugs before the ship. See `evidence/`.
 
+**Honest caveat:** the **chat** leg is reproducible today on the published `theokit@0.15.0` /
+`@theokit/agents@0.30.0`. The **tool-call** leg used the FIXED build (via `pnpm.overrides` to the M6
+build) because the published `@theokit/agents@0.30.0` still carries the pre-fix adapter — a fresh
+end-user `npx create-theokit` reproduces the tool leg only after the `theokit@0.15.1` /
+`@theokit/agents@0.30.1` release publishes (the template's caret ranges pick it up automatically).
+
 ## Target dates
 
 - Wired: 2026-07-04 (M2 shipped the `agents/*.ts` surface; deterministic E2E green).
