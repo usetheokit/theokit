@@ -5,6 +5,7 @@
  */
 import 'reflect-metadata'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { z } from 'zod'
 
 const h = vi.hoisted(() => ({ captured: null as { tools?: unknown[] } | null }))
 
@@ -62,7 +63,8 @@ describe('V4-Q AgentRunner forwards pre-built sdkTools', () => {
 
   it('test_sdktools_append_after_run_options_tools_override', async () => {
     // sdkTools append AFTER the per-run `tools` (CompiledTool) override — both reach the agent.
-    const compiled = { name: 'c', description: 'd', inputSchema: {}, handler: () => 'ok' }
+    // A realistic @Tool CompiledTool carries a live Zod inputSchema (has `.parse`) → defineTool path.
+    const compiled = { name: 'c', description: 'd', inputSchema: z.object({}), handler: () => 'ok' }
     const fakeTool = { name: 'x', description: 'd', inputSchema: {}, handler: () => 'ok' }
     await AgentRunner.builder(STAgent)
       .build()
