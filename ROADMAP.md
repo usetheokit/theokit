@@ -137,7 +137,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M4 — [ ] Eixo C — Cohesive harness (adapter over the SDK)
+### M4 — [x] Eixo C — Cohesive harness (adapter over the SDK)
 
 **Objective:** A cohesive harness (statefull loop, resume, HITL approval, tool cards) packaged as an adapter over `@theokit/sdk` — never a parallel runtime.
 
@@ -156,7 +156,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M5 — [ ] Eixo D — Terminal harness
+### M5 — [x] Eixo D — Terminal harness
 
 **Objective:** A terminal harness rendering stream + tool calls + approval of a local agent, reusing the M4 harness (same adapter, different render surface).
 
