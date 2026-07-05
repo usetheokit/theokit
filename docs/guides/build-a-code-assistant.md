@@ -31,6 +31,35 @@ It is one app with one agent file at its core. Everything below builds outward f
 - An LLM provider key. OpenRouter is the smoothest (one key → many models):
   `OPENROUTER_API_KEY`. `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` also work.
 
+> **Known issues (verified 2026-07-05, fixes in flight).** Executing this guide end-to-end surfaced
+> real gaps the runtime hides (the app **builds and runs** — `theokit build` transpiles via esbuild —
+> but strict `tsc` currently flags them):
+> - A freshly scaffolded app's `app/page.tsx` does not yet type-check against `@theokit/ui@1.0.0`
+>   ([#80](https://github.com/usetheodev/theokit/issues/80)).
+> - `defineAgent({ tools })`'s type rejects `defineAgentTool`/`@theokit/sdk-tools` output even though
+>   it runs ([#81](https://github.com/usetheodev/theokit/issues/81)); until fixed, add
+>   `// @ts-expect-error tool type mismatch — tracked in #81` above the `tools:` line.
+> - The scaffold needs `@types/node` and, for the class agent surface,
+>   `experimentalDecorators` in `tsconfig.json` — see **Setup** below.
+>
+> This guide's commands (scaffold → build → wired endpoints) are proven; the type-level polish is
+> tracked in those issues.
+
+### Setup for real agent code
+
+The scaffold targets the browser app; agent tool handlers use Node APIs, and the class surface uses
+decorators. Add both once:
+
+```bash
+pnpm add -D @types/node
+```
+
+For the class agent surface (Step 6), enable decorators in `tsconfig.json`:
+
+```jsonc
+{ "compilerOptions": { "experimentalDecorators": true, "emitDecoratorMetadata": true } }
+```
+
 ---
 
 ## Step 1 — Scaffold the app
@@ -318,9 +347,16 @@ tested locally is the endpoint that ships.
   exports (`createReadFileTool`, `createListDirTool`, `createSearchTextTool`, `createGlobTool`,
   `createEditFileTool`, `createWriteFileTool`, `createShellTool`, `createGitDiffTool`, `buildRepoMap`,
   each returning a `CustomTool`). `@theokit/sdk` is the only agent runtime.
-- **You verify in your app:** the exact model behavior (needs your provider key) and that your tool
-  set type-checks together — run `theokit build`. If a tool from `@theokit/sdk-tools` doesn't line up
-  with your resolved `@theokit/sdk` version, bump to matching versions.
+- **Proven by executing this guide (2026-07-05):** `npm create theokit` → `pnpm install` →
+  `pnpm add @theokit/sdk-tools` resolves cleanly (theokit 0.15.2 / agents 0.30.1 / sdk 2.18.1 /
+  sdk-tools 0.8.0); `theokit build` compiles **both** `agents/assistant.ts` (sdk-tools + custom
+  `defineAgentTool`) and `agents/coder.ts` (HITL decorators), scans them into the manifest as
+  `POST /api/agents/assistant` + `/coder`, and generates the typed client `.theokit/agents.d.ts`.
+- **Known type-level gaps (build passes, `tsc` does not — fixes tracked):** the tutorial code and a
+  bare scaffold currently fail strict `tsc` on the four issues listed under **Known issues** above
+  (page.tsx drift [#80], tool type [#81], plus the `@types/node` / `experimentalDecorators` setup).
+  The code **runs** — these are type declarations catching up to the shipped runtime.
+- **You verify in your app:** the exact model behavior (needs your provider key).
 
 ## Where to go next
 
