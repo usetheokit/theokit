@@ -175,15 +175,15 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M6 — [ ] Dogfood + V1 ship
+### M6 — [x] Dogfood + V1 ship
 
 **Objective:** Prove the V1 end-to-end and measure the north-star.
 
 **Definition of done:**
 
-- [ ] `create-theokit` default template + `agent-saas` use the new surface exclusively; `/dogfood` emits `EVIDENCE_SUFFICIENT` for the anchor "agent chat on the new surface".
-- [ ] North-star (time-to-shipped-agent) measured and recorded: `npx create-theokit` → agent with streaming chat + tool calls on a real URL; agent-wiring lines ≈ 1 file.
-- [ ] README/docs updated (locked voice/tone); V1 CHANGELOG; all milestones M0–M5 are `[x]`.
+- [x] `create-theokit` default template + `agent-saas` use the new surface exclusively; `/dogfood` emits `EVIDENCE_SUFFICIENT` for the anchor "agent chat on the new surface".
+- [x] North-star (time-to-shipped-agent) measured and recorded: `npx create-theokit` → agent with streaming chat + tool calls on a real URL; agent-wiring lines ≈ 1 file.
+- [x] README/docs updated (locked voice/tone); V1 CHANGELOG; all milestones M0–M5 are `[x]`.
 
 **Dependencies:** M2, M3, M4, M5.
 
