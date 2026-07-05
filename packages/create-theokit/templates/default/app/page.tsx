@@ -71,10 +71,11 @@ const COMMAND_ITEMS: CommandItem[] = QUICK_ACTIONS.map((a) => ({
   group: 'Quick actions',
 }))
 
-// Mock context-window usage — replace with real model state.
+// Display-only context-window hint. The agent's real model lives in `agents/chat.ts`
+// (`model: 'openai/gpt-4o-mini'`); wire real token counts from the stream when you need them.
 const CONTEXT_USED = 4_200
 const CONTEXT_TOTAL = 200_000
-const MODEL_NAME = 'mock-llm'
+const MODEL_NAME = 'gpt-4o-mini'
 
 const ASSISTANT_AVATAR = (
   <Avatar size="sm" tone="primary">
