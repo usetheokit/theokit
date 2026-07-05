@@ -14,10 +14,18 @@
  * `wrangler.toml` — adding it would invalidate the proof.
  *
  * Honest scope: this test runs `wrangler dev` as a subprocess, waits
- * for it to bind a port, and curls two routes. If `wrangler` is missing
- * from PATH, the test SKIPS with an honest message (per Rule 3 — never
- * lie about test coverage). CI environments without wrangler installed
- * skip; environments with it run the full smoke.
+ * for it to bind a port, and curls two routes.
+ *
+ * OPT-IN (issue #78): the real smoke runs ONLY when `THEOKIT_E2E_WRANGLER=1`
+ * (or `=true`). By default it SKIPS with an honest message — because a
+ * present `wrangler` BINARY does not guarantee a runnable `wrangler dev`
+ * (that needs the workerd runtime + network), and a non-binding `dev`
+ * would otherwise stall the `beforeAll` to its 90s hook timeout in every
+ * sandbox / minimal CI. Cloudflare Workers is a future / opt-in
+ * compatibility surface — TheoCloud is the only end-to-end-validated
+ * deploy target (CLAUDE.md) — so this smoke is not a default gate. When
+ * opted in, if the `wrangler` binary is still absent the test skips too
+ * (per Rule 3 — never lie about test coverage).
  *
  * Per `docs/plans/theokit-arch-gaps-implementation-plan.md` v1.2
  * T5a.1 Acceptance Criteria #3.
