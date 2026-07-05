@@ -10,6 +10,7 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
+import type { CustomTool } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { ReasoningEffort } from '../types.js'
@@ -33,8 +34,12 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
   system?: string
   /** Extended-thinking effort (mirrors `@Agent({ reasoningEffort })`). */
   reasoningEffort?: ReasoningEffort
-  /** Pre-built tools (SDK-ready `CompiledTool` shape). */
-  tools?: CompiledTool[]
+  /**
+   * Pre-built tools. Accepts the `@theokit/sdk` `CustomTool` that `defineAgentTool`
+   * (theokit/server) and every `@theokit/sdk-tools` factory return (issue #81) — they are
+   * normalized to the internal {@link CompiledTool} shape at compile time.
+   */
+  tools?: readonly CustomTool[]
 }
 
 /** A branded agent definition — the value {@link defineAgent} returns. */
@@ -66,6 +71,22 @@ export function isAgentDefinition(value: unknown): value is AgentDefinition {
 }
 
 /**
+ * Normalize a pre-built `@theokit/sdk` {@link CustomTool} to the internal
+ * {@link CompiledTool} shape (issue #81). `CustomTool.handler` takes a narrower
+ * `Record<string, unknown>` input than `CompiledTool.handler`'s `unknown`, so it cannot be
+ * assigned directly (contravariance); this thin wrapper bridges the parameter. Runtime-safe:
+ * the SDK always calls a tool handler with the parsed input object.
+ */
+function toCompiledTool(tool: CustomTool): CompiledTool {
+  return {
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    handler: (input) => tool.handler(input as Record<string, unknown>),
+  }
+}
+
+/**
  * Lower a definition to the SDK-ready {@link CompiledAgentOptions} — the same shape
  * `compileAgent` (decorator path) produces, so both surfaces converge on one runtime.
  */
@@ -74,7 +95,7 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     model: def.model,
     reasoningEffort: def.reasoningEffort,
     systemPrompt: def.system,
-    tools: def.tools ?? [],
+    tools: (def.tools ?? []).map(toCompiledTool),
     agents: {},
     stream: true,
   }
