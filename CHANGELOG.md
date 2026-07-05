@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- **M6 dogfood caught two real V1 bugs before the ship.** (1) `defineAgent({ tools: [defineAgentTool(...)] })` crashed at the first tool call with `TypeError: Cannot read properties of undefined (reading 'def')`: the SDK adapter re-ran `defineAgentTool`'s already-lowered JSON-Schema tool through the SDK's `defineTool` (which expects a live Zod schema). `buildSdkTools` now routes by `inputSchema` shape — a live Zod schema (from `@Tool`) goes through `defineTool`; an already-SDK-ready `CustomTool` (JSON-Schema `inputSchema`, from `defineAgentTool`) is forwarded raw. Locked by a regression test + a confirmed minimal repro. (2) The `create-theokit` default template + the `template-default` fixture pinned `@theokit/sdk@^1.1.0`, which lacks the `./compaction` subpath export that `@theokit/agents@0.30.0` requires (`>= 2.13.0`) — a fresh `npx create-theokit` → `pnpm install` → `theokit dev` failed to start with `ERR_PACKAGE_PATH_NOT_EXPORTED`. The pin is bumped to `^2.13.0`. (theokit-ai-first M6)
+- **M6 dogfood caught two real V1 bugs before the ship.** (1) `defineAgent({ tools: [defineAgentTool(...)] })` crashed at the first tool call with `TypeError: Cannot read properties of undefined (reading 'def')`: the SDK adapter re-ran `defineAgentTool`'s already-lowered JSON-Schema tool through the SDK's `defineTool` (which expects a live Zod schema). `buildSdkTools` now routes by `inputSchema` shape — a live Zod schema (from `@Tool`) goes through `defineTool`; an already-SDK-ready `CustomTool` (JSON-Schema `inputSchema`, from `defineAgentTool`) is forwarded raw. Locked by a regression test + a confirmed minimal repro. (2) The `create-theokit` default template + the `template-default` fixture pinned `@theokit/sdk@^1.1.0`, which lacks the `./compaction` subpath export that `@theokit/agents@0.30.0` requires (`>= 2.13.0`) — a fresh `npx create-theokit` → `pnpm install` → `theokit dev` failed to start with `ERR_PACKAGE_PATH_NOT_EXPORTED`. The pin is bumped to `^2.13.0`. The default template's chat page now labels the real model
+(`gpt-4o-mini`) instead of `mock-llm`, and the README package-version tables are refreshed to the
+shipped versions. The `/dogfood` gate emits `EVIDENCE_SUFFICIENT` for the "agent chat on the new
+surface" anchor — a freshly scaffolded app streams a real chat and runs a real tool call against a
+real model (OpenRouter), backed by recorded evidence. (theokit-ai-first M6)
 
 ### Added
 
