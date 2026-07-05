@@ -423,16 +423,16 @@ export default defineConfig({
 
 | Package | Version | Description |
 |---|---|---|
-| [`theokit`](https://www.npmjs.com/package/theokit) | 0.6.1 | Framework core — routing, server, CLI, config, adapters |
+| [`theokit`](https://www.npmjs.com/package/theokit) | 0.15.1 | Framework core — routing, server, CLI, config, adapters, the `agents/*.ts` surface + HITL/checkpoint harness + `theokit agent` terminal |
 | [`@theokit/http`](https://www.npmjs.com/package/@theokit/http) | 0.5.4 | NestJS-style HTTP decorators + pipeline |
-| [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | 0.4.0 | AI agent decorators + SDK adapter + orchestration |
-| [`create-theokit`](https://www.npmjs.com/package/create-theokit) | 1.0.15 | Project scaffolding CLI |
+| [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | 0.30.1 | AI agent decorators + SDK adapter (`defineAgent`, `@HumanInTheLoop`, `@Checkpoint`) |
+| [`create-theokit`](https://www.npmjs.com/package/create-theokit) | 1.0.16 | Project scaffolding CLI |
 
 ### SDK (agent runtime — sibling repo)
 
 | Package | Version | Description |
 |---|---|---|
-| [`@theokit/sdk`](https://www.npmjs.com/package/@theokit/sdk) | 2.0.1 | Agent runtime — `Agent.create()`, `Run.stream()`, providers, persistence |
+| [`@theokit/sdk`](https://www.npmjs.com/package/@theokit/sdk) | 2.18.1 | Agent runtime — `Agent.create()`, `Run.stream()`, providers, persistence (`>= 2.13.0` required by `@theokit/agents`) |
 | [`@theokit/sdk-tools`](https://www.npmjs.com/package/@theokit/sdk-tools) | 0.1.0 | Tool definition helpers for SDK agents |
 | [`@theokit/sdk-budget`](https://www.npmjs.com/package/@theokit/sdk-budget) | 0.1.0 | Cost tracking + budget enforcement for agent runs |
 | [`@theokit/sdk-cache`](https://www.npmjs.com/package/@theokit/sdk-cache) | 0.1.0 | Response caching layer for agent calls |
