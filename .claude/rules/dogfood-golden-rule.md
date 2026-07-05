@@ -8,11 +8,19 @@ Without this file, `/dogfood` emits `EVIDENCE_INSUFFICIENT` with flag `golden_ru
 
 The anchor scenario is the single use case that, if you cannot dogfood it, you cannot claim production-ready. Pick one. Be specific.
 
-**Slug:** `<anchor-slug>` (kebab-case identifier referenced in the manifest)
+**Slug:** `agent-chat-new-surface`
 
-**Description:** Replace this paragraph with a concrete user-visible scenario in which your team — not synthetic load — exercises the product end-to-end on infrastructure you actually own. The scenario should be uncomfortable: the kind of thing that proves the product works when its creators depend on it, not just when synthetic benchmarks do.
+**Description:** A developer runs `npx create-theokit my-app`, `pnpm install`, `theokit dev`, and gets an
+agent that **streams a real model response and executes a real tool call** on the new
+`agents/<name>.ts` surface — over the ai-sdk `UIMessageStream` wire, consumed by `useAgent`, with the
+provider key from the environment (OpenRouter). "On infrastructure you own" = the maintainer's machine
++ a real LLM provider, driven end-to-end (scaffold → dev → `POST /api/agents/<name>` → streamed
+tokens + `tool-input-available`/`tool-output-available`), not a stubbed SDK.
 
-**Why this scenario:** Why is THIS the scenario that, if it works, justifies the v1.0 claim? Tie it to the product's primary promise.
+**Why this scenario:** It IS the product's primary promise — "build the app your agent lives in", agent
+shippable in ~1 file. If a freshly scaffolded app cannot stream a chat and run a tool against a real
+model, the v1.0 claim is hollow. This is the exact path a new user takes; dogfooding it is what
+surfaced the two v1 bugs (the `@theokit/sdk` pin below the peer floor, and the tool-call double-wrap).
 
 ## § 2 — Status vocabulary (LOCKED — do not change without ADR)
 
@@ -49,7 +57,7 @@ Soft caps cap the verdict at `EVIDENCE_WITH_CAVEATS`. They fire when hard caps p
 |---|---|---|
 | Total evidence count for the anchor | ≥ 3 | Single evidence point is not a trend. |
 | Failure stories present | ≥ 1 | A dogfood without failures is theatre. |
-| Evidence from ≥ 2 different operators | recommended | Avoid "the one person who knows how" syndrome. |
+| Evidence from ≥ 1 operator | ≥ 1 (single-maintainer project — see note) | TheoKit is a single-maintainer project (see the monorepo `CLAUDE.md`); the "≥ 2 operators" default guards against "the one person who knows how" syndrome, which does not apply to a solo maintainer. Set to ≥ 1 here; re-tighten to ≥ 2 when the team reaches 3+ engineers (same trigger as the AUTH-DELEGATION re-evaluation). |
 
 ## § 5 — Evidence file frontmatter (LOCKED)
 
