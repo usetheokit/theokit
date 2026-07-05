@@ -70,10 +70,14 @@ describe('create-theokit default template — agents/chat.ts parity with fixture
 })
 
 describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)', () => {
-  it('package.json.tmpl includes @theokit/sdk via regex grep (NOT JSON.parse — Mustache breaks parse)', () => {
+  it('package.json.tmpl pins @theokit/sdk at the 2.13+ compaction floor (M6, EC-7)', () => {
     const src = readFileSync(TEMPLATE_PKG, 'utf-8')
-    // Defensive grep — JSON.parse would fail on {{name}} placeholder
-    expect(src).toMatch(/"@theokit\/sdk":\s*"\^1/)
+    // Defensive grep — JSON.parse would fail on {{name}} placeholder.
+    // M6 bumped this pin from ^1.x to ^2.13.0: @theokit/agents@0.30.x requires the
+    // `@theokit/sdk` `./compaction` subpath export, first shipped in 2.13.0. A fresh
+    // `npx create-theokit` → `pnpm install` failed with ERR_PACKAGE_PATH_NOT_EXPORTED
+    // under the old ^1 pin. This guard locks the floor that carries the export.
+    expect(src).toMatch(/"@theokit\/sdk":\s*"\^2\.1[3-9]/)
   })
 
   it('package.json.tmpl still preserves {{name}} placeholder (sanity)', () => {
