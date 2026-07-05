@@ -487,9 +487,20 @@ function applyTextTransforms(
 }
 
 /**
- * Build the SDK tool list: compiled `@Tool`s lowered via `defineTool`, then any pre-built SDK
- * `CustomTool[]` appended RAW (V4-Q — already defined, must NOT re-run through `defineTool`).
- * Extracted from the stream generator to keep its function-size within budget (G6).
+ * A tool whose `inputSchema` is a live Zod schema (from `@Tool({ input })`) needs the SDK's
+ * `defineTool` to lower it to JSON Schema + wrap parsing. A tool whose `inputSchema` is already a
+ * JSON-Schema object (from `defineAgentTool`, which pre-converts via `z.toJSONSchema`) is ALREADY an
+ * SDK-ready `CustomTool` and MUST be appended raw — re-running it through `defineTool` (which reads
+ * Zod internals like `.def`) crashes. Every Zod schema exposes `.parse`; a JSON-Schema object does not.
+ */
+function hasZodInputSchema(schema: unknown): boolean {
+  return typeof (schema as { parse?: unknown } | null | undefined)?.parse === 'function'
+}
+
+/**
+ * Build the SDK tool list: `@Tool`s (Zod `inputSchema`) lowered via `defineTool`; `defineAgentTool`
+ * results (already SDK-ready `CustomTool`s with a JSON-Schema `inputSchema`) and any pre-built
+ * `sdkTools` appended RAW — must NOT re-run through `defineTool` (V4-Q). Extracted for G6.
  */
 function buildSdkTools(
   compiledTools: CompiledTool[],
@@ -502,13 +513,16 @@ function buildSdkTools(
   extraSdkTools: readonly CustomTool[] = [],
 ): unknown[] {
   return [
-    ...compiledTools.map((t) =>
-      defineTool({
-        name: t.name,
-        description: t.description,
-        inputSchema: t.inputSchema,
-        handler: t.handler,
-      }),
+    ...compiledTools.map(
+      (t) =>
+        hasZodInputSchema(t.inputSchema)
+          ? defineTool({
+              name: t.name,
+              description: t.description,
+              inputSchema: t.inputSchema,
+              handler: t.handler,
+            })
+          : t, // already an SDK-ready CustomTool (JSON-Schema inputSchema) — append raw
     ),
     ...extraSdkTools,
   ]
