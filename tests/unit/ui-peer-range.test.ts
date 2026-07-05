@@ -60,4 +60,15 @@ describe('@theokit/ui peer range (V3-2)', () => {
     expect(rangeAccepts(range!, '0.14.4')).toBe(true)
     expect(rangeAccepts(range!, '0.14.0')).toBe(true)
   })
+
+  it('test_ui_peer_accepts_1_0', () => {
+    // AI-exclusive pivot (2026-07-03) shipped @theokit/ui@1.0.0 — the first stable
+    // major. The default `create-theokit` template pins `@theokit/ui@^1.0.0`, so the
+    // framework peer MUST accept the 1.x line, otherwise a fresh `npx create-theokit`
+    // fails `npm install` with ERESOLVE (npm is strict on optional-peer conflicts;
+    // pnpm is lenient, which is why the M6 pnpm dogfood did not catch it).
+    expect(rangeAccepts(range!, '1.0.0')).toBe(true)
+    // The 2.x line is not validated yet — stays an explicit OR, not an open range.
+    expect(rangeAccepts(range!, '2.0.0')).toBe(false)
+  })
 })
