@@ -14,6 +14,8 @@ import { randomUUID } from 'node:crypto'
 
 import type { ViteDevServer, Connect } from 'vite'
 
+import { getApprovalRegistry } from '../server/agent/approval-registry.js'
+import { handleAgentApproval, isApprovalPath } from '../server/agent/approve-agent.js'
 import { mountAgent } from '../server/agent/mount-agent.js'
 import { resolveProvider } from '../server/agent/provider-resolver.js'
 import {
@@ -49,6 +51,46 @@ export function createAgentMiddleware(
       res.setHeader('x-request-id', requestId)
 
       const urlPath = url.split('?')[0]
+
+      // HITL approve route (`/api/agents/<name>/approve/<id>`, M4) — resolve the pending approval.
+      // Branches BEFORE the agent-path exact match (the approve path never equals an `agentPath`).
+      if (isApprovalPath(urlPath)) {
+        const method = (req.method ?? 'POST').toUpperCase()
+        if (method !== 'POST') {
+          sendError(
+            res,
+            'METHOD_NOT_ALLOWED',
+            'Approve endpoints accept POST',
+            405,
+            undefined,
+            requestId,
+          )
+          logRequest({ method, url, status: 405, duration: Date.now() - start, requestId })
+          return
+        }
+        try {
+          const request = incomingMessageToWebRequest(req)
+          const response = await handleAgentApproval(
+            request,
+            urlPath,
+            getApprovalRegistry(),
+            csrfMode,
+          )
+          await writeWebResponseToServerResponse(response, res)
+        } catch (err) {
+          sendError(
+            res,
+            'INTERNAL',
+            err instanceof Error ? err.message : 'Approve handler failed',
+            500,
+            undefined,
+            requestId,
+          )
+        }
+        logRequest({ method, url, status: res.statusCode, duration: Date.now() - start, requestId })
+        return
+      }
+
       const agent = scanAgents(projectRoot).find((a) => a.agentPath === urlPath)
       if (!agent) {
         // Not a known agent — let the api-middleware own the 404 (single 404 shape).

@@ -9,12 +9,16 @@ import 'reflect-metadata'
 
 import { Reflector } from '@theokit/http'
 
+import { getCheckpointConfig } from '../decorators/checkpoint.js'
+import type { CheckpointOptions } from '../decorators/checkpoint.js'
 import { getCompactionConfig } from '../decorators/compaction.js'
 import type { CompactionDecoratorConfig } from '../decorators/compaction.js'
 import { getContextWindowConfig } from '../decorators/context-window.js'
 import type { ContextWindowOptions } from '../decorators/context-window.js'
 import type { GatewayOptions } from '../decorators/gateway.js'
 import { getGatewayConfig } from '../decorators/gateway.js'
+import { getHumanInTheLoopConfig } from '../decorators/human-in-the-loop.js'
+import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import { getMcpConfig } from '../decorators/mcp.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import { getMemoryConfig } from '../decorators/memory.js'
@@ -61,6 +65,7 @@ export const AgentWarningCode = {
   BUDGET_TOP_LEVEL_METADATA_ONLY: 'THEO_AGENT_BUDGET_TOP_LEVEL_METADATA_ONLY',
   CONTEXT_STRATEGY_METADATA_ONLY: 'THEO_AGENT_CONTEXT_STRATEGY_METADATA_ONLY',
   PROJECT_CONTEXT_KNOB_METADATA_ONLY: 'THEO_AGENT_PROJECT_CONTEXT_KNOB_METADATA_ONLY',
+  CHECKPOINT_STORAGE_METADATA_ONLY: 'THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY',
 } as const
 
 const reflectorInstance = new Reflector()
@@ -81,6 +86,8 @@ export interface AgentWalkResult {
   projectContext?: ProjectContextOptions
   mcpServers?: McpServersMap
   compaction?: CompactionDecoratorConfig
+  /** `@Checkpoint` config (M4) when the agent declares resumable execution; absent ⇒ no checkpoint. */
+  checkpoint?: CheckpointOptions
 }
 
 export interface ToolboxWalkResult {
@@ -99,6 +106,8 @@ export interface ToolWalkResult {
   budget?: BudgetOptions
   trace: boolean
   audit: boolean
+  /** `@HumanInTheLoop` config when the tool method is gated (M4); absent ⇒ not gated. */
+  hitl?: HumanInTheLoopOptions
 }
 
 function walkToolbox(ToolboxClass: Function): ToolboxWalkResult {
@@ -135,6 +144,7 @@ function walkToolbox(ToolboxClass: Function): ToolboxWalkResult {
       budget: undefined, // read via Budget when needed
       trace: traceVal ?? false,
       audit: auditVal ?? false,
+      hitl: getHumanInTheLoopConfig(ToolboxClass, propertyKey),
     }
   })
 
@@ -178,6 +188,25 @@ function warnUnmappedDecoratorKnobs(
           `only ignorePatterns is forwarded.`,
       )
     }
+  }
+}
+
+/**
+ * G10 honesty: only `storage: 'filesystem'` resumes across requests in the M2 harness (the SDK's
+ * durable adapter). `memory` (the decorator default) is per-run; `drizzle`/`redis` are not shipped
+ * by the SDK. Warn so a declared @Checkpoint that CANNOT resume is never a silent no-op.
+ */
+function warnNonDurableCheckpoint(
+  agentName: string,
+  checkpoint: CheckpointOptions | undefined,
+): void {
+  if (checkpoint && checkpoint.storage !== 'filesystem') {
+    console.warn(
+      `[${AgentWarningCode.CHECKPOINT_STORAGE_METADATA_ONLY}] Agent ${agentName}: ` +
+        `@Checkpoint({ storage: '${checkpoint.storage ?? 'memory'}' }) does NOT resume across ` +
+        `requests — only 'filesystem' selects the SDK's durable conversation store. Use ` +
+        `@Checkpoint({ storage: 'filesystem' }) for cross-request resume.`,
+    )
   }
 }
 
@@ -266,6 +295,8 @@ export function walkAgentMetadata(
   const projectContext = getProjectContextConfig(AgentClass)
   warnUnmappedDecoratorKnobs(AgentClass.name, contextWindow, projectContext)
   const compaction = getCompactionConfig(AgentClass)
+  const checkpoint = getCheckpointConfig(AgentClass)
+  warnNonDurableCheckpoint(AgentClass.name, checkpoint)
 
   const result: AgentWalkResult = {
     agentConfig,
@@ -283,6 +314,7 @@ export function walkAgentMetadata(
     projectContext,
     mcpServers,
     compaction,
+    checkpoint,
   }
 
   if (toolboxClasses.length === 0) {

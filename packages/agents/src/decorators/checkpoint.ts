@@ -13,7 +13,7 @@
  * ```ts
  * @Agent({ name: 'research', route: '/research' })
  * @Checkpoint({
- *   storage: 'drizzle',
+ *   storage: 'filesystem', // only 'filesystem' resumes across requests in the M2 harness (M4)
  *   strategy: 'after-tool-call',
  *   maxCheckpoints: 20,
  *   ttl: 3_600_000,  // 1h
@@ -23,8 +23,10 @@
  *   async run() {}
  * }
  *
- * // Resume from checkpoint:
- * // POST /agents/research/chat { resumeToken: 'chk_abc123' }
+ * // Resume: a follow-up POST /api/agents/research with the SAME sessionId replays the persisted
+ * // history. NOTE (M4): only `storage: 'filesystem'` resumes across requests today — `memory`
+ * // (the default below) is per-run; `drizzle`/`redis` are not shipped by the SDK. A non-filesystem
+ * // @Checkpoint emits a THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY warning (honest enforcement).
  * ```
  */
 import { setMeta, getMeta } from '../metadata/index.js'
@@ -32,9 +34,9 @@ import { setMeta, getMeta } from '../metadata/index.js'
 const CHECKPOINT_CONFIG = Symbol.for('theokit:agents:checkpoint')
 
 export type CheckpointStrategy =
-  | 'after-tool-call'    // checkpoint after every successful tool execution
-  | 'after-iteration'    // checkpoint after every loop iteration
-  | 'manual'             // only checkpoint when explicitly called via ctx.checkpoint()
+  | 'after-tool-call' // checkpoint after every successful tool execution
+  | 'after-iteration' // checkpoint after every loop iteration
+  | 'manual' // only checkpoint when explicitly called via ctx.checkpoint()
 
 export type CheckpointStorage = 'memory' | 'filesystem' | 'drizzle' | 'redis'
 
