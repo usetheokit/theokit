@@ -92,10 +92,24 @@ unit-only pass. All root-caused and resolved:
 | F8 `migration-guide-recipes` (7) | 0.2-to-0.3 migration cohort (12 versions old), same as F3 | Deleted (obsolete cohort) |
 | F9 `jobs-crons-docs-presence` (11) | `docs/concepts/*.md` removed; features still exist; docs recoverable from git @9d29df8 | **Decision (operator, 2026-07-05): concept docs are not a repo deliverable — delete the test.** |
 
+## Final gate result (full `vitest run`)
+
+**3740 tests passed, 0 assertion failures, 17 skipped** — all nine test-debt findings resolved.
+
+The only remaining file-level failure is `tests/integration/wrangler-smoke.test.ts`: its `beforeAll`
+spawns `wrangler dev` (Cloudflare Workers under Miniflare) which cannot start in this sandbox (no CF
+toolchain / network), so the hook times out at 90 s and its 3 tests are skipped (no assertion
+failed). This is **environmental and out of scope** — CF Workers is an opt-in, team-unvalidated
+compatibility surface per CLAUDE.md. Recommended follow-up (verifiable only where the wrangler
+toolchain is available, e.g. CI): guard the suite to `describe.skipIf(!wranglerUsable)` so it skips
+cleanly instead of failing on a hook timeout. Not blind-fixed here — a change to a CF smoke must be
+verified green with the CF toolchain present, which this environment lacks.
+
 ## Unresolved questions
 
 - (none) — every finding root-caused with file:line evidence. F9 was an operator decision (docs
-  out-of-repo), not an ambiguity in the code.
+  out-of-repo), not an ambiguity in the code. The `wrangler-smoke` hook timeout is environmental,
+  not test debt introduced or owned by this pass.
 
 ## Test plan
 
