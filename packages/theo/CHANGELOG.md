@@ -1,5 +1,43 @@
 # theo
 
+## 0.15.0
+
+### Minor Changes
+
+- 604bca9: Cohesive agent harness (M4, Eixo C) — make the shipped-but-dead `@HumanInTheLoop` + `@Checkpoint`
+  decorators functional as an adapter over `@theokit/sdk`, with no parallel runtime (ADR 0038).
+
+  - **`@HumanInTheLoop`** now pauses the run before a gated tool: the stream emits the ai-sdk-native
+    `tool-approval-request` chunk and the run stays paused (the SDK's own awaited `pre_tool_call`
+    hook) until `POST /api/agents/<name>/approve/<approvalId>` resolves it — approve runs the tool,
+    deny/timeout surfaces the denial and the run continues.
+  - **`@Checkpoint({ storage: 'filesystem' })`** emits a transient `data-checkpoint` part and selects
+    the SDK's durable `FileSystemConversationStorage`, so a same-session follow-up request resumes.
+  - The M2 file convention gathers a class agent's `@Mixin` toolboxes so a gated tool actually gates
+    through the endpoint. `@theokit/agents` adds `createHitlPlugin`; `theokit` adds the approve route
+    - in-process approval registry. Additive — the M2 surface is unchanged.
+
+- 55d11ca: Terminal harness (M5, Eixo D) — run a local agent in the terminal, reusing the M4 harness with a
+  Node-stdlib render surface (no new runtime, no TUI dependency; ADR 0039).
+
+  - `theokit agent <name> "<message>"` scans `agents/<name>.ts`, compiles it via the M4
+    `compileAgentModule` (through the framework's own Vite transpile), and runs it through
+    `streamAgentUIMessages` — rendering streaming text, tool cards, a checkpoint notice, and errors to
+    the terminal.
+  - A `@HumanInTheLoop`-gated tool prompts `Approve <tool>? (y/N)` inline and resolves the SAME
+    in-process approval registry the web approve-route uses (single-process CLI = the registry
+    singleton's exact fit). A non-interactive terminal auto-denies (fail-safe).
+  - New: `renderAgentStreamToTerminal` + `promptTerminalApproval` + `runAgentInTerminal` (injectable
+    I/O for testability). Additive — the M2/M4 surface is unchanged.
+  - `theokit agent` loads `.env` before resolving the provider key (parity with `theokit dev`), exits
+    non-zero when the run ends in an error, and the approval prompt shares the gated tool's
+    `@HumanInTheLoop` timeout so it can never hang the CLI after the run has settled.
+
+### Patch Changes
+
+- Updated dependencies [604bca9]
+  - @theokit/agents@0.30.0
+
 ## 0.14.0
 
 ### Minor Changes
