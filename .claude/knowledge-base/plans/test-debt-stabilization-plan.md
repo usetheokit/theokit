@@ -79,9 +79,23 @@ Surfaced while fixing the M6 `@theokit/ui` peer `ERESOLVE` (theokit@0.15.2). Cle
 3. **Fixture install may pull an unexpected `@usetheo/ui`.** Mitigation: pin the same range the
    template uses; re-run the build to confirm.
 
+## Scope expansion (found by the full-suite run, beyond the initial unit-only diagnosis)
+
+The full `vitest run` (unit + integration + smoke) surfaced more pre-existing debt than the
+unit-only pass. All root-caused and resolved:
+
+| Finding | Root cause | Resolution |
+|---|---|---|
+| F5 `contract-usetheo-ui-vite-plugin` EC-7 (1) | `satisfiesCaretPrerelease` didn't handle `||`-joined ranges (stale since the V3-2 widening) | Split on `||`, satisfy-if-any-clause |
+| F6 `changeset-config` (2) | Asserted theokit + create-theokit are version-linked; they are independently versioned (0.15.x vs 1.0.x) | Assert reality (not linked; versions may diverge) |
+| F7 `import-validation` (6) | Validated the absorbed-dead `packages/create-theo`; templates `dashboard`/`api-only` removed (ADR-0023) | Retarget to `create-theokit`; templates default-only |
+| F8 `migration-guide-recipes` (7) | 0.2-to-0.3 migration cohort (12 versions old), same as F3 | Deleted (obsolete cohort) |
+| F9 `jobs-crons-docs-presence` (11) | `docs/concepts/*.md` removed; features still exist; docs recoverable from git @9d29df8 | **Decision (operator, 2026-07-05): concept docs are not a repo deliverable — delete the test.** |
+
 ## Unresolved questions
 
-- (none) — all four findings root-caused with file:line evidence before this plan was written.
+- (none) — every finding root-caused with file:line evidence. F9 was an operator decision (docs
+  out-of-repo), not an ambiguity in the code.
 
 ## Test plan
 
