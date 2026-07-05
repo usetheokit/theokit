@@ -15,12 +15,14 @@
  * - `compileAgentDefinition` produces `{ systemPrompt, model, tools, agents:{}, stream:true }`
  *   — the same shape `compileAgent` produces for the decorator path (convergence).
  */
+import type { CustomTool } from '@theokit/sdk'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 
 import {
   compileAgentDefinition,
   defineAgent,
+  type DefineAgentConfig,
   isAgentDefinition,
   type InferAgentInput,
 } from '../../src/bridge/define-agent.js'
@@ -36,6 +38,17 @@ describe('defineAgent (M2)', () => {
     expect(def.model).toBe('claude-sonnet-4-6')
     expect(def.system).toBe('You are a support agent.')
     expect(def.input).toBeDefined()
+  })
+
+  it('test_defineAgent_tools_accepts_sdk_CustomTool (issue #81)', () => {
+    // `defineAgentTool` (theokit/server) and every `@theokit/sdk-tools` factory return the
+    // SDK `CustomTool`. The `tools` field MUST accept it — the runtime already routes it
+    // (buildSdkTools), so the type contract has to agree or the documented pattern
+    // `defineAgent({ tools: [defineAgentTool(...)] })` fails `tsc`.
+    const sdkTools = [] as unknown as CustomTool[]
+    const cfg: DefineAgentConfig = { tools: sdkTools }
+    expectTypeOf<CustomTool[]>().toExtend<NonNullable<DefineAgentConfig['tools']>>()
+    expect(cfg.tools).toBe(sdkTools)
   })
 
   it('test_isAgentDefinition_rejects_non_agent_values', () => {
