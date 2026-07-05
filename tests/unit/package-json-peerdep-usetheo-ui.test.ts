@@ -38,15 +38,27 @@ describe('theokit/packages/theo/package.json — @theokit/ui peerDep contract (A
     expect(pkg.peerDependencies?.['@theokit/ui']).toBeDefined()
   })
 
-  it('should declare a caret 0.x range for @theokit/ui (pre-release or stable)', () => {
-    // Given that UI is in 0.x (pre-1.0 — breaking changes allowed within 0.x),
+  it('should declare a caret OR-range for @theokit/ui that includes the current 1.x line', () => {
+    // Given that @theokit/ui shipped its first stable major (1.0.0) in the
+    // AI-exclusive pivot (2026-07-03), and the default `create-theokit` template
+    // pins `@theokit/ui@^1.0.0`,
     // When we declare the range,
-    // Then it must use caret semantics with optional pre-release suffix.
-    // Examples: ^0.12.0-next.0 (during -next ramp) OR ^0.13.0 (post-stable publish).
-    // Both are valid under ADR 0018: the gate is caret + 0.x, not the suffix.
+    // Then it MUST be a `||`-joined series of caret pins (each `^X.Y.Z`, optional
+    // pre-release suffix) that INCLUDES the published 1.x line — otherwise a fresh
+    // `npx create-theokit` fails `npm install` with ERESOLVE (npm is strict on
+    // optional-peer conflicts; pnpm is lenient). The historical 0.x lines stay in
+    // the OR for existing consumers (ADR 0018: the gate is caret pins, explicitly
+    // OR-joined per validated line — never an open range).
     const range = pkg.peerDependencies?.['@theokit/ui'] ?? ''
-    // eslint-disable-next-line security/detect-unsafe-regex -- single optional group, no nested quantifiers, false positive
-    expect(range).toMatch(/^\^0\.\d+\.\d+(-[a-z]+\.\d+)?$/)
+    const parts = range.split('||').map((p) => p.trim())
+    expect(parts.length).toBeGreaterThan(0)
+    for (const part of parts) {
+      expect(part, `each OR clause must be a caret pin: ${part}`).toMatch(
+        // eslint-disable-next-line security/detect-unsafe-regex -- single optional group, no nested quantifiers, false positive
+        /^\^\d+\.\d+\.\d+(-[a-z]+\.\d+)?$/,
+      )
+    }
+    expect(parts, 'range must cover the published @theokit/ui 1.x line').toContain('^1.0.0')
   })
 
   it('should mark @theokit/ui as optional in peerDependenciesMeta', () => {
