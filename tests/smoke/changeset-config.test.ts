@@ -9,9 +9,13 @@ describe('Changeset Configuration', () => {
     expect(existsSync(resolve(rootDir, '.changeset/config.json'))).toBe(true)
   })
 
-  it('should have linked packages theo + create-theo', () => {
+  it('theokit + create-theokit are independently versioned (NOT changeset-linked)', () => {
+    // theokit (framework) and create-theokit (scaffolder) diverged onto separate
+    // version lines — theokit is 0.x, create-theokit reached 1.x on its own. The M6
+    // release bumped theokit@0.15.2 without touching create-theokit@1.0.16, which
+    // only works because they are NOT linked. `linked` must stay empty.
     const config = JSON.parse(readFileSync(resolve(rootDir, '.changeset/config.json'), 'utf-8'))
-    expect(config.linked).toEqual([['theokit', 'create-theokit']])
+    expect(config.linked ?? []).toEqual([])
   })
 
   it('should have access set to public', () => {
@@ -42,12 +46,16 @@ describe('Changeset Configuration', () => {
     expect(pkg.version).not.toMatch(/-alpha\./)
   })
 
-  it('theo and create-theo versions are linked (stay in sync)', () => {
+  it('theokit + create-theokit versions may diverge (independent lines)', () => {
+    // Regression guard against re-introducing a lockstep-version assumption: the two
+    // packages are released independently, so their versions are NOT required to
+    // match. (theokit 0.x framework vs create-theokit 1.x scaffolder.)
     const theo = JSON.parse(readFileSync(resolve(rootDir, 'packages/theo/package.json'), 'utf-8'))
     const create = JSON.parse(
       readFileSync(resolve(rootDir, 'packages/create-theokit/package.json'), 'utf-8'),
     )
-    expect(theo.version).toBe(create.version)
+    expect(theo.version).toMatch(/^\d+\.\d+\.\d+/)
+    expect(create.version).toMatch(/^\d+\.\d+\.\d+/)
   })
 
   it('root package.json should have changeset scripts', () => {
