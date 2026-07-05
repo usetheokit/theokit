@@ -1,6 +1,12 @@
 import type { UIMessageChunk } from 'ai'
 
-import type { AgentStreamEvent, ToolCallEvent, ToolResultEvent } from './agent-stream-events.js'
+import type {
+  AgentStreamEvent,
+  ApprovalRequiredEvent,
+  CheckpointSavedEvent,
+  ToolCallEvent,
+  ToolResultEvent,
+} from './agent-stream-events.js'
 
 /**
  * M1 (theokit-ai-first) — translate a theokit `AgentStreamEvent` stream into the
@@ -100,6 +106,42 @@ function* emitToolResult(event: ToolResultEvent, seen: Set<string>): Generator<U
   }
 }
 
+/**
+ * Emit a HITL approval request (M4): first synthesize the tool-input part (EC-1) so the
+ * client has a tool to gate, then the ai-sdk-native `tool-approval-request` chunk referencing
+ * the same toolCallId. The client renders the approval + responds via `tool-approval-response`
+ * (out-of-band POST resolves the paused SDK `pre_tool_call` hook — the run is genuinely paused).
+ */
+function* emitApprovalRequest(
+  event: ApprovalRequiredEvent,
+  seen: Set<string>,
+): Generator<UIMessageChunk> {
+  if (!seen.has(event.callId)) {
+    seen.add(event.callId)
+    yield {
+      type: 'tool-input-available',
+      toolCallId: event.callId,
+      toolName: event.toolName,
+      input: event.input ?? {},
+      dynamic: true,
+    }
+  }
+  yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId: event.callId }
+}
+
+/**
+ * Emit a `@Checkpoint` signal (M4) as an ai-sdk-native `data-checkpoint` part. `transient: true`
+ * keeps it OUT of the persisted message history (it is a resume-handle signal, not turn content).
+ * `resumeToken` is the sessionId a follow-up request replays via the SDK conversation storage.
+ */
+function* emitCheckpointSaved(event: CheckpointSavedEvent): Generator<UIMessageChunk> {
+  yield {
+    type: 'data-checkpoint',
+    data: { checkpointId: event.checkpointId, resumeToken: event.resumeToken, step: event.step },
+    transient: true,
+  }
+}
+
 export async function* translateToUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
   opts: { textId: string },
@@ -129,9 +171,15 @@ export async function* translateToUIMessageStream(
       } else if (event.type === 'tool_call') {
         yield* closeOpenBlock(state, opts.textId)
         yield* emitToolCall(event, seenToolCallIds)
+      } else if (event.type === 'approval_required') {
+        yield* closeOpenBlock(state, opts.textId)
+        yield* emitApprovalRequest(event, seenToolCallIds)
       } else if (event.type === 'tool_result') {
         yield* closeOpenBlock(state, opts.textId)
         yield* emitToolResult(event, seenToolCallIds)
+      } else if (event.type === 'checkpoint_saved') {
+        yield* closeOpenBlock(state, opts.textId)
+        yield* emitCheckpointSaved(event)
       } else if (event.type === 'error') {
         // Surface the agent-reported failure to the client instead of swallowing
         // it (M0 order: error chunk, then close the open block below, then finish).
