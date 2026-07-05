@@ -488,3 +488,99 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
     }
   })
 })
+
+describe('translateToUIMessageStream — HITL approval (M4)', () => {
+  it('test_maps_approval_required_to_tool_input_then_approval_request', async () => {
+    // A HITL-gated tool pauses BEFORE running: the translator first synthesizes the
+    // tool-input part (so the client has a tool to gate), then the ai-sdk-native
+    // tool-approval-request chunk referencing the same toolCallId.
+    const events: AgentStreamEvent[] = [
+      {
+        type: 'approval_required',
+        callId: 'call-1',
+        toolName: 'ops.deploy',
+        question: 'Deploy to prod?',
+        input: { env: 'prod' },
+        callbackUrl: '/api/agents/x/approve/call-1',
+        timeoutMs: 300_000,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toEqual([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'call-1',
+        toolName: 'ops.deploy',
+        input: { env: 'prod' },
+        dynamic: true,
+      },
+      { type: 'tool-approval-request', approvalId: 'call-1', toolCallId: 'call-1' },
+      { type: 'finish' },
+    ])
+  })
+
+  it('test_approval_request_chunk_validates_against_ai_schema', async () => {
+    const schema = uiMessageChunkSchema()
+    const validate = (schema as { validate?: (c: unknown) => Promise<{ success: boolean }> })
+      .validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const events: AgentStreamEvent[] = [
+      {
+        type: 'approval_required',
+        callId: 'c1',
+        toolName: 't',
+        question: 'ok?',
+        callbackUrl: '/x',
+        timeoutMs: 1000,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+})
+
+describe('translateToUIMessageStream — @Checkpoint (M4)', () => {
+  it('test_maps_checkpoint_saved_to_transient_data_checkpoint_part', async () => {
+    // A `@Checkpoint` agent emits `checkpoint_saved`; the translator maps it to an ai-sdk-native
+    // `data-checkpoint` part carrying the resume handle, `transient` (kept out of message history).
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'hi' },
+      { type: 'checkpoint_saved', checkpointId: 'chk-1', step: 0, resumeToken: 's1' },
+      {
+        type: 'done',
+        result: 'hi',
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        durationMs: 1,
+        cost: 0,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks).toContainEqual({
+      type: 'data-checkpoint',
+      data: { checkpointId: 'chk-1', resumeToken: 's1', step: 0 },
+      transient: true,
+    })
+    // The open text block is closed before the checkpoint part (state machine, EC-2).
+    const idx = chunks.findIndex((c) => c.type === 'data-checkpoint')
+    expect(chunks[idx - 1]).toEqual({ type: 'text-end', id: TEXT_ID })
+  })
+
+  it('test_checkpoint_chunk_validates_against_ai_schema', async () => {
+    const schema = uiMessageChunkSchema()
+    const validate = (schema as { validate?: (c: unknown) => Promise<{ success: boolean }> })
+      .validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const events: AgentStreamEvent[] = [
+      { type: 'checkpoint_saved', checkpointId: 'chk-1', step: 2, resumeToken: 's1' },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+})
