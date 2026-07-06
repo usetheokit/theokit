@@ -120,5 +120,6 @@ describe('M8 agent() builder', () => {
     expect(isAgentDefinition(built)).toBe(true)
     expect(built.system).toBe('log everything')
     expect(built.tools).toEqual([tool])
+    expect(built.model).toBe('m')
   })
 })

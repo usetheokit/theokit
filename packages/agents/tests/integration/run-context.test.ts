@@ -109,7 +109,7 @@ describe('M7 run-context reaches tool handlers (injected by theokit adapter)', (
     const compiled = compileAgentDefinition(def)
 
     const factory = createSdkAgentStream(compiled, compiled.tools, 'test-key', {
-      context: { projectRoot: '/override' },
+      runContext: { projectRoot: '/override' },
     })
     await drain(factory('go', 'sess-2'))
 
@@ -127,5 +127,32 @@ describe('M7 run-context reaches tool handlers (injected by theokit adapter)', (
 
     expect(h.handlerCalled).toBe(true)
     expect(h.handlerContext).toBeUndefined()
+  })
+
+  it('test_empty_context_object_is_forwarded_as_empty_object', async () => {
+    // Edge case: an explicitly empty {} is a valid context (distinct from "no context").
+    const def = defineAgent({ context: {}, tools: [recordingTool()] })
+    const compiled = compileAgentDefinition(def)
+
+    const factory = createSdkAgentStream(compiled, compiled.tools, 'test-key')
+    await drain(factory('go', 'sess-4'))
+
+    expect(h.handlerCalled).toBe(true)
+    expect(h.handlerContext).toEqual({})
+  })
+
+  it('test_per_run_context_completely_replaces_agent_level_not_merges', async () => {
+    // Edge case: per-run override replaces agent-level entirely — no merging of keys.
+    // Agent-level has 'base'; per-run has only 'override'. Handler must NOT see 'base'.
+    const def = defineAgent({ context: { base: true }, tools: [recordingTool()] })
+    const compiled = compileAgentDefinition(def)
+
+    const factory = createSdkAgentStream(compiled, compiled.tools, 'test-key', {
+      runContext: { override: true },
+    })
+    await drain(factory('go', 'sess-5'))
+
+    expect(h.handlerContext).toEqual({ override: true })
+    expect((h.handlerContext as Record<string, unknown>).base).toBeUndefined()
   })
 })

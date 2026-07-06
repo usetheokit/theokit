@@ -89,7 +89,7 @@ export function compileTools(
     }
 
     for (const tool of tb.tools) {
-      const handler = (instance as Record<string | symbol, Function>)[tool.propertyKey]
+      const handler = (instance as unknown as Record<string | symbol, Function>)[tool.propertyKey]
       if (typeof handler !== 'function') {
         throw new Error(
           `[@theokit/agents] Toolbox ${tb.class.name}: '${String(tool.propertyKey)}' is not a function.`,
