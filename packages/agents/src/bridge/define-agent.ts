@@ -40,16 +40,43 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * normalized to the internal {@link CompiledTool} shape at compile time.
    */
   tools?: readonly CustomTool[]
+  /**
+   * M7 — run-context: an opaque, per-agent object forwarded to every tool handler's
+   * `ctx.context` at run time (injected by the theokit adapter's tool wrapper). Set shared config
+   * (e.g. `{ projectRoot }`) ONCE at the agent level instead of baking it into each tool
+   * factory. Mirrors ai-sdk `experimental_context`, mastra `RuntimeContext`, and
+   * openai-agents-js `RunContext`. Distinct from `@Agent`'s context-window `context`.
+   */
+  context?: Record<string, unknown>
 }
 
-/** A branded agent definition — the value {@link defineAgent} returns. */
-export type AgentDefinition<TInput extends z.ZodType = z.ZodType> = DefineAgentConfig<TInput> & {
+/**
+ * A branded agent definition — the value {@link defineAgent} returns.
+ *
+ * `TTools` (M8) is a phantom type parameter carrying the tool-name union: the `agent()` builder
+ * threads its accumulated literal tool names here (`.build()` returns `AgentDefinition<TInput,
+ * 'a' | 'b'>`), so the generated client (`.theokit/agents.d.ts`) can expose them via
+ * {@link InferAgentToolNames}. `defineAgent` leaves it `string` (its tools array carries no literal
+ * names). Never present at runtime.
+ */
+export type AgentDefinition<
+  TInput extends z.ZodType = z.ZodType,
+  TTools extends string = string,
+> = DefineAgentConfig<TInput> & {
   readonly [AGENT_BRAND]: true
+  readonly __toolNames?: TTools
 }
 
 /** Infer the request type of an agent definition from its `input` Zod schema. */
 export type InferAgentInput<T> =
   T extends AgentDefinition<infer S> ? (S extends z.ZodType ? z.infer<S> : never) : never
+
+/**
+ * Infer the tool-name union of an agent definition (M8). Yields the literal union for agents built
+ * with the `agent()` builder (`'read_file' | 'count_lines'`), or `string` for `defineAgent` agents
+ * whose tools array carries no literal names.
+ */
+export type InferAgentToolNames<T> = T extends AgentDefinition<z.ZodType, infer N> ? N : never
 
 /**
  * Define a zero-config agent. Identity/normalizer (like `defineRoute`) — returns the config
@@ -66,7 +93,7 @@ export function isAgentDefinition(value: unknown): value is AgentDefinition {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as Record<PropertyKey, unknown>)[AGENT_BRAND] === true
+    (value as unknown as Record<PropertyKey, unknown>)[AGENT_BRAND] === true
   )
 }
 
@@ -78,11 +105,20 @@ export function isAgentDefinition(value: unknown): value is AgentDefinition {
  * the SDK always calls a tool handler with the parsed input object.
  */
 function toCompiledTool(tool: CustomTool): CompiledTool {
+  // M7 — forward the run-context `ctx` (2nd arg) to the underlying tool so `defineAgent({ context })`
+  // reaches `ctx.context` in the handler (dropping it silently severs the context seam).
+  // `CustomTool.handler` takes `Record<string, unknown>` as input; `CompiledTool.handler` takes the
+  // wider `unknown`. Contravariance on the input parameter prevents direct assignment — `as unknown as`
+  // is the SDK-boundary seam for this widening. Runtime-safe: SDK always passes a plain object for input.
+  const handler = tool.handler as unknown as (
+    input: unknown,
+    ctx?: { signal?: AbortSignal; context?: unknown },
+  ) => string | Promise<string>
   return {
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
-    handler: (input) => tool.handler(input as Record<string, unknown>),
+    handler: (input, ctx) => handler(input, ctx),
   }
 }
 
@@ -98,5 +134,8 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     tools: (def.tools ?? []).map(toCompiledTool),
     agents: {},
     stream: true,
+    // M7 — run-context flows to CompiledAgentOptions.runContext (distinct from the
+    // context-window `context` field the decorator path uses); absent ⇒ no key.
+    ...(def.context !== undefined ? { runContext: def.context } : {}),
   }
 }

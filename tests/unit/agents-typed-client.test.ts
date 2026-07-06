@@ -30,14 +30,22 @@ describe('generateAgentsDts (M2)', () => {
       projectRoot: PROJECT_ROOT,
     })
     expect(dts).toContain(`declare module '@theo/agents'`)
-    expect(dts).toContain(`import type { InferAgentInput } from '@theokit/agents'`)
+    expect(dts).toContain(
+      `import type { InferAgentInput, InferAgentToolNames } from '@theokit/agents'`,
+    )
     // Import the agent's default export TYPE, relative from .theokit/ to agents/.
     expect(dts).toContain(`import type _agent_support from '../agents/support'`)
     expect(dts).toContain(`import type _agent_echo from '../agents/echo'`)
-    // Each agent → a typed input binding keyed by name.
-    expect(dts).toContain(`'support': { input: InferAgentInput<_agent_support> }`)
-    expect(dts).toContain(`'echo': { input: InferAgentInput<_agent_echo> }`)
+    // Each agent → a typed input binding + tool-name union (M8) keyed by name.
+    expect(dts).toContain(
+      `'support': { input: InferAgentInput<_agent_support>; tools: InferAgentToolNames<_agent_support> }`,
+    )
+    expect(dts).toContain(
+      `'echo': { input: InferAgentInput<_agent_echo>; tools: InferAgentToolNames<_agent_echo> }`,
+    )
     expect(dts).toContain(`export interface AppAgents`)
+    // M8 — useAgent carries the agent's tool-name union to the client hook return.
+    expect(dts).toContain(`UseAgentReturn<AppAgents[K]['input'], AppAgents[K]['tools']>`)
   })
 
   it('test_empty_manifest_emits_stub_module', () => {
