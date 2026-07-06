@@ -79,7 +79,9 @@ export {
   type AgentDefinition,
   type DefineAgentConfig,
   type InferAgentInput,
+  type InferAgentToolNames,
 } from './define-agent.js'
+export { agent, contextualTool, type AgentBuilder, type ContextualTool } from './agent-builder.js'
 export {
   compileAgentModule,
   streamAgentUIMessages,
