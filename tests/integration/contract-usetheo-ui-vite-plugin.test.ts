@@ -64,6 +64,16 @@ function normalizePluginReturn(value: unknown): unknown[] | null {
  * sem versões com build metadata). Suficiente para EC-7 hoist guard.
  */
 function satisfiesCaretPrerelease(version: string, range: string): boolean {
+  // The peer range is a `||`-joined series of caret pins (e.g.
+  // `^0.14.0 || ^0.18.0 || ^0.19.0 || ^1.0.0`). A version satisfies the range
+  // when it satisfies ANY clause. (The helper below checks a single caret pin.)
+  return range
+    .split('||')
+    .map((clause) => clause.trim())
+    .some((clause) => satisfiesSingleCaret(version, clause))
+}
+
+function satisfiesSingleCaret(version: string, range: string): boolean {
   if (!range.startsWith('^')) return false
   const pin = range.slice(1)
   // eslint-disable-next-line security/detect-unsafe-regex -- bounded semver string (\d+ groups bounded by `.` and `$` anchors); no nested quantifiers; no catastrophic backtracking

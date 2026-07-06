@@ -5,7 +5,9 @@ import { resolve } from 'node:path'
 import { buildTheokitPackageOnce } from '../integration/_helpers/build-theokit-package.js'
 
 const theoDistDir = resolve(__dirname, '../../packages/theo/dist')
-const createTheoDistDir = resolve(__dirname, '../../packages/create-theo/dist')
+// create-theo was absorbed into create-theokit (ADR-0023). The live, published
+// scaffolder package is create-theokit — validate its build outputs here.
+const createTheoDistDir = resolve(__dirname, '../../packages/create-theokit/dist')
 
 describe('Smoke: Package Build Outputs', () => {
   beforeAll(() => {
@@ -72,11 +74,11 @@ describe('Smoke: Package Build Outputs', () => {
     })
 
     it('should have templates accessible from dist/', () => {
-      // Templates should be at packages/create-theo/templates/ (sibling to dist/)
+      // Templates live at packages/create-theokit/templates/ (sibling to dist/).
+      // Template set narrowed to `default`-only per ADR-0023 (dashboard/api-only
+      // removed) — polyglot backends come via the --backend flag, not extra templates.
       const templatesDir = resolve(createTheoDistDir, '..', 'templates')
       expect(existsSync(resolve(templatesDir, 'default'))).toBe(true)
-      expect(existsSync(resolve(templatesDir, 'dashboard'))).toBe(true)
-      expect(existsSync(resolve(templatesDir, 'api-only'))).toBe(true)
     })
   })
 })
@@ -211,7 +213,7 @@ describe('Smoke: publint Validation', () => {
 
   it('create-theo should pass publint', () => {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- developer-local smoke test
-    const result = execSync('npx publint packages/create-theo', {
+    const result = execSync('npx publint packages/create-theokit', {
       cwd: resolve(__dirname, '../..'),
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],

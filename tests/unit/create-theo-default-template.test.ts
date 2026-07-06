@@ -85,3 +85,36 @@ describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)',
     expect(src).toContain('{{name}}')
   })
 })
+
+const TEMPLATE_AGENTS_SKILL = resolve(
+  ROOT,
+  'packages/create-theokit/templates/default/dot-claude/skills/theokit-agents/SKILL.md',
+)
+
+describe('create-theokit theokit-agents SKILL — defineAgentTool signature (issue #79)', () => {
+  // Extract ONLY the `defineAgentTool({ ... })` call — the surrounding `defineAgent({ input })`
+  // and the `### @Tool({ input })` decorator example legitimately use `input:` (their real field);
+  // the guard must target the defineAgentTool spec, whose real fields are inputSchema + handler.
+  function defineAgentToolCall(): string {
+    const md = readFileSync(TEMPLATE_AGENTS_SKILL, 'utf-8')
+    const open = md.indexOf('defineAgentTool({')
+    expect(open, 'SKILL.md must contain a defineAgentTool({ ... }) example').toBeGreaterThan(-1)
+    // The call closes with `\n})` at line start; nested `})` (e.g. `z.object({})`) are inline.
+    const close = md.indexOf('\n})', open)
+    expect(close).toBeGreaterThan(open)
+    return md.slice(open, close + 3)
+  }
+
+  it('teaches the real DefineAgentToolSpec fields (inputSchema + handler)', () => {
+    const call = defineAgentToolCall()
+    // Real API: define-agent-tool.ts DefineAgentToolSpec = { inputSchema, handler: () => string }.
+    expect(call).toMatch(/inputSchema:/)
+    expect(call).toMatch(/handler:/)
+  })
+
+  it('does NOT use the wrong input:/execute: shape (the pre-fix drift users copy)', () => {
+    const call = defineAgentToolCall()
+    expect(call).not.toMatch(/\binput:/)
+    expect(call).not.toMatch(/\bexecute:/)
+  })
+})
