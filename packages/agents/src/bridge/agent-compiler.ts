@@ -25,7 +25,17 @@ export interface CompiledTool {
   name: string
   description: string
   inputSchema: unknown
-  handler: (input: unknown) => string | Promise<string>
+  /**
+   * M7 — the optional 2nd `ctx` arg carries the SDK run context: `ctx.context` is the
+   * `defineAgent({ context })` / per-run value, `ctx.signal` the abort signal. Optional so the
+   * decorator `@Tool` handlers (which ignore it) stay assignable. The SDK calls the tool with
+   * both args; a handler that needs run-context (e.g. a filesystem tool reading `projectRoot`)
+   * reads `ctx?.context`.
+   */
+  handler: (
+    input: unknown,
+    ctx?: { signal?: AbortSignal; context?: unknown },
+  ) => string | Promise<string>
 }
 
 /**
@@ -131,6 +141,13 @@ export interface CompiledAgentOptions {
   memory?: MemoryOptions
   skills?: SkillsSettings
   context?: ContextSettings
+  /**
+   * M7 — run-context injected into every tool handler's `ctx.context` by the theokit adapter
+   * (`buildSdkTools` wrapper). Populated by `defineAgent({ context })` (functional surface).
+   * NAME NOTE: distinct from the context-window `context` (`ContextSettings`) above — this is
+   * per-run user data for tools, not token-budget config.
+   */
+  runContext?: Record<string, unknown>
   /** Raw @ProjectContext config; the adapter builds the (async) systemPrompt resolver from it. */
   projectContext?: ProjectContextOptions
   mcpServers?: McpServersMap

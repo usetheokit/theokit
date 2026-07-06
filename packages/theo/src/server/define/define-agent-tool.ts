@@ -47,8 +47,16 @@ export interface DefineAgentToolSpec<T extends z.ZodType> {
   description: string
   /** Zod schema describing the input. Must be `z.object(...)` at the root. */
   inputSchema: T
-  /** Handler invoked with the parsed input. */
-  handler: (input: z.infer<T>) => string | Promise<string>
+  /**
+   * Handler invoked with the parsed input and, optionally, the run `ctx` (M7). `ctx.context`
+   * is the object supplied once at the agent level (`defineAgent({ context })`) or per-run —
+   * read it for shared config like `projectRoot` instead of baking it into the factory.
+   * `ctx.signal` is the abort signal. Optional so existing one-arg handlers keep working.
+   */
+  handler: (
+    input: z.infer<T>,
+    ctx?: { signal?: AbortSignal; context?: unknown },
+  ) => string | Promise<string>
 }
 
 const TOOL_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
@@ -123,9 +131,13 @@ export function defineAgentTool<T extends z.ZodType>(spec: DefineAgentToolSpec<T
     name: spec.name,
     description: spec.description,
     inputSchema,
-    handler: async (input: Record<string, unknown>): Promise<string> => {
+    handler: async (
+      input: Record<string, unknown>,
+      ctx?: { signal?: AbortSignal; context?: unknown },
+    ): Promise<string> => {
       const parsed = spec.inputSchema.parse(input)
-      return await spec.handler(parsed)
+      // M7 — forward the run ctx so the handler can read `ctx.context` (e.g. projectRoot).
+      return await spec.handler(parsed, ctx)
     },
   }
 }
