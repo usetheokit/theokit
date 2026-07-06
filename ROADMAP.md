@@ -194,6 +194,48 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
+### M7 — [ ] Run-context / dependency injection for tools
+
+**Objective:** Give agents and their tools a shared, typed **run-context** — set once at the agent (and overridable per-run) and injected into every tool handler — so tool config like `projectRoot` is declared in ONE place. This closes the concrete gap vs the three reference agent-SDKs: ai-sdk injects `context` (`execute(input, { context })`), mastra a `RuntimeContext`, openai-agents-js a `RunContext<Context>` — TheoKit's `@theokit/sdk` `CustomTool.handler` is `(input) => string`, with no context arg. Surfaced dogfooding `examples/code-assistant`, where `projectRoot` is baked into every `@theokit/sdk-tools` factory instead of the agent.
+
+**Definition of done:**
+
+- [ ] `@theokit/sdk` `CustomTool.handler` accepts a second, optional arg `{ context, signal }` (`context` = the user-provided run-context). Strictly additive — existing single-arg handlers are byte-compatible (type test + full agents suite green). Cross-repo change coordinated + released with a documented version floor.
+- [ ] `defineAgent({ context })` and `@Agent({ context })` declare an agent-level context; `run(msg, { context })` overrides per-run; the context propagates to every tool handler **through the bridge** (adapter over `@theokit/sdk`, never a second runtime — scope ADR merged before code).
+- [ ] `@theokit/sdk-tools` factories (`createReadFileTool`, `createListDirTool`, `createSearchTextTool`, `createGlobTool`, `createShellTool`, …) read `projectRoot` from the run-context instead of requiring it per-factory; a fresh `code-assistant` sets `projectRoot` **once** at the agent.
+- [ ] The context type flows to the handler's second arg (`z.infer`-grade inference); a tool reading `ctx.projectRoot` the agent never declared is a compile error OR a documented runtime guard with a typed error.
+- [ ] `examples/code-assistant` + the build-a-code-assistant guide migrated to the context form; the per-tool `projectRoot` repetition is gone. Proven: `tsc --noEmit` = 0 + the agent runs a tool reading `ctx.projectRoot` end-to-end.
+
+**Dependencies:** M6.
+
+**Top risks:**
+
+1. **Cross-repo dependency on `@theokit/sdk`.** The handler-context seam lives in the external SDK repo; the framework cannot ship until the SDK releases it — version-floor + coordination risk (mirrors the M6 `@theokit/sdk >= 2.13.0` compaction-floor lesson).
+2. **Backward compatibility.** Every existing single-arg handler must keep working; the second arg must be strictly optional/additive, verified by a type test + the existing `@theokit/agents` suite before release.
+
+---
+
+### M8 — [ ] Fluent agent builder with type-state
+
+**Objective:** A composable `agent()` builder — `agent().context(...).tool(...).model(...).build()` — that accumulates **type-state** the way the most-loved TS DX does (Zod, tRPC `t.procedure.input().query()`, Hono, Drizzle): a tool whose required context isn't provided is a compile error, tool names accumulate into a union that types the client's tool-parts, and `.build()` only type-checks when the agent is complete. It resolves to the **SAME branded `AgentDefinition`** that `defineAgent` produces — one runtime, N syntaxes (ADR-B1). Completes the Spring-shaped triangle TheoKit already has (decorators + DI + declarative config) with the composable builder the existing shallow `AgentRunner.builder()` never delivered for *definition*.
+
+**Definition of done:**
+
+- [ ] `agent()` builder with `.context<C>()`, `.tool(t)` (compile error when `t`'s required context ⊄ the agent's `C`), `.model()`, `.system()`, `.use(preset)` (composable partial chains, Spring-Boot-style), `.build()` — typed with accumulative generics.
+- [ ] **Type-state:** `.build()` is only callable when required fields (model) are present — "forgot the model" is a compile error, not a first-request runtime error. Proven by `expectTypeOf` + `@ts-expect-error` tests.
+- [ ] The tool-name union accumulates through the chain and reaches the generated typed client (`.theokit/agents.d.ts`), so `useAgent(name)` can type the stream's tool-parts (today stringly-typed). End-to-end: server builder → manifest → client hook.
+- [ ] `.build()` returns the same branded `AgentDefinition` the scanner/manifest/runtime already consume — no third runtime, no new mount path (convergence test: builder / `defineAgent` / `@Agent` produce an equivalent definition). `defineAgent` stays the one-shot shortcut; decorators stay the DI/class form.
+- [ ] `examples/code-assistant` presented in builder form as the canonical example; docs show the three surfaces converging on one definition and pick one canonical path per audience.
+
+**Dependencies:** M7.
+
+**Top risks:**
+
+1. **Type-gymnastics maintenance.** Accumulative generics (tRPC-style) are powerful but costly for a single maintainer; scope must stay minimal (context + tools + model type-state), NOT a 40-method DSL, or the type surface becomes unmaintainable.
+2. **Three construction surfaces.** Risk of "3 ways to do it" confusing users — mitigated ONLY if all three provably resolve to one `AgentDefinition` (a convergence test) and docs pick one canonical path per audience.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
@@ -206,7 +248,8 @@ Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-
 | mastra (mastra-ai/mastra) | Apache-2.0 (core; `ee/` enterprise) | How a TS framework structures the agent surface + server and loop/memory over the AI SDK. | M2, M4 |
 | copilotkit | MIT | AG-UI protocol (counterpoint to `UIMessageStream`) + generative UI + HITL — to choose the protocol consciously. | M1, M4 |
 | cloudflare-agents-starter | MIT | The 3 tool patterns (server-auto / client / HITL approval) + WS persistence + reasoning display. | M4, M2 |
-| openai-agents-js | MIT | Harness design over a provider: sessions, human-in-the-loop, handoffs, guardrails, tracing. | M4 |
+| openai-agents-js | MIT | Harness design over a provider: sessions, human-in-the-loop, handoffs, guardrails, tracing. | M4, M7 |
+| trpc (trpc/trpc) | MIT | The canonical fluent builder with **accumulative type-inference** in TS (`t.procedure.input().query()`) — how `.tool()`/`.context()` should accumulate type-state (`procedureBuilder.ts`). Studied alongside Zod (in node_modules) + Hono (already cloned). | M8 |
 
 ---
 

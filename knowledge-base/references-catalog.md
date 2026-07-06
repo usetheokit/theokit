@@ -254,6 +254,46 @@ git clone --depth 1 --filter=blob:none https://github.com/openai/openai-agents-j
 
 ---
 
+## trpc (trpc/trpc)
+
+- **Folder:** `knowledge-base/references/trpc/`
+- **Lifecycle:** cloned
+- **Repo:** https://github.com/trpc/trpc
+- **License:** `MIT`
+- **License-gate decision:** auto-approved-permissive
+- **Last release / last commit:** 2026-06-20
+- **Stars / forks at clone time:** 40407
+- **added_by:** roadmap-feature
+- **added_for_milestone:** M8
+
+### Why this peer is here
+
+The canonical fluent builder with **accumulative type-inference** in TypeScript
+(`t.procedure.input(schema).query(fn)`). M8's `agent()` builder must accumulate type-state exactly
+this way: each `.tool()` / `.context()` returns a new type that carries the accumulated tools +
+required-context set, so a missing dependency is a compile error and the tool-name union reaches the
+typed client. tRPC is the deepest reference for the generics that make this work.
+
+### What to study in it
+
+- `packages/server/src/unstable-core-do-not-import/procedureBuilder.ts` — the builder's accumulative
+  generics + `.input()`/`.use()` type threading.
+- How the builder terminates into a value the router (our `AgentDefinition` analog) consumes.
+- Type-state gating (a builder method only valid once prerequisites are present).
+
+### Supports ROADMAP milestone(s)
+
+- M8 — *because:* the accumulative-inference builder pattern (studied alongside Zod in node_modules +
+  Hono already cloned).
+
+### Clone command used
+
+```bash
+git clone --depth 1 --filter=blob:none https://github.com/trpc/trpc.git knowledge-base/references/trpc
+```
+
+---
+
 ## Skipped peers (license gate)
 
 > Peers identified during SOTA discovery but rejected at the license gate.
