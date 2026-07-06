@@ -17,7 +17,7 @@ import { consumeUIMessageStream } from './consume-ui-message-stream.js'
  */
 export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
 
-export interface UseAgentReturn<TInput = unknown> {
+export interface UseAgentReturn<TInput = unknown, TToolNames extends string = string> {
   /** Reconstructed assistant messages so far (ai `UIMessage[]`). */
   messages: UIMessage[]
   status: UseAgentStatus
@@ -29,6 +29,13 @@ export interface UseAgentReturn<TInput = unknown> {
   abort: () => void
   /** Clear messages + error, back to idle. */
   reset: () => void
+  /**
+   * The union of tool names this agent can emit (M8), carried end-to-end from the `agent()`
+   * builder's accumulated tool-name type through the generated `@theo/agents` client. Type-only
+   * witness (never populated at runtime) — narrow a streamed `tool-<name>` part against it. Resolves
+   * to the literal union for builder agents (`'read_file' | 'count_lines'`), `string` otherwise.
+   */
+  readonly __toolNames?: TToolNames
 }
 
 export interface UseAgentOptions {
