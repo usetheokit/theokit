@@ -82,6 +82,8 @@ tmp/
 .claude/worktrees/
 .claude/ralph-loop.local.md
 .claude/architecture-review-loop.local.md
+# PreCompact session snapshots — rolling retention (last 10 by mtime), never commit
+.claude/.compaction-snapshots/
 
 # Python bytecode cache from .claude skill scripts
 **/__pycache__/
