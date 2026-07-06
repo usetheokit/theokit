@@ -1,5 +1,20 @@
 # create-theo
 
+## 1.0.17
+
+### Patch Changes
+
+- 25f7723: Fix (#79): the shipped `theokit-agents` skill doc taught the wrong `defineAgentTool` signature —
+  `{ input, execute }` returning an object. The real API (`DefineAgentToolSpec`) is
+  `{ inputSchema, handler }` where `handler` returns a **string**; a user copying the doc got code
+  that failed `tsc`. Corrected the example, fixed a stale `@theokit/sdk-tools` tool name in the
+  "you are here" map (`createSearchTool` → `createSearchTextTool`/`createGlobTool`/`createShellTool`),
+  and added a regression guard test that asserts the doc's `defineAgentTool` block uses `inputSchema` +
+  `handler` (fail-closed on future drift).
+- 6a91f17: Fix (#81): `defineAgent({ tools })` now type-accepts the `@theokit/sdk` `CustomTool` that `defineAgentTool` and every `@theokit/sdk-tools` factory return (previously `CustomTool` was not assignable to the internal `CompiledTool`, so the documented tool pattern failed `tsc` even though it ran). The `tools` field is typed `readonly CustomTool[]` and normalized to `CompiledTool` at compile.
+
+  Fix (#80): the `create-theokit` default template now type-checks, builds, AND renders on a fresh scaffold. `app/page.tsx` was migrated to the `@theokit/ui@1.0.0` auto-dispatch chat API (`ChatMessage` takes a `UIMessage` and renders its parts; the old manual `Message`/`ToolCallCard` flatten is gone), the template ships `@types/node` + `experimentalDecorators`/`emitDecoratorMetadata` (so tool handlers and the `@Agent` class surface type-check), and a jsdom render test (`app/page.test.tsx`) guards against future `@theokit/ui` drift. A pristine scaffold now passes `tsc --noEmit` with 0 errors (was 7).
+
 ## 1.0.16
 
 ### Patch Changes
