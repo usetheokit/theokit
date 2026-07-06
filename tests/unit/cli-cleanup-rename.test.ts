@@ -34,18 +34,30 @@ describe('cli-cleanup-rename (T0.2)', () => {
     expect(lines).toEqual([])
   }, 15_000)
 
-  it('test_cli_cleanup_has_barrel_export — index.ts re-exports cleanOutDir + gcAgentRegistry', async () => {
-    const content = await readFile(resolve(SRC, 'cli/cleanup/index.ts'), 'utf8')
-    expect(content).toMatch(/cleanOutDir/)
-    expect(content).toMatch(/gcAgentRegistry/)
+  it('test_cli_cleanup_exports_public_api — cleanup.ts exports cleanOutDir + gcAgentRegistry', async () => {
+    // The `cli/cleanup` module has no barrel (`index.ts`): consumers import from
+    // the concrete `cleanup.js` directly (see build.ts below). A barrel with no
+    // importer would be a dead export (G7). This guards that the two public
+    // functions stay exported from the module's single source file.
+    const content = await readFile(resolve(SRC, 'cli/cleanup/cleanup.ts'), 'utf8')
+    expect(content).toMatch(/export\s+async\s+function\s+cleanOutDir/)
+    expect(content).toMatch(/export\s+async\s+function\s+gcAgentRegistry/)
   })
 
-  it('test_cli_cleanup_resolves_imports — cleanup.js + cleanup-types.js inside', async () => {
+  it('test_cli_cleanup_wired_from_build — build.ts imports cleanOutDir from cleanup.js directly', async () => {
+    // The real wiring (no barrel): the build command imports cleanOutDir from the
+    // concrete module path. This is the caller that keeps cleanOutDir non-dead.
+    const build = await readFile(resolve(SRC, 'cli/commands/build.ts'), 'utf8')
+    expect(build).toMatch(
+      /import\s*\{\s*cleanOutDir\s*\}\s*from\s*['"]\.\.\/cleanup\/cleanup\.js['"]/,
+    )
+  })
+
+  it('test_cli_cleanup_dir_is_barrel_less — exactly cleanup.ts + cleanup-types.ts, no index.ts', async () => {
     const entries = await readdir(resolve(SRC, 'cli/cleanup'))
     expect([...entries].sort((a, b) => a.localeCompare(b))).toEqual([
       'cleanup-types.ts',
       'cleanup.ts',
-      'index.ts',
     ])
   })
 
