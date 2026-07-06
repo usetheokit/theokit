@@ -57,7 +57,7 @@ index 0000000..802eb81
 +  .build()
 diff --git a/packages/agents/src/bridge/agent-builder.ts b/packages/agents/src/bridge/agent-builder.ts
 new file mode 100644
-index 0000000..77a1106
+index 0000000..a61417c
 --- /dev/null
 +++ b/packages/agents/src/bridge/agent-builder.ts
 @@ -0,0 +1,145 @@
@@ -174,7 +174,7 @@ index 0000000..77a1106
 +   */
 +  build(
 +    ...guard: TModel extends UnsetMarker ? [error: MissingModelError] : []
-+  ): AgentDefinition<TInput extends z.ZodType ? TInput : z.ZodType>
++  ): AgentDefinition<TInput extends z.ZodType ? TInput : z.ZodType, TTools>
 +  /** Phantom — lets type tests read the accumulated tool-name union. Never present at runtime. */
 +  readonly __toolNames?: TTools
 +}
@@ -244,10 +244,10 @@ index 0a884e8..9622fea 100644
    projectContext?: ProjectContextOptions
    mcpServers?: McpServersMap
 diff --git a/packages/agents/src/bridge/define-agent.ts b/packages/agents/src/bridge/define-agent.ts
-index 3a04f97..f865f92 100644
+index 3a04f97..97a2721 100644
 --- a/packages/agents/src/bridge/define-agent.ts
 +++ b/packages/agents/src/bridge/define-agent.ts
-@@ -40,6 +40,14 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
+@@ -40,17 +40,44 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
     * normalized to the internal {@link CompiledTool} shape at compile time.
     */
    tools?: readonly CustomTool[]
@@ -261,8 +261,40 @@ index 3a04f97..f865f92 100644
 +  context?: Record<string, unknown>
  }
  
- /** A branded agent definition — the value {@link defineAgent} returns. */
-@@ -82,7 +90,10 @@ function toCompiledTool(tool: CustomTool): CompiledTool {
+-/** A branded agent definition — the value {@link defineAgent} returns. */
+-export type AgentDefinition<TInput extends z.ZodType = z.ZodType> = DefineAgentConfig<TInput> & {
++/**
++ * A branded agent definition — the value {@link defineAgent} returns.
++ *
++ * `TTools` (M8) is a phantom type parameter carrying the tool-name union: the `agent()` builder
++ * threads its accumulated literal tool names here (`.build()` returns `AgentDefinition<TInput,
++ * 'a' | 'b'>`), so the generated client (`.theokit/agents.d.ts`) can expose them via
++ * {@link InferAgentToolNames}. `defineAgent` leaves it `string` (its tools array carries no literal
++ * names). Never present at runtime.
++ */
++export type AgentDefinition<
++  TInput extends z.ZodType = z.ZodType,
++  TTools extends string = string,
++> = DefineAgentConfig<TInput> & {
+   readonly [AGENT_BRAND]: true
++  readonly __toolNames?: TTools
+ }
+ 
+ /** Infer the request type of an agent definition from its `input` Zod schema. */
+ export type InferAgentInput<T> =
+   T extends AgentDefinition<infer S> ? (S extends z.ZodType ? z.infer<S> : never) : never
+ 
++/**
++ * Infer the tool-name union of an agent definition (M8). Yields the literal union for agents built
++ * with the `agent()` builder (`'read_file' | 'count_lines'`), or `string` for `defineAgent` agents
++ * whose tools array carries no literal names.
++ */
++export type InferAgentToolNames<T> = T extends AgentDefinition<z.ZodType, infer N> ? N : never
++
+ /**
+  * Define a zero-config agent. Identity/normalizer (like `defineRoute`) — returns the config
+  * branded so the scanner recognizes it. Compilation is deferred to {@link compileAgentDefinition}.
+@@ -82,7 +109,10 @@ function toCompiledTool(tool: CustomTool): CompiledTool {
      name: tool.name,
      description: tool.description,
      inputSchema: tool.inputSchema,
@@ -274,7 +306,7 @@ index 3a04f97..f865f92 100644
    }
  }
  
-@@ -98,5 +109,8 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
+@@ -98,5 +128,8 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
      tools: (def.tools ?? []).map(toCompiledTool),
      agents: {},
      stream: true,
@@ -284,12 +316,14 @@ index 3a04f97..f865f92 100644
    }
  }
 diff --git a/packages/agents/src/bridge/index.ts b/packages/agents/src/bridge/index.ts
-index 403d87a..1b13742 100644
+index 403d87a..5d4a70a 100644
 --- a/packages/agents/src/bridge/index.ts
 +++ b/packages/agents/src/bridge/index.ts
-@@ -80,6 +80,12 @@ export {
+@@ -79,7 +79,14 @@ export {
+   type AgentDefinition,
    type DefineAgentConfig,
    type InferAgentInput,
++  type InferAgentToolNames,
  } from './define-agent.js'
 +export {
 +  agent,
@@ -636,10 +670,10 @@ index 0000000..7994980
 +})
 diff --git a/packages/agents/tests/type/agent-builder.test-d.ts b/packages/agents/tests/type/agent-builder.test-d.ts
 new file mode 100644
-index 0000000..4c986a2
+index 0000000..04644f2
 --- /dev/null
 +++ b/packages/agents/tests/type/agent-builder.test-d.ts
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,73 @@
 +/**
 + * M8 — type-state guarantees of the `agent()` fluent builder. These are COMPILE-TIME assertions:
 + * `npx tsc --noEmit -p packages/agents/tsconfig.test.json` fails if any `@ts-expect-error` line
@@ -651,7 +685,7 @@ index 0000000..4c986a2
 +import type { CustomTool } from '@theokit/sdk'
 +
 +import { agent, contextualTool } from '../../src/bridge/agent-builder.js'
-+import type { AgentDefinition } from '../../src/bridge/define-agent.js'
++import type { AgentDefinition, InferAgentToolNames } from '../../src/bridge/define-agent.js'
 +
 +// A plain tool (no required context) and a tool that REQUIRES { projectRoot: string }.
 +const plainTool: CustomTool = {
@@ -700,6 +734,11 @@ index 0000000..4c986a2
 +  const b = contextualTool({ name: 'beta', description: '', inputSchema: {}, handler: () => '' })
 +  const built = agent().model('m').tool(a).tool(b)
 +  expectTypeOf(built.__toolNames).toEqualTypeOf<('alpha' | 'beta') | undefined>()
++
++  // The union survives `.build()` onto the branded AgentDefinition, and InferAgentToolNames
++  // extracts it — the exact type the generated `.theokit/agents.d.ts` reads (end-to-end).
++  const _def = built.build()
++  expectTypeOf<InferAgentToolNames<typeof _def>>().toEqualTypeOf<'alpha' | 'beta'>()
 +}
 +
 +// ── 5. `.input()` schema is lifted into the built AgentDefinition ─────────────────────────────
@@ -708,6 +747,33 @@ index 0000000..4c986a2
 +  const def = agent().input(schema).model('m').build()
 +  expectTypeOf(def).toExtend<AgentDefinition<typeof schema>>()
 +}
+diff --git a/packages/theo/src/client/use-agent.ts b/packages/theo/src/client/use-agent.ts
+index 95ca258..87a8cf7 100644
+--- a/packages/theo/src/client/use-agent.ts
++++ b/packages/theo/src/client/use-agent.ts
+@@ -17,7 +17,7 @@ import { consumeUIMessageStream } from './consume-ui-message-stream.js'
+  */
+ export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
+ 
+-export interface UseAgentReturn<TInput = unknown> {
++export interface UseAgentReturn<TInput = unknown, TToolNames extends string = string> {
+   /** Reconstructed assistant messages so far (ai `UIMessage[]`). */
+   messages: UIMessage[]
+   status: UseAgentStatus
+@@ -29,6 +29,13 @@ export interface UseAgentReturn<TInput = unknown> {
+   abort: () => void
+   /** Clear messages + error, back to idle. */
+   reset: () => void
++  /**
++   * The union of tool names this agent can emit (M8), carried end-to-end from the `agent()`
++   * builder's accumulated tool-name type through the generated `@theo/agents` client. Type-only
++   * witness (never populated at runtime) — narrow a streamed `tool-<name>` part against it. Resolves
++   * to the literal union for builder agents (`'read_file' | 'count_lines'`), `string` otherwise.
++   */
++  readonly __toolNames?: TToolNames
+ }
+ 
+ export interface UseAgentOptions {
 diff --git a/packages/theo/src/server/define/define-agent-tool.ts b/packages/theo/src/server/define/define-agent-tool.ts
 index 0fd8b04..cc72757 100644
 --- a/packages/theo/src/server/define/define-agent-tool.ts
@@ -747,6 +813,67 @@ index 0fd8b04..cc72757 100644
      },
    }
  }
+diff --git a/packages/theo/src/vite-plugin/agents-typed-client.ts b/packages/theo/src/vite-plugin/agents-typed-client.ts
+index 0f2165e..a0e9128 100644
+--- a/packages/theo/src/vite-plugin/agents-typed-client.ts
++++ b/packages/theo/src/vite-plugin/agents-typed-client.ts
+@@ -66,7 +66,9 @@ export function generateAgentsDts({
+     imports.push(
+       `  import type ${alias} from '${importPath(dtsOutPath, projectRoot, agent.filePath)}'`,
+     )
+-    entries.push(`    '${agent.name}': { input: InferAgentInput<${alias}> }`)
++    entries.push(
++      `    '${agent.name}': { input: InferAgentInput<${alias}>; tools: InferAgentToolNames<${alias}> }`,
++    )
+   }
+ 
+   const body =
+@@ -78,14 +80,14 @@ export function generateAgentsDts({
+ 
+   return `${FILE_HEADER}
+ declare module '@theo/agents' {
+-  import type { InferAgentInput } from '@theokit/agents'
++  import type { InferAgentInput, InferAgentToolNames } from '@theokit/agents'
+   import type { UseAgentReturn } from 'theokit/client'
+ ${importBlock}
+   export interface AppAgents ${body}
+ 
+   export function useAgent<K extends keyof AppAgents>(
+     name: K,
+-  ): UseAgentReturn<AppAgents[K]['input']>
++  ): UseAgentReturn<AppAgents[K]['input'], AppAgents[K]['tools']>
+ }
+ `
+ }
+diff --git a/tests/unit/agents-typed-client.test.ts b/tests/unit/agents-typed-client.test.ts
+index de531e8..947b714 100644
+--- a/tests/unit/agents-typed-client.test.ts
++++ b/tests/unit/agents-typed-client.test.ts
+@@ -30,14 +30,20 @@ describe('generateAgentsDts (M2)', () => {
+       projectRoot: PROJECT_ROOT,
+     })
+     expect(dts).toContain(`declare module '@theo/agents'`)
+-    expect(dts).toContain(`import type { InferAgentInput } from '@theokit/agents'`)
++    expect(dts).toContain(`import type { InferAgentInput, InferAgentToolNames } from '@theokit/agents'`)
+     // Import the agent's default export TYPE, relative from .theokit/ to agents/.
+     expect(dts).toContain(`import type _agent_support from '../agents/support'`)
+     expect(dts).toContain(`import type _agent_echo from '../agents/echo'`)
+-    // Each agent → a typed input binding keyed by name.
+-    expect(dts).toContain(`'support': { input: InferAgentInput<_agent_support> }`)
+-    expect(dts).toContain(`'echo': { input: InferAgentInput<_agent_echo> }`)
++    // Each agent → a typed input binding + tool-name union (M8) keyed by name.
++    expect(dts).toContain(
++      `'support': { input: InferAgentInput<_agent_support>; tools: InferAgentToolNames<_agent_support> }`,
++    )
++    expect(dts).toContain(
++      `'echo': { input: InferAgentInput<_agent_echo>; tools: InferAgentToolNames<_agent_echo> }`,
++    )
+     expect(dts).toContain(`export interface AppAgents`)
++    // M8 — useAgent carries the agent's tool-name union to the client hook return.
++    expect(dts).toContain(`UseAgentReturn<AppAgents[K]['input'], AppAgents[K]['tools']>`)
+   })
+ 
+   it('test_empty_manifest_emits_stub_module', () => {
 diff --git a/tests/unit/define-agent-tool-context.test.ts b/tests/unit/define-agent-tool-context.test.ts
 new file mode 100644
 index 0000000..7cc6cb6
