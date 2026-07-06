@@ -72,8 +72,8 @@ import { z } from 'zod'
 const currentTimeTool = defineAgentTool({
   name: 'current_time',
   description: 'Return the current ISO timestamp',
-  input: z.object({}),
-  execute: async () => ({ time: new Date().toISOString() }),
+  inputSchema: z.object({}),
+  handler: async () => new Date().toISOString(),
 })
 
 export default defineAgent({
@@ -157,7 +157,7 @@ Before writing custom tools, check if they already exist:
 | Package | What it provides | When to use |
 |---------|-----------------|-------------|
 | `@theokit/sdk` | `Agent.create()`, `defineTool()` (primitive), `Run.stream()` | Core agent runtime — always installed |
-| `@theokit/sdk-tools` | Ready-made tools: `createReadFileTool`, `createWriteFileTool`, `createSearchTool`, etc. | **Check here FIRST** before writing custom tools for coding agents |
+| `@theokit/sdk-tools` | Ready-made tools: `createReadFileTool`, `createWriteFileTool`, `createSearchTextTool`, `createGlobTool`, `createShellTool`, etc. | **Check here FIRST** before writing custom tools for coding agents |
 | `@theokit/di-agent` | DI-powered agent with decorator injection | When using dependency injection pattern |
 | `@theokit/di` | Core DI container (`@Injectable`, `@Inject`) | When `@theokit/di-agent` needs explicit bindings |
 
