@@ -40,9 +40,14 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     expect(page).toContain('ChatComposer')
   })
 
-  it('app/page.tsx uses ToolCallCard for tool invocations', () => {
+  it('app/page.tsx renders tool invocations via ChatMessage part auto-dispatch (#80, #85)', () => {
+    // Post-#80, tool-call parts are rendered by ChatMessage's part auto-dispatch (it renders
+    // text/tool-call/reasoning parts of each UIMessage) — the template no longer references
+    // ToolCallCard directly. Assert the mechanism the template actually uses (behavior), not the
+    // removed implementation detail (testing.md § 6 — do not assert internal structure).
     const page = read('app/page.tsx')
-    expect(page).toContain('ToolCallCard')
+    expect(page).toContain('ChatMessage')
+    expect(page).toMatch(/parts/)
   })
 
   it('app/page.tsx uses AgentStreaming as the streaming indicator', () => {
