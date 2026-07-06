@@ -30,7 +30,10 @@ export interface CustomTool {
   name: string
   description: string
   inputSchema: Record<string, unknown>
-  handler: (input: Record<string, unknown>) => string | Promise<string>
+  handler: (
+    input: Record<string, unknown>,
+    ctx?: { signal?: AbortSignal; context?: unknown },
+  ) => string | Promise<string>
 }
 
 /**

@@ -59,4 +59,27 @@ describe('defineAgentTool run-context forwarding (M7)', () => {
 
     await expect(tool.handler({ name: 'ana' })).resolves.toBe('hi ana')
   })
+
+  it('signal is forwarded independently of context (negative: context absent)', async () => {
+    // Negative case: signal should reach the handler even when no context is present.
+    // Proves signal forwarding does not depend on the context field.
+    const controller = new AbortController()
+    let seenSignal: AbortSignal | undefined
+    let seenContext: unknown = 'SENTINEL'
+    const tool = defineAgentTool({
+      name: 'signal_only',
+      description: 'reads signal but no context',
+      inputSchema: z.object({}),
+      handler: (_input, ctx) => {
+        seenSignal = ctx?.signal
+        seenContext = ctx?.context
+        return 'ok'
+      },
+    })
+
+    await tool.handler({}, { signal: controller.signal })
+
+    expect(seenSignal).toBe(controller.signal)
+    expect(seenContext).toBeUndefined()
+  })
 })
