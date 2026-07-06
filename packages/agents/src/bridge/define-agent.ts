@@ -93,7 +93,7 @@ export function isAgentDefinition(value: unknown): value is AgentDefinition {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as Record<PropertyKey, unknown>)[AGENT_BRAND] === true
+    (value as unknown as Record<PropertyKey, unknown>)[AGENT_BRAND] === true
   )
 }
 
@@ -106,11 +106,10 @@ export function isAgentDefinition(value: unknown): value is AgentDefinition {
  */
 function toCompiledTool(tool: CustomTool): CompiledTool {
   // M7 — forward the run-context `ctx` (2nd arg) to the underlying tool so `defineAgent({ context })`
-  // reaches `ctx.context` in the handler (dropping it silently severs the context seam). Older
-  // `@theokit/sdk` types `CustomTool.handler` with a SINGLE arg; theokit's own tools (`defineAgentTool`)
-  // and the adapter's injection call it with a 2nd `ctx`, so bridge the arity at this boundary — the
-  // same `as unknown as` SDK-boundary pattern used elsewhere in the adapter. Runtime-safe: a 1-arg
-  // handler ignores the extra arg; a context-reading tool receives it.
+  // reaches `ctx.context` in the handler (dropping it silently severs the context seam).
+  // `CustomTool.handler` takes `Record<string, unknown>` as input; `CompiledTool.handler` takes the
+  // wider `unknown`. Contravariance on the input parameter prevents direct assignment — `as unknown as`
+  // is the SDK-boundary seam for this widening. Runtime-safe: SDK always passes a plain object for input.
   const handler = tool.handler as unknown as (
     input: unknown,
     ctx?: { signal?: AbortSignal; context?: unknown },

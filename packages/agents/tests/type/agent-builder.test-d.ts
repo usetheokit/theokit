@@ -9,7 +9,11 @@ import { z } from 'zod'
 import type { CustomTool } from '@theokit/sdk'
 
 import { agent, contextualTool } from '../../src/bridge/agent-builder.js'
-import type { AgentDefinition, InferAgentToolNames } from '../../src/bridge/define-agent.js'
+import type {
+  AgentDefinition,
+  InferAgentInput,
+  InferAgentToolNames,
+} from '../../src/bridge/define-agent.js'
 
 // A plain tool (no required context) and a tool that REQUIRES { projectRoot: string }.
 const plainTool: CustomTool = {
@@ -70,4 +74,6 @@ const rootTool = contextualTool(
   const schema = z.object({ q: z.string() })
   const def = agent().input(schema).model('m').build()
   expectTypeOf(def).toExtend<AgentDefinition<typeof schema>>()
+  // DoD 5: InferAgentInput extracts the inferred input shape (used by typed client codegen).
+  expectTypeOf<InferAgentInput<typeof def>>().toEqualTypeOf<{ q: string }>()
 }

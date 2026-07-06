@@ -115,7 +115,7 @@ export interface RuntimeOverrides {
    * handler's `ctx.context` by `buildSdkTools`. Lets a single request override the agent-level
    * `defineAgent({ context })` (mirrors `model`/`cwd`).
    */
-  context?: Record<string, unknown>
+  runContext?: Record<string, unknown>
   /**
    * Per-run plugins (e.g. permission gate selected by request mode). Accepts EITHER
    * named-plugin discovery settings (`{ enabled: [...] }`) OR an array of code `Plugin`
@@ -279,13 +279,14 @@ async function loadSdkRuntime(): Promise<SdkRuntime | null> {
     const sdk = await import('@theokit/sdk')
     const InMemory = sdk.InMemoryConversationStorage
     return {
-      Agent: sdk.Agent as SdkAgentApi,
-      defineTool: sdk.defineTool as SdkRuntime['defineTool'],
+      Agent: sdk.Agent as unknown as SdkAgentApi,
+      defineTool: sdk.defineTool as unknown as SdkRuntime['defineTool'],
       InMemoryConversationStorage: InMemory,
       FileSystemConversationStorage:
         'FileSystemConversationStorage' in sdk ? sdk.FileSystemConversationStorage : InMemory,
     }
-  } catch {
+  } catch (err) {
+    console.warn('[theokit] @theokit/sdk import failed:', err)
     return null
   }
 }
@@ -584,7 +585,7 @@ export function createSdkAgentStream(
   const { parseThinkTags, stripToolDialect } = resolveTextTransformFlags(compiled, overrides)
   // M7 — run-context resolved once per stream: per-run override wins over the agent-level
   // `defineAgent({ context })`; injected into every tool's `ctx.context` by buildSdkTools.
-  const runContext = overrides.context ?? compiled.runContext
+  const runContext = overrides.runContext ?? compiled.runContext
   // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
   // so history persists across the per-round agent create/dispose. Defaults lazily to the
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
@@ -611,83 +612,47 @@ export function createSdkAgentStream(
         }
         return
       }
-      const { Agent, defineTool, InMemoryConversationStorage, FileSystemConversationStorage } = rt
 
-      // M7 — pass the resolved run-context so every tool handler receives it as `ctx.context`,
-      // injected at this adapter layer (theokit owns run-context; no SDK forwarding required).
-      const sdkTools = buildSdkTools(compiledTools, defineTool, overrides.sdkTools, runContext)
+      const { InMemoryConversationStorage, FileSystemConversationStorage } = rt
 
-      // V4-N.1: declared outside the try so `finally` can dispose even when `run.wait()` rejects.
-      let agent: Awaited<ReturnType<typeof Agent.getOrCreate>> | undefined
+      // M7 — pass the resolved run-context so every tool handler receives it as `ctx.context`.
+      const sdkTools = buildSdkTools(compiledTools, rt.defineTool, overrides.sdkTools, runContext)
+      // Wiring triad pillar (c) — M7 run-context metric: observable proof that context injection is active.
+      let runContextSource: string
+      if (overrides.runContext !== undefined) {
+        runContextSource = 'per-run'
+      } else if (compiled.runContext !== undefined) {
+        runContextSource = 'agent-level'
+      } else {
+        runContextSource = 'none'
+      }
+      console.debug('[THEO_AGENT_M7_RUN_CONTEXT]', {
+        source: runContextSource,
+        keys: runContext !== undefined ? Object.keys(runContext) : [],
+      })
+
+      // V4-M/M4: mutate the closure-level `storage` variable so it is shared across rounds
+      // (subsequent calls to this generator reuse the same store — ONE per factory instance).
+      storage ??= newConversationStorage(
+        compiled,
+        InMemoryConversationStorage,
+        FileSystemConversationStorage,
+      )
+
       try {
-        // Project the compiled M8 decorator fields into native Agent.create args.
-        const { options: m8, applied } = assembleM8CreateOptions(compiled)
-        // V4-L.2: merge the per-run cwd into local (preserving any settingSources).
-        if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
-        // V4-L.3: forward the remaining per-request Agent.create surface (absent ⇒ no key).
-        const extra = buildExtraCreateOptions(overrides, compiled)
-        // V4-M/M4: the shared store is cross-round memory (survives per-round dispose); a
-        // `@Checkpoint` filesystem agent gets the durable FS store so resume re-hydrates.
-        storage ??= newConversationStorage(
-          compiled,
-          InMemoryConversationStorage,
-          FileSystemConversationStorage,
-        )
-        if (applied.length > 0) {
-          // Wiring triad — runtime metric: observable proof the decorators fired.
-          console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
-            skills: applied.includes('skills'),
-            context: applied.includes('context'),
-            projectContext: applied.includes('projectContext'),
-          })
-        }
-
-        // V4-M: getOrCreate(sessionId) resumes the shared session so this round sees prior
-        // rounds (M8 fields + per-request extra spread; absent ⇒ no key).
-        agent = await Agent.getOrCreate(sessionId, {
+        yield* streamSdkAgent(rt, compiled, sdkTools, storage, {
           apiKey,
-          model: buildModelSelection(model, reasoningEffort),
-          tools: sdkTools,
-          ...m8,
-          ...extra,
-          conversationStorage: storage,
-        })
-
-        // #44: token streaming in CHRONOLOGICAL ORDER. The SDK streams ALL content updates
-        // (text/tool/thinking) in real time via send's onDelta; run.stream() replays the complete
-        // messages post-completion. Route every content update through onDelta in arrival order so
-        // the merge queue records them interleaved (not all-text-then-all-tools), and consume the
-        // queue CONCURRENTLY with send (the run only resolves after the loop). run.stream() supplies
-        // structural events + the no-onDelta fallback, deduped per-category/callId (isDuplicatedByDelta).
-        const queue = createAsyncQueue<MergeItem>()
-        const { state, onDelta } = createDeltaSink(queue)
-        // Do NOT await send() before draining — onDelta fills the queue in real time during the run;
-        // the consumer yields concurrently. openStream awaits the resolved Run for its post-completion
-        // run.stream(). On send() rejection, openStream throws → pump closes the queue → the awaited
-        // pump re-throws into the outer catch (error event) after any queued deltas have drained.
-        // Step-cap force-close: a ceiling round passes `disableTools` → `tool_choice:"none"` for this send.
-        const sendOptions: SendOptions = { onDelta }
-        if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
-        // (M7 run-context is injected into tool handlers by buildSdkTools above — no SDK seam needed.)
-        const sendPromise = agent.send(message, sendOptions)
-        const openStream = async () => (await sendPromise).stream()
-
-        // Opt-in text-stream transforms (parseThinkTags / stripToolDialect). Both off ⇒ the merged
-        // stream is yielded unchanged (byte-identical) — see applyTextTransforms.
-        const merged = mergeDeltaStream(queue, openStream, runId, state)
-        for await (const event of applyTextTransforms(merged, {
+          model,
+          reasoningEffort,
+          overrides,
           parseThinkTags,
           stripToolDialect,
-        })) {
-          yield event
-        }
-
-        // V4-N.1: the stream's `done` carries zero usage; it is suppressed in mergeDeltaStream and
-        // ONE real-usage `done` is emitted after `run.wait()` (SDK RunResult.usage + cost). Errors
-        // short-circuit it. Exactly-one-terminal on a clean run.
-        if (!state.sawError) {
-          yield realUsageDone(await (await sendPromise).wait(), t0)
-        }
+          sessionId,
+          message,
+          factoryOpts,
+          runId,
+          t0,
+        })
       } catch (err) {
         yield {
           type: 'error',
@@ -695,10 +660,91 @@ export function createSdkAgentStream(
           message: err instanceof Error ? err.message : 'SDK agent error',
           retryable: false,
         }
-      } finally {
-        // V4-N.1: always dispose — covers the new `run.wait()` reject path (LOW-1).
-        await agent?.dispose()
       }
     },
   })
+}
+
+interface StreamSdkAgentOpts {
+  apiKey: string
+  model: string
+  reasoningEffort: string | undefined
+  overrides: RuntimeOverrides
+  parseThinkTags: boolean
+  stripToolDialect: boolean
+  sessionId: string
+  message: string
+  factoryOpts: { disableTools?: boolean } | undefined
+  runId: string
+  t0: number
+}
+
+/**
+ * Inner streaming kernel (G6 extraction): creates the SDK agent, runs the send+stream loop,
+ * and disposes. Errors propagate to the outer generator's catch. The `finally` inside guarantees
+ * disposal even when `run.wait()` rejects (V4-N.1).
+ */
+async function* streamSdkAgent(
+  rt: SdkRuntime,
+  compiled: CompiledAgentOptions,
+  sdkTools: unknown[],
+  storage: ConversationStorageAdapter,
+  opts: StreamSdkAgentOpts,
+): AsyncGenerator<StreamEvent> {
+  const { Agent } = rt
+  const {
+    apiKey,
+    model,
+    reasoningEffort,
+    overrides,
+    parseThinkTags,
+    stripToolDialect,
+    sessionId,
+    message,
+    factoryOpts,
+    runId,
+    t0,
+  } = opts
+
+  // Project the compiled M8 decorator fields into native Agent.create args.
+  const { options: m8, applied } = assembleM8CreateOptions(compiled)
+  if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
+  const extra = buildExtraCreateOptions(overrides, compiled)
+  if (applied.length > 0) {
+    // Wiring triad — runtime metric: observable proof the decorators fired.
+    console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
+      skills: applied.includes('skills'),
+      contextWindow: applied.includes('context'),
+      projectContext: applied.includes('projectContext'),
+    })
+  }
+
+  // V4-N.1: declared before try so `finally` can dispose even when `run.wait()` rejects.
+  const agent = await Agent.getOrCreate(sessionId, {
+    apiKey,
+    model: buildModelSelection(model, reasoningEffort),
+    tools: sdkTools,
+    ...m8,
+    ...extra,
+    conversationStorage: storage,
+  })
+  try {
+    // #44: chronological token streaming via onDelta + merge queue (see createDeltaSink).
+    const queue = createAsyncQueue<MergeItem>()
+    const { state, onDelta } = createDeltaSink(queue)
+    const sendOptions: SendOptions = { onDelta }
+    if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
+    const sendPromise = agent.send(message, sendOptions)
+    const openStream = async () => (await sendPromise).stream()
+    const merged = mergeDeltaStream(queue, openStream, runId, state)
+    for await (const event of applyTextTransforms(merged, { parseThinkTags, stripToolDialect })) {
+      yield event
+    }
+    // V4-N.1: ONE real-usage `done` after run.wait(); errors short-circuit it.
+    if (!state.sawError) {
+      yield realUsageDone(await (await sendPromise).wait(), t0)
+    }
+  } finally {
+    await agent.dispose()
+  }
 }
