@@ -251,12 +251,19 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       'packages/theo/src/server/scan/scan.ts',
       'packages/theo/src/server/scan/manifest.ts',
       'packages/theo/src/server/scan/action-scan.ts',
+      'packages/theo/src/server/scan/agent-scan.ts',
       'packages/theo/src/server/scan/middleware-scan.ts',
       'packages/theo/src/server/scan/ws-scan.ts',
       'packages/theo/src/server/scan/detect-http-methods.ts',
       'packages/theo/src/server/scan/module-loader.ts',
       'packages/theo/src/server/jobs/job-scan.ts',
       'packages/theo/src/server/cron/cron-scan.ts',
+      // Terminal harness — CLI-only render surface (theokit-ai-first M5).
+      // `render-terminal.ts` drives the dev-time `theokit agent <name>` terminal
+      // stream over `node:readline` (approval prompt) + `node:stream` types. It is
+      // never loaded in Workers/browser — the CLI is Node-only by definition, the
+      // same boundary as the build-time scanners above.
+      'packages/theo/src/server/agent/render-terminal.ts',
       // Build-time manifest writers / cron emit
       'packages/theo/src/server/_internal/atomic-write.ts',
       'packages/theo/src/server/_internal/scan-walker.ts',

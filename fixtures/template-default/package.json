@@ -6,6 +6,7 @@
     "@theokit/agents": "workspace:*",
     "@theokit/sdk": "^2.13.0",
     "@theokit/ui": "^0.14.4",
+    "@usetheo/ui": "^0.14.0",
     "lucide-react": "^0.469.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
