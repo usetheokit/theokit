@@ -194,7 +194,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M7 — [ ] Run-context / dependency injection for tools
+### M7 — [x] Run-context / dependency injection for tools
 
 **Objective:** Give agents and their tools a shared, typed **run-context** — set once at the agent (and overridable per-run) and injected into every tool handler — so tool config like `projectRoot` is declared in ONE place. This closes the concrete gap vs the three reference agent-SDKs: ai-sdk injects `context` (`execute(input, { context })`), mastra a `RuntimeContext`, openai-agents-js a `RunContext<Context>` — TheoKit's `@theokit/sdk` `CustomTool.handler` is `(input) => string`, with no context arg. Surfaced dogfooding `examples/code-assistant`, where `projectRoot` is baked into every `@theokit/sdk-tools` factory instead of the agent.
 
@@ -215,7 +215,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M8 — [ ] Fluent agent builder with type-state
+### M8 — [x] Fluent agent builder with type-state
 
 **Objective:** A composable `agent()` builder — `agent().context(...).tool(...).model(...).build()` — that accumulates **type-state** the way the most-loved TS DX does (Zod, tRPC `t.procedure.input().query()`, Hono, Drizzle): a tool whose required context isn't provided is a compile error, tool names accumulate into a union that types the client's tool-parts, and `.build()` only type-checks when the agent is complete. It resolves to the **SAME branded `AgentDefinition`** that `defineAgent` produces — one runtime, N syntaxes (ADR-B1). Completes the Spring-shaped triangle TheoKit already has (decorators + DI + declarative config) with the composable builder the existing shallow `AgentRunner.builder()` never delivered for *definition*.
 
