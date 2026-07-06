@@ -16,6 +16,7 @@ import type {
   Plugin,
   PluginsSettings,
   ProviderRoutingSettings,
+  SendOptions,
   SkillsSettings,
   SystemPromptResolver,
 } from '@theokit/sdk'
@@ -109,6 +110,12 @@ export interface RuntimeOverrides {
   recoverLeakedToolCalls?: boolean
   /** Per-run cwd → `Agent.create({ local: { cwd } })` → `SystemPromptContext.cwd`. */
   cwd?: string
+  /**
+   * M7 — per-run run-context override (`?? compiled.runContext`). Injected into every tool
+   * handler's `ctx.context` by `buildSdkTools`. Lets a single request override the agent-level
+   * `defineAgent({ context })` (mirrors `model`/`cwd`).
+   */
+  context?: Record<string, unknown>
   /**
    * Per-run plugins (e.g. permission gate selected by request mode). Accepts EITHER
    * named-plugin discovery settings (`{ enabled: [...] }`) OR an array of code `Plugin`
@@ -498,9 +505,29 @@ function hasZodInputSchema(schema: unknown): boolean {
 }
 
 /**
+ * M7 — wrap a tool handler so it receives the run-context as `ctx.context`, injected from a closure
+ * over `runContext`. theokit owns the run-context concern (the `defineAgent({ context })` /
+ * `agent().context()` API is theokit's), so it injects it at THIS adapter layer instead of relying
+ * on the SDK to forward it — decoupling the framework from the SDK's tool-call internals. The
+ * incoming `ctx.signal` (from the SDK) is preserved; `context` is set to the agent's run-context.
+ */
+function withRunContext<I>(
+  handler: (
+    input: I,
+    ctx?: { signal?: AbortSignal; context?: unknown },
+  ) => string | Promise<string>,
+  runContext: unknown,
+): (input: I, ctx?: { signal?: AbortSignal; context?: unknown }) => string | Promise<string> {
+  return (input, ctx) => handler(input, { signal: ctx?.signal, context: runContext })
+}
+
+/**
  * Build the SDK tool list: `@Tool`s (Zod `inputSchema`) lowered via `defineTool`; `defineAgentTool`
  * results (already SDK-ready `CustomTool`s with a JSON-Schema `inputSchema`) and any pre-built
  * `sdkTools` appended RAW — must NOT re-run through `defineTool` (V4-Q). Extracted for G6.
+ *
+ * When `runContext` is set, every tool handler is wrapped to receive it as `ctx.context` (M7);
+ * `undefined` ⇒ handlers are passed through unwrapped (byte-identical to pre-M7).
  */
 function buildSdkTools(
   compiledTools: CompiledTool[],
@@ -508,23 +535,32 @@ function buildSdkTools(
     name: string
     description: string
     inputSchema: unknown
-    handler: (input: unknown) => string | Promise<string>
+    handler: (
+      input: unknown,
+      ctx?: { signal?: AbortSignal; context?: unknown },
+    ) => string | Promise<string>
   }) => unknown,
   extraSdkTools: readonly CustomTool[] = [],
+  runContext?: unknown,
 ): unknown[] {
+  const has = runContext !== undefined
   return [
-    ...compiledTools.map(
-      (t) =>
-        hasZodInputSchema(t.inputSchema)
-          ? defineTool({
-              name: t.name,
-              description: t.description,
-              inputSchema: t.inputSchema,
-              handler: t.handler,
-            })
-          : t, // already an SDK-ready CustomTool (JSON-Schema inputSchema) — append raw
+    ...compiledTools.map((t) => {
+      if (hasZodInputSchema(t.inputSchema)) {
+        return defineTool({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+          handler: has ? withRunContext(t.handler, runContext) : t.handler,
+        })
+      }
+      // Already an SDK-ready CustomTool (JSON-Schema inputSchema) — forward RAW (same reference)
+      // unless a run-context must be injected into its handler.
+      return has ? { ...t, handler: withRunContext(t.handler, runContext) } : t
+    }),
+    ...extraSdkTools.map((t) =>
+      has ? { ...t, handler: withRunContext(t.handler, runContext) } : t,
     ),
-    ...extraSdkTools,
   ]
 }
 
@@ -546,6 +582,9 @@ export function createSdkAgentStream(
   // Per-run opt-in text-stream transforms (each overrides the compiled @Agent flag, mirrors `model`):
   // parseThinkTags (M2, <think> extraction), stripToolDialect (theocode#32, leaked-dialect strip).
   const { parseThinkTags, stripToolDialect } = resolveTextTransformFlags(compiled, overrides)
+  // M7 — run-context resolved once per stream: per-run override wins over the agent-level
+  // `defineAgent({ context })`; injected into every tool's `ctx.context` by buildSdkTools.
+  const runContext = overrides.context ?? compiled.runContext
   // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
   // so history persists across the per-round agent create/dispose. Defaults lazily to the
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
@@ -574,7 +613,9 @@ export function createSdkAgentStream(
       }
       const { Agent, defineTool, InMemoryConversationStorage, FileSystemConversationStorage } = rt
 
-      const sdkTools = buildSdkTools(compiledTools, defineTool, overrides.sdkTools)
+      // M7 — pass the resolved run-context so every tool handler receives it as `ctx.context`,
+      // injected at this adapter layer (theokit owns run-context; no SDK forwarding required).
+      const sdkTools = buildSdkTools(compiledTools, defineTool, overrides.sdkTools, runContext)
 
       // V4-N.1: declared outside the try so `finally` can dispose even when `run.wait()` rejects.
       let agent: Awaited<ReturnType<typeof Agent.getOrCreate>> | undefined
@@ -625,10 +666,10 @@ export function createSdkAgentStream(
         // run.stream(). On send() rejection, openStream throws → pump closes the queue → the awaited
         // pump re-throws into the outer catch (error event) after any queued deltas have drained.
         // Step-cap force-close: a ceiling round passes `disableTools` → `tool_choice:"none"` for this send.
-        const sendPromise = agent.send(
-          message,
-          factoryOpts?.disableTools === true ? { onDelta, toolChoice: 'none' } : { onDelta },
-        )
+        const sendOptions: SendOptions = { onDelta }
+        if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
+        // (M7 run-context is injected into tool handlers by buildSdkTools above — no SDK seam needed.)
+        const sendPromise = agent.send(message, sendOptions)
         const openStream = async () => (await sendPromise).stream()
 
         // Opt-in text-stream transforms (parseThinkTags / stripToolDialect). Both off ⇒ the merged

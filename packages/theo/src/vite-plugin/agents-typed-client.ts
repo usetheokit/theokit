@@ -66,7 +66,9 @@ export function generateAgentsDts({
     imports.push(
       `  import type ${alias} from '${importPath(dtsOutPath, projectRoot, agent.filePath)}'`,
     )
-    entries.push(`    '${agent.name}': { input: InferAgentInput<${alias}> }`)
+    entries.push(
+      `    '${agent.name}': { input: InferAgentInput<${alias}>; tools: InferAgentToolNames<${alias}> }`,
+    )
   }
 
   const body =
@@ -78,14 +80,14 @@ export function generateAgentsDts({
 
   return `${FILE_HEADER}
 declare module '@theo/agents' {
-  import type { InferAgentInput } from '@theokit/agents'
+  import type { InferAgentInput, InferAgentToolNames } from '@theokit/agents'
   import type { UseAgentReturn } from 'theokit/client'
 ${importBlock}
   export interface AppAgents ${body}
 
   export function useAgent<K extends keyof AppAgents>(
     name: K,
-  ): UseAgentReturn<AppAgents[K]['input']>
+  ): UseAgentReturn<AppAgents[K]['input'], AppAgents[K]['tools']>
 }
 `
 }
