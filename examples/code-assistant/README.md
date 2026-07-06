@@ -35,9 +35,10 @@ and it pauses for your approval first.
 
 ## Why it's small
 
-A grounded code assistant — file read/list/search/glob + a human-gated writer — is **~2 files, ~55
-lines total**, because the file/search/shell layer is reused from `@theokit/sdk-tools` (don't
-reinvent) and the runtime is `@theokit/sdk` (the harness is an adapter, not a second loop).
+A grounded code assistant — file read/list/search/glob + a human-gated writer — is **2 files, 72
+lines of code** (37 in `assistant.ts`, 35 in `coder.ts`), because the file/search/shell layer is
+reused from `@theokit/sdk-tools` (don't reinvent) and the runtime is `@theokit/sdk` (the harness is
+an adapter, not a second loop).
 
 ## Verified
 
