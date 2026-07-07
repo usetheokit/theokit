@@ -474,7 +474,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M21 — [ ] Separate structuring model (SDK)
+### M21 — [x] Separate structuring model (SDK)
 
 **Objective:** Let `Agent.generateObject` use a cheap fast model for the structured-extraction step while a larger model does the reasoning.
 
@@ -490,7 +490,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M22 — [ ] Skills: inline `createSkill()` + custom directory
+### M22 — [x] Skills: inline `createSkill()` + custom directory
 
 **Objective:** Define skills in TypeScript without a SKILL.md file, and point an agent at a custom skills directory.
 
@@ -506,7 +506,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M23 — [ ] Structured output: multi-schema providers (SDK)
+### M23 — [x] Structured output: multi-schema providers (SDK)
 
 **Objective:** Accept Valibot, ArkType, and raw JSON Schema in `generateObject`/`streamObject`, not only Zod.
 
