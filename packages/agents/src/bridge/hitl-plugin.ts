@@ -42,7 +42,11 @@ export interface HitlWiring {
   /** Push the approval-required event into the agent stream (the translator emits the chunk). */
   emit: (event: ApprovalRequiredEvent) => void
   /** Await the human decision for `approvalId`; resolves true=approve, false=deny (or timeout). */
-  awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions) => Promise<boolean>
+  awaitApproval: (
+    approvalId: string,
+    opts: HumanInTheLoopOptions,
+    toolName: string,
+  ) => Promise<boolean>
 }
 
 /**
@@ -66,7 +70,7 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
           callbackUrl: `approve/${approvalId}`,
           timeoutMs: opts.timeout ?? 300_000,
         })
-        const approved = await wiring.awaitApproval(approvalId, opts)
+        const approved = await wiring.awaitApproval(approvalId, opts, c.name)
         return approved
           ? undefined
           : { block: true, message: `Tool '${c.name}' denied by human approver` }
