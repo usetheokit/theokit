@@ -5,14 +5,12 @@ import {
   ChatThread,
   ChatMessage,
   ChatComposer,
-  ToolCallCard,
   AgentStreaming,
   AgentErrorCard,
   QuickActionChips,
   ContextWindowBar,
-  type Message,
+  type UIMessage,
   type QuickAction,
-  type ToolCallStatus,
 } from '@theokit/ui'
 import {
   EmptyState,
@@ -29,34 +27,22 @@ import { useAgent } from 'theokit/client'
 /**
  * Default scaffold — an Agent Surface, composed entirely from TheoUI.
  *
- *   ChatThread / ChatMessage  → conversation
- *   ToolCallCard              → expandable tool invocations
+ *   ChatThread / ChatMessage  → conversation (ChatMessage auto-dispatches text,
+ *                               tool-call, and reasoning parts of each UIMessage)
  *   AgentStreaming            → streaming indicator
  *   AgentErrorCard            → error display
  *   ChatComposer              → bottom input bar
  *   EmptyState                → first-load screen
  *   ContextWindowBar          → context usage at top
  *   CommandPalette            → ⌘K quick actions
- *   Avatar                    → assistant face in messages
+ *   Avatar                    → assistant/user face in messages
  *   Tooltip                   → hints on icons
  *
  * `useAgent` binds to the `agents/chat.ts` endpoint, consumes the ai-sdk
  * `UIMessageStream`, and handles AbortController cleanup + StrictMode safety.
- * Edit `agents/chat.ts` to pick your model / add tools.
+ * `messages` are the reconstructed ASSISTANT `UIMessage[]`; user turns are tracked
+ * locally and interleaved. Edit `agents/chat.ts` to pick your model / add tools.
  */
-
-type ConversationItem =
-  | { kind: 'message'; id: string; role: 'user' | 'assistant'; content: string; timestamp: string }
-  | {
-      kind: 'tool'
-      id: string
-      tool: string
-      target?: string
-      status: ToolCallStatus
-      output?: string
-      timestamp: string
-    }
-  | { kind: 'error'; id: string; message: string; timestamp: string }
 
 const QUICK_ACTIONS: QuickAction[] = [
   { id: 'summarize', label: 'Summarize this page', icon: Sparkles },
@@ -71,10 +57,11 @@ const COMMAND_ITEMS: CommandItem[] = QUICK_ACTIONS.map((a) => ({
   group: 'Quick actions',
 }))
 
-// Mock context-window usage — replace with real model state.
+// Display-only context-window hint. The agent's real model lives in `agents/chat.ts`
+// (`model: 'openai/gpt-4o-mini'`); wire real token counts from the stream when you need them.
 const CONTEXT_USED = 4_200
 const CONTEXT_TOTAL = 200_000
-const MODEL_NAME = 'mock-llm'
+const MODEL_NAME = 'gpt-4o-mini'
 
 const ASSISTANT_AVATAR = (
   <Avatar size="sm" tone="primary">
@@ -89,7 +76,7 @@ const USER_AVATAR = (
 
 export default function Page() {
   const [composerValue, setComposerValue] = useState('')
-  const [userMessages, setUserMessages] = useState<ConversationItem[]>([])
+  const [userMessages, setUserMessages] = useState<UIMessage[]>([])
   const [paletteOpen, setPaletteOpen] = useState(false)
   const { messages, send, status, reset } = useAgent<{ message: string }>('/api/agents/chat')
 
@@ -105,64 +92,29 @@ export default function Page() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Derive the conversation view from the reconstructed assistant UIMessages
-  // (ai-sdk `UIMessageStream`): text parts → messages, tool parts → tool cards.
-  const items = useMemo<ConversationItem[]>(() => {
-    const ts = new Date().toISOString()
-    const agentItems: ConversationItem[] = []
-    for (const message of messages) {
-      if (message.role !== 'assistant') continue
-      message.parts.forEach((part, i) => {
-        const id = `${message.id}-${i}`
-        if (part.type === 'text') {
-          agentItems.push({
-            kind: 'message',
-            id,
-            role: 'assistant',
-            content: part.text,
-            timestamp: ts,
-          })
-        } else if (part.type === 'dynamic-tool') {
-          agentItems.push({
-            kind: 'tool',
-            id,
-            tool: part.toolName,
-            target:
-              part.input && typeof part.input === 'object'
-                ? Object.entries(part.input as Record<string, unknown>)
-                    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-                    .join(' ')
-                : undefined,
-            status:
-              part.state === 'output-available'
-                ? 'success'
-                : part.state === 'output-error'
-                  ? 'error'
-                  : 'running',
-            output:
-              part.state === 'output-available'
-                ? typeof part.output === 'string'
-                  ? part.output
-                  : JSON.stringify(part.output, null, 2)
-                : part.state === 'output-error'
-                  ? part.errorText
-                  : undefined,
-            timestamp: ts,
-          })
-        }
-      })
+  // Interleave local user turns with the reconstructed assistant UIMessages,
+  // turn by turn. `ChatMessage` renders each message's parts (text/tool/reasoning).
+  const thread = useMemo<UIMessage[]>(() => {
+    const out: UIMessage[] = []
+    const turns = Math.max(userMessages.length, messages.length)
+    for (let i = 0; i < turns; i++) {
+      const user = userMessages[i]
+      const assistant = messages[i]
+      if (user) out.push(user)
+      if (assistant) out.push(assistant)
     }
-    return [...userMessages, ...agentItems]
+    return out
   }, [userMessages, messages])
 
   function handleSubmit(value: string) {
     const trimmed = value.trim()
     if (!trimmed) return
-    const id = `u-${userMessages.length}`
-    setUserMessages((prev) => [
-      ...prev,
-      { kind: 'message', id, role: 'user', content: trimmed, timestamp: new Date().toISOString() },
-    ])
+    const userMessage: UIMessage = {
+      id: `u-${String(userMessages.length)}`,
+      role: 'user',
+      parts: [{ type: 'text', text: trimmed }],
+    }
+    setUserMessages((prev) => [...prev, userMessage])
     send({ message: trimmed })
     setComposerValue('')
   }
@@ -175,11 +127,12 @@ export default function Page() {
       return
     }
     const action = QUICK_ACTIONS.find((a) => a.id === id)
-    if (action) handleSubmit(action.label)
+    // Quick-action labels are strings; only a string can be sent as a prompt.
+    if (action && typeof action.label === 'string') handleSubmit(action.label)
   }
 
   const isStreaming = status === 'streaming'
-  const isEmpty = items.length === 0 && !isStreaming
+  const isEmpty = thread.length === 0 && !isStreaming
   const hasError = status === 'error'
 
   return (
@@ -205,45 +158,13 @@ export default function Page() {
             />
           ) : (
             <ChatThread>
-              {items.map((item) => {
-                if (item.kind === 'message') {
-                  const message: Message = {
-                    id: item.id,
-                    role: item.role,
-                    content: item.content,
-                    timestamp: item.timestamp,
-                    model: item.role === 'assistant' ? MODEL_NAME : undefined,
-                  }
-                  return (
-                    <ChatMessage
-                      key={item.id}
-                      message={message}
-                      avatar={item.role === 'assistant' ? ASSISTANT_AVATAR : USER_AVATAR}
-                    />
-                  )
-                }
-                if (item.kind === 'tool') {
-                  return (
-                    <ToolCallCard
-                      key={item.id}
-                      tool={item.tool}
-                      icon={Wrench}
-                      target={item.target}
-                      status={item.status}
-                      output={item.output}
-                      timestamp={item.timestamp}
-                    />
-                  )
-                }
-                return (
-                  <AgentErrorCard
-                    key={item.id}
-                    kind="model"
-                    title="Agent error"
-                    description={item.message}
-                  />
-                )
-              })}
+              {thread.map((message) => (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  avatar={message.role === 'assistant' ? ASSISTANT_AVATAR : USER_AVATAR}
+                />
+              ))}
               {isStreaming && <AgentStreaming model={MODEL_NAME} />}
             </ChatThread>
           )}
@@ -257,8 +178,8 @@ export default function Page() {
               <AgentErrorCard
                 kind="network"
                 title="Stream ended with an error"
-                description="The connection to the agent endpoint was interrupted. Reset to try again."
-                action={
+                detail="The connection to the agent endpoint was interrupted. Reset to try again."
+                actions={
                   <Button variant="ghost" size="sm" onClick={() => reset()}>
                     Reset
                   </Button>
