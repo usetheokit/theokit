@@ -113,12 +113,12 @@ export async function mountAgent(
     gated && gated.size > 0
       ? {
           gated,
-          awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions) =>
+          awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) =>
             registry.register(approvalId, {
               timeoutMs: opts.timeout ?? 300_000,
               onTimeout: opts.onTimeout ?? 'abort',
-              // M14 — surface the question in GET /approvals (toolName is added when the plugin
-              // wiring forwards it — a follow-up; the listing works with the question today).
+              // M14 — surface toolName + question in GET /approvals (the plugin forwards c.name).
+              toolName,
               question: opts.question,
             }),
         }
