@@ -105,6 +105,8 @@ export type { Sandbox, CodeModeApi, CodeModeConfig, CodeModePermission } from '.
 export { handleChannelWebhook, parseChannelPath, isChannelPath } from './agent/channel-webhook.js'
 export type { ChannelMessage, ChannelWebhookConfig } from './agent/channel-webhook.js'
 // M30 — MCP App `ui://` HTML resources served by the MCP server (rendered in a sandboxed iframe).
+// MCP stdio transport — expose an agent as a stdio MCP server (sibling of the HTTP route).
+export { serveMcpStdio, handleMcpStdioLine, type StdioStreams } from './agent/mcp-stdio.js'
 export {
   defineAppResource,
   buildResourceDescriptors,
