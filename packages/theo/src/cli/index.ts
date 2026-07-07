@@ -82,6 +82,19 @@ cli
     }
   })
 
+cli
+  .command('mcp <agent>', 'Serve an agent as an MCP server over stdio (for desktop MCP clients)')
+  .action(async (agent: string) => {
+    try {
+      const { mcpCommand } = await import('./commands/mcp.js')
+      await mcpCommand(agent)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
+
 cli.command('routes', 'List all routes, actions, and WebSocket endpoints').action(async () => {
   try {
     const { routesCommand } = await import('./commands/routes.js')

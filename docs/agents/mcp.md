@@ -267,6 +267,21 @@ export const appResources = [
 
 
 
+## Serve over stdio — `theokit mcp <agent>` (M16 follow-up)
+
+For a desktop MCP client (e.g. Claude Desktop) that spawns a subprocess and talks over a pipe, serve
+an agent as a **stdio** MCP server — the sibling of the HTTP route, over the same `handleMcpJsonRpc`:
+
+```jsonc
+// claude_desktop_config.json
+{ "mcpServers": { "support": { "command": "theokit", "args": ["mcp", "support"] } } }
+```
+
+`theokit mcp <agent>` reads newline-delimited JSON-RPC from stdin and writes responses to stdout
+(`initialize` / `tools/list` / `resources/list` / `resources/read`). It reuses the framework handler
+— no LLM call, no runtime (a transport). This is the SERVER side; the SDK's MCP *client* stdio
+(consuming external `mcpServers`) is separate and SDK-side. `theokit@0.19.0`.
+
 ## Related
 
 - [Using tools](./using-tools.md) — define custom tools alongside MCP tools

@@ -68,7 +68,7 @@ export async function agentCommand(
  * uses (`cli/commands/dev.ts`) — so a class-decorated `agents/<name>.ts` transpiles identically. No
  * HTTP listen, no service orchestration, silent — just `ssrLoadModule`. Caller MUST `dispose()`.
  */
-async function createAgentSsrLoader(projectRoot: string): Promise<{
+export async function createAgentSsrLoader(projectRoot: string): Promise<{
   load: (p: string) => Promise<Record<string, unknown>>
   dispose: () => Promise<void>
 }> {
