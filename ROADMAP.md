@@ -426,6 +426,214 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
+### M18 — [ ] Tool output shaping (`toModelOutput` / `transform`)
+
+**Objective:** Let a tool return rich data to the app while the model sees a smaller/multimodal representation, and format tool input/output/errors per target (`display` vs `transcript`).
+
+**Definition of done:**
+
+- [ ] `defineAgentTool({ toModelOutput })` — the tool's handler returns rich data; `toModelOutput` maps it to what the model receives (text or multimodal). Proven by a test where the app result ≠ the model-visible result.
+- [ ] `transform({ display?, transcript? })` — formats input/output/errors for UI vs transcript targets; proven by a test asserting distinct rendering per target.
+- [ ] Backward-compatible: tools without these options behave exactly as today.
+
+**Dependencies:** M9 (boundary transforms exist).
+
+**Top risks:** 1. Over-abstraction — keep to two targets (display/transcript), not an open target system (YAGNI). 2. Multimodal shape drift vs the ai-sdk `UIMessage` parts — pin the studied version.
+
+---
+
+### M19 — [ ] Processor pipeline completion (`processInputStream` / `processAPIError`)
+
+**Objective:** Complete the M10 processor surface with the two remaining lifecycle hooks — transform input chunk-by-chunk before the model, and intercept LLM API errors for custom retry/fallback.
+
+**Definition of done:**
+
+- [ ] `createToolHooksPlugin({ processInputStream })` (or a sibling factory) — transforms streaming input before it reaches the model; proven by a test mutating a chunked input.
+- [ ] `processAPIError({ error, attempt })` hook — fires on LLM API errors (429/5xx); proven by a test simulating 2 rate-limit errors that the hook retries before succeeding.
+- [ ] Composes with the existing M10 hooks; inert when not provided.
+
+**Dependencies:** M10.
+
+**Top risks:** 1. `processAPIError` overlaps the SDK's own retry/backoff — scope it to app-level fallback, not a second retry loop. 2. Streaming input mutation races — pass frozen chunks.
+
+---
+
+### M20 — [ ] HITL custom approval payload
+
+**Objective:** Allow the approver to attach a custom payload (comments, extra fields) to an approval decision, beyond `approved: bool + reason?`.
+
+**Definition of done:**
+
+- [ ] `POST /api/agents/<name>/approve/<id>` accepts an optional `payload` object; the tool's denial/approval result surfaces it to the model.
+- [ ] The `approval_required` event + `ApprovalRegistry.list()` carry a declared `payloadSchema` (optional) so the UI knows what to collect.
+- [ ] Backward-compatible: `{ approved, reason? }` still works.
+
+**Dependencies:** M14.
+
+**Top risks:** 1. Payload becomes an unvalidated free-for-all — accept an optional Zod schema per gated tool. 2. Payload size — cap and document.
+
+---
+
+### M21 — [ ] Separate structuring model (SDK)
+
+**Objective:** Let `Agent.generateObject` use a cheap fast model for the structured-extraction step while a larger model does the reasoning.
+
+**Definition of done:**
+
+- [ ] `generateObject({ structuringModel })` — when set, the synthetic `output` tool call runs on `structuringModel`; proven by a golden test asserting two distinct model ids in the run.
+- [ ] Absent ⇒ today's single-model behavior (backward-compatible).
+- [ ] Shipped in `@theokit/sdk` (SDK API — publish train).
+
+**Dependencies:** M14 (errorStrategy shipped in the same `generateObject` surface).
+
+**Top risks:** 1. Two-model coordination cost > benefit for small schemas — document when to use. 2. SDK publish dependency — the consumer sees it only after publish.
+
+---
+
+### M22 — [ ] Skills: inline `createSkill()` + custom directory
+
+**Objective:** Define skills in TypeScript without a SKILL.md file, and point an agent at a custom skills directory.
+
+**Definition of done:**
+
+- [ ] `createSkill({ name, description, instructions })` — a code-defined skill usable alongside filesystem skills; proven by a test enabling one.
+- [ ] `defineAgent({ skillsDir })` — the agent discovers skills from a custom directory instead of `.theokit/skills/`; proven by a test.
+- [ ] Both compose with the M13 per-request resolver.
+
+**Dependencies:** M13.
+
+**Top risks:** 1. Two sources of truth (code + filesystem) — document precedence. 2. YAGNI — SKILL.md covers most cases; keep the inline API minimal.
+
+---
+
+### M23 — [ ] Structured output: multi-schema providers (SDK)
+
+**Objective:** Accept Valibot, ArkType, and raw JSON Schema in `generateObject`/`streamObject`, not only Zod.
+
+**Definition of done:**
+
+- [ ] A schema normalizer converts Valibot/ArkType/JSON-Schema to the internal JSON-Schema the synthetic `output` tool uses; proven by a golden test per provider.
+- [ ] Zod stays the default and the documented recommendation.
+- [ ] Shipped in `@theokit/sdk`.
+
+**Dependencies:** M14.
+
+**Top risks:** 1. Each provider's validation semantics differ — keep parse-failure handling uniform (reuse M14 `errorStrategy`). 2. Low demand (Zod is the standard) — thin adapter, no deep coupling.
+
+---
+
+### M24 — [ ] MCP follow-ups: dynamic toolsets + registries + `requireToolApproval`
+
+**Objective:** Per-request MCP credentials, pre-wired registry integrations, and tool-approval propagation over MCP.
+
+**Definition of done:**
+
+- [ ] `@MCP` accepts a resolver `(ctx) => McpServerConfig` — different MCP creds per request (multi-tenant); proven by a test where two callers get different configs.
+- [ ] Helper(s) to connect a known MCP registry (at least one: mcp.run or Composio) via a documented config.
+- [ ] `requireToolApproval` propagated to MCP tools — a gated MCP tool routes through the M14 approval flow; proven by a test.
+
+**Dependencies:** M16 (MCP serving), M14 (approval flow).
+
+**Top risks:** 1. Per-request MCP connections are expensive — pool/reuse. 2. Registry APIs churn — pin one, document the rest as manual.
+
+---
+
+### M25 — [ ] Multi-agent: background execution + task-completion scoring
+
+**Objective:** Run a sub-agent without blocking the supervisor (`streamUntilIdle`), and validate a sub-agent's result with an injected scorer that can inject feedback for iteration.
+
+**Definition of done:**
+
+- [ ] `delegate(SubAgent, msg, { background: true })` — returns a handle the supervisor polls/awaits later; proven by a test where the supervisor continues before the sub-agent finishes.
+- [ ] `onDelegationComplete` (M12) composes with an injected `scorer` — the scorer returns pass/score+feedback; a failing score re-delegates with the feedback; proven by a test.
+- [ ] No new orchestration engine (ADR 0038/0040 line): drives the EXISTING `delegate`, no second loop, no new store.
+
+**Dependencies:** M12.
+
+**Top risks:** 1. Background execution edges toward a parallel runtime — keep it a thin async wrapper over `delegate`, not a scheduler. 2. Scorer LLM cost — make it opt-in.
+
+---
+
+### M26 — [ ] Workflows as tools (ADR-0041)
+
+**Objective:** Wrap an SDK `Workflow` as a `CustomTool` the agent can invoke — NOT a framework workflow engine (`packages/workflows/` stays G13-forbidden; the engine is SDK-side).
+
+**Definition of done:**
+
+- [ ] `createWorkflowTool(workflow, { name, description })` — thin adapter exposing an SDK `Workflow` as a tool; proven by a test with an injected fake workflow.
+- [ ] The workflow engine is consumed from `@theokit/sdk`, never reimplemented in `packages/`.
+- [ ] Fails clearly if the SDK does not expose `Workflow`.
+
+**Dependencies:** SDK exposing a `Workflow` primitive.
+
+**Top risks:** 1. Temptation to build a framework workflow engine — G13-forbidden; the adapter only wraps. 2. SDK `Workflow` API stability — pin the studied version.
+
+---
+
+### M27 — [ ] Channels: Slack / Discord / Telegram + webhook routes (ADR-0041)
+
+**Objective:** Auto-generate webhook HTTP routes per messaging platform with signature validation, wiring the existing SDK gateway packages into the app's HTTP surface.
+
+**Definition of done:**
+
+- [ ] `POST /api/agents/<name>/channels/<platform>/webhook` auto-generated for configured platforms; proven by a test posting a signed payload.
+- [ ] Signature validation per platform (reject invalid signatures); proven by a negative-case test.
+- [ ] Wires the SDK gateway packages (e.g. `@theokit/gateway-telegram`) — does not reimplement the gateway.
+
+**Dependencies:** M15 (HTTP agent exposure pattern).
+
+**Top risks:** 1. Per-platform signature schemes churn — isolate each in its own validator. 2. Scope/maintenance cost (G13) — start with the platforms the SDK gateway already supports.
+
+---
+
+### M28 — [ ] SDK Agents wrappers (Claude / OpenAI / Cursor) (ADR-0041)
+
+**Objective:** Expose third-party agent SDKs behind a uniform `CustomTool` surface (like M17 ACP), so a TheoKit agent can delegate to them — the runtime stays theirs, TheoKit only wires.
+
+**Definition of done:**
+
+- [ ] `createVendorAgentTool({ vendor, ... })` for at least one vendor (Claude Agent SDK) — wraps the vendor SDK as a tool with `resume` support via the vendor's session id; proven by a test with an injected fake vendor client.
+- [ ] The vendor runtime is consumed, never reimplemented.
+- [ ] Optional per-vendor packages under `@theokit/agent-*` if they carry vendor deps (never in core).
+
+**Dependencies:** M17 (the coding-agent-as-tool pattern).
+
+**Top risks:** 1. Vendor SDK deltas — thin wrapper, own package per vendor for dep isolation. 2. Overlap with ACP (M17) — reuse the client pattern.
+
+---
+
+### M29 — [ ] Code mode sandbox (`createCodeMode`) (ADR-0041)
+
+**Objective:** A sandboxed code-execution tool — the agent composes tools in code executed in an isolation boundary — extending the M17 subprocess pattern with security isolation.
+
+**Definition of done:**
+
+- [ ] `createCodeMode({ tools, sandbox })` — returns a tool that runs agent-authored code against a restricted API in a sandbox; proven by a test running safe code and rejecting a filesystem escape.
+- [ ] A required permission/isolation gate (no default-allow for fs/network) — mirrors M17 `onPermissionRequest`.
+- [ ] Documented security boundary + threat model.
+
+**Dependencies:** M17 (subprocess/permission pattern).
+
+**Top risks:** 1. Sandbox escapes — the whole value is isolation; use a vetted sandbox (not a hand-rolled one). 2. Security-review gate before shipping (Rule: security never sacrificed).
+
+---
+
+### M30 — [ ] MCP Apps: iframe UIs (`ui://` resources) (ADR-0041)
+
+**Objective:** MCP tools that carry `ui://` resource HTML rendered in a sandboxed iframe — a richer MCP tool surface (formerly OUT_OF_SCOPE, re-scoped by owner).
+
+**Definition of done:**
+
+- [ ] `appResources` on the MCP server (M16) — a tool can declare a `ui://` HTML resource; the server serves it.
+- [ ] The HTML renders in a **sandboxed** iframe with a guest API (`callServerTool`, `sendMessage`); proven by a test asserting the sandbox attributes + message bridge.
+- [ ] Security: the iframe is sandboxed by default; the guest API is capability-scoped.
+
+**Dependencies:** M16 (MCP serving).
+
+**Top risks:** 1. iframe sandbox escape / XSS — sandbox attributes + CSP are load-bearing. 2. Low demand outside a Studio-like host — ship minimal, document the intended host.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
