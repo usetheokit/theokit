@@ -522,7 +522,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M24 — [ ] MCP follow-ups: dynamic toolsets + registries + `requireToolApproval`
+### M24 — [x] MCP follow-ups: dynamic toolsets + registries + `requireToolApproval`
 
 **Objective:** Per-request MCP credentials, pre-wired registry integrations, and tool-approval propagation over MCP.
 
