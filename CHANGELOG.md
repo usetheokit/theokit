@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.17.0] - 2026-07-07
+
+### Added
+
 - **M21 / M22 / M23 — via `@theokit/sdk@2.20.0` (SDK publish train).** The three SDK-side milestones ship in `@theokit/sdk` 2.20.0, now the consumed floor (`>=2.20.0`). **M21** — `Agent.generateObject({ structuringModel })`: a two-model reason→structure flow (`model` reasons in free text, `structuringModel` extracts the schema object), validated E2E against a real OpenRouter run producing `{"capital":"Paris","country":"France"}`. **M22** — `createSkill({ name, description, instructions })` inline code skills + `SkillsSettings.skillsDir` / `.inline` (custom dir + code-defined skills; inline overrides file on name conflict). **M23** — `normalizeSchema()`: Zod (default) / JSON Schema / ArkType / Valibot → the internal JSON Schema. 12 SDK unit + golden tests; SDK typecheck + biome clean. (M21, M22, M23)
 - **M24 MCP follow-ups — `@theokit/agents` (ADR-0041):** three framework-side helpers layered over the `@MCP` config (the SDK still owns MCP server execution via `Agent.create({ mcpServers })`). `resolveMcpServers(selection, ctx)` — a per-request resolver so multi-tenant apps hand different MCP credentials to different callers (a static `McpServersMap` OR `(ctx) => McpServersMap`, mirroring the M13 skills resolver; fails fast on a non-object return). `mcpRegistry({ registry, apiKey, apps?/profile? })` — builds a server config for a known registry (**Composio** via `@composio/mcp`, **mcp.run** via `@mcp.run/cli`; the key stays in the server `env`, never logged; fails fast on an unknown registry). `mcpToolApprovals(specs)` — marks MCP tools for approval (`requireToolApproval`), producing the exact `Record<toolName, HumanInTheLoopOptions>` shape the M14 `defineAgent({ approvals })` map consumes, so a gated MCP tool routes through the same (E2E-proven, M20) HITL flow; a bare string is `{ question }` shorthand. 9 unit tests (static/function resolution, multi-tenant divergence, non-object rejection, Composio + mcp.run configs, unknown-registry fail-fast, approval-entry shape); typecheck + eslint clean. (M24)
 - **M29 Code-mode sandbox — `theokit` (ADR-0041):** `createCodeMode({ tools, sandbox, onPermissionRequest, name?, description? })` returns a `CustomTool` that lets the agent compose the available tools **in code** run inside an isolation boundary. The boundary (`sandbox`) is **injected** — TheoKit ships no VM and adds no sandbox dependency to core (same posture as the injected deploy adapter / M17 transport); the app supplies a vetted engine (QuickJS-WASM / isolated-vm / a locked-down worker — never `node:vm`, which is not a security boundary). TheoKit owns the two framework-level guarantees: the **restricted API** (only declared tools are reachable from the code — no `fs`/`process`/`require`/network leak) and the **mandatory permission gate** (every tool call passes `onPermissionRequest` first; NO default-allow — fails fast if omitted, mirroring M17; a denied call throws `CodeModePermissionDeniedError`). Documented security boundary + threat model in [`docs/agents/code-mode.md`](docs/agents/code-mode.md) (responsibility split, vetted-sandbox requirement, pre-ship security gate). 5 tests (missing-permission fail-fast, safe permitted call, denied-tool block, filesystem-escape rejection, custom name); typecheck + eslint clean. (M29)
