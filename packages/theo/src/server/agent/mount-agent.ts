@@ -117,6 +117,9 @@ export async function mountAgent(
             registry.register(approvalId, {
               timeoutMs: opts.timeout ?? 300_000,
               onTimeout: opts.onTimeout ?? 'abort',
+              // M14 — surface the question in GET /approvals (toolName is added when the plugin
+              // wiring forwards it — a follow-up; the listing works with the question today).
+              question: opts.question,
             }),
         }
       : undefined
