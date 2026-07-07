@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.19.0] - 2026-07-07
+
+### Added
+
 - **MCP stdio transport — `theokit mcp <agent>` — `theokit` (M16 follow-up).** Expose a scanned agent as an MCP server over **stdio** (the sibling of the M16 `POST /api/agents/<name>/mcp` HTTP route), so a desktop MCP client (e.g. Claude Desktop) can spawn `theokit mcp support` and speak newline-delimited JSON-RPC over the pipe. `serveMcpStdio` / `handleMcpStdioLine` reuse the framework's OWN `handleMcpJsonRpc` (`initialize` / `tools/list` / `resources/list` / `resources/read`, including per-agent `appResources`); a malformed line returns a `-32700` envelope (never throws). **Scope note:** this is the SERVER-side stdio TRANSPORT — it reuses the framework handler (no LLM call, no runtime, G2), consistent with the M16 HTTP route being framework-side. The SDK's MCP CLIENT stdio (consuming external `mcpServers` via command/args) stays SDK-side per ADR-0040; if the owner intends the server exposure to also move SDK-side, it can (it is a pure transport over `handleMcpJsonRpc`). 8 tests (stdio round-trip, resources, parse-error, blank-line, loop, command routing + not-found). (M16)
 
 ### Changed
