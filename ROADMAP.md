@@ -602,7 +602,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M29 — [ ] Code mode sandbox (`createCodeMode`) (ADR-0041)
+### M29 — [x] Code mode sandbox (`createCodeMode`) (ADR-0041)
 
 **Objective:** A sandboxed code-execution tool — the agent composes tools in code executed in an isolation boundary — extending the M17 subprocess pattern with security isolation.
 

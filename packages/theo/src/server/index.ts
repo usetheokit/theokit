@@ -98,6 +98,9 @@ export type { AcpToolConfig } from './agent/acp-tool.js'
 // M28 — third-party agent SDK (Claude/OpenAI/Cursor) as a tool (vendor runtime stays theirs).
 export { createVendorAgentTool } from './agent/vendor-agent-tool.js'
 export type { VendorAgentClient, VendorAgentToolConfig } from './agent/vendor-agent-tool.js'
+// M29 — code-mode sandbox: agent composes tools in code run inside an INJECTED isolation boundary.
+export { createCodeMode, CodeModePermissionDeniedError } from './agent/code-mode.js'
+export type { Sandbox, CodeModeApi, CodeModeConfig, CodeModePermission } from './agent/code-mode.js'
 // M27 — channel webhook routes (Slack/Telegram/Discord) with per-platform signature validation.
 export { handleChannelWebhook, parseChannelPath, isChannelPath } from './agent/channel-webhook.js'
 export type { ChannelMessage, ChannelWebhookConfig } from './agent/channel-webhook.js'
