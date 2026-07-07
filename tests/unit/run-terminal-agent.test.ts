@@ -45,7 +45,7 @@ function captureStdout() {
 
 /** A fake registry with spies — the wiring test asserts on resolve() without a live pause. */
 function fakeRegistry() {
-  return { register: vi.fn(), resolve: vi.fn().mockReturnValue(true) }
+  return { register: vi.fn(), resolve: vi.fn().mockReturnValue(true), list: vi.fn(() => []) }
 }
 
 const GATED = {
