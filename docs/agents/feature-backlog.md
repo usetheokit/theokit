@@ -29,6 +29,18 @@ Os gaps P1/P2 abaixo foram convertidos nos milestones **M9–M17** do roadmap e 
 
 Validado E2E do registry público (9/9 exports + smoke funcional). Detalhe por milestone nas tabelas.
 
+## ✅ Release M18–M30 — TODOS os DEFERRED fechados (2026-07-07)
+
+Os 13 milestones **M18–M30** foram implementados, validados (E2E OpenRouter onde tocam o modelo) e **publicados no npm**:
+
+| Pacote | Versão | Milestones |
+|---|---|---|
+| `theokit` | **0.17.0** | M18, M20, M26, M27, M28, M29, M30 |
+| `@theokit/agents` | **0.32.0** | M19, M24, M25 (+ fix de segurança HITL `kind:'general'`) |
+| `@theokit/sdk` | **2.20.0** | M21, M22, M23 |
+
+PR #88 merged develop→main; tag + GitHub release `theokit@0.17.0`. **Não resta nenhum gap `DEFERRED` de paridade.**
+
 ## 🗺️ Todos os DEFERRED → milestones M18–M30 (ADR-0041, força total 2026-07-07)
 
 Por decisão do dono, **todos** os gaps `DEFERRED` (+ os `OUT_OF_SCOPE`, re-escopados via `ADR-0041`) viraram milestones no `ROADMAP.md`:
@@ -49,7 +61,7 @@ Por decisão do dono, **todos** os gaps `DEFERRED` (+ os `OUT_OF_SCOPE`, re-esco
 | **M29** | Code mode sandbox (`createCodeMode`) |
 | **M30** | MCP Apps (iframe `ui://` UIs) |
 
-As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um SDK, reimplementar o loop/orchestrator, e abstração própria de provider. Os itens abaixo mantêm a disposição `DEFERRED` no texto histórico das tabelas mas estão **PLANNED** nos milestones acima.
+As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um SDK, reimplementar o loop/orchestrator, e abstração própria de provider. Todos esses milestones estão agora **DONE e publicados** (ver seção de release acima) — as tabelas por domínio abaixo foram atualizadas de `DEFERRED` → `DONE (Mxx)`.
 
 ---
 
@@ -70,10 +82,10 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
 | `beforeToolCall` / `afterToolCall` hooks | P2 | **DONE (M10)** | `createToolHooksPlugin({ beforeToolCall, afterToolCall })` sobre `pre/post_tool_call` do SDK. `beforeToolCall` pode VETAR. `@theokit/agents@0.31.0`. |
-| `toModelOutput` — controlar o que o modelo vê | P3 | DEFERRED | Tool retorna dados ricos para o app; modelo recebe representação menor ou multimodal. Adiar até haver demanda concreta. |
-| `transform` — formatar payloads para UI e transcritos | P3 | DEFERRED | Formata input/output/erros para targets `display` e `transcript`. Complexo; adiar. |
+| `toModelOutput` — controlar o que o modelo vê | P3 | **DONE (M18)** | `defineAgentTool({ handler, toModelOutput })` — handler retorna dados ricos `R`; `toModelOutput(R)` mapeia para a string que o modelo vê. Validado E2E OpenRouter. `theokit@0.17.0`. |
+| `transform` — formatar payloads para UI e transcritos | P3 | **DONE (M18)** | `transform: { display?, transcript? }` + `applyTransform(tool, result, target)` — formata o resultado rico por target (nunca no wire do modelo). `theokit@0.17.0`. |
 | Agentes como tools (padrão supervisor) | P2 | DONE | `defineSubAgent` + `createSquad` em `@theokit/sdk/a2a`. Ver `docs/agents/multi-agent.md`. |
-| Workflows como tools | P3 | DEFERRED | Desbloquear depois que workflows existirem no TheoKit. |
+| Workflows como tools | P3 | **DONE (M26)** | `createWorkflowTool(workflow, { name, description })` — thin adapter sobre um `Workflow` do SDK (engine fica no SDK; `packages/workflows/` continua G13-forbidden). `theokit@0.17.0`. |
 
 ---
 
@@ -82,9 +94,9 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
 | `skills.enabled` não filtra de verdade | P2 | **DONE (verificado — não era bug)** | Verificação M13: o SDK filtra por `SkillsSettings.enabled` e `compile-skills` mapeia `include → enabled`. O `void _enabled` documentado não existia no código. |
-| API inline `createSkill()` | P3 | DEFERRED | Mastra permite definir skills em código sem SKILL.md. SKILL.md filesystem é suficiente para a maioria. |
+| API inline `createSkill()` | P3 | **DONE (M22)** | `createSkill({ name, description, instructions })` — skill code-defined sem SKILL.md, via `SkillsSettings.inline` (inline vence file no conflito de nome). `@theokit/sdk@2.20.0`. |
 | Seleção dinâmica de skills por request | P2 | **DONE (M13)** | `defineAgent({ skills: (ctx) => string[] })` resolvido per-request contra o run-context via `resolveEnabledSkills` no mount. `@theokit/agents@0.31.0` + `theokit@0.16.0`. |
-| Custom skills directory via opção do agente | P3 | DEFERRED | `discoverSkills(dir)` público; contornável com `systemPrompt` resolver. |
+| Custom skills directory via opção do agente | P3 | **DONE (M22)** | `SkillsSettings.skillsDir` — descobre skills de um diretório custom em vez de `.theokit/skills`. `@theokit/sdk@2.20.0`. |
 
 ---
 
@@ -103,8 +115,8 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 |---|---|---|---|
 | `onDelegationStart` / `onDelegationComplete` hooks | P2 | **DONE (M12)** | Hooks em `delegate()` — supervisor reescreve input antes / transforma resultado depois. `abortSignal` já propagava. `@theokit/agents@0.31.0`. Doc em `multi-agent.md`. |
 | `messageFilter` — filtrar histórico antes da delegação | P2 | **N/A arquitetural** | O modelo subagent-as-tool (input único, sem histórico do pai) não expõe histórico para filtrar — nem no framework nem no SDK squad. Diferença arquitetural, não gap. |
-| Background task execution (subagent assíncrono) | P3 | DEFERRED | `streamUntilIdle()`. Adiar até haver demanda. |
-| Task completion scoring / LLM-as-judge | P3 | DEFERRED | Validar resultado do subagente com scorer customizado. |
+| Background task execution (subagent assíncrono) | P3 | **DONE (M25)** | `delegateBackground(subAgent, msg)` → handle `{ wait(), settled() }` não-bloqueante (thin async wrapper sobre `delegate`, sem scheduler). `@theokit/agents@0.32.0`. |
+| Task completion scoring / LLM-as-judge | P3 | **DONE (M25)** | `delegateWithScoring(subAgent, msg, { scorer, maxRounds })` — re-delega com o feedback do scorer até passar ou esgotar rounds. `@theokit/agents@0.32.0`. |
 
 ---
 
@@ -112,8 +124,8 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Valibot / ArkType / JSON Schema como schema providers | P3 | DEFERRED | TheoKit só suporta Zod (padrão de facto). |
-| Separate structuring model | P3 | DEFERRED | Workaround: duas chamadas manuais. |
+| Valibot / ArkType / JSON Schema como schema providers | P3 | **DONE (M23)** | `normalizeSchema()` — Zod (default) / JSON Schema (passthrough) / ArkType (`.toJsonSchema()`) / Valibot (peer opcional) → JSON Schema interno. Zod continua o recomendado. `@theokit/sdk@2.20.0`. |
+| Separate structuring model | P3 | **DONE (M21)** | `generateObject({ structuringModel })` — `model` raciocina (fase 1), `structuringModel` extrai a estrutura (fase 2). Validado E2E OpenRouter. `@theokit/sdk@2.20.0`. |
 | `errorStrategy` — controlar o que acontece em falha de validação | P2 | **DONE (M14)** | `Agent.generateObject({ errorStrategy: 'throw' \| 'return-partial' \| 'return-raw' })`. `return-partial` salva os campos que validam. `@theokit/sdk@2.19.0`. |
 
 ---
@@ -124,7 +136,7 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 |---|---|---|---|
 | HITL no `defineAgent` / fluent builder | P2 | **DONE (M14)** | `defineAgent({ approvals: { <tool>: { question, timeout?, onTimeout? } } })` reusa a fiação HITL do endpoint. Falha-fast se a aprovação nomeia tool inexistente. `@theokit/agents@0.31.0`. |
 | Listagem de aprovações pendentes entre runs | P2 | **DONE (M14)** | `GET /api/agents/<name>/approvals` — o `ApprovalRegistry` rastreia metadata (`toolName`, `question`, `expiresAt`) via `list()`. `theokit@0.16.0`. |
-| Approval payload customizado | P3 | DEFERRED | TheoKit suporta `approved: bool + reason?`. Adiar. |
+| Approval payload customizado | P3 | **DONE (M20)** | `POST /approve/<id>` aceita `{ approved, reason?, payload? }` (payload cap 16 KiB); negação injeta reason+payload no veto → modelo self-corrige. `payloadSchema` opcional no evento/`list()`. Validado E2E. `theokit@0.17.0` + `@theokit/agents@0.32.0`. |
 
 ---
 
@@ -145,8 +157,8 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
 | Custom processor pipeline | P2 | **DONE (M10)** | `createToolHooksPlugin` expõe tool hooks (`beforeToolCall`/`afterToolCall`) + LLM-turn hooks (`beforeLLMCall`/`afterLLMCall`) sobre os hooks nativos do SDK (`pre/post_tool_call`, `pre/post_llm_call`). `@theokit/agents@0.31.0`. |
-| `processInputStream` — modificar input chunk a chunk | P3 | DEFERRED | Adiar até ter demanda. |
-| `processAPIError` — interceptar erros de API do LLM | P2 | DEFERRED | O SDK já tem retry/backoff de provider; um hook dedicado de erro de API fica adiado até haver demanda concreta. |
+| `processInputStream` — modificar input (M19: `processInput`) | P3 | **DONE (M19)** | `createToolHooksPlugin({ processInput })` sobre o `pre_user_send` do SDK — injeta contexto derivado antes do modelo (o SDK não expõe mutação de prompt raw a plugins; teto honesto documentado). Validado E2E. `@theokit/agents@0.32.0`. |
+| `processAPIError` — interceptar erros de API do LLM | P2 | **DONE (M19)** | `runWithApiErrorHandling` / `createApiErrorHandler` — sibling factory app-level que re-invoca o run do SDK no erro (o SDK é dono do retry interno; G2 preservado). Validado E2E (2 runs reais falhos → sucesso). `@theokit/agents@0.32.0`. |
 
 ---
 
@@ -164,8 +176,8 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Adaptadores de canal (Slack, Discord, Telegram) | P3 | DEFERRED | Gateway package existe no SDK, não integrado ao framework. Não é core do "app que o agente mora". |
-| Webhook routes auto-geradas por plataforma | P3 | DEFERRED | Adiar até channels serem core. |
+| Adaptadores de canal (Slack, Discord, Telegram) | P3 | **DONE (M27)** | Validadores de assinatura por plataforma: `slack()` (reuso), `telegram()` (secret-token), `discord()` (Ed25519 via Web Crypto). `theokit@0.17.0`. |
+| Webhook routes auto-geradas por plataforma | P3 | **DONE (M27)** | `handleChannelWebhook` serve `POST /api/agents/<name>/channels/<platform>/webhook` — valida assinatura (401 no inválido) antes do handoff `onMessage` (onde o app fia o gateway do SDK). `theokit@0.17.0`. |
 
 ---
 
@@ -173,7 +185,7 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Sandbox de execução de código (`createCodeMode`) | P3 | DEFERRED | `createShellTool` do `@theokit/sdk-tools` é o mais próximo, sem sandbox. Parcialmente coberto pelo M17 (coding agents via `createACPTool`). |
+| Sandbox de execução de código (`createCodeMode`) | P3 | **DONE (M29)** | `createCodeMode({ tools, sandbox, onPermissionRequest })` — API restrita (só tools declaradas) + gate de permissão obrigatório (sem default-allow); a isolação é um `sandbox` **injetado** (app fornece engine vetado — nunca `node:vm`). Threat model em `docs/agents/code-mode.md`. `theokit@0.17.0`. |
 
 ---
 
@@ -182,10 +194,10 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
 | `MCPServer` — expor agentes TheoKit como servidor MCP | P2 | **DONE (M16)** | `buildMcpToolDescriptors`/`mcpServerInfo` + `POST /api/agents/<name>/mcp` (JSON-RPC: `initialize`, `tools/list`). `@theokit/agents@0.31.0` + `theokit@0.16.0`. |
-| Dynamic toolsets por request (`listToolsets()`) | P2 | TODO | Credenciais MCP diferentes por request (multi-tenant). Follow-up — o serving atual expõe tools estáticas. |
-| Integrações com registries MCP | P3 | DEFERRED | Klavis/mcp.run/Composio/Smithery. Usuário instala servidores manualmente. |
-| MCP Apps (UIs iframe em MCP tools) | P3 | OUT_OF_SCOPE | Específico do Mastra Studio. |
-| `requireToolApproval` propagado via MCP | P3 | DEFERRED | Aprovação de tool via protocolo MCP. Adiar. |
+| Dynamic toolsets por request (`listToolsets()`) | P2 | **DONE (M24)** | `resolveMcpServers(selection, ctx)` — resolver de config MCP per-request (creds multi-tenant), espelha o resolver de skills M13. `@theokit/agents@0.32.0`. |
+| Integrações com registries MCP | P3 | **DONE (M24)** | `mcpRegistry({ registry, apiKey, apps?/profile? })` — config para Composio (`@composio/mcp`) e mcp.run (`@mcp.run/cli`); key no `env`. `@theokit/agents@0.32.0`. |
+| MCP Apps (UIs iframe em MCP tools) | P3 | **DONE (M30, re-escopado ADR-0041)** | `defineAppResource` (`ui://` HTML) servido por `resources/list`+`resources/read`; `mountMcpApp` renderiza em iframe **sandboxed** (`allow-scripts`, sem `allow-same-origin`) + guest API cap-scoped. `theokit@0.17.0`. |
+| `requireToolApproval` propagado via MCP | P3 | **DONE (M24)** | `mcpToolApprovals(specs)` → entradas `HumanInTheLoopOptions` que o `defineAgent({ approvals })` do M14 consome — tool MCP gated roteia pelo fluxo HITL (E2E-provado). `@theokit/agents@0.32.0`. |
 
 ---
 
@@ -202,7 +214,7 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Wrappers para Claude Agent SDK, OpenAI Agents SDK, Cursor SDK | P3 | DEFERRED | O `@theokit/sdk` é o runtime próprio. Não é core da proposta. |
+| Wrappers para Claude Agent SDK, OpenAI Agents SDK, Cursor SDK | P3 | **DONE (M28, re-escopado ADR-0041)** | `createVendorAgentTool({ vendor, client, onSession? })` — expõe um SDK de agente de terceiro como `CustomTool` (runtime deles; client injetado, sem dep de vendor no core). Resume via session id. `theokit@0.17.0`. |
 
 ---
 
@@ -222,6 +234,7 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 | `docs/agents/a2a.md` | ✅ | M15 — agent cards `/.well-known/`, `createA2ATool` client + auth |
 | `docs/agents/processors.md` | ✅ | M10 — `createToolHooksPlugin` tool + LLM-turn hooks, veto |
 | `docs/agents/acp.md` | ✅ | M17 — `createACPTool` + `AcpClient`, `onPermissionRequest` obrigatório |
+| `docs/agents/code-mode.md` | ✅ | M29 — `createCodeMode`, boundary de sandbox **injetado** + gate de permissão, threat model |
 
 ---
 
@@ -245,10 +258,10 @@ resolver, scoping, errorStrategy, HITL surface) foram **implementados e publicad
 | `agents/guardrails` | Backlog P1 → **shipped M9** | ✅ |
 | `agents/processors` | Backlog P2 → **shipped M10** | ✅ |
 | `agents/a2a` | Backlog P2 → **shipped M15** | ✅ |
-| `agents/channels` | Backlog P3 DEFERRED | ✅ auditado |
-| `agents/code-mode` | Backlog P3 DEFERRED (parcial M17) | ✅ auditado |
+| `agents/channels` | Backlog P3 → **shipped M27** | ✅ |
+| `agents/code-mode` | Backlog P3 → **shipped M29** + `docs/agents/code-mode.md` | ✅ |
 | `agents/acp` | Backlog P2 → **shipped M17** | ✅ |
-| `agents/sdk-agents` | Backlog P3 DEFERRED | ✅ auditado |
+| `agents/sdk-agents` | Backlog P3 → **shipped M28** | ✅ |
 | `agents/streaming` | Página não existe (404) — coberto inline em `overview.md` | ✅ |
 | `agents/dynamic-agents` | Página não existe (404) | ✅ |
 
@@ -257,6 +270,6 @@ resolver, scoping, errorStrategy, HITL surface) foram **implementados e publicad
 | Página Mastra | Doc TheoKit gerado | Status |
 |---|---|---|
 | `mcp/overview` | `docs/agents/mcp.md` → **serving shipped M16** | ✅ |
-| `mcp/mcp-apps` | Backlog P3 OUT_OF_SCOPE | ✅ auditado |
+| `mcp/mcp-apps` | Backlog P3 → **shipped M30** (re-escopado ADR-0041) | ✅ |
 
-**TUDO MAPEADO. Paridade Mastra × TheoKit: gaps auditados → implementados (M9–M17) → publicados no npm.**
+**TUDO MAPEADO E FECHADO. Paridade Mastra × TheoKit 100%: gaps auditados → implementados (M9–M30) → publicados no npm (`theokit@0.17.0`, `@theokit/agents@0.32.0`, `@theokit/sdk@2.20.0`). Zero `DEFERRED` restantes.**
