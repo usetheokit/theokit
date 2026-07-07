@@ -426,7 +426,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M18 — [ ] Tool output shaping (`toModelOutput` / `transform`)
+### M18 — [x] Tool output shaping (`toModelOutput` / `transform`)
 
 **Objective:** Let a tool return rich data to the app while the model sees a smaller/multimodal representation, and format tool input/output/errors per target (`display` vs `transcript`).
 
@@ -442,7 +442,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M19 — [ ] Processor pipeline completion (`processInputStream` / `processAPIError`)
+### M19 — [x] Processor pipeline completion (`processInputStream` / `processAPIError`)
 
 **Objective:** Complete the M10 processor surface with the two remaining lifecycle hooks — transform input chunk-by-chunk before the model, and intercept LLM API errors for custom retry/fallback.
 
