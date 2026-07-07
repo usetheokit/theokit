@@ -236,6 +236,196 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
+### M9 — [ ] Guardrails pipeline
+
+**Objective:** Add a pluggable middleware pipeline that intercepts agent input and output at the framework layer — before the LLM sees a prompt and before the response reaches the user. Ships with five built-in processors: `PromptInjectionDetector` (jailbreak/injection pattern detection), `UnicodeNormalizer` (homoglyph/RTL-override stripping), `PIIDetector` (CPF, email, phone redaction), `CostGuardProcessor` (per-session token budget enforcement), and `OutputModerationProcessor` (prohibited-content classification on the model's response). Critical for any agent app exposed to public users.
+
+**Definition of done:**
+
+- [ ] `defineAgent({ guardrails: [PromptInjectionDetector(), PIIDetector({ redact: true }), CostGuard({ maxTokens: 50_000 })] })` — guardrails configured per agent definition, not globally.
+- [ ] `PromptInjectionDetector` blocks the run and returns a typed `GuardrailViolation` error when injection patterns are detected; proven by a unit test covering ≥ 5 known jailbreak patterns.
+- [ ] `PIIDetector` redacts CPF, email, and phone from user input before the LLM receives it; proven by a unit test with Brazilian CPF and international formats.
+- [ ] `CostGuardProcessor` enforces a per-session token budget (configurable); exceeding the budget fails the run with `CostBudgetExceededError` and a clear message.
+- [ ] `OutputModerationProcessor` integrates with a configurable moderation endpoint (OpenAI moderation API or custom); output flagged as prohibited is blocked before reaching the client.
+
+**Dependencies:** M8.
+
+**Top risks:**
+
+1. **False positives in PromptInjectionDetector** — heuristic detection blocks legitimate inputs; mitigate with `sensitivity: 'low' | 'medium' | 'high'` config and sane defaults (medium).
+2. **Latency cost** — each processor adds a sequential step; mitigate by running independent processors concurrently (no ordering dependency) and async-parallel where safe.
+
+---
+
+### M10 — [ ] Agent processor pipeline
+
+**Objective:** Add a composable `Processor` interface that lets developers intercept and transform every phase of an agent's lifecycle — input preprocessing, LLM request/response, tool call pre/post, output delivery, and API error recovery. This is the escape hatch for advanced customization beyond the built-in guardrails: logging, observability, custom retry logic, prompt augmentation, response caching.
+
+**Definition of done:**
+
+- [ ] `Processor` interface with hooks: `processInput()`, `processLLMRequest()`, `processLLMResponse()`, `processOutputResult()`, `processOutputStream()`, `processAPIError()`, `beforeToolCall()`, `afterToolCall()` — each hook is optional; unimplemented hooks are no-ops.
+- [ ] `defineAgent({ processors: [myProcessor] })` — processors configured per agent definition; multiple processors apply sequentially per phase in array order.
+- [ ] `processAPIError({ error, attempt, retry })` — allows implementing custom backoff / fallback when the LLM API returns 429/500; proven by a test simulating 2 rate-limit errors that the processor retries before succeeding.
+- [ ] `beforeToolCall({ toolName, input, context })` / `afterToolCall({ toolName, result })` — intercept every tool call for logging, mutation, or veto; proven by a test recording all tool calls via a processor.
+- [ ] Processors compose with guardrails (M9) — guardrails run before processors on the input phase; processors run before guardrails on the output phase.
+
+**Dependencies:** M9 (processors share pipeline infrastructure with guardrails).
+
+**Top risks:**
+
+1. **API surface maintenance** — 8 hook types means 8 contracts to maintain across SDK evolution; scope strictly to demonstrated use cases.
+2. **Mutable input bugs** — processors that mutate shared input objects race on concurrent runs; mitigate by passing frozen/copy objects to each processor hook.
+
+---
+
+### M11 — [ ] Memory: multi-user scoping + background compression
+
+**Objective:** Two distinct memory improvements that unblock production multi-tenant deployments. First: native `{resource, thread}` scoping so each user's conversation history is isolated without manual ID construction. Second: automatic background compression of long conversation histories so agents with memory do not accumulate unbounded context that degrades performance and cost.
+
+**Definition of done:**
+
+- [ ] `useAgent(name, { resource: userId, thread: threadId })` — deterministic conversation ID derived from the pair; no manual `${userId}-${threadId}` string construction required.
+- [ ] `getHistory(resource, thread)` / `clearHistory(resource, thread)` server-side API; proven by a test with 3 users × 2 threads each, all isolated.
+- [ ] Background compression: when conversation history exceeds `maxMessages` (configurable, default 50), a background summarization pass runs asynchronously via the agent's model, replacing the oldest messages with a compressed summary; the active run is never blocked.
+- [ ] Compression is observable — a `conversation.compressed` event emitted to the app so developers can log/audit compression runs.
+- [ ] Documented example: a SaaS agent handling conversations for 100+ users with `resource=userId` and `thread=sessionId`.
+
+**Dependencies:** M8.
+
+**Top risks:**
+
+1. **Compression quality** — automatic summarization loses context; mitigate by keeping the N most-recent messages verbatim and compressing only older history.
+2. **Concurrency** — background compression races with active runs on the same conversation; mitigate with a per-conversation write lock in `ConversationStorageAdapter`.
+
+---
+
+### M12 — [ ] Multi-agent orchestration v2
+
+**Objective:** Add delegation hooks and history filtering to the supervisor→subagent pattern, giving the supervisor full control over what context is passed down and what happens before/after each delegation. Completes the multi-agent story by closing the observable gap vs Mastra's supervisor pattern.
+
+**Definition of done:**
+
+- [ ] `onDelegationStart({ subAgent, input, supervisorMessages })` hook on `createSquad` — supervisor modifies the input before it reaches the subagent; proven by a test that injects a persona string into every delegation.
+- [ ] `onDelegationComplete({ subAgent, result, supervisorMessages })` hook — supervisor scores, logs, or rejects the subagent's result before it is returned; proven by a test that redacts a keyword from subagent output.
+- [ ] `messageFilter: (messages) => messages` on each subagent declaration — controls which supervisor messages are passed down; proven by a test passing only the last 3 messages to the subagent.
+- [ ] `abortSignal` propagation — the supervisor's abort signal cancels in-flight subagent runs; proven by a test that aborts mid-delegation and confirms the subagent run is terminated.
+- [ ] `docs/agents/multi-agent.md` updated covering all four new primitives with copy-paste examples.
+
+**Dependencies:** M8.
+
+**Top risks:**
+
+1. **Concurrent delegation races** — `onDelegationStart` that mutates input while a parallel delegation runs; mitigate by passing a copy of the input to the hook.
+2. **abortSignal propagation depth** — signal may not propagate through nested delegations > 2 levels deep; document the current supported depth and test at depth 2.
+
+---
+
+### M13 — [ ] Skills runtime improvements
+
+**Objective:** Fix two real bugs/limitations in the skills system: (1) `skills.enabled` silently ignores the filter (`void _enabled` in current code) — passing `['skill-a']` has no effect; (2) skills are discovered at startup — there is no way to return different skills per request, which is critical for multi-tenant deployments where different users should see different skill sets.
+
+**Definition of done:**
+
+- [ ] `skills.enabled` filter actually applies — passing `['skill-a']` causes `agent.skills.list()` to return only `skill-a`; proven by a unit test with 3 SKILL.md files and a filter selecting 1.
+- [ ] `skills` option accepts a resolver function `(ctx: RequestContext) => string[]` — called per request, returning the names of skills to enable; proven by a test where two callers with different `ctx.context.role` see different skill sets.
+- [ ] Resolver has access to `ctx.context` (run context from M7) — enables decisions based on user role, plan tier, or any injected value.
+- [ ] A TTL-cached skill index (revalidate on SKILL.md file change via `fs.watch`) prevents per-request filesystem scans.
+- [ ] Bug fix is non-breaking: existing `enabled: string[]` array config still works; resolver is additive.
+
+**Dependencies:** M8.
+
+**Top risks:**
+
+1. **fs.watch reliability** — `fs.watch` is unreliable on some Linux filesystems; mitigate with a TTL fallback (30s revalidation) when no file-change event arrives.
+2. **Security surface** — a misconfigured resolver could expose skills to the wrong user; document that SKILL.md content is not a security boundary (it is prompt text, not secret data); filtering is a UX/capability concern.
+
+---
+
+### M14 — [ ] HITL surface expansion + structured output error strategy
+
+**Objective:** Expand Human-in-the-loop beyond the `@Agent` class decorator surface. Currently `@HumanInTheLoop` only works on `@Tool` methods in `@Agent` classes — `defineAgent` and the fluent builder have no equivalent. Also adds: an approval history API (list pending approvals across runs), and `errorStrategy` for structured output (what to do when the model fails schema validation after all retries).
+
+**Definition of done:**
+
+- [ ] `defineAgent({ tools: [{ ..., requireApproval: { question: 'Confirm?', timeout: 60_000, onTimeout: 'abort' } }] })` — first-class approval option on any tool definition, not only `@Tool` methods; proven by an E2E test on the `defineAgent` surface.
+- [ ] `agent().tool(t).requireApproval({ question, onTimeout }).build()` on the fluent builder — same capability; proven by a test.
+- [ ] `GET /api/agents/:name/approvals` — lists all pending approval requests for the agent across all active runs; response shape: `[{ callId, toolName, question, input, expiresAt }]`.
+- [ ] `errorStrategy: 'throw' | 'return-partial' | 'return-raw'` on `Agent.generateObject()` — controls behavior when schema validation fails after all retries; `'throw'` is the default (existing behavior preserved, non-breaking).
+- [ ] `docs/agents/human-in-the-loop.md` updated covering `defineAgent` and builder surfaces.
+
+**Dependencies:** M8.
+
+**Top risks:**
+
+1. **Approval state store** — listing pending approvals across runs requires persistent state; default to in-memory (cleared on restart) with an `ApprovalStorageAdapter` interface for persistent backends.
+2. **`defineAgent` discoverability** — the new `requireApproval` option is easy to miss; mitigate with a prominent "without the decorator" example at the top of the HITL doc.
+
+---
+
+### M15 — [ ] A2A protocol
+
+**Objective:** Implement the Agent-to-Agent (A2A) open standard in TheoKit, enabling TheoKit agents to be discovered and called by external agents and to call external A2A-compatible agents. This is a cross-network delegation protocol over HTTP with standardized agent cards — NOT reimplementing the agent loop or the SDK runtime.
+
+**Definition of done:**
+
+- [ ] Agent cards auto-generated and served at `/.well-known/<agent-name>/agent-card.json` for every agent in `agents/`; card includes name, description, declared capabilities, and SSE endpoint URL.
+- [ ] Agent cards pass validation against the published A2A schema; proven by a test against the schema.
+- [ ] `A2AAgent` client: `new A2AAgent({ url: 'https://other-system/agents/assistant', headers: { Authorization: 'Bearer ...' } })` — usable as a tool in `defineAgent`; the remote agent is called and its response returned as the tool result.
+- [ ] Authentication: `A2AAgent` supports Bearer token and API key; `/.well-known/` endpoint supports optional authentication via `agentCard: { auth: true }` config.
+- [ ] Example: `agents/orchestrator.ts` delegating to an external `A2AAgent` tool with a real cross-network call demonstrated in a test or documented smoke test.
+
+**Dependencies:** M12 (multi-agent v2 completes the in-process story before cross-network).
+
+**Top risks:**
+
+1. **A2A spec stability** — the spec is still evolving; mitigate by pinning to a specific schema version and documenting the pinned version in the agent card.
+2. **Discovery attack surface** — `/.well-known/agent-card.json` reveals agent capabilities; mitigate by allowing `agentCard: false` to opt out of discovery per agent.
+
+---
+
+### M16 — [ ] MCPServer
+
+**Objective:** Add an `MCPServer` class that exposes TheoKit agents and tools to external MCP clients — the inverse of the existing `@MCP` decorator. Also adds dynamic toolsets per request so multi-tenant apps can supply different MCP server credentials per user.
+
+**Definition of done:**
+
+- [ ] `MCPServer` class: `new MCPServer({ agents: [MyAgent], tools: [myTool] })` — starts an MCP-compatible endpoint (stdio or HTTP/SSE) exposing the named agents and tools.
+- [ ] TheoKit-hosted route: `GET /mcp` serves as an HTTP MCP server endpoint; external MCP clients connect with `type: 'http', url: 'https://myapp.com/mcp'`.
+- [ ] Stdio mode: `MCPServer.runStdio({ agents: [...] })` — TheoKit app becomes a stdio MCP server usable by Claude Desktop or any MCP-compatible client.
+- [ ] Dynamic toolsets: `@MCP` config accepts a resolver `(ctx: RequestContext) => McpStdioServerConfig` — called per request, enabling per-user MCP credentials (e.g. `ctx.context.githubToken`).
+- [ ] `MCPServer` requires an `auth` config or `{ auth: false }` explicit opt-out; no unauthenticated public MCP server by default.
+
+**Dependencies:** M8.
+
+**Top risks:**
+
+1. **MCP protocol compatibility** — MCP spec has subtle version differences between clients; mitigate by using `@modelcontextprotocol/sdk` as the transport layer (not a hand-rolled implementation).
+2. **Auth model complexity** — MCPServer auth adds significant surface; design: `auth: { type: 'bearer', validate: async (token) => boolean }` as the minimal first contract.
+
+---
+
+### M17 — [ ] ACP: coding agent integration
+
+**Objective:** Add `AcpAgent` and `createACPTool()` to let TheoKit agents delegate to coding agents (Claude Code, Amp, OpenAI Codex) as tools via the Agent Client Protocol (stdio newline-delimited JSON). Enables a TheoKit agent to ask a coding agent to write a function, review code, or run tests — with human-in-the-loop permission gates for file and shell operations.
+
+**Definition of done:**
+
+- [ ] `AcpAgent` class: `new AcpAgent({ command: 'claude', args: ['--output-format', 'json'], cwd: process.cwd(), model: 'claude-sonnet-4-6' })` — spawns the coding agent subprocess and communicates via stdin/stdout newline-delimited JSON.
+- [ ] `createACPTool(acpAgent, { name, description })` — wraps an `AcpAgent` as a tool compatible with `defineAgent`'s `tools` array.
+- [ ] `onPermissionRequest` callback — TheoKit can approve or deny file/shell operations the coding agent requests; wired to the HITL approval flow (M14) for human gates.
+- [ ] `persistSession: true` option — coding agent session is resumed across tool calls within the same agent run (if the CLI supports it).
+- [ ] Fails fast with a clear actionable error if the specified CLI is not installed in the host environment.
+- [ ] `onPermissionRequest` is required (no default-allow mode) — security by default.
+
+**Dependencies:** M16 (shares MCP/process infrastructure), M14 (HITL approval for permission requests).
+
+**Top risks:**
+
+1. **CLI availability** — `claude`, `amp`, `codex` must be installed; mitigate with a startup check that prints installation instructions if missing.
+2. **Scope creep into security** — a coding agent with shell access is a significant risk; `onPermissionRequest` being required (not optional) is the primary mitigation.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
