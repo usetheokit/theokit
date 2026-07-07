@@ -18,6 +18,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+## [0.19.0] - 2026-07-07
+
+### Added
+
+- **MCP stdio transport — `theokit mcp <agent>` — `theokit` (M16 follow-up).** Expose a scanned agent as an MCP server over **stdio** (the sibling of the M16 `POST /api/agents/<name>/mcp` HTTP route), so a desktop MCP client (e.g. Claude Desktop) can spawn `theokit mcp support` and speak newline-delimited JSON-RPC over the pipe. `serveMcpStdio` / `handleMcpStdioLine` reuse the framework's OWN `handleMcpJsonRpc` (`initialize` / `tools/list` / `resources/list` / `resources/read`, including per-agent `appResources`); a malformed line returns a `-32700` envelope (never throws). **Scope note:** this is the SERVER-side stdio TRANSPORT — it reuses the framework handler (no LLM call, no runtime, G2), consistent with the M16 HTTP route being framework-side. The SDK's MCP CLIENT stdio (consuming external `mcpServers` via command/args) stays SDK-side per ADR-0040; if the owner intends the server exposure to also move SDK-side, it can (it is a pure transport over `handleMcpJsonRpc`). 8 tests (stdio round-trip, resources, parse-error, blank-line, loop, command routing + not-found). (M16)
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [0.18.0] - 2026-07-07
 
 ### Added
@@ -29,6 +45,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Removed
 
 ### Fixed
+
+- **Fixture drift — `fixtures/template-default/app/page.tsx` synced to the canonical template.** The build/e2e fixture still carried the pre-#80 page (importing `ToolCallCard`, `ConversationItem`, `ToolCallStatus`) while the real scaffold template (`create-theokit/templates/default`) had migrated to `UIMessage` + ChatMessage part auto-dispatch. Synced the fixture to the template (now byte-identical) and added a regression guard test (`fixture-template-page-in-sync`) so it can never silently drift again. Fixture suites (45) green. (#85 follow-up)
 
 - **Agent cards / MCP / pending-approvals served in PRODUCTION, not just dev (M15/M16 follow-up) — `theokit`.** `GET /.well-known/<name>/agent-card.json` (M15), `POST /api/agents/<name>/mcp` (M16), and `GET /api/agents/<name>/approvals` (M14) were wired only into the dev vite middleware — a built app run via `theokit start` 404'd all three. New shared `serveAgentAuxRoute` dispatcher (Web Request → Response) is the single source of truth, called by BOTH the dev middleware and the prod handler's new `tryServeAgentAux` branch (DRY — the dev `serveMcp`/`serveListApprovals`/`serveAgentCard` copies were removed). 6 dispatcher tests (card/mcp/list + fall-through on non-aux/unknown-agent/wrong-method); dev-middleware + start-handler suites green (no regression). MCP stdio transport stays SDK-side (G13/ADR-0040); channels (M27) stay app-wired (they need app-supplied validators/onMessage). (M15, M16)
 - **`@MCP` decorator was inert — MCP servers never executed (#89) — `@theokit/agents`.** `compiled.mcpServers` (set by the compiler from `@MCP({...})`) was never forwarded to `Agent.create`, so declared MCP servers silently never started (same class as the HITL `kind:'general'` bug — metadata compiled but never reaching the SDK runtime). Fix: `assembleM8CreateOptions` now projects `compiled.mcpServers` into the `Agent.create` options (the SDK owns MCP execution; this is pure adapter projection). Verified end-to-end chain: `@MCP` → `compiled.mcpServers` → `m8.mcpServers` → `Agent.getOrCreate({ ...m8 })`. 3 wiring tests. Also split `sdk-adapter.ts` (was over the 500-line G6 budget pre-existing) — extracted `assembleM8CreateOptions` + `realUsageDone` into `sdk-adapter-create-options.ts`. (#89)
