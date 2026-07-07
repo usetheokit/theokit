@@ -84,3 +84,44 @@ describe('serveAgentAuxRoute — production parity for card/mcp/list-approvals',
     expect(await serveAgentAuxRoute(req(path, 'POST'), path, deps)).toBeNull()
   })
 })
+
+/**
+ * M30 wiring — an agent module that exports `appResources` (from `defineAppResource`) has them
+ * advertised + served by the MCP endpoint (resources/list) via the serve-aux dispatcher.
+ */
+import { defineAppResource } from '../../packages/theo/src/server/agent/mcp-app-resources.js'
+
+describe('serveAgentAuxRoute — M30 per-agent appResources wiring', () => {
+  const withResources = {
+    agents: [{ name: 'ui', filePath: '/agents/ui.ts', agentPath: '/api/agents/ui' } as AgentNode],
+    loadModule: async () => ({
+      default: defineAgent({ model: 'claude-sonnet-4-6', tools: [] }),
+      appResources: [defineAppResource({ uri: 'ui://card', name: 'Card', html: '<b>hi</b>' })],
+    }),
+    baseUrl: 'https://app.example',
+  }
+
+  it('resources/list returns the module-declared ui:// resources', async () => {
+    const path = '/api/agents/ui/mcp'
+    const res = await serveAgentAuxRoute(
+      req(path, 'POST', { jsonrpc: '2.0', id: 1, method: 'resources/list' }),
+      path,
+      withResources,
+    )
+    const rpc = (await res!.json()) as { result?: { resources?: { uri: string }[] } }
+    expect(rpc.result?.resources).toEqual([
+      { uri: 'ui://card', name: 'Card', mimeType: 'text/html' },
+    ])
+  })
+
+  it('initialize advertises capabilities.resources when the module declares any', async () => {
+    const path = '/api/agents/ui/mcp'
+    const res = await serveAgentAuxRoute(
+      req(path, 'POST', { jsonrpc: '2.0', id: 1, method: 'initialize' }),
+      path,
+      withResources,
+    )
+    const rpc = (await res!.json()) as { result?: { capabilities?: Record<string, unknown> } }
+    expect(rpc.result?.capabilities).toHaveProperty('resources')
+  })
+})
