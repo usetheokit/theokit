@@ -538,7 +538,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M25 — [ ] Multi-agent: background execution + task-completion scoring
+### M25 — [x] Multi-agent: background execution + task-completion scoring
 
 **Objective:** Run a sub-agent without blocking the supervisor (`streamUntilIdle`), and validate a sub-agent's result with an injected scorer that can inject feedback for iteration.
 
