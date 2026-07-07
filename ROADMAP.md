@@ -236,7 +236,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M9 — [ ] Guardrails pipeline
+### M9 — [x] Guardrails pipeline
 
 **Objective:** Add a pluggable middleware pipeline that intercepts agent input and output at the framework layer — before the LLM sees a prompt and before the response reaches the user. Ships with five built-in processors: `PromptInjectionDetector` (jailbreak/injection pattern detection), `UnicodeNormalizer` (homoglyph/RTL-override stripping), `PIIDetector` (CPF, email, phone redaction), `CostGuardProcessor` (per-session token budget enforcement), and `OutputModerationProcessor` (prohibited-content classification on the model's response). Critical for any agent app exposed to public users.
 
@@ -257,7 +257,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M10 — [ ] Agent processor pipeline
+### M10 — [x] Agent processor pipeline
 
 **Objective:** Add a composable `Processor` interface that lets developers intercept and transform every phase of an agent's lifecycle — input preprocessing, LLM request/response, tool call pre/post, output delivery, and API error recovery. This is the escape hatch for advanced customization beyond the built-in guardrails: logging, observability, custom retry logic, prompt augmentation, response caching.
 
@@ -278,7 +278,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M11 — [ ] Memory: multi-user scoping + background compression
+### M11 — [x] Memory: multi-user scoping + background compression
 
 **Objective:** Two distinct memory improvements that unblock production multi-tenant deployments. First: native `{resource, thread}` scoping so each user's conversation history is isolated without manual ID construction. Second: automatic background compression of long conversation histories so agents with memory do not accumulate unbounded context that degrades performance and cost.
 
@@ -299,7 +299,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M12 — [ ] Multi-agent orchestration v2
+### M12 — [x] Multi-agent orchestration v2
 
 **Objective:** Add delegation hooks and history filtering to the supervisor→subagent pattern, giving the supervisor full control over what context is passed down and what happens before/after each delegation. Completes the multi-agent story by closing the observable gap vs Mastra's supervisor pattern.
 
@@ -320,7 +320,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M13 — [ ] Skills runtime improvements
+### M13 — [x] Skills runtime improvements
 
 **Objective:** Fix two real bugs/limitations in the skills system: (1) `skills.enabled` silently ignores the filter (`void _enabled` in current code) — passing `['skill-a']` has no effect; (2) skills are discovered at startup — there is no way to return different skills per request, which is critical for multi-tenant deployments where different users should see different skill sets.
 
@@ -341,7 +341,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M14 — [ ] HITL surface expansion + structured output error strategy
+### M14 — [x] HITL surface expansion + structured output error strategy
 
 **Objective:** Expand Human-in-the-loop beyond the `@Agent` class decorator surface. Currently `@HumanInTheLoop` only works on `@Tool` methods in `@Agent` classes — `defineAgent` and the fluent builder have no equivalent. Also adds: an approval history API (list pending approvals across runs), and `errorStrategy` for structured output (what to do when the model fails schema validation after all retries).
 
@@ -362,7 +362,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M15 — [ ] A2A protocol
+### M15 — [x] A2A protocol
 
 **Objective:** Implement the Agent-to-Agent (A2A) open standard in TheoKit, enabling TheoKit agents to be discovered and called by external agents and to call external A2A-compatible agents. This is a cross-network delegation protocol over HTTP with standardized agent cards — NOT reimplementing the agent loop or the SDK runtime.
 
@@ -383,7 +383,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M16 — [ ] MCPServer
+### M16 — [x] MCPServer
 
 **Objective:** Add an `MCPServer` class that exposes TheoKit agents and tools to external MCP clients — the inverse of the existing `@MCP` decorator. Also adds dynamic toolsets per request so multi-tenant apps can supply different MCP server credentials per user.
 
@@ -404,7 +404,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M17 — [ ] ACP: coding agent integration
+### M17 — [x] ACP: coding agent integration
 
 **Objective:** Add `AcpAgent` and `createACPTool()` to let TheoKit agents delegate to coding agents (Claude Code, Amp, OpenAI Codex) as tools via the Agent Client Protocol (stdio newline-delimited JSON). Enables a TheoKit agent to ask a coding agent to write a function, review code, or run tests — with human-in-the-loop permission gates for file and shell operations.
 
