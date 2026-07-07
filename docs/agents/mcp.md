@@ -212,6 +212,61 @@ TheoKit MCP servers are configured once at agent creation time.
 
 ---
 
+## Per-request config + registries + tool approval (M24)
+
+Three framework-side helpers over the `@MCP` config (the SDK still owns MCP server execution):
+
+```ts
+import { resolveMcpServers, mcpRegistry, mcpToolApprovals } from '@theokit/agents'
+
+// Multi-tenant: different MCP creds per request.
+const servers = await resolveMcpServers((ctx) => ({
+  github: { command: 'npx', args: ['-y', 'server-github'], env: { TOKEN: ctx.userToken } },
+}), requestCtx)
+
+// Known registry (Composio / mcp.run).
+const composio = mcpRegistry({ registry: 'composio', apiKey: process.env.COMPOSIO_API_KEY, apps: ['github'] })
+
+// Gate MCP tools through the M14 HITL flow.
+defineAgent({ approvals: mcpToolApprovals({ github_delete_repo: 'DELETE a repository?' }) })
+```
+
+`@theokit/agents@0.32.0`.
+
+## MCP Apps — `ui://` iframe UIs (M30)
+
+An MCP tool can declare a `ui://` HTML resource; the server serves it via `resources/list` +
+`resources/read`, and the client renders it in a **sandboxed** iframe with a capability-scoped
+guest API.
+
+```ts
+import { defineAppResource } from 'theokit/server'
+import { mountMcpApp } from 'theokit/client'
+
+const card = defineAppResource({ uri: 'ui://weather/card', name: 'Weather', html: '<h1>Sunny</h1>' })
+
+// Client: sandbox="allow-scripts" ONLY (never allow-same-origin → null origin).
+mountMcpApp(container, card, {
+  onCallServerTool: (tool, args) => callTool(tool, args),
+})
+```
+
+`theokit@0.17.0`.
+
+**Per-agent declaration (M30 wiring):** an `agents/<name>.ts` module exports its `ui://` resources
+alongside the agent — the MCP endpoint (`POST /api/agents/<name>/mcp`) then advertises + serves them
+(`resources/list` / `resources/read`) in dev AND prod:
+
+```ts
+// agents/weather.ts
+export default defineAgent({ /* ... */ })
+export const appResources = [
+  defineAppResource({ uri: 'ui://weather/card', name: 'Weather', html: '<h1>Sunny</h1>' }),
+]
+```
+
+
+
 ## Related
 
 - [Using tools](./using-tools.md) — define custom tools alongside MCP tools

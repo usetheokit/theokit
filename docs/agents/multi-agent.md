@@ -173,6 +173,28 @@ in `@theokit/sdk/a2a`), not this primitive.
 
 ---
 
+## Background delegation + task scoring (M25)
+
+Run a sub-agent without blocking the supervisor, and validate its result with a scorer that can
+re-delegate with feedback. Both are THIN wrappers over `delegate` — no new engine, no second loop.
+
+```ts
+import { delegateBackground, delegateWithScoring } from '@theokit/agents'
+
+// Non-blocking: keep working, await later.
+const handle = delegateBackground(ResearchAgent, 'research X')
+// ...supervisor does other work...
+const result = await handle.wait()
+
+// Score + re-delegate with feedback until it passes or maxRounds.
+const scored = await delegateWithScoring(WriterAgent, 'draft the intro', {
+  scorer: (r) => r.response.length > 200 ? { pass: true } : { pass: false, feedback: 'expand it' },
+  maxRounds: 3,
+})
+```
+
+`@theokit/agents@0.32.0`.
+
 ## Related
 
 - [Using tools](./using-tools.md) — tools are the building block that subagents build on
