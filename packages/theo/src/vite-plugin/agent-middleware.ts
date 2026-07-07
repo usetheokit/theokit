@@ -19,6 +19,7 @@ import { handleAgentCard, isAgentCardPath } from '../server/agent/agent-card-han
 import { getApprovalRegistry } from '../server/agent/approval-registry.js'
 import { handleAgentApproval, isApprovalPath } from '../server/agent/approve-agent.js'
 import { handleListApprovals, isListApprovalsPath } from '../server/agent/list-approvals-handler.js'
+import { handleMcpJsonRpc, isMcpPath } from '../server/agent/mcp-handler.js'
 import { mountAgent } from '../server/agent/mount-agent.js'
 import { resolveProvider } from '../server/agent/provider-resolver.js'
 import {
@@ -43,6 +44,56 @@ const PREFIX = '/api/agents/'
 interface CardDeps {
   projectRoot: string
   loadModule: (filePath: string) => Promise<unknown>
+}
+
+/** M4 — serve the HITL approve route `/api/agents/<name>/approve/<id>` (already matched). */
+async function serveApprove(
+  req: Connect.IncomingMessage,
+  res: ServerResponse,
+  urlPath: string,
+  csrfMode: CsrfMode,
+  log: { requestId: string; start: number },
+): Promise<void> {
+  const method = (req.method ?? 'POST').toUpperCase()
+  if (method !== 'POST') {
+    sendError(res, 'METHOD_NOT_ALLOWED', 'Approve endpoints accept POST', 405, undefined, log.requestId)
+    logRequest({ method, url: req.url ?? '', status: 405, duration: Date.now() - log.start, requestId: log.requestId })
+    return
+  }
+  try {
+    const response = await handleAgentApproval(incomingMessageToWebRequest(req), urlPath, getApprovalRegistry(), csrfMode)
+    await writeWebResponseToServerResponse(response, res)
+  } catch (err) {
+    sendError(res, 'INTERNAL', err instanceof Error ? err.message : 'Approve handler failed', 500, undefined, log.requestId)
+  }
+  logRequest({ method, url: req.url ?? '', status: res.statusCode, duration: Date.now() - log.start, requestId: log.requestId })
+}
+
+/** M16 — serve `POST /api/agents/<name>/mcp` (JSON-RPC), already matched by the caller. */
+async function serveMcp(
+  req: Connect.IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+  mcpAgentName: string,
+  deps: CardDeps,
+): Promise<void> {
+  const requestId = randomUUID()
+  const start = Date.now()
+  res.setHeader('x-request-id', requestId)
+  const method = (req.method ?? 'POST').toUpperCase()
+  const agent = scanAgents(deps.projectRoot).find((a) => a.name === mcpAgentName)
+  if (method !== 'POST' || !agent) {
+    next()
+    return
+  }
+  try {
+    const body: unknown = await incomingMessageToWebRequest(req).json()
+    const mod = await deps.loadModule(agent.filePath)
+    await writeWebResponseToServerResponse(handleMcpJsonRpc(mod, agent.name, body), res)
+  } catch (err) {
+    sendError(res, 'INTERNAL', err instanceof Error ? err.message : 'MCP handler failed', 500, undefined, requestId)
+  }
+  logRequest({ method, url: req.url ?? '', status: res.statusCode, duration: Date.now() - start, requestId })
 }
 
 /** M14 — serve `GET /api/agents/<name>/approvals` (already matched by the caller). */
@@ -125,40 +176,9 @@ export function createAgentMiddleware(
 
       // HITL approve route (`/api/agents/<name>/approve/<id>`, M4) — resolve the pending approval.
       // Branches BEFORE the agent-path exact match (the approve path never equals an `agentPath`).
+      // Extracted to keep this arrow within the complexity budget (G6).
       if (isApprovalPath(urlPath)) {
-        const method = (req.method ?? 'POST').toUpperCase()
-        if (method !== 'POST') {
-          sendError(
-            res,
-            'METHOD_NOT_ALLOWED',
-            'Approve endpoints accept POST',
-            405,
-            undefined,
-            requestId,
-          )
-          logRequest({ method, url, status: 405, duration: Date.now() - start, requestId })
-          return
-        }
-        try {
-          const request = incomingMessageToWebRequest(req)
-          const response = await handleAgentApproval(
-            request,
-            urlPath,
-            getApprovalRegistry(),
-            csrfMode,
-          )
-          await writeWebResponseToServerResponse(response, res)
-        } catch (err) {
-          sendError(
-            res,
-            'INTERNAL',
-            err instanceof Error ? err.message : 'Approve handler failed',
-            500,
-            undefined,
-            requestId,
-          )
-        }
-        logRequest({ method, url, status: res.statusCode, duration: Date.now() - start, requestId })
+        await serveApprove(req, res, urlPath, csrfMode, { requestId, start })
         return
       }
 
@@ -167,6 +187,13 @@ export function createAgentMiddleware(
       // serving keeps this arrow within the complexity budget (G6).
       if (isListApprovalsPath(urlPath)) {
         await serveListApprovals(req, res, next, { requestId, start })
+        return
+      }
+
+      // M16 — POST /api/agents/<name>/mcp exposes the agent as an MCP server (JSON-RPC).
+      const mcpAgentName = isMcpPath(urlPath)
+      if (mcpAgentName) {
+        await serveMcp(req, res, next, mcpAgentName, { projectRoot, loadModule })
         return
       }
 
