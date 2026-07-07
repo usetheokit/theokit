@@ -95,6 +95,9 @@ export { createWorkflowTool } from './agent/workflow-tool.js'
 export type { WorkflowLike, WorkflowToolConfig } from './agent/workflow-tool.js'
 export { createACPTool, NodeAcpTransport } from './agent/acp-tool.js'
 export type { AcpToolConfig } from './agent/acp-tool.js'
+// M28 — third-party agent SDK (Claude/OpenAI/Cursor) as a tool (vendor runtime stays theirs).
+export { createVendorAgentTool } from './agent/vendor-agent-tool.js'
+export type { VendorAgentClient, VendorAgentToolConfig } from './agent/vendor-agent-tool.js'
 
 // Inline re-exports — items that don't belong to a single sub-barrel
 export { parseRequestBody, FileTooLargeError } from './body-parser.js'
