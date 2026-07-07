@@ -114,3 +114,13 @@ export {
   type ApiErrorDecision,
   type ApiErrorContext,
 } from './api-error-handler.js'
+
+export {
+  delegateBackground,
+  delegateWithScoring,
+  type BackgroundDelegation,
+  type DelegateFn,
+  type Scorer,
+  type ScoreVerdict,
+  type ScoredDelegation,
+} from './delegation-scoring.js'
