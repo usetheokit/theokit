@@ -196,6 +196,10 @@ Validado E2E do registry público (9/9 exports + smoke funcional). Detalhe por m
 | `docs/agents/structured-output.md` | ✅ | `Agent.generateObject` + `Agent.streamObject`, `errorStrategy` (M14) |
 | `docs/agents/human-in-the-loop.md` | ✅ | `@HumanInTheLoop`, `defineAgent({ approvals })` (M14), `GET /approvals` |
 | `docs/agents/mcp.md` | ✅ | `@MCP` decorator + `POST /mcp` serving (M16), envPolicy seguro, OAuth 2.1 PKCE |
+| `docs/agents/guardrails.md` | ✅ | M9 — 5 detectores, input fail-fast + output buffer/moderate, guards custom |
+| `docs/agents/a2a.md` | ✅ | M15 — agent cards `/.well-known/`, `createA2ATool` client + auth |
+| `docs/agents/processors.md` | ✅ | M10 — `createToolHooksPlugin` tool + LLM-turn hooks, veto |
+| `docs/agents/acp.md` | ✅ | M17 — `createACPTool` + `AcpClient`, `onPermissionRequest` obrigatório |
 
 ---
 
