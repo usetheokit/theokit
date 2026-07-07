@@ -60,4 +60,23 @@ describe('createToolHooksPlugin', () => {
     const h = capture(createToolHooksPlugin({}))
     expect(Object.keys(h)).toHaveLength(0)
   })
+
+  it('fires beforeLLMCall / afterLLMCall with the LLM turn context (M10)', async () => {
+    const beforeLLMCall = vi.fn()
+    const afterLLMCall = vi.fn()
+    const h = capture(createToolHooksPlugin({ beforeLLMCall, afterLLMCall }))
+
+    await h.pre_llm_call({ agentId: 'a', runId: 'r', iteration: 0 })
+    await h.post_llm_call({ agentId: 'a', runId: 'r', iteration: 0 })
+
+    expect(beforeLLMCall).toHaveBeenCalledWith({ agentId: 'a', runId: 'r', iteration: 0 })
+    expect(afterLLMCall).toHaveBeenCalledWith({ agentId: 'a', runId: 'r', iteration: 0 })
+  })
+
+  it('registers only the LLM hooks that are provided', () => {
+    const h = capture(createToolHooksPlugin({ beforeLLMCall: () => {} }))
+    expect(typeof h.pre_llm_call).toBe('function')
+    expect(h.post_llm_call).toBeUndefined()
+    expect(h.pre_tool_call).toBeUndefined()
+  })
 })

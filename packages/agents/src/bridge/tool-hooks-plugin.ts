@@ -31,18 +31,34 @@ export interface ToolHooks {
   ) => ToolCallVeto | undefined | Promise<ToolCallVeto | undefined>
   /** Observe every tool call's result after it runs. */
   afterToolCall?: (ctx: AfterToolCallContext) => void | Promise<void>
+  /**
+   * M10 — observe every LLM turn BEFORE it runs (SDK `pre_llm_call`). Observability only — the
+   * SDK's LLM-call context carries `{ agentId, runId, iteration }`, not the mutable request body.
+   */
+  beforeLLMCall?: (ctx: LLMCallContext) => void | Promise<void>
+  /** M10 — observe every LLM turn AFTER it completes (SDK `post_llm_call`). Observability only. */
+  afterLLMCall?: (ctx: LLMCallContext) => void | Promise<void>
+}
+
+/** Context of an LLM turn (mirrors the SDK `LlmCallContext` for `pre_llm_call`/`post_llm_call`). */
+export interface LLMCallContext {
+  agentId: string
+  runId: string
+  /** 0-based iteration index of the current turn, when available. */
+  iteration?: number
 }
 
 /**
- * Minimal SDK hook context (type-only — no runtime import, keeps the SDK peer optional). `args` is
- * present on `pre_tool_call`, `result` on `post_tool_call`; both optional so one shape covers both.
+ * Minimal SDK hook context (type-only — no runtime import, keeps the SDK peer optional). Tool hooks
+ * carry `name`/`args`/`result`; LLM hooks carry `iteration`. All optional so one shape covers both.
  */
 export interface ToolHookRawContext {
-  name: string
-  args?: Record<string, unknown>
-  result?: unknown
   agentId: string
   runId: string
+  name?: string
+  args?: Record<string, unknown>
+  result?: unknown
+  iteration?: number
 }
 export interface ToolHooksPluginContext {
   on(hook: string, handler: (ctx: ToolHookRawContext) => unknown): void
@@ -60,12 +76,18 @@ export function createToolHooksPlugin(hooks: ToolHooks): ToolHooksPlugin {
   return {
     name: 'theokit-tool-hooks',
     register(ctx) {
-      const { beforeToolCall, afterToolCall } = hooks
+      const { beforeToolCall, afterToolCall, beforeLLMCall, afterLLMCall } = hooks
       if (beforeToolCall) {
-        ctx.on('pre_tool_call', (c) => beforeToolCall({ name: c.name, args: c.args ?? {} }))
+        ctx.on('pre_tool_call', (c) => beforeToolCall({ name: c.name ?? '', args: c.args ?? {} }))
       }
       if (afterToolCall) {
-        ctx.on('post_tool_call', (c) => afterToolCall({ name: c.name, result: c.result }))
+        ctx.on('post_tool_call', (c) => afterToolCall({ name: c.name ?? '', result: c.result }))
+      }
+      if (beforeLLMCall) {
+        ctx.on('pre_llm_call', (c) => beforeLLMCall({ agentId: c.agentId, runId: c.runId, iteration: c.iteration }))
+      }
+      if (afterLLMCall) {
+        ctx.on('post_llm_call', (c) => afterLLMCall({ agentId: c.agentId, runId: c.runId, iteration: c.iteration }))
       }
     },
   }
