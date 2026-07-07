@@ -8,7 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M9 Guardrails — `@theokit/agents`:** pluggable input/output guards at the agent boundary (ADR-0040 § D2). Built-in detectors `promptInjectionDetector` (ReDoS-free normalized phrase match), `piiDetector` (CPF/email/phone redaction), `unicodeNormalizer` (zero-width/bidi stripping), `costGuard` (cumulative token budget), `outputModeration` (injected predicate — zero LLM call inside `packages/`, G2). Wired into `defineAgent({ guardrails: [...] })`: input guards run fail-fast at `AgentRunner.stream`'s boundary before the SDK runtime; output guards moderate the full accumulated response and block BEFORE any event reaches the client (`moderateOutputStream` — buffer/moderate/replay). 23 tests (16 unit + 3 output-stream + 4 runner wiring); full package suite green (615); pipeline overhead ~11µs/request (benchmarked). `@Agent` decorator surface for guardrails is the remaining follow-up. (M9)
+- Roadmap amended: added M9 Guardrails pipeline (`/roadmap-feature`)
+- Roadmap amended: added M10 Agent processor pipeline (`/roadmap-feature`)
+- Roadmap amended: added M11 Memory multi-user scoping + background compression (`/roadmap-feature`)
+- Roadmap amended: added M12 Multi-agent orchestration v2 (`/roadmap-feature`)
+- Roadmap amended: added M13 Skills runtime improvements (`/roadmap-feature`)
+- Roadmap amended: added M14 HITL surface expansion + structured output error strategy (`/roadmap-feature`)
+- Roadmap amended: added M15 A2A protocol (`/roadmap-feature`)
+- Roadmap amended: added M16 MCPServer (`/roadmap-feature`)
+- Roadmap amended: added M17 ACP coding agent integration (`/roadmap-feature`)
+
 ### Changed
+
+- ADR-0040 accepted (owner sign-off): runtime-vs-home boundary for the M9–M17 batch. Refines G13 / `sdk-runtime.md` so home/boundary capabilities (guards, `{resource,thread}` scoping, delegation hooks, HTTP exposure, human gates) are permitted in framework core under existing packages, while the LLM-runtime invariant (loop/provider/storage/streaming = SDK) stays intact. Forbidden package names unchanged. (ADR-0040)
 
 ### Deprecated
 
