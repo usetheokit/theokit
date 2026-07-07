@@ -124,3 +124,21 @@ describe('createHitlPlugin (M4)', () => {
     expect(seenToolName).toBe('ops.deploy')
   })
 })
+
+/**
+ * Regression (M14/M19) — without `kind: 'general'` the SDK's isCodePlugin() drops the HITL plugin
+ * and the veto never fires (the run would proceed WITHOUT waiting for human approval — a safety
+ * hole). This guard fails loud if the discriminator regresses.
+ */
+describe('createHitlPlugin — SDK code-plugin discriminator', () => {
+  it("declares kind: 'general' and a version so the HITL veto actually registers", () => {
+    const plugin = createHitlPlugin({
+      gated: new Map(),
+      emit: () => {},
+      awaitApproval: async () => true,
+    })
+    expect(plugin.kind).toBe('general')
+    expect(typeof plugin.version).toBe('string')
+    expect(plugin.version.length).toBeGreaterThan(0)
+  })
+})
