@@ -11,9 +11,11 @@
  * falls through to `next()` so the api-middleware can 404 it consistently.
  */
 import { randomUUID } from 'node:crypto'
+import type { ServerResponse } from 'node:http'
 
 import type { ViteDevServer, Connect } from 'vite'
 
+import { handleAgentCard, isAgentCardPath } from '../server/agent/agent-card-handler.js'
 import { getApprovalRegistry } from '../server/agent/approval-registry.js'
 import { handleAgentApproval, isApprovalPath } from '../server/agent/approve-agent.js'
 import { mountAgent } from '../server/agent/mount-agent.js'
@@ -32,6 +34,42 @@ import {
 
 const PREFIX = '/api/agents/'
 
+/**
+ * M15 — serve `/.well-known/<name>/agent-card.json` (GET) if the request matches. Returns `true`
+ * when it owned the request (responded or fell through to `next()`), `false` to let the caller
+ * continue. Extracted from the middleware arrow to keep that function within the complexity budget.
+ */
+interface CardDeps {
+  projectRoot: string
+  loadModule: (filePath: string) => Promise<unknown>
+}
+
+async function serveAgentCard(
+  req: Connect.IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+  cardAgentName: string,
+  deps: CardDeps,
+): Promise<void> {
+  const requestId = randomUUID()
+  const start = Date.now()
+  res.setHeader('x-request-id', requestId)
+  const method = (req.method ?? 'GET').toUpperCase()
+  const agent = scanAgents(deps.projectRoot).find((a) => a.name === cardAgentName)
+  if (method !== 'GET' || !agent) {
+    next()
+    return
+  }
+  try {
+    const mod = await deps.loadModule(agent.filePath)
+    const baseUrl = `http://${req.headers.host ?? 'localhost'}`
+    await writeWebResponseToServerResponse(handleAgentCard(mod, agent.name, agent.agentPath, baseUrl), res)
+  } catch (err) {
+    sendError(res, 'INTERNAL', err instanceof Error ? err.message : 'Agent card failed', 500, undefined, requestId)
+  }
+  logRequest({ method, url: req.url ?? '', status: res.statusCode, duration: Date.now() - start, requestId })
+}
+
 export function createAgentMiddleware(
   vite: ViteDevServer,
   projectRoot: string,
@@ -41,6 +79,16 @@ export function createAgentMiddleware(
   return (req, res, next) => {
     void (async () => {
       const url = req.url ?? ''
+
+      // M15 — A2A agent card at `/.well-known/<name>/agent-card.json` (GET). The match check is
+      // SYNC so a non-card request still calls `next()` synchronously (no `await` before it — a
+      // dev-middleware contract some tests rely on); only a real card path enters the async path.
+      const cardAgentName = isAgentCardPath(url.split('?')[0])
+      if (cardAgentName) {
+        await serveAgentCard(req, res, next, cardAgentName, { projectRoot, loadModule })
+        return
+      }
+
       if (!url.startsWith(PREFIX)) {
         next()
         return
