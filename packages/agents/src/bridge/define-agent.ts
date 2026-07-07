@@ -13,6 +13,7 @@
 import type { CustomTool } from '@theokit/sdk'
 import type { z } from 'zod'
 
+import type { Guardrail } from '../guardrails/index.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
@@ -48,6 +49,13 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * openai-agents-js `RunContext`. Distinct from `@Agent`'s context-window `context`.
    */
   context?: Record<string, unknown>
+  /**
+   * M9 — guardrails: input/output guards applied at the framework boundary (ADR-0040 § D2).
+   * Input guards run on the user message before the SDK runtime; a `block` fails the run fast.
+   * Built-ins live in `@theokit/agents` (`promptInjectionDetector`, `piiDetector`, `costGuard`,
+   * `unicodeNormalizer`, `outputModeration`).
+   */
+  guardrails?: readonly Guardrail[]
 }
 
 /**
@@ -137,5 +145,7 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // M7 — run-context flows to CompiledAgentOptions.runContext (distinct from the
     // context-window `context` field the decorator path uses); absent ⇒ no key.
     ...(def.context !== undefined ? { runContext: def.context } : {}),
+    // M9 — guardrails flow through unchanged; the runner applies them at the input boundary.
+    ...(def.guardrails !== undefined ? { guardrails: def.guardrails } : {}),
   }
 }
