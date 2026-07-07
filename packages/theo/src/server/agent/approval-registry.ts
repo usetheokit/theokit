@@ -25,6 +25,19 @@ export interface RegisterOptions {
    * registry does NOT implement retry semantics (a timed-out `'retry'` is a deny, not a re-prompt).
    */
   onTimeout: TimeoutAction
+  /** M14 — the gated tool name, surfaced by `list()` (optional; absent for legacy callers). */
+  toolName?: string
+  /** M14 — the approval question, surfaced by `list()` (optional). */
+  question?: string
+}
+
+/** M14 — a pending approval as surfaced by {@link ApprovalRegistry.list}. */
+export interface PendingApproval {
+  approvalId: string
+  toolName?: string
+  question?: string
+  /** Epoch millis when the pending approval auto-settles (registeredAt + timeoutMs). */
+  expiresAt: number
 }
 
 export interface ApprovalRegistry {
@@ -32,11 +45,14 @@ export interface ApprovalRegistry {
   register(approvalId: string, opts: RegisterOptions): Promise<boolean>
   /** Settle a pending approval. Returns false if the id is unknown or already settled. */
   resolve(approvalId: string, approved: boolean): boolean
+  /** M14 — list the currently-pending approvals (process-wide; single-process contract). */
+  list(): PendingApproval[]
 }
 
 interface Pending {
   settle: (approved: boolean) => void
   timer: ReturnType<typeof setTimeout>
+  info: PendingApproval
 }
 
 /**
@@ -71,7 +87,13 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
         const timer = setTimeout(() => {
           settle(opts.onTimeout === 'proceed')
         }, opts.timeoutMs)
-        pending.set(approvalId, { settle, timer })
+        const info: PendingApproval = {
+          approvalId,
+          toolName: opts.toolName,
+          question: opts.question,
+          expiresAt: Date.now() + opts.timeoutMs,
+        }
+        pending.set(approvalId, { settle, timer, info })
       })
     },
     resolve(approvalId, approved) {
@@ -79,6 +101,9 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
       if (!entry) return false
       entry.settle(approved)
       return true
+    },
+    list() {
+      return [...pending.values()].map((p) => p.info)
     },
   }
 }
