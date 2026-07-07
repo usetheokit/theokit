@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **P0: `theokit@0.19.0` publicou com deps `workspace:^` — todo `npm install` externo quebrava.** O tarball de `0.19.0` continha `"@theokit/agents": "workspace:^"` e `"@theokit/http": "workspace:^"`; o protocolo `workspace:` só resolve dentro do monorepo, então qualquer app TheoKit fresco falhava no `npm install` (silencioso, exit 1) / `pnpm install` (`ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`). Causa: publish fora do `scripts/publish-coordinated.sh` (`npm publish` não reescreve `workspace:`). Fix: `theokit@0.19.1` republicado via `pnpm publish`, que reescreve para `^0.33.0`/`^0.5.4`. Encontrado via dogfood npm-strict ao scaffoldar um app novo. (#92)
+
 ### Security
 
 ## [0.19.0] - 2026-07-07
