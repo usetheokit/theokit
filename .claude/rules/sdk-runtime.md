@@ -45,3 +45,16 @@ Reimplementar o SDK dentro do TheoKit é:
 ## Exceção temporária
 
 `llm-runner.ts` existe como exceção documentada até a migração ser completada (plan `sdk-integration`). Após a migração, este arquivo DEVE ser deletado.
+
+## Carve-out — runtime vs. home (ADR-0040, owner sign-off 2026-07-07)
+
+A regra "SDK é o único runtime" continua **inteira** para o que é runtime: loop LLM,
+chamadas de provider, tool-dispatch, engine de storage de conversa, streaming. ADR-0040
+esclarece que **não é reimplementação de runtime** — e portanto É permitido em framework
+core sob pacotes existentes — o que toca o **boundary/home**: guards no boundary HTTP/stream,
+scoping `{resource,thread}` de request→conversa, hooks de observabilidade de delegação,
+exposição HTTP (agent cards, rotas MCP-over-HTTP) e human gates. Esses reusam primitivas do
+SDK, nunca as reimplementam. Features cujo núcleo É runtime (compression de histórico,
+transporte stdio de MCP, subprocess de coding-agent) vão para `../theokit-sdk` (publish
+train), não para `packages/`. A linha "todo novo agent feature vai para o SDK" (acima) é
+refinada por esta: **runtime → SDK; home/boundary → core**. Ver ADR-0040 § D2.

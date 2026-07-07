@@ -196,3 +196,16 @@ npx tsc --noEmit -p packages/agents/tsconfig.test.json  # Zero type errors
 - CSS-in-JS runtime in core — use Tailwind or consumer's choice
 - Built-in i18n — external lib territory
 - Built-in A11y primitives — TheoUI handles components; rest is consumer's choice
+
+**Carve-out (ADR-0040, M9–M17 batch — owner sign-off 2026-07-07):** the forbidden
+package NAMES above stay forbidden, and the reimplementation ban (G2 / `sdk-runtime.md`)
+is untouched. What ADR-0040 permits: **home/boundary** capabilities under EXISTING packages
+(`packages/agents/src/{guardrails,processors,…}/`, `packages/http/`) that reuse — never
+reimplement — SDK runtime primitives. The runtime-vs-home line: LLM loop, provider I/O,
+tool-dispatch, conversation **storage engine**, and response **streaming** stay SDK-owned;
+guards at the HTTP/stream boundary, `{resource,thread}` request→conversation scoping,
+delegation observability hooks, HTTP exposure (agent cards, MCP-over-HTTP routes), and human
+gates are framework core (the "home the agent lives in" wedge — ADR 0038). See ADR-0040 § D2
+for the per-milestone layer assignment. Capabilities whose core is true runtime
+(M11-compression, M16-stdio-transport, M17-subprocess) go to `../theokit-sdk` behind its
+publish train, NOT into `packages/`.

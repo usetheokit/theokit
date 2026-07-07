@@ -1,0 +1,210 @@
+# MCP — Model Context Protocol
+
+Model Context Protocol (MCP) lets agents connect to external tool servers without you
+writing any tool code. An MCP server exposes tools, resources, and prompts over a
+standard protocol — the agent discovers and calls them the same way it calls any other
+tool.
+
+Use MCP when the tool you need already has a server (GitHub, Notion, Postgres, Brave
+Search, Filesystem, Slack...) rather than writing a `defineAgentTool` from scratch.
+
+---
+
+## Quickstart — stdio server
+
+Connect a local MCP server via the `@MCP` decorator on the `@Agent` class:
+
+```ts
+// agents/dev-agent.ts
+import { Agent } from '@theokit/agents'
+import { MCP } from '@theokit/agents'
+
+@Agent({
+  model: 'anthropic/claude-sonnet-4-6',
+  system: 'You are a developer assistant. Use the GitHub and filesystem tools as needed.',
+})
+@MCP({
+  github: {
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-github'],
+    env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN! },
+  },
+  filesystem: {
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()],
+  },
+})
+export class DevAgent {}
+```
+
+`@MCP` maps server names to their launch configuration. The SDK starts each server as a
+subprocess when the agent initializes, connects via stdio, and registers all the server's
+tools on the agent automatically.
+
+---
+
+## stdio server options
+
+```ts
+{
+  command: 'npx',                 // executable (required)
+  args: ['-y', '@mcp/server'],    // command-line arguments
+  env: { API_KEY: '...' },        // environment variables for the server process
+  cwd: '/path/to/dir',            // working directory (local agents only)
+  requestTimeoutMs: 30_000,       // per-request timeout (default: 30s)
+  envPolicy: 'inherit-scrubbed',  // 'inherit-scrubbed' (default) | 'all'
+}
+```
+
+**`envPolicy`**: by default, the SDK strips secret-like host environment variables
+(`*KEY*`, `*SECRET*`, `*TOKEN*`, `*PASSWORD*`, `*_AUTH*`) from the spawned process to
+prevent a third-party MCP server from exfiltrating credentials. Pass explicit `env` values
+to grant specific variables. Set `envPolicy: 'all'` to grant full env inheritance.
+
+---
+
+## HTTP/SSE server
+
+For remote MCP servers (hosted endpoints):
+
+```ts
+import { Agent } from '@theokit/sdk'
+
+const agent = await Agent.create({
+  model: 'anthropic/claude-sonnet-4-6',
+  local: { cwd: process.cwd() },
+  mcpServers: {
+    notion: {
+      type: 'http',
+      url: 'https://mcp.notion.so/v1',
+      headers: { Authorization: `Bearer ${process.env.NOTION_TOKEN}` },
+      requestTimeoutMs: 20_000,
+    },
+  },
+})
+```
+
+| Field | Description |
+|---|---|
+| `type` | `'http'` or `'sse'` (autodetected from URL if omitted) |
+| `url` | Server endpoint URL |
+| `headers` | Static headers sent with every request |
+| `auth` | OAuth 2.1 PKCE config (see below) |
+| `requestTimeoutMs` | Per-request timeout in ms (default: 30s) |
+
+---
+
+## OAuth 2.1 PKCE for HTTP servers
+
+For MCP servers that require OAuth rather than a static token:
+
+```ts
+mcpServers: {
+  googleDrive: {
+    type: 'http',
+    url: 'https://mcp.googleapis.com/v1',
+    auth: {
+      CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,
+      CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET!,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+      oauth: {
+        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenEndpoint: 'https://oauth2.googleapis.com/token',
+        redirectMode: 'localhost',   // opens browser, catches callback on a local port
+      },
+    },
+  },
+}
+```
+
+On first use, the SDK runs the PKCE flow (opens the browser), stores the tokens locally
+(keychain or file), and refreshes them automatically on subsequent runs.
+
+---
+
+## Using MCP with the fluent builder
+
+The `@MCP` decorator is for the class surface. With the fluent builder:
+
+```ts
+import { agent } from '@theokit/sdk'
+
+export default agent()
+  .model('anthropic/claude-sonnet-4-6')
+  .mcpServers({
+    github: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+    },
+  })
+  .build()
+```
+
+---
+
+## Using MCP with `defineAgent`
+
+```ts
+import { defineAgent } from '@theokit/agents'
+
+export default defineAgent({
+  model: 'anthropic/claude-sonnet-4-6',
+  mcpServers: {
+    postgres: {
+      command: 'npx',
+      args: ['-y', '@mcp/server-postgres', process.env.DATABASE_URL!],
+    },
+  },
+})
+```
+
+---
+
+## Multiple servers
+
+An agent can connect to as many MCP servers as needed. The agent discovers all tools from
+all connected servers and can call any of them during a run:
+
+```ts
+@MCP({
+  github: { command: 'npx', args: ['-y', '@mcp/server-github'] },
+  slack: { command: 'npx', args: ['-y', '@mcp/server-slack'] },
+  browser: { command: 'npx', args: ['-y', '@mcp/server-puppeteer'] },
+  postgres: { command: 'npx', args: ['-y', '@mcp/server-postgres', DATABASE_URL] },
+})
+export class ResearchAgent {}
+```
+
+---
+
+## Where to find MCP servers
+
+The MCP ecosystem has a growing catalog:
+
+- [`modelcontextprotocol.io`](https://modelcontextprotocol.io) — official reference servers
+- [`mcp.so`](https://mcp.so) — community server registry
+- Package search: `@modelcontextprotocol/server-*`, `@mcp/server-*`
+
+Popular servers: GitHub, GitLab, Postgres, MySQL, SQLite, Filesystem, Brave Search,
+Puppeteer, Notion, Linear, Slack, Google Drive, AWS S3.
+
+---
+
+## What TheoKit doesn't have (yet)
+
+**MCPServer** — exposing TheoKit agents and tools to external MCP clients is not built in.
+There's no `MCPServer` class that turns your TheoKit agent into an MCP-compatible endpoint.
+Workaround: manually implement the MCP stdio protocol or serve via an HTTP endpoint the
+client reaches with `type: 'http'`.
+
+**Dynamic toolsets** — Mastra's `listToolsets()` lets different MCP tool credentials be
+supplied per-request (useful for multi-tenant apps where each user has their own API keys).
+TheoKit MCP servers are configured once at agent creation time.
+
+---
+
+## Related
+
+- [Using tools](./using-tools.md) — define custom tools alongside MCP tools
+- [Overview](./overview.md) — agent fundamentals
+- [Run context](./run-context.md) — pass per-request config to tool handlers

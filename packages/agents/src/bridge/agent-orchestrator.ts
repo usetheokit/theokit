@@ -24,7 +24,7 @@ import {
   type ReflectionStrategy,
   resolveLoopStrategy,
 } from '../loop/index.js'
-import { runReflectiveLoop } from '../loop/run-reflective-loop.js'
+import { type RoundStreamFactory, runReflectiveLoop } from '../loop/run-reflective-loop.js'
 
 import { compileAgent, type CompiledTool } from './agent-compiler.js'
 import { type DelegationResult, DelegationError } from './delegation-types.js'
@@ -73,6 +73,26 @@ export interface DelegateOptions {
   reflection?: ReflectionStrategy
   /** Per-run loop-ceiling override (`?? SubAgent @MainLoop maxIterations`). */
   maxIterations?: number
+  // M12 — delegation observability hooks (ADR-0040 § D2). Observability over the EXISTING
+  // primitive; no new orchestration engine. `abortSignal` propagation already lives in `signal`.
+  /**
+   * Called BEFORE the sub-agent runs. Returns the input the sub-agent will receive — return
+   * `ctx.input` unchanged, or a rewritten string (e.g. inject a persona). A transform, not a veto.
+   */
+  onDelegationStart?: (ctx: { subAgent: string; input: string }) => string | Promise<string>
+  /**
+   * Called AFTER the sub-agent completes. Returns the result the supervisor sees — return
+   * `ctx.result` unchanged, or a transformed one (e.g. redact, score, re-wrap).
+   */
+  onDelegationComplete?: (ctx: {
+    subAgent: string
+    result: DelegationResult
+  }) => DelegationResult | Promise<DelegationResult>
+  /**
+   * Injected stream factory (parity with `AgentRunnerRunOptions.streamFactory`) — drives the loop
+   * directly instead of the SDK adapter (tests / custom transport). Absent ⇒ `createSdkAgentStream`.
+   */
+  streamFactory?: RoundStreamFactory
 }
 
 /** Validate API key and throw DelegationError if missing. */
@@ -110,6 +130,11 @@ export async function delegate(
 ): Promise<DelegationResult> {
   const apiKey = requireApiKey(opts, SubAgentClass.name)
 
+  // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
+  const effectiveMessage = opts.onDelegationStart
+    ? await opts.onDelegationStart({ subAgent: SubAgentClass.name, input: message })
+    : message
+
   // 1. Walk + compile sub-agent (EC-1: auto-instantiate toolboxes)
   const walk = walkAgentMetadata(SubAgentClass, [])
   const toolboxInstances = new Map(
@@ -124,16 +149,19 @@ export async function delegate(
   // 3. Build the stream factory (the model call stays in the SDK — ADR 0031) + session.
   // V4-T: forward the per-run config (parity with AgentRunner.stream); model opt wins over the
   // decorator; absent fields ⇒ no key (byte-identical to the pre-V4-T `{ model }`-only override).
-  const streamFactory = createSdkAgentStream(compiled, allTools, apiKey, {
-    model: opts.model ?? walk.agentConfig.model,
-    cwd: opts.cwd,
-    plugins: opts.plugins,
-    providers: opts.providers,
-    agents: opts.agents,
-    budgetTracker: opts.budgetTracker,
-    conversationStorage: opts.conversationStorage,
-    sdkTools: opts.sdkTools,
-  })
+  // M12 — an injected factory (tests / custom transport) wins; absent ⇒ the SDK adapter.
+  const streamFactory =
+    opts.streamFactory ??
+    createSdkAgentStream(compiled, allTools, apiKey, {
+      model: opts.model ?? walk.agentConfig.model,
+      cwd: opts.cwd,
+      plugins: opts.plugins,
+      providers: opts.providers,
+      agents: opts.agents,
+      budgetTracker: opts.budgetTracker,
+      conversationStorage: opts.conversationStorage,
+      sdkTools: opts.sdkTools,
+    })
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
   // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
@@ -146,7 +174,7 @@ export async function delegate(
   const reflection =
     opts.reflection ??
     (loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy)
-  return runReflectiveLoop(streamFactory, message, sessionId, {
+  const result = await runReflectiveLoop(streamFactory, effectiveMessage, sessionId, {
     loop: loopStrategy,
     reflection,
     budget,
@@ -154,4 +182,10 @@ export async function delegate(
     signal: opts.signal,
     retry: opts.retry, // V4-T: per-round transient retry (V4-P) on the delegate path
   })
+
+  // M12 — onDelegationComplete: let the supervisor transform the result before it returns.
+  if (opts.onDelegationComplete) {
+    return await opts.onDelegationComplete({ subAgent: SubAgentClass.name, result })
+  }
+  return result
 }

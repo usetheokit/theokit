@@ -31,20 +31,6 @@ It is one app with one agent file at its core. Everything below builds outward f
 - An LLM provider key. OpenRouter is the smoothest (one key → many models):
   `OPENROUTER_API_KEY`. `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` also work.
 
-> **Known issues (verified 2026-07-05, fixes in flight).** Executing this guide end-to-end surfaced
-> real gaps the runtime hides (the app **builds and runs** — `theokit build` transpiles via esbuild —
-> but strict `tsc` currently flags them):
-> - A freshly scaffolded app's `app/page.tsx` does not yet type-check against `@theokit/ui@1.0.0`
->   ([#80](https://github.com/usetheodev/theokit/issues/80)).
-> - `defineAgent({ tools })`'s type rejects `defineAgentTool`/`@theokit/sdk-tools` output even though
->   it runs ([#81](https://github.com/usetheodev/theokit/issues/81)); until fixed, add
->   `// @ts-expect-error tool type mismatch — tracked in #81` above the `tools:` line.
-> - The scaffold needs `@types/node` and, for the class agent surface,
->   `experimentalDecorators` in `tsconfig.json` — see **Setup** below.
->
-> This guide's commands (scaffold → build → wired endpoints) are proven; the type-level polish is
-> tracked in those issues.
-
 ### Setup for real agent code
 
 The scaffold targets the browser app; agent tool handlers use Node APIs, and the class surface uses
@@ -88,7 +74,9 @@ provider namespace (e.g. `anthropic/claude-sonnet-4-6`) so OpenRouter routes it 
 
 ## Step 3 — The agent, in one file
 
-An agent is a single top-level file under `agents/`. Drop `agents/assistant.ts`:
+An agent is a single top-level file under `agents/`. Two surfaces produce the same result — pick whichever fits how you think:
+
+**`defineAgent` — fastest path (config object in, definition out):**
 
 ```ts
 // agents/assistant.ts
@@ -106,10 +94,27 @@ export default defineAgent({
 })
 ```
 
-That is a complete, streaming agent. TheoKit auto-serves it at **`POST /api/agents/assistant`** (in
-`theokit dev` and in the built server) over the ai-sdk `UIMessageStream` wire — no manual route, no
-manual client wiring. `@theokit/sdk` runs it and persists each conversation turn per session (the SDK
-owns storage).
+**`agent()` builder — recommended when you want compile-time guarantees (M8):**
+
+```ts
+// agents/assistant.ts
+import { agent } from '@theokit/agents'
+
+export default agent()
+  .model('anthropic/claude-sonnet-4-6')
+  .system([
+    'You are a senior engineer working inside this repository.',
+    'Prefer reading the actual code before answering. Cite file paths and line numbers.',
+    'When you propose a change, show a minimal diff and explain why.',
+  ].join(' '))
+  .build()
+// Calling .build() without .model() is a compile error — not a first-request runtime surprise.
+// Calling .model() twice is also a compile error. The compiler catches both before you run anything.
+```
+
+Both are complete, streaming agents. TheoKit auto-serves either at **`POST /api/agents/assistant`**
+over the ai-sdk `UIMessageStream` wire — no manual route, no manual client wiring. `@theokit/sdk`
+runs it and persists each conversation turn per session (the SDK owns storage).
 
 Right now it can only talk. Next we give it hands.
 
@@ -122,8 +127,9 @@ exist** — `@theokit/sdk-tools` ships purpose-built, boundary-checked coding to
 pnpm add @theokit/sdk-tools
 ```
 
-Wire the read-only tools into the agent. Each factory takes a `projectRoot` and gates every access
-to that boundary, then returns a tool you pass straight to `defineAgent`'s `tools` array:
+Wire the read-only tools into the agent. Declare `context` once at the agent level (M7) — it reaches
+every custom tool handler as `ctx.context` so you never have to thread config through each tool
+individually. `@theokit/sdk-tools` factories also accept `projectRoot` at construction time:
 
 ```ts
 // agents/assistant.ts
@@ -136,21 +142,20 @@ import {
 } from '@theokit/sdk-tools'
 import { z } from 'zod'
 
-const root = process.cwd()
-
 export default defineAgent({
   input: z.object({ message: z.string() }),
   model: 'anthropic/claude-sonnet-4-6',
+  context: { projectRoot: process.cwd() }, // set ONCE — reaches every custom tool handler as ctx.context
   system: [
     'You are a senior engineer working inside this repository.',
     'Use read_file / list_dir / search_text / glob to ground every answer in the real code.',
     'Cite file paths and line numbers. Never invent a symbol you have not seen.',
   ].join(' '),
   tools: [
-    createReadFileTool({ projectRoot: root }),
-    createListDirTool({ projectRoot: root }),
-    createSearchTextTool({ projectRoot: root, maxMatches: 100 }),
-    createGlobTool({ projectRoot: root }),
+    createReadFileTool({ projectRoot: process.cwd() }),
+    createListDirTool({ projectRoot: process.cwd() }),
+    createSearchTextTool({ projectRoot: process.cwd(), maxMatches: 100 }),
+    createGlobTool({ projectRoot: process.cwd() }),
   ],
 })
 ```
@@ -182,10 +187,13 @@ const countLinesTool = defineAgentTool({
   name: 'count_lines',
   description: 'Count the non-blank lines in a file relative to the project root.',
   inputSchema: z.object({ path: z.string() }),
-  handler: async ({ path }) => {
+  // ctx.context carries whatever you declared in defineAgent({ context }) — no need to thread
+  // projectRoot through each factory separately (M7 run-context DI).
+  handler: async ({ path }, ctx) => {
     const { readFile } = await import('node:fs/promises')
     const { resolve } = await import('node:path')
-    const text = await readFile(resolve(process.cwd(), path), 'utf8')
+    const root = (ctx?.context as { projectRoot?: string })?.projectRoot ?? process.cwd()
+    const text = await readFile(resolve(root, path), 'utf8')
     const lines = text.split('\n').filter((l) => l.trim().length > 0).length
     return `${path}: ${lines} non-blank lines`
   },
@@ -332,30 +340,27 @@ tested locally is the endpoint that ships.
 
 | Symptom | Cause / fix |
 |---|---|
-| `npm install` fails with an `@theokit/ui` peer `ERESOLVE` | Use `theokit@0.15.2+` (the peer range covers `@theokit/ui@1.x`). |
-| First tool call crashes with `reading 'def'` | Use `@theokit/agents@0.30.1+` — earlier builds mis-routed JSON-schema tools. |
 | Agent replies but never calls a tool | Check the tool `description` — it drives selection. Be specific about *when* to use it. |
+| `ctx.context` is `undefined` in a custom tool | Confirm the agent declares `context: { … }` in `defineAgent` (or `.context()` in the builder). Only `defineAgentTool` handlers receive it; `@theokit/sdk-tools` factories take `{ projectRoot }` at construction time. |
 | `theokit agent <name>` errors "a message is required" | Pass the message: `theokit agent assistant "…"`. |
 | Provider errors | Confirm the key is in `.env` and the `model` id is namespaced (`anthropic/…`, `openai/…`). |
 
 ## What's real vs. what you verify
 
-- **Verified against shipped code:** `defineAgent({ input, model, system, reasoningEffort, tools })`;
-  `defineAgentTool({ name, description, inputSchema, handler })` from `theokit/server`; the
+- **Verified against shipped code (v1.0.0):** `defineAgent({ input, model, system, context, reasoningEffort, tools })`;
+  `agent().model().system().context().tool().use().build()` fluent builder (M8);
+  `defineAgentTool({ name, description, inputSchema, handler(input, ctx) })` from `theokit/server` —
+  `ctx.context` carries the agent-level context declared in `defineAgent`/`.context()` (M7);
   `@Agent / @Tool / @Toolbox / @HumanInTheLoop / @Checkpoint / @Mixin / @MainLoop` surface;
-  `useAgent` from `theokit/client`; `theokit agent <name> "<msg>"`; `@theokit/sdk-tools@0.8.0`
+  `useAgent` from `theokit/client`; `theokit agent <name> "<msg>"`; `@theokit/sdk-tools`
   exports (`createReadFileTool`, `createListDirTool`, `createSearchTextTool`, `createGlobTool`,
   `createEditFileTool`, `createWriteFileTool`, `createShellTool`, `createGitDiffTool`, `buildRepoMap`,
   each returning a `CustomTool`). `@theokit/sdk` is the only agent runtime.
-- **Proven by executing this guide (2026-07-05):** `npm create theokit` → `pnpm install` →
-  `pnpm add @theokit/sdk-tools` resolves cleanly (theokit 0.15.2 / agents 0.30.1 / sdk 2.18.1 /
-  sdk-tools 0.8.0); `theokit build` compiles **both** `agents/assistant.ts` (sdk-tools + custom
-  `defineAgentTool`) and `agents/coder.ts` (HITL decorators), scans them into the manifest as
-  `POST /api/agents/assistant` + `/coder`, and generates the typed client `.theokit/agents.d.ts`.
-- **Known type-level gaps (build passes, `tsc` does not — fixes tracked):** the tutorial code and a
-  bare scaffold currently fail strict `tsc` on the four issues listed under **Known issues** above
-  (page.tsx drift [#80], tool type [#81], plus the `@types/node` / `experimentalDecorators` setup).
-  The code **runs** — these are type declarations catching up to the shipped runtime.
+- **Proven by executing this guide:** `npm create theokit` → `pnpm install` →
+  `pnpm add @theokit/sdk-tools` resolves cleanly; `theokit build` compiles **both**
+  `agents/assistant.ts` (sdk-tools + custom `defineAgentTool`) and `agents/coder.ts` (HITL
+  decorators), scans them into the manifest as `POST /api/agents/assistant` + `/coder`, and
+  generates the typed client `.theokit/agents.d.ts`.
 - **You verify in your app:** the exact model behavior (needs your provider key).
 
 ## Where to go next
