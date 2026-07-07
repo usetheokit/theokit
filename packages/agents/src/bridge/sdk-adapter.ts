@@ -9,7 +9,6 @@
 import type {
   AgentDefinition,
   BudgetTracker,
-  ContextSettings,
   ConversationStorageAdapter,
   CustomTool,
   InteractionUpdate,
@@ -17,66 +16,21 @@ import type {
   PluginsSettings,
   ProviderRoutingSettings,
   SendOptions,
-  SkillsSettings,
-  SystemPromptResolver,
 } from '@theokit/sdk'
 
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
-import { compileProjectContext } from './compile-project-context.js'
 import {
   translateInteractionUpdate,
   translateSdkEvent,
   type SdkMessage,
 } from './event-translator.js'
 import { buildModelSelection } from './model-selection.js'
+import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
 import { stripToolDialectStream } from './tool-dialect-stripper.js'
-
-/** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
-interface M8CreateOptions {
-  skills?: SkillsSettings
-  context?: ContextSettings
-  systemPrompt?: string | SystemPromptResolver
-  /** SDK local options: settings source for SKILL.md discovery (EC-1) + per-run cwd (V4-L.2). */
-  local?: { settingSources?: string[]; cwd?: string }
-}
-
-/**
- * Project the M8 fields from `CompiledAgentOptions` (the single compile site is
- * `agent-compiler.ts`, per sdk-runtime.md) into `Agent.create()` arguments. Only
- * the async `@ProjectContext` resolver is built here (it does I/O, so the compiler
- * keeps it raw). `applied` lists which decorators contributed, for the
- * observability log (wiring triad — runtime metric).
- */
-function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
-  options: M8CreateOptions
-  applied: string[]
-} {
-  const options: M8CreateOptions = {}
-  const applied: string[] = []
-  const base = compiled.systemPrompt
-
-  if (compiled.skills) {
-    options.skills = compiled.skills
-    options.local = { settingSources: ['project'] }
-    applied.push('skills')
-  }
-  if (compiled.context) {
-    options.context = compiled.context
-    applied.push('context')
-  }
-  if (compiled.projectContext) {
-    options.systemPrompt = compileProjectContext(compiled.projectContext, base)
-    applied.push('projectContext')
-  } else if (base !== undefined) {
-    options.systemPrompt = base
-  }
-
-  return { options, applied }
-}
 
 /**
  * Per-request overrides forwarded into `Agent.create` (V4-L.2 + V4-L.3). Bundled into
@@ -141,46 +95,6 @@ export interface RuntimeOverrides {
    * come from imperative SDK factories supply them without the `@Tool` compile path.
    */
   sdkTools?: readonly CustomTool[]
-}
-
-/**
- * V4-N.1: build the terminal `done` event from the SDK `RunResult` (real per-run token usage +
- * cost). Extracted from the stream generator to keep its complexity within budget (G6).
- */
-function realUsageDone(
-  result: {
-    result?: string
-    usage?: {
-      inputTokens?: number
-      outputTokens?: number
-      // V4-O: optional reasoning/cache buckets from the SDK TokenUsage.
-      reasoningTokens?: number
-      cacheReadTokens?: number
-      cacheWriteTokens?: number
-    }
-    cost?: { amount?: number }
-  },
-  t0: number,
-): StreamEvent {
-  const u = result.usage
-  const inputTokens = u?.inputTokens ?? 0
-  const outputTokens = u?.outputTokens ?? 0
-  return {
-    type: 'done',
-    result: result.result ?? '',
-    // V4-O: forward the SDK reasoning/cache buckets (0 when the provider omits them) so a
-    // consumer keeps full per-turn usage through the loop into DelegationResult (passthrough — ADR D1).
-    usage: {
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      reasoningTokens: u?.reasoningTokens ?? 0,
-      cacheReadTokens: u?.cacheReadTokens ?? 0,
-      cacheWriteTokens: u?.cacheWriteTokens ?? 0,
-    },
-    durationMs: Date.now() - t0,
-    cost: result.cost?.amount ?? 0,
-  }
 }
 
 /**
