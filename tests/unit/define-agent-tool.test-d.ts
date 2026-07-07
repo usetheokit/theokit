@@ -40,13 +40,15 @@ describe('defineAgentTool (types)', () => {
     })
   })
 
-  it('rejects handler returning a number', () => {
+  it('accepts a rich (non-string) handler return when toModelOutput maps it (M18)', () => {
+    // M18: the handler may return rich data `R`; `toModelOutput` maps it to the model-visible
+    // string. Without `toModelOutput`, a non-string return fails fast at RUNTIME (not compile).
     defineAgentTool({
-      name: 'badreturn',
+      name: 'richreturn',
       description: 'd',
       inputSchema: z.object({}),
-      // @ts-expect-error — number is not assignable to string | Promise<string>
-      handler: () => 42,
+      handler: () => ({ count: 42 }),
+      toModelOutput: (r) => `count=${r.count}`,
     })
   })
 

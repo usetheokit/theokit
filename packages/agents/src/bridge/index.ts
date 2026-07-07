@@ -103,5 +103,34 @@ export {
   type BeforeToolCallContext,
   type AfterToolCallContext,
   type LLMCallContext,
+  type ProcessInputContext,
   type ToolCallVeto,
 } from './tool-hooks-plugin.js'
+
+export {
+  runWithApiErrorHandling,
+  createApiErrorHandler,
+  type ApiErrorPolicy,
+  type ApiErrorDecision,
+  type ApiErrorContext,
+} from './api-error-handler.js'
+
+export {
+  delegateBackground,
+  delegateWithScoring,
+  type BackgroundDelegation,
+  type DelegateFn,
+  type Scorer,
+  type ScoreVerdict,
+  type ScoredDelegation,
+} from './delegation-scoring.js'
+
+export {
+  resolveMcpServers,
+  mcpRegistry,
+  mcpToolApprovals,
+  type McpSelection,
+  type McpRequestContext,
+  type McpRegistryConfig,
+  type McpApprovalSpec,
+} from './mcp-resolver.js'

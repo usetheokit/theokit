@@ -198,6 +198,27 @@ typed input.
 
 ---
 
+## Error strategy on validation failure (M14)
+
+By default, if the model's output still fails schema validation after all retries, `generateObject`
+throws `GenerateObjectError('parse_failed')`. `errorStrategy` changes that:
+
+```ts
+const { object, raw } = await Agent.generateObject({
+  schema: Report,
+  prompt: '...',
+  model: 'anthropic/claude-sonnet-4-6',
+  local: { cwd: process.cwd() },
+  errorStrategy: 'return-partial', // 'throw' (default) | 'return-partial' | 'return-raw'
+})
+```
+
+- `'throw'` — the default; raises `GenerateObjectError`.
+- `'return-raw'` — resolves with the raw, unvalidated input the model sent (inspect `raw`).
+- `'return-partial'` — for object schemas, keeps only the fields that individually validate.
+
+Shipped in `@theokit/sdk@2.19.0`.
+
 ## What TheoKit doesn't have (yet)
 
 **Multiple schema providers** — Mastra supports Valibot, ArkType, and raw JSON Schema in

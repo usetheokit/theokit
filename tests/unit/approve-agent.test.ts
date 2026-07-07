@@ -54,7 +54,7 @@ describe('handleAgentApproval (M4)', () => {
     const res = await handleAgentApproval(approveRequest(true), PATH, reg, 'strict')
 
     expect(res.status).toBe(200)
-    await expect(pending).resolves.toBe(true)
+    await expect(pending).resolves.toEqual({ approved: true })
   })
 
   it('test_deny_settles_the_pending_promise_false', async () => {
@@ -64,7 +64,7 @@ describe('handleAgentApproval (M4)', () => {
     const res = await handleAgentApproval(approveRequest(false), PATH, reg, 'strict')
 
     expect(res.status).toBe(200)
-    await expect(pending).resolves.toBe(false)
+    await expect(pending).resolves.toEqual({ approved: false })
   })
 
   it('test_unknown_id_returns_404', async () => {
@@ -128,6 +128,6 @@ describe('handleAgentApproval (M4)', () => {
     })
     const res = await handleAgentApproval(bare, PATH, reg, 'off')
     expect(res.status).toBe(200)
-    await expect(pending).resolves.toBe(true)
+    await expect(pending).resolves.toEqual({ approved: true })
   })
 })

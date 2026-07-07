@@ -32,7 +32,26 @@ interface PluginContext {
 }
 export interface HitlPlugin {
   name: string
+  /** SDK `BasePlugin.version` — required by the `@theokit/sdk` Plugin contract. */
+  version: string
+  /**
+   * SDK Plugin discriminator. MUST be `'general'` — the SDK's `isCodePlugin()` gate drops any plugin
+   * object lacking `kind: 'general'`, so a `register()`-only object never fires (the HITL veto would
+   * silently NOT pause the run). Regression guard for the M14 latent E2E bug.
+   */
+  kind: 'general'
   register(ctx: PluginContext): void
+}
+
+/**
+ * M20 — a settled HITL decision. Structural mirror of the harness's `ApprovalDecision` (the agents
+ * package must not import from `theokit` — dependency direction). `awaitApproval` may resolve a bare
+ * boolean (legacy) OR this object; the plugin normalizes both.
+ */
+export interface HitlDecision {
+  approved: boolean
+  reason?: string
+  payload?: unknown
 }
 
 /** Injected wiring — the harness (mount-agent) supplies these; the plugin stays pure. */
@@ -41,12 +60,15 @@ export interface HitlWiring {
   gated: Map<string, HumanInTheLoopOptions>
   /** Push the approval-required event into the agent stream (the translator emits the chunk). */
   emit: (event: ApprovalRequiredEvent) => void
-  /** Await the human decision for `approvalId`; resolves true=approve, false=deny (or timeout). */
+  /**
+   * Await the human decision for `approvalId`; resolves approve/deny (or timeout). M20 — may resolve
+   * a bare boolean (legacy) OR a {@link HitlDecision} carrying an approver `reason` + `payload`.
+   */
   awaitApproval: (
     approvalId: string,
     opts: HumanInTheLoopOptions,
     toolName: string,
-  ) => Promise<boolean>
+  ) => Promise<boolean | HitlDecision>
 }
 
 /**
@@ -56,6 +78,10 @@ export interface HitlWiring {
 export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
   return {
     name: 'theokit-hitl',
+    version: '1.0.0',
+    // `kind: 'general'` is load-bearing — without it the SDK's isCodePlugin() drops this plugin and
+    // the HITL veto never fires (the run would proceed WITHOUT waiting for human approval).
+    kind: 'general',
     register(ctx) {
       ctx.on('pre_tool_call', async (c): Promise<PreToolCallVeto | undefined> => {
         const opts = wiring.gated.get(c.name)
@@ -69,11 +95,20 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
           input: c.args,
           callbackUrl: `approve/${approvalId}`,
           timeoutMs: opts.timeout ?? 300_000,
+          // M20 — carry the declared custom-payload schema so the UI knows what to collect.
+          ...(opts.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
         })
-        const approved = await wiring.awaitApproval(approvalId, opts, c.name)
-        return approved
-          ? undefined
-          : { block: true, message: `Tool '${c.name}' denied by human approver` }
+        const raw = await wiring.awaitApproval(approvalId, opts, c.name)
+        // M20 — normalize the legacy boolean and the decision object to one shape.
+        const decision: HitlDecision = typeof raw === 'boolean' ? { approved: raw } : raw
+        if (decision.approved) return undefined
+        // On denial, surface the approver's reason + payload to the model so it can self-correct.
+        let message = `Tool '${c.name}' denied by human approver`
+        if (decision.reason) message += `: ${decision.reason}`
+        if (decision.payload !== undefined) {
+          message += ` (payload: ${JSON.stringify(decision.payload)})`
+        }
+        return { block: true, message }
       })
     },
   }
