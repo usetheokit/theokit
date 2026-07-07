@@ -34,6 +34,17 @@ export interface CustomTool {
     input: Record<string, unknown>,
     ctx?: { signal?: AbortSignal; context?: unknown },
   ) => string | Promise<string>
+  /** M18 — optional per-target formatters for the app's UI/transcript (ignored by the SDK wire). */
+  transform?: ToolTransform
+}
+
+/**
+ * M18 — per-target formatters. `display` shapes the rich handler result for the UI; `transcript`
+ * shapes it for a saved transcript. Applied by {@link applyTransform}, never by the model wire.
+ */
+export interface ToolTransform<R = unknown> {
+  display?: (result: R) => unknown
+  transcript?: (result: R) => unknown
 }
 
 /**
@@ -43,7 +54,7 @@ export interface CustomTool {
  *
  * @public
  */
-export interface DefineAgentToolSpec<T extends z.ZodType> {
+export interface DefineAgentToolSpec<T extends z.ZodType, R = string> {
   /** Tool name surfaced to the LLM. Must match `^[a-zA-Z][a-zA-Z0-9_-]{0,63}$`. */
   name: string
   /** Description surfaced to the LLM. Required — drives tool-selection accuracy. */
@@ -55,11 +66,21 @@ export interface DefineAgentToolSpec<T extends z.ZodType> {
    * is the object supplied once at the agent level (`defineAgent({ context })`) or per-run —
    * read it for shared config like `projectRoot` instead of baking it into the factory.
    * `ctx.signal` is the abort signal. Optional so existing one-arg handlers keep working.
+   *
+   * M18 — the handler may return RICH data `R` (not just a string) when `toModelOutput` is
+   * provided to map it to the model-visible string.
    */
   handler: (
     input: z.infer<T>,
     ctx?: { signal?: AbortSignal; context?: unknown },
-  ) => string | Promise<string>
+  ) => R | Promise<R>
+  /**
+   * M18 — map the rich handler result `R` to the string the model sees. Required (in practice)
+   * when `handler` returns a non-string; absent ⇒ the handler must return a string.
+   */
+  toModelOutput?: (result: R) => string
+  /** M18 — per-target formatters (`display` / `transcript`) for the app, applied by {@link applyTransform}. */
+  transform?: ToolTransform<R>
 }
 
 const TOOL_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
@@ -106,7 +127,9 @@ function isZodObject(schema: z.ZodType): boolean {
  *
  * @public
  */
-export function defineAgentTool<T extends z.ZodType>(spec: DefineAgentToolSpec<T>): CustomTool {
+export function defineAgentTool<T extends z.ZodType, R = string>(
+  spec: DefineAgentToolSpec<T, R>,
+): CustomTool {
   if (!TOOL_NAME_REGEX.test(spec.name)) {
     throw new Error(
       `defineAgentTool: name must match ${TOOL_NAME_REGEX.source}. Got: ${JSON.stringify(spec.name)}`,
@@ -140,7 +163,30 @@ export function defineAgentTool<T extends z.ZodType>(spec: DefineAgentToolSpec<T
     ): Promise<string> => {
       const parsed = spec.inputSchema.parse(input)
       // M7 — forward the run ctx so the handler can read `ctx.context` (e.g. projectRoot).
-      return await spec.handler(parsed, ctx)
+      const result = await spec.handler(parsed, ctx)
+      // M18 — shape the (possibly rich) result into the model-visible string.
+      if (spec.toModelOutput) return spec.toModelOutput(result)
+      if (typeof result !== 'string') {
+        throw new Error(
+          `defineAgentTool(${JSON.stringify(spec.name)}): handler returned a non-string; provide toModelOutput to map it to a string for the model.`,
+        )
+      }
+      return result
     },
+    // M18 — carry the per-target formatters for the app (ignored by the SDK wire).
+    ...(spec.transform !== undefined ? { transform: spec.transform as ToolTransform } : {}),
   }
+}
+
+/**
+ * M18 — apply a tool's `transform` for a target (`display` / `transcript`). Returns the formatted
+ * value, or the raw `result` when the tool declares no transform for that target.
+ */
+export function applyTransform(
+  tool: CustomTool,
+  result: unknown,
+  target: 'display' | 'transcript',
+): unknown {
+  const fn = tool.transform?.[target]
+  return fn ? fn(result) : result
 }
