@@ -102,5 +102,6 @@ export {
   type ToolHooksPlugin,
   type BeforeToolCallContext,
   type AfterToolCallContext,
+  type LLMCallContext,
   type ToolCallVeto,
 } from './tool-hooks-plugin.js'
