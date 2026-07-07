@@ -618,7 +618,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M30 — [ ] MCP Apps: iframe UIs (`ui://` resources) (ADR-0041)
+### M30 — [x] MCP Apps: iframe UIs (`ui://` resources) (ADR-0041)
 
 **Objective:** MCP tools that carry `ui://` resource HTML rendered in a sandboxed iframe — a richer MCP tool surface (formerly OUT_OF_SCOPE, re-scoped by owner).
 
