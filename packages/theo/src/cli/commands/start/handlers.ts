@@ -5,6 +5,7 @@ import { getApprovalRegistry } from '../../../server/agent/approval-registry.js'
 import { handleAgentApproval, isApprovalPath } from '../../../server/agent/approve-agent.js'
 import { mountAgent } from '../../../server/agent/mount-agent.js'
 import { resolveProvider } from '../../../server/agent/provider-resolver.js'
+import { serveAgentAuxRoute } from '../../../server/agent/serve-aux-routes.js'
 import { executeAction } from '../../../server/http/action-execute.js'
 import { executeRoute } from '../../../server/http/execute.js'
 import {
@@ -23,6 +24,9 @@ import type { ServerRouteNode } from '../../../server/scan/match.js'
 import type { LoadModule } from '../../../server/scan/module-loader.js'
 import type { CsrfMode, DisallowedConfig } from '../../../server/security/csrf.js'
 import type { TheoTransformer } from '../../../server/transformer.js'
+
+/** Response header carrying the per-request correlation id. */
+const X_REQUEST_ID = 'x-request-id'
 
 /**
  * T6.1 (PV-7 SRP): start.ts request orchestrator decomposed into 5 focused
@@ -79,7 +83,7 @@ function applyRateLimit(c: RequestHandlerCtx, method: string): boolean {
 /** Branch 1: action routes (`/api/__actions/{file}/{exportName}`). */
 export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
   if (!c.url.startsWith('/api/__actions/')) return false
-  c.res.setHeader('x-request-id', c.requestId)
+  c.res.setHeader(X_REQUEST_ID, c.requestId)
 
   if (applyRateLimit(c, c.req.method ?? 'POST')) return true
 
@@ -145,10 +149,37 @@ export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
 }
 
 /**
- * Branch 1.5: agent convention routes (`/api/agents/<name>`, M2). Runs BEFORE the
- * generic `/api/*` branch so a scanned `agents/<name>.ts` owns its path (parity with
- * dev). Loads the module, resolves the provider apiKey (fail-fast), and streams the
- * M0/M1 UIMessageStream via `mountAgent` (the single dev+prod wiring point).
+ * Branch 1.4: agent AUXILIARY routes served identically in dev + prod (M15/M16 follow-up) —
+ * agent cards (`/.well-known/<name>/agent-card.json`), MCP (`/api/agents/<name>/mcp`), and the
+ * pending-approvals listing (`/api/agents/<name>/approvals`). Before this, they were dev-only, so a
+ * built/deployed app 404'd them. Delegates to the shared `serveAgentAuxRoute` dispatcher (DRY).
+ */
+export async function tryServeAgentAux(c: RequestHandlerCtx): Promise<boolean> {
+  const urlPath = c.url.split('?')[0]
+  const baseUrl = `http://${c.req.headers.host ?? 'localhost'}`
+  const request = incomingMessageToWebRequest(c.req)
+  const response = await serveAgentAuxRoute(request, urlPath, {
+    agents: c.cachedAgents,
+    loadModule: c.loadModule,
+    baseUrl,
+  })
+  if (response === null) return false
+  c.res.setHeader(X_REQUEST_ID, c.requestId)
+  await writeWebResponseToServerResponse(response, c.res)
+  logRequest({
+    method: (c.req.method ?? 'GET').toUpperCase(),
+    url: c.url,
+    status: c.res.statusCode,
+    duration: Date.now() - c.startTime,
+    requestId: c.requestId,
+  })
+  return true
+}
+
+/**
+ * Branch 1.5: agent convention routes (`/api/agents/<name>`, M2). Runs BEFORE the generic `/api/*`
+ * branch so a scanned `agents/<name>.ts` owns its path (parity with dev). Loads the module, resolves
+ * the provider apiKey (fail-fast), and streams the M0/M1 UIMessageStream via `mountAgent`.
  */
 export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
   if (!c.url.startsWith('/api/agents/')) return false
@@ -157,7 +188,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
   // HITL approve route (`/api/agents/<name>/approve/<id>`, M4) — resolve the pending approval.
   // Handled BEFORE the agent-path exact match (the approve path never equals an `agentPath`).
   if (isApprovalPath(urlPath)) {
-    c.res.setHeader('x-request-id', c.requestId)
+    c.res.setHeader(X_REQUEST_ID, c.requestId)
     if (applyRateLimit(c, c.req.method ?? 'POST')) return true
     const method = (c.req.method ?? 'POST').toUpperCase()
     if (method !== 'POST') {
@@ -210,7 +241,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
   const agent = c.cachedAgents.find((a) => a.agentPath === urlPath)
   if (!agent) return false // fall through to the generic /api/* branch (may 404 there)
 
-  c.res.setHeader('x-request-id', c.requestId)
+  c.res.setHeader(X_REQUEST_ID, c.requestId)
   if (applyRateLimit(c, c.req.method ?? 'POST')) return true
 
   const method = (c.req.method ?? 'POST').toUpperCase()
@@ -262,7 +293,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
 /** Branch 2: API routes (`/api/*` excluding actions). */
 export async function tryServeApiRoute(c: RequestHandlerCtx): Promise<boolean> {
   if (!c.url.startsWith('/api/')) return false
-  c.res.setHeader('x-request-id', c.requestId)
+  c.res.setHeader(X_REQUEST_ID, c.requestId)
 
   if (applyRateLimit(c, c.req.method ?? 'GET')) return true
 
