@@ -8,6 +8,7 @@ export * from './a2a/a2a-client.js'
 export * from './conversation-scope.js'
 export * from './skills-resolver.js'
 export * from './acp/protocol.js'
+export * from './acp/client.js'
 export * from './manifest/agent-manifest.js'
 export { agentsPlugin, type AgentsPluginOptions } from './theokit-plugin.js'
 export type {
