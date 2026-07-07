@@ -19,6 +19,7 @@ import { buildSecurityHeaders } from '../../../server/security/security-headers.
 import {
   tryServeAction,
   tryServeAgent,
+  tryServeAgentAux,
   tryServeApiRoute,
   tryServeCustom404,
   tryServeStatic,
@@ -200,6 +201,7 @@ export function createRequestHandler(
       try {
         if (await tryServeReserved(ctx, url, res)) return
         if (await tryServeAction(handlerCtx)) return
+        if (await tryServeAgentAux(handlerCtx)) return
         if (await tryServeAgent(handlerCtx)) return
         if (await tryServeApiRoute(handlerCtx)) return
         if (tryServeStatic(handlerCtx)) return

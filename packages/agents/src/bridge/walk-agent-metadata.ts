@@ -17,8 +17,9 @@ import { getContextWindowConfig } from '../decorators/context-window.js'
 import type { ContextWindowOptions } from '../decorators/context-window.js'
 import type { GatewayOptions } from '../decorators/gateway.js'
 import { getGatewayConfig } from '../decorators/gateway.js'
-import { getHumanInTheLoopConfig } from '../decorators/human-in-the-loop.js'
+import { getGuardrailsConfig } from '../decorators/guardrails.js'
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
+import { getHumanInTheLoopConfig } from '../decorators/human-in-the-loop.js'
 import { getMcpConfig } from '../decorators/mcp.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import { getMemoryConfig } from '../decorators/memory.js'
@@ -30,6 +31,7 @@ import { getProjectContextConfig } from '../decorators/project-context.js'
 import { getSkillsConfig } from '../decorators/skills.js'
 import type { SkillsOptions } from '../decorators/skills.js'
 import { getSubAgents } from '../decorators/sub-agents.js'
+import type { Guardrail } from '../guardrails/index.js'
 import { getMeta } from '../metadata/index.js'
 import {
   AGENT_CONFIG,
@@ -85,6 +87,8 @@ export interface AgentWalkResult {
   contextWindow?: ContextWindowOptions
   projectContext?: ProjectContextOptions
   mcpServers?: McpServersMap
+  /** M9 — `@Guardrails([...])` input/output guards when the class declares them; absent ⇒ none. */
+  guardrails?: readonly Guardrail[]
   compaction?: CompactionDecoratorConfig
   /** `@Checkpoint` config (M4) when the agent declares resumable execution; absent ⇒ no checkpoint. */
   checkpoint?: CheckpointOptions
@@ -288,6 +292,7 @@ export function walkAgentMetadata(
   const memory = getMemoryConfig(AgentClass)
   const skills = getSkillsConfig(AgentClass)
   const mcpServers = getMcpConfig(AgentClass)
+  const guardrails = getGuardrailsConfig(AgentClass)
 
   // M8: @ContextWindow + @ProjectContext have native SDK mappings for only a
   // subset of their knobs; warn once for the rest (honest enforcement, G10).
@@ -313,6 +318,7 @@ export function walkAgentMetadata(
     contextWindow,
     projectContext,
     mcpServers,
+    guardrails,
     compaction,
     checkpoint,
   }
