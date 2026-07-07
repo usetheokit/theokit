@@ -95,6 +95,24 @@ For `redact`, put the transformed text in `text`.
 
 ---
 
+## `@Guardrails` — class decorator (M9)
+
+The `@Agent` class path has the same guardrail capability as `defineAgent({ guardrails })`:
+
+```ts
+import { Agent, MainLoop, Guardrails } from '@theokit/agents'
+import { promptInjectionDetector, piiDetector } from '@theokit/agents'
+
+@Agent({ name: 'support', route: '/api/agents/support' })
+@Guardrails([promptInjectionDetector(), piiDetector({ redact: true })])
+class SupportAgent {
+  @MainLoop() loop() {}
+}
+```
+
+The declared guards compile into `compiled.guardrails` and `AgentRunner` applies them at the
+framework boundary — identical to the functional path. `@theokit/agents@0.32.0`.
+
 ## Related
 
 - [Using tools](./using-tools.md) — tools are the primitive guardrails protect

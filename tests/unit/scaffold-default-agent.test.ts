@@ -48,6 +48,9 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     const page = read('app/page.tsx')
     expect(page).toContain('ChatMessage')
     expect(page).toMatch(/parts/)
+    // Regression guard (#85): the obsolete "uses ToolCallCard" assertion is gone; the real template
+    // (create-theokit/templates/default) fully migrated — ToolCallCard is no longer referenced.
+    expect(page).not.toContain('ToolCallCard')
   })
 
   it('app/page.tsx uses AgentStreaming as the streaming indicator', () => {

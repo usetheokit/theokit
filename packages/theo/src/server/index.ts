@@ -109,6 +109,7 @@ export {
   defineAppResource,
   buildResourceDescriptors,
   readAppResource,
+  extractAppResources,
 } from './agent/mcp-app-resources.js'
 export type {
   AppResource,

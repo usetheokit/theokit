@@ -230,6 +230,39 @@ step (while using a larger model for reasoning) is not built in. Workaround: cal
 
 ---
 
+## Separate structuring model (M21)
+
+Let a large model reason while a cheap fast model does the structured extraction.
+`generateObject({ structuringModel })`: `model` first produces a free-text reasoned answer
+(phase 1), then `structuringModel` extracts the schema-matched object (phase 2).
+
+```ts
+const { object } = await Agent.generateObject({
+  schema: z.object({ capital: z.string(), country: z.string() }),
+  prompt: 'What is the capital of France?',
+  model: { id: 'openrouter/anthropic/claude-sonnet-4-6' },   // reasons
+  structuringModel: { id: 'openrouter/openai/gpt-4o-mini' }, // structures (cheap)
+})
+```
+
+Absent ⇒ today's single-model flow. `@theokit/sdk@2.20.0`.
+
+## Multi-schema providers — `normalizeSchema` (M23)
+
+Zod stays the default and the recommendation. `normalizeSchema()` converts a schema from Zod, JSON
+Schema (passthrough), ArkType (`.toJsonSchema()`), or Valibot (via the optional
+`@valibot/to-json-schema` peer) to the internal JSON Schema.
+
+```ts
+import { normalizeSchema } from '@theokit/sdk'
+
+await normalizeSchema(z.object({ a: z.string() }))       // Zod (default)
+await normalizeSchema({ type: 'object', properties: {} }) // JSON Schema (passthrough)
+await normalizeSchema(arktypeSchema)                       // ArkType (.toJsonSchema())
+```
+
+`@theokit/sdk@2.20.0`.
+
 ## Related
 
 - [Using tools](./using-tools.md) — tools are the building block structured output builds on

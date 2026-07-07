@@ -20,6 +20,7 @@ export {
   type MemoryScope,
 } from './memory.js'
 export { Skills, getSkillsConfig, type SkillsOptions } from './skills.js'
+export { Guardrails, getGuardrailsConfig } from './guardrails.js'
 export { MCP, getMcpConfig, type McpServerConfig, type McpServersMap } from './mcp.js'
 export { Hook, getHooks, getHooksByPoint, type HookPoint, type HookEntry } from './hook.js'
 export {
