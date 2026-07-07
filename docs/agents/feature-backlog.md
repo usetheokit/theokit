@@ -235,6 +235,8 @@ As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um 
 | `docs/agents/processors.md` | ✅ | M10 — `createToolHooksPlugin` tool + LLM-turn hooks, veto |
 | `docs/agents/acp.md` | ✅ | M17 — `createACPTool` + `AcpClient`, `onPermissionRequest` obrigatório |
 | `docs/agents/code-mode.md` | ✅ | M29 — `createCodeMode`, boundary de sandbox **injetado** + gate de permissão, threat model |
+| `docs/agents/channels.md` | ✅ | M27 — webhook routes por plataforma, validação de assinatura (Slack/Telegram/Discord Ed25519) |
+| `docs/agents/sdk-agents.md` | ✅ | M28 — `createVendorAgentTool`, vendor client injetado, resume via session id |
 
 ---
 

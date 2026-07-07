@@ -69,6 +69,35 @@ context carries `agentId` / `runId` / `iteration`, not the mutable request body)
 
 ---
 
+## Input pre-processing — `processInput` (M19)
+
+`processInput` completes the input side of the pipeline, wired to the SDK's `pre_user_send` hook.
+**Honest ceiling:** the SDK does not let a plugin mutate the raw prompt/stream — it lets a handler
+*inject* derived context. `processInput` receives the prompt and returns an optional string the SDK
+injects as a `<memory-context>` block ahead of it.
+
+```ts
+createToolHooksPlugin({
+  processInput: ({ prompt }) => `Preprocessed context for: ${prompt}`,
+})
+```
+
+## API-error handling — `processApiError` (M19)
+
+The SDK owns its own retry/backoff and exposes no api-error hook, so this ships as a **sibling
+factory** — an app-boundary wrapper that re-invokes the run on failure (bounded by `maxAttempts`,
+default 3). It re-invokes the SDK run; it never reimplements the LLM call.
+
+```ts
+import { runWithApiErrorHandling } from '@theokit/agents'
+
+const result = await runWithApiErrorHandling(
+  () => agent.send(msg).then((r) => r.wait()),
+  { processApiError: ({ error, attempt }) => ({ retry: attempt < 3 }) },
+)
+// createApiErrorHandler({ processApiError }) returns a reusable guard. `@theokit/agents@0.32.0`.
+```
+
 ## Related
 
 - [Human-in-the-loop](./human-in-the-loop.md) — pause a tool for a human decision

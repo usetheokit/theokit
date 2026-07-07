@@ -249,6 +249,26 @@ Both shipped in `@theokit/agents@0.31.0` + `theokit@0.16.0`.
 
 ---
 
+## Custom approval payload (M20)
+
+Beyond `approved: boolean`, the approver may attach a `reason` (string) and a `payload` (object).
+`POST /api/agents/<name>/approve/<id>` accepts `{ approved, reason?, payload? }` (payload capped at
+16 KiB). On **denial**, the veto message folds in the reason + payload so the model self-corrects.
+
+```ts
+// Approve/deny with extra context
+await fetch(`/api/agents/support/approve/${callId}`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'X-Theo-Action': '1' },
+  body: JSON.stringify({ approved: false, reason: 'daily limit exceeded', payload: { maxAllowed: 100 } }),
+})
+```
+
+A gated tool may declare an optional `payloadSchema` (`@HumanInTheLoop({ payloadSchema })` or
+`approvals: { <tool>: { payloadSchema } }`) that flows into the `approval_required` event +
+`GET /approvals` so the UI knows what to collect. Backward-compatible with `{ approved, reason? }`.
+`theokit@0.17.0` + `@theokit/agents@0.32.0`.
+
 ## Related
 
 - [Using tools](./using-tools.md) — tools are the primitives HITL gates

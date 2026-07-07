@@ -200,6 +200,31 @@ export default agent()
 
 ---
 
+## Inline skills + custom directory (M22)
+
+Define a skill in TypeScript without a `SKILL.md` file, and point an agent at a custom skills
+directory.
+
+```ts
+import { createSkill } from '@theokit/sdk'
+
+const summarize = createSkill({
+  name: 'summarize',
+  description: 'Summarize text concisely',
+  instructions: 'Read the text and produce a 2-sentence summary.',
+})
+
+await Agent.create({
+  model,
+  skills: {
+    inline: [summarize],       // code-defined skills (override file skills on name conflict)
+    skillsDir: './my-skills',  // custom discovery root instead of .theokit/skills
+  },
+})
+```
+
+Both compose with the per-request enabled-name resolver. `@theokit/sdk@2.20.0`.
+
 ## Related
 
 - [Overview](./overview.md) — agents, models, tools in one place
