@@ -32,6 +32,14 @@ interface PluginContext {
 }
 export interface HitlPlugin {
   name: string
+  /** SDK `BasePlugin.version` — required by the `@theokit/sdk` Plugin contract. */
+  version: string
+  /**
+   * SDK Plugin discriminator. MUST be `'general'` — the SDK's `isCodePlugin()` gate drops any plugin
+   * object lacking `kind: 'general'`, so a `register()`-only object never fires (the HITL veto would
+   * silently NOT pause the run). Regression guard for the M14 latent E2E bug.
+   */
+  kind: 'general'
   register(ctx: PluginContext): void
 }
 
@@ -56,6 +64,10 @@ export interface HitlWiring {
 export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
   return {
     name: 'theokit-hitl',
+    version: '1.0.0',
+    // `kind: 'general'` is load-bearing — without it the SDK's isCodePlugin() drops this plugin and
+    // the HITL veto never fires (the run would proceed WITHOUT waiting for human approval).
+    kind: 'general',
     register(ctx) {
       ctx.on('pre_tool_call', async (c): Promise<PreToolCallVeto | undefined> => {
         const opts = wiring.gated.get(c.name)

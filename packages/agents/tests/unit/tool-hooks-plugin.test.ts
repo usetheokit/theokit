@@ -28,7 +28,12 @@ describe('createToolHooksPlugin', () => {
   it('fires beforeToolCall with the tool name + args (observation, allow)', async () => {
     const beforeToolCall = vi.fn()
     const h = capture(createToolHooksPlugin({ beforeToolCall }))
-    const veto = await h.pre_tool_call({ name: 'deploy', args: { env: 'prod' }, agentId: 'a', runId: 'r' })
+    const veto = await h.pre_tool_call({
+      name: 'deploy',
+      args: { env: 'prod' },
+      agentId: 'a',
+      runId: 'r',
+    })
 
     expect(beforeToolCall).toHaveBeenCalledWith({ name: 'deploy', args: { env: 'prod' } })
     expect(veto).toBeUndefined() // no veto returned → allow
@@ -78,5 +83,20 @@ describe('createToolHooksPlugin', () => {
     expect(typeof h.pre_llm_call).toBe('function')
     expect(h.post_llm_call).toBeUndefined()
     expect(h.pre_tool_call).toBeUndefined()
+  })
+})
+
+/**
+ * Regression (M19) — the SDK's `isCodePlugin()` gate drops any plugin object lacking
+ * `kind: 'general'`, so a `register()`-only object NEVER fires its hooks. Proven via a real
+ * OpenRouter run. This guard fails loud if the discriminator regresses.
+ */
+describe('createToolHooksPlugin — SDK code-plugin discriminator', () => {
+  it("declares kind: 'general' and a version so isCodePlugin() accepts it", () => {
+    const plugin: ToolHooksPlugin = createToolHooksPlugin({ afterToolCall: () => {} })
+    expect(plugin.kind).toBe('general')
+    expect(typeof plugin.version).toBe('string')
+    expect(plugin.version.length).toBeGreaterThan(0)
+    expect(typeof plugin.register).toBe('function')
   })
 })
