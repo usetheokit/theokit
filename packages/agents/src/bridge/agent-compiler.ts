@@ -226,6 +226,7 @@ export function compileAgent(
       : undefined,
     projectContext: walkResult.projectContext,
     mcpServers: walkResult.mcpServers,
+    guardrails: walkResult.guardrails,
     maxIterations: walkResult.mainLoop.maxIterations ?? walkResult.agentConfig.maxIterations,
     timeoutMs: walkResult.mainLoop.timeoutMs ?? walkResult.agentConfig.timeoutMs,
     stream: walkResult.agentConfig.stream ?? true,
