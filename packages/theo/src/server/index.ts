@@ -89,6 +89,13 @@ export * from './openapi/index.js'
 // Cross-module: cache lives at packages/theo/src/cache/ (not server/cache)
 export * from '../cache/index.js'
 
+// Agent-tool adapters — wrap an external runtime (coding agent, SDK workflow) as a `CustomTool`.
+// M26 — SDK `Workflow` as a tool (thin adapter; the engine is the SDK's). M17 — coding agent (ACP).
+export { createWorkflowTool } from './agent/workflow-tool.js'
+export type { WorkflowLike, WorkflowToolConfig } from './agent/workflow-tool.js'
+export { createACPTool, NodeAcpTransport } from './agent/acp-tool.js'
+export type { AcpToolConfig } from './agent/acp-tool.js'
+
 // Inline re-exports — items that don't belong to a single sub-barrel
 export { parseRequestBody, FileTooLargeError } from './body-parser.js'
 export type { UploadedFile, ParsedBody, BodyParserOptions } from './body-parser.js'

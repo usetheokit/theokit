@@ -554,7 +554,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M26 — [ ] Workflows as tools (ADR-0041)
+### M26 — [x] Workflows as tools (ADR-0041)
 
 **Objective:** Wrap an SDK `Workflow` as a `CustomTool` the agent can invoke — NOT a framework workflow engine (`packages/workflows/` stays G13-forbidden; the engine is SDK-side).
 
