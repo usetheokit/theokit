@@ -586,7 +586,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M28 — [ ] SDK Agents wrappers (Claude / OpenAI / Cursor) (ADR-0041)
+### M28 — [x] SDK Agents wrappers (Claude / OpenAI / Cursor) (ADR-0041)
 
 **Objective:** Expose third-party agent SDKs behind a uniform `CustomTool` surface (like M17 ACP), so a TheoKit agent can delegate to them — the runtime stays theirs, TheoKit only wires.
 
