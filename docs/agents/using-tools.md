@@ -260,6 +260,45 @@ const result = await sdk.run({
 
 ---
 
+## Tool output shaping (M18)
+
+A tool handler can return **rich data** for the app while the model sees a compact string.
+`toModelOutput` maps the handler's result to what the model reads; `transform` formats it per
+target for the UI or a saved transcript (never on the model wire).
+
+```ts
+const weather = defineAgentTool({
+  name: 'get_weather',
+  description: 'Get the current weather for a city',
+  inputSchema: z.object({ city: z.string() }),
+  handler: ({ city }) => ({ city, tempC: 21, humidity: 0.6 }), // rich object for the app
+  toModelOutput: (r) => `${r.tempC}°C in ${r.city}`,           // compact string for the model
+  transform: {
+    display: (r) => ({ label: `${r.city}: ${r.tempC}°C` }),   // for the UI
+    transcript: (r) => `weather(${r.city}) = ${r.tempC}°C`,   // for a saved transcript
+  },
+})
+// applyTransform(tool, result, 'display' | 'transcript') applies it app-side.
+```
+
+A string handler with no `toModelOutput` is unchanged (backward-compatible). `theokit@0.17.0`.
+
+## Workflows as tools (M26)
+
+Wrap an SDK `Workflow` as a `CustomTool` the agent can invoke. THIN adapter — the workflow *engine*
+stays in `@theokit/sdk`; TheoKit only exposes it.
+
+```ts
+import { createWorkflowTool } from 'theokit/server'
+
+const runPipeline = createWorkflowTool(myWorkflow, {
+  name: 'run_pipeline',
+  description: 'Run the data pipeline',
+  inputSchema: z.object({ id: z.string() }),
+})
+// Fails fast if the passed object is not a Workflow. `theokit@0.17.0`.
+```
+
 ## Related
 
 - [Run context](./run-context.md) — pass shared config (projectRoot, user info) to tool handlers
