@@ -98,6 +98,18 @@ export type { AcpToolConfig } from './agent/acp-tool.js'
 // M28 — third-party agent SDK (Claude/OpenAI/Cursor) as a tool (vendor runtime stays theirs).
 export { createVendorAgentTool } from './agent/vendor-agent-tool.js'
 export type { VendorAgentClient, VendorAgentToolConfig } from './agent/vendor-agent-tool.js'
+// M30 — MCP App `ui://` HTML resources served by the MCP server (rendered in a sandboxed iframe).
+export {
+  defineAppResource,
+  buildResourceDescriptors,
+  readAppResource,
+} from './agent/mcp-app-resources.js'
+export type {
+  AppResource,
+  AppResourceInput,
+  McpResourceDescriptor,
+  McpResourceContents,
+} from './agent/mcp-app-resources.js'
 
 // Inline re-exports — items that don't belong to a single sub-barrel
 export { parseRequestBody, FileTooLargeError } from './body-parser.js'

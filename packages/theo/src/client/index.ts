@@ -41,3 +41,7 @@ export type {
   QueryKey,
   UseTheoQueryConfig,
 } from './react-query-adapter.js'
+
+// M30 — client host for MCP App ui:// resources (sandboxed iframe + capability-scoped guest API).
+export { mountMcpApp, createGuestMessageHandler, MCP_APP_SANDBOX } from './mcp-app-host.js'
+export type { GuestMessage, McpAppHostOptions, McpAppHandle } from './mcp-app-host.js'
