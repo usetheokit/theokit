@@ -19,6 +19,7 @@ import type { AgentNode } from '../scan/agent-scan.js'
 import { isAgentCardPath, handleAgentCard } from './agent-card-handler.js'
 import { getApprovalRegistry } from './approval-registry.js'
 import { isListApprovalsPath, handleListApprovals } from './list-approvals-handler.js'
+import { extractAppResources } from './mcp-app-resources.js'
 import { isMcpPath, handleMcpJsonRpc } from './mcp-handler.js'
 
 /** Dependencies the aux dispatcher needs from its caller (dev or prod). */
@@ -72,7 +73,9 @@ export async function serveAgentAuxRoute(
       /* malformed/empty JSON → handleMcpJsonRpc returns a -32600 envelope */
     }
     const mod = await deps.loadModule(agent.filePath)
-    return handleMcpJsonRpc(mod, agent.name, body)
+    // M30 — pass the agent's declared `ui://` App resources (named `appResources` export) so the
+    // MCP server advertises + serves them via resources/list + resources/read.
+    return handleMcpJsonRpc(mod, agent.name, body, extractAppResources(mod))
   }
 
   return null
