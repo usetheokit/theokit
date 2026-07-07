@@ -6,3 +6,9 @@ export type { GitHubWebhookOptions } from './github.js'
 
 export { slack } from './slack.js'
 export type { SlackWebhookOptions } from './slack.js'
+
+export { telegram } from './telegram.js'
+export type { TelegramWebhookOptions } from './telegram.js'
+
+export { discord } from './discord.js'
+export type { DiscordWebhookOptions } from './discord.js'

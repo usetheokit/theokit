@@ -570,7 +570,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M27 — [ ] Channels: Slack / Discord / Telegram + webhook routes (ADR-0041)
+### M27 — [x] Channels: Slack / Discord / Telegram + webhook routes (ADR-0041)
 
 **Objective:** Auto-generate webhook HTTP routes per messaging platform with signature validation, wiring the existing SDK gateway packages into the app's HTTP surface.
 
