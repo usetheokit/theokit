@@ -18,6 +18,7 @@ import type { ViteDevServer, Connect } from 'vite'
 import { handleAgentCard, isAgentCardPath } from '../server/agent/agent-card-handler.js'
 import { getApprovalRegistry } from '../server/agent/approval-registry.js'
 import { handleAgentApproval, isApprovalPath } from '../server/agent/approve-agent.js'
+import { handleListApprovals, isListApprovalsPath } from '../server/agent/list-approvals-handler.js'
 import { mountAgent } from '../server/agent/mount-agent.js'
 import { resolveProvider } from '../server/agent/provider-resolver.js'
 import {
@@ -42,6 +43,28 @@ const PREFIX = '/api/agents/'
 interface CardDeps {
   projectRoot: string
   loadModule: (filePath: string) => Promise<unknown>
+}
+
+/** M14 — serve `GET /api/agents/<name>/approvals` (already matched by the caller). */
+async function serveListApprovals(
+  req: Connect.IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+  log: { requestId: string; start: number },
+): Promise<void> {
+  const method = (req.method ?? 'GET').toUpperCase()
+  if (method !== 'GET') {
+    next()
+    return
+  }
+  await writeWebResponseToServerResponse(handleListApprovals(getApprovalRegistry()), res)
+  logRequest({
+    method,
+    url: req.url ?? '',
+    status: res.statusCode,
+    duration: Date.now() - log.start,
+    requestId: log.requestId,
+  })
 }
 
 async function serveAgentCard(
@@ -136,6 +159,14 @@ export function createAgentMiddleware(
           )
         }
         logRequest({ method, url, status: res.statusCode, duration: Date.now() - start, requestId })
+        return
+      }
+
+      // M14 — GET /api/agents/<name>/approvals lists pending HITL approvals. Branches BEFORE the
+      // agent exact-match (the listing path never equals an `agentPath`). Sync match; extracted
+      // serving keeps this arrow within the complexity budget (G6).
+      if (isListApprovalsPath(urlPath)) {
+        await serveListApprovals(req, res, next, { requestId, start })
         return
       }
 
