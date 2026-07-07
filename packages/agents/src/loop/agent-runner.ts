@@ -31,6 +31,7 @@ import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
 import { walkAgentMetadata } from '../bridge/walk-agent-metadata.js'
+import { moderateOutputStream, runInputGuards } from '../guardrails/index.js'
 import type { ReasoningEffort } from '../types.js'
 
 import {
@@ -214,6 +215,31 @@ export class AgentRunner {
    * builder set `.stream(false)`, callers should use {@link run} instead.
    */
   stream(
+    message: string,
+    opts: AgentRunnerRunOptions,
+  ): AsyncGenerator<StreamEvent, DelegationResult> {
+    // M9 — apply input guardrails at the boundary BEFORE the SDK runtime sees the message.
+    // A `block` throws GuardrailViolationError fail-fast; a `redact` rewrites the message.
+    // Absent/empty guard list ⇒ no wrapper, zero overhead (identity path).
+    const guardrails = this.compiled.guardrails
+    if (guardrails && guardrails.length > 0) {
+      // Arrow captures `this` lexically (no `const self = this` aliasing) for the generator below.
+      const runUnguarded = (m: string): AsyncGenerator<StreamEvent, DelegationResult> =>
+        this.streamUnguarded(m, opts)
+      return (async function* guarded(): AsyncGenerator<StreamEvent, DelegationResult> {
+        const safe = await runInputGuards(message, guardrails)
+        // Output guards moderate the accumulated text before it reaches the client (M9).
+        // `moderateOutputStream` is a transparent pass-through when no output guard is present.
+        return yield* moderateOutputStream(runUnguarded(safe), guardrails, (e) =>
+          e.type === 'text_delta' && typeof e.content === 'string' ? e.content : undefined,
+        )
+      })()
+    }
+    return this.streamUnguarded(message, opts)
+  }
+
+  /** The core stream path, after input guardrails have run (M9). */
+  private streamUnguarded(
     message: string,
     opts: AgentRunnerRunOptions,
   ): AsyncGenerator<StreamEvent, DelegationResult> {
