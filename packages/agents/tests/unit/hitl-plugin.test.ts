@@ -109,4 +109,18 @@ describe('createHitlPlugin (M4)', () => {
     // The emitted callId and the awaited approvalId are the same id.
     expect(seen[0]).toBe(seen[1])
   })
+
+  it('test_forwards_the_toolName_to_awaitApproval', async () => {
+    let seenToolName: string | undefined
+    const handler = captureHandler({
+      gated: new Map([['ops.deploy', { question: 'ok?' }]]),
+      emit: () => {},
+      awaitApproval: async (_approvalId, _opts, toolName) => {
+        seenToolName = toolName
+        return true
+      },
+    })
+    await handler(CTX('ops.deploy'))
+    expect(seenToolName).toBe('ops.deploy')
+  })
 })

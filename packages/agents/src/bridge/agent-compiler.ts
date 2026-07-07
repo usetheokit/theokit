@@ -14,6 +14,8 @@ import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import type { McpServersMap } from '../decorators/mcp.js'
 import type { MemoryOptions } from '../decorators/memory.js'
 import type { ProjectContextOptions } from '../decorators/project-context.js'
+import type { Guardrail } from '../guardrails/index.js'
+import type { SkillsSelection } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 
 import { compileContextWindow } from './compile-context-window.js'
@@ -164,6 +166,18 @@ export interface CompiledAgentOptions {
    * durable SDK conversation storage (`storage: 'filesystem'`) so a same-`sessionId` request resumes.
    */
   checkpoint?: CheckpointOptions
+  /**
+   * M9 — guardrails: input/output guards applied at the framework boundary (ADR-0040 § D2).
+   * Input guards run on the user message BEFORE the SDK runtime sees it (fail-fast on `block`).
+   * They REUSE the runtime; they never reimplement it. Absent/empty ⇒ no guards.
+   */
+  guardrails?: readonly Guardrail[]
+  /**
+   * M13 — per-request skills resolver (from `defineAgent({ skills: (ctx) => [...] })`). The request
+   * path resolves it against the run-context (`resolveEnabledSkills`) and sets `skills.enabled`
+   * before the SDK runs. Not consumed by the SDK directly (it reads `skills`). Absent ⇒ no resolver.
+   */
+  skillsResolver?: SkillsSelection
 }
 
 /**

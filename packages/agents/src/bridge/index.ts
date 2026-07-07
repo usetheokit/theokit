@@ -95,3 +95,13 @@ export {
   type DelegateOptions,
   type DelegationResult,
 } from './agent-orchestrator.js'
+
+export {
+  createToolHooksPlugin,
+  type ToolHooks,
+  type ToolHooksPlugin,
+  type BeforeToolCallContext,
+  type AfterToolCallContext,
+  type LLMCallContext,
+  type ToolCallVeto,
+} from './tool-hooks-plugin.js'

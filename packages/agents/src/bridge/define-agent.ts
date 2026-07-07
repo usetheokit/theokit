@@ -13,6 +13,9 @@
 import type { CustomTool } from '@theokit/sdk'
 import type { z } from 'zod'
 
+import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
+import type { Guardrail } from '../guardrails/index.js'
+import type { SkillsSelection } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
@@ -48,6 +51,26 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * openai-agents-js `RunContext`. Distinct from `@Agent`'s context-window `context`.
    */
   context?: Record<string, unknown>
+  /**
+   * M9 — guardrails: input/output guards applied at the framework boundary (ADR-0040 § D2).
+   * Input guards run on the user message before the SDK runtime; a `block` fails the run fast.
+   * Built-ins live in `@theokit/agents` (`promptInjectionDetector`, `piiDetector`, `costGuard`,
+   * `unicodeNormalizer`, `outputModeration`).
+   */
+  guardrails?: readonly Guardrail[]
+  /**
+   * M14 — HITL approvals keyed by tool name. Each gated tool pauses the run and emits an
+   * `approval_required` event until approved (reuses the same `compiled.hitl` wiring the `@Agent`
+   * + `@HumanInTheLoop` path produces). A key that does not match a declared tool fails fast at
+   * compile time.
+   */
+  approvals?: Record<string, HumanInTheLoopOptions>
+  /**
+   * M13 — skills selection: a static list (compiled straight to the SDK `skills.enabled`) OR a
+   * per-request resolver `(ctx) => string[]` (carried on `compiled.skillsResolver`, resolved by the
+   * request path against the run-context). Absent ⇒ the SDK enables every discovered skill.
+   */
+  skills?: SkillsSelection
 }
 
 /**
@@ -137,5 +160,40 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // M7 — run-context flows to CompiledAgentOptions.runContext (distinct from the
     // context-window `context` field the decorator path uses); absent ⇒ no key.
     ...(def.context !== undefined ? { runContext: def.context } : {}),
+    // M9 — guardrails flow through unchanged; the runner applies them at the input boundary.
+    ...(def.guardrails !== undefined ? { guardrails: def.guardrails } : {}),
+    // M14 — HITL approvals compile into the same `hitl` map the decorator path produces.
+    ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
+    // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
+    ...compileSkillsSelection(def.skills),
   }
+}
+
+/** M13 — split a {@link SkillsSelection} into the compiled fields (static → `skills`, fn → `skillsResolver`). */
+function compileSkillsSelection(
+  skills: SkillsSelection | undefined,
+): Pick<CompiledAgentOptions, 'skills' | 'skillsResolver'> {
+  if (skills === undefined) return {}
+  if (typeof skills === 'function') return { skillsResolver: skills }
+  return { skills: { enabled: [...skills], autoInject: true } }
+}
+
+/**
+ * Build the HITL gate map from `defineAgent({ approvals })`, keyed by tool name — the same shape
+ * `agent-endpoint.ts` consumes. Fails fast (error-handling.md) if an approval names a tool the
+ * agent does not declare, so a typo is caught at compile time, not silently ignored at runtime.
+ */
+function compileApprovals(def: AgentDefinition): Map<string, HumanInTheLoopOptions> {
+  const toolNames = new Set((def.tools ?? []).map((t) => t.name))
+  const gates = new Map<string, HumanInTheLoopOptions>()
+  for (const [toolName, options] of Object.entries(def.approvals ?? {})) {
+    if (!toolNames.has(toolName)) {
+      throw new Error(
+        `[@theokit/agents] defineAgent approval references unknown tool "${toolName}". ` +
+          `Declared tools: ${[...toolNames].join(', ') || '(none)'}.`,
+      )
+    }
+    gates.set(toolName, options)
+  }
+  return gates
 }
