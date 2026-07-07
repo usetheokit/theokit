@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **ADR-0042 accepted (owner sign-off): the MCP stdio SERVER transport is framework-side** — finalizes the scope note flagged with the `theokit mcp <agent>` shipment in 0.19.0. The server-exposure stdio transport reuses the framework's `handleMcpJsonRpc` (a transport, sibling of the M16 HTTP route); the SDK's MCP CLIENT stdio (consuming external `mcpServers`) stays SDK-side. Refines ADR-0040's "M16-stdio-transport" note (which is read as the CLIENT runtime). Code comment + `docs` updated to cite ADR-0042. No behavior change. (ADR-0042)
+- **Nit: `scan/errors.ts` no longer references a phantom `ADR-XXX`** — the router-convention decision lives in `g6-router-convention-plan.md` + CHANGELOG 0.4.0 (no standalone ADR was cut); the comment now points there instead of an unfilled `ADR-XXX`.
+
 ### Deprecated
 
 ### Removed

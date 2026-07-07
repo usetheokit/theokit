@@ -7,7 +7,8 @@
  * (`auth/[provider]/login.ts`) and REJECTS dotted-basename routes
  * (`auth.[provider].login.ts`) because the legacy regex extracted the
  * dotted basename incorrectly — `params.provider` was undefined at request
- * time. See ADR-XXX (router-convention-decision) in CHANGELOG 0.4.0.
+ * time. Decision recorded in the plan above (`g6-router-convention-plan.md`) and CHANGELOG 0.4.0
+ * (no standalone ADR was cut for this router-convention change).
  */
 
 /**
