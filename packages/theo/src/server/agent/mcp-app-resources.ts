@@ -84,3 +84,28 @@ export function readAppResource(
   if (!found) return null
   return { contents: [{ uri: found.uri, mimeType: 'text/html', text: found.html }] }
 }
+
+/** True when `v` is a well-formed {@link AppResource} (from `defineAppResource`). */
+function isAppResource(v: unknown): v is AppResource {
+  if (typeof v !== 'object' || v === null) return false
+  const r = v as Record<string, unknown>
+  return (
+    typeof r.uri === 'string' &&
+    r.uri.startsWith('ui://') &&
+    r.mimeType === 'text/html' &&
+    typeof r.html === 'string'
+  )
+}
+
+/**
+ * M30 wiring — extract the App resources an agent module declares via a named `appResources` export
+ * (`export const appResources = [defineAppResource(...)]`). Returns only the well-formed entries; a
+ * module without the export (or with a malformed one) yields `[]`. This is how per-agent `ui://`
+ * resources reach the MCP server's `resources/list` + `resources/read` without a runtime dependency
+ * from `@theokit/agents` on this theo-side type (the module exports them; the serving path reads them).
+ */
+export function extractAppResources(mod: unknown): AppResource[] {
+  const raw = (mod as { appResources?: unknown } | null | undefined)?.appResources
+  if (!Array.isArray(raw)) return []
+  return raw.filter(isAppResource)
+}

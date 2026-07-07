@@ -253,6 +253,20 @@ mountMcpApp(container, card, {
 
 `theokit@0.17.0`.
 
+**Per-agent declaration (M30 wiring):** an `agents/<name>.ts` module exports its `ui://` resources
+alongside the agent — the MCP endpoint (`POST /api/agents/<name>/mcp`) then advertises + serves them
+(`resources/list` / `resources/read`) in dev AND prod:
+
+```ts
+// agents/weather.ts
+export default defineAgent({ /* ... */ })
+export const appResources = [
+  defineAppResource({ uri: 'ui://weather/card', name: 'Weather', html: '<h1>Sunny</h1>' }),
+]
+```
+
+
+
 ## Related
 
 - [Using tools](./using-tools.md) — define custom tools alongside MCP tools
