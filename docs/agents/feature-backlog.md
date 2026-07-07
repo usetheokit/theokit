@@ -29,6 +29,28 @@ Os gaps P1/P2 abaixo foram convertidos nos milestones **M9–M17** do roadmap e 
 
 Validado E2E do registry público (9/9 exports + smoke funcional). Detalhe por milestone nas tabelas.
 
+## 🗺️ Todos os DEFERRED → milestones M18–M30 (ADR-0041, força total 2026-07-07)
+
+Por decisão do dono, **todos** os gaps `DEFERRED` (+ os `OUT_OF_SCOPE`, re-escopados via `ADR-0041`) viraram milestones no `ROADMAP.md`:
+
+| Milestone | Gaps do backlog cobertos |
+|---|---|
+| **M18** | `toModelOutput`, `transform` (tool output shaping) |
+| **M19** | `processInputStream`, `processAPIError` (processor hooks) |
+| **M20** | Approval payload customizado (HITL) |
+| **M21** | Separate structuring model (SDK) |
+| **M22** | `createSkill()` inline + custom skills directory |
+| **M23** | Valibot / ArkType / JSON Schema providers (SDK) |
+| **M24** | MCP: dynamic toolsets + registries + `requireToolApproval` |
+| **M25** | Background task execution + task-completion scoring |
+| **M26** | Workflows as tools (thin adapter — engine fica no SDK) |
+| **M27** | Channels (Slack/Discord/Telegram) + webhook routes |
+| **M28** | SDK Agents wrappers (Claude/OpenAI/Cursor) |
+| **M29** | Code mode sandbox (`createCodeMode`) |
+| **M30** | MCP Apps (iframe `ui://` UIs) |
+
+As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um SDK, reimplementar o loop/orchestrator, e abstração própria de provider. Os itens abaixo mantêm a disposição `DEFERRED` no texto histórico das tabelas mas estão **PLANNED** nos milestones acima.
+
 ---
 
 ## Docs — visão geral de agentes
