@@ -15,13 +15,14 @@ import type { ServerResponse } from 'node:http'
 
 import type { ViteDevServer, Connect } from 'vite'
 
-import { handleAgentCard, isAgentCardPath } from '../server/agent/agent-card-handler.js'
+import { isAgentCardPath } from '../server/agent/agent-card-handler.js'
 import { getApprovalRegistry } from '../server/agent/approval-registry.js'
 import { handleAgentApproval, isApprovalPath } from '../server/agent/approve-agent.js'
-import { handleListApprovals, isListApprovalsPath } from '../server/agent/list-approvals-handler.js'
-import { handleMcpJsonRpc, isMcpPath } from '../server/agent/mcp-handler.js'
+import { isListApprovalsPath } from '../server/agent/list-approvals-handler.js'
+import { isMcpPath } from '../server/agent/mcp-handler.js'
 import { mountAgent } from '../server/agent/mount-agent.js'
 import { resolveProvider } from '../server/agent/provider-resolver.js'
+import { serveAgentAuxRoute } from '../server/agent/serve-aux-routes.js'
 import {
   incomingMessageToWebRequest,
   writeWebResponseToServerResponse,
@@ -56,59 +57,41 @@ async function serveApprove(
 ): Promise<void> {
   const method = (req.method ?? 'POST').toUpperCase()
   if (method !== 'POST') {
-    sendError(res, 'METHOD_NOT_ALLOWED', 'Approve endpoints accept POST', 405, undefined, log.requestId)
-    logRequest({ method, url: req.url ?? '', status: 405, duration: Date.now() - log.start, requestId: log.requestId })
+    sendError(
+      res,
+      'METHOD_NOT_ALLOWED',
+      'Approve endpoints accept POST',
+      405,
+      undefined,
+      log.requestId,
+    )
+    logRequest({
+      method,
+      url: req.url ?? '',
+      status: 405,
+      duration: Date.now() - log.start,
+      requestId: log.requestId,
+    })
     return
   }
   try {
-    const response = await handleAgentApproval(incomingMessageToWebRequest(req), urlPath, getApprovalRegistry(), csrfMode)
+    const response = await handleAgentApproval(
+      incomingMessageToWebRequest(req),
+      urlPath,
+      getApprovalRegistry(),
+      csrfMode,
+    )
     await writeWebResponseToServerResponse(response, res)
   } catch (err) {
-    sendError(res, 'INTERNAL', err instanceof Error ? err.message : 'Approve handler failed', 500, undefined, log.requestId)
+    sendError(
+      res,
+      'INTERNAL',
+      err instanceof Error ? err.message : 'Approve handler failed',
+      500,
+      undefined,
+      log.requestId,
+    )
   }
-  logRequest({ method, url: req.url ?? '', status: res.statusCode, duration: Date.now() - log.start, requestId: log.requestId })
-}
-
-/** M16 — serve `POST /api/agents/<name>/mcp` (JSON-RPC), already matched by the caller. */
-async function serveMcp(
-  req: Connect.IncomingMessage,
-  res: ServerResponse,
-  next: Connect.NextFunction,
-  mcpAgentName: string,
-  deps: CardDeps,
-): Promise<void> {
-  const requestId = randomUUID()
-  const start = Date.now()
-  res.setHeader('x-request-id', requestId)
-  const method = (req.method ?? 'POST').toUpperCase()
-  const agent = scanAgents(deps.projectRoot).find((a) => a.name === mcpAgentName)
-  if (method !== 'POST' || !agent) {
-    next()
-    return
-  }
-  try {
-    const body: unknown = await incomingMessageToWebRequest(req).json()
-    const mod = await deps.loadModule(agent.filePath)
-    await writeWebResponseToServerResponse(handleMcpJsonRpc(mod, agent.name, body), res)
-  } catch (err) {
-    sendError(res, 'INTERNAL', err instanceof Error ? err.message : 'MCP handler failed', 500, undefined, requestId)
-  }
-  logRequest({ method, url: req.url ?? '', status: res.statusCode, duration: Date.now() - start, requestId })
-}
-
-/** M14 — serve `GET /api/agents/<name>/approvals` (already matched by the caller). */
-async function serveListApprovals(
-  req: Connect.IncomingMessage,
-  res: ServerResponse,
-  next: Connect.NextFunction,
-  log: { requestId: string; start: number },
-): Promise<void> {
-  const method = (req.method ?? 'GET').toUpperCase()
-  if (method !== 'GET') {
-    next()
-    return
-  }
-  await writeWebResponseToServerResponse(handleListApprovals(getApprovalRegistry()), res)
   logRequest({
     method,
     url: req.url ?? '',
@@ -118,30 +101,52 @@ async function serveListApprovals(
   })
 }
 
-async function serveAgentCard(
+/**
+ * M15/M16/M14 — serve an agent AUXILIARY route (agent card / MCP / pending-approvals listing) via
+ * the shared `serveAgentAuxRoute` dispatcher (the SAME one `theokit start`'s `tryServeAgentAux`
+ * uses, so dev and prod never drift). Falls through to `next()` when the path is not an aux route,
+ * the method is wrong, or the agent is unknown.
+ */
+async function serveAux(
   req: Connect.IncomingMessage,
   res: ServerResponse,
   next: Connect.NextFunction,
-  cardAgentName: string,
+  urlPath: string,
   deps: CardDeps,
 ): Promise<void> {
   const requestId = randomUUID()
   const start = Date.now()
-  res.setHeader('x-request-id', requestId)
-  const method = (req.method ?? 'GET').toUpperCase()
-  const agent = scanAgents(deps.projectRoot).find((a) => a.name === cardAgentName)
-  if (method !== 'GET' || !agent) {
-    next()
-    return
-  }
   try {
-    const mod = await deps.loadModule(agent.filePath)
-    const baseUrl = `http://${req.headers.host ?? 'localhost'}`
-    await writeWebResponseToServerResponse(handleAgentCard(mod, agent.name, agent.agentPath, baseUrl), res)
+    const request = incomingMessageToWebRequest(req)
+    const response = await serveAgentAuxRoute(request, urlPath, {
+      agents: scanAgents(deps.projectRoot),
+      loadModule: deps.loadModule,
+      baseUrl: `http://${req.headers.host ?? 'localhost'}`,
+    })
+    if (response === null) {
+      next()
+      return
+    }
+    res.setHeader('x-request-id', requestId)
+    await writeWebResponseToServerResponse(response, res)
   } catch (err) {
-    sendError(res, 'INTERNAL', err instanceof Error ? err.message : 'Agent card failed', 500, undefined, requestId)
+    res.setHeader('x-request-id', requestId)
+    sendError(
+      res,
+      'INTERNAL',
+      err instanceof Error ? err.message : 'Agent aux handler failed',
+      500,
+      undefined,
+      requestId,
+    )
   }
-  logRequest({ method, url: req.url ?? '', status: res.statusCode, duration: Date.now() - start, requestId })
+  logRequest({
+    method: (req.method ?? 'GET').toUpperCase(),
+    url: req.url ?? '',
+    status: res.statusCode,
+    duration: Date.now() - start,
+    requestId,
+  })
 }
 
 export function createAgentMiddleware(
@@ -157,9 +162,8 @@ export function createAgentMiddleware(
       // M15 — A2A agent card at `/.well-known/<name>/agent-card.json` (GET). The match check is
       // SYNC so a non-card request still calls `next()` synchronously (no `await` before it — a
       // dev-middleware contract some tests rely on); only a real card path enters the async path.
-      const cardAgentName = isAgentCardPath(url.split('?')[0])
-      if (cardAgentName) {
-        await serveAgentCard(req, res, next, cardAgentName, { projectRoot, loadModule })
+      if (isAgentCardPath(url.split('?')[0]) !== null) {
+        await serveAux(req, res, next, url.split('?')[0], { projectRoot, loadModule })
         return
       }
 
@@ -182,18 +186,10 @@ export function createAgentMiddleware(
         return
       }
 
-      // M14 — GET /api/agents/<name>/approvals lists pending HITL approvals. Branches BEFORE the
-      // agent exact-match (the listing path never equals an `agentPath`). Sync match; extracted
-      // serving keeps this arrow within the complexity budget (G6).
-      if (isListApprovalsPath(urlPath)) {
-        await serveListApprovals(req, res, next, { requestId, start })
-        return
-      }
-
-      // M16 — POST /api/agents/<name>/mcp exposes the agent as an MCP server (JSON-RPC).
-      const mcpAgentName = isMcpPath(urlPath)
-      if (mcpAgentName) {
-        await serveMcp(req, res, next, mcpAgentName, { projectRoot, loadModule })
+      // M14 (list approvals) + M16 (MCP) — both are agent aux routes served by the shared
+      // dispatcher. Branch BEFORE the agent exact-match (neither path equals an `agentPath`).
+      if (isListApprovalsPath(urlPath) !== null || isMcpPath(urlPath) !== null) {
+        await serveAux(req, res, next, urlPath, { projectRoot, loadModule })
         return
       }
 
