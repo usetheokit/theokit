@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`@MCP` decorator was inert — MCP servers never executed (#89) — `@theokit/agents`.** `compiled.mcpServers` (set by the compiler from `@MCP({...})`) was never forwarded to `Agent.create`, so declared MCP servers silently never started (same class as the HITL `kind:'general'` bug — metadata compiled but never reaching the SDK runtime). Fix: `assembleM8CreateOptions` now projects `compiled.mcpServers` into the `Agent.create` options (the SDK owns MCP execution; this is pure adapter projection). Verified end-to-end chain: `@MCP` → `compiled.mcpServers` → `m8.mcpServers` → `Agent.getOrCreate({ ...m8 })`. 3 wiring tests. Also split `sdk-adapter.ts` (was over the 500-line G6 budget pre-existing) — extracted `assembleM8CreateOptions` + `realUsageDone` into `sdk-adapter-create-options.ts`. (#89)
+
 ### Security
 
 ## [0.17.0] - 2026-07-07
