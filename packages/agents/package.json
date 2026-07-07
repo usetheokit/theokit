@@ -36,7 +36,7 @@
   },
   "peerDependencies": {
     "@theokit/http": ">=0.1.0-alpha.0",
-    "@theokit/sdk": ">=2.13.0",
+    "@theokit/sdk": ">=2.20.0",
     "@theokit/sdk-tools": ">=0.2.0",
     "ai": ">=7.0.0",
     "reflect-metadata": ">=0.2.0",
@@ -52,7 +52,7 @@
   },
   "devDependencies": {
     "@theokit/http": "workspace:*",
-    "@theokit/sdk": "^2.13.0",
+    "@theokit/sdk": "^2.20.0",
     "@theokit/sdk-tools": "^0.2.0",
     "ai": "^7.0.14",
     "reflect-metadata": "^0.2.2",
