@@ -13,6 +13,7 @@
 import type { CustomTool } from '@theokit/sdk'
 import type { z } from 'zod'
 
+import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { ReasoningEffort } from '../types.js'
 
@@ -56,6 +57,13 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * `unicodeNormalizer`, `outputModeration`).
    */
   guardrails?: readonly Guardrail[]
+  /**
+   * M14 — HITL approvals keyed by tool name. Each gated tool pauses the run and emits an
+   * `approval_required` event until approved (reuses the same `compiled.hitl` wiring the `@Agent`
+   * + `@HumanInTheLoop` path produces). A key that does not match a declared tool fails fast at
+   * compile time.
+   */
+  approvals?: Record<string, HumanInTheLoopOptions>
 }
 
 /**
@@ -147,5 +155,27 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.context !== undefined ? { runContext: def.context } : {}),
     // M9 — guardrails flow through unchanged; the runner applies them at the input boundary.
     ...(def.guardrails !== undefined ? { guardrails: def.guardrails } : {}),
+    // M14 — HITL approvals compile into the same `hitl` map the decorator path produces.
+    ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
   }
+}
+
+/**
+ * Build the HITL gate map from `defineAgent({ approvals })`, keyed by tool name — the same shape
+ * `agent-endpoint.ts` consumes. Fails fast (error-handling.md) if an approval names a tool the
+ * agent does not declare, so a typo is caught at compile time, not silently ignored at runtime.
+ */
+function compileApprovals(def: AgentDefinition): Map<string, HumanInTheLoopOptions> {
+  const toolNames = new Set((def.tools ?? []).map((t) => t.name))
+  const gates = new Map<string, HumanInTheLoopOptions>()
+  for (const [toolName, options] of Object.entries(def.approvals ?? {})) {
+    if (!toolNames.has(toolName)) {
+      throw new Error(
+        `[@theokit/agents] defineAgent approval references unknown tool "${toolName}". ` +
+          `Declared tools: ${[...toolNames].join(', ') || '(none)'}.`,
+      )
+    }
+    gates.set(toolName, options)
+  }
+  return gates
 }
