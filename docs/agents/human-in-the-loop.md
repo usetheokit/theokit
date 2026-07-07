@@ -222,16 +222,30 @@ per-tool approvals within a single agent run. Pick the right primitive for the j
 
 ---
 
-## What TheoKit doesn't have (yet)
+## Approvals on `defineAgent` (M14)
 
-**Approval via the `defineAgent` surface** — `@HumanInTheLoop` works only on the `@Agent`
-class surface. The `defineAgent` / fluent builder surfaces don't have a HITL equivalent yet.
-Workaround: wrap the sensitive tool call in a custom `defineAgentTool` that itself calls your
-approval API and awaits a response before returning.
+`@HumanInTheLoop` gates tools on the `@Agent` class surface; the `defineAgent` surface gates
+them via the `approvals` map, keyed by tool name — reusing the same endpoint HITL wiring:
 
-**Approval history** — there's no built-in API to list pending approvals across runs or
-fetch the status of a past approval. Implement this in your database by persisting `callId`
-when the `approval_required` event arrives.
+```ts
+export default defineAgent({
+  model: 'anthropic/claude-sonnet-4-6',
+  tools: [deployTool],
+  approvals: {
+    deploy: { question: 'Confirm deployment to production?', timeout: 60_000, onTimeout: 'abort' },
+  },
+})
+```
+
+An approval that names an undeclared tool fails fast at compile time.
+
+## Listing pending approvals (M14)
+
+`GET /api/agents/<name>/approvals` lists the currently-pending approvals with their metadata
+(`toolName`, `question`, `expiresAt`) — the `ApprovalRegistry` tracks them via `list()`. Useful
+for a dashboard that surfaces everything awaiting a human decision.
+
+Both shipped in `@theokit/agents@0.31.0` + `theokit@0.16.0`.
 
 ---
 

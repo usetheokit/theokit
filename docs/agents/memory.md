@@ -210,12 +210,23 @@ Run this on a schedule (nightly cron, post-session) rather than on every request
 
 ---
 
-## What TheoKit doesn't have (yet)
+## Background compression + multi-user scoping (M11)
 
-**Background compression** — Mastra-style agents that automatically summarize and compress
-long message history in the background are not in TheoKit. For very long conversations, paginate
-via `getMessages(id, { limit: 50, offset: -50 })` to keep only recent context, or implement
-compression in a custom `ConversationStorageAdapter`.
+**Background compression is built into the SDK runtime.** When history grows, the SDK's
+`autoSummarize` pass triggers (by a token-fraction threshold), keeps the most recent messages
+verbatim, and summarizes the older ones via `compressConversationWindow` — driven automatically by
+the local agent, so the active run is never blocked.
+
+**Multi-user scoping** — derive a deterministic, collision-safe conversation id from a
+`{resource, thread}` pair instead of hand-building `user-${id}-thread-${id}` strings:
+
+```ts
+import { deriveConversationId } from '@theokit/agents'
+
+const conversationId = deriveConversationId(userId, threadId) // collision-safe
+```
+
+Shipped in `@theokit/agents@0.31.0`.
 
 ---
 

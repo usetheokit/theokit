@@ -190,12 +190,21 @@ Puppeteer, Notion, Linear, Slack, Google Drive, AWS S3.
 
 ---
 
-## What TheoKit doesn't have (yet)
+## Expose your agent AS an MCP server (M16)
 
-**MCPServer** — exposing TheoKit agents and tools to external MCP clients is not built in.
-There's no `MCPServer` class that turns your TheoKit agent into an MCP-compatible endpoint.
-Workaround: manually implement the MCP stdio protocol or serve via an HTTP endpoint the
-client reaches with `type: 'http'`.
+TheoKit serves any agent as an MCP server over its own HTTP route — external MCP clients call
+`POST /api/agents/<name>/mcp` with JSON-RPC 2.0. Two core methods are answered: `initialize`
+(server info + `capabilities.tools`) and `tools/list` (the agent's tools as MCP descriptors).
+
+```ts
+// buildMcpToolDescriptors / mcpServerInfo (@theokit/agents) power the served endpoint.
+// An external MCP client connects with: { type: 'http', url: 'https://app.com/api/agents/ops/mcp' }
+```
+
+Shipped in `@theokit/agents@0.31.0` + `theokit@0.16.0`. The stdio transport for exposing the
+server stays SDK-side.
+
+## What TheoKit doesn't have (yet)
 
 **Dynamic toolsets** — Mastra's `listToolsets()` lets different MCP tool credentials be
 supplied per-request (useful for multi-tenant apps where each user has their own API keys).

@@ -64,6 +64,8 @@ export interface ApprovalRequiredEvent {
   input?: unknown
   callbackUrl: string
   timeoutMs: number
+  /** M20 — JSON-schema descriptor of the custom payload the approver may attach (optional). */
+  payloadSchema?: Record<string, unknown>
 }
 
 /** Agent encountered an error. */

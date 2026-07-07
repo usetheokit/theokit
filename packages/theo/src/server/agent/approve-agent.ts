@@ -11,7 +11,7 @@
  */
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
-import type { ApprovalRegistry } from './approval-registry.js'
+import type { ApprovalDecision, ApprovalRegistry } from './approval-registry.js'
 
 /** The path segment separating the agent name from the approval id. */
 const APPROVE_SEGMENT = '/approve/'
@@ -39,11 +39,37 @@ function jsonError(status: number, code: string, message: string): Response {
   })
 }
 
-/** Extract `{ approved: boolean }` from an untrusted body; `null` when the shape is wrong. */
-function parseApprovalBody(body: unknown): { approved: boolean } | null {
+/**
+ * M20 — cap on the serialized custom payload (16 KiB). A payload is a small structured note
+ * (edited args, a reviewer comment), not a data channel — an oversized one is rejected fail-fast
+ * rather than silently truncated (Rule 8).
+ */
+const MAX_PAYLOAD_BYTES = 16 * 1024
+
+/**
+ * Extract an {@link ApprovalDecision} from an untrusted body; `null` when the shape is wrong.
+ *
+ * M20 — accepts an optional `reason` (string) and `payload` (object, capped at
+ * {@link MAX_PAYLOAD_BYTES}). Backward-compatible: `{ approved }` and `{ approved, reason }` parse
+ * unchanged. A non-object or oversized `payload` is rejected (returns `null` → the route 400s).
+ *
+ * @public
+ */
+export function parseApprovalBody(body: unknown): ApprovalDecision | null {
   if (typeof body !== 'object' || body === null) return null
   const b = body as Record<string, unknown>
-  return typeof b.approved === 'boolean' ? { approved: b.approved } : null
+  if (typeof b.approved !== 'boolean') return null
+  const decision: ApprovalDecision = { approved: b.approved }
+  if (b.reason !== undefined) {
+    if (typeof b.reason !== 'string') return null
+    decision.reason = b.reason
+  }
+  if (b.payload !== undefined) {
+    if (typeof b.payload !== 'object' || b.payload === null || Array.isArray(b.payload)) return null
+    if (JSON.stringify(b.payload).length > MAX_PAYLOAD_BYTES) return null
+    decision.payload = b.payload
+  }
+  return decision
 }
 
 /**
@@ -83,7 +109,7 @@ export async function handleAgentApproval(
     return jsonError(400, 'BAD_REQUEST', 'Request body must contain a boolean `approved`.')
   }
 
-  const resolved = registry.resolve(approvalId, parsed.approved)
+  const resolved = registry.resolve(approvalId, parsed)
   if (!resolved) {
     return jsonError(404, 'NOT_PENDING', `No pending approval for id '${approvalId}'.`)
   }

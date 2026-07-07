@@ -1,6 +1,6 @@
 # Agent feature backlog
 
-Living document. Tracks features identificadas durante revisão de documentação.
+Living document. Tracks features identificadas durante revisão de documentação (paridade Mastra × TheoKit).
 Atualizado a cada nova seção auditada.
 
 **Severidade:**
@@ -14,6 +14,42 @@ Atualizado a cada nova seção auditada.
 - `DEFERRED` — decidido adiar; motivo registrado
 - `OUT_OF_SCOPE` — decidido não construir; motivo registrado
 - `DONE` — entregue no TheoKit
+
+---
+
+## ✅ Release M9–M17 — gaps de paridade fechados (2026-07-07)
+
+Os gaps P1/P2 abaixo foram convertidos nos milestones **M9–M17** do roadmap e **publicados no npm**:
+
+| Pacote | Versão | Governança |
+|---|---|---|
+| `@theokit/agents` | **0.31.0** | ADR-0040 (runtime-vs-home boundary) |
+| `theokit` | **0.16.0** | — |
+| `@theokit/sdk` | **2.19.0** | — |
+
+Validado E2E do registry público (9/9 exports + smoke funcional). Detalhe por milestone nas tabelas.
+
+## 🗺️ Todos os DEFERRED → milestones M18–M30 (ADR-0041, força total 2026-07-07)
+
+Por decisão do dono, **todos** os gaps `DEFERRED` (+ os `OUT_OF_SCOPE`, re-escopados via `ADR-0041`) viraram milestones no `ROADMAP.md`:
+
+| Milestone | Gaps do backlog cobertos |
+|---|---|
+| **M18** | `toModelOutput`, `transform` (tool output shaping) |
+| **M19** | `processInputStream`, `processAPIError` (processor hooks) |
+| **M20** | Approval payload customizado (HITL) |
+| **M21** | Separate structuring model (SDK) |
+| **M22** | `createSkill()` inline + custom skills directory |
+| **M23** | Valibot / ArkType / JSON Schema providers (SDK) |
+| **M24** | MCP: dynamic toolsets + registries + `requireToolApproval` |
+| **M25** | Background task execution + task-completion scoring |
+| **M26** | Workflows as tools (thin adapter — engine fica no SDK) |
+| **M27** | Channels (Slack/Discord/Telegram) + webhook routes |
+| **M28** | SDK Agents wrappers (Claude/OpenAI/Cursor) |
+| **M29** | Code mode sandbox (`createCodeMode`) |
+| **M30** | MCP Apps (iframe `ui://` UIs) |
+
+As invariantes que **permanecem** off-limits (ADR-0041 D3): tornar `theokit` um SDK, reimplementar o loop/orchestrator, e abstração própria de provider. Os itens abaixo mantêm a disposição `DEFERRED` no texto histórico das tabelas mas estão **PLANNED** nos milestones acima.
 
 ---
 
@@ -33,11 +69,11 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| `beforeToolCall` / `afterToolCall` hooks | P2 | TODO | Executar lógica antes/depois de cada tool call — logging, auditoria, bloqueio de input. Suportar por agente e por execução. |
-| `toModelOutput` — controlar o que o modelo vê | P3 | DEFERRED | Tool retorna dados ricos para o app; modelo recebe representação menor ou multimodal. Útil para tools de imagem. Adiar até haver demanda concreta. |
-| `transform` — formatar payloads para UI e transcritos | P3 | DEFERRED | Separado de `toModelOutput`. Formata input/output/erros para targets `display` e `transcript`. Complexo; adiar. |
+| `beforeToolCall` / `afterToolCall` hooks | P2 | **DONE (M10)** | `createToolHooksPlugin({ beforeToolCall, afterToolCall })` sobre `pre/post_tool_call` do SDK. `beforeToolCall` pode VETAR. `@theokit/agents@0.31.0`. |
+| `toModelOutput` — controlar o que o modelo vê | P3 | DEFERRED | Tool retorna dados ricos para o app; modelo recebe representação menor ou multimodal. Adiar até haver demanda concreta. |
+| `transform` — formatar payloads para UI e transcritos | P3 | DEFERRED | Formata input/output/erros para targets `display` e `transcript`. Complexo; adiar. |
 | Agentes como tools (padrão supervisor) | P2 | DONE | `defineSubAgent` + `createSquad` em `@theokit/sdk/a2a`. Ver `docs/agents/multi-agent.md`. |
-| Workflows como tools | P3 | DEFERRED | Converter um workflow em tool que o agente pode invocar. Desbloquear depois que workflows existirem no TheoKit. |
+| Workflows como tools | P3 | DEFERRED | Desbloquear depois que workflows existirem no TheoKit. |
 
 ---
 
@@ -45,10 +81,10 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| `skills.enabled` não filtra de verdade | P2 | TODO | O código faz `void _enabled` — o parâmetro é ignorado. `list()` retorna todos os skills independente do filtro. Feature marcada como "hint" internamente. |
-| API inline `createSkill()` | P3 | DEFERRED | Mastra permite definir skills em código TypeScript sem SKILL.md. TheoKit só tem filesystem. Adiar até haver demanda concreta — SKILL.md é suficiente para a maioria dos casos. |
-| Seleção dinâmica de skills por request | P2 | TODO | Mastra tem resolver function que recebe `requestContext` e retorna lista de skills condicional. TheoKit descobre skills no startup, não por request. Útil para multi-tenant. |
-| Custom skills directory via opção do agente | P3 | DEFERRED | `discoverSkills(dir)` é público e aceita qualquer dir, mas o agente sempre usa `.theokit/skills/`. Contornável com `systemPrompt` resolver + `discoverSkills`. |
+| `skills.enabled` não filtra de verdade | P2 | **DONE (verificado — não era bug)** | Verificação M13: o SDK filtra por `SkillsSettings.enabled` e `compile-skills` mapeia `include → enabled`. O `void _enabled` documentado não existia no código. |
+| API inline `createSkill()` | P3 | DEFERRED | Mastra permite definir skills em código sem SKILL.md. SKILL.md filesystem é suficiente para a maioria. |
+| Seleção dinâmica de skills por request | P2 | **DONE (M13)** | `defineAgent({ skills: (ctx) => string[] })` resolvido per-request contra o run-context via `resolveEnabledSkills` no mount. `@theokit/agents@0.31.0` + `theokit@0.16.0`. |
+| Custom skills directory via opção do agente | P3 | DEFERRED | `discoverSkills(dir)` público; contornável com `systemPrompt` resolver. |
 
 ---
 
@@ -56,8 +92,8 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Background compression (compressão automática de histórico longo) | P2 | TODO | Mastra usa background agents para comprimir histórico crescente. TheoKit não tem equivalente. Workaround: `getMessages(id, { limit, offset })` + adapter custom com sumário. |
-| Multi-user scoping nativo via `resource + thread` | P2 | TODO | Mastra tem `{ resource, thread }` como primitiva de primeira classe. TheoKit usa `conversationId` opaco — o usuário monta `user-${userId}-thread-${threadId}` manualmente. Não documentado como padrão. |
+| Background compression (compressão automática de histórico longo) | P2 | **DONE (já no SDK)** | Verificação M11: o SDK já tem `autoSummarize` (trigger por `triggerFraction`, mantém `keepNewest`, summariza via `compressConversationWindow`), auto-disparado no local-agent. Não reimplementado (DRY). |
+| Multi-user scoping nativo via `resource + thread` | P2 | **DONE (M11)** | `deriveConversationId(resource, thread)` / `parseConversationId` — determinístico e collision-safe. `@theokit/agents@0.31.0`. |
 
 ---
 
@@ -65,10 +101,10 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| `onDelegationStart` / `onDelegationComplete` hooks | P2 | TODO | Interceptar delegação antes/depois para modificar prompt, aprovar/rejeitar, ou injetar feedback. Workaround: `defineAgentTool` customizado com lógica de hook. |
-| `messageFilter` — filtrar histórico antes da delegação | P2 | TODO | Controlar quais mensagens do supervisor são passadas ao subagente. TheoKit passa só a string `input`. |
-| Background task execution (subagent assíncrono) | P3 | DEFERRED | Executar subagente sem bloquear o supervisor; `streamUntilIdle()`. Adiar até haver demanda. |
-| Task completion scoring / LLM-as-judge | P3 | DEFERRED | Validar resultado do subagente com scorer customizado; injetar feedback para iteração. |
+| `onDelegationStart` / `onDelegationComplete` hooks | P2 | **DONE (M12)** | Hooks em `delegate()` — supervisor reescreve input antes / transforma resultado depois. `abortSignal` já propagava. `@theokit/agents@0.31.0`. Doc em `multi-agent.md`. |
+| `messageFilter` — filtrar histórico antes da delegação | P2 | **N/A arquitetural** | O modelo subagent-as-tool (input único, sem histórico do pai) não expõe histórico para filtrar — nem no framework nem no SDK squad. Diferença arquitetural, não gap. |
+| Background task execution (subagent assíncrono) | P3 | DEFERRED | `streamUntilIdle()`. Adiar até haver demanda. |
+| Task completion scoring / LLM-as-judge | P3 | DEFERRED | Validar resultado do subagente com scorer customizado. |
 
 ---
 
@@ -76,9 +112,9 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Valibot / ArkType / JSON Schema como schema providers | P3 | DEFERRED | Mastra suporta Zod, Valibot, ArkType e JSON Schema raw. TheoKit só suporta Zod. Adiar — Zod é o padrão de facto do ecossistema TheoKit. |
-| Separate structuring model | P3 | DEFERRED | Usar modelo barato só para extração estruturada após raciocínio do modelo principal. Workaround: duas chamadas manuais. |
-| `errorStrategy` — controlar o que acontece em falha de validação | P2 | TODO | Mastra tem `errorStrategy: 'return-partial' \| 'return-raw' \| 'throw'`. TheoKit só faz retry até `maxRetries`. |
+| Valibot / ArkType / JSON Schema como schema providers | P3 | DEFERRED | TheoKit só suporta Zod (padrão de facto). |
+| Separate structuring model | P3 | DEFERRED | Workaround: duas chamadas manuais. |
+| `errorStrategy` — controlar o que acontece em falha de validação | P2 | **DONE (M14)** | `Agent.generateObject({ errorStrategy: 'throw' \| 'return-partial' \| 'return-raw' })`. `return-partial` salva os campos que validam. `@theokit/sdk@2.19.0`. |
 
 ---
 
@@ -86,9 +122,9 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| HITL no `defineAgent` / fluent builder | P2 | TODO | `@HumanInTheLoop` funciona apenas na superfície `@Agent` class. `defineAgent` e builder `.build()` não têm equivalente. Workaround: `defineAgentTool` customizado que chama a API de aprovação. |
-| Listagem de aprovações pendentes entre runs | P2 | TODO | Sem API built-in para listar todos os `callId` pendentes. O app deve persistir `approval_required` events no seu próprio banco. |
-| Approval payload customizado | P3 | DEFERRED | Mastra permite payload customizado na aprovação (comentários, campos extras). TheoKit só suporta `approved: bool + reason?: string`. |
+| HITL no `defineAgent` / fluent builder | P2 | **DONE (M14)** | `defineAgent({ approvals: { <tool>: { question, timeout?, onTimeout? } } })` reusa a fiação HITL do endpoint. Falha-fast se a aprovação nomeia tool inexistente. `@theokit/agents@0.31.0`. |
+| Listagem de aprovações pendentes entre runs | P2 | **DONE (M14)** | `GET /api/agents/<name>/approvals` — o `ApprovalRegistry` rastreia metadata (`toolName`, `question`, `expiresAt`) via `list()`. `theokit@0.16.0`. |
+| Approval payload customizado | P3 | DEFERRED | TheoKit suporta `approved: bool + reason?`. Adiar. |
 
 ---
 
@@ -96,11 +132,11 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Pipeline de guardrails built-in | P1 | TODO | Mastra tem processors plugáveis (PromptInjectionDetector, UnicodeNormalizer, PIIDetector, ModerationProcessor, CostGuardProcessor, SystemPromptScrubber, BatchPartsProcessor). TheoKit não tem nenhum. Workaround: implementar na rota HTTP antes/depois de chamar o agente. |
-| Detecção automática de prompt injection | P1 | TODO | Nenhuma proteção built-in contra prompt injection. Crítico para apps expostos ao público. |
-| Sanitização de PII antes do modelo | P2 | TODO | Sem redação automática de dados sensíveis (emails, CPF, telefones) do input do usuário antes de enviar ao LLM. |
-| Limitador de custo por sessão | P2 | TODO | Sem controle automático de custo por sessão ou usuário. Workaround: instrumentar `usage` do result e cortar manualmente. |
-| Output moderation antes de retornar ao usuário | P2 | TODO | Sem verificação de conteúdo inapropriado na resposta do modelo antes de chegar ao cliente. |
+| Pipeline de guardrails built-in | P1 | **DONE (M9)** | `defineAgent({ guardrails: [...] })` — input guards fail-fast no boundary, output moderado antes do cliente (`moderateOutputStream`). `@theokit/agents@0.31.0`. |
+| Detecção automática de prompt injection | P1 | **DONE (M9)** | `promptInjectionDetector()` — match de frase normalizado (ReDoS-free). |
+| Sanitização de PII antes do modelo | P2 | **DONE (M9)** | `piiDetector({ redact })` — CPF/email/telefone → `[REDACTED]` antes do LLM. |
+| Limitador de custo por sessão | P2 | **DONE (M9)** | `costGuard({ maxTokens })` — budget cumulativo de tokens, `CostBudgetExceededError`. |
+| Output moderation antes de retornar ao usuário | P2 | **DONE (M9)** | `outputModeration({ moderate })` — predicado injetado (zero chamada LLM no módulo, G2); bloqueia antes do cliente. |
 
 ---
 
@@ -108,9 +144,9 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Custom processor pipeline | P2 | TODO | Mastra tem interface `Processor` com hooks em cada fase (`processInput`, `processLLMRequest`, `processLLMResponse`, `processOutputResult`, `processOutputStream`, `processAPIError`). TheoKit não tem equivalente. Plugin TheoKit (`TheoPlugin`) é mais limitado — só tem `register(app)`. |
-| `processInputStream` — modificar input chunk a chunk | P3 | DEFERRED | Transformar input em streaming antes de chegar ao modelo. Adiar até ter demanda. |
-| `processAPIError` — interceptar erros de API do LLM | P2 | TODO | Sem hook para capturar erros de API (rate limit, timeout) e aplicar retry/fallback customizado. |
+| Custom processor pipeline | P2 | **DONE (M10)** | `createToolHooksPlugin` expõe tool hooks (`beforeToolCall`/`afterToolCall`) + LLM-turn hooks (`beforeLLMCall`/`afterLLMCall`) sobre os hooks nativos do SDK (`pre/post_tool_call`, `pre/post_llm_call`). `@theokit/agents@0.31.0`. |
+| `processInputStream` — modificar input chunk a chunk | P3 | DEFERRED | Adiar até ter demanda. |
+| `processAPIError` — interceptar erros de API do LLM | P2 | DEFERRED | O SDK já tem retry/backoff de provider; um hook dedicado de erro de API fica adiado até haver demanda concreta. |
 
 ---
 
@@ -118,9 +154,9 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Protocolo A2A open-standard | P2 | TODO | Mastra implementa o Google A2A protocol — agentes em redes diferentes delegam uns aos outros via HTTP, com agent cards padronizados em `/.well-known/<name>/agent-card.json`. TheoKit não tem equivalente. `defineSubAgent` é in-process; não há cross-network delegation. |
-| Agent cards (descoberta de capacidades) | P2 | TODO | Expor capacidades de um agente TheoKit via endpoint padronizado para consumo por outros sistemas. |
-| `A2AAgent` client | P2 | TODO | Chamar um agente remoto como se fosse local. Mastra: `new A2AAgent({ url, headers })`. |
+| Protocolo A2A open-standard | P2 | **DONE (M15)** | Agent cards A2A servidos em `/.well-known/<name>/agent-card.json` + `createA2ATool` para delegação cross-network. `@theokit/agents@0.31.0` + `theokit@0.16.0`. |
+| Agent cards (descoberta de capacidades) | P2 | **DONE (M15)** | `buildAgentCard(entry, { baseUrl })` + `handleAgentCard` servindo o JSON. |
+| `A2AAgent` client | P2 | **DONE (M15)** | `createA2ATool({ url, name, description, auth? })` — POSTa `{ message }` a um agente remoto, retorna a resposta. Auth Bearer/API-key. |
 
 ---
 
@@ -128,8 +164,8 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Adaptadores de canal (Slack, Discord, Telegram) | P3 | DEFERRED | Mastra tem adaptadores para plataformas de mensagem com webhook routes auto-geradas. TheoKit não tem. Gateway package (`@theokit/gateway-telegram`) existe no SDK mas não está integrado ao framework TheoKit. Adiar — não é core do "app que o agente mora". |
-| Webhook routes auto-geradas por plataforma | P3 | DEFERRED | `/api/agents/{id}/channels/{platform}/webhook` com validação de assinatura. Adiar até channels serem core. |
+| Adaptadores de canal (Slack, Discord, Telegram) | P3 | DEFERRED | Gateway package existe no SDK, não integrado ao framework. Não é core do "app que o agente mora". |
+| Webhook routes auto-geradas por plataforma | P3 | DEFERRED | Adiar até channels serem core. |
 
 ---
 
@@ -137,7 +173,7 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Sandbox de execução de código (`createCodeMode`) | P3 | DEFERRED | Mastra tem `createCodeMode({ tools, sandbox })` para agentes que compõem ferramentas em código executado em sandbox. TheoKit não tem. Caso de uso: coding agents que geram e executam código. `createShellTool` do `@theokit/sdk-tools` é o workaround mais próximo, mas sem sandbox de segurança. |
+| Sandbox de execução de código (`createCodeMode`) | P3 | DEFERRED | `createShellTool` do `@theokit/sdk-tools` é o mais próximo, sem sandbox. Parcialmente coberto pelo M17 (coding agents via `createACPTool`). |
 
 ---
 
@@ -145,11 +181,11 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| `MCPServer` — expor agentes TheoKit como servidor MCP | P2 | TODO | Mastra tem `MCPServer` que expõe agentes e tools via protocolo MCP para clientes externos. TheoKit não tem. Workaround: expor uma rota HTTP que o cliente MCP conecta com `type: 'http'`. |
-| Dynamic toolsets por request (`listToolsets()`) | P2 | TODO | Mastra permite credenciais MCP diferentes por request — útil em apps multi-tenant onde cada usuário tem sua própria API key. TheoKit configura servidores MCP uma vez no startup do agente, sem variação por request. |
-| Integrações com registries MCP | P3 | DEFERRED | Mastra tem integrações pré-prontas com Klavis AI, mcp.run, Composio.dev, Smithery.ai, Apify, Ampersand. TheoKit não tem — o usuário instala servidores MCP manualmente. Adiar até haver demanda. |
-| MCP Apps (UIs iframe em MCP tools) | P3 | DEFERRED | Mastra tem `appResources` no `MCPServer` que renderiza UIs HTML em iframes sandboxed no Mastra Studio. Caso de uso muito específico do ecossistema Mastra Studio. Fora de escopo para TheoKit. |
-| `requireToolApproval` propagado via MCP | P3 | DEFERRED | Mastra propaga o mecanismo de aprovação de tools pelo protocolo MCP (hosts que suportam sampling). TheoKit não tem integração de aprovação pelo protocolo MCP. Adiar. |
+| `MCPServer` — expor agentes TheoKit como servidor MCP | P2 | **DONE (M16)** | `buildMcpToolDescriptors`/`mcpServerInfo` + `POST /api/agents/<name>/mcp` (JSON-RPC: `initialize`, `tools/list`). `@theokit/agents@0.31.0` + `theokit@0.16.0`. |
+| Dynamic toolsets por request (`listToolsets()`) | P2 | TODO | Credenciais MCP diferentes por request (multi-tenant). Follow-up — o serving atual expõe tools estáticas. |
+| Integrações com registries MCP | P3 | DEFERRED | Klavis/mcp.run/Composio/Smithery. Usuário instala servidores manualmente. |
+| MCP Apps (UIs iframe em MCP tools) | P3 | OUT_OF_SCOPE | Específico do Mastra Studio. |
+| `requireToolApproval` propagado via MCP | P3 | DEFERRED | Aprovação de tool via protocolo MCP. Adiar. |
 
 ---
 
@@ -157,8 +193,8 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| `AcpAgent` — wrapper para coding agents via stdio JSON | P2 | TODO | Mastra tem `AcpAgent` + `createACPTool()` para rodar coding agents (Claude Code, Amp, OpenAI Codex) como ferramentas de um agente supervisor. Comunicação via stdio newline-delimited JSON. Config: `command`, `args`, `cwd`, `model`, `persistSession`, `onPermissionRequest`, `workspace`. TheoKit não tem equivalente. |
-| Permission request handler para coding agents | P2 | TODO | `onPermissionRequest` callback que o supervisor usa para aprovar/rejeitar ações do coding agent (criar arquivo, executar comando, etc.). Relacionado ao gap de HITL mas para o caso de agentes de código. |
+| `AcpAgent` — wrapper para coding agents via stdio JSON | P2 | **DONE (M17)** | `createACPTool({ command, args, cwd, onPermissionRequest })` — spawna coding agent via `NodeAcpTransport`, dirige com `AcpClient` (JSON-RPC newline-delimited). `theokit@0.16.0` + `@theokit/agents@0.31.0`. |
+| Permission request handler para coding agents | P2 | **DONE (M17)** | `onPermissionRequest` **obrigatório** (security by default — sem default-allow), roteado via `AcpClient.onRequest('session/request_permission')`. |
 
 ---
 
@@ -166,7 +202,7 @@ Atualizado a cada nova seção auditada.
 
 | Gap | Severidade | Disposição | Notas |
 |---|---|---|---|
-| Wrappers para Claude Agent SDK, OpenAI Agents SDK, Cursor SDK | P3 | DEFERRED | Mastra tem `@mastra/claude`, `@mastra/cursor`, `@mastra/openai` — wrappers que expõem agentes de terceiros via interface unificada. `resumeGenerate()`/`resumeStream()` com IDs de sessão de cada vendor (Claude: `sessionId`, OpenAI: `previousResponseId`, Cursor: `agentId`). TheoKit não tem wrappers — o `@theokit/sdk` é o runtime próprio. Adiar — não é core da proposta TheoKit. |
+| Wrappers para Claude Agent SDK, OpenAI Agents SDK, Cursor SDK | P3 | DEFERRED | O `@theokit/sdk` é o runtime próprio. Não é core da proposta. |
 
 ---
 
@@ -178,16 +214,22 @@ Atualizado a cada nova seção auditada.
 | `docs/agents/using-tools.md` | ✅ | `@theokit/sdk-tools` pré-prontos, `ctx.context` (M7), decorator `@Tool` |
 | `docs/agents/skills.md` | ✅ | SKILL.md filesystem-based, `discoverSkills` + `buildSkillsBlock` públicos, `agent.skills.list()` |
 | `docs/agents/memory.md` | ✅ | `ConversationStorageAdapter`, `MemorySettings` + dreaming sweep, semantic index |
-| `docs/agents/multi-agent.md` | ✅ | `defineSubAgent` + `createSquad`, tool scope restriction, delegation depth |
-| `docs/agents/structured-output.md` | ✅ | `Agent.generateObject` + `Agent.streamObject`, synthetic `output` tool approach |
-| `docs/agents/human-in-the-loop.md` | ✅ | `@HumanInTheLoop` decorator, `approval_required` SSE, `Workflow.suspend()`/`resume()` |
-| `docs/agents/mcp.md` | ✅ | `@MCP` decorator, `McpStdioServerConfig` (envPolicy seguro), `McpHttpServerConfig` + OAuth 2.1 PKCE |
+| `docs/agents/multi-agent.md` | ✅ | `defineSubAgent` + `createSquad`, delegation hooks (M12), tool scope, delegation depth |
+| `docs/agents/structured-output.md` | ✅ | `Agent.generateObject` + `Agent.streamObject`, `errorStrategy` (M14) |
+| `docs/agents/human-in-the-loop.md` | ✅ | `@HumanInTheLoop`, `defineAgent({ approvals })` (M14), `GET /approvals` |
+| `docs/agents/mcp.md` | ✅ | `@MCP` decorator + `POST /mcp` serving (M16), envPolicy seguro, OAuth 2.1 PKCE |
+| `docs/agents/guardrails.md` | ✅ | M9 — 5 detectores, input fail-fast + output buffer/moderate, guards custom |
+| `docs/agents/a2a.md` | ✅ | M15 — agent cards `/.well-known/`, `createA2ATool` client + auth |
+| `docs/agents/processors.md` | ✅ | M10 — `createToolHooksPlugin` tool + LLM-turn hooks, veto |
+| `docs/agents/acp.md` | ✅ | M17 — `createACPTool` + `AcpClient`, `onPermissionRequest` obrigatório |
 
 ---
 
 ## Auditoria Mastra — cobertura completa
 
-Todas as 16 páginas do espaço de agents + MCP da documentação Mastra foram auditadas:
+Todas as 16 páginas do espaço de agents + MCP da documentação Mastra foram auditadas. Os gaps
+identificados na auditoria (guardrails, processors, a2a, acp, mcp-server, delegation hooks, skills
+resolver, scoping, errorStrategy, HITL surface) foram **implementados e publicados** como M9–M17.
 
 ### Páginas auditadas (agents/)
 
@@ -200,21 +242,21 @@ Todas as 16 páginas do espaço de agents + MCP da documentação Mastra foram a
 | `agents/supervisor-agents` | `docs/agents/multi-agent.md` | ✅ |
 | `agents/structured-output` | `docs/agents/structured-output.md` | ✅ |
 | `agents/agent-approval` | `docs/agents/human-in-the-loop.md` | ✅ |
-| `agents/guardrails` | Backlog P1 — sem equivalente | ✅ auditado |
-| `agents/processors` | Backlog P2 — sem equivalente | ✅ auditado |
-| `agents/a2a` | Backlog P2 — sem equivalente | ✅ auditado |
+| `agents/guardrails` | Backlog P1 → **shipped M9** | ✅ |
+| `agents/processors` | Backlog P2 → **shipped M10** | ✅ |
+| `agents/a2a` | Backlog P2 → **shipped M15** | ✅ |
 | `agents/channels` | Backlog P3 DEFERRED | ✅ auditado |
-| `agents/code-mode` | Backlog P3 DEFERRED | ✅ auditado |
-| `agents/acp` | Backlog P2 — sem equivalente | ✅ auditado |
+| `agents/code-mode` | Backlog P3 DEFERRED (parcial M17) | ✅ auditado |
+| `agents/acp` | Backlog P2 → **shipped M17** | ✅ |
 | `agents/sdk-agents` | Backlog P3 DEFERRED | ✅ auditado |
-| `agents/streaming` | Página não existe (404) — streaming coberto inline em `overview.md` | ✅ |
-| `agents/dynamic-agents` | Página não existe (404) — não há feature dedicada no Mastra | ✅ |
+| `agents/streaming` | Página não existe (404) — coberto inline em `overview.md` | ✅ |
+| `agents/dynamic-agents` | Página não existe (404) | ✅ |
 
 ### Páginas auditadas (mcp/)
 
 | Página Mastra | Doc TheoKit gerado | Status |
 |---|---|---|
-| `mcp/overview` | `docs/agents/mcp.md` | ✅ |
-| `mcp/mcp-apps` | Backlog P3 DEFERRED | ✅ auditado |
+| `mcp/overview` | `docs/agents/mcp.md` → **serving shipped M16** | ✅ |
+| `mcp/mcp-apps` | Backlog P3 OUT_OF_SCOPE | ✅ auditado |
 
-**TUDO MAPEADO. Auditoria Mastra × TheoKit concluída.**
+**TUDO MAPEADO. Paridade Mastra × TheoKit: gaps auditados → implementados (M9–M17) → publicados no npm.**
