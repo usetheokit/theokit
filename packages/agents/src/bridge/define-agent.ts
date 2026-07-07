@@ -15,6 +15,7 @@ import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import type { Guardrail } from '../guardrails/index.js'
+import type { SkillsSelection } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
@@ -64,6 +65,12 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * compile time.
    */
   approvals?: Record<string, HumanInTheLoopOptions>
+  /**
+   * M13 — skills selection: a static list (compiled straight to the SDK `skills.enabled`) OR a
+   * per-request resolver `(ctx) => string[]` (carried on `compiled.skillsResolver`, resolved by the
+   * request path against the run-context). Absent ⇒ the SDK enables every discovered skill.
+   */
+  skills?: SkillsSelection
 }
 
 /**
@@ -157,7 +164,18 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.guardrails !== undefined ? { guardrails: def.guardrails } : {}),
     // M14 — HITL approvals compile into the same `hitl` map the decorator path produces.
     ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
+    // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
+    ...compileSkillsSelection(def.skills),
   }
+}
+
+/** M13 — split a {@link SkillsSelection} into the compiled fields (static → `skills`, fn → `skillsResolver`). */
+function compileSkillsSelection(
+  skills: SkillsSelection | undefined,
+): Pick<CompiledAgentOptions, 'skills' | 'skillsResolver'> {
+  if (skills === undefined) return {}
+  if (typeof skills === 'function') return { skillsResolver: skills }
+  return { skills: { enabled: [...skills], autoInject: true } }
 }
 
 /**

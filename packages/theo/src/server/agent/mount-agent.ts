@@ -11,6 +11,7 @@
  */
 import {
   compileAgentModule,
+  resolveEnabledSkills,
   streamAgentUIMessages,
   type HumanInTheLoopOptions,
 } from '@theokit/agents'
@@ -91,6 +92,14 @@ export async function mountAgent(
   }
 
   const compiled = compileAgentModule(mod, source)
+
+  // M13 — resolve a per-request skills selector (from `defineAgent({ skills: (ctx) => [...] })`)
+  // against the M7 run-context, setting `skills.enabled` before the SDK runs. `undefined` ⇒ the
+  // SDK enables every discovered skill. `compiled` is fresh per request, so mutation is safe.
+  if (compiled.skillsResolver) {
+    const enabled = await resolveEnabledSkills(compiled.skillsResolver, compiled.runContext ?? {})
+    if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
+  }
 
   let body: unknown = null
   try {
