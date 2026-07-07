@@ -140,15 +140,36 @@ const researcher = defineSubAgent({
 
 ---
 
+## Delegation hooks (M12)
+
+The programmatic `delegate()` primitive accepts two observability hooks — a supervisor can rewrite
+the sub-agent's input before it runs, and transform/score/redact the result before it returns.
+These are observability over the existing delegation (no new orchestration engine).
+
+```ts
+import { delegate } from '@theokit/agents'
+
+const result = await delegate(ResearchAgent, task, {
+  apiKey,
+  // Runs BEFORE the sub-agent — return the input it should receive (rewrite or pass through).
+  onDelegationStart: ({ subAgent, input }) => `[persona: concise researcher]\n${input}`,
+  // Runs AFTER the sub-agent — return the result the supervisor sees (transform or pass through).
+  onDelegationComplete: ({ subAgent, result }) => ({
+    ...result,
+    response: redactSecrets(result.response),
+  }),
+})
+```
+
+`abortSignal` propagation already works — pass `signal` and aborting cancels an in-flight
+delegation. Both hooks may be async.
+
 ## What TheoKit doesn't have (yet)
 
-**Delegation hooks** (`onDelegationStart` / `onDelegationComplete`) — intercepting delegations
-before/after to modify the prompt, approve/reject, or inject feedback is not built in.
-Workaround: wrap `defineSubAgent` in a custom `defineAgentTool` and apply the hook logic there.
-
 **Message filtering** — controlling which messages from the supervisor's context are shared
-with the subagent before delegation is not built in. The subagent receives only its `input`
-string, not the parent's full history.
+with the subagent before delegation. `delegate()` takes a single `input` string, not a message
+history; `messageFilter` over a multi-turn history maps to the SDK squad surface (`createSquad`
+in `@theokit/sdk/a2a`), not this primitive.
 
 ---
 
