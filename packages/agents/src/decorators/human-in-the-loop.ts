@@ -39,17 +39,28 @@ export interface HumanInTheLoopOptions {
   onTimeout?: TimeoutAction
   /** Show the tool input to the approver (default: true). */
   showInput?: boolean
+  /**
+   * M20 — an optional JSON-schema descriptor of the custom payload the approver may attach (edited
+   * args, a review note). Carried into the `approval_required` event + `GET /approvals` so the UI
+   * knows what to collect. A plain JSON object, not a live Zod schema (keeps the wire serializable).
+   */
+  payloadSchema?: Record<string, unknown>
 }
 
 export function HumanInTheLoop(options: HumanInTheLoopOptions): MethodDecorator {
   return (target: object, propertyKey: string | symbol) => {
     const actualTarget = target.constructor
-    setMeta(HITL_CONFIG, actualTarget, {
-      timeout: 300_000,
-      onTimeout: 'abort',
-      showInput: true,
-      ...options,
-    }, propertyKey)
+    setMeta(
+      HITL_CONFIG,
+      actualTarget,
+      {
+        timeout: 300_000,
+        onTimeout: 'abort',
+        showInput: true,
+        ...options,
+      },
+      propertyKey,
+    )
   }
 }
 

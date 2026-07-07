@@ -129,6 +129,8 @@ export async function mountAgent(
               // M14 — surface toolName + question in GET /approvals (the plugin forwards c.name).
               toolName,
               question: opts.question,
+              // M20 — carry the declared custom-payload schema into GET /approvals.
+              ...(opts.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
             }),
         }
       : undefined

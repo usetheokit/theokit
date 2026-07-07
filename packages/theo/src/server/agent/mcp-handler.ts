@@ -2,9 +2,10 @@
  * M16 (theokit-ai-first) — serve an agent as an MCP server over HTTP at `/api/agents/<name>/mcp`.
  *
  * Answers the two core MCP methods over JSON-RPC 2.0: `initialize` (server info + capabilities) and
- * `tools/list` (the agent's tools as MCP descriptors, via `buildMcpToolDescriptors`). Unknown methods
- * return `-32601` (method not found). Web Standards Response (G8). The stdio transport + full method
- * set stay SDK-side (sdk-runtime.md); this exposes the agent over the app's own HTTP route.
+ * `tools/list` (the agent's tools as MCP descriptors, via `buildMcpToolDescriptors`). M30 adds
+ * `resources/list` + `resources/read` for `ui://` App resources. Unknown methods return `-32601`
+ * (method not found). Web Standards Response (G8). The stdio transport + full method set stay
+ * SDK-side (sdk-runtime.md); this exposes the agent over the app's own HTTP route.
  */
 import {
   type AgentManifestEntry,
@@ -12,6 +13,8 @@ import {
   compileAgentModule,
   mcpServerInfo,
 } from '@theokit/agents'
+
+import { type AppResource, buildResourceDescriptors, readAppResource } from './mcp-app-resources.js'
 
 const MCP_PATH = /^\/api\/agents\/([^/]+)\/mcp$/
 
@@ -65,22 +68,38 @@ function toEntry(name: string, mod: unknown): AgentManifestEntry {
   }
 }
 
-/** Handle one MCP JSON-RPC request for an agent module. Always returns a 200 JSON-RPC envelope. */
-export function handleMcpJsonRpc(mod: unknown, name: string, body: unknown): Response {
+/**
+ * Handle one MCP JSON-RPC request for an agent module. Always returns a 200 JSON-RPC envelope.
+ *
+ * M30 — `appResources` (optional) are the agent's declared `ui://` App resources; when present the
+ * server advertises `capabilities.resources` and answers `resources/list` + `resources/read`.
+ */
+export function handleMcpJsonRpc(
+  mod: unknown,
+  name: string,
+  body: unknown,
+  appResources: readonly AppResource[] = [],
+): Response {
   if (!isJsonRpcRequest(body)) {
-    return jsonResponse({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' } })
+    return jsonResponse({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32600, message: 'Invalid Request' },
+    })
   }
-  const { id, method } = body
+  const { id, method, params } = body
   try {
     const entry = toEntry(name, mod)
     if (method === 'initialize') {
       const info = mcpServerInfo(entry)
+      const capabilities: Record<string, unknown> = { tools: {} }
+      if (appResources.length > 0) capabilities.resources = {}
       return jsonResponse({
         jsonrpc: '2.0',
         id,
         result: {
           protocolVersion: info.protocolVersion,
-          capabilities: { tools: {} },
+          capabilities,
           serverInfo: { name: info.name, version: info.version },
         },
       })
@@ -88,7 +107,37 @@ export function handleMcpJsonRpc(mod: unknown, name: string, body: unknown): Res
     if (method === 'tools/list') {
       return jsonResponse({ jsonrpc: '2.0', id, result: { tools: buildMcpToolDescriptors(entry) } })
     }
-    return jsonResponse({ jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } })
+    if (method === 'resources/list') {
+      return jsonResponse({
+        jsonrpc: '2.0',
+        id,
+        result: { resources: buildResourceDescriptors(appResources) },
+      })
+    }
+    if (method === 'resources/read') {
+      const uri = (params as { uri?: unknown } | undefined)?.uri
+      if (typeof uri !== 'string') {
+        return jsonResponse({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32602, message: 'resources/read requires a string `uri` param.' },
+        })
+      }
+      const contents = readAppResource(appResources, uri)
+      if (contents === null) {
+        return jsonResponse({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32602, message: `Resource not found: ${uri}` },
+        })
+      }
+      return jsonResponse({ jsonrpc: '2.0', id, result: contents })
+    }
+    return jsonResponse({
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32601, message: `Method not found: ${method}` },
+    })
   } catch (err) {
     return jsonResponse({
       jsonrpc: '2.0',
