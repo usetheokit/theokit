@@ -13,14 +13,14 @@ describe('createInProcessApprovalRegistry (M4)', () => {
     const reg = createInProcessApprovalRegistry()
     const pending = reg.register('a1', { timeoutMs: 10_000, onTimeout: 'abort' })
     expect(reg.resolve('a1', true)).toBe(true)
-    await expect(pending).resolves.toBe(true)
+    await expect(pending).resolves.toEqual({ approved: true })
   })
 
   it('test_register_resolves_false_on_deny', async () => {
     const reg = createInProcessApprovalRegistry()
     const pending = reg.register('a2', { timeoutMs: 10_000, onTimeout: 'abort' })
     reg.resolve('a2', false)
-    await expect(pending).resolves.toBe(false)
+    await expect(pending).resolves.toEqual({ approved: false })
   })
 
   it('test_resolve_unknown_id_returns_false', () => {
@@ -33,7 +33,7 @@ describe('createInProcessApprovalRegistry (M4)', () => {
     const pending = reg.register('a3', { timeoutMs: 10_000, onTimeout: 'abort' })
     expect(reg.resolve('a3', true)).toBe(true)
     expect(reg.resolve('a3', false)).toBe(false) // already settled/removed
-    await expect(pending).resolves.toBe(true)
+    await expect(pending).resolves.toEqual({ approved: true })
   })
 
   it('test_times_out_per_onTimeout_abort_denies', async () => {
@@ -42,7 +42,7 @@ describe('createInProcessApprovalRegistry (M4)', () => {
       const reg = createInProcessApprovalRegistry()
       const pending = reg.register('a4', { timeoutMs: 1000, onTimeout: 'abort' })
       vi.advanceTimersByTime(1001)
-      await expect(pending).resolves.toBe(false) // abort → deny
+      await expect(pending).resolves.toEqual({ approved: false }) // abort → deny
     } finally {
       vi.useRealTimers()
     }
@@ -56,7 +56,7 @@ describe('createInProcessApprovalRegistry (M4)', () => {
       const reg = createInProcessApprovalRegistry()
       const pending = reg.register('a4b', { timeoutMs: 1000, onTimeout: 'retry' })
       vi.advanceTimersByTime(1001)
-      await expect(pending).resolves.toBe(false)
+      await expect(pending).resolves.toEqual({ approved: false })
     } finally {
       vi.useRealTimers()
     }
@@ -68,7 +68,7 @@ describe('createInProcessApprovalRegistry (M4)', () => {
       const reg = createInProcessApprovalRegistry()
       const pending = reg.register('a5', { timeoutMs: 1000, onTimeout: 'proceed' })
       vi.advanceTimersByTime(1001)
-      await expect(pending).resolves.toBe(true) // proceed → approve
+      await expect(pending).resolves.toEqual({ approved: true }) // proceed → approve
     } finally {
       vi.useRealTimers()
     }
@@ -81,7 +81,7 @@ describe('createInProcessApprovalRegistry (M4)', () => {
     reg.resolve('x1', true)
     // x2 is still pending; resolving x1 does not settle x2.
     reg.resolve('x2', false)
-    await expect(p1).resolves.toBe(true)
-    await expect(p2).resolves.toBe(false)
+    await expect(p1).resolves.toEqual({ approved: true })
+    await expect(p2).resolves.toEqual({ approved: false })
   })
 })

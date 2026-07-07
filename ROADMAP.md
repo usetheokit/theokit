@@ -458,7 +458,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M20 — [ ] HITL custom approval payload
+### M20 — [x] HITL custom approval payload
 
 **Objective:** Allow the approver to attach a custom payload (comments, extra fields) to an approval decision, beyond `approved: bool + reason?`.
 
