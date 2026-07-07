@@ -124,3 +124,13 @@ export {
   type ScoreVerdict,
   type ScoredDelegation,
 } from './delegation-scoring.js'
+
+export {
+  resolveMcpServers,
+  mcpRegistry,
+  mcpToolApprovals,
+  type McpSelection,
+  type McpRequestContext,
+  type McpRegistryConfig,
+  type McpApprovalSpec,
+} from './mcp-resolver.js'
