@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defineMiddleware } from 'theokit/server'
+import { defineMiddleware } from '../../packages/theo/src/server/define/define-middleware.js'
 
 describe('defineMiddleware', () => {
   it('should return the handler unchanged (same reference)', () => {

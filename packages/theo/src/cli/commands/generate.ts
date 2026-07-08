@@ -73,14 +73,14 @@ function toCamelCase(name: string): string {
 
 function generateRouteTemplate(name: string): string {
   return [
-    `import { defineRoute } from 'theokit/server'`,
+    `import { route } from 'theokit/server'`,
     `import { z } from 'zod'`,
     ``,
-    `export const GET = defineRoute({`,
-    `  handler: ({ ctx }) => {`,
+    `export const GET = route()`,
+    `  .handler(({ ctx }) => {`,
     `    return { message: 'TODO: implement ${name} GET' }`,
-    `  },`,
-    `})`,
+    `  })`,
+    `  .build()`,
     ``,
   ].join('\n')
 }
@@ -106,15 +106,15 @@ function generateControllerTemplate(name: string): string {
 function generateActionTemplate(name: string): string {
   const camel = toCamelCase(name)
   return [
-    `import { defineAction } from 'theokit/server'`,
+    `import { action } from 'theokit/server'`,
     `import { z } from 'zod'`,
     ``,
-    `export const ${camel} = defineAction({`,
-    `  input: z.object({}),`,
-    `  handler: ({ input, ctx }) => {`,
+    `export const ${camel} = action()`,
+    `  .input(z.object({}))`,
+    `  .handler(({ input, ctx }) => {`,
     `    return { message: 'TODO: implement ${name}' }`,
-    `  },`,
-    `})`,
+    `  })`,
+    `  .build()`,
     ``,
   ].join('\n')
 }
@@ -125,44 +125,32 @@ function generateActionTemplate(name: string): string {
  * per testing.md.
  */
 function generateAgentTemplate(name: string): string {
-  const pascal = toPascalCase(name)
   return [
-    `import 'reflect-metadata'`,
-    `import { Agent, MainLoop } from '@theokit/agents'`,
-    `import { UseGuards } from '@theokit/http'`,
+    `import { agent } from '@theokit/agents'`,
+    `import { z } from 'zod'`,
     ``,
-    `@Agent({`,
-    `  name: '${name}',`,
-    `  route: '/api/agents/${name}',`,
-    `  model: 'openai/gpt-4o-mini',`,
-    `  systemPrompt: 'You are a helpful ${name} assistant.',`,
-    `})`,
-    `export class ${pascal}Agent {`,
-    `  @MainLoop({ strategy: 'react', maxIterations: 5 })`,
-    `  async run() {}`,
-    `}`,
+    `// Zero-config: this file is auto-served at POST /api/agents/${name}.`,
+    `// Add tools with tool('name')...build() and chain them via .tool(...).`,
+    `export default agent()`,
+    `  .input(z.object({ message: z.string() }))`,
+    `  .model('openai/gpt-4o-mini')`,
+    `  .system('You are a helpful ${name} assistant.')`,
+    `  .build()`,
     ``,
   ].join('\n')
 }
 
 function generateToolboxTemplate(name: string): string {
-  const pascal = toPascalCase(name)
+  const camel = toCamelCase(name)
   return [
-    `import 'reflect-metadata'`,
+    `import { tool } from 'theokit/server'`,
     `import { z } from 'zod'`,
-    `import { Toolbox, Tool } from '@theokit/agents'`,
     ``,
-    `@Toolbox({ namespace: '${name}' })`,
-    `export class ${pascal}Tools {`,
-    `  @Tool({`,
-    `    name: 'hello',`,
-    `    description: 'Say hello',`,
-    `    input: z.object({ name: z.string() }),`,
-    `  })`,
-    `  async hello(input: { name: string }) {`,
-    `    return \`Hello, \${input.name}!\``,
-    `  }`,
-    `}`,
+    `export const ${camel}Hello = tool('${name}_hello')`,
+    `  .describe('Say hello')`,
+    `  .input(z.object({ name: z.string() }))`,
+    `  .execute(({ name }) => \`Hello, \${name}!\`)`,
+    `  .build()`,
     ``,
   ].join('\n')
 }

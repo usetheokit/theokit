@@ -9,7 +9,8 @@ import { scanWebSocketRoutes } from '../../server/scan/ws-scan.js'
 export async function routesCommand(): Promise<void> {
   const cwd = process.cwd()
   const config = await loadConfig(cwd)
-  validateProjectStructure(cwd)
+  // #95 — honor config.appDir so a custom frontend dir (e.g. apps/web) passes the structure gate.
+  validateProjectStructure(cwd, config.appDir)
 
   const serverDir = resolve(cwd, config.serverDir)
 

@@ -27,7 +27,12 @@ export interface LoadedRoutes {
   agents: AgentNode[]
 }
 
-export function loadRoutesAndActions(distDir: string, serverDir: string): LoadedRoutes {
+export function loadRoutesAndActions(
+  distDir: string,
+  serverDir: string,
+  // #95 follow-up — agents dir name (config `agentsDir`, default "agents") for the live-scan fallback.
+  agentsDir = 'agents',
+): LoadedRoutes {
   const manifestPath = join(distDir, 'manifest.json')
 
   if (existsSync(manifestPath)) {
@@ -49,7 +54,7 @@ export function loadRoutesAndActions(distDir: string, serverDir: string): Loaded
     routes: scanServerRoutes(serverDir),
     actions: scanServerActions(serverDir),
     wsRoutes: scanWebSocketRoutes(serverDir),
-    // Agents live at <projectRoot>/agents, a sibling of serverDir (LOCKED naming).
-    agents: scanAgents(dirname(serverDir)),
+    // Agents live at <projectRoot>/<agentsDir>; projectRoot = serverDir's parent for the canonical layout.
+    agents: scanAgents(dirname(serverDir), agentsDir),
   }
 }

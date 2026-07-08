@@ -18,6 +18,8 @@ export interface AgentCommandDeps {
   loadModule?: (filePath: string) => Promise<Record<string, unknown>>
   runAgent?: typeof runAgentInTerminal
   resolveApiKey?: () => string
+  /** Agents dir name (config `agentsDir`); defaults to the loaded config's value ("agents"). Tests inject it. */
+  agentsDir?: string
 }
 
 export async function agentCommand(
@@ -29,10 +31,15 @@ export async function agentCommand(
     throw new Error('theokit agent: a message is required. Usage: theokit agent <name> "<message>"')
   }
   const projectRoot = deps.projectRoot ?? process.cwd()
-  const agents = scanAgents(projectRoot)
+  // #95 follow-up — resolve the agents dir from config (default "agents") so `agentsDir: "core/agents"`
+  // is honored in the terminal, same as dev. Tests inject `agentsDir` to skip the config load.
+  const agentsDir =
+    deps.agentsDir ??
+    (await (await import('../../config/load-config.js')).loadConfig(projectRoot)).agentsDir
+  const agents = scanAgents(projectRoot, agentsDir)
   const agent = agents.find((a) => a.name === name)
   if (!agent) {
-    const names = agents.map((a) => a.name).join(', ') || '(none found in agents/)'
+    const names = agents.map((a) => a.name).join(', ') || `(none found in ${agentsDir}/)`
     throw new Error(`theokit agent: '${name}' not found. Available agents: ${names}`)
   }
 
@@ -84,6 +91,10 @@ export async function createAgentSsrLoader(projectRoot: string): Promise<{
     ssr: config.ssr,
     services: config.services,
     viteOptimizeDeps: config.viteOptimizeDeps,
+    // #95 — honor config `serverDir` so the terminal SSR loader transpiles under the same root as dev.
+    serverDir: config.serverDir,
+    // #95 follow-up — honor config `agentsDir`.
+    agentsDir: config.agentsDir,
   })
   const server = await createServer({
     root: projectRoot,

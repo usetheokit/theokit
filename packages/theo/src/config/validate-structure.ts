@@ -12,13 +12,6 @@ interface ValidationRule {
   errorMessage: string
 }
 
-const REQUIRED_DIRS: ValidationRule[] = [
-  {
-    path: 'app',
-    errorMessage: 'Missing required directory: app/',
-  },
-]
-
 const REQUIRED_FILES: ValidationRule[] = [
   {
     path: 'theo.config.ts',
@@ -30,14 +23,20 @@ const REQUIRED_FILES: ValidationRule[] = [
   },
 ]
 
-export function validateProjectStructure(rootDir: string): void {
+// #95 — honor config `appDir` (default "app") so a project that groups its frontend under a custom
+// directory (e.g. `apps/web`) is not rejected by a hardcoded `app/` requirement.
+export function validateProjectStructure(rootDir: string, appDir = 'app'): void {
   if (!existsSync(rootDir)) {
     throw new TheoProjectError([`Project directory does not exist: ${rootDir}`], rootDir)
   }
 
   const errors: string[] = []
 
-  for (const rule of REQUIRED_DIRS) {
+  const requiredDirs: ValidationRule[] = [
+    { path: appDir, errorMessage: `Missing required directory: ${appDir}/` },
+  ]
+
+  for (const rule of requiredDirs) {
     if (!existsSync(join(rootDir, rule.path))) {
       errors.push(rule.errorMessage)
     }

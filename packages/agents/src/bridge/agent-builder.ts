@@ -18,6 +18,9 @@
 import type { CustomTool } from '@theokit/sdk'
 import type { z } from 'zod'
 
+import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
+import type { Guardrail } from '../guardrails/index.js'
+import type { SkillsSelection } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
 
 import { defineAgent, type AgentDefinition, type DefineAgentConfig } from './define-agent.js'
@@ -104,6 +107,21 @@ export interface AgentBuilder<
     tool: ContextualTool<TName, TRequired>,
     ...guard: TContext extends TRequired ? [] : [error: ToolContextError<TRequired>]
   ): AgentBuilder<TInput, TModel, TContext, TTools | TName>
+  /** M9 — add one input/output guardrail (appends). Runs at the framework boundary before the SDK. */
+  guardrail(g: Guardrail): AgentBuilder<TInput, TModel, TContext, TTools>
+  /** M9 — set the full guardrail list (replaces any previously added). */
+  guardrails(gs: readonly Guardrail[]): AgentBuilder<TInput, TModel, TContext, TTools>
+  /** M14 — gate one tool behind a HITL approval (merges into the approvals map, keyed by tool name). */
+  approval(
+    toolName: TTools extends never ? string : TTools,
+    options: HumanInTheLoopOptions,
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
+  /** M14 — set the full approvals map (replaces any previously added). */
+  approvals(
+    map: Record<string, HumanInTheLoopOptions>,
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
+  /** M13 — select skills: a static list OR a per-request resolver `(ctx) => string[]`. */
+  skills(selection: SkillsSelection): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * Apply a reusable partial chain (Spring-Boot-style composition). `preset` receives the current
    * builder and returns an advanced one; its accumulated type-state flows through.
@@ -136,6 +154,14 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
       makeBuilder({ ...config, reasoningEffort: effort }),
     context: (value: Record<string, unknown>) => makeBuilder({ ...config, context: value }),
     tool: (tool: CustomTool) => makeBuilder({ ...config, tools: [...(config.tools ?? []), tool] }),
+    guardrail: (g: Guardrail) =>
+      makeBuilder({ ...config, guardrails: [...(config.guardrails ?? []), g] }),
+    guardrails: (gs: readonly Guardrail[]) => makeBuilder({ ...config, guardrails: gs }),
+    approval: (toolName: string, options: HumanInTheLoopOptions) =>
+      makeBuilder({ ...config, approvals: { ...(config.approvals ?? {}), [toolName]: options } }),
+    approvals: (map: Record<string, HumanInTheLoopOptions>) =>
+      makeBuilder({ ...config, approvals: map }),
+    skills: (selection: SkillsSelection) => makeBuilder({ ...config, skills: selection }),
     use: (preset: (b: unknown) => unknown) => preset(runtime),
     build: () => defineAgent(config),
   }
