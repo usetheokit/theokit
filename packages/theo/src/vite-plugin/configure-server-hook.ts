@@ -164,7 +164,8 @@ export async function runConfigureServer(
   if (ctx.resolvedOpenApi !== undefined) {
     const openApiCfg = ctx.resolvedOpenApi
     const { reEmitOpenApi } = await import('./openapi-emit/dev-emit.js')
-    const openApiServerDir = resolve(ctx.projectRoot, 'server')
+    // #95 — the OpenAPI dev-emit scans the SAME backend root as the route middleware (honor serverDir).
+    const openApiServerDir = ctx.serverDir
     const openApiDistDir = resolve(ctx.projectRoot, ctx.resolvedDistDir)
     const isRouteFileForOpenApi = (file: string): boolean =>
       file.startsWith(openApiServerDir) && /\.(ts|tsx|js|mjs)$/.test(file)
