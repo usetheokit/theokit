@@ -3,6 +3,8 @@ export * from './define-action.js'
 export * from './define-middleware.js'
 export * from './ui-message-stream-response.js'
 export * from './define-agent-tool.js'
+// M31 — the fluent `tool()` builder (builder-only authoring API).
+export * from './tool-builder.js'
 export * from './define-websocket.js'
 export * from './define-channel.js'
 export * from './define-plugin.js'
