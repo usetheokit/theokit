@@ -8,7 +8,8 @@
 import { describe, it, expect, expectTypeOf } from 'vitest'
 import { z } from 'zod'
 
-import { tool, defineAgentTool } from '../../packages/theo/src/server/define/index.js'
+import { tool } from '../../packages/theo/src/server/define/index.js'
+import { defineAgentTool } from '../../packages/theo/src/server/define/define-agent-tool.js'
 
 describe('tool() builder — identity-shape delegation', () => {
   it('emits a CustomTool structurally identical to defineAgentTool({...})', async () => {

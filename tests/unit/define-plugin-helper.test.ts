@@ -36,9 +36,9 @@ describe('T2.1 — definePlugin() identity helper (ADR-0008 D6)', () => {
     expect(registered).toBe(true)
   })
 
-  it('exported from theokit/server barrel (error scenario: barrel BC)', () => {
-    expect(typeof theokit.definePlugin).toBe('function')
-    expect(theokit.definePlugin).toBe(definePlugin)
+  it('M31 builder-only: definePlugin is removed from the theokit/server barrel (use plugin())', () => {
+    expect((theokit as Record<string, unknown>).definePlugin).toBeUndefined()
+    expect(typeof (theokit as Record<string, unknown>).plugin).toBe('function')
   })
 
   it('rejects missing name at compile time (TS @ts-expect-error)', () => {

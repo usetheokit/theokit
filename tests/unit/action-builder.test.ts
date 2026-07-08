@@ -5,7 +5,8 @@
 import { describe, it, expect, expectTypeOf } from 'vitest'
 import { z } from 'zod'
 
-import { action, defineAction } from '../../packages/theo/src/server/define/index.js'
+import { action } from '../../packages/theo/src/server/define/index.js'
+import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
 
 describe('action() builder — identity-shape delegation', () => {
   it('emits an ActionConfig structurally identical to defineAction({...})', async () => {

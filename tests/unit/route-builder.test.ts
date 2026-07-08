@@ -5,7 +5,8 @@
 import { describe, it, expect, expectTypeOf } from 'vitest'
 import { z } from 'zod'
 
-import { route, defineRoute } from '../../packages/theo/src/server/define/index.js'
+import { route } from '../../packages/theo/src/server/define/index.js'
+import { defineRoute } from '../../packages/theo/src/server/define/define-route.js'
 
 describe('route() builder — identity-shape delegation', () => {
   it('emits a RouteConfig structurally identical to defineRoute({...})', async () => {

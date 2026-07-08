@@ -43,7 +43,6 @@ describe('scanServerActionsEnriched — basic discovery', () => {
       'hello.ts',
       `
       import { z } from 'zod'
-      import { defineAction } from 'theokit/server'
       export default defineAction({
         input: z.object({ name: z.string() }),
         handler: ({ input }) => ({ greeting: 'Hi ' + input.name }),
@@ -63,7 +62,6 @@ describe('scanServerActionsEnriched — basic discovery', () => {
     write(
       'upload.ts',
       `
-      import { defineAction } from 'theokit/server'
       export default defineAction({
         accept: 'form',
         input: z.object({ file: z.string() }),
@@ -134,7 +132,6 @@ describe('scanServerActionsEnriched — P#4 plugin-forms shared-schema conventio
     write(
       'create-user.ts',
       `
-      import { defineAction } from 'theokit/server'
       import { schema } from './schemas/create-user.js'
       export const createUser = defineAction({ input: schema, handler: () => null })
     `,
@@ -157,7 +154,6 @@ describe('scanServerActionsEnriched — P#4 plugin-forms shared-schema conventio
       'inline-only.ts',
       `
       import { z } from 'zod'
-      import { defineAction } from 'theokit/server'
       export const inlineOnly = defineAction({ input: z.object({ x: z.string() }), handler: () => null })
     `,
     )
@@ -171,7 +167,6 @@ describe('scanServerActionsEnriched — P#4 plugin-forms shared-schema conventio
     write(
       'multi.ts',
       `
-      import { defineAction } from 'theokit/server'
       import { schema } from './schemas/multi.js'
       export const multi = defineAction({ input: schema, handler: () => null })
     `,
@@ -180,6 +175,13 @@ describe('scanServerActionsEnriched — P#4 plugin-forms shared-schema conventio
       'schemas/multi.ts',
       `
       import { z } from 'zod'
+      import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
+      import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
+      import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
+      import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
+      import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
+      import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
+      import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
       export const schema = z.object({ y: z.string() })
     `,
     )
@@ -200,7 +202,6 @@ describe('scanServerActionsEnriched — EC-9 comment stripping', () => {
     write(
       'jcomment.ts',
       `
-      import { defineAction } from 'theokit/server'
       // accept: 'form' — this is just documentation
       export default defineAction({
         accept: 'json',
@@ -217,7 +218,6 @@ describe('scanServerActionsEnriched — EC-9 comment stripping', () => {
     write(
       'bcomment.ts',
       `
-      import { defineAction } from 'theokit/server'
       /* example: accept: 'form' below */
       export default defineAction({
         accept: 'json',
