@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M31 Phase 2 — `agent()` builder gains `.guardrail(s)` / `.approval(s)` / `.skills`.** The three
+  methods the DoD names: `agent().model(m).tool(write).approval('write',{question}).guardrail(g)
+  .skills(['fs']).build()`. Each sets the matching `DefineAgentConfig` field, so `.build()` (→
+  `defineAgent` → `compileAgentDefinition`) carries it into `CompiledAgentOptions` identically to the
+  object-config path (proven by compile-through tests). (`builder-only-authoring-api`)
 - **M31 Phase 3 — `config()` fluent builder (hybrid grammar).** `config().serverDir('core')
   .agentsDir('core/agents').appDir('apps/web').set({ security: {…} }).build()`. Config is a ~30-field
   flat bag, so the builder is HYBRID (ADR-M31-3): dedicated setters for the common fields + a
