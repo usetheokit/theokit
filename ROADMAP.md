@@ -710,7 +710,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M34 — [ ] Phase 2 — MCP surface hardening + default-DENY exposure
+### M34 — [x] Phase 2 — MCP surface hardening + default-DENY exposure
 
 > Added 2026-07-08 by `/roadmap-feature` (slug: `mcp-surface-hardening`). See CHANGELOG `[Unreleased] § Added`.
 

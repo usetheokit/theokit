@@ -15,12 +15,21 @@
  * The HITL approve route stays in each caller (it carries caller-specific rate-limiting/CSRF plumbing).
  */
 import type { AgentNode } from '../scan/agent-scan.js'
+import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import { isAgentCardPath, handleAgentCard } from './agent-card-handler.js'
 import { getApprovalRegistry } from './approval-registry.js'
 import { isListApprovalsPath, handleListApprovals } from './list-approvals-handler.js'
 import { extractAppResources } from './mcp-app-resources.js'
 import { isMcpPath, handleMcpJsonRpc } from './mcp-handler.js'
+
+/** JSON error envelope (mirrors mount-agent.ts:37 — the parity source for the MCP CSRF gate). */
+function jsonError(status: number, code: string, message: string): Response {
+  return new Response(JSON.stringify({ error: { code, message } }), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  })
+}
 
 /** Dependencies the aux dispatcher needs from its caller (dev or prod). */
 export interface AuxRouteDeps {
@@ -30,6 +39,13 @@ export interface AuxRouteDeps {
   loadModule: (filePath: string) => Promise<unknown>
   /** Absolute base URL (`http(s)://host`) for the agent-card endpoint URLs. */
   baseUrl: string
+  /**
+   * M34 (#97) — CSRF enforcement mode for the MCP route. `POST /api/agents/<name>/mcp` drives the
+   * agent (spends LLM tokens), so a cross-origin POST MUST be rejected in `'strict'` — parity with
+   * the agent-run route (`mount-agent.ts:83-91`). Defaults to `'strict'` (safe-by-default); a caller
+   * that already gated upstream may pass `'off'`.
+   */
+  csrfMode?: CsrfMode
 }
 
 /**
@@ -60,23 +76,63 @@ export async function serveAgentAuxRoute(
     return handleListApprovals(getApprovalRegistry())
   }
 
-  // M16 — POST /api/agents/<name>/mcp (JSON-RPC MCP server).
+  // M16 — POST /api/agents/<name>/mcp (JSON-RPC MCP server). Extracted to keep this dispatcher
+  // within the cognitive-complexity budget (G6).
   const mcpName = isMcpPath(urlPath)
   if (mcpName !== null) {
-    if (method !== 'POST') return null
-    const agent = deps.agents.find((a) => a.name === mcpName)
-    if (!agent) return null
-    let body: unknown = null
-    try {
-      body = await request.json()
-    } catch {
-      /* malformed/empty JSON → handleMcpJsonRpc returns a -32600 envelope */
-    }
-    const mod = await deps.loadModule(agent.filePath)
-    // M30 — pass the agent's declared `ui://` App resources (named `appResources` export) so the
-    // MCP server advertises + serves them via resources/list + resources/read.
-    return handleMcpJsonRpc(mod, agent.name, body, extractAppResources(mod))
+    return serveMcpRoute(request, method, mcpName, deps)
   }
 
   return null
+}
+
+/**
+ * Serve the MCP route with the M34 gates: default-DENY opt-in → CSRF → dispatch. Returns `null` to
+ * fall through (wrong method / unknown or non-opted-in agent), a 403 on CSRF failure, else the
+ * JSON-RPC response.
+ */
+async function serveMcpRoute(
+  request: Request,
+  method: string,
+  mcpName: string,
+  deps: AuxRouteDeps,
+): Promise<Response | null> {
+  if (method !== 'POST') return null
+  const agent = deps.agents.find((a) => a.name === mcpName)
+  if (!agent) return null
+
+  const mod = await deps.loadModule(agent.filePath)
+
+  // M34 — DEFAULT-DENY: an agent is NOT exposed on MCP unless it explicitly opts in with a named
+  // `export const mcp = true` (blueprint D5 — default-EXPOSE is the footgun magnified by the
+  // multi-surface thesis). Absent the opt-in, fall through to 404 (the agent is web-only). This is a
+  // breaking change from the M16 auto-mount (documented in the CHANGELOG § Security).
+  if (!isMcpExposed(mod)) return null
+
+  // M34 (#97) — enforce CSRF BEFORE any work. The MCP route drives the agent (real LLM tokens), so a
+  // cross-origin POST must be rejected — parity with the agent-run route (`mount-agent.ts:83-91`).
+  const csrfMode = deps.csrfMode ?? 'strict'
+  if (csrfMode === 'strict') {
+    const csrf = validateCsrfRequest(request)
+    if (!csrf.valid) return jsonError(403, 'CSRF_FAILED', `CSRF check failed: ${csrf.reason}`)
+  }
+
+  let body: unknown = null
+  try {
+    body = await request.json()
+  } catch {
+    /* malformed/empty JSON → handleMcpJsonRpc returns a -32600 envelope */
+  }
+  // M30 — pass the agent's declared `ui://` App resources (named `appResources` export) so the MCP
+  // server advertises + serves them via resources/list + resources/read.
+  return handleMcpJsonRpc(mod, agent.name, body, extractAppResources(mod))
+}
+
+/**
+ * M34 — DEFAULT-DENY opt-in check: is this agent module exposed on the MCP surface? An agent opts in
+ * with a named `export const mcp = true` (mirroring the `appResources` named-export convention).
+ * Anything else (absent / falsy) → NOT exposed. Read at the emit layer (blueprint D5).
+ */
+function isMcpExposed(mod: unknown): boolean {
+  return (mod as { mcp?: unknown } | null | undefined)?.mcp === true
 }
