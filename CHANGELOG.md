@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M31 Phase 1 — `tool()` fluent builder.** New fluent authoring surface for agent tools:
+  `tool('read').describe(d).input(z…).execute((i,ctx)=>…).build()`. Pure type-state (tRPC UnsetMarker;
+  `.build()` is a compile error until `.input()` + `.execute()` are set; `execute` input inferred from
+  the Zod schema). `.build()` delegates to the internal `defineAgentTool`, emitting the identical
+  `CustomTool` — the SDK/agent compile path is unchanged (proven by a wiring test through
+  `compileAgentDefinition`). First surface of the builder-only migration (M31). (`builder-only-authoring-api`)
 - Roadmap amended: added M31 Builder-only authoring API across all surfaces (`/roadmap-feature builder-only-authoring-api`)
 
 ### Changed
