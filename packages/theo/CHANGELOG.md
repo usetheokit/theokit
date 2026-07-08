@@ -1,5 +1,14 @@
 # theo
 
+## 0.22.1
+
+### Patch Changes
+
+- Security: MCP `tools/call` no longer bypasses HITL approval (#99). A tool gated by `.approval()` /
+  `@HumanInTheLoop` was executed unguarded when invoked via MCP `tools/call`; now `callTool` receives
+  `compiled.hitl` and refuses a gated tool with an `isError` result before invoking the handler
+  (fail-closed). Non-gated tools are unaffected.
+
 ## 0.16.0
 
 ### Minor Changes
