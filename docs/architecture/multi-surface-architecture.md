@@ -115,8 +115,8 @@ Prior art: tRPC `callProcedure` / `createCallerFactory`. Parity with the HTTP pa
 |---|---|---|
 | **web** | ✅ shipped | `executeWebRequest(Request)` — routes/actions/pages/auth |
 | **MCP (server)** | ✅ shipped + hardened (M34) | `POST /api/agents/<name>/mcp` → `handleMcpJsonRpc` → the compiled tools |
-| **TUI** | ✅ ships (ADR-0039) | today over HTTP-loopback; `callProcedure` is the intended in-process upgrade |
-| **Tauri** | 🟡 authorized-in-principle, **deferred + gated** | intended sidecar reusing the node adapter — the `Request→Response` waist cannot express Tauri's push half (`Channel`/`emit`); gated on a push-transport ADR + evidence of real demand |
+| **TUI** | ✅ shipped, **both models (M35)** | Model A (default): `streamAgentTurnInProcess` — single process, no server/port/CSRF, inline HITL. Model B (fallback): HTTP-loopback (`--http`/`THEO_CODE_URL`) for the one-server multi-surface case |
+| **Tauri** | 🟡 authorized-in-principle, **deferred + gated (M36)** | intended sidecar reusing the M35 in-process path — the `Request→Response` waist cannot express Tauri's push half (`Channel`/`emit`); gated on a push-transport ADR (M36) + evidence of real demand |
 
 ---
 
@@ -157,8 +157,8 @@ Delivered through the project's CYCLE (discover → plan → implement → code-
 
 The design is deliberately incremental. What is **not** done, and why:
 
-- **Tauri surface** — deferred + gated (ADR-0044 D3). Needs a push-transport ADR (the `fetch(Request)→Response` waist cannot express `Channel`/`emit`) + evidence of a real desktop app need. Default realization will be a sidecar reusing the node adapter, **not** an `adapter-tauri` build target.
-- **TUI over the in-process caller** — the TUI ships today over HTTP-loopback (ADR-0039); migrating it onto `callProcedure` (no loopback) is the intended upgrade, not yet done.
+- **Tauri surface** — deferred + gated (ADR-0044 D3, scheduled M36). Needs a push-transport ADR (the `fetch(Request)→Response` waist cannot express `Channel`/`emit`) + evidence of a real desktop app need. Default realization will be a sidecar reusing the **M35 in-process path**, **not** an `adapter-tauri` build target.
+- **TUI in-process (Model A)** — ✅ **shipped (M35).** The framework seam `streamAgentTurnInProcess` (`packages/theo/src/server/agent/stream-agent-turn-in-process.ts`) runs an agent turn in a single process with inline HITL; the `theo-code-v2` Ink TUI defaults to it (no server/port/CSRF), with HTTP-loopback kept as the `--http` fallback. Note: a provider error the SDK does **not** surface (e.g. an unknown model id → 404 that ends the stream `start→finish` with no error chunk) is a separate upstream `@theokit/sdk` gap; the TUI guards it with a "no content" hint until the SDK surfaces it.
 - **Full MCP OAuth resource-server auth** — the current MCP gate is the CSRF parity fix (#97). The spec-correct remote-MCP flow (RFC 8707 audience-bound token validation + RFC 9728 PRM discovery) is the next step; stdio uses env creds (no in-request token).
 - **Over-MCP approval mechanism** — gated tools are currently *refused* over MCP (fail-closed, #99). A real approval flow over MCP is a follow-up only if demand appears.
 - **Per-tool (not per-agent) surface tags** — default-DENY is currently per-agent (`export const mcp = true`). A finer per-tool `surfaces` allowlist (the blueprint's D5 in full) is a future refinement.
@@ -173,7 +173,8 @@ The design is deliberately incremental. What is **not** done, and why:
 |---|---|
 | Builder authoring surface | `packages/theo/src/server/define/*-builder.ts`, `packages/agents/src/bridge/agent-builder.ts` |
 | Shared Zod input validation | `packages/theo/src/server/http/validate-route-input.ts` |
-| In-process caller | `packages/theo/src/server/http/in-process-caller.ts` |
+| In-process caller (routes) | `packages/theo/src/server/http/in-process-caller.ts` |
+| In-process agent turn (Model A, M35) | `packages/theo/src/server/agent/stream-agent-turn-in-process.ts` |
 | Ctx reconciliation | `packages/theo/src/server/http/ctx-reconciliation.ts` |
 | HTTP execution seam | `packages/theo/src/server/web-handler.ts` (`executeWebRequest`), `.../http/execute.ts` |
 | MCP server transport | `packages/theo/src/server/agent/mcp-handler.ts`, `.../serve-aux-routes.ts` |

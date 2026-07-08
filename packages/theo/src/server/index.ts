@@ -104,6 +104,18 @@ export type { Sandbox, CodeModeApi, CodeModeConfig, CodeModePermission } from '.
 // M27 — channel webhook routes (Slack/Telegram/Discord) with per-platform signature validation.
 export { handleChannelWebhook, parseChannelPath, isChannelPath } from './agent/channel-webhook.js'
 export type { ChannelMessage, ChannelWebhookConfig } from './agent/channel-webhook.js'
+// M35 — in-process agent-turn seam (Model A): the Ink TUI / Tauri drive an agent turn in ONE process
+// (no HTTP loopback, no port, no CSRF), reusing streamAgentUIMessages with inline HITL resolution.
+export {
+  streamAgentTurnInProcess,
+  InProcessApprovalRequiredError,
+} from './agent/stream-agent-turn-in-process.js'
+export type {
+  StreamAgentTurnInProcessInput,
+  StreamAgentTurnDeps,
+  InProcessApprovalRequest,
+  InProcessAwaitApproval,
+} from './agent/stream-agent-turn-in-process.js'
 // M30 — MCP App `ui://` HTML resources served by the MCP server (rendered in a sandboxed iframe).
 // MCP stdio transport — expose an agent as a stdio MCP server (sibling of the HTTP route).
 export { serveMcpStdio, handleMcpStdioLine, type StdioStreams } from './agent/mcp-stdio.js'
