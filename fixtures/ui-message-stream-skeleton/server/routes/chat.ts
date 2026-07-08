@@ -34,18 +34,20 @@ async function* echoAgentStream(message: string): AsyncIterable<AgentStreamEvent
   }
 }
 
-export const POST = defineRoute({
-  body: z.object({
-    messages: z
-      .array(
-        z.object({
-          role: z.string(),
-          parts: z.array(z.object({ type: z.string(), text: z.string().optional() })).optional(),
-        }),
-      )
-      .optional(),
-  }),
-  handler: async ({ body }): Promise<Response> => {
+export const POST = route()
+  .body(
+    z.object({
+      messages: z
+        .array(
+          z.object({
+            role: z.string(),
+            parts: z.array(z.object({ type: z.string(), text: z.string().optional() })).optional(),
+          }),
+        )
+        .optional(),
+    }),
+  )
+  .handler(async ({ body }): Promise<Response> => {
     const last = body?.messages?.at(-1)
     const prompt = last?.parts?.map((p) => p.text ?? '').join('') ?? ''
     const events = echoAgentStream(prompt)
@@ -53,5 +55,5 @@ export const POST = defineRoute({
     return uiMessageStreamResponse(
       translateToUIMessageStream(events, { textId: crypto.randomUUID() }),
     )
-  },
-})
+  })
+  .build()

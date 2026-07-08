@@ -1,4 +1,4 @@
-import { defineRoute } from 'theokit/server'
+import { route } from 'theokit/server'
 import { z } from 'zod'
 
 export interface User {
@@ -19,23 +19,23 @@ const users: User[] = [
  * Query schema is Zod-validated; client gets `query.search?: string` typed
  * via `theoFetch<typeof GET>(...)` end-to-end (no manual `as` casts).
  */
-export const GET = defineRoute({
-  query: z.object({ search: z.string().optional() }),
-  handler: ({ query }): User[] => {
+export const GET = route()
+  .query(z.object({ search: z.string().optional() }))
+  .handler(({ query }): User[] => {
     if (!query.search) return users
     return users.filter((u) => u.name.toLowerCase().includes(query.search!.toLowerCase()))
-  },
-})
+  })
+  .build()
 
 /**
  * POST /api/users — create a user. Body schema is Zod-validated; client
  * autocompletes `body.name` + `body.email` and TS rejects extras.
  */
-export const POST = defineRoute({
-  body: z.object({ name: z.string().min(1), email: z.string().email() }),
-  handler: ({ body }): User => {
+export const POST = route()
+  .body(z.object({ name: z.string().min(1), email: z.string().email() }))
+  .handler(({ body }): User => {
     const user: User = { id: `u-${users.length + 1}`, ...body }
     users.push(user)
     return user
-  },
-})
+  })
+  .build()
