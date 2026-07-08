@@ -137,6 +137,28 @@ export type { TheoTransformer } from './transformer.js'
 // per docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md.
 export { executeWebRequest } from './web-handler.js'
 
+// M33 — the in-process typed caller (the seam TUI/Tauri/MCP surfaces use to invoke route logic
+// WITHOUT synthesizing an HTTP Request). Shares the one Zod validation pipeline with the HTTP path.
+export {
+  callProcedure,
+  ProcedureInputError,
+  ProcedureOutputError,
+  type ProcedureInput,
+} from './http/in-process-caller.js'
+export {
+  validateRouteInput,
+  type RouteInputSchemas,
+  type RouteInputChannel,
+  type RouteInputValidation,
+  type RawRouteInput,
+} from './http/validate-route-input.js'
+export {
+  type ContextValue,
+  type JobsAugmentedCtx,
+  type QueueClientLike,
+  CTX_WRITERS,
+} from './http/ctx-reconciliation.js'
+
 // Plugin types (used by definePlugin + extension authors)
 export type {
   TheoPlugin,
