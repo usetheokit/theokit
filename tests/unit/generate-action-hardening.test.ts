@@ -77,7 +77,7 @@ describe('generate action — co-located test emit', () => {
     expect(result.status).toBe('created')
     const actionPath = join(cwd, 'server/actions/create-user.ts')
     const testPath = join(cwd, 'server/actions/create-user.test.ts')
-    expect(readFileSync(actionPath, 'utf8')).toContain('defineAction')
+    expect(readFileSync(actionPath, 'utf8')).toContain('action()')
     expect(readFileSync(testPath, 'utf8')).toContain('describe')
     expect(readFileSync(testPath, 'utf8')).toContain('createUser')
   })

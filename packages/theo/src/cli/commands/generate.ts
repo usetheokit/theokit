@@ -73,14 +73,14 @@ function toCamelCase(name: string): string {
 
 function generateRouteTemplate(name: string): string {
   return [
-    `import { defineRoute } from 'theokit/server'`,
+    `import { route } from 'theokit/server'`,
     `import { z } from 'zod'`,
     ``,
-    `export const GET = defineRoute({`,
-    `  handler: ({ ctx }) => {`,
+    `export const GET = route()`,
+    `  .handler(({ ctx }) => {`,
     `    return { message: 'TODO: implement ${name} GET' }`,
-    `  },`,
-    `})`,
+    `  })`,
+    `  .build()`,
     ``,
   ].join('\n')
 }
@@ -106,15 +106,15 @@ function generateControllerTemplate(name: string): string {
 function generateActionTemplate(name: string): string {
   const camel = toCamelCase(name)
   return [
-    `import { defineAction } from 'theokit/server'`,
+    `import { action } from 'theokit/server'`,
     `import { z } from 'zod'`,
     ``,
-    `export const ${camel} = defineAction({`,
-    `  input: z.object({}),`,
-    `  handler: ({ input, ctx }) => {`,
+    `export const ${camel} = action()`,
+    `  .input(z.object({}))`,
+    `  .handler(({ input, ctx }) => {`,
     `    return { message: 'TODO: implement ${name}' }`,
-    `  },`,
-    `})`,
+    `  })`,
+    `  .build()`,
     ``,
   ].join('\n')
 }
