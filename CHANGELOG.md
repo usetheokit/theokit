@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-08
+
 ### Security
 
 - **M34 (Phase 2) — MCP route CSRF/auth gate + default-DENY exposure (closes #97).** `POST
