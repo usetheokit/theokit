@@ -77,7 +77,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
     actions: cachedActions,
     wsRoutes: cachedWsRoutes,
     agents: cachedAgents,
-  } = loadRoutesAndActions(distDir, serverDir)
+  } = loadRoutesAndActions(distDir, serverDir, config.agentsDir)
 
   // Rate limiter (legacy flat form only — per-route variant is handled in
   // api-middleware integration path, not this fallback).

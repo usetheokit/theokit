@@ -20,13 +20,19 @@ export interface McpCommandDeps {
   loadModule?: (filePath: string) => Promise<Record<string, unknown>>
   /** stdio streams; defaults to `readline(process.stdin)` + `process.stdout`. Injected in tests. */
   streams?: StdioStreams
+  /** Agents dir name (config `agentsDir`); defaults to the loaded config's value ("agents"). Tests inject it. */
+  agentsDir?: string
 }
 
 export async function mcpCommand(name: string, deps: McpCommandDeps = {}): Promise<void> {
   const projectRoot = deps.projectRoot ?? process.cwd()
-  const agent = scanAgents(projectRoot).find((a) => a.name === name)
+  // #95 follow-up — resolve agents dir from config (default "agents") so `agentsDir` is honored here too.
+  const agentsDir =
+    deps.agentsDir ??
+    (await (await import('../../config/load-config.js')).loadConfig(projectRoot)).agentsDir
+  const agent = scanAgents(projectRoot, agentsDir).find((a) => a.name === name)
   if (!agent) {
-    const names = scanAgents(projectRoot)
+    const names = scanAgents(projectRoot, agentsDir)
       .map((a) => a.name)
       .join(', ')
     throw new Error(
