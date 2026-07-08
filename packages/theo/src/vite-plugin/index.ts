@@ -108,6 +108,12 @@ export interface TheoPluginOptions {
    * `"agents"`. Set to e.g. `"core/agents"` to co-locate agents with the domain root (#95 follow-up).
    */
   agentsDir?: string
+  /**
+   * Frontend dir (config `appDir`, default "app") holding the file-based router (`page.tsx`,
+   * `layout.tsx`, …), relative to the project root. Set to e.g. `"apps/web"` to group the web UI
+   * under an `apps/` root alongside other frontends (#95 follow-up).
+   */
+  appDir?: string
 }
 
 /**
@@ -280,7 +286,8 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
   const options =
     typeof rootOrOptions === 'string' ? { root: rootOrOptions } : (rootOrOptions ?? {})
   const projectRoot = options.root ?? process.cwd()
-  const appDir = resolve(projectRoot, 'app')
+  // Frontend dir (config `appDir`, default "app") — the file-based router scan + SSR/client entry (#95).
+  const appDir = resolve(projectRoot, options.appDir ?? 'app')
   // Backend root (config `serverDir`, default "server") — route/action middleware scan under it (#95).
   const serverDir = resolve(projectRoot, options.serverDir ?? 'server')
   // Agents dir NAME (config `agentsDir`, default "agents") — the agent-middleware scanAgents uses it.

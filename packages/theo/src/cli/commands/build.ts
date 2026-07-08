@@ -45,7 +45,8 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   loadEnv({ cwd, mode: 'production' })
 
   const config = await loadConfig(cwd)
-  validateProjectStructure(cwd)
+  // #95 — honor config.appDir so a custom frontend dir (e.g. apps/web) passes the structure gate.
+  validateProjectStructure(cwd, config.appDir)
 
   // T2.2 — Clean .theokit/ at build start (Astro pattern). Skip .git*.
   const distDirAbs = resolve(cwd, config.distDir)
@@ -179,7 +180,18 @@ async function runAdapterBuild(
     // `react()` may return Plugin or Plugin[] depending on version; spread the
     // async chain so the contract returns a flat Plugin[] (AdapterBuildContext
     // type updated to `Plugin[] | Promise<Plugin[]>`).
-    makeVitePlugins: async (opts) => [react(), ...(await theoPluginAsync(opts))].flat(),
+    // #95 — inject the config dirs so the client build's router/entry + typed-client codegen honor
+    // custom appDir/serverDir/agentsDir (e.g. "apps/web" / "core" / "core/agents").
+    makeVitePlugins: async (opts) =>
+      [
+        react(),
+        ...(await theoPluginAsync({
+          ...opts,
+          appDir: config.appDir,
+          serverDir: config.serverDir,
+          agentsDir: config.agentsDir,
+        })),
+      ].flat(),
   }
 
   // T1.1 (architecture-medium-deferrals, ADR D1) — Adapter Registry replaces

@@ -26,7 +26,8 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
   loadEnv({ cwd, mode: 'development' })
 
   const config = await loadConfig(cwd)
-  validateProjectStructure(cwd)
+  // #95 — pass config.appDir so the structure gate honors a custom frontend dir (e.g. apps/web).
+  validateProjectStructure(cwd, config.appDir)
 
   // Wave 2 (T1.1) — spawn polyglot services BEFORE Vite. Healthcheck gates
   // readiness. Empty `services: {}` → early return (Wave 1 BC preserved).
@@ -70,6 +71,8 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
       serverDir: config.serverDir,
       // #95 follow-up — honor config `agentsDir` (default "agents") for the agent scan/middleware.
       agentsDir: config.agentsDir,
+      // #95 follow-up — honor config `appDir` (default "app") for the file-based router + SSR/client entry.
+      appDir: config.appDir,
       // Wave 2 (T3.1) — wire typed-client plugin when services declared.
       services: config.services,
       // T4.1 (canvas-ecosystem-refactor / ADR D6) — passthrough peer-deps

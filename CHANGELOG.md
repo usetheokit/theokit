@@ -19,6 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`appDir` config agora é honrado (dev/build/routes + structure gate).** Terceiro complemento da
+  família `serverDir`/`agentsDir`: `validateProjectStructure` exigia `app/` hardcoded (`Missing
+  required directory: app/`) e o vite-plugin scaneava `app/` fixo, ignorando `config.appDir` (schema
+  já tinha a key com default `'app'`, só o `--target static` a respeitava). Consequência: `appDir:
+  'apps/web'` fazia `theokit dev` abortar no structure gate. Agora `validateProjectStructure(cwd,
+  config.appDir)` e os comandos `dev`/`build`/`routes` threadam `config.appDir` → o router
+  file-based + SSR/client entry scaneiam o dir custom. Default `'app'` preservado. Permite agrupar
+  frontends sob `apps/` (`apps/web` + `apps/tui`) como OpenCode. (#95)
 - **`agentsDir` config agora é honrado (dev/build/terminal/mcp/start).** Complemento do fix do
   `serverDir`: o scan de agentes hardcodava `<projectRoot>/agents` ("LOCKED naming") em ~10 lugares
   (agent-middleware, manifest, agents-typed-client, `theokit agent`/`mcp`, produção `start`). Agora
