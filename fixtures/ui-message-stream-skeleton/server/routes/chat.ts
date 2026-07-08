@@ -1,5 +1,5 @@
 import { translateToUIMessageStream, type AgentStreamEvent } from '@theokit/agents'
-import { defineRoute, uiMessageStreamResponse } from 'theokit/server'
+import { route, uiMessageStreamResponse } from 'theokit/server'
 import { z } from 'zod'
 
 /**

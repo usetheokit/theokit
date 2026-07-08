@@ -1,10 +1,9 @@
-import { defineRoute } from 'theokit/server'
-import type { z } from 'zod'
+import { route } from 'theokit/server'
 import type { RequestContext } from '../context.js'
 
-export const POST = defineRoute<z.ZodUndefined, z.ZodUndefined, z.ZodUndefined, RequestContext>({
-  handler: ({ ctx }) => {
+export const POST = route()
+  .handler(({ ctx }: { ctx: RequestContext }) => {
     ctx.sessions.destroySession(ctx.res)
     return { ok: true }
-  },
-})
+  })
+  .build()
