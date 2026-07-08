@@ -21,10 +21,16 @@ const hoisted = vi.hoisted(() => ({
   lastStreamInput: null as unknown,
   lastCompiled: null as unknown,
   lastApiKey: null as unknown,
+  resolveEnabledSkills: null as unknown,
+  skillsResolved: [] as unknown[],
 }))
 
 vi.mock('@theokit/agents', () => ({
   compileAgentModule: (mod: { __compiled: unknown }) => mod.__compiled,
+  resolveEnabledSkills: (selection: unknown, ctx: unknown) => {
+    hoisted.skillsResolved.push({ selection, ctx })
+    return Promise.resolve(hoisted.resolveEnabledSkills)
+  },
   streamAgentUIMessages: (compiled: unknown, apiKey: string, input: unknown) => {
     hoisted.lastCompiled = compiled
     hoisted.lastApiKey = apiKey
@@ -99,6 +105,39 @@ describe('streamAgentTurnInProcess (M35)', () => {
       toolName: 'deploy',
       opts: { question: 'Deploy?' },
     })
+  })
+
+  it('resolves function-form skills before streaming (parity with mountAgent)', async () => {
+    hoisted.chunks = [{ type: 'finish' }]
+    hoisted.skillsResolved = []
+    hoisted.resolveEnabledSkills = ['deploy-skill']
+    const resolver = () => ['deploy-skill']
+    const WITH_SKILLS = {
+      __compiled: {
+        tools: [],
+        stream: true,
+        skillsResolver: resolver,
+        runContext: { projectRoot: '/x' },
+      },
+    }
+    await collect(streamAgentTurnInProcess(WITH_SKILLS, 'sk', { message: 'go', sessionId: 's' }))
+    // resolveEnabledSkills was called with the compiled resolver + run context...
+    expect(hoisted.skillsResolved).toHaveLength(1)
+    expect(hoisted.skillsResolved[0]).toMatchObject({
+      selection: resolver,
+      ctx: { projectRoot: '/x' },
+    })
+    // ...and the resolved skills were applied to the compiled agent before streaming.
+    expect(WITH_SKILLS.__compiled).toMatchObject({
+      skills: { enabled: ['deploy-skill'], autoInject: true },
+    })
+  })
+
+  it('does not call resolveEnabledSkills for a static (no-resolver) agent', async () => {
+    hoisted.chunks = [{ type: 'finish' }]
+    hoisted.skillsResolved = []
+    await collect(streamAgentTurnInProcess(PLAIN, 'sk', { message: 'x', sessionId: 's' }))
+    expect(hoisted.skillsResolved).toHaveLength(0)
   })
 
   it('fails fast when a gated agent is run without an awaitApproval resolver', () => {
