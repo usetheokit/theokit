@@ -32,6 +32,8 @@ import { setupWsUpgrade } from './ws-upgrade.js'
 export interface ConfigureServerCtx {
   projectRoot: string
   appDir: string
+  /** Absolute backend root (config `serverDir`, default `<projectRoot>/server`) — route/action scan (#95). */
+  serverDir: string
   resolvedDistDir: string
   ssrEnabled: boolean
   isDevMode: { value: boolean }
@@ -80,8 +82,9 @@ export async function runConfigureServer(
     }
   })
 
-  // Server middleware (action before API — more specific prefix first)
-  const serverDir = resolve(ctx.projectRoot, 'server')
+  // Server middleware (action before API — more specific prefix first). `serverDir` honors the
+  // config `serverDir` (default `<projectRoot>/server`) — no longer hardcoded (#95).
+  const serverDir = ctx.serverDir
   server.middlewares.use(
     createActionMiddleware(server, serverDir, {
       pluginRunner: ctx.pluginRunner,
