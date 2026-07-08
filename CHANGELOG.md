@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-08
+
 ### Added
 
 - **M31 Phase 2 — `agent()` builder gains `.guardrail(s)` / `.approval(s)` / `.skills`.** The three
