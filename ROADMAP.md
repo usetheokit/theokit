@@ -661,6 +661,80 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+> **GOLD GOAL (M32→M34) — TUI / MCP / Tauri are authorized framework-core surfaces.** One construction (the M31 builder unit) authored once and projected to web + TUI + MCP + Tauri, so the framework serves a conventional app (login/cadastro/CRUD) AND the multi-surface agent app. M32 authorizes the surfaces (the gate); M33 builds the load-bearing contract (typed ctx + in-process caller); M34 lands MCP as the first fully-realized + secured surface. TUI/Tauri realization is subsequent + gated on M32's ruling + evidence. **Evidence base: `.claude/knowledge-base/discoveries/blueprints/universal-handler-architecture-blueprint.md`** (12-cluster deep research, 4 adversarial critics; 4 of 5 original recommendations were REFUTED — these milestones encode the *narrower verdict-adjusted* design that survived).
+
+### M32 — [ ] Phase 0 — Surfaces scope ruling (ADR: TUI/MCP/Tauri as framework-core)
+
+> Added 2026-07-08 by `/roadmap-feature` (slug: `surfaces-scope-adr`). See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** A signed architecture ADR that rules **which of TUI / MCP / Tauri are framework-CORE surfaces** (vs SDK-side / thin CLI wrappers), reconciled with the locked boundaries — the GATE for all downstream work. No transport code ships until this decision is signed (blueprint §7.3 Phase 0, §7.1 ADR-1: *"FOUNDATIONAL — blocks everything"*).
+
+**Definition of done:**
+
+- [ ] ADR in `docs/adr/` that explicitly authorizes (or scopes) TUI/MCP/Tauri as framework-core surfaces AND reconciles with **ADR-0040** (SDK owns the agent + MCP-CLIENT runtime): the ADR draws the line that framework-core owns the **transport/exposure of APP logic** (a route/tool projected onto MCP/TUI/Tauri), which is DISTINCT from the SDK's agent runtime + MCP client. Evidence: blueprint §1.2, §8.7; ADR-0040; `sdk-runtime.md` carve-out.
+- [ ] The ADR states the **package placement** of the universal unit and how it respects the **G1 dependency DAG** (`@theokit/http` ↛ `@theokit/agents`) — a unit straddling both packages was never proven to respect the locked direction (blueprint §7.1, §8.7). Ships with a `dependency-cruiser`/boundary-check test asserting the DAG holds.
+- [ ] The ADR names the AUTHORIZED surfaces + the DEFERRED ones with explicit re-evaluation triggers (blueprint §7.3 Phase 5 gating).
+- [ ] No code beyond the ADR + the boundary-check test. CHANGELOG references the ADR + the blueprint.
+
+**Dependencies:** M31 (builder-only — the unit authoring surface the projections attach to).
+
+**Top risks (new):**
+
+1. **Over-broad ruling reopens the SDK-owns-runtime invariant (ADR-0040).** Mitigation: scope the ADR strictly to *transport/exposure of app logic*, never the agent loop / MCP-client runtime (which stay SDK-side per the locked invariant + the ROADMAP out-of-scope "reimplementing the agent loop").
+2. **A straddling unit violates the G1 DAG** (`@theokit/http` ↛ `@theokit/agents`). Mitigation: the ADR fixes package placement + a boundary-check test BEFORE any Phase-1 code.
+
+**Why now (from the deep-research verdict):** the blueprint's adversarial critics flagged that **no ADR currently authorizes TUI/MCP/Tauri as core surfaces** — every downstream design "inherits its risk from this unmade call" (§8.7). This is the owner's foundational decision; the GOLD GOAL cannot proceed without it.
+
+---
+
+### M33 — [ ] Phase 1 — Typed-ctx reconciliation + in-process caller contract
+
+> Added 2026-07-08 by `/roadmap-feature` (slug: `typed-ctx-inprocess-caller`). See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** the **load-bearing contract** that makes non-HTTP surfaces possible — a typed request context that MATCHES the runtime (fix the `ctx:unknown` hole against the 3 ctx writers) + a stable **in-process typed caller** so TUI/Tauri/MCP invoke shared logic WITHOUT synthesizing an HTTP Request. Prototyped FIRST, before any transport (blueprint §7.3 Phase 1, §5.2, §5.4, §8.8: *"the make-or-break mechanism… has no design — prototype it first"*).
+
+**Definition of done:**
+
+- [ ] **Multi-writer ctx reconciliation** (blueprint §5.2, §8.5, D2-narrow verdict): infer `TCtx` from the user `context.ts` at the **web adapter seam only** (`middleware-runner.ts:117-124` already returns typed `ctx.ctx`); **explicitly exclude / route-out** the two non-middleware writers — `pluginRunner.applyDecorations` (`execute.ts:124,136`) + `jobBackend` `ctx.queue` (`execute.ts:141-151`) — from the typed surface. **KEEP the LOCKED 5-arity `RouteConfig` generic** (`route-config-generic-arity.test.ts` stays green — GAP-4). Ship a documented reconciliation artifact + **type-tests asserting the typed ctx matches `execute.ts:122-165`** (a required deliverable, not a footnote).
+- [ ] **In-process typed caller** — `callProcedure(name, input, ctxFactory) => Result` (tRPC `createCallerFactory`/`localLink` analog; `references/trpc/…router.ts:401-496`). Unit + integration tests proving a route's logic runs via the caller WITHOUT a `Request` and produces the SAME result as the HTTP `executeWebRequest` path. Define the shared core both the caller and the Request path call (no duplicated CSRF/validation/plugin pipeline).
+- [ ] Additive only — no change to the shape `scan`/`execute` consume; all gates green (theokit unit + integration + typecheck + lint).
+
+**Dependencies:** M32 (the scope ruling authorizes the surfaces this contract serves).
+
+**Top risks (new):**
+
+1. **The typed ctx lies again** if a plugin/`jobBackend` writer leaks into the inferred type — reproducing the exact Hono failure the design claims to escape (blueprint §8.5, verified against TheoKit's own `execute.ts`). Mitigation: the reconciliation artifact + type-tests against `execute.ts` are a REQUIRED deliverable.
+2. **The in-process caller re-implements `executeWebRequest`'s pipeline inconsistently** (CSRF/validation/plugins) → two divergent execution paths. Mitigation: extract the shared core the caller and the Request path both invoke.
+
+**Why now:** this is the one contract every non-HTTP surface depends on, and the deep research found it has **zero design today** (TheoKit's only core seam is `executeWebRequest(Request)=>Response`, §8.8). Proving it BEFORE any transport de-risks the whole GOLD GOAL.
+
+---
+
+### M34 — [ ] Phase 2 — MCP surface hardening + default-DENY exposure
+
+> Added 2026-07-08 by `/roadmap-feature` (slug: `mcp-surface-hardening`). See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** make **MCP a real, SECURE framework-core surface** — close the two shipped holes + establish **default-DENY** per-surface exposure (D5, the ONE deep-research recommendation the critics did NOT refute). Security-urgent — closes **#97** (blueprint §1.2, §3 D5, §5.6, §8.6).
+
+**Definition of done:**
+
+- [ ] **`tools/call` implemented** (`mcp-handler.ts:93-135` today answers list-only, unknown → `-32601`): the MCP handler EXECUTES a tool and returns a proper `CallToolResult` (`content[]` + `isError`, or `structuredContent` + `outputSchema`). Integration test: an MCP client lists AND calls a tool and gets the result (via the M33 in-process caller).
+- [ ] **MCP-route auth** — `POST /api/agents/<name>/mcp` (`serve-aux-routes.ts:63-79`, today ZERO auth) enforces a gate **per the real, transport-bifurcated MCP spec** (blueprint §5.3, §8.6): remote/HTTP validates an **RFC 8707 audience-bound OAuth token** (401 + `WWW-Authenticate` + RFC 9728 PRM); **stdio uses env credentials, no in-request token**. Immediate parity fix: CSRF like `mount-agent.ts:83-91`. **Negative test:** unauthenticated MCP POST → 401/403. **Closes #97.**
+- [ ] **Schema retention + protocol bump** — `buildMcpToolDescriptors` (`mcp-server-manifest.ts:44-45`) emits the real Zod-derived `inputSchema` (today the empty `{properties:{}}`); protocol bumped `2024-11-05` → `2025-06-18`+.
+- [ ] **Default-DENY per-surface exposure** (D5, blueprint §5.6): a unit is web-only + auth-required UNLESS it explicitly opts onto MCP with a per-surface capability guard; enforced **structurally at the emit layer** (an un-tagged unit gets NO tool descriptor + NO `tools/call` route). Test: an un-tagged unit is not exposed as an MCP tool. Precedents: Encore `expose:false`, Tauri capability ACL, the in-repo `ui://` sandbox (`mcp-app-resources.ts:8-11`).
+- [ ] Gates green; CHANGELOG `### Security` entry; #97 verified-and-closed with evidence.
+
+**Dependencies:** M32 (surface authorized), M33 (the in-process caller executes the tool). *The immediate #97 CSRF-parity fix MAY ship independently as a hotfix; the spec-correct auth + `tools/call` + default-DENY land here.*
+
+**Top risks (new):**
+
+1. **Pushing token validation onto stdio** (which the spec says must NOT carry a token — §8.6). Mitigation: the gate MUST be transport-bifurcated (OAuth RS for remote; env creds for stdio).
+2. **Default-DENY breaks apps relying on auto-mount-every-agent-as-MCP.** Mitigation: the auto-mount becomes explicit opt-in (breaking, documented in CHANGELOG + a migration note).
+
+**Why now:** the MCP route is an **unauthenticated, token-spending, shipped endpoint** (#97, code-verified) and the app advertises tools it cannot execute (`tools/call` missing). This is the security-urgent slice of the GOLD GOAL and the one recommendation that survived every adversarial critic.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
