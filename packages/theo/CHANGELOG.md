@@ -1,5 +1,11 @@
 # theo
 
+## 0.23.1
+
+### Patch Changes
+
+- Republish fix: 0.23.0 was accidentally published with an unresolved `@theokit/agents: workspace:^` dependency (npm publish does not rewrite the pnpm workspace protocol; #92 regression). 0.23.1 is published via `pnpm publish`, which rewrites it to a real version range. 0.23.0 is deprecated on npm.
+
 ## 0.23.0
 
 ### Minor Changes
