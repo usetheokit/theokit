@@ -54,7 +54,8 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   const distDir = resolve(cwd, '.theokit')
   const clientDir = resolve(distDir, 'client')
-  const serverDir = resolve(cwd, 'server')
+  // #95 — honor config `serverDir` (default "server") in production start, matching dev.
+  const serverDir = resolve(cwd, config.serverDir)
 
   if (!existsSync(clientDir)) {
     throw new Error('No build found. Run `theo build` first.')

@@ -66,6 +66,8 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
       root: cwd,
       rateLimit: flatRateLimit,
       ssr: config.ssr,
+      // #95 — honor config `serverDir` (default "server") so route/action discovery scans it.
+      serverDir: config.serverDir,
       // Wave 2 (T3.1) — wire typed-client plugin when services declared.
       services: config.services,
       // T4.1 (canvas-ecosystem-refactor / ADR D6) — passthrough peer-deps
