@@ -68,29 +68,32 @@ describe('theo generate', () => {
     }
   })
 
-  it('route should contain defineRoute', async () => {
+  it('route should emit the route() builder', async () => {
     const dir = createTempProject()
     const orig = process.cwd()
     process.chdir(dir)
     try {
       await generateCommand('route', 'health')
       const content = readFileSync(join(dir, 'server/routes/health.ts'), 'utf-8')
-      expect(content).toContain('defineRoute')
-      expect(content).toContain("import { defineRoute } from 'theokit/server'")
+      // M31 builder-only: the scaffold emits `route()...build()` (was `defineRoute({...})`).
+      expect(content).toContain('route()')
+      expect(content).toContain('.build()')
+      expect(content).toContain("import { route } from 'theokit/server'")
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })
     }
   })
 
-  it('action should contain defineAction', async () => {
+  it('action should emit the action() builder', async () => {
     const dir = createTempProject()
     const orig = process.cwd()
     process.chdir(dir)
     try {
       await generateCommand('action', 'update-user')
       const content = readFileSync(join(dir, 'server/actions/update-user.ts'), 'utf-8')
-      expect(content).toContain('defineAction')
+      expect(content).toContain('action()')
+      expect(content).toContain('.build()')
       expect(content).toContain('updateUser')
     } finally {
       process.chdir(orig)
