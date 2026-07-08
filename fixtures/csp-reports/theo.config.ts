@@ -1,4 +1,4 @@
-import { defineConfig } from 'theokit'
+import { config } from 'theokit'
 import { JsonStdoutSink } from 'theokit/server'
 
 /**
@@ -13,15 +13,17 @@ import { JsonStdoutSink } from 'theokit/server'
  * Run with `pnpm dev`, then POST a mock report to /__theo/csp-report
  * and observe the audit line in stdout.
  */
-export default defineConfig({
-  audit: {
-    logger: new JsonStdoutSink(),
-  },
-  security: {
-    headers: {
-      // Stay in report-only mode for this fixture so violations are
-      // observed without breaking the page.
-      cspMode: 'report-only',
+export default config()
+  .set({
+    audit: {
+      logger: new JsonStdoutSink(),
     },
-  },
-})
+    security: {
+      headers: {
+        // Stay in report-only mode for this fixture so violations are
+        // observed without breaking the page.
+        cspMode: 'report-only',
+      },
+    },
+  })
+  .build()

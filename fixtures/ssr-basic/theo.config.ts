@@ -1,2 +1,2 @@
-import { defineConfig } from 'theokit'
-export default defineConfig({ ssr: true })
+import { config } from 'theokit'
+export default config().ssr(true).build()
