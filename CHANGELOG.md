@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M31 Phase 3 — `route()` fluent builder.** `route().query(z).body(z).params(z).response(z).status(n)
+  .csrf(false).handler(({query,body,params})=>…).build()`. Type-state: `.build()` is a compile error
+  before `.handler()`; the handler `ctx` infers `query/body/params` from the Zod schemas. `.build()`
+  delegates to the internal `defineRoute` (identity) → identical `RouteConfig`, scan/execute path
+  unchanged. (`builder-only-authoring-api`)
 - **M31 Phase 1 — `tool()` fluent builder.** New fluent authoring surface for agent tools:
   `tool('read').describe(d).input(z…).execute((i,ctx)=>…).build()`. Pure type-state (tRPC UnsetMarker;
   `.build()` is a compile error until `.input()` + `.execute()` are set; `execute` input inferred from
