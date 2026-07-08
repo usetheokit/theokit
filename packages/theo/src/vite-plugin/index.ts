@@ -95,6 +95,13 @@ export interface TheoPluginOptions {
    * (pass an inert store that discards writes).
    */
   csrfReadinessStore?: CsrfReadinessStore
+  /**
+   * Backend root directory name (config `serverDir`), relative to the project root. Route/action
+   * discovery, the typed-client codegen, and the routes HMR watcher all scan `<serverDir>/routes`,
+   * `<serverDir>/actions`, etc. Defaults to `"server"` — apps that keep the canonical layout are
+   * unaffected. Set to e.g. `"core"` to organize the backend by domain (issue #95).
+   */
+  serverDir?: string
 }
 
 /**
@@ -138,6 +145,9 @@ export async function theoPluginAsync(
   const options =
     typeof rootOrOptions === 'string' ? { root: rootOrOptions } : (rootOrOptions ?? {})
   const projectRoot = options.root ?? process.cwd()
+  // Backend root (config `serverDir`, default "server"). Route/action discovery, typed-client
+  // codegen, and the routes HMR watcher all scan under this dir (issue #95). Absolute.
+  const serverDirAbs = resolve(projectRoot, options.serverDir ?? 'server')
 
   const consumerTailwindConfig = findConsumerConfig(projectRoot, 'tailwind.config')
   const consumerPostcssConfig = findConsumerConfig(projectRoot, 'postcss.config')
@@ -164,7 +174,7 @@ export async function theoPluginAsync(
   const { appTypedClientPlugin } = await import('./app-typed-client.js')
   const appClientPlugin = appTypedClientPlugin({
     cwd: projectRoot,
-    serverDir: resolve(projectRoot, 'server'),
+    serverDir: serverDirAbs,
     distDir: resolve(projectRoot, '.theokit'),
   })
 
@@ -175,7 +185,7 @@ export async function theoPluginAsync(
   // virtual module ambient declaration in consumer apps.
   const { actionsVirtualModule } = await import('./actions-virtual-module.js')
   const actionsPlugin = actionsVirtualModule({
-    serverDir: resolve(projectRoot, 'server'),
+    serverDir: serverDirAbs,
     distDir: resolve(projectRoot, '.theokit'),
   })
 
@@ -189,7 +199,7 @@ export async function theoPluginAsync(
     distDir: resolve(projectRoot, '.theokit'),
     // Agents live at <projectRoot>/agents; generateManifest scans them via the server dir's
     // parent, which is projectRoot for the canonical layout.
-    scanManifest: () => generateManifest(resolve(projectRoot, 'server'), projectRoot),
+    scanManifest: () => generateManifest(serverDirAbs, projectRoot),
   })
 
   // G6 T1.2 — server-routes HMR. Watches `<serverDir>/routes/**` and
@@ -197,7 +207,7 @@ export async function theoPluginAsync(
   // with a 50 ms debounce per EC-6.
   const { serverRoutesHmrPlugin } = await import('./server-routes-hmr.js')
   const routesHmrPlugin = serverRoutesHmrPlugin({
-    serverDir: resolve(projectRoot, 'server'),
+    serverDir: serverDirAbs,
   })
 
   return [
@@ -261,6 +271,8 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
     typeof rootOrOptions === 'string' ? { root: rootOrOptions } : (rootOrOptions ?? {})
   const projectRoot = options.root ?? process.cwd()
   const appDir = resolve(projectRoot, 'app')
+  // Backend root (config `serverDir`, default "server") — route/action middleware scan under it (#95).
+  const serverDir = resolve(projectRoot, options.serverDir ?? 'server')
   const ssrEnabled = options.ssr ?? false
 
   // Resolve paths for SSR module loading. Pure helper extracted for T1.3
@@ -372,6 +384,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
       await runConfigureServer(server, {
         projectRoot,
         appDir,
+        serverDir,
         resolvedDistDir,
         ssrEnabled,
         isDevMode: isDevModeRef,
