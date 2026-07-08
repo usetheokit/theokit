@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Roadmap amended: added M35 Phase 3 — TUI terminal-only in-process surface (Model A) (`/roadmap-feature tui-terminal-only-inprocess`)
+- Roadmap amended: added M36 Phase 4 — Tauri desktop surface (push-transport ADR + real app) (`/roadmap-feature tauri-desktop-surface`)
+
 ### Security
 
 - **MCP `tools/call` no longer BYPASSES HITL approval (closes #99).** A tool gated by `.approval()` /
