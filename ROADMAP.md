@@ -687,7 +687,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M33 — [ ] Phase 1 — Typed-ctx reconciliation + in-process caller contract
+### M33 — [x] Phase 1 — Typed-ctx reconciliation + in-process caller contract
 
 > Added 2026-07-08 by `/roadmap-feature` (slug: `typed-ctx-inprocess-caller`). See CHANGELOG `[Unreleased] § Added`.
 
