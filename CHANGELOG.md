@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M31 Phase 3 — `action()` fluent builder.** `action().input(z).accept('form').csrf(false)
+  .handler(({input,ctx})=>…).build()`. Type-state: `.input()` + `.handler()` required before
+  `.build()`; `ctx.input` inferred from the schema. `.build()` delegates to the internal
+  `defineAction` (identity) → identical `ActionConfig`. (`builder-only-authoring-api`)
 - **M31 Phase 3 — `route()` fluent builder.** `route().query(z).body(z).params(z).response(z).status(n)
   .csrf(false).handler(({query,body,params})=>…).build()`. Type-state: `.build()` is a compile error
   before `.handler()`; the handler `ctx` infers `query/body/params` from the Zod schemas. `.build()`

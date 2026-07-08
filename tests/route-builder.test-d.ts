@@ -17,9 +17,9 @@ test('a complete chain resolves to RouteConfig', () => {
 
 test('build() before handler() is a compile error', () => {
   const assertGuard = () => {
-    // @ts-expect-error — a route needs .handler(fn) before .build()
     route()
       .body(z.object({ n: z.number() }))
+      // @ts-expect-error — a route needs .handler(fn) before .build()
       .build()
   }
   expectTypeOf(assertGuard).toBeFunction()
