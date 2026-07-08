@@ -162,6 +162,8 @@ export async function tryServeAgentAux(c: RequestHandlerCtx): Promise<boolean> {
     agents: c.cachedAgents,
     loadModule: c.loadModule,
     baseUrl,
+    // M34 (#97) — the MCP aux route drives the agent (spends tokens); enforce CSRF like the run route.
+    csrfMode: c.csrfMode,
   })
   if (response === null) return false
   c.res.setHeader(X_REQUEST_ID, c.requestId)
