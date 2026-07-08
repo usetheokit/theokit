@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M31 Phase 3 — `config()` fluent builder (hybrid grammar).** `config().serverDir('core')
+  .agentsDir('core/agents').appDir('apps/web').set({ security: {…} }).build()`. Config is a ~30-field
+  flat bag, so the builder is HYBRID (ADR-M31-3): dedicated setters for the common fields + a
+  `.set(partial)` escape for the long tail. `.build()` delegates to the internal `defineConfig`
+  (identity) → same `Partial<TheoConfig>`; `loadConfig` unchanged. **All 6 core builders + `tool()`
+  done.** (`builder-only-authoring-api`)
 - **M31 Phase 3 — `websocket()` / `middleware()` / `plugin()` fluent builders.** `websocket()
   .onOpen(fn).onMessage(fn).build()` (lifecycle setters → `WebSocketHandler`); `middleware()
   .handle(fn).build()` (type-state: `.handle()` required → `MiddlewareHandler`); `plugin('name')

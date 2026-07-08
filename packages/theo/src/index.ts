@@ -1,5 +1,7 @@
 // Config
 export { defineConfig } from './config/define-config.js'
+// M31 — the fluent `config()` builder (builder-only authoring API).
+export { config, type ConfigBuilder } from './config/config-builder.js'
 export { loadConfig, deepMerge } from './config/load-config.js'
 export { theoConfigSchema } from './config/schema.js'
 export type { TheoConfig } from './config/schema.js'
