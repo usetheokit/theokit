@@ -1,3 +1,4 @@
+import { defineConfig } from '../../../packages/theo/src/config/define-config.js'
 /**
  * Fixture (T2.2) — TheoKit app demonstrating `theo.config.ts > storage`.
  *
@@ -7,7 +8,6 @@
  *
  * Credentials come from env vars in production. Tests inject literals.
  */
-import { defineConfig } from '../../../packages/theo/src/index.js'
 
 export default defineConfig({
   storage: {

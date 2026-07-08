@@ -4,12 +4,9 @@
  */
 import { describe, it, expect } from 'vitest'
 
-import {
-  websocket,
-  middleware,
-  defineWebSocket,
-  defineMiddleware,
-} from '../../packages/theo/src/server/define/index.js'
+import { websocket, middleware } from '../../packages/theo/src/server/define/index.js'
+import { defineWebSocket } from '../../packages/theo/src/server/define/define-websocket.js'
+import { defineMiddleware } from '../../packages/theo/src/server/define/define-middleware.js'
 
 describe('websocket() builder', () => {
   it('emits a WebSocketHandler with the lifecycle hooks set', () => {

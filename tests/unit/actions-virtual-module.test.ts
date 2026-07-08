@@ -68,7 +68,7 @@ describe('actionsVirtualModule — load', () => {
       'createUser.ts',
       `
       import { z } from 'zod'
-      import { defineAction } from 'theokit/server'
+      import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
       export default defineAction({
         input: z.object({ name: z.string() }),
         handler: ({ input }) => ({ id: '1', name: input.name }),

@@ -84,9 +84,11 @@ describe('Smoke: Package Build Outputs', () => {
 })
 
 describe('Smoke: Import Validation from dist/', () => {
-  it('should import defineConfig from theo dist', async () => {
+  it('exposes the config() builder from theo dist (M31 builder-only)', async () => {
     const mod = await import('../../packages/theo/dist/index.js')
-    expect(typeof mod.defineConfig).toBe('function')
+    expect(typeof mod.config).toBe('function')
+    // The legacy defineConfig is removed from the public API (ADR-0043 D1).
+    expect((mod as Record<string, unknown>).defineConfig).toBeUndefined()
   })
 
   it('should import loadConfig from theo dist', async () => {
@@ -104,19 +106,23 @@ describe('Smoke: Import Validation from dist/', () => {
     expect(typeof mod.validateProjectStructure).toBe('function')
   })
 
-  it('should import defineRoute from theo/server dist', async () => {
+  it('exposes the route() builder from theo/server dist (M31 builder-only)', async () => {
     const mod = await import('../../packages/theo/dist/server/index.js')
-    expect(typeof mod.defineRoute).toBe('function')
+    expect(typeof mod.route).toBe('function')
+    // The legacy define* functions are removed from the public API (ADR-0043 D1).
+    expect((mod as Record<string, unknown>).defineRoute).toBeUndefined()
   })
 
-  it('should import defineAction from theo/server dist', async () => {
+  it('exposes the action() builder from theo/server dist (M31 builder-only)', async () => {
     const mod = await import('../../packages/theo/dist/server/index.js')
-    expect(typeof mod.defineAction).toBe('function')
+    expect(typeof mod.action).toBe('function')
+    expect((mod as Record<string, unknown>).defineAction).toBeUndefined()
   })
 
-  it('should import defineMiddleware from theo/server dist', async () => {
+  it('exposes the middleware() builder from theo/server dist (M31 builder-only)', async () => {
     const mod = await import('../../packages/theo/dist/server/index.js')
-    expect(typeof mod.defineMiddleware).toBe('function')
+    expect(typeof mod.middleware).toBe('function')
+    expect((mod as Record<string, unknown>).defineMiddleware).toBeUndefined()
   })
 
   it('should import cookie helpers from theo/server dist', async () => {

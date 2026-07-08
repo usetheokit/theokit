@@ -1,6 +1,6 @@
 import { describe, it, expectTypeOf } from 'vitest'
-import { defineRoute } from 'theokit/server'
 import { z } from 'zod'
+import { defineRoute } from '../../packages/theo/src/server/define/define-route.js'
 
 describe('defineRoute type inference', () => {
   it('should infer query type from Zod schema', () => {

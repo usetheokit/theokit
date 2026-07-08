@@ -23,7 +23,14 @@ import {
   NotFoundException,
   HttpStatus,
 } from '../../src/index.js'
-import { Agent, MainLoop, Toolbox, Tool, Mixin, Budget } from '../../../agents/src/index.js'
+import {
+  Agent,
+  MainLoop,
+  Toolbox,
+  Tool,
+  Mixin,
+  Budget,
+} from '../../../agents/src/decorators/index.js'
 import { TheoApp } from '../../src/app.js'
 import { createTypedClient } from '../../src/index.js'
 import type { TypedClientError } from '../../src/index.js'
