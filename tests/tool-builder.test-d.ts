@@ -37,9 +37,9 @@ test('build() is a compile error until BOTH .input() and .execute() are set', ()
     // @ts-expect-error — a tool needs .input() and .execute() before .build()
     tool('none').build()
 
-    // @ts-expect-error — .execute(handler) must be set before .build()
     tool('inputOnly')
       .input(z.object({ n: z.number() }))
+      // @ts-expect-error — .execute(handler) must be set before .build()
       .build()
   }
   // Reference (typechecks the body) without invoking it (an incomplete .build() throws at runtime).

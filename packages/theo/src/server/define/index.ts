@@ -2,6 +2,8 @@ export * from './define-route.js'
 // M31 — the fluent `route()` builder (builder-only authoring API).
 export * from './route-builder.js'
 export * from './define-action.js'
+// M31 — the fluent `action()` builder (builder-only authoring API).
+export * from './action-builder.js'
 export * from './define-middleware.js'
 export * from './ui-message-stream-response.js'
 export * from './define-agent-tool.js'
