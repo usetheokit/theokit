@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **MCP `tools/call` no longer BYPASSES HITL approval (closes #99).** A tool gated by `.approval()` /
+  `@HumanInTheLoop` was executed unguarded when invoked via MCP `tools/call` — the approval gate
+  (`compiled.hitl`) lives in the SDK run-loop, but `tools/call` called `tool.handler(args)` directly,
+  so mutating tools (`bash`/`write`/`edit`) ran with no human gate over MCP. Now `callTool` receives
+  `compiled.hitl` and REFUSES a gated tool with an `isError` result ("requires human approval, not
+  available over MCP") — the handler is never invoked (fail-closed). Non-gated tools are unaffected.
+  Found by live post-M34 verification. (#99)
+
 ## [0.22.0] - 2026-07-08
 
 ### Security
