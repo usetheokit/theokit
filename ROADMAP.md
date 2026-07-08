@@ -735,7 +735,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M35 — [ ] Phase 3 — TUI terminal-only in-process surface (Model A)
+### M35 — [x] Phase 3 — TUI terminal-only in-process surface (Model A)
 
 > Added 2026-07-08 by `/roadmap-feature` (slug: `tui-terminal-only-inprocess`). See CHANGELOG `[Unreleased] § Added`.
 
