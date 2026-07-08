@@ -735,6 +735,56 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+### M35 — [ ] Phase 3 — TUI terminal-only in-process surface (Model A)
+
+> Added 2026-07-08 by `/roadmap-feature` (slug: `tui-terminal-only-inprocess`). See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** realize the TUI as a **single-process** surface — the TUI drives agent turns via the M33 in-process caller (`callProcedure`) with NO HTTP loopback, NO port, NO CSRF (the Claude Code / Codex single-process shape), while keeping the HTTP client/server path (Model B) as a fallback; ship the `theo-code-v2` example running both modes + a single-bin distribution.
+
+**Definition of done:**
+
+- [ ] **In-process turn path** — the TUI run-turn drives an agent turn via the M33 `callProcedure` / in-process caller WITHOUT synthesizing an HTTP Request or spawning a server; the SDK runtime runs in the same process. (`apps/tui/run-turn-http.ts` today → add an in-process runner; select via flag/env.)
+- [ ] **Terminal-only mode** — a documented flag/env selects in-process mode: no port bound, no CSRF gate crossed, no localhost server. HTTP loopback (Model B) preserved as the fallback for the multi-surface (web+TUI+MCP one-server) case.
+- [ ] **Parity** — integration test proving an in-process turn produces the SAME result as the HTTP path (extends `tests/integration/in-process-vs-http-parity.test.ts` to the turn/stream path).
+- [ ] **Distribution** — a single npm bin runs the terminal-only app as one process (no server child). Evidence: the `theo-code-v2` example runs BOTH modes live in the tmux (in-process + HTTP); the single-bin path documented.
+- [ ] Gates green; CHANGELOG `### Added`; `docs/architecture/multi-surface-architecture.md` gap closed ("callProcedure not yet wired into the TUI").
+
+**Dependencies:** M33 (in-process caller — [x]), M31 (builder authoring — [x]), M32 (surfaces authorized — [x]).
+
+**Top risks (new):**
+
+1. **Two turn paths (in-process vs HTTP) diverge** in CSRF/validation/streaming shape → two execution paths that drift. Mitigation: the in-process path reuses the SAME shared core (`validateRouteInput` + the SDK stream) the HTTP path uses; the parity test is the gate (extends M33's contract).
+2. **SDK runtime in-process needs the provider key + streaming without the HTTP SSE-translate layer.** Mitigation: consume `Run.stream()` directly in-process; the TUI reuses the event shape `apps/tui/sse-translate.ts` already defines as the contract.
+
+**Why now:** the distribution question is unanswered — today the TUI only works client/server over HTTP-loopback (needs a running server + crosses CSRF). For a terminal-only agent app (the Claude Code / Codex shape) that is over-heavy: a port, a server lifecycle, and an auth boundary where there is no network. M33 already shipped the `callProcedure` seam precisely to collapse this to one process; wiring it into the TUI is the realization the GOLD GOAL authorized but never delivered, and it unblocks single-binary distribution.
+
+---
+
+### M36 — [ ] Phase 4 — Tauri desktop surface (push-transport ADR + real app)
+
+> Added 2026-07-08 by `/roadmap-feature` (slug: `tauri-desktop-surface`). See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** realize **Tauri desktop** as an authorized framework-core surface — a working desktop app reusing the M35 in-process path via a sidecar, gated on a **push-transport ADR** (the `fetch(Request)→Response` waist cannot express Tauri's push half: `Channel`/`emit`).
+
+**Definition of done:**
+
+- [ ] **Push-transport ADR accepted BEFORE any code (GATE)** — decides how server→client push (streaming tokens, tool events) crosses the Tauri boundary (`Channel`/`emit`/IPC), since the Request→Response waist is request/response only. Reconciles with **ADR-0040/0044** (transport of app logic = home; agent runtime = SDK). Evidence: `docs/architecture/multi-surface-architecture.md` §9 (Tauri deferred + gated), ADR-0044 D3.
+- [ ] **Sidecar reuses the M35 in-process path** — the desktop app drives turns via the same in-process caller + SDK runtime (no HTTP loopback); the sidecar bridges IPC↔core.
+- [ ] **Working Tauri app** — a window that streams a real agent turn (tokens + tool events) via the push transport from the ADR. Evidence: the desktop example runs.
+- [ ] **Packageable desktop artifact** (Tauri bundle) + sidecar↔core contract test.
+- [ ] Gates green; CHANGELOG `### Added`; Ecosystem + architecture docs updated (Tauri: deferred → realized).
+
+**Dependencies:** M35 (Model A in-process path — the desktop reuses it), M33 (in-process caller — [x]), M31 (builders — [x]).
+
+**Top risks (new):**
+
+1. **The push half (Channel/emit) has no design in the current Request/Response waist** — building the app before the ADR repeats the "inherits risk from an unmade call" failure the deep-research critics flagged. Mitigation: the ADR is a hard GATE — no Tauri code ships until it is signed.
+2. **Tauri pulls a Rust/webview toolchain + native bundling into the example's distribution story**, widening the maintenance surface. Mitigation: keep the sidecar the ONLY coupling point; the core stays transport-agnostic (reuses M35's in-process path), so Tauri specifics live only in the example/adapter, never in `packages/` core.
+
+**Why now:** the owner explicitly declared the demand ("precisamos … tauri desktop"). ADR-0044 D3 deferred Tauri gated on exactly that (demand + a push-transport ADR). With M35 delivering the in-process path, the desktop app is the natural reuse; realizing it completes the GOLD GOAL's fourth surface (web ✅ + MCP ✅ + TUI ⏳M35 + Tauri ⏳M36).
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
