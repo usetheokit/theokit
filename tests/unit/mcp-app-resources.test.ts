@@ -77,7 +77,12 @@ async function rpc(
   params: unknown,
   resources: ReturnType<typeof defineAppResource>[],
 ) {
-  const res = handleMcpJsonRpc(agentMod, 'x', { jsonrpc: '2.0', id: 1, method, params }, resources)
+  const res = await handleMcpJsonRpc(
+    agentMod,
+    'x',
+    { jsonrpc: '2.0', id: 1, method, params },
+    resources,
+  )
   return (await res.json()) as { result?: unknown; error?: { code: number } }
 }
 

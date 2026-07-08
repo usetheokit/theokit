@@ -6,6 +6,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-08
+
+### Security
+
+- **M34 (Phase 2) — MCP route CSRF/auth gate + default-DENY exposure (closes #97).** `POST
+  /api/agents/<name>/mcp` shipped with ZERO CSRF/auth while it drives the agent (spends real LLM
+  tokens) — a cross-origin POST could trigger paid operations. Now the MCP route (1) requires an
+  explicit opt-in `export const mcp = true` on the agent module (DEFAULT-DENY — an agent is web-only
+  unless it declares the MCP surface), and (2) enforces `validateCsrfRequest` before any work → 403
+  on a cross-origin POST in `csrfMode: 'strict'`, parity with the agent-run route
+  (`mount-agent.ts:83-91`). `csrfMode` is threaded from both the dev (`agent-middleware`) and prod
+  (`start/handlers`) callers. **BREAKING:** the M16 auto-mount-every-agent-as-MCP becomes explicit
+  opt-in — add `export const mcp = true` to an agent file to keep it MCP-exposed. (#97, ADR-0044 D5)
+
+### Added
+
+- **M34 (Phase 2) — MCP `tools/call` execution + schema retention + protocol bump.** The MCP handler
+  now EXECUTES tools (`tools/call` → runs the tool handler, returns a `CallToolResult` `content[]` +
+  `isError`) — before it advertised tools it could not run. `tools/list` retains each tool's real
+  Zod-derived `inputSchema` (was dropped to `{properties:{}}`). Protocol bumped `2024-11-05` →
+  `2025-06-18` (the server owns the version it speaks, in `mcp-handler.ts`). MCP is now a real,
+  usable, secured framework-core surface (the GOLD GOAL's first fully-realized non-web surface).
+  (`mcp-surface-hardening`, ADR-0044)
+
+- **M33 (Phase 1) DONE — in-process typed caller (`callProcedure`) + ctx reconciliation.** The
+  load-bearing contract for non-HTTP surfaces (TUI/Tauri/MCP): `callProcedure(config, {query,body,
+  params}, ctx)` invokes a route's shared logic with STRUCTURED input, WITHOUT synthesizing an HTTP
+  Request or running the middleware chain — validated by the SAME Zod pipeline as the HTTP path
+  (extracted to `validateRouteInput`, one pipeline/no drift; proven by an HTTP↔in-process parity
+  test). Typed errors off-web (`ProcedureInputError`/`ProcedureOutputError`, not a 400/500 Response).
+  Plus the **ctx reconciliation contract** (`ctx-reconciliation.ts`): the typed `TCtx` corresponds to
+  the user `context.ts` factory (writer 1) ONLY; the two other runtime ctx writers (`execute.ts:122-165`
+  — plugin decorations + `jobBackend` `ctx.queue`) are explicitly NOT typed onto the route surface
+  (`ctx.queue` reached via opt-in `JobsAugmentedCtx`), closing the refuted `runtime==type` lie — with
+  type-tests against `execute.ts` and the LOCKED 5-arity `RouteConfig` generic preserved (GAP-4).
+  (`typed-ctx-inprocess-caller`, ADR-0044)
+- **M32 (Phase 0) DONE — ADR-0044: TUI/MCP/Tauri authorized as framework-core transport surfaces.** The
+  foundational scope gate for the GOLD GOAL. Extends ADR-0040's runtime-vs-home line (transport/exposure
+  of app logic = home = core; LLM loop / agent runtime / MCP-client = SDK) + ADR-0042 (MCP server
+  transport already framework-side) + ADR-0039 (TUI reuse). MCP + TUI authorized now; Tauri deferred +
+  gated on M33's in-process caller + a push-transport ADR. Default-DENY exposure + `--target` stays
+  emit-only (rejects the deep-research-refuted recommendations). Ships a tested G1 dependency-DAG
+  invariant (`@theokit/http` ↛ `@theokit/agents`, `tests/unit/g1-dependency-dag-boundary.test.ts`).
+- Roadmap amended: added M32 Phase 0 — Surfaces scope ruling ADR (`/roadmap-feature surfaces-scope-adr`)
+- Roadmap amended: added M33 Phase 1 — Typed-ctx reconciliation + in-process caller (`/roadmap-feature typed-ctx-inprocess-caller`)
+- Roadmap amended: added M34 Phase 2 — MCP surface hardening + default-DENY (`/roadmap-feature mcp-surface-hardening`)
+- Universal-handler-architecture research blueprint (12-cluster deep research + 4 adversarial critics) at `.claude/knowledge-base/discoveries/blueprints/universal-handler-architecture-blueprint.md` — feeds the M32→M34 GOLD GOAL (TUI/MCP/Tauri as framework-core surfaces).
+
 ## [0.21.0] - 2026-07-08
 
 ### Added
