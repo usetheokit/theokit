@@ -1,6 +1,5 @@
-// Config
-export { defineConfig } from './config/define-config.js'
-// M31 — the fluent `config()` builder (builder-only authoring API).
+// Config — M31 builder-only: `config()` is the public authoring surface; `defineConfig` is now
+// internal (imported by config-builder's `.build()` via source path), removed from the public API.
 export { config, type ConfigBuilder } from './config/config-builder.js'
 export { loadConfig, deepMerge } from './config/load-config.js'
 export { theoConfigSchema } from './config/schema.js'

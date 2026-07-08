@@ -1,5 +1,6 @@
 import { describe, it, expectTypeOf } from 'vitest'
-import { defineRoute, defineAction } from 'theokit/server'
+import { defineRoute } from '../../packages/theo/src/server/define/define-route.js'
+import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
 import { z } from 'zod'
 
 describe('Onda 7 — Type Safety End-to-End', () => {

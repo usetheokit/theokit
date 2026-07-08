@@ -5,7 +5,7 @@ import {
   serveMcpStdio,
 } from '../../packages/theo/src/server/agent/mcp-stdio.js'
 import { defineAppResource } from '../../packages/theo/src/server/agent/mcp-app-resources.js'
-import { defineAgent } from '../../packages/agents/src/index.js'
+import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 
 /**
  * MCP stdio transport — expose an agent as a stdio MCP server, reusing the framework's

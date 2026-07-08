@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { defineRoute } from 'theokit/server'
 import { z } from 'zod'
+import { defineRoute } from '../../packages/theo/src/server/define/define-route.js'
 
 describe('defineRoute', () => {
   it('should return the route config unchanged (same reference)', () => {

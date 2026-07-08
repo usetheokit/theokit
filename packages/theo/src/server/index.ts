@@ -151,7 +151,8 @@ export type {
   OnErrorHook,
   RunHookOptions,
 } from './plugin-types.js'
-export { definePlugin } from './plugin-types.js'
+// M31 builder-only: `plugin()` is the public authoring surface; `definePlugin`/`defineTheoPlugin`
+// are now internal (the plugin() builder's `.build()` delegates to them via source path).
 
 // Config helpers — auto-load .env for standalone server scripts (Telegram bots,
 // queue consumers, cron jobs) that bypass the CLI.

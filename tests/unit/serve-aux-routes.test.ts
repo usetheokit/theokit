@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { serveAgentAuxRoute } from '../../packages/theo/src/server/agent/serve-aux-routes.js'
-import { defineAgent } from '../../packages/agents/src/index.js'
+import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 import type { AgentNode } from '../../packages/theo/src/server/scan/agent-scan.js'
 
 /**

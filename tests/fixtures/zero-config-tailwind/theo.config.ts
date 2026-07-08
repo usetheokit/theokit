@@ -1,7 +1,3 @@
-import { defineConfig } from 'theokit'
+import { config } from 'theokit'
 
-export default defineConfig({
-  appDir: 'app',
-  serverDir: 'server',
-  port: 0,
-})
+export default config().appDir('app').serverDir('server').port(0).build()
