@@ -25,8 +25,10 @@ export interface AgentNode {
  * M2 — scan the TOP-LEVEL `agents/` convention (sibling of `server/`, per the LOCKED naming
  * decision). Mirrors `scanWebSocketRoutes`: one file → one endpoint, `index` stripped.
  */
-export function scanAgents(projectRoot: string): AgentNode[] {
-  const agentsDir = join(projectRoot, 'agents')
+export function scanAgents(projectRoot: string, agentsDirName = 'agents'): AgentNode[] {
+  // `agentsDirName` (config `agentsDir`, default "agents") — the dir holding `<name>.ts` agent
+  // definitions, relative to the project root. May be nested (e.g. "core/agents"). (#95 follow-up)
+  const agentsDir = join(projectRoot, agentsDirName)
   if (!existsSync(agentsDir) || !statSync(agentsDir).isDirectory()) {
     return []
   }

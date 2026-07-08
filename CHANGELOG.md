@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`agentsDir` config agora é honrado (dev/build/terminal/mcp/start).** Complemento do fix do
+  `serverDir`: o scan de agentes hardcodava `<projectRoot>/agents` ("LOCKED naming") em ~10 lugares
+  (agent-middleware, manifest, agents-typed-client, `theokit agent`/`mcp`, produção `start`). Agora
+  `config.agentsDir` (nova key no schema, default `'agents'`) é threadado por todos. Permite
+  co-localizar agentes sob um root de domínio (ex: `agentsDir: 'core/agents'`). Default preservado.
+  Verificado: `POST /api/agents/code` acha `core/agents/code.ts` e streama. (#95)
 - **`serverDir` config agora é honrado no `theokit dev` (e no terminal + produção `start`).** O
   vite-plugin do dev + `configure-server-hook` + `cli/commands/{dev,agent,start}` hardcodavam
   `resolve(projectRoot, 'server')` e ignoravam `config.serverDir` (schema tinha a opção com default

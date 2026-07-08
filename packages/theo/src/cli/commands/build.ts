@@ -80,7 +80,8 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   // dep, malformed entry), the user still gets manifests for diagnostics.
   const serverDir = resolve(cwd, config.serverDir)
   const distDir = distDirAbs
-  const manifest = generateManifest(serverDir)
+  // #95 follow-up — pass projectRoot (cwd) + config.agentsDir so agents scan honors a custom dir.
+  const manifest = generateManifest(serverDir, cwd, config.agentsDir)
   writeManifest(manifest, distDir)
 
   const totalEndpoints =

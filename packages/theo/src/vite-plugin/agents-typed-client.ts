@@ -98,8 +98,10 @@ const VIRTUAL_AGENTS_ID = '@theo/agents'
 const RESOLVED_AGENTS_ID = '\0@theo/agents'
 
 export interface AgentsTypedClientPluginOptions {
-  /** Absolute project root (agents live at `<projectRoot>/agents`). */
+  /** Absolute project root (agents live at `<projectRoot>/<agentsDir>`). */
   projectRoot: string
+  /** Agents dir name (config `agentsDir`, default "agents"), relative to projectRoot — the watch glob. */
+  agentsDir?: string
   /** Absolute `.theokit/` output dir (where `agents.d.ts` lands). */
   distDir: string
   /** Injects the scanned agents; returns the current manifest-shaped agent list. */
@@ -170,7 +172,10 @@ export function agentsTypedClientPlugin(opts: AgentsTypedClientPluginOptions): P
     },
     configureServer(server) {
       viteServer = server
-      const agentsGlob = posix.join(opts.projectRoot.replace(/\\/g, '/'), 'agents')
+      const agentsGlob = posix.join(
+        opts.projectRoot.replace(/\\/g, '/'),
+        opts.agentsDir ?? 'agents',
+      )
       const onFile = (file: string): void => {
         if (file.replace(/\\/g, '/').startsWith(agentsGlob)) scheduleEmit()
       }
