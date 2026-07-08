@@ -19,6 +19,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`serverDir` config agora é honrado no `theokit dev` (e no terminal + produção `start`).** O
+  vite-plugin do dev + `configure-server-hook` + `cli/commands/{dev,agent,start}` hardcodavam
+  `resolve(projectRoot, 'server')` e ignoravam `config.serverDir` (schema tinha a opção com default
+  `'server'`, mas só o `build` a respeitava). Consequência: `serverDir: 'core'` dava 404 em todas as
+  rotas no dev. Agora `dev`/`agent`/`start` threadam `config.serverDir` → o plugin scaneia
+  `<serverDir>/routes`. Default `'server'` preservado (apps existentes inalterados). Desbloqueia
+  organizar o backend por domínio (`core/`) — usado pelo theocode e pelo theo-code-v2. (#95)
 - **P0: `theokit@0.19.0` publicou com deps `workspace:^` — todo `npm install` externo quebrava.** O tarball de `0.19.0` continha `"@theokit/agents": "workspace:^"` e `"@theokit/http": "workspace:^"`; o protocolo `workspace:` só resolve dentro do monorepo, então qualquer app TheoKit fresco falhava no `npm install` (silencioso, exit 1) / `pnpm install` (`ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`). Causa: publish fora do `scripts/publish-coordinated.sh` (`npm publish` não reescreve `workspace:`). Fix: `theokit@0.19.1` republicado via `pnpm publish`, que reescreve para `^0.33.0`/`^0.5.4`. Encontrado via dogfood npm-strict ao scaffoldar um app novo. (#92)
 
 ### Security

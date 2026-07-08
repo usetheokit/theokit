@@ -84,6 +84,8 @@ export async function createAgentSsrLoader(projectRoot: string): Promise<{
     ssr: config.ssr,
     services: config.services,
     viteOptimizeDeps: config.viteOptimizeDeps,
+    // #95 — honor config `serverDir` so the terminal SSR loader transpiles under the same root as dev.
+    serverDir: config.serverDir,
   })
   const server = await createServer({
     root: projectRoot,
