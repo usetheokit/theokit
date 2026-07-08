@@ -87,6 +87,39 @@ describe('handleMcpJsonRpc', () => {
     expect(result.content[0]).toMatchObject({ type: 'text', text: 'found:theo' })
   })
 
+  it('M34/#99 — tools/call REFUSES a HITL-gated tool (no human approval available over MCP)', async () => {
+    // An agent whose `danger` tool is gated by an approval — the HITL gate lives in the run-loop, not
+    // in the raw tool handler, so tools/call must REFUSE it rather than execute the handler unguarded.
+    let ran = false
+    const gatedMod = {
+      default: defineAgent({
+        model: 'claude-sonnet-4-6',
+        tools: [
+          {
+            name: 'danger',
+            description: 'Mutating',
+            inputSchema: { type: 'object', properties: {} },
+            handler: () => {
+              ran = true
+              return 'DID_RUN'
+            },
+          },
+        ],
+        approvals: { danger: { question: 'Approve?' } },
+      }),
+    }
+    const { json } = await rpc(gatedMod, 'ops', {
+      jsonrpc: '2.0',
+      id: 24,
+      method: 'tools/call',
+      params: { name: 'danger', arguments: {} },
+    })
+    const result = json.result as { content: { text: string }[]; isError?: boolean }
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toMatch(/approval/i)
+    expect(ran).toBe(false) // the handler must NOT have executed
+  })
+
   it('M34 — tools/call on an unknown tool returns an error result (not -32601 crash)', async () => {
     const { json } = await rpc(mod, 'ops', {
       jsonrpc: '2.0',
