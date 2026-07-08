@@ -42,6 +42,7 @@ import { serverErrorToEnvelope } from '../core/contracts/server-error-to-envelop
 import { TheoError } from '../core/contracts/theo-error.js'
 
 import { isZodLike } from './http/execute-stages.js'
+import { validateRouteInput } from './http/validate-route-input.js'
 import { runWebMiddleware, type WebMiddleware } from './http/web-middleware-runner.js'
 import type {
   WebOnErrorHook,
@@ -216,28 +217,18 @@ async function runHandler(
   // prior behavior (a route declaring config.params then fails validation).
   const paramsRaw = paramsInput
 
-  // Validate input via Zod schemas when present.
-  let query: unknown = queryRaw
-  if (config.query !== undefined) {
-    const parsed = config.query.safeParse(queryRaw)
-    if (!parsed.success)
-      return { ok: false, response: validationErrorResponse(parsed.error, 'query') }
-    query = parsed.data
+  // M33 — validate the three input channels via the SINGLE shared pipeline (`validateRouteInput`),
+  // the same one the in-process caller (`callProcedure`) uses. The HTTP path maps a failure to a
+  // 400 Response; the in-process path throws. One pipeline, no drift.
+  const validated = validateRouteInput(config, {
+    query: queryRaw,
+    body: bodyRaw,
+    params: paramsRaw,
+  })
+  if (!validated.ok) {
+    return { ok: false, response: validationErrorResponse(validated.error, validated.channel) }
   }
-  let body: unknown = bodyRaw
-  if (config.body !== undefined) {
-    const parsed = config.body.safeParse(bodyRaw)
-    if (!parsed.success)
-      return { ok: false, response: validationErrorResponse(parsed.error, 'body') }
-    body = parsed.data
-  }
-  let params: unknown = paramsRaw
-  if (config.params !== undefined) {
-    const parsed = config.params.safeParse(paramsRaw)
-    if (!parsed.success)
-      return { ok: false, response: validationErrorResponse(parsed.error, 'params') }
-    params = parsed.data
-  }
+  const { query, body, params } = validated
 
   const result = await config.handler({ query, body, params, request, context })
   return validateResponseOutput(config.response, result) ?? { ok: true, result }
