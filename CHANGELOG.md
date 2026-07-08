@@ -6,15 +6,117 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-08
+
 ### Added
 
+- **M31 Phase 2 — `agent()` builder gains `.guardrail(s)` / `.approval(s)` / `.skills`.** The three
+  methods the DoD names: `agent().model(m).tool(write).approval('write',{question}).guardrail(g)
+  .skills(['fs']).build()`. Each sets the matching `DefineAgentConfig` field, so `.build()` (→
+  `defineAgent` → `compileAgentDefinition`) carries it into `CompiledAgentOptions` identically to the
+  object-config path (proven by compile-through tests). (`builder-only-authoring-api`)
+- **M31 Phase 3 — `config()` fluent builder (hybrid grammar).** `config().serverDir('core')
+  .agentsDir('core/agents').appDir('apps/web').set({ security: {…} }).build()`. Config is a ~30-field
+  flat bag, so the builder is HYBRID (ADR-M31-3): dedicated setters for the common fields + a
+  `.set(partial)` escape for the long tail. `.build()` delegates to the internal `defineConfig`
+  (identity) → same `Partial<TheoConfig>`; `loadConfig` unchanged. **All 6 core builders + `tool()`
+  done.** (`builder-only-authoring-api`)
+- **M31 Phase 3 — `websocket()` / `middleware()` / `plugin()` fluent builders.** `websocket()
+  .onOpen(fn).onMessage(fn).build()` (lifecycle setters → `WebSocketHandler`); `middleware()
+  .handle(fn).build()` (type-state: `.handle()` required → `MiddlewareHandler`); `plugin('name')
+  .onRequest(fn).onResponse(fn).decorateRequest(k,v).build()` (synthesizes the `register(app)` body
+  → `TheoPlugin`). All delegate to / produce the same value the legacy `define*` consumed — 5 of the
+  6 core surfaces done (route/action/websocket/middleware/plugin; `config()` pending). (`builder-only-authoring-api`)
+- **M31 Phase 3 — `action()` fluent builder.** `action().input(z).accept('form').csrf(false)
+  .handler(({input,ctx})=>…).build()`. Type-state: `.input()` + `.handler()` required before
+  `.build()`; `ctx.input` inferred from the schema. `.build()` delegates to the internal
+  `defineAction` (identity) → identical `ActionConfig`. (`builder-only-authoring-api`)
+- **M31 Phase 3 — `route()` fluent builder.** `route().query(z).body(z).params(z).response(z).status(n)
+  .csrf(false).handler(({query,body,params})=>…).build()`. Type-state: `.build()` is a compile error
+  before `.handler()`; the handler `ctx` infers `query/body/params` from the Zod schemas. `.build()`
+  delegates to the internal `defineRoute` (identity) → identical `RouteConfig`, scan/execute path
+  unchanged. (`builder-only-authoring-api`)
+- **M31 Phase 1 — `tool()` fluent builder.** New fluent authoring surface for agent tools:
+  `tool('read').describe(d).input(z…).execute((i,ctx)=>…).build()`. Pure type-state (tRPC UnsetMarker;
+  `.build()` is a compile error until `.input()` + `.execute()` are set; `execute` input inferred from
+  the Zod schema). `.build()` delegates to the internal `defineAgentTool`, emitting the identical
+  `CustomTool` — the SDK/agent compile path is unchanged (proven by a wiring test through
+  `compileAgentDefinition`). First surface of the builder-only migration (M31). (`builder-only-authoring-api`)
+- Roadmap amended: added M31 Builder-only authoring API across all surfaces (`/roadmap-feature builder-only-authoring-api`)
+
+### Removed
+
+- **BREAKING (M31) — every `define*` function and every `@theokit/agents` decorator removed from the
+  public API.** The fluent builders (`agent/tool/route/action/websocket/middleware/config/plugin`) are
+  now the ONLY authoring surface. Removed from the public entrypoints: `defineAgent`, `defineAgentTool`,
+  `defineRoute`, `defineAction`, `defineWebSocket`/`defineWebSocketWeb`, `defineMiddleware`,
+  `defineConfig`, `definePlugin`/`defineTheoPlugin`, and the decorators `@Agent/@Tool/@Toolbox/
+  @HumanInTheLoop/@Guardrails/@Skills/@MainLoop/@SubAgents/@Checkpoint/@Mixin/…`. The functions +
+  decorators remain as INTERNAL implementation (each builder's `.build()` delegates to them), so the
+  scan/compile/runtime is unchanged — only the authoring surface. TYPES stay public (`RouteConfig`,
+  `CustomTool`, `TheoPlugin`, `HumanInTheLoopOptions`, `TimeoutAction`, …). Scope note: `defineChannel`/
+  `defineWebChannel` (M27 channels) remain exported (outside M31's 8-surface scope — a `channel()`
+  builder is a follow-up). See the migration guide below. (`builder-only-authoring-api`, ADR-0043)
+- **Deleted the decorator examples** (`examples/agent-saas`, `examples/code-assistant`) per ADR-0043 D2.
+
 ### Changed
+
+- **Build: `@theokit/agents` no longer maps `@theokit/http` to source in tsconfig `paths`** — it now
+  resolves via the workspace package (its built `.d.ts`), matching the tsup `external` contract. Fixes
+  a DTS-build `rootDir` failure surfaced by the barrel un-export. (`builder-only-authoring-api`)
+- **M31 — migration guide (`define*` / decorators → builders).** The fluent builder is the single
+  authoring surface. Consumer migration (mechanical, behavior-preserving — the builder `.build()`
+  emits the identical value the old `define*` returned):
+
+  | Before | After |
+  |---|---|
+  | `defineAgentTool({ name, description, inputSchema, handler })` | `tool(name).describe(d).input(schema).execute(handler).build()` |
+  | `defineRoute({ query, body, params, handler })` | `route().query(q).body(b).params(p).handler(fn).build()` |
+  | `defineAction({ input, accept, handler })` | `action().input(i).accept(a).handler(fn).build()` |
+  | `defineWebSocket({ onOpen, onMessage })` | `websocket().onOpen(fn).onMessage(fn).build()` |
+  | `defineMiddleware(fn)` | `middleware().handle(fn).build()` |
+  | `defineConfig({ … })` | `config().serverDir(s)….set({ … }).build()` |
+  | `definePlugin({ name, register })` | `plugin(name).onRequest(fn).onResponse(fn).build()` |
+  | `defineAgent({ input, model, tools, approvals, … })` | `agent().input(i).model(m).context(c).tool(t).approval('name',{…}).build()` |
+  | `@Agent/@Tool/@HumanInTheLoop/@Guardrails/@Skills` decorators | the `agent()` / `tool()` builders (same compiled output) |
+
+  Notes: `agent()` requires `.model()` before `.build()` and `.context()` before `.tool()` (type-state
+  guards). `config()` is hybrid — dedicated setters for common fields + `.set(partial)` for the long
+  tail (ADR-0043 D3). Decorator-only capabilities without a functional field (`@Checkpoint/@MainLoop/
+  @Toolbox/@SubAgents/@Mixin`) are dropped from the authoring surface per ADR-0043 D2 (re-addable as
+  builder methods on demand). (`builder-only-authoring-api`, ADR-0043)
+- **ADR-0042 accepted (owner sign-off): the MCP stdio SERVER transport is framework-side** — finalizes the scope note flagged with the `theokit mcp <agent>` shipment in 0.19.0. The server-exposure stdio transport reuses the framework's `handleMcpJsonRpc` (a transport, sibling of the M16 HTTP route); the SDK's MCP CLIENT stdio (consuming external `mcpServers`) stays SDK-side. Refines ADR-0040's "M16-stdio-transport" note (which is read as the CLIENT runtime). Code comment + `docs` updated to cite ADR-0042. No behavior change. (ADR-0042)
+- **Nit: `scan/errors.ts` no longer references a phantom `ADR-XXX`** — the router-convention decision lives in `g6-router-convention-plan.md` + CHANGELOG 0.4.0 (no standalone ADR was cut); the comment now points there instead of an unfilled `ADR-XXX`.
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+
+- **`appDir` config agora é honrado (dev/build/routes + structure gate).** Terceiro complemento da
+  família `serverDir`/`agentsDir`: `validateProjectStructure` exigia `app/` hardcoded (`Missing
+  required directory: app/`) e o vite-plugin scaneava `app/` fixo, ignorando `config.appDir` (schema
+  já tinha a key com default `'app'`, só o `--target static` a respeitava). Consequência: `appDir:
+  'apps/web'` fazia `theokit dev` abortar no structure gate. Agora `validateProjectStructure(cwd,
+  config.appDir)` e os comandos `dev`/`build`/`routes` threadam `config.appDir` → o router
+  file-based + SSR/client entry scaneiam o dir custom. Default `'app'` preservado. Permite agrupar
+  frontends sob `apps/` (`apps/web` + `apps/tui`) como OpenCode. (#95)
+- **`agentsDir` config agora é honrado (dev/build/terminal/mcp/start).** Complemento do fix do
+  `serverDir`: o scan de agentes hardcodava `<projectRoot>/agents` ("LOCKED naming") em ~10 lugares
+  (agent-middleware, manifest, agents-typed-client, `theokit agent`/`mcp`, produção `start`). Agora
+  `config.agentsDir` (nova key no schema, default `'agents'`) é threadado por todos. Permite
+  co-localizar agentes sob um root de domínio (ex: `agentsDir: 'core/agents'`). Default preservado.
+  Verificado: `POST /api/agents/code` acha `core/agents/code.ts` e streama. (#95)
+- **`serverDir` config agora é honrado no `theokit dev` (e no terminal + produção `start`).** O
+  vite-plugin do dev + `configure-server-hook` + `cli/commands/{dev,agent,start}` hardcodavam
+  `resolve(projectRoot, 'server')` e ignoravam `config.serverDir` (schema tinha a opção com default
+  `'server'`, mas só o `build` a respeitava). Consequência: `serverDir: 'core'` dava 404 em todas as
+  rotas no dev. Agora `dev`/`agent`/`start` threadam `config.serverDir` → o plugin scaneia
+  `<serverDir>/routes` (incluindo o caminho de OpenAPI dev-emit, que também hardcodava `'server'`).
+  Default `'server'` preservado (apps existentes inalterados). Desbloqueia
+  organizar o backend por domínio (`core/`) — usado pelo theocode e pelo theo-code-v2. (#95)
+- **P0: `theokit@0.19.0` publicou com deps `workspace:^` — todo `npm install` externo quebrava.** O tarball de `0.19.0` continha `"@theokit/agents": "workspace:^"` e `"@theokit/http": "workspace:^"`; o protocolo `workspace:` só resolve dentro do monorepo, então qualquer app TheoKit fresco falhava no `npm install` (silencioso, exit 1) / `pnpm install` (`ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`). Causa: publish fora do `scripts/publish-coordinated.sh` (`npm publish` não reescreve `workspace:`). Fix: `theokit@0.19.1` republicado via `pnpm publish`, que reescreve para `^0.33.0`/`^0.5.4`. Encontrado via dogfood npm-strict ao scaffoldar um app novo. (#92)
 
 ### Security
 

@@ -1,8 +1,8 @@
-import { defineRoute } from 'theokit/server'
+import { route } from 'theokit/server'
 
-export const GET = defineRoute({
-  handler: ({ ctx }) => {
+export const GET = route()
+  .handler(({ ctx }) => {
     const started = (ctx as { startedAt?: number }).startedAt ?? 0
     return { ok: true, decoratedStartedAt: started }
-  },
-})
+  })
+  .build()

@@ -7,11 +7,7 @@
     "rootDir": "./src",
     "declaration": true,
     "declarationDir": "./dist",
-    "strict": true,
-    "paths": {
-      "@theokit/http": ["../http/src/index.ts"],
-      "@theokit/http/runtime/node": ["../http/src/runtime-node.ts"]
-    }
+    "strict": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "tests", "node_modules"]

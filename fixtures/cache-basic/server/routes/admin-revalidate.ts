@@ -1,12 +1,14 @@
-import { defineRoute, revalidatePath, revalidateTag } from 'theokit/server'
+import { route, revalidatePath, revalidateTag } from 'theokit/server'
 import { z } from 'zod'
 
-export const POST = defineRoute({
-  body: z.object({
-    tag: z.string().optional(),
-    path: z.string().optional(),
-  }),
-  async handler({ body }) {
+export const POST = route()
+  .body(
+    z.object({
+      tag: z.string().optional(),
+      path: z.string().optional(),
+    }),
+  )
+  .handler(async ({ body }) => {
     if (body.tag) {
       const { deleted } = await revalidateTag(body.tag)
       return Response.json({ ok: true, deleted, kind: 'tag' })
@@ -16,5 +18,5 @@ export const POST = defineRoute({
       return Response.json({ ok: true, deleted, kind: 'path' })
     }
     return Response.json({ ok: false, error: 'specify tag or path' }, { status: 400 })
-  },
-})
+  })
+  .build()

@@ -1,8 +1,8 @@
-import { defineRoute } from 'theokit/server'
+import { route } from 'theokit/server'
 
-export const GET = defineRoute({
-  handler: ({ ctx }: { ctx: any }) => ({
+export const GET = route()
+  .handler(({ ctx }: { ctx: any }) => ({
     requestId: ctx.requestId,
     middlewareRan: ctx.middlewareRan,
-  }),
-})
+  }))
+  .build()

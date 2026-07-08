@@ -634,6 +634,33 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
+### M31 — [ ] Builder-only authoring API across all surfaces
+
+> Added 2026-07-08 by `/roadmap-feature` (slug: `builder-only-authoring-api`). See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** Make the fluent builder the ONLY authoring surface across all 8 define-surfaces (`agent · tool · route · action · websocket · middleware · config · plugin`), and remove every `define*` function + every `@theokit/agents` decorator — one blessed pattern, resolving the three-surfaces "paradox of choice" the DX audit surfaced vs Mastra + Vercel AI SDK.
+
+**Definition of done:**
+
+- [ ] A fluent builder exists for all 8 surfaces — entry `x()` → chainable setters → terminal `.build()` that emits the EXACT branded/identity shape the runtime consumer already reads (`route()`→`RouteConfig`, `config()`→`TheoConfig`, `tool()`→`CustomTool`, `agent()`→`AgentDefinition`, …), so the scan/discovery/loadConfig/SDK runtime is UNCHANGED. The `agent()` builder gains its 3 missing methods (`.guardrail(s)`, `.approval(s)`, `.skills`).
+- [ ] Every `define*` export is REMOVED from the public API (`defineAgent`, `defineAgentTool`, `defineRoute`, `defineAction`, `defineWebSocket`/`defineWebSocketWeb`, `defineMiddleware`, `defineConfig`, `definePlugin`/`defineTheoPlugin`, `defineHealthRoute`/`defineReadyRoute`) AND every `@theokit/agents` decorator (`@Agent/@Tool/@Toolbox/@HumanInTheLoop/@Guardrails/@Skills/@Checkpoint/@MainLoop/@Mixin/@SubAgents`). The `@theokit/http` `@Controller` path is OUT OF SCOPE and stays intact (out-of-scope invariant preserved — grill Q3 decision).
+- [ ] Decorator-only capabilities with no functional equivalent (`@Checkpoint/@MainLoop/@Toolbox/@Mixin/@SubAgents`) each get a builder method OR are explicitly dropped via an ADR — NO silent capability loss.
+- [ ] All in-tree consumers migrated to the builder: `theo-code-v2` (agent + 12 tools + 7 routes), the `create-theokit` default template, and the fixtures (which ARE the test suite). `theokit/examples/` (`code-assistant` + `agent-saas`) is DELETED, not migrated (grill Q3 decision — removes the 7 hardest decorator sites).
+- [ ] Green gates: theokit unit + integration + typecheck + lint pass; `theo-code-v2` full suite + typecheck + lint pass; npm-strict dev smoke still functional (web + `/api/health` + agent stream + TUI). `CHANGELOG` documents the breaking change + a migration guide (`define*({…})` → `x()…build()`).
+
+**Dependencies:** M8 (Fluent agent builder with type-state — the machinery this generalizes), M9 (Guardrails), M13 (Skills runtime), M14 (HITL surface) — all `[x]`, so schedulable immediately.
+
+**Top risks (new):**
+
+1. **Breaking blast radius (~110 call-sites) + fixtures-are-tests.** Removing `define*`/decorators rewrites every consumer; the fixtures ARE the suite, so a bad migration makes tests validate the wrong shape (false green). Mitigation: `.build()` emits the identical branded shape (runtime untouched); migrate surface-by-surface with TDD, a pilot `tool()` slice first, fixtures last.
+2. **Decorator-only feature homelessness + `config()` weak-fit.** `@Checkpoint/@MainLoop/@Toolbox/@Mixin/@SubAgents` have no functional equivalent today — removing decorators without a builder method silently drops them. And `config()` as a ~30-setter chain is arguably worse DX than `defineConfig({})` (Vite/Nuxt/Astro keep config as identity on purpose). Mitigation: an ADR decides builder-method-vs-drop per decorator-only feature AND fixes the `config()` grammar (full builder vs `.set(partial)` escape) BEFORE coding.
+
+**Why now (from grill Q1):**
+
+The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`createTool`) and the Vercel AI SDK (`ToolLoopAgent`/`tool()`), and found TheoKit ships THREE ways to author an agent (`@Agent` decorators, `defineAgent`, and the `agent()` builder) — a "paradox of choice" papercut that costs onboarding and triples docs/examples/maintenance. Successful frameworks bless ONE path. The owner's decision (verbatim): "o framework vai seguir o padrão builder EM TODAS AS FRENTES TODAS — se é para seguir um padrão, esse vai ser o nosso padrão." Locked forks: builder-only (remove `define*` + decorators now — breaking major) across all 8 surfaces. The inventory de-risks it: all 8 `define*` are identity functions, so a builder whose `.build()` emits the same shape leaves the runtime untouched — only authoring changes.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)

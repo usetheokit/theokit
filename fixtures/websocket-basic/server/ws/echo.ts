@@ -1,10 +1,10 @@
-import { defineWebSocket } from 'theokit/server'
+import { websocket } from 'theokit/server'
 
-export default defineWebSocket({
-  onOpen(ws) {
+export default websocket()
+  .onOpen((ws) => {
     ws.send('connected')
-  },
-  onMessage(ws, data) {
+  })
+  .onMessage((ws, data) => {
     ws.send(`echo: ${data}`)
-  },
-})
+  })
+  .build()

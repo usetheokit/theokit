@@ -1,4 +1,4 @@
-import { defineAgent } from '@theokit/agents'
+import { agent } from '@theokit/agents'
 import { z } from 'zod'
 
 /**
@@ -13,10 +13,10 @@ import { z } from 'zod'
  * models) OR ANTHROPIC_API_KEY / OPENAI_API_KEY. The `model` id is prefixed with the provider
  * namespace so OpenRouter routes it upstream (see https://openrouter.ai/models).
  *
- * Add tools with `defineAgentTool` (from `theokit/server`) and pass them to `tools: [...]`.
+ * Add tools with `tool('name')...build()` (from `theokit/server`) and chain them via `.tool(...)`.
  */
-export default defineAgent({
-  input: z.object({ message: z.string() }),
-  model: 'openai/gpt-4o-mini',
-  system: 'You are a helpful assistant.',
-})
+export default agent()
+  .input(z.object({ message: z.string() }))
+  .model('openai/gpt-4o-mini')
+  .system('You are a helpful assistant.')
+  .build()

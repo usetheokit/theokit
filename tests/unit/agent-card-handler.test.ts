@@ -5,10 +5,13 @@
  * `/.well-known/<name>/agent-card.json` from a loaded agent module. Web-Standard Request→Response
  * (G8). Pure-enough to unit-test without a Vite server.
  */
-import { defineAgent } from '../../packages/agents/src/index.js'
+import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 import { describe, expect, it } from 'vitest'
 
-import { handleAgentCard, isAgentCardPath } from '../../packages/theo/src/server/agent/agent-card-handler.js'
+import {
+  handleAgentCard,
+  isAgentCardPath,
+} from '../../packages/theo/src/server/agent/agent-card-handler.js'
 
 const mod = {
   default: defineAgent({

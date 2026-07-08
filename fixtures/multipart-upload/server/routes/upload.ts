@@ -1,5 +1,4 @@
-import { defineRoute, parseRequestBody, type UploadedFile } from 'theokit/server'
-import type { z } from 'zod'
+import { route, parseRequestBody, type UploadedFile } from 'theokit/server'
 
 interface UploadResult {
   filename: string
@@ -16,14 +15,8 @@ interface UploadResult {
  * Returns metadata about the uploaded file. In real apps you'd persist
  * the buffer to S3/disk/etc.
  */
-export const POST = defineRoute<
-  z.ZodUndefined,
-  z.ZodUndefined,
-  z.ZodUndefined,
-  unknown,
-  Response | UploadResult | { error: string }
->({
-  handler: async ({ request }) => {
+export const POST = route()
+  .handler(async ({ request }): Promise<Response | UploadResult | { error: string }> => {
     // The body parser detects multipart/form-data by Content-Type.
     const parsed = await parseRequestBody(
       request as unknown as Parameters<typeof parseRequestBody>[0],
@@ -43,5 +36,5 @@ export const POST = defineRoute<
       mimeType: file.mimeType,
       description: parsed.fields?.description,
     }
-  },
-})
+  })
+  .build()

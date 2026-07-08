@@ -1,5 +1,5 @@
-import { defineConfig } from 'theokit'
+import { config } from 'theokit'
 
 // pnpm theokit build --target=cloudflare
 // Emits .theo/cloudflare/worker.mjs (Workers entry).
-export default defineConfig({})
+export default config().build()

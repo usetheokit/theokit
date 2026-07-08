@@ -1,4 +1,4 @@
-import { defineRoute, rotateSession } from 'theokit/server'
+import { route, rotateSession } from 'theokit/server'
 import { z } from 'zod'
 
 /**
@@ -12,10 +12,10 @@ const SyncBody = z.object({
   email: z.string().email(),
 })
 
-export const POST = defineRoute({
-  body: SyncBody,
-  async handler({ body, cookies }) {
+export const POST = route()
+  .body(SyncBody)
+  .handler(async ({ body, cookies }) => {
     await rotateSession(cookies, { userId: body.userId, email: body.email })
     return Response.json({ ok: true })
-  },
-})
+  })
+  .build()
