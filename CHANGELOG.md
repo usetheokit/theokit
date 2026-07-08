@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M31 Phase 3 — `websocket()` / `middleware()` / `plugin()` fluent builders.** `websocket()
+  .onOpen(fn).onMessage(fn).build()` (lifecycle setters → `WebSocketHandler`); `middleware()
+  .handle(fn).build()` (type-state: `.handle()` required → `MiddlewareHandler`); `plugin('name')
+  .onRequest(fn).onResponse(fn).decorateRequest(k,v).build()` (synthesizes the `register(app)` body
+  → `TheoPlugin`). All delegate to / produce the same value the legacy `define*` consumed — 5 of the
+  6 core surfaces done (route/action/websocket/middleware/plugin; `config()` pending). (`builder-only-authoring-api`)
 - **M31 Phase 3 — `action()` fluent builder.** `action().input(z).accept('form').csrf(false)
   .handler(({input,ctx})=>…).build()`. Type-state: `.input()` + `.handler()` required before
   `.build()`; `ctx.input` inferred from the schema. `.build()` delegates to the internal
