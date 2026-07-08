@@ -25,7 +25,7 @@ describe('T5.2 — dynamic-routes fixture', () => {
 
   it('server route validates params with Zod', () => {
     const src = read('server/routes/posts/[id].ts')
-    expect(src).toMatch(/params:\s*z\.object/)
+    expect(src).toMatch(/\.params\(\s*z\.object/)
   })
 
   it('README documents both patterns', () => {

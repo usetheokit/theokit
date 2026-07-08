@@ -190,6 +190,7 @@ export async function buildStatic(
 
   const scan = deps.scanAppRoutes ?? scanRoutes
   // #95 — honor config `appDir` (default "app") so `--target static` prerenders a custom frontend dir.
+  // `config` is a fully-loaded TheoConfig (loadConfig applied the schema default), so appDir is present.
   const appDir = resolve(cwd, config.appDir)
   const tree = scan(appDir)
 
