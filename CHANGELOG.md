@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M32 (Phase 0) DONE — ADR-0044: TUI/MCP/Tauri authorized as framework-core transport surfaces.** The
+  foundational scope gate for the GOLD GOAL. Extends ADR-0040's runtime-vs-home line (transport/exposure
+  of app logic = home = core; LLM loop / agent runtime / MCP-client = SDK) + ADR-0042 (MCP server
+  transport already framework-side) + ADR-0039 (TUI reuse). MCP + TUI authorized now; Tauri deferred +
+  gated on M33's in-process caller + a push-transport ADR. Default-DENY exposure + `--target` stays
+  emit-only (rejects the deep-research-refuted recommendations). Ships a tested G1 dependency-DAG
+  invariant (`@theokit/http` ↛ `@theokit/agents`, `tests/unit/g1-dependency-dag-boundary.test.ts`).
 - Roadmap amended: added M32 Phase 0 — Surfaces scope ruling ADR (`/roadmap-feature surfaces-scope-adr`)
 - Roadmap amended: added M33 Phase 1 — Typed-ctx reconciliation + in-process caller (`/roadmap-feature typed-ctx-inprocess-caller`)
 - Roadmap amended: added M34 Phase 2 — MCP surface hardening + default-DENY (`/roadmap-feature mcp-surface-hardening`)
