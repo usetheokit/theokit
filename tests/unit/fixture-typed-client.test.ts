@@ -27,8 +27,8 @@ describe('T4.1 — typed-client fixture (structure)', () => {
 
   it('route exports both GET and POST with Zod schemas', () => {
     const src = read('server/routes/users.ts')
-    expect(src).toMatch(/export const GET = defineRoute/)
-    expect(src).toMatch(/export const POST = defineRoute/)
+    expect(src).toMatch(/export const GET = route\(\)/)
+    expect(src).toMatch(/export const POST = route\(\)/)
     expect(src).toMatch(/z\.object/)
   })
 })

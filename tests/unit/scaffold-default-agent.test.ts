@@ -120,20 +120,21 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     expect(existsSync(resolve(TEMPLATE_ROOT, 'server/routes/chat.ts'))).toBe(false)
   })
 
-  it('M3: agents/chat.ts exists and default-exports defineAgent from @theokit/agents', () => {
+  it('M31: agents/chat.ts default-exports the agent() builder from @theokit/agents', () => {
     const agent = read('agents/chat.ts')
-    expect(agent).toMatch(/export\s+default\s+defineAgent\(/)
+    expect(agent).toMatch(/export\s+default\s+agent\(\)/)
+    expect(agent).toMatch(/\.build\(\)/)
     expect(agent).toMatch(/from\s+['"]@theokit\/agents['"]/)
   })
 
-  it('M3: agents/chat.ts declares a Zod input schema (typed end-to-end client)', () => {
+  it('M31: agents/chat.ts declares a Zod input schema (typed end-to-end client)', () => {
     const agent = read('agents/chat.ts')
-    expect(agent).toMatch(/input:\s*z\.object\(/)
+    expect(agent).toMatch(/\.input\(\s*z\.object\(/)
   })
 
-  it('M3: agents/chat.ts declares a model', () => {
+  it('M31: agents/chat.ts declares a model', () => {
     const agent = read('agents/chat.ts')
-    expect(agent).toMatch(/model:\s*['"]/)
+    expect(agent).toMatch(/\.model\(\s*['"]/)
   })
 
   it('M3: agents/chat.ts does NOT reference the removed proprietary surface', () => {
