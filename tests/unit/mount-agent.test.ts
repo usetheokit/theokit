@@ -14,7 +14,8 @@ import { describe, expect, it } from 'vitest'
 // Import from the workspace source (not the bare `@theokit/agents`) so the root `tsc`
 // gate resolves it without the vitest alias; vitest resolves both to the same src file,
 // so `AgentDefinitionError instanceof` still matches what `mountAgent` throws.
-import { defineAgent, AgentDefinitionError } from '../../packages/agents/src/index.js'
+import { AgentDefinitionError } from '../../packages/agents/src/index.js'
+import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 import {
   mountAgent,
   parseAgentRequestBody,

@@ -42,8 +42,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `compileAgentDefinition`). First surface of the builder-only migration (M31). (`builder-only-authoring-api`)
 - Roadmap amended: added M31 Builder-only authoring API across all surfaces (`/roadmap-feature builder-only-authoring-api`)
 
+### Removed
+
+- **BREAKING (M31) — every `define*` function and every `@theokit/agents` decorator removed from the
+  public API.** The fluent builders (`agent/tool/route/action/websocket/middleware/config/plugin`) are
+  now the ONLY authoring surface. Removed from the public entrypoints: `defineAgent`, `defineAgentTool`,
+  `defineRoute`, `defineAction`, `defineWebSocket`/`defineWebSocketWeb`, `defineMiddleware`,
+  `defineConfig`, `definePlugin`/`defineTheoPlugin`, and the decorators `@Agent/@Tool/@Toolbox/
+  @HumanInTheLoop/@Guardrails/@Skills/@MainLoop/@SubAgents/@Checkpoint/@Mixin/…`. The functions +
+  decorators remain as INTERNAL implementation (each builder's `.build()` delegates to them), so the
+  scan/compile/runtime is unchanged — only the authoring surface. TYPES stay public (`RouteConfig`,
+  `CustomTool`, `TheoPlugin`, `HumanInTheLoopOptions`, `TimeoutAction`, …). Scope note: `defineChannel`/
+  `defineWebChannel` (M27 channels) remain exported (outside M31's 8-surface scope — a `channel()`
+  builder is a follow-up). See the migration guide below. (`builder-only-authoring-api`, ADR-0043)
+- **Deleted the decorator examples** (`examples/agent-saas`, `examples/code-assistant`) per ADR-0043 D2.
+
 ### Changed
 
+- **Build: `@theokit/agents` no longer maps `@theokit/http` to source in tsconfig `paths`** — it now
+  resolves via the workspace package (its built `.d.ts`), matching the tsup `external` contract. Fixes
+  a DTS-build `rootDir` failure surfaced by the barrel un-export. (`builder-only-authoring-api`)
 - **M31 — migration guide (`define*` / decorators → builders).** The fluent builder is the single
   authoring surface. Consumer migration (mechanical, behavior-preserving — the builder `.build()`
   emits the identical value the old `define*` returned):

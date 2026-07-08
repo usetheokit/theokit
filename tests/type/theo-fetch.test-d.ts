@@ -1,5 +1,5 @@
 import { describe, it, expectTypeOf } from 'vitest'
-import { defineRoute } from 'theokit/server'
+import { defineRoute } from '../../packages/theo/src/server/define/define-route.js'
 import type { InferResponse, InferQuery, InferBody } from 'theokit/client'
 import { z } from 'zod'
 

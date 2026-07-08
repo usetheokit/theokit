@@ -4,7 +4,8 @@
  */
 import { describe, it, expect } from 'vitest'
 
-import { config, defineConfig } from '../../packages/theo/src/index.js'
+import { config } from '../../packages/theo/src/index.js'
+import { defineConfig } from '../../packages/theo/src/config/define-config.js'
 
 describe('config() builder — hybrid grammar', () => {
   it('setters produce the same object as defineConfig({...})', () => {

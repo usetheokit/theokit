@@ -1,6 +1,6 @@
 import { describe, it, expectTypeOf } from 'vitest'
-import { defineConfig } from 'theokit'
 import type { TheoConfig } from 'theokit'
+import { defineConfig } from '../../packages/theo/src/config/define-config.js'
 
 describe('defineConfig type inference', () => {
   it('should accept partial TheoConfig', () => {

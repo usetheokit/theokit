@@ -1,3 +1,4 @@
+import { defineConfig } from '../../../packages/theo/src/config/define-config.js'
 /**
  * Fixture (T3.2) — TheoKit app demonstrating `useUnstorage` with a mock Redis driver.
  *
@@ -6,6 +7,5 @@
  * demonstrates that pattern (vs. T2.2 which uses `theo.config.ts > storage`
  * for PG/Redis with `usePostgres`/`useRedis`).
  */
-import { defineConfig } from '../../../packages/theo/src/index.js'
 
 export default defineConfig({})
