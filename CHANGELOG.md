@@ -44,6 +44,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **M31 — migration guide (`define*` / decorators → builders).** The fluent builder is the single
+  authoring surface. Consumer migration (mechanical, behavior-preserving — the builder `.build()`
+  emits the identical value the old `define*` returned):
+
+  | Before | After |
+  |---|---|
+  | `defineAgentTool({ name, description, inputSchema, handler })` | `tool(name).describe(d).input(schema).execute(handler).build()` |
+  | `defineRoute({ query, body, params, handler })` | `route().query(q).body(b).params(p).handler(fn).build()` |
+  | `defineAction({ input, accept, handler })` | `action().input(i).accept(a).handler(fn).build()` |
+  | `defineWebSocket({ onOpen, onMessage })` | `websocket().onOpen(fn).onMessage(fn).build()` |
+  | `defineMiddleware(fn)` | `middleware().handle(fn).build()` |
+  | `defineConfig({ … })` | `config().serverDir(s)….set({ … }).build()` |
+  | `definePlugin({ name, register })` | `plugin(name).onRequest(fn).onResponse(fn).build()` |
+  | `defineAgent({ input, model, tools, approvals, … })` | `agent().input(i).model(m).context(c).tool(t).approval('name',{…}).build()` |
+  | `@Agent/@Tool/@HumanInTheLoop/@Guardrails/@Skills` decorators | the `agent()` / `tool()` builders (same compiled output) |
+
+  Notes: `agent()` requires `.model()` before `.build()` and `.context()` before `.tool()` (type-state
+  guards). `config()` is hybrid — dedicated setters for common fields + `.set(partial)` for the long
+  tail (ADR-0043 D3). Decorator-only capabilities without a functional field (`@Checkpoint/@MainLoop/
+  @Toolbox/@SubAgents/@Mixin`) are dropped from the authoring surface per ADR-0043 D2 (re-addable as
+  builder methods on demand). (`builder-only-authoring-api`, ADR-0043)
 - **ADR-0042 accepted (owner sign-off): the MCP stdio SERVER transport is framework-side** — finalizes the scope note flagged with the `theokit mcp <agent>` shipment in 0.19.0. The server-exposure stdio transport reuses the framework's `handleMcpJsonRpc` (a transport, sibling of the M16 HTTP route); the SDK's MCP CLIENT stdio (consuming external `mcpServers`) stays SDK-side. Refines ADR-0040's "M16-stdio-transport" note (which is read as the CLIENT runtime). Code comment + `docs` updated to cite ADR-0042. No behavior change. (ADR-0042)
 - **Nit: `scan/errors.ts` no longer references a phantom `ADR-XXX`** — the router-convention decision lives in `g6-router-convention-plan.md` + CHANGELOG 0.4.0 (no standalone ADR was cut); the comment now points there instead of an unfilled `ADR-XXX`.
 
