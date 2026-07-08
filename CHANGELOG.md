@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Roadmap amended: added M32 Phase 0 — Surfaces scope ruling ADR (`/roadmap-feature surfaces-scope-adr`)
+- Roadmap amended: added M33 Phase 1 — Typed-ctx reconciliation + in-process caller (`/roadmap-feature typed-ctx-inprocess-caller`)
+- Roadmap amended: added M34 Phase 2 — MCP surface hardening + default-DENY (`/roadmap-feature mcp-surface-hardening`)
+- Universal-handler-architecture research blueprint (12-cluster deep research + 4 adversarial critics) at `.claude/knowledge-base/discoveries/blueprints/universal-handler-architecture-blueprint.md` — feeds the M32→M34 GOLD GOAL (TUI/MCP/Tauri as framework-core surfaces).
+
 ## [0.21.0] - 2026-07-08
 
 ### Added
