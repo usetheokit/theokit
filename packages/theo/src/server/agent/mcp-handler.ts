@@ -87,6 +87,7 @@ async function callTool(
   tools: readonly CompiledTool[],
   toolName: unknown,
   args: unknown,
+  hitl?: ReadonlyMap<string, unknown>,
 ): Promise<CallToolResult> {
   if (typeof toolName !== 'string') {
     return {
@@ -97,6 +98,21 @@ async function callTool(
   const tool = tools.find((t) => t.name === toolName)
   if (!tool) {
     return { content: [{ type: 'text', text: `Unknown tool: ${toolName}` }], isError: true }
+  }
+  // #99 — REFUSE a HITL-gated tool. The approval gate (`compiled.hitl`) lives in the SDK run-loop,
+  // not in the raw tool handler; executing the handler here would BYPASS the human approval the web/
+  // TUI surfaces enforce. Over MCP there is no approval mechanism, so a gated tool is not callable —
+  // return an error result instead of running it unguarded (fail-closed, Rule 8).
+  if (hitl?.has(toolName)) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Tool "${toolName}" requires human approval, which is not available over MCP. Refused.`,
+        },
+      ],
+      isError: true,
+    }
   }
   try {
     const result = await tool.handler(args)
@@ -181,7 +197,7 @@ export async function handleMcpJsonRpc(
     }
     if (method === 'tools/call') {
       const p = params as { name?: unknown; arguments?: unknown } | undefined
-      const result = await callTool(compiled.tools, p?.name, p?.arguments ?? {})
+      const result = await callTool(compiled.tools, p?.name, p?.arguments ?? {}, compiled.hitl)
       return jsonResponse({ jsonrpc: '2.0', id, result })
     }
     if (method === 'resources/list') {
