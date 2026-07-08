@@ -291,6 +291,11 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // ADR-0028 — CF Workers / Bun / Deno serve the spec from their own
       // asset layer, not this module.
       'packages/theo/src/server/openapi/serve-docs.ts',
+      // ACP subprocess tool (M17): spawns an external coding agent over
+      // stdio via node:child_process (+ node:stream types). Subprocess
+      // spawning has no Web-Standards equivalent — it is Node-only by
+      // definition, the same boundary as the CLI harness above.
+      'packages/theo/src/server/agent/acp-tool.ts',
     ])
 
     /**
