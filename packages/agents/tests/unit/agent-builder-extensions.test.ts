@@ -13,8 +13,7 @@ import type { Guardrail } from '../../src/guardrails/index.js'
 
 const passGuard: Guardrail = {
   name: 'test-guard',
-  stage: 'input',
-  check: () => ({ action: 'pass' }),
+  checkInput: (text) => ({ action: 'allow', text }),
 }
 
 /** A minimal named tool so `.approval(name, …)` has a declared tool to gate (defineAgent validates). */
