@@ -12,10 +12,16 @@
  * is no second request — the caller resolves the approval INLINE via `awaitApproval` (e.g. the Ink
  * TUI's y/n prompt). The gated-tool map is `compiled.hitl` verbatim, so the pause semantics are
  * byte-identical to the HTTP path; only the resolver differs. Parity with the mount is by
- * construction: both call `streamAgentUIMessages` with the same `{ message, sessionId, hitl }`.
+ * construction: both compile the module, resolve function-form skills, and call `streamAgentUIMessages`
+ * with the same `{ message, sessionId, hitl }`.
+ *
+ * Consumers WILL still receive `tool-approval-request` chunks from the returned generator — they are
+ * INFORMATIONAL (render them or ignore them). The authoritative human gate is `awaitApproval`, which
+ * the SDK awaits BEFORE the gated tool runs; the chunk is not the gate.
  */
 import {
   compileAgentModule,
+  resolveEnabledSkills,
   streamAgentUIMessages,
   type HitlDecision,
   type HumanInTheLoopOptions,
@@ -103,10 +109,22 @@ export function streamAgentTurnInProcess(
         }
       : undefined
 
-  return deps.stream(compiled, apiKey, {
-    message: input.message,
-    sessionId: input.sessionId ?? crypto.randomUUID(),
-    hitl,
-    signal: input.signal,
-  })
+  const sessionId = input.sessionId ?? crypto.randomUUID()
+
+  // Resolve function-form skills (`defineAgent({ skills: (ctx) => [...] })`) BEFORE streaming — exact
+  // parity with mount-agent. Done INSIDE the returned generator so the synchronous fail-fast above is
+  // preserved (the caller still gets a plain `AsyncGenerator`, no `await` at the call site). A static
+  // skill list leaves `skillsResolver` undefined and this is a no-op.
+  return (async function* () {
+    if (compiled.skillsResolver) {
+      const enabled = await resolveEnabledSkills(compiled.skillsResolver, compiled.runContext ?? {})
+      if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
+    }
+    yield* deps.stream(compiled, apiKey, {
+      message: input.message,
+      sessionId,
+      hitl,
+      signal: input.signal,
+    })
+  })()
 }
