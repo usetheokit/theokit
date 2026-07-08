@@ -1,9 +1,9 @@
-import { defineRoute } from 'theokit/server'
+import { route } from 'theokit/server'
 import { z } from 'zod'
 
-export const GET = defineRoute({
-  query: z.object({}),
-  async handler() {
+export const GET = route()
+  .query(z.object({}))
+  .handler(async () => {
     return { status: 'ok' }
-  },
-})
+  })
+  .build()
