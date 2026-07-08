@@ -634,7 +634,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 
 ---
 
-### M31 — [ ] Builder-only authoring API across all surfaces
+### M31 — [x] Builder-only authoring API across all surfaces
 
 > Added 2026-07-08 by `/roadmap-feature` (slug: `builder-only-authoring-api`). See CHANGELOG `[Unreleased] § Added`.
 
