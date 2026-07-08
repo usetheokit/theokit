@@ -5,6 +5,9 @@
 // The decorator OPTION TYPES stay public (the framework + consumers annotate with them — e.g. the
 // HITL `TimeoutAction` used by the approval-registry and the `agent().approval(...)` options).
 export type { HumanInTheLoopOptions, TimeoutAction } from './decorators/human-in-the-loop.js'
+// M35 — the settled HITL decision type is part of the public approval contract: an `awaitApproval`
+// resolver (the HTTP registry or the in-process seam) may return a bare boolean OR this structured value.
+export type { HitlDecision } from './bridge/hitl-plugin.js'
 export * from './bridge/index.js'
 export * from './loop/index.js'
 export * from './guardrails/index.js'

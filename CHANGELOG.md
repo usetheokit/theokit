@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **M35 — TUI terminal-only in-process surface (Model A).** New framework seam `streamAgentTurnInProcess` (`theokit/server`) runs an agent turn in a SINGLE process — no HTTP loopback, no port, no CSRF — reusing `streamAgentUIMessages` with inline HITL resolution (the Claude Code / Codex shape). `@theokit/agents` now publicly exports the `HitlDecision` type. The `theo-code-v2` Ink TUI defaults to in-process, with HTTP-loopback kept as a `--http` fallback. (#M35)
+- Roadmap amended: added M35 Phase 3 — TUI terminal-only in-process surface (Model A) (`/roadmap-feature tui-terminal-only-inprocess`)
+- Roadmap amended: added M36 Phase 4 — Tauri desktop surface (push-transport ADR + real app) (`/roadmap-feature tauri-desktop-surface`)
+
 ### Security
 
 - **MCP `tools/call` no longer BYPASSES HITL approval (closes #99).** A tool gated by `.approval()` /
