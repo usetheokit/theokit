@@ -35,7 +35,7 @@ export async function handleMcpStdioLine(
       error: { code: -32700, message: 'Parse error' },
     })
   }
-  const response = handleMcpJsonRpc(mod, name, body, appResources)
+  const response = await handleMcpJsonRpc(mod, name, body, appResources)
   const payload: unknown = await response.json()
   return JSON.stringify(payload)
 }

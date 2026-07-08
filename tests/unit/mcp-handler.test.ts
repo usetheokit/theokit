@@ -21,15 +21,16 @@ const mod = {
       {
         name: 'search',
         description: 'Search the KB',
-        inputSchema: { type: 'object', properties: {} },
-        handler: () => 'ok',
+        // M34 — a real input schema (not the dropped empty `{properties:{}}`).
+        inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
+        handler: (input: unknown) => `found:${(input as { q?: string }).q}`,
       },
     ],
   }),
 }
 
 async function rpc(mod: unknown, name: string, body: unknown) {
-  const res = handleMcpJsonRpc(mod, name, body)
+  const res = await handleMcpJsonRpc(mod, name, body)
   return { status: res.status, json: (await res.json()) as Record<string, unknown> }
 }
 
@@ -61,6 +62,50 @@ describe('handleMcpJsonRpc', () => {
     const { json } = await rpc(mod, 'ops', { jsonrpc: '2.0', id: 2, method: 'tools/list' })
     const result = json.result as { tools: { name: string }[] }
     expect(result.tools.map((t) => t.name)).toEqual(['search'])
+  })
+
+  it('M34 — tools/list retains the real Zod-derived inputSchema (not the dropped empty one)', async () => {
+    const { json } = await rpc(mod, 'ops', { jsonrpc: '2.0', id: 20, method: 'tools/list' })
+    const result = json.result as {
+      tools: { name: string; inputSchema: { properties?: Record<string, unknown> } }[]
+    }
+    const search = result.tools.find((t) => t.name === 'search')!
+    // Before M34 this was `{properties:{}}` — the schema was dropped. Now the real props survive.
+    expect(search.inputSchema.properties).toHaveProperty('q')
+  })
+
+  it('M34 — tools/call EXECUTES the tool and returns a CallToolResult', async () => {
+    const { json } = await rpc(mod, 'ops', {
+      jsonrpc: '2.0',
+      id: 21,
+      method: 'tools/call',
+      params: { name: 'search', arguments: { q: 'theo' } },
+    })
+    // Proper MCP CallToolResult: content[] with a text item, isError false.
+    const result = json.result as { content: { type: string; text: string }[]; isError?: boolean }
+    expect(result.isError).toBeFalsy()
+    expect(result.content[0]).toMatchObject({ type: 'text', text: 'found:theo' })
+  })
+
+  it('M34 — tools/call on an unknown tool returns an error result (not -32601 crash)', async () => {
+    const { json } = await rpc(mod, 'ops', {
+      jsonrpc: '2.0',
+      id: 22,
+      method: 'tools/call',
+      params: { name: 'nonexistent', arguments: {} },
+    })
+    // Unknown tool → a JSON-RPC error OR an isError result; either is acceptable, never a silent 200 ok.
+    const hasError =
+      json.error !== undefined ||
+      (json.result as { isError?: boolean } | undefined)?.isError === true
+    expect(hasError).toBe(true)
+  })
+
+  it('M34 — initialize advertises a current protocol version (not the stale 2024-11-05)', async () => {
+    const { json } = await rpc(mod, 'ops', { jsonrpc: '2.0', id: 23, method: 'initialize' })
+    const result = json.result as { protocolVersion: string }
+    expect(result.protocolVersion).not.toBe('2024-11-05')
+    expect(result.protocolVersion >= '2025-06-18').toBe(true)
   })
 
   it('returns JSON-RPC method-not-found (-32601) for an unknown method', async () => {

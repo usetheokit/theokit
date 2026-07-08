@@ -19,8 +19,14 @@ const AGENTS: AgentNode[] = [
 
 const deps = {
   agents: AGENTS,
-  loadModule: async () => ({ default: defineAgent({ model: 'claude-sonnet-4-6', tools: [] }) }),
+  loadModule: async () => ({
+    default: defineAgent({ model: 'claude-sonnet-4-6', tools: [] }),
+    mcp: true,
+  }),
   baseUrl: 'https://app.example',
+  // M34 (#97) — these tests exercise the MCP dispatch shape, not the CSRF gate (covered by the
+  // dedicated `mcp-route-auth.test.ts`), so disable the gate here.
+  csrfMode: 'off' as const,
 }
 
 function req(url: string, method = 'GET', body?: unknown): Request {
@@ -97,8 +103,10 @@ describe('serveAgentAuxRoute — M30 per-agent appResources wiring', () => {
     loadModule: async () => ({
       default: defineAgent({ model: 'claude-sonnet-4-6', tools: [] }),
       appResources: [defineAppResource({ uri: 'ui://card', name: 'Card', html: '<b>hi</b>' })],
+      mcp: true, // M34 — opt into the MCP surface (default-DENY).
     }),
     baseUrl: 'https://app.example',
+    csrfMode: 'off' as const,
   }
 
   it('resources/list returns the module-declared ui:// resources', async () => {
