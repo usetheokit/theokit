@@ -663,7 +663,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 > **GOLD GOAL (M32→M34) — TUI / MCP / Tauri are authorized framework-core surfaces.** One construction (the M31 builder unit) authored once and projected to web + TUI + MCP + Tauri, so the framework serves a conventional app (login/cadastro/CRUD) AND the multi-surface agent app. M32 authorizes the surfaces (the gate); M33 builds the load-bearing contract (typed ctx + in-process caller); M34 lands MCP as the first fully-realized + secured surface. TUI/Tauri realization is subsequent + gated on M32's ruling + evidence. **Evidence base: `.claude/knowledge-base/discoveries/blueprints/universal-handler-architecture-blueprint.md`** (12-cluster deep research, 4 adversarial critics; 4 of 5 original recommendations were REFUTED — these milestones encode the *narrower verdict-adjusted* design that survived).
 
-### M32 — [ ] Phase 0 — Surfaces scope ruling (ADR: TUI/MCP/Tauri as framework-core)
+### M32 — [x] Phase 0 — Surfaces scope ruling (ADR: TUI/MCP/Tauri as framework-core)
 
 > Added 2026-07-08 by `/roadmap-feature` (slug: `surfaces-scope-adr`). See CHANGELOG `[Unreleased] § Added`.
 
