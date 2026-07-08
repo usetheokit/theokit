@@ -68,7 +68,7 @@ describe('M30 — readAppResource (resources/read)', () => {
  * M30 — the MCP handler serves the App resources over JSON-RPC (extends the M16 handler).
  */
 import { handleMcpJsonRpc } from '../../packages/theo/src/server/agent/mcp-handler.js'
-import { defineAgent } from '../../packages/agents/src/index.js'
+import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 
 const agentMod = { default: defineAgent({ model: 'claude-sonnet-4-6', tools: [] }) }
 

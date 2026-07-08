@@ -11,7 +11,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { TheoConfig } from '../../packages/theo/src/config/schema.js'
 
-const fakeConfig: TheoConfig = {} as TheoConfig
+// A minimally-valid loaded config: `buildStatic` reads `config.appDir` (present on every real
+// loaded TheoConfig via the schema default). Honor the contract instead of casting a bare `{}`.
+const fakeConfig: TheoConfig = { appDir: 'app' } as TheoConfig
 
 describe('Static adapter — shape', () => {
   it('exposes the DeployAdapter contract', () => {

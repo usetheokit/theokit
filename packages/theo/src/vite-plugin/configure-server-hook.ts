@@ -32,6 +32,10 @@ import { setupWsUpgrade } from './ws-upgrade.js'
 export interface ConfigureServerCtx {
   projectRoot: string
   appDir: string
+  /** Absolute backend root (config `serverDir`, default `<projectRoot>/server`) — route/action scan (#95). */
+  serverDir: string
+  /** Agents dir NAME (config `agentsDir`, default "agents") relative to projectRoot — agent-middleware scan. */
+  agentsDir: string
   resolvedDistDir: string
   ssrEnabled: boolean
   isDevMode: { value: boolean }
@@ -80,8 +84,9 @@ export async function runConfigureServer(
     }
   })
 
-  // Server middleware (action before API — more specific prefix first)
-  const serverDir = resolve(ctx.projectRoot, 'server')
+  // Server middleware (action before API — more specific prefix first). `serverDir` honors the
+  // config `serverDir` (default `<projectRoot>/server`) — no longer hardcoded (#95).
+  const serverDir = ctx.serverDir
   server.middlewares.use(
     createActionMiddleware(server, serverDir, {
       pluginRunner: ctx.pluginRunner,
@@ -92,7 +97,9 @@ export async function runConfigureServer(
   // M2 — agent convention (`/api/agents/<name>`) before the generic api-middleware
   // (mirrors the action prefix). Agents live at <projectRoot>/agents (LOCKED naming).
   // CSRF is enforced in `mountAgent` (shared dev+prod point) at the same mode as routes.
-  server.middlewares.use(createAgentMiddleware(server, ctx.projectRoot, ctx.csrfMode))
+  server.middlewares.use(
+    createAgentMiddleware(server, ctx.projectRoot, ctx.csrfMode, ctx.agentsDir),
+  )
   // Wave 2 completion — services-proxy prefixes flow through to the
   // api-middleware so it can call `next()` for paths that should be
   // forwarded to a sidecar by Vite's proxyMiddleware.
@@ -157,7 +164,8 @@ export async function runConfigureServer(
   if (ctx.resolvedOpenApi !== undefined) {
     const openApiCfg = ctx.resolvedOpenApi
     const { reEmitOpenApi } = await import('./openapi-emit/dev-emit.js')
-    const openApiServerDir = resolve(ctx.projectRoot, 'server')
+    // #95 — the OpenAPI dev-emit scans the SAME backend root as the route middleware (honor serverDir).
+    const openApiServerDir = ctx.serverDir
     const openApiDistDir = resolve(ctx.projectRoot, ctx.resolvedDistDir)
     const isRouteFileForOpenApi = (file: string): boolean =>
       file.startsWith(openApiServerDir) && /\.(ts|tsx|js|mjs)$/.test(file)

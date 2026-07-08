@@ -1,9 +1,9 @@
-import { defineRoute } from 'theokit/server/define'
+import { route } from 'theokit/server/define'
 
-export const GET = defineRoute({
-  handler: () => ({
+export const GET = route()
+  .handler(() => ({
     status: 'ok',
     timestamp: Date.now(),
     framework: 'TheoKit',
-  }),
-})
+  }))
+  .build()

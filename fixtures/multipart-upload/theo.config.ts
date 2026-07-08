@@ -1,8 +1,10 @@
-import { defineConfig } from 'theokit'
+import { config } from 'theokit'
 
-export default defineConfig({
-  upload: {
-    maxFileSize: 10 * 1024 * 1024, // 10 MB
-    maxFiles: 5,
-  },
-})
+export default config()
+  .set({
+    upload: {
+      maxFileSize: 10 * 1024 * 1024, // 10 MB
+      maxFiles: 5,
+    },
+  })
+  .build()

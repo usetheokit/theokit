@@ -1,6 +1,8 @@
-import { defineConfig } from 'theokit'
+import { config } from 'theokit'
 
-export default defineConfig({
-  ssr: true,
-  ssrStreaming: true,
-})
+export default config()
+  .set({
+    ssr: true,
+    ssrStreaming: true,
+  })
+  .build()

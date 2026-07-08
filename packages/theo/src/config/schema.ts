@@ -67,6 +67,12 @@ export const theoConfigSchema = z
     appDir: z.string().default('app'),
     serverDir: z.string().default('server'),
     /**
+     * Directory (relative to the project root) holding `agents/<name>.ts` definitions, scanned by
+     * dev/build/terminal/mcp. Defaults to `"agents"` — apps that keep the canonical layout are
+     * unaffected. Set to e.g. `"core/agents"` to organize agents under a domain root (#95 follow-up).
+     */
+    agentsDir: z.string().default('agents'),
+    /**
      * T2.2 / EC-4 — Build output directory. Must be a relative path inside
      * the project root. Refused absolute or parent-relative paths to prevent
      * `cleanOutDir` from wiping arbitrary locations (defense-in-depth on

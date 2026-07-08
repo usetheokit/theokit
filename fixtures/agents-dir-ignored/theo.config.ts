@@ -1,2 +1,2 @@
-import { defineConfig } from 'theokit'
-export default defineConfig({})
+import { config } from 'theokit'
+export default config().build()

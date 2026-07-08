@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { defineAgent } from '../../packages/agents/src/index.js'
+import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 
 import { handleMcpJsonRpc, isMcpPath } from '../../packages/theo/src/server/agent/mcp-handler.js'
 
@@ -47,7 +47,11 @@ describe('handleMcpJsonRpc', () => {
     const { status, json } = await rpc(mod, 'ops', { jsonrpc: '2.0', id: 1, method: 'initialize' })
     expect(status).toBe(200)
     expect(json.id).toBe(1)
-    const result = json.result as { protocolVersion: string; serverInfo: { name: string }; capabilities: { tools: unknown } }
+    const result = json.result as {
+      protocolVersion: string
+      serverInfo: { name: string }
+      capabilities: { tools: unknown }
+    }
     expect(result.serverInfo.name).toBe('ops')
     expect(typeof result.protocolVersion).toBe('string')
     expect(result.capabilities.tools).toBeDefined()

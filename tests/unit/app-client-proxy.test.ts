@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAppClient } from '../../packages/theo/src/client/app-client.js'
 import { TheoFetchError } from '../../packages/theo/src/client/theo-fetch.js'
 
-type FetchCall = { url: string; init: Record<string, unknown> }
+interface FetchCall {
+  url: string
+  init: Record<string, unknown>
+}
 function makeMockFetch() {
   const calls: FetchCall[] = []
   const impl = vi.fn(async (url: string, init?: Record<string, unknown>) => {
@@ -96,9 +99,9 @@ describe('createAppClient — Proxy facade over theoFetch', () => {
   it('throws MISSING_PARAM when an opts.params key matches a segment but its value is empty', async () => {
     const { impl } = makeMockFetch()
     const client = createAppClient<AppClient>({ fetchImpl: impl as any })
-    await expect(
-      client.posts.id.get({ params: { id: '' as any } }),
-    ).rejects.toThrow(/MISSING_PARAM|required/i)
+    await expect(client.posts.id.get({ params: { id: '' as any } })).rejects.toThrow(
+      /MISSING_PARAM|required/i,
+    )
   })
 
   it('rejects top-level method call (no segment)', async () => {

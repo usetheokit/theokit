@@ -1,4 +1,4 @@
-import { defineRoute } from 'theokit/server'
+import { route } from 'theokit/server'
 import { generatePkceChallenge } from 'theokit/server'
 import { generateOAuthState } from 'theokit/server'
 
@@ -6,8 +6,8 @@ import { generateOAuthState } from 'theokit/server'
  * GET /auth/start — kick off GitHub OAuth with PKCE + state.
  * TheoKit ships the primitives; GitHub's endpoint is wired by hand.
  */
-export const GET = defineRoute({
-  async handler({ cookies }) {
+export const GET = route()
+  .handler(async ({ cookies }) => {
     const { codeVerifier, codeChallenge, codeChallengeMethod } = await generatePkceChallenge()
     const state = generateOAuthState()
 
@@ -23,5 +23,5 @@ export const GET = defineRoute({
     url.searchParams.set('scope', 'read:user')
 
     return Response.redirect(url.toString(), 302)
-  },
-})
+  })
+  .build()
