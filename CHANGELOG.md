@@ -6,7 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **M34 (Phase 2) — MCP route CSRF/auth gate + default-DENY exposure (closes #97).** `POST
+  /api/agents/<name>/mcp` shipped with ZERO CSRF/auth while it drives the agent (spends real LLM
+  tokens) — a cross-origin POST could trigger paid operations. Now the MCP route (1) requires an
+  explicit opt-in `export const mcp = true` on the agent module (DEFAULT-DENY — an agent is web-only
+  unless it declares the MCP surface), and (2) enforces `validateCsrfRequest` before any work → 403
+  on a cross-origin POST in `csrfMode: 'strict'`, parity with the agent-run route
+  (`mount-agent.ts:83-91`). `csrfMode` is threaded from both the dev (`agent-middleware`) and prod
+  (`start/handlers`) callers. **BREAKING:** the M16 auto-mount-every-agent-as-MCP becomes explicit
+  opt-in — add `export const mcp = true` to an agent file to keep it MCP-exposed. (#97, ADR-0044 D5)
+
 ### Added
+
+- **M34 (Phase 2) — MCP `tools/call` execution + schema retention + protocol bump.** The MCP handler
+  now EXECUTES tools (`tools/call` → runs the tool handler, returns a `CallToolResult` `content[]` +
+  `isError`) — before it advertised tools it could not run. `tools/list` retains each tool's real
+  Zod-derived `inputSchema` (was dropped to `{properties:{}}`). Protocol bumped `2024-11-05` →
+  `2025-06-18` (the server owns the version it speaks, in `mcp-handler.ts`). MCP is now a real,
+  usable, secured framework-core surface (the GOLD GOAL's first fully-realized non-web surface).
+  (`mcp-surface-hardening`, ADR-0044)
 
 - **M33 (Phase 1) DONE — in-process typed caller (`callProcedure`) + ctx reconciliation.** The
   load-bearing contract for non-HTTP surfaces (TUI/Tauri/MCP): `callProcedure(config, {query,body,
