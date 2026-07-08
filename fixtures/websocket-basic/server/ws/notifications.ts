@@ -1,7 +1,7 @@
-import { defineWebSocket } from 'theokit/server'
+import { websocket } from 'theokit/server'
 
-export default defineWebSocket({
-  onMessage(ws, data) {
+export default websocket()
+  .onMessage((ws, data) => {
     ws.send(`notification: ${data}`)
-  },
-})
+  })
+  .build()

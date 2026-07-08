@@ -64,12 +64,12 @@ describe('scaffold anti-stack lint — no raw OpenAI in default agents/chat.ts (
       ).toBe(false)
     })
 
-    it(`${relativePath} uses @theokit/agents (directly OR indirectly via defineAgent/defineAgentTool)`, () => {
+    it(`${relativePath} uses @theokit/agents (directly OR indirectly via agent()/tool() builders)`, () => {
       const content = readFileSync(absPath, 'utf-8')
-      // M3: the new indirection is defineAgent (compiles to the SDK at mount time)
-      // or defineAgentTool (still valid for tool-equipped agents).
-      // Either proves the locked stack — accept both.
-      const indirectViaTheokit = /defineAgent|defineAgentTool/.test(content)
+      // M31 builder-only: the authoring surface is `agent()...build()` / `tool()...build()`
+      // (the compile-to-SDK bridge). Legacy `defineAgent`/`defineAgentTool` still accepted for
+      // any not-yet-migrated file. Any of these proves the locked stack.
+      const indirectViaTheokit = /\bagent\(\)|\btool\(|defineAgent|defineAgentTool/.test(content)
       expect(indirectViaTheokit).toBe(true)
     })
   }

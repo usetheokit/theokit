@@ -6,9 +6,9 @@ import { resolve } from 'node:path'
  * M3 (clean break) — the default scaffold's chat agent is now the zero-config
  * `agents/chat.ts` convention (the pre-M2 `server/routes/chat.ts` +
  * `defineAgentEndpoint` surface was removed). The canonical file MUST:
- *   (a) `export default defineAgent({...})` from `@theokit/agents`,
- *   (b) declare a Zod `input` schema (end-to-end typed client),
- *   (c) declare a `model`,
+ *   (a) `export default agent()...build()` from `@theokit/agents` (M31 builder-only API),
+ *   (b) declare a Zod `.input()` schema (end-to-end typed client),
+ *   (c) declare a `.model()`,
  *   (d) NOT reference the removed surface (defineAgentEndpoint / streamAgentRun /
  *       createConversationHistory / AgentEvent),
  *   (e) NOT import a raw LLM SDK (anti-stack guard — the SDK owns the provider).
@@ -29,21 +29,23 @@ describe('fixtures/template-default canonical agents/chat.ts (M3)', () => {
     expect(existsSync(OLD_CHAT)).toBe(false)
   })
 
-  it('agents/chat.ts exists and default-exports defineAgent', () => {
+  it('agents/chat.ts exists and default-exports the agent() builder', () => {
     expect(existsSync(AGENT_PATH)).toBe(true)
     const src = readAgent()
-    expect(src).toMatch(/export\s+default\s+defineAgent\(/)
+    // M31 builder-only: `export default agent()...build()` (was `defineAgent({...})`).
+    expect(src).toMatch(/export\s+default\s+agent\(\)/)
+    expect(src).toMatch(/\.build\(\)/)
     expect(src).toMatch(/from\s+['"]@theokit\/agents['"]/)
   })
 
   it('declares a Zod input schema (typed end-to-end client)', () => {
     const src = readAgent()
-    expect(src).toMatch(/input:\s*z\.object\(/)
+    expect(src).toMatch(/\.input\(\s*z\.object\(/)
   })
 
   it('declares a model', () => {
     const src = readAgent()
-    expect(src).toMatch(/model:\s*['"]/)
+    expect(src).toMatch(/\.model\(\s*['"]/)
   })
 
   it('does NOT reference the removed proprietary surface', () => {
