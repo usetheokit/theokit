@@ -6,7 +6,8 @@
  * This is a TRANSPORT over the framework's OWN {@link handleMcpJsonRpc} — it reuses the exact handler
  * the HTTP route uses; it calls no LLM, spawns no MCP client, and reimplements no runtime (G2 /
  * sdk-runtime.md). Distinct from the SDK's MCP CLIENT stdio (which spawns external MCP servers via
- * `mcpServers` command/args) — that stays SDK-side per ADR-0040. Here TheoKit is the SERVER.
+ * `mcpServers` command/args) — that stays SDK-side. Here TheoKit is the SERVER. The framework-side
+ * placement of this server-exposure transport is recorded in ADR-0042 (refining ADR-0040's M16 note).
  */
 import type { AppResource } from './mcp-app-resources.js'
 import { handleMcpJsonRpc } from './mcp-handler.js'

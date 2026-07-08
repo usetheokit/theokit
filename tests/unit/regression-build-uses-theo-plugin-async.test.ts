@@ -51,9 +51,11 @@ describe('regression: build command wires theoPluginAsync (0.2.2 fix)', () => {
     const source = readFileSync(BUILD_TS, 'utf8')
 
     // When: we look at the makeVitePlugins factory
-    // Then: it must be `async (opts) =>` and `await theoPluginAsync(opts)`
+    // Then: it must be `async (opts) =>` and `await theoPluginAsync(...)`. Since #95 the call spreads
+    // `opts` with the config dirs (`theoPluginAsync({ ...opts, appDir, serverDir, agentsDir })`), so we
+    // assert the async call + the opts spread rather than the exact `(opts)` literal.
     expect(source).toMatch(/makeVitePlugins:\s*async\s*\(/)
-    expect(source).toContain('await theoPluginAsync(opts)')
+    expect(source).toMatch(/await theoPluginAsync\(\s*\{?\s*\.\.\.opts/)
   })
 
   it('AdapterBuildContext.makeVitePlugins type accepts Promise<Plugin[]>', () => {

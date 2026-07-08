@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { mcpCommand } from '../../packages/theo/src/cli/commands/mcp.js'
-import { defineAgent } from '../../packages/agents/src/index.js'
+import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 import type { StdioStreams } from '../../packages/theo/src/server/agent/mcp-stdio.js'
 
 /**

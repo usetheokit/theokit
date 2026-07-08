@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defineConfig } from 'theokit'
+import { defineConfig } from '../../packages/theo/src/config/define-config.js'
 
 describe('defineConfig', () => {
   it('should return the config object unchanged', () => {

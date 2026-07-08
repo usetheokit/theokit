@@ -28,7 +28,7 @@ beforeAll(() => {
   scaffold(projectDir, 'e2e-test-app', 'default')
 
   // Symlink packages/theo → projectDir/node_modules/theokit so the
-  // scaffolded `theo.config.ts` (which does `import { defineConfig } from
+  // scaffolded `theo.config.ts` (which does `import { config } from
   // 'theokit'`) resolves without a full `pnpm install`.
   const nodeModulesDir = join(projectDir, 'node_modules')
   mkdirSync(nodeModulesDir, { recursive: true })
@@ -58,7 +58,9 @@ describe('T7.4 Sub-fase D — scaffold → build → start E2E', () => {
 
   it('scaffold writes theo.config.ts that parses', () => {
     const config = readFileSync(join(projectDir, 'theo.config.ts'), 'utf8')
-    expect(config).toMatch(/defineConfig/)
+    // M31 builder-only: the scaffolded config uses `config().build()` (was `defineConfig({})`).
+    expect(config).toMatch(/\bconfig\(\)/)
+    expect(config).toMatch(/\.build\(\)/)
   })
 
   it('scaffolded app uses `theokit` imports (not `theo`) — locked stack', () => {

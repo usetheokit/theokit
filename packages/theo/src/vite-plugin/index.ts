@@ -95,6 +95,25 @@ export interface TheoPluginOptions {
    * (pass an inert store that discards writes).
    */
   csrfReadinessStore?: CsrfReadinessStore
+  /**
+   * Backend root directory name (config `serverDir`), relative to the project root. Route/action
+   * discovery, the typed-client codegen, and the routes HMR watcher all scan `<serverDir>/routes`,
+   * `<serverDir>/actions`, etc. Defaults to `"server"` — apps that keep the canonical layout are
+   * unaffected. Set to e.g. `"core"` to organize the backend by domain (issue #95).
+   */
+  serverDir?: string
+  /**
+   * Directory (relative to project root) holding `agents/<name>.ts` definitions (config `agentsDir`).
+   * Scanned by the dev agent-middleware + the typed-agent codegen + the routes manifest. Defaults to
+   * `"agents"`. Set to e.g. `"core/agents"` to co-locate agents with the domain root (#95 follow-up).
+   */
+  agentsDir?: string
+  /**
+   * Frontend dir (config `appDir`, default "app") holding the file-based router (`page.tsx`,
+   * `layout.tsx`, …), relative to the project root. Set to e.g. `"apps/web"` to group the web UI
+   * under an `apps/` root alongside other frontends (#95 follow-up).
+   */
+  appDir?: string
 }
 
 /**
@@ -138,6 +157,12 @@ export async function theoPluginAsync(
   const options =
     typeof rootOrOptions === 'string' ? { root: rootOrOptions } : (rootOrOptions ?? {})
   const projectRoot = options.root ?? process.cwd()
+  // Backend root (config `serverDir`, default "server"). Route/action discovery, typed-client
+  // codegen, and the routes HMR watcher all scan under this dir (issue #95). Absolute.
+  const serverDirAbs = resolve(projectRoot, options.serverDir ?? 'server')
+  // Agents dir NAME (config `agentsDir`, default "agents"), relative to projectRoot — scanAgents
+  // joins it. May be nested (e.g. "core/agents"). (#95 follow-up)
+  const agentsDirName = options.agentsDir ?? 'agents'
 
   const consumerTailwindConfig = findConsumerConfig(projectRoot, 'tailwind.config')
   const consumerPostcssConfig = findConsumerConfig(projectRoot, 'postcss.config')
@@ -164,7 +189,7 @@ export async function theoPluginAsync(
   const { appTypedClientPlugin } = await import('./app-typed-client.js')
   const appClientPlugin = appTypedClientPlugin({
     cwd: projectRoot,
-    serverDir: resolve(projectRoot, 'server'),
+    serverDir: serverDirAbs,
     distDir: resolve(projectRoot, '.theokit'),
   })
 
@@ -175,7 +200,7 @@ export async function theoPluginAsync(
   // virtual module ambient declaration in consumer apps.
   const { actionsVirtualModule } = await import('./actions-virtual-module.js')
   const actionsPlugin = actionsVirtualModule({
-    serverDir: resolve(projectRoot, 'server'),
+    serverDir: serverDirAbs,
     distDir: resolve(projectRoot, '.theokit'),
   })
 
@@ -186,10 +211,11 @@ export async function theoPluginAsync(
   const { generateManifest } = await import('../server/internal-api.js')
   const agentsClientPlugin = agentsTypedClientPlugin({
     projectRoot,
+    agentsDir: agentsDirName,
     distDir: resolve(projectRoot, '.theokit'),
-    // Agents live at <projectRoot>/agents; generateManifest scans them via the server dir's
-    // parent, which is projectRoot for the canonical layout.
-    scanManifest: () => generateManifest(resolve(projectRoot, 'server'), projectRoot),
+    // Agents live at <projectRoot>/<agentsDir>; generateManifest scans them via the server dir's
+    // parent (projectRoot for the canonical layout) + the agents dir name (#95 follow-up).
+    scanManifest: () => generateManifest(serverDirAbs, projectRoot, agentsDirName),
   })
 
   // G6 T1.2 — server-routes HMR. Watches `<serverDir>/routes/**` and
@@ -197,7 +223,7 @@ export async function theoPluginAsync(
   // with a 50 ms debounce per EC-6.
   const { serverRoutesHmrPlugin } = await import('./server-routes-hmr.js')
   const routesHmrPlugin = serverRoutesHmrPlugin({
-    serverDir: resolve(projectRoot, 'server'),
+    serverDir: serverDirAbs,
   })
 
   return [
@@ -260,7 +286,12 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
   const options =
     typeof rootOrOptions === 'string' ? { root: rootOrOptions } : (rootOrOptions ?? {})
   const projectRoot = options.root ?? process.cwd()
-  const appDir = resolve(projectRoot, 'app')
+  // Frontend dir (config `appDir`, default "app") — the file-based router scan + SSR/client entry (#95).
+  const appDir = resolve(projectRoot, options.appDir ?? 'app')
+  // Backend root (config `serverDir`, default "server") — route/action middleware scan under it (#95).
+  const serverDir = resolve(projectRoot, options.serverDir ?? 'server')
+  // Agents dir NAME (config `agentsDir`, default "agents") — the agent-middleware scanAgents uses it.
+  const agentsDir = options.agentsDir ?? 'agents'
   const ssrEnabled = options.ssr ?? false
 
   // Resolve paths for SSR module loading. Pure helper extracted for T1.3
@@ -372,6 +403,8 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
       await runConfigureServer(server, {
         projectRoot,
         appDir,
+        serverDir,
+        agentsDir,
         resolvedDistDir,
         ssrEnabled,
         isDevMode: isDevModeRef,

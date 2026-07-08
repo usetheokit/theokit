@@ -65,14 +65,16 @@ export interface LoadedManifest {
 
 export function generateManifest(
   serverDir: string,
-  // Agents live at `<projectRoot>/agents`, a sibling of `serverDir` (LOCKED naming).
-  // Defaults to the server dir's parent; overridable for tests / non-standard layouts.
+  // Agents live at `<projectRoot>/<agentsDir>`. Defaults to the server dir's parent; overridable
+  // for tests / non-standard layouts.
   projectRoot: string = dirname(serverDir),
+  // Agents dir NAME (config `agentsDir`, default "agents"), relative to projectRoot (#95 follow-up).
+  agentsDir = 'agents',
 ): TheoManifest {
   const routes = scanServerRoutes(serverDir)
   const actions = scanServerActions(serverDir)
   const websockets = scanWebSocketRoutes(serverDir)
-  const agents = scanAgents(projectRoot)
+  const agents = scanAgents(projectRoot, agentsDir)
 
   return {
     version: 1,

@@ -1,5 +1,5 @@
 import { describe, it, expectTypeOf } from 'vitest'
-import { defineAction } from 'theokit/server'
+import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
 import { z } from 'zod'
 
 describe('defineAction type inference', () => {

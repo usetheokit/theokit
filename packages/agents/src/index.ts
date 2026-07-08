@@ -1,4 +1,10 @@
-export * from './decorators/index.js'
+// M31 builder-only: the `@Agent/@Tool/@Toolbox/@HumanInTheLoop/@Guardrails/@Skills/@MainLoop/
+// @SubAgents/@Checkpoint/@Mixin/…` decorators are removed from the public API (ADR-0043 D1/D2). The
+// `agent()` / `tool()` builders are the single authoring surface. The decorator implementations +
+// their metadata getters remain internal (the compiler reads them via source-path imports).
+// The decorator OPTION TYPES stay public (the framework + consumers annotate with them — e.g. the
+// HITL `TimeoutAction` used by the approval-registry and the `agent().approval(...)` options).
+export type { HumanInTheLoopOptions, TimeoutAction } from './decorators/human-in-the-loop.js'
 export * from './bridge/index.js'
 export * from './loop/index.js'
 export * from './guardrails/index.js'

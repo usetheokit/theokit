@@ -54,7 +54,8 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   const distDir = resolve(cwd, '.theokit')
   const clientDir = resolve(distDir, 'client')
-  const serverDir = resolve(cwd, 'server')
+  // #95 — honor config `serverDir` (default "server") in production start, matching dev.
+  const serverDir = resolve(cwd, config.serverDir)
 
   if (!existsSync(clientDir)) {
     throw new Error('No build found. Run `theo build` first.')
@@ -76,7 +77,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
     actions: cachedActions,
     wsRoutes: cachedWsRoutes,
     agents: cachedAgents,
-  } = loadRoutesAndActions(distDir, serverDir)
+  } = loadRoutesAndActions(distDir, serverDir, config.agentsDir)
 
   // Rate limiter (legacy flat form only — per-route variant is handled in
   // api-middleware integration path, not this fallback).

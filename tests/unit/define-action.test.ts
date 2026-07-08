@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { defineAction } from 'theokit/server'
 import { z } from 'zod'
+import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
 
 describe('defineAction', () => {
   it('should return the action config unchanged (same reference)', () => {
@@ -13,7 +13,7 @@ describe('defineAction', () => {
   })
 
   it('should preserve input schema', () => {
-    const schema = z.object({ email: z.string().email() })
+    const schema = z.object({ email: z.email() })
     const config = {
       input: schema,
       handler: ({ input: _input }: { input: { email: string } }) => ({ ok: true }),

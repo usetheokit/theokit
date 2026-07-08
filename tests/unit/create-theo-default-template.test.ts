@@ -34,15 +34,16 @@ describe('create-theokit default template — agents/chat.ts parity with fixture
     expect(template).toBe(fixture)
   })
 
-  it('template agents/chat.ts default-exports defineAgent (M3 — replaces defineAgentEndpoint)', () => {
+  it('template agents/chat.ts default-exports the agent() builder (M31 builder-only API)', () => {
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
-    expect(src).toMatch(/export\s+default\s+defineAgent\(/)
+    expect(src).toMatch(/export\s+default\s+agent\(\)/)
+    expect(src).toMatch(/\.build\(\)/)
     expect(src).toMatch(/from\s+['"]@theokit\/agents['"]/)
   })
 
   it('template agents/chat.ts declares a Zod input schema (typed end-to-end client)', () => {
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
-    expect(src).toMatch(/input:\s*z\.object\(/)
+    expect(src).toMatch(/\.input\(\s*z\.object\(/)
   })
 
   it('template agents/chat.ts does NOT import the raw openai npm package', () => {
@@ -65,7 +66,7 @@ describe('create-theokit default template — agents/chat.ts parity with fixture
 
   it('template agents/chat.ts declares a model', () => {
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
-    expect(src).toMatch(/model:\s*['"]/)
+    expect(src).toMatch(/\.model\(\s*['"]/)
   })
 })
 

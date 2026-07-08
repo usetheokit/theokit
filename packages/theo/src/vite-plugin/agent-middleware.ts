@@ -45,6 +45,7 @@ const PREFIX = '/api/agents/'
 interface CardDeps {
   projectRoot: string
   loadModule: (filePath: string) => Promise<unknown>
+  agentsDir: string
 }
 
 /** M4 — serve the HITL approve route `/api/agents/<name>/approve/<id>` (already matched). */
@@ -119,7 +120,7 @@ async function serveAux(
   try {
     const request = incomingMessageToWebRequest(req)
     const response = await serveAgentAuxRoute(request, urlPath, {
-      agents: scanAgents(deps.projectRoot),
+      agents: scanAgents(deps.projectRoot, deps.agentsDir),
       loadModule: deps.loadModule,
       baseUrl: `http://${req.headers.host ?? 'localhost'}`,
     })
@@ -153,6 +154,7 @@ export function createAgentMiddleware(
   vite: ViteDevServer,
   projectRoot: string,
   csrfMode: CsrfMode = 'strict',
+  agentsDir = 'agents',
 ): Connect.NextHandleFunction {
   const loadModule = createViteLoader(vite)
   return (req, res, next) => {
@@ -163,7 +165,7 @@ export function createAgentMiddleware(
       // SYNC so a non-card request still calls `next()` synchronously (no `await` before it — a
       // dev-middleware contract some tests rely on); only a real card path enters the async path.
       if (isAgentCardPath(url.split('?')[0]) !== null) {
-        await serveAux(req, res, next, url.split('?')[0], { projectRoot, loadModule })
+        await serveAux(req, res, next, url.split('?')[0], { projectRoot, loadModule, agentsDir })
         return
       }
 
@@ -189,11 +191,11 @@ export function createAgentMiddleware(
       // M14 (list approvals) + M16 (MCP) — both are agent aux routes served by the shared
       // dispatcher. Branch BEFORE the agent exact-match (neither path equals an `agentPath`).
       if (isListApprovalsPath(urlPath) !== null || isMcpPath(urlPath) !== null) {
-        await serveAux(req, res, next, urlPath, { projectRoot, loadModule })
+        await serveAux(req, res, next, urlPath, { projectRoot, loadModule, agentsDir })
         return
       }
 
-      const agent = scanAgents(projectRoot).find((a) => a.agentPath === urlPath)
+      const agent = scanAgents(projectRoot, agentsDir).find((a) => a.agentPath === urlPath)
       if (!agent) {
         // Not a known agent — let the api-middleware own the 404 (single 404 shape).
         next()
