@@ -1,4 +1,4 @@
-import { defineRoute } from 'theokit/server'
+import { route } from 'theokit/server'
 import { z } from 'zod'
 
 export interface User {
@@ -11,10 +11,10 @@ const db: User[] = [
   { id: '2', name: 'Bob' },
 ]
 
-export const GET = defineRoute({
-  query: z.object({ search: z.string().optional() }),
-  handler: ({ query }): User[] => {
+export const GET = route()
+  .query(z.object({ search: z.string().optional() }))
+  .handler(({ query }): User[] => {
     if (!query.search) return db
     return db.filter((u) => u.name.toLowerCase().includes(query.search!.toLowerCase()))
-  },
-})
+  })
+  .build()

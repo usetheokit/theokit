@@ -1,5 +1,5 @@
-import { defineRoute } from 'theokit/server'
+import { route } from 'theokit/server'
 
-export const GET = defineRoute({
-  handler: () => Response.json({ ok: true }),
-})
+export const GET = route()
+  .handler(() => Response.json({ ok: true }))
+  .build()
