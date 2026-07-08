@@ -189,7 +189,8 @@ export async function buildStatic(
   await runNodeBuild(config, cwd, ctx)
 
   const scan = deps.scanAppRoutes ?? scanRoutes
-  const appDir = resolve(cwd, 'app')
+  // #95 — honor config `appDir` (default "app") so `--target static` prerenders a custom frontend dir.
+  const appDir = resolve(cwd, config.appDir)
   const tree = scan(appDir)
 
   const loadStaticPaths = deps.loadStaticPaths ?? defaultLoadStaticPaths
