@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M33 (Phase 1) DONE — in-process typed caller (`callProcedure`) + ctx reconciliation.** The
+  load-bearing contract for non-HTTP surfaces (TUI/Tauri/MCP): `callProcedure(config, {query,body,
+  params}, ctx)` invokes a route's shared logic with STRUCTURED input, WITHOUT synthesizing an HTTP
+  Request or running the middleware chain — validated by the SAME Zod pipeline as the HTTP path
+  (extracted to `validateRouteInput`, one pipeline/no drift; proven by an HTTP↔in-process parity
+  test). Typed errors off-web (`ProcedureInputError`/`ProcedureOutputError`, not a 400/500 Response).
+  Plus the **ctx reconciliation contract** (`ctx-reconciliation.ts`): the typed `TCtx` corresponds to
+  the user `context.ts` factory (writer 1) ONLY; the two other runtime ctx writers (`execute.ts:122-165`
+  — plugin decorations + `jobBackend` `ctx.queue`) are explicitly NOT typed onto the route surface
+  (`ctx.queue` reached via opt-in `JobsAugmentedCtx`), closing the refuted `runtime==type` lie — with
+  type-tests against `execute.ts` and the LOCKED 5-arity `RouteConfig` generic preserved (GAP-4).
+  (`typed-ctx-inprocess-caller`, ADR-0044)
 - **M32 (Phase 0) DONE — ADR-0044: TUI/MCP/Tauri authorized as framework-core transport surfaces.** The
   foundational scope gate for the GOLD GOAL. Extends ADR-0040's runtime-vs-home line (transport/exposure
   of app logic = home = core; LLM loop / agent runtime / MCP-client = SDK) + ADR-0042 (MCP server
