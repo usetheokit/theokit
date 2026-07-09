@@ -760,7 +760,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M36 — [ ] Phase 4 — Tauri desktop surface (push-transport ADR + real app)
+### M36 — [x] Phase 4 — Tauri desktop surface (push-transport ADR + real app)
 
 > Added 2026-07-08 by `/roadmap-feature` (slug: `tauri-desktop-surface`). See CHANGELOG `[Unreleased] § Added`.
 
