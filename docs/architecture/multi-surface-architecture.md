@@ -116,7 +116,7 @@ Prior art: tRPC `callProcedure` / `createCallerFactory`. Parity with the HTTP pa
 | **web** | ✅ shipped | `executeWebRequest(Request)` — routes/actions/pages/auth |
 | **MCP (server)** | ✅ shipped + hardened (M34) | `POST /api/agents/<name>/mcp` → `handleMcpJsonRpc` → the compiled tools |
 | **TUI** | ✅ shipped, **both models (M35)** | Model A (default): `streamAgentTurnInProcess` — single process, no server/port/CSRF, inline HITL. Model B (fallback): HTTP-loopback (`--http`/`THEO_CODE_URL`) for the one-server multi-surface case |
-| **Tauri** | 🟡 authorized-in-principle, **deferred + gated (M36)** | intended sidecar reusing the M35 in-process path — the `Request→Response` waist cannot express Tauri's push half (`Channel`/`emit`); gated on a push-transport ADR (M36) + evidence of real demand |
+| **Tauri** | ✅ **realized (M36)** | Rust shell + webview + Node **sidecar** that runs the agent via `streamAgentTurnInProcess` (M35). Sidecar streams `UIMessageChunk`s as JSONL over stdout → Rust reads `CommandEvent::Stdout` → pushes each line to the webview via a **`Channel<String>`** (ADR-0045 — the push transport the `Request→Response` waist could not express). HITL is bidirectional: approval-request over stdout, decision back over the sidecar's stdin. Core stays transport-agnostic; all Tauri specifics live in the example. |
 
 ---
 
@@ -157,7 +157,7 @@ Delivered through the project's CYCLE (discover → plan → implement → code-
 
 The design is deliberately incremental. What is **not** done, and why:
 
-- **Tauri surface** — deferred + gated (ADR-0044 D3, scheduled M36). Needs a push-transport ADR (the `fetch(Request)→Response` waist cannot express `Channel`/`emit`) + evidence of a real desktop app need. Default realization will be a sidecar reusing the **M35 in-process path**, **not** an `adapter-tauri` build target.
+- **Tauri surface** — ✅ **realized (M36, ADR-0045).** A Node sidecar runs the agent via the M35 in-process path; the Rust shell streams its JSONL stdout to the webview via a `Channel<String>` (the push transport). All Tauri specifics live in the example (`theo-code-v2/apps/desktop`), **not** an `adapter-tauri` build target; framework core is untouched. Remaining desktop follow-ups (not blocking): a single-file packaged sidecar (`@yao-pkg/pkg`) instead of a `node` launcher, and automated webview E2E (no `tauri-driver`/`WebKitWebDriver` in the current CI sandbox — the pipeline is proven via the shell compiling + the sidecar streaming a real turn through the exact launcher + the HITL stdin round-trip).
 - **TUI in-process (Model A)** — ✅ **shipped (M35).** The framework seam `streamAgentTurnInProcess` (`packages/theo/src/server/agent/stream-agent-turn-in-process.ts`) runs an agent turn in a single process with inline HITL; the `theo-code-v2` Ink TUI defaults to it (no server/port/CSRF), with HTTP-loopback kept as the `--http` fallback. Note: a provider error the SDK does **not** surface (e.g. an unknown model id → 404 that ends the stream `start→finish` with no error chunk) is a separate upstream `@theokit/sdk` gap; the TUI guards it with a "no content" hint until the SDK surfaces it.
 - **Full MCP OAuth resource-server auth** — the current MCP gate is the CSRF parity fix (#97). The spec-correct remote-MCP flow (RFC 8707 audience-bound token validation + RFC 9728 PRM discovery) is the next step; stdio uses env creds (no in-request token).
 - **Over-MCP approval mechanism** — gated tools are currently *refused* over MCP (fail-closed, #99). A real approval flow over MCP is a follow-up only if demand appears.
@@ -178,8 +178,9 @@ The design is deliberately incremental. What is **not** done, and why:
 | Ctx reconciliation | `packages/theo/src/server/http/ctx-reconciliation.ts` |
 | HTTP execution seam | `packages/theo/src/server/web-handler.ts` (`executeWebRequest`), `.../http/execute.ts` |
 | MCP server transport | `packages/theo/src/server/agent/mcp-handler.ts`, `.../serve-aux-routes.ts` |
+| Tauri desktop (M36 — sidecar + Channel) | `theo-code-v2/apps/desktop/` (`sidecar-core.ts`, `sidecar.ts`, `src-tauri/src/lib.rs`, `frontend/main.js`) — in the example, not core |
 | Boundary invariant test | `tests/unit/g1-dependency-dag-boundary.test.ts` |
-| Authorizing decision | `.claude/knowledge-base/adrs/0044-*.md` (+ 0040, 0042, 0043 it extends) |
+| Authorizing decision | `.claude/knowledge-base/adrs/0044-*.md`, `0045-*.md` (Tauri) (+ 0040, 0042, 0043) |
 | Research | `.claude/knowledge-base/discoveries/blueprints/universal-handler-architecture-blueprint.md` |
 
 ---
