@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **M36 — Tauri desktop surface (realized).** The 4th multi-surface (web ✅ + MCP ✅ + TUI ✅ + Tauri ✅). A Node **sidecar** runs the agent via the M35 `streamAgentTurnInProcess` seam (single process, no HTTP); the Tauri Rust shell reads its JSONL stdout and pushes each chunk to the webview via a **`Channel<String>`** (ADR-0045 — the push transport the `Request→Response` waist could not express). HITL is bidirectional (approval-request over stdout, decision over stdin). **No framework-core change** — all Tauri specifics live in the example (`theo-code-v2/apps/desktop`); `build --target` stays emit-only. (#M36)
 - **M35 — TUI terminal-only in-process surface (Model A).** New framework seam `streamAgentTurnInProcess` (`theokit/server`) runs an agent turn in a SINGLE process — no HTTP loopback, no port, no CSRF — reusing `streamAgentUIMessages` with inline HITL resolution (the Claude Code / Codex shape). `@theokit/agents` now publicly exports the `HitlDecision` type. The `theo-code-v2` Ink TUI defaults to in-process, with HTTP-loopback kept as a `--http` fallback. (#M35)
 - Roadmap amended: added M35 Phase 3 — TUI terminal-only in-process surface (Model A) (`/roadmap-feature tui-terminal-only-inprocess`)
 - Roadmap amended: added M36 Phase 4 — Tauri desktop surface (push-transport ADR + real app) (`/roadmap-feature tauri-desktop-surface`)
