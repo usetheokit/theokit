@@ -785,18 +785,47 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+### M37 — [ ] Streaming-transport: resumable / reconnectable agent streams (runId + event cache)
+
+> Added 2026-07-11 (slug: `resumable-agent-streams`). Chosen by the owner (option **a**) after the Mastra **Durable Agents** comparison: the SDK owns the durable primitives (workflow suspend/resume + persistence, HITL tool approval — SE29 + M18-M30), but the **transport half** (reconnect-by-runId, event replay) is a framework concern, not the in-process runtime's. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** the framework already exposes `agents/*.ts → SSE endpoint` emitting `UIMessageStream` (Eixo B), but a stream is **request-scoped** — if the client drops (mobile, spotty network, long tool use) the run is lost and frames emitted while disconnected are gone. Add a **durable transport layer** over the existing SSE surface: each run carries a stable `runId`; emitted frames are recorded in a per-run **event cache** (in-memory default, pluggable persistent backend); a **reconnect / observe endpoint** lets the same (or a second) client resume by `runId`, replaying missed frames via SSE's native `Last-Event-ID` then continuing live. This is the **transport half of "durable agents"** (per ADR-0040/0044: transport of app logic = framework home; the agent loop + suspend/resume + checkpoints stay SDK). It does NOT run the agent loop inside a workflow, does NOT add a cross-process PubSub broker, and does NOT import Inngest — those stay SDK-side / out of scope.
+
+**Definition of done:**
+
+- [ ] **Scope ADR accepted BEFORE any code (GATE)** — affirms "durable *transport* = framework home (transport of app logic, ADR-0040/0044); agent loop + suspend/resume/checkpoints = SDK", and that NO cross-process orchestration engine (PubSub broker, message queue, Inngest) enters `packages/` core — only an interface + an in-memory cache ship in core. Reconciles with the ROADMAP out-of-scope "reimplementing the agent loop / own multi-agent orchestration".
+- [ ] Every agent run over the SSE surface carries a stable `runId` surfaced to the client (response header + first frame), and each SSE frame carries a monotonic `id:` so `Last-Event-ID` reconnect is exact (no dup, no gap).
+- [ ] Emitted `UIMessageStream` frames are recorded in a per-`runId` **event cache** behind an interface (default in-memory; a persistent backend — e.g. reusing the SDK's `ConversationStorageAdapter` seam or a Redis adapter — is pluggable, NOT shipped in core beyond the interface + the in-memory impl).
+- [ ] A **reconnect / observe endpoint** (e.g. `GET /api/agents/<name>/runs/<runId>/stream`) resumes a run: replays frames after the client's `Last-Event-ID` (SSE-native), then attaches to the live tail. A second client can observe a run a first client started.
+- [ ] The durable layer **reuses the existing in-process caller + `stream-agent-turn-in-process.ts`** (no HTTP loopback) — it wraps the existing bridge, never a new loop.
+- [ ] `untilIdle`-style keep-open across background-task continuations is EITHER wired (reusing the SDK's background task-notification re-entry, already stamped on `RunResult.origin`) OR explicitly deferred with a documented note — decide in the plan/ADR.
+- [ ] TDD (concurrency-aware): a run streams, the client disconnects mid-stream, reconnects by `runId` with `Last-Event-ID` → receives exactly the missed frames then the live continuation (no dup, no gap across the reconnect boundary); a second observer attaches to a live run; the per-run cache is evicted after the run ends (bounded — mirror Mastra's `cleanup()` + auto-timer).
+- [ ] Gates green; CHANGELOG `### Added`; the architecture doc gains the "durable/reconnect layer over SSE" section; Ecosystem note updated (Mastra durable-agents parity: **transport half realized in the framework; loop + suspend/resume stays SDK; PubSub/Inngest out**).
+
+**Dependencies:** M33 (in-process caller — [x]), M35 (Model A in-process path — [x]), M36 (push-transport ADR lineage — Tauri's `Channel`/`emit` push half; M37 is the symmetric HTTP/SSE push half — [x]). SDK-side primitives already shipped: workflow suspend/resume + persistence (SE29), HITL tool approval (M18-M30) — M37 consumes them, adds no new loop.
+
+**Top risks (new):**
+
+1. **Event-cache unbounded growth / memory leak** — recording every frame per run without eviction leaks memory on a long-lived server. Mitigation: a bounded per-run buffer + a cleanup timer after the run ends (Mastra's model — explicit `cleanup()` frees immediately, an auto-timer backstops); the persistent backend stays opt-in / interface-only in core.
+2. **Ordering / dedup on reconnect** — a naive replay duplicates or skips the frame straddling the disconnect. Mitigation: a monotonic `id:` per frame + `Last-Event-ID` exact-resume semantics (SSE-native — rung 3, do not invent a protocol); a concurrency test proves no-dup / no-gap across the reconnect boundary.
+3. **Scope creep into orchestration** — a "reconnect broker" can drift into a cross-process PubSub / queue (the deferred orchestration-engine gap). Mitigation: the scope ADR is a hard GATE; core ships only the interface + in-memory cache; PubSub / Redis / Inngest stay out (opt-in adapters or SDK-side, never core).
+
+**Why now:** the owner explicitly chose option **(a)** — the streaming-transport milestone in the framework — after the Mastra Durable Agents comparison showed TheoKit has the SDK-side primitives (workflow suspend/resume + HITL) but lacks the transport half (reconnect-by-`runId`, event cache/replay). M36 just landed the *push*-transport ADR for Tauri (`Channel`/`emit`); M37 is the symmetric HTTP/SSE **durable** transport, completing the "a client can drop and reconnect without missing chunks" promise on the web surface — the exact gap the comparison surfaced. SSE's native `Last-Event-ID` makes the reconnect cheap (reuse, not reinvent), keeping the milestone in one manageable cycle.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
 
 | Peer | License | Why it's here | Supports milestone(s) |
 |---|---|---|---|
-| ai-sdk (vercel/ai) | Apache-2.0 | Canonical `UIMessageStream` protocol, route-handler + `useChat` pattern, `@ai-sdk/tui`. The peer this initiative aligns to. | M0, M1, M2, M5 |
+| ai-sdk (vercel/ai) | Apache-2.0 | Canonical `UIMessageStream` protocol, route-handler + `useChat` pattern, `@ai-sdk/tui`. The peer this initiative aligns to. The frames M37 caches/replays are `UIMessageStream` frames. | M0, M1, M2, M5, M37 |
 | assistant-ui | MIT | Consumer of the protocol — how a React UI expects the stream we emit (`useChatRuntime`, message parts, generative UI, inline HITL). | M1, M4 |
 | opencode (sst/opencode) | MIT | Real terminal harness in TS (Bun, event-based, over the AI SDK) — canonical Eixo D reference + tool-call rendering. | M5, M1 |
-| mastra (mastra-ai/mastra) | Apache-2.0 (core; `ee/` enterprise) | How a TS framework structures the agent surface + server and loop/memory over the AI SDK. | M2, M4 |
+| mastra (mastra-ai/mastra) | Apache-2.0 (core; `ee/` enterprise) | How a TS framework structures the agent surface + server and loop/memory over the AI SDK. Its **Durable Agents** (PubSub + event cache + `observe(runId)`) are the source of the M37 transport-half comparison — M37 adopts the reconnect/cache idea, NOT the cross-process broker. | M2, M4, M37 |
 | copilotkit | MIT | AG-UI protocol (counterpoint to `UIMessageStream`) + generative UI + HITL — to choose the protocol consciously. | M1, M4 |
-| cloudflare-agents-starter | MIT | The 3 tool patterns (server-auto / client / HITL approval) + WS persistence + reasoning display. | M4, M2 |
+| cloudflare-agents-starter | MIT | The 3 tool patterns (server-auto / client / HITL approval) + WS persistence + reasoning display — the connection-persistence + reconnect pattern M37's event cache mirrors over SSE. | M4, M2, M37 |
 | openai-agents-js | MIT | Harness design over a provider: sessions, human-in-the-loop, handoffs, guardrails, tracing. | M4, M7 |
 | trpc (trpc/trpc) | MIT | The canonical fluent builder with **accumulative type-inference** in TS (`t.procedure.input().query()`) — how `.tool()`/`.context()` should accumulate type-state (`procedureBuilder.ts`). Studied alongside Zod (in node_modules) + Hono (already cloned). | M8 |
 
