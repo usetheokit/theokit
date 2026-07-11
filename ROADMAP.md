@@ -815,7 +815,9 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M38 — [ ] `untilIdle` — keep the durable stream open across a suspend→resume continuation
+### M38 — [x] `untilIdle` — keep the durable stream open across a suspend→resume continuation
+
+> **Delivered 2026-07-11 (ADR-0047) — outcome differs from the original framing, honestly:** the discover phase proved TheoKit's HITL is a **blocked-await in-place continuation** (the run pauses mid-iteration, the M37 durable stream stays open, the SAME run continues on the SAME `runId` when a separate `POST /approve` resolves it), so the transport-legitimate half was **already satisfied by design** — an `untilIdle` flag / `maxIdleMs` would be a no-op for the only in-scope trigger (HITL) and dead code for the out-of-scope dispatch trigger. Per G11/G7 + Rule 3, M38 shipped **evidence, not a no-op flag**: ADR-0047 (the decision + DoD disposition) + `tests/integration/hitl-durable-continuation.test.ts` (proves the pause + M37 reconnect + resume-continuation combination end-to-end). The re-invoke `untilIdle` stays gated on the out-of-scope dispatch-engine ADR.
 
 > Added 2026-07-11 (slug: `until-idle-continuation-stream`). The transport-legitimate half of the Mastra **Background Tasks** comparison — the M37 durable stream stays open across a `suspend → resume` continuation so the follow-up turn flows on the SAME connection. **Cross-check (out-of-scope):** Background Tasks' *dispatch engine* (worker pool, `globalConcurrency`/`perAgentConcurrency`/`backpressure`, tool-level `background.enabled`, the `_background` LLM override, `backgroundTaskManager`) DIRECTLY overlaps the locked out-of-scope "reimplementing the agent loop / own multi-agent orchestration" — that half is **reaffirmed OUT of scope** and is NOT this milestone. M38 takes ONLY the transport slice (named as an M37 follow-up in ADR-0046 D6). See CHANGELOG `[Unreleased] § Added`.
 
