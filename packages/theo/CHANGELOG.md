@@ -1,5 +1,13 @@
 # theo
 
+## 0.24.0
+
+### Minor Changes
+
+- **M37 — resumable / reconnectable agent streams (durable transport over SSE).**
+
+  The durable-transport half of Mastra-style durable agents, over the existing `agents/*.ts → SSE` surface. Every agent run now carries a stable transport `runId` in the `x-theokit-run-id` response header, and each SSE frame gains a monotonic `id:` line. A new `GET /api/agents/<name>/runs/<runId>/stream` endpoint replays the frames a dropped client missed (via SSE-native `Last-Event-ID`) then follows the live tail — so a client can reconnect, or a second client observe a run a first started, without missing chunks. Frames are buffered in a per-run `RunEventCache` (in-memory default; a persistent backend plugs in behind the interface — no broker in core); the atomic `attach()` guarantees no gap / no dup across the reconnect boundary. Transport-only (ADR-0046): wraps `streamAgentUIMessages`, never a new loop — the agent loop + suspend/resume stay in `@theokit/sdk`. `untilIdle` + a shipped persistent cache backend are named follow-ups.
+
 ## 0.23.1
 
 ### Patch Changes
