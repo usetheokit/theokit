@@ -785,7 +785,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M37 — [ ] Streaming-transport: resumable / reconnectable agent streams (runId + event cache)
+### M37 — [x] Streaming-transport: resumable / reconnectable agent streams (runId + event cache)
 
 > Added 2026-07-11 (slug: `resumable-agent-streams`). Chosen by the owner (option **a**) after the Mastra **Durable Agents** comparison: the SDK owns the durable primitives (workflow suspend/resume + persistence, HITL tool approval — SE29 + M18-M30), but the **transport half** (reconnect-by-runId, event replay) is a framework concern, not the in-process runtime's. See CHANGELOG `[Unreleased] § Added`.
 

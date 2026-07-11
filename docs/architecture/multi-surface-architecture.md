@@ -130,6 +130,16 @@ The multi-surface thesis magnifies the default-expose footgun: a login/mutation 
 
 Session identity across surfaces is modeled (design) as a **discriminated union** (`web-cookie | mcp-oauth | ipc | tui-device`), not a flattened uniform type, so a handler can never confuse a full-trust human cookie with a narrowly-scoped MCP client (confused-deputy defense). CSRF is web-cookie-only. Auth providers stay delegated (AUTH-DELEGATION lock: RFC primitives in core, providers via Auth.js/Better Auth).
 
+### 7.1 Durable transport — resumable / reconnectable streams (M37, ADR-0046)
+
+The web SSE surface is request-scoped: a dropped client loses the run and any chunks emitted while disconnected. M37 adds a **durable transport layer** over the *existing* SSE waist — it is transport of app logic (ADR-0040/0044 home), NOT a new agent loop (the loop + suspend/resume stay in `@theokit/sdk`). Three additive pieces:
+
+1. **Identity + framing.** `mountAgent` mints a transport `runId` (`run-<uuid>`), surfaced in the `x-theokit-run-id` response header; each SSE frame gains a monotonic `id: <seq>` line so the browser's `EventSource` echoes `Last-Event-ID` on reconnect (SSE-native — no invented protocol).
+2. **`RunEventCache`.** Each frame is teed into a per-`runId` ordered buffer (in-memory default; a persistent backend — Redis / the SDK's `ConversationStorageAdapter` — plugs in behind the interface, **never a broker in core**). The load-bearing `attach(runId, afterSeq, onFrame, onEnd)` snapshots replay frames AND registers the live listener in ONE synchronous tick, so no frame slips between replay and subscribe and none is duplicated. Bounded: a run is evicted a fixed window after `end()` (parity with the approval-registry).
+3. **Reconnect / observe endpoint.** `GET /api/agents/<name>/runs/<runId>/stream` replays frames after `Last-Event-ID`, then follows the live tail; a **second client can observe** a run a first started. Intentionally open (a GET is not CSRF-vulnerable; the `runId` is 122-bit-unguessable; a custom-header CSRF check would break `EventSource`, which sends no custom headers). Unknown `runId` → 404.
+
+This is the transport half of Mastra-style "durable agents"; `untilIdle` (keep-open across background continuations) and a shipped persistent cache backend are named follow-ups. The TUI/Tauri in-process path is unchanged (it does not reconnect over HTTP). Code: `packages/theo/src/server/agent/{run-event-cache,durable-ui-message-stream-response,handle-agent-run-reconnect}.ts`.
+
 ---
 
 ## 8. How it was implemented — the milestones
