@@ -16,10 +16,11 @@ import {
   type HumanInTheLoopOptions,
 } from '@theokit/agents'
 
-import { uiMessageStreamResponse } from '../define/ui-message-stream-response.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import { getApprovalRegistry } from './approval-registry.js'
+import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
+import { getRunEventCache, mintRunId } from './run-event-cache.js'
 
 /** The message + session extracted from a chat request, or `null` when the body is invalid. */
 export interface AgentRequestInput {
@@ -135,7 +136,13 @@ export async function mountAgent(
         }
       : undefined
 
-  return uiMessageStreamResponse(
+  // M37 (ADR-0046) — mint a transport runId + stream through the durable layer:
+  // each SSE frame is cached + `id:`-tagged so a dropped client can reconnect
+  // (or a second client observe) via `GET /api/agents/<name>/runs/<runId>/stream`.
+  // The runId is surfaced in the `x-theokit-run-id` response header.
+  const runId = mintRunId()
+  return durableUiMessageStreamResponse(
     streamAgentUIMessages(compiled, apiKey, { ...input, hitl, signal: request.signal }),
+    { runId, cache: getRunEventCache() },
   )
 }
