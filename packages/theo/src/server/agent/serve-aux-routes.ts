@@ -19,9 +19,11 @@ import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import { isAgentCardPath, handleAgentCard } from './agent-card-handler.js'
 import { getApprovalRegistry } from './approval-registry.js'
+import { handleAgentRunReconnect, isAgentRunStreamPath } from './handle-agent-run-reconnect.js'
 import { isListApprovalsPath, handleListApprovals } from './list-approvals-handler.js'
 import { extractAppResources } from './mcp-app-resources.js'
 import { isMcpPath, handleMcpJsonRpc } from './mcp-handler.js'
+import { getRunEventCache } from './run-event-cache.js'
 
 /** JSON error envelope (mirrors mount-agent.ts:37 — the parity source for the MCP CSRF gate). */
 function jsonError(status: number, code: string, message: string): Response {
@@ -74,6 +76,19 @@ export async function serveAgentAuxRoute(
   if (isListApprovalsPath(urlPath)) {
     if (method !== 'GET') return null
     return handleListApprovals(getApprovalRegistry())
+  }
+
+  // M37 — GET /api/agents/<name>/runs/<runId>/stream (durable reconnect / observe).
+  // INTENTIONALLY open (no CSRF, no auth gate): a GET is not CSRF-vulnerable, the
+  // run-start POST is already gated, and the `runId` is a 122-bit UUID (unguessable).
+  // Observe-by-runId is a FEATURE (ADR-0046 D5) — a second client resumes a run a
+  // first started. Do NOT add a custom-header CSRF check here: browsers send NO
+  // custom headers with `EventSource`, so it would break native SSE reconnect.
+  const runStream = isAgentRunStreamPath(urlPath)
+  if (runStream !== null) {
+    if (method !== 'GET') return null
+    if (!deps.agents.some((a) => a.name === runStream.name)) return null
+    return handleAgentRunReconnect(runStream.runId, request, getRunEventCache())
   }
 
   // M16 — POST /api/agents/<name>/mcp (JSON-RPC MCP server). Extracted to keep this dispatcher

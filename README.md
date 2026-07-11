@@ -438,7 +438,7 @@ export default defineConfig({
 | [`@theokit/sdk-cache`](https://www.npmjs.com/package/@theokit/sdk-cache) | 0.1.0 | Response caching layer for agent calls |
 | [`@theokit/sdk-memory`](https://www.npmjs.com/package/@theokit/sdk-memory) | 0.1.0 | Persistent memory for agent conversations |
 | [`@theokit/sdk-handoff`](https://www.npmjs.com/package/@theokit/sdk-handoff) | 0.1.0 | Agent-to-agent handoff protocol |
-| [`@theokit/codemod-sdk-2-0`](https://www.npmjs.com/package/@theokit/codemod-sdk-2-0) | 1.0.0 | Codemod for SDK v1 → v2 migration |
+| [`@theokit/codemod-sdk-2-0`](https://www.npmjs.com/package/@theokit/codemod-sdk-2-0) | 1.0.0 | ~~Codemod for SDK v1 → v2 migration~~ — **DEPRECATED/archived** (abandoned `@theokit/sdk-core` rename that never shipped; do not use) |
 
 ### Auth providers (sibling repo)
 
