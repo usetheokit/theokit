@@ -117,3 +117,7 @@ architecture-output.old-*
 .turbo/
 code-review-output/
 architecture-output/
+
+# Python bytecode (Claude Code skill scripts)
+__pycache__/
+*.pyc
