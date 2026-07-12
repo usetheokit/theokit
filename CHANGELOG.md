@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.2.5] - 2026-07-12
+
+### Fixed
+- **The `--surface tui` app now shows your own prompt + the full history, and opens with a greeting.** `useAgent` reconstructs only the ASSISTANT turns, so the previous template (which fed `agent.messages` straight to `<ChatThread>`) never rendered the user's message and showed a half-conversation. The template now tracks the user's turns locally and INTERLEAVES them with the assistant turns (mirroring the web surface), so both sides render in order. It also seeds an opening assistant greeting so the thread starts warm instead of empty (like a coding-agent CLI). Found dogfooding the TUI.
+
 ## [theokit@0.30.2 + @theokit/tauri@0.1.2 + create-theokit@1.2.4] - 2026-07-12
 
 ### Added
