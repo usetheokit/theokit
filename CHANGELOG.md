@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit@0.30.2 + @theokit/tauri@0.1.2 + create-theokit@1.2.4] - 2026-07-12
+
+### Added
+- **`theokit/server/agent` sub-path.** The agent-seam survivors of the M3 clean break (`streamAgentTurnInProcess` + its HITL types, the tool adapters `createWorkflowTool`/`createACPTool`/`createVendorAgentTool`, `createCodeMode`, `handleChannelWebhook`, MCP stdio/app-resources) were public but had NO non-deprecated import path — the only home was the deprecated `theokit/server` umbrella. So every scaffolded agent app printed `[theokit] umbrella import "theokit/server" is DEPRECATED …` on startup. Re-introduced a lean `theokit/server/agent` barrel over that public surface (the proprietary surface removed in M3 stays out); the umbrella now re-exports it (`export * from './agent/index.js'` — lossless, back-compat until 0.x+2).
+
+### Changed
+- `create-theokit@1.2.4` tui template + `@theokit/tauri@0.1.2` sidecar import `streamAgentTurnInProcess` from `theokit/server/agent` instead of the umbrella — **the deprecation warning is gone** from a fresh scaffolded TUI/desktop app. (`theokit@0.30.2` ships the sub-path.)
+
 ## [create-theokit@1.2.3 + @theokit/agents@0.35.2] - 2026-07-12
 
 ### Changed
