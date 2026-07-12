@@ -30,7 +30,7 @@ export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from './use-agen
 
 // M41 (ADR-0050) — the unified agent-client transport seam (`ai`'s ChatTransport + optional approve),
 // the two shipped transports, and the framework-agnostic store `useAgent` binds over.
-export type { AgentTransport, ApprovalDecision } from './transport.js'
+export type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
 export { HttpTransport } from './http-transport.js'
 export type { HttpTransportOptions } from './http-transport.js'
 export { InProcessTransport } from './in-process-transport.js'
