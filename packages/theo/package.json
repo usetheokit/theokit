@@ -88,6 +88,10 @@
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js"
     },
+    "./client/core": {
+      "types": "./dist/client/core.d.ts",
+      "import": "./dist/client/core.js"
+    },
     "./react-query": {
       "types": "./dist/react-query/index.d.ts",
       "import": "./dist/react-query/index.js"
