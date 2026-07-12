@@ -876,7 +876,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M40 — [ ] Code Mode: generated `instructions` (return `{ tool, instructions }`) — close the Mastra Code-Mode DX gap
+### M40 — [x] Code Mode: generated `instructions` (return `{ tool, instructions }`) — close the Mastra Code-Mode DX gap
 
 > Added 2026-07-12 (slug: `code-mode-instructions`). The ONE runtime/DX-legitimate gap from the Mastra **Code Mode** comparison. M29 already ships `createCodeMode` — sandboxed agent-authored code orchestrating tools via a permission-gated restricted API + per-instance allow-list scoping, with a STRICTER posture than Mastra (injected vetted sandbox, `node:vm` banned, explicit per-call permission gate). Mastra additionally returns a generated `instructions` string that teaches the model the code contract + the available bridged calls; TheoKit returns only the tool, so the app hand-writes that prompt. **Cross-check (out-of-scope):** a bundled sandbox impl (Mastra's `LocalSandbox` = host node process) stays OUT — M29/ADR-0041's LOCKED decision is inject-a-vetted-sandbox-only (core ships no VM; `node:vm` is not a boundary). The `external_*` / `execute_typescript` naming is cosmetic (the `api.<tool>(args)` surface is equivalent) and is NOT adopted (churn). See CHANGELOG `[Unreleased] § Added`.
 
