@@ -18,14 +18,33 @@ export async function consumeUIMessageStream(
   response: Response,
   onMessage: (message: UIMessage) => void,
 ): Promise<void> {
-  if (response.body === null) return
+  const chunkStream = await responseToChunkStream(response)
+  await consumeChunkStream(chunkStream, onMessage)
+}
 
-  const { parseJsonEventStream, readUIMessageStream, uiMessageChunkSchema } = await import('ai')
+/**
+ * M41 (ADR-0050 D3) — the reusable middle piece: a UIMessageStream SSE `Response` →
+ * `ReadableStream<UIMessageChunk>`, reusing `ai`'s own `parseJsonEventStream` (the exact primitive
+ * `useChat` runs). This is precisely what a `ChatTransport.sendMessages` returns, so `HttpTransport`
+ * builds on it directly (no reinvented wire parser — Rule 9). A body-less response yields an empty stream.
+ */
+export async function responseToChunkStream(
+  response: Response,
+): Promise<ReadableStream<UIMessageChunk>> {
+  if (response.body === null) {
+    return new ReadableStream<UIMessageChunk>({
+      start(controller) {
+        controller.close()
+      },
+    })
+  }
 
-  // ai validates each SSE JSON frame against its own strict chunk schema (the exact
-  // gate `useChat` runs), then yields `{ success, value }`; forward the valid chunks.
+  const { parseJsonEventStream, uiMessageChunkSchema } = await import('ai')
+
+  // ai validates each SSE JSON frame against its own strict chunk schema (the exact gate `useChat`
+  // runs), then yields `{ success, value }`; forward the valid chunks.
   const parsed = parseJsonEventStream({ stream: response.body, schema: uiMessageChunkSchema })
-  const chunkStream = new ReadableStream<UIMessageChunk>({
+  return new ReadableStream<UIMessageChunk>({
     async start(controller) {
       for await (const result of parsed) {
         if (result.success) controller.enqueue(result.value)
@@ -33,8 +52,20 @@ export async function consumeUIMessageStream(
       controller.close()
     },
   })
+}
 
-  for await (const message of readUIMessageStream({ stream: chunkStream })) {
+/**
+ * M41 (ADR-0050 D6) — read a `ReadableStream<UIMessageChunk>` into reconstructed assistant
+ * `UIMessage`s via `ai`'s `readUIMessageStream`. Shared by `consumeUIMessageStream` (Response path)
+ * and the framework-agnostic `AgentClient` store (transport path). `onMessage` fires on every
+ * reconstruction step so a caller can render streaming updates.
+ */
+export async function consumeChunkStream(
+  stream: ReadableStream<UIMessageChunk>,
+  onMessage: (message: UIMessage) => void,
+): Promise<void> {
+  const { readUIMessageStream } = await import('ai')
+  for await (const message of readUIMessageStream({ stream })) {
     onMessage(message)
   }
 }

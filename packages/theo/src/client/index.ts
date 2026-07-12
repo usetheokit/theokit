@@ -20,9 +20,29 @@ export { stableQueryKey, buildUseTheoQueryConfig } from './react-query-adapter.j
 // (The pre-M2 proprietary agent client surface — the old stream hook, its SSE
 // parser, and the tool-card correlator — was removed in the M3 clean break; the
 // canonical agent client is `useAgent` over the ai-sdk UIMessageStream wire.)
-export { consumeUIMessageStream } from './consume-ui-message-stream.js'
+export {
+  consumeUIMessageStream,
+  responseToChunkStream,
+  consumeChunkStream,
+} from './consume-ui-message-stream.js'
 export { useAgent } from './use-agent.js'
 export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from './use-agent.js'
+
+// M41 (ADR-0050) — the unified agent-client transport seam (`ai`'s ChatTransport + optional approve),
+// the two shipped transports, and the framework-agnostic store `useAgent` binds over.
+export type { AgentTransport, ApprovalDecision } from './transport.js'
+export { HttpTransport } from './http-transport.js'
+export type { HttpTransportOptions } from './http-transport.js'
+export { InProcessTransport } from './in-process-transport.js'
+export type {
+  InProcessTransportOptions,
+  InProcessRunner,
+  InProcessRunInput,
+  InProcessApprovalRequestLike,
+  InProcessAwaitApproval,
+} from './in-process-transport.js'
+export { AgentClient } from './agent-client.js'
+export type { AgentClientState } from './agent-client.js'
 
 // Link with prefetch — instant navigation for multi-page apps
 export { Link } from './link.js'
