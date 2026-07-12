@@ -6,8 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.2.0] - 2026-07-12
+
+### Changed
+- **The `--surface tui` / `--surface desktop` scaffolds now render with the real UI libraries** (UI-across-surfaces track M46 + M47), so a generated terminal/desktop app shows the exact conversation the web surface does — not a hand-rolled placeholder.
+  - **tui (M46)** renders with **`@theokit/tui`** (`<ChatThread>`), fed by the `@theokit/tui/ai-sdk` adapter (`uiMessagesToChatThread`) — the unified client's `UIMessage[]` projected onto the terminal-native chat. Adds `@theokit/tui` to the surface deps.
+  - **desktop (M47)** webview is now a **React** app rendering with **`@theokit/ui`** (`<ChatThread>` + `<ChatMessage>`), driven by the same `useAgent` hook the web surface uses over a `ChannelTransport` whose source is **`@theokit/tauri`**'s `createTauriChannelSource`; the Node sidecar runs the turn via `@theokit/tauri/sidecar`'s `runTurnToJsonl` (no hand-rolled copy). Adds `@theokit/ui`, `@theokit/tauri`, `@vitejs/plugin-react` to the surface deps; the webview entry is `frontend/src/main.tsx` + `App.tsx`.
+
+## [@theokit/tauri@0.1.1] - 2026-07-12
+
 ### Added
-- **`@theokit/tauri@0.1.0`** — a new package: the desktop transport glue for TheoKit agents, so a Tauri app wires an agent in one call instead of hand-rolling the bridge. Webview: `createTauriChannelSource(core)` turns the injected Tauri `{ invoke, Channel }` into the M42 `ChannelTransport` push source (`useAgent(new ChannelTransport({ source }))` renders the desktop UI with `@theokit/ui`), and `createTauriAgentClient(core)` is the no-React equivalent over M44 `createAgentClient`. Node sidecar (`@theokit/tauri/sidecar`): `runTurnToJsonl(mod, apiKey, message, write)` streams one turn via `streamAgentTurnInProcess` and emits each `UIMessageChunk` as a JSONL line for the Rust shell to forward over a `Channel`; a thrown error surfaces as a trailing `{type:'error'}` line, never swallowed. The `@tauri-apps/api` primitives are injected structurally (optional peer, no hard dep) so framework core `theokit` stays Tauri-agnostic (ADR-0055, ADR-0045). First step of the UI-across-surfaces track.
+- **`@theokit/tauri`** — a new package: the desktop transport glue for TheoKit agents, so a Tauri app wires an agent in one call instead of hand-rolling the bridge. Webview: `createTauriChannelSource(core)` turns the injected Tauri `{ invoke, Channel }` into the M42 `ChannelTransport` push source (`useAgent(new ChannelTransport({ source }))` renders the desktop UI with `@theokit/ui`), and `createTauriAgentClient(core)` is the no-React equivalent over M44 `createAgentClient`. Node sidecar (`@theokit/tauri/sidecar`): `runTurnToJsonl(mod, apiKey, message, write)` streams one turn via `streamAgentTurnInProcess` and emits each `UIMessageChunk` as a JSONL line for the Rust shell to forward over a `Channel`; a thrown error surfaces as a trailing `{type:'error'}` line, never swallowed. The `@tauri-apps/api` primitives are injected structurally (optional peer, no hard dep) so framework core `theokit` stays Tauri-agnostic (ADR-0055, ADR-0045). First step of the UI-across-surfaces track.
+
+### Fixed
+- `0.1.1` — the published package no longer carries a `workspace:*` dependency (`0.1.0` was published with `npm publish`, which does not resolve it; consumers hit `EUNSUPPORTEDPROTOCOL`). `0.1.0` is deprecated.
 
 ## [create-theokit@1.1.1] - 2026-07-12
 
