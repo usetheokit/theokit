@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{name}} — TheoKit desktop</title>
+    <style>
+      body {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        margin: 0;
+        padding: 16px;
+        background: #0b0e14;
+        color: #c8d3e0;
+      }
+      h3 { margin: 0 0 12px; color: #7dcfff; }
+      #out { white-space: pre-wrap; min-height: 55vh; line-height: 1.5; }
+      .err { color: #f7768e; }
+      form { display: flex; gap: 8px; margin-top: 12px; }
+      input {
+        flex: 1;
+        padding: 8px;
+        background: #151922;
+        color: inherit;
+        border: 1px solid #2a2f3a;
+        border-radius: 6px;
+      }
+      button { padding: 8px 14px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h3>◆ {{name}} — TheoKit agent (desktop)</h3>
+    <div id="out"></div>
+    <form id="composer">
+      <input id="input" placeholder="Message the agent…" autocomplete="off" />
+      <button type="submit">Send</button>
+    </form>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
