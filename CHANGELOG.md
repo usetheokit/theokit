@@ -6,8 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-07-12
+
 ### Added
 - Roadmap amended: added M42 (Tauri `ChannelTransport` + reconnect parity), M43 (request-context/auth parity across every transport), M44 (standalone typed agent client-SDK, no React) — the remaining steps of the theokit↔sdk DX track on the M41 `ChatTransport` seam. Each is a clean addition on the same seam, no runtime change (`/roadmap-feature`).
+- **M42 shipped** — Tauri desktop on the unified client. `ChannelTransport` implements `ai`'s `ChatTransport` over an injected Tauri-`Channel`-shaped push source (no `@tauri-apps/*` in core; testable with a fake); bridges pushed JSONL `UIMessageChunk` lines → `ReadableStream` (malformed/non-chunk lines skipped via a discriminant guard, never fatal); `abortSignal`/reader-cancel tear down the source; `reconnectToStream` → `null` (single-process parity); `approve` routes to the injected `settle`. `useAgent(channelTransport)` drives the desktop webview with the same shape — no bespoke reader. `extractLastUserText` factored out (DRY). Runtime untouched. ADR-0051.
 
 ## [0.27.0] - 2026-07-12
 

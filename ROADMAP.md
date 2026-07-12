@@ -932,7 +932,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M42 — [ ] Tauri desktop on the unified client — `ChannelTransport` (push) + reconnect parity
+### M42 — [x] Tauri desktop on the unified client — `ChannelTransport` (push) + reconnect parity
 
 > Added 2026-07-12 (slug: `tauri-channel-transport`). DX-track step 2 on the M41 `ChatTransport` seam. M36 shipped Tauri as a real surface (sidecar runs `streamAgentTurnInProcess`, writes JSONL to stdout, Rust `Channel<String>.send(line)` pushes to the webview — ADR-0045). But the webview consumes those pushed frames by hand (a bespoke `channel.onmessage` reader) — the SAME fragmentation M41 removed for web + TUI, still present for Tauri. This milestone gives the Tauri webview the SAME `useAgent` by shipping a `ChannelTransport` that implements `ai`'s `ChatTransport` over an INJECTED Tauri-`Channel`-shaped push source. See CHANGELOG `[Unreleased] § Added`.
 
