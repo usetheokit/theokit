@@ -15,7 +15,8 @@ out-of-band human-in-the-loop. TheoKit ships two transports; you rarely construc
 | Surface | Transport | How `useAgent` gets it |
 |---|---|---|
 | **Web** (and any HTTP client) | `HttpTransport` | Pass a path string — `useAgent('/api/agents/chat')` wraps it in an `HttpTransport` for you. |
-| **Terminal / desktop** (single process) | `InProcessTransport` | Construct it over the in-process seam and pass it — `useAgent(transport)`. |
+| **Terminal** (single process) | `InProcessTransport` | Construct it over the in-process seam and pass it — `useAgent(transport)`. |
+| **Tauri desktop** (webview ↔ Node sidecar) | `ChannelTransport` | Wrap the Tauri `Channel`/`invoke` push in a source and pass it — `useAgent(channelTransport)`. |
 
 ## Web
 
@@ -56,6 +57,39 @@ function TuiChat({ mod, apiKey }: { mod: unknown; apiKey: string }) {
 
 `InProcessTransport.reconnectToStream()` is a no-op that returns `null` (a single process has no dropped
 server stream to resume — matching the AI SDK's `DirectChatTransport`).
+
+## Tauri desktop (push over a `Channel`)
+
+The M36 desktop app runs the agent in a Node sidecar that writes each `UIMessageChunk` as a JSONL line
+to stdout; the Rust shell pushes each line to the webview via a Tauri `Channel` (ADR-0045). Give the
+webview the SAME `useAgent` with a `ChannelTransport` over an injected push source — core imports no
+`@tauri-apps/*` (the source is structural, so the transport is also testable with a fake):
+
+```tsx
+import { useAgent, ChannelTransport, type ChannelPushSource } from 'theokit/client'
+import { Channel, invoke } from '@tauri-apps/api/core'
+import { useMemo } from 'react'
+
+const source: ChannelPushSource = {
+  start(turn, { onLine, onClose }) {
+    const channel = new Channel<string>()
+    channel.onmessage = onLine
+    void invoke('run_agent', { message: turn.message, channel }).then(onClose)
+    return () => void invoke('abort_agent') // teardown on abort/cancel
+  },
+  settle: (id, decision) => invoke('approve_agent', { id, decision }),
+}
+
+function DesktopChat() {
+  const transport = useMemo(() => new ChannelTransport({ source }), [])
+  const { messages, status, send, approve } = useAgent(transport)
+  // Same hook, same return shape as web + terminal.
+}
+```
+
+`ChannelTransport.reconnectToStream()` returns `null` — the sidecar runs the turn directly (no durable
+server stream), the same honest parity as `InProcessTransport`. A malformed pushed line is skipped, never
+fatal. `approve` routes to the injected `settle` (another `invoke`).
 
 ## Human-in-the-loop: one `approve`
 
