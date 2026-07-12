@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.3.0] - 2026-07-12
+
+### Fixed
+- **`--surface desktop` (Tauri) now actually runs `npm run dev` end-to-end.** The scaffold was structurally complete but three gaps stopped `tauri dev` from ever launching the agent — found by building + running it for real (Rust compile + native window + real OpenRouter stream), not just the file-shape test harness:
+  - **No sidecar binary.** The Rust shell spawns the agent turn via `app.shell().sidecar("theo-sidecar")`, which Tauri resolves to `src-tauri/binaries/theo-sidecar-<target-triple>` — but nothing created it (`build:sidecar` was a stub that only echoed). A new `scripts/build-sidecar.mjs` generates the launcher (a shim that runs `sidecar/sidecar.ts` via the app's own `tsx` — Node runtime, where the ai-sdk streams correctly; a `bun --compile` self-contained binary silently drops the token stream), wired into `tauri.conf.json` `beforeDevCommand`/`beforeBuildCommand` so it is regenerated each launch.
+  - **No app icons.** `tauri::generate_context!()` fails to compile without `src-tauri/icons/icon.png`. A full icon set (PNG/ICO/ICNS + Windows Store logos) now ships in the template, referenced by `bundle.icon`.
+  - **Invalid stylesheet.** The webview's vanilla-Vite PostCSS pipeline rejected `@theokit/ui`'s `styles.css` (`@import "./components.css"` was appended after other statements). Fixed upstream in `@theokit/ui@1.0.2` (the template's `^1.0.0` picks it up).
+
+  Verified: `tauri dev` compiles the Rust shell, opens the native window, the sidecar streams a real agent reply, and `vite build frontend` succeeds. Windows desktop dev still needs a compiled sidecar binary (the tsx shim is POSIX; `build:sidecar` fails loud on win32 with the packaging path) — macOS/Linux dev works out of the box.
+
 ## [create-theokit@1.2.9] - 2026-07-12
 
 ### Changed

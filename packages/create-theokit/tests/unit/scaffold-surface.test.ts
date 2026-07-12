@@ -133,6 +133,25 @@ describe('applySurface (M45)', () => {
     expect(tsconfig.include).toContain('sidecar/**/*.ts')
     expect(tsconfig.include).toContain('frontend/src/**/*.tsx')
     expect(tsconfig.include.some((g) => g.startsWith('app/'))).toBe(false)
+
+    // Window/bundle icons ship — `tauri::generate_context!()` fails to compile without icons/icon.png.
+    expect(existsSync(join(targetDir, 'src-tauri/icons/icon.png'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src-tauri/icons/icon.ico'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src-tauri/icons/icon.icns'))).toBe(true)
+
+    // The sidecar externalBin launcher generator ships, is wired into `build:sidecar`, and runs before
+    // dev/build so `src-tauri/binaries/theo-sidecar-<triple>` exists when the Rust shell spawns it.
+    expect(existsSync(join(targetDir, 'scripts/build-sidecar.mjs'))).toBe(true)
+    const pkgScripts = (JSON.parse(read('package.json')) as { scripts: Record<string, string> })
+      .scripts
+    expect(pkgScripts['build:sidecar']).toBe('node scripts/build-sidecar.mjs')
+    const conf = JSON.parse(read('src-tauri/tauri.conf.json')) as {
+      build: { beforeDevCommand: string; beforeBuildCommand: string }
+      bundle: { icon: string[] }
+    }
+    expect(conf.build.beforeDevCommand).toContain('scripts/build-sidecar.mjs')
+    expect(conf.build.beforeBuildCommand).toContain('scripts/build-sidecar.mjs')
+    expect(conf.bundle.icon).toContain('icons/icon.ico')
   })
 
   it('throws on a forced transform error (EC-4 rollback parity with --bare)', () => {
