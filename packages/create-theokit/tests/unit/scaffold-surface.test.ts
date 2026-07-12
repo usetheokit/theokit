@@ -61,6 +61,10 @@ describe('applySurface (M45)', () => {
     expect(app).toContain("from '@theokit/tui'")
     expect(app).toContain('ChatThread')
     expect(app).toContain('uiMessagesToChatThread')
+    // useAgent reconstructs only ASSISTANT turns — the template MUST track user turns locally and interleave
+    // them (else the user's own prompt never renders), and open with a greeting so the thread isn't empty.
+    expect(app).toContain('setUserMessages')
+    expect(app).toContain('GREETING')
 
     const pkg = JSON.parse(read('package.json')) as {
       dependencies: Record<string, string>

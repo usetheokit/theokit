@@ -1,5 +1,5 @@
 import { Box, Text, useApp, useInput } from 'ink'
-import { type ReactElement } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import {
   AgentStreaming,
   AppStatusBar,
@@ -10,6 +10,7 @@ import {
   WelcomeBanner,
 } from '@theokit/tui'
 import { uiMessagesToChatThread } from '@theokit/tui/ai-sdk'
+import type { UIMessage } from 'ai'
 import { InProcessTransport, useAgent } from 'theokit/client'
 import { streamAgentTurnInProcess } from 'theokit/server/agent'
 
@@ -19,6 +20,18 @@ import * as chatAgent from '../agents/chat.js'
 const MODEL = 'openai/gpt-4o-mini'
 const CWD = process.cwd()
 
+/** The agent's opening line — so the conversation starts warm instead of empty (like a coding-agent CLI). */
+const GREETING: UIMessage = {
+  id: 'greeting',
+  role: 'assistant',
+  parts: [
+    {
+      type: 'text',
+      text: "Hi — I'm your TheoKit agent. Ask me anything and I'll stream a reply. Type below and press Enter · /clear resets · esc cancels.",
+    },
+  ],
+}
+
 /** Resolve the provider key from the environment (OpenRouter / Anthropic / OpenAI). */
 const apiKey = (): string =>
   process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY ?? ''
@@ -26,10 +39,10 @@ const apiKey = (): string =>
 /**
  * M46 — the terminal surface, composed from `@theokit/tui` the way a Claude Code / OpenCode / Codex CLI is:
  * a `WelcomeBanner` header, a scrolling `<ChatThread>`, a live `<AgentStreaming>` indicator, the Claude-Code
- * bordered `<ChatComposer>` (slash-commands, `@` file mentions, Alt+Enter newline — all shipped), and a
- * persistent `<AppStatusBar>` footer (model · cwd · state). The agent is driven by the UNIFIED `useAgent`
- * hook (M41) over the in-process seam — its `UIMessage[]` projected onto `<ChatThread>` by the
- * `@theokit/tui/ai-sdk` adapter. We compose shipped primitives: no hand-rolled input, no bespoke reader.
+ * bordered `<ChatComposer>`, and a persistent `<AppStatusBar>` footer. The agent is driven by the UNIFIED
+ * `useAgent` hook (M41). `useAgent` reconstructs only the ASSISTANT turns, so — like the web surface — we
+ * track the user's turns locally and INTERLEAVE them, then project the whole thread onto `<ChatThread>` via
+ * the `@theokit/tui/ai-sdk` adapter (so both your prompts and the replies show, in order).
  */
 const transport = new InProcessTransport({
   run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
@@ -37,9 +50,24 @@ const transport = new InProcessTransport({
 
 export function App(): ReactElement {
   const agent = useAgent<{ message: string }>(transport)
+  const [userMessages, setUserMessages] = useState<UIMessage[]>([])
   const streaming = agent.status === 'streaming'
   const elapsed = useTurnElapsed(streaming)
   const { exit } = useApp()
+
+  // Interleave local user turns with the reconstructed assistant turns (mirrors the web surface), after the
+  // opening greeting — so the full conversation history renders, your prompt included.
+  const thread = useMemo<UIMessage[]>(() => {
+    const out: UIMessage[] = [GREETING]
+    const turns = Math.max(userMessages.length, agent.messages.length)
+    for (let i = 0; i < turns; i++) {
+      const user = userMessages[i]
+      const assistant = agent.messages[i]
+      if (user !== undefined) out.push(user)
+      if (assistant !== undefined) out.push(assistant)
+    }
+    return out
+  }, [userMessages, agent.messages])
 
   // Esc cancels a running turn, or quits when idle (the Claude Code affordance).
   useInput((_input, key) => {
@@ -52,9 +80,14 @@ export function App(): ReactElement {
     const trimmed = text.trim()
     if (trimmed.length === 0) return
     if (trimmed === '/clear') {
+      setUserMessages([])
       agent.reset()
       return
     }
+    setUserMessages((prev) => [
+      ...prev,
+      { id: `u-${String(prev.length)}`, role: 'user', parts: [{ type: 'text', text: trimmed }] },
+    ])
     agent.send({ message: trimmed })
   }
 
@@ -69,7 +102,7 @@ export function App(): ReactElement {
           <Text dimColor>cwd: {CWD}</Text>
         </WelcomeBanner>
 
-        <ChatThread messages={uiMessagesToChatThread(agent.messages)} />
+        <ChatThread messages={uiMessagesToChatThread(thread)} />
 
         {streaming ? <AgentStreaming thought="Thinking…" elapsedSeconds={elapsed} showCancelHint /> : null}
         {agent.error ? <Text color="red">⚠ {agent.error.message}</Text> : null}
