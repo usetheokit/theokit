@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.2.6] - 2026-07-12
+
+### Fixed
+- **`--surface tui` conversation order + duplicate-id crash.** `useAgent` opens a fresh stream per send — `agent.messages` holds ONLY the current turn (and the SDK assigns those messages no stable id). The 1.2.5 template interleaved `agent.messages[i]` with user turn `i`, which mis-paired every reply with the wrong prompt after turn 1, and accumulating the empty-id assistant messages threw `ChatThread: duplicate message id ""`. The template now OWNS the transcript: it accumulates each finished turn into `history` with its own unique ids (`u-N` / `a-N` / `greeting`) and shows the in-flight reply live until it commits — correct order, complete history, unique ids, no flicker. Found dogfooding a multi-turn chat.
+
 ## [create-theokit@1.2.5] - 2026-07-12
 
 ### Fixed
