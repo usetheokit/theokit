@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "{{name}}",
+  "version": "0.1.0",
+  "identifier": "dev.theokit.{{name}}",
+  "build": {
+    "frontendDist": "../frontend/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "vite frontend",
+    "beforeBuildCommand": "vite build frontend"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "{{name}} — TheoKit desktop",
+        "width": 900,
+        "height": 680
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/theo-sidecar"]
+  }
+}

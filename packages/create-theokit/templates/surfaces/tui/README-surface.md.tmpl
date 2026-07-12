@@ -1,0 +1,26 @@
+# {{name}} — TheoKit agent (terminal / TUI surface)
+
+A terminal agent app scaffolded by `create-theokit --surface tui`. It runs the agent **in-process**
+(no HTTP server, no port) and renders the streamed response in the terminal with [Ink](https://github.com/vadimdemedes/ink).
+
+## How it consumes the agent (the unified client)
+
+`tui/App.tsx` uses the SAME `useAgent` hook as the web surface — over an `InProcessTransport`:
+
+```tsx
+const transport = new InProcessTransport({
+  run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
+})
+const agent = useAgent({ message: string }>(transport)  // messages, status, send, …
+```
+
+No bespoke terminal reader — the terminal, web, and desktop surfaces share one client (M41-M44).
+
+## Run
+
+```bash
+export OPENROUTER_API_KEY=...   # or ANTHROPIC_API_KEY
+npm run dev                      # tsx tui/main.tsx
+```
+
+Type a message + Enter; Esc to quit. The agent lives in `agents/chat.ts` (edit its model / system prompt).

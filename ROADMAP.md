@@ -1014,6 +1014,37 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+### M45 — [x] `create-theokit --surface web|tui|desktop` — scaffold the three surfaces on the unified client
+
+> Added 2026-07-12 (slug: `create-theokit-surfaces`). The DX-track PAYOFF at the scaffolder: `create-theokit` today emits only the **web** app. M41-M44 gave all three surfaces one client (`useAgent`/transports/`createAgentClient`), but a user still cannot GENERATE a TUI or Desktop agent app. This milestone adds a `--surface` flag that scaffolds the terminal (Ink) and desktop (Tauri sidecar) surfaces — each wired to the M41/M42/M44 unified client (NOT the raw `streamAgentTurnInProcess`/`channel.onmessage` consumption the reference apps use). See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** add `create-theokit <app> --surface web|tui|desktop` (default `web`). `--surface tui` scaffolds an **Ink** terminal app whose component uses `useAgent(new InProcessTransport({ run: (i) => streamAgentTurnInProcess(mod, apiKey, i) }))` (M41). `--surface desktop` scaffolds a **Tauri** app: a Node **sidecar** that runs the agent via `streamAgentTurnInProcess` → JSONL stdout (M35/M36 server seam), a Rust `src-tauri` shell that pushes sidecar lines over a `Channel` (ADR-0045), and a **vanilla-JS webview** that consumes them via `createAgentClient(new ChannelTransport({ source }))` from the React-FREE `theokit/client/core` (M42 + M44 — the no-React consumer built for exactly this). The `--surface` flag mirrors `--backend` (a flag-driven additive scaffold from a template fragment), NOT a proliferation of top-level templates (ADR-0023 default-only respected). The scaffolder's TEMPLATE files carry the Ink/Tauri/Rust boilerplate; **framework core (`packages/theo`) ships NO Tauri/Ink code** (ADR-0045 posture preserved — the boilerplate is in an example-grade scaffolder template, not core).
+
+**Definition of done:**
+
+- [ ] **Design ADR accepted BEFORE code (GATE)** — affirms: (a) `--surface` is a flag-driven additive scaffold (mirrors `--backend`/`parseBackendFlags` + `scaffoldServices`), NOT new top-level templates (ADR-0023 default-only); (b) the scaffolded TUI/Desktop consume the agent via the M41/M42/M44 UNIFIED client (`useAgent(InProcessTransport)` / `createAgentClient(ChannelTransport)`), not the raw seam — this is the DX-track payoff; (c) the Tauri/Ink boilerplate lives in the scaffolder's template fragments, framework core stays Tauri/Ink-agnostic (ADR-0045 reconciled — a scaffolder template is example-grade, not `packages/theo`); (d) the sidecar (server) keeps `streamAgentTurnInProcess → JSONL` (M35/M36). Reconciles ADR-0023, ADR-0045, ADR-0050/0051/0053.
+- [ ] `parseSurfaceFlags(args): SurfaceKind` (`'web' | 'tui' | 'desktop'`, default `web`) — mirrors `parseBackendFlags`; fail-fast on an unknown value.
+- [ ] `--surface tui` scaffolds an Ink app: `package.json` deps (`ink`, `react`, `react-dom`, `theokit`, `@theokit/agents`, `@theokit/sdk`, `zod`), an entry that renders an Ink component driving `useAgent(new InProcessTransport({ run }))`, and an `agents/<name>.ts`. Web-only deps (`@theokit/ui`, tailwind) removed.
+- [ ] `--surface desktop` scaffolds a Tauri app: the Node `sidecar` (`streamAgentTurnInProcess` → JSONL, HITL over stdin), the Rust `src-tauri/` (`Cargo.toml`, `tauri.conf.json` with `externalBin`, `lib.rs` with the `Channel` `run_turn` + `approve` commands, `main.rs`, `capabilities/default.json`), and a vanilla-JS `frontend/` webview consuming via `createAgentClient(new ChannelTransport({ source }))` from `theokit/client/core`.
+- [ ] `--surface web` (default) is the existing web scaffold — unchanged, back-compat.
+- [ ] Framework core (`packages/theo`) unchanged — NO Tauri/Ink dependency added to `packages/theo`; the boilerplate is entirely in `create-theokit` templates.
+- [ ] TDD: `parseSurfaceFlags` (valid/invalid/default); scaffold `--surface tui` → assert the Ink files + `useAgent(new InProcessTransport` wiring + Ink deps present, no web-only deps; scaffold `--surface desktop` → assert the sidecar + `src-tauri/{Cargo.toml,tauri.conf.json,lib.rs}` + webview `createAgentClient(new ChannelTransport` wiring present; the generated TUI/Desktop TS/JS is consistent (no dangling imports). Rollback (EC-4) on a forced transform error.
+- [ ] Evidence + honesty boundary: the scaffold correctness (files present, unified-client wiring, no web-only deps) is validated in-env; the generated TUI's real run (LLM key + TTY) and the Desktop's full Tauri **Rust build + GUI** are toolchain/key-gated — documented (the Rust boilerplate mirrors the reference `theo-code-v2/apps/desktop` EVIDENCE.md proven 2026-07-09), NOT falsely claimed as run here.
+- [ ] Docs (a "scaffold a TUI / desktop agent app" section) + CHANGELOG (`create-theokit` minor).
+
+**Dependencies:** M41 (`useAgent` + `InProcessTransport` — [x]), M42 (`ChannelTransport` — [x]), M44 (`createAgentClient` + `theokit/client/core` — [x]); the M35 in-process seam + M36 Tauri sidecar/ADR-0045 (reference blueprint — [x]); the `create-theokit` scaffolder (`--backend`/`--bare` transform pattern — [x]).
+
+**Top risks (new):**
+
+1. **Putting Tauri/Ink into framework core (ADR-0045 breach).** Mitigation: ALL boilerplate lives in `create-theokit` template fragments (example-grade), `packages/theo` gets no Tauri/Ink dep — the ADR draws this line explicitly.
+2. **Template proliferation (ADR-0023 breach).** Mitigation: `--surface` is a FLAG (like `--backend`), scaffolding from a fragment, not new top-level `--template` values. Web stays the single canonical template.
+3. **Scaffolding the raw seam instead of the unified client (missing the DX payoff).** Mitigation: the ADR mandates the templates use `useAgent(InProcessTransport)` / `createAgentClient(ChannelTransport)`; a test asserts the wiring string is present. This is the whole point — the scaffolder proves M41-M44.
+4. **Over-claiming Desktop "runs" without the Rust toolchain.** Mitigation: honesty boundary in the DoD — scaffold + TS/JS validated in-env; the Rust build + GUI is documented as toolchain-gated (mirrors the proven reference), never faked (Rule 3).
+
+**Why now:** M41-M44 delivered the unified client LIBRARY; the scaffolder still only emits web, so a user cannot generate a TUI or Desktop agent app. Adding `--surface` closes the loop — "write once, consume identically, AND scaffold on any surface" — and each generated app is the living proof that the DX track pays off (TUI exercises M41, Desktop exercises M42 + M44's no-React client).
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
