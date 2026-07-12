@@ -49,20 +49,27 @@ interface SurfaceConfig {
 const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
   tui: {
     fragment: 'tui',
-    // `ai` is the UIMessageStream type/reader the unified client consumes; it was transitive via
-    // `@theokit/ui` (dropped for tui), so declare it explicitly. `ink` peers `react >=18` (works with 19).
-    deps: { ink: '^5.1.0', ai: '^7.0.0' },
+    // `@theokit/tui` renders the conversation (`<ChatThread>` + the `./ai-sdk` UIMessage adapter). `ai` is
+    // the UIMessageStream type the unified client + adapter consume (was transitive via `@theokit/ui`, dropped
+    // for tui), so declare it explicitly. `ink` peers `react >=18` (works with 19) — @theokit/tui peers it too.
+    deps: { '@theokit/tui': '^0.30.0', ink: '^5.1.0', ai: '^7.0.0' },
     devDeps: { tsx: '^4.19.0' },
     scripts: { dev: 'tsx tui/main.tsx', start: 'tsx tui/main.tsx' },
     tsconfigInclude: ['tui/**/*.ts', 'tui/**/*.tsx', 'server/**/*.ts', 'agents/**/*.ts'],
   },
   desktop: {
     fragment: 'desktop',
-    // The webview consumes the agent via `createAgentClient` from the React-FREE `theokit/client/core`
-    // (M44). It is bundled by Vite; the sidecar runs via tsx. `ai` = the UIMessageStream reader (was
-    // transitive via `@theokit/ui`, dropped here).
-    deps: { ai: '^7.0.0' },
-    devDeps: { tsx: '^4.19.0', '@tauri-apps/cli': '^2.0.0', vite: '^6.0.0' },
+    // M47: the webview is a React app rendering with `@theokit/ui`, driven by `useAgent` over a
+    // `ChannelTransport` whose source is `@theokit/tauri`'s `createTauriChannelSource`; the Node sidecar
+    // runs the turn via `@theokit/tauri/sidecar`. `ai` = the UIMessageStream reader + UIMessage type (was
+    // transitive via `@theokit/ui`, re-added explicitly here). react/react-dom are inherited from the default.
+    deps: { '@theokit/ui': '^1.0.0', '@theokit/tauri': '^0.1.1', ai: '^7.0.0' },
+    devDeps: {
+      tsx: '^4.19.0',
+      '@tauri-apps/cli': '^2.0.0',
+      vite: '^6.0.0',
+      '@vitejs/plugin-react': '^4.3.0',
+    },
     scripts: {
       dev: 'tauri dev',
       tauri: 'tauri',
@@ -73,6 +80,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     tsconfigInclude: [
       'sidecar/**/*.ts',
       'frontend/src/**/*.ts',
+      'frontend/src/**/*.tsx',
       'server/**/*.ts',
       'agents/**/*.ts',
     ],
