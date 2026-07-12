@@ -2,13 +2,15 @@
 
 A desktop agent app scaffolded by `create-theokit --surface desktop`. Three tiers (ADR-0045):
 
-1. **Webview** (`frontend/`) — a Vite-bundled page that consumes the agent via the **unified client**:
-   `createAgentClient(new ChannelTransport({ source }))` from the React-FREE `theokit/client/core`
-   (M42 + M44). No React, no bespoke reader — the same client the web + terminal surfaces use.
+1. **Webview** (`frontend/`) — a Vite-bundled **React** page that renders with **`@theokit/ui`**
+   (`<ChatThread>` + `<ChatMessage>`), driven by the same `useAgent` hook the web surface uses. The
+   transport is `new ChannelTransport({ source: createTauriChannelSource(...) })` from **`@theokit/tauri`** —
+   the Tauri `Channel`/`invoke` bridge, injected. Same unified client + UI as the web surface; only the
+   transport differs (M42 + M47).
 2. **Rust shell** (`src-tauri/`) — spawns the Node sidecar, pushes its stdout lines to the webview over
    a Tauri `Channel`, and forwards HITL decisions to the sidecar's stdin.
-3. **Node sidecar** (`sidecar/`) — runs the agent in-process (`streamAgentTurnInProcess` → JSONL stdout,
-   M35/M36 server seam). No HTTP, no port.
+3. **Node sidecar** (`sidecar/`) — runs the agent in-process via **`@theokit/tauri/sidecar`**'s
+   `runTurnToJsonl` (`streamAgentTurnInProcess` → JSONL stdout, M35/M36 server seam). No HTTP, no port.
 
 ## Prerequisites (toolchain)
 
@@ -28,4 +30,4 @@ npm run dev                      # tauri dev
 
 The agent lives in `agents/chat.ts` (edit its model / system prompt). Wire HITL by adding a
 `@HumanInTheLoop`-gated tool — the sidecar emits `tool-approval-request`, the webview shows Approve/Deny,
-and `createAgentClient(...).approve(id, { approved })` routes the decision through the transport's `settle`.
+and `useAgent(...).approve(id, { approved })` routes the decision through the transport's `settle`.

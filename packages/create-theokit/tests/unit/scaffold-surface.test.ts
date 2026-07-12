@@ -57,11 +57,16 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('useAgent')
     expect(app).toContain('streamAgentTurnInProcess')
     expect(app).toContain('my-tui') // {{name}} substituted
+    // M46: renders with @theokit/tui via the ai-sdk UIMessage adapter (Step A).
+    expect(app).toContain("from '@theokit/tui'")
+    expect(app).toContain('ChatThread')
+    expect(app).toContain('uiMessagesToChatThread')
 
     const pkg = JSON.parse(read('package.json')) as {
       dependencies: Record<string, string>
       scripts: Record<string, string>
     }
+    expect(pkg.dependencies['@theokit/tui']).toBeDefined() // M46 renders the conversation
     expect(pkg.dependencies.ink).toBeDefined()
     expect(pkg.dependencies['@theokit/sdk']).toBeDefined() // agent runtime kept
     expect(pkg.dependencies['@theokit/ui']).toBeUndefined() // web-only dropped
@@ -76,28 +81,33 @@ describe('applySurface (M45)', () => {
     expect(tsconfig.include.some((g) => g.startsWith('app/'))).toBe(false)
   })
 
-  it('desktop scaffolds a Tauri app: sidecar + src-tauri + webview on createAgentClient(ChannelTransport)', () => {
+  it('desktop scaffolds a Tauri app: sidecar + src-tauri + React webview on @theokit/ui + @theokit/tauri', () => {
     scaffold(targetDir, 'my-desk')
     applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })
 
     // Three tiers (ADR-0045): webview / Rust shell / Node sidecar.
     expect(existsSync(join(targetDir, 'sidecar/sidecar.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'sidecar/sidecar-core.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'sidecar/sidecar-core.ts'))).toBe(false) // M47 — replaced by @theokit/tauri/sidecar
     expect(existsSync(join(targetDir, 'src-tauri/Cargo.toml'))).toBe(true)
     expect(existsSync(join(targetDir, 'src-tauri/tauri.conf.json'))).toBe(true)
     expect(existsSync(join(targetDir, 'src-tauri/src/lib.rs'))).toBe(true)
     expect(existsSync(join(targetDir, 'src-tauri/capabilities/default.json'))).toBe(true)
     expect(existsSync(join(targetDir, 'frontend/index.html'))).toBe(true)
-    expect(existsSync(join(targetDir, 'frontend/src/main.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'frontend/src/main.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'frontend/src/App.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'frontend/src/main.ts'))).toBe(false) // M47 — React entry now
 
-    // ADR-0054 D2 — the webview uses the React-FREE unified client (M42 + M44).
-    const webview = read('frontend/src/main.ts')
-    expect(webview).toContain('createAgentClient')
-    expect(webview).toContain('ChannelTransport')
-    expect(webview).toContain('theokit/client/core')
+    // M47 — the webview is React + @theokit/ui, driven by useAgent over @theokit/tauri's ChannelTransport.
+    const app = read('frontend/src/App.tsx')
+    expect(app).toContain("from '@theokit/ui'")
+    expect(app).toContain('ChatThread')
+    expect(app).toContain('useAgent')
+    expect(app).toContain('ChannelTransport')
+    expect(app).toContain('createTauriChannelSource')
+    expect(read('frontend/src/main.tsx')).toContain("import '@theokit/ui/styles.css'")
 
-    // The sidecar keeps the M35/M36 server seam.
-    expect(read('sidecar/sidecar-core.ts')).toContain('streamAgentTurnInProcess')
+    // The sidecar runs the turn via @theokit/tauri/sidecar (no hand-rolled copy).
+    expect(read('sidecar/sidecar.ts')).toContain("from '@theokit/tauri/sidecar'")
 
     // {{name}} substituted in the Rust + Tauri config.
     expect(read('src-tauri/Cargo.toml')).toContain('my-desk-desktop')
@@ -106,10 +116,14 @@ describe('applySurface (M45)', () => {
     expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
     expect(existsSync(join(targetDir, 'src-tauri/Cargo.toml.tmpl'))).toBe(false) // no leftover .tmpl
 
-    // tsconfig include covers the sidecar + webview source (not the removed app/).
+    const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> }
+    expect(pkg.dependencies['@theokit/ui']).toBeDefined() // M47 renders the webview
+    expect(pkg.dependencies['@theokit/tauri']).toBeDefined() // M47 transport source + sidecar
+
+    // tsconfig include covers the sidecar + React webview source (not the removed app/).
     const tsconfig = JSON.parse(read('tsconfig.json')) as { include: string[] }
     expect(tsconfig.include).toContain('sidecar/**/*.ts')
-    expect(tsconfig.include).toContain('frontend/src/**/*.ts')
+    expect(tsconfig.include).toContain('frontend/src/**/*.tsx')
     expect(tsconfig.include.some((g) => g.startsWith('app/'))).toBe(false)
   })
 
