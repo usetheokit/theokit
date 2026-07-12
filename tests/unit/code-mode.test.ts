@@ -20,7 +20,7 @@ function fakeSandbox(): Sandbox {
   return {
     run: async (code: string, api: CodeModeApi) => {
       // Toy protocol: "call:<tool>:<jsonArgs>" — enough to exercise the gate without a real VM.
-      const m = /^call:([a-z_]+):(.*)$/.exec(code)
+      const m = /^call:([a-zA-Z_]+):(.*)$/.exec(code)
       if (!m) return { ran: code }
       const fn = api[m[1]]
       if (!fn) throw new Error(`ReferenceError: ${m[1]} is not defined`) // not in the restricted API
@@ -52,7 +52,7 @@ describe('M29 — createCodeMode', () => {
 
   it('runs safe code that calls a permitted tool', async () => {
     const onPermissionRequest = vi.fn(() => ({ granted: true }))
-    const tool = createCodeMode({
+    const { tool } = createCodeMode({
       tools: [addTool],
       sandbox: fakeSandbox(),
       onPermissionRequest,
@@ -66,7 +66,7 @@ describe('M29 — createCodeMode', () => {
     const onPermissionRequest = vi.fn((req: { tool: string }) => ({
       granted: req.tool !== 'write_file',
     }))
-    const tool = createCodeMode({
+    const { tool } = createCodeMode({
       tools: [addTool, writeFileTool],
       sandbox: fakeSandbox(),
       onPermissionRequest,
@@ -77,7 +77,7 @@ describe('M29 — createCodeMode', () => {
   })
 
   it('rejects a filesystem escape — only declared tools are in the restricted API', async () => {
-    const tool = createCodeMode({
+    const { tool } = createCodeMode({
       tools: [addTool],
       sandbox: fakeSandbox(),
       onPermissionRequest: () => ({ granted: true }),
@@ -89,7 +89,7 @@ describe('M29 — createCodeMode', () => {
   })
 
   it('honors a custom name + description', () => {
-    const tool = createCodeMode({
+    const { tool } = createCodeMode({
       tools: [addTool],
       sandbox: fakeSandbox(),
       onPermissionRequest: () => ({ granted: true }),
@@ -98,5 +98,109 @@ describe('M29 — createCodeMode', () => {
     })
     expect(tool.name).toBe('run_code')
     expect(tool.description).toBe('Execute composed code')
+  })
+})
+
+describe('M40 — createCodeMode generated instructions (ADR-0049)', () => {
+  const getTopProducts = defineAgentTool({
+    name: 'getTopProducts',
+    description: 'Get top selling products',
+    inputSchema: z.object({ limit: z.number() }),
+    handler: () => '[]',
+  })
+  const getSupplier = defineAgentTool({
+    name: 'getSupplier',
+    description: 'Get a supplier by id',
+    inputSchema: z.object({ id: z.string(), region: z.string().optional() }),
+    handler: () => '{}',
+  })
+  const make = (tools = [getTopProducts]) =>
+    createCodeMode({
+      tools,
+      sandbox: fakeSandbox(),
+      onPermissionRequest: () => ({ granted: true }),
+    })
+
+  it('returns { tool, instructions } — the tool is the M29 CustomTool (behavior unchanged)', async () => {
+    const { tool, instructions } = make()
+    expect(typeof instructions).toBe('string')
+    expect(tool.name).toBe('run_code')
+    // Behavior-identical: the tool still runs code through the gate + sandbox.
+    const out = await tool.handler({ code: 'call:getTopProducts:{"limit":5}' })
+    expect(out).toBe('[]')
+  })
+
+  it('lists each declared tool as `await api.<name>(<input>)` with its description + input shape', () => {
+    const { instructions } = make([getTopProducts, getSupplier])
+    expect(instructions).toContain('await api.getTopProducts({ limit: number })')
+    expect(instructions).toContain('Get top selling products')
+    // Optional props marked with `?`.
+    expect(instructions).toContain('await api.getSupplier({ id: string, region?: string })')
+  })
+
+  it('carries the fixed code contract (sandbox, one result, Promise.all)', () => {
+    const { instructions } = make()
+    expect(instructions).toMatch(/sandbox/i)
+    expect(instructions).toMatch(/return .*(one|single|structured) .*result/i)
+    expect(instructions).toMatch(/Promise\.all/)
+  })
+
+  it('fails fast without a sandbox (security by default — a vetted boundary is required)', () => {
+    expect(() =>
+      createCodeMode({
+        tools: [getTopProducts],
+        onPermissionRequest: () => ({ granted: true }),
+      } as never),
+    ).toThrow(/sandbox/)
+  })
+
+  it('fails fast on an empty tools[] (the restricted API would be empty)', () => {
+    expect(() =>
+      createCodeMode({
+        tools: [],
+        sandbox: fakeSandbox(),
+        onPermissionRequest: () => ({ granted: true }),
+      }),
+    ).toThrow(/non-empty tools/)
+  })
+
+  it('renders a no-argument tool as `api.<name>({})` (no double-space)', () => {
+    const ping = defineAgentTool({
+      name: 'ping',
+      description: 'Health check',
+      inputSchema: z.object({}),
+      handler: () => 'ok',
+    })
+    const { instructions } = make([ping])
+    expect(instructions).toContain('await api.ping({})')
+    expect(instructions).not.toContain('{  }')
+  })
+
+  it('instructions reference the CONFIGURED tool name when overridden', () => {
+    const { instructions } = createCodeMode({
+      tools: [getTopProducts],
+      sandbox: fakeSandbox(),
+      onPermissionRequest: () => ({ granted: true }),
+      name: 'run_analysis',
+    })
+    expect(instructions).toContain('`run_analysis`')
+    expect(instructions).not.toContain('`run_code`')
+  })
+
+  it('scoping — distinct instances list ONLY their own allow-list (least privilege)', () => {
+    const sales = createCodeMode({
+      tools: [getTopProducts],
+      sandbox: fakeSandbox(),
+      onPermissionRequest: () => ({ granted: true }),
+    })
+    const inventory = createCodeMode({
+      tools: [getSupplier],
+      sandbox: fakeSandbox(),
+      onPermissionRequest: () => ({ granted: true }),
+    })
+    expect(sales.instructions).toContain('api.getTopProducts')
+    expect(sales.instructions).not.toContain('api.getSupplier')
+    expect(inventory.instructions).toContain('api.getSupplier')
+    expect(inventory.instructions).not.toContain('api.getTopProducts')
   })
 })
