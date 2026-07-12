@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.2.9] - 2026-07-12
+
+### Changed
+- **Simplified the default (web) scaffold to an honest, minimal agent chat — everything shown now WORKS.** The previous scaffold wrapped a real chat in a fake dashboard: a hardcoded `CostMeter` ($0.0023), a hardcoded `ContextWindowBar` (fake token count), and dead `New conversation` / `History` / `Settings` sidebar buttons (no handlers) — misleading demo chrome (G10). Removed all of it (real cost/token/history/settings are features, not scaffold defaults — YAGNI). The scaffold is now: a slim top bar (name + working theme switcher), the streaming chat (greeting → prompt → reply, correct order), three honest starter prompts that send real messages, a working `New chat` (reset), and an `AgentErrorCard` that shows the **real** error (the old generic "connection interrupted" copy had hidden a real bug). Verified live in a real browser against OpenRouter. Add real chrome back as you build it.
+
 ## [theokit@0.30.3 + create-theokit@1.2.8] - 2026-07-12
 
 ### Fixed

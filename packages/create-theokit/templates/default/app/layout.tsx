@@ -1,73 +1,30 @@
 import '@theokit/ui/styles.css'
 
 import { Outlet } from 'react-router'
-import { AgentProfile, ThemeSwitcher, CostMeter, type AgentProfileDescriptor } from '@theokit/ui'
-import { Sidebar, TopNav, Tooltip, Badge } from '@usetheo/ui'
-import { Bot, MessageSquare, History, Settings } from 'lucide-react'
+import { ThemeSwitcher } from '@theokit/ui'
+import { Bot } from 'lucide-react'
 
-const AGENTS: AgentProfileDescriptor[] = [
-  {
-    id: 'theo',
-    name: 'Theo',
-    description: 'Edit the agent at agents/chat.ts.',
-    tone: 'primary',
-    initials: 'TH',
-    badge: 'Online',
-  },
-]
-
+/**
+ * App shell — a slim top bar (product name + theme toggle) over the chat surface.
+ *
+ * Deliberately minimal: everything shown WORKS. A scaffold is an honest starting point, not a demo
+ * dashboard — so there is no fake cost meter, no fake token counter, and no dead History/Settings buttons.
+ * Add real chrome (a conversation list, usage from the stream, a settings route) as you build it.
+ */
 export default function RootLayout() {
   return (
     <div className="grid h-screen w-screen grid-rows-[auto_1fr] bg-background text-foreground">
-      <TopNav className="border-border/60 border-b px-4 py-2">
-        <TopNav.Left>
-          <Tooltip label="TheoKit agent surface" side="bottom">
-            <span className="inline-flex items-center gap-2">
-              <Bot className="size-5 text-primary" aria-hidden />
-              <span className="font-semibold text-sm tracking-tight">Theo Agent</span>
-              <Badge variant="outline" size="sm">
-                v0.1
-              </Badge>
-            </span>
-          </Tooltip>
-        </TopNav.Left>
-        <TopNav.Right>
-          <Tooltip label="Toggle theme" side="bottom" align="end">
-            <span>
-              <ThemeSwitcher />
-            </span>
-          </Tooltip>
-        </TopNav.Right>
-      </TopNav>
+      <header className="flex items-center justify-between border-border/60 border-b px-4 py-2">
+        <span className="inline-flex items-center gap-2">
+          <Bot className="size-5 text-primary" aria-hidden />
+          <span className="font-semibold text-sm tracking-tight">Theo Agent</span>
+        </span>
+        <ThemeSwitcher />
+      </header>
 
-      <div className="grid h-full grid-cols-[260px_1fr] overflow-hidden">
-        <Sidebar className="flex flex-col border-border/60 border-r p-3">
-          <Sidebar.Header>
-            <AgentProfile agents={AGENTS} activeId="theo" />
-          </Sidebar.Header>
-
-          <Sidebar.Section title="Workspace">
-            <Sidebar.Item icon={MessageSquare} active>
-              New conversation
-            </Sidebar.Item>
-            <Sidebar.Item icon={History}>History</Sidebar.Item>
-            <Sidebar.Item icon={Settings}>Settings</Sidebar.Item>
-          </Sidebar.Section>
-
-          <Sidebar.Footer className="mt-auto">
-            <CostMeter
-              compact
-              title="This session"
-              cost={0.0023}
-              delta={{ value: 0.0023, period: 'now' }}
-            />
-          </Sidebar.Footer>
-        </Sidebar>
-
-        <main className="flex h-full flex-col overflow-hidden">
-          <Outlet />
-        </main>
-      </div>
+      <main className="flex h-full flex-col overflow-hidden">
+        <Outlet />
+      </main>
     </div>
   )
 }
