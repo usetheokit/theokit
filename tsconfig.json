@@ -20,7 +20,8 @@
     "paths": {
       "theokit": ["./packages/theo/src/index.ts"],
       "theokit/server": ["./packages/theo/src/server/index.ts"],
-      "theokit/client": ["./packages/theo/src/client/index.ts"]
+      "theokit/client": ["./packages/theo/src/client/index.ts"],
+      "theokit/*": ["./packages/theo/*"]
     }
   },
   "include": [
