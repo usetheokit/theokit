@@ -20,6 +20,12 @@ import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 import { isAgentCardPath, handleAgentCard } from './agent-card-handler.js'
 import { getApprovalRegistry } from './approval-registry.js'
 import { handleAgentRunReconnect, isAgentRunStreamPath } from './handle-agent-run-reconnect.js'
+import {
+  handleThreadMessage,
+  handleThreadStream,
+  isThreadMessagePath,
+  isThreadStreamPath,
+} from './handle-thread-routes.js'
 import { isListApprovalsPath, handleListApprovals } from './list-approvals-handler.js'
 import { extractAppResources } from './mcp-app-resources.js'
 import { isMcpPath, handleMcpJsonRpc } from './mcp-handler.js'
@@ -48,6 +54,12 @@ export interface AuxRouteDeps {
    * that already gated upstream may pass `'off'`.
    */
   csrfMode?: CsrfMode
+  /**
+   * M39 — lazily resolve the provider apiKey. Required only for the thread
+   * follow-up route (which drives the agent); resolved on demand so non-agent
+   * aux routes (card, approvals, stream) never need a provider key.
+   */
+  resolveApiKey?: () => string
 }
 
 /**
@@ -91,6 +103,11 @@ export async function serveAgentAuxRoute(
     return handleAgentRunReconnect(runStream.runId, request, getRunEventCache())
   }
 
+  // M39 — thread signal routes (follow-up message + subscribe-by-thread). Extracted
+  // to keep this dispatcher within the cognitive-complexity budget (G6).
+  const threadResponse = await serveThreadRoute(request, method, urlPath, deps)
+  if (threadResponse !== null) return threadResponse
+
   // M16 — POST /api/agents/<name>/mcp (JSON-RPC MCP server). Extracted to keep this dispatcher
   // within the cognitive-complexity budget (G6).
   const mcpName = isMcpPath(urlPath)
@@ -98,6 +115,65 @@ export async function serveAgentAuxRoute(
     return serveMcpRoute(request, method, mcpName, deps)
   }
 
+  return null
+}
+
+/**
+ * M39 — serve the thread routes:
+ *  - `POST .../threads/<sessionId>/message` (follow-up) — loads the module, drives
+ *    the run headless via the thread dispatcher. Needs `resolveApiKey` (drives the
+ *    agent) → 501 when absent (rather than a silent 404).
+ *  - `GET .../threads/<sessionId>/stream` (subscribe) — attach to the active/next
+ *    run's durable stream. INTENTIONALLY open (GET, no custom headers — like the
+ *    M37 reconnect route).
+ *
+ * SECURITY (thread stream): unlike the M37 reconnect route — keyed on an
+ * `mintRunId()` UUID (122-bit unguessable) — the thread stream is keyed on the
+ * caller-supplied `sessionId`. The open GET is safe ONLY if the `sessionId` is
+ * unguessable (e.g. a client-minted UUID). An app that uses a PREDICTABLE
+ * sessionId (user id, email, sequential id) MUST add its own auth gate before
+ * this endpoint, or any party who can guess the sessionId can read the thread's
+ * live conversation stream. Documented in `docs/architecture/multi-surface-architecture.md`.
+ *
+ * Returns `null` to fall through (not a thread route, wrong method, unknown agent).
+ */
+async function serveThreadRoute(
+  request: Request,
+  method: string,
+  urlPath: string,
+  deps: AuxRouteDeps,
+): Promise<Response | null> {
+  const stream = isThreadStreamPath(urlPath)
+  if (stream !== null) {
+    if (method !== 'GET') return null
+    if (!deps.agents.some((a) => a.name === stream.name)) return null
+    return handleThreadStream(stream.sessionId, request)
+  }
+
+  const msg = isThreadMessagePath(urlPath)
+  if (msg !== null) {
+    if (method !== 'POST') return null
+    const agent = deps.agents.find((a) => a.name === msg.name)
+    if (!agent) return null
+    if (deps.resolveApiKey === undefined) {
+      // MEDIUM-1 — the path matched but the caller wired no provider-key resolver.
+      // Fail loudly (501) instead of a silent 404 that reads as "route not found".
+      return jsonError(
+        501,
+        'NOT_CONFIGURED',
+        'Thread follow-up requires a provider API key (resolveApiKey was not provided to serveAgentAuxRoute).',
+      )
+    }
+    const mod = await deps.loadModule(agent.filePath)
+    return handleThreadMessage({
+      mod,
+      apiKey: deps.resolveApiKey(),
+      sessionId: msg.sessionId,
+      request,
+      source: `agent "${msg.name}"`,
+      csrfMode: deps.csrfMode ?? 'strict',
+    })
+  }
   return null
 }
 
