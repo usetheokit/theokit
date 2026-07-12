@@ -37,6 +37,13 @@ export interface AttachResult {
  * default; swap a persistent backend for multi-instance deploys.
  */
 export interface RunEventCache {
+  /**
+   * M39 — synchronously register `runId` as a live (frame-less) run so `has()` is
+   * true and a subscriber can `attach()` BEFORE the first frame. Idempotent.
+   * Closes the race where a thread's active run is resolvable in the registry but
+   * not yet in the cache (a headless pump appends its first frame asynchronously).
+   */
+  begin(runId: string): void
   /** Record a frame for `runId`, returning its assigned monotonic `seq`. Notifies live listeners. */
   append(runId: string, data: string): number
   /** Mark `runId` terminated: notify listeners, then schedule bounded eviction. Idempotent. */
@@ -93,6 +100,10 @@ export function createInMemoryRunEventCache(opts: RunEventCacheOptions = {}): Ru
   }
 
   return {
+    begin(runId) {
+      getOrCreate(runId)
+    },
+
     append(runId, data) {
       const buf = getOrCreate(runId)
       const seq = buf.frames.length
