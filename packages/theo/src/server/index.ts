@@ -89,48 +89,10 @@ export * from './openapi/index.js'
 // Cross-module: cache lives at packages/theo/src/cache/ (not server/cache)
 export * from '../cache/index.js'
 
-// Agent-tool adapters — wrap an external runtime (coding agent, SDK workflow) as a `CustomTool`.
-// M26 — SDK `Workflow` as a tool (thin adapter; the engine is the SDK's). M17 — coding agent (ACP).
-export { createWorkflowTool } from './agent/workflow-tool.js'
-export type { WorkflowLike, WorkflowToolConfig } from './agent/workflow-tool.js'
-export { createACPTool, NodeAcpTransport } from './agent/acp-tool.js'
-export type { AcpToolConfig } from './agent/acp-tool.js'
-// M28 — third-party agent SDK (Claude/OpenAI/Cursor) as a tool (vendor runtime stays theirs).
-export { createVendorAgentTool } from './agent/vendor-agent-tool.js'
-export type { VendorAgentClient, VendorAgentToolConfig } from './agent/vendor-agent-tool.js'
-// M29 — code-mode sandbox: agent composes tools in code run inside an INJECTED isolation boundary.
-export { createCodeMode, CodeModePermissionDeniedError } from './agent/code-mode.js'
-export type { Sandbox, CodeModeApi, CodeModeConfig, CodeModePermission } from './agent/code-mode.js'
-// M27 — channel webhook routes (Slack/Telegram/Discord) with per-platform signature validation.
-export { handleChannelWebhook, parseChannelPath, isChannelPath } from './agent/channel-webhook.js'
-export type { ChannelMessage, ChannelWebhookConfig } from './agent/channel-webhook.js'
-// M35 — in-process agent-turn seam (Model A): the Ink TUI / Tauri drive an agent turn in ONE process
-// (no HTTP loopback, no port, no CSRF), reusing streamAgentUIMessages with inline HITL resolution.
-export {
-  streamAgentTurnInProcess,
-  InProcessApprovalRequiredError,
-} from './agent/stream-agent-turn-in-process.js'
-export type {
-  StreamAgentTurnInProcessInput,
-  StreamAgentTurnDeps,
-  InProcessApprovalRequest,
-  InProcessAwaitApproval,
-} from './agent/stream-agent-turn-in-process.js'
-// M30 — MCP App `ui://` HTML resources served by the MCP server (rendered in a sandboxed iframe).
-// MCP stdio transport — expose an agent as a stdio MCP server (sibling of the HTTP route).
-export { serveMcpStdio, handleMcpStdioLine, type StdioStreams } from './agent/mcp-stdio.js'
-export {
-  defineAppResource,
-  buildResourceDescriptors,
-  readAppResource,
-  extractAppResources,
-} from './agent/mcp-app-resources.js'
-export type {
-  AppResource,
-  AppResourceInput,
-  McpResourceDescriptor,
-  McpResourceContents,
-} from './agent/mcp-app-resources.js'
+// Agent-seam domain (in-process turn seam, agent-tool adapters, code-mode, channel webhooks, MCP
+// stdio/app-resources) — now addressable at `theokit/server/agent` (T2.5 subpath). Re-exported through the
+// umbrella for back-compat until 0.x+2; the barrel is the single source of the agent-domain surface.
+export * from './agent/index.js'
 
 // Inline re-exports — items that don't belong to a single sub-barrel
 export { parseRequestBody, FileTooLargeError } from './body-parser.js'

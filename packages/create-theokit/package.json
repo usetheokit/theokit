@@ -1,6 +1,6 @@
 {
   "name": "create-theokit",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "type": "module",
   "description": "Scaffold a new TheoKit project",
   "license": "Apache-2.0",
