@@ -10,8 +10,11 @@ export default defineConfig([
       // T4.4 (architecture-cleanup) — subpath entrypoints per ADR-0001 v3.
       // Consumers should migrate to these; `theokit/server` keeps re-exporting
       // them for backwards compat until 1.0.
-      // (server/agent/index removed in the M3 clean break — the subpath held only
-      // the proprietary surface; its survivors are internal.)
+      // server/agent re-introduced (T2.5): a lean barrel over the PUBLIC agent-seam survivors
+      // (in-process turn seam, tool adapters, code-mode, channel webhooks, MCP). The proprietary
+      // surface removed in the M3 clean break stays out. Gives agent consumers (TUI / Tauri scaffold
+      // templates) a non-deprecated import path instead of the umbrella.
+      'server/agent/index': 'src/server/agent/index.ts',
       'server/auth/index': 'src/server/auth/index.ts',
       'server/cost/index': 'src/server/cost/index.ts',
       'server/cron/index': 'src/server/cron/index.ts',
