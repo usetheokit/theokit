@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- Roadmap amended: added M42 (Tauri `ChannelTransport` + reconnect parity), M43 (request-context/auth parity across every transport), M44 (standalone typed agent client-SDK, no React) — the remaining steps of the theokit↔sdk DX track on the M41 `ChatTransport` seam. Each is a clean addition on the same seam, no runtime change (`/roadmap-feature`).
+
 ## [0.27.0] - 2026-07-12
 
 ### Added
