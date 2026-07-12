@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.1.1] - 2026-07-12
+
+### Fixed
+- **M45 surfaces install + type-check.** Found by running every `--surface` scenario end-to-end (real `npm install` + `tsc`): (1) `react-router` was wrongly dropped for tui/desktop but is a REQUIRED `theokit` peer — kept now (removing it broke `npm install`); (2) `ai` was missing (it was transitive via the dropped `@theokit/ui`) — the unified client needs it, declared explicitly; (3) React 19 removed the global `JSX` namespace — the Ink `App.tsx` returns `ReactElement`. Adds a comprehensive `surface-matrix` test covering every scenario.
+
 ## [create-theokit@1.1.0] - 2026-07-12
 
 ### Added
