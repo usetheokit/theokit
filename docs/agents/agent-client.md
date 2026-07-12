@@ -140,6 +140,32 @@ If a web stream drops, `reconnect()` resumes it via the durable transport (`GET 
 The transport captured the run id from the initial response; a completed/evicted run returns `null`
 and `reconnect()` is a no-op. (Auto-reconnect-on-drop and `Last-Event-ID` tail-resume land with M42.)
 
+## Use an agent from a script — no React (M44)
+
+`useAgent` is the React binding; for a node script, a CLI, a test, or a non-React UI, use
+`createAgentClient` from the React-free entry `theokit/client/core` — the same store, no React in your
+bundle:
+
+```ts
+import { createAgentClient, HttpTransport } from 'theokit/client/core'
+
+const client = createAgentClient(new HttpTransport({ api: 'https://myapp.com/api/agents/chat' }))
+
+// Ergonomic streaming: yield the assistant message as it streams; last value is the final result.
+let final
+for await (const message of client.stream({ message: 'summarize my inbox' })) {
+  final = message
+}
+console.log(final?.parts)
+
+// Or event-driven: subscribe + getState (+ send / abort / reset / approve / reconnect).
+const unsub = client.subscribe(() => console.log(client.getState().status))
+```
+
+`createAgentClient` drives ANY transport (`HttpTransport` over node fetch, `InProcessTransport` in a
+test, `ChannelTransport`), supports M43 `context`, and imports no React (`theokit/client/core` is a
+React-free entry). `theokit/client` also re-exports `createAgentClient` for React apps' convenience.
+
 ## Advanced: the transport as a building block
 
 `HttpTransport` / `InProcessTransport` are plain `ChatTransport`s and the store, `AgentClient`, is

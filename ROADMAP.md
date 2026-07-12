@@ -987,7 +987,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M44 — [ ] Standalone typed agent client-SDK (no React) over the same store
+### M44 — [x] Standalone typed agent client-SDK (no React) over the same store
 
 > Added 2026-07-12 (slug: `standalone-agent-client-sdk`). DX-track step 4 — the last one. `useAgent` is a thin React binding over the framework-agnostic `AgentClient` store (M41 D6). Node scripts, CLIs, tests, and non-React UIs cannot use a React hook — but they CAN use the store directly. This milestone ships a small standalone client-SDK (`createAgentClient(transport)`) exposing the store's capabilities as a plain async API, so an agent is consumable from any JS runtime on the SAME seam. See CHANGELOG `[Unreleased] § Added`.
 
