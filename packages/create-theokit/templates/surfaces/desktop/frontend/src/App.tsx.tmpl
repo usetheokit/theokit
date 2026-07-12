@@ -1,0 +1,83 @@
+import { ChatMessage, ChatThread, TheoUIProvider } from '@theokit/ui'
+import { createTauriChannelSource, type TauriCore } from '@theokit/tauri'
+import type { UIMessage } from 'ai'
+import { useMemo, useState, type CSSProperties, type FormEvent, type ReactElement } from 'react'
+import { ChannelTransport, useAgent } from 'theokit/client'
+
+/**
+ * M47 — the desktop webview renders with `@theokit/ui` (`<ChatThread>` + `<ChatMessage>`), driven by the
+ * SAME `useAgent` hook the web surface uses. The transport is a `ChannelTransport` whose source is
+ * `createTauriChannelSource` (`@theokit/tauri`): the Tauri `Channel`/`invoke` bridge, injected — so this
+ * webview reuses the exact unified client + UI the web surface does; only the transport differs. No
+ * hand-rolled reader, no bespoke DOM. The Node sidecar runs the turn via `@theokit/tauri/sidecar`.
+ */
+const tauri = (globalThis as { __TAURI__?: { core: TauriCore } }).__TAURI__
+if (tauri === undefined) {
+  throw new Error('Tauri globals unavailable — run inside the desktop shell (`npm run dev`).')
+}
+const transport = new ChannelTransport({ source: createTauriChannelSource(tauri.core) })
+
+const styles = {
+  page: { display: 'flex', flexDirection: 'column', height: '100vh', gap: 12, padding: 16 },
+  thread: { flex: 1, overflowY: 'auto' },
+  form: { display: 'flex', gap: 8 },
+  input: { flex: 1, padding: 8, borderRadius: 6 },
+} satisfies Record<string, CSSProperties>
+
+export function App(): ReactElement {
+  const { messages, send, status, error } = useAgent<{ message: string }>(transport)
+  const [userMessages, setUserMessages] = useState<UIMessage[]>([])
+  const [input, setInput] = useState('')
+
+  // Interleave local user turns with the reconstructed assistant UIMessages (mirrors the web surface).
+  const thread = useMemo<UIMessage[]>(() => {
+    const out: UIMessage[] = []
+    const turns = Math.max(userMessages.length, messages.length)
+    for (let i = 0; i < turns; i++) {
+      const user = userMessages[i]
+      const assistant = messages[i]
+      if (user !== undefined) out.push(user)
+      if (assistant !== undefined) out.push(assistant)
+    }
+    return out
+  }, [userMessages, messages])
+
+  const onSubmit = (event: FormEvent): void => {
+    event.preventDefault()
+    const message = input.trim()
+    if (message.length === 0) return
+    setUserMessages((prev) => [
+      ...prev,
+      { id: `u-${String(prev.length)}`, role: 'user', parts: [{ type: 'text', text: message }] },
+    ])
+    send({ message })
+    setInput('')
+  }
+
+  return (
+    <TheoUIProvider>
+      <main style={styles.page}>
+        <h1 style={{ fontSize: 14, fontWeight: 600 }}>◆ {{name}} — TheoKit agent (desktop)</h1>
+        <div style={styles.thread}>
+          <ChatThread>
+            {thread.map((message) => (
+              <ChatMessage key={message.id} message={message} />
+            ))}
+          </ChatThread>
+        </div>
+        {status === 'streaming' ? <p>…thinking</p> : null}
+        {error ? <p style={{ color: '#f7768e' }}>⚠ {error.message}</p> : null}
+        <form style={styles.form} onSubmit={onSubmit}>
+          <input
+            style={styles.input}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Message the agent…"
+            autoComplete="off"
+          />
+          <button type="submit">Send</button>
+        </form>
+      </main>
+    </TheoUIProvider>
+  )
+}
