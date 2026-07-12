@@ -15,6 +15,21 @@ export interface ApprovalDecision {
 }
 
 /**
+ * M43 (ADR-0052) — per-request context attached uniformly across every transport.
+ *
+ * `headers` is the serializable, HTTP-native half (an auth token → request headers on `HttpTransport`);
+ * `metadata` is the structured, same-process half forwarded to the in-process runner
+ * (`InProcessTransport`) / the Tauri `invoke` (`ChannelTransport`). Threaded through the seam's existing
+ * `ChatRequestOptions` — NOT a new channel. The turn input stays the request `body`.
+ */
+export interface RequestContext {
+  /** Per-request headers (e.g. auth). HTTP-native; mapped to request headers by `HttpTransport`. */
+  headers?: Record<string, string>
+  /** Structured per-request context (tenant, provider, …) forwarded to in-process / channel runners. */
+  metadata?: unknown
+}
+
+/**
  * M41 (ADR-0050 D1/D2) — the client transport seam.
  *
  * It IS `ai`'s `ChatTransport<UIMessage>` (the adopted SOTA interface — we do NOT invent a parallel

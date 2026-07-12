@@ -3,7 +3,7 @@ import { useMemo, useRef, useSyncExternalStore } from 'react'
 
 import { AgentClient, type UseAgentStatus } from './agent-client.js'
 import { HttpTransport } from './http-transport.js'
-import type { AgentTransport, ApprovalDecision } from './transport.js'
+import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
 
 /**
  * M2 (theokit-ai-first) / M41 (ADR-0050) — `useAgent`, the ONE typed client hook for the
@@ -50,6 +50,12 @@ export interface UseAgentOptions {
   headers?: Record<string, string>
   /** Override fetch (primarily for tests) — captured when a string path builds an `HttpTransport`. */
   fetch?: typeof fetch
+  /**
+   * M43 — per-request context attached uniformly to EVERY transport (`headers` → HTTP request headers;
+   * `metadata` → the in-process runner / Tauri invoke). A value OR a resolver evaluated on every
+   * send/reconnect, so a rotating token/tenant is never stale.
+   */
+  context?: RequestContext | (() => RequestContext | undefined)
 }
 
 /**
@@ -76,8 +82,13 @@ export function useAgent<TInput = unknown>(
               fetch: optionsRef.current.fetch,
             })
           : pathOrTransport,
+        // M43 — resolve context live from the ref each send/reconnect (never stale). A value or a resolver.
+        () => {
+          const ctx = optionsRef.current.context
+          return typeof ctx === 'function' ? ctx() : ctx
+        },
       ),
-    // Identity is the binding; headers are resolved live via optionsRef, fetch captured at creation.
+    // Identity is the binding; headers/context are resolved live via optionsRef, fetch captured at creation.
     [pathOrTransport],
   )
 
