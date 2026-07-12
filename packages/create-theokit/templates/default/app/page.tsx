@@ -8,51 +8,24 @@ import {
   AgentStreaming,
   AgentErrorCard,
   QuickActionChips,
-  ContextWindowBar,
   type UIMessage,
   type QuickAction,
 } from '@theokit/ui'
-import { CommandPalette, Avatar, Tooltip, Button, ScrollArea, type CommandItem } from '@usetheo/ui'
-import { Sparkles, Wrench, RotateCcw, Command } from 'lucide-react'
+import { Button, ScrollArea } from '@usetheo/ui'
+import { Plus, Sparkles } from 'lucide-react'
 import { useAgent } from 'theokit/client'
 
 /**
- * Default scaffold — an Agent Surface, composed entirely from TheoUI.
+ * Default scaffold — a working agent chat, composed from TheoUI. Everything here FUNCTIONS: the thread
+ * streams real replies, `New chat` resets, the starter prompts send real messages, and the error card shows
+ * the real error. No fake cost/token meters.
  *
- *   ChatThread / ChatMessage  → conversation (ChatMessage auto-dispatches text,
- *                               tool-call, and reasoning parts of each UIMessage)
- *   AgentStreaming            → streaming indicator
- *   AgentErrorCard            → error display
- *   ChatComposer              → bottom input bar
- *   QuickActionChips          → first-load suggestions
- *   ContextWindowBar          → context usage at top
- *   CommandPalette            → ⌘K quick actions
- *   Avatar / Tooltip          → message faces + icon hints
- *
- * `useAgent` binds to the `agents/chat.ts` endpoint and consumes the ai-sdk `UIMessageStream`. It opens a
- * FRESH stream per send, so `messages` hold only the CURRENT turn (and carry no stable id) — we OWN the
- * transcript: `history` accumulates every finished turn with our own unique ids (`u-N` / `a-N` / `greeting`),
- * and the in-flight reply is shown live until it commits. This keeps the order correct, the history complete,
- * and every id unique. Edit `agents/chat.ts` to pick your model / add tools.
+ * `useAgent` opens a FRESH stream per send — its `messages` hold only the CURRENT turn (with no stable id),
+ * so we OWN the transcript: `history` accumulates each finished turn with our own unique ids, and the
+ * in-flight reply is shown live until it commits (correct order, complete history, unique ids). Edit
+ * `agents/chat.ts` to pick your model / add tools.
  */
 
-const QUICK_ACTIONS: QuickAction[] = [
-  { id: 'summarize', label: 'Summarize this page', icon: Sparkles },
-  { id: 'tools', label: 'Show available tools', icon: Wrench },
-  { id: 'reset', label: 'Start a new conversation', icon: RotateCcw },
-]
-
-const COMMAND_ITEMS: CommandItem[] = QUICK_ACTIONS.map((a) => ({
-  id: a.id,
-  label: a.label,
-  icon: a.icon,
-  group: 'Quick actions',
-}))
-
-// Display-only context-window hint. The agent's real model lives in `agents/chat.ts`
-// (`model: 'openai/gpt-4o-mini'`); wire real token counts from the stream when you need them.
-const CONTEXT_USED = 4_200
-const CONTEXT_TOTAL = 200_000
 const MODEL_NAME = 'gpt-4o-mini'
 
 /** The agent's opening line — so the conversation starts warm instead of empty. */
@@ -60,50 +33,32 @@ const GREETING: UIMessage = {
   id: 'greeting',
   role: 'assistant',
   parts: [
-    {
-      type: 'text',
-      text: "Hi — I'm your TheoKit agent. Ask me anything and I'll stream a reply. Try a quick action below or type your own.",
-    },
+    { type: 'text', text: "Hi — I'm your TheoKit agent. Ask me anything and I'll stream a reply." },
   ],
 }
 
-const ASSISTANT_AVATAR = (
-  <Avatar size="sm" tone="primary">
-    <Avatar.Fallback>TH</Avatar.Fallback>
-  </Avatar>
-)
-const USER_AVATAR = (
-  <Avatar size="sm" tone="muted">
-    <Avatar.Fallback>YOU</Avatar.Fallback>
-  </Avatar>
-)
+/** Honest starter prompts — each sends a real message the scaffold agent can actually answer. */
+const STARTERS: QuickAction[] = [
+  { id: 'help', label: 'What can you help me with?', icon: Sparkles },
+  { id: 'haiku', label: 'Write a haiku about TypeScript', icon: Sparkles },
+  { id: 'async', label: 'Explain async/await in one paragraph', icon: Sparkles },
+]
 
 export default function Page() {
   const [composerValue, setComposerValue] = useState('')
-  const [paletteOpen, setPaletteOpen] = useState(false)
   const [history, setHistory] = useState<UIMessage[]>([GREETING])
-  const { messages, send, status, reset } = useAgent<{ message: string }>('/api/agents/chat')
-
-  // ⌘K / Ctrl+K opens the CommandPalette.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setPaletteOpen((v) => !v)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  const { messages, send, status, reset, error } = useAgent<{ message: string }>('/api/agents/chat')
 
   const isStreaming = status === 'streaming'
+  const hasError = status === 'error'
+
   const users = history.filter((m) => m.role === 'user').length
   const replies = history.filter((m) => m.role === 'assistant' && m.id !== 'greeting').length
   // A sent prompt is still awaiting its committed reply — the current turn is "in flight".
   const pending = users > replies
 
   // Merge the in-flight turn's parts into ONE assistant message with our own unique id (the SDK's ids are
-  // empty, which would collide in the thread). `suffix` distinguishes the live copy from the committed one.
+  // empty, which would collide). `suffix` distinguishes the live copy from the committed one.
   const inflightReply = (suffix: string): UIMessage => ({
     id: `a-${String(replies)}${suffix}`,
     role: 'assistant',
@@ -133,45 +88,30 @@ export default function Page() {
     setComposerValue('')
   }
 
-  function handleQuickAction(id: string) {
-    setPaletteOpen(false)
-    if (id === 'reset') {
-      setHistory([GREETING])
-      reset()
-      return
-    }
-    const action = QUICK_ACTIONS.find((a) => a.id === id)
-    // Quick-action labels are strings; only a string can be sent as a prompt.
-    if (action && typeof action.label === 'string') handleSubmit(action.label)
+  function newChat() {
+    setHistory([GREETING])
+    reset()
+    setComposerValue('')
   }
-
-  const hasError = status === 'error'
 
   return (
     <>
-      <ContextWindowBar
-        used={CONTEXT_USED}
-        total={CONTEXT_TOTAL}
-        trailing={MODEL_NAME}
-        label="Context window"
-        compact
-        className="border-border/60 border-b px-6 py-2"
-      />
-
       <ScrollArea className="flex-1">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-6">
           <ChatThread>
             {thread.map((message) => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                avatar={message.role === 'assistant' ? ASSISTANT_AVATAR : USER_AVATAR}
-              />
+              <ChatMessage key={message.id} message={message} />
             ))}
             {isStreaming && <AgentStreaming model={MODEL_NAME} />}
           </ChatThread>
           {onlyGreeting && (
-            <QuickActionChips actions={QUICK_ACTIONS} onSelect={handleQuickAction} />
+            <QuickActionChips
+              actions={STARTERS}
+              onSelect={(id) => {
+                const action = STARTERS.find((s) => s.id === id)
+                if (action && typeof action.label === 'string') handleSubmit(action.label)
+              }}
+            />
           )}
         </div>
       </ScrollArea>
@@ -182,11 +122,11 @@ export default function Page() {
             <div className="mb-3">
               <AgentErrorCard
                 kind="network"
-                title="Stream ended with an error"
-                detail="The connection to the agent endpoint was interrupted. Reset to try again."
+                title="The agent stream ended with an error"
+                detail={error?.message ?? 'Something went wrong. Start a new chat to try again.'}
                 actions={
-                  <Button variant="ghost" size="sm" onClick={() => reset()}>
-                    Reset
+                  <Button variant="ghost" size="sm" onClick={newChat}>
+                    New chat
                   </Button>
                 }
               />
@@ -197,32 +137,22 @@ export default function Page() {
             onValueChange={setComposerValue}
             onSubmit={handleSubmit}
             running={isStreaming}
-            placeholder="Ask the agent…"
+            placeholder="Message the agent…"
             leadingActions={
-              <Tooltip label="Open command palette (⌘K)" side="top">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setPaletteOpen(true)}
-                  aria-label="Open command palette"
-                >
-                  <Command className="size-4" />
-                </Button>
-              </Tooltip>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={newChat}
+                aria-label="New chat"
+                title="New chat"
+              >
+                <Plus className="size-4" />
+              </Button>
             }
           />
         </div>
       </div>
-
-      <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        items={COMMAND_ITEMS}
-        onSelect={handleQuickAction}
-        placeholder="Run a command…"
-        emptyMessage="No matching commands."
-      />
     </>
   )
 }
