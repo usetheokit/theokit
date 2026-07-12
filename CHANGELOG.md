@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.2.7] - 2026-07-12
+
+### Fixed
+- **The default (web) `@theokit/ui` chat surface now has the same correct interaction as the terminal surface.** Its `app/page.tsx` had the same latent bug the TUI did — it interleaved the per-turn `agent.messages` with local user turns, so after turn 1 each reply paired with the wrong prompt. It now OWNS the transcript (accumulates finished turns into `history` with unique ids `u-N` / `a-N` / `greeting`, shows the in-flight reply live until it commits) and opens with an agent greeting + the quick-action chips (the empty-state card is replaced by the warm greeting, matching the terminal surface). Verified: the fresh web app type-checks against real `@theokit/ui` + `@usetheo/ui` + `theokit`, and renders greeting + quick actions + composer.
+
 ## [create-theokit@1.2.6] - 2026-07-12
 
 ### Fixed
