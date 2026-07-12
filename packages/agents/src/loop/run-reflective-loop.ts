@@ -24,6 +24,7 @@ import {
   type DelegationResult,
   DelegationError,
 } from '../bridge/delegation-types.js'
+import { debugLog } from '../debug-log.js'
 
 import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strategy.js'
 import type { ReflectionContext, ReflectionStrategy } from './reflection-strategy.js'
@@ -218,7 +219,7 @@ function finalize(
 ): DelegationResult {
   acc.rounds = round
   acc.finishReason = reason
-  console.debug(MAINLOOP_METRIC, { strategy: strategyName, rounds: round, terminal: reason })
+  debugLog(MAINLOOP_METRIC, { strategy: strategyName, rounds: round, terminal: reason })
   return acc
 }
 
