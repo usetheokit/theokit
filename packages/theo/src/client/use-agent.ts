@@ -1,21 +1,22 @@
 import type { UIMessage } from 'ai'
-import { useCallback, useRef, useState } from 'react'
+import { useMemo, useRef, useSyncExternalStore } from 'react'
 
-import { consumeUIMessageStream } from './consume-ui-message-stream.js'
+import { AgentClient, type UseAgentStatus } from './agent-client.js'
+import { HttpTransport } from './http-transport.js'
+import type { AgentTransport, ApprovalDecision } from './transport.js'
 
 /**
- * M2 (theokit-ai-first) — `useAgent`, the typed client hook for the `agents/*.ts` convention.
+ * M2 (theokit-ai-first) / M41 (ADR-0050) — `useAgent`, the ONE typed client hook for the
+ * `agents/*.ts` convention, unified across surfaces.
  *
- * A thin React hook over `consumeUIMessageStream` (which reuses `ai`'s own UIMessageStream
- * reader). `useAgent('support')` binds to `POST /api/agents/support`; the generated
- * `@theo/agents` module (`.theokit/agents.d.ts`) types `send` to the agent's `input` schema,
- * so the request shape is inferred end-to-end from the server `defineAgent({ input })` with
- * ZERO manual wiring (DoD line 2).
- *
- * Transport: fetch + ReadableStream (POST needs a body; EventSource is GET-only). `ai` is
- * loaded lazily by `consumeUIMessageStream` so non-agent apps never pay for it.
+ * Pass an endpoint path (web) OR an {@link AgentTransport} (terminal/desktop). A string is wrapped in
+ * an {@link HttpTransport} (exact back-compat with the pre-M41 fetch+SSE hook); an `InProcessTransport`
+ * drives the SAME hook in a single process. The hook is a thin binding over the framework-agnostic
+ * {@link AgentClient} store via React's native `useSyncExternalStore` (no test-DOM dependency). The
+ * generated `@theo/agents` module types `send` to the agent's `input` schema — inferred end-to-end
+ * from the server `defineAgent({ input })` with ZERO manual wiring.
  */
-export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
+export type { UseAgentStatus }
 
 export interface UseAgentReturn<TInput = unknown, TToolNames extends string = string> {
   /** Reconstructed assistant messages so far (ai `UIMessage[]`). */
@@ -29,89 +30,67 @@ export interface UseAgentReturn<TInput = unknown, TToolNames extends string = st
   abort: () => void
   /** Clear messages + error, back to idle. */
   reset: () => void
+  /** Settle a paused HITL approval (HTTP `POST /approve/<id>` for web; the inline callback in-process). */
+  approve: (approvalId: string, decision: ApprovalDecision) => Promise<void>
+  /** Resume an interrupted stream (M37 durable transport for web; a no-op in-process). */
+  reconnect: () => void
   /**
-   * The union of tool names this agent can emit (M8), carried end-to-end from the `agent()`
-   * builder's accumulated tool-name type through the generated `@theo/agents` client. Type-only
-   * witness (never populated at runtime) — narrow a streamed `tool-<name>` part against it. Resolves
-   * to the literal union for builder agents (`'read_file' | 'count_lines'`), `string` otherwise.
+   * The union of tool names this agent can emit (M8), carried end-to-end from the `agent()` builder's
+   * accumulated tool-name type through the generated `@theo/agents` client. Type-only witness (never
+   * populated at runtime). Resolves to the literal union for builder agents, `string` otherwise.
    */
   readonly __toolNames?: TToolNames
 }
 
 export interface UseAgentOptions {
-  /** Extra request headers (e.g., auth). */
+  /**
+   * Extra request headers (e.g., auth) — applied when a string path builds an `HttpTransport`. Read on
+   * EVERY request, so a value that changes across renders (a rotating JWT) is never sent stale.
+   */
   headers?: Record<string, string>
-  /** Override fetch (primarily for tests). */
+  /** Override fetch (primarily for tests) — captured when a string path builds an `HttpTransport`. */
   fetch?: typeof fetch
 }
 
 /**
- * Bind to the agent endpoint at `path` (`/api/agents/<name>`). Prefer the generated
- * `useAgent` from `@theo/agents` (typed by agent name); this base accepts an explicit path.
+ * Bind to an agent by endpoint path (`/api/agents/<name>`) or by an explicit {@link AgentTransport}.
+ * Prefer the generated `useAgent` from `@theo/agents` (typed by agent name); this base accepts a path
+ * or a transport. The store is created once per binding identity — memoize a transport before passing it.
  */
 export function useAgent<TInput = unknown>(
-  path: string,
+  pathOrTransport: string | AgentTransport,
   options: UseAgentOptions = {},
 ): UseAgentReturn<TInput> {
-  const [messages, setMessages] = useState<UIMessage[]>([])
-  const [status, setStatus] = useState<UseAgentStatus>('idle')
-  const [error, setError] = useState<Error | undefined>(undefined)
-  const controllerRef = useRef<AbortController | null>(null)
+  // Track the latest options so the built HttpTransport reads current headers per request (dynamic
+  // auth is never stale) without rebuilding the store — which would drop in-flight messages.
+  const optionsRef = useRef(options)
+  optionsRef.current = options
 
-  const abort = useCallback(() => {
-    controllerRef.current?.abort()
-    controllerRef.current = null
-  }, [])
-
-  const reset = useCallback(() => {
-    abort()
-    setMessages([])
-    setError(undefined)
-    setStatus('idle')
-  }, [abort])
-
-  const send = useCallback(
-    (input: TInput) => {
-      abort()
-      const controller = new AbortController()
-      controllerRef.current = controller
-      setMessages([])
-      setError(undefined)
-      setStatus('streaming')
-
-      const fetchImpl = options.fetch ?? globalThis.fetch
-      void (async () => {
-        try {
-          const response = await fetchImpl(path, {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              accept: 'text/event-stream',
-              'X-Theo-Action': '1',
-              ...options.headers,
-            },
-            body: JSON.stringify(input),
-            signal: controller.signal,
-          })
-          await consumeUIMessageStream(response, (message) => {
-            setMessages((prev) => {
-              const next = [...prev]
-              const idx = next.findIndex((m) => m.id === message.id)
-              if (idx >= 0) next[idx] = message
-              else next.push(message)
-              return next
+  const client = useMemo(
+    () =>
+      new AgentClient<TInput>(
+        typeof pathOrTransport === 'string'
+          ? new HttpTransport({
+              api: pathOrTransport,
+              headers: () => optionsRef.current.headers,
+              fetch: optionsRef.current.fetch,
             })
-          })
-          setStatus('done')
-        } catch (err) {
-          if (controller.signal.aborted) return
-          setError(err instanceof Error ? err : new Error(String(err)))
-          setStatus('error')
-        }
-      })()
-    },
-    [abort, options.fetch, options.headers, path],
+          : pathOrTransport,
+      ),
+    // Identity is the binding; headers are resolved live via optionsRef, fetch captured at creation.
+    [pathOrTransport],
   )
 
-  return { messages, status, error, send, abort, reset }
+  const state = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot)
+
+  return {
+    messages: state.messages,
+    status: state.status,
+    error: state.error,
+    send: client.send,
+    abort: client.abort,
+    reset: client.reset,
+    approve: client.approve,
+    reconnect: client.reconnect,
+  }
 }

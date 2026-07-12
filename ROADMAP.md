@@ -903,6 +903,35 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+### M41 — [x] Unified typed agent client on the AI SDK `ChatTransport` seam (web + TUI; foundation of the DX track)
+
+> Added 2026-07-12 (slug: `unified-agent-client-transport`). The foundation of the theokit↔sdk integration DX track: **write the agent once, consume it identically on every surface.** Today the agent DEFINITION is unified (`agents/<name>.ts` → `compileAgentModule` → SDK, same on web/TUI/Tauri), but the CLIENT is fragmented — `useAgent()` (web fetch+SSE, bespoke), `useAgentStream()` (TUI in-process), a Rust `Channel` reader (Tauri): three consumption shapes for the same agent. This milestone adopts the **`ChatTransport` abstraction from `ai` (already a dependency, v7.0.14)** — the SOTA transport-agnostic chat-client seam (`sendMessages(... { metadata, headers, body, abortSignal }) → ReadableStream<UIMessageChunk>` + `reconnectToStream`) — so each surface becomes a `ChatTransport`, and `useAgent` becomes a thin typed wrapper. **DX track (this is M41, the foundation): M42** Tauri `ChannelTransport` + reconnect parity; **M43** request-context/auth parity through the transport; **M44** standalone typed client-SDK binding (node/scripts, no React). Each is a clean addition on the same `ChatTransport` seam — no rework. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** consolidate the two in-repo client surfaces (`packages/theo/src/client/use-agent.ts` fetch+SSE, and the TUI `useAgentStream`) behind ONE seam by adopting `ai`'s `ChatTransport` — NOT a hand-rolled abstraction (parsimony rung 4 / G12: reuse the installed dependency's SOTA interface). The framework ships two `ChatTransport` implementations — `HttpTransport` (web: wraps `mountAgent` SSE + M37 durable reconnect) and `InProcessTransport` (TUI: wraps `streamAgentTurnInProcess`) — and `useAgent('name')` becomes a typed wrapper over a transport with the SAME return shape (`{ messages, status, error, send, abort, approve, reconnect }`) and the SAME typed input inferred from the existing `@theo/agents` codegen. The transport interface models reconnect + per-request context from day 1 (HttpTransport implements `reconnectToStream` via M37; InProcess is in-process so it no-ops reconnect), so M42–M44 add transports/parity without changing the seam. This is DRY consolidation of EXISTING duplication, not speculative abstraction (G11/G13).
+
+**Definition of done:**
+
+- [ ] **Design ADR accepted BEFORE code (GATE)** — affirms: (a) adopt `ai`'s `ChatTransport` as the seam (do NOT invent a parallel Transport interface); (b) `useAgent` is a thin typed wrapper over a transport, unifying `useAgent`/`useAgentStream` (DRY); (c) the runtime + agent definition + compile are UNCHANGED (G2 — this is client/boundary only, not runtime); (d) reconnect + context are transport concerns modeled now, implemented per-transport as surfaces gain them. Reconciles with M35/M37 + `sdk-runtime.md` carve-out.
+- [ ] `HttpTransport` implements `ChatTransport` over the shipped web path (`mountAgent` SSE + the `x-theokit-run-id` header + M37 `reconnectToStream` via `GET /runs/<runId>/stream`). Byte-identical wire to today — it wraps, not replaces.
+- [ ] `InProcessTransport` implements `ChatTransport` over `streamAgentTurnInProcess` (TUI — no HTTP): `sendMessages` returns the in-process `ReadableStream<UIMessageChunk>`; `reconnectToStream` is a documented no-op (single process, no drop). HITL resolves via the same inline callback seam.
+- [ ] `useAgent('name')` returns `{ messages, status, error, send, abort, approve, reconnect }` with input typed from `@theo/agents`; it works on web (HttpTransport) AND the Ink TUI (InProcessTransport) from the SAME hook. `useAgentStream` is folded into it (or kept as a thin re-export with a deprecation note) — no third bespoke client shape.
+- [ ] `approve(id, decision)` is one client concept that routes to the transport's HITL path (HTTP `POST /approve` for web; the inline callback for in-process) — the dev calls the same method on every surface.
+- [ ] Back-compat: the existing `useAgent` web call sites keep working (same return shape or a documented migration); the SSE wire + M37 reconnect are unchanged; the agent definition/compile/runtime are untouched.
+- [ ] TDD: `HttpTransport.sendMessages` yields the SSE chunks + reconnect replays via `reconnectToStream` (reuse the M37 test harness); `InProcessTransport.sendMessages` yields the generator chunks; `useAgent` drives both transports with the same assertions (messages accumulate, status transitions, abort, approve); typed-input inference holds.
+- [ ] Docs (a "one client, every surface" guide) + CHANGELOG; **ADR** for the `ChatTransport`-adoption decision + the `useAgent`/`useAgentStream` unification.
+
+**Dependencies:** `ai@7.0.14` (`ChatTransport` — shipped dep); M2 web mount + M37 durable reconnect (`mount-agent.ts`, `handle-agent-run-reconnect.ts` — [x]); M35 in-process seam (`streamAgentTurnInProcess` — [x]); the `@theo/agents` typed-client codegen (`agents-typed-client.ts` — [x]). No new subsystem, no runtime change.
+
+**Top risks (new):**
+
+1. **Re-fragmenting instead of consolidating.** Building a new `useAgent` while leaving `useAgentStream` as a separate shape re-creates the fork. Mitigation: the ADR requires ONE hook over a transport; `useAgentStream` is folded in (or a thin re-export), verified by a test that both surfaces use the same hook.
+2. **Inventing a parallel Transport interface (G11/rung-4 violation).** Mitigation: adopt `ai`'s `ChatTransport` verbatim as the seam; our transports IMPLEMENT it. The ADR bans a hand-rolled interface.
+3. **Scope creep into Tauri / full context parity in one cycle.** Mitigation: M41 ships the seam + web + TUI (the two in-repo, testable client surfaces); Tauri's `ChannelTransport` + reconnect parity is M42, context/auth parity is M43, the standalone client-SDK is M44 — each a clean addition on the seam, kept out of M41 to fit one manageable cycle.
+
+**Why now:** the integration DX is architecturally coherent on the DEFINITION side (one agent, three transports) but fragmented on the CLIENT side (three consumption shapes for the same agent). The most FAANG + DX-first move is to adopt the SOTA transport-agnostic seam we ALREADY ship (`ai`'s `ChatTransport`) and consolidate the client behind it — reuse, not reinvent (parsimony rung 4 / DRY). It is the foundation from which reconnect parity (M42), context/auth parity (M43), and a standalone client-SDK (M44) fall out with no rework — the honest sequence for "write the agent once, consume it identically on desktop, terminal, and web."
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
