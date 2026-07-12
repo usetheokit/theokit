@@ -63,12 +63,43 @@ export class CodeModePermissionDeniedError extends Error {
   }
 }
 
+/** M40 (ADR-0049) — render a tool's JSON-Schema input as a readable arg shape, e.g. `{ limit: number, region?: string }`. */
+function describeToolInput(inputSchema: Record<string, unknown>): string {
+  const props = (inputSchema.properties as Record<string, { type?: unknown }> | undefined) ?? {}
+  const required = new Set((inputSchema.required as string[] | undefined) ?? [])
+  const entries = Object.entries(props).map(([key, spec]) => {
+    // Complex Zod types (union/intersection/enum) may emit no top-level `type` → 'unknown' (safe).
+    const type = typeof spec.type === 'string' ? spec.type : 'unknown'
+    return `${key}${required.has(key) ? '' : '?'}: ${type}`
+  })
+  return entries.length > 0 ? `{ ${entries.join(', ')} }` : '{}'
+}
+
 /**
- * Build a code-mode `CustomTool`. Fails fast if `onPermissionRequest` or `sandbox` is missing
- * (security by default). The returned tool takes `{ code }`, assembles the permission-gated restricted
- * API from `tools`, runs the code in the injected sandbox, and returns the code's result.
+ * M40 (ADR-0049) — generate the model-facing instructions from the SAME `tools` allow-list
+ * `createCodeMode` captures (DRY — cannot drift from the api surface it describes). Teaches the model
+ * that its code runs in a sandbox, the available `api.<name>(input)` calls (ONLY this allow-list —
+ * least-privilege scoping), and the return contract. Add it to the agent's system prompt.
  */
-export function createCodeMode(config: CodeModeConfig): CustomTool {
+function generateCodeModeInstructions(tools: CustomTool[], toolName: string): string {
+  const calls = tools
+    .map((t) => `- \`await api.${t.name}(${describeToolInput(t.inputSchema)})\` — ${t.description}`)
+    .join('\n')
+  return [
+    `The \`${toolName}\` tool runs your code in a sandbox. Your code may call ONLY these functions (each bridges to a real, validated tool on the host):`,
+    calls,
+    'Write an async function body that composes these calls and return exactly ONE structured result. Prefer `Promise.all` for independent calls; do arithmetic and aggregation in code, not in prose.',
+  ].join('\n\n')
+}
+
+/**
+ * Build a code-mode tool + its generated model instructions (M40 / ADR-0049). Fails fast if
+ * `onPermissionRequest` or `sandbox` is missing (security by default). `tool` takes `{ code }`,
+ * assembles the permission-gated restricted API from `tools`, runs the code in the injected sandbox,
+ * and returns the code's result. `instructions` (add it to the agent's system prompt) teaches the
+ * model the sandboxed-code contract + the available `api.<name>(input)` calls.
+ */
+export function createCodeMode(config: CodeModeConfig): { tool: CustomTool; instructions: string } {
   if (typeof config.onPermissionRequest !== 'function') {
     throw new Error(
       'createCodeMode requires onPermissionRequest (security by default — no default-allow for any tool).',
@@ -78,6 +109,13 @@ export function createCodeMode(config: CodeModeConfig): CustomTool {
   if (typeof sandboxRun !== 'function') {
     throw new Error(
       'createCodeMode requires an injected `sandbox` with a run() method (a vetted isolation boundary — never node:vm).',
+    )
+  }
+  // M40 — an empty allow-list is a config mistake: the restricted API (and the generated
+  // instructions) would be empty, and the code could call nothing. Fail fast.
+  if (config.tools.length === 0) {
+    throw new Error(
+      'createCodeMode requires a non-empty tools[] — the restricted API would be empty.',
     )
   }
 
@@ -91,8 +129,9 @@ export function createCodeMode(config: CodeModeConfig): CustomTool {
     }
   }
 
-  return {
-    name: config.name ?? 'run_code',
+  const name = config.name ?? 'run_code'
+  const tool: CustomTool = {
+    name,
     description:
       config.description ??
       'Run code that composes the available tools. Only the declared tools are callable.',
@@ -107,4 +146,5 @@ export function createCodeMode(config: CodeModeConfig): CustomTool {
       return typeof result === 'string' ? result : JSON.stringify(result)
     },
   }
+  return { tool, instructions: generateCodeModeInstructions(config.tools, name) }
 }
