@@ -41,6 +41,13 @@ export type {
   InProcessApprovalRequestLike,
   InProcessAwaitApproval,
 } from './in-process-transport.js'
+// M42 (ADR-0051) — Tauri desktop push transport over an injected Channel-shaped source.
+export { ChannelTransport } from './channel-transport.js'
+export type {
+  ChannelTransportOptions,
+  ChannelPushSource,
+  ChannelTurnHandlers,
+} from './channel-transport.js'
 export { AgentClient } from './agent-client.js'
 export type { AgentClientState } from './agent-client.js'
 
