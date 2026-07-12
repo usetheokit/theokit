@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.2.1] - 2026-07-12
+
+### Fixed
+- **`npx create-theokit --surface tui|desktop` no longer crashes with `__dirname is not defined`.** `scaffold-surface.ts` referenced the CJS `__dirname` global, which does not exist in the published ESM bundle — so a real `--surface tui`/`--surface desktop` scaffold rolled back at runtime (`1.1.0`–`1.2.0`). The unit tests never caught it because they import the source under vitest, where `__dirname` is provided; only running the built binary surfaces it. Fixed by deriving `__dirname` from `import.meta.url` (mirrors `src/index.ts` + `src/scaffold-services.ts`). Added a `built-cli` integration test that runs the actual `dist/cli.js` for both surfaces so this class of "works from source, broken when bundled" bug can never regress. Found by dogfooding the published binary end-to-end. `1.2.0` is deprecated.
+
 ## [theokit@0.30.1 + @theokit/agents@0.35.1] - 2026-07-12
 
 ### Fixed

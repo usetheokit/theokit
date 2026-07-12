@@ -8,7 +8,13 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// ESM has no CJS `__dirname` global — derive it (mirrors src/index.ts + src/scaffold-services.ts). Without
+// this the published bundle throws `__dirname is not defined` at runtime (vitest provides the global, so the
+// unit tests never caught it — only running `npx create-theokit --surface tui` for real surfaced it).
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /**
  * M45 (ADR-0054) — `create-theokit --surface web|tui|desktop`.
