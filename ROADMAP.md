@@ -846,7 +846,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M39 — [ ] Thread signals: follow-up (queue + wake-idle) + subscribe-by-thread over the M37 durable transport
+### M39 — [x] Thread signals: follow-up (queue + wake-idle) + subscribe-by-thread over the M37 durable transport
 
 > Added 2026-07-12 (slug: `thread-signals-followup-subscribe`). The transport-legitimate slice of the Mastra **Signals** comparison, owner-approved. Scope: (a) a thread **follow-up** message (ACTIVE run ⇒ QUEUE + continuation; IDLE ⇒ wake/start) and (b) **subscribe-by-thread** (conversationId ⇒ the active/next run's durable stream), both over M37. **Cross-check (out-of-scope):** `sendSignal` (system-context injection), state-signal lanes (`sendStateSignal`/`computeStateSignal`), the notification inbox + delivery policy (`sendNotificationSignal`/`createNotificationInboxTool`), and distributed pub/sub + leasing (`RedisStreamsPubSub`) are the signal-provider-framework / product / infra halves — reaffirmed OUT. See CHANGELOG `[Unreleased] § Added`.
 
