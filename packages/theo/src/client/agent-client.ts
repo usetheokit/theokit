@@ -1,7 +1,7 @@
 import type { UIMessage, UIMessageChunk } from 'ai'
 
 import { consumeChunkStream } from './consume-ui-message-stream.js'
-import type { AgentTransport, ApprovalDecision } from './transport.js'
+import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
 
 export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
 
@@ -47,6 +47,8 @@ export class AgentClient<TInput = unknown> {
   readonly #transport: AgentTransport
   readonly #chatId = crypto.randomUUID()
   readonly #listeners = new Set<() => void>()
+  /** M43 — resolves per-request context (evaluated on every send/reconnect — dynamic, never stale). */
+  readonly #contextResolver: (() => RequestContext | undefined) | undefined
 
   #messages: UIMessage[] = []
   #status: UseAgentStatus = 'idle'
@@ -54,8 +56,9 @@ export class AgentClient<TInput = unknown> {
   #controller: AbortController | null = null
   #snapshot: AgentClientState = { messages: [], status: 'idle', error: undefined }
 
-  constructor(transport: AgentTransport) {
+  constructor(transport: AgentTransport, contextResolver?: () => RequestContext | undefined) {
     this.#transport = transport
+    this.#contextResolver = contextResolver
   }
 
   /** Subscribe to state changes; returns an unsubscribe fn. */
@@ -124,6 +127,7 @@ export class AgentClient<TInput = unknown> {
     this.#error = undefined
     this.#status = 'streaming'
     this.#emit()
+    const context = this.#contextResolver?.()
     void this.#drive(
       () =>
         this.#transport.sendMessages({
@@ -135,6 +139,9 @@ export class AgentClient<TInput = unknown> {
           // Only object inputs flow as the request `body` (the turn text is always in `messages`);
           // a primitive input is carried by the user message, never spread into the body.
           body: typeof input === 'object' && input !== null ? input : undefined,
+          // M43 — per-request context reaches every transport (headers → HTTP, metadata → in-process/channel).
+          headers: context?.headers,
+          metadata: context?.metadata,
         }),
       controller,
     )
@@ -146,7 +153,16 @@ export class AgentClient<TInput = unknown> {
     this.#controller = controller
     this.#status = 'streaming'
     this.#emit()
-    void this.#drive(() => this.#transport.reconnectToStream({ chatId: this.#chatId }), controller)
+    const context = this.#contextResolver?.()
+    void this.#drive(
+      () =>
+        this.#transport.reconnectToStream({
+          chatId: this.#chatId,
+          headers: context?.headers,
+          metadata: context?.metadata,
+        }),
+      controller,
+    )
   }
 
   /** Abort an in-flight stream (not an error — leaves messages as-is). */

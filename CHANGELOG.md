@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-07-12
+
+### Added
+- **M43 shipped** — request-context / auth parity across every transport. `useAgent(pathOrTransport, { context })` attaches a per-request `RequestContext` (`{ headers?, metadata? }`) — a value or a resolver evaluated on every send/reconnect (never stale). Threaded through the seam's `ChatRequestOptions` to every transport: `HttpTransport` → `context.headers` become request headers; `InProcessTransport` → `context.metadata` reaches the runner as `InProcessRunInput.context`; `ChannelTransport` → `context.metadata` reaches the injected `start(turn)` as `turn.context`. Context stops at the transport boundary (never enters the SDK runtime — G2). No-context calls are byte-identical to before. ADR-0052.
+
 ## [0.28.0] - 2026-07-12
 
 ### Added
