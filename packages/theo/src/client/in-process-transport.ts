@@ -1,5 +1,6 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
 
+import { extractLastUserText } from './last-user-text.js'
 import type { AgentTransport, ApprovalDecision } from './transport.js'
 
 /** An inline approval request handed to the transport's resolver (structural — no server import). */
@@ -53,20 +54,6 @@ function generatorToStream(gen: AsyncGenerator<UIMessageChunk>): ReadableStream<
       await gen.return(undefined)
     },
   })
-}
-
-/** Extract the turn text from the last user message's text parts. */
-function extractLastUserText(messages: readonly UIMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i]
-    if (message.role !== 'user') continue
-    const text = message.parts
-      .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-      .map((part) => part.text)
-      .join('')
-    if (text.length > 0) return text
-  }
-  return ''
 }
 
 /**
