@@ -81,13 +81,19 @@ export function generateAgentsDts({
   return `${FILE_HEADER}
 declare module '@theo/agents' {
   import type { InferAgentInput, InferAgentToolNames } from '@theokit/agents'
-  import type { UseAgentReturn } from 'theokit/client'
+  import type { UseAgentReturn, AgentTransport } from 'theokit/client'
 ${importBlock}
   export interface AppAgents ${body}
 
+  // Web (and any HTTP surface): bind by agent name — \`send\` is typed to the agent's \`input\` schema.
   export function useAgent<K extends keyof AppAgents>(
     name: K,
   ): UseAgentReturn<AppAgents[K]['input'], AppAgents[K]['tools']>
+  // M41 (ADR-0050) — terminal/desktop (and advanced): bind by an explicit AgentTransport
+  // (e.g. InProcessTransport). The SAME hook, one consumption shape across every surface.
+  export function useAgent<TInput = unknown>(
+    transport: AgentTransport,
+  ): UseAgentReturn<TInput>
 }
 `
 }
