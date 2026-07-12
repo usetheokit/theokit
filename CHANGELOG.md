@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-07-12
+
+### Changed
+
+- **BREAKING (M40, ADR-0049): `createCodeMode` now returns `{ tool, instructions }` instead of the tool directly.** Migrate `const runCode = createCodeMode(...)` → `const { tool: runCode, instructions } = createCodeMode(...)` and add `instructions` to the agent's system prompt. Chosen over an additive `.instructions` because the instructions belong in the agent prompt, not on the tool object (theokit is pre-1.0; Code Mode is Beta). (#M40)
+
+### Added
+
+- **M40 — Code Mode: generated `instructions` (ADR-0049).** `createCodeMode` now returns a generated `instructions` string alongside the M29 tool. It is derived from the SAME `tools` allow-list the tool already captures (DRY — cannot drift from the api surface): it lists each `await api.<name>(<input>)` call + description + input shape (from the tool's JSON-Schema; `?` marks optional props), and states the code contract (runs in a sandbox; return exactly ONE structured result; prefer `Promise.all` for independent calls). Each `createCodeMode` instance lists ONLY its own allow-list (least-privilege scoping — two instances generate distinct instructions). Closes the Mastra Code-Mode DX gap (their `{ tool, instructions }`). The `tool` behavior + the permission gate + the injected-sandbox requirement are unchanged. No new runtime/sandbox/dependency. (`packages/theo/src/server/agent/code-mode.ts`, ADR-0049, #M40)
+- Roadmap amended: added **M40 — Code Mode: generated `instructions` (return `{ tool, instructions }`)** to `ROADMAP.md` (`/roadmap-feature code-mode-instructions`). The one runtime/DX-legitimate gap from the Mastra **Code Mode** comparison — M29 already ships `createCodeMode` (sandboxed agent-authored code orchestrating tools via a permission-gated restricted API + allow-list scoping, STRICTER than Mastra: injected vetted sandbox, `node:vm` banned, per-call permission gate), but returns only the tool. M40 generates the `instructions` prompt from the SAME tool allow-list (DRY) — teaching the model the sandboxed-code contract + the available `api.<tool>(args)` calls + schemas + the `Promise.all` tip — so the model reliably uses code mode, mirroring Mastra's `{ tool, instructions }`. No new runtime/sandbox/dependency. **Out-of-scope cross-check (added):** a bundled Code-Mode sandbox (Mastra's `LocalSandbox` = host node process) stays OUT — it contradicts the LOCKED ADR-0041/M29 inject-a-vetted-sandbox-only security decision (core ships no VM); the `external_*` / `execute_typescript` naming is cosmetic and NOT adopted (churn). (#M40)
+
 ## [0.25.0] - 2026-07-12
 
 ### Added

@@ -1,18 +1,29 @@
 # Code mode (`createCodeMode`) — security boundary & threat model
 
-**Status:** M29 (ADR-0041). `createCodeMode` lets an agent compose the available tools *in code* run
-inside an isolation boundary, instead of one tool call at a time.
+**Status:** M29 (ADR-0041); M40 (ADR-0049) added generated `instructions`. `createCodeMode` lets an
+agent compose the available tools *in code* run inside an isolation boundary, instead of one tool call
+at a time.
 
 ```ts
 import { createCodeMode } from 'theokit/server'
 
-const runCode = createCodeMode({
+const { tool: runCode, instructions } = createCodeMode({
   tools: [addTool, searchTool],        // the ONLY functions the code can call
   sandbox: myVettedSandbox,            // INJECTED — you supply a vetted isolation boundary
   onPermissionRequest: ({ tool, args }) => ({ granted: isAllowed(tool, args) }),
 })
-// pass `runCode` to an agent like any other tool
+// pass `runCode` to the agent as a tool, and add `instructions` to its system prompt:
+//   new Agent({ instructions: ['You are a helpful assistant.', instructions], tools: { run_code: runCode } })
 ```
+
+> **Breaking change (M40, ADR-0049):** `createCodeMode` now returns `{ tool, instructions }` instead
+> of the tool directly. Migrate `const runCode = createCodeMode(...)` →
+> `const { tool: runCode, instructions } = createCodeMode(...)`, and add `instructions` to the agent's
+> system prompt. `instructions` is GENERATED from your `tools` allow-list — it teaches the model that
+> its code runs in a sandbox, lists the available `api.<name>(input)` calls (only your allow-list), and
+> states the return contract (return one structured result; prefer `Promise.all`). It cannot drift
+> from the api surface it describes, and each `createCodeMode` instance lists only its own tools
+> (least-privilege scoping).
 
 ## Responsibility split (read before shipping)
 
