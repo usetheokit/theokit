@@ -48,6 +48,25 @@ describe('generateAgentsDts (M2)', () => {
     expect(dts).toContain(`UseAgentReturn<AppAgents[K]['input'], AppAgents[K]['tools']>`)
   })
 
+  it('test_M41_emits_both_name_and_transport_overloads', () => {
+    // M41 (ADR-0050 D6) — the codegen keeps the name-typed overload AND adds a transport overload,
+    // so the SAME generated `useAgent` binds web (by name) and terminal/desktop (by AgentTransport).
+    const dts = generateAgentsDts({
+      manifest: manifestWith([
+        { filePath: 'agents/support.ts', agentPath: '/api/agents/support', name: 'support' },
+      ]),
+      dtsOutPath: DTS_OUT,
+      projectRoot: PROJECT_ROOT,
+    })
+    // The AgentTransport seam type is imported from theokit/client.
+    expect(dts).toContain(`import type { UseAgentReturn, AgentTransport } from 'theokit/client'`)
+    // Overload 1 — by name (typed input + tools).
+    expect(dts).toContain(`useAgent<K extends keyof AppAgents>(`)
+    // Overload 2 — by transport (InProcessTransport etc.).
+    expect(dts).toContain(`transport: AgentTransport,`)
+    expect(dts).toContain(`): UseAgentReturn<TInput>`)
+  })
+
   it('test_empty_manifest_emits_stub_module', () => {
     const dts = generateAgentsDts({
       manifest: manifestWith([]),
