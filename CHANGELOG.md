@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-07-12
+
 ### Added
 - Roadmap amended: added M41 — Unified typed agent client on the AI SDK `ChatTransport` seam (web + TUI). Foundation of the theokit↔sdk integration DX track (M42 Tauri `ChannelTransport` + reconnect parity, M43 request-context/auth parity, M44 standalone typed client-SDK). Consolidates the two in-repo client surfaces (`useAgent` fetch+SSE, TUI `useAgentStream`) behind `ai`'s `ChatTransport` — reuse the shipped dep, not a hand-rolled interface (`/roadmap-feature unified-agent-client-transport`).
 - **M41 shipped** — `useAgent` is one hook over one seam across web + terminal. Adopts `ai`'s `ChatTransport` and ships `HttpTransport` (web) + `InProcessTransport` (in-process); `useAgent(pathOrTransport)` drives both from a framework-agnostic `AgentClient` store (React `useSyncExternalStore`, no new dep). Return shape gains `approve(id, decision)` (routes to the transport's HITL path) and `reconnect()` (M37 for web; no-op in-process); the `@theo/agents` codegen adds a `useAgent(transport)` overload. Runtime/definition/compile untouched. ADR-0050 (`theokit@minor`).
