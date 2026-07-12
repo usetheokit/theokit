@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-07-12
+
+### Added
+- **M44 shipped** — standalone typed agent client-SDK (no React). `createAgentClient(transport, { context? })` from the React-FREE entry `theokit/client/core` returns a plain handle over the framework-agnostic `AgentClient` store: `send`/`abort`/`reset`/`approve`/`reconnect`/`subscribe`/`getState`, plus `stream(input): AsyncIterable<UIMessage>` (progressive assistant snapshots; last value = final result; rejects on a failed turn; unsubscribes + aborts the turn on early break; lost-wakeup-safe). Drives any transport (`HttpTransport`/`InProcessTransport`/`ChannelTransport`) and supports the M43 per-request `context`. `theokit/client/core` imports no React (import-graph test); `theokit/client` re-exports `createAgentClient` for React apps. No new store (wraps `AgentClient` — G12), no runtime change. **Completes the theokit↔sdk DX track (M41 web+TUI, M42 Tauri, M43 context, M44 standalone).** ADR-0053.
+
 ## [0.29.0] - 2026-07-12
 
 ### Added
