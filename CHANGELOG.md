@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Roadmap amended: added **M40 — Code Mode: generated `instructions` (return `{ tool, instructions }`)** to `ROADMAP.md` (`/roadmap-feature code-mode-instructions`). The one runtime/DX-legitimate gap from the Mastra **Code Mode** comparison — M29 already ships `createCodeMode` (sandboxed agent-authored code orchestrating tools via a permission-gated restricted API + allow-list scoping, STRICTER than Mastra: injected vetted sandbox, `node:vm` banned, per-call permission gate), but returns only the tool. M40 generates the `instructions` prompt from the SAME tool allow-list (DRY) — teaching the model the sandboxed-code contract + the available `api.<tool>(args)` calls + schemas + the `Promise.all` tip — so the model reliably uses code mode, mirroring Mastra's `{ tool, instructions }`. No new runtime/sandbox/dependency. **Out-of-scope cross-check (added):** a bundled Code-Mode sandbox (Mastra's `LocalSandbox` = host node process) stays OUT — it contradicts the LOCKED ADR-0041/M29 inject-a-vetted-sandbox-only security decision (core ships no VM); the `external_*` / `execute_typescript` naming is cosmetic and NOT adopted (churn). (#M40)
+
 ## [0.25.0] - 2026-07-12
 
 ### Added
