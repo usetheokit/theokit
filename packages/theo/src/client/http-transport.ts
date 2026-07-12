@@ -65,9 +65,11 @@ export class HttpTransport implements AgentTransport {
     options: Parameters<ChatTransport<UIMessage>['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
     const { messages, abortSignal, headers, body } = options
-    // Only spread an object body (never a primitive — that would emit char-indexed keys). The server
+    // Only spread an object body (never a primitive — that would emit char-indexed keys). `body` is typed
+    // `object | undefined` (ai's `ChatRequestOptions`), so no cast is needed — the guard narrows to
+    // `object`. (A runtime-`null` body, which the type forbids, spreads to `{}` — harmless.) The server
     // accepts `{ messages }` (ai shape) AND `{ ...input }` (typed input), preferring the turn text.
-    const extra = typeof body === 'object' ? (body as Record<string, unknown>) : undefined
+    const extra = typeof body === 'object' ? body : undefined
     const response = await this.#fetch(this.#api, {
       method: 'POST',
       headers: {

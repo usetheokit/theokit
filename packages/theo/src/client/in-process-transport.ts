@@ -21,6 +21,8 @@ export interface InProcessRunInput {
   sessionId?: string
   signal?: AbortSignal
   awaitApproval?: InProcessAwaitApproval
+  /** M43 — per-request context (from `sendMessages`'s `metadata`) — tenant / provider / auth for the runner. */
+  context?: unknown
 }
 
 /**
@@ -94,11 +96,13 @@ export class InProcessTransport implements AgentTransport {
   sendMessages(
     options: Parameters<ChatTransport<UIMessage>['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
-    const { messages, abortSignal } = options
+    const { messages, abortSignal, metadata } = options
     const generator = this.#run({
       message: extractLastUserText(messages),
       signal: abortSignal ?? undefined,
       awaitApproval: this.#awaitApproval,
+      // M43 — forward per-request context (the seam's `metadata`) to the runner.
+      context: metadata,
     })
     return Promise.resolve(generatorToStream(generator))
   }
