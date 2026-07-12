@@ -932,6 +932,88 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+### M42 — [ ] Tauri desktop on the unified client — `ChannelTransport` (push) + reconnect parity
+
+> Added 2026-07-12 (slug: `tauri-channel-transport`). DX-track step 2 on the M41 `ChatTransport` seam. M36 shipped Tauri as a real surface (sidecar runs `streamAgentTurnInProcess`, writes JSONL to stdout, Rust `Channel<String>.send(line)` pushes to the webview — ADR-0045). But the webview consumes those pushed frames by hand (a bespoke `channel.onmessage` reader) — the SAME fragmentation M41 removed for web + TUI, still present for Tauri. This milestone gives the Tauri webview the SAME `useAgent` by shipping a `ChannelTransport` that implements `ai`'s `ChatTransport` over an INJECTED Tauri-`Channel`-shaped push source. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** ship `ChannelTransport` in `packages/theo/src/client/` — a `ChatTransport<UIMessage>` that bridges a push source (a Tauri `Channel`: `{ onmessage }` delivering JSONL `UIMessageChunk` lines, plus an injected `start(turn)` that invokes the Rust command) into a `ReadableStream<UIMessageChunk>`, so `useAgent(channelTransport)` drives the desktop webview with the SAME return shape as web/TUI. The push source is INJECTED (decoupled from the Tauri runtime — no `@tauri-apps/api` dependency in core), exactly as `InProcessTransport` injects its runner — so it is unit-tested with a fake channel, no Rust/webview toolchain. **Reconnect parity:** `reconnectToStream` returns `null` (a single-process sidecar has no durable server stream — identical to `InProcessTransport`, and documented as the honest in-process/push-surface posture; the durable `runId` reconnect stays web-only, M37). Approve routes to the transport's HITL path (the injected `invoke`-style settle).
+
+**Definition of done:**
+
+- [ ] **Design ADR accepted BEFORE code (GATE)** — affirms: (a) `ChannelTransport implements ChatTransport` (NOT a parallel interface — M41 D1); (b) the Tauri push source is INJECTED (`{ onmessage; start; settle? }`), so core adds NO `@tauri-apps/*` dependency and the transport is testable without Tauri (mirrors `InProcessTransport`); (c) `reconnectToStream → null` is the correct parity for a single-process push surface (reconciles with M36/ADR-0045 sidecar = direct in-process, and M37 durable reconnect = web-only); (d) runtime/definition/compile UNCHANGED (G2). Reconciles ADR-0045 (Tauri push) + ADR-0050 (M41 seam).
+- [ ] `ChannelTransport` in `packages/theo/src/client/channel-transport.ts` implements `ChatTransport<UIMessage>` + the optional `approve`: `sendMessages` starts the turn via the injected `start` and bridges the injected channel's JSONL-parsed `onmessage` frames into a `ReadableStream<UIMessageChunk>` (honoring `abortSignal`); `reconnectToStream → null`; `approve` routes to the injected settle.
+- [ ] `useAgent(channelTransport)` drives the Tauri webview with the SAME `{ messages, status, error, send, abort, reset, approve, reconnect }` shape — no bespoke `channel.onmessage` reader on the app side. Exported from `theokit/client`.
+- [ ] The M36 example's webview consumes agents via `useAgent(channelTransport)` (the bespoke reader retired) OR a documented adapter shows the wiring; the sidecar↔shell JSONL contract (ADR-0045 D2) is unchanged.
+- [ ] Back-compat: web `HttpTransport` + TUI `InProcessTransport` unchanged; the JSONL/Channel wire (ADR-0045) unchanged; runtime untouched.
+- [ ] TDD: inject a fake channel that emits JSONL `UIMessageChunk` lines → `ChannelTransport.sendMessages` yields the parsed chunks; malformed JSONL lines are handled (skipped/typed-error, not a crash); `abortSignal` ends the stream; `approve` routes; `reconnectToStream` returns `null`; `useAgent(channelTransport)` accumulates messages + transitions status.
+- [ ] Docs (extend the "one client, every surface" guide with the Tauri row) + CHANGELOG + ADR.
+
+**Dependencies:** M41 (`ChatTransport` seam + `AgentClient` + `useAgent(transport)` — [x]); M36 Tauri sidecar + push-transport ADR-0045 ([x]); M35 in-process seam ([x]). No new dependency, no runtime change.
+
+**Top risks (new):**
+
+1. **Coupling core to `@tauri-apps/api`.** Mitigation: the push source is INJECTED (structural `{ onmessage; start }`), never imported — core stays Tauri-agnostic (same posture as ADR-0045 D5 + M41's injected `InProcessRunner`). The ADR bans a `@tauri-apps/*` core dependency.
+2. **Faking "reconnect parity" as real durable reconnect.** Mitigation: `reconnectToStream → null` is the honest answer for a single-process push surface; the ADR records WHY (no durable server stream; M37 is web-only). Not a stub pretending to resume.
+3. **JSONL frame corruption crashing the stream.** Mitigation: malformed lines are handled (skip + optional typed error), tested — a bad line never crashes the webview (Rule 8).
+
+**Why now:** M41 unified web + TUI; Tauri is the third surface still consuming agents by hand. Closing it on the same seam completes "one client, every surface" for all three shipped surfaces (web ✅ + TUI ✅ + Tauri) — the honest next step, a clean addition on the M41 seam with zero rework.
+
+---
+
+### M43 — [ ] Request-context / auth parity across every transport
+
+> Added 2026-07-12 (slug: `transport-request-context`). DX-track step 3 on the M41 seam. `ai`'s `ChatTransport.sendMessages` already carries per-request `{ headers, body, metadata }` (`ChatRequestOptions`), and `HttpTransport` forwards `headers`/`body` today — but there is no UNIFORM way for an app to attach per-request context (an auth token, a tenant id, a provider selection) at the `useAgent` layer and have it reach EVERY transport consistently (HTTP header, in-process runner arg, Tauri invoke arg). This milestone formalizes one `context` channel that flows through the seam to all three transports. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** add a uniform per-request context channel to the unified client: `useAgent`/`AgentClient.send` accept a `context` (headers + body + metadata), threaded to `transport.sendMessages({ headers, body, metadata })` for EVERY transport. `HttpTransport` maps it to request headers/body (already partially wired — formalize + cover metadata); `InProcessTransport` forwards it to the injected runner (a `context` arg the sidecar/TUI runner receives); `ChannelTransport` (M42) forwards it to the injected `start(turn, context)`. Dynamic values (a rotating JWT) resolve per request (reuse M41's `HeadersResolver` pattern). No runtime change — context is a transport/boundary concern (the SDK already receives per-run config; this is the app→transport plumbing).
+
+**Definition of done:**
+
+- [ ] **Design ADR (GATE)** — affirms: (a) context flows via `ai`'s `ChatRequestOptions` (`headers`/`body`/`metadata`) — NOT a new bespoke channel (M41 D1 reuse); (b) each transport maps context to its native mechanism (HTTP header / runner arg / invoke arg); (c) dynamic context resolves per request (M41 `HeadersResolver` reuse — never stale); (d) runtime UNCHANGED (G2) — this is app→transport plumbing, the SDK already takes per-run config.
+- [ ] `useAgent`/`AgentClient` accept a per-call `context` (or a `context` resolver) threaded to `sendMessages({ headers, body, metadata })` for all transports.
+- [ ] `HttpTransport` maps context → request headers/body/(metadata where applicable); `InProcessTransport` forwards it to the injected runner; `ChannelTransport` forwards it to the injected `start`.
+- [ ] Dynamic context (function form) is resolved per request — never captured stale (reuse M41's resolver fix + test).
+- [ ] Back-compat: calls WITHOUT context behave exactly as today across all transports; runtime untouched.
+- [ ] TDD: a per-request auth header reaches `HttpTransport`'s fetch; the same `context` reaches an `InProcessTransport` runner arg and a `ChannelTransport` `start` arg; a rotating token is current on each of two sends.
+- [ ] Docs (context/auth section in the client guide) + CHANGELOG + ADR.
+
+**Dependencies:** M41 ([x]); M42 (`ChannelTransport` — context must reach it too). No new dependency, no runtime change.
+
+**Top risks (new):**
+
+1. **Leaking context into the runtime (G2 breach).** Mitigation: context stops at the transport boundary → the app's server handler / runner; the SDK loop is untouched. The ADR draws the line.
+2. **Stale dynamic context.** Mitigation: reuse M41's per-request resolver pattern + its regression test; cover all three transports.
+
+**Why now:** with three surfaces on one seam (M41 + M42), the missing DX piece is attaching auth/tenant/provider per request uniformly — today only `HttpTransport` half-does it. A single `context` channel across all transports is the honest completion of the seam's request model.
+
+---
+
+### M44 — [ ] Standalone typed agent client-SDK (no React) over the same store
+
+> Added 2026-07-12 (slug: `standalone-agent-client-sdk`). DX-track step 4 — the last one. `useAgent` is a thin React binding over the framework-agnostic `AgentClient` store (M41 D6). Node scripts, CLIs, tests, and non-React UIs cannot use a React hook — but they CAN use the store directly. This milestone ships a small standalone client-SDK (`createAgentClient(transport)`) exposing the store's capabilities as a plain async API, so an agent is consumable from any JS runtime on the SAME seam. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** ship `createAgentClient(transport)` in `packages/theo/src/client/` (no React import) returning a plain client over the existing `AgentClient` store: `send(input)`, `abort()`, `reset()`, `approve(id, decision)`, `reconnect()`, `subscribe(listener)`, `getState()`, plus an ergonomic `stream(input): AsyncIterable<UIMessage>` (drive a turn and yield reconstructed messages) for the common scripting shape. It drives ANY transport (Http / InProcess / Channel), so a node script hits an HTTP agent, and a test drives an in-process agent, with the same API. Zero React dependency (the store already is framework-agnostic — this is a documented public entry, not new logic).
+
+**Definition of done:**
+
+- [ ] **Design ADR (GATE)** — affirms: (a) the standalone client is a thin public surface over the EXISTING `AgentClient` store (NO new store, NO duplicated logic — M41 D6 / G12); (b) it imports NO React (a separate export path so a node consumer never pulls React); (c) it drives any `AgentTransport`; (d) runtime UNCHANGED (G2).
+- [ ] `createAgentClient(transport)` (no React) exposes `send`/`abort`/`reset`/`approve`/`reconnect`/`subscribe`/`getState` over the `AgentClient` store, plus `stream(input): AsyncIterable<UIMessage>`.
+- [ ] Exported from a React-free entry (e.g. `theokit/client/core` or a documented subpath) so a node/script consumer pulls no React.
+- [ ] Works over `HttpTransport` (node fetch) AND `InProcessTransport` in a plain script/test — same API.
+- [ ] Back-compat: `useAgent` unchanged (now optionally re-expressed as a binding over `createAgentClient`, or left as-is — no behavior change); runtime untouched.
+- [ ] TDD: `createAgentClient(fakeTransport).stream({...})` yields the reconstructed messages; `subscribe`/`getState` reflect status transitions; `approve` routes; no React is imported by the entry (import-graph assertion).
+- [ ] Docs ("use an agent from a script — no React" section) + CHANGELOG + ADR.
+
+**Dependencies:** M41 (`AgentClient` store + transports — [x]); M43 (context — a script sets per-request context). No new dependency, no runtime change.
+
+**Top risks (new):**
+
+1. **Duplicating the store logic (G12 breach).** Mitigation: `createAgentClient` wraps the EXISTING `AgentClient` — the ADR bans a parallel store; a test asserts one implementation.
+2. **Pulling React into a node consumer.** Mitigation: a React-free export path + an import-graph test asserting the entry imports no `react`.
+
+**Why now:** the seam already has a framework-agnostic store; exposing it for node/scripts/tests is the last DX gap — an agent consumable from any runtime, closing the "write once, consume anywhere" promise the DX track set out to deliver. It completes M41-M44.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
