@@ -82,15 +82,26 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     expect(has('index.html')).toBe(false)
     expect(noTmplLeftover()).toBe(true)
 
-    // Unified-client wiring (ADR-0054 D2) + {{name}}
+    // Unified-client wiring (ADR-0054 D2) + M46 @theokit/tui rendering + {{name}}
     const app = read('tui/App.tsx')
-    for (const s of ['useAgent', 'InProcessTransport', 'streamAgentTurnInProcess', 'term-app']) {
+    for (const s of [
+      'useAgent',
+      'InProcessTransport',
+      'streamAgentTurnInProcess',
+      'term-app',
+      // M46: renders with @theokit/tui via the ai-sdk UIMessage adapter (Step A)
+      "from '@theokit/tui'",
+      'ChatThread',
+      "from '@theokit/tui/ai-sdk'",
+      'uiMessagesToChatThread',
+    ]) {
       expect(app).toContain(s)
     }
     expect(read('tui/main.tsx')).toContain("from './App.js'")
 
-    // Deps: ink + ai added, agent runtime + theokit peers kept, UI-only removed
+    // Deps: @theokit/tui + ink + ai added, agent runtime + theokit peers kept, UI-only removed
     const p = pkg()
+    expect(p.dependencies['@theokit/tui']).toBeDefined() // M46 — renders the conversation
     expect(p.dependencies.ink).toBeDefined()
     expect(p.dependencies.ai).toBeDefined() // UIMessageStream reader (was transitive via @theokit/ui)
     expect(p.dependencies['@theokit/sdk']).toBeDefined()
@@ -114,12 +125,12 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     scaffold(dir, 'desk-app')
     applySurface({ targetDir: dir, projectName: 'desk-app', surface: 'desktop' })
 
-    // Tier files
+    // Tier files (M47: React webview + @theokit/tauri sidecar — no hand-rolled sidecar-core.ts)
     for (const f of [
       'sidecar/sidecar.ts',
-      'sidecar/sidecar-core.ts',
       'frontend/index.html',
-      'frontend/src/main.ts',
+      'frontend/src/main.tsx',
+      'frontend/src/App.tsx',
       'frontend/vite.config.ts',
       'src-tauri/Cargo.toml',
       'src-tauri/tauri.conf.json',
@@ -130,21 +141,29 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     ]) {
       expect(has(f), `missing ${f}`).toBe(true)
     }
+    expect(has('sidecar/sidecar-core.ts')).toBe(false) // M47 — replaced by @theokit/tauri/sidecar
+    expect(has('frontend/src/main.ts')).toBe(false) // M47 — React main.tsx now
     expect(has('app')).toBe(false)
     expect(noTmplLeftover()).toBe(true)
 
-    // Webview = React-FREE unified client (M42 + M44)
-    const webview = read('frontend/src/main.ts')
+    // Webview = React + @theokit/ui, driven by useAgent over @theokit/tauri's ChannelTransport (M47)
+    const app = read('frontend/src/App.tsx')
     for (const s of [
-      'createAgentClient',
+      'useAgent',
       'ChannelTransport',
-      'theokit/client/core',
-      'client.stream',
+      "from '@theokit/ui'",
+      'ChatThread',
+      'ChatMessage',
+      'createTauriChannelSource',
+      "from '@theokit/tauri'",
+      'desk-app', // {{name}} substituted
     ]) {
-      expect(webview).toContain(s)
+      expect(app).toContain(s)
     }
-    // Sidecar = server seam
-    expect(read('sidecar/sidecar-core.ts')).toContain('streamAgentTurnInProcess')
+    expect(read('frontend/src/main.tsx')).toContain("import '@theokit/ui/styles.css'")
+    // Sidecar = @theokit/tauri/sidecar (no hand-rolled copy)
+    expect(read('sidecar/sidecar.ts')).toContain("from '@theokit/tauri/sidecar'")
+    expect(read('sidecar/sidecar.ts')).toContain('runTurnToJsonl')
     // Rust shell has both commands + externalBin wiring
     const lib = read('src-tauri/src/lib.rs')
     expect(lib).toContain('fn run_turn')
@@ -163,13 +182,17 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     // Deps + tsconfig
     const p = pkg()
     expect(p.dependencies.ai).toBeDefined() // webview UIMessageStream reader
+    expect(p.dependencies['@theokit/ui']).toBeDefined() // M47 — renders the webview
+    expect(p.dependencies['@theokit/tauri']).toBeDefined() // M47 — transport source + sidecar glue
+    expect(p.dependencies.react).toBeDefined() // React webview
     expect(p.dependencies['react-router']).toBeDefined() // theokit REQUIRED peer kept
     expect(p.devDependencies['@tauri-apps/cli']).toBeDefined()
     expect(p.devDependencies.vite).toBeDefined()
+    expect(p.devDependencies['@vitejs/plugin-react']).toBeDefined() // M47 — compiles the webview JSX
     expect(p.scripts.dev).toBe('tauri dev')
     const tsc = JSON.parse(read('tsconfig.json')) as { include: string[] }
     expect(tsc.include).toContain('sidecar/**/*.ts')
-    expect(tsc.include).toContain('frontend/src/**/*.ts')
+    expect(tsc.include).toContain('frontend/src/**/*.tsx')
   })
 
   it('tui + --backend node — surface AND services compose', () => {

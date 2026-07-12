@@ -10,6 +10,7 @@
     "test:e2e": "playwright test --config playwright.config.ts",
     "test:coverage": "vitest run --coverage",
     "build": "pnpm -r run build",
+    "verify:published": "node scripts/verify-published-no-workspace.mjs",
     "validate:publint": "npx publint packages/theo && npx publint packages/create-theokit",
     "validate:attw": "npx @arethetypeswrong/cli --pack packages/theo --ignore-rules cjs-resolves-to-esm no-resolution",
     "typecheck": "tsc --noEmit",
