@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit@0.30.3 + create-theokit@1.2.8] - 2026-07-12
+
+### Fixed
+- **`theokit@0.30.3` — the web `useAgent` chat now actually streams (was `TypeError: Illegal invocation`).** `HttpTransport` stored the default `fetch` and called it as `this.#fetch(...)`; the browser's native `fetch` throws `Illegal invocation` when its receiver is not `window`, so EVERY web agent send died before reaching the network (the error card's generic "connection interrupted" hid it). The default fetch is now bound to `globalThis`. Node/jsdom fetch is lenient about `this`, so unit tests + `curl` never caught it — only a real browser did. Added a regression test with a strict native-like fetch.
+- **`create-theokit@1.2.8` — the default (web) scaffold now declares `ai`.** `theokit`'s client stream consumer dynamically `import('ai')`s (`ai` is an OPTIONAL peer, so it is NOT auto-installed), and `@theokit/ui` consumes its `UIMessage` type. Without it a fresh web app threw on the first streamed reply. The tui/desktop surfaces already declared `ai`; the web template was missing it. Both bugs found dogfooding the scaffolded web app in a real Chrome against a live OpenRouter model — the chat now streams a real reply end-to-end.
+
 ## [create-theokit@1.2.7] - 2026-07-12
 
 ### Fixed
