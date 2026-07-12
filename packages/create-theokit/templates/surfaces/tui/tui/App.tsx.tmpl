@@ -1,5 +1,5 @@
 import { Box, Text, useApp, useInput } from 'ink'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import { InProcessTransport, useAgent } from 'theokit/client'
 import { streamAgentTurnInProcess } from 'theokit/server'
 
@@ -17,7 +17,7 @@ const transport = new InProcessTransport({
   run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
 })
 
-export function App(): JSX.Element {
+export function App(): ReactElement {
   const agent = useAgent<{ message: string }>(transport)
   const [input, setInput] = useState('')
   const { exit } = useApp()
