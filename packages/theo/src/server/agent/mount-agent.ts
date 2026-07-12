@@ -9,16 +9,11 @@
  * Request body — accepts the `@ai-sdk/react` `useChat` shape (`{ id, messages: UIMessage[] }`,
  * the typed-client path) AND a simple `{ message, sessionId? }` shape (M0/M1-style clients).
  */
-import {
-  compileAgentModule,
-  resolveEnabledSkills,
-  streamAgentUIMessages,
-  type HumanInTheLoopOptions,
-} from '@theokit/agents'
+import { compileAgentModule, resolveEnabledSkills, streamAgentUIMessages } from '@theokit/agents'
 
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
-import { getApprovalRegistry } from './approval-registry.js'
+import { buildAgentHitl } from './build-agent-streamer.js'
 import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
 import { getRunEventCache, mintRunId } from './run-event-cache.js'
 
@@ -117,24 +112,8 @@ export async function mountAgent(
   // When the agent has @HumanInTheLoop-gated tools (M4), wire the pause: the plugin's `awaitApproval`
   // registers a pending approval in the shared registry (the Promise that PAUSES the run); the
   // approve route (`handleAgentApproval`) resolves it. No gated tools ⇒ the M2 stream path unchanged.
-  const gated = compiled.hitl
-  const registry = getApprovalRegistry()
-  const hitl =
-    gated && gated.size > 0
-      ? {
-          gated,
-          awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) =>
-            registry.register(approvalId, {
-              timeoutMs: opts.timeout ?? 300_000,
-              onTimeout: opts.onTimeout ?? 'abort',
-              // M14 — surface toolName + question in GET /approvals (the plugin forwards c.name).
-              toolName,
-              question: opts.question,
-              // M20 — carry the declared custom-payload schema into GET /approvals.
-              ...(opts.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
-            }),
-        }
-      : undefined
+  // Extracted to `build-agent-streamer.ts` (M39 / DRY — the thread routes reuse the same wiring).
+  const hitl = buildAgentHitl(compiled)
 
   // M37 (ADR-0046) — mint a transport runId + stream through the durable layer:
   // each SSE frame is cached + `id:`-tagged so a dropped client can reconnect

@@ -126,6 +126,8 @@ async function serveAux(
       loadModule: deps.loadModule,
       baseUrl: `http://${req.headers.host ?? 'localhost'}`,
       csrfMode: deps.csrfMode,
+      // M39 — the thread follow-up route drives the agent; resolve the key on demand.
+      resolveApiKey: () => resolveProvider().apiKey,
     })
     if (response === null) {
       next()
