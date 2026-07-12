@@ -57,8 +57,10 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     fragment: 'tui',
     // `@theokit/tui` renders the conversation (`<ChatThread>` + the `./ai-sdk` UIMessage adapter). `ai` is
     // the UIMessageStream type the unified client + adapter consume (was transitive via `@theokit/ui`, dropped
-    // for tui), so declare it explicitly. `ink` peers `react >=18` (works with 19) — @theokit/tui peers it too.
-    deps: { '@theokit/tui': '^0.30.0', ink: '^5.1.0', ai: '^7.0.0' },
+    // for tui), so declare it explicitly. `ink@7` is the React-19 line (ink@5 crashes on React 19 with
+    // `ReactCurrentOwner` — the default template pins react@19; ink@6.0.0+ moved its peer to react>=19) and
+    // matches @theokit/tui's own ink@^7.1.0, so the app's `import 'ink'` dedupes to one React-19 ink.
+    deps: { '@theokit/tui': '^0.30.0', ink: '^7.1.0', ai: '^7.0.0' },
     devDeps: { tsx: '^4.19.0' },
     scripts: { dev: 'tsx tui/main.tsx', start: 'tsx tui/main.tsx' },
     tsconfigInclude: ['tui/**/*.ts', 'tui/**/*.tsx', 'server/**/*.ts', 'agents/**/*.ts'],
