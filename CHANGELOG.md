@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.2.2] - 2026-07-12
+
+### Fixed
+- **`--surface tui` no longer crashes at `npm run dev` with `Cannot read properties of undefined (reading 'ReactCurrentOwner')`.** The tui surface pinned `ink@^5.1.0`, whose bundled `react-reconciler` reads React-18 internals (`ReactCurrentOwner`) that React 19 removed — and the default template pins `react@19`. Moved the tui surface FORWARD to `ink@^7.1.0` (the React-19 line — ink@6.0.0+ set its peer to `react>=19`), which also matches `@theokit/tui`'s own `ink@^7.1.0` so the app's `import 'ink'` dedupes to a single React-19 ink. Never downgrade React. Locked with a regression assertion (`ink` MUST be `^7`+). Found by dogfooding the TUI end-to-end (scaffold → install → `npm run dev`).
+
 ## [create-theokit@1.2.1] - 2026-07-12
 
 ### Fixed
