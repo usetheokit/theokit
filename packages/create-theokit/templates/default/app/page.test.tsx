@@ -9,9 +9,12 @@ import Page from './page'
  * must both type-check AND render. Renders the real React tree in jsdom.
  */
 describe('default chat page', () => {
-  it('renders the empty state + quick actions + composer on first load', () => {
-    render(<Page />)
-    expect(screen.getByText('What should we build today?')).toBeDefined()
+  it('opens with the agent greeting + quick actions + composer on first load', () => {
+    const { container } = render(<Page />)
+    // The agent greets first — the transcript starts warm (like the terminal surface). ChatMessage renders
+    // the text across markdown spans, so assert the assistant message container structurally, not by text.
+    expect(container.querySelector('[data-theo-chat-message="assistant"]')).not.toBeNull()
+    // … with the quick-action suggestions and the composer.
     expect(screen.getByText('Summarize this page')).toBeDefined()
     expect(screen.getByText('Show available tools')).toBeDefined()
     expect(screen.getByText('Start a new conversation')).toBeDefined()
