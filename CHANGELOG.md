@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit@0.30.1 + @theokit/agents@0.35.1] - 2026-07-12
+
+### Fixed
+- **`npm install theokit` no longer fails with `EUNSUPPORTEDPROTOCOL`.** Every published `theokit` from `0.24.0` through `0.30.0` shipped raw `workspace:^` in its regular `dependencies` (`@theokit/agents`, `@theokit/http`) because it was published with `npm publish`, which — unlike `pnpm publish` — does not resolve the `workspace:` protocol. Any external consumer (and every `create-theokit` app) could not install. `theokit@0.30.1` is republished via `pnpm publish`, so the deps resolve to real semver ranges (`^0.35.0` / `^0.5.4`); verified end-to-end (`npm install` of a scaffolded-app dep set now succeeds). `@theokit/agents@0.35.1` republishes to also clear a `workspace:*` in its published `devDependencies` (harmless to consumers, but removed for cleanliness). All broken versions (`theokit` `0.24.0`–`0.30.0`, `@theokit/agents@0.35.0`) are deprecated on npm. A new post-publish guard — `pnpm verify:published` (`scripts/verify-published-no-workspace.mjs`) — fetches each publishable package's published manifest and fails if any dependency field still contains a `workspace:` specifier; wire it into CI/release so this can never regress (issue #115).
+
 ## [create-theokit@1.2.0] - 2026-07-12
 
 ### Changed
