@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "vite frontend",
-    "beforeBuildCommand": "vite build frontend"
+    "beforeDevCommand": "node scripts/build-sidecar.mjs && vite frontend",
+    "beforeBuildCommand": "node scripts/build-sidecar.mjs && vite build frontend"
   },
   "app": {
     "windows": [
@@ -25,6 +25,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/theo-sidecar"]
+    "externalBin": ["binaries/theo-sidecar"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }

@@ -82,8 +82,9 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       dev: 'tauri dev',
       tauri: 'tauri',
       'build:frontend': 'vite build frontend',
-      'build:sidecar':
-        'tsx --version >/dev/null && echo "sidecar runs via tsx (see src-tauri/tauri.conf.json)"',
+      // Generates the Tauri externalBin launcher (src-tauri/binaries/theo-sidecar-<triple>) the Rust
+      // shell spawns. Wired into tauri.conf.json beforeDev/BuildCommand — regenerated each launch.
+      'build:sidecar': 'node scripts/build-sidecar.mjs',
     },
     tsconfigInclude: [
       'sidecar/**/*.ts',
