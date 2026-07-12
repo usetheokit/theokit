@@ -15,6 +15,7 @@ import { detectPkgManager, type PkgManager } from './pkg-manager.js'
 import { assertNodeVersion } from './preflight-node.js'
 import { runPrompts, getDefaults, type ProjectOptions } from './prompts.js'
 import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
+import { applySurface, parseSurfaceFlags, type SurfaceKind } from './scaffold-surface.js'
 
 import { scaffold } from './index.js'
 
@@ -40,6 +41,7 @@ function showHelp(): void {
     -v, --version                 Show version number
     --yes                         Use recommended defaults (skip prompts)
     --template=<name>             Template to use (default: "default")
+    --surface=<web|tui|desktop>   App surface (default: "web") — tui (Ink) / desktop (Tauri)
     --bare                        Minimal app (no @theokit/* deps)
     --skip-install                Scaffold files only, skip package install
     --disable-git                 Skip git init
@@ -56,6 +58,8 @@ function showHelp(): void {
     npx create-theokit my-app --yes
     npx create-theokit my-app
     npx create-theokit my-app --bare --skip-install
+    npx create-theokit my-app --surface=tui
+    npx create-theokit my-app --surface=desktop
     npx create-theokit my-app --use-bun --biome
     npx create-theokit my-app --example=https://github.com/user/repo
     npx create-theokit my-app --import-alias="~/*"
@@ -119,6 +123,22 @@ export async function main(): Promise<void> {
     process.exit(1)
   }
 
+  let surface: SurfaceKind = 'web'
+  try {
+    surface = parseSurfaceFlags(args)
+  } catch (err) {
+    console.error('')
+    console.error(err instanceof Error ? err.message : String(err))
+    process.exit(1)
+  }
+  // --bare strips the agent deps; a tui/desktop surface needs them. Refuse the contradiction fail-fast.
+  if (bare && surface !== 'web') {
+    console.error(
+      `\n--bare cannot be combined with --surface=${surface} (the surface needs the agent deps).\n`,
+    )
+    process.exit(1)
+  }
+
   const targetDir = resolve(process.cwd(), projectName)
 
   // --example: clone from GitHub
@@ -153,12 +173,16 @@ export async function main(): Promise<void> {
 
   try {
     const suffix = bare ? ' [--bare]' : ''
+    const surfaceSuffix = surface !== 'web' ? ` [surface: ${surface}]` : ''
     const backendsSuffix = backends.length > 0 ? ` [+services: ${backends.join(', ')}]` : ''
     console.log(
-      `\nCreating TheoKit project "${projectName}" (template: ${templateName})${suffix}${backendsSuffix}...\n`,
+      `\nCreating TheoKit project "${projectName}" (template: ${templateName})${suffix}${surfaceSuffix}${backendsSuffix}...\n`,
     )
 
     scaffold(targetDir, projectName, templateName, { bare })
+
+    // M45 — apply the surface onto the scaffolded default (tui/desktop; web is a no-op).
+    applySurfaceStep(targetDir, projectName, surface, options)
 
     // Post-scaffold: apply user options
     applyOptions(targetDir, options, { importAlias, useBiome })
@@ -191,6 +215,29 @@ export async function main(): Promise<void> {
 }
 
 // ── Post-scaffold transforms ──
+
+/**
+ * M45 — apply the surface onto the scaffolded default (tui/desktop; web is a no-op). Rolls the whole
+ * target dir back on failure (EC-4), exactly like --bare, and disables the web-only options a
+ * tui/desktop app does not ship.
+ */
+function applySurfaceStep(
+  targetDir: string,
+  projectName: string,
+  surface: SurfaceKind,
+  options: ProjectOptions,
+): void {
+  if (surface === 'web') return
+  try {
+    applySurface({ targetDir, projectName, surface })
+  } catch (err) {
+    rmSync(targetDir, { recursive: true, force: true })
+    const original = err instanceof Error ? err.message : String(err)
+    throw new Error(`Scaffold rolled back: surface transform failed.\nOriginal error: ${original}`)
+  }
+  options.tailwind = false
+  options.srcDir = false
+}
 
 interface ApplyOpts {
   importAlias: string

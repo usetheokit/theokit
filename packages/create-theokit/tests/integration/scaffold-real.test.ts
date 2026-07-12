@@ -199,7 +199,9 @@ describe('scaffold (integration — real template)', () => {
     scaffold(targetDir, 'config-test')
 
     const config = readFileSync(join(targetDir, 'theo.config.ts'), 'utf-8')
-    expect(config).toContain('defineConfig')
+    // The template uses the fluent `config().build()` API (was `defineConfig`); the intent of this test
+    // is that theo.config.ts wires NO httpDecoratorsPlugin / @theokit/http.
+    expect(config).toContain('config(')
     expect(config).not.toContain('httpDecoratorsPlugin')
     expect(config).not.toContain('@theokit/http')
   })

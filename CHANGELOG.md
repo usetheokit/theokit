@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.1.0] - 2026-07-12
+
+### Added
+- Roadmap amended: added M45 — `create-theokit --surface web|tui|desktop` scaffolds the terminal (Ink) and desktop (Tauri sidecar) surfaces, each wired to the M41/M42/M44 unified client. `--surface` is a flag (mirrors `--backend`); the Tauri/Ink boilerplate lives in scaffolder templates, framework core stays agnostic (`/roadmap-feature`).
+- **M45 shipped** — `create-theokit --surface tui|desktop` generates a terminal (Ink) or desktop (Tauri) agent app, not just web. `--surface tui` → an Ink app driving `useAgent(new InProcessTransport(...))` (M41); `--surface desktop` → a Tauri app (Node sidecar `streamAgentTurnInProcess` → JSONL, Rust `Channel` shell, vanilla-JS webview on `createAgentClient(new ChannelTransport(...))` from the React-free `theokit/client/core` — M42 + M44). Each surface uses the UNIFIED client (the DX-track payoff), not the raw seam. Boilerplate lives in scaffolder templates; framework core stays Tauri/Ink-agnostic (ADR-0045). `--surface` is a flag, not a new template (ADR-0023); `--bare` refuses a non-web surface. ADR-0054.
+
 ## [0.30.0] - 2026-07-12
 
 ### Added

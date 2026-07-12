@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Allow the webview to run the agent turn + settle HITL via the sidecar.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [{ "name": "theo-sidecar", "sidecar": true }]
+    }
+  ]
+}
