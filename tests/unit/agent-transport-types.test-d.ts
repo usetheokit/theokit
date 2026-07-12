@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import type { ChatTransport, UIMessage } from 'ai'
 
+import type { ChannelTransport } from '../../packages/theo/src/client/channel-transport.js'
 import type { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
 import type { InProcessTransport } from '../../packages/theo/src/client/in-process-transport.js'
 import type { AgentTransport } from '../../packages/theo/src/client/transport.js'
@@ -19,9 +20,14 @@ describe('AgentTransport seam (types)', () => {
     expectTypeOf<InProcessTransport>().toExtend<ChatTransport<UIMessage>>()
   })
 
+  it('M42 — ChannelTransport implements the same seam', () => {
+    expectTypeOf<ChannelTransport>().toExtend<ChatTransport<UIMessage>>()
+  })
+
   it('D2 — AgentTransport is the ChatTransport seam plus the optional approve method', () => {
     expectTypeOf<AgentTransport>().toExtend<ChatTransport<UIMessage>>()
     expectTypeOf<HttpTransport>().toExtend<AgentTransport>()
     expectTypeOf<InProcessTransport>().toExtend<AgentTransport>()
+    expectTypeOf<ChannelTransport>().toExtend<AgentTransport>()
   })
 })
