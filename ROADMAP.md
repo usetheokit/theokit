@@ -1014,7 +1014,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M45 — [ ] `create-theokit --surface web|tui|desktop` — scaffold the three surfaces on the unified client
+### M45 — [x] `create-theokit --surface web|tui|desktop` — scaffold the three surfaces on the unified client
 
 > Added 2026-07-12 (slug: `create-theokit-surfaces`). The DX-track PAYOFF at the scaffolder: `create-theokit` today emits only the **web** app. M41-M44 gave all three surfaces one client (`useAgent`/transports/`createAgentClient`), but a user still cannot GENERATE a TUI or Desktop agent app. This milestone adds a `--surface` flag that scaffolds the terminal (Ink) and desktop (Tauri sidecar) surfaces — each wired to the M41/M42/M44 unified client (NOT the raw `streamAgentTurnInProcess`/`channel.onmessage` consumption the reference apps use). See CHANGELOG `[Unreleased] § Added`.
 
