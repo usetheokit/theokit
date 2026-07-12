@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- Roadmap amended: added M45 — `create-theokit --surface web|tui|desktop` scaffolds the terminal (Ink) and desktop (Tauri sidecar) surfaces, each wired to the M41/M42/M44 unified client. `--surface` is a flag (mirrors `--backend`); the Tauri/Ink boilerplate lives in scaffolder templates, framework core stays agnostic (`/roadmap-feature`).
+
 ## [0.30.0] - 2026-07-12
 
 ### Added
