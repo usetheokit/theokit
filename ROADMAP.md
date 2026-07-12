@@ -903,7 +903,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M41 — [ ] Unified typed agent client on the AI SDK `ChatTransport` seam (web + TUI; foundation of the DX track)
+### M41 — [x] Unified typed agent client on the AI SDK `ChatTransport` seam (web + TUI; foundation of the DX track)
 
 > Added 2026-07-12 (slug: `unified-agent-client-transport`). The foundation of the theokit↔sdk integration DX track: **write the agent once, consume it identically on every surface.** Today the agent DEFINITION is unified (`agents/<name>.ts` → `compileAgentModule` → SDK, same on web/TUI/Tauri), but the CLIENT is fragmented — `useAgent()` (web fetch+SSE, bespoke), `useAgentStream()` (TUI in-process), a Rust `Channel` reader (Tauri): three consumption shapes for the same agent. This milestone adopts the **`ChatTransport` abstraction from `ai` (already a dependency, v7.0.14)** — the SOTA transport-agnostic chat-client seam (`sendMessages(... { metadata, headers, body, abortSignal }) → ReadableStream<UIMessageChunk>` + `reconnectToStream`) — so each surface becomes a `ChatTransport`, and `useAgent` becomes a thin typed wrapper. **DX track (this is M41, the foundation): M42** Tauri `ChannelTransport` + reconnect parity; **M43** request-context/auth parity through the transport; **M44** standalone typed client-SDK binding (node/scripts, no React). Each is a clean addition on the same `ChatTransport` seam — no rework. See CHANGELOG `[Unreleased] § Added`.
 
