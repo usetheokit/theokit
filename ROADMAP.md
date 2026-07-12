@@ -960,7 +960,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M43 — [ ] Request-context / auth parity across every transport
+### M43 — [x] Request-context / auth parity across every transport
 
 > Added 2026-07-12 (slug: `transport-request-context`). DX-track step 3 on the M41 seam. `ai`'s `ChatTransport.sendMessages` already carries per-request `{ headers, body, metadata }` (`ChatRequestOptions`), and `HttpTransport` forwards `headers`/`body` today — but there is no UNIFORM way for an app to attach per-request context (an auth token, a tenant id, a provider selection) at the `useAgent` layer and have it reach EVERY transport consistently (HTTP header, in-process runner arg, Tauri invoke arg). This milestone formalizes one `context` channel that flows through the seam to all three transports. See CHANGELOG `[Unreleased] § Added`.
 

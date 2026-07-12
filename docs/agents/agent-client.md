@@ -107,6 +107,33 @@ await approve('appr-123', { approved: false, reason: 'not allowed on this path' 
 
 `approve` on the in-process transport rejects for an unknown/settled id (fail-fast — never a silent resolve).
 
+## Per-request context / auth (M43)
+
+Attach per-request context — an auth token, a tenant id, a provider selection — once, and it reaches
+EVERY transport uniformly. Pass `context` (a value or a resolver, evaluated on every send/reconnect so a
+rotating token is never stale):
+
+```tsx
+const { messages, send } = useAgent('chat', {
+  context: () => ({
+    headers: { Authorization: `Bearer ${useToken()}` }, // → HTTP request headers (HttpTransport)
+    metadata: { tenant: 'acme', provider: 'openrouter' }, // → the in-process runner / Tauri invoke
+  }),
+})
+```
+
+Each transport maps context to its native mechanism:
+
+- **`HttpTransport`** — `context.headers` become request headers (an app's HTTP context travels as
+  headers). `metadata` is not used by HTTP.
+- **`InProcessTransport`** — `context.metadata` is forwarded to the runner as `InProcessRunInput.context`
+  (the sidecar/TUI runner reads it — e.g. to pick a provider).
+- **`ChannelTransport`** — `context.metadata` is forwarded to the injected `start(turn)` as `turn.context`
+  (the Tauri `invoke` passes it to the sidecar).
+
+Context stops at the transport boundary — it never enters the agent runtime (the SDK already takes its
+own per-run config). Calls WITHOUT `context` behave exactly as before.
+
 ## Reconnect (web, M37)
 
 If a web stream drops, `reconnect()` resumes it via the durable transport (`GET /runs/<runId>/stream`).
