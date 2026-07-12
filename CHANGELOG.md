@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.2.3 + @theokit/agents@0.35.2] - 2026-07-12
+
+### Changed
+- **`create-theokit@1.2.3` — the `--surface tui` app now looks like a real agent CLI (Claude Code / OpenCode / Codex).** Rewrote the terminal template to compose the maximum of `@theokit/tui`'s shipped primitives instead of a hand-rolled `›` input: a `WelcomeBanner` header, a scrolling `<ChatThread>` (fed by the `@theokit/tui/ai-sdk` adapter), a live `<AgentStreaming>` indicator (spinner + elapsed, `esc` to cancel), the Claude-Code bordered `<ChatComposer>` (slash-commands, `@` file mentions, `Alt+Enter` newline), and a persistent `<AppStatusBar>` footer (model · cwd · state). `esc` cancels a running turn / quits when idle; `/clear` resets. Still driven by the unified `useAgent` hook — composition only, no new deps.
+
+### Fixed
+- **`@theokit/agents@0.35.2` — agent runs no longer spam stdout with `[THEO_AGENT_M7_RUN_CONTEXT]` / `[THEO_AGENT_M8_RUNTIME_APPLIED]` / `[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]`.** These wiring-triad runtime metrics were emitted via unconditional `console.debug`, corrupting any stdout consumer — an Ink TUI render, a piped log, a JSON pipeline (G9). They are now gated behind `THEOKIT_DEBUG` (opt-in via a shared `debugLog` helper): silent by default, `THEOKIT_DEBUG=1` to see them. Found dogfooding the TUI.
+
 ## [create-theokit@1.2.2] - 2026-07-12
 
 ### Fixed

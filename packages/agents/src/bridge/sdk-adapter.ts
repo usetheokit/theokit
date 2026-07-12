@@ -18,6 +18,7 @@ import type {
   SendOptions,
 } from '@theokit/sdk'
 
+import { debugLog } from '../debug-log.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
@@ -540,7 +541,7 @@ export function createSdkAgentStream(
       } else {
         runContextSource = 'none'
       }
-      console.debug('[THEO_AGENT_M7_RUN_CONTEXT]', {
+      debugLog('[THEO_AGENT_M7_RUN_CONTEXT]', {
         source: runContextSource,
         keys: runContext !== undefined ? Object.keys(runContext) : [],
       })
@@ -625,8 +626,8 @@ async function* streamSdkAgent(
   if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
   const extra = buildExtraCreateOptions(overrides, compiled)
   if (applied.length > 0) {
-    // Wiring triad — runtime metric: observable proof the decorators fired.
-    console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
+    // Wiring triad — runtime metric: observable proof the decorators fired (opt-in via THEOKIT_DEBUG).
+    debugLog('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
       skills: applied.includes('skills'),
       contextWindow: applied.includes('context'),
       projectContext: applied.includes('projectContext'),
