@@ -24,8 +24,11 @@ export type SurfaceKind = 'web' | 'tui' | 'desktop'
 
 const VALID_SURFACES = ['web', 'tui', 'desktop'] as const
 
-/** Web-only deps dropped for the tui/desktop surfaces (they ship no web UI). */
-const WEB_ONLY_DEPS = ['@theokit/ui', '@usetheo/ui', 'lucide-react', 'react-router'] as const
+/**
+ * Web-only deps dropped for the tui/desktop surfaces (they ship no web UI). `react-router` is NOT dropped
+ * — `theokit` declares it a REQUIRED peer, so removing it breaks `npm install` (ERESOLVE).
+ */
+const WEB_ONLY_DEPS = ['@theokit/ui', '@usetheo/ui', 'lucide-react'] as const
 const WEB_ONLY_DEV_DEPS = ['tailwindcss', '@tailwindcss/vite', 'tailwindcss-animate'] as const
 /** Web UI files removed for the tui/desktop surfaces. */
 const WEB_ONLY_FILES = ['app', 'index.html', 'tailwind.config.ts', 'postcss.config.js'] as const
@@ -46,7 +49,9 @@ interface SurfaceConfig {
 const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
   tui: {
     fragment: 'tui',
-    deps: { ink: '^5.1.0' },
+    // `ai` is the UIMessageStream type/reader the unified client consumes; it was transitive via
+    // `@theokit/ui` (dropped for tui), so declare it explicitly. `ink` peers `react >=18` (works with 19).
+    deps: { ink: '^5.1.0', ai: '^7.0.0' },
     devDeps: { tsx: '^4.19.0' },
     scripts: { dev: 'tsx tui/main.tsx', start: 'tsx tui/main.tsx' },
     tsconfigInclude: ['tui/**/*.ts', 'tui/**/*.tsx', 'server/**/*.ts', 'agents/**/*.ts'],
@@ -54,8 +59,9 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
   desktop: {
     fragment: 'desktop',
     // The webview consumes the agent via `createAgentClient` from the React-FREE `theokit/client/core`
-    // (M44). It is bundled by Vite; the sidecar runs via tsx.
-    deps: {},
+    // (M44). It is bundled by Vite; the sidecar runs via tsx. `ai` = the UIMessageStream reader (was
+    // transitive via `@theokit/ui`, dropped here).
+    deps: { ai: '^7.0.0' },
     devDeps: { tsx: '^4.19.0', '@tauri-apps/cli': '^2.0.0', vite: '^6.0.0' },
     scripts: {
       dev: 'tauri dev',
