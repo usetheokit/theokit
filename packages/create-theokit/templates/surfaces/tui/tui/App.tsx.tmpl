@@ -1,0 +1,64 @@
+import { Box, Text, useApp, useInput } from 'ink'
+import { useMemo, useState } from 'react'
+import { InProcessTransport, useAgent } from 'theokit/client'
+import { streamAgentTurnInProcess } from 'theokit/server'
+
+import * as chatAgent from '../agents/chat.js'
+
+/** Resolve the provider key from the environment (OpenRouter / Anthropic). */
+const apiKey = (): string => process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? ''
+
+/**
+ * M45 — the terminal surface on the UNIFIED client. `useAgent` (M41) drives an `InProcessTransport`
+ * whose runner binds the framework's in-process seam (`streamAgentTurnInProcess`) — the SAME hook the
+ * web surface uses, no bespoke terminal reader. Ink is React, so the hook works unchanged.
+ */
+const transport = new InProcessTransport({
+  run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
+})
+
+export function App(): JSX.Element {
+  const agent = useAgent<{ message: string }>(transport)
+  const [input, setInput] = useState('')
+  const { exit } = useApp()
+
+  useInput((char, key) => {
+    if (key.escape) {
+      exit()
+    } else if (key.return) {
+      if (input.trim().length > 0) agent.send({ message: input })
+      setInput('')
+    } else if (key.backspace || key.delete) {
+      setInput((s) => s.slice(0, -1))
+    } else if (char && !key.ctrl && !key.meta) {
+      setInput((s) => s + char)
+    }
+  })
+
+  const assistant = useMemo(
+    () =>
+      agent.messages
+        .flatMap((m) => m.parts)
+        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map((p) => p.text)
+        .join(''),
+    [agent.messages],
+  )
+
+  return (
+    <Box flexDirection="column" padding={1}>
+      <Text color="cyan">◆ {{name}} — TheoKit agent (terminal). Type a message + Enter · Esc to quit.</Text>
+      {assistant.length > 0 ? (
+        <Box marginTop={1}>
+          <Text>{assistant}</Text>
+        </Box>
+      ) : null}
+      {agent.status === 'streaming' ? <Text color="yellow">…thinking</Text> : null}
+      {agent.error ? <Text color="red">⚠ {agent.error.message}</Text> : null}
+      <Box marginTop={1}>
+        <Text color="green">› </Text>
+        <Text>{input}</Text>
+      </Box>
+    </Box>
+  )
+}

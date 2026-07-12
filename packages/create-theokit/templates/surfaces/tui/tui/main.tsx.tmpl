@@ -1,0 +1,14 @@
+import { render } from 'ink'
+
+import { App } from './App.js'
+
+// Load .env if present (Node native — no dependency). Provider key: OPENROUTER_API_KEY or ANTHROPIC_API_KEY.
+if (typeof process.loadEnvFile === 'function') {
+  try {
+    process.loadEnvFile()
+  } catch {
+    // no .env on disk — rely on the ambient environment
+  }
+}
+
+render(<App />)

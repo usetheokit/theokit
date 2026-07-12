@@ -173,6 +173,25 @@ framework-agnostic — a standalone (no-React) client can subscribe to it direct
 implement your own `ChatTransport` (e.g. a WebSocket or a Tauri channel — M42) and pass it to `useAgent`;
 the hook does not care how the bytes arrive, only that they are `UIMessageChunk`s.
 
+## Scaffold a surface — `create-theokit --surface` (M45)
+
+The `create-theokit` scaffolder generates each surface wired to this unified client:
+
+```bash
+npx create-theokit my-app                    # web (default) — useAgent('/api/agents/chat')
+npx create-theokit my-app --surface tui      # terminal (Ink) — useAgent(InProcessTransport)
+npx create-theokit my-app --surface desktop  # desktop (Tauri) — createAgentClient(ChannelTransport)
+```
+
+- **`--surface tui`** — an Ink terminal app (`tui/App.tsx`) driving `useAgent(new InProcessTransport({
+  run: (i) => streamAgentTurnInProcess(mod, apiKey, i) }))`. Runs in-process; no server, no port.
+- **`--surface desktop`** — a Tauri app: a Node sidecar (`streamAgentTurnInProcess` → JSONL stdout), a
+  Rust shell pushing lines over a `Channel`, and a vanilla-JS webview consuming via
+  `createAgentClient(new ChannelTransport({ source }))` from the React-free `theokit/client/core`. The
+  desktop build needs the Rust + Tauri toolchain.
+
+Each scaffolded app is the same agent on the same client — write once, consume (and scaffold) on any surface.
+
 ## Why adopt `ChatTransport` (not a bespoke interface)
 
 `ChatTransport` is the AI SDK's SOTA transport-agnostic chat seam, already a dependency. Adopting it
