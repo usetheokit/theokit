@@ -20,8 +20,13 @@ export interface ChannelTurnHandlers {
  * returning a teardown that aborts the sidecar turn.
  */
 export interface ChannelPushSource {
-  /** Start a turn; deliver each JSONL `UIMessageChunk` line to `onLine`, then `onClose`. Return a teardown. */
-  start(turn: { message: string }, handlers: ChannelTurnHandlers): () => void
+  /**
+   * Start a turn; deliver each JSONL `UIMessageChunk` line to `onLine`, then `onClose`. Return a teardown.
+   * `turn.context` (M43) is the per-request context (from the seam's `metadata`) — the Tauri `invoke`
+   * forwards it to the sidecar. When no context is set it is present as `context: undefined` (the key is
+   * NOT absent) — a sidecar that checks `'context' in turn` should treat `undefined` as "no context".
+   */
+  start(turn: { message: string; context?: unknown }, handlers: ChannelTurnHandlers): () => void
   /** Optional HITL settle (another Tauri `invoke`). */
   settle?(approvalId: string, decision: ApprovalDecision): Promise<void>
 }
@@ -53,7 +58,7 @@ export class ChannelTransport implements AgentTransport {
   sendMessages(
     options: Parameters<ChatTransport<UIMessage>['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
-    const { messages, abortSignal } = options
+    const { messages, abortSignal, metadata } = options
     const message = extractLastUserText(messages)
     const source = this.#source
 
@@ -72,7 +77,7 @@ export class ChannelTransport implements AgentTransport {
           settle()
         }
         teardown = source.start(
-          { message },
+          { message, context: metadata },
           {
             onLine: (line) => {
               if (closed) return
