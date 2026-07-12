@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-07-12
+
 ### Changed
 
 - **BREAKING (M40, ADR-0049): `createCodeMode` now returns `{ tool, instructions }` instead of the tool directly.** Migrate `const runCode = createCodeMode(...)` → `const { tool: runCode, instructions } = createCodeMode(...)` and add `instructions` to the agent's system prompt. Chosen over an additive `.instructions` because the instructions belong in the agent prompt, not on the tool object (theokit is pre-1.0; Code Mode is Beta). (#M40)
