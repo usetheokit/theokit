@@ -2,6 +2,11 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-07-12
+
+### Fixed
+- **Published package no longer carries a `workspace:*` dependency.** `0.1.0` was published with `npm publish`, which (unlike `pnpm publish`) does not resolve the `theokit: workspace:*` dev dependency — so `npm install`-ing any project that depended on `@theokit/tauri@0.1.0` failed with `EUNSUPPORTEDPROTOCOL "workspace:"`. Republished with `pnpm publish` so every dependency resolves to a real version. `0.1.0` is deprecated.
+
 ## [0.1.0] - 2026-07-12
 
 ### Added
