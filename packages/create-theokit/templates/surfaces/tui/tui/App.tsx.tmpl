@@ -1,21 +1,35 @@
 import { Box, Text, useApp, useInput } from 'ink'
-import { useState, type ReactElement } from 'react'
-import { ChatThread } from '@theokit/tui'
+import { type ReactElement } from 'react'
+import {
+  AgentStreaming,
+  AppStatusBar,
+  ChatComposer,
+  ChatThread,
+  TheoTUIProvider,
+  useTurnElapsed,
+  WelcomeBanner,
+} from '@theokit/tui'
 import { uiMessagesToChatThread } from '@theokit/tui/ai-sdk'
 import { InProcessTransport, useAgent } from 'theokit/client'
 import { streamAgentTurnInProcess } from 'theokit/server'
 
 import * as chatAgent from '../agents/chat.js'
 
-/** Resolve the provider key from the environment (OpenRouter / Anthropic). */
-const apiKey = (): string => process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? ''
+/** Shown in the status bar — keep in sync with the model in `agents/chat.ts`. */
+const MODEL = 'openai/gpt-4o-mini'
+const CWD = process.cwd()
+
+/** Resolve the provider key from the environment (OpenRouter / Anthropic / OpenAI). */
+const apiKey = (): string =>
+  process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY ?? ''
 
 /**
- * M46 — the terminal surface renders with `@theokit/tui`. `useAgent` (M41) drives an `InProcessTransport`
- * whose runner binds the in-process seam (`streamAgentTurnInProcess`) — the SAME hook the web surface uses.
- * The unified client's `UIMessage[]` is projected onto `<ChatThread>` via the `@theokit/tui/ai-sdk` adapter
- * (`uiMessagesToChatThread`), so the terminal shows the exact same conversation the web/desktop surfaces do,
- * rendered with the terminal-native primitives instead of a hand-rolled `<Text>` concat.
+ * M46 — the terminal surface, composed from `@theokit/tui` the way a Claude Code / OpenCode / Codex CLI is:
+ * a `WelcomeBanner` header, a scrolling `<ChatThread>`, a live `<AgentStreaming>` indicator, the Claude-Code
+ * bordered `<ChatComposer>` (slash-commands, `@` file mentions, Alt+Enter newline — all shipped), and a
+ * persistent `<AppStatusBar>` footer (model · cwd · state). The agent is driven by the UNIFIED `useAgent`
+ * hook (M41) over the in-process seam — its `UIMessage[]` projected onto `<ChatThread>` by the
+ * `@theokit/tui/ai-sdk` adapter. We compose shipped primitives: no hand-rolled input, no bespoke reader.
  */
 const transport = new InProcessTransport({
   run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
@@ -23,39 +37,53 @@ const transport = new InProcessTransport({
 
 export function App(): ReactElement {
   const agent = useAgent<{ message: string }>(transport)
-  const [input, setInput] = useState('')
+  const streaming = agent.status === 'streaming'
+  const elapsed = useTurnElapsed(streaming)
   const { exit } = useApp()
 
-  useInput((char, key) => {
-    if (key.escape) {
-      exit()
-    } else if (key.return) {
-      if (input.trim().length > 0) agent.send({ message: input })
-      setInput('')
-    } else if (key.backspace || key.delete) {
-      setInput((s) => s.slice(0, -1))
-    } else if (char && !key.ctrl && !key.meta) {
-      setInput((s) => s + char)
-    }
+  // Esc cancels a running turn, or quits when idle (the Claude Code affordance).
+  useInput((_input, key) => {
+    if (!key.escape) return
+    if (streaming) agent.abort()
+    else exit()
   })
 
-  // The unified client's UIMessage[] → this package's ChatThreadMessage[] (the ai-sdk adapter, Step A).
-  const messages = uiMessagesToChatThread(agent.messages)
+  const handleSubmit = (text: string): void => {
+    const trimmed = text.trim()
+    if (trimmed.length === 0) return
+    if (trimmed === '/clear') {
+      agent.reset()
+      return
+    }
+    agent.send({ message: trimmed })
+  }
 
   return (
-    <Box flexDirection="column" padding={1}>
-      <ChatThread
-        messages={messages}
-        header={
-          <Text color="cyan">◆ {{name}} — TheoKit agent (terminal). Type a message + Enter · Esc to quit.</Text>
-        }
-      />
-      {agent.status === 'streaming' ? <Text color="yellow">…thinking</Text> : null}
-      {agent.error ? <Text color="red">⚠ {agent.error.message}</Text> : null}
-      <Box marginTop={1}>
-        <Text color="green">› </Text>
-        <Text>{input}</Text>
+    <TheoTUIProvider theme={{ base: 'dark', override: { accent: 'cyan' } }}>
+      <Box flexDirection="column">
+        <WelcomeBanner
+          name="{{name}}"
+          tagline="Your agent, in the terminal — built with TheoKit."
+          hints={['Enter sends · Alt+Enter for a newline', '/clear resets · esc cancels a turn or quits']}
+        >
+          <Text dimColor>cwd: {CWD}</Text>
+        </WelcomeBanner>
+
+        <ChatThread messages={uiMessagesToChatThread(agent.messages)} />
+
+        {streaming ? <AgentStreaming thought="Thinking…" elapsedSeconds={elapsed} showCancelHint /> : null}
+        {agent.error ? <Text color="red">⚠ {agent.error.message}</Text> : null}
+
+        <ChatComposer
+          placeholder="Ask your agent…  (Enter sends · / commands · @ files)"
+          bordered
+          hint="Enter sends · Alt+Enter newline · /clear resets · esc cancels"
+          commands={[{ name: 'clear', description: 'clear the conversation' }]}
+          onSubmit={handleSubmit}
+        />
+
+        <AppStatusBar model={MODEL} cwd={CWD} state={streaming ? 'streaming' : 'idle'} />
       </Box>
-    </Box>
+    </TheoTUIProvider>
   )
 }

@@ -110,6 +110,7 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
   })
 
   it('test_reflective_loop_emits_runtime_metric_rounds_2 — observable proof', async () => {
+    process.env.THEOKIT_DEBUG = '1' // the wiring metric is now opt-in (silent by default — TUI/pipe hygiene)
     const spy = vi.spyOn(console, 'debug').mockImplementation(() => {})
     script([[toolResult], [done]])
     await delegate(PlanActReflectAgent, 'task', { apiKey: 'test' })
@@ -117,6 +118,7 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
       '[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]',
       expect.objectContaining({ strategy: 'plan-act-reflect', rounds: 2 }),
     )
+    delete process.env.THEOKIT_DEBUG
   })
 
   it('test_simple_chat_single_round_regression — 1 round through both on-ramps', async () => {
