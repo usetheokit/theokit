@@ -50,6 +50,10 @@ export type {
 } from './channel-transport.js'
 export { AgentClient } from './agent-client.js'
 export type { AgentClientState } from './agent-client.js'
+// M44 (ADR-0053) — the standalone (no-React) client is also re-exported here for convenience; a node
+// consumer should import it from the React-free `theokit/client/core` entry instead.
+export { createAgentClient } from './create-agent-client.js'
+export type { AgentClientHandle, CreateAgentClientOptions } from './create-agent-client.js'
 
 // Link with prefetch — instant navigation for multi-page apps
 export { Link } from './link.js'
