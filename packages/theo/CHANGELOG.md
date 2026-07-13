@@ -1,5 +1,17 @@
 # theo
 
+## 0.36.1
+
+### Patch Changes
+
+- fc3cc06: Fix (#117): route handlers now receive a Web `Request` as `ctx.request` in the Node server (dev + `theokit start`),
+  matching the public `request: Request` handler type and ADR-0028 R3a. Previously the Node executor leaked
+  the raw `IncomingMessage`, so any Web-standard use of `ctx.request` — e.g. `ctx.request.headers.get(...)` or
+  `createSessionManagerWeb.getSession(ctx.request)` — threw `request.headers.get is not a function` at runtime
+  even though it type-checked. This made the framework's own Web session primitive unusable from a handler in
+  the Node server. The handler request carries method + URL + headers (the request body remains available via
+  the typed `ctx.body`, since the Node stream is already parsed before the handler runs).
+
 ## 0.36.0
 
 ### Patch Changes
@@ -35,7 +47,7 @@
 ### Minor Changes
 
 - **Capability generators now live in the agent domain and connect to the agent.** `theokit generate
-  workflow|eval|sandbox|schedule|memory <name>` emits under `agents/<capability>/` (not the app root) —
+workflow|eval|sandbox|schedule|memory <name>` emits under `agents/<capability>/` (not the app root) —
   these are facets of the agent domain, not standalone top-level concerns. The folder-semantic scanner
   now also skips `agents/{workflows,evals,memory}` (it already skipped `sandbox`/`schedules`), so none
   become phantom routes. The emitted examples are wired to the agent: `sandbox` is a `tool()` you add
