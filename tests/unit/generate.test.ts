@@ -112,9 +112,11 @@ describe('theo generate', () => {
       const filePath = join(dir, 'agents/schedules/daily-digest.ts')
       expect(existsSync(filePath)).toBe(true)
       const content = readFileSync(filePath, 'utf-8')
-      expect(content).toContain("from '@theokit/sdk/cron'")
-      expect(content).toContain('Cron.create(')
-      expect(content).toContain('dailyDigestSchedule')
+      // Framework-native cron: `defineCron` (auto-discovered + deploy-translated), not the SDK's Cron.create.
+      expect(content).toContain("from 'theokit/server/cron'")
+      expect(content).toContain("export default defineCron('daily-digest'")
+      expect(content).toContain('schedule:')
+      expect(content).toContain('async handler(')
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })

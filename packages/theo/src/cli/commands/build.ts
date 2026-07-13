@@ -15,7 +15,7 @@ import {
   translateCronToVercel,
 } from '../../server/cron/adapter-translators.js'
 import { writeCronManifest } from '../../server/cron/cron-manifest.js'
-import { scanCrons } from '../../server/cron/cron-scan.js'
+import { scanCronDirs } from '../../server/cron/cron-scan.js'
 import { writeJobManifest } from '../../server/jobs/job-manifest.js'
 import { scanJobs } from '../../server/jobs/job-scan.js'
 import { generateManifest, writeManifest } from '../../server/scan/manifest.js'
@@ -92,7 +92,7 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   )
 
   // T1.1 — cron scan + manifest + per-target adapter translation
-  await emitCronArtifacts({ cwd, serverDir, distDir, target })
+  await emitCronArtifacts({ cwd, serverDir, agentsDir: config.agentsDir, distDir, target })
 
   // T1.2 — job scan + manifest (no per-target translation needed)
   await emitJobArtifacts({ cwd, serverDir, distDir })
@@ -205,12 +205,16 @@ async function runAdapterBuild(
 async function emitCronArtifacts(opts: {
   cwd: string
   serverDir: string
+  agentsDir: string
   distDir: string
   target: BuildTarget
 }): Promise<void> {
+  // Crons live in two conventional homes: `server/crons/` (a backend trigger) and
+  // `agents/schedules/` (a scheduled agent run, kept in the agent domain). Both feed one manifest.
   const cronsDir = resolve(opts.serverDir, 'crons')
+  const agentsSchedulesDir = resolve(opts.cwd, opts.agentsDir, 'schedules')
 
-  const cronNodes = existsSync(cronsDir) ? await scanCrons(cronsDir) : []
+  const cronNodes = await scanCronDirs([cronsDir, agentsSchedulesDir])
   const manifestPath = resolve(opts.distDir, 'crons.json')
   writeCronManifest(manifestPath, cronNodes, opts.cwd)
 
