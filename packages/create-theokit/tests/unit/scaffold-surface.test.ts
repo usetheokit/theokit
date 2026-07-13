@@ -114,6 +114,14 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('createTauriChannelSource')
     expect(read('frontend/src/main.tsx')).toContain("import '@theokit/ui/styles.css'")
 
+    // Parity with the web default surface — the SAME rich @theokit/ui components (not a bare input/button),
+    // just a different transport. Guards against regressing the desktop back to a poorer chat.
+    expect(app).toContain('ChatComposer')
+    expect(app).toContain('AgentStreaming')
+    expect(app).toContain('QuickActionChips')
+    expect(app).toContain('AgentErrorCard')
+    expect(app).toContain('ThemeSwitcher')
+
     // The sidecar runs the turn via @theokit/tauri/sidecar (no hand-rolled copy).
     expect(read('sidecar/sidecar.ts')).toContain("from '@theokit/tauri/sidecar'")
 
@@ -127,6 +135,8 @@ describe('applySurface (M45)', () => {
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> }
     expect(pkg.dependencies['@theokit/ui']).toBeDefined() // M47 renders the webview
     expect(pkg.dependencies['@theokit/tauri']).toBeDefined() // M47 transport source + sidecar
+    expect(pkg.dependencies['@usetheo/ui']).toBeDefined() // rich surface parity — Button
+    expect(pkg.dependencies['lucide-react']).toBeDefined() // rich surface parity — icons
 
     // tsconfig include covers the sidecar + React webview source (not the removed app/).
     const tsconfig = JSON.parse(read('tsconfig.json')) as { include: string[] }
