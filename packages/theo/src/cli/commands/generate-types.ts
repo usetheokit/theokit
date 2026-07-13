@@ -13,6 +13,11 @@ export const VALID_TYPES = [
   'controller',
   'agent',
   'toolbox',
+  'workflow',
+  'eval',
+  'sandbox',
+  'schedule',
+  'memory',
   'resource',
 ] as const
 export type GeneratorType = (typeof VALID_TYPES)[number]

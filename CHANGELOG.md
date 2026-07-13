@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit@0.32.0] - 2026-07-13
+
+### Added
+- **Capability generators — `theokit generate <capability> <name>` scaffolds a working SDK feature.**
+  Beyond `route`/`action`/`page`/`ws`/`controller`/`agent`/`toolbox`/`resource`, the generator now emits a
+  minimal, runnable example of each SDK capability so you learn the API by reading real code (`rails g`
+  style):
+  - `theokit generate workflow greeting` → `workflows/greeting.ts` — a `Workflow.create().then(fn(...)).commit()`
+    chain. Runs standalone: `greetingWorkflow.run({ name: 'Ada' })` → `"Hello, Ada!"`.
+  - `theokit generate eval qa-smoke` → `evals/qa-smoke.ts` — an `Eval.create({ dataset, scorers, agent })`
+    that scores your model over a dataset (`Scorers.containsExpected()`).
+  - `theokit generate sandbox run-command` → `sandbox/run-command.ts` — a `LocalSandbox` command runner with
+    timeout + output cap. Runs standalone: `runCommand('echo hi')` → `{ stdout, stderr, exitCode }`.
+  - `theokit generate schedule daily-digest` → `schedules/daily-digest.ts` — a `Cron.create({ cron, agent })`
+    job that fires an agent on a schedule.
+  - `theokit generate memory conversations` → `memory/conversations.ts` — a conversation-storage adapter
+    (`InMemoryConversationStorage` / `FileSystemConversationStorage`) to wire into an agent.
+
+  Each generated file type-checks against `@theokit/sdk` (v2.30.0 subpath exports `@theokit/sdk/{workflow,eval,sandbox,cron}`);
+  the two self-contained ones (`workflow`, `sandbox`) were verified to run end-to-end. The `generate --help`
+  text and the invalid-type error now list the full capability set.
+
 ## [create-theokit@1.5.1] - 2026-07-13
 
 ### Changed
