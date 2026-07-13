@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.9.0] - 2026-07-13
+
+### Changed
+- **Scaffold frontend is type-based (`create-theokit@1.9.0`).** The web `app/` refactored into
+  `components/` (`Header`, `ChatPanel`, `Composer` — flat Tailwind `.tsx`, ai-chatbot convention), `hooks/`
+  (`use-transcript.ts` — the STATE hook, unit-tested), and `lib/` (`constants.ts`). `page.tsx` is a thin
+  composition root; `layout.tsx` composes `<Header/>`. Each bucket holds real extracted code — no empty
+  placeholder folders (`utils/`/`styles/`/`assets/` documented as convention, added on demand — YAGNI). No
+  `main.tsx`/`index.js`/`pages/` (framework-owned entry + file routes, Next.js-style). `--bare` drops the
+  three folders + rewrites `layout.tsx` to an unstyled shell (also fixes a latent bare bug: `layout.tsx`
+  imported the `@theokit/ui` that bare removes). Grounded in the deep frontend-structure research pass.
+
 ## [create-theokit@1.8.0] - 2026-07-13
 
 ### Changed

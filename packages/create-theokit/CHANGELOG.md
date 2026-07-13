@@ -1,5 +1,23 @@
 # create-theo
 
+## 1.9.0
+
+### Minor Changes
+
+- **Scaffold frontend is now type-based (`components/` + `hooks/` + `lib/`).** The web `app/` was refactored
+  from one folder into the layout most React apps grow into, with each bucket holding real, extracted code
+  (no empty placeholder folders):
+  - `app/components/` — `Header.tsx`, `ChatPanel.tsx` (transcript + starters), `Composer.tsx` (input + error
+    + new-chat). Flat `.tsx`, Tailwind (no CSS modules), the shadcn/ai-chatbot convention.
+  - `app/hooks/use-transcript.ts` — the transcript/streaming STATE hook (unit-tested).
+  - `app/lib/constants.ts` — greeting + starter prompts.
+
+  `page.tsx` is a thin composition root (lays out `<ChatPanel>` + `<Composer>`, pulls state from the hook);
+  `layout.tsx` composes `<Header/>`. `utils/`/`styles/`/`assets/` are documented as the convention but not
+  shipped empty (YAGNI). No `main.tsx`/`index.js`/`pages/` — the entry is framework-owned and routes are
+  files (Next.js-style). `--bare` drops `components/`+`hooks/`+`lib/` and rewrites `layout.tsx` to an
+  unstyled shell (also fixing a latent bare bug where `layout.tsx` imported the removed `@theokit/ui`).
+
 ## 1.8.0
 
 ### Minor Changes
