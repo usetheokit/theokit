@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents@0.38.0 + theokit@0.36.0 + create-theokit@1.7.0] - 2026-07-13
+
+### Changed
+- **`.skills([inlineSkill])` auto-provisions the `skill_read` tool — one call instead of two
+  (`@theokit/agents@0.38.0`).** An inline skill lists in the `<skills>` block by name + description only;
+  its body is unreachable to the model without a `skill_read` tool. The runtime now auto-appends that tool
+  when an agent declares inline skills, so `agent().skills([mySkill]).build()` both registers AND makes the
+  skill readable. Dedup (an explicit `defineSkillReadTool` wins) + graceful degrade (older SDK → list-only).
+  Kept at the runtime layer so the compile module stays SDK-runtime-free. Scaffold drops the separate
+  `.tool(defineSkillReadTool([...]))` line (`create-theokit@1.7.0`); `theokit@0.36.0` bumps its
+  `@theokit/agents` floor to `^0.38.0` (dependency bump only).
+
 ## [@theokit/agents@0.37.0 + theokit@0.35.0 + create-theokit@1.6.0] - 2026-07-13
 
 ### Added

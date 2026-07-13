@@ -67,4 +67,8 @@ describe('M13 — defineAgent({ skills })', () => {
     expect(compiled.skills).toEqual({ enabled: ['a', 'b'], autoInject: true })
     expect(compiled.skills).not.toHaveProperty('inline')
   })
+
+  // Auto-wiring the `skill_read` tool happens at the RUNTIME layer (where @theokit/sdk is loaded), not
+  // at compile time — the compile module stays free of a runtime SDK dependency. See
+  // tests/integration/skill-read-autowire.test.ts.
 })
