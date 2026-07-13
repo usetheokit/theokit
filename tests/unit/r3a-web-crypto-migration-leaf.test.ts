@@ -303,6 +303,13 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // spawning has no Web-Standards equivalent — it is Node-only by
       // definition, the same boundary as the CLI harness above.
       'packages/theo/src/server/agent/acp-tool.ts',
+      // Node-adapter scope (#122): decorator-controller dispatch. Scans
+      // `<serverDir>/controllers/**` from disk (node:fs/node:path) and writes
+      // a Web Response into a Node ServerResponse — the same dev-server /
+      // Node-adapter boundary as node-web-adapter.ts + the build-time scanners.
+      // The PORTABLE dispatch core lives in @theokit/http (`createDecoratorHandler`,
+      // pure Web-Standard); this file is only the Node FS-scan + req/res glue.
+      'packages/theo/src/server/http/controller-dispatch.ts',
     ])
 
     /**
