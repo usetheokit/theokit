@@ -232,23 +232,26 @@ function generateSandboxTemplate(name: string): string {
 }
 
 function generateScheduleTemplate(name: string): string {
-  const camel = toCamelCase(name)
+  const base = name.split('/').pop() ?? name
   return [
-    `import { Cron } from '@theokit/sdk/cron'`,
+    `import { defineCron } from 'theokit/server/cron'`,
     ``,
     `/**`,
-    ` * A scheduled run of your agent (@theokit/sdk). \`Cron.create\` fires an agent (or a Workflow) on a`,
-    ` * cron schedule. To fire the REAL agent, mirror its config (same model + systemPrompt as`,
-    ` * \`agents/chat.ts\`). Register it once at startup (app entry or a server route): \`await ${camel}Schedule()\`.`,
+    ` * A scheduled agent run — a first-class TheoKit cron. \`theokit build\` discovers it automatically and`,
+    ` * translates the schedule to your deploy target's native cron (Vercel / Cloudflare / AWS). No manual`,
+    ` * scheduler to start. The handler is where you invoke your agent — POST to \`/api/agents/chat\`, or use`,
+    ` * \`@theokit/sdk\`'s \`Agent\` with the same model + system prompt as \`agents/chat.ts\`.`,
+    ` *`,
+    ` * Schedules are UTC (https://crontab.guru). \`signal\` aborts when the scheduler stops.`,
     ` */`,
-    `export function ${camel}Schedule() {`,
-    `  return Cron.create({`,
-    `    cron: '0 9 * * *', // every day at 09:00`,
-    `    // Mirror your agent: same model (+ systemPrompt) so the scheduled run behaves like the live agent.`,
-    `    agent: { apiKey: process.env.OPENROUTER_API_KEY ?? '', model: { id: 'openai/gpt-4o-mini' } },`,
-    `    inputData: { message: 'Good morning! Give me a one-line summary of anything important.' },`,
-    `  })`,
-    `}`,
+    `export default defineCron('${base}', {`,
+    `  schedule: '0 9 * * *', // every day at 09:00 UTC`,
+    `  async handler({ traceId, scheduledAt, signal }) {`,
+    `    void signal`,
+    `    // Invoke your agent here — e.g. fetch your own \`/api/agents/chat\` endpoint, or call the SDK Agent.`,
+    `    console.log(\`[${base}] fired at \${scheduledAt.toISOString()} (trace \${traceId})\`)`,
+    `  },`,
+    `})`,
     ``,
   ].join('\n')
 }

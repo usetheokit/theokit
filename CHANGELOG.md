@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit@0.34.0] - 2026-07-13
+
+### Changed
+- **`theokit generate schedule` emits the framework-native `defineCron` (not the SDK's `Cron.create`),
+  discovered from `agents/schedules/`.** A scheduled agent run is now a first-class TheoKit cron:
+  `export default defineCron(name, { schedule, handler })`, auto-discovered by `theokit build` and
+  translated to the deploy target's native cron (Vercel/Cloudflare/AWS) — no manual `Cron.start()`. The
+  build-time scanner now walks BOTH `server/crons/` and `agents/schedules/` (new `scanCronDirs([...])`,
+  unified duplicate-name guard), so schedules stay in the agent domain AND get native scheduling. Verified
+  end-to-end: `theokit build` on the showcase reports "Crons: 1 declared" from `agents/schedules/`.
+
 ## [theokit@0.33.0 + @theokit/agents@0.36.0] - 2026-07-13
 
 ### Added

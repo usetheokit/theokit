@@ -1,5 +1,18 @@
 # theo
 
+## 0.34.0
+
+### Minor Changes
+
+- **`theokit generate schedule` now emits the framework-native `defineCron`, discovered from
+  `agents/schedules/`.** The previous template used the SDK's programmatic `Cron.create` (needs a manual
+  `Cron.start()`, no deploy integration). The generated schedule is now
+  `export default defineCron(name, { schedule, handler })` — auto-discovered by `theokit build` and
+  translated to the deploy target's native cron (Vercel/Cloudflare/AWS). The build-time cron scanner now
+  walks BOTH `server/crons/` (backend trigger) and `agents/schedules/` (scheduled agent run, kept in the
+  agent domain) via the new `scanCronDirs([...])`, with a unified duplicate-name guard across both homes.
+  A scheduled agent run stays in the agent domain AND is a first-class framework cron.
+
 ## 0.33.0
 
 ### Minor Changes
