@@ -13,9 +13,10 @@ folders it composes (prompts, tools, skills) live together under `agents/`, with
 │   ├── prompts/            #   system prompts / personas
 │   │   └── instructions.ts
 │   ├── tools/              #   tools the agent can call
-│   │   └── weather.ts      #     tool('weather')…build()
-│   └── skills/             #   Markdown procedures the agent (and you) can follow
-│       └── getting-started.md
+│   │   ├── weather.ts      #     remote — current weather via open-meteo (HTTP)
+│   │   └── current-time.ts #     local — date/time in an IANA timezone (no network)
+│   └── skills/             #   procedures the model loads on demand (createSkill)
+│       └── daily-briefing.ts    #   a real skill: time → weather → a one-line nudge
 ├── app/                    # Frontend (web surface). tui → tui/, desktop → frontend/
 ├── server/                 # Backend routes / actions (POST/GET handlers, jobs)
 ├── shared/                 # Code imported by more than one layer
@@ -44,12 +45,16 @@ export default agent()
   .model('openai/gpt-4o-mini')
   .system(BASE_INSTRUCTIONS)   // agents/prompts/instructions.ts
   .tool(weatherTool)           // agents/tools/weather.ts
+  .tool(currentTimeTool)       // agents/tools/current-time.ts
+  .tool(defineSkillReadTool([dailyBriefingSkill]))  // agents/skills/daily-briefing.ts
   .build()
 ```
 
 Grow the agent by editing its neighbours, not by inflating `chat.ts`: persona → `prompts/instructions.ts`,
-a new capability → `tools/<name>.ts` (then `.tool(<name>Tool)`), a documented procedure →
-`skills/<name>.md`. Add a **second agent** as another `agents/<name>.ts`.
+a new capability → `tools/<name>.ts` (then `.tool(<name>Tool)`), a documented procedure → a
+`createSkill(...)` in `skills/<name>.ts` (add it to the `defineSkillReadTool([...])` list). A **skill** is
+loaded by the model on demand via the `skill_read` tool, so long procedures don't bloat every prompt. Add a
+**second agent** as another `agents/<name>.ts`.
 
 ## Surfaces
 

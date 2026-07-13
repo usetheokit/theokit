@@ -7,7 +7,7 @@ Common changes, and where they go. See [ARCHITECTURE](./ARCHITECTURE.md) for the
 | Change the model | `agents/chat.ts` (`.model(...)`) + the label in `shared/agent.ts` |
 | Change the persona / rules | `agents/prompts/instructions.ts` |
 | Add a tool (an action the agent can take) | new `agents/tools/<name>.ts`, then `.tool(<name>Tool)` in `agents/chat.ts` |
-| Add a skill (a documented procedure) | new `agents/skills/<name>.md` |
+| Add a skill (a procedure the model loads on demand) | `createSkill(...)` in `agents/skills/<name>.ts`, then add it to `defineSkillReadTool([...])` in `agents/chat.ts` |
 | Add a second agent | new `agents/<name>.ts` → auto-served at `/api/agents/<name>`, bind with `useAgent('<name>')` |
 | Change the greeting / app name | `shared/agent.ts` |
 | Add a backend route | `server/routes/<name>.ts` |
