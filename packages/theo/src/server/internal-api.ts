@@ -16,6 +16,11 @@
 // --- http ---
 export { executeAction } from './http/action-execute.js'
 export { executeRoute, sendError } from './http/execute.js'
+export {
+  createControllerDispatcher,
+  dispatchControllerRequest,
+  type ControllerDispatcher,
+} from './http/controller-dispatch.js'
 export { incomingMessageToHandlerRequest } from './http/node-request.js'
 export { handleBatchRequest, BATCH_PATH } from './http/batch-handler.js'
 export { createCorsHandler } from './http/cors.js'
@@ -40,7 +45,7 @@ export { scanServerActions, scanServerActionsEnriched } from './scan/action-scan
 export type { ActionManifestEntry } from './scan/action-scan.js'
 export { scanAgents } from './scan/agent-scan.js'
 export type { AgentNode } from './scan/agent-scan.js'
-export { createViteLoader } from './scan/module-loader.js'
+export { createViteLoader, type LoadModule } from './scan/module-loader.js'
 export { matchRoute } from './scan/match.js'
 export { scanServerRoutes } from './scan/scan.js'
 export { generateManifest } from './scan/manifest.js'

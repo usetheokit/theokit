@@ -237,9 +237,10 @@ export async function theoPluginAsync(
 
   return [
     theoPlugin(rootOrOptions),
-    controllerTransformPlugin,
     ...uiPlugins,
     ...servicesPlugins,
+    // #122 — swc-compile controllers/** (enforce:'pre'; order-independent).
+    controllerTransformPlugin,
     appClientPlugin,
     actionsPlugin,
     agentsClientPlugin,
