@@ -30,7 +30,7 @@ export class DuplicateCronNameError extends Error {
   ) {
     super(
       `Duplicate cron name "${cronName}" defined in: ${filePaths.join(', ')}. ` +
-        'Cron names must be unique across server/crons/.',
+        'Cron names must be unique across server/crons/ and agents/schedules/.',
     )
     this.name = 'DuplicateCronNameError'
   }
@@ -62,15 +62,29 @@ function isCronDefinition(value: unknown): value is CronDefinition {
  * error messages anchored to the file that failed.
  */
 export async function scanCrons(cronsDir: string): Promise<CronNode[]> {
-  if (!existsSync(cronsDir)) return []
+  return scanCronDirs([cronsDir])
+}
 
+/**
+ * Scan MULTIPLE cron directories and merge the results with a UNIFIED
+ * duplicate-name guard across all of them. The framework discovers crons in
+ * two conventional homes: `server/crons/` (a backend trigger) and
+ * `agents/schedules/` (a scheduled agent run — kept in the agent domain). Both
+ * feed the same manifest + deploy translation; a name may not collide across
+ * the two dirs. Missing dirs are skipped (no error). Nodes are returned sorted
+ * by name for a stable manifest.
+ */
+export async function scanCronDirs(dirs: readonly string[]): Promise<CronNode[]> {
   const filePaths: string[] = []
-  walkSourceFiles(cronsDir, { extensions: CRON_EXTENSIONS }, (p) => {
-    const base = basename(p)
-    // Skip private helpers (`_helper.ts`) and OS junk (`.DS_Store`).
-    if (base.startsWith('_') || base.startsWith('.')) return
-    filePaths.push(p)
-  })
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue
+    walkSourceFiles(dir, { extensions: CRON_EXTENSIONS }, (p) => {
+      const base = basename(p)
+      // Skip private helpers (`_helper.ts`) and OS junk (`.DS_Store`).
+      if (base.startsWith('_') || base.startsWith('.')) return
+      filePaths.push(p)
+    })
+  }
 
   const nodes: CronNode[] = []
   for (const filePath of filePaths) {
@@ -96,7 +110,7 @@ export async function scanCrons(cronsDir: string): Promise<CronNode[]> {
     })
   }
 
-  // Dup-name detection
+  // Dup-name detection (unified across every scanned dir).
   const byName = new Map<string, string[]>()
   for (const node of nodes) {
     const bucket = byName.get(node.name) ?? []
