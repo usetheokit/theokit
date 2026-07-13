@@ -34,6 +34,15 @@ const HELLO_PAGE = `export default function Page() {
 }
 `
 
+// --bare ships an unstyled shell: no @theokit/ui Header, no styles.css import. Replaces the default
+// layout (which composes components/Header.tsx + imports @theokit/ui, both dropped by --bare).
+const BARE_LAYOUT = `import { Outlet } from 'react-router'
+
+export default function RootLayout() {
+  return <Outlet />
+}
+`
+
 export interface BareTransformOptions {
   /** Test-only — force a synthetic write failure to validate rollback path. */
   _testForceError?: string
@@ -77,10 +86,15 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
   }
 
-  // 2. Replace app/page.tsx with Hello Theo
+  // 2. Replace app/page.tsx (Hello Theo) + app/layout.tsx (unstyled shell) — the defaults compose the chat
+  //    surface + import @theokit/ui, which --bare drops.
   const pagePath = join(targetDir, 'app/page.tsx')
   if (existsSync(pagePath)) {
     writeFileSync(pagePath, HELLO_PAGE)
+  }
+  const layoutPath = join(targetDir, 'app/layout.tsx')
+  if (existsSync(layoutPath)) {
+    writeFileSync(layoutPath, BARE_LAYOUT)
   }
 
   // 3. Remove the demo chat agent (the `agents/chat.ts` file + its TheoUI page)
@@ -89,11 +103,12 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     unlinkSync(chatPath)
   }
 
-  // 3b. Remove the chat feature's frontend internals (`app/chat/`) — they import `@theokit/ui`, which
-  //     --bare drops. The Hello-Theo page does not reference them, so the folder would be dead + unbuildable.
-  const chatFeatureDir = join(targetDir, 'app/chat')
-  if (existsSync(chatFeatureDir)) {
-    rmSync(chatFeatureDir, { recursive: true, force: true })
+  // 3b. Remove the chat frontend surface — `app/{components,hooks,lib}/` import `@theokit/ui` /
+  //     `theokit/client`, which --bare drops. The Hello-Theo page references none of them, so they would
+  //     be dead + unbuildable. (The route surface — layout/page/error/… — is kept, page + layout rewritten.)
+  for (const dir of ['app/components', 'app/hooks', 'app/lib']) {
+    const p = join(targetDir, dir)
+    if (existsSync(p)) rmSync(p, { recursive: true, force: true })
   }
 
   // 4. Remove tailwind + postcss config files (toolchain dropped from devDeps)

@@ -18,11 +18,17 @@ folders it composes (prompts, tools, skills) live together under `agents/`, with
 │   └── skills/             #   procedures the model loads on demand (createSkill)
 │       └── daily-briefing.ts    #   a real skill: time → weather → a one-line nudge
 ├── app/                    # Frontend (web surface). tui → tui/, desktop → frontend/
-│   ├── page.tsx            #   the chat route — the VIEW (presentational, composes @theokit/ui)
-│   ├── layout/error/loading/not-found.tsx  #   route surface (special files)
-│   └── chat/               #   the chat feature's internals (never a route — holds no page file)
-│       ├── use-transcript.ts   #     transcript STATE (history + streaming) — a hook
-│       └── constants.ts        #     greeting + starter prompts (declarative config)
+│   ├── page.tsx            #   the chat route — composition root (lays out the components + the hook)
+│   ├── layout.tsx          #   root layout — composes <Header/> over the routed page
+│   ├── error/loading/not-found.tsx  #   route surface (special files)
+│   ├── components/         #   presentational UI (Tailwind, flat .tsx — no CSS modules)
+│   │   ├── Header.tsx      #     the top bar
+│   │   ├── ChatPanel.tsx   #     the transcript + streaming indicator + starter prompts
+│   │   └── Composer.tsx    #     the input + error card + new-chat
+│   ├── hooks/              #   custom hooks
+│   │   └── use-transcript.ts  #     transcript STATE (history + streaming)
+│   └── lib/                #   app modules / config
+│       └── constants.ts    #     greeting + starter prompts
 ├── server/                 # Backend routes / actions (POST/GET handlers, jobs)
 ├── shared/                 # Code imported by more than one layer
 │   └── agent.ts            #   branding (name, model, greeting) — one source of truth
@@ -75,18 +81,27 @@ All three render the same `@theokit/ui` chat and read `shared/agent.ts` for the 
 
 ## Frontend organization
 
-The web `app/` follows the pattern every serious chat frontend converges on (Vercel's `ai-chatbot`, the
-Vercel AI SDK docs): **the page is the presentational view; the transcript/streaming STATE lives in a
-hook.** So `page.tsx` composes `@theokit/ui` components, `chat/use-transcript.ts` owns the message history +
-in-flight merge, and `chat/constants.ts` holds the greeting + starter prompts. This keeps the tricky state
-logic testable (`chat/use-transcript.test.ts`) and the view readable.
+The web `app/` is organized **type-based**, the layout most React apps grow into:
 
-The structure separates two things **semantically**: the **route surface** (`page` / `layout` / `error` /
-`loading` / `not-found`) stays at the `app/` root — those are the only files the router serves — and the
-**chat feature's internals** live in a `chat/` folder. A folder becomes a route only when it contains a
-`page` (or the other special files), so `chat/` — which holds only the feature's modules — is never served
-(Next-style colocation). Grouping the feature's code in one folder (rather than scattering `hooks/` +
-`lib/` with one file each) is feature-colocation: a second feature becomes its own `<feature>/` folder. Add
-presentational components beside these when the view grows.
+| Folder | Holds | Example |
+|---|---|---|
+| `app/` root | the **route surface** — the only files the router serves | `page.tsx`, `layout.tsx`, `error/loading/not-found.tsx` |
+| `components/` | presentational UI (flat `.tsx`; Tailwind, no CSS modules) | `Header`, `ChatPanel`, `Composer` |
+| `hooks/` | custom hooks — where **state** lives | `use-transcript.ts` |
+| `lib/` | app modules / config | `constants.ts` |
+
+Two rules make this work and keep it honest:
+
+1. **State in a hook, view in components.** This is the pattern every serious chat frontend converges on
+   (Vercel `ai-chatbot`, the AI SDK docs). `page.tsx` is a thin composition root — it lays out `<ChatPanel>`
+   + `<Composer>` and pulls transcript state from `useChatTranscript`. The tricky history + in-flight merge
+   is isolated + unit-tested (`hooks/use-transcript.test.ts`); the components are dumb and prop-driven.
+2. **Folders aren't routes.** A folder is served only when it holds a `page`/`layout`/… file, so
+   `components/`, `hooks/`, `lib/` are never routes (Next-style colocation). Add `utils/`, `styles/`,
+   `assets/` when you actually have a helper, a global stylesheet, or an image — a scaffold ships the
+   folders it *uses*, not empty placeholders (YAGNI).
+
+The entry point is framework-owned — there is no `main.tsx`/`index.js`. Routes are files (`page.tsx`), not
+a `pages/` folder you wire by hand: that's the Next.js-style convention TheoKit is built on.
 
 See also: [CUSTOMIZATION](./CUSTOMIZATION.md).

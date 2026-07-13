@@ -64,21 +64,30 @@ describe('scaffold (integration — real template)', () => {
     expect(chat).toContain('.tool(currentTimeTool)')
     expect(chat).toContain('.skills([dailyBriefingSkill])')
     // shared/ — one source of truth for cross-layer branding, imported by the agent + the frontend.
-    // The frontend consumes it from `app/chat/constants.ts`; the route surface (page/layout/…) stays at
-    // the app root, and the chat feature's internals live in a `chat/` folder — never a route, because a
-    // folder is only served when it contains a `page`/`layout`/… file (Next-style colocation).
+    // The frontend consumes it from `app/lib/constants.ts`. The web app is organized type-based: the route
+    // surface (page/layout/…) at the app root, plus `components/`, `hooks/`, `lib/` — none of which are
+    // routes (a folder is only served when it holds a `page`/`layout`/… file).
     expect(existsSync(join(targetDir, 'shared/agent.ts'))).toBe(true)
-    expect(readFileSync(join(targetDir, 'app/chat/constants.ts'), 'utf-8')).toContain(
+    expect(readFileSync(join(targetDir, 'app/lib/constants.ts'), 'utf-8')).toContain(
       "from '../../shared/agent'",
     )
-    // Frontend organized semantically: route surface at app/ root; chat internals colocated in `chat/`.
-    expect(existsSync(join(targetDir, 'app/chat/constants.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'app/chat/use-transcript.ts'))).toBe(true)
+    // components/ (real UI split), hooks/ (the transcript hook), lib/ (constants).
+    expect(existsSync(join(targetDir, 'app/components/ChatPanel.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/components/Composer.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/components/Header.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/hooks/use-transcript.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/lib/constants.ts'))).toBe(true)
+    // The page is the composition root: pulls transcript state from the hook, lays out the components.
     const pageSrc = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
     expect(pageSrc).toContain('useChatTranscript')
-    expect(pageSrc).toContain('./chat/use-transcript')
-    expect(readFileSync(join(targetDir, 'app/chat/use-transcript.ts'), 'utf-8')).toContain(
+    expect(pageSrc).toContain('./components/ChatPanel')
+    expect(pageSrc).toContain('./hooks/use-transcript')
+    expect(readFileSync(join(targetDir, 'app/hooks/use-transcript.ts'), 'utf-8')).toContain(
       'useAgent',
+    )
+    // layout.tsx composes the Header component (not an inline header).
+    expect(readFileSync(join(targetDir, 'app/layout.tsx'), 'utf-8')).toContain(
+      "from './components/Header'",
     )
     // docs/ — the structure is documented.
     expect(existsSync(join(targetDir, 'docs/ARCHITECTURE.md'))).toBe(true)
@@ -156,9 +165,14 @@ describe('scaffold (integration — real template)', () => {
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
     expect(pkg.dependencies?.['@theokit/ui']).toBeUndefined()
     expect(pkg.dependencies?.['@theokit/sdk']).toBeUndefined()
-    // The chat feature's frontend internals import @theokit/ui — --bare must drop the whole surface,
-    // not leave a dead `app/chat/` that references a removed dep.
-    expect(existsSync(join(targetDir, 'app/chat'))).toBe(false)
+    // The chat frontend surface imports @theokit/ui — --bare must drop it all (components/hooks/lib),
+    // not leave dead folders referencing a removed dep. layout.tsx is rewritten to an unstyled shell.
+    expect(existsSync(join(targetDir, 'app/components'))).toBe(false)
+    expect(existsSync(join(targetDir, 'app/hooks'))).toBe(false)
+    expect(existsSync(join(targetDir, 'app/lib'))).toBe(false)
+    const bareLayout = readFileSync(join(targetDir, 'app/layout.tsx'), 'utf-8')
+    expect(bareLayout).not.toContain('@theokit/ui')
+    expect(bareLayout).not.toContain('./components/Header')
   })
 
   it('should use theokit as main dep without controller-era packages', () => {
@@ -267,11 +281,14 @@ describe('scaffold (integration — real template)', () => {
     scaffold(targetDir, 'page-test')
 
     const page = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
-    // Chat surface composed from @theokit/ui; transcript state via the `useChatTranscript` hook in
-    // `chat/` (which wraps the M2 `useAgent`), keeping the page presentational.
-    expect(page).toContain('@theokit/ui')
+    // The page is the composition root: it lays out the ChatPanel + Composer components and pulls transcript
+    // state from `useChatTranscript` (the hook wraps the M2 `useAgent`). @theokit/ui lives in the components.
+    expect(page).toContain('ChatPanel')
     expect(page).toContain('useChatTranscript')
-    expect(readFileSync(join(targetDir, 'app/chat/use-transcript.ts'), 'utf-8')).toContain(
+    expect(readFileSync(join(targetDir, 'app/components/ChatPanel.tsx'), 'utf-8')).toContain(
+      '@theokit/ui',
+    )
+    expect(readFileSync(join(targetDir, 'app/hooks/use-transcript.ts'), 'utf-8')).toContain(
       'useAgent',
     )
     expect(page).not.toContain('useAgentStream')
