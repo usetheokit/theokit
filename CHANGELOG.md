@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.4.0] - 2026-07-13
+
+### Changed
+- **Agent-centered folder structure** (inspired by vercel-labs/personal-agent-template), applied to all three surfaces. The agent is no longer a single thin `agents/chat.ts` — it is *composed* from its neighbours, and cross-layer branding is defined once:
+  - `agents/_lib/instructions.ts` — the persona / system prompt (was an inline string).
+  - `agents/_tools/weather.ts` — an example tool (`tool('weather')…build()`), chained via `.tool(weatherTool)` in `chat.ts`.
+  - `agents/skills/getting-started.md` — an example Markdown skill.
+  - `shared/agent.ts` — one source of truth for the name, model label, and greeting, imported by the agent AND every frontend (web/tui/desktop), removing the greeting/model duplication that had been copy-pasted across surfaces.
+  - `docs/{ARCHITECTURE,CUSTOMIZATION,ENVIRONMENT}.md` — the structure is now documented in-repo.
+
+  The `_lib`/`_tools` folders are **underscore-prefixed** so the framework's `agents/*` → `POST /api/agents/<name>` route scanner skips them (verified: `/api/agents/_tools/weather` 404s, only `chat` is served); `skills/` needs no underscore because Markdown is never scanned. Zero framework-core change — this is purely the scaffold template. Verified end-to-end: fresh scaffold type-checks, the composed agent streams a real reply, and the desktop frontend bundles the cross-root `shared/` import.
+
 ## [create-theokit@1.3.2] - 2026-07-13
 
 ### Changed

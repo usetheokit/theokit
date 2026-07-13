@@ -1,6 +1,9 @@
 import { agent } from '@theokit/agents'
 import { z } from 'zod'
 
+import { BASE_INSTRUCTIONS } from './_lib/instructions.js'
+import { weatherTool } from './_tools/weather.js'
+
 /**
  * Chat agent — the zero-config `agents/*.ts` convention.
  *
@@ -13,10 +16,14 @@ import { z } from 'zod'
  * models) OR ANTHROPIC_API_KEY / OPENAI_API_KEY. The `model` id is prefixed with the provider
  * namespace so OpenRouter routes it upstream (see https://openrouter.ai/models).
  *
- * Add tools with `tool('name')...build()` (from `theokit/server`) and chain them via `.tool(...)`.
+ * The agent is composed from its neighbours (see `docs/ARCHITECTURE.md`): the persona lives in
+ * `agents/_lib/instructions.ts` and tools in `agents/_tools/` (both underscore-prefixed so the
+ * route scanner skips them). Add a tool with `tool('name')…build()` and chain it via `.tool(...)`;
+ * add a skill as `agents/skills/<name>.md`.
  */
 export default agent()
   .input(z.object({ message: z.string() }))
   .model('openai/gpt-4o-mini')
-  .system('You are a helpful assistant.')
+  .system(BASE_INSTRUCTIONS)
+  .tool(weatherTool)
   .build()
