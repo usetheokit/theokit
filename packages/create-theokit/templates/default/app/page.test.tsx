@@ -9,14 +9,17 @@ import Page from './page'
  * must both type-check AND render. Renders the real React tree in jsdom.
  */
 describe('default chat page', () => {
-  it('renders the empty state + quick actions + composer on first load', () => {
-    render(<Page />)
-    expect(screen.getByText('What should we build today?')).toBeDefined()
-    expect(screen.getByText('Summarize this page')).toBeDefined()
-    expect(screen.getByText('Show available tools')).toBeDefined()
-    expect(screen.getByText('Start a new conversation')).toBeDefined()
-    expect(screen.getByPlaceholderText('Ask the agent…')).toBeDefined()
-    expect(screen.getByLabelText('Open command palette')).toBeDefined()
+  it('opens with the agent greeting + honest starter prompts + composer + a working New chat', () => {
+    const { container } = render(<Page />)
+    // The agent greets first — the transcript starts warm. ChatMessage renders the text across markdown
+    // spans, so assert the assistant message container structurally, not by text.
+    expect(container.querySelector('[data-theo-chat-message="assistant"]')).not.toBeNull()
+    // Honest starter prompts (each sends a real message the agent can answer) + the composer.
+    expect(screen.getByText('What can you help me with?')).toBeDefined()
+    expect(screen.getByText('Write a haiku about TypeScript')).toBeDefined()
+    expect(screen.getByPlaceholderText('Message the agent…')).toBeDefined()
+    // `New chat` (reset) is real — no fake cost/token meters or dead History/Settings buttons here.
+    expect(screen.getByLabelText('New chat')).toBeDefined()
   })
 
   it('ChatMessage accepts a UIMessage and renders its message container (auto-dispatch)', () => {

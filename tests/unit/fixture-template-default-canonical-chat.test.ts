@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /**
@@ -16,12 +16,31 @@ import { resolve } from 'node:path'
 
 const ROOT = resolve(__dirname, '../..')
 const AGENT_PATH = resolve(ROOT, 'fixtures/template-default/agents/chat.ts')
-const PAGE_PATH = resolve(ROOT, 'fixtures/template-default/app/page.tsx')
 const PKG_PATH = resolve(ROOT, 'fixtures/template-default/package.json')
 const OLD_CHAT = resolve(ROOT, 'fixtures/template-default/server/routes/chat.ts')
 
 function readAgent(): string {
   return readFileSync(AGENT_PATH, 'utf-8')
+}
+
+/**
+ * Concatenate every production source file under the fixture's `app/` (excludes `*.test.*`). The chat
+ * surface is composed across `page.tsx` + `components/` + `hooks/`, so the `useAgent` wiring lives in
+ * `hooks/use-transcript.ts`; scan the tree so the check follows the hook wherever it's composed from.
+ */
+function readAppTree(): string {
+  const chunks: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (/\.(tsx?|jsx?)$/.test(entry.name) && !/\.(test|spec)\./.test(entry.name)) {
+        chunks.push(readFileSync(full, 'utf-8'))
+      }
+    }
+  }
+  walk(resolve(ROOT, 'fixtures/template-default/app'))
+  return chunks.join('\n')
 }
 
 describe('fixtures/template-default canonical agents/chat.ts (M3)', () => {
@@ -63,11 +82,11 @@ describe('fixtures/template-default canonical agents/chat.ts (M3)', () => {
     expect(rawSdkImport).toBe(false)
   })
 
-  it('the client page consumes the agent via useAgent (not the removed useAgentStream)', () => {
-    const page = readFileSync(PAGE_PATH, 'utf-8')
-    expect(page).toMatch(/useAgent\b/)
-    expect(page).not.toMatch(/useAgentStream/)
-    expect(page).toMatch(/\/api\/agents\/chat/)
+  it('the client app consumes the agent via useAgent (not the removed useAgentStream)', () => {
+    const app = readAppTree()
+    expect(app).toMatch(/useAgent\b/)
+    expect(app).not.toMatch(/useAgentStream/)
+    expect(app).toMatch(/\/api\/agents\/chat/)
   })
 
   it('LOC budget for the zero-config agent file: <= 40 lines', () => {

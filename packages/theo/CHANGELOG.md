@@ -1,5 +1,69 @@
 # theo
 
+## 0.36.1
+
+### Patch Changes
+
+- fc3cc06: Fix (#117): route handlers now receive a Web `Request` as `ctx.request` in the Node server (dev + `theokit start`),
+  matching the public `request: Request` handler type and ADR-0028 R3a. Previously the Node executor leaked
+  the raw `IncomingMessage`, so any Web-standard use of `ctx.request` — e.g. `ctx.request.headers.get(...)` or
+  `createSessionManagerWeb.getSession(ctx.request)` — threw `request.headers.get is not a function` at runtime
+  even though it type-checked. This made the framework's own Web session primitive unusable from a handler in
+  the Node server. The handler request carries method + URL + headers (the request body remains available via
+  the typed `ctx.body`, since the Node stream is already parsed before the handler runs).
+
+## 0.36.0
+
+### Patch Changes
+
+- Bump the `@theokit/agents` floor to `^0.38.0` — the runtime auto-wires the `skill_read` tool for agents
+  that declare inline skills via `.skills([...])`. No theokit API change.
+
+## 0.35.0
+
+### Patch Changes
+
+- Bump the `@theokit/agents` floor to `^0.37.0` so the framework compiles agents that declare inline
+  `createSkill` skills via `.skills([...])`. theokit's own code is unchanged, but the compile path
+  (`compileAgentModule` → `compileAgentDefinition`) must be the version that splits a mixed skills list
+  into `skills.enabled` + `skills.inline`; an older `@theokit/agents` would mis-map an inline object into
+  `enabled`. No app-facing API change.
+
+## 0.34.0
+
+### Minor Changes
+
+- **`theokit generate schedule` now emits the framework-native `defineCron`, discovered from
+  `agents/schedules/`.** The previous template used the SDK's programmatic `Cron.create` (needs a manual
+  `Cron.start()`, no deploy integration). The generated schedule is now
+  `export default defineCron(name, { schedule, handler })` — auto-discovered by `theokit build` and
+  translated to the deploy target's native cron (Vercel/Cloudflare/AWS). The build-time cron scanner now
+  walks BOTH `server/crons/` (backend trigger) and `agents/schedules/` (scheduled agent run, kept in the
+  agent domain) via the new `scanCronDirs([...])`, with a unified duplicate-name guard across both homes.
+  A scheduled agent run stays in the agent domain AND is a first-class framework cron.
+
+## 0.33.0
+
+### Minor Changes
+
+- **Capability generators now live in the agent domain and connect to the agent.** `theokit generate
+workflow|eval|sandbox|schedule|memory <name>` emits under `agents/<capability>/` (not the app root) —
+  these are facets of the agent domain, not standalone top-level concerns. The folder-semantic scanner
+  now also skips `agents/{workflows,evals,memory}` (it already skipped `sandbox`/`schedules`), so none
+  become phantom routes. The emitted examples are wired to the agent: `sandbox` is a `tool()` you add
+  with `.tool(...)`; `memory` shows `.conversationStorage(...)` (new in `@theokit/agents@0.36.0`);
+  `eval`/`schedule` mirror the agent's model + system prompt; `workflow` documents `agentStep`.
+
+## 0.32.0
+
+### Minor Changes
+
+- **Capability generators.** `theokit generate <capability> <name>` now scaffolds a minimal, runnable
+  example of five SDK capabilities — `workflow`, `eval`, `sandbox`, `schedule`, `memory` — alongside the
+  existing `route`/`action`/`page`/`ws`/`controller`/`agent`/`toolbox`/`resource` kinds. Each emitted file
+  type-checks against `@theokit/sdk`; `workflow` and `sandbox` run standalone. Learn the API by reading real
+  code (`rails g` style) instead of hunting docs.
+
 ## 0.30.0
 
 ### Minor Changes

@@ -77,8 +77,10 @@ describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)',
     // M6 bumped this pin from ^1.x to ^2.13.0: @theokit/agents@0.30.x requires the
     // `@theokit/sdk` `./compaction` subpath export, first shipped in 2.13.0. A fresh
     // `npx create-theokit` → `pnpm install` failed with ERR_PACKAGE_PATH_NOT_EXPORTED
-    // under the old ^1 pin. This guard locks the floor that carries the export.
-    expect(src).toMatch(/"@theokit\/sdk":\s*"\^2\.1[3-9]/)
+    // under the old ^1 pin. This guard locks the FLOOR that carries the export — any
+    // `^2.<minor>` with minor >= 13 satisfies it (the template legitimately tracks a
+    // higher minor over time; the regex allows 2.13 through 2.99).
+    expect(src).toMatch(/"@theokit\/sdk":\s*"\^2\.(1[3-9]|[2-9]\d)\./)
   })
 
   it('package.json.tmpl still preserves {{name}} placeholder (sanity)', () => {

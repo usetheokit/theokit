@@ -285,6 +285,13 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // module — they pass native Web Request through executeWebRequest
       // directly without the bridge.
       'packages/theo/src/server/http/node-web-adapter.ts',
+      // Node-adapter scope (#117): the primitive IncomingMessage → Web
+      // Request converters extracted out of node-web-adapter.ts so the
+      // Node executor can build the handler-facing Web Request without
+      // pulling the Web dispatch pipeline into its import graph. Holds the
+      // node:stream (Readable.toWeb) body-drain — same ADR-0028 R3a
+      // boundary; never loaded in Workers/Bun/Deno.
+      'packages/theo/src/server/http/node-request.ts',
       // Static-file boundary: the built-in OpenAPI docs server reads the
       // emitted spec file from disk (node:fs) and resolves its path
       // (node:path). Like static.ts, this is Node-adapter scope per

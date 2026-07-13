@@ -55,6 +55,51 @@ describe('scanAgents (M2)', () => {
     expect(agents.map((a) => a.name)).toEqual(['echo'])
   })
 
+  it('test_scanAgents_composition_subfolders_are_not_routes', () => {
+    // Folder-semantic discovery: the agent file lives alongside the folders it composes; those
+    // conventional sub-folders (tools/skills/prompts/lib/…) are that concern, NOT routed agents.
+    setupFixture({
+      'agents/chat.ts': 'export default {}',
+      'agents/tools/weather.ts': 'export const weatherTool = {}',
+      'agents/skills/getting-started.ts': 'export const skill = {}',
+      'agents/prompts/instructions.ts': 'export const BASE = ""',
+      'agents/lib/helper.ts': 'export const h = {}',
+      // Capability folders (`theokit generate workflow|eval|sandbox|schedule|memory`) are agent
+      // concerns too — never phantom routes.
+      'agents/workflows/greeting.ts': 'export const w = {}',
+      'agents/evals/qa-smoke.ts': 'export const e = {}',
+      'agents/sandbox/run-command.ts': 'export const s = {}',
+      'agents/schedules/daily-digest.ts': 'export const c = {}',
+      'agents/memory/conversations.ts': 'export const m = {}',
+    })
+    const agents = scanAgents(TMP_DIR)
+    // Exactly one agent: `chat`. No phantom /api/agents/tools/weather, /api/agents/workflows/… etc.
+    expect(agents.map((a) => a.name)).toEqual(['chat'])
+    expect(agents[0]?.agentPath).toBe('/api/agents/chat')
+  })
+
+  it('test_scanAgents_agent_may_also_be_a_folder_with_index', () => {
+    // A nested named agent (`agents/<name>/index.ts`) still works, and its own composition folders skip.
+    setupFixture({
+      'agents/support/index.ts': 'export default {}',
+      'agents/support/tools/ticket.ts': 'export const t = {}',
+    })
+    const agents = scanAgents(TMP_DIR)
+    expect(agents.map((a) => a.name)).toEqual(['support'])
+  })
+
+  it('test_scanAgents_reserved_subfolder_names_only_apply_to_directories', () => {
+    // A flat file literally named `tools.ts` is still a valid agent — the reserved names guard
+    // intermediate DIRECTORIES, never the agent file itself.
+    setupFixture({
+      'agents/tools.ts': 'export default {}',
+      'agents/chat.ts': 'export default {}',
+      'agents/chat/tools/x.ts': 'export const x = {}',
+    })
+    const agents = scanAgents(TMP_DIR)
+    expect(agents.map((a) => a.name).sort((x, y) => x.localeCompare(y))).toEqual(['chat', 'tools'])
+  })
+
   it('test_scanAgents_returns_empty_when_no_agents_dir', () => {
     // TMP_DIR exists but has no agents/ subdir.
     expect(scanAgents(TMP_DIR)).toEqual([])
