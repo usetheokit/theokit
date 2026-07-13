@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit@0.33.0 + @theokit/agents@0.36.0] - 2026-07-13
+
+### Added
+- **`.conversationStorage(adapter)` on the agent builder (`@theokit/agents@0.36.0`).** Declare WHERE an
+  agent's conversation turns persist right where you define it —
+  `agent().model(...).conversationStorage(store).build()` — swapping in-memory ⇄ filesystem ⇄ custom
+  without touching the runtime. Flows to `Agent.getOrCreate({ conversationStorage })`; per-run override
+  wins over the agent-level default wins over the SDK default. TDD: 4 new tests; full agents suite green.
+
+### Changed
+- **Capability generators are agent-domain and connected to the agent (`theokit@0.33.0`).** `theokit
+  generate workflow|eval|sandbox|schedule|memory` now scaffolds under `agents/<capability>/` instead of
+  the app root — these are the agent's capabilities, not standalone top-level folders (screaming
+  architecture / package-by-domain). The folder-semantic scanner skips `agents/{workflows,evals,memory}`
+  too (phantom-route guard). Emitted examples wire to the agent: `sandbox` → a `tool()`; `memory` →
+  `.conversationStorage(...)`; `eval`/`schedule` mirror the agent's model + system prompt; `workflow`
+  documents `agentStep`. Validated end-to-end in a scaffolded showcase app (all capabilities under
+  `agents/`, wired into `chat.ts`, `tsc` clean, workflow runs).
+
 ## [theokit@0.32.0] - 2026-07-13
 
 ### Added
