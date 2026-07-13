@@ -69,7 +69,7 @@ function readConsumerSwcrc(startDir: string): Record<string, unknown> | null {
   return null
 }
 
-interface SwcCore {
+export interface SwcCore {
   transformSync: (src: string, opts: unknown) => { code: string }
 }
 
@@ -105,20 +105,23 @@ async function loadSwcCore(): Promise<SwcCore | null> {
 }
 
 /**
- * Load a TypeScript controller file using @swc/core for decorator support.
+ * Transform TypeScript controller SOURCE (with parameter decorators) into
+ * ESM code, emitting the `design:paramtypes` / decorator metadata that esbuild
+ * cannot produce. Pure code→code — no file I/O, no module load — so it is
+ * reusable both by {@link loadControllerWithSwc} (which then temp-writes +
+ * imports) and by a build-tool transform hook that returns `{ code }` directly.
  *
- * Strategy:
- *   1. Read source .ts file
- *   2. Transform via @swc/core with legacyDecorator + decoratorMetadata
- *   3. Write temp .mjs in SAME directory (relative imports resolve correctly)
- *   4. Dynamic import() the .mjs — transitive .ts imports go through
- *      tsx/Vite's global hook (they don't have parameter decorators)
- *   5. Cleanup temp file
+ * The `@swc/core` loader is injectable (`loadSwc`) for testability; it defaults
+ * to the cached singleton.
+ *
+ * @throws HttpDecoratorsConfigError when @swc/core is unavailable.
  */
-export async function loadControllerWithSwc(
-  absoluteFilePath: string,
-): Promise<Record<string, unknown>> {
-  const swc = await loadSwcCore()
+export async function transformControllerSource(
+  source: string,
+  filename: string,
+  loadSwc: () => Promise<SwcCore | null> = loadSwcCore,
+): Promise<string> {
+  const swc = await loadSwc()
   if (!swc) {
     throw new HttpDecoratorsConfigError(
       `@swc/core is required for parameter decorators (@Body, @Param, @Query). ` +
@@ -128,14 +131,13 @@ export async function loadControllerWithSwc(
     )
   }
 
-  const source = readFileSync(absoluteFilePath, 'utf-8')
-  const consumerSwcrc = readConsumerSwcrc(dirname(absoluteFilePath))
+  const consumerSwcrc = readConsumerSwcrc(dirname(filename))
   const consumerJsc =
     consumerSwcrc?.jsc && typeof consumerSwcrc.jsc === 'object'
       ? (consumerSwcrc.jsc as Record<string, unknown>)
       : null
   const { code } = swc.transformSync(source, {
-    filename: absoluteFilePath,
+    filename,
     jsc: {
       parser: {
         syntax: 'typescript',
@@ -154,6 +156,25 @@ export async function loadControllerWithSwc(
     module: { type: 'es6' },
     sourceMaps: false,
   })
+  return code
+}
+
+/**
+ * Load a TypeScript controller file using @swc/core for decorator support.
+ *
+ * Strategy:
+ *   1. Read source .ts file
+ *   2. Transform via {@link transformControllerSource} (legacyDecorator + metadata)
+ *   3. Write temp .mjs in SAME directory (relative imports resolve correctly)
+ *   4. Dynamic import() the .mjs — transitive .ts imports go through
+ *      tsx/Vite's global hook (they don't have parameter decorators)
+ *   5. Cleanup temp file
+ */
+export async function loadControllerWithSwc(
+  absoluteFilePath: string,
+): Promise<Record<string, unknown>> {
+  const source = readFileSync(absoluteFilePath, 'utf-8')
+  const code = await transformControllerSource(source, absoluteFilePath)
 
   // Write temp .mjs in SAME directory so relative imports resolve identically.
   // .mjs = Node treats as ESM regardless of package.json type field.

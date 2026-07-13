@@ -11,9 +11,13 @@ describe('Bundle size regression', () => {
     console.log(`  http-decorators/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
-  it('http-decorators DTS under 40KB', () => {
+  it('http-decorators DTS under budget', () => {
     const size = statSync(resolve(distDir, 'index.d.ts')).size
-    expect(size).toBeLessThan(48_000)
+    // Budget bumped 48KB → 52KB (#122): the public surface gained
+    // `transformControllerSource` + `SwcCore` so the framework's Vite
+    // controller transform can reuse the swc option block (ADR-1 / Rule 9),
+    // instead of duplicating it (G12). Deliberate, minimal API addition.
+    expect(size).toBeLessThan(52_000)
     console.log(`  http-decorators/dist/index.d.ts: ${(size / 1024).toFixed(1)} KB`)
   })
 })

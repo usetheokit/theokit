@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- Decorator controllers under `server/controllers/**` are compiled through `@theokit/http`'s swc transform in the `theokit dev`/build Vite pipeline, so their parameter decorators (`@Body`/`@Param`/`@Query`) emit the metadata esbuild drops — the foundation for serving decorator controllers at parity with file-based `route()`. File-based routes compile exactly as before (the transform is a strict no-op outside `controllers/`). `@theokit/http` now exports `transformControllerSource` + `SwcCore` so the framework reuses the swc option block instead of duplicating it (#122).
+
 ## [create-theokit@1.10.0] - 2026-07-13
 
 ### Added
