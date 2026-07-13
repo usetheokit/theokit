@@ -118,6 +118,7 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
   })
 
   it('test_adapter_emits_runtime_applied_log', async () => {
+    process.env.THEOKIT_DEBUG = '1' // the wiring metric is now opt-in (silent by default — TUI/pipe hygiene)
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
     @Agent({ name: 'sk2', route: '/sk2' })
     @Skills(['y'])
@@ -130,5 +131,6 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
       String(c[0]).includes('THEO_AGENT_M8_RUNTIME_APPLIED'),
     )
     expect(hits.length).toBeGreaterThanOrEqual(1)
+    delete process.env.THEOKIT_DEBUG
   })
 })

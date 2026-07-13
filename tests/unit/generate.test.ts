@@ -42,6 +42,108 @@ describe('theo generate', () => {
     }
   })
 
+  it('should create a workflow file that emits the SDK Workflow builder', async () => {
+    const dir = createTempProject()
+    const orig = process.cwd()
+    process.chdir(dir)
+    try {
+      await generateCommand('workflow', 'greeting')
+      const filePath = join(dir, 'agents/workflows/greeting.ts')
+      expect(existsSync(filePath)).toBe(true)
+      const content = readFileSync(filePath, 'utf-8')
+      expect(content).toContain("from '@theokit/sdk/workflow'")
+      expect(content).toContain('Workflow.create(')
+      expect(content).toContain('.then(fn(')
+      expect(content).toContain('.commit()')
+      expect(content).toContain('greetingWorkflow')
+    } finally {
+      process.chdir(orig)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('should create an eval file that emits the SDK Eval builder', async () => {
+    const dir = createTempProject()
+    const orig = process.cwd()
+    process.chdir(dir)
+    try {
+      await generateCommand('eval', 'qa-smoke')
+      const filePath = join(dir, 'agents/evals/qa-smoke.ts')
+      expect(existsSync(filePath)).toBe(true)
+      const content = readFileSync(filePath, 'utf-8')
+      expect(content).toContain("from '@theokit/sdk/eval'")
+      expect(content).toContain('Eval.create(')
+      expect(content).toContain('Scorers.containsExpected(')
+      expect(content).toContain('qaSmokeEval')
+    } finally {
+      process.chdir(orig)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('should create a sandbox file that emits LocalSandbox', async () => {
+    const dir = createTempProject()
+    const orig = process.cwd()
+    process.chdir(dir)
+    try {
+      await generateCommand('sandbox', 'run-command')
+      const filePath = join(dir, 'agents/sandbox/run-command.ts')
+      expect(existsSync(filePath)).toBe(true)
+      const content = readFileSync(filePath, 'utf-8')
+      // The sandbox capability manifests as an agent TOOL (the canonical, connected use).
+      expect(content).toContain("from 'theokit/server'")
+      expect(content).toContain("from '@theokit/sdk/sandbox'")
+      expect(content).toContain("tool('run_command')")
+      expect(content).toContain('new LocalSandbox(')
+      expect(content).toContain('sandbox.execute(')
+      expect(content).toContain('runCommandTool')
+    } finally {
+      process.chdir(orig)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('should create a schedule file that emits Cron.create', async () => {
+    const dir = createTempProject()
+    const orig = process.cwd()
+    process.chdir(dir)
+    try {
+      await generateCommand('schedule', 'daily-digest')
+      const filePath = join(dir, 'agents/schedules/daily-digest.ts')
+      expect(existsSync(filePath)).toBe(true)
+      const content = readFileSync(filePath, 'utf-8')
+      // Framework-native cron: `defineCron` (auto-discovered + deploy-translated), not the SDK's Cron.create.
+      expect(content).toContain("from 'theokit/server/cron'")
+      expect(content).toContain("export default defineCron('daily-digest'")
+      expect(content).toContain('schedule:')
+      expect(content).toContain('async handler(')
+    } finally {
+      process.chdir(orig)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('should create a memory file that configures conversation storage', async () => {
+    const dir = createTempProject()
+    const orig = process.cwd()
+    process.chdir(dir)
+    try {
+      await generateCommand('memory', 'conversations')
+      const filePath = join(dir, 'agents/memory/conversations.ts')
+      expect(existsSync(filePath)).toBe(true)
+      const content = readFileSync(filePath, 'utf-8')
+      expect(content).toContain("from '@theokit/sdk'")
+      expect(content).toContain('InMemoryConversationStorage')
+      expect(content).toContain('FileSystemConversationStorage')
+      expect(content).toContain('conversationStorage')
+      // Now connectable: the doc shows wiring it into the agent via .conversationStorage(...).
+      expect(content).toContain('.conversationStorage(conversationStorage)')
+    } finally {
+      process.chdir(orig)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('should create page file', async () => {
     const dir = createTempProject()
     const orig = process.cwd()

@@ -11,6 +11,7 @@ import type {
   BudgetTracker,
   ConversationStorageAdapter,
   CustomTool,
+  InlineSkill,
   InteractionUpdate,
   Plugin,
   PluginsSettings,
@@ -18,6 +19,7 @@ import type {
   SendOptions,
 } from '@theokit/sdk'
 
+import { debugLog } from '../debug-log.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
@@ -180,6 +182,12 @@ interface SdkRuntime {
   }) => unknown
   InMemoryConversationStorage: new () => ConversationStorageAdapter
   FileSystemConversationStorage: new () => ConversationStorageAdapter
+  /**
+   * SE23 — optional `skill_read` tool factory. Absent on SDKs older than it shipped; guarded with `in`
+   * at load so an older peer degrades gracefully (inline skills still list in the `<skills>` block, they
+   * just aren't auto-readable). Used to auto-wire reading for `defineAgent({ skills: [inlineSkill] })`.
+   */
+  defineSkillReadTool?: (skills: readonly InlineSkill[]) => unknown
 }
 
 /**
@@ -198,6 +206,9 @@ async function loadSdkRuntime(): Promise<SdkRuntime | null> {
       InMemoryConversationStorage: InMemory,
       FileSystemConversationStorage:
         'FileSystemConversationStorage' in sdk ? sdk.FileSystemConversationStorage : InMemory,
+      ...('defineSkillReadTool' in sdk
+        ? { defineSkillReadTool: sdk.defineSkillReadTool as SdkRuntime['defineSkillReadTool'] }
+        : {}),
     }
   } catch (err) {
     console.warn('[theokit] @theokit/sdk import failed:', err)
@@ -503,7 +514,10 @@ export function createSdkAgentStream(
   // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
   // so history persists across the per-round agent create/dispose. Defaults lazily to the
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
-  let storage: ConversationStorageAdapter | undefined = overrides.conversationStorage
+  // Precedence: per-run override > agent-level `defineAgent({ conversationStorage })`
+  // (compiled.conversationStorage) > SDK default (chosen lazily below).
+  let storage: ConversationStorageAdapter | undefined =
+    overrides.conversationStorage ?? compiled.conversationStorage
 
   // `factoryOpts.disableTools` (step-cap force-close) → `tool_choice:"none"` at send-time.
   return (
@@ -531,6 +545,22 @@ export function createSdkAgentStream(
 
       // M7 — pass the resolved run-context so every tool handler receives it as `ctx.context`.
       const sdkTools = buildSdkTools(compiledTools, rt.defineTool, overrides.sdkTools, runContext)
+
+      // Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
+      // skill lists in the `<skills>` block by name + description only — its body is unreachable to the
+      // model without the `skill_read` tool, so registering an inline skill implies wanting it readable.
+      // One `.skills([...])` call thus both registers AND makes the skill readable. Dedup: skip when the
+      // app already declared a `skill_read` (an explicit `defineSkillReadTool` wins). Graceful: skip when
+      // the loaded SDK predates `defineSkillReadTool` (inline skills still list, just not auto-readable).
+      const inlineSkills = compiled.skills?.inline
+      if (
+        inlineSkills !== undefined &&
+        inlineSkills.length > 0 &&
+        rt.defineSkillReadTool !== undefined &&
+        !compiledTools.some((t) => t.name === 'skill_read')
+      ) {
+        sdkTools.push(rt.defineSkillReadTool(inlineSkills))
+      }
       // Wiring triad pillar (c) — M7 run-context metric: observable proof that context injection is active.
       let runContextSource: string
       if (overrides.runContext !== undefined) {
@@ -540,7 +570,7 @@ export function createSdkAgentStream(
       } else {
         runContextSource = 'none'
       }
-      console.debug('[THEO_AGENT_M7_RUN_CONTEXT]', {
+      debugLog('[THEO_AGENT_M7_RUN_CONTEXT]', {
         source: runContextSource,
         keys: runContext !== undefined ? Object.keys(runContext) : [],
       })
@@ -625,8 +655,8 @@ async function* streamSdkAgent(
   if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
   const extra = buildExtraCreateOptions(overrides, compiled)
   if (applied.length > 0) {
-    // Wiring triad — runtime metric: observable proof the decorators fired.
-    console.debug('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
+    // Wiring triad — runtime metric: observable proof the decorators fired (opt-in via THEOKIT_DEBUG).
+    debugLog('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
       skills: applied.includes('skills'),
       contextWindow: applied.includes('context'),
       projectContext: applied.includes('projectContext'),

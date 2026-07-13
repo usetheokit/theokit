@@ -6,6 +6,264 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.10.0] - 2026-07-13
+
+### Added
+- **Scaffold shows how to add screens, using TheoKit's client primitives (`create-theokit@1.10.0`).** A nav
+  menu (`app/components/Nav.tsx` — TheoKit's `Link` with route **prefetch** + `useLocation` for active state,
+  composed into the `Header`) + a real self-documenting example route (`app/about/page.tsx` → `/about`,
+  explains file-based routing, links back with `Link`, sets its title with `<Metadata>`, says to delete it)
+  + `page.tsx` sets its title via `<Metadata>` + a pointer comment + `docs/ARCHITECTURE.md` § "Adding a
+  screen" (folder convention, dynamic `[id]`/catch-all, `theokit generate page`, and the `theokit/client`
+  primitives: `Link`/`Metadata`/`Image`/`theoFetch`/`react-query` — reach for these over raw react-router).
+  No dead demo — every link goes to a real route. Documents that a `pages/` folder for routes is an
+  anti-pattern (file-based routing: `app/` IS the pages layer; a `pages/` inside prefixes every URL with
+  `/pages`).
+
+## [create-theokit@1.9.0] - 2026-07-13
+
+### Changed
+- **Scaffold frontend is type-based (`create-theokit@1.9.0`).** The web `app/` refactored into
+  `components/` (`Header`, `ChatPanel`, `Composer` — flat Tailwind `.tsx`, ai-chatbot convention), `hooks/`
+  (`use-transcript.ts` — the STATE hook, unit-tested), and `lib/` (`constants.ts`). `page.tsx` is a thin
+  composition root; `layout.tsx` composes `<Header/>`. Each bucket holds real extracted code — no empty
+  placeholder folders (`utils/`/`styles/`/`assets/` documented as convention, added on demand — YAGNI). No
+  `main.tsx`/`index.js`/`pages/` (framework-owned entry + file routes, Next.js-style). `--bare` drops the
+  three folders + rewrites `layout.tsx` to an unstyled shell (also fixes a latent bare bug: `layout.tsx`
+  imported the `@theokit/ui` that bare removes). Grounded in the deep frontend-structure research pass.
+
+## [create-theokit@1.8.0] - 2026-07-13
+
+### Changed
+- **Scaffold frontend organized semantically (`create-theokit@1.8.0`).** The web `app/` splits into a
+  presentational **view** (`page.tsx` composes `@theokit/ui`) and the chat feature's internals in an
+  **`app/chat/`** folder: `use-transcript.ts` (the transcript/streaming STATE hook, now unit-tested) +
+  `constants.ts` (greeting + starter prompts). The route surface (`page`/`layout`/`error`/`loading`/
+  `not-found`) stays at the `app/` root — the only files the router serves; `chat/` is never a route
+  (a folder is served only when it holds a `page`/… file — Next-style colocation). Follows the convergent
+  chat-frontend pattern (Vercel ai-chatbot, AI SDK docs: state in a hook, page presentational) +
+  feature-colocation (one `<feature>/` folder, not scattered `hooks/`+`lib/`). Keeps TheoKit's
+  Next.js-style framework-owned entry (no `main.tsx`).
+
+## [@theokit/agents@0.38.0 + theokit@0.36.0 + create-theokit@1.7.0] - 2026-07-13
+
+### Changed
+- **`.skills([inlineSkill])` auto-provisions the `skill_read` tool — one call instead of two
+  (`@theokit/agents@0.38.0`).** An inline skill lists in the `<skills>` block by name + description only;
+  its body is unreachable to the model without a `skill_read` tool. The runtime now auto-appends that tool
+  when an agent declares inline skills, so `agent().skills([mySkill]).build()` both registers AND makes the
+  skill readable. Dedup (an explicit `defineSkillReadTool` wins) + graceful degrade (older SDK → list-only).
+  Kept at the runtime layer so the compile module stays SDK-runtime-free. Scaffold drops the separate
+  `.tool(defineSkillReadTool([...]))` line (`create-theokit@1.7.0`); `theokit@0.36.0` bumps its
+  `@theokit/agents` floor to `^0.38.0` (dependency bump only).
+
+## [@theokit/agents@0.37.0 + theokit@0.35.0 + create-theokit@1.6.0] - 2026-07-13
+
+### Added
+- **`.skills([...])` accepts inline `createSkill` objects (`@theokit/agents@0.37.0`).** A code-defined
+  skill can now be registered on the builder — `agent().skills([mySkill]).build()` — so the SDK injects its
+  name + description into the `<skills>` system-prompt block (the model KNOWS the skill exists) instead of
+  the app hardcoding it in the persona. `SkillsSelection` widened to `(string | InlineSkill)[] | resolver`;
+  `compileSkillsSelection` splits names → `skills.enabled`, objects → `skills.inline`. Backward-compatible;
+  the run path already forwarded `compiled.skills` to `Agent.create`.
+
+### Changed
+- **Default scaffold uses `.skills([dailyBriefingSkill])` (`create-theokit@1.6.0`).** The chat agent
+  registers its inline skill via the first-class builder method (+ keeps `skill_read` for on-demand body
+  reads); the persona no longer repeats the skill name — the `<skills>` block lists it. Removes the prior
+  workaround. `theokit@0.35.0` bumps its `@theokit/agents` floor to `^0.37.0` so the compile path splits
+  inline skills correctly (dependency bump only; no theokit API change).
+
+## [theokit@0.34.0] - 2026-07-13
+
+### Changed
+- **`theokit generate schedule` emits the framework-native `defineCron` (not the SDK's `Cron.create`),
+  discovered from `agents/schedules/`.** A scheduled agent run is now a first-class TheoKit cron:
+  `export default defineCron(name, { schedule, handler })`, auto-discovered by `theokit build` and
+  translated to the deploy target's native cron (Vercel/Cloudflare/AWS) — no manual `Cron.start()`. The
+  build-time scanner now walks BOTH `server/crons/` and `agents/schedules/` (new `scanCronDirs([...])`,
+  unified duplicate-name guard), so schedules stay in the agent domain AND get native scheduling. Verified
+  end-to-end: `theokit build` on the showcase reports "Crons: 1 declared" from `agents/schedules/`.
+
+## [theokit@0.33.0 + @theokit/agents@0.36.0] - 2026-07-13
+
+### Added
+- **`.conversationStorage(adapter)` on the agent builder (`@theokit/agents@0.36.0`).** Declare WHERE an
+  agent's conversation turns persist right where you define it —
+  `agent().model(...).conversationStorage(store).build()` — swapping in-memory ⇄ filesystem ⇄ custom
+  without touching the runtime. Flows to `Agent.getOrCreate({ conversationStorage })`; per-run override
+  wins over the agent-level default wins over the SDK default. TDD: 4 new tests; full agents suite green.
+
+### Changed
+- **Capability generators are agent-domain and connected to the agent (`theokit@0.33.0`).** `theokit
+  generate workflow|eval|sandbox|schedule|memory` now scaffolds under `agents/<capability>/` instead of
+  the app root — these are the agent's capabilities, not standalone top-level folders (screaming
+  architecture / package-by-domain). The folder-semantic scanner skips `agents/{workflows,evals,memory}`
+  too (phantom-route guard). Emitted examples wire to the agent: `sandbox` → a `tool()`; `memory` →
+  `.conversationStorage(...)`; `eval`/`schedule` mirror the agent's model + system prompt; `workflow`
+  documents `agentStep`. Validated end-to-end in a scaffolded showcase app (all capabilities under
+  `agents/`, wired into `chat.ts`, `tsc` clean, workflow runs).
+
+## [theokit@0.32.0] - 2026-07-13
+
+### Added
+- **Capability generators — `theokit generate <capability> <name>` scaffolds a working SDK feature.**
+  Beyond `route`/`action`/`page`/`ws`/`controller`/`agent`/`toolbox`/`resource`, the generator now emits a
+  minimal, runnable example of each SDK capability so you learn the API by reading real code (`rails g`
+  style):
+  - `theokit generate workflow greeting` → `workflows/greeting.ts` — a `Workflow.create().then(fn(...)).commit()`
+    chain. Runs standalone: `greetingWorkflow.run({ name: 'Ada' })` → `"Hello, Ada!"`.
+  - `theokit generate eval qa-smoke` → `evals/qa-smoke.ts` — an `Eval.create({ dataset, scorers, agent })`
+    that scores your model over a dataset (`Scorers.containsExpected()`).
+  - `theokit generate sandbox run-command` → `sandbox/run-command.ts` — a `LocalSandbox` command runner with
+    timeout + output cap. Runs standalone: `runCommand('echo hi')` → `{ stdout, stderr, exitCode }`.
+  - `theokit generate schedule daily-digest` → `schedules/daily-digest.ts` — a `Cron.create({ cron, agent })`
+    job that fires an agent on a schedule.
+  - `theokit generate memory conversations` → `memory/conversations.ts` — a conversation-storage adapter
+    (`InMemoryConversationStorage` / `FileSystemConversationStorage`) to wire into an agent.
+
+  Each generated file type-checks against `@theokit/sdk` (v2.30.0 subpath exports `@theokit/sdk/{workflow,eval,sandbox,cron}`);
+  the two self-contained ones (`workflow`, `sandbox`) were verified to run end-to-end. The `generate --help`
+  text and the invalid-type error now list the full capability set.
+
+## [create-theokit@1.5.1] - 2026-07-13
+
+### Changed
+- **Default scaffold now demonstrates real SDK features, not placeholders.** The agent ships two working
+  tools (`weather` — a remote open-meteo call; `current-time` — a local, deterministic one) and a **real
+  skill** via the SDK's skills API: `agents/skills/daily-briefing.ts` is a `createSkill(...)` exposed to the
+  model through `defineSkillReadTool([...])` — the model sees each skill's name + description every turn and
+  loads the full body on demand with the `skill_read` tool, replacing the dead Markdown note. The persona
+  guides the model to call the tools + the skill. Verified live: a briefing request drove `skill_read` +
+  `current_time` + `weather` and produced the 3-line briefing. Bumps the `@theokit/sdk` floor to `^2.25.0`
+  (where `createSkill` / `defineSkillReadTool` landed).
+
+## [theokit@0.31.0 + create-theokit@1.5.0] - 2026-07-13
+
+### Added
+- **Folder-semantic agent discovery (`theokit@0.31.0`).** The `agents/*` scanner now recognizes an agent's
+  composition folders. Files under a conventional sub-folder of `agents/` — `prompts/`, `tools/`, `skills/`,
+  `lib/`, `hooks/`, `channels/`, `connections/`, `subagents/`, `schedules/`, `sandbox/` — are that concern,
+  NOT routed agents. So `agents/tools/weather.ts` no longer becomes a phantom `POST /api/agents/tools/weather`
+  endpoint, and agent tooling can use clean folder names (no underscore workaround). Only `agents/<name>.ts`
+  (or `agents/<name>/index.ts`) is served. Backward-compatible: existing flat `agents/*.ts` agents are
+  unchanged; a flat file literally named `tools.ts` is still a valid agent (the reserved names guard
+  intermediate directories only). Inspired by Eve's "file = identity" convention.
+
+### Changed
+- **Agent-centered scaffold (`create-theokit@1.5.0`), applied to all three surfaces.** The default agent is
+  no longer a single thin `agents/chat.ts` — it is composed from clean-named sibling folders under `agents/`
+  (enabled by `theokit@0.31.0` above):
+  - `agents/chat.ts` — the agent, composed via `.system(BASE_INSTRUCTIONS).tool(weatherTool)`.
+  - `agents/prompts/instructions.ts` — the persona / system prompt.
+  - `agents/tools/weather.ts` — an example tool (`tool('weather')…build()`).
+  - `agents/skills/getting-started.md` — an example Markdown skill.
+  - `shared/agent.ts` — one source of truth for name/model/greeting, imported by the agent AND every
+    frontend (removes the greeting/model duplication across web/tui/desktop).
+  - `docs/{ARCHITECTURE,CUSTOMIZATION,ENVIRONMENT}.md` — the structure is documented.
+
+  No underscore-prefixed folders — the clean names are made possible by the framework's new folder-semantic
+  scanner. Verified: fresh scaffold type-checks, `/api/agents/tools/weather` 404s (no phantom route), and the
+  composed agent streams a real reply.
+
+## [create-theokit@1.4.0] - 2026-07-13
+
+### Changed
+- **Agent-centered folder structure** (inspired by vercel-labs/personal-agent-template), applied to all three surfaces. The agent is no longer a single thin `agents/chat.ts` — it is *composed* from its neighbours, and cross-layer branding is defined once:
+  - `agents/_lib/instructions.ts` — the persona / system prompt (was an inline string).
+  - `agents/_tools/weather.ts` — an example tool (`tool('weather')…build()`), chained via `.tool(weatherTool)` in `chat.ts`.
+  - `agents/skills/getting-started.md` — an example Markdown skill.
+  - `shared/agent.ts` — one source of truth for the name, model label, and greeting, imported by the agent AND every frontend (web/tui/desktop), removing the greeting/model duplication that had been copy-pasted across surfaces.
+  - `docs/{ARCHITECTURE,CUSTOMIZATION,ENVIRONMENT}.md` — the structure is now documented in-repo.
+
+  The `_lib`/`_tools` folders are **underscore-prefixed** so the framework's `agents/*` → `POST /api/agents/<name>` route scanner skips them (verified: `/api/agents/_tools/weather` 404s, only `chat` is served); `skills/` needs no underscore because Markdown is never scanned. Zero framework-core change — this is purely the scaffold template. Verified end-to-end: fresh scaffold type-checks, the composed agent streams a real reply, and the desktop frontend bundles the cross-root `shared/` import.
+
+## [create-theokit@1.3.2] - 2026-07-13
+
+### Changed
+- **`--surface desktop` now renders the SAME rich chat as the default web scaffold.** The desktop webview
+  previously shipped a bare `<input>`/`<button>` composer; it now composes the exact same `@theokit/ui`
+  components the web default uses — `ChatThread` / `ChatMessage` / `ChatComposer` (with the squared Send
+  button) / `AgentStreaming` / `AgentErrorCard` / `QuickActionChips` / `ThemeSwitcher` — plus the greeting,
+  honest starter prompts, transcript-ownership logic, and a header with the theme switcher. No
+  desktop-specific components: the webview is React like the web, so `useAgent` + the `@theokit/ui`
+  components are identical; only the transport differs (`ChannelTransport` vs the web's HTTP path). The
+  app-level layout uses inline styles (reading the theme CSS vars, so light/dark still cascades) because
+  the desktop bundle is plain Vite without the framework's Tailwind build — the `@theokit/ui` components
+  themselves self-style via the precompiled stylesheet. Adds `@usetheo/ui` + `lucide-react` to the desktop
+  deps (same versions as web). Verified rendering in a real browser against the mocked bridge.
+
+## [create-theokit@1.3.1] - 2026-07-12
+
+### Fixed
+- **`--surface desktop` no longer opens to a blank white webview.** Found by driving the running Tauri window for real (a self-hosted HTTP listener the webview `fetch`es — Tauri does not sync `document.title` to the native window, so title-based probes are meaningless). Two independent bugs both blanked the screen:
+  - **`window.__TAURI__` was never injected.** `frontend/src/App.tsx` reads `globalThis.__TAURI__.core` at module scope and throws if absent, so React never mounted. Tauri v2 only injects that global when `app.withGlobalTauri: true` — which the config was missing. Added it.
+  - **A strict CSP blocked the dev server.** `app.security.csp` was `script-src 'self'`, which blocks the inline react-refresh `<script>` that `@vitejs/plugin-react` injects in dev (and the HMR WebSocket) → the module graph fails to load → blank. Set `csp: null` (harden for production per README-surface § Security).
+
+  Verified end-to-end in the native window: React mounts, `window.__TAURI__.core.invoke` resolves, and invoking `run_turn` streams a real OpenRouter reply back over the Tauri `Channel` (3+ `text-delta` chunks captured). Supersedes 1.3.0, which shipped the sidecar/icon fixes but still opened blank.
+
+## [create-theokit@1.3.0] - 2026-07-12
+
+### Fixed
+- **`--surface desktop` (Tauri) now actually runs `npm run dev` end-to-end.** The scaffold was structurally complete but three gaps stopped `tauri dev` from ever launching the agent — found by building + running it for real (Rust compile + native window + real OpenRouter stream), not just the file-shape test harness:
+  - **No sidecar binary.** The Rust shell spawns the agent turn via `app.shell().sidecar("theo-sidecar")`, which Tauri resolves to `src-tauri/binaries/theo-sidecar-<target-triple>` — but nothing created it (`build:sidecar` was a stub that only echoed). A new `scripts/build-sidecar.mjs` generates the launcher (a shim that runs `sidecar/sidecar.ts` via the app's own `tsx` — Node runtime, where the ai-sdk streams correctly; a `bun --compile` self-contained binary silently drops the token stream), wired into `tauri.conf.json` `beforeDevCommand`/`beforeBuildCommand` so it is regenerated each launch.
+  - **No app icons.** `tauri::generate_context!()` fails to compile without `src-tauri/icons/icon.png`. A full icon set (PNG/ICO/ICNS + Windows Store logos) now ships in the template, referenced by `bundle.icon`.
+  - **Invalid stylesheet.** The webview's vanilla-Vite PostCSS pipeline rejected `@theokit/ui`'s `styles.css` (`@import "./components.css"` was appended after other statements). Fixed upstream in `@theokit/ui@1.0.2` (the template's `^1.0.0` picks it up).
+
+  Verified: `tauri dev` compiles the Rust shell, opens the native window, the sidecar streams a real agent reply, and `vite build frontend` succeeds. Windows desktop dev still needs a compiled sidecar binary (the tsx shim is POSIX; `build:sidecar` fails loud on win32 with the packaging path) — macOS/Linux dev works out of the box.
+
+## [create-theokit@1.2.9] - 2026-07-12
+
+### Changed
+- **Simplified the default (web) scaffold to an honest, minimal agent chat — everything shown now WORKS.** The previous scaffold wrapped a real chat in a fake dashboard: a hardcoded `CostMeter` ($0.0023), a hardcoded `ContextWindowBar` (fake token count), and dead `New conversation` / `History` / `Settings` sidebar buttons (no handlers) — misleading demo chrome (G10). Removed all of it (real cost/token/history/settings are features, not scaffold defaults — YAGNI). The scaffold is now: a slim top bar (name + working theme switcher), the streaming chat (greeting → prompt → reply, correct order), three honest starter prompts that send real messages, a working `New chat` (reset), and an `AgentErrorCard` that shows the **real** error (the old generic "connection interrupted" copy had hidden a real bug). Verified live in a real browser against OpenRouter. Add real chrome back as you build it.
+
+## [theokit@0.30.3 + create-theokit@1.2.8] - 2026-07-12
+
+### Fixed
+- **`theokit@0.30.3` — the web `useAgent` chat now actually streams (was `TypeError: Illegal invocation`).** `HttpTransport` stored the default `fetch` and called it as `this.#fetch(...)`; the browser's native `fetch` throws `Illegal invocation` when its receiver is not `window`, so EVERY web agent send died before reaching the network (the error card's generic "connection interrupted" hid it). The default fetch is now bound to `globalThis`. Node/jsdom fetch is lenient about `this`, so unit tests + `curl` never caught it — only a real browser did. Added a regression test with a strict native-like fetch.
+- **`create-theokit@1.2.8` — the default (web) scaffold now declares `ai`.** `theokit`'s client stream consumer dynamically `import('ai')`s (`ai` is an OPTIONAL peer, so it is NOT auto-installed), and `@theokit/ui` consumes its `UIMessage` type. Without it a fresh web app threw on the first streamed reply. The tui/desktop surfaces already declared `ai`; the web template was missing it. Both bugs found dogfooding the scaffolded web app in a real Chrome against a live OpenRouter model — the chat now streams a real reply end-to-end.
+
+## [create-theokit@1.2.7] - 2026-07-12
+
+### Fixed
+- **The default (web) `@theokit/ui` chat surface now has the same correct interaction as the terminal surface.** Its `app/page.tsx` had the same latent bug the TUI did — it interleaved the per-turn `agent.messages` with local user turns, so after turn 1 each reply paired with the wrong prompt. It now OWNS the transcript (accumulates finished turns into `history` with unique ids `u-N` / `a-N` / `greeting`, shows the in-flight reply live until it commits) and opens with an agent greeting + the quick-action chips (the empty-state card is replaced by the warm greeting, matching the terminal surface). Verified: the fresh web app type-checks against real `@theokit/ui` + `@usetheo/ui` + `theokit`, and renders greeting + quick actions + composer.
+
+## [create-theokit@1.2.6] - 2026-07-12
+
+### Fixed
+- **`--surface tui` conversation order + duplicate-id crash.** `useAgent` opens a fresh stream per send — `agent.messages` holds ONLY the current turn (and the SDK assigns those messages no stable id). The 1.2.5 template interleaved `agent.messages[i]` with user turn `i`, which mis-paired every reply with the wrong prompt after turn 1, and accumulating the empty-id assistant messages threw `ChatThread: duplicate message id ""`. The template now OWNS the transcript: it accumulates each finished turn into `history` with its own unique ids (`u-N` / `a-N` / `greeting`) and shows the in-flight reply live until it commits — correct order, complete history, unique ids, no flicker. Found dogfooding a multi-turn chat.
+
+## [create-theokit@1.2.5] - 2026-07-12
+
+### Fixed
+- **The `--surface tui` app now shows your own prompt + the full history, and opens with a greeting.** `useAgent` reconstructs only the ASSISTANT turns, so the previous template (which fed `agent.messages` straight to `<ChatThread>`) never rendered the user's message and showed a half-conversation. The template now tracks the user's turns locally and INTERLEAVES them with the assistant turns (mirroring the web surface), so both sides render in order. It also seeds an opening assistant greeting so the thread starts warm instead of empty (like a coding-agent CLI). Found dogfooding the TUI.
+
+## [theokit@0.30.2 + @theokit/tauri@0.1.2 + create-theokit@1.2.4] - 2026-07-12
+
+### Added
+- **`theokit/server/agent` sub-path.** The agent-seam survivors of the M3 clean break (`streamAgentTurnInProcess` + its HITL types, the tool adapters `createWorkflowTool`/`createACPTool`/`createVendorAgentTool`, `createCodeMode`, `handleChannelWebhook`, MCP stdio/app-resources) were public but had NO non-deprecated import path — the only home was the deprecated `theokit/server` umbrella. So every scaffolded agent app printed `[theokit] umbrella import "theokit/server" is DEPRECATED …` on startup. Re-introduced a lean `theokit/server/agent` barrel over that public surface (the proprietary surface removed in M3 stays out); the umbrella now re-exports it (`export * from './agent/index.js'` — lossless, back-compat until 0.x+2).
+
+### Changed
+- `create-theokit@1.2.4` tui template + `@theokit/tauri@0.1.2` sidecar import `streamAgentTurnInProcess` from `theokit/server/agent` instead of the umbrella — **the deprecation warning is gone** from a fresh scaffolded TUI/desktop app. (`theokit@0.30.2` ships the sub-path.)
+
+## [create-theokit@1.2.3 + @theokit/agents@0.35.2] - 2026-07-12
+
+### Changed
+- **`create-theokit@1.2.3` — the `--surface tui` app now looks like a real agent CLI (Claude Code / OpenCode / Codex).** Rewrote the terminal template to compose the maximum of `@theokit/tui`'s shipped primitives instead of a hand-rolled `›` input: a `WelcomeBanner` header, a scrolling `<ChatThread>` (fed by the `@theokit/tui/ai-sdk` adapter), a live `<AgentStreaming>` indicator (spinner + elapsed, `esc` to cancel), the Claude-Code bordered `<ChatComposer>` (slash-commands, `@` file mentions, `Alt+Enter` newline), and a persistent `<AppStatusBar>` footer (model · cwd · state). `esc` cancels a running turn / quits when idle; `/clear` resets. Still driven by the unified `useAgent` hook — composition only, no new deps.
+
+### Fixed
+- **`@theokit/agents@0.35.2` — agent runs no longer spam stdout with `[THEO_AGENT_M7_RUN_CONTEXT]` / `[THEO_AGENT_M8_RUNTIME_APPLIED]` / `[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]`.** These wiring-triad runtime metrics were emitted via unconditional `console.debug`, corrupting any stdout consumer — an Ink TUI render, a piped log, a JSON pipeline (G9). They are now gated behind `THEOKIT_DEBUG` (opt-in via a shared `debugLog` helper): silent by default, `THEOKIT_DEBUG=1` to see them. Found dogfooding the TUI.
+
+## [create-theokit@1.2.2] - 2026-07-12
+
+### Fixed
+- **`--surface tui` no longer crashes at `npm run dev` with `Cannot read properties of undefined (reading 'ReactCurrentOwner')`.** The tui surface pinned `ink@^5.1.0`, whose bundled `react-reconciler` reads React-18 internals (`ReactCurrentOwner`) that React 19 removed — and the default template pins `react@19`. Moved the tui surface FORWARD to `ink@^7.1.0` (the React-19 line — ink@6.0.0+ set its peer to `react>=19`), which also matches `@theokit/tui`'s own `ink@^7.1.0` so the app's `import 'ink'` dedupes to a single React-19 ink. Never downgrade React. Locked with a regression assertion (`ink` MUST be `^7`+). Found by dogfooding the TUI end-to-end (scaffold → install → `npm run dev`).
+
+## [create-theokit@1.2.1] - 2026-07-12
+
+### Fixed
+- **`npx create-theokit --surface tui|desktop` no longer crashes with `__dirname is not defined`.** `scaffold-surface.ts` referenced the CJS `__dirname` global, which does not exist in the published ESM bundle — so a real `--surface tui`/`--surface desktop` scaffold rolled back at runtime (`1.1.0`–`1.2.0`). The unit tests never caught it because they import the source under vitest, where `__dirname` is provided; only running the built binary surfaces it. Fixed by deriving `__dirname` from `import.meta.url` (mirrors `src/index.ts` + `src/scaffold-services.ts`). Added a `built-cli` integration test that runs the actual `dist/cli.js` for both surfaces so this class of "works from source, broken when bundled" bug can never regress. Found by dogfooding the published binary end-to-end. `1.2.0` is deprecated.
+
 ## [theokit@0.30.1 + @theokit/agents@0.35.1] - 2026-07-12
 
 ### Fixed

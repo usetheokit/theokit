@@ -38,5 +38,5 @@ export {
 export type { CronScheduler } from './cron-runtime-node.js'
 export { createCronScheduler } from './cron-runtime-node.js'
 
-export { scanCrons, DuplicateCronNameError } from './cron-scan.js'
+export { scanCrons, scanCronDirs, DuplicateCronNameError } from './cron-scan.js'
 export type { CronNode } from './cron-scan.js'

@@ -18,16 +18,38 @@ The desktop build needs the **Rust toolchain + Tauri v2 prerequisites** (see
 <https://v2.tauri.app/start/prerequisites/>) in addition to Node. The Node/TypeScript tiers (webview,
 sidecar) run without Rust; the packaged desktop app requires it.
 
-## Run
+## Run (macOS / Linux)
 
 ```bash
-export OPENROUTER_API_KEY=...   # or ANTHROPIC_API_KEY
-# 1. Build the sidecar to src-tauri/binaries/theo-sidecar-<target-triple> (see externalBin in tauri.conf.json).
-#    e.g. bundle sidecar/sidecar.ts with your Node launcher of choice, or run it via a `node` externalBin.
-# 2. Launch the desktop shell (builds the webview via Vite, then runs Tauri):
-npm run dev                      # tauri dev
+export OPENROUTER_API_KEY=...     # or ANTHROPIC_API_KEY
+npm install
+npm run dev                        # tauri dev
 ```
+
+`tauri dev` runs `beforeDevCommand` (`node scripts/build-sidecar.mjs && vite frontend`) first, so the
+sidecar launcher and the webview are ready before the Rust shell spawns them — no manual step. The
+sidecar launcher (`src-tauri/binaries/theo-sidecar-<target-triple>`) is a shim that runs
+`sidecar/sidecar.ts` via the app's own `tsx` (Node runtime — the ai-sdk streams correctly there); it is
+regenerated on every launch, so a moved project self-heals.
 
 The agent lives in `agents/chat.ts` (edit its model / system prompt). Wire HITL by adding a
 `@HumanInTheLoop`-gated tool — the sidecar emits `tool-approval-request`, the webview shows Approve/Deny,
 and `useAgent(...).approve(id, { approved })` routes the decision through the transport's `settle`.
+
+## Security — CSP
+
+`tauri.conf.json` ships `app.security.csp: null` (no Content-Security-Policy) so the Vite dev server's
+inline react-refresh script isn't blocked (a strict `script-src 'self'` blanks the webview in dev). For a
+**production** build, add a CSP: the bundled app serves from `tauri://` with no inline scripts, so a strict
+policy like `"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"` works.
+`app.withGlobalTauri: true` is required — the webview reads `window.__TAURI__.core` to reach the Rust shell.
+
+## Packaging (distributable app + Windows)
+
+The dev launcher above is a POSIX shim that depends on the app's `node_modules` (tsx). For a **distributable**
+build (`npm run build` → `tauri build`) — and for **Windows dev**, where Tauri requires a real `.exe`
+externalBin that a shell shim cannot satisfy (`build:sidecar` fails loud on win32 pointing here) — compile
+`sidecar/sidecar.ts` to a **self-contained binary** at `src-tauri/binaries/theo-sidecar-<target-triple>[.exe]`
+before building. Options: **Node SEA** (single-executable app — runs under Node, where the stream works),
+or `bun build --compile`/`pkg` (verify the ai-sdk token stream survives your bundler first). Replace the
+`build:sidecar` script with your compile command and keep the same output path.

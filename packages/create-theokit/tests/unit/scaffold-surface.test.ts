@@ -61,6 +61,11 @@ describe('applySurface (M45)', () => {
     expect(app).toContain("from '@theokit/tui'")
     expect(app).toContain('ChatThread')
     expect(app).toContain('uiMessagesToChatThread')
+    // useAgent opens a fresh stream per send (messages = current turn only) — the template MUST accumulate
+    // the transcript locally (else the user prompt never shows and turn order misaligns) and open with a
+    // greeting so the thread isn't empty.
+    expect(app).toContain('setHistory')
+    expect(app).toContain('GREETING')
 
     const pkg = JSON.parse(read('package.json')) as {
       dependencies: Record<string, string>
@@ -68,6 +73,9 @@ describe('applySurface (M45)', () => {
     }
     expect(pkg.dependencies['@theokit/tui']).toBeDefined() // M46 renders the conversation
     expect(pkg.dependencies.ink).toBeDefined()
+    // ink MUST be the React-19 line (^7) — ink@5 crashes on React 19 with `ReactCurrentOwner`, and the
+    // default template pins react@19. Never regress below ^7 (found by dogfooding the TUI end-to-end).
+    expect(pkg.dependencies.ink).toMatch(/\^?[7-9]/)
     expect(pkg.dependencies['@theokit/sdk']).toBeDefined() // agent runtime kept
     expect(pkg.dependencies['@theokit/ui']).toBeUndefined() // web-only dropped
     expect(pkg.scripts.dev).toContain('tui/main.tsx')
@@ -106,6 +114,14 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('createTauriChannelSource')
     expect(read('frontend/src/main.tsx')).toContain("import '@theokit/ui/styles.css'")
 
+    // Parity with the web default surface — the SAME rich @theokit/ui components (not a bare input/button),
+    // just a different transport. Guards against regressing the desktop back to a poorer chat.
+    expect(app).toContain('ChatComposer')
+    expect(app).toContain('AgentStreaming')
+    expect(app).toContain('QuickActionChips')
+    expect(app).toContain('AgentErrorCard')
+    expect(app).toContain('ThemeSwitcher')
+
     // The sidecar runs the turn via @theokit/tauri/sidecar (no hand-rolled copy).
     expect(read('sidecar/sidecar.ts')).toContain("from '@theokit/tauri/sidecar'")
 
@@ -119,12 +135,41 @@ describe('applySurface (M45)', () => {
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> }
     expect(pkg.dependencies['@theokit/ui']).toBeDefined() // M47 renders the webview
     expect(pkg.dependencies['@theokit/tauri']).toBeDefined() // M47 transport source + sidecar
+    expect(pkg.dependencies['@usetheo/ui']).toBeDefined() // rich surface parity — Button
+    expect(pkg.dependencies['lucide-react']).toBeDefined() // rich surface parity — icons
 
     // tsconfig include covers the sidecar + React webview source (not the removed app/).
     const tsconfig = JSON.parse(read('tsconfig.json')) as { include: string[] }
     expect(tsconfig.include).toContain('sidecar/**/*.ts')
     expect(tsconfig.include).toContain('frontend/src/**/*.tsx')
     expect(tsconfig.include.some((g) => g.startsWith('app/'))).toBe(false)
+
+    // Window/bundle icons ship — `tauri::generate_context!()` fails to compile without icons/icon.png.
+    expect(existsSync(join(targetDir, 'src-tauri/icons/icon.png'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src-tauri/icons/icon.ico'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src-tauri/icons/icon.icns'))).toBe(true)
+
+    // The sidecar externalBin launcher generator ships, is wired into `build:sidecar`, and runs before
+    // dev/build so `src-tauri/binaries/theo-sidecar-<triple>` exists when the Rust shell spawns it.
+    expect(existsSync(join(targetDir, 'scripts/build-sidecar.mjs'))).toBe(true)
+    const pkgScripts = (JSON.parse(read('package.json')) as { scripts: Record<string, string> })
+      .scripts
+    expect(pkgScripts['build:sidecar']).toBe('node scripts/build-sidecar.mjs')
+    const conf = JSON.parse(read('src-tauri/tauri.conf.json')) as {
+      build: { beforeDevCommand: string; beforeBuildCommand: string }
+      bundle: { icon: string[] }
+      app: { withGlobalTauri?: boolean; security: { csp: string | null } }
+    }
+    expect(conf.build.beforeDevCommand).toContain('scripts/build-sidecar.mjs')
+    expect(conf.build.beforeBuildCommand).toContain('scripts/build-sidecar.mjs')
+    expect(conf.bundle.icon).toContain('icons/icon.ico')
+
+    // White-screen guards: App.tsx reads `globalThis.__TAURI__.core` at module scope, so the global
+    // MUST be injected (`withGlobalTauri`) or React never mounts. And the Vite dev server injects an
+    // inline react-refresh script that a strict `script-src 'self'` CSP blocks → blank webview; the
+    // scaffold ships `csp: null` (harden for production per README § Packaging).
+    expect(conf.app.withGlobalTauri).toBe(true)
+    expect(conf.app.security.csp).toBeNull()
   })
 
   it('throws on a forced transform error (EC-4 rollback parity with --bare)', () => {
