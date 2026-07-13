@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { scanCrons } from '../../packages/theo/src/server/cron/cron-scan.js'
+import { scanCrons, scanCronDirs } from '../../packages/theo/src/server/cron/cron-scan.js'
 
 let root: string
 
@@ -90,5 +90,24 @@ describe('scanCrons (T1.3)', () => {
     writeFileSync(join(crons(), 'c.ts'), cronModule('c-name'))
     const [node] = await scanCrons(crons())
     expect(node.concurrency).toBe('forbid')
+  })
+})
+
+describe('scanCronDirs — multi-home discovery (server/crons + agents/schedules)', () => {
+  // Real fixture discovery hits the documented tsx-in-vitest-worker limitation above; the honest
+  // end-to-end proof is `theokit build` against a fixture (the CLI path). These cases exercise the
+  // dir-merging + missing-dir handling that does NOT touch the import chain.
+  it('returns empty array when all dirs are empty', async () => {
+    mkdirSync(join(root, 'agents', 'schedules'), { recursive: true })
+    const result = await scanCronDirs([crons(), join(root, 'agents', 'schedules')])
+    expect(result).toEqual([])
+  })
+
+  it('skips missing dirs without throwing', async () => {
+    const result = await scanCronDirs([
+      crons(),
+      join(root, 'agents', 'schedules', 'does-not-exist'),
+    ])
+    expect(result).toEqual([])
   })
 })

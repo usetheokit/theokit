@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { streamAgentTurnInProcess, type InProcessAwaitApproval } from 'theokit/server'
+import { streamAgentTurnInProcess, type InProcessAwaitApproval } from 'theokit/server/agent'
 
 /** Writes one JSONL line (the sidecar's stdout `write`). */
 export type WriteLine = (line: string) => void

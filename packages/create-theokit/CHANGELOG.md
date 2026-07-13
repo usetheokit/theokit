@@ -1,5 +1,96 @@
 # create-theo
 
+## 1.10.0
+
+### Minor Changes
+
+- **Scaffold shows how to add screens — a nav menu + an example route + docs — using TheoKit's own client
+  primitives.** A one-route scaffold didn't indicate where a second screen goes. Now it does, without a dead
+  demo, and it models `theokit/client` (not raw react-router):
+  - `app/components/Nav.tsx` — the primary navigation menu, one entry per screen, using TheoKit's `Link`
+    (react-router Link + route **prefetch** on hover/focus) + `useLocation` for the active route. Composed
+    into the `Header`.
+  - `app/about/page.tsx` — a real, self-documenting `/about` route (explains file-based routing, links back
+    to the chat with TheoKit's `Link`, sets its `<title>` with TheoKit's `<Metadata>`, and tells you to
+    delete it once you've got the idea). It works — not a fake screen.
+  - `page.tsx` now sets its title via `<Metadata>` too, and carries a pointer comment on adding screens.
+  - `docs/ARCHITECTURE.md` § **Adding a screen** — the folder convention (`app/settings/page.tsx` →
+    `/settings`, dynamic `[id]`, catch-all `[...slug]`), the `theokit generate page <name>` command, and
+    TheoKit's client primitives (`Link` prefetch, `Metadata`, `Image`, `theoFetch` + the `react-query`
+    adapter) — reach for these over generic libraries.
+
+  Note: a `pages/` folder holding routes is an anti-pattern here — `app/` **is** the pages layer (file-based
+  routing: the folder path is the URL, so `app/pages/chat/page.tsx` would serve `/pages/chat`). That's the
+  old Next.js Pages Router the App Router (which TheoKit follows) dropped.
+
+## 1.9.1
+
+### Patch Changes
+
+- **docs: clarify that `loading`/`error`/`not-found` are route files, not components.** `docs/ARCHITECTURE.md`
+  now spells out that the router binds `page`/`layout`/`loading`/`error`/`not-found` by name + location
+  (they live at the route segment — the `app/` root for `/`), so they sit beside `components/`/`hooks/`/`lib/`
+  by convention, not by mistake — and moving `loading.tsx` into `components/` would drop the route's loading
+  UI. This is the Next.js App Router model TheoKit implements. No code change.
+
+## 1.9.0
+
+### Minor Changes
+
+- **Scaffold frontend is now type-based (`components/` + `hooks/` + `lib/`).** The web `app/` was refactored
+  from one folder into the layout most React apps grow into, with each bucket holding real, extracted code
+  (no empty placeholder folders):
+  - `app/components/` — `Header.tsx`, `ChatPanel.tsx` (transcript + starters), `Composer.tsx` (input + error
+    + new-chat). Flat `.tsx`, Tailwind (no CSS modules), the shadcn/ai-chatbot convention.
+  - `app/hooks/use-transcript.ts` — the transcript/streaming STATE hook (unit-tested).
+  - `app/lib/constants.ts` — greeting + starter prompts.
+
+  `page.tsx` is a thin composition root (lays out `<ChatPanel>` + `<Composer>`, pulls state from the hook);
+  `layout.tsx` composes `<Header/>`. `utils/`/`styles/`/`assets/` are documented as the convention but not
+  shipped empty (YAGNI). No `main.tsx`/`index.js`/`pages/` — the entry is framework-owned and routes are
+  files (Next.js-style). `--bare` drops `components/`+`hooks/`+`lib/` and rewrites `layout.tsx` to an
+  unstyled shell (also fixing a latent bare bug where `layout.tsx` imported the removed `@theokit/ui`).
+
+## 1.8.0
+
+### Minor Changes
+
+- **Frontend organized semantically — state in a hook, feature internals in a private folder.** The web
+  `app/` no longer inlines the chat's transcript logic + constants in a 158-line `page.tsx`. Following the
+  pattern every serious chat frontend converges on (Vercel `ai-chatbot`, the AI SDK docs), the page is now
+  the presentational **view**, and the transcript/streaming **state** lives in a hook. Files are grouped
+  semantically:
+  - route surface (`page` / `layout` / `error` / `loading` / `not-found`) stays at the `app/` root — the
+    only files the router serves;
+  - the chat feature's internals live in an **`app/chat/`** folder: `use-transcript.ts` (the transcript
+    state hook, now unit-tested in `use-transcript.test.ts`) and `constants.ts` (greeting + starter prompts).
+
+  `chat/` is never a route: a folder is only served when it holds a `page`/`layout`/… file (Next-style
+  colocation), and `chat/` holds only the feature's modules. Grouping the feature in ONE folder — rather
+  than scattering `hooks/` + `lib/` with a single file each — is feature-colocation that scales (a second
+  feature becomes its own `<feature>/`). `docs/ARCHITECTURE.md` documents the split. `--bare` drops
+  `app/chat/` too (its files import `@theokit/ui`, which bare removes).
+
+## 1.7.0
+
+### Minor Changes
+
+- **Scaffold wires its skill in ONE call.** `agents/chat.ts` now uses just `.skills([dailyBriefingSkill])`
+  (requires `@theokit/agents@^0.38.0`): registering the inline skill also auto-provisions the `skill_read`
+  tool, so the separate `.tool(defineSkillReadTool([...]))` line + its import are gone. Same behaviour, half
+  the wiring.
+
+## 1.6.0
+
+### Minor Changes
+
+- **Default scaffold registers its skill via `.skills([...])`, not just a read tool.** `agents/chat.ts`
+  now wires the inline `dailyBriefingSkill` with `.skills([dailyBriefingSkill])` (requires
+  `@theokit/agents@^0.37.0`), so the SDK lists the skill's name + description in the `<skills>` system-prompt
+  block automatically. The persona no longer hardcodes the skill name — the model discovers it from the
+  block, then loads the body on demand via the `skill_read` tool (`defineSkillReadTool`). Removes the
+  previous workaround (skill name repeated in the prompt).
+
 ## 1.1.1
 
 ### Patch Changes

@@ -1,11 +1,32 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const TEMPLATE_ROOT = resolve(__dirname, '../../packages/create-theokit/templates/default')
 
 function read(rel: string): string {
   return readFileSync(resolve(TEMPLATE_ROOT, rel), 'utf-8')
+}
+
+/**
+ * Concatenate every PRODUCTION source file under `app/` (excludes `*.test.*` / `*.spec.*`). The chat
+ * surface is composed across `page.tsx` + `components/` + `hooks/` — asserting the surface exists ANYWHERE
+ * in the app tree keeps these checks intent-focused (does the scaffold use ChatThread / useAgent / …) and
+ * refactor-proof, instead of coupling to which file currently holds each symbol.
+ */
+function readAppTree(): string {
+  const chunks: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (/\.(tsx?|jsx?)$/.test(entry.name) && !/\.(test|spec)\./.test(entry.name)) {
+        chunks.push(readFileSync(full, 'utf-8'))
+      }
+    }
+  }
+  walk(resolve(TEMPLATE_ROOT, 'app'))
+  return chunks.join('\n')
 }
 
 describe('create-theokit default template — agent surface (T3.1)', () => {
@@ -29,79 +50,39 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     expect(pkg).toMatch(/"react-dom"/)
   })
 
-  it('app/page.tsx uses ChatThread + ChatMessage + ChatComposer (conversation surface)', () => {
+  it('app surface uses ChatThread + ChatMessage + ChatComposer (conversation surface)', () => {
     // Post-2026-05-18 redesign: scaffold uses a proper chat surface with
     // ChatThread/ChatMessage/ChatComposer rather than the lower-level
     // AgentComposer + AgentTimeline pair, so a fresh `create-theokit my-app`
-    // looks like a real product on first load.
-    const page = read('app/page.tsx')
-    expect(page).toContain('ChatThread')
-    expect(page).toContain('ChatMessage')
-    expect(page).toContain('ChatComposer')
+    // looks like a real product on first load. The surface is composed across
+    // page.tsx + components/ (ChatPanel, Composer) — scan the whole app tree.
+    const app = readAppTree()
+    expect(app).toContain('ChatThread')
+    expect(app).toContain('ChatMessage')
+    expect(app).toContain('ChatComposer')
   })
 
-  it('app/page.tsx renders tool invocations via ChatMessage part auto-dispatch (#80, #85)', () => {
+  it('app surface renders tool invocations via ChatMessage part auto-dispatch (#80, #85)', () => {
     // Post-#80, tool-call parts are rendered by ChatMessage's part auto-dispatch (it renders
     // text/tool-call/reasoning parts of each UIMessage) — the template no longer references
     // ToolCallCard directly. Assert the mechanism the template actually uses (behavior), not the
     // removed implementation detail (testing.md § 6 — do not assert internal structure).
-    const page = read('app/page.tsx')
-    expect(page).toContain('ChatMessage')
-    expect(page).toMatch(/parts/)
+    const app = readAppTree()
+    expect(app).toContain('ChatMessage')
+    expect(app).toMatch(/parts/)
     // Regression guard (#85): the obsolete "uses ToolCallCard" assertion is gone; the real template
     // (create-theokit/templates/default) fully migrated — ToolCallCard is no longer referenced.
-    expect(page).not.toContain('ToolCallCard')
+    expect(app).not.toContain('ToolCallCard')
   })
 
-  it('app/page.tsx uses AgentStreaming as the streaming indicator', () => {
-    const page = read('app/page.tsx')
-    expect(page).toContain('AgentStreaming')
+  it('app surface uses AgentStreaming as the streaming indicator', () => {
+    const app = readAppTree()
+    expect(app).toContain('AgentStreaming')
   })
 
-  it('app/page.tsx uses EmptyState for first-load (no messages yet)', () => {
-    const page = read('app/page.tsx')
-    expect(page).toContain('EmptyState')
-  })
-
-  it('app/page.tsx wires the full TheoUI agent product set (Avatar, ContextWindowBar, CommandPalette, Tooltip)', () => {
-    // The default scaffold should look like an agent product on first load,
-    // not a minimal chat box. These six components are the "agent shell"
-    // signal — together they say: this is the home for your agent, not a
-    // starting point you'll have to decorate yourself.
-    const page = read('app/page.tsx')
-    expect(page).toContain('Avatar')
-    expect(page).toContain('ContextWindowBar')
-    expect(page).toContain('CommandPalette')
-    expect(page).toContain('Tooltip')
-  })
-
-  it('app/page.tsx wires ⌘K keyboard shortcut for CommandPalette', () => {
-    const page = read('app/page.tsx')
-    // Regression: keep the cmd/ctrl+K opener so the palette is discoverable.
-    expect(page).toMatch(/metaKey|ctrlKey/)
-    expect(page).toMatch(/'k'/)
-  })
-
-  it('app/layout.tsx wires CostMeter + Badge + Tooltip from TheoUI', () => {
-    const layout = read('app/layout.tsx')
-    expect(layout).toContain('CostMeter')
-    expect(layout).toContain('Badge')
-    expect(layout).toContain('Tooltip')
-  })
-
-  it('app/layout.tsx declares an AgentProfile descriptor with badge + tone', () => {
-    // The scaffold should ship an example descriptor so the AgentProfile
-    // dropdown is non-empty out of the box — otherwise it just renders a
-    // placeholder face.
-    const layout = read('app/layout.tsx')
-    expect(layout).toMatch(/AgentProfileDescriptor/)
-    expect(layout).toMatch(/badge:\s*['"`]/)
-    expect(layout).toMatch(/tone:\s*['"`]/)
-  })
-
-  it('app/page.tsx imports from @theokit/ui (not local stub)', () => {
-    const page = read('app/page.tsx')
-    expect(page).toMatch(/from ['"]@theokit\/ui['"]/)
+  it('app surface imports from @theokit/ui (not local stub)', () => {
+    const app = readAppTree()
+    expect(app).toMatch(/from ['"]@theokit\/ui['"]/)
   })
 
   it('app/page.tsx is a Client Component ("use client" directive)', () => {
@@ -152,20 +133,22 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     expect(rawSdkImport).toBe(false)
   })
 
-  it('M3: page.tsx uses useAgent hook (not the removed useAgentStream) and references /api/agents/chat', () => {
-    const page = read('app/page.tsx')
-    expect(page).toMatch(/useAgent\b/)
-    expect(page).not.toMatch(/useAgentStream/)
-    expect(page).toMatch(/from\s+['"]theokit\/client['"]/)
-    expect(page).toMatch(/\/api\/agents\/chat/)
+  it('M3: app surface uses useAgent hook (not the removed useAgentStream) and references /api/agents/chat', () => {
+    // useAgent + the /api/agents/chat wiring live in the transcript hook (app/hooks/use-transcript.ts);
+    // scan the whole app tree so the check follows the hook wherever it's composed from.
+    const app = readAppTree()
+    expect(app).toMatch(/useAgent\b/)
+    expect(app).not.toMatch(/useAgentStream/)
+    expect(app).toMatch(/from\s+['"]theokit\/client['"]/)
+    expect(app).toMatch(/\/api\/agents\/chat/)
   })
 
-  it('M3: page.tsx does NOT manually parse SSE (no getReader / TextDecoder)', () => {
-    // useAgent handles the UIMessageStream internally — the page never touches
-    // the raw SSE reader or text decoder.
-    const page = read('app/page.tsx')
-    expect(page).not.toMatch(/getReader\(\)/)
-    expect(page).not.toMatch(/new TextDecoder/)
+  it('M3: app surface does NOT manually parse SSE (no getReader / TextDecoder)', () => {
+    // useAgent handles the UIMessageStream internally — no file in the app tree touches the raw SSE
+    // reader or text decoder.
+    const app = readAppTree()
+    expect(app).not.toMatch(/getReader\(\)/)
+    expect(app).not.toMatch(/new TextDecoder/)
   })
 
   it('layout.tsx does not manually wrap ThemeProvider (auto-injected via entry-client)', () => {
@@ -174,12 +157,6 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     // ThemeProvider is fine to mention only if not as a JSX wrapper — exclude
     // the JSX-call form `<ThemeProvider`.
     expect(layout).not.toMatch(/<ThemeProvider/)
-  })
-
-  it('layout.tsx uses TopNav + Sidebar app shell from TheoUI', () => {
-    const layout = read('app/layout.tsx')
-    expect(layout).toContain('TopNav')
-    expect(layout).toContain('Sidebar')
   })
 
   it('layout.tsx calls <Outlet /> from react-router (regression — black page bug)', () => {

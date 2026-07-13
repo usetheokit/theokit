@@ -8,7 +8,13 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// ESM has no CJS `__dirname` global — derive it (mirrors src/index.ts + src/scaffold-services.ts). Without
+// this the published bundle throws `__dirname is not defined` at runtime (vitest provides the global, so the
+// unit tests never caught it — only running `npx create-theokit --surface tui` for real surfaced it).
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /**
  * M45 (ADR-0054) — `create-theokit --surface web|tui|desktop`.
@@ -51,11 +57,19 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     fragment: 'tui',
     // `@theokit/tui` renders the conversation (`<ChatThread>` + the `./ai-sdk` UIMessage adapter). `ai` is
     // the UIMessageStream type the unified client + adapter consume (was transitive via `@theokit/ui`, dropped
-    // for tui), so declare it explicitly. `ink` peers `react >=18` (works with 19) — @theokit/tui peers it too.
-    deps: { '@theokit/tui': '^0.30.0', ink: '^5.1.0', ai: '^7.0.0' },
+    // for tui), so declare it explicitly. `ink@7` is the React-19 line (ink@5 crashes on React 19 with
+    // `ReactCurrentOwner` — the default template pins react@19; ink@6.0.0+ moved its peer to react>=19) and
+    // matches @theokit/tui's own ink@^7.1.0, so the app's `import 'ink'` dedupes to one React-19 ink.
+    deps: { '@theokit/tui': '^0.30.0', ink: '^7.1.0', ai: '^7.0.0' },
     devDeps: { tsx: '^4.19.0' },
     scripts: { dev: 'tsx tui/main.tsx', start: 'tsx tui/main.tsx' },
-    tsconfigInclude: ['tui/**/*.ts', 'tui/**/*.tsx', 'server/**/*.ts', 'agents/**/*.ts'],
+    tsconfigInclude: [
+      'tui/**/*.ts',
+      'tui/**/*.tsx',
+      'server/**/*.ts',
+      'agents/**/*.ts',
+      'shared/**/*.ts',
+    ],
   },
   desktop: {
     fragment: 'desktop',
@@ -63,7 +77,15 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     // `ChannelTransport` whose source is `@theokit/tauri`'s `createTauriChannelSource`; the Node sidecar
     // runs the turn via `@theokit/tauri/sidecar`. `ai` = the UIMessageStream reader + UIMessage type (was
     // transitive via `@theokit/ui`, re-added explicitly here). react/react-dom are inherited from the default.
-    deps: { '@theokit/ui': '^1.0.0', '@theokit/tauri': '^0.1.1', ai: '^7.0.0' },
+    // Same rich surface as the web default → same UI deps: `@usetheo/ui` (Button) + `lucide-react` (icons),
+    // matching the web template's versions. `@theokit/ui` components self-style via the precompiled sheet.
+    deps: {
+      '@theokit/ui': '^1.0.0',
+      '@usetheo/ui': '^0.14.0',
+      '@theokit/tauri': '^0.1.1',
+      'lucide-react': '^0.469.0',
+      ai: '^7.0.0',
+    },
     devDeps: {
       tsx: '^4.19.0',
       '@tauri-apps/cli': '^2.0.0',
@@ -74,8 +96,9 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       dev: 'tauri dev',
       tauri: 'tauri',
       'build:frontend': 'vite build frontend',
-      'build:sidecar':
-        'tsx --version >/dev/null && echo "sidecar runs via tsx (see src-tauri/tauri.conf.json)"',
+      // Generates the Tauri externalBin launcher (src-tauri/binaries/theo-sidecar-<triple>) the Rust
+      // shell spawns. Wired into tauri.conf.json beforeDev/BuildCommand — regenerated each launch.
+      'build:sidecar': 'node scripts/build-sidecar.mjs',
     },
     tsconfigInclude: [
       'sidecar/**/*.ts',
@@ -83,6 +106,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       'frontend/src/**/*.tsx',
       'server/**/*.ts',
       'agents/**/*.ts',
+      'shared/**/*.ts',
     ],
   },
 }

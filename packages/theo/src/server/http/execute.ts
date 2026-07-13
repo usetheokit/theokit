@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ServerResponse } from 'node:http'
 
 import { isAuthRequiredError } from '../../core/contracts/auth-error-guard.js'
 import { TheoError } from '../../core/contracts/theo-error.js'
@@ -14,6 +14,7 @@ import { enforceCsrf } from '../security/csrf.js'
 import type { ExecuteRouteContext } from './execute-context.js'
 import { isZodLike, parseQueryAndBody, runZodValidation } from './execute-stages.js'
 import { runMiddlewareAndContext } from './middleware-runner.js'
+import { incomingMessageToHandlerRequest } from './node-request.js'
 import { sendError, sendJson } from './send-response.js'
 
 // CSRF policy applies to every state-mutating method, including DELETE.
@@ -244,11 +245,19 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
       query: Record<string, string>
       body: unknown
       params: Record<string, string>
-      request: IncomingMessage
+      request: Request
       ctx: Record<string, unknown>
     }) => unknown
     const callableHandler = handler as RouteHandlerCallable
-    const handlerResult = await callableHandler({ query, body, params, request: req, ctx })
+    // ADR-0028 R3a — handlers receive a Web `Request` in EVERY runtime. The
+    // Node path previously leaked the raw `IncomingMessage` here, so any
+    // Web-standard use of `ctx.request` (e.g. `ctx.request.headers.get(...)`,
+    // `createSessionManagerWeb.getSession(ctx.request)`) threw at runtime even
+    // though it type-checked (`ctx.request` is declared `Request`). Body is
+    // exposed via `ctx.body`, so the handler request carries headers/url/method
+    // only (the Node stream is already drained by `parseQueryAndBody`).
+    const webRequest = incomingMessageToHandlerRequest(req)
+    const handlerResult = await callableHandler({ query, body, params, request: webRequest, ctx })
 
     // Handle result
     if (handlerResult === undefined || handlerResult === null) {
