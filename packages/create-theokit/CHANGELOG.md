@@ -1,5 +1,25 @@
 # create-theo
 
+## 1.8.0
+
+### Minor Changes
+
+- **Frontend organized semantically — state in a hook, feature internals in a private folder.** The web
+  `app/` no longer inlines the chat's transcript logic + constants in a 158-line `page.tsx`. Following the
+  pattern every serious chat frontend converges on (Vercel `ai-chatbot`, the AI SDK docs), the page is now
+  the presentational **view**, and the transcript/streaming **state** lives in a hook. Files are grouped
+  semantically:
+  - route surface (`page` / `layout` / `error` / `loading` / `not-found`) stays at the `app/` root — the
+    only files the router serves;
+  - the chat feature's internals live in an **`app/chat/`** folder: `use-transcript.ts` (the transcript
+    state hook, now unit-tested in `use-transcript.test.ts`) and `constants.ts` (greeting + starter prompts).
+
+  `chat/` is never a route: a folder is only served when it holds a `page`/`layout`/… file (Next-style
+  colocation), and `chat/` holds only the feature's modules. Grouping the feature in ONE folder — rather
+  than scattering `hooks/` + `lib/` with a single file each — is feature-colocation that scales (a second
+  feature becomes its own `<feature>/`). `docs/ARCHITECTURE.md` documents the split. `--bare` drops
+  `app/chat/` too (its files import `@theokit/ui`, which bare removes).
+
 ## 1.7.0
 
 ### Minor Changes
