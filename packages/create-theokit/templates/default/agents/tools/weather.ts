@@ -5,8 +5,8 @@ import { z } from 'zod'
  * An example agent tool — current weather for a place, via the keyless open-meteo API.
  *
  * A tool is PURE metadata + a handler: it describes a capability and runs local/HTTP work; it NEVER calls
- * an LLM (the agent decides when to invoke it). Lives in `agents/_tools/` (underscore-prefixed) so the
- * route scanner skips it — it is imported into `agents/chat.ts` and chained with `.tool(weatherTool)`.
+ * an LLM (the agent decides when to invoke it). Lives in `tools/` — a semantic sub-folder the agent
+ * scanner skips — and is imported into `chat.ts` and chained with `.tool(weatherTool)`.
  *
  * Add your own the same way: `tool('name').describe(...).input(z.object({...})).execute(async (input) => …).build()`.
  */

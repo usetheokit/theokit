@@ -1,18 +1,19 @@
 # Architecture
 
-How this TheoKit app is organized. The layout puts the **agent at the center** and keeps a clean split
-between the agent, the backend, the frontend, and cross-layer code.
+How this TheoKit app is organized. The layout puts the **agent at the center**: the agent file and the
+folders it composes (prompts, tools, skills) live together under `agents/`, with clean names — the
+"file = identity" convention agent frameworks like [Eve](https://eve.dev) use.
 
 ## Project structure
 
 ```
 .
-├── agents/                 # The agent lives here (auto-served at POST /api/agents/<name>)
-│   ├── chat.ts             #   the agent — composed from its neighbours below
-│   ├── _lib/               #   internal helpers (underscore = NOT a route)
-│   │   └── instructions.ts #     the system prompt / persona
-│   ├── _tools/             #   tools the agent can call (underscore = NOT a route)
-│   │   └── weather.ts      #     example: tool('weather')…build()
+├── agents/                 # The agent, and what composes it
+│   ├── chat.ts             #   the agent → POST /api/agents/chat, useAgent('chat')
+│   ├── prompts/            #   system prompts / personas
+│   │   └── instructions.ts
+│   ├── tools/              #   tools the agent can call
+│   │   └── weather.ts      #     tool('weather')…build()
 │   └── skills/             #   Markdown procedures the agent (and you) can follow
 │       └── getting-started.md
 ├── app/                    # Frontend (web surface). tui → tui/, desktop → frontend/
@@ -24,13 +25,14 @@ between the agent, the backend, the frontend, and cross-layer code.
 └── theo.config.ts          # App config (name, dirs, plugins)
 ```
 
-## Why `_lib/` and `_tools/` have an underscore
+## Clean names, no phantom routes
 
-The framework turns **every `.ts` under `agents/` into a `POST /api/agents/<name>` endpoint** (that is the
-zero-config convention that lets `useAgent('chat')` bind with no manual wiring). Files that are *not*
-agents — the persona, the tools — would otherwise become phantom endpoints, so they live in
-underscore-prefixed folders, which the route scanner skips (the same convention Next.js uses for private
-folders). `skills/` needs no underscore because Markdown is never scanned.
+An agent is a file: `agents/<name>.ts` → `POST /api/agents/<name>`. But the framework's scanner is
+**folder-semantic** — the conventional sub-folders under `agents/` (`prompts/`, `tools/`, `skills/`,
+`lib/`, `hooks/`, `channels/`, `connections/`, `subagents/`, `schedules/`) are **that concern, not routes**.
+So the names stay clean (`tools/`, not `_tools/`) and `agents/tools/weather.ts` never becomes a phantom
+`/api/agents/tools/weather` endpoint. Markdown (`skills/*.md`) is never scanned either way. The
+prompts/tools/skills are **shared** across every agent in `agents/`.
 
 ## Composition
 
@@ -40,13 +42,14 @@ folders). `skills/` needs no underscore because Markdown is never scanned.
 export default agent()
   .input(z.object({ message: z.string() }))
   .model('openai/gpt-4o-mini')
-  .system(BASE_INSTRUCTIONS)   // agents/_lib/instructions.ts
-  .tool(weatherTool)           // agents/_tools/weather.ts
+  .system(BASE_INSTRUCTIONS)   // agents/prompts/instructions.ts
+  .tool(weatherTool)           // agents/tools/weather.ts
   .build()
 ```
 
-Grow the agent by editing its neighbours, not by inflating `chat.ts`: persona → `_lib/instructions.ts`,
-a new capability → `_tools/<name>.ts` (then `.tool(<name>Tool)`), a documented procedure → `skills/<name>.md`.
+Grow the agent by editing its neighbours, not by inflating `chat.ts`: persona → `prompts/instructions.ts`,
+a new capability → `tools/<name>.ts` (then `.tool(<name>Tool)`), a documented procedure →
+`skills/<name>.md`. Add a **second agent** as another `agents/<name>.ts`.
 
 ## Surfaces
 
