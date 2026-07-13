@@ -16,6 +16,7 @@ import {
   handleBatchRequest,
   handleCspReport,
   handleCsrfReadiness,
+  incomingMessageToHandlerRequest,
   logRequest,
   matchRoute,
   scanServerRoutes,
@@ -217,7 +218,8 @@ async function runPluginsBeforeRouteMatch(
   const { req, res, requestId, start, url } = reqCtx
   try {
     const hookResult = await pluginRunner.runOnRequest({
-      request: req,
+      // #119 — plugin hooks see a Web `Request` in every runtime (ADR-0028 R3a).
+      request: incomingMessageToHandlerRequest(req),
       response: res,
       ctx: {},
       requestId,
