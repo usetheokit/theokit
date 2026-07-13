@@ -18,11 +18,13 @@ folders it composes (prompts, tools, skills) live together under `agents/`, with
 │   └── skills/             #   procedures the model loads on demand (createSkill)
 │       └── daily-briefing.ts    #   a real skill: time → weather → a one-line nudge
 ├── app/                    # Frontend (web surface). tui → tui/, desktop → frontend/
-│   ├── page.tsx            #   the chat route — composition root (lays out the components + the hook)
+│   ├── page.tsx            #   the `/` route — composition root (lays out the components + the hook)
 │   ├── layout.tsx          #   root layout — composes <Header/> over the routed page
 │   ├── error/loading/not-found.tsx  #   route surface (special files)
+│   ├── about/page.tsx      #   an EXAMPLE `/about` route — shows how screens grow (delete when done)
 │   ├── components/         #   presentational UI (Tailwind, flat .tsx — no CSS modules)
-│   │   ├── Header.tsx      #     the top bar
+│   │   ├── Header.tsx      #     the top bar (composes Nav + theme toggle)
+│   │   ├── Nav.tsx         #     the navigation menu (a link per screen)
 │   │   ├── ChatPanel.tsx   #     the transcript + streaming indicator + starter prompts
 │   │   └── Composer.tsx    #     the input + error card + new-chat
 │   ├── hooks/              #   custom hooks
@@ -117,5 +119,40 @@ Two rules make the rest work and keep it honest:
 
 The entry point is framework-owned — there is no `main.tsx`/`index.js`. Routes are files (`page.tsx`), not
 a `pages/` folder you wire by hand: that's the Next.js-style convention TheoKit is built on.
+
+### Adding a screen
+
+Routing is **file-based**: a screen is a folder under `app/` with a `page.tsx`. The folder name is the URL
+segment; the home screen is the flat `app/page.tsx`.
+
+| You want | Create | Serves |
+|---|---|---|
+| a `/settings` screen | `app/settings/page.tsx` | `/settings` |
+| a nested screen | `app/settings/billing/page.tsx` | `/settings/billing` |
+| a dynamic screen | `app/users/[id]/page.tsx` | `/users/:id` (read the param with react-router's `useParams`) |
+| a catch-all | `app/docs/[...slug]/page.tsx` | `/docs/*` |
+
+The one-command way: **`theokit generate page settings`** creates `app/settings/page.tsx` for you. Each
+screen can have its own `layout.tsx` / `loading.tsx` / `error.tsx` / `not-found.tsx` (the route special
+files, scoped to that segment).
+
+**Navigation + menus.** The routing runs on react-router (the same router `layout.tsx` renders via
+`<Outlet/>`), but prefer TheoKit's own client primitives over the raw react-router ones:
+
+```tsx
+import { Link } from 'theokit/client'      // react-router Link + route prefetch (intent | viewport)
+import { useLocation } from 'react-router'  // for active-link styling
+
+<Link to="/settings" prefetch="intent">Settings</Link>
+```
+
+TheoKit's `theokit/client` gives you the Next-parity building blocks: **`Link`** (prefetch), **`Metadata`**
+(set `<title>`/meta per route — used in `page.tsx` + `about/page.tsx`), **`Image`** (optimized `<img>`),
+**`theoFetch`** + the **`theokit/react-query`** adapter (typed data fetching against your `server/`
+routes), and **`useAgent`** (the chat stream). Reach for these instead of generic libraries.
+
+The primary menu is `app/components/Nav.tsx` (TheoKit `Link` + `useLocation` for the active route). A worked
+example ships as `app/about/page.tsx` (the `/about` route, linked from the `Nav`, with its own `Metadata`
+title); it explains this and tells you to delete it once you've got the idea.
 
 See also: [CUSTOMIZATION](./CUSTOMIZATION.md).

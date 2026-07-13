@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.10.0] - 2026-07-13
+
+### Added
+- **Scaffold shows how to add screens, using TheoKit's client primitives (`create-theokit@1.10.0`).** A nav
+  menu (`app/components/Nav.tsx` — TheoKit's `Link` with route **prefetch** + `useLocation` for active state,
+  composed into the `Header`) + a real self-documenting example route (`app/about/page.tsx` → `/about`,
+  explains file-based routing, links back with `Link`, sets its title with `<Metadata>`, says to delete it)
+  + `page.tsx` sets its title via `<Metadata>` + a pointer comment + `docs/ARCHITECTURE.md` § "Adding a
+  screen" (folder convention, dynamic `[id]`/catch-all, `theokit generate page`, and the `theokit/client`
+  primitives: `Link`/`Metadata`/`Image`/`theoFetch`/`react-query` — reach for these over raw react-router).
+  No dead demo — every link goes to a real route. Documents that a `pages/` folder for routes is an
+  anti-pattern (file-based routing: `app/` IS the pages layer; a `pages/` inside prefixes every URL with
+  `/pages`).
+
 ## [create-theokit@1.9.0] - 2026-07-13
 
 ### Changed
