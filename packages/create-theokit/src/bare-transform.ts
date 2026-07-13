@@ -103,10 +103,10 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     unlinkSync(chatPath)
   }
 
-  // 3b. Remove the chat frontend surface — `app/{components,hooks,lib}/` import `@theokit/ui` /
-  //     `theokit/client`, which --bare drops. The Hello-Theo page references none of them, so they would
-  //     be dead + unbuildable. (The route surface — layout/page/error/… — is kept, page + layout rewritten.)
-  for (const dir of ['app/components', 'app/hooks', 'app/lib']) {
+  // 3b. Remove the chat frontend surface — `app/{components,hooks,lib}/` (import @theokit/ui) + the
+  //     `app/about/` example route (part of the chat demo). The Hello-Theo page references none of them.
+  //     (The route surface — layout/page/error/… — is kept; page + layout are rewritten above.)
+  for (const dir of ['app/components', 'app/hooks', 'app/lib', 'app/about']) {
     const p = join(targetDir, dir)
     if (existsSync(p)) rmSync(p, { recursive: true, force: true })
   }

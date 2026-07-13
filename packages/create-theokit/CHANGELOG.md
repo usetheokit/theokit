@@ -1,5 +1,28 @@
 # create-theo
 
+## 1.10.0
+
+### Minor Changes
+
+- **Scaffold shows how to add screens — a nav menu + an example route + docs — using TheoKit's own client
+  primitives.** A one-route scaffold didn't indicate where a second screen goes. Now it does, without a dead
+  demo, and it models `theokit/client` (not raw react-router):
+  - `app/components/Nav.tsx` — the primary navigation menu, one entry per screen, using TheoKit's `Link`
+    (react-router Link + route **prefetch** on hover/focus) + `useLocation` for the active route. Composed
+    into the `Header`.
+  - `app/about/page.tsx` — a real, self-documenting `/about` route (explains file-based routing, links back
+    to the chat with TheoKit's `Link`, sets its `<title>` with TheoKit's `<Metadata>`, and tells you to
+    delete it once you've got the idea). It works — not a fake screen.
+  - `page.tsx` now sets its title via `<Metadata>` too, and carries a pointer comment on adding screens.
+  - `docs/ARCHITECTURE.md` § **Adding a screen** — the folder convention (`app/settings/page.tsx` →
+    `/settings`, dynamic `[id]`, catch-all `[...slug]`), the `theokit generate page <name>` command, and
+    TheoKit's client primitives (`Link` prefetch, `Metadata`, `Image`, `theoFetch` + the `react-query`
+    adapter) — reach for these over generic libraries.
+
+  Note: a `pages/` folder holding routes is an anti-pattern here — `app/` **is** the pages layer (file-based
+  routing: the folder path is the URL, so `app/pages/chat/page.tsx` would serve `/pages/chat`). That's the
+  old Next.js Pages Router the App Router (which TheoKit follows) dropped.
+
 ## 1.9.1
 
 ### Patch Changes
