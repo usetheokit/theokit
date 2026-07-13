@@ -53,25 +53,42 @@ function findControllerFiles(dir: string): string[] {
   return found
 }
 
+/** A discovered controller: its source file + the loaded `@Controller` class. */
+export interface ControllerModule {
+  filePath: string
+  cls: ControllerClass
+}
+
 /**
- * Load every `@Controller` class under `controllersDir` via the injected loader.
- * Non-controller exports are ignored (`isControllerClass` — reused from @theokit/http).
+ * Load every `@Controller` class under `controllersDir` via the injected loader,
+ * keeping each class paired with its source file (needed by the typed-client
+ * codegen to emit `import type { X } from '<file>'`). Non-controller exports are
+ * ignored (`isControllerClass` — reused from @theokit/http).
  */
+export async function scanControllerModules(
+  controllersDir: string,
+  loadModule: ControllerModuleLoader,
+): Promise<ControllerModule[]> {
+  const files = findControllerFiles(controllersDir)
+  const modules: ControllerModule[] = []
+  for (const filePath of files) {
+    const mod = await loadModule(filePath)
+    for (const exported of Object.values(mod)) {
+      if (typeof exported === 'function' && isControllerClass(exported)) {
+        modules.push({ filePath, cls: exported as ControllerClass })
+      }
+    }
+  }
+  return modules
+}
+
+/** Load every `@Controller` class under `controllersDir` (classes only). */
 export async function scanControllers(
   controllersDir: string,
   loadModule: ControllerModuleLoader,
 ): Promise<ControllerClass[]> {
-  const files = findControllerFiles(controllersDir)
-  const classes: ControllerClass[] = []
-  for (const file of files) {
-    const mod = await loadModule(file)
-    for (const exported of Object.values(mod)) {
-      if (typeof exported === 'function' && isControllerClass(exported)) {
-        classes.push(exported as ControllerClass)
-      }
-    }
-  }
-  return classes
+  const modules = await scanControllerModules(controllersDir, loadModule)
+  return modules.map((m) => m.cls)
 }
 
 /**
