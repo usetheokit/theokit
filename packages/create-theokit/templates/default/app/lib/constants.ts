@@ -4,7 +4,7 @@ import { Sparkles } from 'lucide-react'
 import { AGENT } from '../../shared/agent'
 
 /**
- * Chat UI constants — kept out of the view so `page.tsx` stays declarative (the pattern Vercel's
+ * Chat UI constants — kept out of the view so the page + components stay declarative (the pattern Vercel's
  * ai-chatbot uses: starter prompts + greeting live in a constants module, not inline in the component).
  */
 
