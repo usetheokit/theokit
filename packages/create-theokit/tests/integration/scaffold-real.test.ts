@@ -48,12 +48,20 @@ describe('scaffold (integration — real template)', () => {
     // `prompts/`, `tools/`, `skills/` are that concern, NOT phantom /api/agents/tools/weather routes.
     expect(existsSync(join(targetDir, 'agents/chat.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'agents/prompts/instructions.ts'))).toBe(true)
+    // A real, working set — two tools (a remote HTTP one + a local one) and a real skill.
     expect(existsSync(join(targetDir, 'agents/tools/weather.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'agents/skills/getting-started.md'))).toBe(true)
-    // index.ts composes the pieces (persona + tool) rather than inlining them.
+    expect(existsSync(join(targetDir, 'agents/tools/current-time.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/skills/daily-briefing.ts'))).toBe(true)
+    // The skill uses the real skills feature (createSkill), not a dead Markdown note.
+    expect(readFileSync(join(targetDir, 'agents/skills/daily-briefing.ts'), 'utf-8')).toContain(
+      'createSkill(',
+    )
+    // chat.ts composes persona + tools + the skill (exposed to the model via defineSkillReadTool).
     const chat = readFileSync(join(targetDir, 'agents/chat.ts'), 'utf-8')
     expect(chat).toContain('BASE_INSTRUCTIONS')
     expect(chat).toContain('.tool(weatherTool)')
+    expect(chat).toContain('.tool(currentTimeTool)')
+    expect(chat).toContain('defineSkillReadTool')
     // shared/ — one source of truth for cross-layer branding, imported by the agent + the frontend.
     expect(existsSync(join(targetDir, 'shared/agent.ts'))).toBe(true)
     expect(readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')).toContain(
