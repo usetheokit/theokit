@@ -10,7 +10,7 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
-import type { CustomTool } from '@theokit/sdk'
+import type { ConversationStorageAdapter, CustomTool } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
@@ -71,6 +71,13 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * request path against the run-context). Absent ⇒ the SDK enables every discovered skill.
    */
   skills?: SkillsSelection
+  /**
+   * Conversation memory: the `ConversationStorageAdapter` the agent persists its turns to. Swap it to
+   * control WHERE memory lives — `InMemoryConversationStorage` (ephemeral, great for tests) vs
+   * `FileSystemConversationStorage` (durable) vs a custom adapter. Absent ⇒ the SDK picks its default
+   * store. A per-run override still wins over this agent-level default.
+   */
+  conversationStorage?: ConversationStorageAdapter
 }
 
 /**
@@ -166,6 +173,11 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
     ...compileSkillsSelection(def.skills),
+    // Conversation memory: the declared adapter flows to the run path, which hands it to
+    // `Agent.getOrCreate({ conversationStorage })`; absent ⇒ the SDK default is chosen lazily.
+    ...(def.conversationStorage !== undefined
+      ? { conversationStorage: def.conversationStorage }
+      : {}),
   }
 }
 

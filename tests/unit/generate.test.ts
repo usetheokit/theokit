@@ -48,7 +48,7 @@ describe('theo generate', () => {
     process.chdir(dir)
     try {
       await generateCommand('workflow', 'greeting')
-      const filePath = join(dir, 'workflows/greeting.ts')
+      const filePath = join(dir, 'agents/workflows/greeting.ts')
       expect(existsSync(filePath)).toBe(true)
       const content = readFileSync(filePath, 'utf-8')
       expect(content).toContain("from '@theokit/sdk/workflow'")
@@ -68,7 +68,7 @@ describe('theo generate', () => {
     process.chdir(dir)
     try {
       await generateCommand('eval', 'qa-smoke')
-      const filePath = join(dir, 'evals/qa-smoke.ts')
+      const filePath = join(dir, 'agents/evals/qa-smoke.ts')
       expect(existsSync(filePath)).toBe(true)
       const content = readFileSync(filePath, 'utf-8')
       expect(content).toContain("from '@theokit/sdk/eval'")
@@ -87,13 +87,16 @@ describe('theo generate', () => {
     process.chdir(dir)
     try {
       await generateCommand('sandbox', 'run-command')
-      const filePath = join(dir, 'sandbox/run-command.ts')
+      const filePath = join(dir, 'agents/sandbox/run-command.ts')
       expect(existsSync(filePath)).toBe(true)
       const content = readFileSync(filePath, 'utf-8')
+      // The sandbox capability manifests as an agent TOOL (the canonical, connected use).
+      expect(content).toContain("from 'theokit/server'")
       expect(content).toContain("from '@theokit/sdk/sandbox'")
+      expect(content).toContain("tool('run_command')")
       expect(content).toContain('new LocalSandbox(')
       expect(content).toContain('sandbox.execute(')
-      expect(content).toContain('runCommand')
+      expect(content).toContain('runCommandTool')
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })
@@ -106,7 +109,7 @@ describe('theo generate', () => {
     process.chdir(dir)
     try {
       await generateCommand('schedule', 'daily-digest')
-      const filePath = join(dir, 'schedules/daily-digest.ts')
+      const filePath = join(dir, 'agents/schedules/daily-digest.ts')
       expect(existsSync(filePath)).toBe(true)
       const content = readFileSync(filePath, 'utf-8')
       expect(content).toContain("from '@theokit/sdk/cron'")
@@ -124,13 +127,15 @@ describe('theo generate', () => {
     process.chdir(dir)
     try {
       await generateCommand('memory', 'conversations')
-      const filePath = join(dir, 'memory/conversations.ts')
+      const filePath = join(dir, 'agents/memory/conversations.ts')
       expect(existsSync(filePath)).toBe(true)
       const content = readFileSync(filePath, 'utf-8')
       expect(content).toContain("from '@theokit/sdk'")
       expect(content).toContain('InMemoryConversationStorage')
       expect(content).toContain('FileSystemConversationStorage')
       expect(content).toContain('conversationStorage')
+      // Now connectable: the doc shows wiring it into the agent via .conversationStorage(...).
+      expect(content).toContain('.conversationStorage(conversationStorage)')
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })

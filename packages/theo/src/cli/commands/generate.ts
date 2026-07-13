@@ -182,8 +182,9 @@ function generateEvalTemplate(name: string): string {
     `import { Eval, Scorers } from '@theokit/sdk/eval'`,
     ``,
     `/**`,
-    ` * A minimal eval (@theokit/sdk) — runs your model over a dataset and scores each output. Run it`,
-    ` * (needs a provider key in the environment):`,
+    ` * An eval for your agent (@theokit/sdk) — runs the model over a dataset and scores each output.`,
+    ` * To score the REAL agent, mirror its config: point \`agent.model\` (and, ideally, a \`systemPrompt\`)`,
+    ` * at the same values your \`agents/chat.ts\` uses. Run it (needs a provider key in the environment):`,
     ` *`,
     ` *   const run = await ${camel}Eval.run()`,
     ` *   console.log(run.aggregate.meanScore)`,
@@ -192,6 +193,7 @@ function generateEvalTemplate(name: string): string {
     `  name: '${name}',`,
     `  dataset: [{ input: 'Say ok', expected: 'ok' }],`,
     `  scorers: [Scorers.containsExpected({ caseSensitive: false })],`,
+    `  // Mirror your agent: same model (+ systemPrompt) so this evaluates the agent your users talk to.`,
     `  agent: { apiKey: process.env.OPENROUTER_API_KEY ?? '', model: { id: 'openai/gpt-4o-mini' } },`,
     `})`,
     ``,
@@ -200,22 +202,31 @@ function generateEvalTemplate(name: string): string {
 
 function generateSandboxTemplate(name: string): string {
   const camel = toCamelCase(name)
+  const base = name.split('/').pop() ?? name
+  const snake = base.replace(/-/g, '_')
   return [
+    `import { tool } from 'theokit/server'`,
     `import { LocalSandbox } from '@theokit/sdk/sandbox'`,
+    `import { z } from 'zod'`,
     ``,
     `/**`,
-    ` * A sandboxed command runner (@theokit/sdk). \`LocalSandbox\` runs a shell command with a timeout +`,
-    ` * output cap, isolated from your app process — wrap it in a tool so the agent can run commands safely.`,
+    ` * A sandbox-backed agent tool. \`LocalSandbox\` (@theokit/sdk) runs a shell command with a timeout +`,
+    ` * output cap, isolated from your app process — so the agent can run commands SAFELY. This IS an agent`,
+    ` * capability: connect it to your agent with \`.tool(...)\`:`,
     ` *`,
-    ` *   const out = await ${camel}('echo hello from the sandbox')`,
-    ` *   console.log(out.stdout, out.exitCode)`,
+    ` *   // agents/chat.ts`,
+    ` *   import { ${camel}Tool } from './sandbox/${base}.js'`,
+    ` *   agent().model(...).tool(${camel}Tool).build()`,
     ` */`,
-    `export async function ${camel}(`,
-    `  command: string,`,
-    `): Promise<{ stdout: string; stderr: string; exitCode: number }> {`,
-    `  const sandbox = new LocalSandbox({ timeoutMs: 5_000 })`,
-    `  return sandbox.execute(command)`,
-    `}`,
+    `export const ${camel}Tool = tool('${snake}')`,
+    `  .describe('Run a shell command in an isolated sandbox and return its output.')`,
+    `  .input(z.object({ command: z.string().describe('The shell command to run, e.g. "ls -la"') }))`,
+    `  .execute(async ({ command }) => {`,
+    `    const sandbox = new LocalSandbox({ timeoutMs: 5_000 })`,
+    `    const { stdout, stderr, exitCode } = await sandbox.execute(command)`,
+    `    return exitCode === 0 ? stdout : \`exit \${exitCode}: \${stderr}\``,
+    `  })`,
+    `  .build()`,
     ``,
   ].join('\n')
 }
@@ -226,12 +237,14 @@ function generateScheduleTemplate(name: string): string {
     `import { Cron } from '@theokit/sdk/cron'`,
     ``,
     `/**`,
-    ` * A scheduled job (@theokit/sdk). \`Cron.create\` fires an agent (or a Workflow) on a cron schedule.`,
-    ` * Register it once at startup (e.g. from your app entry or a server route): \`await ${camel}Schedule()\`.`,
+    ` * A scheduled run of your agent (@theokit/sdk). \`Cron.create\` fires an agent (or a Workflow) on a`,
+    ` * cron schedule. To fire the REAL agent, mirror its config (same model + systemPrompt as`,
+    ` * \`agents/chat.ts\`). Register it once at startup (app entry or a server route): \`await ${camel}Schedule()\`.`,
     ` */`,
     `export function ${camel}Schedule() {`,
     `  return Cron.create({`,
     `    cron: '0 9 * * *', // every day at 09:00`,
+    `    // Mirror your agent: same model (+ systemPrompt) so the scheduled run behaves like the live agent.`,
     `    agent: { apiKey: process.env.OPENROUTER_API_KEY ?? '', model: { id: 'openai/gpt-4o-mini' } },`,
     `    inputData: { message: 'Good morning! Give me a one-line summary of anything important.' },`,
     `  })`,
@@ -240,16 +253,21 @@ function generateScheduleTemplate(name: string): string {
   ].join('\n')
 }
 
-function generateMemoryTemplate(_name: string): string {
+function generateMemoryTemplate(name: string): string {
+  const base = name.split('/').pop() ?? name
   return [
     `import { InMemoryConversationStorage, FileSystemConversationStorage } from '@theokit/sdk'`,
     ``,
     `/**`,
-    ` * Conversation memory (@theokit/sdk). Agents auto-persist their turns; swap this adapter to control`,
-    ` * WHERE memory lives, then pass it to your agent's runtime options (\`conversationStorage\`).`,
+    ` * The agent's conversation memory (@theokit/sdk). Connect it to your agent with`,
+    ` * \`.conversationStorage(...)\` to control WHERE turns are persisted:`,
+    ` *`,
+    ` *   // agents/chat.ts`,
+    ` *   import { conversationStorage } from './memory/${base}.js'`,
+    ` *   agent().model(...).conversationStorage(conversationStorage).build()`,
     ` *`,
     ` * - \`InMemoryConversationStorage\` — ephemeral, resets on restart (great for tests).`,
-    ` * - \`FileSystemConversationStorage\` — persists across restarts (the default when unset).`,
+    ` * - \`FileSystemConversationStorage\` — persists across restarts (the framework default when unset).`,
     ` */`,
     `export const conversationStorage = new InMemoryConversationStorage()`,
     ``,
@@ -266,26 +284,32 @@ function resolveTemplate(
   name: string,
 ): { filePath: string; content: string } | null {
   switch (type) {
+    // Agent-capability generators. These live UNDER `agents/` — they are facets of the agent domain,
+    // not standalone top-level concerns — and the folder-semantic scanner treats each as composition
+    // (never a phantom route). See docs/ARCHITECTURE.md.
     case 'workflow':
       return {
-        filePath: resolve(cwd, 'workflows', `${name}.ts`),
+        filePath: resolve(cwd, 'agents/workflows', `${name}.ts`),
         content: generateWorkflowTemplate(name),
       }
     case 'eval':
-      return { filePath: resolve(cwd, 'evals', `${name}.ts`), content: generateEvalTemplate(name) }
+      return {
+        filePath: resolve(cwd, 'agents/evals', `${name}.ts`),
+        content: generateEvalTemplate(name),
+      }
     case 'sandbox':
       return {
-        filePath: resolve(cwd, 'sandbox', `${name}.ts`),
+        filePath: resolve(cwd, 'agents/sandbox', `${name}.ts`),
         content: generateSandboxTemplate(name),
       }
     case 'schedule':
       return {
-        filePath: resolve(cwd, 'schedules', `${name}.ts`),
+        filePath: resolve(cwd, 'agents/schedules', `${name}.ts`),
         content: generateScheduleTemplate(name),
       }
     case 'memory':
       return {
-        filePath: resolve(cwd, 'memory', `${name}.ts`),
+        filePath: resolve(cwd, 'agents/memory', `${name}.ts`),
         content: generateMemoryTemplate(name),
       }
     case 'route':

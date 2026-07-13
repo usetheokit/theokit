@@ -1,5 +1,18 @@
 # @theokit/agents
 
+## 0.36.0
+
+### Minor Changes
+
+- **`.conversationStorage(adapter)` on the agent builder — control the agent's memory.** `agent()` (and
+  `defineAgent({ conversationStorage })`) now accept a `ConversationStorageAdapter`, so an app declares
+  WHERE the agent's conversation turns persist right where it defines the agent:
+  `agent().model(...).conversationStorage(store).build()`. The adapter flows through
+  `compileAgentDefinition` → the run path → `Agent.getOrCreate({ conversationStorage })`. Precedence:
+  a per-run override wins over the agent-level default, which wins over the SDK's lazily-chosen default
+  (byte-identical to the previous behaviour when unset). Swap `InMemoryConversationStorage` (ephemeral)
+  ⇄ `FileSystemConversationStorage` (durable) ⇄ a custom adapter without touching the runtime.
+
 ## 0.35.0
 
 ### Minor Changes

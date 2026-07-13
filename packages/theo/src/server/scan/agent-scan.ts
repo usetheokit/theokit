@@ -30,6 +30,9 @@ const AGENT_SUBFOLDERS = new Set([
   'subagents',
   'schedules',
   'sandbox',
+  'workflows',
+  'evals',
+  'memory',
 ])
 
 /**
