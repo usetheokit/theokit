@@ -1,7 +1,14 @@
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ServerResponse } from 'node:http'
 
 export interface PluginContext {
-  request: IncomingMessage
+  /**
+   * The incoming request as a Web `Request` — the same shape a plugin hook sees on the edge adapters
+   * (`WebPluginContext.request`), so a hook that reads `request.headers.get(...)` / `request.url` /
+   * `request.method` is portable across `theokit dev` / `theokit start` (Node) and Web runtimes (#119,
+   * ADR-0028 R3a). Method + absolute URL + headers; the request body is not exposed here (onRequest /
+   * preHandler fire before the body is parsed — the handler reads it via `ctx.body`).
+   */
+  request: Request
   response: ServerResponse
   ctx: Record<string, unknown>
   requestId: string
