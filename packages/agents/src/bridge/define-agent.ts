@@ -10,7 +10,7 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
-import type { ConversationStorageAdapter, CustomTool } from '@theokit/sdk'
+import type { ConversationStorageAdapter, CustomTool, InlineSkill } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
@@ -181,13 +181,25 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
   }
 }
 
-/** M13 — split a {@link SkillsSelection} into the compiled fields (static → `skills`, fn → `skillsResolver`). */
+/**
+ * M13 — split a {@link SkillsSelection} into the compiled fields (static → `skills`, fn →
+ * `skillsResolver`). A static array may mix filesystem skill NAMES (`string` → `skills.enabled`) with
+ * inline `createSkill` objects (`InlineSkill` → `skills.inline`, injected into the `<skills>` block).
+ */
 function compileSkillsSelection(
   skills: SkillsSelection | undefined,
 ): Pick<CompiledAgentOptions, 'skills' | 'skillsResolver'> {
   if (skills === undefined) return {}
   if (typeof skills === 'function') return { skillsResolver: skills }
-  return { skills: { enabled: [...skills], autoInject: true } }
+  const enabled: string[] = []
+  const inline: InlineSkill[] = []
+  for (const entry of skills) {
+    if (typeof entry === 'string') enabled.push(entry)
+    else inline.push(entry)
+  }
+  return {
+    skills: { enabled, autoInject: true, ...(inline.length > 0 ? { inline } : {}) },
+  }
 }
 
 /**
