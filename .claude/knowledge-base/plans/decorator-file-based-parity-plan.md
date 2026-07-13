@@ -65,10 +65,10 @@ The decorator SURFACE already exists and is designed (patterns skill `theokit-ht
 
 ## ADRs
 
-### ADR-1 — Reuse `@theokit/http` `walkControllerMetadata` + swc-loader; do NOT reimplement a decorator engine in `theo`
-**Decision:** the theokit app's controller-scan/dispatch call `@theokit/http`'s existing walker + swc-loader.
-**Rationale:** Rule 9 (don't reinvent) + Patterns D-1/D-2 already solved decorator metadata + swc compilation; a second engine = DRY violation + 2× bug surface (`sdk-runtime.md`-style incoherence).
-**Rejected:** (a) reimplement a lightweight decorator reader in `theo` — duplicates `walk-metadata.ts`, drifts. (b) shell out to a standalone `TheoApp` per request — wrong runtime, no Vite/SSR/typed-client.
+### ADR-1 — Reuse `@theokit/http` `walkControllerMetadata` + swc-loader + `registerControllers`; do NOT reimplement a decorator engine in `theo`
+**Decision:** the theokit app's controller scan/dispatch call `@theokit/http`'s existing public surface: `walkControllerMetadata` (route metadata + `bodySchema`), the swc-loader (compile param decorators), and **`registerControllers(classes) → RouteRegistration[]`** (mount + Web-Standard handler). `theo` only WIRES these into its dev/start request path + typed-client codegen.
+**Rationale:** Rule 9 (don't reinvent) + Patterns D-1/D-2 already solved decorator metadata + swc compilation, and `registerControllers` already builds the Web-Standard dispatch handler; a second engine = DRY violation + 2× bug surface (`sdk-runtime.md`-style incoherence).
+**Rejected:** (a) reimplement a decorator reader/dispatcher in `theo` — duplicates `walk-metadata.ts`/`registerControllers`, drifts. (b) shell out to a standalone `TheoApp.listen()` per request — wrong runtime, no Vite/SSR/typed-client. (c) `@theokit/http`'s `createTypedClient` for the typed client — REJECTED for the codegen: it needs a HAND-DECLARED `contract()` RouteMap, so it does NOT auto-generate from controllers the way `theo`'s codegen does from route files (verified in `packages/http/dist/index.d.ts`). The codegen must synthesize controller entries itself (ADR-2).
 
 ### ADR-2 — Typed-client entries for controllers are emitted as TYPE expressions over the class (deferred to tsc), mirroring the file-based `InferResponse` model
 **Decision:** for a controller method `Ctrl.method`, emit `Promise<Awaited<ReturnType<InstanceType<typeof Ctrl>['method']>>>` for the response, and derive the body type from the captured `@Body` Zod schema (`z.infer<typeof schema>` when the schema is an exported const) OR the method's first param type (`Parameters<...>[n]`) when not.
@@ -76,9 +76,9 @@ The decorator SURFACE already exists and is designed (patterns skill `theokit-ht
 **Rejected:** (a) runtime-only parity, no typed client — fails the user's core requirement (parity with `route()` INCLUDES the typed client). (b) full static analysis of controller types in the plugin — re-implements tsc; brittle.
 **Decision checkpoint (Phase 3 gate):** if a spike shows body/param inference from classes is not reliably expressible as a type expression (e.g., `@Body('key')` named extraction, or un-typed method params), FALL BACK to: response-typed + body typed as `unknown` (documented), and file a follow-up — but the route is still SERVED + appears in the client. Runtime parity (Phases 1–2) ships regardless.
 
-### ADR-3 — Controller mounting is extracted into `controller-dispatch.ts`, shared by dev + start; `api-middleware.ts`/`app-typed-client.ts` are NOT inflated
-**Decision:** new `server/http/controller-dispatch.ts` owns "given a walked controller route + a Web Request, run it through the shared handler path"; `api-middleware` calls it after `matchRoute` misses a file route.
-**Rationale:** G6 (both files near 500 LoC BLOCK); SRP (`architecture.md § 3`).
+### ADR-3 — Controller mounting is a NEW `controller-dispatch.ts` (reusing `registerControllers`), shared by dev + start; `api-middleware.ts`/`app-typed-client.ts` are NOT inflated
+**Decision:** new `server/http/controller-dispatch.ts` owns "scan `server/controllers/`, `registerControllers` → a controller route table, and given a Web Request match+run it through the shared handler path (`incomingMessageToHandlerRequest`)". `api-middleware` calls it AFTER `matchRoute` misses a file route (a ~5-line branch).
+**Rationale:** G6 (both files near 500 LoC BLOCK); SRP (`architecture.md § 3`); Rule 9 (reuse `registerControllers`).
 **Rejected:** inline in `api-middleware.ts` — pushes it over budget, blocks commit.
 
 ### ADR-4 — `controllers/**` are compiled by swc via a dedicated Vite transform; file-based routes stay on esbuild
@@ -86,59 +86,59 @@ The decorator SURFACE already exists and is designed (patterns skill `theokit-ht
 **Rationale:** esbuild cannot emit param-decorator metadata (documented in swc-loader.ts:124); scoping to `controllers/**` keeps the common path fast + zero-config for non-decorator apps.
 **Rejected:** swc for the whole app — slower, unnecessary, changes the default compile for every file.
 
+### ADR-5 — Controllers are a PARALLEL route path; `generateManifest`/`ManifestRoute` are NOT touched (zero adapter ripple)
+**Decision:** controllers do NOT enter the shared file-based `generateManifest`/`ManifestRoute`. Their scan → dispatch (ADR-3) and their typed-client emit (ADR-2) are a parallel path, sitting alongside the file-based routes in the dev/start request handler and the codegen — never folded into `generateManifest`.
+**Rationale:** the file-based manifest is SYNC (static file scan) and consumed by 10+ callers incl. every deploy adapter (`adapters/{bun,deno,netlify,vercel,…}`). Folding controllers in would force `generateManifest` ASYNC (controllers need `walkControllerMetadata` on a loaded module for `bodySchema`) and ripple `await` across the whole adapter matrix — high blast radius for zero benefit (routing works fine parallel). Keeping controllers parallel means a routes-only app's manifest + `.theokit/client.d.ts` are byte-identical (regression-proof). This also fixes the Task 1.1 decomposition defect surfaced at implement-time (a scanner folded into the sync manifest conflated static routing with runtime `bodySchema`, forcing the ripple + a non-wireable scanner).
+**Rejected:** (a) async `generateManifest` + controller entries (the original plan) — 10+-adapter `await` ripple, regression risk, no upside. (b) static AST parse of decorators into the sync manifest — reimplements `walk-metadata`'s path derivation (Rule 9 violation) and still can't capture `bodySchema` for dispatch. **Consequence:** deploy adapters (Vercel/CF/…) do not serve controllers until a separate follow-up wires the parallel path into each adapter (dev/start parity ships now; adapter parity is a tracked follow-up).
+
 ## Dependency Graph
 
 ```
-Phase 1 (controller-scan + manifest source)  ── blocks ──▶ Phase 2 (swc transform + dispatch/mount = runtime parity)
-Phase 1 ── blocks ──▶ Phase 3 (typed-client emit for controllers)   [Phase 3 gated by ADR-2 checkpoint]
-Phase 2 + Phase 3 ── block ──▶ Phase 4 (integration validation + showcase example)
+Task 1.1 (swc transform for controllers/**)  ── blocks ──▶ Task 1.2 (scan + dispatch/mount = RUNTIME parity)
+Task 1.2 ── blocks ──▶ Task 2.1 (typed-client emit = TYPED parity)   [ADR-2 checkpoint]
+Task 1.2 + Task 2.1 ── block ──▶ Task 3.1 (integration validation + release)
 ```
-Phase 2 and Phase 3 are parallelizable after Phase 1.
+Each task is independently WIREABLE (its own production caller) and NONE touch `generateManifest` (ADR-5 — zero adapter ripple).
 
 ## Phases
 
-### Phase 1 — Controller scan → manifest routes
+### Phase 1 — Runtime parity (controllers served in a theokit app)
 
-**Task 1.1 — `controller-scan.ts` walks `serverDir/controllers/**` into route entries.**
-- **Files to edit:** `packages/theo/src/server/scan/controller-scan.ts` (NEW), `packages/theo/src/server/scan/manifest.ts`.
-- **Why this step:** the typed client + dispatch both need a manifest of controller routes; today none exists (Baseline: no controller-scan). Mirrors `scan.ts` (routes) — same directory-walk shape, different extractor (`walkControllerMetadata`).
-- **Deep dependency analysis:** `generateManifest` (manifest.ts:86,131) is consumed by 10+ files incl. all adapters — so controller routes are ADDED to `ManifestRoute[]` as additive entries carrying `{ routePath, methods, source: 'controller', filePath, exportName }`; adapters that ignore `source==='controller'` are unaffected.
-- **TDD:** `tests/unit/controller-scan.test.ts` — given a fixture `controllers/tasks.controller.ts` (reuse `fixtures/decorator-fullstack`), `scanControllers(dir)` returns entries for `GET /api/v2/tasks`, `GET /api/v2/tasks/:id`, `POST /api/v2/tasks` with the captured `bodySchema` present on POST. RED first (no scanner). GWT.
-- **Concurrency tests:** (none — single-threaded build-time scan).
-- **Acceptance:** entries include path+method+source; no route-file entries regress (`generateManifest` still returns the same file-based routes for a routes-only app).
-- **DoD:** `npx vitest run tests/unit/controller-scan.test.ts` green; `wc -l controller-scan.ts` < 200.
+**Task 1.1 — Vite transform compiles `controllers/**` through the swc-loader.**
+- **Files to edit:** `packages/theo/src/vite-plugin/controller-swc-transform.ts` (NEW), `packages/theo/src/vite-plugin/index.ts` (register the plugin).
+- **Why this step:** parameter decorators (`@Body`/`@Param`/`@Query`) need swc — esbuild can't emit their metadata (swc-loader.ts:124); without it, dispatch (Task 1.2) can't validate/inject. This is the foundation. **Wireable:** the caller is the Vite plugin array in `index.ts` (the transform is registered = invoked on `controllers/**`).
+- **Deep dependency analysis:** `enforce:'pre'` transform; matches only `id` under `serverDir/controllers/`. Reuses `@theokit/http`'s swc-loader config (ADR-1/ADR-4).
+- **TDD:** `tests/unit/controller-swc-transform.test.ts` — transforming a controller source with `@Body(z…)` + `@Param('id')` yields code where `walkControllerMetadata` on the loaded module returns the route + `bodySchema` (i.e. the transform enabled the metadata that plain esbuild would drop). A non-controller `id` returns identity (untouched). RED first.
+- **Failure scenarios (external tooling):** `@swc/core` missing → the transform throws a clear DX error naming `@swc/core` (mirror swc-loader.ts:124), not a cryptic esbuild failure. Test asserts the message.
+- **Concurrency tests:** (none — single-threaded transform).
+- **Acceptance:** controller module loaded via the transform exposes param metadata; non-controller files untouched.
+- **DoD:** `npx vitest run tests/unit/controller-swc-transform.test.ts` green; new file < 200 LoC; registered in `index.ts`.
 
-### Phase 2 — swc transform + runtime mount (runtime parity)
+**Task 1.2 — `controller-dispatch.ts` (scan `server/controllers/` + `registerControllers` → route table + match/dispatch on the shared Web-Request path); `api-middleware` (+ start) call it after a file-route miss.**
+- **Files to edit:** `packages/theo/src/server/http/controller-dispatch.ts` (NEW — owns `scanControllers(dir, loadModule)` + `matchController` + `dispatchController`), `packages/theo/src/vite-plugin/api-middleware.ts` (~5-line "no file route → try controller" branch), `packages/theo/src/cli/commands/start/*` (same branch).
+- **Why this step:** runtime parity — a controller ACTUALLY SERVES in `theokit dev`/`start`. Reuses `@theokit/http`'s `registerControllers` (ADR-1) for the Web-Standard handler + `walkControllerMetadata` for routing; reuses `incomingMessageToHandlerRequest` (#119/ADR-0028 R3a) so `ctx`/plugins/CSRF/session behave identically to file routes. **Wireable:** the caller is `api-middleware.ts` (production dev request path). **ADR-5:** `generateManifest` is NOT touched — controllers are a parallel table.
+- **Deep dependency analysis:** `api-middleware.ts` (391 LoC, near G6 500) gains only the small branch; all scan/match/dispatch logic is in the NEW `controller-dispatch.ts`. CSRF (`enforceCsrf`) + security headers + plugin `onRequest` already run in api-middleware BEFORE the branch, so controllers inherit them.
+- **TDD:** `tests/integration/controller-serve.test.ts` — a real request to `POST /api/v2/tasks` on a controller-backed app returns 200 + the created task; `@Body(zod)` rejects a bad body with the typed 400; `GET /api/v2/tasks/:id` binds `@Param`; a routes-only app is unaffected (file routes still served; `generateManifest` output byte-identical). RED first.
+- **Failure scenarios:** malformed controller (no `@Controller`) → clear scan error, not a silent skip (test). `@swc/core` absent → the Task 1.1 DX error surfaces.
+- **Concurrency tests:** (none — dispatch holds no shared mutable state; the controller route table is built once at startup).
+- **Acceptance:** controller routes served with CSRF/session/plugin parity; zero regression to file routes + the manifest.
+- **DoD:** integration test green; new file < 300 LoC; `api-middleware.ts` stays < 500.
 
-**Task 2.1 — Vite transform compiles `controllers/**` through swc-loader.**
-- **Files to edit:** `packages/theo/src/vite-plugin/controller-swc-transform.ts` (NEW), `packages/theo/src/vite-plugin/index.ts` (register plugin).
-- **Why this step:** parameter decorators need swc (esbuild limitation, swc-loader.ts:124); without this, `@Body`/`@Param` metadata is missing at runtime → dispatch can't validate/inject. Scoped to `controllers/**` (ADR-4) so the default path is untouched.
-- **Deep dependency analysis:** the transform runs `enforce:'pre'`; only matches `id` under `serverDir/controllers/`. Reuses `swc-loader`'s config (strip `$schema`, Legacy decorators).
-- **TDD:** `tests/unit/controller-swc-transform.test.ts` — a controller source with `@Body(z...)` transformed by the plugin yields code where `reflect-metadata` param metadata is emitted (assert the transform output contains the decorator metadata calls / that `walkControllerMetadata` on the loaded module returns the body schema). RED first.
-- **Failure scenarios (external tooling):** `@swc/core` missing → the transform throws a clear DX error naming `@swc/core` (mirror swc-loader.ts:124), not a cryptic esbuild failure. Test asserts the error message.
-- **Acceptance:** a controller module loaded via the transform exposes param metadata; a non-controller file is untouched (identity).
+### Phase 2 — Typed parity (controllers in `@theo/client`) — ADR-2 checkpoint
 
-**Task 2.2 — `controller-dispatch.ts` mounts a walked controller route on the shared Web-Request handler path; `api-middleware` + start call it.**
-- **Files to edit:** `packages/theo/src/server/http/controller-dispatch.ts` (NEW), `packages/theo/src/vite-plugin/api-middleware.ts` (call after file-route miss), `packages/theo/src/cli/commands/start/*` (same).
-- **Why this step:** runtime parity — the whole point is a controller ACTUALLY SERVES in `theokit dev`. Reuses `incomingMessageToHandlerRequest` (ADR-0028 R3a / #119) so `ctx`/plugins/CSRF/session behave identically to file routes.
-- **Deep dependency analysis:** `api-middleware.ts` (391 LoC, near G6 500) → dispatch logic lives in the NEW file; api-middleware only adds a ~5-line "if no route match, try controller match" branch. Preserves CSRF (`enforceCsrf`) + security headers + plugin hooks already in api-middleware.
-- **TDD:** `tests/integration/controller-serve.test.ts` — a real request to `POST /api/v2/tasks` on a controller-backed app returns 200 + the created task; `@Body(zod)` validation rejects a bad body with the typed error; CSRF enforced on POST. RED first.
-- **Concurrency tests:** (none — single request per test; dispatch holds no shared mutable state).
-- **Acceptance:** controller routes served; file-based routes still served (no regression); CSRF/session identical.
+**Task 2.1 — Emit `client.<controller>.<method>()` entries into `.theokit/client.d.ts`; wire the orphan `controllersGlob`.**
+- **Files to edit:** `packages/theo/src/vite-plugin/controller-client-emit.ts` (NEW), `packages/theo/src/vite-plugin/app-typed-client.ts` (call the new emitter; the `controllersGlob` watch — currently orphan — now feeds it, reusing `scanControllers` from Task 1.2).
+- **Why this step:** parity's decisive half — the user's requirement is decorators keep the typed client `route()` gives. Emits type expressions over the controller class (ADR-2), mirroring the file-based `InferResponse` model. **Wireable:** the caller is `app-typed-client.ts` (production codegen). Reuses `scanControllers` (Task 1.2) — no second scan.
+- **Deep dependency analysis:** `app-typed-client.ts` (424 LoC, near budget) → the emitter is a NEW file; app-typed-client imports it + merges its entries into the same client tree; the `controllersGlob` watch now triggers a re-emit that includes controllers.
+- **TDD:** `tests/unit/controller-client-emit.test.ts` — given the tasks controller, the emitted `.d.ts` contains `tasks: { get; post }`; a `tsc` type-test (`expectTypeOf` / `.test-d.ts`) asserts `client.tasks.get()` response resolves to the method return type, and (checkpoint-dependent) `client.tasks.post` body resolves to the `@Body` schema OR `unknown`. A routes-only fixture's `.theokit/client.d.ts` stays byte-identical. RED first.
+- **Checkpoint (ADR-2):** run the type-test spike FIRST. If class-based body inference isn't reliably expressible, ship response-typed + body `unknown` + a follow-up issue (runtime parity from Phase 1 already ships). Record the decision in `## Unresolved Questions`.
+- **Concurrency tests:** (none — build-time codegen).
+- **Acceptance:** controller entries appear in the client with correct response type; file-based client entries byte-unchanged.
+- **DoD:** unit + type-test green; new file < 250 LoC; `app-typed-client.ts` stays < 500.
 
-### Phase 3 — Typed-client emit for controllers (ADR-2; gated by checkpoint)
+### Phase 3 — Integration Validation (the "eat your own cooking" gate)
 
-**Task 3.1 — Emit `client.<controller>.<method>()` entries into `.theokit/client.d.ts`; wire the orphan `controllersGlob`.**
-- **Files to edit:** `packages/theo/src/vite-plugin/controller-client-emit.ts` (NEW), `packages/theo/src/vite-plugin/app-typed-client.ts` (call the new emitter; the `controllersGlob` watch now feeds it).
-- **Why this step:** parity's decisive half — the user's requirement is decorators keep the typed client `route()` gives. Emits type expressions over the controller class (ADR-2), mirroring the file-based `InferResponse` model.
-- **Deep dependency analysis:** `app-typed-client.ts` (424 LoC, near budget) → the controller emitter is a NEW file; app-typed-client imports it + merges its entries into the same client tree. The `controllersGlob` watch (currently orphan) now triggers a re-emit that includes controllers.
-- **TDD:** `tests/unit/controller-client-emit.test.ts` — given the tasks controller manifest, the emitted `.d.ts` contains `tasks: { get: ... ; post: ... }` whose types resolve to the method return + `@Body` schema; a `tsc` type-test (`expectTypeOf`) asserts `client.tasks.post` body is `{ title: string; priority: ... }` and response is the task. RED first.
-- **Checkpoint (ADR-2):** run the type-test spike FIRST; if class-based body inference is not reliably expressible, ship response-typed + body `unknown` + follow-up issue, and note it in the plan's Unresolved Questions resolution.
-- **Acceptance:** controller entries appear in the client with correct response type; file-based client entries unchanged (byte-diff on a routes-only fixture).
-
-### Phase 4 — Integration Validation (the "eat your own cooking" gate)
-
-**Task 4.1 — End-to-end: a decorator controller served + called through the typed client, in a real fixture; showcase example.**
+**Task 3.1 — End-to-end: a decorator controller served + called through the typed client, in a real fixture; showcase example.**
 - **Files to edit:** `tests/integration/controller-parity.test.ts` (NEW), `fixtures/decorator-fullstack/` (add an `app/` + `theo.config` so it's a real theokit app, OR a new minimal fixture), optional `apps/showcase` variant.
 - **Why this step:** the Goal's single metric. Proves the full chain: scan → swc → serve → typed client → call.
 - **TDD:** boot the fixture through the theokit dev/build path; assert (a) `GET /api/v2/tasks` served 200, (b) `.theokit/client.d.ts` has the `tasks` entry, (c) a `tsc` type-test over `client.tasks.get()` resolves the response type.
@@ -149,38 +149,38 @@ Phase 2 and Phase 3 are parallelizable after Phase 1.
 
 | Requirement (from #122 / Goal) | Task(s) |
 |---|---|
-| Scan `server/controllers/` | 1.1 |
-| Controllers in the manifest (adapter-additive) | 1.1 |
-| swc compile controllers in dev (param decorators) | 2.1 |
-| Serve controllers in `theokit dev`/`start` (runtime parity) | 2.2 |
-| CSRF/session/plugin parity with file routes (#119/ADR-0028) | 2.2 |
-| Typed-client entries for controllers (`@theo/client`) | 3.1 |
-| Request/response inference from classes (ADR-2 + checkpoint) | 3.1 |
-| Wire (not orphan) the `controllersGlob` watch | 3.1 |
-| Zero regression to file-based routes + typed client | 1.1, 2.2, 3.1, 4.1 |
-| End-to-end parity proof | 4.1 |
+| swc compile controllers in dev (param decorators) | 1.1 |
+| Scan `server/controllers/` (`scanControllers`) | 1.2 |
+| Serve controllers in `theokit dev`/`start` (runtime parity, reuse `registerControllers`) | 1.2 |
+| CSRF/session/plugin parity with file routes (#119/ADR-0028) | 1.2 |
+| `generateManifest` untouched → zero adapter ripple (ADR-5) | 1.2 |
+| Typed-client entries for controllers (`@theo/client`) | 2.1 |
+| Request/response inference from classes (ADR-2 + checkpoint) | 2.1 |
+| Wire (not orphan) the `controllersGlob` watch | 2.1 |
+| Zero regression to file-based routes + typed client | 1.2, 2.1, 3.1 |
+| End-to-end parity proof | 3.1 |
 
 ## Drawbacks & Risks
 
 | Risk | Severity | Mitigation | Owner |
 |---|---|---|---|
-| Class-based body/param inference may not be expressible as a type expression (`@Body('key')`, untyped params) | HIGH | ADR-2 checkpoint spike FIRST; fall back to response-typed + body `unknown` + follow-up; runtime parity ships regardless | plan author |
-| Blast radius: adding controller routes to the shared manifest could affect 10+ adapters | HIGH | Controller entries are additive + `source:'controller'`; adapters ignore unknown source (test: routes-only manifest byte-identical) | plan author |
+| Class-based body/param inference may not be expressible as a type expression (`@Body('key')`, untyped params) | HIGH | ADR-2 checkpoint spike FIRST; fall back to response-typed + body `unknown` + follow-up; runtime parity (Phase 1) ships regardless | plan author |
 | swc-in-Vite adds a compile path + `@swc/core` requirement | MEDIUM | Scope transform to `controllers/**` (ADR-4); clear DX error when swc missing; zero impact on non-decorator apps | plan author |
 | G6: `api-middleware.ts` (391) / `app-typed-client.ts` (424) near 500 BLOCK | MEDIUM | All new logic in NEW files (ADR-3); the two files gain only a small call site each | plan author |
-| Two decorator engines drift (`@theokit/http` vs a `theo` reader) | MEDIUM | ADR-1: reuse `walkControllerMetadata`; never reimplement | plan author |
+| Two decorator engines drift (`@theokit/http` vs a `theo` reader) | MEDIUM | ADR-1: reuse `walkControllerMetadata` + `registerControllers`; never reimplement | plan author |
+| Deploy adapters (Vercel/CF/…) do not serve controllers until separately wired (ADR-5 keeps controllers out of the shared manifest) | LOW | Documented follow-up; dev/start parity ships now; a routes-only app + all adapters are byte-unaffected (regression test) | plan author |
 
 ## Unresolved Questions
 
-- Q1: Body/param type inference from decorated classes — resolved at Phase 3 by a spike; the checkpoint (ADR-2) picks full-inference vs response-only fallback. Not blocking runtime parity.
-- Q2: Guards/interceptors (`@UseGuards`/`@UseInterceptors`) in the app path — out of scope here (the patterns skill's guards→middleware pattern maps them to `defineMiddleware`; wiring that into the app dispatch is a follow-up). Controllers in this plan support routing + `@Body`/`@Param`/`@Query` + CSRF/session; guards/interceptors deferred with an explicit note.
-- Q3: Deploy adapters serving controllers — this plan makes controllers work in `dev`/`start`; adapter (Vercel/CF/…) emission of controllers is a follow-up (the manifest is additive so it doesn't break them, but they won't serve controllers until wired).
+- Q1: Body/param type inference from decorated classes — resolved at Phase 2 (Task 2.1) by a spike; the checkpoint (ADR-2) picks full-inference vs response-only fallback. Not blocking runtime parity.
+- Q2: Guards/interceptors (`@UseGuards`/`@UseInterceptors`) in the app path — out of scope here (the patterns skill's guards→middleware pattern maps them to `defineMiddleware`; wiring that into the app dispatch is a follow-up). Controllers here support routing + `@Body`/`@Param`/`@Query` + CSRF/session; guards/interceptors deferred with an explicit note.
+- Q3: Deploy adapters serving controllers — this plan ships controllers in `dev`/`start` only (ADR-5). Adapter (Vercel/CF/…) emission is a tracked follow-up; the parallel path keeps adapters byte-unaffected meanwhile.
 
 ## Failure scenarios
 
-- **`@swc/core` missing** — the Vite transform (2.1) throws a DX error naming `@swc/core` (test asserts message); not an esbuild crash.
-- **Malformed controller** (no `@Controller`, or a method with no HTTP decorator) — scan (1.1) reports a clear error, not a silent skip (test).
-- **`@Body()` without schema and without `emitDecoratorMetadata`** — mirror `walk-metadata.ts:74` WARN; validation is skipped with a documented warning (D-2).
+- **`@swc/core` missing** — the Task 1.1 Vite transform throws a DX error naming `@swc/core` (test asserts message); not an esbuild crash.
+- **Malformed controller** (no `@Controller`, or a method with no HTTP decorator) — `scanControllers` (Task 1.2) reports a clear error, not a silent skip (test).
+- **`@Body()` without schema and without `emitDecoratorMetadata`** — mirror `walk-metadata.ts:74` WARN; validation skipped with a documented warning (D-2).
 
 ## Global DoD
 
