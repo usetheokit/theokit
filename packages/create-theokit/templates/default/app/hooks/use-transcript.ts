@@ -4,12 +4,12 @@ import { type UIMessage } from '@theokit/ui'
 import { useEffect, useState } from 'react'
 import { useAgent } from 'theokit/client'
 
-import { GREETING } from './constants'
+import { GREETING } from '../lib/constants'
 
 /**
  * Owns the chat transcript — the subtle part of an agent UI, so it lives in a hook, not the view. This is
  * the convergent pattern across AI chat frontends (Vercel ai-chatbot's `use-active-chat`, the AI SDK docs):
- * transcript + streaming state in a hook; the page stays presentational.
+ * transcript + streaming state in a hook; the page + components stay presentational.
  *
  * Why a hook is needed: `useAgent` opens a FRESH stream per send, so its `messages` hold only the CURRENT
  * turn (with no stable id). We OWN the full transcript here — `history` accumulates each finished turn with
