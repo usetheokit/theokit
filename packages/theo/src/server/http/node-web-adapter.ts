@@ -29,58 +29,15 @@
  * v1.0 § Phase G slice 5/N (closes the executor bridge surface).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { Readable } from 'node:stream'
 
 import { executeWebRequest, type ExecuteWebRequestOptions } from '../web-handler.js'
 
-/**
- * Build a Web `Request` from a Node `IncomingMessage`. The Web Request
- * spec requires an absolute URL; we synthesize one from
- * `req.headers.host` (or fall back to `localhost` for test doubles).
- *
- * For methods with a body (POST/PUT/PATCH/DELETE), the Node Readable
- * stream is wrapped as a Web ReadableStream via `Readable.toWeb()` so
- * downstream consumers can call `request.json()` / `request.formData()`
- * / `request.text()` natively.
- *
- * EC-1: Node sometimes provides headers as `string | string[]`. Web
- * `Headers` collapses to single-comma-joined strings — we do the join
- * manually for repeated headers because `Headers.append` would create
- * multi-value entries which behave differently on `.get()`.
- */
-export function incomingMessageToWebRequest(req: IncomingMessage): Request {
-  const host = pickHeaderString(req.headers.host) ?? 'localhost'
-  const url = `http://${host}${req.url ?? '/'}`
+import { incomingMessageToWebRequest } from './node-request.js'
 
-  const headers = new Headers()
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) continue
-    if (Array.isArray(value)) {
-      headers.set(key, value.join(', '))
-    } else {
-      headers.set(key, value)
-    }
-  }
-
-  const method = (req.method ?? 'GET').toUpperCase()
-  const hasBody = method !== 'GET' && method !== 'HEAD'
-
-  if (!hasBody) {
-    return new Request(url, { method, headers })
-  }
-
-  // Drain Node's Readable into a Web ReadableStream. `Readable.toWeb` is
-  // available in Node 18+ (theokit's engines.node floor is 22+, so safe).
-  const webStream = Readable.toWeb(req) as ReadableStream
-  return new Request(url, {
-    method,
-    headers,
-    body: webStream,
-    // EC-2: Node 18+ requires `duplex: 'half'` when body is a stream.
-    // The `RequestInit` type omits it (Web spec gap); cast accordingly.
-    ...({ duplex: 'half' } as { duplex: 'half' }),
-  })
-}
+// The primitive `IncomingMessage` → Web `Request` converters live in
+// `node-request.js` (dependency-free, shared with the executor). Re-exported
+// here so existing importers of the adapter keep resolving them.
+export { incomingMessageToWebRequest, incomingMessageToHandlerRequest } from './node-request.js'
 
 /**
  * Write a Web `Response` into a Node `ServerResponse`. Mirrors the Node
@@ -155,13 +112,4 @@ export async function executeWebRequestFromNode(
   const webRequest = incomingMessageToWebRequest(req)
   const webResponse = await executeWebRequest(webRequest, routeModule, opts)
   await writeWebResponseToServerResponse(webResponse, res)
-}
-
-/** Pick the first usable string from Node's `string | string[] | undefined` headers. */
-function pickHeaderString(value: string | string[] | undefined): string | undefined {
-  if (typeof value === 'string') return value
-  if (Array.isArray(value)) {
-    for (const v of value) if (typeof v === 'string' && v.length > 0) return v
-  }
-  return undefined
 }
