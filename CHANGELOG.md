@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.3.2] - 2026-07-13
+
+### Changed
+- **`--surface desktop` now renders the SAME rich chat as the default web scaffold.** The desktop webview
+  previously shipped a bare `<input>`/`<button>` composer; it now composes the exact same `@theokit/ui`
+  components the web default uses — `ChatThread` / `ChatMessage` / `ChatComposer` (with the squared Send
+  button) / `AgentStreaming` / `AgentErrorCard` / `QuickActionChips` / `ThemeSwitcher` — plus the greeting,
+  honest starter prompts, transcript-ownership logic, and a header with the theme switcher. No
+  desktop-specific components: the webview is React like the web, so `useAgent` + the `@theokit/ui`
+  components are identical; only the transport differs (`ChannelTransport` vs the web's HTTP path). The
+  app-level layout uses inline styles (reading the theme CSS vars, so light/dark still cascades) because
+  the desktop bundle is plain Vite without the framework's Tailwind build — the `@theokit/ui` components
+  themselves self-style via the precompiled stylesheet. Adds `@usetheo/ui` + `lucide-react` to the desktop
+  deps (same versions as web). Verified rendering in a real browser against the mocked bridge.
+
 ## [create-theokit@1.3.1] - 2026-07-12
 
 ### Fixed
