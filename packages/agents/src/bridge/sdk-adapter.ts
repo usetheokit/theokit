@@ -504,7 +504,10 @@ export function createSdkAgentStream(
   // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
   // so history persists across the per-round agent create/dispose. Defaults lazily to the
   // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
-  let storage: ConversationStorageAdapter | undefined = overrides.conversationStorage
+  // Precedence: per-run override > agent-level `defineAgent({ conversationStorage })`
+  // (compiled.conversationStorage) > SDK default (chosen lazily below).
+  let storage: ConversationStorageAdapter | undefined =
+    overrides.conversationStorage ?? compiled.conversationStorage
 
   // `factoryOpts.disableTools` (step-cap force-close) → `tool_choice:"none"` at send-time.
   return (
