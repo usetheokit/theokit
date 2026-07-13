@@ -148,10 +148,18 @@ describe('applySurface (M45)', () => {
     const conf = JSON.parse(read('src-tauri/tauri.conf.json')) as {
       build: { beforeDevCommand: string; beforeBuildCommand: string }
       bundle: { icon: string[] }
+      app: { withGlobalTauri?: boolean; security: { csp: string | null } }
     }
     expect(conf.build.beforeDevCommand).toContain('scripts/build-sidecar.mjs')
     expect(conf.build.beforeBuildCommand).toContain('scripts/build-sidecar.mjs')
     expect(conf.bundle.icon).toContain('icons/icon.ico')
+
+    // White-screen guards: App.tsx reads `globalThis.__TAURI__.core` at module scope, so the global
+    // MUST be injected (`withGlobalTauri`) or React never mounts. And the Vite dev server injects an
+    // inline react-refresh script that a strict `script-src 'self'` CSP blocks → blank webview; the
+    // scaffold ships `csp: null` (harden for production per README § Packaging).
+    expect(conf.app.withGlobalTauri).toBe(true)
+    expect(conf.app.security.csp).toBeNull()
   })
 
   it('throws on a forced transform error (EC-4 rollback parity with --bare)', () => {

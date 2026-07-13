@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.3.1] - 2026-07-12
+
+### Fixed
+- **`--surface desktop` no longer opens to a blank white webview.** Found by driving the running Tauri window for real (a self-hosted HTTP listener the webview `fetch`es — Tauri does not sync `document.title` to the native window, so title-based probes are meaningless). Two independent bugs both blanked the screen:
+  - **`window.__TAURI__` was never injected.** `frontend/src/App.tsx` reads `globalThis.__TAURI__.core` at module scope and throws if absent, so React never mounted. Tauri v2 only injects that global when `app.withGlobalTauri: true` — which the config was missing. Added it.
+  - **A strict CSP blocked the dev server.** `app.security.csp` was `script-src 'self'`, which blocks the inline react-refresh `<script>` that `@vitejs/plugin-react` injects in dev (and the HMR WebSocket) → the module graph fails to load → blank. Set `csp: null` (harden for production per README-surface § Security).
+
+  Verified end-to-end in the native window: React mounts, `window.__TAURI__.core.invoke` resolves, and invoking `run_turn` streams a real OpenRouter reply back over the Tauri `Channel` (3+ `text-delta` chunks captured). Supersedes 1.3.0, which shipped the sidecar/icon fixes but still opened blank.
+
 ## [create-theokit@1.3.0] - 2026-07-12
 
 ### Fixed

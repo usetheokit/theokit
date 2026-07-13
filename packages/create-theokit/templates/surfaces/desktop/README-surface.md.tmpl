@@ -36,6 +36,14 @@ The agent lives in `agents/chat.ts` (edit its model / system prompt). Wire HITL 
 `@HumanInTheLoop`-gated tool — the sidecar emits `tool-approval-request`, the webview shows Approve/Deny,
 and `useAgent(...).approve(id, { approved })` routes the decision through the transport's `settle`.
 
+## Security — CSP
+
+`tauri.conf.json` ships `app.security.csp: null` (no Content-Security-Policy) so the Vite dev server's
+inline react-refresh script isn't blocked (a strict `script-src 'self'` blanks the webview in dev). For a
+**production** build, add a CSP: the bundled app serves from `tauri://` with no inline scripts, so a strict
+policy like `"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"` works.
+`app.withGlobalTauri: true` is required — the webview reads `window.__TAURI__.core` to reach the Rust shell.
+
 ## Packaging (distributable app + Windows)
 
 The dev launcher above is a POSIX shim that depends on the app's `node_modules` (tsx). For a **distributable**
