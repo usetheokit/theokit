@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Metadata } from 'theokit/client'
 
 import { ChatPanel } from './components/ChatPanel'
 import { Composer } from './components/Composer'
@@ -12,6 +13,11 @@ import { useChatTranscript } from './hooks/use-transcript'
  * two presentational pieces (`ChatPanel` + `Composer`). Everything FUNCTIONS: the thread streams real
  * replies, `New chat` resets, and the starter prompts send real messages. Edit `agents/chat.ts` to pick
  * your model / add tools; grow the UI by adding components under `app/components/`.
+ *
+ * Add a SCREEN: routing is file-based — a screen is a folder under `app/` with a `page.tsx`
+ * (`app/settings/page.tsx` → `/settings`; `app/users/[id]/page.tsx` → `/users/:id`). Run
+ * `theokit generate page <name>`, then add a link in `app/components/Nav.tsx`. This route is `/` (see the
+ * example `app/about/page.tsx` + `docs/ARCHITECTURE.md` § Adding a screen).
  */
 export default function Page() {
   const [composerValue, setComposerValue] = useState('')
@@ -32,6 +38,7 @@ export default function Page() {
 
   return (
     <>
+      <Metadata title="TheoKit agent" description="Chat with your TheoKit agent." />
       <ChatPanel
         thread={thread}
         isStreaming={isStreaming}
