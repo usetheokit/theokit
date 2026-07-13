@@ -56,14 +56,13 @@ describe('scaffold (integration — real template)', () => {
     expect(readFileSync(join(targetDir, 'agents/skills/daily-briefing.ts'), 'utf-8')).toContain(
       'createSkill(',
     )
-    // chat.ts composes persona + tools + the skill. The inline skill is registered via `.skills([...])`
-    // (→ the SDK's `<skills>` block) AND exposed for on-demand body reads via `defineSkillReadTool`.
+    // chat.ts composes persona + tools + the skill. ONE `.skills([...])` call registers the inline skill
+    // into the `<skills>` block AND auto-provisions the `skill_read` tool (no separate wiring needed).
     const chat = readFileSync(join(targetDir, 'agents/chat.ts'), 'utf-8')
     expect(chat).toContain('BASE_INSTRUCTIONS')
     expect(chat).toContain('.tool(weatherTool)')
     expect(chat).toContain('.tool(currentTimeTool)')
     expect(chat).toContain('.skills([dailyBriefingSkill])')
-    expect(chat).toContain('defineSkillReadTool')
     // shared/ — one source of truth for cross-layer branding, imported by the agent + the frontend.
     expect(existsSync(join(targetDir, 'shared/agent.ts'))).toBe(true)
     expect(readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')).toContain(

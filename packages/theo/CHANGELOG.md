@@ -1,5 +1,12 @@
 # theo
 
+## 0.36.0
+
+### Patch Changes
+
+- Bump the `@theokit/agents` floor to `^0.38.0` — the runtime auto-wires the `skill_read` tool for agents
+  that declare inline skills via `.skills([...])`. No theokit API change.
+
 ## 0.35.0
 
 ### Patch Changes

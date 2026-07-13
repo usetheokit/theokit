@@ -1,5 +1,4 @@
 import { agent } from '@theokit/agents'
-import { defineSkillReadTool } from '@theokit/sdk'
 import { z } from 'zod'
 
 import { BASE_INSTRUCTIONS } from './prompts/instructions.js'
@@ -25,10 +24,9 @@ export default agent()
   .system(BASE_INSTRUCTIONS)
   .tool(weatherTool)
   .tool(currentTimeTool)
-  // `.skills([...])` registers the code-defined skill: the SDK lists its name + description in a
-  // `<skills>` block in every system prompt (cheap), so the model KNOWS the skill exists.
+  // `.skills([...])` wires the code-defined skill in ONE call: the SDK lists its name + description in a
+  // `<skills>` block every turn (cheap, so the model KNOWS it exists) AND auto-provisions a `skill_read`
+  // tool the model calls to load the full body on demand (so a long procedure only enters the prompt
+  // when needed). Pass a filesystem skill NAME (a string) here too; mix strings + createSkill freely.
   .skills([dailyBriefingSkill])
-  // `defineSkillReadTool` then gives the model a `skill_read` tool to load the full body on demand —
-  // so a long procedure only enters the prompt when the model actually needs it.
-  .tool(defineSkillReadTool([dailyBriefingSkill]))
   .build()

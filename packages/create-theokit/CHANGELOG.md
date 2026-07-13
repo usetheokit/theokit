@@ -1,5 +1,14 @@
 # create-theo
 
+## 1.7.0
+
+### Minor Changes
+
+- **Scaffold wires its skill in ONE call.** `agents/chat.ts` now uses just `.skills([dailyBriefingSkill])`
+  (requires `@theokit/agents@^0.38.0`): registering the inline skill also auto-provisions the `skill_read`
+  tool, so the separate `.tool(defineSkillReadTool([...]))` line + its import are gone. Same behaviour, half
+  the wiring.
+
 ## 1.6.0
 
 ### Minor Changes

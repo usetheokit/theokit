@@ -1,5 +1,19 @@
 # @theokit/agents
 
+## 0.38.0
+
+### Minor Changes
+
+- **`.skills([inlineSkill])` now auto-provisions the `skill_read` tool — one call, not two.** An inline
+  `createSkill` lists in the `<skills>` block by name + description ONLY; its body is unreachable to the
+  model without a `skill_read` tool, so registering an inline skill implies wanting it readable. The
+  runtime (`createSkillAgentStream`, where `@theokit/sdk` is dynamically loaded) now auto-appends
+  `skill_read` when the agent declares inline skills — so `agent().skills([mySkill]).build()` both
+  registers the skill AND makes it readable. Dedup: an explicit `defineSkillReadTool` the app added wins
+  (never duplicated). Graceful: an SDK older than `defineSkillReadTool` degrades to list-only (no crash).
+  The auto-wire lives at the runtime layer so the pure compile module (`compileAgentDefinition`) keeps its
+  type-only SDK dependency. `defineSkillReadTool` remains available as an escape hatch (custom skill sets).
+
 ## 0.37.0
 
 ### Minor Changes
