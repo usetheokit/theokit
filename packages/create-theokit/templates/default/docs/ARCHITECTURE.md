@@ -90,7 +90,21 @@ The web `app/` is organized **type-based**, the layout most React apps grow into
 | `hooks/` | custom hooks — where **state** lives | `use-transcript.ts` |
 | `lib/` | app modules / config | `constants.ts` |
 
-Two rules make this work and keep it honest:
+### Route files are not components
+
+`page` · `layout` · `loading` · `error` · `not-found` are **route conventions**, not components. The
+router binds them by **name + location**: matched by `^(page|layout|error|loading|not-found)\.(tsx|ts|jsx|js)$`
+at a route segment (the `app/` root is the `/` route). `loading.tsx` becomes that route's Suspense
+fallback, `error.tsx` its error boundary — *because they sit there, with that name*.
+
+So `loading.tsx` looks like a component (it renders a spinner) but it is **not** one — move it into
+`components/` and the router no longer finds it, and the route loses its loading UI. This is exactly the
+Next.js App Router model TheoKit implements: the special files live at the route segment, and `components/`
+/ `hooks/` / `lib/` sit alongside them. Having both at the `app/` root is the convention, not a mismatch.
+(If a special file grows big, keep the thin route file and have it render a real component from
+`components/` — e.g. `loading.tsx` → `<LoadingScreen/>`.)
+
+Two rules make the rest work and keep it honest:
 
 1. **State in a hook, view in components.** This is the pattern every serious chat frontend converges on
    (Vercel `ai-chatbot`, the AI SDK docs). `page.tsx` is a thin composition root — it lays out `<ChatPanel>`
