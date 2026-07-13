@@ -71,7 +71,15 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     // `ChannelTransport` whose source is `@theokit/tauri`'s `createTauriChannelSource`; the Node sidecar
     // runs the turn via `@theokit/tauri/sidecar`. `ai` = the UIMessageStream reader + UIMessage type (was
     // transitive via `@theokit/ui`, re-added explicitly here). react/react-dom are inherited from the default.
-    deps: { '@theokit/ui': '^1.0.0', '@theokit/tauri': '^0.1.1', ai: '^7.0.0' },
+    // Same rich surface as the web default → same UI deps: `@usetheo/ui` (Button) + `lucide-react` (icons),
+    // matching the web template's versions. `@theokit/ui` components self-style via the precompiled sheet.
+    deps: {
+      '@theokit/ui': '^1.0.0',
+      '@usetheo/ui': '^0.14.0',
+      '@theokit/tauri': '^0.1.1',
+      'lucide-react': '^0.469.0',
+      ai: '^7.0.0',
+    },
     devDeps: {
       tsx: '^4.19.0',
       '@tauri-apps/cli': '^2.0.0',
