@@ -15,19 +15,20 @@ import { InProcessTransport, useAgent } from 'theokit/client'
 import { streamAgentTurnInProcess } from 'theokit/server/agent'
 
 import * as chatAgent from '../agents/chat.js'
+import { AGENT } from '../shared/agent.js'
 
-/** Shown in the status bar — keep in sync with the model in `agents/chat.ts`. */
-const MODEL = 'openai/gpt-4o-mini'
+/** Shown in the status bar (from `shared/agent.ts`). */
+const MODEL = AGENT.model
 const CWD = process.cwd()
 
-/** The agent's opening line — so the conversation starts warm instead of empty (like a coding-agent CLI). */
+/** The agent's opening line — the shared greeting plus TUI key hints, so the conversation starts warm. */
 const GREETING: UIMessage = {
   id: 'greeting',
   role: 'assistant',
   parts: [
     {
       type: 'text',
-      text: "Hi — I'm your TheoKit agent. Ask me anything and I'll stream a reply. Type below and press Enter · /clear resets · esc cancels.",
+      text: `${AGENT.greeting} Type below and press Enter · /clear resets · esc cancels.`,
     },
   ],
 }

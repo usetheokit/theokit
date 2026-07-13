@@ -63,7 +63,13 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     deps: { '@theokit/tui': '^0.30.0', ink: '^7.1.0', ai: '^7.0.0' },
     devDeps: { tsx: '^4.19.0' },
     scripts: { dev: 'tsx tui/main.tsx', start: 'tsx tui/main.tsx' },
-    tsconfigInclude: ['tui/**/*.ts', 'tui/**/*.tsx', 'server/**/*.ts', 'agents/**/*.ts'],
+    tsconfigInclude: [
+      'tui/**/*.ts',
+      'tui/**/*.tsx',
+      'server/**/*.ts',
+      'agents/**/*.ts',
+      'shared/**/*.ts',
+    ],
   },
   desktop: {
     fragment: 'desktop',
@@ -100,6 +106,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       'frontend/src/**/*.tsx',
       'server/**/*.ts',
       'agents/**/*.ts',
+      'shared/**/*.ts',
     ],
   },
 }
