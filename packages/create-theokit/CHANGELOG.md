@@ -1,5 +1,15 @@
 # create-theo
 
+## 1.9.1
+
+### Patch Changes
+
+- **docs: clarify that `loading`/`error`/`not-found` are route files, not components.** `docs/ARCHITECTURE.md`
+  now spells out that the router binds `page`/`layout`/`loading`/`error`/`not-found` by name + location
+  (they live at the route segment — the `app/` root for `/`), so they sit beside `components/`/`hooks/`/`lib/`
+  by convention, not by mistake — and moving `loading.tsx` into `components/` would drop the route's loading
+  UI. This is the Next.js App Router model TheoKit implements. No code change.
+
 ## 1.9.0
 
 ### Minor Changes
