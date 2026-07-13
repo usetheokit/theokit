@@ -15,6 +15,8 @@ import { Button, ScrollArea } from '@usetheo/ui'
 import { Plus, Sparkles } from 'lucide-react'
 import { useAgent } from 'theokit/client'
 
+import { AGENT } from '../shared/agent'
+
 /**
  * Default scaffold — a working agent chat, composed from TheoUI. Everything here FUNCTIONS: the thread
  * streams real replies, `New chat` resets, the starter prompts send real messages, and the error card shows
@@ -26,15 +28,13 @@ import { useAgent } from 'theokit/client'
  * `agents/chat.ts` to pick your model / add tools.
  */
 
-const MODEL_NAME = 'gpt-4o-mini'
+const MODEL_NAME = AGENT.model
 
-/** The agent's opening line — so the conversation starts warm instead of empty. */
+/** The agent's opening line (from `shared/agent.ts`) — so the conversation starts warm instead of empty. */
 const GREETING: UIMessage = {
   id: 'greeting',
   role: 'assistant',
-  parts: [
-    { type: 'text', text: "Hi — I'm your TheoKit agent. Ask me anything and I'll stream a reply." },
-  ],
+  parts: [{ type: 'text', text: AGENT.greeting }],
 }
 
 /** Honest starter prompts — each sends a real message the scaffold agent can actually answer. */
