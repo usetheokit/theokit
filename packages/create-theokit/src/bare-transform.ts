@@ -26,7 +26,7 @@
  * transform never leaves the target dir in a broken state.
  */
 
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 const HELLO_PAGE = `export default function Page() {
@@ -87,6 +87,13 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
   const chatPath = join(targetDir, 'agents/chat.ts')
   if (existsSync(chatPath)) {
     unlinkSync(chatPath)
+  }
+
+  // 3b. Remove the chat feature's frontend internals (`app/chat/`) — they import `@theokit/ui`, which
+  //     --bare drops. The Hello-Theo page does not reference them, so the folder would be dead + unbuildable.
+  const chatFeatureDir = join(targetDir, 'app/chat')
+  if (existsSync(chatFeatureDir)) {
+    rmSync(chatFeatureDir, { recursive: true, force: true })
   }
 
   // 4. Remove tailwind + postcss config files (toolchain dropped from devDeps)
