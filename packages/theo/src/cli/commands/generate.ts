@@ -155,12 +155,139 @@ function generateToolboxTemplate(name: string): string {
   ].join('\n')
 }
 
+function generateWorkflowTemplate(name: string): string {
+  const camel = toCamelCase(name)
+  return [
+    `import { Workflow, fn } from '@theokit/sdk/workflow'`,
+    ``,
+    `/**`,
+    ` * A minimal workflow — a typed, multi-step pipeline (@theokit/sdk). Each \`fn(...)\` step is a pure`,
+    ` * function; a step can also run an agent via \`agentStep(name, agent, mapInput)\`. Import + run it from`,
+    ` * a route, action, cron job, or tool:`,
+    ` *`,
+    ` *   const run = await ${camel}Workflow.run({ name: 'Ada' })`,
+    ` *   console.log(run.status, run.output)   // 'completed'  'Hello, Ada!'`,
+    ` */`,
+    `export const ${camel}Workflow = Workflow.create({ name: '${name}' })`,
+    `  .then(fn('normalize', (input: { name: string }) => ({ name: input.name.trim() })))`,
+    `  .then(fn('greet', (step: { name: string }) => \`Hello, \${step.name}!\`))`,
+    `  .commit()`,
+    ``,
+  ].join('\n')
+}
+
+function generateEvalTemplate(name: string): string {
+  const camel = toCamelCase(name)
+  return [
+    `import { Eval, Scorers } from '@theokit/sdk/eval'`,
+    ``,
+    `/**`,
+    ` * A minimal eval (@theokit/sdk) — runs your model over a dataset and scores each output. Run it`,
+    ` * (needs a provider key in the environment):`,
+    ` *`,
+    ` *   const run = await ${camel}Eval.run()`,
+    ` *   console.log(run.aggregate.meanScore)`,
+    ` */`,
+    `export const ${camel}Eval = Eval.create({`,
+    `  name: '${name}',`,
+    `  dataset: [{ input: 'Say ok', expected: 'ok' }],`,
+    `  scorers: [Scorers.containsExpected({ caseSensitive: false })],`,
+    `  agent: { apiKey: process.env.OPENROUTER_API_KEY ?? '', model: { id: 'openai/gpt-4o-mini' } },`,
+    `})`,
+    ``,
+  ].join('\n')
+}
+
+function generateSandboxTemplate(name: string): string {
+  const camel = toCamelCase(name)
+  return [
+    `import { LocalSandbox } from '@theokit/sdk/sandbox'`,
+    ``,
+    `/**`,
+    ` * A sandboxed command runner (@theokit/sdk). \`LocalSandbox\` runs a shell command with a timeout +`,
+    ` * output cap, isolated from your app process — wrap it in a tool so the agent can run commands safely.`,
+    ` *`,
+    ` *   const out = await ${camel}('echo hello from the sandbox')`,
+    ` *   console.log(out.stdout, out.exitCode)`,
+    ` */`,
+    `export async function ${camel}(`,
+    `  command: string,`,
+    `): Promise<{ stdout: string; stderr: string; exitCode: number }> {`,
+    `  const sandbox = new LocalSandbox({ timeoutMs: 5_000 })`,
+    `  return sandbox.execute(command)`,
+    `}`,
+    ``,
+  ].join('\n')
+}
+
+function generateScheduleTemplate(name: string): string {
+  const camel = toCamelCase(name)
+  return [
+    `import { Cron } from '@theokit/sdk/cron'`,
+    ``,
+    `/**`,
+    ` * A scheduled job (@theokit/sdk). \`Cron.create\` fires an agent (or a Workflow) on a cron schedule.`,
+    ` * Register it once at startup (e.g. from your app entry or a server route): \`await ${camel}Schedule()\`.`,
+    ` */`,
+    `export function ${camel}Schedule() {`,
+    `  return Cron.create({`,
+    `    cron: '0 9 * * *', // every day at 09:00`,
+    `    agent: { apiKey: process.env.OPENROUTER_API_KEY ?? '', model: { id: 'openai/gpt-4o-mini' } },`,
+    `    inputData: { message: 'Good morning! Give me a one-line summary of anything important.' },`,
+    `  })`,
+    `}`,
+    ``,
+  ].join('\n')
+}
+
+function generateMemoryTemplate(_name: string): string {
+  return [
+    `import { InMemoryConversationStorage, FileSystemConversationStorage } from '@theokit/sdk'`,
+    ``,
+    `/**`,
+    ` * Conversation memory (@theokit/sdk). Agents auto-persist their turns; swap this adapter to control`,
+    ` * WHERE memory lives, then pass it to your agent's runtime options (\`conversationStorage\`).`,
+    ` *`,
+    ` * - \`InMemoryConversationStorage\` — ephemeral, resets on restart (great for tests).`,
+    ` * - \`FileSystemConversationStorage\` — persists across restarts (the default when unset).`,
+    ` */`,
+    `export const conversationStorage = new InMemoryConversationStorage()`,
+    ``,
+    `// Persist across restarts instead:`,
+    `// export const conversationStorage = new FileSystemConversationStorage()`,
+    `void FileSystemConversationStorage`,
+    ``,
+  ].join('\n')
+}
+
 function resolveTemplate(
   cwd: string,
   type: GeneratorType,
   name: string,
 ): { filePath: string; content: string } | null {
   switch (type) {
+    case 'workflow':
+      return {
+        filePath: resolve(cwd, 'workflows', `${name}.ts`),
+        content: generateWorkflowTemplate(name),
+      }
+    case 'eval':
+      return { filePath: resolve(cwd, 'evals', `${name}.ts`), content: generateEvalTemplate(name) }
+    case 'sandbox':
+      return {
+        filePath: resolve(cwd, 'sandbox', `${name}.ts`),
+        content: generateSandboxTemplate(name),
+      }
+    case 'schedule':
+      return {
+        filePath: resolve(cwd, 'schedules', `${name}.ts`),
+        content: generateScheduleTemplate(name),
+      }
+    case 'memory':
+      return {
+        filePath: resolve(cwd, 'memory', `${name}.ts`),
+        content: generateMemoryTemplate(name),
+      }
     case 'route':
       return {
         filePath: resolve(cwd, 'server/routes', `${name}.ts`),
