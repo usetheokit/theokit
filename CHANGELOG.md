@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit@0.31.0 + create-theokit@1.5.0] - 2026-07-13
+
+### Added
+- **Folder-semantic agent discovery (`theokit@0.31.0`).** The `agents/*` scanner now recognizes an agent's
+  composition folders. Files under a conventional sub-folder of `agents/` — `prompts/`, `tools/`, `skills/`,
+  `lib/`, `hooks/`, `channels/`, `connections/`, `subagents/`, `schedules/`, `sandbox/` — are that concern,
+  NOT routed agents. So `agents/tools/weather.ts` no longer becomes a phantom `POST /api/agents/tools/weather`
+  endpoint, and agent tooling can use clean folder names (no underscore workaround). Only `agents/<name>.ts`
+  (or `agents/<name>/index.ts`) is served. Backward-compatible: existing flat `agents/*.ts` agents are
+  unchanged; a flat file literally named `tools.ts` is still a valid agent (the reserved names guard
+  intermediate directories only). Inspired by Eve's "file = identity" convention.
+
+### Changed
+- **Agent-centered scaffold (`create-theokit@1.5.0`), applied to all three surfaces.** The default agent is
+  no longer a single thin `agents/chat.ts` — it is composed from clean-named sibling folders under `agents/`
+  (enabled by `theokit@0.31.0` above):
+  - `agents/chat.ts` — the agent, composed via `.system(BASE_INSTRUCTIONS).tool(weatherTool)`.
+  - `agents/prompts/instructions.ts` — the persona / system prompt.
+  - `agents/tools/weather.ts` — an example tool (`tool('weather')…build()`).
+  - `agents/skills/getting-started.md` — an example Markdown skill.
+  - `shared/agent.ts` — one source of truth for name/model/greeting, imported by the agent AND every
+    frontend (removes the greeting/model duplication across web/tui/desktop).
+  - `docs/{ARCHITECTURE,CUSTOMIZATION,ENVIRONMENT}.md` — the structure is documented.
+
+  No underscore-prefixed folders — the clean names are made possible by the framework's new folder-semantic
+  scanner. Verified: fresh scaffold type-checks, `/api/agents/tools/weather` 404s (no phantom route), and the
+  composed agent streams a real reply.
+
 ## [create-theokit@1.4.0] - 2026-07-13
 
 ### Changed

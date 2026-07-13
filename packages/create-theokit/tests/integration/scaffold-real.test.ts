@@ -43,14 +43,14 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
 
-    // Agent-centered structure — the agent is composed from its neighbours (docs/ARCHITECTURE.md).
-    // `_lib`/`_tools` are underscore-prefixed so the `agents/*` route scanner skips them (no phantom
-    // /api/agents/_tools/weather endpoint); `skills/` is Markdown so it is never scanned.
+    // Agent-centered structure (docs/ARCHITECTURE.md): the agent file + the folders it composes live
+    // together under `agents/`, clean-named. The folder-semantic scanner serves only `chat.ts`;
+    // `prompts/`, `tools/`, `skills/` are that concern, NOT phantom /api/agents/tools/weather routes.
     expect(existsSync(join(targetDir, 'agents/chat.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'agents/_lib/instructions.ts'))).toBe(true)
-    expect(existsSync(join(targetDir, 'agents/_tools/weather.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/prompts/instructions.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/tools/weather.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'agents/skills/getting-started.md'))).toBe(true)
-    // chat.ts composes the pieces (persona + tool) rather than inlining them.
+    // index.ts composes the pieces (persona + tool) rather than inlining them.
     const chat = readFileSync(join(targetDir, 'agents/chat.ts'), 'utf-8')
     expect(chat).toContain('BASE_INSTRUCTIONS')
     expect(chat).toContain('.tool(weatherTool)')

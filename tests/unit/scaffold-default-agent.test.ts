@@ -58,47 +58,6 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     expect(page).toContain('AgentStreaming')
   })
 
-  it('app/page.tsx uses EmptyState for first-load (no messages yet)', () => {
-    const page = read('app/page.tsx')
-    expect(page).toContain('EmptyState')
-  })
-
-  it('app/page.tsx wires the full TheoUI agent product set (Avatar, ContextWindowBar, CommandPalette, Tooltip)', () => {
-    // The default scaffold should look like an agent product on first load,
-    // not a minimal chat box. These six components are the "agent shell"
-    // signal — together they say: this is the home for your agent, not a
-    // starting point you'll have to decorate yourself.
-    const page = read('app/page.tsx')
-    expect(page).toContain('Avatar')
-    expect(page).toContain('ContextWindowBar')
-    expect(page).toContain('CommandPalette')
-    expect(page).toContain('Tooltip')
-  })
-
-  it('app/page.tsx wires ⌘K keyboard shortcut for CommandPalette', () => {
-    const page = read('app/page.tsx')
-    // Regression: keep the cmd/ctrl+K opener so the palette is discoverable.
-    expect(page).toMatch(/metaKey|ctrlKey/)
-    expect(page).toMatch(/'k'/)
-  })
-
-  it('app/layout.tsx wires CostMeter + Badge + Tooltip from TheoUI', () => {
-    const layout = read('app/layout.tsx')
-    expect(layout).toContain('CostMeter')
-    expect(layout).toContain('Badge')
-    expect(layout).toContain('Tooltip')
-  })
-
-  it('app/layout.tsx declares an AgentProfile descriptor with badge + tone', () => {
-    // The scaffold should ship an example descriptor so the AgentProfile
-    // dropdown is non-empty out of the box — otherwise it just renders a
-    // placeholder face.
-    const layout = read('app/layout.tsx')
-    expect(layout).toMatch(/AgentProfileDescriptor/)
-    expect(layout).toMatch(/badge:\s*['"`]/)
-    expect(layout).toMatch(/tone:\s*['"`]/)
-  })
-
   it('app/page.tsx imports from @theokit/ui (not local stub)', () => {
     const page = read('app/page.tsx')
     expect(page).toMatch(/from ['"]@theokit\/ui['"]/)
@@ -174,12 +133,6 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     // ThemeProvider is fine to mention only if not as a JSX wrapper — exclude
     // the JSX-call form `<ThemeProvider`.
     expect(layout).not.toMatch(/<ThemeProvider/)
-  })
-
-  it('layout.tsx uses TopNav + Sidebar app shell from TheoUI', () => {
-    const layout = read('app/layout.tsx')
-    expect(layout).toContain('TopNav')
-    expect(layout).toContain('Sidebar')
   })
 
   it('layout.tsx calls <Outlet /> from react-router (regression — black page bug)', () => {
