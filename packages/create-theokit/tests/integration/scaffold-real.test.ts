@@ -77,6 +77,14 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'app/components/Header.tsx'))).toBe(true)
     expect(existsSync(join(targetDir, 'app/hooks/use-transcript.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'app/lib/constants.ts'))).toBe(true)
+    // A second, self-documenting screen (`/about`) + a nav menu — shows how the app grows. Both use
+    // TheoKit's own client primitives (`Link` with prefetch, `Metadata` for the title), not raw react-router.
+    expect(existsSync(join(targetDir, 'app/about/page.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/components/Nav.tsx'))).toBe(true)
+    const nav = readFileSync(join(targetDir, 'app/components/Nav.tsx'), 'utf-8')
+    expect(nav).toContain("from 'theokit/client'")
+    expect(nav).toContain('prefetch')
+    expect(readFileSync(join(targetDir, 'app/about/page.tsx'), 'utf-8')).toContain('Metadata')
     // The page is the composition root: pulls transcript state from the hook, lays out the components.
     const pageSrc = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
     expect(pageSrc).toContain('useChatTranscript')
@@ -170,6 +178,7 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'app/components'))).toBe(false)
     expect(existsSync(join(targetDir, 'app/hooks'))).toBe(false)
     expect(existsSync(join(targetDir, 'app/lib'))).toBe(false)
+    expect(existsSync(join(targetDir, 'app/about'))).toBe(false)
     const bareLayout = readFileSync(join(targetDir, 'app/layout.tsx'), 'utf-8')
     expect(bareLayout).not.toContain('@theokit/ui')
     expect(bareLayout).not.toContain('./components/Header')
