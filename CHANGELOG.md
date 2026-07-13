@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.8.0] - 2026-07-13
+
+### Changed
+- **Scaffold frontend organized semantically (`create-theokit@1.8.0`).** The web `app/` splits into a
+  presentational **view** (`page.tsx` composes `@theokit/ui`) and the chat feature's internals in an
+  **`app/chat/`** folder: `use-transcript.ts` (the transcript/streaming STATE hook, now unit-tested) +
+  `constants.ts` (greeting + starter prompts). The route surface (`page`/`layout`/`error`/`loading`/
+  `not-found`) stays at the `app/` root — the only files the router serves; `chat/` is never a route
+  (a folder is served only when it holds a `page`/… file — Next-style colocation). Follows the convergent
+  chat-frontend pattern (Vercel ai-chatbot, AI SDK docs: state in a hook, page presentational) +
+  feature-colocation (one `<feature>/` folder, not scattered `hooks/`+`lib/`). Keeps TheoKit's
+  Next.js-style framework-owned entry (no `main.tsx`).
+
 ## [@theokit/agents@0.38.0 + theokit@0.36.0 + create-theokit@1.7.0] - 2026-07-13
 
 ### Changed
