@@ -229,7 +229,7 @@ export async function loadControllersFromGlob(
  * Uses Symbol.for() global registry key — same Symbol instance across
  * module boundaries (SWC-loaded controllers share the global registry).
  */
-function isControllerClass(fn: Function): boolean {
+export function isControllerClass(fn: Function): boolean {
   try {
     return Reflect.hasMetadata(Symbol.for('theokit:http-decorators:controller-prefix'), fn)
   } catch {
