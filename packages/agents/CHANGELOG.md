@@ -1,5 +1,20 @@
 # @theokit/agents
 
+## 0.37.0
+
+### Minor Changes
+
+- **`.skills([...])` now accepts inline `createSkill` objects — not just filesystem skill names.** The SDK
+  has always supported code-defined skills (`SkillsSettings.inline`, auto-injected into the `<skills>`
+  system-prompt block), but the builder's `.skills()` / `defineAgent({ skills })` only took `string[]`
+  names, so an inline skill could only reach the model through a `skill_read` tool + persona hardcoding.
+  `SkillsSelection` is widened to `readonly (string | InlineSkill)[] | resolver`; `compileSkillsSelection`
+  splits a mixed list into `skills.enabled` (filesystem names) + `skills.inline` (createSkill objects).
+  So `agent().skills([mySkill]).build()` registers the skill's name + description into the `<skills>`
+  block — the model KNOWS the skill exists without repeating it in the system prompt. Backward-compatible:
+  a pure name list still compiles to `{ enabled, autoInject }` (no `inline` key). The run path already
+  forwarded `compiled.skills` to `Agent.create({ skills })`; only the builder input surface changed.
+
 ## 0.36.0
 
 ### Minor Changes

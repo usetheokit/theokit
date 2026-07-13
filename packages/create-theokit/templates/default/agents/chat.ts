@@ -25,7 +25,10 @@ export default agent()
   .system(BASE_INSTRUCTIONS)
   .tool(weatherTool)
   .tool(currentTimeTool)
-  // `defineSkillReadTool` exposes the skills to the model as an on-demand `skill_read` tool — the model
-  // sees each skill's name + description and loads the full body only when it needs it.
+  // `.skills([...])` registers the code-defined skill: the SDK lists its name + description in a
+  // `<skills>` block in every system prompt (cheap), so the model KNOWS the skill exists.
+  .skills([dailyBriefingSkill])
+  // `defineSkillReadTool` then gives the model a `skill_read` tool to load the full body on demand —
+  // so a long procedure only enters the prompt when the model actually needs it.
   .tool(defineSkillReadTool([dailyBriefingSkill]))
   .build()

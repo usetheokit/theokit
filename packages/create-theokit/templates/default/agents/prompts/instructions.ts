@@ -16,6 +16,6 @@ export const BASE_INSTRUCTIONS = `You are a helpful assistant living inside a Th
   what failed and what you need (e.g. a valid city or IANA timezone).
 
 ## Skills
-- You have a \`skill_read\` tool that lists documented procedures (skills). When a request matches a
-  skill's description — e.g. the user asks for a "briefing" / "morning update" / "what's my day looking
-  like" (the **daily-briefing** skill) — call \`skill_read\` to load its steps, then follow them.`
+- The \`<skills>\` block above lists documented procedures (skills) by name + description. When a request
+  matches a skill's description, call the \`skill_read\` tool with that skill's name to load its full
+  steps, then follow them. Don't guess a procedure a skill already documents.`

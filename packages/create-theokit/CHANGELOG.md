@@ -1,5 +1,16 @@
 # create-theo
 
+## 1.6.0
+
+### Minor Changes
+
+- **Default scaffold registers its skill via `.skills([...])`, not just a read tool.** `agents/chat.ts`
+  now wires the inline `dailyBriefingSkill` with `.skills([dailyBriefingSkill])` (requires
+  `@theokit/agents@^0.37.0`), so the SDK lists the skill's name + description in the `<skills>` system-prompt
+  block automatically. The persona no longer hardcodes the skill name — the model discovers it from the
+  block, then loads the body on demand via the `skill_read` tool (`defineSkillReadTool`). Removes the
+  previous workaround (skill name repeated in the prompt).
+
 ## 1.1.1
 
 ### Patch Changes

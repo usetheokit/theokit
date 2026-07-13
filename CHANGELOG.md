@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents@0.37.0 + theokit@0.35.0 + create-theokit@1.6.0] - 2026-07-13
+
+### Added
+- **`.skills([...])` accepts inline `createSkill` objects (`@theokit/agents@0.37.0`).** A code-defined
+  skill can now be registered on the builder — `agent().skills([mySkill]).build()` — so the SDK injects its
+  name + description into the `<skills>` system-prompt block (the model KNOWS the skill exists) instead of
+  the app hardcoding it in the persona. `SkillsSelection` widened to `(string | InlineSkill)[] | resolver`;
+  `compileSkillsSelection` splits names → `skills.enabled`, objects → `skills.inline`. Backward-compatible;
+  the run path already forwarded `compiled.skills` to `Agent.create`.
+
+### Changed
+- **Default scaffold uses `.skills([dailyBriefingSkill])` (`create-theokit@1.6.0`).** The chat agent
+  registers its inline skill via the first-class builder method (+ keeps `skill_read` for on-demand body
+  reads); the persona no longer repeats the skill name — the `<skills>` block lists it. Removes the prior
+  workaround. `theokit@0.35.0` bumps its `@theokit/agents` floor to `^0.37.0` so the compile path splits
+  inline skills correctly (dependency bump only; no theokit API change).
+
 ## [theokit@0.34.0] - 2026-07-13
 
 ### Changed

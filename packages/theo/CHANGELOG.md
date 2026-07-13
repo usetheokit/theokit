@@ -1,5 +1,15 @@
 # theo
 
+## 0.35.0
+
+### Patch Changes
+
+- Bump the `@theokit/agents` floor to `^0.37.0` so the framework compiles agents that declare inline
+  `createSkill` skills via `.skills([...])`. theokit's own code is unchanged, but the compile path
+  (`compileAgentModule` → `compileAgentDefinition`) must be the version that splits a mixed skills list
+  into `skills.enabled` + `skills.inline`; an older `@theokit/agents` would mis-map an inline object into
+  `enabled`. No app-facing API change.
+
 ## 0.34.0
 
 ### Minor Changes
