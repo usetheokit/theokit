@@ -6,7 +6,12 @@
  *
  * EC-3: throws if toolbox instance is missing from the instances map.
  */
-import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
+import type {
+  ContextSettings,
+  ConversationStorageAdapter,
+  SkillsSettings,
+  SystemPromptResolver,
+} from '@theokit/sdk'
 
 import { getAgentConfig } from '../decorators/agent.js'
 import type { CheckpointOptions } from '../decorators/checkpoint.js'
@@ -138,6 +143,14 @@ export interface CompiledAgentOptions {
   recoverLeakedToolCalls?: boolean
   /** Static prompt OR a per-request {@link SystemPromptResolver} (V4-L.1, Axis-B). */
   systemPrompt?: string | SystemPromptResolver
+  /**
+   * Agent-level conversation memory: the `ConversationStorageAdapter` the SDK persists turns to
+   * (`Agent.getOrCreate({ conversationStorage })`). Populated by `defineAgent({ conversationStorage })`
+   * / `.conversationStorage(adapter)`. A per-run override (`RuntimeOverrides.conversationStorage`)
+   * wins over this; absent ⇒ the SDK default store is chosen lazily. Distinct from `@Checkpoint`,
+   * which only toggles filesystem-vs-memory for the built-in default.
+   */
+  conversationStorage?: ConversationStorageAdapter
   tools: CompiledTool[]
   agents: Record<string, CompiledSubAgent>
   memory?: MemoryOptions

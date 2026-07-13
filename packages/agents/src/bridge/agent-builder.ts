@@ -15,7 +15,7 @@
  *
  * PURE metadata (sdk-runtime.md / G2): the builder describes an agent, it NEVER calls an LLM.
  */
-import type { CustomTool } from '@theokit/sdk'
+import type { ConversationStorageAdapter, CustomTool } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
@@ -123,6 +123,13 @@ export interface AgentBuilder<
   /** M13 — select skills: a static list OR a per-request resolver `(ctx) => string[]`. */
   skills(selection: SkillsSelection): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
+   * Set the agent's conversation memory — the `ConversationStorageAdapter` the SDK persists turns to.
+   * Swap in-memory ⇄ filesystem ⇄ custom without touching the runtime. A per-run override still wins.
+   */
+  conversationStorage(
+    adapter: ConversationStorageAdapter,
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
    * Apply a reusable partial chain (Spring-Boot-style composition). `preset` receives the current
    * builder and returns an advanced one; its accumulated type-state flows through.
    */
@@ -162,6 +169,8 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     approvals: (map: Record<string, HumanInTheLoopOptions>) =>
       makeBuilder({ ...config, approvals: map }),
     skills: (selection: SkillsSelection) => makeBuilder({ ...config, skills: selection }),
+    conversationStorage: (adapter: ConversationStorageAdapter) =>
+      makeBuilder({ ...config, conversationStorage: adapter }),
     use: (preset: (b: unknown) => unknown) => preset(runtime),
     build: () => defineAgent(config),
   }

@@ -1,5 +1,17 @@
 # theo
 
+## 0.33.0
+
+### Minor Changes
+
+- **Capability generators now live in the agent domain and connect to the agent.** `theokit generate
+  workflow|eval|sandbox|schedule|memory <name>` emits under `agents/<capability>/` (not the app root) —
+  these are facets of the agent domain, not standalone top-level concerns. The folder-semantic scanner
+  now also skips `agents/{workflows,evals,memory}` (it already skipped `sandbox`/`schedules`), so none
+  become phantom routes. The emitted examples are wired to the agent: `sandbox` is a `tool()` you add
+  with `.tool(...)`; `memory` shows `.conversationStorage(...)` (new in `@theokit/agents@0.36.0`);
+  `eval`/`schedule` mirror the agent's model + system prompt; `workflow` documents `agentStep`.
+
 ## 0.32.0
 
 ### Minor Changes

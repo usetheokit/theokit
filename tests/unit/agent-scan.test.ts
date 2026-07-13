@@ -64,9 +64,16 @@ describe('scanAgents (M2)', () => {
       'agents/skills/getting-started.ts': 'export const skill = {}',
       'agents/prompts/instructions.ts': 'export const BASE = ""',
       'agents/lib/helper.ts': 'export const h = {}',
+      // Capability folders (`theokit generate workflow|eval|sandbox|schedule|memory`) are agent
+      // concerns too — never phantom routes.
+      'agents/workflows/greeting.ts': 'export const w = {}',
+      'agents/evals/qa-smoke.ts': 'export const e = {}',
+      'agents/sandbox/run-command.ts': 'export const s = {}',
+      'agents/schedules/daily-digest.ts': 'export const c = {}',
+      'agents/memory/conversations.ts': 'export const m = {}',
     })
     const agents = scanAgents(TMP_DIR)
-    // Exactly one agent: `chat`. No phantom /api/agents/tools/weather etc.
+    // Exactly one agent: `chat`. No phantom /api/agents/tools/weather, /api/agents/workflows/… etc.
     expect(agents.map((a) => a.name)).toEqual(['chat'])
     expect(agents[0]?.agentPath).toBe('/api/agents/chat')
   })
