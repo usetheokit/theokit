@@ -43,6 +43,63 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
 
+    // Agent-centered structure (docs/ARCHITECTURE.md): the agent file + the folders it composes live
+    // together under `agents/`, clean-named. The folder-semantic scanner serves only `chat.ts`;
+    // `prompts/`, `tools/`, `skills/` are that concern, NOT phantom /api/agents/tools/weather routes.
+    expect(existsSync(join(targetDir, 'agents/chat.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/prompts/instructions.ts'))).toBe(true)
+    // A real, working set — two tools (a remote HTTP one + a local one) and a real skill.
+    expect(existsSync(join(targetDir, 'agents/tools/weather.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/tools/current-time.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/skills/daily-briefing.ts'))).toBe(true)
+    // The skill uses the real skills feature (createSkill), not a dead Markdown note.
+    expect(readFileSync(join(targetDir, 'agents/skills/daily-briefing.ts'), 'utf-8')).toContain(
+      'createSkill(',
+    )
+    // chat.ts composes persona + tools + the skill. ONE `.skills([...])` call registers the inline skill
+    // into the `<skills>` block AND auto-provisions the `skill_read` tool (no separate wiring needed).
+    const chat = readFileSync(join(targetDir, 'agents/chat.ts'), 'utf-8')
+    expect(chat).toContain('BASE_INSTRUCTIONS')
+    expect(chat).toContain('.tool(weatherTool)')
+    expect(chat).toContain('.tool(currentTimeTool)')
+    expect(chat).toContain('.skills([dailyBriefingSkill])')
+    // shared/ — one source of truth for cross-layer branding, imported by the agent + the frontend.
+    // The frontend consumes it from `app/lib/constants.ts`. The web app is organized type-based: the route
+    // surface (page/layout/…) at the app root, plus `components/`, `hooks/`, `lib/` — none of which are
+    // routes (a folder is only served when it holds a `page`/`layout`/… file).
+    expect(existsSync(join(targetDir, 'shared/agent.ts'))).toBe(true)
+    expect(readFileSync(join(targetDir, 'app/lib/constants.ts'), 'utf-8')).toContain(
+      "from '../../shared/agent'",
+    )
+    // components/ (real UI split), hooks/ (the transcript hook), lib/ (constants).
+    expect(existsSync(join(targetDir, 'app/components/ChatPanel.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/components/Composer.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/components/Header.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/hooks/use-transcript.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/lib/constants.ts'))).toBe(true)
+    // A second, self-documenting screen (`/about`) + a nav menu — shows how the app grows. Both use
+    // TheoKit's own client primitives (`Link` with prefetch, `Metadata` for the title), not raw react-router.
+    expect(existsSync(join(targetDir, 'app/about/page.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'app/components/Nav.tsx'))).toBe(true)
+    const nav = readFileSync(join(targetDir, 'app/components/Nav.tsx'), 'utf-8')
+    expect(nav).toContain("from 'theokit/client'")
+    expect(nav).toContain('prefetch')
+    expect(readFileSync(join(targetDir, 'app/about/page.tsx'), 'utf-8')).toContain('Metadata')
+    // The page is the composition root: pulls transcript state from the hook, lays out the components.
+    const pageSrc = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
+    expect(pageSrc).toContain('useChatTranscript')
+    expect(pageSrc).toContain('./components/ChatPanel')
+    expect(pageSrc).toContain('./hooks/use-transcript')
+    expect(readFileSync(join(targetDir, 'app/hooks/use-transcript.ts'), 'utf-8')).toContain(
+      'useAgent',
+    )
+    // layout.tsx composes the Header component (not an inline header).
+    expect(readFileSync(join(targetDir, 'app/layout.tsx'), 'utf-8')).toContain(
+      "from './components/Header'",
+    )
+    // docs/ — the structure is documented.
+    expect(existsSync(join(targetDir, 'docs/ARCHITECTURE.md'))).toBe(true)
+
     // .gitignore renamed from _gitignore
     expect(existsSync(join(targetDir, '.gitignore'))).toBe(true)
     expect(existsSync(join(targetDir, '_gitignore'))).toBe(false)
@@ -116,6 +173,15 @@ describe('scaffold (integration — real template)', () => {
     const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
     expect(pkg.dependencies?.['@theokit/ui']).toBeUndefined()
     expect(pkg.dependencies?.['@theokit/sdk']).toBeUndefined()
+    // The chat frontend surface imports @theokit/ui — --bare must drop it all (components/hooks/lib),
+    // not leave dead folders referencing a removed dep. layout.tsx is rewritten to an unstyled shell.
+    expect(existsSync(join(targetDir, 'app/components'))).toBe(false)
+    expect(existsSync(join(targetDir, 'app/hooks'))).toBe(false)
+    expect(existsSync(join(targetDir, 'app/lib'))).toBe(false)
+    expect(existsSync(join(targetDir, 'app/about'))).toBe(false)
+    const bareLayout = readFileSync(join(targetDir, 'app/layout.tsx'), 'utf-8')
+    expect(bareLayout).not.toContain('@theokit/ui')
+    expect(bareLayout).not.toContain('./components/Header')
   })
 
   it('should use theokit as main dep without controller-era packages', () => {
@@ -224,9 +290,16 @@ describe('scaffold (integration — real template)', () => {
     scaffold(targetDir, 'page-test')
 
     const page = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
-    // Chat surface composed from @theokit/ui + the M2 useAgent hook
-    expect(page).toContain('@theokit/ui')
-    expect(page).toContain('useAgent')
+    // The page is the composition root: it lays out the ChatPanel + Composer components and pulls transcript
+    // state from `useChatTranscript` (the hook wraps the M2 `useAgent`). @theokit/ui lives in the components.
+    expect(page).toContain('ChatPanel')
+    expect(page).toContain('useChatTranscript')
+    expect(readFileSync(join(targetDir, 'app/components/ChatPanel.tsx'), 'utf-8')).toContain(
+      '@theokit/ui',
+    )
+    expect(readFileSync(join(targetDir, 'app/hooks/use-transcript.ts'), 'utf-8')).toContain(
+      'useAgent',
+    )
     expect(page).not.toContain('useAgentStream')
     // No leftover task-CRUD demo code
     expect(page).not.toContain('createTask')

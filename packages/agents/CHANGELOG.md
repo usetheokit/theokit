@@ -1,5 +1,47 @@
 # @theokit/agents
 
+## 0.38.0
+
+### Minor Changes
+
+- **`.skills([inlineSkill])` now auto-provisions the `skill_read` tool — one call, not two.** An inline
+  `createSkill` lists in the `<skills>` block by name + description ONLY; its body is unreachable to the
+  model without a `skill_read` tool, so registering an inline skill implies wanting it readable. The
+  runtime (`createSkillAgentStream`, where `@theokit/sdk` is dynamically loaded) now auto-appends
+  `skill_read` when the agent declares inline skills — so `agent().skills([mySkill]).build()` both
+  registers the skill AND makes it readable. Dedup: an explicit `defineSkillReadTool` the app added wins
+  (never duplicated). Graceful: an SDK older than `defineSkillReadTool` degrades to list-only (no crash).
+  The auto-wire lives at the runtime layer so the pure compile module (`compileAgentDefinition`) keeps its
+  type-only SDK dependency. `defineSkillReadTool` remains available as an escape hatch (custom skill sets).
+
+## 0.37.0
+
+### Minor Changes
+
+- **`.skills([...])` now accepts inline `createSkill` objects — not just filesystem skill names.** The SDK
+  has always supported code-defined skills (`SkillsSettings.inline`, auto-injected into the `<skills>`
+  system-prompt block), but the builder's `.skills()` / `defineAgent({ skills })` only took `string[]`
+  names, so an inline skill could only reach the model through a `skill_read` tool + persona hardcoding.
+  `SkillsSelection` is widened to `readonly (string | InlineSkill)[] | resolver`; `compileSkillsSelection`
+  splits a mixed list into `skills.enabled` (filesystem names) + `skills.inline` (createSkill objects).
+  So `agent().skills([mySkill]).build()` registers the skill's name + description into the `<skills>`
+  block — the model KNOWS the skill exists without repeating it in the system prompt. Backward-compatible:
+  a pure name list still compiles to `{ enabled, autoInject }` (no `inline` key). The run path already
+  forwarded `compiled.skills` to `Agent.create({ skills })`; only the builder input surface changed.
+
+## 0.36.0
+
+### Minor Changes
+
+- **`.conversationStorage(adapter)` on the agent builder — control the agent's memory.** `agent()` (and
+  `defineAgent({ conversationStorage })`) now accept a `ConversationStorageAdapter`, so an app declares
+  WHERE the agent's conversation turns persist right where it defines the agent:
+  `agent().model(...).conversationStorage(store).build()`. The adapter flows through
+  `compileAgentDefinition` → the run path → `Agent.getOrCreate({ conversationStorage })`. Precedence:
+  a per-run override wins over the agent-level default, which wins over the SDK's lazily-chosen default
+  (byte-identical to the previous behaviour when unset). Swap `InMemoryConversationStorage` (ephemeral)
+  ⇄ `FileSystemConversationStorage` (durable) ⇄ a custom adapter without touching the runtime.
+
 ## 0.35.0
 
 ### Minor Changes

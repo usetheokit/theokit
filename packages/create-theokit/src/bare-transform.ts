@@ -26,11 +26,20 @@
  * transform never leaves the target dir in a broken state.
  */
 
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 const HELLO_PAGE = `export default function Page() {
   return <h1>Hello Theo</h1>
+}
+`
+
+// --bare ships an unstyled shell: no @theokit/ui Header, no styles.css import. Replaces the default
+// layout (which composes components/Header.tsx + imports @theokit/ui, both dropped by --bare).
+const BARE_LAYOUT = `import { Outlet } from 'react-router'
+
+export default function RootLayout() {
+  return <Outlet />
 }
 `
 
@@ -77,16 +86,29 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
   }
 
-  // 2. Replace app/page.tsx with Hello Theo
+  // 2. Replace app/page.tsx (Hello Theo) + app/layout.tsx (unstyled shell) — the defaults compose the chat
+  //    surface + import @theokit/ui, which --bare drops.
   const pagePath = join(targetDir, 'app/page.tsx')
   if (existsSync(pagePath)) {
     writeFileSync(pagePath, HELLO_PAGE)
+  }
+  const layoutPath = join(targetDir, 'app/layout.tsx')
+  if (existsSync(layoutPath)) {
+    writeFileSync(layoutPath, BARE_LAYOUT)
   }
 
   // 3. Remove the demo chat agent (the `agents/chat.ts` file + its TheoUI page)
   const chatPath = join(targetDir, 'agents/chat.ts')
   if (existsSync(chatPath)) {
     unlinkSync(chatPath)
+  }
+
+  // 3b. Remove the chat frontend surface — `app/{components,hooks,lib}/` (import @theokit/ui) + the
+  //     `app/about/` example route (part of the chat demo). The Hello-Theo page references none of them.
+  //     (The route surface — layout/page/error/… — is kept; page + layout are rewritten above.)
+  for (const dir of ['app/components', 'app/hooks', 'app/lib', 'app/about']) {
+    const p = join(targetDir, dir)
+    if (existsSync(p)) rmSync(p, { recursive: true, force: true })
   }
 
   // 4. Remove tailwind + postcss config files (toolchain dropped from devDeps)

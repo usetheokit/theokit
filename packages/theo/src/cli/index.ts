@@ -51,7 +51,7 @@ cli
 cli
   .command(
     'generate <type> <name> [...fields]',
-    'Generate a route, action, page, ws, controller, or resource (resource accepts field:type args)',
+    'Scaffold a route, action, page, ws, controller, agent, toolbox, workflow, eval, sandbox, schedule, memory, or resource (resource accepts field:type args)',
   )
   .action(async (type: string, name: string, fields: string[]) => {
     try {

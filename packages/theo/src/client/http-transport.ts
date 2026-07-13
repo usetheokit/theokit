@@ -53,7 +53,10 @@ export class HttpTransport implements AgentTransport {
   constructor(options: HttpTransportOptions) {
     this.#api = options.api
     this.#headers = options.headers ?? {}
-    this.#fetch = options.fetch ?? globalThis.fetch
+    // BIND the default fetch to globalThis — the native `fetch` throws `TypeError: Illegal invocation` when
+    // invoked as a method (`this.#fetch(...)` would set `this` to this transport instance, not the window).
+    // An injected fetch (tests / non-browser hosts) is a plain function and is used as-is.
+    this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis)
   }
 
   /** Resolve the configured headers per request (a resolver evaluates now — dynamic auth is never stale). */
