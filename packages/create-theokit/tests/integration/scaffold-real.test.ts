@@ -43,6 +43,25 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
 
+    // Agent-centered structure — the agent is composed from its neighbours (docs/ARCHITECTURE.md).
+    // `_lib`/`_tools` are underscore-prefixed so the `agents/*` route scanner skips them (no phantom
+    // /api/agents/_tools/weather endpoint); `skills/` is Markdown so it is never scanned.
+    expect(existsSync(join(targetDir, 'agents/chat.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/_lib/instructions.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/_tools/weather.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'agents/skills/getting-started.md'))).toBe(true)
+    // chat.ts composes the pieces (persona + tool) rather than inlining them.
+    const chat = readFileSync(join(targetDir, 'agents/chat.ts'), 'utf-8')
+    expect(chat).toContain('BASE_INSTRUCTIONS')
+    expect(chat).toContain('.tool(weatherTool)')
+    // shared/ — one source of truth for cross-layer branding, imported by the agent + the frontend.
+    expect(existsSync(join(targetDir, 'shared/agent.ts'))).toBe(true)
+    expect(readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')).toContain(
+      "from '../shared/agent'",
+    )
+    // docs/ — the structure is documented.
+    expect(existsSync(join(targetDir, 'docs/ARCHITECTURE.md'))).toBe(true)
+
     // .gitignore renamed from _gitignore
     expect(existsSync(join(targetDir, '.gitignore'))).toBe(true)
     expect(existsSync(join(targetDir, '_gitignore'))).toBe(false)

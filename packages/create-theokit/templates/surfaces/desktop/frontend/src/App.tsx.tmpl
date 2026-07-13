@@ -16,6 +16,8 @@ import { createTauriChannelSource, type TauriCore } from '@theokit/tauri'
 import { Bot, Plus, Sparkles } from 'lucide-react'
 import { ChannelTransport, useAgent } from 'theokit/client'
 
+import { AGENT } from '../../shared/agent'
+
 /**
  * M47 — the desktop webview renders the SAME agent-chat surface as the default web scaffold, from the exact
  * same `@theokit/ui` components (`ChatThread` / `ChatMessage` / `ChatComposer` / `AgentStreaming` /
@@ -28,7 +30,7 @@ import { ChannelTransport, useAgent } from 'theokit/client'
  * `ThemeSwitcher` still cascades) because the desktop bundle is plain Vite, not the framework's Tailwind build.
  */
 
-const MODEL_NAME = 'gpt-4o-mini'
+const MODEL_NAME = AGENT.model
 
 // `withGlobalTauri: true` (tauri.conf.json) injects this global; the module throws early if the app is opened
 // outside the desktop shell (e.g. a plain browser) so the failure is loud, not a silent white screen.
@@ -38,13 +40,11 @@ if (tauri === undefined) {
 }
 const transport = new ChannelTransport({ source: createTauriChannelSource(tauri.core) })
 
-/** The agent's opening line — so the conversation starts warm instead of empty. */
+/** The agent's opening line (from `shared/agent.ts`) — so the conversation starts warm instead of empty. */
 const GREETING: UIMessage = {
   id: 'greeting',
   role: 'assistant',
-  parts: [
-    { type: 'text', text: "Hi — I'm your TheoKit agent. Ask me anything and I'll stream a reply." },
-  ],
+  parts: [{ type: 'text', text: AGENT.greeting }],
 }
 
 /** Honest starter prompts — each sends a real message the scaffold agent can actually answer. */
