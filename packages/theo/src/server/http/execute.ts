@@ -105,8 +105,12 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
     disallowed,
     jobBackend,
   } = ctx
+  // ADR-0028 R3a / #117 / #119 — handlers AND plugin hooks see a Web `Request` in every runtime. Built
+  // once from the Node `IncomingMessage` (headers/URL/method; body stays on the parsed `ctx.body`) and
+  // shared by every buildPluginCtx call + the handler invocation below.
+  const webRequest = incomingMessageToHandlerRequest(req)
   const buildPluginCtx = (ctxObj: Record<string, unknown>): PluginContext => ({
-    request: req,
+    request: webRequest,
     response: res,
     ctx: ctxObj,
     requestId: requestId ?? 'no-id',
@@ -249,14 +253,12 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
       ctx: Record<string, unknown>
     }) => unknown
     const callableHandler = handler as RouteHandlerCallable
-    // ADR-0028 R3a — handlers receive a Web `Request` in EVERY runtime. The
-    // Node path previously leaked the raw `IncomingMessage` here, so any
+    // ADR-0028 R3a — handlers receive a Web `Request` in EVERY runtime (built once above, shared with
+    // the plugin hooks). The Node path previously leaked the raw `IncomingMessage` here, so any
     // Web-standard use of `ctx.request` (e.g. `ctx.request.headers.get(...)`,
-    // `createSessionManagerWeb.getSession(ctx.request)`) threw at runtime even
-    // though it type-checked (`ctx.request` is declared `Request`). Body is
-    // exposed via `ctx.body`, so the handler request carries headers/url/method
-    // only (the Node stream is already drained by `parseQueryAndBody`).
-    const webRequest = incomingMessageToHandlerRequest(req)
+    // `createSessionManagerWeb.getSession(ctx.request)`) threw at runtime even though it type-checked
+    // (`ctx.request` is declared `Request`). Body is exposed via `ctx.body`, so the request carries
+    // headers/url/method only (the Node stream is already drained by `parseQueryAndBody`).
     const handlerResult = await callableHandler({ query, body, params, request: webRequest, ctx })
 
     // Handle result

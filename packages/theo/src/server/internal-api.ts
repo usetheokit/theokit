@@ -16,6 +16,7 @@
 // --- http ---
 export { executeAction } from './http/action-execute.js'
 export { executeRoute, sendError } from './http/execute.js'
+export { incomingMessageToHandlerRequest } from './http/node-request.js'
 export { handleBatchRequest, BATCH_PATH } from './http/batch-handler.js'
 export { createCorsHandler } from './http/cors.js'
 export type { CorsConfig } from './http/cors.js'

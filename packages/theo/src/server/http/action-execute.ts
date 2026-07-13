@@ -18,6 +18,7 @@ import { sendError } from './execute.js'
 import { formDataToObject } from './form-data-to-object.js'
 import { handleRequestError } from './handle-request-error.js'
 import { runMiddlewareAndContext } from './middleware-runner.js'
+import { incomingMessageToHandlerRequest } from './node-request.js'
 import { serializeActionResult } from './serialize-action-result.js'
 
 // Universal dev gate — same IIFE pattern as track-agent-run (EC-11 tree-shake).
@@ -36,7 +37,8 @@ interface ZodLike {
   safeParse: (value: unknown) => {
     success: boolean
     data?: unknown
-    error?: { issues: z.ZodIssue[] }
+    // Derive the issue element type from `ZodError` — `z.ZodIssue` is deprecated in Zod 4.
+    error?: { issues: z.ZodError['issues'] }
   }
 }
 
@@ -304,8 +306,11 @@ async function executeActionWithOptions(opts: ExecuteActionOptions): Promise<voi
     disallowed,
   } = opts
 
+  // ADR-0028 R3a / #119 — plugin hooks see a Web `Request` in every runtime (built once, shared across
+  // buildPluginCtx calls). Actions have no request body on the handler ctx; hooks read headers/URL/method.
+  const webRequest = incomingMessageToHandlerRequest(req)
   const buildPluginCtx = (ctxObj: Record<string, unknown>): PluginContext => ({
-    request: req,
+    request: webRequest,
     response: res,
     ctx: ctxObj,
     requestId: requestId ?? 'no-id',
