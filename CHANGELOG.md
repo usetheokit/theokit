@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit@1.5.1] - 2026-07-13
+
+### Changed
+- **Default scaffold now demonstrates real SDK features, not placeholders.** The agent ships two working
+  tools (`weather` — a remote open-meteo call; `current-time` — a local, deterministic one) and a **real
+  skill** via the SDK's skills API: `agents/skills/daily-briefing.ts` is a `createSkill(...)` exposed to the
+  model through `defineSkillReadTool([...])` — the model sees each skill's name + description every turn and
+  loads the full body on demand with the `skill_read` tool, replacing the dead Markdown note. The persona
+  guides the model to call the tools + the skill. Verified live: a briefing request drove `skill_read` +
+  `current_time` + `weather` and produced the 3-line briefing. Bumps the `@theokit/sdk` floor to `^2.25.0`
+  (where `createSkill` / `defineSkillReadTool` landed).
+
 ## [theokit@0.31.0 + create-theokit@1.5.0] - 2026-07-13
 
 ### Added

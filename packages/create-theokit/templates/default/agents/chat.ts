@@ -1,7 +1,10 @@
 import { agent } from '@theokit/agents'
+import { defineSkillReadTool } from '@theokit/sdk'
 import { z } from 'zod'
 
 import { BASE_INSTRUCTIONS } from './prompts/instructions.js'
+import { dailyBriefingSkill } from './skills/daily-briefing.js'
+import { currentTimeTool } from './tools/current-time.js'
 import { weatherTool } from './tools/weather.js'
 
 /**
@@ -21,4 +24,8 @@ export default agent()
   .model('openai/gpt-4o-mini')
   .system(BASE_INSTRUCTIONS)
   .tool(weatherTool)
+  .tool(currentTimeTool)
+  // `defineSkillReadTool` exposes the skills to the model as an on-demand `skill_read` tool — the model
+  // sees each skill's name + description and loads the full body only when it needs it.
+  .tool(defineSkillReadTool([dailyBriefingSkill]))
   .build()
