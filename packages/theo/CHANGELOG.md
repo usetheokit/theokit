@@ -1,5 +1,15 @@
 # theo
 
+## 0.32.0
+
+### Minor Changes
+
+- **Capability generators.** `theokit generate <capability> <name>` now scaffolds a minimal, runnable
+  example of five SDK capabilities — `workflow`, `eval`, `sandbox`, `schedule`, `memory` — alongside the
+  existing `route`/`action`/`page`/`ws`/`controller`/`agent`/`toolbox`/`resource` kinds. Each emitted file
+  type-checks against `@theokit/sdk`; `workflow` and `sandbox` run standalone. Learn the API by reading real
+  code (`rails g` style) instead of hunting docs.
+
 ## 0.30.0
 
 ### Minor Changes
