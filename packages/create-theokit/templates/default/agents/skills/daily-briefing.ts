@@ -4,8 +4,8 @@ import { createSkill } from '@theokit/sdk'
  * A real, code-defined skill (`createSkill`) — a documented procedure the MODEL can pull in on demand.
  *
  * Unlike a loose Markdown note, this is wired into the agent: `agents/chat.ts` passes it to
- * `defineSkillReadTool([...])`, which gives the model a `skill_read` tool. The model sees the skill's
- * name + description in every turn (cheap) and calls `skill_read('daily-briefing')` to load the full
+ * `.skills([dailyBriefingSkill])`. That one call lists the skill's name + description in a `<skills>`
+ * block every turn (cheap) AND provisions a `skill_read` tool the model calls to load the full
  * `instructions` only when it actually needs them — so long procedures don't bloat every prompt.
  *
  * Lives in `agents/skills/` — a semantic folder the route scanner skips, so it never becomes an endpoint.

@@ -11,6 +11,7 @@ import type {
   BudgetTracker,
   ConversationStorageAdapter,
   CustomTool,
+  InlineSkill,
   InteractionUpdate,
   Plugin,
   PluginsSettings,
@@ -181,6 +182,12 @@ interface SdkRuntime {
   }) => unknown
   InMemoryConversationStorage: new () => ConversationStorageAdapter
   FileSystemConversationStorage: new () => ConversationStorageAdapter
+  /**
+   * SE23 — optional `skill_read` tool factory. Absent on SDKs older than it shipped; guarded with `in`
+   * at load so an older peer degrades gracefully (inline skills still list in the `<skills>` block, they
+   * just aren't auto-readable). Used to auto-wire reading for `defineAgent({ skills: [inlineSkill] })`.
+   */
+  defineSkillReadTool?: (skills: readonly InlineSkill[]) => unknown
 }
 
 /**
@@ -199,6 +206,9 @@ async function loadSdkRuntime(): Promise<SdkRuntime | null> {
       InMemoryConversationStorage: InMemory,
       FileSystemConversationStorage:
         'FileSystemConversationStorage' in sdk ? sdk.FileSystemConversationStorage : InMemory,
+      ...('defineSkillReadTool' in sdk
+        ? { defineSkillReadTool: sdk.defineSkillReadTool as SdkRuntime['defineSkillReadTool'] }
+        : {}),
     }
   } catch (err) {
     console.warn('[theokit] @theokit/sdk import failed:', err)
@@ -535,6 +545,22 @@ export function createSdkAgentStream(
 
       // M7 — pass the resolved run-context so every tool handler receives it as `ctx.context`.
       const sdkTools = buildSdkTools(compiledTools, rt.defineTool, overrides.sdkTools, runContext)
+
+      // Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
+      // skill lists in the `<skills>` block by name + description only — its body is unreachable to the
+      // model without the `skill_read` tool, so registering an inline skill implies wanting it readable.
+      // One `.skills([...])` call thus both registers AND makes the skill readable. Dedup: skip when the
+      // app already declared a `skill_read` (an explicit `defineSkillReadTool` wins). Graceful: skip when
+      // the loaded SDK predates `defineSkillReadTool` (inline skills still list, just not auto-readable).
+      const inlineSkills = compiled.skills?.inline
+      if (
+        inlineSkills !== undefined &&
+        inlineSkills.length > 0 &&
+        rt.defineSkillReadTool !== undefined &&
+        !compiledTools.some((t) => t.name === 'skill_read')
+      ) {
+        sdkTools.push(rt.defineSkillReadTool(inlineSkills))
+      }
       // Wiring triad pillar (c) — M7 run-context metric: observable proof that context injection is active.
       let runContextSource: string
       if (overrides.runContext !== undefined) {
