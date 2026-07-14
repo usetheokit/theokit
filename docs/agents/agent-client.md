@@ -34,6 +34,38 @@ The wire is unchanged from before M41: `POST /api/agents/<name>` (UIMessageStrea
 CSRF header), the durable `x-theokit-run-id`, and the M37 reconnect endpoint. Existing `useAgent('/path')`
 call sites keep working — the return shape only GAINED `approve` and `reconnect` (additive).
 
+## One conversation, every surface — `thread` (M46)
+
+`useAgent` returns two views of the messages:
+
+- **`messages`** — the CURRENT turn's assistant messages, reset on every `send`. Back-compat since M41.
+- **`thread`** — the WHOLE conversation to render: committed turns + the current user message + the
+  in-flight streaming assistant, accumulated across sends with stable ids, committed exactly once, cleared
+  only by `reset()`.
+
+Render `thread` — don't hand-roll a transcript from `messages`. The client store (the React-free
+`theokit/client/core`) owns the accumulation and id management, so the SAME conversation drives web,
+desktop (Tauri) and TUI with identical shape:
+
+```tsx
+function Chat() {
+  const { thread, status, send } = useAgent('chat')
+  return (
+    <>
+      {thread.map((m) => (
+        <Message key={m.id} message={m} />
+      ))}
+      <button onClick={() => send({ message: 'hi' })}>Ask</button>
+    </>
+  )
+}
+```
+
+Before M46, each surface re-implemented ~88 lines of transcript state (local history + a commit-once
+effect + an in-flight merge with fabricated ids). That is now one field on the store — an errored or
+aborted turn is dropped rather than corrupting committed history, and stale (aborted) drives never append.
+The no-React client exposes the same value at `createAgentClient(...).getState().thread`.
+
 ## Terminal / desktop (in-process)
 
 An Ink TUI or a Tauri window runs the agent in the SAME process — no HTTP. Bind the in-process seam

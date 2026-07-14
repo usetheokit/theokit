@@ -1,23 +1,18 @@
 'use client'
 
 import { type UIMessage } from '@theokit/ui'
-import { useEffect, useState } from 'react'
 import { useAgent } from 'theokit/client'
 
 import { GREETING } from '../lib/constants'
 
 /**
- * Owns the chat transcript — the subtle part of an agent UI, so it lives in a hook, not the view. This is
- * the convergent pattern across AI chat frontends (Vercel ai-chatbot's `use-active-chat`, the AI SDK docs):
- * transcript + streaming state in a hook; the page + components stay presentational.
- *
- * Why a hook is needed: `useAgent` opens a FRESH stream per send, so its `messages` hold only the CURRENT
- * turn (with no stable id). We OWN the full transcript here — `history` accumulates each finished turn with
- * our own unique ids, and the in-flight reply is shown live until it commits: correct order, complete
- * history, unique keys.
+ * Owns the chat transcript for the view. Since M46, the framework's client store accumulates the full
+ * conversation `thread` (committed turns + the in-flight streaming reply, with stable ids), so this hook
+ * is a thin projection: prepend the warm greeting and map status to the flags the UI reads. The 88-line
+ * hand-rolled transcript (local history + commit-once effect + inflight-merge) is gone — the store owns it.
  */
 export interface ChatTranscript {
-  /** The full transcript to render (committed history + the in-flight reply while streaming). */
+  /** The full transcript to render (greeting + committed history + the in-flight reply while streaming). */
   thread: UIMessage[]
   isStreaming: boolean
   hasError: boolean
@@ -31,58 +26,14 @@ export interface ChatTranscript {
 }
 
 export function useChatTranscript(): ChatTranscript {
-  const [history, setHistory] = useState<UIMessage[]>([GREETING])
-  const {
-    messages,
-    send,
-    status,
-    reset: resetAgent,
-    error,
-  } = useAgent<{ message: string }>('/api/agents/chat')
-
-  const isStreaming = status === 'streaming'
-  const users = history.filter((m) => m.role === 'user').length
-  const replies = history.filter((m) => m.role === 'assistant' && m.id !== 'greeting').length
-  // A sent prompt is still awaiting its committed reply — the current turn is "in flight".
-  const pending = users > replies
-
-  // Merge the in-flight turn's parts into ONE assistant message with our own unique id (the SDK's ids are
-  // empty, which would collide). `suffix` distinguishes the live copy from the committed one.
-  const inflightReply = (suffix: string): UIMessage => ({
-    id: `a-${String(replies)}${suffix}`,
-    role: 'assistant',
-    parts: messages.flatMap((m) => m.parts),
-  })
-
-  // Commit the finished reply into history exactly once (the next send resets `messages`). Deps are the
-  // stream-transition inputs; `inflightReply` is deliberately NOT a dep — it's a fresh closure each render
-  // that would re-fire the effect, and it only reads `messages`/`replies`, which ARE deps. (If you enable
-  // the `react-hooks/exhaustive-deps` lint rule, add an eslint-disable for this line.)
-  useEffect(() => {
-    if (!isStreaming && pending && messages.length > 0) {
-      setHistory((h) => [...h, inflightReply('')])
-    }
-  }, [isStreaming, pending, messages, replies])
-
-  // Transcript = committed history + the in-flight reply (shown until it commits — no flicker, no double).
-  const thread = pending && messages.length > 0 ? [...history, inflightReply('-live')] : history
-
+  const { thread, send, status, reset, error } = useAgent<{ message: string }>('/api/agents/chat')
   return {
-    thread,
-    isStreaming,
+    thread: [GREETING, ...thread],
+    isStreaming: status === 'streaming',
     hasError: status === 'error',
     error,
-    onlyGreeting: history.length === 1 && !isStreaming,
-    sendMessage(text) {
-      setHistory((h) => [
-        ...h,
-        { id: `u-${String(h.length)}`, role: 'user', parts: [{ type: 'text', text }] },
-      ])
-      send({ message: text })
-    },
-    reset() {
-      setHistory([GREETING])
-      resetAgent()
-    },
+    onlyGreeting: thread.length === 0 && status !== 'streaming',
+    sendMessage: (text) => send({ message: text }),
+    reset,
   }
 }
