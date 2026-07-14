@@ -1071,6 +1071,32 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+### M47 — [ ] `@Expose` decorator — make the agent↔exposure↔frontend wire visible in one code review
+
+> Added 2026-07-14 by `/roadmap-feature` (slug: `agent-expose-decorator`). The DX-track follow-on to M41–M46: the transport is unified and the conversation lives in the core store, but HOW an agent is exposed is still invisible to a reviewer. The agent's route/CSRF/auth live in the scanner convention (far from `agents/chat.ts`), the frontend link is a magic string `useAgent('/api/agents/chat')` resolved through gitignored `.theokit` codegen, and the input type is DUPLICATED (`useAgent<{message:string}>` repeats `.input(z.object({message}))`). This milestone introduces an `@Expose` decorator (sibling of the #122 `@Controller`/`@Get` HTTP decorators) so the exposure is EXPLICIT and review-visible, while the agent stays built separately. Surfaced dogfooding the showcase; extends the roadmap past its V1 ship criterion with new DX intent. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** an opt-in `@Expose` decorator binds a SEPARATELY-BUILT agent (`agents/<name>.ts`, pure `agent()…build()`) to its exposure via a controller-style class (`@Controller('/api/agents')` + `@Expose(chatAgent, { csrf })` + `@UseGuards(...)`), so a reviewer sees in ONE read what is the AGENT (behavior) vs the EXPOSURE (route/auth/csrf/streaming). The single declared exposure is **surface-agnostic** — it feeds the M41 unified client on web (HTTP), TUI (in-process), and desktop (channel) with a **typed, traceable handle** (`import { chat } from '@theo/agents'; useAgent(chat)`) that kills the magic string AND the duplicated input type (cmd-click → `agents/chat.ts`; `send` inferred from `.input()`). Convention stays the zero-config default; `@Expose` **unifies/replaces** the existing `@Agent` decorator (NOT a third competing path).
+
+**Definition of done:**
+
+- [ ] **Design ADR accepted BEFORE code (GATE)** — affirms: (a) `@Expose` is OPT-IN; the zero-config `agents/*.ts` convention stays the default (does NOT contradict the V1 "expose = 1 file, 0 wiring" criterion — `@Expose` is the explicit path when review-visibility/custom auth/csrf/path is wanted); (b) it UNIFIES the existing `@Agent` decorator — one exposure path, not a third (the roadmap root problem was "two competing paths"); (c) exposure/wiring ONLY — no agent-runtime reimplementation (G2 / `sdk-runtime.md`); (d) the declared exposure is surface-agnostic — HTTP concerns (CSRF/auth) apply to web, TUI/desktop bind in-process with request-context (M43), no HTTP assumptions leak into the core.
+- [ ] `@Expose(agent, opts?)` decorator ships in `@theokit/http` (or `@theokit/agents`, per ADR), bindable in a `@Controller` class; registers the agent's HTTP endpoint (streaming `UIMessageStream`) with shared CSRF/guards/plugins (G5 — shared guards, distinct pipeline).
+- [ ] A typed, client-safe handle is emitted in `@theo/agents` (`import { chat } from '@theo/agents'`) carrying the path + input type; `useAgent(chat)` / `createAgentClient(chat…)` bind by the handle — NO magic string, NO duplicated type; `send` typed from the agent's `.input()`; cmd-click traces to `agents/<name>.ts`.
+- [ ] The SAME handle drives all 3 surfaces: web (HttpTransport), TUI (InProcessTransport), desktop (ChannelTransport) — validated per-surface (E2E or template/scaffold test), one exposure declaration.
+- [ ] `@Agent` reconciled: a grep proves 0 parallel exposure path (`@Agent` either becomes an alias of `@Expose` or is deprecated with a clean migration); the SDK runtime G2 invariant intact.
+- [ ] Showcase migrated to `@Expose` + the typed handle (deletes the raw-string+duplicated-type anti-pattern in `app/hooks/use-transcript.ts`); TDD (binding, endpoint registration, CSRF/guard enforcement, typed-handle inference, 3-surface parity, back-compat of the convention default); ADR + CHANGELOG + docs ("expose an agent, every surface").
+
+**Dependencies:** M41 (`AgentClient` store + transports — [x]), M45 (`create-theokit --surface web|tui|desktop` — [x]), M46 (`thread` in the core store — [x]). Builds on #122 (`@Controller` decorator infra in `@theokit/http`).
+
+**Top risks (new — pre-existing risks documented elsewhere in roadmap):**
+
+1. **@Agent reconciliation.** Unifying with the existing `@Agent` decorator without becoming a THIRD competing exposure path — the roadmap's root problem was "two competing paths to expose an agent". Mitigation: the design ADR (GATE) fixes `@Expose` as the single path; `@Agent` becomes an alias or is deprecated with a clean migration; a grep gate proves no parallel path ships.
+2. **Surface-agnostic exposure.** Expressing ONE exposure that serves HTTP (CSRF/auth) AND in-process (TUI/desktop — no CSRF, request-context via M43) without leaking HTTP assumptions into the core. Mitigation: the exposure declares the neutral contract (agent + guards); the HTTP surface applies CSRF; the in-process binders (`chat.inProcess()`/`chat.channel(src)`) carry request-context; a per-surface test proves parity.
+
+**Why now:** M41–M46 unified the transport + the conversation, but dogfooding the showcase showed the EXPOSURE is still invisible: reading `agents/chat.ts` tells you nothing about the route, CSRF, auth, or the frontend contract, and the frontend duplicates the input type over a magic string. A reviewer can't see the agent↔backend↔frontend wire in one read. `@Expose` makes it explicit — and the 3-surface constraint dictates the exposure be surface-agnostic so the same declaration serves web, TUI, and desktop.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)

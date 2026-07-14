@@ -34,6 +34,47 @@ The wire is unchanged from before M41: `POST /api/agents/<name>` (UIMessageStrea
 CSRF header), the durable `x-theokit-run-id`, and the M37 reconnect endpoint. Existing `useAgent('/path')`
 call sites keep working — the return shape only GAINED `approve` and `reconnect` (additive).
 
+## Expose an agent, visibly — `@Expose` + typed handle (M47)
+
+By default an agent is served by convention (`agents/chat.ts` → `POST /api/agents/chat`) and bound by name
+(`useAgent('chat')`). When you want the exposure **visible in one code review** — the route, CSRF, and auth
+next to your other controllers — bind the (separately-built) agent with `@Expose`:
+
+```ts
+// agents/chat.ts — the pure agent (behavior only)
+export default agent().input(z.object({ message: z.string() })).model('openai/gpt-4o-mini').tool(weatherTool).build()
+
+// server/controllers/agents.controller.ts — the EXPOSURE, visible
+import { Controller, Expose, UseGuards } from '@theokit/http'
+import chatAgent from '../../agents/chat'
+
+@Controller('api/agents')
+export class AgentsController {
+  @Expose(chatAgent, { csrf: true }) // → POST /api/agents/chat, streams the agent's UIMessageStream
+  @UseGuards(RequireSession)          // auth is visible, not hidden in config
+  chat!: typeof chatAgent
+}
+```
+
+On the frontend, bind by the generated **typed handle** — no magic string, no duplicated input type
+(cmd-click `chat` → `agents/chat.ts`; `send` is inferred from the agent's `.input()`):
+
+```tsx
+import { chat } from '@theo/agents' // generated handle: { path } + phantom input/tool types
+const { thread, send } = useAgent(chat)
+```
+
+The **same handle** drives every surface:
+
+```tsx
+useAgent(chat)                                  // web    — HttpTransport to chat.path
+useAgent(chat.inProcess(run))                   // TUI    — InProcessTransport
+createAgentClient(chat.channel(source))         // desktop — ChannelTransport
+```
+
+One runtime under it all (`mountAgent`): `@Expose`, `@Agent`, and the file convention are **authoring
+surfaces, not competing paths**. `@Expose` is opt-in — the zero-config convention still works unchanged.
+
 ## One conversation, every surface — `thread` (M46)
 
 `useAgent` returns two views of the messages:

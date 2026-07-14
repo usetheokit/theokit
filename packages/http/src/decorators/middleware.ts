@@ -7,7 +7,11 @@ import {
   CATCH_EXCEPTIONS,
 } from '../metadata/index.js'
 
-export function UseGuards(...guards: Function[]): ClassDecorator & MethodDecorator {
+export function UseGuards(
+  ...guards: Function[]
+): ClassDecorator & MethodDecorator & PropertyDecorator {
+  // M47 — also a PropertyDecorator so per-agent guards attach to an `@Expose` property (visible auth). The
+  // runtime already keys guards by propertyKey; only the type is widened (back-compat — strictly permissive).
   return (target: object, propertyKey?: string | symbol) => {
     const actualTarget = propertyKey ? target.constructor : target
     const existing = getMeta<Function[]>(USE_GUARDS, actualTarget, propertyKey) ?? []

@@ -34,4 +34,6 @@ export {
   createDecoratorServer,
   createDecoratorHandler,
   type DecoratorHandler,
+  type CreateDecoratorServerOptions,
+  type ServeAgent,
 } from './create-server.js'
