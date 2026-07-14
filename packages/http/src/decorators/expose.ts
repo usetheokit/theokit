@@ -28,14 +28,13 @@ export interface ExposeEntry {
 }
 
 /**
- * Bind an agent to a controller member. Accumulates one {@link ExposeEntry} per member under the
+ * Bind an agent to a controller PROPERTY. Accumulates one {@link ExposeEntry} per member under the
  * `EXPOSE_AGENT` metadata key on the controller constructor — the same accumulation shape `@Post` uses for
- * `ROUTE_METHODS`, so `walkControllerMetadata` reads both alongside each other.
+ * `ROUTE_METHODS`, so `walkControllerMetadata` reads both alongside each other. Typed as `PropertyDecorator`
+ * (the exposure is declared as a property, e.g. `@Expose(chatAgent) chat!: typeof chatAgent`); the agent's
+ * behavior lives in its own `agents/<name>.ts`, never in a controller method body.
  */
-export function Expose(
-  agent: unknown,
-  opts: ExposeOptions = {},
-): PropertyDecorator & MethodDecorator {
+export function Expose(agent: unknown, opts: ExposeOptions = {}): PropertyDecorator {
   return (target: object, propertyKey: string | symbol) => {
     const existing = getMeta<ExposeEntry[]>(EXPOSE_AGENT, target.constructor) ?? []
     existing.push({ agent, opts, propertyKey })
