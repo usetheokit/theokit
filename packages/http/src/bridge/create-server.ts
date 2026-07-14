@@ -177,6 +177,11 @@ async function handleRequest(
       container,
     )
 
+    // A handler may return a Web `Response` directly (Set-Cookie, custom status /
+    // headers) — parity with file-based `route()`. Pass it through untouched
+    // instead of JSON-stringifying it into `{}`.
+    if (result instanceof Response) return result
+
     return buildResponse(result, walk, method)
   } catch (err) {
     return runExceptionFilters(err, walk.filters, request, container)
