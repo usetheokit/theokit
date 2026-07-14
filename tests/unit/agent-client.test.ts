@@ -37,7 +37,7 @@ function fakeTransport(overrides: Partial<AgentTransport> = {}): AgentTransport 
 }
 
 /** Wait until the client's status leaves 'streaming'. */
-async function waitSettled(client: AgentClient): Promise<void> {
+async function waitSettled<T>(client: AgentClient<T>): Promise<void> {
   await new Promise<void>((resolve) => {
     const unsub = client.subscribe(() => {
       const s = client.getSnapshot().status
@@ -176,5 +176,127 @@ describe('AgentClient (M41)', () => {
     client.reset()
     expect(client.getSnapshot().status).toBe('idle')
     expect(client.getSnapshot().messages).toHaveLength(0)
+  })
+})
+
+// ── M46 — conversation `thread` (committed history + in-flight; commit-once; stable ids) ──
+
+/** Flatten a thread into `[role, text]` pairs for assertion. */
+function roleTexts(msgs: UIMessage[]): Array<[string, string]> {
+  return msgs.map((m) => [
+    m.role,
+    m.parts
+      .filter((p): p is { type: 'text'; text: string } => (p as { type?: string }).type === 'text')
+      .map((p) => p.text)
+      .join(''),
+  ])
+}
+
+describe('AgentClient — conversation thread (M46)', () => {
+  it('test_thread_accumulates_user_and_assistant_across_two_sends', async () => {
+    const client = new AgentClient<{ message: string }>(fakeTransport())
+    client.send({ message: 'one' })
+    await waitSettled(client)
+    expect(roleTexts(client.getSnapshot().thread)).toEqual([
+      ['user', 'one'],
+      ['assistant', 'Hello'],
+    ])
+
+    client.send({ message: 'two' })
+    await waitSettled(client)
+    // Prior committed turn preserved + the new turn appended (no lost turn).
+    expect(roleTexts(client.getSnapshot().thread)).toEqual([
+      ['user', 'one'],
+      ['assistant', 'Hello'],
+      ['user', 'two'],
+      ['assistant', 'Hello'],
+    ])
+  })
+
+  it('test_thread_commits_inflight_exactly_once_no_duplicate', async () => {
+    const client = new AgentClient<{ message: string }>(fakeTransport())
+    client.send({ message: 'one' })
+    await waitSettled(client)
+    client.send({ message: 'two' })
+    await waitSettled(client)
+    // Exactly 4 entries — the first turn is committed ONCE, not duplicated by the second send.
+    expect(client.getSnapshot().thread).toHaveLength(4)
+    const ids = client.getSnapshot().thread.map((m) => m.id)
+    expect(new Set(ids).size).toBe(ids.length) // all ids unique/stable (no empty-id collision)
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
+  })
+
+  it('test_messages_stays_per_turn_backcompat_thread_is_additive', async () => {
+    const client = new AgentClient<{ message: string }>(fakeTransport())
+    client.send({ message: 'one' })
+    await waitSettled(client)
+    // `messages` keeps its exact prior semantics: only the current turn's assistant (no user, no history).
+    expect(client.getSnapshot().messages.every((m) => m.role === 'assistant')).toBe(true)
+    client.send({ message: 'two' })
+    await waitSettled(client)
+    // After a second send, `messages` is the CURRENT turn only (reset), while `thread` holds all 4.
+    expect(client.getSnapshot().messages.every((m) => m.role === 'assistant')).toBe(true)
+    expect(client.getSnapshot().thread.length).toBeGreaterThan(client.getSnapshot().messages.length)
+  })
+
+  it('test_reset_clears_thread_new_conversation', async () => {
+    const client = new AgentClient<{ message: string }>(fakeTransport())
+    client.send({ message: 'one' })
+    await waitSettled(client)
+    client.reset()
+    expect(client.getSnapshot().thread).toHaveLength(0)
+  })
+
+  it('test_error_mid_stream_does_not_commit_partial_into_committed_history', async () => {
+    // A first successful turn commits; a second turn that ERRORS must not pollute committed history.
+    let call = 0
+    const transport = fakeTransport({
+      sendMessages: (async () => {
+        call += 1
+        if (call === 2) throw new Error('Agent request failed: 500')
+        return chunkStream(TEXT_TURN)
+      }) as ChatTransport<UIMessage>['sendMessages'],
+    })
+    const client = new AgentClient<{ message: string }>(transport)
+    client.send({ message: 'one' })
+    await waitSettled(client) // done → turn 1 in-flight
+    client.send({ message: 'two' }) // commits turn 1; turn 2 errors
+    await waitSettled(client)
+    expect(client.getSnapshot().status).toBe('error')
+    // Committed history = turn 1 (user+assistant) intact; the errored turn's partial is NOT committed
+    // beyond the just-sent user echo (no corrupt assistant history).
+    const committedAssistants = client.getSnapshot().thread.filter((m) => m.role === 'assistant')
+    expect(committedAssistants).toHaveLength(1) // only turn 1's assistant; the errored turn has none
+  })
+
+  it('test_stale_aborted_drive_does_not_append_to_thread', async () => {
+    const gates: Array<() => void> = []
+    const gatedStream = (): ReadableStream<UIMessageChunk> =>
+      new ReadableStream<UIMessageChunk>({
+        pull(controller) {
+          return new Promise<void>((resolve) => {
+            gates.push(() => {
+              controller.close()
+              resolve()
+            })
+          })
+        },
+      })
+    const client = new AgentClient<{ message: string }>(
+      fakeTransport({
+        sendMessages: (async () => gatedStream()) as ChatTransport<UIMessage>['sendMessages'],
+      }),
+    )
+    const tick = () => new Promise((r) => setTimeout(r, 15))
+    client.send({ message: '1' })
+    await tick()
+    client.abort()
+    client.send({ message: '2' })
+    await tick()
+    gates[0]?.() // release the STALE first drive
+    await tick()
+    // The stale drive must not have committed a turn into thread.
+    expect(client.getSnapshot().thread.filter((m) => m.role === 'assistant')).toHaveLength(0)
+    expect(client.getSnapshot().status).toBe('streaming') // still the live 2nd turn
   })
 })

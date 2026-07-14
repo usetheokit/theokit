@@ -5,6 +5,7 @@ import type { ChannelTransport } from '../../packages/theo/src/client/channel-tr
 import type { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
 import type { InProcessTransport } from '../../packages/theo/src/client/in-process-transport.js'
 import type { AgentTransport } from '../../packages/theo/src/client/transport.js'
+import type { UseAgentReturn } from '../../packages/theo/src/client/use-agent.js'
 
 /**
  * M41 (ADR-0050 D1/D2) — the seam IS `ai`'s `ChatTransport<UIMessage>`. Both shipped transports MUST
@@ -29,5 +30,18 @@ describe('AgentTransport seam (types)', () => {
     expectTypeOf<HttpTransport>().toExtend<AgentTransport>()
     expectTypeOf<InProcessTransport>().toExtend<AgentTransport>()
     expectTypeOf<ChannelTransport>().toExtend<AgentTransport>()
+  })
+})
+
+/**
+ * M46 — `useAgent`'s return type exposes the surface-agnostic conversation `thread` alongside the
+ * back-compat per-turn `messages`. This assertion is the codegen contract: the generated `@theo/agents`
+ * client types `useAgent` as `UseAgentReturn<...>`, so `thread` propagates to every typed agent binding
+ * with ZERO codegen change (the generator emits the interface name, not a hand-written shape).
+ */
+describe('UseAgentReturn conversation thread (types) — M46', () => {
+  it('exposes both the per-turn `messages` and the full conversation `thread` as UIMessage[]', () => {
+    expectTypeOf<UseAgentReturn>().toHaveProperty('messages').toEqualTypeOf<UIMessage[]>()
+    expectTypeOf<UseAgentReturn>().toHaveProperty('thread').toEqualTypeOf<UIMessage[]>()
   })
 })

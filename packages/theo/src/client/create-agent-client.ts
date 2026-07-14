@@ -31,7 +31,11 @@ export interface AgentClientHandle<TInput = unknown> {
   reconnect(): void
   /** Subscribe to state changes; returns an unsubscribe fn. */
   subscribe(listener: () => void): () => void
-  /** The current immutable snapshot (messages / status / error). */
+  /**
+   * The current immutable snapshot: per-turn `messages` (back-compat) + the full conversation `thread`
+   * (M46 — committed history + in-flight, accumulated across sends) + `status` / `error`. A TUI / vanilla
+   * consumer renders `thread` directly without hand-rolling a transcript.
+   */
   getState(): AgentClientState
   /**
    * Drive one turn and yield the assistant `UIMessage` as it streams (progressive snapshots); iteration
