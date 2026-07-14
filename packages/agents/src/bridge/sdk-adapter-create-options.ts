@@ -40,8 +40,15 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
 
   if (compiled.skills) {
     options.skills = compiled.skills
-    options.local = { settingSources: ['project'] }
     applied.push('skills')
+  }
+  // theokit-file-based-config — project `.theokit/` discovery sources into `local`, DECOUPLED from
+  // inline skills (an agent may want hooks/mcp/subagents/context/cron with no inline skill). cwd is
+  // merged downstream (`sdk-adapter.ts` overrides.cwd → app root via `mount-agent.ts`); never dropped.
+  const settingSources = resolveSettingSources(compiled)
+  if (settingSources) {
+    options.local = { ...options.local, settingSources }
+    applied.push('settingSources')
   }
   if (compiled.context) {
     options.context = compiled.context
@@ -62,6 +69,19 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   }
 
   return { options, applied }
+}
+
+/**
+ * theokit-file-based-config — resolve the SDK `local.settingSources`:
+ *  - an explicit, NON-EMPTY `.settingSources([...])` wins (EC-5), empty `[]` ⇒ unset (EC-3);
+ *  - else an agent that declares inline skills falls back to `['project']` (back-compat);
+ *  - else `undefined` (inline config only — no disk discovery).
+ */
+function resolveSettingSources(compiled: CompiledAgentOptions): string[] | undefined {
+  const explicit = compiled.settingSources
+  if (explicit && explicit.length > 0) return [...explicit]
+  if (compiled.skills) return ['project']
+  return undefined
 }
 
 /**

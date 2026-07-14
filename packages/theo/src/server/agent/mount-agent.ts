@@ -65,16 +65,28 @@ export function parseAgentRequestBody(body: unknown): AgentRequestInput | null {
   return null
 }
 
+/** Non-runtime options for {@link mountAgent} (grouped so the call stays ≤ 5 params). */
+export interface MountAgentOptions {
+  /** Labels a fail-fast `AgentDefinitionError` (the agent file path). Default `'agent module'`. */
+  source?: string
+  /** CSRF posture at this boundary. Default `'strict'`; `'off'` when a controller already gated (G5). */
+  csrfMode?: CsrfMode
+  /**
+   * theokit-file-based-config (EC-1) — the framework-resolved app root. When the agent opted into
+   * `.theokit/` file-based config (`.settingSources([...])`), discovery points here, NOT `process.cwd()`.
+   */
+  projectRoot?: string
+}
+
 /**
  * Mount a loaded agent module as a `Response`. `apiKey` is resolved by the caller
- * (`resolveProvider`). `source` labels a fail-fast `AgentDefinitionError` (the file path).
+ * (`resolveProvider`). See {@link MountAgentOptions} for the labeling / CSRF / app-root knobs.
  */
 export async function mountAgent(
   mod: unknown,
   request: Request,
   apiKey: string,
-  source = 'agent module',
-  csrfMode: CsrfMode = 'strict',
+  { source = 'agent module', csrfMode = 'strict', projectRoot }: MountAgentOptions = {},
 ): Promise<Response> {
   // Enforce CSRF BEFORE any work — an agent run spends real LLM tokens, so a cross-origin
   // POST must be rejected before it reaches the SDK (parity with actions/routes). The custom
@@ -121,7 +133,25 @@ export async function mountAgent(
   // The runId is surfaced in the `x-theokit-run-id` response header.
   const runId = mintRunId()
   return durableUiMessageStreamResponse(
-    streamAgentUIMessages(compiled, apiKey, { ...input, hitl, signal: request.signal }),
+    streamAgentUIMessages(compiled, apiKey, {
+      ...input,
+      hitl,
+      signal: request.signal,
+      cwd: resolveDiscoveryCwd(compiled, projectRoot),
+    }),
     { runId, cache: getRunEventCache() },
   )
+}
+
+/**
+ * theokit-file-based-config (EC-1) — resolve the `.theokit/` discovery cwd. When the agent opted into
+ * file-based config (`.settingSources([...])`), point discovery at the framework-resolved app root,
+ * NOT `process.cwd()` (which is not guaranteed to be the app root). No opt-in ⇒ `undefined` (byte-unchanged).
+ */
+function resolveDiscoveryCwd(
+  compiled: { settingSources?: readonly unknown[] },
+  projectRoot: string | undefined,
+): string | undefined {
+  const optedIn = (compiled.settingSources?.length ?? 0) > 0
+  return projectRoot !== undefined && optedIn ? projectRoot : undefined
 }

@@ -52,6 +52,8 @@ export interface RequestHandlerCtx {
   // Runtime infra
   loadModule: LoadModule
   serverDir: string
+  /** App root (= `process.cwd()` at `theokit start`); mountAgent points `.theokit/` discovery here. */
+  projectRoot: string
   pluginRunner: PluginRunner | undefined
   transformer: TheoTransformer | undefined
   csrfMode: CsrfMode
@@ -272,7 +274,11 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
     const mod = await c.loadModule(agent.filePath)
     const apiKey = resolveProvider().apiKey
     const request = incomingMessageToWebRequest(c.req)
-    const response = await mountAgent(mod, request, apiKey, agent.filePath, c.csrfMode)
+    const response = await mountAgent(mod, request, apiKey, {
+      source: agent.filePath,
+      csrfMode: c.csrfMode,
+      projectRoot: c.projectRoot,
+    })
     await writeWebResponseToServerResponse(response, c.res)
   } catch (err) {
     sendError(
