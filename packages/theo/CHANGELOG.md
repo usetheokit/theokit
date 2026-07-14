@@ -1,5 +1,32 @@
 # theo
 
+## 0.38.0
+
+### Minor Changes
+
+- c8ceb5e: `useAgent` now exposes the whole conversation as `thread`, not just the current turn (M46, #125, ADR-0058).
+
+  The client store (`theokit/client/core`) accumulates a surface-agnostic `thread: UIMessage[]` — committed turns + the current user message + the in-flight streaming assistant — with stable message ids, committed exactly once, cleared only by `reset()`. Render `const { thread } = useAgent(...)` (or `createAgentClient(...).getState().thread` from the React-free core) instead of hand-rolling a transcript from per-turn `messages`. Same shape on web, desktop (Tauri) and TUI.
+
+  - Per-turn `messages` keeps its exact back-compat semantics — `thread` is purely additive; existing call sites are untouched.
+  - The `@theo/agents` codegen types `thread` automatically (it emits the `UseAgentReturn` interface name).
+  - An errored or aborted turn is dropped rather than corrupting committed history; stale (aborted) drives never append.
+  - **create-theokit:** the scaffolded web, TUI, and desktop apps now render `useAgent().thread` directly — the ~88-line hand-rolled transcript (local history + commit-once effect + inflight-merge) is gone from all three surface templates.
+
+- 55afcec: Decorator controllers now reach parity with file-based `route()` inside a theokit app (#122).
+
+  Put a `@Controller` class in `server/controllers/*.controller.ts` and in `theokit dev` its routes are **served** alongside file-based routes — sharing CSRF, security headers, CORS, rate-limit, and plugins — and **typed** in `@theo/client` as `client.<ns>.<method>()` with the response type inferred from the handler and `:id` params typed from the route pattern. File-based routes take precedence; a controller only answers paths they miss.
+
+  - File-based routes, the deploy manifest, and the routes-only typed client are unchanged (the swc transform is a strict no-op outside `controllers/`; controllers stay out of `generateManifest`).
+  - Request `@Body`/`@Query` types are `unknown` for now — parameter decorators are invisible to the type system (#124); runtime `@Body` Zod validation is unaffected.
+  - Production `theokit start` serving of controllers is tracked separately (#123).
+  - `@theokit/http` gains `transformControllerSource`, `createDecoratorHandler`, `isControllerClass`, `loadControllerWithSwc`, `loadControllersFromGlob` + supporting types so the framework reuses http's swc + dispatch rather than duplicating them.
+
+### Patch Changes
+
+- Updated dependencies [55afcec]
+  - @theokit/http@0.6.0
+
 ## 0.37.0
 
 ### Minor Changes
