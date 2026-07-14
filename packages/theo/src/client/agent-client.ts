@@ -181,6 +181,11 @@ export class AgentClient<TInput = unknown> {
   reconnect = (): void => {
     const controller = new AbortController()
     this.#controller = controller
+    // Reconnecting before any send() (or after reset()) leaves #currentAssistantId empty — fabricate one
+    // so a replayed assistant never lands in `thread` with an empty, non-unique id (M46 invariant).
+    if (!this.#currentAssistantId) this.#currentAssistantId = crypto.randomUUID()
+    // Reconnect means "resume/retry" — a stale error must not linger next to a fresh 'streaming' status.
+    this.#error = undefined
     this.#status = 'streaming'
     this.#emit()
     const context = this.#contextResolver?.()
