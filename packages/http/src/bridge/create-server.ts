@@ -35,9 +35,28 @@ export interface CreateDecoratorServerOptions {
   configure?: (consumer: MiddlewareConsumerImpl) => void
 }
 
-export function createDecoratorServer(
+/**
+ * A pure Web-Standard controller handler: callable as `(request) => Response | null`
+ * plus a non-executing `matches(method, pathname)` route probe (so a host can gate
+ * — e.g. CSRF — before dispatch runs a handler).
+ */
+export interface DecoratorHandler {
+  (request: Request): Promise<Response | null>
+  /** True when a controller route owns `method` + `pathname` (no handler executed). */
+  matches(method: string, pathname: string): boolean
+}
+
+/**
+ * Build a pure Web-Standard request handler from decorated controller classes,
+ * WITHOUT binding a network listener. Returns a {@link DecoratorHandler} whose
+ * call returns `null` when no controller route matched — the caller decides the
+ * miss (a standalone server answers 404; a host middleware falls through to its
+ * own routing). This is the reusable dispatch seam consumed by the framework's
+ * controller dispatch (#122) so it never re-implements match/bind/validate.
+ */
+export function createDecoratorHandler(
   controllersOrOpts: Function[] | CreateDecoratorServerOptions,
-) {
+): DecoratorHandler {
   const { controllers, container, configure } = Array.isArray(controllersOrOpts)
     ? { controllers: controllersOrOpts, container: undefined, configure: undefined }
     : controllersOrOpts
@@ -74,10 +93,30 @@ export function createDecoratorServer(
     return 0
   })
 
-  // Create Web Standard handler + Node adapter
+  const handler = ((request: Request) =>
+    handleRequest(routes, request, container, middlewareEntries)) as DecoratorHandler
+  handler.matches = (method: string, pathname: string): boolean =>
+    findRoute(routes, method.toUpperCase(), pathname) !== null
+  return handler
+}
+
+export function createDecoratorServer(
+  controllersOrOpts: Function[] | CreateDecoratorServerOptions,
+) {
+  const handle = createDecoratorHandler(controllersOrOpts)
+  // Standalone server: a no-match (handler returns null) becomes a 404.
   const adapter = createNodeAdapter()
-  const handler = (request: Request) => handleRequest(routes, request, container, middlewareEntries)
-  return adapter.createServer(handler)
+  return adapter.createServer(async (request: Request) => {
+    const res = await handle(request)
+    if (res) return res
+    const { pathname } = new URL(request.url)
+    return jsonResponse(404, {
+      error: {
+        code: 'NOT_FOUND',
+        message: `No route for ${request.method.toUpperCase()} ${pathname}`,
+      },
+    })
+  })
 }
 
 // ─── Web Standard request handler ────────────────────────────
@@ -87,17 +126,14 @@ async function handleRequest(
   request: Request,
   container?: DiContainer,
   middlewareEntries: ResolvedMiddleware[] = [],
-): Promise<Response> {
+): Promise<Response | null> {
   const url = new URL(request.url)
   const method = request.method.toUpperCase()
   const pathname = url.pathname
 
   const match = findRoute(routes, method, pathname)
-  if (!match) {
-    return jsonResponse(404, {
-      error: { code: 'NOT_FOUND', message: `No route for ${method} ${pathname}` },
-    })
-  }
+  // null = no controller route matched; the caller owns the miss (404 or fall-through).
+  if (!match) return null
 
   const { walk, instance, params } = match
 
@@ -140,6 +176,11 @@ async function handleRequest(
       request,
       container,
     )
+
+    // A handler may return a Web `Response` directly (Set-Cookie, custom status /
+    // headers) — parity with file-based `route()`. Pass it through untouched
+    // instead of JSON-stringifying it into `{}`.
+    if (result instanceof Response) return result
 
     return buildResponse(result, walk, method)
   } catch (err) {

@@ -26,7 +26,7 @@ function writeRoute(rel: string, content: string): void {
 }
 
 describe('Decorator → Client Bridge (G1 integration)', () => {
-  it('generates .d.ts with BOTH file-routes AND extraRoutes in same AppClient', () => {
+  it('generates .d.ts with BOTH file-routes AND extraRoutes in same AppClient', async () => {
     // File-based route
     writeRoute('users.ts', 'export const GET = () => ({})\n')
 
@@ -63,7 +63,7 @@ describe('Decorator → Client Bridge (G1 integration)', () => {
     })
 
     // Trigger codegen
-    ;(plugin.configResolved as Function)({})
+    await (plugin.configResolved as Function)({})
 
     const dts = join(distDir, 'client.d.ts')
     expect(existsSync(dts)).toBe(true)
@@ -85,7 +85,7 @@ describe('Decorator → Client Bridge (G1 integration)', () => {
     expect(content).toMatch(/delete:/)
   })
 
-  it('works with extraRoutes-only (no file-routes)', () => {
+  it('works with extraRoutes-only (no file-routes)', async () => {
     writeFileSync(
       join(serverDir, 'controllers', 'cats.controller.ts'),
       'export class CatsController {}\n',
@@ -105,14 +105,14 @@ describe('Decorator → Client Bridge (G1 integration)', () => {
       ],
     })
 
-    ;(plugin.configResolved as Function)({})
+    await (plugin.configResolved as Function)({})
 
     const content = readFileSync(join(distDir, 'client.d.ts'), 'utf-8')
     expect(content).toContain('cats:')
     expect(content).toContain("declare module '@theo/client'")
   })
 
-  it('works with file-routes-only (no extraRoutes) — backward compat', () => {
+  it('works with file-routes-only (no extraRoutes) — backward compat', async () => {
     writeRoute('health.ts', 'export const GET = () => ({})\n')
 
     const plugin = appTypedClientPlugin({
@@ -122,14 +122,14 @@ describe('Decorator → Client Bridge (G1 integration)', () => {
       // NO extraRoutes
     })
 
-    ;(plugin.configResolved as Function)({})
+    await (plugin.configResolved as Function)({})
 
     const content = readFileSync(join(distDir, 'client.d.ts'), 'utf-8')
     expect(content).toContain('health:')
     expect(content).not.toContain('cats:')
   })
 
-  it('extraRoutes with :id params produce typed params in .d.ts', () => {
+  it('extraRoutes with :id params produce typed params in .d.ts', async () => {
     writeFileSync(
       join(serverDir, 'controllers', 'cats.controller.ts'),
       'export class CatsController {}\n',
@@ -149,7 +149,7 @@ describe('Decorator → Client Bridge (G1 integration)', () => {
       ],
     })
 
-    ;(plugin.configResolved as Function)({})
+    await (plugin.configResolved as Function)({})
 
     const content = readFileSync(join(distDir, 'client.d.ts'), 'utf-8')
     // Should contain param type: { params: { id: string } }
