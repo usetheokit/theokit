@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
+- **Adopt `@theokit/sdk@3.x`.** SDK v3.0 replaced its standalone factory functions with static `X.create()` methods (SE36). The `@theokit/agents` bridge now binds the new names — `Tool.create`, `SkillReadTool.create`, `Retry.create` — and the scaffold's code-defined skill uses `Skill.create`. A latent bug was fixed on the way: the tool-handler wrapper dropped the SE12 `ctx.messages` transcript projection (a tool reading the turn transcript would have silently gotten nothing); handler types now track the SDK's `CustomTool['handler']` instead of a hand-maintained copy. **Breaking:** `theokit` + `@theokit/agents` now require `@theokit/sdk >= 3.5.0` (and `@theokit/sdk-tools >= 0.9.1`). Apps on SDK 2.x must upgrade — `npx @theokit/codemod-sdk-3-0 --write` migrates direct factory calls.
 - **A freshly scaffolded `agents/chat.ts` reads as intent, not mechanism.** The 4-line inline comment that explained *how* `.skills()` works (the `<skills>` block + on-demand `skill_read` tool) moved from the scaffold into the `.skills()` JSDoc — so the developer's first file shows `.skills([dailyBriefingSkill])` with the "how" one hover/cmd-click away, instead of framework internals inlined in their code (`@theokit/agents` + `create-theokit` patch).
 
 ### Fixed

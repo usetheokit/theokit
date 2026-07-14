@@ -8,7 +8,7 @@
  *
  * The auto-wire lives at the RUNTIME layer (`createSdkAgentStream`), where `@theokit/sdk` is dynamically
  * loaded — the pure compile module (`compileAgentDefinition`) keeps its type-only SDK dependency. This test
- * mocks `@theokit/sdk` so `getOrCreate` can capture the tools it receives and `defineSkillReadTool` is a
+ * mocks `@theokit/sdk` so `getOrCreate` can capture the tools it receives and `SkillReadTool.create` is a
  * real factory. Dedup + graceful-degrade (older SDK without the factory) are covered too.
  */
 import 'reflect-metadata'
@@ -17,7 +17,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   /** Names of the tools `Agent.getOrCreate` was called with. */
   toolNames: [] as string[],
-  /** Toggle: when false, the mocked SDK omits `defineSkillReadTool` (older-peer simulation). */
+  /** Toggle: when false, the mocked SDK omits `SkillReadTool` (older-peer simulation). */
   provideReadTool: true,
 }))
 
@@ -32,15 +32,23 @@ vi.mock('@theokit/sdk', () => ({
     appendMessage = async () => {}
     deleteConversation = async () => {}
   },
-  defineTool: (spec: { name: string }) => ({ name: spec.name }),
-  createSkill: (spec: { name: string; description: string; instructions: string }) => ({
-    ...spec,
-    source: `inline://${spec.name}`,
-  }),
+  // SE36 (SDK v3.0) — factories are `X.create()`.
+  Tool: { create: (spec: { name: string }) => ({ name: spec.name }) },
+  Skill: {
+    create: (spec: { name: string; description: string; instructions: string }) => ({
+      ...spec,
+      source: `inline://${spec.name}`,
+    }),
+  },
   // Present only when the toggle is on — mirrors an SDK old enough to lack SE23.
-  get defineSkillReadTool() {
+  get SkillReadTool() {
     return h.provideReadTool
-      ? (skills: ReadonlyArray<{ name: string }>) => ({ name: 'skill_read', covers: skills.length })
+      ? {
+          create: (skills: ReadonlyArray<{ name: string }>) => ({
+            name: 'skill_read',
+            covers: skills.length,
+          }),
+        }
       : undefined
   },
   Agent: {
@@ -61,9 +69,9 @@ vi.mock('@theokit/sdk', () => ({
 
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
 const { compileAgentDefinition, defineAgent } = await import('../../src/bridge/define-agent.js')
-const { createSkill } = await import('@theokit/sdk')
+const { Skill } = await import('@theokit/sdk')
 
-const briefing = createSkill({
+const briefing = Skill.create({
   name: 'daily-briefing',
   description: 'A morning briefing',
   instructions: 'steps...',
@@ -105,7 +113,7 @@ describe('skill_read is auto-wired for inline skills at runtime', () => {
     expect(h.toolNames.filter((n) => n === 'skill_read')).toHaveLength(1)
   })
 
-  it('degrades gracefully when the SDK lacks defineSkillReadTool (no crash, no tool)', async () => {
+  it('degrades gracefully when the SDK lacks SkillReadTool (no crash, no tool)', async () => {
     h.provideReadTool = false
     const compiled = compileAgentDefinition(defineAgent({ model: 'm', skills: [briefing] }))
     const factory = createSdkAgentStream(compiled, compiled.tools, 'test-key')
