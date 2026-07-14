@@ -130,6 +130,27 @@ describe('createAgentClient (M44)', () => {
     expect(client.getState().status).toBe('done')
   })
 
+  it('test_getState_thread_accumulates_conversation_across_sends_no_react', async () => {
+    // M46 — the React-FREE client surfaces the full conversation `thread` via getState(), so a TUI /
+    // vanilla consumer renders history + in-flight WITHOUT hand-rolling a transcript.
+    const client = createAgentClient(fakeTransport())
+    const settle = () =>
+      new Promise<void>((r) => {
+        const u = client.subscribe(() => {
+          if (client.getState().status === 'done') {
+            u()
+            r()
+          }
+        })
+      })
+    client.send({ message: 'one' })
+    await settle()
+    client.send({ message: 'two' })
+    await settle()
+    const roles = client.getState().thread.map((m) => m.role)
+    expect(roles).toEqual(['user', 'assistant', 'user', 'assistant'])
+  })
+
   it('test_approve_routes_to_transport', async () => {
     const approve = vi.fn(async (_id: string, _d: ApprovalDecision) => undefined)
     const client = createAgentClient(fakeTransport({ approve }))
