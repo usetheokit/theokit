@@ -102,7 +102,7 @@ describe('agents/*.ts convention — end to end (M2)', () => {
       body: JSON.stringify({ message: 'hi' }),
     })
 
-    const response = await mountAgent(mod, request, 'sk-test', 'agents/echo.ts')
+    const response = await mountAgent(mod, request, 'sk-test', { source: 'agents/echo.ts' })
     expect(response.status).toBe(200)
     expect(response.headers.get('x-vercel-ai-ui-message-stream')).toBe('v1')
 

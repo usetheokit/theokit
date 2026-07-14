@@ -7,7 +7,7 @@ import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-opt
  * theokit-file-based-config T2.1 — `settingSources` projects into `Agent.create({ local })`
  * DECOUPLED from inline skills (EC-3 empty = unset, EC-5 explicit wins, back-compat preserved).
  */
-const base: CompiledAgentOptions = { model: 'm' }
+const base: CompiledAgentOptions = { model: 'm', tools: [], agents: {}, stream: true }
 
 describe('T2.1 — assembleM8CreateOptions projects settingSources into local', () => {
   it('test_setting_sources_flows_to_agent_create_with_cwd — settingSources, no inline skills', () => {
