@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **`theokit dev` no longer full-reloads ("blinks") when a local SQLite DB is written.** Every DB write (an agent turn persisting its conversation, a saved record, …) touches `.data/app.db` + its `-wal`/`-shm` sidecars; the dev watcher was reloading the page on each, tearing down any in-flight agent stream mid-interaction. The dev server now ignores `**/.data/**` and SQLite artifacts (`*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`) — interacting with an agent stays live (#121).
+
 ### Added
 - **Decorator controllers now serve in `theokit dev`.** Put a `@Controller` class in `server/controllers/*.controller.ts` and its routes are served alongside file-based `route()` — with the same CSRF, security-headers, CORS, rate-limit, and plugin behavior. File-based routes take precedence; a controller only answers paths they don't. Two pieces make it work: a Vite swc transform compiles `controllers/**` (so `@Body`/`@Param`/`@Query` parameter decorators emit the metadata esbuild drops), and the dev server falls through to a controller dispatcher on a route miss. File-based routes and the deploy manifest are unchanged (the transform is a strict no-op outside `controllers/`; controllers stay out of `generateManifest`). Production `theokit start` serving is tracked separately (#123). `@theokit/http` now exports `transformControllerSource`, `createDecoratorHandler`, `isControllerClass`, `loadControllerWithSwc` + types so the framework reuses http's swc + dispatch instead of duplicating them (#122).
 - **A decorator controller method can return a Web `Response`** (Set-Cookie, custom status/headers) and it passes through untouched — parity with file-based `route()`. Previously any non-string return was JSON-serialized, so a returned `Response` became `{}` and dropped its cookie. This makes session login/logout controllers work (#122).
