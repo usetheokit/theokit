@@ -18,26 +18,33 @@ describe('M47 — walkControllerMetadata surfaces @Expose bindings', () => {
   it('test_walk_marks_agent_bound_member', () => {
     @Controller('api/agents')
     class AgentsController {
-      @Expose(fakeAgent, { csrf: true })
+      @Expose(fakeAgent)
       chat!: unknown
     }
     const results = walkControllerMetadata(AgentsController)
     const agentRoute = results.find((r) => r.agent !== undefined)
     expect(agentRoute).toBeDefined()
-    expect(agentRoute!.agent).toEqual({ module: fakeAgent, opts: { csrf: true } })
+    expect(agentRoute!.agent).toEqual({ module: fakeAgent, opts: {} })
     expect(agentRoute!.verb).toBe('POST')
     expect(agentRoute!.fullPath).toBe('/api/agents/chat')
     expect(agentRoute!.propertyKey).toBe('chat')
   })
 
-  it('test_walk_expose_honors_explicit_path_option', () => {
+  it('test_expose_served_path_equals_the_generated_handle_convention_route', () => {
+    // BLOCKER guard (M47 review): the generated handle's runtime value is `agentHandle('/api/agents/<name>')`
+    // (the agent's convention route). The @Expose served path is `prefix + propertyKey`. When @Expose sits
+    // under `@Controller('api/agents')` on a property named after the agent (`chat` for `agents/chat.ts`),
+    // the two are IDENTICAL — so `useAgent(chat)` hits the served URL. This test pins that identity, the
+    // exact invariant broken by the removed `opts.path` override.
+    const agentName = 'chat'
+    const conventionHandlePath = `/api/agents/${agentName}` // what the codegen emits for agents/chat.ts
     @Controller('api/agents')
     class AgentsController {
-      @Expose(fakeAgent, { path: 'support-bot' })
-      support!: unknown
+      @Expose(fakeAgent)
+      chat!: unknown // property named after the agent
     }
     const [route] = walkControllerMetadata(AgentsController).filter((r) => r.agent)
-    expect(route.fullPath).toBe('/api/agents/support-bot')
+    expect(route.fullPath).toBe(conventionHandlePath)
   })
 
   it('test_walk_expose_composes_class_and_member_guards', () => {

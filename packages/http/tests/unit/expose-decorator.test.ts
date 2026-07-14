@@ -15,7 +15,7 @@ describe('M47 — @Expose decorator', () => {
 
   it('test_expose_stores_agent_and_opts_in_metadata', () => {
     class AgentsController {
-      @Expose(fakeAgent, { csrf: true })
+      @Expose(fakeAgent)
       chat!: unknown
     }
     const entries = getMeta<ExposeEntry[]>(EXPOSE_AGENT, AgentsController)
@@ -23,7 +23,7 @@ describe('M47 — @Expose decorator', () => {
     expect(entries).toHaveLength(1)
     expect(entries![0]).toMatchObject({
       agent: fakeAgent,
-      opts: { csrf: true },
+      opts: {},
       propertyKey: 'chat',
     })
   })
@@ -42,7 +42,7 @@ describe('M47 — @Expose decorator', () => {
     class MultiController {
       @Expose(fakeAgent)
       chat!: unknown
-      @Expose(fakeAgent, { csrf: false })
+      @Expose(fakeAgent)
       other!: unknown
     }
     const entries = getMeta<ExposeEntry[]>(EXPOSE_AGENT, MultiController)
