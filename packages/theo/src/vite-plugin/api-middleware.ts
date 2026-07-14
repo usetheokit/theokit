@@ -20,6 +20,8 @@ import {
   incomingMessageToHandlerRequest,
   logRequest,
   dispatchControllerRequest,
+  mountAgent,
+  resolveProvider,
   matchRoute,
   scanServerRoutes,
   sendError,
@@ -274,6 +276,10 @@ async function tryControllerFallthrough(ctx: {
     csrfMode: ctx.csrfMode,
     disallowed: ctx.disallowed,
     requestId: ctx.requestId,
+    // M47 — serve @Expose-bound agent routes via the ONE runtime (mountAgent). CSRF is already enforced
+    // once at the controller-dispatch boundary (G5), so mountAgent runs with csrfMode 'off' (no double gate).
+    serveAgent: (agent: unknown, request: Request) =>
+      mountAgent(agent, request, resolveProvider().apiKey, 'expose', 'off'),
   })
   if (!handled) return false
   logRequest(
