@@ -7,7 +7,14 @@ export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
 
 /** The observable state the store exposes (stable reference between emits — `useSyncExternalStore` contract). */
 export interface AgentClientState {
+  /** The CURRENT turn's assistant messages (per-turn; reset each `send`). Back-compat — unchanged since M41. */
   messages: UIMessage[]
+  /**
+   * M46 — the full conversation: committed turns + the current turn's user message + in-flight assistant.
+   * Accumulated across sends (never reset except by `reset()`), with stable ids committed exactly once.
+   * Render this instead of hand-rolling a transcript from `messages`.
+   */
+  thread: UIMessage[]
   status: UseAgentStatus
   error: Error | undefined
 }
@@ -54,7 +61,14 @@ export class AgentClient<TInput = unknown> {
   #status: UseAgentStatus = 'idle'
   #error: Error | undefined
   #controller: AbortController | null = null
-  #snapshot: AgentClientState = { messages: [], status: 'idle', error: undefined }
+  // M46 — conversation accumulation (React-free; all surfaces inherit it via the snapshot).
+  /** Committed (finished) turns — user + assistant, with stable fabricated ids. */
+  #committed: UIMessage[] = []
+  /** The current turn's user message (in `thread` but never in `messages` — back-compat). */
+  #currentUser: UIMessage | undefined
+  /** A stable id for the current turn's assistant (the SDK leaves it empty — we fabricate one). */
+  #currentAssistantId = ''
+  #snapshot: AgentClientState = { messages: [], thread: [], status: 'idle', error: undefined }
 
   constructor(transport: AgentTransport, contextResolver?: () => RequestContext | undefined) {
     this.#transport = transport
@@ -73,7 +87,12 @@ export class AgentClient<TInput = unknown> {
   getSnapshot = (): AgentClientState => this.#snapshot
 
   #emit(): void {
-    this.#snapshot = { messages: this.#messages, status: this.#status, error: this.#error }
+    // thread = committed turns + this turn's user + the in-flight assistant (`messages`). New array per
+    // emit is fine — the SNAPSHOT reference only changes here, satisfying useSyncExternalStore.
+    const thread = this.#currentUser
+      ? [...this.#committed, this.#currentUser, ...this.#messages]
+      : [...this.#committed, ...this.#messages]
+    this.#snapshot = { messages: this.#messages, thread, status: this.#status, error: this.#error }
     for (const listener of this.#listeners) listener()
   }
 
@@ -104,7 +123,10 @@ export class AgentClient<TInput = unknown> {
       }
       await consumeChunkStream(stream, (message) => {
         if (aborted()) return
-        this.#upsert(message)
+        // The SDK leaves the assistant message id empty — fabricate a stable per-turn id so every chunk
+        // upserts into the SAME message and the committed copy has a collision-free key (M46).
+        const stamped = message.id ? message : { ...message, id: this.#currentAssistantId }
+        this.#upsert(stamped)
         this.#emit()
       })
       if (aborted()) return
@@ -120,9 +142,17 @@ export class AgentClient<TInput = unknown> {
 
   /** Send a typed input; opens a fresh stream (replaces prior messages). */
   send = (input: TInput): void => {
+    // M46 — commit the PRIOR turn into history exactly once, but ONLY if it finished cleanly (`done`).
+    // An errored or aborted turn (status !== 'done') is dropped, keeping committed history uncorrupted.
+    if (this.#status === 'done' && this.#currentUser) {
+      this.#committed = [...this.#committed, this.#currentUser, ...this.#messages]
+    }
     this.abort()
     const controller = new AbortController()
     this.#controller = controller
+    const userMsg = buildUserMessage(input)
+    this.#currentUser = userMsg
+    this.#currentAssistantId = crypto.randomUUID()
     this.#messages = []
     this.#error = undefined
     this.#status = 'streaming'
@@ -134,7 +164,7 @@ export class AgentClient<TInput = unknown> {
           trigger: 'submit-message',
           chatId: this.#chatId,
           messageId: undefined,
-          messages: [buildUserMessage(input)],
+          messages: [userMsg],
           abortSignal: controller.signal,
           // Only object inputs flow as the request `body` (the turn text is always in `messages`);
           // a primitive input is carried by the user message, never spread into the body.
@@ -151,6 +181,11 @@ export class AgentClient<TInput = unknown> {
   reconnect = (): void => {
     const controller = new AbortController()
     this.#controller = controller
+    // Reconnecting before any send() (or after reset()) leaves #currentAssistantId empty — fabricate one
+    // so a replayed assistant never lands in `thread` with an empty, non-unique id (M46 invariant).
+    if (!this.#currentAssistantId) this.#currentAssistantId = crypto.randomUUID()
+    // Reconnect means "resume/retry" — a stale error must not linger next to a fresh 'streaming' status.
+    this.#error = undefined
     this.#status = 'streaming'
     this.#emit()
     const context = this.#contextResolver?.()
@@ -175,6 +210,9 @@ export class AgentClient<TInput = unknown> {
   reset = (): void => {
     this.abort()
     this.#messages = []
+    // M46 — reset means a NEW conversation: clear committed history + the current turn's user too.
+    this.#committed = []
+    this.#currentUser = undefined
     this.#error = undefined
     this.#status = 'idle'
     this.#emit()

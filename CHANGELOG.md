@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **`theokit dev` no longer full-reloads ("blinks") when a local SQLite DB is written.** Every DB write (an agent turn persisting its conversation, a saved record, …) touches `.data/app.db` + its `-wal`/`-shm` sidecars; the dev watcher was reloading the page on each, tearing down any in-flight agent stream mid-interaction. The dev server now ignores `**/.data/**` and SQLite artifacts (`*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`) — interacting with an agent stays live (#121).
+
+### Added
+- **`useAgent` now gives you the whole conversation, not just the current turn.** The client store
+  accumulates a surface-agnostic `thread` — committed turns + the current user message + the in-flight
+  streaming assistant — with stable message ids, committed exactly once, cleared only by `reset()`. Render
+  `const { thread } = useAgent(...)` (or `client.getState().thread` from the React-free core) instead of
+  hand-rolling a transcript from per-turn `messages`. Same shape on web, desktop (Tauri) and TUI, since it
+  lives in `theokit/client/core`. `messages` keeps its exact per-turn back-compat semantics — `thread` is
+  purely additive (M46, #125).
+- Roadmap amended: added M46 Conversation `thread` in the client core (`/roadmap-feature agent-conversation-in-core`)
+- **Decorator controllers now serve in `theokit dev`.** Put a `@Controller` class in `server/controllers/*.controller.ts` and its routes are served alongside file-based `route()` — with the same CSRF, security-headers, CORS, rate-limit, and plugin behavior. File-based routes take precedence; a controller only answers paths they don't. Two pieces make it work: a Vite swc transform compiles `controllers/**` (so `@Body`/`@Param`/`@Query` parameter decorators emit the metadata esbuild drops), and the dev server falls through to a controller dispatcher on a route miss. File-based routes and the deploy manifest are unchanged (the transform is a strict no-op outside `controllers/`; controllers stay out of `generateManifest`). Production `theokit start` serving is tracked separately (#123). `@theokit/http` now exports `transformControllerSource`, `createDecoratorHandler`, `isControllerClass`, `loadControllerWithSwc` + types so the framework reuses http's swc + dispatch instead of duplicating them (#122).
+- **A decorator controller method can return a Web `Response`** (Set-Cookie, custom status/headers) and it passes through untouched — parity with file-based `route()`. Previously any non-string return was JSON-serialized, so a returned `Response` became `{}` and dropped its cookie. This makes session login/logout controllers work (#122).
+- **Decorator controllers appear in the typed `@theo/client`.** A `@Controller` class's routes now show up as `client.<ns>.<method>()` in `.theokit/client.d.ts` alongside file-based routes, with the **response type inferred** from the method (`GET /api/v2/tasks/:id` → `client.tasks.get({ params: { id } })` typed to the handler's return). Request `@Body`/`@Query` types are `unknown` for now — parameter decorators are invisible to the type system, so body autocomplete is tracked as a follow-up (#124); runtime `@Body` Zod validation is unaffected. Routes-only apps emit a byte-identical client (#122).
+
 ## [create-theokit@1.10.0] - 2026-07-13
 
 ### Added
