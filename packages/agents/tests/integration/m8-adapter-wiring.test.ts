@@ -31,6 +31,9 @@ import { ProjectContext } from '../../src/decorators/project-context.js'
 import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
 import { compileAgent } from '../../src/bridge/agent-compiler.js'
 import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
+import { streamAgentUIMessages } from '../../src/bridge/agent-endpoint.js'
+import { agent } from '../../src/bridge/agent-builder.js'
+import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
 
 async function drain(AgentClass: Function) {
   const compiled = compileAgent(walkAgentMetadata(AgentClass))
@@ -115,6 +118,24 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
     expect(opts.context).toBeUndefined()
     expect(opts.local).toBeUndefined()
     expect('systemPrompt' in opts).toBe(false)
+  })
+
+  it('test_settingSources_cwd_is_config_root_not_process_cwd (EC-1/T2.2)', async () => {
+    // The framework threads its resolved projectRoot (≠ process.cwd()) as local.cwd so `.theokit/`
+    // discovery points at the app root — proven by a fakeRoot that is NOT the process cwd.
+    const fakeRoot = '/fake/app/root'
+    expect(fakeRoot).not.toBe(process.cwd())
+    const compiled = compileAgentDefinition(agent().model('m').settingSources(['project']).build())
+    const gen = streamAgentUIMessages(compiled, 'test-key', {
+      message: 'hi',
+      sessionId: 's',
+      cwd: fakeRoot,
+    })
+    for await (const _ of gen) {
+      // drain — triggers Agent.getOrCreate()
+    }
+    const opts = createSpy.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(opts.local).toEqual({ settingSources: ['project'], cwd: fakeRoot })
   })
 
   it('test_adapter_emits_runtime_applied_log', async () => {
