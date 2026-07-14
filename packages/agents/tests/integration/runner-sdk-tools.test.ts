@@ -27,7 +27,7 @@ vi.mock('@theokit/sdk', () => ({
     }),
   },
   // defineTool MARKS its result so the test can prove sdkTools are NOT re-defined.
-  defineTool: (s: object) => ({ __defined: true, ...s }),
+  Tool: { create: (s: object) => ({ __defined: true, ...s }) },
 }))
 
 const { AgentRunner } = await import('../../src/index.js')

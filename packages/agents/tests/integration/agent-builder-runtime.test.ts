@@ -26,7 +26,7 @@ vi.mock('@theokit/sdk', () => ({
     getMessages = async () => []
     appendMessage = async () => {}
   },
-  defineTool: (spec: unknown) => spec,
+  Tool: { create: (spec: unknown) => spec },
   Agent: {
     getOrCreate: vi.fn(
       async (_id: string, opts: { tools?: Array<{ handler: (i: unknown) => unknown }> }) => {
