@@ -9,7 +9,10 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { generateAgentsDts } from '../../packages/theo/src/vite-plugin/agents-typed-client.js'
+import {
+  generateAgentsDts,
+  generateAgentsRuntimeModule,
+} from '../../packages/theo/src/vite-plugin/agents-typed-client.js'
 import type { TheoManifest } from '../../packages/theo/src/server/scan/manifest.js'
 
 const DTS_OUT = '/project/.theokit/agents.d.ts'
@@ -108,5 +111,31 @@ describe('generateAgentsDts (M2)', () => {
     })
     expect(dts).toContain(`export interface AppAgents`)
     expect(dts).not.toContain('import type _agent_')
+  })
+})
+
+describe('generateAgentsRuntimeModule (M47 — the runtime `@theo/agents` body)', () => {
+  it('test_agentHandle_is_imported_not_reexported (regression: browser ReferenceError)', () => {
+    // The runtime module USES `agentHandle(...)` to build each handle, so it must be `import`ed (a local
+    // binding), NOT `export {...} from` (a re-export with no local binding). `export { agentHandle } from`
+    // shipped a `ReferenceError: agentHandle is not defined` in the browser — this pins the fix.
+    const mod = generateAgentsRuntimeModule(['chat'])
+    expect(mod).toContain(`import { agentHandle } from 'theokit/client'`)
+    expect(mod).toContain(`export { useAgent } from 'theokit/client'`)
+    // The buggy form must NOT reappear: agentHandle re-exported (no local binding) while also called.
+    expect(mod).not.toContain(`export { useAgent, agentHandle }`)
+    expect(mod).toContain(`export const chat = agentHandle('/api/agents/chat')`)
+  })
+
+  it('test_empty_manifest_still_exports_useAgent', () => {
+    const mod = generateAgentsRuntimeModule([])
+    expect(mod).toContain(`export { useAgent } from 'theokit/client'`)
+    expect(mod).not.toContain('agentHandle(')
+  })
+
+  it('test_emits_one_handle_per_agent', () => {
+    const mod = generateAgentsRuntimeModule(['chat', 'support'])
+    expect(mod).toContain(`export const chat = agentHandle('/api/agents/chat')`)
+    expect(mod).toContain(`export const support = agentHandle('/api/agents/support')`)
   })
 })
