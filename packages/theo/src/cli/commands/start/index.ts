@@ -109,6 +109,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
         cachedAgents,
         loadModule,
         serverDir,
+        projectRoot: cwd,
         pluginRunner,
         transformer,
         csrfMode: config.security?.csrf ?? 'strict',

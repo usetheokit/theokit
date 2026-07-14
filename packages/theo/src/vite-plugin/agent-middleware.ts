@@ -230,7 +230,11 @@ export function createAgentMiddleware(
         const mod = await loadModule(agent.filePath)
         const apiKey = resolveProvider().apiKey
         const request = incomingMessageToWebRequest(req)
-        const response = await mountAgent(mod, request, apiKey, agent.filePath, csrfMode)
+        const response = await mountAgent(mod, request, apiKey, {
+          source: agent.filePath,
+          csrfMode,
+          projectRoot,
+        })
         await writeWebResponseToServerResponse(response, res)
       } catch (err) {
         sendError(
