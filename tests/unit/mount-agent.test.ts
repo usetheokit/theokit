@@ -65,12 +65,9 @@ describe('parseAgentRequestBody (M2)', () => {
 
 describe('mountAgent (M2)', () => {
   it('test_returns_400_on_empty_body', async () => {
-    const res = await mountAgent(
-      { default: defineAgent({ model: 'm' }) },
-      jsonRequest({}),
-      'k',
-      'agents/echo.ts',
-    )
+    const res = await mountAgent({ default: defineAgent({ model: 'm' }) }, jsonRequest({}), 'k', {
+      source: 'agents/echo.ts',
+    })
     expect(res.status).toBe(400)
     const json = (await res.json()) as { error: { code: string } }
     expect(json.error.code).toBe('BAD_REQUEST')
@@ -81,7 +78,7 @@ describe('mountAgent (M2)', () => {
       { default: { not: 'an agent' } },
       jsonRequest({ message: 'x' }),
       'k',
-      'agents/bad.ts',
+      { source: 'agents/bad.ts' },
     ).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(AgentDefinitionError)
     // Negative case asserts the SPECIFIC message (names the source file), not just "throws".
@@ -95,12 +92,9 @@ describe('mountAgent (M2)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ message: 'hi' }),
     })
-    const res = await mountAgent(
-      { default: defineAgent({ model: 'm' }) },
-      request,
-      'k',
-      'agents/echo.ts',
-    )
+    const res = await mountAgent({ default: defineAgent({ model: 'm' }) }, request, 'k', {
+      source: 'agents/echo.ts',
+    })
     expect(res.status).toBe(403)
     const json = (await res.json()) as { error: { code: string } }
     expect(json.error.code).toBe('CSRF_FAILED')
@@ -113,13 +107,10 @@ describe('mountAgent (M2)', () => {
       body: JSON.stringify({}),
     })
     // csrfMode 'off' skips the check → reaches body parsing → 400 (not 403).
-    const res = await mountAgent(
-      { default: defineAgent({ model: 'm' }) },
-      request,
-      'k',
-      'agents/echo.ts',
-      'off',
-    )
+    const res = await mountAgent({ default: defineAgent({ model: 'm' }) }, request, 'k', {
+      source: 'agents/echo.ts',
+      csrfMode: 'off',
+    })
     expect(res.status).toBe(400)
   })
 })
