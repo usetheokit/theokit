@@ -58,11 +58,14 @@ describe('useChatTranscript', () => {
     expect(result.current.onlyGreeting).toBe(false)
   })
 
-  it('reset delegates to the store reset', () => {
+  it('reset delegates to the store reset and the transcript returns to the greeting', () => {
+    // After reset the store yields an empty thread; the hook must project back to just the greeting.
     agentThread = []
     agentStatus = 'idle'
     const { result } = renderHook(() => useChatTranscript())
     act(() => result.current.reset())
     expect(resetAgent).toHaveBeenCalled()
+    expect(result.current.thread).toHaveLength(1)
+    expect(result.current.thread[0].id).toBe('greeting')
   })
 })
