@@ -66,7 +66,7 @@ vi.mock('@theokit/sdk', () => ({
         },
       }),
   },
-  defineTool: (spec: unknown) => spec,
+  Tool: { create: (spec: unknown) => spec },
 }))
 
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
