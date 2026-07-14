@@ -27,10 +27,6 @@ import { createNodeAdapter } from './runtime/node.js'
 import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
 
 /**
- * Creates a real HTTP server from decorated controller classes.
- * Uses Web Standard Request/Response internally; Node adapter at the boundary.
- */
-/**
  * M47 — serves an `@Expose`-bound agent route. http is agent-runtime agnostic (G1/G2): it invokes this
  * injected callback (theo supplies a `mountAgent`-backed impl) instead of calling a controller method.
  */
@@ -118,6 +114,10 @@ export function createDecoratorHandler(
   return handler
 }
 
+/**
+ * Creates a real HTTP server from decorated controller classes.
+ * Uses Web Standard Request/Response internally; Node adapter at the boundary.
+ */
 export function createDecoratorServer(
   controllersOrOpts: Function[] | CreateDecoratorServerOptions,
 ) {
