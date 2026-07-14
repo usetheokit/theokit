@@ -1071,7 +1071,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M47 — [ ] `@Expose` decorator — make the agent↔exposure↔frontend wire visible in one code review
+### M47 — [x] `@Expose` decorator — make the agent↔exposure↔frontend wire visible in one code review
 
 > Added 2026-07-14 by `/roadmap-feature` (slug: `agent-expose-decorator`). The DX-track follow-on to M41–M46: the transport is unified and the conversation lives in the core store, but HOW an agent is exposed is still invisible to a reviewer. The agent's route/CSRF/auth live in the scanner convention (far from `agents/chat.ts`), the frontend link is a magic string `useAgent('/api/agents/chat')` resolved through gitignored `.theokit` codegen, and the input type is DUPLICATED (`useAgent<{message:string}>` repeats `.input(z.object({message}))`). This milestone introduces an `@Expose` decorator (sibling of the #122 `@Controller`/`@Get` HTTP decorators) so the exposure is EXPLICIT and review-visible, while the agent stays built separately. Surfaced dogfooding the showcase; extends the roadmap past its V1 ship criterion with new DX intent. See CHANGELOG `[Unreleased] § Added`.
 
