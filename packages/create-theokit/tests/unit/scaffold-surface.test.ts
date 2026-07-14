@@ -61,10 +61,10 @@ describe('applySurface (M45)', () => {
     expect(app).toContain("from '@theokit/tui'")
     expect(app).toContain('ChatThread')
     expect(app).toContain('uiMessagesToChatThread')
-    // useAgent opens a fresh stream per send (messages = current turn only) — the template MUST accumulate
-    // the transcript locally (else the user prompt never shows and turn order misaligns) and open with a
-    // greeting so the thread isn't empty.
-    expect(app).toContain('setHistory')
+    // M46 — the store owns the conversation: the template renders `useAgent().thread` directly (no
+    // hand-rolled history/commit-once) and only prepends the warm greeting.
+    expect(app).toContain('agent.thread')
+    expect(app).not.toContain('setHistory')
     expect(app).toContain('GREETING')
 
     const pkg = JSON.parse(read('package.json')) as {
