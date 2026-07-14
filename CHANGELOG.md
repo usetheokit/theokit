@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`theokit dev` no longer full-reloads ("blinks") when a local SQLite DB is written.** Every DB write (an agent turn persisting its conversation, a saved record, …) touches `.data/app.db` + its `-wal`/`-shm` sidecars; the dev watcher was reloading the page on each, tearing down any in-flight agent stream mid-interaction. The dev server now ignores `**/.data/**` and SQLite artifacts (`*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`) — interacting with an agent stays live (#121).
 
 ### Added
+- **`@Expose` — make an agent's exposure visible in one code review.** Put a `@Controller('/api/agents')`
+  class with `@Expose(chatAgent, { csrf: true })` next to your other controllers and a reviewer sees, in
+  one file, WHAT the agent is (`chatAgent`, built separately in `agents/chat.ts`), WHERE it's served
+  (`POST /api/agents/chat`), and its security (`csrf`, `@UseGuards`). The agent stays built separately; the
+  exposure is explicit and opt-in (the zero-config `agents/*.ts` convention still works). On the frontend,
+  `import { chat } from '@theo/agents'; useAgent(chat)` binds with **no magic string and no duplicated input
+  type** — the path comes from the generated handle and `send` is typed from the agent's `.input()`
+  (cmd-click `chat` → `agents/chat.ts`). The same handle drives every surface: web `useAgent(chat)`, terminal
+  `useAgent(chat.inProcess(run))`, desktop `createAgentClient(chat.channel(source))`. One runtime under it all
+  (`mountAgent`) — `@Expose`, `@Agent`, and the file convention are authoring surfaces, not competing paths
+  (M47, ADR-0059).
 - Roadmap amended: added M47 `@Expose` decorator — make the agent↔exposure↔frontend wire visible in one code review (`/roadmap-feature agent-expose-decorator`)
 - **`useAgent` now gives you the whole conversation, not just the current turn.** The client store
   accumulates a surface-agnostic `thread` — committed turns + the current user message + the in-flight
