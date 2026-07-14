@@ -30,7 +30,7 @@ vi.mock('@theokit/sdk', () => ({
   },
   // defineTool MARKS its result so the test can prove which tools were re-defined vs forwarded raw.
   // It also reads inputSchema like the real SDK would — a JSON-Schema object reaching here would be a bug.
-  defineTool: (s: { inputSchema: unknown }) => ({ __defined: true, ...s }),
+  Tool: { create: (s: { inputSchema: unknown }) => ({ __defined: true, ...s }) },
 }))
 
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')

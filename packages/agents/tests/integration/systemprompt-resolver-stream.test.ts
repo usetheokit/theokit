@@ -40,7 +40,7 @@ vi.mock('@theokit/sdk', () => ({
       }
     }),
   },
-  defineTool: (s: unknown) => s,
+  Tool: { create: (s: unknown) => s },
 }))
 
 function baseCompiled(systemPrompt: CompiledAgentOptions['systemPrompt']): CompiledAgentOptions {

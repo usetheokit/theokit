@@ -56,7 +56,7 @@ vi.mock('@theokit/sdk', () => {
         }
       }),
     },
-    defineTool: (s: unknown) => s,
+    Tool: { create: (s: unknown) => s },
   }
 })
 
