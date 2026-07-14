@@ -55,15 +55,23 @@ export function runConfigHook(ctx: ConfigHookCtx): Record<string, unknown> {
     server: {
       ...(warmupClientFiles.length > 0 ? { warmup: { clientFiles: warmupClientFiles } } : {}),
       ...(servicesProxy !== undefined ? { proxy: servicesProxy } : {}),
-      // Skip watching gitignored heavy dirs to avoid hitting ENOSPC
-      // (inotify watcher exhaustion).
+      // Skip watching gitignored heavy dirs to avoid ENOSPC (inotify watcher
+      // exhaustion), theokit's own generated output, and local SQLite data.
+      // #121: a DB write (`.data/app.db` + `-wal`/`-shm`) on every agent turn /
+      // request must NOT trigger a full page reload — that "blinks" the screen
+      // and tears down the in-flight agent stream.
       watch: {
         ignored: [
           '**/referencias/**',
           '**/.theokit/**',
-          '**/.theokit/**',
           '**/dist/**',
           '**/node_modules/**',
+          '**/.data/**',
+          '**/*.db',
+          '**/*.db-wal',
+          '**/*.db-shm',
+          '**/*.sqlite',
+          '**/*.sqlite-journal',
         ],
       },
     },
