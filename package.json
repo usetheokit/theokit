@@ -48,7 +48,7 @@
     "@eslint/js": "^9.39.4",
     "@ls-lint/ls-lint": "^2.3.1",
     "@playwright/test": "^1.61.0",
-    "@theokit/sdk": "^2.20.0",
+    "@theokit/sdk": "^3.5.0",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^25.9.3",
     "@types/pg": "^8.20.0",

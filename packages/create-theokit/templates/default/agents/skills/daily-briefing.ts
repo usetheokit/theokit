@@ -1,7 +1,7 @@
-import { createSkill } from '@theokit/sdk'
+import { Skill } from '@theokit/sdk'
 
 /**
- * A real, code-defined skill (`createSkill`) — a documented procedure the MODEL can pull in on demand.
+ * A real, code-defined skill (`Skill.create`) — a documented procedure the MODEL can pull in on demand.
  *
  * Unlike a loose Markdown note, this is wired into the agent: `agents/chat.ts` passes it to
  * `.skills([dailyBriefingSkill])`. That one call lists the skill's name + description in a `<skills>`
@@ -10,7 +10,7 @@ import { createSkill } from '@theokit/sdk'
  *
  * Lives in `agents/skills/` — a semantic folder the route scanner skips, so it never becomes an endpoint.
  */
-export const dailyBriefingSkill = createSkill({
+export const dailyBriefingSkill = Skill.create({
   name: 'daily-briefing',
   description:
     "Produce a short 'good morning' briefing (today's date, the weather, and a one-line nudge).",
