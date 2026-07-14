@@ -1,5 +1,5 @@
 import { Box, Text, useApp, useInput } from 'ink'
-import { useEffect, useState, type ReactElement } from 'react'
+import { type ReactElement } from 'react'
 import {
   AgentStreaming,
   AppStatusBar,
@@ -42,10 +42,9 @@ const apiKey = (): string =>
  * `WelcomeBanner` header, scrolling `<ChatThread>`, live `<AgentStreaming>`, bordered `<ChatComposer>`, and a
  * persistent `<AppStatusBar>` footer. Driven by the unified `useAgent` hook (M41).
  *
- * `useAgent` opens a FRESH stream per send — its `messages` hold only the CURRENT turn (and the SDK assigns
- * them no stable id), so we OWN the transcript: `history` accumulates every finished turn with our own unique
- * ids (`u-N` / `a-N`), and the in-flight reply is shown live until it commits. This keeps the order correct,
- * the history complete, and every id unique (ChatThread rejects duplicates).
+ * The full conversation comes straight from `useAgent().thread` (M46): the client store accumulates every
+ * finished turn plus the in-flight streaming reply, with stable ids — so no hand-rolled history/commit-once
+ * here. Prepend the warm `GREETING` and render.
  */
 const transport = new InProcessTransport({
   run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
@@ -57,31 +56,8 @@ export function App(): ReactElement {
   const elapsed = useTurnElapsed(streaming)
   const { exit } = useApp()
 
-  const [history, setHistory] = useState<UIMessage[]>([GREETING])
-
-  const users = history.filter((m) => m.role === 'user').length
-  const replies = history.filter((m) => m.role === 'assistant' && m.id !== 'greeting').length
-  // A sent prompt is still awaiting its committed reply — the current turn is "in flight".
-  const pending = users > replies
-
-  // Merge the in-flight turn's parts into ONE assistant message with our own unique id (the SDK's ids are
-  // empty, which would collide in the thread). `suffix` distinguishes the live copy from the committed one.
-  const inflightReply = (suffix: string): UIMessage => ({
-    id: `a-${String(replies)}${suffix}`,
-    role: 'assistant',
-    parts: agent.messages.flatMap((m) => m.parts),
-  })
-
-  // Commit the finished reply into history exactly once (the next send resets `agent.messages`).
-  useEffect(() => {
-    if (!streaming && pending && agent.messages.length > 0) {
-      setHistory((h) => [...h, inflightReply('')])
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streaming, pending, agent.messages, replies])
-
-  // Transcript = committed history + the in-flight reply (shown until it commits — no flicker, no double).
-  const thread = pending && agent.messages.length > 0 ? [...history, inflightReply('-live')] : history
+  // The store owns the conversation (M46) — prepend the warm greeting and render.
+  const thread = [GREETING, ...agent.thread]
 
   // Esc cancels a running turn, or quits when idle (the Claude Code affordance).
   useInput((_input, key) => {
@@ -94,14 +70,9 @@ export function App(): ReactElement {
     const trimmed = text.trim()
     if (trimmed.length === 0) return
     if (trimmed === '/clear') {
-      setHistory([GREETING])
       agent.reset()
       return
     }
-    setHistory((h) => [
-      ...h,
-      { id: `u-${String(h.length)}`, role: 'user', parts: [{ type: 'text', text: trimmed }] },
-    ])
     agent.send({ message: trimmed })
   }
 
