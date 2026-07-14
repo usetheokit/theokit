@@ -147,20 +147,23 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
   })
 
   // M47 — @Expose-bound members have no verb decorator, so they are absent from `methods`. Produce an
-  // agent-serving WalkResult per binding: verb POST (agents are POST), path = prefix + (opts.path ?? member
-  // name), the agent module carried for the dispatcher, guards composed class-first (G5 shared guards).
+  // agent-serving WalkResult per binding: verb POST (agents are POST), path = prefix + member name (this
+  // MUST be the agent's convention route so the generated handle's path matches — see ExposeOptions), the
+  // agent module carried for the dispatcher, guards composed class-first (G5 shared guards). Interceptors
+  // do NOT run for agent routes — the dispatcher delegates straight to `mountAgent` before the interceptor
+  // chain — so they are intentionally not collected here (documented on `@Expose`).
   const exposeEntries = getMeta<ExposeEntry[]>(EXPOSE_AGENT, ControllerClass) ?? []
   const agentResults: WalkResult[] = exposeEntries.map((e) => {
     const memberGuards = getMeta<Function[]>(USE_GUARDS, ControllerClass, e.propertyKey) ?? []
     const verb: HttpVerb = 'POST'
     return {
       verb,
-      fullPath: joinPath(prefix, e.opts.path ?? String(e.propertyKey)),
+      fullPath: joinPath(prefix, String(e.propertyKey)),
       propertyKey: e.propertyKey,
       paramEntries: [],
       headers: [],
       guards: [...classGuards, ...memberGuards],
-      interceptors: [...classInterceptors],
+      interceptors: [],
       filters: classFilters,
       agent: { module: e.agent, opts: e.opts },
     }
