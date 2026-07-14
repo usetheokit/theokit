@@ -9,6 +9,7 @@
 import type {
   ContextSettings,
   ConversationStorageAdapter,
+  SettingSource,
   SkillsSettings,
   SystemPromptResolver,
 } from '@theokit/sdk'
@@ -151,6 +152,12 @@ export interface CompiledAgentOptions {
    * which only toggles filesystem-vs-memory for the built-in default.
    */
   conversationStorage?: ConversationStorageAdapter
+  /**
+   * theokit-file-based-config — opt-in `.theokit/` file-based config roots (`"project"`/`"user"`/…).
+   * Projected into `Agent.create({ local: { settingSources } })` by `assembleM8CreateOptions`
+   * (merged with `cwd`, decoupled from inline skills). Absent ⇒ inline (code) config only.
+   */
+  settingSources?: readonly SettingSource[]
   tools: CompiledTool[]
   agents: Record<string, CompiledSubAgent>
   memory?: MemoryOptions
