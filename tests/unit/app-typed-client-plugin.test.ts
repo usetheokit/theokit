@@ -66,34 +66,34 @@ describe('appTypedClientPlugin (Vite plugin)', () => {
     expect((plugin.load as any)('/some/random/id')).toBeNull()
   })
 
-  it('emitClientDts is idempotent — repeat write reports changed=false when content unchanged', () => {
+  it('emitClientDts is idempotent — repeat write reports changed=false when content unchanged', async () => {
     writeRoute('a.ts', 'export const GET = () => ({})\n')
     const opts = { cwd: sandbox, serverDir, distDir }
-    const r1 = emitClientDts(opts)
+    const r1 = await emitClientDts(opts)
     expect(r1.changed).toBe(true)
-    const r2 = emitClientDts(opts)
+    const r2 = await emitClientDts(opts)
     expect(r2.changed).toBe(false)
   })
 
-  it('emitClientDts detects route file additions on subsequent calls', () => {
+  it('emitClientDts detects route file additions on subsequent calls', async () => {
     writeRoute('a.ts', 'export const GET = () => ({})\n')
     const opts = { cwd: sandbox, serverDir, distDir }
-    emitClientDts(opts)
+    await emitClientDts(opts)
     writeRoute('b.ts', 'export const POST = () => ({})\n')
-    const r2 = emitClientDts(opts)
+    const r2 = await emitClientDts(opts)
     expect(r2.changed).toBe(true)
     const dts = readFileSync(join(distDir, 'client.d.ts'), 'utf-8')
     expect(dts).toContain('a:')
     expect(dts).toContain('b:')
   })
 
-  it('EC-6: write is atomic via tmp + rename (no half-written file under rapid succession)', () => {
+  it('EC-6: write is atomic via tmp + rename (no half-written file under rapid succession)', async () => {
     writeRoute('a.ts', 'export const GET = () => ({})\n')
     const opts = { cwd: sandbox, serverDir, distDir }
     // Trigger 5 rapid emits — each must leave a parseable file behind.
     for (let i = 0; i < 5; i++) {
       writeRoute('a.ts', `export const GET = () => ({ tick: ${i} })\n`)
-      emitClientDts(opts)
+      await emitClientDts(opts)
       const content = readFileSync(join(distDir, 'client.d.ts'), 'utf-8')
       // Final file must always end with the closing `}` of the declared module.
       expect(content.trimEnd().endsWith('}')).toBe(true)
@@ -101,9 +101,9 @@ describe('appTypedClientPlugin (Vite plugin)', () => {
     }
   })
 
-  it('no .tmp files remain after writes (rename succeeded)', () => {
+  it('no .tmp files remain after writes (rename succeeded)', async () => {
     writeRoute('a.ts', 'export const GET = () => ({})\n')
-    emitClientDts({ cwd: sandbox, serverDir, distDir })
+    await emitClientDts({ cwd: sandbox, serverDir, distDir })
     const dts = join(distDir, 'client.d.ts')
     // Check no sibling .tmp file lingers.
     const tmp = `${dts}.${process.pid}.tmp`
@@ -111,10 +111,10 @@ describe('appTypedClientPlugin (Vite plugin)', () => {
     expect(statSync(dts).isFile()).toBe(true)
   })
 
-  it('plugin handles missing serverDir gracefully (emits stub, no crash)', () => {
+  it('plugin handles missing serverDir gracefully (emits stub, no crash)', async () => {
     const noServer = join(sandbox, 'no-server')
     const plugin = appTypedClientPlugin({ cwd: sandbox, serverDir: noServer, distDir })
-    expect(() => (plugin.configResolved as any)({} as any)).not.toThrow()
+    await (plugin.configResolved as any)({} as any)
     const dts = join(distDir, 'client.d.ts')
     expect(existsSync(dts)).toBe(true)
     expect(readFileSync(dts, 'utf-8')).toContain('No routes detected')

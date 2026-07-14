@@ -226,10 +226,21 @@ export async function theoPluginAsync(
     serverDir: serverDirAbs,
   })
 
+  // #122 (T1.1) — compile `<serverDir>/controllers/**` through @theokit/http's
+  // swc transform so parameter decorators (@Body/@Param/@Query) emit metadata
+  // esbuild drops. No-op for every non-controller file (ADR-4 — file-based
+  // routes are byte-for-byte unchanged).
+  const { controllerSwcTransformPlugin } = await import('./controller-swc-transform.js')
+  const controllerTransformPlugin = controllerSwcTransformPlugin({
+    serverDir: serverDirAbs,
+  })
+
   return [
     theoPlugin(rootOrOptions),
     ...uiPlugins,
     ...servicesPlugins,
+    // #122 — swc-compile controllers/** (enforce:'pre'; order-independent).
+    controllerTransformPlugin,
     appClientPlugin,
     actionsPlugin,
     agentsClientPlugin,

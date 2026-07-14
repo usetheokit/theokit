@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { resolve } from 'node:path'
 
 import type { ViteDevServer, Connect } from 'vite'
 
@@ -18,6 +19,7 @@ import {
   handleCsrfReadiness,
   incomingMessageToHandlerRequest,
   logRequest,
+  dispatchControllerRequest,
   matchRoute,
   scanServerRoutes,
   sendError,
@@ -26,6 +28,7 @@ import {
   type CspReportHandlerOptions,
   type CsrfReadinessStore,
   type DisallowedConfig,
+  type LoadModule,
   type PluginRunner,
   type RateLimitConfig,
   type SecurityHeadersConfig,
@@ -245,6 +248,48 @@ async function runPluginsBeforeRouteMatch(
   return false
 }
 
+/**
+ * #122 (T1.2) — controller fall-through for the `!match` arm. Serves a decorator
+ * controller under `<serverDir>/controllers/` (dev parity); inherits the security-
+ * headers/CORS/rate-limit/plugin gates already run upstream, and CSRF is enforced
+ * inside `dispatchControllerRequest`. Zero cost for routes-only apps. Returns `true`
+ * when a controller handled the request (response already written + logged).
+ */
+async function tryControllerFallthrough(ctx: {
+  req: IncomingMessage
+  res: ServerResponse
+  serverDir: string
+  loadModule: LoadModule
+  csrfMode: 'off' | 'warn' | 'strict'
+  disallowed: DisallowedConfig | undefined
+  requestId: string
+  url: string
+  start: number
+}): Promise<boolean> {
+  const handled = await dispatchControllerRequest({
+    controllersDir: resolve(ctx.serverDir, 'controllers'),
+    loadModule: ctx.loadModule,
+    req: ctx.req,
+    res: ctx.res,
+    csrfMode: ctx.csrfMode,
+    disallowed: ctx.disallowed,
+    requestId: ctx.requestId,
+  })
+  if (!handled) return false
+  logRequest(
+    {
+      method: (ctx.req.method ?? 'GET').toUpperCase(),
+      url: ctx.url,
+      status: ctx.res.statusCode,
+      duration: Date.now() - ctx.start,
+      requestId: ctx.requestId,
+    },
+    undefined,
+    ctx.req,
+  )
+  return true
+}
+
 export function createApiMiddleware(
   vite: ViteDevServer,
   serverDir: string,
@@ -343,6 +388,23 @@ export function createApiMiddleware(
       const match = matchRoute(url, routes)
 
       if (!match) {
+        // #122 (T1.2) — no file route matched; try a decorator controller (dev parity).
+        if (
+          await tryControllerFallthrough({
+            req,
+            res,
+            serverDir,
+            loadModule,
+            csrfMode,
+            disallowed,
+            requestId,
+            url,
+            start,
+          })
+        ) {
+          return
+        }
+
         const urlPath = url.split('?')[0]
         const routePaths = routes.map((r) => r.routePath)
         const suggestion = findSuggestion(urlPath, routePaths)

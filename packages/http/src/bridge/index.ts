@@ -22,5 +22,16 @@ export {
   type MiddlewareConfigProxy,
 } from './middleware-consumer.js'
 export { walkControllerMetadata, joinPath, type WalkResult } from './walk-metadata.js'
+export {
+  transformControllerSource,
+  loadControllerWithSwc,
+  loadControllersFromGlob,
+  isControllerClass,
+  type SwcCore,
+} from './swc-loader.js'
 export { registerControllers, type RouteRegistration } from './register-controllers.js'
-export { createDecoratorServer } from './create-server.js'
+export {
+  createDecoratorServer,
+  createDecoratorHandler,
+  type DecoratorHandler,
+} from './create-server.js'

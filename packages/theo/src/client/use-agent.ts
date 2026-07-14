@@ -19,8 +19,14 @@ import type { AgentTransport, ApprovalDecision, RequestContext } from './transpo
 export type { UseAgentStatus }
 
 export interface UseAgentReturn<TInput = unknown, TToolNames extends string = string> {
-  /** Reconstructed assistant messages so far (ai `UIMessage[]`). */
+  /** The CURRENT turn's assistant messages (per-turn; reset each `send`). Back-compat since M41. */
   messages: UIMessage[]
+  /**
+   * M46 — the full conversation to render: committed turns + the current turn's user + in-flight
+   * assistant, accumulated across sends with stable ids. Prefer this over hand-rolling a transcript
+   * from `messages`. Same shape on every surface (web/desktop/TUI) — it lives in the core store.
+   */
+  thread: UIMessage[]
   status: UseAgentStatus
   /** The last error, or `undefined`. */
   error: Error | undefined
@@ -96,6 +102,7 @@ export function useAgent<TInput = unknown>(
 
   return {
     messages: state.messages,
+    thread: state.thread,
     status: state.status,
     error: state.error,
     send: client.send,

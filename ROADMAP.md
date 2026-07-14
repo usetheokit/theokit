@@ -1045,6 +1045,32 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+### M46 — [ ] Conversation `thread` in the client core — stop hand-rolling the transcript on every surface
+
+> Added 2026-07-14 by `/roadmap-feature` (slug: `agent-conversation-in-core`). The DX-track follow-on to M41–M45: those unified the TRANSPORT (`useAgent(path|transport)` over `HttpTransport`/`InProcessTransport`/`ChannelTransport`), but the client still hands the consumer the RAW per-turn `UIMessage[]` and resets it on every `send` (`agent-client.ts:137`). So every app re-implements conversation history + the streaming→committed lifecycle + id management — `apps/showcase/app/hooks/use-transcript.ts` is 88 lines of exactly that plumbing, re-written per surface (web/desktop/TUI). This milestone raises the client from "current turn" to "conversation" IN the React-free core store, so all three surfaces inherit a ready-to-render `thread`. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** the React-free `theokit/client/core` store (`AgentClient` / `agent-client.ts`) accumulates and exposes a surface-agnostic `thread` — committed history + the in-flight turn — across sends (NOT reset), owning the streaming→committed lifecycle and stable id management; `useAgent()` and `createAgentClient()` return `thread` additively (raw `messages` kept for back-compat), so the showcase's 88-line `use-transcript.ts` collapses to `const { thread, status, send } = useAgent(...)` and the TUI + desktop templates consume the same `thread`.
+
+**Definition of done:**
+
+- [ ] **Design ADR accepted BEFORE code (GATE)** — affirms: (a) the `thread` lives in the EXISTING `AgentClient` store (`theokit/client/core`), NOT a new store nor a React-only hook (M41 D6 / G12 / the M44 no-React invariant) — so `useAgent`, the Ink client, and `createAgentClient` all inherit it; (b) ADDITIVE — raw `messages` (per-turn) keeps its exact current semantics, `thread` is new (back-compat, R1); (c) runtime/wire/agent-definition UNTOUCHED — client/boundary state only (G2 / `sdk-runtime.md` carve-out); (d) `thread` accumulation reuses ai-sdk's `readUIMessageStream` already in the store (Rule 9, no new dep).
+- [ ] `AgentClientState` gains `thread` = committed turns + in-flight turn, accumulated across `send`s with stable ids (the store fabricates the ids the SDK leaves empty and commits a finished turn exactly once).
+- [ ] `useAgent()` + `createAgentClient()` return `thread`; the `@theo/agents` typed codegen types it. Raw `messages` unchanged.
+- [ ] Lifecycle owned by the store (zero consumer boilerplate): commit-once on stream end, in-flight-vs-committed dedup (no flicker/double), abort mid-turn leaves a coherent thread, reconnect (M37) replays into the SAME thread, error mid-stream surfaces without corrupting history.
+- [ ] Validated on all 3 surfaces: showcase (web) `use-transcript.ts` collapses to `const { thread, status, send } = useAgent(...)` (the 88 lines deleted); the M45 TUI (Ink) + desktop (Tauri) templates consume `thread` identically — one conversation model, every surface.
+- [ ] TDD (the R2 races): commit-once, abort mid-turn, reconnect-replay-into-thread, error mid-stream, empty/colliding id; back-compat regression (existing `messages` behavior + wire byte-identical). Docs ("one conversation, every surface") + CHANGELOG + ADR.
+
+**Dependencies:** M41 (`AgentClient` store + transports — [x]), M44 (`createAgentClient` + React-free `theokit/client/core` — [x]); M45 (web/tui/desktop surfaces — [x], the 3-surface validation target).
+
+**Top risks (new — pre-existing risks documented elsewhere in roadmap):**
+
+1. **Mental-model / back-compat shift.** `messages` is per-turn today; adding `thread` risks "which do I use?" confusion or breakage if `messages` semantics drift. Mitigation: `thread` is additive; `messages` keeps its exact per-turn semantics; docs steer to `thread`; a back-compat regression proves `messages` unchanged.
+2. **Id/lifecycle correctness in edge cases.** The store now owns id fabrication + commit-once + in-flight/committed dedup (the fragile showcase `useEffect`). Risk: double-commit, id collision, flicker, lost turn on abort/reconnect/error. Mitigation: TDD the lifecycle across abort/reconnect/error, commit-once, and empty/colliding ids — the exact races the showcase hand-managed.
+
+**Why now:** M41–M45 removed the transport leak but left the conversation-state leak. Dogfooding the showcase made it concrete — `use-transcript.ts` is 88 lines of pure plumbing (separate `history`, `flatMap` of raw parts, fabricated ids, commit-once `useEffect`, in-flight/committed juggling) that every app copies AND re-writes per surface. Moving it into the core store once is the honest fix, and the 3-surface constraint dictates it lives in the React-free `theokit/client/core` — a React hook would leave the TUI and a vanilla desktop out.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
