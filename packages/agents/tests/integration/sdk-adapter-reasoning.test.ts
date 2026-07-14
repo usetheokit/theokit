@@ -39,7 +39,7 @@ vi.mock('@theokit/sdk', () => ({
       }
     }),
   },
-  defineTool: (s: unknown) => s,
+  Tool: { create: (s: unknown) => s },
 }))
 
 const { AgentRunner } = await import('../../src/index.js')

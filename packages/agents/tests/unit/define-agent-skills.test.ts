@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { createSkill } from '@theokit/sdk'
+import { Skill } from '@theokit/sdk'
 
 import { compileAgentDefinition, defineAgent } from '../../src/bridge/define-agent.js'
 import { resolveEnabledSkills } from '../../src/skills-resolver.js'
@@ -41,15 +41,15 @@ describe('M13 — defineAgent({ skills })', () => {
     expect(compiled.skillsResolver).toBeUndefined()
   })
 
-  // Inline skills (createSkill) — the SDK injects their name+description into the `<skills>` block via
+  // Inline skills (Skill.create) — the SDK injects their name+description into the `<skills>` block via
   // `skills.inline` (autoInject). The builder must accept the objects, not just filesystem names.
-  const briefing = createSkill({
+  const briefing = Skill.create({
     name: 'daily-briefing',
     description: 'A morning briefing',
     instructions: 'do X',
   })
 
-  it('routes an inline createSkill object to skills.inline (enabled empty)', () => {
+  it('routes an inline Skill.create object to skills.inline (enabled empty)', () => {
     const compiled = compileAgentDefinition(defineAgent({ model: 'm', skills: [briefing] }))
     expect(compiled.skills).toEqual({ enabled: [], inline: [briefing], autoInject: true })
     expect(compiled.skillsResolver).toBeUndefined()

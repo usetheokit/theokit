@@ -8,7 +8,7 @@
  * is unchanged across the major — only rag/voice/di sub-paths left the SDK.
  *
  * EC-4 (SHOULD TEST): use semver-aware major check (`^2.0.1`) instead of
- * brittle `starts-with` — accepts 2.x; rejects 1.x and 3.x.
+ * brittle `starts-with` — accepts 3.x; rejects 2.x and 4.x.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -22,18 +22,19 @@ import {
 } from '@theokit/sdk'
 
 /**
- * Minimal major-version check (`^2.0.1`).
- *  - major MUST equal 2 (every 2.x ships the Harness primitives this suite asserts)
+ * Minimal major-version check (`^3.5.0`).
+ *  - major MUST equal 3 (SDK v3.0 SE36 made every public factory `X.create()`; theokit's
+ *    adapter binds `Tool.create` / `SkillReadTool.create` / `Retry.create`, so it requires 3.x)
  *  - minor/patch are free
  */
 function satisfiesSdkMajor(version: string): boolean {
   const m = /^(\d+)\.(\d+)\.(\d+)/.exec(version)
   if (m === null) return false
-  return Number(m[1]) === 2
+  return Number(m[1]) === 3
 }
 
 describe('SDK exports smoke (T0.1)', () => {
-  it('test_sdk_version_satisfies_caret_range (EC-4) — @theokit/sdk version is in ^2.0.1', () => {
+  it('test_sdk_version_satisfies_caret_range (EC-4) — @theokit/sdk version is in ^3.5.0', () => {
     // Resolve via require to find the actually-installed package.json
     const sdkPkgPath = require.resolve('@theokit/sdk/package.json')
     const pkg = JSON.parse(readFileSync(sdkPkgPath, 'utf8')) as { version: string }
@@ -70,20 +71,20 @@ describe('SDK exports smoke (T0.1)', () => {
     expect(typeof s.deleteConversation).toBe('function')
   })
 
-  it('major check rejects 1.x', () => {
-    expect(satisfiesSdkMajor('1.99.99')).toBe(false)
+  it('major check rejects 2.x', () => {
+    expect(satisfiesSdkMajor('2.99.99')).toBe(false)
   })
 
-  it('major check rejects 3.0.0', () => {
-    expect(satisfiesSdkMajor('3.0.0')).toBe(false)
+  it('major check accepts 3.0.0', () => {
+    expect(satisfiesSdkMajor('3.0.0')).toBe(true)
   })
 
-  it('major check accepts 2.0.1', () => {
-    expect(satisfiesSdkMajor('2.0.1')).toBe(true)
+  it('major check accepts 3.5.0', () => {
+    expect(satisfiesSdkMajor('3.5.0')).toBe(true)
   })
 
-  it('major check accepts 2.99.99', () => {
-    expect(satisfiesSdkMajor('2.99.99')).toBe(true)
+  it('major check accepts 3.99.99', () => {
+    expect(satisfiesSdkMajor('3.99.99')).toBe(true)
   })
 
   it('major check rejects malformed string', () => {

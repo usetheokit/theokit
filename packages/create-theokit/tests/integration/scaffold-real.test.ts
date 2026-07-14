@@ -52,9 +52,9 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'agents/tools/weather.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'agents/tools/current-time.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'agents/skills/daily-briefing.ts'))).toBe(true)
-    // The skill uses the real skills feature (createSkill), not a dead Markdown note.
+    // The skill uses the real skills feature (Skill.create), not a dead Markdown note.
     expect(readFileSync(join(targetDir, 'agents/skills/daily-briefing.ts'), 'utf-8')).toContain(
-      'createSkill(',
+      'Skill.create(',
     )
     // chat.ts composes persona + tools + the skill. ONE `.skills([...])` call registers the inline skill
     // into the `<skills>` block AND auto-provisions the `skill_read` tool (no separate wiring needed).

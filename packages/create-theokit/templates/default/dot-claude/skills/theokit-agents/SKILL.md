@@ -156,12 +156,12 @@ Before writing custom tools, check if they already exist:
 
 | Package | What it provides | When to use |
 |---------|-----------------|-------------|
-| `@theokit/sdk` | `Agent.create()`, `defineTool()` (primitive), `Run.stream()` | Core agent runtime — always installed |
+| `@theokit/sdk` | `Agent.create()`, `Tool.create()` (primitive), `Run.stream()` | Core agent runtime — always installed |
 | `@theokit/sdk-tools` | Ready-made tools: `createReadFileTool`, `createWriteFileTool`, `createSearchTextTool`, `createGlobTool`, `createShellTool`, etc. | **Check here FIRST** before writing custom tools for coding agents |
 | `@theokit/di-agent` | DI-powered agent with decorator injection | When using dependency injection pattern |
 | `@theokit/di` | Core DI container (`@Injectable`, `@Inject`) | When `@theokit/di-agent` needs explicit bindings |
 
-**`defineTool()` in `@theokit/sdk` is the primitive API.** For coding agents, `@theokit/sdk-tools` has batteries-included tools that wrap `defineTool()` with file system access, search, shell execution, etc. Don't reimplement what `sdk-tools` already provides.
+**`Tool.create()` in `@theokit/sdk` is the primitive API.** For coding agents, `@theokit/sdk-tools` has batteries-included tools that wrap `Tool.create()` with file system access, search, shell execution, etc. Don't reimplement what `sdk-tools` already provides.
 
 ## Rules
 

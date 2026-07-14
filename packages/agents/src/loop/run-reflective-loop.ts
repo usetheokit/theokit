@@ -378,8 +378,9 @@ async function startRound(
     }
   }
   if (!retry) return open()
-  const { withRetry } = await import('@theokit/sdk/retry')
-  return withRetry(open, { ...retry, signal: retry.signal ?? signal })
+  // SE36 (SDK v3.0) — `withRetry` became `Retry.create`; same call shape.
+  const { Retry } = await import('@theokit/sdk/retry')
+  return Retry.create(open, { ...retry, signal: retry.signal ?? signal })
 }
 
 async function* consumeOneRound(

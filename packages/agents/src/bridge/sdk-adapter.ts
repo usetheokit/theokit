@@ -178,7 +178,7 @@ interface SdkRuntime {
     name: string
     description: string
     inputSchema: unknown
-    handler: (input: unknown) => string | Promise<string>
+    handler: CustomTool['handler']
   }) => unknown
   InMemoryConversationStorage: new () => ConversationStorageAdapter
   FileSystemConversationStorage: new () => ConversationStorageAdapter
@@ -200,15 +200,19 @@ async function loadSdkRuntime(): Promise<SdkRuntime | null> {
   try {
     const sdk = await import('@theokit/sdk')
     const InMemory = sdk.InMemoryConversationStorage
+    // SE36 (SDK v3.0) — the public factories became `X.create()`: `defineTool`→`Tool.create`,
+    // `defineSkillReadTool`→`SkillReadTool.create`. Guard on the VALUE (not `'…' in sdk`) so a peer
+    // that omits `SkillReadTool` degrades gracefully instead of calling `.create` on `undefined`.
+    const skillReadTool = 'SkillReadTool' in sdk ? sdk.SkillReadTool : undefined
     return {
       Agent: sdk.Agent as unknown as SdkAgentApi,
-      defineTool: sdk.defineTool as unknown as SdkRuntime['defineTool'],
+      // `.bind` keeps the static factory callable when detached from `sdk.Tool` (it takes no `this`,
+      // but binding is explicit + satisfies unbound-method rather than relying on that).
+      defineTool: sdk.Tool.create.bind(sdk.Tool) as unknown as SdkRuntime['defineTool'],
       InMemoryConversationStorage: InMemory,
       FileSystemConversationStorage:
         'FileSystemConversationStorage' in sdk ? sdk.FileSystemConversationStorage : InMemory,
-      ...('defineSkillReadTool' in sdk
-        ? { defineSkillReadTool: sdk.defineSkillReadTool as SdkRuntime['defineSkillReadTool'] }
-        : {}),
+      ...(skillReadTool ? { defineSkillReadTool: (skills) => skillReadTool.create(skills) } : {}),
     }
   } catch (err) {
     console.warn('[theokit] @theokit/sdk import failed:', err)
@@ -437,14 +441,14 @@ function hasZodInputSchema(schema: unknown): boolean {
  * on the SDK to forward it — decoupling the framework from the SDK's tool-call internals. The
  * incoming `ctx.signal` (from the SDK) is preserved; `context` is set to the agent's run-context.
  */
-function withRunContext<I>(
-  handler: (
-    input: I,
-    ctx?: { signal?: AbortSignal; context?: unknown },
-  ) => string | Promise<string>,
+function withRunContext(
+  handler: CustomTool['handler'],
   runContext: unknown,
-): (input: I, ctx?: { signal?: AbortSignal; context?: unknown }) => string | Promise<string> {
-  return (input, ctx) => handler(input, { signal: ctx?.signal, context: runContext })
+): CustomTool['handler'] {
+  // Forward the FULL ctx (SE12 `messages` transcript projection + `signal` + any future
+  // field) and override ONLY `context` with the run value. Dropping `messages` here would
+  // silently break a tool that reads the turn transcript — so spread, don't cherry-pick.
+  return (input, ctx) => handler(input, { ...ctx, context: runContext })
 }
 
 /**
@@ -461,10 +465,7 @@ function buildSdkTools(
     name: string
     description: string
     inputSchema: unknown
-    handler: (
-      input: unknown,
-      ctx?: { signal?: AbortSignal; context?: unknown },
-    ) => string | Promise<string>
+    handler: CustomTool['handler']
   }) => unknown,
   extraSdkTools: readonly CustomTool[] = [],
   runContext?: unknown,
