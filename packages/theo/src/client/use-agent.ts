@@ -2,6 +2,7 @@ import type { UIMessage } from 'ai'
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
 import { AgentClient, type UseAgentStatus } from './agent-client.js'
+import { type AgentHandle, isAgentHandle } from './agent-handle.js'
 import { HttpTransport } from './http-transport.js'
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
 
@@ -65,12 +66,14 @@ export interface UseAgentOptions {
 }
 
 /**
- * Bind to an agent by endpoint path (`/api/agents/<name>`) or by an explicit {@link AgentTransport}.
- * Prefer the generated `useAgent` from `@theo/agents` (typed by agent name); this base accepts a path
- * or a transport. The store is created once per binding identity — memoize a transport before passing it.
+ * Bind to an agent by endpoint path (`/api/agents/<name>`), by a typed {@link AgentHandle} (M47 — the
+ * generated `chat` handle; kills the magic string + duplicated input type), or by an explicit
+ * {@link AgentTransport}. Prefer the generated `useAgent` from `@theo/agents` (typed by agent name or
+ * handle); this base accepts all three. The store is created once per binding identity — memoize a
+ * transport before passing it.
  */
 export function useAgent<TInput = unknown>(
-  pathOrTransport: string | AgentTransport,
+  binding: string | AgentHandle<TInput> | AgentTransport,
   options: UseAgentOptions = {},
 ): UseAgentReturn<TInput> {
   // Track the latest options so the built HttpTransport reads current headers per request (dynamic
@@ -78,24 +81,33 @@ export function useAgent<TInput = unknown>(
   const optionsRef = useRef(options)
   optionsRef.current = options
 
+  // A handle resolves to its HTTP path; a string is already a path — both build an HttpTransport. A
+  // transport is used as-is. `api` is undefined only for a transport binding.
+  let api: string | undefined
+  if (typeof binding === 'string') api = binding
+  else if (isAgentHandle(binding)) api = binding.path
+  // Identity is the binding (a handle's path OR a transport instance) — a stable key for the memo.
+  const bindingIdentity = api ?? binding
+
   const client = useMemo(
     () =>
       new AgentClient<TInput>(
-        typeof pathOrTransport === 'string'
+        api !== undefined
           ? new HttpTransport({
-              api: pathOrTransport,
+              api,
               headers: () => optionsRef.current.headers,
               fetch: optionsRef.current.fetch,
             })
-          : pathOrTransport,
+          : (binding as AgentTransport),
         // M43 — resolve context live from the ref each send/reconnect (never stale). A value or a resolver.
         () => {
           const ctx = optionsRef.current.context
           return typeof ctx === 'function' ? ctx() : ctx
         },
       ),
-    // Identity is the binding; headers/context are resolved live via optionsRef, fetch captured at creation.
-    [pathOrTransport],
+    // bindingIdentity captures api/binding; options resolve live via optionsRef (rebuild would drop messages).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bindingIdentity],
   )
 
   const state = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot)
