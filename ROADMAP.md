@@ -1045,7 +1045,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M46 — [ ] Conversation `thread` in the client core — stop hand-rolling the transcript on every surface
+### M46 — [x] Conversation `thread` in the client core — stop hand-rolling the transcript on every surface
 
 > Added 2026-07-14 by `/roadmap-feature` (slug: `agent-conversation-in-core`). The DX-track follow-on to M41–M45: those unified the TRANSPORT (`useAgent(path|transport)` over `HttpTransport`/`InProcessTransport`/`ChannelTransport`), but the client still hands the consumer the RAW per-turn `UIMessage[]` and resets it on every `send` (`agent-client.ts:137`). So every app re-implements conversation history + the streaming→committed lifecycle + id management — `apps/showcase/app/hooks/use-transcript.ts` is 88 lines of exactly that plumbing, re-written per surface (web/desktop/TUI). This milestone raises the client from "current turn" to "conversation" IN the React-free core store, so all three surfaces inherit a ready-to-render `thread`. See CHANGELOG `[Unreleased] § Added`.
 
