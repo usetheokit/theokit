@@ -17,7 +17,11 @@ describe('Bundle size regression', () => {
     // `transformControllerSource` + `SwcCore` so the framework's Vite
     // controller transform can reuse the swc option block (ADR-1 / Rule 9),
     // instead of duplicating it (G12). Deliberate, minimal API addition.
-    expect(size).toBeLessThan(52_000)
+    // Budget bumped 52KB → 55KB (M47): the surface gained the `@Expose`
+    // decorator + `ExposeOptions`/`ExposeEntry` + the `WalkResult.agent`
+    // field, so an agent binds to a controller visibly (ADR-M47-1).
+    // Deliberate, minimal API addition.
+    expect(size).toBeLessThan(55_000)
     console.log(`  http-decorators/dist/index.d.ts: ${(size / 1024).toFixed(1)} KB`)
   })
 })
