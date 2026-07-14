@@ -24,7 +24,8 @@ describe('M47 — handle surface binders (one handle, three transports)', () => 
   })
 
   it('test_handle_channel_returns_ChannelTransport', () => {
-    const source = { subscribe: () => () => undefined }
+    // A minimal ChannelPushSource: start() returns a teardown; no chunks delivered here.
+    const source = { start: () => () => undefined }
     const transport = chat.channel(source)
     expect(transport).toBeInstanceOf(ChannelTransport)
   })
