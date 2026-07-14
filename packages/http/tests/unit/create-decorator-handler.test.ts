@@ -22,6 +22,17 @@ class ThingsCtrl {
   create(@Body(zCreate) body: z.infer<typeof zCreate>) {
     return body
   }
+
+  // Handlers that need Set-Cookie / a custom status return a Web `Response`
+  // directly — parity with file-based `route()`. It must pass through untouched
+  // (NOT be JSON-stringified into `{}`, which drops the cookie).
+  @Get('session')
+  session() {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'set-cookie': 'sid=abc; HttpOnly' },
+    })
+  }
 }
 
 describe.skipIf(!isVitest)('createDecoratorHandler', () => {
@@ -44,6 +55,13 @@ describe.skipIf(!isVitest)('createDecoratorHandler', () => {
     const res = await handle(new Request('http://x/api/v2/things/42'))
     expect(res!.status).toBe(200)
     expect(await res!.json()).toEqual({ id: '42' })
+  })
+
+  it('passes a handler-returned Response through untouched (Set-Cookie survives)', async () => {
+    const res = await handle(new Request('http://x/api/v2/things/session'))
+    expect(res!.status).toBe(200)
+    expect(res!.headers.get('set-cookie')).toBe('sid=abc; HttpOnly')
+    expect(await res!.json()).toEqual({ ok: true }) // not `{}` from JSON.stringify(Response)
   })
 
   it('returns a 422 typed validation error on an invalid @Body', async () => {
