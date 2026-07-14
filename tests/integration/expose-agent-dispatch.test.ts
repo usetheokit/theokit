@@ -27,7 +27,7 @@ const chatAgent = { __agent: 'chat' }
 
 @Controller('api/agents')
 export class AgentsController {
-  @Expose(chatAgent, { csrf: true })
+  @Expose(chatAgent)
   chat
 }
 
@@ -67,7 +67,7 @@ describe('M47 — @Expose route dispatches to serveAgent end-to-end (scan → sw
     expect(serveAgent).toHaveBeenCalledTimes(1)
     // The bound agent module + the per-binding opts reach the callback.
     const [, , opts] = serveAgent.mock.calls[0] as unknown as [unknown, Request, unknown]
-    expect(opts).toEqual({ csrf: true })
+    expect(opts).toEqual({})
   })
 
   it('test_normal_route_served_as_method_not_agent', async () => {

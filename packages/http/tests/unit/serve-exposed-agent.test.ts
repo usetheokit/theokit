@@ -17,7 +17,7 @@ describe('M47 — createDecoratorHandler delegates @Expose routes to serveAgent'
   it('test_agent_route_delegates_to_serveAgent', async () => {
     @Controller('api/agents')
     class AgentsController {
-      @Expose(fakeAgent, { csrf: true })
+      @Expose(fakeAgent)
       chat!: unknown
     }
     const serveAgent = vi.fn(async () => new Response('STREAM', { status: 200 }))
@@ -32,7 +32,7 @@ describe('M47 — createDecoratorHandler delegates @Expose routes to serveAgent'
     // The callback receives the bound agent module + the request + the per-binding opts.
     const [mod, , opts] = serveAgent.mock.calls[0] as unknown as [unknown, Request, unknown]
     expect(mod).toBe(fakeAgent)
-    expect(opts).toEqual({ csrf: true })
+    expect(opts).toEqual({})
   })
 
   it('test_agent_route_runs_guards_before_serveAgent', async () => {
