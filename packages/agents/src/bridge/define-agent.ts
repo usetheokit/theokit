@@ -10,7 +10,12 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
-import type { ConversationStorageAdapter, CustomTool, InlineSkill } from '@theokit/sdk'
+import type {
+  ConversationStorageAdapter,
+  CustomTool,
+  InlineSkill,
+  SettingSource,
+} from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
@@ -78,6 +83,15 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * store. A per-run override still wins over this agent-level default.
    */
   conversationStorage?: ConversationStorageAdapter
+  /**
+   * theokit-file-based-config — opt into `.theokit/` file-based config (skills, subagents, hooks,
+   * MCP, context, cron). The SDK discovers config from these roots under the app's `cwd`:
+   * `"project"` = `<cwd>/.theokit/`, `"user"` = `~/.theokit/`. Absent ⇒ inline (code) config only.
+   * SECURITY: enabling `"project"` enables shell-executing hooks from `.theokit/hooks.json` — this
+   * is opt-in because `.theokit/` is the app's own repo (informed consent). The SDK owns discovery
+   * + execution (G2 / ADR-0040); theokit only wires this into `Agent.create({ local.settingSources })`.
+   */
+  settingSources?: readonly SettingSource[]
 }
 
 /**
@@ -178,6 +192,9 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.conversationStorage !== undefined
       ? { conversationStorage: def.conversationStorage }
       : {}),
+    // theokit-file-based-config — the declared `.theokit/` sources flow to the run path, which
+    // projects them into `Agent.create({ local.settingSources })`; absent ⇒ inline config only.
+    ...(def.settingSources !== undefined ? { settingSources: def.settingSources } : {}),
   }
 }
 
