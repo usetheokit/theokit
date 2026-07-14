@@ -298,5 +298,112 @@ describe('AgentClient — conversation thread (M46)', () => {
     // The stale drive must not have committed a turn into thread.
     expect(client.getSnapshot().thread.filter((m) => m.role === 'assistant')).toHaveLength(0)
     expect(client.getSnapshot().status).toBe('streaming') // still the live 2nd turn
+    // Release the LIVE second turn so no gated stream dangles past the test (flakiness guard), and assert
+    // it settles cleanly — the surviving turn is turn 2 only (the gated stream carries no text chunks, so
+    // no assistant content), never the aborted turn 1.
+    gates[1]?.()
+    await tick()
+    expect(client.getSnapshot().status).toBe('done')
+    expect(roleTexts(client.getSnapshot().thread)).toEqual([['user', '2']])
+  })
+
+  it('test_send_while_streaming_drops_the_aborted_turn_from_thread', async () => {
+    // Sending a NEW message mid-stream aborts the in-flight turn; the aborted turn (user1 + its partial
+    // assistant) is intentionally dropped from `thread` — only the completed turn 2 survives (regression
+    // guard for the documented `status !== 'done'` commit gate).
+    const gates: Array<() => void> = []
+    const gatedFirst = (): ReadableStream<UIMessageChunk> =>
+      new ReadableStream<UIMessageChunk>({
+        pull(controller) {
+          return new Promise<void>((resolve) => {
+            gates.push(() => {
+              controller.close()
+              resolve()
+            })
+          })
+        },
+      })
+    let call = 0
+    const client = new AgentClient<{ message: string }>(
+      fakeTransport({
+        sendMessages: (async () => {
+          call += 1
+          return call === 1 ? gatedFirst() : chunkStream(TEXT_TURN)
+        }) as ChatTransport<UIMessage>['sendMessages'],
+      }),
+    )
+    const tick = () => new Promise((r) => setTimeout(r, 15))
+    client.send({ message: 'one' }) // turn 1 blocks (streaming)
+    await tick()
+    expect(client.getSnapshot().status).toBe('streaming')
+    client.send({ message: 'two' }) // sent mid-stream → aborts turn 1, starts turn 2
+    await tick()
+    gates[0]?.() // release the aborted turn-1 stream (must not commit)
+    await tick()
+    // Only turn 2 is in the thread — turn 1 (user 'one' + partial assistant) was dropped, not committed.
+    expect(roleTexts(client.getSnapshot().thread)).toEqual([
+      ['user', 'two'],
+      ['assistant', 'Hello'],
+    ])
+  })
+
+  it('test_sdk_provided_message_id_is_honored_not_replaced', async () => {
+    // When the stream DOES carry a stable assistant id, the store keeps it (never overwrites with the
+    // fabricated per-turn id) — the fabrication is a fallback for the empty-id case only.
+    const client = new AgentClient<{ message: string }>(
+      fakeTransport({
+        sendMessages: (async () =>
+          chunkStream([
+            { type: 'start', messageId: 'sdk-fixed-1' },
+            { type: 'text-start', id: 't0' },
+            { type: 'text-delta', id: 't0', delta: 'Hi' },
+            { type: 'text-end', id: 't0' },
+            { type: 'finish' },
+          ])) as ChatTransport<UIMessage>['sendMessages'],
+      }),
+    )
+    client.send({ message: 'hi' })
+    await waitSettled(client)
+    const assistant = client.getSnapshot().thread.find((m) => m.role === 'assistant')
+    expect(assistant?.id).toBe('sdk-fixed-1') // honored, not a fabricated uuid
+  })
+
+  it('test_reconnect_before_send_fabricates_nonempty_ids_and_keeps_thread_valid', async () => {
+    // MEDIUM-1 regression: reconnect() before any send() must not stamp replayed assistants with an empty
+    // id — every thread entry keeps a non-empty, unique key.
+    const client = new AgentClient<{ message: string }>(
+      fakeTransport({
+        reconnectToStream: (async () =>
+          chunkStream(TEXT_TURN)) as ChatTransport<UIMessage>['reconnectToStream'],
+      }),
+    )
+    client.reconnect()
+    await waitSettled(client)
+    const ids = client.getSnapshot().thread.map((m) => m.id)
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
+  })
+
+  it('test_reconnect_after_error_clears_error_and_resumes', async () => {
+    // reconnect() means retry — a stale error must not linger beside a fresh 'streaming'/'done'.
+    let call = 0
+    const client = new AgentClient<{ message: string }>(
+      fakeTransport({
+        sendMessages: (async () => {
+          throw new Error('Agent request failed: 500')
+        }) as ChatTransport<UIMessage>['sendMessages'],
+        reconnectToStream: (async () => {
+          call += 1
+          return chunkStream(TEXT_TURN)
+        }) as ChatTransport<UIMessage>['reconnectToStream'],
+      }),
+    )
+    client.send({ message: 'hi' })
+    await waitSettled(client)
+    expect(client.getSnapshot().status).toBe('error')
+    client.reconnect()
+    await waitSettled(client)
+    expect(call).toBe(1)
+    expect(client.getSnapshot().status).toBe('done')
+    expect(client.getSnapshot().error).toBeUndefined()
   })
 })
