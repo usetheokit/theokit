@@ -5,6 +5,8 @@ import type { ChannelTransport } from '../../packages/theo/src/client/channel-tr
 import type { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
 import type { InProcessTransport } from '../../packages/theo/src/client/in-process-transport.js'
 import type { AgentTransport } from '../../packages/theo/src/client/transport.js'
+import { agentHandle } from '../../packages/theo/src/client/agent-handle.js'
+import type { AgentHandle } from '../../packages/theo/src/client/agent-handle.js'
 import type { UseAgentReturn } from '../../packages/theo/src/client/use-agent.js'
 
 /**
@@ -43,5 +45,26 @@ describe('UseAgentReturn conversation thread (types) — M46', () => {
   it('exposes both the per-turn `messages` and the full conversation `thread` as UIMessage[]', () => {
     expectTypeOf<UseAgentReturn>().toHaveProperty('messages').toEqualTypeOf<UIMessage[]>()
     expectTypeOf<UseAgentReturn>().toHaveProperty('thread').toEqualTypeOf<UIMessage[]>()
+  })
+})
+
+/**
+ * M47 (ADR-M47-2) — binding by a typed handle infers `send`'s parameter from the handle's phantom input,
+ * with NO duplicated `<{ message }>` at the call site. This is the parity that kills the anti-pattern: the
+ * input type flows from the agent's `.input()` through the generated handle to `useAgent(handle).send`.
+ */
+describe('useAgent(handle) input inference (types) — M47', () => {
+  it('the generated handle carries the agent input type as its phantom generic', () => {
+    // `agentHandle<{ message }>()` yields `AgentHandle<{ message }>` — the type the codegen emits per agent.
+    const chat = agentHandle<{ message: string }>('/api/agents/chat')
+    expectTypeOf(chat).toEqualTypeOf<AgentHandle<{ message: string }>>()
+  })
+
+  it('binding by that input type infers send() with no duplication at the call site', () => {
+    // `useAgent(handle)` returns `UseAgentReturn<TInput>` (TInput from the handle) — so `send` is typed to
+    // the agent input WITHOUT restating `<{ message }>` where the hook is used.
+    expectTypeOf<UseAgentReturn<{ message: string }>['send']>()
+      .parameter(0)
+      .toEqualTypeOf<{ message: string }>()
   })
 })

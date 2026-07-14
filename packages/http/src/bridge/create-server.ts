@@ -5,6 +5,7 @@
  */
 import 'reflect-metadata'
 
+import type { ExposeOptions } from '../decorators/expose.js'
 import type { ParamEntry } from '../decorators/params.js'
 import { ForbiddenException } from '../exceptions/http-exception.js'
 
@@ -26,13 +27,21 @@ import { createNodeAdapter } from './runtime/node.js'
 import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
 
 /**
- * Creates a real HTTP server from decorated controller classes.
- * Uses Web Standard Request/Response internally; Node adapter at the boundary.
+ * M47 — serves an `@Expose`-bound agent route. http is agent-runtime agnostic (G1/G2): it invokes this
+ * injected callback (theo supplies a `mountAgent`-backed impl) instead of calling a controller method.
  */
+export type ServeAgent = (
+  agent: unknown,
+  request: Request,
+  opts: ExposeOptions,
+) => Promise<Response>
+
 export interface CreateDecoratorServerOptions {
   controllers: Function[]
   container?: DiContainer
   configure?: (consumer: MiddlewareConsumerImpl) => void
+  /** M47 — required when any controller `@Expose`-binds an agent; serves the agent route. */
+  serveAgent?: ServeAgent
 }
 
 /**
@@ -57,8 +66,13 @@ export interface DecoratorHandler {
 export function createDecoratorHandler(
   controllersOrOpts: Function[] | CreateDecoratorServerOptions,
 ): DecoratorHandler {
-  const { controllers, container, configure } = Array.isArray(controllersOrOpts)
-    ? { controllers: controllersOrOpts, container: undefined, configure: undefined }
+  const { controllers, container, configure, serveAgent } = Array.isArray(controllersOrOpts)
+    ? {
+        controllers: controllersOrOpts,
+        container: undefined,
+        configure: undefined,
+        serveAgent: undefined,
+      }
     : controllersOrOpts
 
   // Collect middleware
@@ -94,12 +108,16 @@ export function createDecoratorHandler(
   })
 
   const handler = ((request: Request) =>
-    handleRequest(routes, request, container, middlewareEntries)) as DecoratorHandler
+    handleRequest(routes, request, container, middlewareEntries, serveAgent)) as DecoratorHandler
   handler.matches = (method: string, pathname: string): boolean =>
     findRoute(routes, method.toUpperCase(), pathname) !== null
   return handler
 }
 
+/**
+ * Creates a real HTTP server from decorated controller classes.
+ * Uses Web Standard Request/Response internally; Node adapter at the boundary.
+ */
 export function createDecoratorServer(
   controllersOrOpts: Function[] | CreateDecoratorServerOptions,
 ) {
@@ -126,6 +144,7 @@ async function handleRequest(
   request: Request,
   container?: DiContainer,
   middlewareEntries: ResolvedMiddleware[] = [],
+  serveAgent?: ServeAgent,
 ): Promise<Response | null> {
   const url = new URL(request.url)
   const method = request.method.toUpperCase()
@@ -146,6 +165,22 @@ async function handleRequest(
     const ctx = createExecutionContext(request, instance.constructor, walk.propertyKey)
     const guardResponse = await runGuards(walk.guards, ctx, container)
     if (guardResponse) return guardResponse
+
+    // M47 — an @Expose-bound route is served by the injected agent runtime (mountAgent, via theo), AFTER
+    // guards (auth applies to agents — G5) and NEVER as a JSON controller method. http stays agnostic.
+    if (walk.agent) {
+      if (!serveAgent) {
+        return jsonResponse(500, {
+          error: {
+            code: 'AGENT_SERVER_NOT_WIRED',
+            message:
+              `Controller route ${String(walk.propertyKey)} is @Expose-bound but no serveAgent was ` +
+              `provided to createDecoratorHandler. The framework must wire serveAgent (mountAgent).`,
+          },
+        })
+      }
+      return await serveAgent(walk.agent.module, request, walk.agent.opts)
+    }
 
     // Body
     const body = await resolveBody(method, request, walk)
