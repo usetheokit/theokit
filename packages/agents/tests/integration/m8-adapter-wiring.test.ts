@@ -20,7 +20,7 @@ vi.mock('@theokit/sdk', () => ({
       })
     },
   },
-  defineTool: (spec: unknown) => spec,
+  Tool: { create: (spec: unknown) => spec },
 }))
 
 import { Agent } from '../../src/decorators/agent.js'

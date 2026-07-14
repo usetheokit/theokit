@@ -2,7 +2,7 @@
   "name": "services-python-basic-fixture",
   "private": true,
   "type": "module",
-  "version": "0.0.51",
+  "version": "0.0.52",
   "dependencies": {
     "theokit": "workspace:*"
   }

@@ -24,9 +24,6 @@ export default agent()
   .system(BASE_INSTRUCTIONS)
   .tool(weatherTool)
   .tool(currentTimeTool)
-  // `.skills([...])` wires the code-defined skill in ONE call: the SDK lists its name + description in a
-  // `<skills>` block every turn (cheap, so the model KNOWS it exists) AND auto-provisions a `skill_read`
-  // tool the model calls to load the full body on demand (so a long procedure only enters the prompt
-  // when needed). Pass a filesystem skill NAME (a string) here too; mix strings + createSkill freely.
+  // Skills the agent can consult on demand (hover `.skills` for how it works).
   .skills([dailyBriefingSkill])
   .build()
