@@ -7,6 +7,9 @@ export type { HttpVerb, RouteMethodEntry } from './methods.js'
 export { Req, Res, Body, Param, Query, Headers, Session, Ip, HostParam } from './params.js'
 export type { ParamSource, ParamEntry } from './params.js'
 
+export { Expose } from './expose.js'
+export type { ExposeOptions, ExposeEntry } from './expose.js'
+
 export { HttpCode, Header, Redirect } from './response.js'
 export type { RedirectMeta } from './response.js'
 

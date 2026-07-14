@@ -61,6 +61,7 @@ export function generateAgentsDts({
   const agents = manifest.agents ?? []
   const imports: string[] = []
   const entries: string[] = []
+  const handles: string[] = []
   for (const agent of agents) {
     const alias = aliasFor(agent.name)
     imports.push(
@@ -69,7 +70,13 @@ export function generateAgentsDts({
     entries.push(
       `    '${agent.name}': { input: InferAgentInput<${alias}>; tools: InferAgentToolNames<${alias}> }`,
     )
+    // M47 — a named, client-safe handle per agent: `import { chat } from '@theo/agents'; useAgent(chat)`.
+    // cmd-click on the generated const hops to the agent source via the type-only import above.
+    handles.push(
+      `  export const ${agent.name}: AgentHandle<InferAgentInput<${alias}>, InferAgentToolNames<${alias}>>`,
+    )
   }
+  const handleBlock = handles.length > 0 ? `\n${handles.join('\n')}\n` : ''
 
   const body =
     entries.length > 0
@@ -81,7 +88,7 @@ export function generateAgentsDts({
   return `${FILE_HEADER}
 declare module '@theo/agents' {
   import type { InferAgentInput, InferAgentToolNames } from '@theokit/agents'
-  import type { UseAgentReturn, AgentTransport } from 'theokit/client'
+  import type { UseAgentReturn, AgentTransport, AgentHandle } from 'theokit/client'
 ${importBlock}
   export interface AppAgents ${body}
 
@@ -89,12 +96,19 @@ ${importBlock}
   export function useAgent<K extends keyof AppAgents>(
     name: K,
   ): UseAgentReturn<AppAgents[K]['input'], AppAgents[K]['tools']>
+  // M47 — bind by a typed handle: \`import { chat } from '@theo/agents'; useAgent(chat)\`. No magic
+  // string (the path lives on the handle) and no duplicated input type (inferred from the handle).
+  export function useAgent<TInput, TTools extends string>(
+    handle: AgentHandle<TInput, TTools>,
+  ): UseAgentReturn<TInput, TTools>
   // M41 (ADR-0050) — terminal/desktop (and advanced): bind by an explicit AgentTransport
   // (e.g. InProcessTransport). The SAME hook, one consumption shape across every surface.
   export function useAgent<TInput = unknown>(
     transport: AgentTransport,
   ): UseAgentReturn<TInput>
-}
+
+  // M47 — one client-safe handle per agent (runtime value = { path }; types are phantom).
+${handleBlock}}
 `
 }
 
@@ -194,7 +208,17 @@ export function agentsTypedClientPlugin(opts: AgentsTypedClientPluginOptions): P
     },
     load(id) {
       if (id === RESOLVED_AGENTS_ID) {
-        return `export { useAgent } from 'theokit/client'\n`
+        // M47 — the runtime module re-exports `useAgent` AND emits one handle value per agent
+        // (`export const chat = agentHandle('/api/agents/chat')`), so `import { chat } from '@theo/agents'`
+        // resolves at runtime. Types come from the sibling `agents.d.ts` module augmentation.
+        const agents = opts.scanManifest(opts.projectRoot).agents ?? []
+        const handleLines = agents.map(
+          (a) => `export const ${a.name} = agentHandle('/api/agents/${a.name}')`,
+        )
+        return (
+          `export { useAgent, agentHandle } from 'theokit/client'\n` +
+          (handleLines.length > 0 ? handleLines.join('\n') + '\n' : '')
+        )
       }
       return null
     },

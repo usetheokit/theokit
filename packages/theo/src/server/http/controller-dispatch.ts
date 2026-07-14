@@ -6,7 +6,7 @@ import { readdirSync, type Dirent } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 
-import { createDecoratorHandler, isControllerClass } from '@theokit/http'
+import { createDecoratorHandler, isControllerClass, type ServeAgent } from '@theokit/http'
 
 import { dispatchCsrfWarn } from '../security/csrf-warn-dispatch.js'
 import { enforceCsrf, type DisallowedConfig } from '../security/csrf.js'
@@ -102,10 +102,12 @@ export async function scanControllers(
 export async function createControllerDispatcher(opts: {
   controllersDir: string
   loadModule: ControllerModuleLoader
+  /** M47 — serves `@Expose`-bound agent routes (theo supplies a `mountAgent`-backed impl). */
+  serveAgent?: ServeAgent
 }): Promise<ControllerDispatcher | null> {
   const classes = await scanControllers(opts.controllersDir, opts.loadModule)
   if (classes.length === 0) return null
-  const handle = createDecoratorHandler(classes)
+  const handle = createDecoratorHandler({ controllers: classes, serveAgent: opts.serveAgent })
   return {
     dispatch: (request) => handle(request),
     matches: (method, pathname) => handle.matches(method, pathname),
@@ -142,11 +144,14 @@ export async function dispatchControllerRequest(args: {
   csrfMode: 'off' | 'warn' | 'strict'
   disallowed?: DisallowedConfig
   requestId: string
+  /** M47 — serves `@Expose`-bound agent routes (mountAgent-backed); omit for routes-only apps. */
+  serveAgent?: ServeAgent
 }): Promise<boolean> {
   const { req, res, csrfMode, disallowed, requestId } = args
   const dispatcher = await createControllerDispatcher({
     controllersDir: args.controllersDir,
     loadModule: args.loadModule,
+    serveAgent: args.serveAgent,
   })
   if (!dispatcher) return false
 
