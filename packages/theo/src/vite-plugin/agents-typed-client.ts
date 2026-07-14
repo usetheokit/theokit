@@ -112,6 +112,27 @@ ${handleBlock}}
 `
 }
 
+/**
+ * M47 — the RUNTIME body of the virtual `@theo/agents` module: it re-exports `useAgent` and emits one
+ * handle value per agent (`export const chat = agentHandle('/api/agents/chat')`), so
+ * `import { chat } from '@theo/agents'` resolves at runtime.
+ *
+ * `agentHandle` MUST be `import`ed (a local binding), NOT re-exported — `export { agentHandle } from '…'`
+ * re-exports the name but does NOT bind it locally, so `agentHandle(…)` below would throw
+ * `ReferenceError: agentHandle is not defined` in the browser (caught by the real-browser dogfood, missed
+ * by curl + the .d.ts-only unit test).
+ */
+export function generateAgentsRuntimeModule(agentNames: string[]): string {
+  const handleLines = agentNames.map(
+    (name) => `export const ${name} = agentHandle('/api/agents/${name}')`,
+  )
+  return (
+    `import { agentHandle } from 'theokit/client'\n` +
+    `export { useAgent } from 'theokit/client'\n` +
+    (handleLines.length > 0 ? handleLines.join('\n') + '\n' : '')
+  )
+}
+
 // ─── Vite plugin ─────────────────────────────────────────────────────────────
 
 const VIRTUAL_AGENTS_ID = '@theo/agents'
@@ -208,17 +229,8 @@ export function agentsTypedClientPlugin(opts: AgentsTypedClientPluginOptions): P
     },
     load(id) {
       if (id === RESOLVED_AGENTS_ID) {
-        // M47 — the runtime module re-exports `useAgent` AND emits one handle value per agent
-        // (`export const chat = agentHandle('/api/agents/chat')`), so `import { chat } from '@theo/agents'`
-        // resolves at runtime. Types come from the sibling `agents.d.ts` module augmentation.
         const agents = opts.scanManifest(opts.projectRoot).agents ?? []
-        const handleLines = agents.map(
-          (a) => `export const ${a.name} = agentHandle('/api/agents/${a.name}')`,
-        )
-        return (
-          `export { useAgent, agentHandle } from 'theokit/client'\n` +
-          (handleLines.length > 0 ? handleLines.join('\n') + '\n' : '')
-        )
+        return generateAgentsRuntimeModule(agents.map((a) => a.name))
       }
       return null
     },

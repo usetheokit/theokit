@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Binding an agent by handle (`import { chat } from '@theo/agents'; useAgent(chat)`) no longer crashes the page** with `ReferenceError: agentHandle is not defined`. The generated `@theo/agents` runtime module re-exported `agentHandle` and then called it — but a re-export (`export { x } from '…'`) creates no local binding, so the handle constructor threw at module load and the whole chat surface fell into the error boundary. `agentHandle` is now imported (local binding); only `useAgent` is re-exported. Verified end-to-end in a real browser (message → streamed agent reply). Regression shipped in `theokit@0.39.0` (M47).
 - **`theokit dev` no longer full-reloads ("blinks") when a local SQLite DB is written.** Every DB write (an agent turn persisting its conversation, a saved record, …) touches `.data/app.db` + its `-wal`/`-shm` sidecars; the dev watcher was reloading the page on each, tearing down any in-flight agent stream mid-interaction. The dev server now ignores `**/.data/**` and SQLite artifacts (`*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`) — interacting with an agent stays live (#121).
 
 ### Added
