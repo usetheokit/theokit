@@ -69,7 +69,7 @@ describe('mountAgent (M2)', () => {
       { default: defineAgent({ model: 'm' }) },
       jsonRequest({}),
       'k',
-      'agents/echo.ts',
+      { source: 'agents/echo.ts' },
     )
     expect(res.status).toBe(400)
     const json = (await res.json()) as { error: { code: string } }
@@ -81,7 +81,7 @@ describe('mountAgent (M2)', () => {
       { default: { not: 'an agent' } },
       jsonRequest({ message: 'x' }),
       'k',
-      'agents/bad.ts',
+      { source: 'agents/bad.ts' },
     ).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(AgentDefinitionError)
     // Negative case asserts the SPECIFIC message (names the source file), not just "throws".
@@ -99,7 +99,7 @@ describe('mountAgent (M2)', () => {
       { default: defineAgent({ model: 'm' }) },
       request,
       'k',
-      'agents/echo.ts',
+      { source: 'agents/echo.ts' },
     )
     expect(res.status).toBe(403)
     const json = (await res.json()) as { error: { code: string } }
@@ -117,8 +117,7 @@ describe('mountAgent (M2)', () => {
       { default: defineAgent({ model: 'm' }) },
       request,
       'k',
-      'agents/echo.ts',
-      'off',
+      { source: 'agents/echo.ts', csrfMode: 'off' },
     )
     expect(res.status).toBe(400)
   })
