@@ -120,7 +120,16 @@ export interface AgentBuilder<
   approvals(
     map: Record<string, HumanInTheLoopOptions>,
   ): AgentBuilder<TInput, TModel, TContext, TTools>
-  /** M13 — select skills: a static list OR a per-request resolver `(ctx) => string[]`. */
+  /**
+   * M13 — the skills the agent can consult mid-turn: a static list OR a per-request
+   * resolver `(ctx) => string[]`. Each entry is a `createSkill(...)` object OR a
+   * filesystem skill NAME (a string) — mix freely.
+   *
+   * Progressive disclosure (cheap by default): every turn the SDK lists each skill's
+   * name + description in a `<skills>` block (so the model KNOWS the skill exists) AND
+   * auto-provisions a `skill_read` tool the model calls to load the full body ON DEMAND
+   * (so a long procedure only enters the prompt when it is actually needed).
+   */
   skills(selection: SkillsSelection): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * Set the agent's conversation memory — the `ConversationStorageAdapter` the SDK persists turns to.
