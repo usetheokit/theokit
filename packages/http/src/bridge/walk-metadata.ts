@@ -2,12 +2,14 @@ import 'reflect-metadata'
 import type { z } from 'zod'
 
 import type { ControllerMeta } from '../decorators/controller.js'
+import type { ExposeEntry, ExposeOptions } from '../decorators/expose.js'
 import type { RouteMethodEntry, HttpVerb } from '../decorators/methods.js'
 import type { ParamEntry } from '../decorators/params.js'
 import type { RedirectMeta } from '../decorators/response.js'
 import {
   getMeta,
   CONTROLLER_PREFIX,
+  EXPOSE_AGENT,
   ROUTE_METHODS,
   ROUTE_PARAMS,
   ROUTE_STATUS,
@@ -35,6 +37,11 @@ export interface WalkResult {
   guards: Function[]
   interceptors: Function[]
   filters: Function[]
+  /**
+   * M47 — set when the member is bound via `@Expose(agent, opts)`. The dispatcher delegates such routes to
+   * the agent runtime (`mountAgent`) instead of invoking a JSON handler. `undefined` for normal verb routes.
+   */
+  agent?: { module: unknown; opts: ExposeOptions }
 }
 
 /**
@@ -139,6 +146,30 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
     }
   })
 
-  walkCache.set(ControllerClass, result)
-  return result
+  // M47 — @Expose-bound members have no verb decorator, so they are absent from `methods`. Produce an
+  // agent-serving WalkResult per binding: verb POST (agents are POST), path = prefix + member name (this
+  // MUST be the agent's convention route so the generated handle's path matches — see ExposeOptions), the
+  // agent module carried for the dispatcher, guards composed class-first (G5 shared guards). Interceptors
+  // do NOT run for agent routes — the dispatcher delegates straight to `mountAgent` before the interceptor
+  // chain — so they are intentionally not collected here (documented on `@Expose`).
+  const exposeEntries = getMeta<ExposeEntry[]>(EXPOSE_AGENT, ControllerClass) ?? []
+  const agentResults: WalkResult[] = exposeEntries.map((e) => {
+    const memberGuards = getMeta<Function[]>(USE_GUARDS, ControllerClass, e.propertyKey) ?? []
+    const verb: HttpVerb = 'POST'
+    return {
+      verb,
+      fullPath: joinPath(prefix, String(e.propertyKey)),
+      propertyKey: e.propertyKey,
+      paramEntries: [],
+      headers: [],
+      guards: [...classGuards, ...memberGuards],
+      interceptors: [],
+      filters: classFilters,
+      agent: { module: e.agent, opts: e.opts },
+    }
+  })
+
+  const all = [...result, ...agentResults]
+  walkCache.set(ControllerClass, all)
+  return all
 }

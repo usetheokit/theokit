@@ -58,13 +58,34 @@ describe('generateAgentsDts (M2)', () => {
       dtsOutPath: DTS_OUT,
       projectRoot: PROJECT_ROOT,
     })
-    // The AgentTransport seam type is imported from theokit/client.
-    expect(dts).toContain(`import type { UseAgentReturn, AgentTransport } from 'theokit/client'`)
+    // The AgentTransport seam type is imported from theokit/client (M47 adds AgentHandle to the import).
+    expect(dts).toContain(
+      `import type { UseAgentReturn, AgentTransport, AgentHandle } from 'theokit/client'`,
+    )
     // Overload 1 — by name (typed input + tools).
     expect(dts).toContain(`useAgent<K extends keyof AppAgents>(`)
     // Overload 2 — by transport (InProcessTransport etc.).
     expect(dts).toContain(`transport: AgentTransport,`)
     expect(dts).toContain(`): UseAgentReturn<TInput>`)
+  })
+
+  it('test_M47_emits_named_handle_and_handle_overload', () => {
+    // M47 (ADR-M47-2) — the codegen also emits one client-safe handle const per agent + a useAgent(handle)
+    // overload, so `import { chat } from '@theo/agents'; useAgent(chat)` kills the magic string + dup type.
+    const dts = generateAgentsDts({
+      manifest: manifestWith([
+        { filePath: 'agents/chat.ts', agentPath: '/api/agents/chat', name: 'chat' },
+      ]),
+      dtsOutPath: DTS_OUT,
+      projectRoot: PROJECT_ROOT,
+    })
+    // Named handle const, typed with the agent's phantom input + tools.
+    expect(dts).toContain(
+      `export const chat: AgentHandle<InferAgentInput<_agent_chat>, InferAgentToolNames<_agent_chat>>`,
+    )
+    // useAgent(handle) overload.
+    expect(dts).toContain(`handle: AgentHandle<TInput, TTools>,`)
+    expect(dts).toContain(`): UseAgentReturn<TInput, TTools>`)
   })
 
   it('test_empty_manifest_emits_stub_module', () => {
