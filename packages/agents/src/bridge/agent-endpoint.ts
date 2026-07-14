@@ -163,6 +163,12 @@ export interface StreamAgentOptions {
   /** Durable conversation storage for resume (M4); defaults to the SDK per-run in-memory store. */
   conversationStorage?: RuntimeOverrides['conversationStorage']
   /**
+   * theokit-file-based-config (EC-1) — the app root `cwd` the SDK resolves `.theokit/` against when
+   * `settingSources` is active. The framework boundary (`mountAgent`) threads its resolved
+   * `projectRoot` here so discovery points at the app root, NOT `process.cwd()`. Absent ⇒ no `local.cwd`.
+   */
+  cwd?: RuntimeOverrides['cwd']
+  /**
    * The request's abort signal (M4). On client disconnect, the HITL merge queue is closed so the
    * detached SDK pump stops buffering (bounded memory) and the client stream terminates at once.
    * The paused SDK run itself is released by the approval timeout, not instantly — a durable-store
@@ -185,6 +191,9 @@ export function streamAgentUIMessages(
   const textId = crypto.randomUUID()
   const overrides: RuntimeOverrides = {}
   if (input.conversationStorage) overrides.conversationStorage = input.conversationStorage
+  // theokit-file-based-config (EC-1) — thread the app-root cwd so the adapter merges it into
+  // `local.cwd` (sdk-adapter `overrides.cwd`), pointing `.theokit/` discovery at the app root.
+  if (input.cwd !== undefined) overrides.cwd = input.cwd
 
   let source: AsyncGenerator<AgentStreamEvent>
   if (!input.hitl || input.hitl.gated.size === 0) {

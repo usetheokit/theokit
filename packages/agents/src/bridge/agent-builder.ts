@@ -15,7 +15,7 @@
  *
  * PURE metadata (sdk-runtime.md / G2): the builder describes an agent, it NEVER calls an LLM.
  */
-import type { ConversationStorageAdapter, CustomTool } from '@theokit/sdk'
+import type { ConversationStorageAdapter, CustomTool, SettingSource } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
@@ -139,6 +139,13 @@ export interface AgentBuilder<
     adapter: ConversationStorageAdapter,
   ): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
+   * theokit-file-based-config — opt into `.theokit/` file-based config (skills, subagents, hooks,
+   * MCP, context, cron), discovered by the SDK from the app root (`"project"` = `<cwd>/.theokit/`,
+   * `"user"` = `~/.theokit/`). Unset ⇒ inline (code) config only. SECURITY: `"project"` enables
+   * shell-executing hooks from `.theokit/hooks.json` — opt-in because `.theokit/` is your own repo.
+   */
+  settingSources(sources: readonly SettingSource[]): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
    * Apply a reusable partial chain (Spring-Boot-style composition). `preset` receives the current
    * builder and returns an advanced one; its accumulated type-state flows through.
    */
@@ -180,6 +187,8 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     skills: (selection: SkillsSelection) => makeBuilder({ ...config, skills: selection }),
     conversationStorage: (adapter: ConversationStorageAdapter) =>
       makeBuilder({ ...config, conversationStorage: adapter }),
+    settingSources: (sources: readonly SettingSource[]) =>
+      makeBuilder({ ...config, settingSources: sources }),
     use: (preset: (b: unknown) => unknown) => preset(runtime),
     build: () => defineAgent(config),
   }
