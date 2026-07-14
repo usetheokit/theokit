@@ -28,6 +28,10 @@ export {
 export { useAgent } from './use-agent.js'
 export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from './use-agent.js'
 
+// M47 (ADR-M47-2) — the typed, client-safe agent handle (`useAgent(chat)` — no magic string, no dup type).
+export { agentHandle, isAgentHandle } from './agent-handle.js'
+export type { AgentHandle } from './agent-handle.js'
+
 // M41 (ADR-0050) — the unified agent-client transport seam (`ai`'s ChatTransport + optional approve),
 // the two shipped transports, and the framework-agnostic store `useAgent` binds over.
 export type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
