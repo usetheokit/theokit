@@ -164,7 +164,7 @@ function resolveDiscoveryCwd(
  * `projects/` transcript subtree never collides with `settingSources` discovery. Absent `projectRoot`
  * ⇒ `undefined` (the SDK default `~/.theokit` applies).
  */
-function resolveSessionBaseDir(projectRoot: string | undefined): string | undefined {
+export function resolveSessionBaseDir(projectRoot: string | undefined): string | undefined {
   if (projectRoot === undefined) return undefined
   // Web-Standards discipline (R3a/G8): no `node:path` in `server/` — append with `/` (the SDK
   // normalizes the separator). Strip a trailing slash on `projectRoot` so we never emit `//`.
