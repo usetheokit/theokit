@@ -22,16 +22,6 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-    deleteConversation = async () => {}
-  },
-  FileSystemConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-    deleteConversation = async () => {}
-  },
   // SE36 (SDK v3.0) — factories are `X.create()`.
   Tool: { create: (spec: { name: string }) => ({ name: spec.name }) },
   Skill: {

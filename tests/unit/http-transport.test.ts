@@ -172,9 +172,9 @@ describe('HttpTransport (M41)', () => {
     const body = JSON.parse(
       (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
     )
-    expect(body).toEqual({
-      messages: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
-    })
+    // The turn's `messages` ride along + the stable `id` (chatId → server sessionId, session-continuity
+    // fix). The point of THIS test is that a primitive body is NOT spread into char-indexed keys.
+    expect(body.messages).toEqual([{ id: 'u1', role: 'user', parts: [{ type: 'text', text: 'hi' }] }])
     expect(Object.keys(body)).not.toContain('0')
   })
 
