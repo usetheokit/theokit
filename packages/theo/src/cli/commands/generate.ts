@@ -266,7 +266,7 @@ function generateMemoryTemplate(_name: string): string {
     ` * keyed by the conversation's session id — a same-session follow-up request resumes prior turns with`,
     ` * zero setup. There is no storage adapter to construct or pass to the agent anymore.`,
     ` *`,
-    ` * Keep these transcripts out of git (the scaffold's \`.gitignore\` already ignores \`.data/\`).`,
+    ` * Keep these transcripts out of git — add \`.data/\` to your \`.gitignore\`.`,
     ` *`,
     ` * Advanced: to change WHERE sessions are written (e.g. \`~/.claude\` so the Claude Code CLI can`,
     ` * \`--continue\` them), set the SDK's \`local.baseDir\` where you create the agent. Most apps never need to.`,

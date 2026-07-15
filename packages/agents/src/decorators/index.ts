@@ -24,13 +24,6 @@ export { Guardrails, getGuardrailsConfig } from './guardrails.js'
 export { MCP, getMcpConfig, type McpServerConfig, type McpServersMap } from './mcp.js'
 export { Hook, getHooks, getHooksByPoint, type HookPoint, type HookEntry } from './hook.js'
 export {
-  Conversation,
-  getConversationConfig,
-  type ConversationOptions,
-  type ConversationStorage,
-  type CompactionStrategy,
-} from './conversation.js'
-export {
   HumanInTheLoop,
   getHumanInTheLoopConfig,
   type HumanInTheLoopOptions,
