@@ -1097,7 +1097,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M48 — [ ] Ecosystem integration guarantee — FAANG-grade theokit↔@theokit/sdk seam
+### M48 — [x] Ecosystem integration guarantee — FAANG-grade theokit↔@theokit/sdk seam
 
 > Added 2026-07-14 by `/roadmap-feature` (slug: `ecosystem-integration-guarantee`). See CHANGELOG `[Unreleased] § Added`.
 
