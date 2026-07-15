@@ -9,7 +9,6 @@
 import type {
   AgentDefinition,
   BudgetTracker,
-  ConversationStorageAdapter,
   CustomTool,
   InlineSkill,
   InteractionUpdate,
@@ -86,11 +85,13 @@ export interface RuntimeOverrides {
   /** Per-run SDK budget tracker (inner tool-loop cap; distinct from the loop's USD `budget`). */
   budgetTracker?: BudgetTracker
   /**
-   * V4-M: conversation store shared across the loop's rounds so history persists
-   * (round N+1 sees rounds 1..N). Default `InMemoryConversationStorage` (per-run,
-   * no disk). Pass a `FileSystemConversationStorage`/custom adapter for durable history.
+   * SDK 4.0 (SE40) — root of the native Claude-shaped `.jsonl` session transcript the SDK writes
+   * automatically (`<baseDir>/projects/<encoded-cwd>/<agentId>.jsonl`). The framework threads the
+   * app's project root here (see `mount-agent`) so sessions persist per-app; unset ⇒ SDK default
+   * (`~/.theokit`). Replaces the removed pluggable `conversationStorage` — persistence is now the
+   * SDK's native transcript, not a swappable adapter.
    */
-  conversationStorage?: ConversationStorageAdapter
+  baseDir?: string
   /**
    * V4-Q: pre-built SDK `CustomTool[]` forwarded RAW to `Agent.create.tools` (appended after the
    * compiled tools), bypassing `defineTool` (which requires a Zod schema). Lets an app whose tools
@@ -180,8 +181,6 @@ interface SdkRuntime {
     inputSchema: unknown
     handler: CustomTool['handler']
   }) => unknown
-  InMemoryConversationStorage: new () => ConversationStorageAdapter
-  FileSystemConversationStorage: new () => ConversationStorageAdapter
   /**
    * SE23 — optional `skill_read` tool factory. Absent on SDKs older than it shipped; guarded with `in`
    * at load so an older peer degrades gracefully (inline skills still list in the `<skills>` block, they
@@ -192,14 +191,12 @@ interface SdkRuntime {
 
 /**
  * Dynamically import `@theokit/sdk` (optional peer dep) and bind the runtime symbols; `null` when it
- * is not installed (the caller emits `SDK_NOT_INSTALLED`). FS storage is guarded with `in` so an SDK
- * build (or a test mock) that omits the export does not throw the whole import — it falls back to
- * in-memory (no durable resume). Only used for `@Checkpoint({ storage: 'filesystem' })`.
+ * is not installed (the caller emits `SDK_NOT_INSTALLED`). SDK 4.0 (SE40) writes the session transcript
+ * natively — there is no pluggable storage to load; persistence is automatic (see `local.baseDir`).
  */
 async function loadSdkRuntime(): Promise<SdkRuntime | null> {
   try {
     const sdk = await import('@theokit/sdk')
-    const InMemory = sdk.InMemoryConversationStorage
     // SE36 (SDK v3.0) — the public factories became `X.create()`: `defineTool`→`Tool.create`,
     // `defineSkillReadTool`→`SkillReadTool.create`. Guard on the VALUE (not `'…' in sdk`) so a peer
     // that omits `SkillReadTool` degrades gracefully instead of calling `.create` on `undefined`.
@@ -209,29 +206,12 @@ async function loadSdkRuntime(): Promise<SdkRuntime | null> {
       // `.bind` keeps the static factory callable when detached from `sdk.Tool` (it takes no `this`,
       // but binding is explicit + satisfies unbound-method rather than relying on that).
       defineTool: sdk.Tool.create.bind(sdk.Tool) as unknown as SdkRuntime['defineTool'],
-      InMemoryConversationStorage: InMemory,
-      FileSystemConversationStorage:
-        'FileSystemConversationStorage' in sdk ? sdk.FileSystemConversationStorage : InMemory,
       ...(skillReadTool ? { defineSkillReadTool: (skills) => skillReadTool.create(skills) } : {}),
     }
   } catch (err) {
     console.warn('[theokit] @theokit/sdk import failed:', err)
     return null
   }
-}
-
-/**
- * Pick the shared conversation store (M4). `@Checkpoint({ storage: 'filesystem' })` selects the
- * SDK's durable FS adapter so a same-`sessionId` follow-up request RESUMES from persisted history
- * (no new store — the SDK owns persistence). Everything else keeps the per-run in-memory store
- * ('drizzle'/'redis' are not shipped by the SDK → in-memory fallback).
- */
-function newConversationStorage(
-  compiled: CompiledAgentOptions,
-  InMemory: new () => ConversationStorageAdapter,
-  FileSystem: new () => ConversationStorageAdapter,
-): ConversationStorageAdapter {
-  return compiled.checkpoint?.storage === 'filesystem' ? new FileSystem() : new InMemory()
 }
 
 /** #40: tagged item flowing through the merge queue — an incremental delta or a complete SDK message. */
@@ -512,13 +492,8 @@ export function createSdkAgentStream(
   // M7 — run-context resolved once per stream: per-run override wins over the agent-level
   // `defineAgent({ context })`; injected into every tool's `ctx.context` by buildSdkTools.
   const runContext = overrides.runContext ?? compiled.runContext
-  // V4-M: ONE conversation store shared across the loop's rounds (closure-scoped per run)
-  // so history persists across the per-round agent create/dispose. Defaults lazily to the
-  // SDK's in-memory store (no disk) after the dynamic import; an app override wins.
-  // Precedence: per-run override > agent-level `defineAgent({ conversationStorage })`
-  // (compiled.conversationStorage) > SDK default (chosen lazily below).
-  let storage: ConversationStorageAdapter | undefined =
-    overrides.conversationStorage ?? compiled.conversationStorage
+  // SDK 4.0 (SE40): history persists across the loop's rounds via the SDK's native `.jsonl` transcript
+  // (keyed by `sessionId`/`agentId` under `local.baseDir`). No theokit-side store — the SDK owns it.
 
   // `factoryOpts.disableTools` (step-cap force-close) → `tool_choice:"none"` at send-time.
   return (
@@ -541,8 +516,6 @@ export function createSdkAgentStream(
         }
         return
       }
-
-      const { InMemoryConversationStorage, FileSystemConversationStorage } = rt
 
       // M7 — pass the resolved run-context so every tool handler receives it as `ctx.context`.
       const sdkTools = buildSdkTools(compiledTools, rt.defineTool, overrides.sdkTools, runContext)
@@ -576,16 +549,8 @@ export function createSdkAgentStream(
         keys: runContext !== undefined ? Object.keys(runContext) : [],
       })
 
-      // V4-M/M4: mutate the closure-level `storage` variable so it is shared across rounds
-      // (subsequent calls to this generator reuse the same store — ONE per factory instance).
-      storage ??= newConversationStorage(
-        compiled,
-        InMemoryConversationStorage,
-        FileSystemConversationStorage,
-      )
-
       try {
-        yield* streamSdkAgent(rt, compiled, sdkTools, storage, {
+        yield* streamSdkAgent(rt, compiled, sdkTools, {
           apiKey,
           model,
           reasoningEffort,
@@ -633,7 +598,6 @@ async function* streamSdkAgent(
   rt: SdkRuntime,
   compiled: CompiledAgentOptions,
   sdkTools: unknown[],
-  storage: ConversationStorageAdapter,
   opts: StreamSdkAgentOpts,
 ): AsyncGenerator<StreamEvent> {
   const { Agent } = rt
@@ -654,6 +618,9 @@ async function* streamSdkAgent(
   // Project the compiled M8 decorator fields into native Agent.create args.
   const { options: m8, applied } = assembleM8CreateOptions(compiled)
   if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
+  // SDK 4.0 (SE40): root the native session transcript at the framework-resolved app root when known
+  // (mount-agent threads it), so sessions persist per-app; unset ⇒ SDK default (`~/.theokit`).
+  if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
   const extra = buildExtraCreateOptions(overrides, compiled)
   if (applied.length > 0) {
     // Wiring triad — runtime metric: observable proof the decorators fired (opt-in via THEOKIT_DEBUG).
@@ -671,7 +638,6 @@ async function* streamSdkAgent(
     tools: sdkTools,
     ...m8,
     ...extra,
-    conversationStorage: storage,
   })
   try {
     // #44: chronological token streaming via onDelta + merge queue (see createDeltaSink).

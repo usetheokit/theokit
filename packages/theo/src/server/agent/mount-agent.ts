@@ -138,6 +138,7 @@ export async function mountAgent(
       hitl,
       signal: request.signal,
       cwd: resolveDiscoveryCwd(compiled, projectRoot),
+      baseDir: resolveSessionBaseDir(projectRoot),
     }),
     { runId, cache: getRunEventCache() },
   )
@@ -154,4 +155,18 @@ function resolveDiscoveryCwd(
 ): string | undefined {
   const optedIn = (compiled.settingSources?.length ?? 0) > 0
   return projectRoot !== undefined && optedIn ? projectRoot : undefined
+}
+
+/**
+ * SDK 4.0 (SE40) — resolve the root of the native `.jsonl` session transcript. Unlike `.theokit/`
+ * discovery, persistence is NOT gated on a file-based-config opt-in — every agent session persists.
+ * Root it under the app's `.data/` (git-ignored, EC-2), kept OUT of the `.theokit/` config dir so a
+ * `projects/` transcript subtree never collides with `settingSources` discovery. Absent `projectRoot`
+ * ⇒ `undefined` (the SDK default `~/.theokit` applies).
+ */
+export function resolveSessionBaseDir(projectRoot: string | undefined): string | undefined {
+  if (projectRoot === undefined) return undefined
+  // Web-Standards discipline (R3a/G8): no `node:path` in `server/` — append with `/` (the SDK
+  // normalizes the separator). Strip a trailing slash on `projectRoot` so we never emit `//`.
+  return `${projectRoot.replace(/\/+$/, '')}/.data/agent-sessions`
 }

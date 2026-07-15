@@ -18,14 +18,6 @@ const h = vi.hoisted(() => ({ handlerContext: undefined as unknown }))
 // @theokit/sdk mock (same contract as run-context.test.ts): send invokes the first tool handler
 // with NO ctx — theokit injects the run-context at the adapter layer — and yields a FINISHED stream.
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
-  FileSystemConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Tool: { create: (spec: unknown) => spec },
   Agent: {
     getOrCreate: vi.fn(
