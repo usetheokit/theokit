@@ -11,7 +11,6 @@
 import type {
   AgentDefinition,
   BudgetTracker,
-  ConversationStorageAdapter,
   CustomTool,
   PluginsSettings,
   ProviderRoutingSettings,
@@ -63,8 +62,6 @@ export interface DelegateOptions {
   agents?: Record<string, AgentDefinition>
   /** Per-run SDK budget tracker (inner tool-loop cap). */
   budgetTracker?: BudgetTracker
-  /** Per-run conversation store (cross-round history). */
-  conversationStorage?: ConversationStorageAdapter
   /** Per-run pre-built SDK tools forwarded raw (V4-Q). */
   sdkTools?: readonly CustomTool[]
   /** Per-round transient retry (V4-P). */
@@ -159,7 +156,6 @@ export async function delegate(
       providers: opts.providers,
       agents: opts.agents,
       budgetTracker: opts.budgetTracker,
-      conversationStorage: opts.conversationStorage,
       sdkTools: opts.sdkTools,
     })
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`

@@ -20,7 +20,7 @@ export interface M8CreateOptions {
   context?: ContextSettings
   systemPrompt?: string | SystemPromptResolver
   /** SDK local options: settings source for SKILL.md discovery (EC-1) + per-run cwd (V4-L.2). */
-  local?: { settingSources?: string[]; cwd?: string }
+  local?: { settingSources?: string[]; cwd?: string; baseDir?: string }
   /** #89 — `@MCP` servers forwarded to `Agent.create({ mcpServers })` (the SDK owns execution). */
   mcpServers?: McpServersMap
 }

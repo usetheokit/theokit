@@ -8,7 +8,6 @@
  */
 import type {
   ContextSettings,
-  ConversationStorageAdapter,
   SettingSource,
   SkillsSettings,
   SystemPromptResolver,
@@ -144,14 +143,6 @@ export interface CompiledAgentOptions {
   recoverLeakedToolCalls?: boolean
   /** Static prompt OR a per-request {@link SystemPromptResolver} (V4-L.1, Axis-B). */
   systemPrompt?: string | SystemPromptResolver
-  /**
-   * Agent-level conversation memory: the `ConversationStorageAdapter` the SDK persists turns to
-   * (`Agent.getOrCreate({ conversationStorage })`). Populated by `defineAgent({ conversationStorage })`
-   * / `.conversationStorage(adapter)`. A per-run override (`RuntimeOverrides.conversationStorage`)
-   * wins over this; absent ⇒ the SDK default store is chosen lazily. Distinct from `@Checkpoint`,
-   * which only toggles filesystem-vs-memory for the built-in default.
-   */
-  conversationStorage?: ConversationStorageAdapter
   /**
    * theokit-file-based-config — opt-in `.theokit/` file-based config roots (`"project"`/`"user"`/…).
    * Projected into `Agent.create({ local: { settingSources } })` by `assembleM8CreateOptions`
