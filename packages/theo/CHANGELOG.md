@@ -1,5 +1,18 @@
 # theo
 
+## 0.42.0
+
+### Minor Changes
+
+- Adopt `@theokit/sdk@^4.0.1`. Agent conversation history now persists **automatically** via the SDK's native Claude-shaped `.jsonl` transcript — no storage adapter to wire. The framework roots each app's transcript under `<projectRoot>/.data/agent-sessions` (git-ignore `.data/`).
+
+  **Breaking:** the pluggable conversation-storage surface is removed (SDK 4.0 no longer ships it). `AgentBuilder.conversationStorage()` and the `@Conversation` decorator are gone. Apps that passed a storage adapter should delete that wiring — persistence is on by default. Sessions still thread by `sessionId` for resume.
+
+### Patch Changes
+
+- Updated dependencies
+  - @theokit/agents@0.41.0
+
 ## 0.41.0
 
 ### Minor Changes
