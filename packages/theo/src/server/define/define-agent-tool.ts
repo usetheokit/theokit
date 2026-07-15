@@ -26,14 +26,39 @@ import { z } from 'zod'
  *
  * @public
  */
+/**
+ * M48 — the tool-handler run context, a standalone mirror of `@theokit/sdk`'s tool `ctx` (kept in
+ * sync by the `tests/type/custom-tool-mirror.test-d.ts` type gate). `context` (M7) is the object
+ * supplied once at agent/run level; `messages` (SE12) is a read-only transcript projection of the
+ * current turn; `threadId` (#119) is the run's session identity — so a stateful tool shared across
+ * sessions can scope its state per session instead of leaking it. Standalone (no `@theokit/sdk`
+ * import) because the SDK is an optional peer.
+ */
+export interface ToolHandlerContext {
+  signal?: AbortSignal
+  context?: unknown
+  messages?: readonly ToolContextMessage[]
+  threadId?: string
+}
+
+/** SE12 — a read-only, text-only projection of a turn message (mirror of the SDK type). */
+export interface ToolContextMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
 export interface CustomTool {
   name: string
   description: string
   inputSchema: Record<string, unknown>
-  handler: (
-    input: Record<string, unknown>,
-    ctx?: { signal?: AbortSignal; context?: unknown },
-  ) => string | Promise<string>
+  /**
+   * Returns `string` (theokit's `defineAgentTool` maps every result to the model-visible string).
+   * The SDK's `CustomTool` handler return is WIDER (`string | ToolResultContentBlock[]`, SE7); a
+   * `string`-returning handler is a valid subtype the SDK accepts — the type gate asserts
+   * `mirror ⊆ SDK` for the return (covariant) and `mirror === SDK` for the `ctx` param (contravariant,
+   * to catch #119 `ctx.threadId` drift). See `tests/type/custom-tool-mirror.test-d.ts`.
+   */
+  handler: (input: Record<string, unknown>, ctx?: ToolHandlerContext) => string | Promise<string>
   /** M18 — optional per-target formatters for the app's UI/transcript (ignored by the SDK wire). */
   transform?: ToolTransform
 }
@@ -70,10 +95,7 @@ export interface DefineAgentToolSpec<T extends z.ZodType, R = string> {
    * M18 — the handler may return RICH data `R` (not just a string) when `toModelOutput` is
    * provided to map it to the model-visible string.
    */
-  handler: (
-    input: z.infer<T>,
-    ctx?: { signal?: AbortSignal; context?: unknown },
-  ) => R | Promise<R>
+  handler: (input: z.infer<T>, ctx?: ToolHandlerContext) => R | Promise<R>
   /**
    * M18 — map the rich handler result `R` to the string the model sees. Required (in practice)
    * when `handler` returns a non-string; absent ⇒ the handler must return a string.
@@ -157,10 +179,7 @@ export function defineAgentTool<T extends z.ZodType, R = string>(
     name: spec.name,
     description: spec.description,
     inputSchema,
-    handler: async (
-      input: Record<string, unknown>,
-      ctx?: { signal?: AbortSignal; context?: unknown },
-    ): Promise<string> => {
+    handler: async (input: Record<string, unknown>, ctx?: ToolHandlerContext): Promise<string> => {
       const parsed = spec.inputSchema.parse(input)
       // M7 — forward the run ctx so the handler can read `ctx.context` (e.g. projectRoot).
       const result = await spec.handler(parsed, ctx)
