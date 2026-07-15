@@ -27,14 +27,6 @@ const h = vi.hoisted(() => ({
 // @theokit/sdk mock: getOrCreate captures the built tools; send invokes the first tool's handler
 // with NO ctx (the SDK is NOT the one forwarding context here) and yields a FINISHED stream.
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
-  FileSystemConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Tool: { create: (spec: unknown) => spec },
   Agent: {
     getOrCreate: vi.fn(

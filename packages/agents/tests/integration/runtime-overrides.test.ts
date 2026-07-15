@@ -31,10 +31,6 @@ const h = vi.hoisted(() => ({
 // maxIterations ceiling; post theokit#53 the signature keys on tool name+input only),
 // ⇒ finishReason 'tool-calls' (the "still working" signal), and a FINISHED status (⇒ done).
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Agent: {
     getOrCreate: vi.fn(async (_id: string, opts: Record<string, unknown>) => {
       h.captured = opts
@@ -117,6 +113,14 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
     const runner = AgentRunner.builder(SimpleAgent).build()
     await runner.run('hi', { apiKey: 'k', cwd: '/proj/root' })
     expect((h.captured?.local as { cwd: string }).cwd).toBe('/proj/root')
+  })
+
+  it('test_baseDir_override_reaches_agent_create_local', async () => {
+    // SDK 4.0 (SE40): the per-run root of the native `.jsonl` session transcript is threaded into
+    // `Agent.create({ local: { baseDir } })`, so the SDK persists (and resumes) sessions under it.
+    const runner = AgentRunner.builder(SimpleAgent).build()
+    await runner.run('hi', { apiKey: 'k', baseDir: '/app/.data/agent-sessions' })
+    expect((h.captured?.local as { baseDir: string }).baseDir).toBe('/app/.data/agent-sessions')
   })
 
   it('test_maxIterations_override_caps_loop_with_step_limit', async () => {

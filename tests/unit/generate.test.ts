@@ -123,7 +123,7 @@ describe('theo generate', () => {
     }
   })
 
-  it('should create a memory file that configures conversation storage', async () => {
+  it('should create a memory doc file (persistence is automatic since SDK 4.0)', async () => {
     const dir = createTempProject()
     const orig = process.cwd()
     process.chdir(dir)
@@ -132,12 +132,13 @@ describe('theo generate', () => {
       const filePath = join(dir, 'agents/memory/conversations.ts')
       expect(existsSync(filePath)).toBe(true)
       const content = readFileSync(filePath, 'utf-8')
-      expect(content).toContain("from '@theokit/sdk'")
-      expect(content).toContain('InMemoryConversationStorage')
-      expect(content).toContain('FileSystemConversationStorage')
-      expect(content).toContain('conversationStorage')
-      // Now connectable: the doc shows wiring it into the agent via .conversationStorage(...).
-      expect(content).toContain('.conversationStorage(conversationStorage)')
+      // SDK 4.0 (SE40): no pluggable storage to construct — the file is a doc explaining automatic
+      // native persistence. It must NOT emit the removed SDK classes or the removed builder method.
+      expect(content).not.toContain('InMemoryConversationStorage')
+      expect(content).not.toContain('FileSystemConversationStorage')
+      expect(content).not.toContain('.conversationStorage(')
+      expect(content).toContain('AUTOMATICALLY')
+      expect(content).toContain('.data/agent-sessions')
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })
