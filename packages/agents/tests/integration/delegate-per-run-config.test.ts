@@ -1,6 +1,6 @@
 /**
  * V4-T — `delegate()` forwards the per-run config surface (parity with `AgentRunner.stream()`):
- * `model`/`cwd`/`plugins`/`providers`/`agents`/`budgetTracker`/`conversationStorage`/`sdkTools` reach
+ * `model`/`cwd`/`plugins`/`providers`/`agents`/`budgetTracker`/`sdkTools` reach
  * `createSdkAgentStream`'s overrides, and `retry`/`reflection` reach the reflective loop config.
  * Absent fields ⇒ today's behavior (decorator model only; strategy-derived reflection; no retry).
  */
@@ -79,7 +79,6 @@ describe('V4-T delegate() forwards per-run config', () => {
       providers: { routes: [] } as never,
       agents: { helper: {} as never },
       budgetTracker: { onStep: () => {} } as never,
-      conversationStorage: { getMessages: async () => [], appendMessage: async () => {} } as never,
       sdkTools: [fakeTool] as never,
     })
     expect(h.overrides?.model).toBe('override-model') // opts.model wins over the decorator
@@ -88,7 +87,6 @@ describe('V4-T delegate() forwards per-run config', () => {
     expect(h.overrides?.providers).toEqual({ routes: [] })
     expect(h.overrides?.agents).toHaveProperty('helper')
     expect(h.overrides?.budgetTracker).toBeDefined()
-    expect(h.overrides?.conversationStorage).toBeDefined()
     expect(h.overrides?.sdkTools).toContain(fakeTool)
   })
 

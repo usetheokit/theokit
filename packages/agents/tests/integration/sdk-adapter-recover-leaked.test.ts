@@ -14,10 +14,6 @@ import type { ProviderRoutingSettings } from '@theokit/sdk'
 const getOrCreateMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Agent: {
     getOrCreate: getOrCreateMock.mockImplementation(async () => ({
       send: async (_msg: string, opts?: { onDelta?: (d: { update: unknown }) => void }) => {
