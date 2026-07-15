@@ -1,5 +1,22 @@
 # theo
 
+## 0.43.0
+
+### Minor Changes
+
+- Ecosystem integration guarantee for the `@theokit/sdk` seam (M48) — the load-bearing seam (the SDK is the only agent runtime) is now drift-guaranteed to the same FAANG-grade posture as the `@theokit/ui` and TheoCloud seams.
+
+  - **Tool handlers now see `ctx.threadId` (the run's session identity, #119) and `ctx.messages` (the turn transcript, SE12).** The local `CustomTool` type mirror is synced to the SDK and kept in sync by a `.test-d.ts` type gate, so a future SDK `ctx` change fails `tsc` instead of drifting silently — a stateful tool can scope state per session instead of leaking it.
+  - **`theokit start` fails fast when the installed `@theokit/sdk` is incompatible** — a typed `SdkIncompatibleError` (found-vs-required) at boot, instead of only a per-request error. An api-only app with no SDK installed still boots (the SDK is an optional peer).
+  - **Closed the SDK-family peer ranges** (`@theokit/sdk-tools` `>=0.11.0` → `^0.11.0`) and added a consumer + producer contract test plus a version-drift guard so a breaking SDK change is caught in CI or at publish, never in production.
+
+  No action needed for apps already on `@theokit/sdk ^4.0.1`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @theokit/agents@0.42.0
+
 ## 0.42.0
 
 ### Minor Changes
