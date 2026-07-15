@@ -4,65 +4,8 @@ import { z } from 'zod'
 import { Agent } from '../../src/decorators/agent.js'
 import { MainLoop } from '../../src/decorators/main-loop.js'
 import { Toolbox, Tool } from '../../src/decorators/tool.js'
-import { Conversation, getConversationConfig } from '../../src/decorators/conversation.js'
 import { ContextWindow, getContextWindowConfig } from '../../src/decorators/context-window.js'
 import { HumanInTheLoop, getHumanInTheLoopConfig } from '../../src/decorators/human-in-the-loop.js'
-
-// ─── @Conversation ──────────────────────────────────────────
-
-describe('@Conversation decorator', () => {
-  it('test_conversation_stores_config', () => {
-    @Agent({ name: 'test', route: '/test' })
-    @Conversation({ storage: 'drizzle', maxHistory: 100, compaction: 'summarize', ttl: 86_400_000 })
-    class TestAgent {
-      @MainLoop()
-      async run() {}
-    }
-
-    const config = getConversationConfig(TestAgent)!
-    expect(config.storage).toBe('drizzle')
-    expect(config.maxHistory).toBe(100)
-    expect(config.compaction).toBe('summarize')
-    expect(config.ttl).toBe(86_400_000)
-  })
-
-  it('test_conversation_defaults', () => {
-    @Agent({ name: 'test', route: '/test' })
-    @Conversation()
-    class TestAgent {
-      @MainLoop()
-      async run() {}
-    }
-
-    const config = getConversationConfig(TestAgent)!
-    expect(config.storage).toBe('memory')
-    expect(config.maxHistory).toBe(0)
-    expect(config.compaction).toBe('truncate')
-    expect(config.ttl).toBe(0)
-    expect(config.preserveLastN).toBe(5)
-  })
-
-  it('test_conversation_redis', () => {
-    @Agent({ name: 'test', route: '/test' })
-    @Conversation({ storage: 'redis', ttl: 3_600_000 })
-    class TestAgent {
-      @MainLoop()
-      async run() {}
-    }
-
-    expect(getConversationConfig(TestAgent)!.storage).toBe('redis')
-  })
-
-  it('test_no_conversation_returns_undefined', () => {
-    @Agent({ name: 'test', route: '/test' })
-    class TestAgent {
-      @MainLoop()
-      async run() {}
-    }
-
-    expect(getConversationConfig(TestAgent)).toBeUndefined()
-  })
-})
 
 // ─── @ContextWindow ─────────────────────────────────────────
 

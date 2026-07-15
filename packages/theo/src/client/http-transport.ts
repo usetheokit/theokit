@@ -67,7 +67,7 @@ export class HttpTransport implements AgentTransport {
   async sendMessages(
     options: Parameters<ChatTransport<UIMessage>['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
-    const { messages, abortSignal, headers, body } = options
+    const { messages, abortSignal, headers, body, chatId } = options
     // Only spread an object body (never a primitive — that would emit char-indexed keys). `body` is typed
     // `object | undefined` (ai's `ChatRequestOptions`), so no cast is needed — the guard narrows to
     // `object`. (A runtime-`null` body, which the type forbids, spreads to `{}` — harmless.) The server
@@ -82,7 +82,11 @@ export class HttpTransport implements AgentTransport {
         ...this.#resolveHeaders(),
         ...toRecord(headers),
       },
-      body: JSON.stringify({ ...extra, messages }),
+      // Send the stable `chatId` as the top-level `id` — the server reads it as the sessionId, so ONE
+      // conversation (SDK history + session-scoped tools like `todolist`) persists across turns instead of
+      // resetting on a fresh random session each request. Placed last so a session is never shadowed by an
+      // `id` field inside the typed input. Undefined chatId ⇒ key omitted ⇒ server falls back (unchanged).
+      body: JSON.stringify({ ...extra, messages, id: chatId }),
       signal: abortSignal,
     })
     if (!response.ok) {

@@ -14,7 +14,6 @@
 import type {
   AgentDefinition,
   BudgetTracker,
-  ConversationStorageAdapter,
   CustomTool,
   Plugin,
   PluginsSettings,
@@ -102,6 +101,11 @@ export interface AgentRunnerRunOptions {
    */
   readonly cwd?: string
   /**
+   * SDK 4.0 (SE40): per-run root of the native `.jsonl` session transcript, forwarded into
+   * `Agent.create({ local: { baseDir } })`. Absent ⇒ the SDK default (`~/.theokit`).
+   */
+  readonly baseDir?: string
+  /**
    * V4-L.2 (Axis-A SWAP): per-run loop-ceiling override. When provided, the loop
    * strategy is re-resolved with this ceiling for this call only (zod-validated —
    * `< 1` throws, never a silent unbounded loop). Absent ⇒ the build-time ceiling.
@@ -124,12 +128,6 @@ export interface AgentRunnerRunOptions {
    * send. Distinct from {@link AgentRunnerRunOptions.budget} (the OUTER reflective-loop USD ceiling).
    */
   readonly budgetTracker?: BudgetTracker
-  /**
-   * V4-M: conversation store shared across the loop's rounds so history persists (round N+1
-   * sees rounds 1..N). Default `InMemoryConversationStorage` (per-run, no disk). Pass a
-   * `FileSystemConversationStorage`/custom adapter for durable cross-run history.
-   */
-  readonly conversationStorage?: ConversationStorageAdapter
   /**
    * V4-Q: pre-built SDK `CustomTool[]` forwarded RAW to `Agent.create.tools` (appended after the
    * agent's compiled tools), bypassing `defineTool`. For an app whose tools come from imperative
@@ -262,11 +260,11 @@ export class AgentRunner {
         stripToolDialect: opts.stripToolDialect, // theocode#32: per-run tool-dialect strip opt-in
         recoverLeakedToolCalls: opts.recoverLeakedToolCalls, // theokit#58: per-run leaked-dialect recovery opt-in
         cwd: opts.cwd,
+        baseDir: opts.baseDir,
         plugins: opts.plugins,
         providers: opts.providers,
         agents: opts.agents,
         budgetTracker: opts.budgetTracker,
-        conversationStorage: opts.conversationStorage,
         sdkTools: opts.sdkTools, // V4-Q: pre-built SDK tools forwarded raw
       })
     const sessionId = opts.sessionId ?? `runner-${crypto.randomUUID()}`

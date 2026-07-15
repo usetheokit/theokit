@@ -14,10 +14,6 @@ import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 const h = vi.hoisted(() => ({ deltaText: '' }))
 
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Agent: {
     getOrCreate: vi.fn(async () => ({
       // Drive onDelta with the configured text (the adapter's #44 token-stream path), then FINISH.

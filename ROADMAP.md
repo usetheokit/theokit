@@ -1097,6 +1097,33 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
+### M48 — [ ] Ecosystem integration guarantee — FAANG-grade theokit↔@theokit/sdk seam
+
+> Added 2026-07-14 by `/roadmap-feature` (slug: `ecosystem-integration-guarantee`). See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** Bring the `theokit ↔ @theokit/sdk` integration seam up to the drift-guaranteed, FAANG-grade posture the `theo-ui` and TheoCloud seams already have — a cross-repo contract test (consumer + producer), a type-assignability gate on the local `CustomTool` mirror, a closed peer-version range with fail-fast presence check, and a seam manifest doc — and audit the other two seams to confirm parity.
+
+**Definition of done:**
+
+- [ ] **Contract test (consumer + producer).** `theokit/tests/integration/contract-sdk-seam.test.ts` runs a real `agent().build()` through the REAL published `@theokit/sdk` and asserts `Agent.getOrCreate` shape, `Tool.create` → `CustomTool`, and every `Run.stream()` event discriminant (text / tool-input / tool-result / reasoning / error / finish); a producer-side test in `theokit-sdk` gated by `prepublishOnly` asserts theokit's consumption still passes BEFORE publish. Both green.
+- [ ] **Type-assignability gate.** A `.test-d.ts` asserts the local `CustomTool` mirror (`packages/theo/src/server/define/define-agent-tool.ts:29`) is structurally assignable to `import('@theokit/sdk').CustomTool` via `expectTypeOf().toMatchTypeOf()`; an intentional divergence (e.g. the incoming `theokit-sdk#119` `ctx.threadId`) fails `tsc`.
+- [ ] **Version gate + fail-fast.** Peer ranges closed `>=3.5.0` → `^3.5.0` (`@theokit/sdk`) and `>=0.9.1` → `^0.9.1` (`@theokit/sdk-tools`) in `packages/{theo,agents}`; a presence + semver check fails fast with a typed error at boot / first-load (not only a lazy `SDK_NOT_INSTALLED` at first request) when the installed SDK is missing or outside the supported range.
+- [ ] **Seam manifest doc.** `docs/architecture/theokit-sdk-integration.md` enumerates the integration surface (~35 SDK symbols theokit consumes), the validated SDK version, and the 4 guarantee layers — mirroring `theokit-theocloud-integration.md`; the stale CLAUDE.md Ecosystem line ("permanent workspace link") is corrected to reality (npm registry; sibling links removed 2026-06-10).
+- [ ] **Parity audit (breadth).** The seam doc records a passing check that `theo-ui`'s cross-repo contract test AND TheoCloud's `services.json` schema-drift guard (EC-7) still hold — so all three ecosystem seams are accounted for, none reinvented.
+
+**Dependencies:** none blocking — all M0–M47 are `[x]`. Builds on the agent bridge/surface: M31 (builder-only authoring), M33 (typed-ctx reconciliation), M46 (`thread` core), M47 (`@Expose`).
+
+**Top risks (new — pre-existing risks documented elsewhere in roadmap):**
+
+1. **Producer-side gate vs blocked SDK CI.** `theokit-sdk`'s GitHub Actions is billing-blocked (local `pnpm validate` is the gate), so the producer contract test must run in a `prepublishOnly` script (local, pre-publish) like theo-ui's — NOT a remote workflow — or it never runs. Mitigation: wire the producer test into `theokit-sdk`'s `prepublishOnly`, matching the theo-ui producer pattern.
+2. **Closing the range surprises pinned apps.** `^3.5.0` rejects an app that pinned a newer SDK major — but that is the intended guardrail. Mitigation: document the supported-range + conscious-bump procedure in the seam doc; a future SDK major gets a deliberate theokit bump (the SE36 → 3.x precedent proved the open range's cost).
+
+**Why now (from grill Q1):**
+
+The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo contract test (consumer + producer) and TheoCloud has the `services.json` schema-drift guard (EC-7), but the `theokit ↔ @theokit/sdk` seam — the load-bearing one (the SDK is the *only* agent runtime, per `sdk-runtime.md` / G2) — has NONE: ~35 symbols consumed via structural types + a dynamic import, one un-tested local `CustomTool` mirror, an open `>=3.5.0` range, and no seam doc. This surfaced concretely today: filing `theokit-sdk#119` (`CustomTool` ctx lacks `threadId` → stateful tools like `todolist` leak across sessions) showed that when the SDK adds that field, theokit's local mirror silently drifts and nothing catches it — the exact class of failure a type gate + contract test prevents. Closing this brings the SDK seam to parity with the other two.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)

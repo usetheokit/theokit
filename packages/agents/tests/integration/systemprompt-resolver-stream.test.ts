@@ -21,10 +21,6 @@ interface CapturedCreate {
 const h = vi.hoisted(() => ({ captured: null as CapturedCreate | null }))
 
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Agent: {
     getOrCreate: vi.fn(async (_id: string, opts: CapturedCreate) => {
       h.captured = opts
