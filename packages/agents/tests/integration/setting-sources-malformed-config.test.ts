@@ -7,10 +7,6 @@ import { describe, expect, it, vi } from 'vitest'
  * only "don't swallow" — proven here by a mocked SDK that rejects on create.
  */
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Tool: { create: (s: unknown) => s },
   Agent: {
     getOrCreate: () =>

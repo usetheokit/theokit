@@ -15,10 +15,6 @@ import { stripToolDialectStream } from '../../src/bridge/tool-dialect-stripper.j
 const h = vi.hoisted(() => ({ deltaText: '' }))
 
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Agent: {
     getOrCreate: vi.fn(async () => ({
       send: async (_msg: string, opts?: { onDelta?: (d: { update: unknown }) => void }) => {

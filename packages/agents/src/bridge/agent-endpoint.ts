@@ -160,14 +160,18 @@ export interface StreamAgentOptions {
   sessionId: string
   /** Enable human-in-the-loop tool approval (M4). Absent ⇒ the M2 non-HITL path, byte-unchanged. */
   hitl?: StreamHitlOptions
-  /** Durable conversation storage for resume (M4); defaults to the SDK per-run in-memory store. */
-  conversationStorage?: RuntimeOverrides['conversationStorage']
   /**
    * theokit-file-based-config (EC-1) — the app root `cwd` the SDK resolves `.theokit/` against when
    * `settingSources` is active. The framework boundary (`mountAgent`) threads its resolved
    * `projectRoot` here so discovery points at the app root, NOT `process.cwd()`. Absent ⇒ no `local.cwd`.
    */
   cwd?: RuntimeOverrides['cwd']
+  /**
+   * SDK 4.0 (SE40) — root of the native `.jsonl` session transcript. The framework boundary
+   * (`mountAgent`) threads the resolved app root here so sessions persist per-app; absent ⇒ the SDK
+   * default (`~/.theokit`).
+   */
+  baseDir?: RuntimeOverrides['baseDir']
   /**
    * The request's abort signal (M4). On client disconnect, the HITL merge queue is closed so the
    * detached SDK pump stops buffering (bounded memory) and the client stream terminates at once.
@@ -190,10 +194,11 @@ export function streamAgentUIMessages(
 ): AsyncGenerator<UIMessageChunk> {
   const textId = crypto.randomUUID()
   const overrides: RuntimeOverrides = {}
-  if (input.conversationStorage) overrides.conversationStorage = input.conversationStorage
   // theokit-file-based-config (EC-1) — thread the app-root cwd so the adapter merges it into
   // `local.cwd` (sdk-adapter `overrides.cwd`), pointing `.theokit/` discovery at the app root.
   if (input.cwd !== undefined) overrides.cwd = input.cwd
+  // SDK 4.0 (SE40) — thread the app-root session dir so the SDK writes the native transcript per-app.
+  if (input.baseDir !== undefined) overrides.baseDir = input.baseDir
 
   let source: AsyncGenerator<AgentStreamEvent>
   if (!input.hitl || input.hitl.gated.size === 0) {
@@ -243,10 +248,11 @@ export function streamAgentUIMessages(
     source = queue.drain()
   }
 
-  // M4 @Checkpoint: emit `checkpoint_saved` (→ `data-checkpoint`) ONLY for durable ('filesystem')
-  // storage — that is the only config the harness actually resumes across requests (sdk-adapter
-  // selects FileSystemConversationStorage). Emitting a resume handle for a per-run in-memory store
-  // would promise a resume that never works (G10 honesty; walkAgentMetadata warns for the rest).
+  // M4 @Checkpoint: emit `checkpoint_saved` (→ `data-checkpoint`) ONLY when the agent opted into a
+  // durable checkpoint (`@Checkpoint({ storage: 'filesystem' })`) — the theokit-side signal that the
+  // client may resume. SDK 4.0 (SE40) persists EVERY session to the native `.jsonl` transcript, so
+  // resume is available under the hood; this gate keeps the pre-4.0 emit contract unchanged (G10:
+  // don't retroactively promise a resume handle the agent never asked to advertise).
   const durableCheckpoint = compiled.checkpoint?.storage === 'filesystem'
   const events = durableCheckpoint ? appendCheckpointSaved(source, input.sessionId) : source
   return translateToUIMessageStream(events, { textId })

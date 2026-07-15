@@ -256,27 +256,22 @@ function generateScheduleTemplate(name: string): string {
   ].join('\n')
 }
 
-function generateMemoryTemplate(name: string): string {
-  const base = name.split('/').pop() ?? name
+function generateMemoryTemplate(_name: string): string {
   return [
-    `import { InMemoryConversationStorage, FileSystemConversationStorage } from '@theokit/sdk'`,
-    ``,
     `/**`,
-    ` * The agent's conversation memory (@theokit/sdk). Connect it to your agent with`,
-    ` * \`.conversationStorage(...)\` to control WHERE turns are persisted:`,
+    ` * Conversation memory — nothing to wire.`,
     ` *`,
-    ` *   // agents/chat.ts`,
-    ` *   import { conversationStorage } from './memory/${base}.js'`,
-    ` *   agent().model(...).conversationStorage(conversationStorage).build()`,
+    ` * Since @theokit/sdk 4.0, every agent session persists AUTOMATICALLY to a native Claude-shaped`,
+    ` * transcript. TheoKit roots it at your app under \`.data/agent-sessions/projects/<cwd>/<agentId>.jsonl\`,`,
+    ` * keyed by the conversation's session id — a same-session follow-up request resumes prior turns with`,
+    ` * zero setup. There is no storage adapter to construct or pass to the agent anymore.`,
     ` *`,
-    ` * - \`InMemoryConversationStorage\` — ephemeral, resets on restart (great for tests).`,
-    ` * - \`FileSystemConversationStorage\` — persists across restarts (the framework default when unset).`,
+    ` * Keep these transcripts out of git (the scaffold's \`.gitignore\` already ignores \`.data/\`).`,
+    ` *`,
+    ` * Advanced: to change WHERE sessions are written (e.g. \`~/.claude\` so the Claude Code CLI can`,
+    ` * \`--continue\` them), set the SDK's \`local.baseDir\` where you create the agent. Most apps never need to.`,
     ` */`,
-    `export const conversationStorage = new InMemoryConversationStorage()`,
-    ``,
-    `// Persist across restarts instead:`,
-    `// export const conversationStorage = new FileSystemConversationStorage()`,
-    `void FileSystemConversationStorage`,
+    `export {}`,
     ``,
   ].join('\n')
 }

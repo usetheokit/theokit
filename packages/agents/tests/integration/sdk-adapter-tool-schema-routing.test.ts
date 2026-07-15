@@ -15,10 +15,6 @@ import { z } from 'zod'
 const h = vi.hoisted(() => ({ captured: null as { tools?: unknown[] } | null }))
 
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Agent: {
     getOrCreate: vi.fn(async (_id: string, opts: { tools?: unknown[] }) => {
       h.captured = opts
