@@ -24,6 +24,7 @@ import { createProductionLoader } from '../../../server/scan/module-loader.js'
 import { resolveTransformer } from '../../../server/transformer.js'
 import { preflightNodeAndBindings } from '../../preflight-node-version.js'
 
+import { assertSdkCompatible } from './assert-sdk-compatible.js'
 import {
   configureAgentRegistryFromConfig,
   configureStorageManagerFromConfig,
@@ -48,6 +49,10 @@ export async function startCommand(options: StartOptions): Promise<void> {
   preflightNodeAndBindings(cwd)
   loadEnv({ cwd, mode: 'production' })
   const config = await loadConfig(cwd)
+
+  // M48 — fail fast if the installed @theokit/sdk is present but incompatible (before serving any
+  // request). Absent SDK stays silent here (an api-only app is valid); the request path guards it lazily.
+  assertSdkCompatible()
 
   await configureAgentRegistryFromConfig(config.agents?.registry)
   await configureStorageManagerFromConfig(config.storage)
