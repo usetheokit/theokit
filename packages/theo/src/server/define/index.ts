@@ -17,7 +17,13 @@ export type { RouteConfig } from './define-route.js'
 export type { ActionAccept, ActionConfig } from './define-action.js'
 export type { WebSocketLike, WebSocketHandler, WebSocketHandlerWeb } from './define-websocket.js'
 export type { MiddlewareHandler } from './define-middleware.js'
-export type { CustomTool, ToolTransform, DefineAgentToolSpec } from './define-agent-tool.js'
+export type {
+  CustomTool,
+  ToolTransform,
+  DefineAgentToolSpec,
+  ToolHandlerContext,
+  ToolContextMessage,
+} from './define-agent-tool.js'
 
 // --- Fluent builders (the public authoring surface) ---
 export { route, type RouteBuilder } from './route-builder.js'
