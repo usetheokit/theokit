@@ -18,7 +18,7 @@ interface FakeStreamEvent {
 const h = vi.hoisted(() => ({
   events: [] as FakeStreamEvent[],
   calls: [] as { apiKey: string; message: string; sessionId: string }[],
-  overrides: [] as { conversationStorage?: unknown }[],
+  overrides: [] as Record<string, unknown>[],
 }))
 
 vi.mock('../../src/bridge/sdk-adapter.js', () => ({
@@ -27,7 +27,7 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
       _compiled: unknown,
       _tools: unknown,
       apiKey: string,
-      overrides: { conversationStorage?: unknown } = {},
+      overrides: Record<string, unknown> = {},
     ) =>
     (message: string, sessionId: string): AsyncIterable<FakeStreamEvent> => {
       h.calls.push({ apiKey, message, sessionId })
@@ -225,39 +225,23 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
     }
   })
 
-  it('test_resume_by_sessionId_threads_session_and_storage_into_sdk', async () => {
-    // Resume is SDK-owned: getOrCreate(sessionId, {conversationStorage}) re-hydrates. The harness's
-    // job is to THREAD both faithfully — proven here: two requests with the same sessionId + a shared
-    // storage adapter both reach the SDK factory with s1 and the same storage object.
+  it('test_resume_by_sessionId_threads_the_session_into_the_sdk', async () => {
+    // Resume is SDK-owned (SDK 4.0 native transcript): two requests with the SAME sessionId both reach
+    // the SDK factory as `s1`, so prior turns re-hydrate. The harness's job is to thread the sessionId.
     h.events = [{ type: 'text_delta', content: 'a' }, DONE]
     h.calls = []
     h.overrides = []
-    const sharedStorage = { __fake: 'conversation-storage' }
     const compiled = compileAgentModule(defineAgent({ model: 'm' }))
 
-    await collectStream(
-      streamAgentUIMessages(compiled, 'k', {
-        message: 'A',
-        sessionId: 's1',
-        conversationStorage: sharedStorage as never,
-      }),
-    )
-    await collectStream(
-      streamAgentUIMessages(compiled, 'k', {
-        message: 'B',
-        sessionId: 's1',
-        conversationStorage: sharedStorage as never,
-      }),
-    )
+    await collectStream(streamAgentUIMessages(compiled, 'k', { message: 'A', sessionId: 's1' }))
+    await collectStream(streamAgentUIMessages(compiled, 'k', { message: 'B', sessionId: 's1' }))
 
     expect(h.calls.map((c) => c.sessionId)).toEqual(['s1', 's1'])
-    expect(h.overrides[0].conversationStorage).toBe(sharedStorage)
-    expect(h.overrides[1].conversationStorage).toBe(sharedStorage)
   })
 
-  it('test_resume_missing_storage_falls_back_deterministically', async () => {
-    // No storage adapter → the override is absent (the SDK adapter defaults to its per-run in-memory
-    // store); the stream still completes cleanly (no crash).
+  it('test_resume_by_sessionId_completes_cleanly', async () => {
+    // A same-session request streams to a clean finish (no crash) — persistence is the SDK's native
+    // transcript; theokit passes no storage adapter.
     h.events = [{ type: 'text_delta', content: 'a' }, DONE]
     h.calls = []
     h.overrides = []
@@ -265,7 +249,6 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
     const chunks = await collectStream(
       streamAgentUIMessages(compiled, 'k', { message: 'A', sessionId: 's1' }),
     )
-    expect(h.overrides[0].conversationStorage).toBeUndefined()
     expect(chunks.at(-1)).toEqual({ type: 'finish' })
   })
 })

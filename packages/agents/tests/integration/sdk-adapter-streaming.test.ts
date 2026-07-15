@@ -28,10 +28,6 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('@theokit/sdk', () => ({
-  InMemoryConversationStorage: class {
-    getMessages = async () => []
-    appendMessage = async () => {}
-  },
   Agent: {
     getOrCreate: () =>
       Promise.resolve({
