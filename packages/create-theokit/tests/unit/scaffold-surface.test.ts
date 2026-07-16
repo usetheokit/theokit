@@ -50,6 +50,14 @@ describe('applySurface (M45)', () => {
 
     expect(existsSync(join(targetDir, 'tui/main.tsx'))).toBe(true)
     expect(existsSync(join(targetDir, 'tui/App.tsx'))).toBe(true)
+    // `npm run demo:tools` — a visual reference of every tool render state (renders AgentTimeline via the
+    // same messagesToAgentEvents path, using tui/theme.ts). No agent/LLM needed.
+    expect(existsSync(join(targetDir, 'tui/tool-variations.tsx'))).toBe(true)
+    const demo = read('tui/tool-variations.tsx')
+    expect(demo).toContain('AgentTimeline')
+    expect(demo).toContain('messagesToAgentEvents')
+    expect(demo).toContain("from './theme.js'")
+    expect(demo).toContain('output-error') // the failed-tool state is exercised
 
     // ADR-0054 D2 — the unified client, NOT the raw seam consumption.
     const app = read('tui/App.tsx')
@@ -135,6 +143,7 @@ describe('applySurface (M45)', () => {
     // stays DECLARED because theokit's in-process agent runtime (`streamAgentTurnInProcess`) imports it.
     expect(pkg.dependencies.ai).toBeDefined()
     expect(pkg.scripts.dev).toContain('tui/main.tsx')
+    expect(pkg.scripts['demo:tools']).toBe('tsx tui/tool-variations.tsx')
 
     expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
     expect(existsSync(join(targetDir, 'tui/App.tsx.tmpl'))).toBe(false) // no leftover .tmpl
