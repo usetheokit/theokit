@@ -111,6 +111,52 @@ describe('AgentClient (M41)', () => {
     expect(client.getSnapshot().status).toBe('done')
   })
 
+  it('test_abort_then_stale_drive_error_chunk_does_not_clobber_status', async () => {
+    // #136 review (LOW) — the fix opens a NEW exit for a stale drive: an error chunk now makes the
+    // `for await` throw into `#drive`'s catch. The `aborted()` guard in that catch MUST still prevent a
+    // stale (aborted) drive from clobbering the LIVE turn's status to 'error'.
+    const gates: Array<() => void> = []
+    let call = 0
+    const gatedStream = (): ReadableStream<UIMessageChunk> => {
+      const errors = call++ === 0 // first (stale) stream errors on release; second (live) closes clean
+      return new ReadableStream<UIMessageChunk>({
+        pull(controller) {
+          return new Promise<void>((resolve) => {
+            gates.push(() => {
+              if (errors) {
+                controller.enqueue({ type: 'start' } as UIMessageChunk)
+                controller.enqueue({ type: 'error', errorText: 'stale boom' } as UIMessageChunk)
+              }
+              controller.close()
+              resolve()
+            })
+          })
+        },
+      })
+    }
+    const transport = fakeTransport({
+      sendMessages: (async () => gatedStream()) as ChatTransport<UIMessage>['sendMessages'],
+    })
+    const client = new AgentClient(transport)
+    const tick = () => new Promise((r) => setTimeout(r, 15))
+
+    client.send({ message: '1' }) // stale drive1 blocks on gate[0]
+    await tick()
+    client.abort() // abort controller1
+    client.send({ message: '2' }) // live drive2 blocks on gate[1]; status 'streaming'
+    await tick()
+    expect(client.getSnapshot().status).toBe('streaming')
+
+    gates[0]?.() // release stream1 → error chunk → for-await throws → #drive catch → aborted() guard → no clobber
+    await tick()
+    expect(client.getSnapshot().status).toBe('streaming') // the LIVE turn, NOT clobbered to 'error'
+    expect(client.getSnapshot().error).toBeUndefined()
+
+    gates[1]?.() // release stream2 → clean close → done
+    await tick()
+    expect(client.getSnapshot().status).toBe('done')
+  })
+
   it('test_drives_in_process_transport_with_same_shape', async () => {
     // The SAME store over an in-process-style transport (generator-backed stream) — proves unification.
     const transport = fakeTransport({
