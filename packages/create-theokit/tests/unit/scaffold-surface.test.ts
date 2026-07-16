@@ -73,10 +73,11 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('DEFAULT_COMPOSER_SHORTCUTS')
     expect(app).toContain('onHelpToggle')
     expect(app).toContain('exitArmed')
-    // HITL: a gated tool pauses the run → findPendingApproval surfaces it → an Ink-native y/n prompt
-    // (the ChatComposer's replacement) settles it via agent.approve. (@theokit/tui's ApprovalPrompt is
-    // custom-renderer-only; the scaffold runs on plain Ink, so the prompt is Ink-native here.)
+    // HITL: a gated tool pauses the run → findPendingApproval surfaces it → @theokit/tui's ApprovalPrompt
+    // (choice bar) settles via agent.approve. InkInputProvider bridges Ink's stdin to the prompt (#41).
     expect(app).toContain('findPendingApproval')
+    expect(app).toContain('ApprovalPrompt')
+    expect(app).toContain('InkInputProvider')
     expect(app).toContain('settleApproval')
     expect(app).toContain('agent.approve(approvalId, { approved })')
     expect(app).toContain('settledApprovals') // resolved gates are remembered so the prompt clears
