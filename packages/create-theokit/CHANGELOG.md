@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.20.0
+
+### Minor Changes
+
+- TUI: a `npm run demo:tools` script (and `tui/tool-variations.tsx`) that renders a visual reference of every way the timeline draws a tool — pending, running, success, a shell-envelope output, failed, and approval-requested — plus an assistant markdown turn and a thinking row. It feeds a synthetic conversation through the SAME `messagesToAgentEvents` → `<AgentTimeline>` path the real app uses and reads your `tui/theme.ts`, so it's an accurate, agent-free way to preview your colors/glyphs and see each tool state. Delete the file if you don't want it.
+
 ## 1.19.0
 
 ### Minor Changes
