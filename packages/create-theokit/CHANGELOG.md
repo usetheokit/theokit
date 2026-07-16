@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.13.0
+
+### Minor Changes
+
+- TUI surface: the status-bar footer now shows **real tokens and cost**, not just `model · cwd`. Bumped `@theokit/tui ^0.32.0 → ^0.33.0` and wired the scaffolded `tui/App.tsx` to read each turn's usage off `useAgent().thread` (via `readTurnUsage`) — rendering the current turn's context tokens against the model's window (`12.3k/128k`) plus the summed session cost (`cost ~$0.01`). The window denominator is a new `AGENT.contextWindow` field in `shared/agent.ts` (a model property you set when you change models — 128k for gpt-4o-mini). The footer is now `model · cwd · tokens · cost · state`, the Claude-Code shape. Requires `@theokit/tui ^0.33.0`.
+
 ## 1.12.0
 
 ### Minor Changes

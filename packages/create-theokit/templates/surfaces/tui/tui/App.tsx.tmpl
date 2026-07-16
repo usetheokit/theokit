@@ -6,6 +6,7 @@ import {
   AppStatusBar,
   ChatComposer,
   messagesToAgentEvents,
+  readTurnUsage,
   TheoTUIProvider,
   useTurnElapsed,
   WelcomeBanner,
@@ -60,6 +61,14 @@ export function App(): ReactElement {
   // The store owns the conversation (M46) — prepend the warm greeting and project to timeline events.
   const events = messagesToAgentEvents([GREETING, ...agent.thread])
 
+  // Footer telemetry from the per-turn usage the agent stream rides on each assistant message's metadata
+  // (readTurnUsage). Context window = the LAST turn's input tokens (what the model saw) over the model's
+  // window; cost = the sum across the session. Both stay undefined until the first turn reports usage.
+  const usages = agent.thread.map(readTurnUsage).filter((u) => u !== undefined)
+  const lastUsage = usages.at(-1)
+  const sessionCost = usages.reduce((sum, u) => sum + (u.cost ?? 0), 0)
+  const tokens = lastUsage ? { used: lastUsage.inputTokens, limit: AGENT.contextWindow } : undefined
+
   // Esc cancels a running turn, or quits when idle (the Claude Code affordance).
   useInput((_input, key) => {
     if (!key.escape) return
@@ -101,7 +110,13 @@ export function App(): ReactElement {
           onSubmit={handleSubmit}
         />
 
-        <AppStatusBar model={MODEL} cwd={CWD} state={streaming ? 'streaming' : 'idle'} />
+        <AppStatusBar
+          model={MODEL}
+          cwd={CWD}
+          tokens={tokens}
+          cost={sessionCost > 0 ? sessionCost : undefined}
+          state={streaming ? 'streaming' : 'idle'}
+        />
       </Box>
     </TheoTUIProvider>
   )
