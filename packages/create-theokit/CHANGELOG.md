@@ -1,5 +1,17 @@
 # create-theo
 
+## 1.17.0
+
+### Minor Changes
+
+- TUI surface: a Claude-Code-shaped welcome banner. On a wide terminal the scaffold now opens with a
+  two-column box — LEFT: the `✻ Welcome to <app>` header, a little pixel mascot, the model, and the cwd
+  (home tildeified); RIGHT: a `Tips for getting started` column and a `What's new` column — in Claude
+  Code's warm coral border. It collapses to a single column (header + mascot + model + cwd) on narrow
+  terminals so nothing truncates. Built as a small custom `<Box>` banner because `@theokit/tui`'s
+  `WelcomeBanner` caps its width at 60 cols, too narrow for the two-column layout. Live-verified in a real
+  terminal. No new deps.
+
 ## 1.16.1
 
 ### Patch Changes
