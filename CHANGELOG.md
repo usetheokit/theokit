@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **`create-theokit` TUI wires the full `@theokit/tui@0.40.0` component set live** — each with a real hook, not a static gallery. `Stack` (app layout, Claude cadence); `/usage` observability panel from the last turn's real usage (`ContextWindowBar` + `TokenUsageChart` input/output/cached/reasoning + `CostMeter`); `Toast` for transient outcomes; and four interactive slash-command demos: `/plan` (`PlanApproval`), `/ask` (`QuestionPrompt` + free-text), `/select` (`SelectList` multi), `/progress` (`MultiStepProgress` + `ProgressActivity` + `ProgressBar`, timer-advanced). Live-verified end-to-end; the generated app typechecks against the 0.40.0 types.
+
 ### Changed
 - **`create-theokit` TUI adopts `@theokit/tui@0.40.0` — Claude-Code `PermissionPrompt` HITL card.** A gated tool now renders a structured approval card (tool-type header · command line · proposed input · `Do you want to proceed?` · numbered `1. Yes / 2. No` menu, ↑/↓ + Enter, Esc → safe `No`), replacing the `once/always/reject` `ApprovalPrompt` bar. `onDecision` maps `yes` → approve. Live-verified end-to-end: real model turn calls `send_notification` → card renders → `Yes` → tool executes.
 - **`create-theokit` TUI: monochrome-by-default chrome.** Color is reserved for meaning — the assistant `⏺`, the `>` prompt, and the input border render in the terminal default (via `tui/theme.ts`); tool states (gray/yellow/green/red) and errors keep their color; the banner keeps its accent. One-line to re-tint via `theme.ts`.

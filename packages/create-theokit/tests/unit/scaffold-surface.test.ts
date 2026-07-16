@@ -117,6 +117,27 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('settleApproval')
     expect(app).toContain('agent.approve(approvalId, { approved })')
     expect(app).toContain('settledApprovals') // resolved gates are remembered so the prompt clears
+    // All @theokit/tui@0.40.0 surfaces wired live in App.tsx: Stack layout; the /usage observability panel
+    // (ContextWindowBar + TokenUsageChart + CostMeter, from real lastUsage); Toast for transient outcomes;
+    // and slash-command demos /plan (PlanApproval), /ask (QuestionPrompt), /select (SelectList),
+    // /progress (MultiStepProgress + ProgressActivity + ProgressBar, timer-advanced).
+    for (const sym of [
+      'Stack',
+      'ContextWindowBar',
+      'TokenUsageChart',
+      'CostMeter',
+      'Toast',
+      'PlanApproval',
+      'QuestionPrompt',
+      'SelectList',
+      'MultiStepProgress',
+      'ProgressActivity',
+      'ProgressBar',
+    ]) {
+      expect(app).toContain(sym)
+    }
+    expect(app).toContain("name: 'progress'") // the demo slash commands are exposed in the composer palette
+    expect(app).toContain('usedTokens={lastUsage.inputTokens}') // observability wired to REAL usage, not fake data
     const main = read('tui/main.tsx')
     expect(main).toContain('exitOnCtrlC: false')
     expect(app).not.toContain('ChatThread')

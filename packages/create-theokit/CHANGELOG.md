@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.22.0
+
+### Minor Changes
+
+- TUI surface wires the full `@theokit/tui@0.40.0` component set live into the scaffolded app — each with a real hook, not a static gallery. `Stack` lays out the app with the Claude-Code one-line cadence. `/usage` toggles an observability panel built from the last turn's real usage: `ContextWindowBar` (context fill), `TokenUsageChart` (input/output/cached/reasoning breakdown), and `CostMeter` (session cost, when reported). A `Toast` surfaces transient outcomes (a demo answered, a task finished; auto-dismiss). Four slash-command demos run interactively from the composer: `/plan` → `PlanApproval` (approve/revise a markdown plan), `/ask` → `QuestionPrompt` (options + free-text), `/select` → `SelectList` (multi-select), `/progress` → `MultiStepProgress` + `ProgressActivity` + `ProgressBar` (timer-advanced multi-step task). Every surface is deletable from the one file. Live-verified end-to-end in a real terminal; the generated app typechecks against the 0.40.0 types.
+
 ## 1.21.0
 
 ### Minor Changes
