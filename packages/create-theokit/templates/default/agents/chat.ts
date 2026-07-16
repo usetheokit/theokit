@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { BASE_INSTRUCTIONS } from './prompts/instructions.js'
 import { dailyBriefingSkill } from './skills/daily-briefing.js'
 import { currentTimeTool } from './tools/current-time.js'
+import { sendNotificationTool } from './tools/send-notification.js'
 import { weatherTool } from './tools/weather.js'
 
 /**
@@ -24,6 +25,11 @@ export default agent()
   .system(BASE_INSTRUCTIONS)
   .tool(weatherTool)
   .tool(currentTimeTool)
+  .tool(sendNotificationTool)
+  // Human-in-the-loop: gate the side-effecting tool behind an approval. Before the agent runs
+  // `send_notification`, the run pauses and the surface shows an approval prompt — allow once/always or
+  // reject. Ask the agent to "notify me that …" to see it. Gate any real-world action the same way.
+  .approval('send_notification', { question: 'Send this notification?' })
   // Skills the agent can consult on demand (hover `.skills` for how it works).
   .skills([dailyBriefingSkill])
   .build()

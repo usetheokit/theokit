@@ -6,6 +6,7 @@ import {
   AppStatusBar,
   ChatComposer,
   DEFAULT_COMPOSER_SHORTCUTS,
+  findPendingApproval,
   KeyboardHelp,
   messagesToAgentEvents,
   readTurnUsage,
@@ -63,6 +64,10 @@ export function App(): ReactElement {
   // Ctrl+C is a two-step quit (Claude Code): the first press arms the exit + shows a hint, the second
   // quits. Any other key disarms. `render(<App/>, { exitOnCtrlC: false })` in main.tsx hands us Ctrl+C.
   const [exitArmed, setExitArmed] = useState(false)
+  // Approval ids already decided — the `approval-requested` part is a STANDALONE gate that never flips to
+  // a resolved state (it is keyed by its own id, distinct from the tool call), so we remember settled ids
+  // to hide the prompt once answered instead of re-showing it forever.
+  const [settledApprovals, setSettledApprovals] = useState<readonly string[]>([])
 
   // The store owns the conversation (M46) — prepend the warm greeting and project to timeline events.
   const events = messagesToAgentEvents([GREETING, ...agent.thread])
@@ -75,9 +80,30 @@ export function App(): ReactElement {
   const sessionCost = usages.reduce((sum, u) => sum + (u.cost ?? 0), 0)
   const tokens = lastUsage ? { used: lastUsage.inputTokens, limit: AGENT.contextWindow } : undefined
 
-  // Global keys. Esc cancels a running turn / closes the help panel. Ctrl+C cancels a turn, else arms →
-  // quits on a second press. The ChatComposer owns the editing keys (/, @, !, ?, history ↑↓, emacs chords).
+  // Human-in-the-loop: a gated tool (`send_notification`) pauses the run awaiting a decision. When one is
+  // pending (and not already settled) we show the approval prompt IN PLACE OF the composer and settle it.
+  const rawApproval = findPendingApproval(agent.thread)
+  const pendingApproval =
+    rawApproval && !settledApprovals.includes(rawApproval.approvalId) ? rawApproval : undefined
+
+  const settleApproval = (approvalId: string, approved: boolean): void => {
+    setSettledApprovals((prev) => [...prev, approvalId])
+    void agent.approve(approvalId, { approved })
+  }
+
+  // Global keys. When a gated tool awaits approval, y/Enter allows it and n/Esc rejects — the run is
+  // genuinely paused until then. Otherwise: Esc cancels a running turn / closes help; Ctrl+C cancels a
+  // turn, else arms → quits on a second press. The ChatComposer owns editing keys (/, @, !, ?, ↑↓, emacs).
   useInput((input, key) => {
+    if (pendingApproval) {
+      const answer = input.toLowerCase()
+      if (answer === 'y' || key.return) {
+        settleApproval(pendingApproval.approvalId, true)
+      } else if (answer === 'n' || key.escape) {
+        settleApproval(pendingApproval.approvalId, false)
+      }
+      return
+    }
     if (key.escape) {
       if (showHelp) setShowHelp(false)
       else if (streaming) agent.abort()
@@ -127,21 +153,38 @@ export function App(): ReactElement {
 
         {showHelp ? <KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} /> : null}
 
-        <ChatComposer
-          placeholder="Ask your agent…  (Enter sends · / commands · @ files · ? help)"
-          bordered
-          hint={
-            exitArmed
-              ? 'Press Ctrl+C again to quit'
-              : 'Enter sends · Alt+Enter newline · / commands · @ files · ? help · esc cancels'
-          }
-          commands={[
-            { name: 'clear', description: 'clear the conversation' },
-            { name: 'help', description: 'toggle the keyboard shortcuts panel' },
-          ]}
-          onHelpToggle={() => setShowHelp((h) => !h)}
-          onSubmit={handleSubmit}
-        />
+        {pendingApproval ? (
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor="yellow"
+            paddingX={1}
+          >
+            <Text bold color="yellow">
+              ⚠ Allow {pendingApproval.toolName}?
+            </Text>
+            <Text dimColor>{JSON.stringify(pendingApproval.input)}</Text>
+            <Text>
+              <Text color="green">[y]</Text> allow · <Text color="red">[n]</Text> reject
+            </Text>
+          </Box>
+        ) : (
+          <ChatComposer
+            placeholder="Ask your agent…  (Enter sends · / commands · @ files · ? help)"
+            bordered
+            hint={
+              exitArmed
+                ? 'Press Ctrl+C again to quit'
+                : 'Enter sends · Alt+Enter newline · / commands · @ files · ? help · esc cancels'
+            }
+            commands={[
+              { name: 'clear', description: 'clear the conversation' },
+              { name: 'help', description: 'toggle the keyboard shortcuts panel' },
+            ]}
+            onHelpToggle={() => setShowHelp((h) => !h)}
+            onSubmit={handleSubmit}
+          />
+        )}
 
         <AppStatusBar
           model={MODEL}
