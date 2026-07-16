@@ -66,11 +66,14 @@ export async function consumeChunkStream(
 ): Promise<void> {
   const { readUIMessageStream } = await import('ai')
   // #136 — a provider failure (401/429/5xx) arrives as a `{ type: 'error', errorText }` chunk, NOT a
-  // thrown rejection (the in-process runner and the SSE path both emit it as data). `ai`'s
-  // `readUIMessageStream` calls `onError` on that chunk but does NOT throw, so without a hook it is
-  // silently swallowed and the stream ends "clean" — the store then settles to 'done' instead of
-  // 'error'. Capture the error and `terminateOnError` (stop reconstructing partial messages after it),
-  // then rethrow so `AgentClient.#drive`'s existing catch surfaces it (status='error', error set).
+  // thrown rejection (the in-process runner and the SSE path both emit it as data). With the default
+  // `readUIMessageStream({ stream })` (no `onError`, `terminateOnError` off) that chunk is silently
+  // swallowed — the stream ends "clean" and the store settles to 'done' instead of 'error'.
+  // `onError` captures the error; `terminateOnError` stops reconstructing partial messages after it AND
+  // (under ai@7.0.14) errors the underlying iterator — so the `for await` below rejects and
+  // `AgentClient.#drive`'s existing catch surfaces it (status='error', error set). The post-loop
+  // `throw` is a defensive fallback that still surfaces the captured error if a future `ai` version
+  // stops rejecting under `terminateOnError`; it is dead code under ai@7.0.14 but cheap version-robustness.
   let streamError: Error | undefined
   for await (const message of readUIMessageStream({
     stream,
