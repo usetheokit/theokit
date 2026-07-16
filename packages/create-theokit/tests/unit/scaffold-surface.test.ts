@@ -57,10 +57,14 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('useAgent')
     expect(app).toContain('streamAgentTurnInProcess')
     expect(app).toContain('my-tui') // {{name}} substituted
-    // M46: renders with @theokit/tui via the ai-sdk UIMessage adapter (Step A).
+    // Claude-Code render + AI-FREE: `<AgentTimeline>` (Markdown + tool cards) fed by `messagesToAgentEvents`
+    // (the ai-free projection from `@theokit/tui`), NOT `<ChatThread>`/`@theokit/tui/ai-sdk`/`ai`.
     expect(app).toContain("from '@theokit/tui'")
-    expect(app).toContain('ChatThread')
-    expect(app).toContain('uiMessagesToChatThread')
+    expect(app).toContain('AgentTimeline')
+    expect(app).toContain('messagesToAgentEvents')
+    expect(app).not.toContain('ChatThread')
+    expect(app).not.toContain('@theokit/tui/ai-sdk')
+    expect(app).not.toContain("from 'ai'")
     // M46 — the store owns the conversation: the template renders `useAgent().thread` directly (no
     // hand-rolled history/commit-once) and only prepends the warm greeting.
     expect(app).toContain('agent.thread')
@@ -83,6 +87,9 @@ describe('applySurface (M45)', () => {
     expect(pkg.dependencies.lowlight).toBeDefined()
     expect(pkg.dependencies['@theokit/sdk']).toBeDefined() // agent runtime kept
     expect(pkg.dependencies['@theokit/ui']).toBeUndefined() // web-only dropped
+    // The tui surface is AI-FREE: it renders via `<AgentTimeline>` + the ai-free `messagesToAgentEvents`
+    // (structural `UIMessageLike`), so `ai` is dropped — theokit keeps it internal (type-only optional peer).
+    expect(pkg.dependencies.ai).toBeUndefined()
     expect(pkg.scripts.dev).toContain('tui/main.tsx')
 
     expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
