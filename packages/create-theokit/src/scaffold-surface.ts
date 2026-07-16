@@ -75,7 +75,12 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       lowlight: '^3.0.0',
     },
     devDeps: { tsx: '^4.19.0' },
-    scripts: { dev: 'tsx tui/main.tsx', start: 'tsx tui/main.tsx' },
+    scripts: {
+      dev: 'tsx tui/main.tsx',
+      start: 'tsx tui/main.tsx',
+      // A visual reference of every tool render state (pending/running/success/failed/…) — no agent needed.
+      'demo:tools': 'tsx tui/tool-variations.tsx',
+    },
     tsconfigInclude: [
       'tui/**/*.ts',
       'tui/**/*.tsx',

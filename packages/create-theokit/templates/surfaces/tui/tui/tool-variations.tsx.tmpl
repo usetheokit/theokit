@@ -1,0 +1,49 @@
+/**
+ * A tiny visual reference — `npm run demo:tools` — showing every way the timeline renders a tool, so you
+ * can see the states (and your `tui/theme.ts` colors/glyphs) without driving a real agent. It feeds a
+ * synthetic conversation through the SAME `messagesToAgentEvents` → `<AgentTimeline>` path the real app
+ * uses, so what you see here is exactly what a live turn renders. Delete this file if you don't want it.
+ */
+import { Box, render, Text } from 'ink'
+import { type ReactElement } from 'react'
+import { AgentTimeline, messagesToAgentEvents, TheoTUIProvider, type UIMessageLike } from '@theokit/tui'
+
+import { THEME } from './theme.js'
+
+/** A one-part assistant message carrying a tool in a given ai-sdk state (the shape `useAgent().thread` holds). */
+const tool = (name: string, state: string, extra: Record<string, unknown> = {}): UIMessageLike => ({
+  id: `t-${name}`,
+  role: 'assistant',
+  parts: [{ type: 'dynamic-tool', toolName: name, toolCallId: `c-${name}`, input: { q: 'demo' }, state, ...extra }],
+})
+
+/** One of each: a user turn, an assistant markdown turn, a thinking row, then every tool state. */
+const THREAD: UIMessageLike[] = [
+  { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'show me every tool render state' }] },
+  { id: 'a1', role: 'assistant', parts: [{ type: 'text', text: 'Here is **each** state the timeline renders:' }] },
+  { id: 'think', role: 'assistant', parts: [{ type: 'reasoning', text: 'planning the demo…' }] },
+  tool('search', 'input-streaming'), // pending (gray)
+  tool('fetch_data', 'input-available'), // running (accent spinner)
+  tool('current_time', 'output-available', { output: 'Current time (Asia/Tokyo): 5:00 PM GMT+9' }), // success (green) + ⎿
+  tool('send_notification', 'output-available', {
+    output: '{"stdout":"📣 Notification sent","stderr":"","exitCode":0}',
+  }), // success — shell-envelope output
+  tool('weather', 'output-error', { errorText: 'Unknown city "Xyz" — try a valid city name.' }), // failed (red) + ⎿
+  tool('deploy', 'approval-requested', { approval: { id: 'c-deploy' } }), // approval-requested → pending
+]
+
+function Demo(): ReactElement {
+  return (
+    <TheoTUIProvider theme={THEME}>
+      <Box flexDirection="column" paddingX={1}>
+        <Text bold>Tool render variations — exactly how the timeline renders each state</Text>
+        <Text dimColor>pending · running · success · shell · failed · approval  —  Ctrl+C to exit</Text>
+        <Box marginTop={1}>
+          <AgentTimeline events={messagesToAgentEvents(THREAD)} />
+        </Box>
+      </Box>
+    </TheoTUIProvider>
+  )
+}
+
+render(<Demo />)
