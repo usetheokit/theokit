@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
+- **`create-theokit` TUI: two-line footer + sparkle spinner (@theokit/tui ^0.37.0, closes #44/#45).** `<StatusFooter>` replaces the single-line bar (model left · context right, then `? for shortcuts`); the thinking spinner is now a cycling `✵` sparkle with a `↓` token-direction arrow (`✵  Thinking (1s · ↓ 543 tokens · esc to interrupt)`).
 - **`create-theokit` TUI:** a one-line top margin above the input composer / approval prompt (breathing room from the conversation).
 - **`create-theokit` TUI banner: full-width + "Theo" wordmark.** The welcome box now spans the full terminal width with margins on every side + inner padding; a bold `Theo` block wordmark (coral) replaces the mascot; more spacing between the logo, `✻ Welcome`, and the tips/what's-new columns; a fixed-width left column keeps the two-column layout intact when the cwd is long.
 - **`create-theokit` TUI: Claude-Code-shaped welcome banner.** A wide terminal now opens with a two-column box — left: `✻ Welcome to <app>` + a pixel mascot + model + cwd; right: `Tips for getting started` + `What's new` — in the coral border; collapses to a single column on narrow terminals. Custom `<Box>` banner (the lib's `WelcomeBanner` caps at 60 cols, too narrow for two columns). Live-verified. No new deps.

@@ -62,11 +62,10 @@ describe('applySurface (M45)', () => {
     expect(app).toContain("from '@theokit/tui'")
     expect(app).toContain('AgentTimeline')
     expect(app).toContain('messagesToAgentEvents')
-    // Footer telemetry: the status bar shows real context tokens + session cost from per-turn usage
+    // Footer telemetry: the two-line StatusFooter shows real context usage from the last turn's usage
     // (readTurnUsage over `agent.thread`), against the app-declared context window.
     expect(app).toContain('readTurnUsage')
     expect(app).toContain('AGENT.contextWindow')
-    expect(app).toContain('cost={sessionCost')
     // Claude-Code look (@theokit/tui ^0.36.0): coral accent, ✻ welcome banner, whimsical thinking
     // spinner with the live token count (`esc to interrupt`), and a Notice for errors.
     expect(app).toContain('#d97757') // Claude Code's coral accent
@@ -80,6 +79,9 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('THINKING_PHRASES')
     expect(app).toContain('tokens={lastUsage?.totalTokens}')
     expect(app).toContain('<Notice variant="error">')
+    // Two-line Claude-Code footer (StatusFooter) + streaming token direction arrow (@theokit/tui ^0.37.0, #44/#45).
+    expect(app).toContain('StatusFooter')
+    expect(app).toContain('tokenDirection="down"')
     // Claude-Code interaction: slash palette (/clear, /help) + keyboard-help panel + Ctrl+C two-step quit.
     // (@-file mentions + ↑↓ history come from ChatComposer defaults — no wiring needed.)
     expect(app).toContain('KeyboardHelp')
