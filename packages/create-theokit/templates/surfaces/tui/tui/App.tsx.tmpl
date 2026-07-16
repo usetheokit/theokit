@@ -47,16 +47,12 @@ const GREETING: UIMessageLike = {
 const apiKey = (): string =>
   process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY ?? ''
 
-// The unified in-process transport (M41): each turn drives the agent through `streamAgentTurnInProcess`,
-// whose `UIMessageStream` the client consumes — so the TUI never imports `ai`.
+// The unified in-process transport (M41): each turn drives the agent through `streamAgentTurnInProcess`.
 const transport = new InProcessTransport({
   run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
 })
 
-/**
- * The surface's composition root: owns state (`useAgent` M41 + composer mode) and composes the presentational
- * pieces (`<Banner>`, `<AgentTimeline>`, `<UsagePanel>`, `<DemoSurface>`, `<ChatComposer>`) under a `<Stack>`.
- */
+/** The surface's composition root: owns state (`useAgent` M41 + mode) and composes the components under `<Stack>`. */
 export function App(): ReactElement {
   const agent = useAgent<{ message: string }>(transport)
   const streaming = agent.status === 'streaming'
@@ -74,8 +70,7 @@ export function App(): ReactElement {
   // Stable so the `/progress` timer effect (in ProgressDemo) never restarts on an unrelated re-render.
   const backToChat = useCallback(() => setMode('chat'), [])
 
-  // Derived from the store (M46): timeline events (greeting prepended), the last turn's usage (drives the
-  // footer + `/usage`, undefined until turn 1), and any pending HITL approval.
+  // Derived from the store (M46): timeline events (greeting prepended), the last turn's usage, HITL approval.
   const events = messagesToAgentEvents([GREETING, ...agent.thread])
   const lastUsage = agent.thread.map(readTurnUsage).filter((u) => u !== undefined).at(-1)
   const rawApproval = findPendingApproval(agent.thread)
@@ -89,8 +84,7 @@ export function App(): ReactElement {
 
   const inDemoInput = mode === 'plan' || mode === 'ask' || mode === 'select'
 
-  // Global keys. A gated tool / interactive demo OWNS the keys while active — stay out of its way. Else: Esc
-  // exits progress / closes usage / closes help / cancels a turn; Ctrl+C cancels a turn, else arms → quits.
+  // Global keys — skipped while a gated tool / interactive demo owns input. Esc backs out; Ctrl+C cancels/quits.
   useInput((input, key) => {
     if (pendingApproval || inDemoInput) return
     if (key.escape) {
@@ -126,10 +120,16 @@ export function App(): ReactElement {
         setShowUsage((u) => !u)
         return
       case '/plan':
+        setMode('plan')
+        return
       case '/ask':
+        setMode('ask')
+        return
       case '/select':
+        setMode('select')
+        return
       case '/progress':
-        setMode(trimmed.slice(1) as Mode)
+        setMode('progress')
         return
       default:
         agent.send({ message: trimmed })
@@ -138,8 +138,7 @@ export function App(): ReactElement {
 
   return (
     <TheoTUIProvider theme={THEME}>
-      {/* InkInputProvider bridges Ink's stdin to @theokit/tui's interactive surfaces (PermissionPrompt + the
-          DemoSurface prompts). `Stack` gives the top-level sections the Claude-Code one-line cadence. */}
+      {/* InkInputProvider bridges Ink stdin to the interactive surfaces; `Stack` gives the Claude-Code cadence. */}
       <InkInputProvider>
         <Stack gap={1}>
           <Banner />
@@ -168,8 +167,7 @@ export function App(): ReactElement {
 
           {showHelp ? <KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} /> : null}
 
-          {/* The input area: a gated tool's approval card, a demo surface (/plan /ask /select /progress),
-              or the composer. */}
+          {/* The input area: a gated tool's approval card, a demo surface, or the composer. */}
           {pendingApproval ? (
             <PermissionPrompt
               toolType="Tool call"

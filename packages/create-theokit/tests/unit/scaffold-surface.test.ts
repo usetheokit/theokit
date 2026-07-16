@@ -98,10 +98,10 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('<DemoSurface')
     expect(app).toContain('Stack')
     // The moved surfaces are NO LONGER in App.tsx — they live in their component files (prevents regressing
-    // back to the monolith).
-    expect(app).not.toContain('function Banner()')
-    expect(app).not.toContain('PlanApproval')
-    expect(app).not.toContain('ContextWindowBar')
+    // back to the monolith). Assert on code-shaped tokens so a documentary comment can't false-fail the guard.
+    expect(app).not.toContain('function Banner(')
+    expect(app).not.toContain('<PlanApproval')
+    expect(app).not.toContain('<ContextWindowBar')
     // App.tsx composition-root concerns stay here.
     expect(app).toContain('THINKING_PHRASES')
     expect(app).toContain('tokens={lastUsage?.totalTokens}')
@@ -154,6 +154,15 @@ describe('applySurface (M45)', () => {
     expect(surfaceReadme).toContain('## Architecture')
     expect(surfaceReadme).toContain('components/Demos')
     expect(surfaceReadme).toContain('useAgent')
+    // No `{{name}}` template placeholder leaks into ANY scaffolded tui file (substituteTmpls is recursive).
+    for (const f of [
+      'tui/App.tsx',
+      'tui/components/Banner.tsx',
+      'tui/components/UsagePanel.tsx',
+      'tui/components/Demos.tsx',
+    ]) {
+      expect(read(f)).not.toContain('{{name}}')
+    }
     const main = read('tui/main.tsx')
     expect(main).toContain('exitOnCtrlC: false')
     expect(app).not.toContain('ChatThread')
