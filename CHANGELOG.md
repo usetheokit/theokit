@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
+- **`create-theokit` TUI: a much closer Claude-Code look & feel.** The scaffold now opens with a `✻ Welcome to <app>` banner in Claude Code's warm coral accent (`#d97757` — colors the `✻`, the `⏺` markers, the box borders + `>` prompt), a `/help · /clear` tips line + cwd; the thinking spinner cycles whimsical status words (`Pondering`/`Noodling`/`Percolating`/…) and shimmers; the composer shows a minimal `? for shortcuts` hint + `Ask <app> anything…` placeholder. Live-verified against a real model turn. No new deps.
 - **`create-theokit` TUI adopts `@theokit/tui@0.35.0` — real `⏺` glyph + real `<ApprovalPrompt>`.** The scaffold now gets Claude Code's `⏺` assistant/tool bullet from the theme (issue #40, no scaffold change) and wraps its tree in `<InkInputProvider>` to render the library's `<ApprovalPrompt>` choice bar (`Allow once / Allow always / Reject`, ←/→ + Enter — issue #41) for HITL, replacing the earlier Ink-native `[y]/[n]` prompt. Both prior workarounds are closed; the scaffold uses the real lib components. Live-verified end-to-end. Bumps `@theokit/tui ^0.34.0 → ^0.35.0`.
 
 ### Added
