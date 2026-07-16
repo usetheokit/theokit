@@ -41,6 +41,7 @@ export {
   type ApprovalRequiredEvent,
   type ErrorEvent,
   type DoneEvent,
+  type AgentTurnMetadata,
   type RunStartedEvent,
   isTextDelta,
   isToolCall,

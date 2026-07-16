@@ -94,6 +94,20 @@ export interface DoneEvent {
   cost?: number
 }
 
+/**
+ * Per-turn usage the translator attaches to the ai-sdk `finish` chunk's `messageMetadata`, so it
+ * lands on the reconstructed assistant `UIMessage.metadata` on the client (via `readUIMessageStream`)
+ * with NO extra header/store wiring. It is the seam that lets a surface (a TUI status bar, a web
+ * cost meter) show real tokens/cost for the turn it just streamed. Mirrors `DoneEvent`'s usage/cost
+ * (the authoritative totals the SDK reports at turn end) plus the wall-clock `durationMs`.
+ */
+export interface AgentTurnMetadata {
+  usage: DoneEvent['usage']
+  /** Total cost in USD for the turn (present iff the SDK reported it). */
+  cost?: number
+  durationMs: number
+}
+
 /** Agent run started. */
 export interface RunStartedEvent {
   type: 'run_started'

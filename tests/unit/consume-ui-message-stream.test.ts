@@ -42,6 +42,31 @@ describe('consumeUIMessageStream (M2)', () => {
     expect(snapshots.at(-1)).toBe('Hello')
   })
 
+  it('test_finish_message_metadata_lands_on_reconstructed_message_metadata', async () => {
+    // The seam the TUI status bar / cost meter reads: the translator rides the turn's usage on the
+    // finish chunk's `messageMetadata`; ai-sdk's readUIMessageStream (this reader) lands it on the
+    // reconstructed assistant `UIMessage.metadata` — with NO extra header/store wiring. Boundary test
+    // for the packages/agents translator change (the unit test asserts the chunk; this asserts the
+    // client reconstruction the store/`useAgent` actually observes).
+    const meta = {
+      usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46 },
+      durationMs: 1234,
+      cost: 0.0021,
+    }
+    const response = sseResponse([
+      { type: 'start' },
+      { type: 'text-start', id: 't0' },
+      { type: 'text-delta', id: 't0', delta: 'hi' },
+      { type: 'text-end', id: 't0' },
+      { type: 'finish', messageMetadata: meta },
+    ])
+    let lastMetadata: unknown
+    await consumeUIMessageStream(response, (message) => {
+      lastMetadata = (message as { metadata?: unknown }).metadata
+    })
+    expect(lastMetadata).toEqual(meta)
+  })
+
   it('test_surfaces_error_chunk_then_terminates', async () => {
     // An agent run that fails mid-stream emits an `error` chunk + `finish` (M1 translator).
     // The reader must still terminate cleanly (no throw) and expose the failed turn.

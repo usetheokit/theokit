@@ -56,6 +56,12 @@ const DONE: FakeStreamEvent = {
   durationMs: 1,
 }
 
+/** The finish chunk a `DONE`-terminated run now carries — the translator attaches the turn's usage. */
+const FINISH_DONE = {
+  type: 'finish',
+  messageMetadata: { usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 1 },
+} as const
+
 describe('compileAgentModule (M2)', () => {
   it('test_compiles_defineAgent_default_export', () => {
     const compiled = compileAgentModule({ default: defineAgent({ model: 'm', system: 's' }) })
@@ -136,7 +142,7 @@ describe('streamAgentUIMessages (M2)', () => {
 
     expect(chunks[0]).toEqual({ type: 'start' })
     expect(chunks.some((c) => c.type === 'text-delta' && c.delta === 'hi')).toBe(true)
-    expect(chunks.at(-1)).toEqual({ type: 'finish' })
+    expect(chunks.at(-1)).toEqual(FINISH_DONE)
     // apiKey + message + sessionId threaded into the SDK runtime.
     expect(h.calls[0]).toEqual({ apiKey: 'sk-test', message: 'hi', sessionId: 's1' })
   })
@@ -249,6 +255,6 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
     const chunks = await collectStream(
       streamAgentUIMessages(compiled, 'k', { message: 'A', sessionId: 's1' }),
     )
-    expect(chunks.at(-1)).toEqual({ type: 'finish' })
+    expect(chunks.at(-1)).toEqual(FINISH_DONE)
   })
 })
