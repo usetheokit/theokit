@@ -1,5 +1,17 @@
 # create-theo
 
+## 1.16.1
+
+### Patch Changes
+
+- TUI surface adopts `@theokit/tui@0.36.0` for the last mile of Claude-Code parity:
+
+  - **Thinking spinner shows the live token count + "esc to interrupt"** — the streaming hint is now the exact Claude Code shape `(Ns · N tokens · esc to interrupt)` (the scaffold passes the last turn's `totalTokens`), replacing the earlier `esc to cancel` with no count.
+  - **Tighter assistant/tool alignment** — the `⏺` bullet's two-space gap now aligns assistant message rows with tool rows (from the theme), and `<AgentTimeline>` spacing between blocks reads cleaner.
+  - **Errors render as a `<Notice variant="error">`** (`✗` marker) instead of a raw red line.
+
+  Bumps `@theokit/tui ^0.35.0 → ^0.36.0`. Live-verified against a real model turn (`⠼  Thinking (1s · 510 tokens · esc to interrupt)`).
+
 ## 1.16.0
 
 ### Minor Changes

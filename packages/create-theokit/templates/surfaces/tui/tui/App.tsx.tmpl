@@ -11,6 +11,7 @@ import {
   InkInputProvider,
   KeyboardHelp,
   messagesToAgentEvents,
+  Notice,
   readTurnUsage,
   TheoTUIProvider,
   useTurnElapsed,
@@ -159,10 +160,11 @@ export function App(): ReactElement {
             phrases={THINKING_PHRASES}
             shimmer
             elapsedSeconds={elapsed}
+            tokens={lastUsage?.totalTokens}
             showCancelHint
           />
         ) : null}
-        {agent.error ? <Text color="red">⚠ {agent.error.message}</Text> : null}
+        {agent.error ? <Notice variant="error">{agent.error.message}</Notice> : null}
 
         {showHelp ? <KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} /> : null}
 
