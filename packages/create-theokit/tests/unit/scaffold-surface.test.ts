@@ -76,6 +76,11 @@ describe('applySurface (M45)', () => {
     // ink MUST be the React-19 line (^7) — ink@5 crashes on React 19 with `ReactCurrentOwner`, and the
     // default template pins react@19. Never regress below ^7 (found by dogfooding the TUI end-to-end).
     expect(pkg.dependencies.ink).toMatch(/\^?[7-9]/)
+    // figlet (WelcomeBanner ASCII) + lowlight (ChatMessage highlight) are @theokit/tui PEERS the app
+    // relies on. They MUST be declared: pnpm never auto-installs peers, so without these the scaffolded
+    // TUI crashes at boot under pnpm (found by dogfooding the TUI end-to-end on the @theokit/tui@0.31 bump).
+    expect(pkg.dependencies.figlet).toBeDefined()
+    expect(pkg.dependencies.lowlight).toBeDefined()
     expect(pkg.dependencies['@theokit/sdk']).toBeDefined() // agent runtime kept
     expect(pkg.dependencies['@theokit/ui']).toBeUndefined() // web-only dropped
     expect(pkg.scripts.dev).toContain('tui/main.tsx')
