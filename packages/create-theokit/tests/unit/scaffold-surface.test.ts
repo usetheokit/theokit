@@ -64,7 +64,7 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('InProcessTransport')
     expect(app).toContain('useAgent')
     expect(app).toContain('streamAgentTurnInProcess')
-    expect(app).toContain('my-tui') // {{name}} substituted
+    expect(read('tui/components/Banner.tsx')).toContain('my-tui') // {{name}} substituted (name lives in Banner)
     // Claude-Code render + AI-FREE: `<AgentTimeline>` (Markdown + tool cards) fed by `messagesToAgentEvents`
     // (the ai-free projection from `@theokit/tui`), NOT `<ChatThread>`/`@theokit/tui/ai-sdk`/`ai`.
     expect(app).toContain("from '@theokit/tui'")
@@ -88,45 +88,58 @@ describe('applySurface (M45)', () => {
     expect(theme).toContain("assistant: { prefix: '' }")
     expect(theme).toContain('export const BANNER_TIPS')
     expect(app).toContain("from './theme.js'")
-    // Custom two-column welcome box (Claude Code shape): ✻ header + Theo wordmark + model + cwd on the
-    // left; getting-started tips + what's new on the right (collapses to one column when narrow).
-    expect(app).toContain('function Banner()')
-    expect(app).toContain('✻ Welcome to')
-    expect(app).toContain('{LOGO}')
-    expect(app).toContain('Tips for getting started')
-    expect(app).toContain('What&apos;s new')
+    // Componentized surface (create-theokit@1.23.0): App.tsx is the composition root; Banner / UsagePanel /
+    // Demos live under tui/components/*. App imports the three children and composes them under <Stack>.
+    expect(app).toContain("from './components/Banner.js'")
+    expect(app).toContain("from './components/UsagePanel.js'")
+    expect(app).toContain("from './components/Demos.js'")
+    expect(app).toContain('<Banner />')
+    expect(app).toContain('<UsagePanel')
+    expect(app).toContain('<DemoSurface')
+    expect(app).toContain('Stack')
+    // The moved surfaces are NO LONGER in App.tsx — they live in their component files (prevents regressing
+    // back to the monolith).
+    expect(app).not.toContain('function Banner()')
+    expect(app).not.toContain('PlanApproval')
+    expect(app).not.toContain('ContextWindowBar')
+    // App.tsx composition-root concerns stay here.
     expect(app).toContain('THINKING_PHRASES')
     expect(app).toContain('tokens={lastUsage?.totalTokens}')
     expect(app).toContain('<Notice variant="error">')
-    // Two-line Claude-Code footer (StatusFooter) + streaming token direction arrow (@theokit/tui ^0.37.0, #44/#45).
     expect(app).toContain('StatusFooter')
     expect(app).toContain('tokenDirection="down"')
-    // Claude-Code interaction: slash palette (/clear, /help) + keyboard-help panel + Ctrl+C two-step quit.
-    // (@-file mentions + ↑↓ history come from ChatComposer defaults — no wiring needed.)
+    expect(app).toContain('Toast')
     expect(app).toContain('KeyboardHelp')
     expect(app).toContain('DEFAULT_COMPOSER_SHORTCUTS')
     expect(app).toContain('onHelpToggle')
     expect(app).toContain('exitArmed')
-    // HITL: a gated tool pauses the run → findPendingApproval surfaces it → @theokit/tui's PermissionPrompt
-    // (Claude-Code tool-approval card, numbered yes/no menu) settles via agent.approve. InkInputProvider
-    // bridges Ink's stdin to the prompt (#41). Adopted @theokit/tui ^0.40.0.
+    expect(app).toContain("name: 'progress'") // the demo slash commands are exposed in the composer palette
+    // HITL stays in the root: findPendingApproval → PermissionPrompt (numbered yes/no, decision === 'yes' →
+    // approve) settles via agent.approve; InkInputProvider bridges Ink stdin to the prompt.
     expect(app).toContain('findPendingApproval')
     expect(app).toContain('PermissionPrompt')
     expect(app).toContain("decision === 'yes'")
     expect(app).toContain('InkInputProvider')
     expect(app).toContain('settleApproval')
     expect(app).toContain('agent.approve(approvalId, { approved })')
-    expect(app).toContain('settledApprovals') // resolved gates are remembered so the prompt clears
-    // All @theokit/tui@0.40.0 surfaces wired live in App.tsx: Stack layout; the /usage observability panel
-    // (ContextWindowBar + TokenUsageChart + CostMeter, from real lastUsage); Toast for transient outcomes;
-    // and slash-command demos /plan (PlanApproval), /ask (QuestionPrompt), /select (SelectList),
-    // /progress (MultiStepProgress + ProgressActivity + ProgressBar, timer-advanced).
+    expect(app).toContain('settledApprovals')
+    // Banner component (moved out of App.tsx): the Claude-Code two-column welcome box.
+    const banner = read('tui/components/Banner.tsx')
+    expect(banner).toContain('export function Banner()')
+    expect(banner).toContain('✻ Welcome to')
+    expect(banner).toContain('{LOGO}')
+    expect(banner).toContain('Tips for getting started')
+    expect(banner).toContain('What&apos;s new')
+    // UsagePanel component: the /usage observability trio, prop-driven from the real TurnUsage.
+    const usagePanel = read('tui/components/UsagePanel.tsx')
+    expect(usagePanel).toContain('usedTokens={usage.inputTokens}') // wired to REAL usage, not fake data
+    for (const sym of ['ContextWindowBar', 'TokenUsageChart', 'CostMeter']) {
+      expect(usagePanel).toContain(sym)
+    }
+    // Demos component: the deletable slash-command showcase — every interactive 0.40.0 surface lives here.
+    const demos = read('tui/components/Demos.tsx')
+    expect(demos).toContain('export function DemoSurface')
     for (const sym of [
-      'Stack',
-      'ContextWindowBar',
-      'TokenUsageChart',
-      'CostMeter',
-      'Toast',
       'PlanApproval',
       'QuestionPrompt',
       'SelectList',
@@ -134,10 +147,13 @@ describe('applySurface (M45)', () => {
       'ProgressActivity',
       'ProgressBar',
     ]) {
-      expect(app).toContain(sym)
+      expect(demos).toContain(sym)
     }
-    expect(app).toContain("name: 'progress'") // the demo slash commands are exposed in the composer palette
-    expect(app).toContain('usedTokens={lastUsage.inputTokens}') // observability wired to REAL usage, not fake data
+    // System Design ships with the surface (README-surface.md § Architecture).
+    const surfaceReadme = read('README-surface.md')
+    expect(surfaceReadme).toContain('## Architecture')
+    expect(surfaceReadme).toContain('components/Demos')
+    expect(surfaceReadme).toContain('useAgent')
     const main = read('tui/main.tsx')
     expect(main).toContain('exitOnCtrlC: false')
     expect(app).not.toContain('ChatThread')

@@ -1,35 +1,21 @@
-import { homedir } from 'node:os'
-
-import { Box, Text, useApp, useInput } from 'ink'
-import { type ReactElement, useEffect, useState } from 'react'
+import { Text, useApp, useInput } from 'ink'
+import { type ReactElement, useCallback, useState } from 'react'
 import {
   AgentStreaming,
   AgentTimeline,
   ChatComposer,
-  ContextWindowBar,
-  CostMeter,
   DEFAULT_COMPOSER_SHORTCUTS,
   findPendingApproval,
   InkInputProvider,
   KeyboardHelp,
   messagesToAgentEvents,
-  MultiStepProgress,
   Notice,
   PermissionPrompt,
-  PlanApproval,
-  ProgressActivity,
-  ProgressBar,
-  QuestionPrompt,
   readTurnUsage,
-  SelectList,
-  type SelectListItem,
   Stack,
   StatusFooter,
   TheoTUIProvider,
   Toast,
-  type TodoItem,
-  type TokenCategory,
-  TokenUsageChart,
   useTurnElapsed,
   type UIMessageLike,
 } from '@theokit/tui'
@@ -38,23 +24,14 @@ import { streamAgentTurnInProcess } from 'theokit/server/agent'
 
 import * as chatAgent from '../agents/chat.js'
 import { AGENT } from '../shared/agent.js'
-// Everything visual (accent, banner wordmark + copy, spinner words, placeholder) lives in ONE file —
-// edit `tui/theme.ts` to restyle; this component never needs touching for a rebrand.
-import {
-  ACCENT,
-  BANNER_TIPS,
-  BANNER_WHATS_NEW,
-  LOGO,
-  PLACEHOLDER,
-  THEME,
-  THINKING_PHRASES,
-  WIDE_COLS,
-} from './theme.js'
+// Composed from `tui/components/*`; restyle everything in the ONE file `tui/theme.ts`.
+import { Banner } from './components/Banner.js'
+import { DemoSurface, type Mode, type ToastPayload } from './components/Demos.js'
+import { UsagePanel } from './components/UsagePanel.js'
+import { PLACEHOLDER, THEME, THINKING_PHRASES } from './theme.js'
 
-/** Shown in the status bar (from `shared/agent.ts`). */
+/** Model label (footer) — from `shared/agent.ts`, the single branding source. */
 const MODEL = AGENT.model
-/** cwd with the home dir tildeified (`~/…`), so the banner line stays short. */
-const CWD = process.cwd().replace(homedir(), '~')
 /** Compact token count for the footer: `128000 → 128k`, `12300 → 12.3k`, `462 → 462`. */
 const fmtK = (n: number): string =>
   n >= 1000 ? `${(Math.round(n / 100) / 10).toString().replace(/\.0$/, '')}k` : `${n}`
@@ -70,160 +47,37 @@ const GREETING: UIMessageLike = {
 const apiKey = (): string =>
   process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY ?? ''
 
-// ── Slash-command demo data ────────────────────────────────────────────────────────────────────────
-// The interactive `@theokit/tui` surfaces (`/plan`, `/ask`, `/select`, `/progress`) run live IN the app,
-// triggered from the composer, with real handlers — not a separate gallery. Delete the ones you don't need.
-const DEMO_PLAN = [
-  '## Proposed plan',
-  '',
-  '1. Scaffold the `reports` route',
-  '2. Add the `generateReport` server action',
-  '3. Stream results into the dashboard',
-].join('\n')
-
-const DEMO_ASK_OPTIONS: readonly SelectListItem[] = [
-  { value: 'python', label: 'Python (FastAPI)', description: 'polyglot service via --backend python' },
-  { value: 'node', label: 'Node (Hono)', description: 'fetch-handler service' },
-  { value: 'none', label: 'TypeScript only', description: 'no external backend' },
-]
-
-const DEMO_SELECT_ITEMS: readonly SelectListItem[] = [
-  { value: 'auth', label: 'Auth', description: 'sessions + requireAuth' },
-  { value: 'db', label: 'Database', description: 'SQLite by default' },
-  { value: 'ws', label: 'WebSocket', description: 'realtime channel' },
-  { value: 'deploy', label: 'Deploy', description: 'TheoCloud target' },
-]
-
-const DEMO_STEP_LABELS = ['Plan', 'Generate', 'Validate', 'Ship'] as const
-
-/** The composer mode — `chat` is the default; the others swap the composer for a live demo surface. */
-type Mode = 'chat' | 'plan' | 'ask' | 'select' | 'progress'
-
-/**
- * The terminal surface, composed from `@theokit/tui` the way a Claude Code / OpenCode / Codex CLI is:
- * `WelcomeBanner` header, a scrolling `<AgentTimeline>` (assistant turns rendered as Markdown + fenced code,
- * tool calls as collapsible cards, thinking rows — the Claude-Code render), a live `<AgentStreaming>` spinner,
- * a bordered `<ChatComposer>`, and a persistent `<StatusFooter>` footer. Driven by the unified `useAgent`
- * hook (M41).
- *
- * The conversation comes from `useAgent().thread` (M46), projected to the timeline's `AgentEvent[]` by the
- * ai-free `messagesToAgentEvents` — so this terminal surface never imports the `ai` SDK. Prepend the greeting.
- */
+// The unified in-process transport (M41): each turn drives the agent through `streamAgentTurnInProcess`,
+// whose `UIMessageStream` the client consumes — so the TUI never imports `ai`.
 const transport = new InProcessTransport({
   run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
 })
 
-/** The app name — `{{name}}` is substituted at scaffold time. */
-const APP_NAME = '{{name}}'
-
 /**
- * The Claude-Code welcome box: a full-width rounded accent border with margins on every side. On a wide
- * terminal it lays out two columns — left is the `Theo` wordmark + a `✻` welcome line + model + cwd; right
- * is the getting-started tips + what's new. Below `WIDE_COLS` it collapses to a single column.
+ * The surface's composition root: owns state (`useAgent` M41 + composer mode) and composes the presentational
+ * pieces (`<Banner>`, `<AgentTimeline>`, `<UsagePanel>`, `<DemoSurface>`, `<ChatComposer>`) under a `<Stack>`.
  */
-function Banner(): ReactElement {
-  const cols = process.stdout.columns ?? 80
-  const wide = cols >= WIDE_COLS
-  return (
-    <Box
-      // Full width, with a one-cell margin on every side.
-      width={cols - 2}
-      marginX={1}
-      marginY={1}
-      paddingX={2}
-      paddingY={1}
-      borderStyle="round"
-      borderColor={ACCENT}
-      flexDirection="row"
-    >
-      {/* Fixed-width left column (fits the 34-wide wordmark) so a long cwd truncates instead of pushing
-          the right column off-screen — the box stays full width, the content stays grouped on the left. */}
-      <Box flexDirection="column" width={38} flexShrink={0}>
-        <Text color={ACCENT}>{LOGO}</Text>
-        <Box marginTop={1} flexDirection="column">
-          <Text color={ACCENT} bold wrap="truncate-end">
-            ✻ Welcome to {APP_NAME}
-          </Text>
-          <Text dimColor wrap="truncate-end">
-            {MODEL}
-          </Text>
-          <Text dimColor wrap="truncate-start">
-            cwd: {CWD}
-          </Text>
-        </Box>
-      </Box>
-      {wide ? (
-        <Box flexDirection="column" flexShrink={0} marginLeft={4}>
-          <Text color={ACCENT} bold>
-            Tips for getting started
-          </Text>
-          <Box marginTop={1} flexDirection="column">
-            {BANNER_TIPS.map((tip) => (
-              <Text key={tip} dimColor>
-                {tip}
-              </Text>
-            ))}
-          </Box>
-          <Box marginTop={1} flexDirection="column">
-            <Text color={ACCENT} bold>
-              What&apos;s new
-            </Text>
-            <Box marginTop={1} flexDirection="column">
-              {BANNER_WHATS_NEW.map((line) => (
-                <Text key={line} dimColor>
-                  {line}
-                </Text>
-              ))}
-            </Box>
-          </Box>
-        </Box>
-      ) : null}
-    </Box>
-  )
-}
-
 export function App(): ReactElement {
   const agent = useAgent<{ message: string }>(transport)
   const streaming = agent.status === 'streaming'
   const elapsed = useTurnElapsed(streaming)
   const { exit } = useApp()
   const [showHelp, setShowHelp] = useState(false)
-  // Ctrl+C is a two-step quit (Claude Code): the first press arms the exit + shows a hint, the second
-  // quits. Any other key disarms. `render(<App/>, { exitOnCtrlC: false })` in main.tsx hands us Ctrl+C.
+  // Ctrl+C is a two-step quit (Claude Code): first press arms + hints, second quits; any other key disarms.
   const [exitArmed, setExitArmed] = useState(false)
-  // Approval ids already decided — the `approval-requested` part is a STANDALONE gate that never flips to
-  // a resolved state (it is keyed by its own id, distinct from the tool call), so we remember settled ids
-  // to hide the prompt once answered instead of re-showing it forever.
+  // Settled approval ids — the gate never flips to resolved, so we hide answered prompts by id.
   const [settledApprovals, setSettledApprovals] = useState<readonly string[]>([])
-  // The composer mode + the slash-command demo state (a plan/ask/select/progress surface swaps the composer).
+  // Composer mode (`chat` = composer; others swap it for a `<DemoSurface>`), `/usage` toggle, `<Toast>`.
   const [mode, setMode] = useState<Mode>('chat')
-  const [progressStep, setProgressStep] = useState(0)
-  // `/usage` toggles a token-usage panel; a Toast surfaces transient outcomes (a demo answered, a task done).
   const [showUsage, setShowUsage] = useState(false)
-  const [toast, setToast] = useState<{ message: string; variant: 'info' | 'success' | 'error' } | null>(
-    null,
-  )
+  const [toast, setToast] = useState<ToastPayload | null>(null)
+  // Stable so the `/progress` timer effect (in ProgressDemo) never restarts on an unrelated re-render.
+  const backToChat = useCallback(() => setMode('chat'), [])
 
-  // The store owns the conversation (M46) — prepend the warm greeting and project to timeline events.
+  // Derived from the store (M46): timeline events (greeting prepended), the last turn's usage (drives the
+  // footer + `/usage`, undefined until turn 1), and any pending HITL approval.
   const events = messagesToAgentEvents([GREETING, ...agent.thread])
-
-  // The last turn's usage (readTurnUsage reads the totals the agent stream rides on each assistant
-  // message's metadata) drives the streaming token count, the footer's context usage, AND the `/usage`
-  // observability panel (ContextWindowBar / TokenUsageChart / CostMeter). Undefined until the first turn.
   const lastUsage = agent.thread.map(readTurnUsage).filter((u) => u !== undefined).at(-1)
-
-  // Only PRESENT categories render in the chart — build the map from whatever the turn actually reported.
-  const usageChart: Partial<Record<TokenCategory, number>> = lastUsage
-    ? {
-        input: lastUsage.inputTokens,
-        output: lastUsage.outputTokens,
-        ...(lastUsage.cacheReadTokens !== undefined ? { cached: lastUsage.cacheReadTokens } : {}),
-        ...(lastUsage.reasoningTokens !== undefined ? { reasoning: lastUsage.reasoningTokens } : {}),
-      }
-    : {}
-
-  // Human-in-the-loop: a gated tool (`send_notification`) pauses the run awaiting a decision. When one is
-  // pending (and not already settled) we show the approval prompt IN PLACE OF the composer and settle it.
   const rawApproval = findPendingApproval(agent.thread)
   const pendingApproval =
     rawApproval && !settledApprovals.includes(rawApproval.approvalId) ? rawApproval : undefined
@@ -233,26 +87,10 @@ export function App(): ReactElement {
     void agent.approve(approvalId, { approved })
   }
 
-  // `/progress` runs a live multi-step task: advance one step every 700ms; when it finishes, toast + return
-  // to chat. This is the only mode driven by a timer — the interactive modes complete on the user's input.
-  useEffect(() => {
-    if (mode !== 'progress') return
-    if (progressStep >= DEMO_STEP_LABELS.length) {
-      const done = setTimeout(() => {
-        setMode('chat')
-        setToast({ message: 'Task complete', variant: 'success' })
-      }, 600)
-      return () => clearTimeout(done)
-    }
-    const tick = setTimeout(() => setProgressStep((s) => s + 1), 700)
-    return () => clearTimeout(tick)
-  }, [mode, progressStep])
-
   const inDemoInput = mode === 'plan' || mode === 'ask' || mode === 'select'
 
-  // Global keys. A gated tool (`PermissionPrompt`) or an interactive demo (`PlanApproval`/`QuestionPrompt`/
-  // `SelectList`) OWNS the keys while active — stay out of its way. Otherwise: Esc exits the progress demo /
-  // closes the usage panel / closes help / cancels a running turn; Ctrl+C cancels a turn, else arms → quits.
+  // Global keys. A gated tool / interactive demo OWNS the keys while active — stay out of its way. Else: Esc
+  // exits progress / closes usage / closes help / cancels a turn; Ctrl+C cancels a turn, else arms → quits.
   useInput((input, key) => {
     if (pendingApproval || inDemoInput) return
     if (key.escape) {
@@ -288,36 +126,20 @@ export function App(): ReactElement {
         setShowUsage((u) => !u)
         return
       case '/plan':
-        setMode('plan')
-        return
       case '/ask':
-        setMode('ask')
-        return
       case '/select':
-        setMode('select')
-        return
       case '/progress':
-        setProgressStep(0)
-        setMode('progress')
+        setMode(trimmed.slice(1) as Mode)
         return
       default:
         agent.send({ message: trimmed })
     }
   }
 
-  // The `/progress` lanes: steps before the cursor are done, the cursor is active, the rest are pending.
-  const progressSteps: readonly TodoItem[] = DEMO_STEP_LABELS.map((label, i) => ({
-    id: label,
-    label,
-    status: i < progressStep ? 'done' : i === progressStep ? 'active' : 'pending',
-  }))
-  const progressPercent = Math.min(100, Math.round((progressStep / DEMO_STEP_LABELS.length) * 100))
-
   return (
     <TheoTUIProvider theme={THEME}>
-      {/* InkInputProvider bridges Ink's stdin to @theokit/tui's interactive surfaces (PermissionPrompt +
-          PlanApproval / QuestionPrompt / SelectList) so they receive keys under plain Ink — the ChatComposer
-          keeps Ink's own hooks. `Stack` gives the top-level sections the Claude-Code one-line cadence. */}
+      {/* InkInputProvider bridges Ink's stdin to @theokit/tui's interactive surfaces (PermissionPrompt + the
+          DemoSurface prompts). `Stack` gives the top-level sections the Claude-Code one-line cadence. */}
       <InkInputProvider>
         <Stack gap={1}>
           <Banner />
@@ -335,17 +157,10 @@ export function App(): ReactElement {
             />
           ) : null}
           {agent.error ? <Notice variant="error">{agent.error.message}</Notice> : null}
-
-          {/* `/usage` — the observability panel, from the last turn's real usage. ContextWindowBar shows the
-              context fill, TokenUsageChart the per-category breakdown, CostMeter the session cost (if reported). */}
+          {/* `/usage` — the observability panel, from the last turn's real usage. */}
           {showUsage && lastUsage ? (
-            <Box flexDirection="column">
-              <ContextWindowBar usedTokens={lastUsage.inputTokens} limitTokens={AGENT.contextWindow} />
-              <TokenUsageChart usage={usageChart} />
-              {lastUsage.cost !== undefined ? <CostMeter costUsd={lastUsage.cost} /> : null}
-            </Box>
+            <UsagePanel usage={lastUsage} contextWindow={AGENT.contextWindow} />
           ) : null}
-
           {/* A transient outcome banner (a demo answered, a task finished). Auto-dismisses after 5s. */}
           {toast ? (
             <Toast message={toast.message} variant={toast.variant} onDismiss={() => setToast(null)} />
@@ -353,8 +168,8 @@ export function App(): ReactElement {
 
           {showHelp ? <KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} /> : null}
 
-          {/* The input area: a gated tool's approval card, an interactive demo surface (/plan /ask /select
-              /progress), or the composer. Each demo completes back to chat (Enter) or cancels (Esc). */}
+          {/* The input area: a gated tool's approval card, a demo surface (/plan /ask /select /progress),
+              or the composer. */}
           {pendingApproval ? (
             <PermissionPrompt
               toolType="Tool call"
@@ -365,62 +180,18 @@ export function App(): ReactElement {
                   : undefined
               }
               onDecision={(decision) => {
-                // PermissionPrompt's default choices are `yes`/`no` (Esc → the last one, `no`, the safe
-                // default). Only `yes` approves. Settle (remembering the id so the standalone gate part
-                // stops re-showing) and forward the decision to the client.
+                // Default choices are `yes`/`no` (Esc → `no`, the safe default); only `yes` approves.
                 settleApproval(pendingApproval.approvalId, decision === 'yes')
               }}
             />
-          ) : mode === 'plan' ? (
-            <PlanApproval
-              plan={DEMO_PLAN}
-              onDecision={(d) => {
-                setMode('chat')
-                setToast({
-                  message:
-                    d.kind === 'approve'
-                      ? 'Plan approved'
-                      : `Revision requested${d.feedback ? `: ${d.feedback}` : ''}`,
-                  variant: 'success',
-                })
-              }}
+          ) : mode !== 'chat' ? (
+            <DemoSurface
+              mode={mode}
+              elapsed={elapsed}
+              tokens={lastUsage?.totalTokens}
+              onComplete={backToChat}
+              onToast={setToast}
             />
-          ) : mode === 'ask' ? (
-            <QuestionPrompt
-              header="Backend"
-              question="Which backend should the app ship next to?"
-              options={DEMO_ASK_OPTIONS}
-              allowFreeText
-              onAnswer={(a) => {
-                setMode('chat')
-                setToast({
-                  message: `Answered: ${a.values.join(', ')}${a.text ? ` (${a.text})` : ''}`,
-                  variant: 'info',
-                })
-              }}
-            />
-          ) : mode === 'select' ? (
-            <SelectList
-              items={DEMO_SELECT_ITEMS}
-              multi
-              onSubmit={(values) => {
-                setMode('chat')
-                setToast({ message: `Selected: ${values.join(', ') || '(none)'}`, variant: 'info' })
-              }}
-            />
-          ) : mode === 'progress' ? (
-            <Box flexDirection="column">
-              <MultiStepProgress steps={progressSteps} current={progressStep} groupLabel="Demo task" />
-              <ProgressActivity
-                label="Working…"
-                percent={progressPercent}
-                elapsedSeconds={elapsed}
-                tokens={lastUsage?.totalTokens}
-                tokenDirection="up"
-              />
-              <ProgressBar percent={progressPercent} />
-              <Text dimColor>esc to exit</Text>
-            </Box>
           ) : (
             <ChatComposer
               placeholder={PLACEHOLDER}
@@ -440,8 +211,7 @@ export function App(): ReactElement {
             />
           )}
 
-          {/* Claude Code's two-line footer: top-left the model, top-right the context usage; bottom the
-              shortcuts hint. `StatusFooter` justifies the top row to the terminal edges. */}
+          {/* Claude Code's two-line footer: model (left) · context usage (right) · shortcuts hint (bottom). */}
           <StatusFooter
             left={<Text>{MODEL}</Text>}
             right={
