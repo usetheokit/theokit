@@ -5,7 +5,6 @@ import { type ReactElement, useState } from 'react'
 import {
   AgentStreaming,
   AgentTimeline,
-  ApprovalPrompt,
   ChatComposer,
   DEFAULT_COMPOSER_SHORTCUTS,
   findPendingApproval,
@@ -13,6 +12,7 @@ import {
   KeyboardHelp,
   messagesToAgentEvents,
   Notice,
+  PermissionPrompt,
   readTurnUsage,
   StatusFooter,
   TheoTUIProvider,
@@ -172,7 +172,7 @@ export function App(): ReactElement {
     void agent.approve(approvalId, { approved })
   }
 
-  // Global keys. While a gated tool awaits approval, the `<ApprovalPrompt>` owns the keys (←/→/Enter/Esc)
+  // Global keys. While a gated tool awaits approval, the `<PermissionPrompt>` owns the keys (↑/↓/Enter/Esc)
   // — stay out of its way. Otherwise: Esc cancels a running turn / closes help; Ctrl+C cancels a turn, else
   // arms → quits on a second press. The ChatComposer owns editing keys (/, @, !, ?, ↑↓, emacs chords).
   useInput((input, key) => {
@@ -210,8 +210,8 @@ export function App(): ReactElement {
 
   return (
     <TheoTUIProvider theme={THEME}>
-      {/* InkInputProvider bridges Ink's stdin to @theokit/tui's interactive surfaces (ApprovalPrompt's
-          choice bar) so they receive keys under plain Ink — the ChatComposer keeps using Ink's own hooks. */}
+      {/* InkInputProvider bridges Ink's stdin to @theokit/tui's interactive surfaces (PermissionPrompt's
+          numbered choice menu) so they receive keys under plain Ink — the ChatComposer keeps Ink's own hooks. */}
       <InkInputProvider>
         <Box flexDirection="column">
         <Banner />
@@ -235,16 +235,21 @@ export function App(): ReactElement {
         {/* A one-line top margin separates the input (or the approval prompt) from the conversation above. */}
         <Box marginTop={1} flexDirection="column">
           {pendingApproval ? (
-            <ApprovalPrompt
-              title={`Allow ${pendingApproval.toolName}?`}
+            <PermissionPrompt
+              toolType="Tool call"
+              command={pendingApproval.toolName}
+              description={
+                pendingApproval.input !== undefined
+                  ? JSON.stringify(pendingApproval.input)
+                  : undefined
+              }
               onDecision={(decision) => {
-                // The prompt's choices are `once`/`always`/`reject`; only `reject` denies. Map to the client's
-                // decision object and settle (remembering the id so the standalone gate part stops re-showing).
-                settleApproval(pendingApproval.approvalId, decision !== 'reject')
+                // PermissionPrompt's default choices are `yes`/`no` (Esc → the last one, `no`, the safe
+                // default). Only `yes` approves. Settle (remembering the id so the standalone gate part
+                // stops re-showing) and forward the decision to the client.
+                settleApproval(pendingApproval.approvalId, decision === 'yes')
               }}
-            >
-              <Text dimColor>{JSON.stringify(pendingApproval.input)}</Text>
-            </ApprovalPrompt>
+            />
           ) : (
             <ChatComposer
               placeholder={PLACEHOLDER}
