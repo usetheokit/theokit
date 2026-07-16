@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.17.2
+
+### Patch Changes
+
+- TUI: add a one-line top margin above the input composer (and the approval prompt that replaces it), so it no longer sits flush against the last message — a bit more breathing room between the conversation and where you type.
+
 ## 1.17.1
 
 ### Patch Changes
