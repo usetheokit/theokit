@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.20.1
+
+### Patch Changes
+
+- TUI: monochrome-by-default chrome — color is now reserved for meaning. The assistant `⏺` bullet, the `>` prompt, and the input border render in the terminal's default color (via `tui/theme.ts`: `accent: ''` + neutral `role.*.prefix`), while semantic colors are kept: tool states (pending gray · running yellow · success green · failed red) and errors (red). The welcome banner keeps its accent (it uses the `ACCENT` const directly). Restyle in one line — set `accent: ACCENT` to colorize the chrome, or tint the bullets via `role.*.prefix`.
+
 ## 1.20.0
 
 ### Minor Changes

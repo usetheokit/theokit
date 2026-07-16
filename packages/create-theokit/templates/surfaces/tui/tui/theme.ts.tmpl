@@ -25,8 +25,15 @@ export const ACCENT = '#d97757'
 export const THEME: TheoThemeProp = {
   base: 'dark', // 'dark' · 'light' · 'no-color'
   override: {
-    accent: ACCENT,
-    // role: { assistant: { glyph: '⏺  ' } },
+    // Color is reserved for MEANING. The chrome — the assistant `⏺` bullet, the `>` prompt, and the input
+    // border — stays MONOCHROME (terminal default). Semantic colors (tool states: pending gray · running
+    // yellow · success green · failed red; and errors) keep their color. Set `accent: ACCENT` to tint the
+    // chrome, or give `role.*.prefix` a color name/hex to tint the bullets.
+    accent: '', // the input border (the banner uses ACCENT directly, so it always stays colored)
+    role: {
+      assistant: { prefix: '' }, // the assistant `⏺` bullet
+      user: { prefix: '' }, // the `>` prompt (conversation + input)
+    },
     // toolStatus: { pending: { glyph: '○' }, success: { glyph: '●' }, failed: { glyph: '✗' } },
   },
 }
