@@ -5,7 +5,6 @@ import { type ReactElement, useState } from 'react'
 import {
   AgentStreaming,
   AgentTimeline,
-  AppStatusBar,
   ApprovalPrompt,
   ChatComposer,
   DEFAULT_COMPOSER_SHORTCUTS,
@@ -15,6 +14,7 @@ import {
   messagesToAgentEvents,
   Notice,
   readTurnUsage,
+  StatusFooter,
   TheoTUIProvider,
   useTurnElapsed,
   type UIMessageLike,
@@ -29,6 +29,9 @@ import { AGENT } from '../shared/agent.js'
 const MODEL = AGENT.model
 /** cwd with the home dir tildeified (`~/…`), so the banner line stays short. */
 const CWD = process.cwd().replace(homedir(), '~')
+/** Compact token count for the footer: `128000 → 128k`, `12300 → 12.3k`, `462 → 462`. */
+const fmtK = (n: number): string =>
+  n >= 1000 ? `${(Math.round(n / 100) / 10).toString().replace(/\.0$/, '')}k` : `${n}`
 /** Claude Code's warm accent (truecolor; degrades gracefully on 256-color terminals). */
 const ACCENT = '#d97757'
 /** The "Theo" wordmark (figlet ANSI-Shadow, block glyphs — single-width, renders everywhere). */
@@ -161,13 +164,10 @@ export function App(): ReactElement {
   // The store owns the conversation (M46) — prepend the warm greeting and project to timeline events.
   const events = messagesToAgentEvents([GREETING, ...agent.thread])
 
-  // Footer telemetry from the per-turn usage the agent stream rides on each assistant message's metadata
-  // (readTurnUsage). Context window = the LAST turn's input tokens (what the model saw) over the model's
-  // window; cost = the sum across the session. Both stay undefined until the first turn reports usage.
-  const usages = agent.thread.map(readTurnUsage).filter((u) => u !== undefined)
-  const lastUsage = usages.at(-1)
-  const sessionCost = usages.reduce((sum, u) => sum + (u.cost ?? 0), 0)
-  const tokens = lastUsage ? { used: lastUsage.inputTokens, limit: AGENT.contextWindow } : undefined
+  // The last turn's usage (readTurnUsage reads the totals the agent stream rides on each assistant
+  // message's metadata) drives the streaming token count + the footer's context usage. Undefined until
+  // the first turn reports usage.
+  const lastUsage = agent.thread.map(readTurnUsage).filter((u) => u !== undefined).at(-1)
 
   // Human-in-the-loop: a gated tool (`send_notification`) pauses the run awaiting a decision. When one is
   // pending (and not already settled) we show the approval prompt IN PLACE OF the composer and settle it.
@@ -232,6 +232,7 @@ export function App(): ReactElement {
             shimmer
             elapsedSeconds={elapsed}
             tokens={lastUsage?.totalTokens}
+            tokenDirection="down"
             showCancelHint
           />
         ) : null}
@@ -256,7 +257,7 @@ export function App(): ReactElement {
             <ChatComposer
               placeholder="Ask {{name}} anything…"
               bordered
-              hint={exitArmed ? 'Press Ctrl+C again to quit' : '? for shortcuts'}
+              hint={exitArmed ? 'Press Ctrl+C again to quit' : undefined}
               commands={[
                 { name: 'clear', description: 'clear the conversation' },
                 { name: 'help', description: 'toggle the keyboard shortcuts panel' },
@@ -267,12 +268,18 @@ export function App(): ReactElement {
           )}
         </Box>
 
-        <AppStatusBar
-          model={MODEL}
-          cwd={CWD}
-          tokens={tokens}
-          cost={sessionCost > 0 ? sessionCost : undefined}
-          state={streaming ? 'streaming' : 'idle'}
+        {/* Claude Code's two-line footer: top-left the model, top-right the context usage; bottom the
+            shortcuts hint. `StatusFooter` justifies the top row to the terminal edges. */}
+        <StatusFooter
+          left={<Text>{MODEL}</Text>}
+          right={
+            lastUsage ? (
+              <Text>
+                {fmtK(lastUsage.inputTokens)}/{fmtK(AGENT.contextWindow)} context
+              </Text>
+            ) : undefined
+          }
+          hint="? for shortcuts"
         />
         </Box>
       </InkInputProvider>

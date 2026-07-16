@@ -1,5 +1,16 @@
 # create-theo
 
+## 1.18.0
+
+### Minor Changes
+
+- TUI adopts `@theokit/tui@0.37.0`, closing the last two Claude-Code parity gaps (issues #44 + #45):
+
+  - **Two-line footer** — the single-line status bar is replaced by `<StatusFooter>`: a top row with the model on the left and the context usage (`506/128k context`) justified to the right edge, and a bottom `? for shortcuts` row (the shortcuts move here from under the input box — the Claude Code layout).
+  - **Thinking spinner: sparkle + token direction** — the spinner is now a cycling `✵`/`✳` sparkle (was a braille spinner) and the token count carries a `↓` arrow: `✵  Thinking (1s · ↓ 543 tokens · esc to interrupt)` — the exact Claude Code streaming line.
+
+  Bumps `@theokit/tui ^0.36.0 → ^0.37.0`. Live-verified end-to-end against a real model turn.
+
 ## 1.17.2
 
 ### Patch Changes
