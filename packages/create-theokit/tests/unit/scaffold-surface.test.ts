@@ -62,6 +62,11 @@ describe('applySurface (M45)', () => {
     expect(app).toContain("from '@theokit/tui'")
     expect(app).toContain('AgentTimeline')
     expect(app).toContain('messagesToAgentEvents')
+    // Footer telemetry: the status bar shows real context tokens + session cost from per-turn usage
+    // (readTurnUsage over `agent.thread`), against the app-declared context window.
+    expect(app).toContain('readTurnUsage')
+    expect(app).toContain('AGENT.contextWindow')
+    expect(app).toContain('cost={sessionCost')
     expect(app).not.toContain('ChatThread')
     expect(app).not.toContain('@theokit/tui/ai-sdk')
     expect(app).not.toContain("from 'ai'")
