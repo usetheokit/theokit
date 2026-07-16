@@ -4,7 +4,7 @@
   "type": "module",
   "dependencies": {
     "@theokit/agents": "workspace:*",
-    "@theokit/sdk": "^2.20.0",
+    "@theokit/sdk": "^2.30.0",
     "@theokit/ui": "^0.14.4",
     "@usetheo/ui": "^0.14.0",
     "lucide-react": "^0.469.0",
