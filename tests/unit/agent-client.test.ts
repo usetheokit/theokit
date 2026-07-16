@@ -137,6 +137,27 @@ describe('AgentClient (M41)', () => {
     expect(client.getSnapshot().error?.message).toMatch(/500/)
   })
 
+  it('test_send_error_chunk_sets_error_status', async () => {
+    // #136 — the in-process runner does NOT throw on a provider failure; it EMITS a `{ type: 'error',
+    // errorText }` chunk inside an otherwise-resolved stream. The store must surface it as status='error'
+    // (not settle to 'done'), so `useAgent().error` populates and the scaffold's <Notice> renders.
+    const transport = fakeTransport({
+      sendMessages: (async () =>
+        chunkStream([
+          { type: 'start' },
+          { type: 'text-start', id: 't0' },
+          { type: 'text-delta', id: 't0', delta: 'Hi' },
+          { type: 'text-end', id: 't0' },
+          { type: 'error', errorText: 'OpenRouter: 401 No auth credentials found' },
+        ])) as ChatTransport<UIMessage>['sendMessages'],
+    })
+    const client = new AgentClient(transport)
+    client.send({ message: 'hi' })
+    await waitSettled(client)
+    expect(client.getSnapshot().status).toBe('error')
+    expect(client.getSnapshot().error?.message).toBe('OpenRouter: 401 No auth credentials found')
+  })
+
   it('test_approve_routes_to_transport', async () => {
     const approve = vi.fn(async (_id: string, _d: ApprovalDecision) => undefined)
     const client = new AgentClient(fakeTransport({ approve }))
