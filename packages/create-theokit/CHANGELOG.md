@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.17.1
+
+### Patch Changes
+
+- TUI welcome banner refinements: it now spans the **full terminal width** with a one-cell margin on every side and inner padding; the mascot is replaced by a bold **"Theo"** wordmark (block letters) in the coral accent; and the layout has more breathing room between the logo, the `✻ Welcome` line, and the tips/what's-new columns. A fixed-width left column keeps the two-column layout intact even when the cwd is long (it truncates instead of pushing the right column off-screen).
+
 ## 1.17.0
 
 ### Minor Changes

@@ -74,7 +74,7 @@ describe('applySurface (M45)', () => {
     // left; getting-started tips + what's new on the right (collapses to one column when narrow).
     expect(app).toContain('function Banner()')
     expect(app).toContain('✻ Welcome to')
-    expect(app).toContain('MASCOT')
+    expect(app).toContain('THEO_LOGO')
     expect(app).toContain('Tips for getting started')
     expect(app).toContain('What&apos;s new')
     expect(app).toContain('THINKING_PHRASES')
