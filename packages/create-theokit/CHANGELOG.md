@@ -1,5 +1,18 @@
 # create-theo
 
+## 1.14.0
+
+### Minor Changes
+
+- TUI surface: Claude-Code interaction parity in the scaffolded `tui/App.tsx`. The composer already carried the primitives from `@theokit/tui`; the app now wires the full set:
+
+  - **Keyboard-help panel** — `?` on an empty line (or `/help`) toggles a `KeyboardHelp` overlay listing every shortcut (`DEFAULT_COMPOSER_SHORTCUTS`).
+  - **Ctrl+C two-step quit** — a single press cancels a running turn or arms the exit (`Press Ctrl+C again to quit`); a second press quits. `tui/main.tsx` now renders with `exitOnCtrlC: false` so the app owns the key.
+  - **Slash-command palette** — `/clear` and `/help` in a prefix-filtered menu (typing `/` opens it; ↑↓ select, Tab/Enter complete).
+  - **@-file mentions + ↑↓ history** — already on by default from `ChatComposer` (gitignore-aware cwd walk + input recall), now surfaced in the placeholder/help.
+
+  Live-verified in a real terminal: the help panel toggles, Esc dismisses it, and the two-step Ctrl+C quit arms then exits.
+
 ## 1.13.0
 
 ### Minor Changes
