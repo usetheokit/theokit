@@ -26,17 +26,27 @@ import { AGENT } from '../shared/agent.js'
 /** Shown in the status bar (from `shared/agent.ts`). */
 const MODEL = AGENT.model
 const CWD = process.cwd()
+/** Claude Code's warm accent (truecolor; degrades gracefully on 256-color terminals). */
+const ACCENT = '#d97757'
+/** Whimsical status words cycled while the agent thinks (Claude Code idiom — the ✻ spinner rotates these). */
+const THINKING_PHRASES = [
+  'Thinking',
+  'Pondering',
+  'Noodling',
+  'Percolating',
+  'Baking',
+  'Brewing',
+  'Simmering',
+  'Conjuring',
+  'Musing',
+  'Marinating',
+] as const
 
-/** The agent's opening line — the shared greeting plus TUI key hints, so the conversation starts warm. */
+/** The agent's opening line — a short warm intro; the banner already carries the how-to tips. */
 const GREETING: UIMessageLike = {
   id: 'greeting',
   role: 'assistant',
-  parts: [
-    {
-      type: 'text',
-      text: `${AGENT.greeting} Type below and press Enter · / for commands · @ to mention a file · ? for help.`,
-    },
-  ],
+  parts: [{ type: 'text', text: AGENT.greeting }],
 }
 
 /** Resolve the provider key from the environment (OpenRouter / Anthropic / OpenAI). */
@@ -130,22 +140,28 @@ export function App(): ReactElement {
   }
 
   return (
-    <TheoTUIProvider theme={{ base: 'dark', override: { accent: 'cyan' } }}>
+    <TheoTUIProvider theme={{ base: 'dark', override: { accent: ACCENT } }}>
       {/* InkInputProvider bridges Ink's stdin to @theokit/tui's interactive surfaces (ApprovalPrompt's
           choice bar) so they receive keys under plain Ink — the ChatComposer keeps using Ink's own hooks. */}
       <InkInputProvider>
         <Box flexDirection="column">
         <WelcomeBanner
-          name="{{name}}"
-          tagline="Your agent, in the terminal — built with TheoKit."
-          hints={['Enter sends · Alt+Enter for a newline', '/ commands · @ files · ? help · ctrl+c quits']}
+          name="✻ Welcome to {{name}}"
+          hints={['/help for help  ·  /clear to reset', 'Enter sends  ·  @ mentions a file  ·  esc interrupts']}
         >
           <Text dimColor>cwd: {CWD}</Text>
         </WelcomeBanner>
 
         <AgentTimeline events={events} />
 
-        {streaming ? <AgentStreaming thought="Thinking…" elapsedSeconds={elapsed} showCancelHint /> : null}
+        {streaming ? (
+          <AgentStreaming
+            phrases={THINKING_PHRASES}
+            shimmer
+            elapsedSeconds={elapsed}
+            showCancelHint
+          />
+        ) : null}
         {agent.error ? <Text color="red">⚠ {agent.error.message}</Text> : null}
 
         {showHelp ? <KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} /> : null}
@@ -163,13 +179,9 @@ export function App(): ReactElement {
           </ApprovalPrompt>
         ) : (
           <ChatComposer
-            placeholder="Ask your agent…  (Enter sends · / commands · @ files · ? help)"
+            placeholder="Ask {{name}} anything…"
             bordered
-            hint={
-              exitArmed
-                ? 'Press Ctrl+C again to quit'
-                : 'Enter sends · Alt+Enter newline · / commands · @ files · ? help · esc cancels'
-            }
+            hint={exitArmed ? 'Press Ctrl+C again to quit' : '? for shortcuts'}
             commands={[
               { name: 'clear', description: 'clear the conversation' },
               { name: 'help', description: 'toggle the keyboard shortcuts panel' },
