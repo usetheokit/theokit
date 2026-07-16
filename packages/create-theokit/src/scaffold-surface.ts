@@ -81,7 +81,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     // matching the web template's versions. `@theokit/ui` components self-style via the precompiled sheet.
     deps: {
       '@theokit/ui': '^1.0.0',
-      '@usetheo/ui': '^0.14.0',
+      '@usetheo/ui': '^0.26.0',
       '@theokit/tauri': '^0.1.1',
       'lucide-react': '^0.469.0',
       ai: '^7.0.0',
