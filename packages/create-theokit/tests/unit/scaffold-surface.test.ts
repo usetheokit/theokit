@@ -107,10 +107,12 @@ describe('applySurface (M45)', () => {
     expect(app).toContain('DEFAULT_COMPOSER_SHORTCUTS')
     expect(app).toContain('onHelpToggle')
     expect(app).toContain('exitArmed')
-    // HITL: a gated tool pauses the run → findPendingApproval surfaces it → @theokit/tui's ApprovalPrompt
-    // (choice bar) settles via agent.approve. InkInputProvider bridges Ink's stdin to the prompt (#41).
+    // HITL: a gated tool pauses the run → findPendingApproval surfaces it → @theokit/tui's PermissionPrompt
+    // (Claude-Code tool-approval card, numbered yes/no menu) settles via agent.approve. InkInputProvider
+    // bridges Ink's stdin to the prompt (#41). Adopted @theokit/tui ^0.40.0.
     expect(app).toContain('findPendingApproval')
-    expect(app).toContain('ApprovalPrompt')
+    expect(app).toContain('PermissionPrompt')
+    expect(app).toContain("decision === 'yes'")
     expect(app).toContain('InkInputProvider')
     expect(app).toContain('settleApproval')
     expect(app).toContain('agent.approve(approvalId, { approved })')
