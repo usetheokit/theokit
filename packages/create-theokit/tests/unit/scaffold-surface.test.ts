@@ -66,14 +66,22 @@ describe('applySurface (M45)', () => {
     // (readTurnUsage over `agent.thread`), against the app-declared context window.
     expect(app).toContain('readTurnUsage')
     expect(app).toContain('AGENT.contextWindow')
-    // Claude-Code look (@theokit/tui ^0.36.0): coral accent, ✻ welcome banner, whimsical thinking
-    // spinner with the live token count (`esc to interrupt`), and a Notice for errors.
-    expect(app).toContain('#d97757') // Claude Code's coral accent
-    // Custom two-column welcome box (Claude Code shape): ✻ header + pixel mascot + model + cwd on the
+    // Global style lives in ONE editable file `tui/theme.ts` (the DX win): accent, banner wordmark + copy,
+    // spinner words, placeholder. The App imports it and never needs touching for a restyle.
+    const theme = read('tui/theme.ts')
+    expect(theme).toContain('#d97757') // Claude Code's coral accent
+    expect(theme).toContain('export const ACCENT')
+    expect(theme).toContain('export const THEME')
+    expect(theme).toContain('export const LOGO')
+    expect(theme).toContain('export const THINKING_PHRASES')
+    expect(theme).toContain('export const PLACEHOLDER')
+    expect(theme).toContain('export const BANNER_TIPS')
+    expect(app).toContain("from './theme.js'")
+    // Custom two-column welcome box (Claude Code shape): ✻ header + Theo wordmark + model + cwd on the
     // left; getting-started tips + what's new on the right (collapses to one column when narrow).
     expect(app).toContain('function Banner()')
     expect(app).toContain('✻ Welcome to')
-    expect(app).toContain('THEO_LOGO')
+    expect(app).toContain('{LOGO}')
     expect(app).toContain('Tips for getting started')
     expect(app).toContain('What&apos;s new')
     expect(app).toContain('THINKING_PHRASES')

@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.19.0
+
+### Minor Changes
+
+- TUI: a single **`tui/theme.ts`** file to restyle the whole terminal UI. All the visual knobs — the accent color, the global `@theokit/tui` theme (with commented bullet-glyph override examples), the welcome-banner wordmark (`LOGO`), the tips + what's-new copy, the thinking-spinner words, and the input placeholder — now live in one well-documented file. `tui/App.tsx` imports from it and never needs touching for a rebrand: change the accent, swap the ASCII wordmark (`npx figlet -f "ANSI Shadow" "YourApp"`), edit the copy — done. Verified live: editing only `tui/theme.ts` re-themes the banner (accent + copy) on the next launch.
+
 ## 1.18.0
 
 ### Minor Changes
