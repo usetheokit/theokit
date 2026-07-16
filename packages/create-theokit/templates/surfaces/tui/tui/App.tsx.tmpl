@@ -239,30 +239,33 @@ export function App(): ReactElement {
 
         {showHelp ? <KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} /> : null}
 
-        {pendingApproval ? (
-          <ApprovalPrompt
-            title={`Allow ${pendingApproval.toolName}?`}
-            onDecision={(decision) => {
-              // The prompt's choices are `once`/`always`/`reject`; only `reject` denies. Map to the client's
-              // decision object and settle (remembering the id so the standalone gate part stops re-showing).
-              settleApproval(pendingApproval.approvalId, decision !== 'reject')
-            }}
-          >
-            <Text dimColor>{JSON.stringify(pendingApproval.input)}</Text>
-          </ApprovalPrompt>
-        ) : (
-          <ChatComposer
-            placeholder="Ask {{name}} anything…"
-            bordered
-            hint={exitArmed ? 'Press Ctrl+C again to quit' : '? for shortcuts'}
-            commands={[
-              { name: 'clear', description: 'clear the conversation' },
-              { name: 'help', description: 'toggle the keyboard shortcuts panel' },
-            ]}
-            onHelpToggle={() => setShowHelp((h) => !h)}
-            onSubmit={handleSubmit}
-          />
-        )}
+        {/* A one-line top margin separates the input (or the approval prompt) from the conversation above. */}
+        <Box marginTop={1} flexDirection="column">
+          {pendingApproval ? (
+            <ApprovalPrompt
+              title={`Allow ${pendingApproval.toolName}?`}
+              onDecision={(decision) => {
+                // The prompt's choices are `once`/`always`/`reject`; only `reject` denies. Map to the client's
+                // decision object and settle (remembering the id so the standalone gate part stops re-showing).
+                settleApproval(pendingApproval.approvalId, decision !== 'reject')
+              }}
+            >
+              <Text dimColor>{JSON.stringify(pendingApproval.input)}</Text>
+            </ApprovalPrompt>
+          ) : (
+            <ChatComposer
+              placeholder="Ask {{name}} anything…"
+              bordered
+              hint={exitArmed ? 'Press Ctrl+C again to quit' : '? for shortcuts'}
+              commands={[
+                { name: 'clear', description: 'clear the conversation' },
+                { name: 'help', description: 'toggle the keyboard shortcuts panel' },
+              ]}
+              onHelpToggle={() => setShowHelp((h) => !h)}
+              onSubmit={handleSubmit}
+            />
+          )}
+        </Box>
 
         <AppStatusBar
           model={MODEL}
