@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- **`create-theokit` TUI adopts `@theokit/tui@0.35.0` — real `⏺` glyph + real `<ApprovalPrompt>`.** The scaffold now gets Claude Code's `⏺` assistant/tool bullet from the theme (issue #40, no scaffold change) and wraps its tree in `<InkInputProvider>` to render the library's `<ApprovalPrompt>` choice bar (`Allow once / Allow always / Reject`, ←/→ + Enter — issue #41) for HITL, replacing the earlier Ink-native `[y]/[n]` prompt. Both prior workarounds are closed; the scaffold uses the real lib components. Live-verified end-to-end. Bumps `@theokit/tui ^0.34.0 → ^0.35.0`.
+
 ### Added
 - **`create-theokit` TUI: human-in-the-loop approval for gated tools.** The default agent ships a demo side-effecting tool (`send_notification`) gated with `.approval(...)`; asking the agent to "notify me that …" pauses the run. The scaffolded `tui/App.tsx` surfaces it via `@theokit/tui`'s new `findPendingApproval` and shows an approval prompt in place of the composer (`[y] allow · [n] reject`), settling via `agent.approve(approvalId, { approved })` and clearing once answered. The SDK genuinely parks the tool until you decide — it runs on approve, is skipped on reject. Live-verified end-to-end against a real model turn. Bumps `@theokit/tui ^0.33.0 → ^0.34.0`.
 - **`create-theokit` TUI: Claude-Code interaction parity.** The scaffolded `tui/App.tsx` wires the full keybinding set the composer already supported: a `?`/`​/help` keyboard-help overlay (`KeyboardHelp` + `DEFAULT_COMPOSER_SHORTCUTS`), a two-step Ctrl+C quit (first press cancels/arms with a `Press Ctrl+C again to quit` hint, second quits — `main.tsx` renders with `exitOnCtrlC: false`), a `/clear`+`/help` slash-command palette, and the already-default `@`-file mentions + ↑↓ history. Live-verified in a real terminal.
