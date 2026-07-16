@@ -70,7 +70,13 @@ describe('applySurface (M45)', () => {
     // Claude-Code look (@theokit/tui ^0.36.0): coral accent, ✻ welcome banner, whimsical thinking
     // spinner with the live token count (`esc to interrupt`), and a Notice for errors.
     expect(app).toContain('#d97757') // Claude Code's coral accent
+    // Custom two-column welcome box (Claude Code shape): ✻ header + pixel mascot + model + cwd on the
+    // left; getting-started tips + what's new on the right (collapses to one column when narrow).
+    expect(app).toContain('function Banner()')
     expect(app).toContain('✻ Welcome to')
+    expect(app).toContain('MASCOT')
+    expect(app).toContain('Tips for getting started')
+    expect(app).toContain('What&apos;s new')
     expect(app).toContain('THINKING_PHRASES')
     expect(app).toContain('tokens={lastUsage?.totalTokens}')
     expect(app).toContain('<Notice variant="error">')
