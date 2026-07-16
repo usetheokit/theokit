@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.14.1
+
+### Patch Changes
+
+- Bump the default template's pins to the releases that carry the per-turn usage metadata the TUI footer reads end-to-end: `theokit ^0.43.0 → ^0.43.1` and `@theokit/agents ^0.42.0 → ^0.43.0`. Without this, a fresh scaffold installed `@theokit/agents@0.42.x` whose stream did not ride usage on the finish chunk, so the footer's tokens/cost stayed blank against a real model turn. Now the whole chain — translator emits `messageMetadata` → `readUIMessageStream` lands it on `UIMessage.metadata` → `readTurnUsage` → `AppStatusBar` — ships from published bits.
+
 ## 1.14.0
 
 ### Minor Changes
