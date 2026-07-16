@@ -1,5 +1,20 @@
 # create-theo
 
+## 1.15.0
+
+### Minor Changes
+
+- TUI surface: **human-in-the-loop approval** for gated tools. The default agent now ships a demo
+  side-effecting tool (`send_notification`) gated via `.approval('send_notification', …)`; ask the agent to
+  "notify me that …" and the run pauses. The scaffolded `tui/App.tsx` surfaces the pending gate with
+  `@theokit/tui`'s new `findPendingApproval(agent.thread)` and shows an approval prompt in place of the
+  composer — `[y] allow · [n] reject` — settling it via `agent.approve(approvalId, { approved })`, then
+  clearing once answered. The whole gate is real: the SDK genuinely parks the tool until you decide, the
+  tool runs on approve and is skipped on reject. Live-verified end-to-end against a real model turn. Bumps
+  `@theokit/tui ^0.33.0 → ^0.34.0` (adds `findPendingApproval` + `PendingApproval`). (The prompt is
+  Ink-native — `@theokit/tui`'s `ApprovalPrompt` component targets its own renderer's input system, which
+  the plain-Ink scaffold does not run.)
+
 ## 1.14.1
 
 ### Patch Changes
