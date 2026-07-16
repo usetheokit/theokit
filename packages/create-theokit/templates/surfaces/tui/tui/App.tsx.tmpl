@@ -24,6 +24,18 @@ import { streamAgentTurnInProcess } from 'theokit/server/agent'
 
 import * as chatAgent from '../agents/chat.js'
 import { AGENT } from '../shared/agent.js'
+// Everything visual (accent, banner wordmark + copy, spinner words, placeholder) lives in ONE file —
+// edit `tui/theme.ts` to restyle; this component never needs touching for a rebrand.
+import {
+  ACCENT,
+  BANNER_TIPS,
+  BANNER_WHATS_NEW,
+  LOGO,
+  PLACEHOLDER,
+  THEME,
+  THINKING_PHRASES,
+  WIDE_COLS,
+} from './theme.js'
 
 /** Shown in the status bar (from `shared/agent.ts`). */
 const MODEL = AGENT.model
@@ -32,32 +44,6 @@ const CWD = process.cwd().replace(homedir(), '~')
 /** Compact token count for the footer: `128000 → 128k`, `12300 → 12.3k`, `462 → 462`. */
 const fmtK = (n: number): string =>
   n >= 1000 ? `${(Math.round(n / 100) / 10).toString().replace(/\.0$/, '')}k` : `${n}`
-/** Claude Code's warm accent (truecolor; degrades gracefully on 256-color terminals). */
-const ACCENT = '#d97757'
-/** The "Theo" wordmark (figlet ANSI-Shadow, block glyphs — single-width, renders everywhere). */
-const THEO_LOGO = [
-  '████████╗██╗  ██╗███████╗ ██████╗',
-  '╚══██╔══╝██║  ██║██╔════╝██╔═══██╗',
-  '   ██║   ███████║█████╗  ██║   ██║',
-  '   ██║   ██╔══██║██╔══╝  ██║   ██║',
-  '   ██║   ██║  ██║███████╗╚██████╔╝',
-  '   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ',
-].join('\n')
-/** Below this column count the welcome box collapses to a single column (the two-column aside needs room). */
-const WIDE_COLS = 90
-/** Whimsical status words cycled while the agent thinks (Claude Code idiom — the ✻ spinner rotates these). */
-const THINKING_PHRASES = [
-  'Thinking',
-  'Pondering',
-  'Noodling',
-  'Percolating',
-  'Baking',
-  'Brewing',
-  'Simmering',
-  'Conjuring',
-  'Musing',
-  'Marinating',
-] as const
 
 /** The agent's opening line — a short warm intro; the banner already carries the how-to tips. */
 const GREETING: UIMessageLike = {
@@ -110,7 +96,7 @@ function Banner(): ReactElement {
       {/* Fixed-width left column (fits the 34-wide wordmark) so a long cwd truncates instead of pushing
           the right column off-screen — the box stays full width, the content stays grouped on the left. */}
       <Box flexDirection="column" width={38} flexShrink={0}>
-        <Text color={ACCENT}>{THEO_LOGO}</Text>
+        <Text color={ACCENT}>{LOGO}</Text>
         <Box marginTop={1} flexDirection="column">
           <Text color={ACCENT} bold wrap="truncate-end">
             ✻ Welcome to {APP_NAME}
@@ -129,16 +115,22 @@ function Banner(): ReactElement {
             Tips for getting started
           </Text>
           <Box marginTop={1} flexDirection="column">
-            <Text dimColor>Ask me anything — I stream a reply</Text>
-            <Text dimColor>/help  ·  @ mention a file  ·  esc interrupts</Text>
+            {BANNER_TIPS.map((tip) => (
+              <Text key={tip} dimColor>
+                {tip}
+              </Text>
+            ))}
           </Box>
           <Box marginTop={1} flexDirection="column">
             <Text color={ACCENT} bold>
               What&apos;s new
             </Text>
             <Box marginTop={1} flexDirection="column">
-              <Text dimColor>Human-in-the-loop approvals</Text>
-              <Text dimColor>Live token usage in the footer</Text>
+              {BANNER_WHATS_NEW.map((line) => (
+                <Text key={line} dimColor>
+                  {line}
+                </Text>
+              ))}
             </Box>
           </Box>
         </Box>
@@ -217,7 +209,7 @@ export function App(): ReactElement {
   }
 
   return (
-    <TheoTUIProvider theme={{ base: 'dark', override: { accent: ACCENT } }}>
+    <TheoTUIProvider theme={THEME}>
       {/* InkInputProvider bridges Ink's stdin to @theokit/tui's interactive surfaces (ApprovalPrompt's
           choice bar) so they receive keys under plain Ink — the ChatComposer keeps using Ink's own hooks. */}
       <InkInputProvider>
@@ -255,7 +247,7 @@ export function App(): ReactElement {
             </ApprovalPrompt>
           ) : (
             <ChatComposer
-              placeholder="Ask {{name}} anything…"
+              placeholder={PLACEHOLDER}
               bordered
               hint={exitArmed ? 'Press Ctrl+C again to quit' : undefined}
               commands={[
