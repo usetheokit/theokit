@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- **`create-theokit` TUI surface componentized + ships a System Design.** `tui/App.tsx` drops 460 → 230 lines (focused composition root); the welcome `Banner`, the `/usage` panel (`UsagePanel`), and the `/plan /ask /select /progress` showcase (`Demos`, owns its own timer) move to `tui/components/*` — single-responsibility, and the demos deletable in one file. The generated app now ships a `## Architecture` section in `README-surface.md` (component tree + data flow + layer boundaries + extension points). Pure refactor — every 1.22.0 behavior preserved; generated app typechecks against the 0.40.0 types with zero unused imports.
+
 ### Added
 - **`create-theokit` TUI wires the full `@theokit/tui@0.40.0` component set live** — each with a real hook, not a static gallery. `Stack` (app layout, Claude cadence); `/usage` observability panel from the last turn's real usage (`ContextWindowBar` + `TokenUsageChart` input/output/cached/reasoning + `CostMeter`); `Toast` for transient outcomes; and four interactive slash-command demos: `/plan` (`PlanApproval`), `/ask` (`QuestionPrompt` + free-text), `/select` (`SelectList` multi), `/progress` (`MultiStepProgress` + `ProgressActivity` + `ProgressBar`, timer-advanced). Live-verified end-to-end; the generated app typechecks against the 0.40.0 types.
 
