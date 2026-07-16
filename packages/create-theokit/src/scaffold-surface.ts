@@ -60,7 +60,15 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     // for tui), so declare it explicitly. `ink@7` is the React-19 line (ink@5 crashes on React 19 with
     // `ReactCurrentOwner` — the default template pins react@19; ink@6.0.0+ moved its peer to react>=19) and
     // matches @theokit/tui's own ink@^7.1.0, so the app's `import 'ink'` dedupes to one React-19 ink.
-    deps: { '@theokit/tui': '^0.30.0', ink: '^7.1.0', ai: '^7.0.0' },
+    // `figlet` (WelcomeBanner ASCII) + `lowlight` (ChatMessage syntax highlight) are @theokit/tui PEERS the
+    // app relies on — declared here so pnpm (which never auto-installs peers, unlike npm) resolves them.
+    deps: {
+      '@theokit/tui': '^0.31.0',
+      ink: '^7.1.0',
+      ai: '^7.0.0',
+      figlet: '^1.7.0',
+      lowlight: '^3.0.0',
+    },
     devDeps: { tsx: '^4.19.0' },
     scripts: { dev: 'tsx tui/main.tsx', start: 'tsx tui/main.tsx' },
     tsconfigInclude: [
