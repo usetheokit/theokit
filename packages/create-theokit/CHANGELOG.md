@@ -1,5 +1,15 @@
 # create-theo
 
+## 1.12.0
+
+### Minor Changes
+
+- Scaffolds now work + look right on every surface:
+
+  - **SDK compatibility fixed (all surfaces).** The default template pinned a stale `@theokit/sdk ^2.25.0` while `theokit@0.43.0` peers `^4.0.1` — every freshly-scaffolded app installed an incompatible SDK 2.x. Bumped to `^4.0.1`, plus `@usetheo/ui ^0.14.0 → ^0.26.0` (the `@theokit/ui@1.x` peer). Guarded by a regression test.
+  - **TUI surface: Claude-Code render.** `create-theokit --surface tui` now renders via `<AgentTimeline>` — assistant turns as Markdown (headings, lists, fenced code → syntax-highlighted code blocks) and tool calls as collapsible cards (`⎿` output) — instead of plain text. Bumped `@theokit/tui ^0.30.0 → ^0.32.0` and declared its `figlet`/`lowlight` peers (pnpm never auto-installs peers, so without them the TUI crashed at boot under pnpm). The app's own code + `@theokit/tui` are ai-free (project `useAgent().thread` via `messagesToAgentEvents`); `ai` stays a dep only for theokit's in-process agent runtime.
+  - **Clean start.** The default agent tools import `tool` from the `theokit/server/define` sub-path instead of the deprecated umbrella `theokit/server`, so the TUI boots without a deprecation warning.
+
 ## 1.11.2
 
 ### Patch Changes
