@@ -31,8 +31,15 @@ const MODEL = AGENT.model
 const CWD = process.cwd().replace(homedir(), '~')
 /** Claude Code's warm accent (truecolor; degrades gracefully on 256-color terminals). */
 const ACCENT = '#d97757'
-/** A little pixel mascot for the welcome box (single-width block glyphs — renders everywhere). */
-const MASCOT = ['▛▀▜', '▌••▐', '▙▄▟'].join('\n')
+/** The "Theo" wordmark (figlet ANSI-Shadow, block glyphs — single-width, renders everywhere). */
+const THEO_LOGO = [
+  '████████╗██╗  ██╗███████╗ ██████╗',
+  '╚══██╔══╝██║  ██║██╔════╝██╔═══██╗',
+  '   ██║   ███████║█████╗  ██║   ██║',
+  '   ██║   ██╔══██║██╔══╝  ██║   ██║',
+  '   ██║   ██║  ██║███████╗╚██████╔╝',
+  '   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ',
+].join('\n')
 /** Below this column count the welcome box collapses to a single column (the two-column aside needs room). */
 const WIDE_COLS = 90
 /** Whimsical status words cycled while the agent thinks (Claude Code idiom — the ✻ spinner rotates these). */
@@ -78,43 +85,59 @@ const transport = new InProcessTransport({
 const APP_NAME = '{{name}}'
 
 /**
- * The Claude-Code welcome box: a rounded accent border. On a wide terminal it lays out two columns —
- * left is the `✻` header + a little pixel mascot + the model + cwd; right is the getting-started tips +
- * what's new. Below `WIDE_COLS` it collapses to a single column so nothing truncates.
+ * The Claude-Code welcome box: a full-width rounded accent border with margins on every side. On a wide
+ * terminal it lays out two columns — left is the `Theo` wordmark + a `✻` welcome line + model + cwd; right
+ * is the getting-started tips + what's new. Below `WIDE_COLS` it collapses to a single column.
  */
 function Banner(): ReactElement {
   const cols = process.stdout.columns ?? 80
   const wide = cols >= WIDE_COLS
   return (
     <Box
+      // Full width, with a one-cell margin on every side.
+      width={cols - 2}
+      marginX={1}
+      marginY={1}
+      paddingX={2}
+      paddingY={1}
       borderStyle="round"
       borderColor={ACCENT}
-      paddingX={1}
       flexDirection="row"
-      width={wide ? Math.min(cols - 2, 96) : undefined}
     >
-      <Box flexDirection="column" flexGrow={1}>
-        <Text color={ACCENT} bold>
-          ✻ Welcome to {APP_NAME}
-        </Text>
-        <Text color={ACCENT}>{MASCOT}</Text>
-        <Text dimColor>{MODEL}</Text>
-        <Text dimColor wrap="truncate-start">
-          cwd: {CWD}
-        </Text>
+      {/* Fixed-width left column (fits the 34-wide wordmark) so a long cwd truncates instead of pushing
+          the right column off-screen — the box stays full width, the content stays grouped on the left. */}
+      <Box flexDirection="column" width={38} flexShrink={0}>
+        <Text color={ACCENT}>{THEO_LOGO}</Text>
+        <Box marginTop={1} flexDirection="column">
+          <Text color={ACCENT} bold wrap="truncate-end">
+            ✻ Welcome to {APP_NAME}
+          </Text>
+          <Text dimColor wrap="truncate-end">
+            {MODEL}
+          </Text>
+          <Text dimColor wrap="truncate-start">
+            cwd: {CWD}
+          </Text>
+        </Box>
       </Box>
       {wide ? (
-        <Box flexDirection="column" flexShrink={0} marginLeft={2}>
+        <Box flexDirection="column" flexShrink={0} marginLeft={4}>
           <Text color={ACCENT} bold>
             Tips for getting started
           </Text>
-          <Text dimColor>Ask me anything — I stream a reply</Text>
-          <Text dimColor>/help  ·  @ mention a file  ·  esc interrupts</Text>
-          <Text> </Text>
-          <Text color={ACCENT} bold>
-            What&apos;s new
-          </Text>
-          <Text dimColor>Human-in-the-loop approvals · live token usage</Text>
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>Ask me anything — I stream a reply</Text>
+            <Text dimColor>/help  ·  @ mention a file  ·  esc interrupts</Text>
+          </Box>
+          <Box marginTop={1} flexDirection="column">
+            <Text color={ACCENT} bold>
+              What&apos;s new
+            </Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text dimColor>Human-in-the-loop approvals</Text>
+              <Text dimColor>Live token usage in the footer</Text>
+            </Box>
+          </Box>
         </Box>
       ) : null}
     </Box>
