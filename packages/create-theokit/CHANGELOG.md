@@ -1,5 +1,18 @@
 # create-theo
 
+## 1.16.0
+
+### Minor Changes
+
+- TUI surface: a much closer Claude-Code look & feel out of the box.
+
+  - **Welcome banner** — `✻ Welcome to <app>` in Claude Code's warm accent, with a `/help for help · /clear to reset` tips line and the cwd, in a rounded box (via `@theokit/tui`'s `WelcomeBanner`).
+  - **Warm accent** — the theme accent is now Claude Code's coral `#d97757` (truecolor, degrades gracefully) instead of cyan: it colors the `✻`, the `⏺` assistant/tool markers, the box borders and the `>` prompt.
+  - **Thinking spinner with personality** — while the agent streams, the spinner cycles whimsical status words (`Thinking · Pondering · Noodling · Percolating · Baking · Brewing · Simmering · Conjuring · Musing · Marinating`) and shimmers, with the elapsed seconds + `esc` hint (via `AgentStreaming`'s `phrases` + `shimmer`).
+  - **Cleaner input** — a minimal `? for shortcuts` hint under the composer (the full keybinding list lives in the `?` panel), and an `Ask <app> anything…` placeholder.
+
+  Live-verified in a real terminal against a real model turn. No new deps.
+
 ## 1.15.1
 
 ### Patch Changes
