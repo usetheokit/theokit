@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
+- **`create-theokit` TUI adopts `@theokit/tui@0.40.0` — Claude-Code `PermissionPrompt` HITL card.** A gated tool now renders a structured approval card (tool-type header · command line · proposed input · `Do you want to proceed?` · numbered `1. Yes / 2. No` menu, ↑/↓ + Enter, Esc → safe `No`), replacing the `once/always/reject` `ApprovalPrompt` bar. `onDecision` maps `yes` → approve. Live-verified end-to-end: real model turn calls `send_notification` → card renders → `Yes` → tool executes.
 - **`create-theokit` TUI: monochrome-by-default chrome.** Color is reserved for meaning — the assistant `⏺`, the `>` prompt, and the input border render in the terminal default (via `tui/theme.ts`); tool states (gray/yellow/green/red) and errors keep their color; the banner keeps its accent. One-line to re-tint via `theme.ts`.
 - **`create-theokit` TUI: `npm run demo:tools`.** A `tui/tool-variations.tsx` demo that renders every tool timeline state (pending/running/success/shell/failed/approval) via the real `messagesToAgentEvents`→`AgentTimeline` path + your `tui/theme.ts` — an agent-free visual reference for your colors/glyphs.
 - **`create-theokit` TUI: one-file restyle via `tui/theme.ts`.** All visual knobs (accent, `@theokit/tui` theme + bullet-glyph override examples, banner `LOGO` wordmark, tips/what's-new copy, spinner words, placeholder) centralized in a single documented file; `tui/App.tsx` imports from it. Rebrand without touching the component.

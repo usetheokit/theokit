@@ -68,7 +68,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     // `import 'ink'` dedupes to one React-19 ink. `figlet` (banner ASCII) + `lowlight` (code highlight) are
     // @theokit/tui PEERS the app relies on — declared so pnpm (which never auto-installs peers) resolves them.
     deps: {
-      '@theokit/tui': '^0.37.0',
+      '@theokit/tui': '^0.40.0',
       ink: '^7.1.0',
       ai: '^7.0.0',
       figlet: '^1.7.0',
