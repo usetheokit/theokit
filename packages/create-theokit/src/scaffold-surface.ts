@@ -31,10 +31,12 @@ export type SurfaceKind = 'web' | 'tui' | 'desktop'
 const VALID_SURFACES = ['web', 'tui', 'desktop'] as const
 
 /**
- * Web-only deps dropped for the tui/desktop surfaces (they ship no web UI). `react-router` is NOT dropped
- * — `theokit` declares it a REQUIRED peer, so removing it breaks `npm install` (ERESOLVE).
+ * Deps stripped from the default template before a surface adds its own. The web UI deps (`@theokit/ui` /
+ * `@usetheo/ui` / `lucide-react`) go for both tui + desktop; `ai` goes too so the AI-FREE tui surface drops
+ * it — the desktop webview re-adds `ai` via its own `cfg.deps` (it renders with `@theokit/ui`). `react-router`
+ * is NOT dropped — `theokit` declares it a REQUIRED peer, so removing it breaks `npm install` (ERESOLVE).
  */
-const WEB_ONLY_DEPS = ['@theokit/ui', '@usetheo/ui', 'lucide-react'] as const
+const WEB_ONLY_DEPS = ['@theokit/ui', '@usetheo/ui', 'lucide-react', 'ai'] as const
 const WEB_ONLY_DEV_DEPS = ['tailwindcss', '@tailwindcss/vite', 'tailwindcss-animate'] as const
 /** Web UI files removed for the tui/desktop surfaces. */
 const WEB_ONLY_FILES = ['app', 'index.html', 'tailwind.config.ts', 'postcss.config.js'] as const
@@ -55,17 +57,17 @@ interface SurfaceConfig {
 const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
   tui: {
     fragment: 'tui',
-    // `@theokit/tui` renders the conversation (`<ChatThread>` + the `./ai-sdk` UIMessage adapter). `ai` is
-    // the UIMessageStream type the unified client + adapter consume (was transitive via `@theokit/ui`, dropped
-    // for tui), so declare it explicitly. `ink@7` is the React-19 line (ink@5 crashes on React 19 with
-    // `ReactCurrentOwner` — the default template pins react@19; ink@6.0.0+ moved its peer to react>=19) and
-    // matches @theokit/tui's own ink@^7.1.0, so the app's `import 'ink'` dedupes to one React-19 ink.
-    // `figlet` (WelcomeBanner ASCII) + `lowlight` (ChatMessage syntax highlight) are @theokit/tui PEERS the
-    // app relies on — declared here so pnpm (which never auto-installs peers, unlike npm) resolves them.
+    // `@theokit/tui` renders the conversation via `<AgentTimeline>` (Markdown + fenced code + collapsible
+    // tool cards — the Claude-Code render), projected from `useAgent().thread` by the AI-FREE
+    // `messagesToAgentEvents` (structural `UIMessageLike`, no `ai` import) — so the terminal surface needs
+    // NO `ai` dependency (the unified client keeps `ai` internal, as a type-only optional peer). `ink@7` is
+    // the React-19 line (ink@5 crashes on React 19 with `ReactCurrentOwner`; the default template pins
+    // react@19; ink@6.0.0+ moved its peer to react>=19), matching @theokit/tui's own ink@^7.1.0 so the app's
+    // `import 'ink'` dedupes to one React-19 ink. `figlet` (banner ASCII) + `lowlight` (code highlight) are
+    // @theokit/tui PEERS the app relies on — declared so pnpm (which never auto-installs peers) resolves them.
     deps: {
-      '@theokit/tui': '^0.31.0',
+      '@theokit/tui': '^0.32.0',
       ink: '^7.1.0',
-      ai: '^7.0.0',
       figlet: '^1.7.0',
       lowlight: '^3.0.0',
     },
