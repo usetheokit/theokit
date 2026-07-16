@@ -1,0 +1,37 @@
+import { Box } from 'ink'
+import { type ReactElement } from 'react'
+import {
+  ContextWindowBar,
+  CostMeter,
+  type TokenCategory,
+  TokenUsageChart,
+  type TurnUsage,
+} from '@theokit/tui'
+
+/**
+ * The `/usage` observability panel, built from the last turn's REAL usage (never fabricated). `ContextWindowBar`
+ * shows the context fill (`used/limit`), `TokenUsageChart` the per-category breakdown, `CostMeter` the session
+ * cost — the last only when the turn actually reported one. Toggle it with `/usage` in the composer.
+ */
+export function UsagePanel({
+  usage,
+  contextWindow,
+}: {
+  usage: TurnUsage
+  contextWindow: number
+}): ReactElement {
+  // Only PRESENT categories render in the chart — build the map from whatever the turn actually reported.
+  const chart: Partial<Record<TokenCategory, number>> = {
+    input: usage.inputTokens,
+    output: usage.outputTokens,
+    ...(usage.cacheReadTokens !== undefined ? { cached: usage.cacheReadTokens } : {}),
+    ...(usage.reasoningTokens !== undefined ? { reasoning: usage.reasoningTokens } : {}),
+  }
+  return (
+    <Box flexDirection="column">
+      <ContextWindowBar usedTokens={usage.inputTokens} limitTokens={contextWindow} />
+      <TokenUsageChart usage={chart} />
+      {usage.cost !== undefined ? <CostMeter costUsd={usage.cost} /> : null}
+    </Box>
+  )
+}
