@@ -87,9 +87,9 @@ describe('applySurface (M45)', () => {
     expect(pkg.dependencies.lowlight).toBeDefined()
     expect(pkg.dependencies['@theokit/sdk']).toBeDefined() // agent runtime kept
     expect(pkg.dependencies['@theokit/ui']).toBeUndefined() // web-only dropped
-    // The tui surface is AI-FREE: it renders via `<AgentTimeline>` + the ai-free `messagesToAgentEvents`
-    // (structural `UIMessageLike`), so `ai` is dropped — theokit keeps it internal (type-only optional peer).
-    expect(pkg.dependencies.ai).toBeUndefined()
+    // The tui's RENDER is ai-free (App.tsx imports no `ai`; see the App content assertions above), but `ai`
+    // stays DECLARED because theokit's in-process agent runtime (`streamAgentTurnInProcess`) imports it.
+    expect(pkg.dependencies.ai).toBeDefined()
     expect(pkg.scripts.dev).toContain('tui/main.tsx')
 
     expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
