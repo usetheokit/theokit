@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.21.0
+
+### Minor Changes
+
+- TUI surface adopts `@theokit/tui@^0.40.0` and upgrades the human-in-the-loop gate to the Claude-Code `PermissionPrompt` card. A gated tool now renders a structured approval card — tool-type header, the command on its own line, the proposed input as a description, `Do you want to proceed?`, and a numbered `1. Yes / 2. No` menu (↑/↓ + Enter, Esc → the safe `No` default) — replacing the previous `once/always/reject` `ApprovalPrompt` bar. The `onDecision` maps `yes` → approve. Live-verified end-to-end: a real model turn calls `send_notification`, the card renders, `Yes` approves, and the tool executes.
+
 ## 1.20.1
 
 ### Patch Changes
