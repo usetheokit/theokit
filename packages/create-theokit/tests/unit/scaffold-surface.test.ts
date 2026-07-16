@@ -83,6 +83,9 @@ describe('applySurface (M45)', () => {
     expect(theme).toContain('export const LOGO')
     expect(theme).toContain('export const THINKING_PHRASES')
     expect(theme).toContain('export const PLACEHOLDER')
+    // Monochrome-by-default chrome: color is reserved for meaning (tool states/errors keep it).
+    expect(theme).toContain("accent: ''")
+    expect(theme).toContain("assistant: { prefix: '' }")
     expect(theme).toContain('export const BANNER_TIPS')
     expect(app).toContain("from './theme.js'")
     // Custom two-column welcome box (Claude Code shape): ✻ header + Theo wordmark + model + cwd on the
