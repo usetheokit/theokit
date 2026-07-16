@@ -2,8 +2,10 @@ import type { UIMessageChunk } from 'ai'
 
 import type {
   AgentStreamEvent,
+  AgentTurnMetadata,
   ApprovalRequiredEvent,
   CheckpointSavedEvent,
+  DoneEvent,
   ToolCallEvent,
   ToolResultEvent,
 } from './agent-stream-events.js'
@@ -69,6 +71,40 @@ function* closeOpenBlock(state: BlockState, textId: string): Generator<UIMessage
   // Reset the just-closed block's stale reasoning id so it can never be reused
   // by a later thinking event (reasoningId is always re-minted before read).
   state.reasoningId = null
+}
+
+/** Emit a text delta, opening a fresh text block first when one is not already open (EC-2). */
+function* emitTextDelta(
+  state: BlockState,
+  textId: string,
+  content: string,
+): Generator<UIMessageChunk> {
+  if (state.openBlock !== 'text') {
+    yield* closeOpenBlock(state, textId)
+    yield { type: 'text-start', id: textId }
+    state.openBlock = 'text'
+  }
+  yield { type: 'text-delta', id: textId, delta: content }
+}
+
+/**
+ * Emit a reasoning delta, opening a fresh reasoning block first when one is not already open.
+ * Consecutive `thinking` events collapse into ONE reasoning block (EC-3); a new block mints a fresh id.
+ */
+function* emitReasoningDelta(
+  state: BlockState,
+  textId: string,
+  content: string,
+): Generator<UIMessageChunk> {
+  let reasoningId = state.openBlock === 'reasoning' ? state.reasoningId : null
+  if (reasoningId === null) {
+    yield* closeOpenBlock(state, textId)
+    reasoningId = crypto.randomUUID()
+    state.reasoningId = reasoningId
+    yield { type: 'reasoning-start', id: reasoningId }
+    state.openBlock = 'reasoning'
+  }
+  yield { type: 'reasoning-delta', id: reasoningId, delta: content }
 }
 
 /** Emit a tool-input-available for a committed tool call (EC-1: `dynamic:true`). */
@@ -149,25 +185,16 @@ export async function* translateToUIMessageStream(
   yield { type: 'start' }
   const state: BlockState = { openBlock: null, reasoningId: null }
   const seenToolCallIds = new Set<string>()
+  // The turn's authoritative usage/cost/durationMs, captured from `done` and attached to the finish
+  // chunk's `messageMetadata` (below) so it reconstructs onto the client's assistant UIMessage.metadata.
+  // Stays undefined for a run that ends without `done` (error/abort) → the finish stays bare.
+  let turnMetadata: AgentTurnMetadata | undefined
   try {
     for await (const event of events) {
       if (event.type === 'text_delta') {
-        if (state.openBlock !== 'text') {
-          yield* closeOpenBlock(state, opts.textId)
-          yield { type: 'text-start', id: opts.textId }
-          state.openBlock = 'text'
-        }
-        yield { type: 'text-delta', id: opts.textId, delta: event.content }
+        yield* emitTextDelta(state, opts.textId, event.content)
       } else if (event.type === 'thinking') {
-        let reasoningId = state.openBlock === 'reasoning' ? state.reasoningId : null
-        if (reasoningId === null) {
-          yield* closeOpenBlock(state, opts.textId)
-          reasoningId = crypto.randomUUID()
-          state.reasoningId = reasoningId
-          yield { type: 'reasoning-start', id: reasoningId }
-          state.openBlock = 'reasoning'
-        }
-        yield { type: 'reasoning-delta', id: reasoningId, delta: event.content }
+        yield* emitReasoningDelta(state, opts.textId, event.content)
       } else if (event.type === 'tool_call') {
         yield* closeOpenBlock(state, opts.textId)
         yield* emitToolCall(event, seenToolCallIds)
@@ -186,6 +213,8 @@ export async function* translateToUIMessageStream(
         yield { type: 'error', errorText: event.message }
         break
       } else if (event.type === 'done') {
+        // Capture the authoritative turn totals for the finish chunk's messageMetadata, then stop.
+        turnMetadata = doneToMetadata(event)
         break
       }
       // Other events (run_started, iteration, …) produce no chunk.
@@ -196,5 +225,15 @@ export async function* translateToUIMessageStream(
     yield { type: 'error', errorText: String(err) }
   }
   yield* closeOpenBlock(state, opts.textId)
-  yield { type: 'finish' }
+  // Attach the turn metadata (usage/cost/durationMs) when the run completed cleanly (`done` seen).
+  // ai-sdk's finish chunk carries `messageMetadata?: unknown`; readUIMessageStream lands it on
+  // UIMessage.metadata. A bare `{ type: 'finish' }` (no metadata) is emitted for error/abort turns.
+  yield turnMetadata ? { type: 'finish', messageMetadata: turnMetadata } : { type: 'finish' }
+}
+
+/** Project the `done` event's authoritative totals into the client-facing {@link AgentTurnMetadata}. */
+function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
+  return event.cost === undefined
+    ? { usage: event.usage, durationMs: event.durationMs }
+    : { usage: event.usage, durationMs: event.durationMs, cost: event.cost }
 }

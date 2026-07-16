@@ -190,7 +190,14 @@ describe('HITL harness E2E (M4 / DoD-3)', () => {
       true,
     )
     // The stream terminates cleanly.
-    expect(chunks.at(-1)).toEqual({ type: 'finish' })
+    expect(chunks.at(-1)).toEqual({
+      type: 'finish',
+      messageMetadata: {
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+        cost: 0,
+      },
+    })
   })
 
   it('test_e2e_hitl_deny_surfaces_denied_and_continues', async () => {
@@ -208,7 +215,14 @@ describe('HITL harness E2E (M4 / DoD-3)', () => {
       ),
     ).toBe(true)
     // The stream still terminates cleanly (loop continued to completion).
-    expect(chunks.at(-1)).toEqual({ type: 'finish' })
+    expect(chunks.at(-1)).toEqual({
+      type: 'finish',
+      messageMetadata: {
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 1,
+        cost: 0,
+      },
+    })
   })
 
   it('test_e2e_approval_surfaces_as_approval_requested_part_through_the_real_reader', async () => {

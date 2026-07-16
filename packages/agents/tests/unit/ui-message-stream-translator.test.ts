@@ -41,6 +41,17 @@ async function collect(chunks: AsyncIterable<UIMessageChunk>): Promise<UIMessage
   return out
 }
 
+/**
+ * The finish chunk a run terminated by the common `done` stub (usage {0,0,0}, durationMs 1, no cost)
+ * now carries — the translator attaches the turn's authoritative metadata (see
+ * `test_done_usage_lands_on_finish_message_metadata`). Shared so the sequence tests below assert the
+ * FULL contract without repeating the metadata shape.
+ */
+const FINISH_ZERO_USAGE = {
+  type: 'finish',
+  messageMetadata: { usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 1 },
+} as const
+
 describe('translateToUIMessageStream — text (M0)', () => {
   it('test_translates_text_run_to_ordered_chunks', async () => {
     const events: AgentStreamEvent[] = [
@@ -61,13 +72,70 @@ describe('translateToUIMessageStream — text (M0)', () => {
       { type: 'text-delta', id: TEXT_ID, delta: 'he' },
       { type: 'text-delta', id: TEXT_ID, delta: 'llo' },
       { type: 'text-end', id: TEXT_ID },
-      { type: 'finish' },
+      FINISH_ZERO_USAGE,
     ])
   })
 
   it('test_empty_run_emits_start_then_finish', async () => {
     const chunks = await collect(translateToUIMessageStream(fromArray([]), { textId: TEXT_ID }))
     expect(chunks).toEqual([{ type: 'start' }, { type: 'finish' }])
+  })
+
+  it('test_done_usage_lands_on_finish_message_metadata', async () => {
+    // The turn's authoritative usage/cost/durationMs (DoneEvent) MUST ride the finish chunk's
+    // `messageMetadata`, so it reconstructs onto the client's assistant UIMessage.metadata (via
+    // readUIMessageStream) — the seam a TUI status bar / cost meter reads with no extra wiring.
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'hi' },
+      {
+        type: 'done',
+        result: 'hi',
+        usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46, reasoningTokens: 5 },
+        durationMs: 1234,
+        cost: 0.0021,
+      },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const finish = chunks.at(-1)
+    expect(finish?.type).toBe('finish')
+    expect((finish as { messageMetadata?: unknown }).messageMetadata).toEqual({
+      usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46, reasoningTokens: 5 },
+      durationMs: 1234,
+      cost: 0.0021,
+    })
+  })
+
+  it('test_finish_metadata_validates_against_ui_message_chunk_schema', async () => {
+    // `messageMetadata` is `unknown` in ai-sdk's finish chunk schema — a metadata-bearing finish
+    // MUST still validate (guards against a shape the strictObject union would reject).
+    const events: AgentStreamEvent[] = [
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+        durationMs: 9,
+        cost: 0.0001,
+      },
+    ]
+    const schema = uiMessageChunkSchema()
+    const validate = schema.validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const finish = chunks.at(-1)
+    expect((finish as { messageMetadata?: unknown }).messageMetadata).toBeDefined()
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+
+  it('test_error_terminated_run_finish_has_no_metadata', async () => {
+    // A run that ends via `error` (no `done`) has no authoritative usage — the finish stays bare.
+    const events: AgentStreamEvent[] = [
+      { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
+    ]
+    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks.at(-1)).toEqual({ type: 'finish' })
   })
 
   it('test_run_started_only_emits_no_orphan_text', async () => {
@@ -189,7 +257,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
       { type: 'reasoning-delta', id: rid, delta: 'let me ' },
       { type: 'reasoning-delta', id: rid, delta: 'think' },
       { type: 'reasoning-end', id: rid },
-      { type: 'finish' },
+      FINISH_ZERO_USAGE,
     ])
   })
 
@@ -250,7 +318,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
     const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     const rid = reasoningIdOf(chunks)
     // reasoning-end precedes finish; no orphan open block.
-    expect(chunks.slice(-2)).toEqual([{ type: 'reasoning-end', id: rid }, { type: 'finish' }])
+    expect(chunks.slice(-2)).toEqual([{ type: 'reasoning-end', id: rid }, FINISH_ZERO_USAGE])
   })
 
   it('test_reasoning_id_is_a_uuid_not_math_random', async () => {
@@ -374,7 +442,7 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
         dynamic: true,
       },
       { type: 'tool-output-available', toolCallId: 'c1', output: 'hit' },
-      { type: 'finish' },
+      FINISH_ZERO_USAGE,
     ])
   })
 
