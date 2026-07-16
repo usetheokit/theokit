@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+
 import { Box, Text, useApp, useInput } from 'ink'
 import { type ReactElement, useState } from 'react'
 import {
@@ -15,7 +17,6 @@ import {
   readTurnUsage,
   TheoTUIProvider,
   useTurnElapsed,
-  WelcomeBanner,
   type UIMessageLike,
 } from '@theokit/tui'
 import { InProcessTransport, useAgent } from 'theokit/client'
@@ -26,9 +27,14 @@ import { AGENT } from '../shared/agent.js'
 
 /** Shown in the status bar (from `shared/agent.ts`). */
 const MODEL = AGENT.model
-const CWD = process.cwd()
+/** cwd with the home dir tildeified (`~/…`), so the banner line stays short. */
+const CWD = process.cwd().replace(homedir(), '~')
 /** Claude Code's warm accent (truecolor; degrades gracefully on 256-color terminals). */
 const ACCENT = '#d97757'
+/** A little pixel mascot for the welcome box (single-width block glyphs — renders everywhere). */
+const MASCOT = ['▛▀▜', '▌••▐', '▙▄▟'].join('\n')
+/** Below this column count the welcome box collapses to a single column (the two-column aside needs room). */
+const WIDE_COLS = 90
 /** Whimsical status words cycled while the agent thinks (Claude Code idiom — the ✻ spinner rotates these). */
 const THINKING_PHRASES = [
   'Thinking',
@@ -67,6 +73,53 @@ const apiKey = (): string =>
 const transport = new InProcessTransport({
   run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
 })
+
+/** The app name — `{{name}}` is substituted at scaffold time. */
+const APP_NAME = '{{name}}'
+
+/**
+ * The Claude-Code welcome box: a rounded accent border. On a wide terminal it lays out two columns —
+ * left is the `✻` header + a little pixel mascot + the model + cwd; right is the getting-started tips +
+ * what's new. Below `WIDE_COLS` it collapses to a single column so nothing truncates.
+ */
+function Banner(): ReactElement {
+  const cols = process.stdout.columns ?? 80
+  const wide = cols >= WIDE_COLS
+  return (
+    <Box
+      borderStyle="round"
+      borderColor={ACCENT}
+      paddingX={1}
+      flexDirection="row"
+      width={wide ? Math.min(cols - 2, 96) : undefined}
+    >
+      <Box flexDirection="column" flexGrow={1}>
+        <Text color={ACCENT} bold>
+          ✻ Welcome to {APP_NAME}
+        </Text>
+        <Text color={ACCENT}>{MASCOT}</Text>
+        <Text dimColor>{MODEL}</Text>
+        <Text dimColor wrap="truncate-start">
+          cwd: {CWD}
+        </Text>
+      </Box>
+      {wide ? (
+        <Box flexDirection="column" flexShrink={0} marginLeft={2}>
+          <Text color={ACCENT} bold>
+            Tips for getting started
+          </Text>
+          <Text dimColor>Ask me anything — I stream a reply</Text>
+          <Text dimColor>/help  ·  @ mention a file  ·  esc interrupts</Text>
+          <Text> </Text>
+          <Text color={ACCENT} bold>
+            What&apos;s new
+          </Text>
+          <Text dimColor>Human-in-the-loop approvals · live token usage</Text>
+        </Box>
+      ) : null}
+    </Box>
+  )
+}
 
 export function App(): ReactElement {
   const agent = useAgent<{ message: string }>(transport)
@@ -146,12 +199,7 @@ export function App(): ReactElement {
           choice bar) so they receive keys under plain Ink — the ChatComposer keeps using Ink's own hooks. */}
       <InkInputProvider>
         <Box flexDirection="column">
-        <WelcomeBanner
-          name="✻ Welcome to {{name}}"
-          hints={['/help for help  ·  /clear to reset', 'Enter sends  ·  @ mentions a file  ·  esc interrupts']}
-        >
-          <Text dimColor>cwd: {CWD}</Text>
-        </WelcomeBanner>
+        <Banner />
 
         <AgentTimeline events={events} />
 
