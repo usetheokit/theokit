@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
+- **`create-theokit` TUI: `npm run demo:tools`.** A `tui/tool-variations.tsx` demo that renders every tool timeline state (pending/running/success/shell/failed/approval) via the real `messagesToAgentEvents`→`AgentTimeline` path + your `tui/theme.ts` — an agent-free visual reference for your colors/glyphs.
 - **`create-theokit` TUI: one-file restyle via `tui/theme.ts`.** All visual knobs (accent, `@theokit/tui` theme + bullet-glyph override examples, banner `LOGO` wordmark, tips/what's-new copy, spinner words, placeholder) centralized in a single documented file; `tui/App.tsx` imports from it. Rebrand without touching the component.
 - **`create-theokit` TUI: two-line footer + sparkle spinner (@theokit/tui ^0.37.0, closes #44/#45).** `<StatusFooter>` replaces the single-line bar (model left · context right, then `? for shortcuts`); the thinking spinner is now a cycling `✵` sparkle with a `↓` token-direction arrow (`✵  Thinking (1s · ↓ 543 tokens · esc to interrupt)`).
 - **`create-theokit` TUI:** a one-line top margin above the input composer / approval prompt (breathing room from the conversation).
