@@ -32,9 +32,12 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
     }
   })
 
-  it('test_root_devdep_sdk_aligned_to_v4_floor', () => {
+  it('test_root_devdep_sdk_aligned_to_v4_line', () => {
+    // The root devDep must track the v4 line (not the stale `^3.5.0` hoist EC-C fixed). Assert the
+    // v4 caret prefix, NOT an exact pin, so a within-v4 bump (4.0 → 4.1 → 4.2) stays green — only a
+    // drop off v4 (or back to a 3.x hoist) fails here.
     const root = readPkg('package.json')
     const dev = root.devDependencies as Record<string, string>
-    expect(dev['@theokit/sdk']).toBe('^4.0.1')
+    expect(dev['@theokit/sdk']).toMatch(/^\^4\./)
   })
 })
