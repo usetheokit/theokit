@@ -88,7 +88,6 @@ describe('M45 surface matrix — full scaffold per surface', () => {
       'useAgent',
       'InProcessTransport',
       'streamAgentTurnInProcess',
-      'term-app',
       // Claude-Code render: <AgentTimeline> (Markdown + tool cards) fed by the ai-free `messagesToAgentEvents`
       "from '@theokit/tui'",
       'AgentTimeline',
@@ -96,6 +95,9 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     ]) {
       expect(app).toContain(s)
     }
+    // Componentized (1.23.0): App composes tui/components/*; {{name}} is substituted in Banner.
+    expect(app).toContain("from './components/Demos.js'")
+    expect(read('tui/components/Banner.tsx')).toContain('term-app') // {{name}} substituted
     // NOT the old text-only path, and the app source never imports `ai` directly.
     expect(app).not.toContain('ChatThread')
     expect(app).not.toContain("from '@theokit/tui/ai-sdk'")
