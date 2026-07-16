@@ -1,5 +1,16 @@
 # create-theo
 
+## 1.15.1
+
+### Patch Changes
+
+- TUI surface adopts `@theokit/tui@0.35.0`, which closes the two gaps the previous scaffold worked around:
+
+  - **Claude-Code bullet glyph `⏺`** restored in the theme (issue #40) — the assistant/tool marker now matches Claude Code exactly, with no scaffold change (it comes from the theme).
+  - **Real `<ApprovalPrompt>` choice bar** for HITL (issue #41). The scaffolded `tui/App.tsx` now wraps its tree in `<InkInputProvider>` (bridges Ink's stdin to the library's interactive surfaces) and renders `@theokit/tui`'s `<ApprovalPrompt>` — an `Allow once / Allow always / Reject` choice bar navigable with ←/→ + Enter — in place of the earlier Ink-native `[y]/[n]` prompt. Maps the choice to `agent.approve(approvalId, { approved: decision !== 'reject' })` and remembers settled ids so the standalone gate part stops re-showing. Live-verified end-to-end against a real model turn: navigate → commit → the gated tool runs → the agent continues → the prompt clears.
+
+  Bumps `@theokit/tui ^0.34.0 → ^0.35.0`.
+
 ## 1.15.0
 
 ### Minor Changes

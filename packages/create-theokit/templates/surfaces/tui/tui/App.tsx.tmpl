@@ -4,9 +4,11 @@ import {
   AgentStreaming,
   AgentTimeline,
   AppStatusBar,
+  ApprovalPrompt,
   ChatComposer,
   DEFAULT_COMPOSER_SHORTCUTS,
   findPendingApproval,
+  InkInputProvider,
   KeyboardHelp,
   messagesToAgentEvents,
   readTurnUsage,
@@ -91,19 +93,11 @@ export function App(): ReactElement {
     void agent.approve(approvalId, { approved })
   }
 
-  // Global keys. When a gated tool awaits approval, y/Enter allows it and n/Esc rejects — the run is
-  // genuinely paused until then. Otherwise: Esc cancels a running turn / closes help; Ctrl+C cancels a
-  // turn, else arms → quits on a second press. The ChatComposer owns editing keys (/, @, !, ?, ↑↓, emacs).
+  // Global keys. While a gated tool awaits approval, the `<ApprovalPrompt>` owns the keys (←/→/Enter/Esc)
+  // — stay out of its way. Otherwise: Esc cancels a running turn / closes help; Ctrl+C cancels a turn, else
+  // arms → quits on a second press. The ChatComposer owns editing keys (/, @, !, ?, ↑↓, emacs chords).
   useInput((input, key) => {
-    if (pendingApproval) {
-      const answer = input.toLowerCase()
-      if (answer === 'y' || key.return) {
-        settleApproval(pendingApproval.approvalId, true)
-      } else if (answer === 'n' || key.escape) {
-        settleApproval(pendingApproval.approvalId, false)
-      }
-      return
-    }
+    if (pendingApproval) return
     if (key.escape) {
       if (showHelp) setShowHelp(false)
       else if (streaming) agent.abort()
@@ -137,7 +131,10 @@ export function App(): ReactElement {
 
   return (
     <TheoTUIProvider theme={{ base: 'dark', override: { accent: 'cyan' } }}>
-      <Box flexDirection="column">
+      {/* InkInputProvider bridges Ink's stdin to @theokit/tui's interactive surfaces (ApprovalPrompt's
+          choice bar) so they receive keys under plain Ink — the ChatComposer keeps using Ink's own hooks. */}
+      <InkInputProvider>
+        <Box flexDirection="column">
         <WelcomeBanner
           name="{{name}}"
           tagline="Your agent, in the terminal — built with TheoKit."
@@ -154,20 +151,16 @@ export function App(): ReactElement {
         {showHelp ? <KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} /> : null}
 
         {pendingApproval ? (
-          <Box
-            flexDirection="column"
-            borderStyle="round"
-            borderColor="yellow"
-            paddingX={1}
+          <ApprovalPrompt
+            title={`Allow ${pendingApproval.toolName}?`}
+            onDecision={(decision) => {
+              // The prompt's choices are `once`/`always`/`reject`; only `reject` denies. Map to the client's
+              // decision object and settle (remembering the id so the standalone gate part stops re-showing).
+              settleApproval(pendingApproval.approvalId, decision !== 'reject')
+            }}
           >
-            <Text bold color="yellow">
-              ⚠ Allow {pendingApproval.toolName}?
-            </Text>
             <Text dimColor>{JSON.stringify(pendingApproval.input)}</Text>
-            <Text>
-              <Text color="green">[y]</Text> allow · <Text color="red">[n]</Text> reject
-            </Text>
-          </Box>
+          </ApprovalPrompt>
         ) : (
           <ChatComposer
             placeholder="Ask your agent…  (Enter sends · / commands · @ files · ? help)"
@@ -193,7 +186,8 @@ export function App(): ReactElement {
           cost={sessionCost > 0 ? sessionCost : undefined}
           state={streaming ? 'streaming' : 'idle'}
         />
-      </Box>
+        </Box>
+      </InkInputProvider>
     </TheoTUIProvider>
   )
 }
