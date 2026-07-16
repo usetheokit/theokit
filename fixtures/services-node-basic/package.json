@@ -2,7 +2,7 @@
   "name": "services-node-basic-fixture",
   "private": true,
   "type": "module",
-  "version": "0.0.56",
+  "version": "0.0.57",
   "dependencies": {
     "theokit": "workspace:*"
   }
