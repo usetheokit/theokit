@@ -115,6 +115,10 @@ function ProgressDemo({
 /**
  * Renders the demo surface for a non-`chat` `mode`, IN PLACE OF the composer. Each interactive demo
  * completes back to chat via `onComplete` and reports its outcome via `onToast`.
+ *
+ * The friendly look is the Claude-Code trick: the surface sits in a rounded box with padding, so the GROUP
+ * breathes (like the welcome banner) while the menu items inside stay tight — Claude Code doesn't space menu
+ * rows either; the box + padding is what makes it feel airy. Restyle the border/padding here to taste.
  */
 export function DemoSurface({
   mode,
@@ -129,53 +133,61 @@ export function DemoSurface({
   onComplete: () => void
   onToast: (t: ToastPayload) => void
 }): ReactElement {
-  switch (mode) {
-    case 'plan':
-      return (
-        <PlanApproval
-          plan={DEMO_PLAN}
-          onDecision={(d) => {
-            onComplete()
-            onToast({
-              message:
-                d.kind === 'approve'
-                  ? 'Plan approved'
-                  : `Revision requested${d.feedback ? `: ${d.feedback}` : ''}`,
-              variant: 'success',
-            })
-          }}
-        />
-      )
-    case 'ask':
-      return (
-        <QuestionPrompt
-          header="Backend"
-          question="Which backend should the app ship next to?"
-          options={DEMO_ASK_OPTIONS}
-          allowFreeText
-          onAnswer={(a) => {
-            onComplete()
-            onToast({
-              message: `Answered: ${a.values.join(', ')}${a.text ? ` (${a.text})` : ''}`,
-              variant: 'info',
-            })
-          }}
-        />
-      )
-    case 'select':
-      return (
-        <SelectList
-          items={DEMO_SELECT_ITEMS}
-          multi
-          onSubmit={(values) => {
-            onComplete()
-            onToast({ message: `Selected: ${values.join(', ') || '(none)'}`, variant: 'info' })
-          }}
-        />
-      )
-    case 'progress':
-      return (
-        <ProgressDemo elapsed={elapsed} tokens={tokens} onComplete={onComplete} onToast={onToast} />
-      )
-  }
+  const body = ((): ReactElement => {
+    switch (mode) {
+      case 'plan':
+        return (
+          <PlanApproval
+            plan={DEMO_PLAN}
+            onDecision={(d) => {
+              onComplete()
+              onToast({
+                message:
+                  d.kind === 'approve'
+                    ? 'Plan approved'
+                    : `Revision requested${d.feedback ? `: ${d.feedback}` : ''}`,
+                variant: 'success',
+              })
+            }}
+          />
+        )
+      case 'ask':
+        return (
+          <QuestionPrompt
+            header="Backend"
+            question="Which backend should the app ship next to?"
+            options={DEMO_ASK_OPTIONS}
+            allowFreeText
+            onAnswer={(a) => {
+              onComplete()
+              onToast({
+                message: `Answered: ${a.values.join(', ')}${a.text ? ` (${a.text})` : ''}`,
+                variant: 'info',
+              })
+            }}
+          />
+        )
+      case 'select':
+        return (
+          <SelectList
+            items={DEMO_SELECT_ITEMS}
+            multi
+            onSubmit={(values) => {
+              onComplete()
+              onToast({ message: `Selected: ${values.join(', ') || '(none)'}`, variant: 'info' })
+            }}
+          />
+        )
+      case 'progress':
+        return (
+          <ProgressDemo elapsed={elapsed} tokens={tokens} onComplete={onComplete} onToast={onToast} />
+        )
+    }
+  })()
+
+  return (
+    <Box flexDirection="column" borderStyle="round" paddingX={2} paddingY={1}>
+      {body}
+    </Box>
+  )
 }
