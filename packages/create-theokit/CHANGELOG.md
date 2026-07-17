@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.23.5
+
+### Patch Changes
+
+- `--surface desktop`: seamless title bar. The window is now frameless (`decorations: false`) and the app owns its top bar — it's the app background with a faint gray wash, so no OS chrome clashes with the UI. The bar is draggable (`data-tauri-drag-region`) and carries its own minimize / maximize / close controls next to the theme switcher. Adds the required `core:window:*` capabilities (`start-dragging`, `minimize`, `maximize`, `unmaximize`, `toggle-maximize`, `close`) so the drag + buttons actually work.
+
 ## 1.23.4
 
 ### Patch Changes
