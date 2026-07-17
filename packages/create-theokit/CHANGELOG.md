@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.23.1
+
+### Patch Changes
+
+- TUI surface adopts `@theokit/tui@^0.41.0` and documents the opt-in row `gap`. The list/menu demos (`/progress`, `/ask`, `/select`) keep their tight, Claude-Code-matching default (no visual change from 1.23.0); a comment in `tui/components/Demos.tsx` shows how to add `gap={1}` to `MultiStepProgress` / `QuestionPrompt` / `SelectList` for a blank line between items, now that `@theokit/tui@0.41.0` exposes the prop (usetheodev/theokit-tui#50). Terminal spacing is whole-row only (0 = tight, 1 = one blank line) — the default is 0.
+
 ## 1.23.0
 
 ### Minor Changes
