@@ -13,7 +13,7 @@ import {
 } from '@theokit/ui'
 import { Button } from '@usetheo/ui'
 import { createTauriChannelSource, type TauriCore } from '@theokit/tauri'
-import { Bot, Plus, Sparkles } from 'lucide-react'
+import { Bot, Minus, Plus, Sparkles, Square, X } from 'lucide-react'
 import { ChannelTransport, useAgent } from 'theokit/client'
 
 import { AGENT } from '../../shared/agent'
@@ -39,6 +39,26 @@ if (tauri === undefined) {
   throw new Error('Tauri globals unavailable — run inside the desktop shell (`npm run dev`).')
 }
 const transport = new ChannelTransport({ source: createTauriChannelSource(tauri.core) })
+
+// The window is frameless (`decorations: false` in tauri.conf.json) so the OS title bar can't clash with
+// the app background — the app owns its top bar. These drive the native window from our custom controls.
+// (The drag + these calls need `core:window:*` permissions in `src-tauri/capabilities/default.json`.)
+const appWindow = (
+  globalThis as {
+    __TAURI__?: {
+      window?: {
+        getCurrentWindow: () => {
+          minimize: () => Promise<void>
+          toggleMaximize: () => Promise<void>
+          close: () => Promise<void>
+        }
+      }
+    }
+  }
+).__TAURI__?.window
+const minimizeWindow = (): void => void appWindow?.getCurrentWindow().minimize()
+const maximizeWindow = (): void => void appWindow?.getCurrentWindow().toggleMaximize()
+const closeWindow = (): void => void appWindow?.getCurrentWindow().close()
 
 /** The agent's opening line (from `shared/agent.ts`) — so the conversation starts warm instead of empty. */
 const GREETING: UIMessage = {
@@ -68,11 +88,27 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    // A faint gray wash (4% of the text color over the background) makes the frameless title bar
+    // read as a distinct strip in BOTH themes, without breaking the seamless feel.
+    background: 'hsl(var(--foreground) / 0.04)',
     borderBottom: '1px solid hsl(var(--border) / 0.6)',
     padding: '8px 16px',
   },
   brand: { display: 'inline-flex', alignItems: 'center', gap: 8 },
   brandName: { fontWeight: 600, fontSize: 13, letterSpacing: '-0.01em' },
+  headerRight: { display: 'inline-flex', alignItems: 'center', gap: 4 },
+  winBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    border: 'none',
+    borderRadius: 6,
+    background: 'transparent',
+    color: 'hsl(var(--muted-foreground))',
+    cursor: 'pointer',
+  },
   scroll: { flex: 1, overflowY: 'auto', minHeight: 0 },
   column: {
     margin: '0 auto',
@@ -116,12 +152,44 @@ export function App(): ReactElement {
   return (
     <TheoUIProvider>
       <div style={styles.page}>
-        <header style={styles.header}>
+        {/* Frameless title bar: `data-tauri-drag-region` makes the whole strip drag the window; the
+            background is the app background (with a faint wash), so the bar reads as one with the
+            content. Interactive children (theme switcher, window buttons) still receive clicks. */}
+        <header style={styles.header} data-tauri-drag-region>
           <span style={styles.brand}>
             <Bot size={18} style={{ color: 'hsl(var(--primary))' }} aria-hidden />
             <span style={styles.brandName}>{{name}} — TheoKit agent</span>
           </span>
-          <ThemeSwitcher />
+          <span style={styles.headerRight}>
+            <ThemeSwitcher />
+            <button
+              type="button"
+              style={styles.winBtn}
+              onClick={minimizeWindow}
+              aria-label="Minimize"
+              title="Minimize"
+            >
+              <Minus size={16} />
+            </button>
+            <button
+              type="button"
+              style={styles.winBtn}
+              onClick={maximizeWindow}
+              aria-label="Maximize"
+              title="Maximize"
+            >
+              <Square size={13} />
+            </button>
+            <button
+              type="button"
+              style={styles.winBtn}
+              onClick={closeWindow}
+              aria-label="Close"
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </span>
         </header>
 
         <div style={styles.scroll}>
