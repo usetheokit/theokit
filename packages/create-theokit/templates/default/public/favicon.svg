@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#6366f1"/><text x="50%" y="55%" font-family="system-ui" font-size="20" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">T</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Theo">
+  <!-- brand mark: #431A7A = oklch(0.34 0.15 296.97) -->
+  <g fill="#431A7A">
+    <rect x="160" y="288" width="232" height="216" rx="64" ry="64"/>
+    <rect x="632" y="288" width="232" height="216" rx="64" ry="64"/>
+    <rect x="408" y="288" width="208" height="544" rx="64" ry="64"/>
+  </g>
+</svg>
