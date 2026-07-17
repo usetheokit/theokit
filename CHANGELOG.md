@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
+- **`create-theokit` TUI adopts `@theokit/tui@0.41.0` + documents the opt-in row `gap`.** The `/progress /ask /select` demos keep their tight, Claude-Code-matching default (no visual change); a comment in `tui/components/Demos.tsx` shows how to add `gap={1}` to `MultiStepProgress`/`QuestionPrompt`/`SelectList` for a blank line between items (the prop landed in `@theokit/tui@0.41.0`, usetheodev/theokit-tui#50). Terminal spacing is whole-row (0 = tight default, 1 = one blank line).
 - **`create-theokit` TUI surface componentized + ships a System Design.** `tui/App.tsx` drops 460 → 230 lines (focused composition root); the welcome `Banner`, the `/usage` panel (`UsagePanel`), and the `/plan /ask /select /progress` showcase (`Demos`, owns its own timer) move to `tui/components/*` — single-responsibility, and the demos deletable in one file. The generated app now ships a `## Architecture` section in `README-surface.md` (component tree + data flow + layer boundaries + extension points). Pure refactor — every 1.22.0 behavior preserved; generated app typechecks against the 0.40.0 types with zero unused imports.
 
 ### Added

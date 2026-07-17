@@ -96,6 +96,8 @@ function ProgressDemo({
 
   return (
     <Box flexDirection="column">
+      {/* Rows are tight by default (the Claude-Code menu look). Add `gap={1}` to any list/menu below
+          (MultiStepProgress / QuestionPrompt / SelectList) for a blank line between items — @theokit/tui ^0.41.0. */}
       <MultiStepProgress steps={steps} current={step} groupLabel="Demo task" />
       <ProgressActivity
         label="Working…"
