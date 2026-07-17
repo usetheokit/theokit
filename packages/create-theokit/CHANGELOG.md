@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.23.3
+
+### Patch Changes
+
+- TUI surface: adopt `@theokit/tui@0.41.1` — the `/select` multi-select checkbox now uses the smaller `○` / `●` circle instead of the bulky `◯` / `◉` LARGE CIRCLE, so the option list reads lighter and less cramped inside the demo box.
+
 ## 1.23.2
 
 ### Patch Changes
