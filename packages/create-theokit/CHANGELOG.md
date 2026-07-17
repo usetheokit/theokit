@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.23.2
+
+### Patch Changes
+
+- TUI surface: wrap the `/plan · /ask · /select · /progress` demo surfaces in a rounded, padded box so the group breathes without spacing individual menu rows — the Claude-Code friendly-spacing look (box + padding, items tight inside). Fixes the "colado" feel of `/select` without oscillating between too-tight (`gap=0`) and too-spaced (`gap=1`); the `gap` opt-in stays documented for users who still want inter-item blank lines.
+
 ## 1.23.1
 
 ### Patch Changes

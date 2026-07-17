@@ -152,6 +152,10 @@ describe('applySurface (M45)', () => {
     // @theokit/tui ^0.41.0 (#50): rows are tight by default; the `gap` opt-in is documented for users who
     // want a blank line between items. (The default has no active `gap` prop — verified by live smoke.)
     expect(demos).toContain('Add `gap={1}`')
+    // The Claude-Code friendly-spacing trick: the demo surface sits in a rounded, padded box so the GROUP
+    // breathes while menu rows stay tight inside (Claude Code doesn't space menu rows either — the box does it).
+    expect(demos).toContain('borderStyle="round"')
+    expect(demos).toContain('paddingY={1}')
     // System Design ships with the surface (README-surface.md § Architecture).
     const surfaceReadme = read('README-surface.md')
     expect(surfaceReadme).toContain('## Architecture')
