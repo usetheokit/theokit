@@ -1,10 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Allow the webview to run the agent turn + settle HITL via the sidecar.",
+  "description": "Allow the webview to run the agent turn + settle HITL via the sidecar, and drive the frameless window (drag + minimize/maximize/close).",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
     "shell:allow-spawn",
     {
       "identifier": "shell:allow-execute",

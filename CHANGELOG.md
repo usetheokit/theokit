@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- **`create-theokit` `--surface desktop`: seamless title bar.** The window is frameless (`decorations: false`) and the app owns its top bar — app background with a faint gray wash, draggable (`data-tauri-drag-region`), with its own minimize / maximize / close controls next to the theme switcher. Adds the `core:window:*` capabilities so the drag + buttons work.
+
 ### Fixed
 - **`create-theokit` `--surface desktop`: the agent now responds.** The Tauri `run_turn` command resolved before the sidecar stream was delivered; the webview's `ChannelTransport` closes the stream on invoke-resolve (`onClose`), so every streamed chunk arrived after close and was dropped (user message shown, no reply, no error). `run_turn` now awaits the sidecar stream inline before resolving, and forwards the process env so the provider key reaches the sidecar. Root cause proven via a browser A/B on the real frontend; HITL unaffected. (#137)
 
