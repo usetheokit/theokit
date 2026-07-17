@@ -29,6 +29,9 @@ async fn run_turn(
         .shell()
         .sidecar("theo-sidecar")
         .map_err(|e| e.to_string())?
+        // Forward this process's environment (the provider key — OPENROUTER_API_KEY /
+        // ANTHROPIC_API_KEY — lives here) so the sidecar can authenticate.
+        .envs(std::env::vars())
         .args([message])
         .spawn()
         .map_err(|e| e.to_string())?;
@@ -41,18 +44,22 @@ async fn run_turn(
         *guard = Some(child);
     }
 
-    tauri::async_runtime::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(bytes) => {
-                    let line = String::from_utf8_lossy(&bytes).to_string();
-                    let _ = on_chunk.send(line);
-                }
-                CommandEvent::Terminated(_) => break,
-                _ => {}
+    // AWAIT the stream inline — do NOT spawn a detached task and return early. The webview's
+    // `ChannelTransport` calls `invoke('run_turn').then(onClose)`, and `onClose` CLOSES the stream
+    // (further chunks are dropped). If `run_turn` resolves before the sidecar's chunks are delivered
+    // over the Channel, every chunk lands after the stream is closed → the agent renders no reply.
+    // Resolving only after the sidecar terminates makes `onClose` fire AFTER the last chunk. HITL is
+    // unaffected: `approve` writes to the child's stdin via shared state while this loop awaits.
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(bytes) => {
+                let line = String::from_utf8_lossy(&bytes).to_string();
+                let _ = on_chunk.send(line);
             }
+            CommandEvent::Terminated(_) => break,
+            _ => {}
         }
-    });
+    }
     Ok(())
 }
 
