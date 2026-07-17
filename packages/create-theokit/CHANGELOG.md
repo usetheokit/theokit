@@ -1,5 +1,11 @@
 # create-theo
 
+## 1.23.4
+
+### Patch Changes
+
+- Fix `--surface desktop`: the agent never responded because the Tauri `run_turn` command resolved before the sidecar stream was delivered. The webview's `ChannelTransport` calls `invoke('run_turn').then(onClose)` and `onClose` closes the stream — so when `run_turn` returned early (spawning a detached forwarding task), every streamed chunk arrived after the stream was closed and was dropped (user message shown, no reply, no error). `run_turn` now awaits the sidecar stream inline before resolving, so `onClose` fires after the last chunk. Also forwards the process env (`.envs(std::env::vars())`) so the provider key reaches the sidecar. HITL is unaffected. (#137)
+
 ## 1.23.3
 
 ### Patch Changes
