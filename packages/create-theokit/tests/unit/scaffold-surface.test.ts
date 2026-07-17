@@ -185,7 +185,7 @@ describe('applySurface (M45)', () => {
       dependencies: Record<string, string>
       scripts: Record<string, string>
     }
-    expect(pkg.dependencies['@theokit/tui']).toBe('^0.41.0') // M46 renders the conversation; #50 gap prop
+    expect(pkg.dependencies['@theokit/tui']).toBe('^0.41.1') // M46 renders the conversation; #50 gap prop; 0.41.1 smaller ○/● checkbox
     expect(pkg.dependencies.ink).toBeDefined()
     // ink MUST be the React-19 line (^7) — ink@5 crashes on React 19 with `ReactCurrentOwner`, and the
     // default template pins react@19. Never regress below ^7 (found by dogfooding the TUI end-to-end).
