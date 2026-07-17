@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **`create-theokit` `--surface desktop`: the agent now responds.** The Tauri `run_turn` command resolved before the sidecar stream was delivered; the webview's `ChannelTransport` closes the stream on invoke-resolve (`onClose`), so every streamed chunk arrived after close and was dropped (user message shown, no reply, no error). `run_turn` now awaits the sidecar stream inline before resolving, and forwards the process env so the provider key reaches the sidecar. Root cause proven via a browser A/B on the real frontend; HITL unaffected. (#137)
+
 ### Changed
 - **`create-theokit` TUI: smaller `/select` checkbox glyph (adopts `@theokit/tui@0.41.1`).** The multi-select checkbox drops the bulky `◯` / `◉` LARGE CIRCLE for the smaller `○` / `●` circle, so a dense option list reads lighter. The glyph was a lib literal (`SelectList`), so the swap shipped as the `@theokit/tui@0.41.1` default (regression-tested) and `create-theokit` bumps its pin `^0.41.0 → ^0.41.1`. Live-verified: `●` selected + `○` unselected inside the demo box.
 - **`create-theokit` TUI: Claude-Code friendly-box spacing for the demo surfaces.** The `/plan · /ask · /select · /progress` demos now sit in a rounded, padded box (`borderStyle="round"` + `paddingX`/`paddingY`) so the group breathes while menu rows stay tight inside — matching how Claude Code makes menus feel airy (the box does it, not inter-item gaps). Resolves the cramped feel of `/select` without the `gap={0}`↔`gap={1}` oscillation; the `gap` opt-in stays documented.
