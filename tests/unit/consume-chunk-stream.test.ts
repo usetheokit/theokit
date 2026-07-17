@@ -10,7 +10,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { UIMessage, UIMessageChunk } from 'ai'
 
-import { consumeChunkStream } from '../../packages/theo/src/client/consume-ui-message-stream.js'
+import {
+  consumeChunkStream,
+  consumeUIMessageStream,
+} from '../../packages/theo/src/client/consume-ui-message-stream.js'
 
 /** Build a ReadableStream<UIMessageChunk> from literal chunks. */
 function chunkStream(chunks: Array<Record<string, unknown>>): ReadableStream<UIMessageChunk> {
@@ -66,5 +69,55 @@ describe('consumeChunkStream (#136 — error surfacing)', () => {
       .map((p) => p.text)
       .join('')
     expect(text).toBe('Hello')
+  })
+})
+
+/** Build a `Response` whose SSE body emits the given UIMessageChunks as `data: <json>` frames. */
+function sseResponse(chunks: Array<Record<string, unknown>>): Response {
+  const body = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(body))
+      controller.close()
+    },
+  })
+  return new Response(stream, { headers: { 'content-type': 'text/event-stream' } })
+}
+
+describe('consumeUIMessageStream (#136 — SSE/HTTP path surfaces errors)', () => {
+  it('test_consumeUIMessageStream_rethrows_on_sse_error_frame', async () => {
+    // The web surface consumes an SSE `Response` — a provider failure arrives as an `error` frame, exactly
+    // like the in-process path's error chunk. This path shares `consumeChunkStream`, so it must rethrow too.
+    const response = sseResponse([
+      { type: 'start' },
+      { type: 'text-start', id: 't0' },
+      { type: 'text-delta', id: 't0', delta: 'Hi' },
+      { type: 'text-end', id: 't0' },
+      { type: 'error', errorText: 'OpenRouter: 401 No auth credentials found' },
+    ])
+    const seen: UIMessage[] = []
+    await expect(consumeUIMessageStream(response, (m) => seen.push(m))).rejects.toThrow(
+      'OpenRouter: 401 No auth credentials found',
+    )
+    // Pre-error text was still delivered over the wire — a partial turn is not lost.
+    const text = seen
+      .at(-1)
+      ?.parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+      .map((p) => p.text)
+      .join('')
+    expect(text).toBe('Hi')
+  })
+
+  it('test_consumeUIMessageStream_happy_path_no_throw', async () => {
+    const response = sseResponse([
+      { type: 'start' },
+      { type: 'text-start', id: 't0' },
+      { type: 'text-delta', id: 't0', delta: 'Hello' },
+      { type: 'text-end', id: 't0' },
+      { type: 'finish' },
+    ])
+    const seen: UIMessage[] = []
+    await expect(consumeUIMessageStream(response, (m) => seen.push(m))).resolves.toBeUndefined()
+    expect(seen.length).toBeGreaterThan(0)
   })
 })
