@@ -14,6 +14,7 @@ import type { CustomTool, InlineSkill, SettingSource } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
+import type { McpServersMap } from '../decorators/mcp.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
@@ -80,6 +81,12 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * + execution (G2 / ADR-0040); theokit only wires this into `Agent.create({ local.settingSources })`.
    */
   settingSources?: readonly SettingSource[]
+  /**
+   * MCP servers available to the agent — the builder-chain equivalent of the `@MCP` class
+   * decorator. Each key is a server name; the value is the server configuration. Forwarded
+   * unchanged to `Agent.create({ mcpServers })` (the SDK owns MCP execution). Absent ⇒ no MCP.
+   */
+  mcpServers?: McpServersMap
 }
 
 /**
@@ -178,6 +185,9 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // theokit-file-based-config — the declared `.theokit/` sources flow to the run path, which
     // projects them into `Agent.create({ local.settingSources })`; absent ⇒ inline config only.
     ...(def.settingSources !== undefined ? { settingSources: def.settingSources } : {}),
+    // MCP — builder/`defineAgent` servers converge on the same `mcpServers` field the `@MCP`
+    // decorator path populates; the SDK adapter forwards it to `Agent.create({ mcpServers })`.
+    ...(def.mcpServers !== undefined ? { mcpServers: def.mcpServers } : {}),
   }
 }
 

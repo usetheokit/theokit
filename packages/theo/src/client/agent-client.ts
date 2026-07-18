@@ -204,6 +204,14 @@ export class AgentClient<TInput = unknown> {
   abort = (): void => {
     this.#controller?.abort()
     this.#controller = null
+    // Finalize the status when the USER aborts an in-flight turn: the aborted `#drive` early-returns
+    // without touching status (so a stale drive can't clobber a newer turn), which would otherwise leave
+    // `status` stuck on 'streaming' — a lingering spinner + an unusable surface. A caller that aborts to
+    // start a NEW turn (`send`/`sendMessages`) sets 'streaming' again immediately after, so this is safe.
+    if (this.#status === 'streaming') {
+      this.#status = this.#committed.length > 0 || this.#messages.length > 0 ? 'done' : 'idle'
+      this.#emit()
+    }
   }
 
   /** Clear messages + error, back to idle. */
