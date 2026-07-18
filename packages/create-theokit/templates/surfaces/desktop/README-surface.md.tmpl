@@ -53,3 +53,17 @@ externalBin that a shell shim cannot satisfy (`build:sidecar` fails loud on win3
 before building. Options: **Node SEA** (single-executable app — runs under Node, where the stream works),
 or `bun build --compile`/`pkg` (verify the ai-sdk token stream survives your bundler first). Replace the
 `build:sidecar` script with your compile command and keep the same output path.
+
+### Cross-platform release (macOS · Linux · Windows)
+
+Tauri does **not** cross-compile between operating systems — macOS/Linux bundles must be built on their own
+host, and only Windows-NSIS-from-Linux is a fragile last resort ([docs](https://v2.tauri.app/distribute/pipelines/github/)).
+The best practice is a **matrix of native CI runners**, so this surface ships
+`.github/workflows/release.yml`: on push to a `release` branch (or a manual run) it builds `{{name}}` on
+`macos-latest` (Apple Silicon **and** Intel), `ubuntu-22.04` (x64 + arm64) and `windows-latest`, then drafts
+a GitHub release with the installers (`.dmg`/`.app`, `.deb`/`.AppImage`/`.rpm`, `.msi`/NSIS `.exe`).
+
+Before that workflow can ship a **working** app, resolve the sidecar gap above (the CI `tauri build` runs the
+same `build:sidecar`, which fails on the Windows runner and produces a non-portable shim on macOS/Linux). For
+public distribution you also need **code signing** — macOS notarization (Apple Developer ID) and a Windows
+signing certificate; see [Tauri › Distribute](https://v2.tauri.app/distribute/).
