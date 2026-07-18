@@ -19,6 +19,7 @@ import type { CustomTool, SettingSource } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
+import type { McpServersMap } from '../decorators/mcp.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
@@ -139,6 +140,13 @@ export interface AgentBuilder<
    */
   settingSources(sources: readonly SettingSource[]): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
+   * Declare MCP (Model Context Protocol) servers available to this agent — the builder-chain
+   * equivalent of the `@MCP` class decorator. Each key is a server name; the value is its config
+   * (`command` / `args` / `env` / `cwd`). Forwarded to `Agent.create({ mcpServers })`; the SDK owns
+   * MCP execution. Call once — a later call replaces the map.
+   */
+  mcp(servers: McpServersMap): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
    * Apply a reusable partial chain (Spring-Boot-style composition). `preset` receives the current
    * builder and returns an advanced one; its accumulated type-state flows through.
    */
@@ -180,6 +188,7 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     skills: (selection: SkillsSelection) => makeBuilder({ ...config, skills: selection }),
     settingSources: (sources: readonly SettingSource[]) =>
       makeBuilder({ ...config, settingSources: sources }),
+    mcp: (servers: McpServersMap) => makeBuilder({ ...config, mcpServers: servers }),
     use: (preset: (b: unknown) => unknown) => preset(runtime),
     build: () => defineAgent(config),
   }

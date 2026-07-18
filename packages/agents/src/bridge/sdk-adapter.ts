@@ -22,6 +22,10 @@ import { debugLog } from '../debug-log.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
+import {
+  compileAgentDefinition,
+  type AgentDefinition as TheokitAgentDefinition,
+} from './define-agent.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import {
   translateInteractionUpdate,
@@ -657,5 +661,70 @@ async function* streamSdkAgent(
     }
   } finally {
     await agent.dispose()
+  }
+}
+
+/**
+ * The minimal `SDKAgent` surface a serving host needs (ACP checks `agentId: string` + `send: fn`).
+ * `Agent.getOrCreate` returns the real SDK agent — this alias just types what {@link toAgentFactory}
+ * hands back without re-exporting the full `@theokit/sdk` `Agent` type.
+ */
+export interface SdkAgentHandle {
+  readonly agentId: string
+  send: (msg: string, opts?: unknown) => unknown
+  dispose: () => Promise<void>
+}
+
+/**
+ * #12 — bridge a builder/`defineAgent` {@link TheokitAgentDefinition} to a real `SDKAgent` FACTORY,
+ * so surfaces that require an `SDKAgent` (or `(sessionId) => SDKAgent`) — notably `theokit acp`,
+ * whose entry default-export must be one — can serve an agent defined with the `agent()` chain.
+ *
+ * The factory reuses the SAME projection the streaming path uses (`compileAgentDefinition` → tools /
+ * model / `assembleM8CreateOptions`), so the served agent has identical tools, model, system prompt,
+ * skills, and `mcpServers`. Keyed per `sessionId` via `Agent.getOrCreate` (matches the run path).
+ *
+ * NOTE: HITL approvals (`.approval(...)`) are driven by the framework's streaming runner, not by
+ * `Agent.create`; a raw `SDKAgent` from this factory does not auto-pause gated tools — the serving
+ * surface (e.g. the ACP client) owns approval. Tools still execute; they are simply not HITL-gated here.
+ */
+export function toAgentFactory(
+  def: TheokitAgentDefinition,
+  opts: { apiKey: string; overrides?: RuntimeOverrides },
+): (sessionId: string) => Promise<SdkAgentHandle> {
+  const compiled = compileAgentDefinition(def)
+  const overrides = opts.overrides ?? {}
+  const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
+  const reasoningEffort = overrides.reasoningEffort ?? compiled.reasoningEffort
+  const runContext = overrides.runContext ?? compiled.runContext
+  return async (sessionId: string): Promise<SdkAgentHandle> => {
+    const rt = await loadSdkRuntime()
+    if (!rt) {
+      throw new Error('[@theokit/agents] @theokit/sdk is not installed — run: pnpm add @theokit/sdk')
+    }
+    const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
+    // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream) so an inline skill's
+    // body stays reachable to the model when this factory serves the agent.
+    const inlineSkills = compiled.skills?.inline
+    if (
+      inlineSkills !== undefined &&
+      inlineSkills.length > 0 &&
+      rt.defineSkillReadTool !== undefined &&
+      !compiled.tools.some((t) => t.name === 'skill_read')
+    ) {
+      sdkTools.push(rt.defineSkillReadTool(inlineSkills))
+    }
+    const { options: m8 } = assembleM8CreateOptions(compiled)
+    if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
+    if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
+    const extra = buildExtraCreateOptions(overrides, compiled)
+    const agent = await rt.Agent.getOrCreate(sessionId, {
+      apiKey: opts.apiKey,
+      model: buildModelSelection(model, reasoningEffort),
+      tools: sdkTools,
+      ...m8,
+      ...extra,
+    })
+    return agent as unknown as SdkAgentHandle
   }
 }
