@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
+- **`create-theokit` `--surface desktop`: title-bar polish + cross-platform release CI.** Fixes invisible theme colors (the app wrapped `@theokit/ui` `oklch()` vars in invalid `hsl(var()/a)` → transparent; now `var()`/`color-mix`), ships a slim `--muted` title-bar band, window controls with `:hover` (red close), a cleaner app-name title, and a `.github/workflows/release.yml` native-runner matrix (macOS Intel+Apple Silicon, Ubuntu x64+arm64, Windows) that builds installers via `tauri-action` — the documented best practice since Tauri can't cross-compile between OSes.
+
+### Changed
 - **`create-theokit` `--surface desktop`: seamless title bar.** The window is frameless (`decorations: false`) and the app owns its top bar — app background with a faint gray wash, draggable (`data-tauri-drag-region`), with its own minimize / maximize / close controls next to the theme switcher. Adds the `core:window:*` capabilities so the drag + buttons work.
 
 ### Fixed

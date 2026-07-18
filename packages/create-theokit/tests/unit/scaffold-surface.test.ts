@@ -255,6 +255,18 @@ describe('applySurface (M45)', () => {
     expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
     expect(existsSync(join(targetDir, 'src-tauri/Cargo.toml.tmpl'))).toBe(false) // no leftover .tmpl
 
+    // Cross-platform release CI (macOS + Linux + Windows native runners — Tauri can't cross-compile).
+    const wf = read('.github/workflows/release.yml')
+    expect(wf).toContain('macos-latest')
+    expect(wf).toContain('ubuntu-22.04')
+    expect(wf).toContain('windows-latest')
+    expect(wf).toContain('tauri-apps/tauri-action')
+    expect(wf).toContain('my-desk-v__VERSION__') // {{name}} substituted in tagName
+    // GitHub Actions `${{ ... }}` MUST survive the {{name}} substitution (the substituter only
+    // replaces the literal `{{name}}` token, so `${{ matrix.platform }}` stays intact).
+    expect(wf).toContain('${{ matrix.platform }}')
+    expect(existsSync(join(targetDir, '.github/workflows/release.yml.tmpl'))).toBe(false) // no leftover .tmpl
+
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> }
     expect(pkg.dependencies['@theokit/ui']).toBeDefined() // M47 renders the webview
     expect(pkg.dependencies['@theokit/tauri']).toBeDefined() // M47 transport source + sidecar
