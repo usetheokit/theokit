@@ -1,5 +1,17 @@
 # create-theo
 
+## 1.23.6
+
+### Patch Changes
+
+- `--surface desktop` polish + cross-platform CI:
+
+  - **Fix: theme colors were invisible.** The app-level styles wrapped `@theokit/ui`'s `oklch()` theme vars in `hsl(var(--x) / a)`, which is invalid CSS and rendered transparent — so the title-bar tint (and any alpha color) silently disappeared. Switched to `var(--x)` / `color-mix(in oklch, …)`.
+  - **Slim, evident title bar.** The frameless top bar is now a compact `--muted` band (thin padding) that reads clearly apart from the content.
+  - **Window controls with hover.** Minimize / maximize / close get proper `:hover` feedback (subtle highlight, classic red on close) via a small stylesheet, since inline styles can't do pseudo-classes.
+  - **Cleaner title.** The title bar shows just the app name (drops the verbose “— TheoKit agent” suffix).
+  - **Cross-platform release workflow.** Ships `.github/workflows/release.yml` — a native-runner matrix (macOS Apple Silicon + Intel, Ubuntu x64 + arm64, Windows) that builds installers and drafts a GitHub release via `tauri-action`, the documented best practice since Tauri can’t cross-compile between OSes. Documented in `README-surface.md § Packaging` (with the sidecar-as-binary prerequisite).
+
 ## 1.23.5
 
 ### Patch Changes
