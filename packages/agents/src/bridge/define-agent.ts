@@ -153,12 +153,23 @@ function toCompiledTool(tool: CustomTool): CompiledTool {
     input: unknown,
     ctx?: { signal?: AbortSignal; context?: unknown },
   ) => string | Promise<string>
-  return {
+  const compiled: CompiledTool = {
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
     handler: (input, ctx) => handler(input, ctx),
   }
+  // Preserve SYMBOL-keyed metadata the SDK installs on a tool — notably the `@theokit/sdk/a2a` subagent
+  // credential-inheritance sink (`Symbol.for("theokit.subagent.inheritCredentials")`). Copying only the
+  // four known fields drops it, so the SDK runtime can't hand the parent's `apiKey` down to a delegated
+  // child → the child fails with `provider_unresolved` ("(no response)"). The wrapped handler still calls
+  // the original tool's handler, so the sink (which mutates that handler's closure) stays effective.
+  for (const sym of Object.getOwnPropertySymbols(tool)) {
+    ;(compiled as unknown as Record<symbol, unknown>)[sym] = (
+      tool as unknown as Record<symbol, unknown>
+    )[sym]
+  }
+  return compiled
 }
 
 /**
