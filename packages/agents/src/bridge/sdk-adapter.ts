@@ -330,21 +330,16 @@ async function* mergeDeltaStream(
   })().catch((thrown: unknown) => {
     pumpError = { thrown }
   })
-  // #47 ORDER FIX — hold the assistant's `text_delta` and flush it AFTER the drained stream.
-  // For providers whose `onDelta` reports TEXT but not `tool-call-started` (e.g. gpt-5.4 via OpenRouter),
-  // tool events surface ONLY via `run.stream()` (post-completion). Emitting live onDelta text immediately
-  // then put the FINAL answer BEFORE the tool that produced it — even though the model is tool-first
-  // (verified against the raw provider response: round-1 message is `content:null` + `tool_calls`). Held
-  // text is emitted after the tools, so the timeline order matches the model's true chronology. Non-text
-  // deltas (tool/thinking) keep their live order (correct when onDelta DOES report them). `sawTextDelta`
-  // is already set in the sink, so `run.stream()`'s duplicate text stays deduped. Trade-off: on a
-  // text-ONLY turn the answer is emitted when generation completes rather than token-by-token — an
-  // acceptable cost for a tool-first coding agent where correct tool/answer order is what matters.
-  const heldText: StreamEvent[] = []
+  // #47-followup — stream ALL deltas (text / tool / thinking) LIVE in arrival order. The tool
+  // lifecycle (`tool-call-started` + `tool-call-completed`) is now emitted via `onDelta` from the SDK's
+  // tool-dispatch, which runs BETWEEN LLM rounds — so a tool call and its result arrive in the queue at
+  // their true chronological position, BEFORE the post-tool answer text. That removes the need to HOLD
+  // the answer (the earlier #47 fix), which had regressed text-ONLY turns to batch-at-completion. The
+  // `run.stream()` (pump) replay of the same tool call/result is deduped by callId (`isDuplicatedByDelta`
+  // + the sink's `emittedTool*Ids`), so nothing double-renders and text streams token-by-token again.
   for await (const item of queue) {
     if (item.kind === 'delta') {
-      if (item.event.type === 'text_delta') heldText.push(item.event)
-      else yield item.event
+      yield item.event
       continue
     }
     for (const out of translateSdkEvent(item.msg, runId)) {
@@ -354,7 +349,6 @@ async function* mergeDeltaStream(
       yield out
     }
   }
-  for (const ev of heldText) yield ev // flush the final answer AFTER the tools (#47)
   await pump // settled (handled at creation); re-throw any captured error into the generator's try/catch
   if (pumpError) throw pumpError.thrown
 }
