@@ -42,6 +42,11 @@ export type InProcessAwaitApproval = (
 
 export interface StreamAgentTurnInProcessInput {
   message: string
+  /**
+   * M35 (multimodal) — images to send alongside the text. Threaded to the SDK's structured
+   * `SDKUserMessage { text, images }` send form. Absent ⇒ the string send path is byte-unchanged.
+   */
+  images?: Parameters<typeof streamAgentUIMessages>[2]['images']
   /** Resume key; a fresh id per run when omitted. */
   sessionId?: string
   /**
@@ -122,6 +127,8 @@ export function streamAgentTurnInProcess(
     }
     yield* deps.stream(compiled, apiKey, {
       message: input.message,
+      // M35 — pass images through so the SDK send uses the structured `{ text, images }` form.
+      ...(input.images !== undefined ? { images: input.images } : {}),
       sessionId,
       hitl,
       signal: input.signal,
