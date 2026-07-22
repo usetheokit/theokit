@@ -22,14 +22,40 @@ describe('builder .memory() → Agent.create projection', () => {
     expect(applied).toContain('memory')
   })
 
-  it('decorator_memory_no_longer_inert', () => {
-    // The decorator shape ({provider, scope, …}) has no `enabled` — declaring @Memory() means the
-    // author WANTS memory, so the projection normalizes it to the SDK's `{enabled: true}`.
-    const def = agent().model('openai/gpt-4o').build()
-    const compiled = { ...compileAgentDefinition(def), memory: { provider: 'built-in' as const } }
-    const { options, applied } = assembleM8CreateOptions(compiled)
-    expect(options.memory).toEqual({ enabled: true })
-    expect(applied).toContain('memory')
+  it('decorator_memory_no_longer_inert (real @Memory path, not fabricated)', async () => {
+    // M49 review F8 — exercise the REAL decorator→walk→compiler→projection chain end-to-end
+    // (pattern from memory-skills-mcp-decorators.test.ts).
+    await import('reflect-metadata')
+    const { Agent } = await import('../../src/decorators/agent.js')
+    const { MainLoop } = await import('../../src/decorators/main-loop.js')
+    const { Memory } = await import('../../src/decorators/memory.js')
+    const { walkAgentMetadata } = await import('../../src/bridge/walk-agent-metadata.js')
+    const { compileAgent } = await import('../../src/bridge/agent-compiler.js')
+
+    @Agent({ name: 'mem-agent', route: '/mem' })
+    @Memory({ provider: 'built-in', maxFacts: 100 })
+    class MemAgent {
+      @MainLoop()
+      async run() {}
+    }
+
+    const compiled = compileAgent(walkAgentMetadata(MemAgent))
+    expect(compiled.memory).toBeDefined()
+    const warns: string[] = []
+    const orig = process.stderr.write.bind(process.stderr)
+    process.stderr.write = ((c: unknown) => {
+      warns.push(String(c))
+      return true
+    }) as typeof process.stderr.write
+    try {
+      const { options, applied } = assembleM8CreateOptions(compiled)
+      expect(options.memory).toEqual({ enabled: true })
+      expect(applied).toContain('memory')
+      // Unmapped decorator knobs are discarded LOUDLY (F8).
+      expect(warns.join('')).toContain('maxFacts')
+    } finally {
+      process.stderr.write = orig
+    }
   })
 
   it('no_memory_declared_projects_nothing', () => {
