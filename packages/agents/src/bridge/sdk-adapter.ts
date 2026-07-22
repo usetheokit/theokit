@@ -42,9 +42,21 @@ import { stripToolDialectStream } from './tool-dialect-stripper.js'
  * one object (rather than positional params) so the per-request surface can grow without
  * a parameter explosion. Each field is Axis-A SWAP — a value the app holds at call time.
  */
+/**
+ * A multimodal image for a send turn — the SDK's `SDKImage` shape, typed locally because `@theokit/sdk`
+ * is an optional peer (dynamic import). Either a URL or inline base64 `{ data, mimeType }`.
+ */
+export type BridgeImage = { url: string } | { data: string; mimeType: string }
+
 export interface RuntimeOverrides {
   /** Overrides the model for this call (`?? compiled.model ?? default`). */
   model?: string
+  /**
+   * M35 (multimodal) — images to send alongside the text. When present, the SDK send switches from the
+   * plain-string form to the structured `{ text, images }` form (`SDKUserMessage`). Absent ⇒ the
+   * string path is byte-unchanged (back-compat).
+   */
+  images?: readonly BridgeImage[]
   /**
    * Per-run extended-thinking effort (`?? compiled.reasoningEffort`). Mapped to the SDK
    * `ModelSelection.params` so the provider produces reasoning (surfaced as `thinking` StreamEvents).
@@ -665,7 +677,13 @@ async function* streamSdkAgent(
     const { state, onDelta } = createDeltaSink(queue)
     const sendOptions: SendOptions = { onDelta }
     if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
-    const sendPromise = agent.send(message, sendOptions)
+    // M35 — when images are present, use the SDK's structured `SDKUserMessage { text, images }` form so
+    // the model receives them alongside the text; otherwise the plain-string form is unchanged (back-compat).
+    const sendInput =
+      overrides.images && overrides.images.length > 0
+        ? { text: message, images: overrides.images }
+        : message
+    const sendPromise = agent.send(sendInput as typeof message, sendOptions)
     const openStream = async () => (await sendPromise).stream()
     const merged = mergeDeltaStream(queue, openStream, runId, state)
     for await (const event of applyTextTransforms(merged, { parseThinkTags, stripToolDialect })) {
