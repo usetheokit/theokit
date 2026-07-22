@@ -8,6 +8,7 @@
  */
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
 
+import type { MemorySettings } from '@theokit/sdk'
 import type { McpServersMap } from '../decorators/mcp.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
@@ -24,6 +25,8 @@ export interface M8CreateOptions {
   plugins?: readonly unknown[]
   /** #89 — `@MCP` servers forwarded to `Agent.create({ mcpServers })` (the SDK owns execution). */
   mcpServers?: McpServersMap
+  /** M49 — durable-memory settings forwarded to `Agent.create({ memory })` (SDK MemorySettings). */
+  memory?: MemorySettings
 }
 
 /**
@@ -73,6 +76,15 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   if (compiled.mcpServers && Object.keys(compiled.mcpServers).length > 0) {
     options.mcpServers = compiled.mcpServers
     applied.push('mcpServers')
+  }
+  // M49 — forward memory to `Agent.create` (same inert-decorator class as #89: the field compiled
+  // but never projected, so the SDK's whole memory subsystem was unreachable). Builder path carries
+  // the SDK `MemorySettings` verbatim; the legacy decorator shape (no `enabled`) normalizes to the
+  // minimal opt-in — declaring `@Memory()` means the author wants memory ON.
+  if (compiled.memory !== undefined) {
+    options.memory =
+      'enabled' in compiled.memory ? (compiled.memory as MemorySettings) : { enabled: true }
+    applied.push('memory')
   }
 
   return { options, applied }
