@@ -158,6 +158,8 @@ export interface StreamHitlOptions {
 export interface StreamAgentOptions {
   message: string
   sessionId: string
+  /** M35 (multimodal) — images to send alongside the text. Absent ⇒ the string send path is unchanged. */
+  images?: RuntimeOverrides['images']
   /** Enable human-in-the-loop tool approval (M4). Absent ⇒ the M2 non-HITL path, byte-unchanged. */
   hitl?: StreamHitlOptions
   /**
@@ -199,6 +201,8 @@ export function streamAgentUIMessages(
   if (input.cwd !== undefined) overrides.cwd = input.cwd
   // SDK 4.0 (SE40) — thread the app-root session dir so the SDK writes the native transcript per-app.
   if (input.baseDir !== undefined) overrides.baseDir = input.baseDir
+  // M35 (multimodal) — thread images so the adapter sends the structured `{ text, images }` form.
+  if (input.images !== undefined) overrides.images = input.images
 
   let source: AsyncGenerator<AgentStreamEvent>
   if (!input.hitl || input.hitl.gated.size === 0) {
