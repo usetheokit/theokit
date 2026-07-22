@@ -1,5 +1,12 @@
 # services-both-fixture
 
+## 0.0.58
+
+### Patch Changes
+
+- Updated dependencies [95bc32e]
+  - theokit@0.43.4
+
 ## 0.0.57
 
 ### Patch Changes

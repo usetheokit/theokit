@@ -10,7 +10,7 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
-import type { CustomTool, InlineSkill, SettingSource } from '@theokit/sdk'
+import type { CustomTool, InlineSkill, MemorySettings, SettingSource } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
@@ -81,6 +81,13 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * + execution (G2 / ADR-0040); theokit only wires this into `Agent.create({ local.settingSources })`.
    */
   settingSources?: readonly SettingSource[]
+  /**
+   * M49 — durable memory (the SDK's `.theokit/memory/` subsystem: `Remember:` capture, MEMORY.md
+   * store, auto-injected `<memory>` block, `memory_search`/`memory_get` tools). The shape is the
+   * SDK's own `MemorySettings` — the canonical runtime contract. Projected into
+   * `Agent.create({ memory })` by `assembleM8CreateOptions`.
+   */
+  memory?: MemorySettings
   /**
    * Code `Plugin` objects forwarded to `Agent.create({ plugins })` — EXTENSION units (tools,
    * commands, model providers, memory adapters). For lifecycle interception use {@link hooks}.
@@ -207,6 +214,8 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // theokit-file-based-config — the declared `.theokit/` sources flow to the run path, which
     // projects them into `Agent.create({ local.settingSources })`; absent ⇒ inline config only.
     ...(def.settingSources !== undefined ? { settingSources: def.settingSources } : {}),
+    // M49 — memory flows to the projection layer; `assembleM8CreateOptions` forwards it to Agent.create.
+    ...(def.memory !== undefined ? { memory: def.memory } : {}),
     // Hooks are converted here — the layer EVERY path converges on — rather than on the builder, so
     // `defineAgent({ hooks })` cannot type-check and silently no-op. A lifecycle hook that is
     // declared but never registered is a security gate that does not gate.
