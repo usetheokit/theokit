@@ -82,6 +82,23 @@ describe('streamAgentTurnInProcess (M35)', () => {
     expect(input.sessionId.length).toBeGreaterThan(0)
   })
 
+  // M35 (multimodal) — images must pass through to streamAgentUIMessages; a drop here is invisible to a
+  // layer-local test (the seam lesson). Assert the value reaches the captured stream input.
+  it('threads images through to streamAgentUIMessages when supplied', async () => {
+    hoisted.chunks = [{ type: 'finish' }]
+    const img = { data: 'aGk=', mimeType: 'image/png' }
+    await collect(streamAgentTurnInProcess(PLAIN, 'sk', { message: 'hi', images: [img] }))
+    const input = hoisted.lastStreamInput as { images?: unknown }
+    expect(input.images).toEqual([img])
+  })
+
+  it('omits images on a text-only turn (back-compat)', async () => {
+    hoisted.chunks = [{ type: 'finish' }]
+    await collect(streamAgentTurnInProcess(PLAIN, 'sk', { message: 'hi' }))
+    const input = hoisted.lastStreamInput as { images?: unknown }
+    expect(input.images).toBeUndefined()
+  })
+
   it('wires HITL to the inline awaitApproval callback for a gated agent', async () => {
     hoisted.chunks = [{ type: 'finish' }]
     const awaitApproval = vi.fn().mockResolvedValue(true)
