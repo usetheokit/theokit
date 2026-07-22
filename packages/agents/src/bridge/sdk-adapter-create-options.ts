@@ -21,6 +21,7 @@ export interface M8CreateOptions {
   systemPrompt?: string | SystemPromptResolver
   /** SDK local options: settings source for SKILL.md discovery (EC-1) + per-run cwd (V4-L.2). */
   local?: { settingSources?: string[]; cwd?: string; baseDir?: string }
+  plugins?: readonly unknown[]
   /** #89 — `@MCP` servers forwarded to `Agent.create({ mcpServers })` (the SDK owns execution). */
   mcpServers?: McpServersMap
 }
@@ -45,6 +46,12 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   // theokit-file-based-config — project `.theokit/` discovery sources into `local`, DECOUPLED from
   // inline skills (an agent may want hooks/mcp/subagents/context/cron with no inline skill). cwd is
   // merged downstream (`sdk-adapter.ts` overrides.cwd → app root via `mount-agent.ts`); never dropped.
+  // Code `Plugin` objects (e.g. `createToolHooksPlugin`) — registered directly by the runtime
+  // (`extractCodePlugins`); this is the fluent builder's only route to the SDK lifecycle-hook seam.
+  if (compiled.plugins) {
+    options.plugins = compiled.plugins
+    applied.push('plugins')
+  }
   const settingSources = resolveSettingSources(compiled)
   if (settingSources) {
     options.local = { ...options.local, settingSources }
