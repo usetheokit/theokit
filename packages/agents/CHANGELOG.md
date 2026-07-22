@@ -1,5 +1,12 @@
 # @theokit/agents
 
+## 0.44.5
+
+### Patch Changes
+
+- e38db92: Fix stream event order so tool events precede the final answer text. For providers whose `onDelta` reports text but not `tool-call-started` (e.g. gpt-5.4 via OpenRouter), tool events surface only via `run.stream()` (post-completion), so live onDelta text was emitted BEFORE the tool that produced it — even though the model is tool-first (verified against the raw provider response). The SDK adapter now holds `text_delta` and flushes it after the drained stream, so the timeline order matches the model's true chronology (tool → result → answer). Non-text deltas keep their live order; duplicate text stays deduped. Trade-off: on a text-only turn the answer is emitted at generation-complete rather than token-by-token.
+- 4cc200b: M35 (multimodal) — thread images through the bridge to `agent.send`. `StreamAgentOptions` and `RuntimeOverrides` gain an optional `images` field; when present the adapter sends the SDK's structured `SDKUserMessage { text, images }` form instead of a plain string, so the model receives images alongside the text. Absent ⇒ the string send path is byte-unchanged (back-compat). Zero new dependencies.
+
 ## 0.43.0
 
 ### Minor Changes
