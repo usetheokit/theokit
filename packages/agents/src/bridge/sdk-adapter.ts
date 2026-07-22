@@ -130,7 +130,16 @@ function buildExtraCreateOptions(
   const recoverLeakedToolCalls =
     overrides.recoverLeakedToolCalls ?? compiled.recoverLeakedToolCalls ?? false
   const extra: Record<string, unknown> = {}
-  if (overrides.plugins !== undefined) extra.plugins = overrides.plugins
+  // A per-run plugin override (e.g. the HITL gate) must NOT silently drop the agent's own code plugins:
+  // `extra` is spread AFTER the assembled options, so a bare assignment clobbered `compiled.plugins`
+  // and every `createToolHooksPlugin` hook was lost whenever HITL was active. Concatenate when both
+  // sides are arrays; keep the previous replace semantics for the legacy `{ enabled }` object form.
+  if (overrides.plugins !== undefined) {
+    extra.plugins =
+      Array.isArray(overrides.plugins) && Array.isArray(compiled.plugins)
+        ? [...compiled.plugins, ...overrides.plugins]
+        : overrides.plugins
+  }
   if (overrides.providers !== undefined) {
     extra.providers = recoverLeakedToolCalls
       ? withLeakedDialectRecovery(overrides.providers)

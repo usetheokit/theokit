@@ -149,6 +149,8 @@ export interface CompiledAgentOptions {
    * (merged with `cwd`, decoupled from inline skills). Absent ⇒ inline (code) config only.
    */
   settingSources?: readonly SettingSource[]
+  /** Code `Plugin` objects forwarded to `Agent.create({ plugins })` (lifecycle-hook seam). */
+  plugins?: readonly unknown[]
   tools: CompiledTool[]
   agents: Record<string, CompiledSubAgent>
   memory?: MemoryOptions
