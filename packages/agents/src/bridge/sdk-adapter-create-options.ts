@@ -82,8 +82,20 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   // the SDK `MemorySettings` verbatim; the legacy decorator shape (no `enabled`) normalizes to the
   // minimal opt-in — declaring `@Memory()` means the author wants memory ON.
   if (compiled.memory !== undefined) {
-    options.memory =
-      'enabled' in compiled.memory ? (compiled.memory as MemorySettings) : { enabled: true }
+    if ('enabled' in compiled.memory) {
+      options.memory = compiled.memory as MemorySettings
+    } else {
+      // Legacy decorator shape ({provider, embeddings, fts, scope, maxFacts}) — those knobs have no
+      // SDK counterpart yet, so they are DISCARDED on normalization. Loud, never silent (M49 review
+      // F8): the author asked for e.g. maxFacts and must know it is not honored.
+      const dropped = Object.keys(compiled.memory)
+      if (dropped.length > 0) {
+        process.stderr.write(
+          `[theokit-agents] @Memory decorator options not yet mapped to the SDK (${dropped.join(', ')}) — memory enabled with defaults\n`,
+        )
+      }
+      options.memory = { enabled: true }
+    }
     applied.push('memory')
   }
 
