@@ -82,6 +82,17 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    */
   settingSources?: readonly SettingSource[]
   /**
+   * Code `Plugin` objects forwarded to `Agent.create({ plugins })` — EXTENSION units (tools,
+   * commands, model providers, memory adapters). For lifecycle interception use {@link hooks}.
+   */
+  plugins?: readonly unknown[]
+  /**
+   * Lifecycle hooks keyed by `HookName` (`pre_tool_call` may veto via `{ block, message }`). Set by
+   * the builder's `hooks()`; converted into a code plugin at `build()` and never reaching the SDK
+   * under this name — the plugin is the TRANSPORT, this is the contract callers write against.
+   */
+  hooks?: Readonly<Record<string, unknown>>
+  /**
    * MCP servers available to the agent — the builder-chain equivalent of the `@MCP` class
    * decorator. Each key is a server name; the value is the server configuration. Forwarded
    * unchanged to `Agent.create({ mcpServers })` (the SDK owns MCP execution). Absent ⇒ no MCP.
@@ -196,6 +207,10 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // theokit-file-based-config — the declared `.theokit/` sources flow to the run path, which
     // projects them into `Agent.create({ local.settingSources })`; absent ⇒ inline config only.
     ...(def.settingSources !== undefined ? { settingSources: def.settingSources } : {}),
+    // Hooks are converted here — the layer EVERY path converges on — rather than on the builder, so
+    // `defineAgent({ hooks })` cannot type-check and silently no-op. A lifecycle hook that is
+    // declared but never registered is a security gate that does not gate.
+    ...compileHooksAndPlugins(def),
     // MCP — builder/`defineAgent` servers converge on the same `mcpServers` field the `@MCP`
     // decorator path populates; the SDK adapter forwards it to `Agent.create({ mcpServers })`.
     ...(def.mcpServers !== undefined ? { mcpServers: def.mcpServers } : {}),
@@ -207,6 +222,37 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
  * `skillsResolver`). A static array may mix filesystem skill NAMES (`string` → `skills.enabled`) with
  * inline `createSkill` objects (`InlineSkill` → `skills.inline`, injected into the `<skills>` block).
  */
+/**
+ * Convert a `hooks` map into the code plugin that carries it, appended to any explicitly registered
+ * plugins. Hooks and plugins are DIFFERENT concepts — a hook is a lifecycle interception point, a
+ * plugin is an extension unit — but the SDK dispatches hooks through the plugin seam, so the map
+ * needs a transport. Doing the conversion HERE (not on the builder) means every entry point that
+ * reaches `defineAgent` gets it, so `hooks` can never be declared-but-dropped.
+ */
+function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly unknown[] } {
+  const map = (def as { hooks?: Readonly<Record<string, unknown>> }).hooks
+  const entries = Object.entries(map ?? {}).filter(([, h]) => typeof h === 'function')
+  const explicit = def.plugins ?? []
+
+  if (entries.length === 0) {
+    return def.plugins !== undefined ? { plugins: def.plugins } : {}
+  }
+
+  // `kind: 'general'` is load-bearing — the SDK's `isCodePlugin()` drops any plugin without it and
+  // no hook fires (proven against a real run; see the M26/M28 dispatch investigation).
+  const plugin = {
+    name: 'theokit-builder-hooks',
+    version: '1.0.0',
+    kind: 'general' as const,
+    register(ctx: { on: (hook: string, handler: (c: never) => unknown) => void }): void {
+      for (const [hookName, handler] of entries) {
+        ctx.on(hookName, handler as (c: never) => unknown)
+      }
+    },
+  }
+  return { plugins: [...explicit, plugin] }
+}
+
 function compileSkillsSelection(
   skills: SkillsSelection | undefined,
 ): Pick<CompiledAgentOptions, 'skills' | 'skillsResolver'> {
