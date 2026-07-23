@@ -14,6 +14,7 @@ export type AgentOutputEvent =
   | AgentTextEvent
   | AgentReasoningEvent
   | AgentToolCallEvent
+  | AgentPartialToolCallEvent
   | AgentToolResultEvent
   | AgentErrorEvent
   | AgentFinishEvent
@@ -34,6 +35,18 @@ export interface AgentReasoningEvent {
 /** A tool invocation with its (committed) input — the args the model decided on. */
 export interface AgentToolCallEvent {
   readonly type: 'tool-call'
+  readonly callId: string
+  readonly name: string
+  readonly input: unknown
+}
+
+/**
+ * Incremental tool input as the model streams the args (theokit-sdk#70) — a DISTINCT lifecycle point
+ * from `tool-call` (args committed). Consumers that stream tool-input render the progressive args; those
+ * that don't may ignore it. Never duplicates `tool-call`.
+ */
+export interface AgentPartialToolCallEvent {
+  readonly type: 'partial-tool-call'
   readonly callId: string
   readonly name: string
   readonly input: unknown
@@ -74,6 +87,7 @@ export const AGENT_OUTPUT_EVENT_TYPES = [
   'text',
   'reasoning',
   'tool-call',
+  'partial-tool-call',
   'tool-result',
   'error',
   'finish',
@@ -89,6 +103,8 @@ export const isReasoningEvent = (e: AgentOutputEvent): e is AgentReasoningEvent 
   e.type === 'reasoning'
 export const isToolCallEvent = (e: AgentOutputEvent): e is AgentToolCallEvent =>
   e.type === 'tool-call'
+export const isPartialToolCallEvent = (e: AgentOutputEvent): e is AgentPartialToolCallEvent =>
+  e.type === 'partial-tool-call'
 export const isToolResultEvent = (e: AgentOutputEvent): e is AgentToolResultEvent =>
   e.type === 'tool-result'
 export const isErrorEvent = (e: AgentOutputEvent): e is AgentErrorEvent => e.type === 'error'
