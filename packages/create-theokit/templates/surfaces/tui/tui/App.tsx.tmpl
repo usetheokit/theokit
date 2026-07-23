@@ -1,107 +1,228 @@
-import { Box, Text, useApp, useInput } from 'ink'
-import { type ReactElement } from 'react'
+import { Text, useApp, useInput } from 'ink'
+import { type ReactElement, useCallback, useState } from 'react'
 import {
   AgentStreaming,
-  AppStatusBar,
+  AgentTimeline,
   ChatComposer,
-  ChatThread,
+  DEFAULT_COMPOSER_SHORTCUTS,
+  findPendingApproval,
+  InkInputProvider,
+  KeyboardHelp,
+  messagesToAgentEvents,
+  Notice,
+  PermissionPrompt,
+  readTurnUsage,
+  Stack,
+  StatusFooter,
   TheoTUIProvider,
+  Toast,
   useTurnElapsed,
-  WelcomeBanner,
+  type UIMessageLike,
 } from '@theokit/tui'
-import { uiMessagesToChatThread } from '@theokit/tui/ai-sdk'
-import type { UIMessage } from 'ai'
 import { InProcessTransport, useAgent } from 'theokit/client'
 import { streamAgentTurnInProcess } from 'theokit/server/agent'
 
 import * as chatAgent from '../agents/chat.js'
 import { AGENT } from '../shared/agent.js'
+// Composed from `tui/components/*`; restyle everything in the ONE file `tui/theme.ts`.
+import { Banner } from './components/Banner.js'
+import { DemoSurface, type Mode, type ToastPayload } from './components/Demos.js'
+import { UsagePanel } from './components/UsagePanel.js'
+import { PLACEHOLDER, THEME, THINKING_PHRASES } from './theme.js'
 
-/** Shown in the status bar (from `shared/agent.ts`). */
+/** Model label (footer) — from `shared/agent.ts`, the single branding source. */
 const MODEL = AGENT.model
-const CWD = process.cwd()
+/** Compact token count for the footer: `128000 → 128k`, `12300 → 12.3k`, `462 → 462`. */
+const fmtK = (n: number): string =>
+  n >= 1000 ? `${(Math.round(n / 100) / 10).toString().replace(/\.0$/, '')}k` : `${n}`
 
-/** The agent's opening line — the shared greeting plus TUI key hints, so the conversation starts warm. */
-const GREETING: UIMessage = {
+/** The agent's opening line — a short warm intro; the banner already carries the how-to tips. */
+const GREETING: UIMessageLike = {
   id: 'greeting',
   role: 'assistant',
-  parts: [
-    {
-      type: 'text',
-      text: `${AGENT.greeting} Type below and press Enter · /clear resets · esc cancels.`,
-    },
-  ],
+  parts: [{ type: 'text', text: AGENT.greeting }],
 }
 
 /** Resolve the provider key from the environment (OpenRouter / Anthropic / OpenAI). */
 const apiKey = (): string =>
   process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY ?? ''
 
-/**
- * M46 — the terminal surface, composed from `@theokit/tui` the way a Claude Code / OpenCode / Codex CLI is:
- * `WelcomeBanner` header, scrolling `<ChatThread>`, live `<AgentStreaming>`, bordered `<ChatComposer>`, and a
- * persistent `<AppStatusBar>` footer. Driven by the unified `useAgent` hook (M41).
- *
- * The full conversation comes straight from `useAgent().thread` (M46): the client store accumulates every
- * finished turn plus the in-flight streaming reply, with stable ids — so no hand-rolled history/commit-once
- * here. Prepend the warm `GREETING` and render.
- */
+// The unified in-process transport (M41): each turn drives the agent through `streamAgentTurnInProcess`.
 const transport = new InProcessTransport({
   run: (input) => streamAgentTurnInProcess(chatAgent, apiKey(), input),
 })
 
+/** The surface's composition root: owns state (`useAgent` M41 + mode) and composes the components under `<Stack>`. */
 export function App(): ReactElement {
   const agent = useAgent<{ message: string }>(transport)
   const streaming = agent.status === 'streaming'
   const elapsed = useTurnElapsed(streaming)
   const { exit } = useApp()
+  const [showHelp, setShowHelp] = useState(false)
+  // Ctrl+C is a two-step quit (Claude Code): first press arms + hints, second quits; any other key disarms.
+  const [exitArmed, setExitArmed] = useState(false)
+  // Settled approval ids — the gate never flips to resolved, so we hide answered prompts by id.
+  const [settledApprovals, setSettledApprovals] = useState<readonly string[]>([])
+  // Composer mode (`chat` = composer; others swap it for a `<DemoSurface>`), `/usage` toggle, `<Toast>`.
+  const [mode, setMode] = useState<Mode>('chat')
+  const [showUsage, setShowUsage] = useState(false)
+  const [toast, setToast] = useState<ToastPayload | null>(null)
+  // Stable so the `/progress` timer effect (in ProgressDemo) never restarts on an unrelated re-render.
+  const backToChat = useCallback(() => setMode('chat'), [])
 
-  // The store owns the conversation (M46) — prepend the warm greeting and render.
-  const thread = [GREETING, ...agent.thread]
+  // Derived from the store (M46): timeline events (greeting prepended), the last turn's usage, HITL approval.
+  const events = messagesToAgentEvents([GREETING, ...agent.thread])
+  const lastUsage = agent.thread.map(readTurnUsage).filter((u) => u !== undefined).at(-1)
+  const rawApproval = findPendingApproval(agent.thread)
+  const pendingApproval =
+    rawApproval && !settledApprovals.includes(rawApproval.approvalId) ? rawApproval : undefined
 
-  // Esc cancels a running turn, or quits when idle (the Claude Code affordance).
-  useInput((_input, key) => {
-    if (!key.escape) return
-    if (streaming) agent.abort()
-    else exit()
+  const settleApproval = (approvalId: string, approved: boolean): void => {
+    setSettledApprovals((prev) => [...prev, approvalId])
+    void agent.approve(approvalId, { approved })
+  }
+
+  const inDemoInput = mode === 'plan' || mode === 'ask' || mode === 'select'
+
+  // Global keys — skipped while a gated tool / interactive demo owns input. Esc backs out; Ctrl+C cancels/quits.
+  useInput((input, key) => {
+    if (pendingApproval || inDemoInput) return
+    if (key.escape) {
+      if (mode === 'progress') setMode('chat')
+      else if (showUsage) setShowUsage(false)
+      else if (showHelp) setShowHelp(false)
+      else if (streaming) agent.abort()
+      return
+    }
+    if (key.ctrl && input === 'c') {
+      if (streaming) {
+        agent.abort()
+        return
+      }
+      if (exitArmed) exit()
+      else setExitArmed(true)
+      return
+    }
+    if (exitArmed) setExitArmed(false)
   })
 
   const handleSubmit = (text: string): void => {
     const trimmed = text.trim()
     if (trimmed.length === 0) return
-    if (trimmed === '/clear') {
-      agent.reset()
-      return
+    switch (trimmed) {
+      case '/clear':
+        agent.reset()
+        return
+      case '/help':
+        setShowHelp((h) => !h)
+        return
+      case '/usage':
+        setShowUsage((u) => !u)
+        return
+      case '/plan':
+        setMode('plan')
+        return
+      case '/ask':
+        setMode('ask')
+        return
+      case '/select':
+        setMode('select')
+        return
+      case '/progress':
+        setMode('progress')
+        return
+      default:
+        agent.send({ message: trimmed })
     }
-    agent.send({ message: trimmed })
   }
 
   return (
-    <TheoTUIProvider theme={{ base: 'dark', override: { accent: 'cyan' } }}>
-      <Box flexDirection="column">
-        <WelcomeBanner
-          name="{{name}}"
-          tagline="Your agent, in the terminal — built with TheoKit."
-          hints={['Enter sends · Alt+Enter for a newline', '/clear resets · esc cancels a turn or quits']}
-        >
-          <Text dimColor>cwd: {CWD}</Text>
-        </WelcomeBanner>
+    <TheoTUIProvider theme={THEME}>
+      {/* InkInputProvider bridges Ink stdin to the interactive surfaces; `Stack` gives the Claude-Code cadence. */}
+      <InkInputProvider>
+        <Stack gap={1}>
+          <Banner />
 
-        <ChatThread messages={uiMessagesToChatThread(thread)} />
+          <AgentTimeline events={events} />
 
-        {streaming ? <AgentStreaming thought="Thinking…" elapsedSeconds={elapsed} showCancelHint /> : null}
-        {agent.error ? <Text color="red">⚠ {agent.error.message}</Text> : null}
+          {streaming ? (
+            <AgentStreaming
+              phrases={THINKING_PHRASES}
+              shimmer
+              elapsedSeconds={elapsed}
+              tokens={lastUsage?.totalTokens}
+              tokenDirection="down"
+              showCancelHint
+            />
+          ) : null}
+          {agent.error ? <Notice variant="error">{agent.error.message}</Notice> : null}
+          {/* `/usage` — the observability panel, from the last turn's real usage. */}
+          {showUsage && lastUsage ? (
+            <UsagePanel usage={lastUsage} contextWindow={AGENT.contextWindow} />
+          ) : null}
+          {/* A transient outcome banner (a demo answered, a task finished). Auto-dismisses after 5s. */}
+          {toast ? (
+            <Toast message={toast.message} variant={toast.variant} onDismiss={() => setToast(null)} />
+          ) : null}
 
-        <ChatComposer
-          placeholder="Ask your agent…  (Enter sends · / commands · @ files)"
-          bordered
-          hint="Enter sends · Alt+Enter newline · /clear resets · esc cancels"
-          commands={[{ name: 'clear', description: 'clear the conversation' }]}
-          onSubmit={handleSubmit}
-        />
+          {showHelp ? <KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} /> : null}
 
-        <AppStatusBar model={MODEL} cwd={CWD} state={streaming ? 'streaming' : 'idle'} />
-      </Box>
+          {/* The input area: a gated tool's approval card, a demo surface, or the composer. */}
+          {pendingApproval ? (
+            <PermissionPrompt
+              toolType="Tool call"
+              command={pendingApproval.toolName}
+              description={
+                pendingApproval.input !== undefined
+                  ? JSON.stringify(pendingApproval.input)
+                  : undefined
+              }
+              onDecision={(decision) => {
+                // Default choices are `yes`/`no` (Esc → `no`, the safe default); only `yes` approves.
+                settleApproval(pendingApproval.approvalId, decision === 'yes')
+              }}
+            />
+          ) : mode !== 'chat' ? (
+            <DemoSurface
+              mode={mode}
+              elapsed={elapsed}
+              tokens={lastUsage?.totalTokens}
+              onComplete={backToChat}
+              onToast={setToast}
+            />
+          ) : (
+            <ChatComposer
+              placeholder={PLACEHOLDER}
+              bordered
+              hint={exitArmed ? 'Press Ctrl+C again to quit' : undefined}
+              commands={[
+                { name: 'clear', description: 'clear the conversation' },
+                { name: 'help', description: 'toggle the keyboard shortcuts panel' },
+                { name: 'usage', description: 'toggle the token-usage panel' },
+                { name: 'plan', description: 'demo: plan approval card' },
+                { name: 'ask', description: 'demo: question prompt' },
+                { name: 'select', description: 'demo: multi-select list' },
+                { name: 'progress', description: 'demo: multi-step progress' },
+              ]}
+              onHelpToggle={() => setShowHelp((h) => !h)}
+              onSubmit={handleSubmit}
+            />
+          )}
+
+          {/* Claude Code's two-line footer: model (left) · context usage (right) · shortcuts hint (bottom). */}
+          <StatusFooter
+            left={<Text>{MODEL}</Text>}
+            right={
+              lastUsage ? (
+                <Text>
+                  {fmtK(lastUsage.inputTokens)}/{fmtK(AGENT.contextWindow)} context
+                </Text>
+              ) : undefined
+            }
+            hint="? for shortcuts"
+          />
+        </Stack>
+      </InkInputProvider>
     </TheoTUIProvider>
   )
 }

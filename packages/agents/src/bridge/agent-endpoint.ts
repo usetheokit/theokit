@@ -23,7 +23,7 @@ import type { AgentStreamEvent } from './agent-stream-events.js'
 import { compileAgentDefinition, isAgentDefinition } from './define-agent.js'
 import { createHitlPlugin, type HitlWiring } from './hitl-plugin.js'
 import { createSdkAgentStream, type RuntimeOverrides } from './sdk-adapter.js'
-import { translateToUIMessageStream } from './ui-message-stream-translator.js'
+import { presentUIMessageStream } from './present-ui-message-stream.js'
 import { walkAgentMetadata } from './walk-agent-metadata.js'
 
 /** Thrown when an `agents/` file default-exports neither a `defineAgent` value nor an `@Agent` class. */
@@ -158,6 +158,8 @@ export interface StreamHitlOptions {
 export interface StreamAgentOptions {
   message: string
   sessionId: string
+  /** M35 (multimodal) — images to send alongside the text. Absent ⇒ the string send path is unchanged. */
+  images?: RuntimeOverrides['images']
   /** Enable human-in-the-loop tool approval (M4). Absent ⇒ the M2 non-HITL path, byte-unchanged. */
   hitl?: StreamHitlOptions
   /**
@@ -199,6 +201,8 @@ export function streamAgentUIMessages(
   if (input.cwd !== undefined) overrides.cwd = input.cwd
   // SDK 4.0 (SE40) — thread the app-root session dir so the SDK writes the native transcript per-app.
   if (input.baseDir !== undefined) overrides.baseDir = input.baseDir
+  // M35 (multimodal) — thread images so the adapter sends the structured `{ text, images }` form.
+  if (input.images !== undefined) overrides.images = input.images
 
   let source: AsyncGenerator<AgentStreamEvent>
   if (!input.hitl || input.hitl.gated.size === 0) {
@@ -255,5 +259,5 @@ export function streamAgentUIMessages(
   // don't retroactively promise a resume handle the agent never asked to advertise).
   const durableCheckpoint = compiled.checkpoint?.storage === 'filesystem'
   const events = durableCheckpoint ? appendCheckpointSaved(source, input.sessionId) : source
-  return translateToUIMessageStream(events, { textId })
+  return presentUIMessageStream(events, { textId })
 }

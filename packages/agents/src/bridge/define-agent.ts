@@ -10,10 +10,11 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
-import type { CustomTool, InlineSkill, SettingSource } from '@theokit/sdk'
+import type { CustomTool, InlineSkill, MemorySettings, SettingSource } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
+import type { McpServersMap } from '../decorators/mcp.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
@@ -80,6 +81,30 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * + execution (G2 / ADR-0040); theokit only wires this into `Agent.create({ local.settingSources })`.
    */
   settingSources?: readonly SettingSource[]
+  /**
+   * M49 — durable memory (the SDK's `.theokit/memory/` subsystem: `Remember:` capture, MEMORY.md
+   * store, auto-injected `<memory>` block, `memory_search`/`memory_get` tools). The shape is the
+   * SDK's own `MemorySettings` — the canonical runtime contract. Projected into
+   * `Agent.create({ memory })` by `assembleM8CreateOptions`.
+   */
+  memory?: MemorySettings
+  /**
+   * Code `Plugin` objects forwarded to `Agent.create({ plugins })` — EXTENSION units (tools,
+   * commands, model providers, memory adapters). For lifecycle interception use {@link hooks}.
+   */
+  plugins?: readonly unknown[]
+  /**
+   * Lifecycle hooks keyed by `HookName` (`pre_tool_call` may veto via `{ block, message }`). Set by
+   * the builder's `hooks()`; converted into a code plugin at `build()` and never reaching the SDK
+   * under this name — the plugin is the TRANSPORT, this is the contract callers write against.
+   */
+  hooks?: Readonly<Record<string, unknown>>
+  /**
+   * MCP servers available to the agent — the builder-chain equivalent of the `@MCP` class
+   * decorator. Each key is a server name; the value is the server configuration. Forwarded
+   * unchanged to `Agent.create({ mcpServers })` (the SDK owns MCP execution). Absent ⇒ no MCP.
+   */
+  mcpServers?: McpServersMap
 }
 
 /**
@@ -146,12 +171,23 @@ function toCompiledTool(tool: CustomTool): CompiledTool {
     input: unknown,
     ctx?: { signal?: AbortSignal; context?: unknown },
   ) => string | Promise<string>
-  return {
+  const compiled: CompiledTool = {
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
     handler: (input, ctx) => handler(input, ctx),
   }
+  // Preserve SYMBOL-keyed metadata the SDK installs on a tool — notably the `@theokit/sdk/a2a` subagent
+  // credential-inheritance sink (`Symbol.for("theokit.subagent.inheritCredentials")`). Copying only the
+  // four known fields drops it, so the SDK runtime can't hand the parent's `apiKey` down to a delegated
+  // child → the child fails with `provider_unresolved` ("(no response)"). The wrapped handler still calls
+  // the original tool's handler, so the sink (which mutates that handler's closure) stays effective.
+  for (const sym of Object.getOwnPropertySymbols(tool)) {
+    ;(compiled as unknown as Record<symbol, unknown>)[sym] = (
+      tool as unknown as Record<symbol, unknown>
+    )[sym]
+  }
+  return compiled
 }
 
 /**
@@ -178,6 +214,15 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // theokit-file-based-config — the declared `.theokit/` sources flow to the run path, which
     // projects them into `Agent.create({ local.settingSources })`; absent ⇒ inline config only.
     ...(def.settingSources !== undefined ? { settingSources: def.settingSources } : {}),
+    // M49 — memory flows to the projection layer; `assembleM8CreateOptions` forwards it to Agent.create.
+    ...(def.memory !== undefined ? { memory: def.memory } : {}),
+    // Hooks are converted here — the layer EVERY path converges on — rather than on the builder, so
+    // `defineAgent({ hooks })` cannot type-check and silently no-op. A lifecycle hook that is
+    // declared but never registered is a security gate that does not gate.
+    ...compileHooksAndPlugins(def),
+    // MCP — builder/`defineAgent` servers converge on the same `mcpServers` field the `@MCP`
+    // decorator path populates; the SDK adapter forwards it to `Agent.create({ mcpServers })`.
+    ...(def.mcpServers !== undefined ? { mcpServers: def.mcpServers } : {}),
   }
 }
 
@@ -186,7 +231,38 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
  * `skillsResolver`). A static array may mix filesystem skill NAMES (`string` → `skills.enabled`) with
  * inline `createSkill` objects (`InlineSkill` → `skills.inline`, injected into the `<skills>` block).
  */
-function compileSkillsSelection(
+/**
+ * Convert a `hooks` map into the code plugin that carries it, appended to any explicitly registered
+ * plugins. Hooks and plugins are DIFFERENT concepts — a hook is a lifecycle interception point, a
+ * plugin is an extension unit — but the SDK dispatches hooks through the plugin seam, so the map
+ * needs a transport. Doing the conversion HERE (not on the builder) means every entry point that
+ * reaches `defineAgent` gets it, so `hooks` can never be declared-but-dropped.
+ */
+function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly unknown[] } {
+  const map = (def as { hooks?: Readonly<Record<string, unknown>> }).hooks
+  const entries = Object.entries(map ?? {}).filter(([, h]) => typeof h === 'function')
+  const explicit = def.plugins ?? []
+
+  if (entries.length === 0) {
+    return def.plugins !== undefined ? { plugins: def.plugins } : {}
+  }
+
+  // `kind: 'general'` is load-bearing — the SDK's `isCodePlugin()` drops any plugin without it and
+  // no hook fires (proven against a real run; see the M26/M28 dispatch investigation).
+  const plugin = {
+    name: 'theokit-builder-hooks',
+    version: '1.0.0',
+    kind: 'general' as const,
+    register(ctx: { on: (hook: string, handler: (c: never) => unknown) => void }): void {
+      for (const [hookName, handler] of entries) {
+        ctx.on(hookName, handler as (c: never) => unknown)
+      }
+    },
+  }
+  return { plugins: [...explicit, plugin] }
+}
+
+export function compileSkillsSelection(
   skills: SkillsSelection | undefined,
 ): Pick<CompiledAgentOptions, 'skills' | 'skillsResolver'> {
   if (skills === undefined) return {}

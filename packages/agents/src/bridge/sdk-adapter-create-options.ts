@@ -8,6 +8,7 @@
  */
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
 
+import type { MemorySettings } from '@theokit/sdk'
 import type { McpServersMap } from '../decorators/mcp.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
@@ -21,8 +22,11 @@ export interface M8CreateOptions {
   systemPrompt?: string | SystemPromptResolver
   /** SDK local options: settings source for SKILL.md discovery (EC-1) + per-run cwd (V4-L.2). */
   local?: { settingSources?: string[]; cwd?: string; baseDir?: string }
+  plugins?: readonly unknown[]
   /** #89 — `@MCP` servers forwarded to `Agent.create({ mcpServers })` (the SDK owns execution). */
   mcpServers?: McpServersMap
+  /** M49 — durable-memory settings forwarded to `Agent.create({ memory })` (SDK MemorySettings). */
+  memory?: MemorySettings
 }
 
 /**
@@ -45,6 +49,12 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   // theokit-file-based-config — project `.theokit/` discovery sources into `local`, DECOUPLED from
   // inline skills (an agent may want hooks/mcp/subagents/context/cron with no inline skill). cwd is
   // merged downstream (`sdk-adapter.ts` overrides.cwd → app root via `mount-agent.ts`); never dropped.
+  // Code `Plugin` objects (e.g. `createToolHooksPlugin`) — registered directly by the runtime
+  // (`extractCodePlugins`); this is the fluent builder's only route to the SDK lifecycle-hook seam.
+  if (compiled.plugins) {
+    options.plugins = compiled.plugins
+    applied.push('plugins')
+  }
   const settingSources = resolveSettingSources(compiled)
   if (settingSources) {
     options.local = { ...options.local, settingSources }
@@ -66,6 +76,27 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   if (compiled.mcpServers && Object.keys(compiled.mcpServers).length > 0) {
     options.mcpServers = compiled.mcpServers
     applied.push('mcpServers')
+  }
+  // M49 — forward memory to `Agent.create` (same inert-decorator class as #89: the field compiled
+  // but never projected, so the SDK's whole memory subsystem was unreachable). Builder path carries
+  // the SDK `MemorySettings` verbatim; the legacy decorator shape (no `enabled`) normalizes to the
+  // minimal opt-in — declaring `@Memory()` means the author wants memory ON.
+  if (compiled.memory !== undefined) {
+    if ('enabled' in compiled.memory) {
+      options.memory = compiled.memory as MemorySettings
+    } else {
+      // Legacy decorator shape ({provider, embeddings, fts, scope, maxFacts}) — those knobs have no
+      // SDK counterpart yet, so they are DISCARDED on normalization. Loud, never silent (M49 review
+      // F8): the author asked for e.g. maxFacts and must know it is not honored.
+      const dropped = Object.keys(compiled.memory)
+      if (dropped.length > 0) {
+        process.stderr.write(
+          `[theokit-agents] @Memory decorator options not yet mapped to the SDK (${dropped.join(', ')}) — memory enabled with defaults\n`,
+        )
+      }
+      options.memory = { enabled: true }
+    }
+    applied.push('memory')
   }
 
   return { options, applied }

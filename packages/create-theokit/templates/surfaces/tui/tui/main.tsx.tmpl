@@ -11,4 +11,6 @@ if (typeof process.loadEnvFile === 'function') {
   }
 }
 
-render(<App />)
+// `exitOnCtrlC: false` so the App owns Ctrl+C — a single press cancels a running turn, a double press
+// quits (the Claude Code affordance). Without this, Ink would hard-exit on the first Ctrl+C.
+render(<App />, { exitOnCtrlC: false })

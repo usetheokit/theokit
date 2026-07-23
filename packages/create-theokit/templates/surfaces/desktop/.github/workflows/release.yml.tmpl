@@ -1,0 +1,83 @@
+# Cross-platform desktop release — builds {{name}} for macOS (Apple Silicon + Intel),
+# Linux (x64 + arm64) and Windows, then drafts a GitHub release with the installers.
+#
+# WHY a matrix of native runners: Tauri does NOT support cross-compiling between operating
+# systems (macOS/Linux bundles REQUIRE their own host; only Windows-NSIS-from-Linux is a
+# last-resort exception). Each target therefore builds on its own runner — the documented
+# best practice: https://v2.tauri.app/distribute/pipelines/github/
+#
+# ⚠️ PREREQUISITE — the sidecar must be a real binary, not the dev shim.
+#    `tauri build` runs `scripts/build-sidecar.mjs`, which in DEV writes a POSIX shell shim
+#    that execs this repo's local `tsx` (absolute build-time paths, requires Node on the user's
+#    machine). That shim is NOT portable to end users, and `build-sidecar.mjs` intentionally
+#    FAILS on Windows (Tauri needs a `.exe`). Before this workflow can ship a working app you
+#    MUST compile `sidecar/sidecar.ts` to a self-contained per-platform binary at
+#    `src-tauri/binaries/theo-sidecar-<target-triple>[.exe]`. See README-surface.md § Packaging.
+#
+# Trigger: push to the `release` branch, or run manually (Actions → Run workflow).
+name: release-desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release]
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest # Apple Silicon → .app / .dmg
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest # Intel → .app / .dmg
+            args: --target x86_64-apple-darwin
+          - platform: ubuntu-22.04 # Linux x64 → .deb / .AppImage / .rpm
+            args: ''
+          - platform: ubuntu-22.04-arm # Linux arm64
+            args: ''
+          - platform: windows-latest # Windows → .exe (NSIS) / .msi
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build + release with Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: {{name}}-v__VERSION__
+          releaseName: '{{name}} v__VERSION__'
+          releaseBody: 'See the assets below to download and install this version.'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

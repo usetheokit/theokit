@@ -1,5 +1,38 @@
 # theo
 
+## 0.43.9
+
+### Patch Changes
+
+- Updated dependencies [5793ec1]
+  - @theokit/agents@0.47.0
+
+## 0.43.8
+
+### Patch Changes
+
+- Updated dependencies [70a4daa]
+  - @theokit/agents@0.45.0
+
+## 0.43.4
+
+### Patch Changes
+
+- 95bc32e: M35 (multimodal) — `streamAgentTurnInProcess` (the in-process agent-turn seam the TUI runs on) now accepts an optional `images` field on its input and threads it to `streamAgentUIMessages`, so an image sent from the composer reaches `agent.send({ text, images })`. Absent ⇒ the string turn is byte-unchanged (back-compat). Requires `@theokit/agents` >= 0.44.5.
+
+## 0.43.2
+
+### Patch Changes
+
+- 6bcfafa: Surface in-process agent stream errors in the unified client. A provider failure (401/429/5xx) arrives as a `{ type: 'error', errorText }` chunk rather than a thrown rejection; `consumeChunkStream` now captures it via `readUIMessageStream`'s `onError` + `terminateOnError` and rethrows, so `AgentClient`/`useAgent` settle to `status: 'error'` with `error.message` set instead of silently ending in `'done'`. This makes a failed turn visible (e.g. the scaffold's `<Notice variant="error">` renders) instead of leaving a dead UI. The stale-drive abort path is covered so an aborted turn's error chunk never clobbers a newer live turn. Fixes #136.
+
+## 0.43.1
+
+### Patch Changes
+
+- Updated dependencies [d398561]
+  - @theokit/agents@0.43.0
+
 ## 0.43.0
 
 ### Minor Changes

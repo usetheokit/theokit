@@ -24,3 +24,48 @@ npm run dev                      # tsx tui/main.tsx
 ```
 
 Type a message + Enter; Esc to quit. The agent lives in `agents/chat.ts` (edit its model / system prompt).
+
+## Architecture (System Design)
+
+The TUI surface is a small React (Ink) app with ONE composition root and three presentational pieces.
+
+### Component tree
+
+```
+tui/main.tsx                       render(<App/>, { exitOnCtrlC: false })
+└─ tui/App.tsx                     COMPOSITION ROOT — owns useAgent + state + key routing
+   ├─ components/Banner.tsx        welcome box (wordmark · model · cwd · tips) — presentational
+   ├─ <AgentTimeline/>             the conversation (from @theokit/tui)
+   ├─ components/UsagePanel.tsx    /usage: ContextWindowBar · TokenUsageChart · CostMeter — prop-driven
+   ├─ components/Demos.tsx         /plan /ask /select /progress showcase — DELETABLE (see below)
+   └─ <ChatComposer/> | <PermissionPrompt/>   the input area (composer, or a gated-tool approval card)
+```
+
+### Data flow
+
+```
+you type ─▶ App.handleSubmit ─▶ agent.send() ─▶ InProcessTransport ─▶ streamAgentTurnInProcess (theokit)
+                                                                              │  UIMessageStream
+useAgent().thread ◀───────────────────────────────────────────────────────────┘
+   │  messagesToAgentEvents (ai-free projection, M46)          readTurnUsage
+   ▼                                                                │
+<AgentTimeline/>                                            lastUsage ─▶ footer + <UsagePanel/>
+```
+
+### Layer boundaries
+
+| Layer | Owns | The surface imports it as |
+|---|---|---|
+| `shared/agent.ts` | branding (name · model label · greeting · contextWindow) — **single source of truth** | `AGENT` (Banner + App) |
+| `agents/chat.ts` | the agent's model + system prompt (persona) | `chatAgent` (the transport) |
+| `server/` (via `theokit`) | the in-process runtime (`streamAgentTurnInProcess`) | one import |
+| `tui/` | the terminal surface (this folder) | — |
+
+The surface never imports `ai` — `@theokit/tui` renders the conversation structurally; only theokit's runtime touches the stream.
+
+### Extension points
+
+- **Restyle** → `tui/theme.ts` (accent, banner wordmark/copy, spinner words, placeholder) — one file, no component edits.
+- **Rebrand** → `shared/agent.ts` (name · greeting · model label · contextWindow).
+- **Change behavior** → `agents/chat.ts` (model + system prompt).
+- **Delete the demos** → remove `tui/components/Demos.tsx`, the `<DemoSurface>` branch in `App.tsx`, the 4 demo entries in the `<ChatComposer commands>` list, and the `/plan|/ask|/select|/progress` cases in `handleSubmit`. Everything else keeps working.

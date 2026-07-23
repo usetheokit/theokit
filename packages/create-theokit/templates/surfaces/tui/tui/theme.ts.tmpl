@@ -1,0 +1,80 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *  tui/theme.ts — the ONE place to restyle your terminal UI.
+ *
+ *  Everything visual lives here: the accent color, the welcome-banner wordmark + copy, the "thinking"
+ *  words, and the input placeholder. Edit this file to rebrand — `tui/App.tsx` reads from it and never
+ *  needs touching for a restyle.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+import type { TheoThemeProp } from '@theokit/tui'
+
+/**
+ * The accent color — used for the banner, the `✻`/`⏺` markers, the box borders, and the `>` prompt.
+ * Any Ink color: a name (`'cyan'`, `'green'`, `'magenta'`) or a hex (`'#d97757'`, truecolor).
+ */
+export const ACCENT = '#d97757'
+
+/**
+ * The global `@theokit/tui` theme applied by `<TheoTUIProvider>`. Partial-merge: override only what you
+ * pass — everything else inherits the base theme. Uncomment a block below to restyle the bullets:
+ *
+ *   role: { assistant: { glyph: '▸ ' } },                              // the assistant message bullet
+ *   toolStatus: { success: { glyph: '◆' }, failed: { glyph: '✗' } },   // per-status tool bullets
+ */
+export const THEME: TheoThemeProp = {
+  base: 'dark', // 'dark' · 'light' · 'no-color'
+  override: {
+    // Color is reserved for MEANING. The chrome — the assistant `⏺` bullet, the `>` prompt, and the input
+    // border — stays MONOCHROME (terminal default). Semantic colors (tool states: pending gray · running
+    // yellow · success green · failed red; and errors) keep their color. Set `accent: ACCENT` to tint the
+    // chrome, or give `role.*.prefix` a color name/hex to tint the bullets.
+    accent: '', // the input border (the banner uses ACCENT directly, so it always stays colored)
+    role: {
+      assistant: { prefix: '' }, // the assistant `⏺` bullet
+      user: { prefix: '' }, // the `>` prompt (conversation + input)
+    },
+    // toolStatus: { pending: { glyph: '○' }, success: { glyph: '●' }, failed: { glyph: '✗' } },
+  },
+}
+
+/**
+ * The wordmark at the top of the welcome banner (ASCII art). Swap it for your own — generate one with
+ * `npx figlet -f "ANSI Shadow" "YourApp"` — or set it to `''` to hide it. Use single-width glyphs so it
+ * renders on every terminal.
+ */
+export const LOGO = [
+  '████████╗██╗  ██╗███████╗ ██████╗',
+  '╚══██╔══╝██║  ██║██╔════╝██╔═══██╗',
+  '   ██║   ███████║█████╗  ██║   ██║',
+  '   ██║   ██╔══██║██╔══╝  ██║   ██║',
+  '   ██║   ██║  ██║███████╗╚██████╔╝',
+  '   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ',
+].join('\n')
+
+/** The welcome banner's right column (shown on wide terminals). One string per line. */
+export const BANNER_TIPS = [
+  'Ask me anything — I stream a reply',
+  '/help  ·  @ mention a file  ·  esc interrupts',
+]
+export const BANNER_WHATS_NEW = ['Human-in-the-loop approvals', 'Live token usage in the footer']
+
+/** Whimsical words the "thinking" spinner cycles through while the agent works. */
+export const THINKING_PHRASES = [
+  'Thinking',
+  'Pondering',
+  'Noodling',
+  'Percolating',
+  'Baking',
+  'Brewing',
+  'Simmering',
+  'Conjuring',
+  'Musing',
+  'Marinating',
+]
+
+/** The dim placeholder shown in the empty input box. */
+export const PLACEHOLDER = 'Ask {{name}} anything…'
+
+/** Below this terminal width the welcome banner collapses from two columns to one. */
+export const WIDE_COLS = 90

@@ -24,6 +24,10 @@ import type { ReasoningEffort } from '../types.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import {
+  compileAgentDefinition,
+  type AgentDefinition as TheokitAgentDefinition,
+} from './define-agent.js'
+import {
   translateInteractionUpdate,
   translateSdkEvent,
   type SdkMessage,
@@ -38,9 +42,21 @@ import { stripToolDialectStream } from './tool-dialect-stripper.js'
  * one object (rather than positional params) so the per-request surface can grow without
  * a parameter explosion. Each field is Axis-A SWAP — a value the app holds at call time.
  */
+/**
+ * A multimodal image for a send turn — the SDK's `SDKImage` shape, typed locally because `@theokit/sdk`
+ * is an optional peer (dynamic import). Either a URL or inline base64 `{ data, mimeType }`.
+ */
+export type BridgeImage = { url: string } | { data: string; mimeType: string }
+
 export interface RuntimeOverrides {
   /** Overrides the model for this call (`?? compiled.model ?? default`). */
   model?: string
+  /**
+   * M35 (multimodal) — images to send alongside the text. When present, the SDK send switches from the
+   * plain-string form to the structured `{ text, images }` form (`SDKUserMessage`). Absent ⇒ the
+   * string path is byte-unchanged (back-compat).
+   */
+  images?: readonly BridgeImage[]
   /**
    * Per-run extended-thinking effort (`?? compiled.reasoningEffort`). Mapped to the SDK
    * `ModelSelection.params` so the provider produces reasoning (surfaced as `thinking` StreamEvents).
@@ -126,7 +142,16 @@ function buildExtraCreateOptions(
   const recoverLeakedToolCalls =
     overrides.recoverLeakedToolCalls ?? compiled.recoverLeakedToolCalls ?? false
   const extra: Record<string, unknown> = {}
-  if (overrides.plugins !== undefined) extra.plugins = overrides.plugins
+  // A per-run plugin override (e.g. the HITL gate) must NOT silently drop the agent's own code plugins:
+  // `extra` is spread AFTER the assembled options, so a bare assignment clobbered `compiled.plugins`
+  // and every `createToolHooksPlugin` hook was lost whenever HITL was active. Concatenate when both
+  // sides are arrays; keep the previous replace semantics for the legacy `{ enabled }` object form.
+  if (overrides.plugins !== undefined) {
+    extra.plugins =
+      Array.isArray(overrides.plugins) && Array.isArray(compiled.plugins)
+        ? [...compiled.plugins, ...overrides.plugins]
+        : overrides.plugins
+  }
   if (overrides.providers !== undefined) {
     extra.providers = recoverLeakedToolCalls
       ? withLeakedDialectRecovery(overrides.providers)
@@ -326,6 +351,13 @@ async function* mergeDeltaStream(
   })().catch((thrown: unknown) => {
     pumpError = { thrown }
   })
+  // #47-followup — stream ALL deltas (text / tool / thinking) LIVE in arrival order. The tool
+  // lifecycle (`tool-call-started` + `tool-call-completed`) is now emitted via `onDelta` from the SDK's
+  // tool-dispatch, which runs BETWEEN LLM rounds — so a tool call and its result arrive in the queue at
+  // their true chronological position, BEFORE the post-tool answer text. That removes the need to HOLD
+  // the answer (the earlier #47 fix), which had regressed text-ONLY turns to batch-at-completion. The
+  // `run.stream()` (pump) replay of the same tool call/result is deduped by callId (`isDuplicatedByDelta`
+  // + the sink's `emittedTool*Ids`), so nothing double-renders and text streams token-by-token again.
   for await (const item of queue) {
     if (item.kind === 'delta') {
       yield item.event
@@ -645,7 +677,13 @@ async function* streamSdkAgent(
     const { state, onDelta } = createDeltaSink(queue)
     const sendOptions: SendOptions = { onDelta }
     if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
-    const sendPromise = agent.send(message, sendOptions)
+    // M35 — when images are present, use the SDK's structured `SDKUserMessage { text, images }` form so
+    // the model receives them alongside the text; otherwise the plain-string form is unchanged (back-compat).
+    const sendInput =
+      overrides.images && overrides.images.length > 0
+        ? { text: message, images: overrides.images }
+        : message
+    const sendPromise = agent.send(sendInput as typeof message, sendOptions)
     const openStream = async () => (await sendPromise).stream()
     const merged = mergeDeltaStream(queue, openStream, runId, state)
     for await (const event of applyTextTransforms(merged, { parseThinkTags, stripToolDialect })) {
@@ -657,5 +695,72 @@ async function* streamSdkAgent(
     }
   } finally {
     await agent.dispose()
+  }
+}
+
+/**
+ * The minimal `SDKAgent` surface a serving host needs (ACP checks `agentId: string` + `send: fn`).
+ * `Agent.getOrCreate` returns the real SDK agent — this alias just types what {@link toAgentFactory}
+ * hands back without re-exporting the full `@theokit/sdk` `Agent` type.
+ */
+export interface SdkAgentHandle {
+  readonly agentId: string
+  send: (msg: string, opts?: unknown) => unknown
+  dispose: () => Promise<void>
+}
+
+/**
+ * #12 — bridge a builder/`defineAgent` {@link TheokitAgentDefinition} to a real `SDKAgent` FACTORY,
+ * so surfaces that require an `SDKAgent` (or `(sessionId) => SDKAgent`) — notably `theokit acp`,
+ * whose entry default-export must be one — can serve an agent defined with the `agent()` chain.
+ *
+ * The factory reuses the SAME projection the streaming path uses (`compileAgentDefinition` → tools /
+ * model / `assembleM8CreateOptions`), so the served agent has identical tools, model, system prompt,
+ * skills, and `mcpServers`. Keyed per `sessionId` via `Agent.getOrCreate` (matches the run path).
+ *
+ * NOTE: HITL approvals (`.approval(...)`) are driven by the framework's streaming runner, not by
+ * `Agent.create`; a raw `SDKAgent` from this factory does not auto-pause gated tools — the serving
+ * surface (e.g. the ACP client) owns approval. Tools still execute; they are simply not HITL-gated here.
+ */
+export function toAgentFactory(
+  def: TheokitAgentDefinition,
+  opts: { apiKey: string; overrides?: RuntimeOverrides },
+): (sessionId: string) => Promise<SdkAgentHandle> {
+  const compiled = compileAgentDefinition(def)
+  const overrides = opts.overrides ?? {}
+  const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
+  const reasoningEffort = overrides.reasoningEffort ?? compiled.reasoningEffort
+  const runContext = overrides.runContext ?? compiled.runContext
+  return async (sessionId: string): Promise<SdkAgentHandle> => {
+    const rt = await loadSdkRuntime()
+    if (!rt) {
+      throw new Error(
+        '[@theokit/agents] @theokit/sdk is not installed — run: pnpm add @theokit/sdk',
+      )
+    }
+    const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
+    // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream) so an inline skill's
+    // body stays reachable to the model when this factory serves the agent.
+    const inlineSkills = compiled.skills?.inline
+    if (
+      inlineSkills !== undefined &&
+      inlineSkills.length > 0 &&
+      rt.defineSkillReadTool !== undefined &&
+      !compiled.tools.some((t) => t.name === 'skill_read')
+    ) {
+      sdkTools.push(rt.defineSkillReadTool(inlineSkills))
+    }
+    const { options: m8 } = assembleM8CreateOptions(compiled)
+    if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
+    if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
+    const extra = buildExtraCreateOptions(overrides, compiled)
+    const agent = await rt.Agent.getOrCreate(sessionId, {
+      apiKey: opts.apiKey,
+      model: buildModelSelection(model, reasoningEffort),
+      tools: sdkTools,
+      ...m8,
+      ...extra,
+    })
+    return agent as unknown as SdkAgentHandle
   }
 }
