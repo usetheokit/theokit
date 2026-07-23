@@ -124,12 +124,52 @@ proof that one review pass is not enough when the fixes are non-trivial:
 
 | # | Defect the FIXES introduced | Fix |
 |---|---|---|
-| R2 | The accumulate fix concatenated blindly, so composing `skills(['a'])` twice MANUFACTURED `['a','a']` — a waist state the reference never emits for that input. The V3 regression asserting "no throw" had also become vacuous, since skills no longer routes through `setOnce`. | `enabled` is deduped; a dedicated test asserts no duplicate is manufactured. |
+| R2 | The review claimed the accumulate fix "manufactured" a duplicate by concatenating. **REVERTED — the review was wrong and I accepted it without checking.** See § The dedupe reversal below. | Concat restored; three equivalence correspondences pinned as tests. |
 | R3 | The conflict message `JSON.stringify`d both values — leaking MCP tokens / auth headers from a config-file-built draft, 60 lines from the V5 rule that says report the shape, never the content. | The message reports `shapeOf(value)` (type, arity, key names). Regression test asserts a planted secret never appears. |
 | R3b | `setOnce(field, undefined)` silently consumed the slot. | `undefined` is a no-op. |
 | R4 | The V5 validation accepted only strings, rejecting the `InlineSkill` objects `compileSkillsSelection` accepts — making the layer strictly LESS expressive than the path it claims equivalence with. | Accepts `string \| InlineSkill`; regression test covers a mixed array. |
 | R5 | The gap pin was structurally incapable of failing: it unioned its own answer into the question, derived the universe from the NON-deleted compiler, missed `parseThinkTags`/`stripToolDialect`/`recoverLeakedToolCalls`, and falsely listed `skillsResolver` as expressible. | Universe is now the waist TYPE (`satisfies keyof CompiledAgentOptions` + a compile-time exhaustiveness check, so a new field cannot go unclassified); `expressible` is derived by applying every capability. **Verified failing in both directions**: a fabricated field fails the assertion, and omitting a real gap field fails two tests. |
 | R6 | The live proof was executed by nothing and did not even typecheck. | It is a `*.test.ts` under a dedicated `test:live` target (kept out of the deterministic suite per `rules/testing.md` § 3, since it hits a real provider) and is typechecked by the root tsconfig. |
+
+### The dedupe reversal (a fix that was itself the defect)
+
+Round 2 added a dedupe to `skills`. Probing it against the reference showed the dedupe was the ONLY
+remaining divergence in the whole milestone:
+
+```
+single capability : cap ['a','a']  ≡ ref ['a','a']   ✅
+merged capabilities: cap ['a','b'] vs ref ['a','a','b'] ❌  (dedupe collapsed the author's own duplicate)
+```
+
+The faithful rule is that **the capability list IS the authoring list, concatenated in order**:
+`skills(['a']) + skills(['a'])` corresponds to authoring `['a','a']`, which the reference maps to
+`['a','a']`. Under that rule nothing is "manufactured" — the duplicate is what the author wrote.
+Dedupe looks tidier and is behaviorally harmless, but it breaks the milestone's one contract
+(zero behavior change), so it was removed and the three correspondences are now pinned as tests
+(`capability.test.ts § the capability list IS the authoring list`).
+
+Lesson recorded because it cost a round: an adversarial review finding is a hypothesis to VERIFY,
+not an instruction to obey. Round 2's fix was applied without first measuring the claim.
+
+### Inline-skill validation had a hole one level down
+
+`skills([{ name: 'x' }])` was accepted. `InlineSkill extends Skill` requires `name`, `description`
+AND `instructions` (`@theokit/sdk` `create-skill.d.ts` + `internal/runtime/skills/discover-skills.d.ts`),
+so a malformed inline skill reached the `<skills>` system-prompt block with `undefined` fields —
+the silent-corruption class the boundary validation exists to stop, reopened below the array check.
+Now all three fields are required; the message names the missing FIELD, never the value.
+
+## DoD deviations (recorded, not hidden)
+
+The M52 DoD asks for `AgentSpecDraft` + `SdkAgentAdapter` and the trio `model`/`tools`/`sandbox`.
+Two deliberate deviations:
+
+1. **`AgentSpecDraft` / `SdkAgentAdapter` were REUSED, not created** — `CompiledAgentOptionsDraft` +
+   `assembleM8CreateOptions` already exist (ADR § 1). Creating them would have been the third
+   representation this milestone exists to eliminate.
+2. **`sandbox` is not a field of `CompiledAgentOptions`** — there is nothing to set. `skills` took
+   its place as the third capability. Adding a `sandbox` field would be a behavior change, the
+   opposite of the milestone's contract.
 
 Honest residue: `setOnce`'s deep equality compares FUNCTIONS by identity, so fields carrying
 functions stay identity-idempotent rather than value-idempotent. That asymmetry is now stated at
