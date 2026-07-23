@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Roadmap: presentation layer (M49–M51).** New milestones to make theokit the named adaptation/presentation boundary between `@theokit/sdk` and every UI surface: a new `@theokit/presenter` package with a canonical `AgentOutputEvent`, a `Presenter` Strategy contract + registry, and three presenters (`UIMessageStream` web, `Terminal` ANSI, `Json` API) sourced from ONE canonical event — closing the terminal/web translation duplication surfaced by dogfooding agent-builder. Multi-protocol Ports (PTY/WS input) are a documented, YAGNI-deferred future track behind an OCP seam. Discover blueprint at `knowledge-base/discoveries/blueprints/multi-surface-presentation-layer-blueprint.md`.
+
 ### Changed
 - **`create-theokit` `--surface desktop`: title-bar polish + cross-platform release CI.** Fixes invisible theme colors (the app wrapped `@theokit/ui` `oklch()` vars in invalid `hsl(var()/a)` → transparent; now `var()`/`color-mix`), ships a slim `--muted` title-bar band, window controls with `:hover` (red close), a cleaner app-name title, and a `.github/workflows/release.yml` native-runner matrix (macOS Intel+Apple Silicon, Ubuntu x64+arm64, Windows) that builds installers via `tauri-action` — the documented best practice since Tauri can't cross-compile between OSes.
 
