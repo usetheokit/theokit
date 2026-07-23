@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **Capability core for agent authoring (M52).** `@theokit/agents` gains `Capability` — a two-member contract (`name`, `apply`) that enriches the EXISTING `CompiledAgentOptions` waist instead of inventing a parallel representation. Ships `ModelCapability`/`ToolsCapability`/`skills()`, a `CapabilityRegistry` (unlocks declaring an agent from a config FILE, not only from code), `CapabilityPreset` (a preset behaves as one capability), typed fail-fast conflicts (`CapabilityConflictError` — decorators silently let the last write win), and `provenance` so composition is auditable. A zero-behavior proof asserts the capability path is deep-equal to the existing `defineAgent` path at the waist AND through the shared `Agent.create` adapter — including via the file/registry route. Patterns budget (13 adopted / 8 refused, each justified) recorded in `knowledge-base/adrs/0001-capability-patterns-budget.md`.
+
+### Added
 - **Roadmap: capability-based agent authoring, decorators removed (M52-M53).** `@theokit/agents` moves from a metadata/decorator-driven pipeline to an object-oriented, capability-based one: a canonical `AgentSpec` (the narrow waist between authoring and runtime), a `Capability` contract (Strategy + value-level Decorator), a registry (unlocks file-based authoring), presets (Composite) and an `SdkAgentAdapter` — then an ATOMIC migration + removal of the agent decorators (major, no `reflect-metadata`, no deprecation window — backward compat was waived, so a decorator kept as a wrapper would be code written to be deleted), proven by repointing the existing suite unchanged. The `@theokit/http` **controller** decorators are explicitly out of scope and stay. Design spike at `knowledge-base/discoveries/blueprints/capability-oo-design-spike.md`.
 
 ### Added
