@@ -50,17 +50,131 @@ describe('applySurface (M45)', () => {
 
     expect(existsSync(join(targetDir, 'tui/main.tsx'))).toBe(true)
     expect(existsSync(join(targetDir, 'tui/App.tsx'))).toBe(true)
+    // `npm run demo:tools` — a visual reference of every tool render state (renders AgentTimeline via the
+    // same messagesToAgentEvents path, using tui/theme.ts). No agent/LLM needed.
+    expect(existsSync(join(targetDir, 'tui/tool-variations.tsx'))).toBe(true)
+    const demo = read('tui/tool-variations.tsx')
+    expect(demo).toContain('AgentTimeline')
+    expect(demo).toContain('messagesToAgentEvents')
+    expect(demo).toContain("from './theme.js'")
+    expect(demo).toContain('output-error') // the failed-tool state is exercised
 
     // ADR-0054 D2 — the unified client, NOT the raw seam consumption.
     const app = read('tui/App.tsx')
     expect(app).toContain('InProcessTransport')
     expect(app).toContain('useAgent')
     expect(app).toContain('streamAgentTurnInProcess')
-    expect(app).toContain('my-tui') // {{name}} substituted
-    // M46: renders with @theokit/tui via the ai-sdk UIMessage adapter (Step A).
+    expect(read('tui/components/Banner.tsx')).toContain('my-tui') // {{name}} substituted (name lives in Banner)
+    // Claude-Code render + AI-FREE: `<AgentTimeline>` (Markdown + tool cards) fed by `messagesToAgentEvents`
+    // (the ai-free projection from `@theokit/tui`), NOT `<ChatThread>`/`@theokit/tui/ai-sdk`/`ai`.
     expect(app).toContain("from '@theokit/tui'")
-    expect(app).toContain('ChatThread')
-    expect(app).toContain('uiMessagesToChatThread')
+    expect(app).toContain('AgentTimeline')
+    expect(app).toContain('messagesToAgentEvents')
+    // Footer telemetry: the two-line StatusFooter shows real context usage from the last turn's usage
+    // (readTurnUsage over `agent.thread`), against the app-declared context window.
+    expect(app).toContain('readTurnUsage')
+    expect(app).toContain('AGENT.contextWindow')
+    // Global style lives in ONE editable file `tui/theme.ts` (the DX win): accent, banner wordmark + copy,
+    // spinner words, placeholder. The App imports it and never needs touching for a restyle.
+    const theme = read('tui/theme.ts')
+    expect(theme).toContain('#d97757') // Claude Code's coral accent
+    expect(theme).toContain('export const ACCENT')
+    expect(theme).toContain('export const THEME')
+    expect(theme).toContain('export const LOGO')
+    expect(theme).toContain('export const THINKING_PHRASES')
+    expect(theme).toContain('export const PLACEHOLDER')
+    // Monochrome-by-default chrome: color is reserved for meaning (tool states/errors keep it).
+    expect(theme).toContain("accent: ''")
+    expect(theme).toContain("assistant: { prefix: '' }")
+    expect(theme).toContain('export const BANNER_TIPS')
+    expect(app).toContain("from './theme.js'")
+    // Componentized surface (create-theokit@1.23.0): App.tsx is the composition root; Banner / UsagePanel /
+    // Demos live under tui/components/*. App imports the three children and composes them under <Stack>.
+    expect(app).toContain("from './components/Banner.js'")
+    expect(app).toContain("from './components/UsagePanel.js'")
+    expect(app).toContain("from './components/Demos.js'")
+    expect(app).toContain('<Banner />')
+    expect(app).toContain('<UsagePanel')
+    expect(app).toContain('<DemoSurface')
+    expect(app).toContain('Stack')
+    // The moved surfaces are NO LONGER in App.tsx — they live in their component files (prevents regressing
+    // back to the monolith). Assert on code-shaped tokens so a documentary comment can't false-fail the guard.
+    expect(app).not.toContain('function Banner(')
+    expect(app).not.toContain('<PlanApproval')
+    expect(app).not.toContain('<ContextWindowBar')
+    // App.tsx composition-root concerns stay here.
+    expect(app).toContain('THINKING_PHRASES')
+    expect(app).toContain('tokens={lastUsage?.totalTokens}')
+    expect(app).toContain('<Notice variant="error">')
+    expect(app).toContain('StatusFooter')
+    expect(app).toContain('tokenDirection="down"')
+    expect(app).toContain('Toast')
+    expect(app).toContain('KeyboardHelp')
+    expect(app).toContain('DEFAULT_COMPOSER_SHORTCUTS')
+    expect(app).toContain('onHelpToggle')
+    expect(app).toContain('exitArmed')
+    expect(app).toContain("name: 'progress'") // the demo slash commands are exposed in the composer palette
+    // HITL stays in the root: findPendingApproval → PermissionPrompt (numbered yes/no, decision === 'yes' →
+    // approve) settles via agent.approve; InkInputProvider bridges Ink stdin to the prompt.
+    expect(app).toContain('findPendingApproval')
+    expect(app).toContain('PermissionPrompt')
+    expect(app).toContain("decision === 'yes'")
+    expect(app).toContain('InkInputProvider')
+    expect(app).toContain('settleApproval')
+    expect(app).toContain('agent.approve(approvalId, { approved })')
+    expect(app).toContain('settledApprovals')
+    // Banner component (moved out of App.tsx): the Claude-Code two-column welcome box.
+    const banner = read('tui/components/Banner.tsx')
+    expect(banner).toContain('export function Banner()')
+    expect(banner).toContain('✻ Welcome to')
+    expect(banner).toContain('{LOGO}')
+    expect(banner).toContain('Tips for getting started')
+    expect(banner).toContain('What&apos;s new')
+    // UsagePanel component: the /usage observability trio, prop-driven from the real TurnUsage.
+    const usagePanel = read('tui/components/UsagePanel.tsx')
+    expect(usagePanel).toContain('usedTokens={usage.inputTokens}') // wired to REAL usage, not fake data
+    for (const sym of ['ContextWindowBar', 'TokenUsageChart', 'CostMeter']) {
+      expect(usagePanel).toContain(sym)
+    }
+    // Demos component: the deletable slash-command showcase — every interactive 0.40.0 surface lives here.
+    const demos = read('tui/components/Demos.tsx')
+    expect(demos).toContain('export function DemoSurface')
+    for (const sym of [
+      'PlanApproval',
+      'QuestionPrompt',
+      'SelectList',
+      'MultiStepProgress',
+      'ProgressActivity',
+      'ProgressBar',
+    ]) {
+      expect(demos).toContain(sym)
+    }
+    // @theokit/tui ^0.41.0 (#50): rows are tight by default; the `gap` opt-in is documented for users who
+    // want a blank line between items. (The default has no active `gap` prop — verified by live smoke.)
+    expect(demos).toContain('Add `gap={1}`')
+    // The Claude-Code friendly-spacing trick: the demo surface sits in a rounded, padded box so the GROUP
+    // breathes while menu rows stay tight inside (Claude Code doesn't space menu rows either — the box does it).
+    expect(demos).toContain('borderStyle="round"')
+    expect(demos).toContain('paddingY={1}')
+    // System Design ships with the surface (README-surface.md § Architecture).
+    const surfaceReadme = read('README-surface.md')
+    expect(surfaceReadme).toContain('## Architecture')
+    expect(surfaceReadme).toContain('components/Demos')
+    expect(surfaceReadme).toContain('useAgent')
+    // No `{{name}}` template placeholder leaks into ANY scaffolded tui file (substituteTmpls is recursive).
+    for (const f of [
+      'tui/App.tsx',
+      'tui/components/Banner.tsx',
+      'tui/components/UsagePanel.tsx',
+      'tui/components/Demos.tsx',
+    ]) {
+      expect(read(f)).not.toContain('{{name}}')
+    }
+    const main = read('tui/main.tsx')
+    expect(main).toContain('exitOnCtrlC: false')
+    expect(app).not.toContain('ChatThread')
+    expect(app).not.toContain('@theokit/tui/ai-sdk')
+    expect(app).not.toContain("from 'ai'")
     // M46 — the store owns the conversation: the template renders `useAgent().thread` directly (no
     // hand-rolled history/commit-once) and only prepends the warm greeting.
     expect(app).toContain('agent.thread')
@@ -71,14 +185,23 @@ describe('applySurface (M45)', () => {
       dependencies: Record<string, string>
       scripts: Record<string, string>
     }
-    expect(pkg.dependencies['@theokit/tui']).toBeDefined() // M46 renders the conversation
+    expect(pkg.dependencies['@theokit/tui']).toBe('^0.41.1') // M46 renders the conversation; #50 gap prop; 0.41.1 smaller ○/● checkbox
     expect(pkg.dependencies.ink).toBeDefined()
     // ink MUST be the React-19 line (^7) — ink@5 crashes on React 19 with `ReactCurrentOwner`, and the
     // default template pins react@19. Never regress below ^7 (found by dogfooding the TUI end-to-end).
     expect(pkg.dependencies.ink).toMatch(/\^?[7-9]/)
+    // figlet (WelcomeBanner ASCII) + lowlight (ChatMessage highlight) are @theokit/tui PEERS the app
+    // relies on. They MUST be declared: pnpm never auto-installs peers, so without these the scaffolded
+    // TUI crashes at boot under pnpm (found by dogfooding the TUI end-to-end on the @theokit/tui@0.31 bump).
+    expect(pkg.dependencies.figlet).toBeDefined()
+    expect(pkg.dependencies.lowlight).toBeDefined()
     expect(pkg.dependencies['@theokit/sdk']).toBeDefined() // agent runtime kept
     expect(pkg.dependencies['@theokit/ui']).toBeUndefined() // web-only dropped
+    // The tui's RENDER is ai-free (App.tsx imports no `ai`; see the App content assertions above), but `ai`
+    // stays DECLARED because theokit's in-process agent runtime (`streamAgentTurnInProcess`) imports it.
+    expect(pkg.dependencies.ai).toBeDefined()
     expect(pkg.scripts.dev).toContain('tui/main.tsx')
+    expect(pkg.scripts['demo:tools']).toBe('tsx tui/tool-variations.tsx')
 
     expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
     expect(existsSync(join(targetDir, 'tui/App.tsx.tmpl'))).toBe(false) // no leftover .tmpl
@@ -131,6 +254,18 @@ describe('applySurface (M45)', () => {
 
     expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
     expect(existsSync(join(targetDir, 'src-tauri/Cargo.toml.tmpl'))).toBe(false) // no leftover .tmpl
+
+    // Cross-platform release CI (macOS + Linux + Windows native runners — Tauri can't cross-compile).
+    const wf = read('.github/workflows/release.yml')
+    expect(wf).toContain('macos-latest')
+    expect(wf).toContain('ubuntu-22.04')
+    expect(wf).toContain('windows-latest')
+    expect(wf).toContain('tauri-apps/tauri-action')
+    expect(wf).toContain('my-desk-v__VERSION__') // {{name}} substituted in tagName
+    // GitHub Actions `${{ ... }}` MUST survive the {{name}} substitution (the substituter only
+    // replaces the literal `{{name}}` token, so `${{ matrix.platform }}` stays intact).
+    expect(wf).toContain('${{ matrix.platform }}')
+    expect(existsSync(join(targetDir, '.github/workflows/release.yml.tmpl'))).toBe(false) // no leftover .tmpl
 
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> }
     expect(pkg.dependencies['@theokit/ui']).toBeDefined() // M47 renders the webview

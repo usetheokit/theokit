@@ -1,5 +1,34 @@
 # @theokit/agents
 
+## 0.47.0
+
+### Minor Changes
+
+- 5793ec1: Capability core for agent authoring (M52). `@theokit/agents` gains `Capability` — a two-member contract (`name`, `apply`) that enriches the EXISTING `CompiledAgentOptions` waist instead of inventing a parallel representation. Ships `ModelCapability` / `ToolsCapability` / `skills()`, a `CapabilityRegistry` (which unlocks declaring an agent from a config FILE, not only from code), `CapabilityPreset` (a preset behaves as one capability), typed fail-fast conflicts (`CapabilityConflictError`, whose message reports a value's SHAPE and never its content, since a config-built draft can carry tokens), and `provenance` so composition is auditable.
+
+  Proven zero-behavior: the capability path is deep-equal to BOTH the `defineAgent` compiler and the decorator `compileAgent` — the artifact M53 deletes — at the waist and through the shared `Agent.create` projection, including via the file/registry route, and confirmed end-to-end against a real provider. The proof also pins the waist fields no capability expresses yet (derived from the type, with a compile-time exhaustiveness check, verified to fail on over-claim as loudly as on omission) — that list is M53's entry criterion.
+
+  The agent decorators are untouched in this release; they are removed in M53.
+
+## 0.45.0
+
+### Minor Changes
+
+- 70a4daa: Presentation layer (M49): new `@theokit/presenter` package — the canonical `AgentOutputEvent` (narrow-waist normalized event) + the `Presenter` Strategy contract + registry + `UIMessageStreamPresenter` (the web surface) + `fromSdk` source translator. `@theokit/agents` now composes its web `UIMessageStream` path over the shared presenter (`presentUIMessageStream`), replacing the inline `translateToUIMessageStream` (removed — the public export is now `presentUIMessageStream`). Behavior is byte-identical (the full existing web test corpus — unit + M1 E2E — passes unchanged against the new path). This closes the web/terminal translation duplication surfaced by dogfooding agent-builder; terminal/JSON presenters follow in M50/M51. No backward-compat shim (owner-approved clean break).
+
+## 0.44.5
+
+### Patch Changes
+
+- e38db92: Fix stream event order so tool events precede the final answer text. For providers whose `onDelta` reports text but not `tool-call-started` (e.g. gpt-5.4 via OpenRouter), tool events surface only via `run.stream()` (post-completion), so live onDelta text was emitted BEFORE the tool that produced it — even though the model is tool-first (verified against the raw provider response). The SDK adapter now holds `text_delta` and flushes it after the drained stream, so the timeline order matches the model's true chronology (tool → result → answer). Non-text deltas keep their live order; duplicate text stays deduped. Trade-off: on a text-only turn the answer is emitted at generation-complete rather than token-by-token.
+- 4cc200b: M35 (multimodal) — thread images through the bridge to `agent.send`. `StreamAgentOptions` and `RuntimeOverrides` gain an optional `images` field; when present the adapter sends the SDK's structured `SDKUserMessage { text, images }` form instead of a plain string, so the model receives images alongside the text. Absent ⇒ the string send path is byte-unchanged (back-compat). Zero new dependencies.
+
+## 0.43.0
+
+### Minor Changes
+
+- d398561: Surface per-turn usage on the streamed assistant message. `translateToUIMessageStream` now rides the turn's authoritative totals — `usage` (input/output/total + reasoning/cache buckets), `cost`, and `durationMs` — on the ai-sdk `finish` chunk's `messageMetadata`, so they reconstruct onto the client's assistant `UIMessage.metadata` (via `readUIMessageStream`) with no extra header or store wiring. A run that ends without a `done` event (error/abort) keeps a bare `finish` (no fabricated usage). New public type `AgentTurnMetadata`. This is what lets a surface (a TUI status bar, a web cost meter) show real tokens/cost for the turn it just streamed — previously the totals stopped at the server.
+
 ## 0.42.0
 
 ### Minor Changes

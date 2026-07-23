@@ -15,10 +15,11 @@
  *
  * PURE metadata (sdk-runtime.md / G2): the builder describes an agent, it NEVER calls an LLM.
  */
-import type { CustomTool, SettingSource } from '@theokit/sdk'
+import type { CustomTool, SettingSource, MemorySettings } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
+import type { McpServersMap } from '../decorators/mcp.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
 import type { ReasoningEffort } from '../types.js'
@@ -139,6 +140,47 @@ export interface AgentBuilder<
    */
   settingSources(sources: readonly SettingSource[]): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
+   * M49 — enable the SDK's durable memory for this agent (`.theokit/memory/` in the run cwd:
+   * `Remember:` capture with secret redaction, auto-injected recall, memory tools). Takes the SDK's
+   * `MemorySettings` verbatim — `{ enabled: true }` is the minimal opt-in.
+   */
+  memory(settings: MemorySettings): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
+   * Attach LIFECYCLE HOOKS in code, keyed by `HookName` — the builder-chain seam for intercepting
+   * the agent loop. `pre_tool_call` may VETO a tool by returning `{ block: true, message }` before
+   * it runs; the other events are observational.
+   *
+   * ```ts
+   * agent().hooks({
+   *   pre_tool_call: (c) => guard(c.name) ? undefined : { block: true, message: 'not allowed' },
+   *   on_session_start: () => log('session up'),
+   * })
+   * ```
+   *
+   * A hook is delivered internally as a code plugin, but that is TRANSPORT, not the contract — use
+   * this instead of hand-wrapping a plugin, so the caller expresses interception rather than
+   * assembling plumbing. Call once — a later call replaces the map. Composes with
+   * {@link AgentBuilder.plugins}: hooks and plugins are additive, not exclusive.
+   */
+  hooks(map: Readonly<Record<string, unknown>>): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
+   * Register code `Plugin` objects for this agent — the builder-chain equivalent of
+   * `Agent.create({ plugins })`. A plugin is an EXTENSION UNIT: it can register tools and commands,
+   * or supply a model provider / memory adapter (`kind: 'general' | 'model-provider' | 'memory'`).
+   *
+   * For lifecycle interception prefer {@link AgentBuilder.hooks} — a hook needs a plugin only as its
+   * transport, and `plugins()` makes the caller assemble that transport by hand. Reach for this when
+   * you genuinely have a plugin (a provider, a memory adapter, a tool-registering extension).
+   */
+  plugins(list: readonly unknown[]): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
+   * Declare MCP (Model Context Protocol) servers available to this agent — the builder-chain
+   * equivalent of the `@MCP` class decorator. Each key is a server name; the value is its config
+   * (`command` / `args` / `env` / `cwd`). Forwarded to `Agent.create({ mcpServers })`; the SDK owns
+   * MCP execution. Call once — a later call replaces the map.
+   */
+  mcp(servers: McpServersMap): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
    * Apply a reusable partial chain (Spring-Boot-style composition). `preset` receives the current
    * builder and returns an advanced one; its accumulated type-state flows through.
    */
@@ -180,6 +222,10 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     skills: (selection: SkillsSelection) => makeBuilder({ ...config, skills: selection }),
     settingSources: (sources: readonly SettingSource[]) =>
       makeBuilder({ ...config, settingSources: sources }),
+    memory: (settings: MemorySettings) => makeBuilder({ ...config, memory: settings }),
+    hooks: (map: Readonly<Record<string, unknown>>) => makeBuilder({ ...config, hooks: map }),
+    plugins: (list: readonly unknown[]) => makeBuilder({ ...config, plugins: list }),
+    mcp: (servers: McpServersMap) => makeBuilder({ ...config, mcpServers: servers }),
     use: (preset: (b: unknown) => unknown) => preset(runtime),
     build: () => defineAgent(config),
   }

@@ -32,7 +32,10 @@ const VALID_SURFACES = ['web', 'tui', 'desktop'] as const
 
 /**
  * Web-only deps dropped for the tui/desktop surfaces (they ship no web UI). `react-router` is NOT dropped
- * — `theokit` declares it a REQUIRED peer, so removing it breaks `npm install` (ERESOLVE).
+ * — `theokit` declares it a REQUIRED peer, so removing it breaks `npm install` (ERESOLVE). `ai` is NOT
+ * dropped either: although the tui's RENDER is ai-free (`@theokit/tui` + `messagesToAgentEvents`), theokit's
+ * in-process agent runtime (`streamAgentTurnInProcess` → the UIMessageStream protocol) imports `ai` at
+ * RUNTIME, so every surface that runs an agent must keep it installed.
  */
 const WEB_ONLY_DEPS = ['@theokit/ui', '@usetheo/ui', 'lucide-react'] as const
 const WEB_ONLY_DEV_DEPS = ['tailwindcss', '@tailwindcss/vite', 'tailwindcss-animate'] as const
@@ -55,14 +58,29 @@ interface SurfaceConfig {
 const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
   tui: {
     fragment: 'tui',
-    // `@theokit/tui` renders the conversation (`<ChatThread>` + the `./ai-sdk` UIMessage adapter). `ai` is
-    // the UIMessageStream type the unified client + adapter consume (was transitive via `@theokit/ui`, dropped
-    // for tui), so declare it explicitly. `ink@7` is the React-19 line (ink@5 crashes on React 19 with
-    // `ReactCurrentOwner` — the default template pins react@19; ink@6.0.0+ moved its peer to react>=19) and
-    // matches @theokit/tui's own ink@^7.1.0, so the app's `import 'ink'` dedupes to one React-19 ink.
-    deps: { '@theokit/tui': '^0.30.0', ink: '^7.1.0', ai: '^7.0.0' },
+    // `@theokit/tui` renders the conversation via `<AgentTimeline>` (Markdown + fenced code + collapsible
+    // tool cards — the Claude-Code render), projected from `useAgent().thread` by the ai-free
+    // `messagesToAgentEvents` (structural `UIMessageLike`) — so the TUI's own code + `@theokit/tui` never
+    // import `ai`. `ai` is still declared because theokit's in-process agent runtime
+    // (`streamAgentTurnInProcess` → the UIMessageStream protocol) imports it at RUNTIME. `ink@7` is the
+    // React-19 line (ink@5 crashes on React 19 with `ReactCurrentOwner`; the default template pins react@19;
+    // ink@6.0.0+ moved its peer to react>=19), matching @theokit/tui's own ink@^7.1.0 so the app's
+    // `import 'ink'` dedupes to one React-19 ink. `figlet` (banner ASCII) + `lowlight` (code highlight) are
+    // @theokit/tui PEERS the app relies on — declared so pnpm (which never auto-installs peers) resolves them.
+    deps: {
+      '@theokit/tui': '^0.41.1',
+      ink: '^7.1.0',
+      ai: '^7.0.0',
+      figlet: '^1.7.0',
+      lowlight: '^3.0.0',
+    },
     devDeps: { tsx: '^4.19.0' },
-    scripts: { dev: 'tsx tui/main.tsx', start: 'tsx tui/main.tsx' },
+    scripts: {
+      dev: 'tsx tui/main.tsx',
+      start: 'tsx tui/main.tsx',
+      // A visual reference of every tool render state (pending/running/success/failed/…) — no agent needed.
+      'demo:tools': 'tsx tui/tool-variations.tsx',
+    },
     tsconfigInclude: [
       'tui/**/*.ts',
       'tui/**/*.tsx',
@@ -81,7 +99,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     // matching the web template's versions. `@theokit/ui` components self-style via the precompiled sheet.
     deps: {
       '@theokit/ui': '^1.0.0',
-      '@usetheo/ui': '^0.14.0',
+      '@usetheo/ui': '^0.26.0',
       '@theokit/tauri': '^0.1.1',
       'lucide-react': '^0.469.0',
       ai: '^7.0.0',

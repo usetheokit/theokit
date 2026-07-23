@@ -82,28 +82,35 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     expect(has('index.html')).toBe(false)
     expect(noTmplLeftover()).toBe(true)
 
-    // Unified-client wiring (ADR-0054 D2) + M46 @theokit/tui rendering + {{name}}
+    // Unified-client wiring (ADR-0054 D2) + Claude-Code render via @theokit/tui + {{name}}
     const app = read('tui/App.tsx')
     for (const s of [
       'useAgent',
       'InProcessTransport',
       'streamAgentTurnInProcess',
-      'term-app',
-      // M46: renders with @theokit/tui via the ai-sdk UIMessage adapter (Step A)
+      // Claude-Code render: <AgentTimeline> (Markdown + tool cards) fed by the ai-free `messagesToAgentEvents`
       "from '@theokit/tui'",
-      'ChatThread',
-      "from '@theokit/tui/ai-sdk'",
-      'uiMessagesToChatThread',
+      'AgentTimeline',
+      'messagesToAgentEvents',
     ]) {
       expect(app).toContain(s)
     }
+    // Componentized (1.23.0): App composes tui/components/*; {{name}} is substituted in Banner.
+    expect(app).toContain("from './components/Demos.js'")
+    expect(read('tui/components/Banner.tsx')).toContain('term-app') // {{name}} substituted
+    // NOT the old text-only path, and the app source never imports `ai` directly.
+    expect(app).not.toContain('ChatThread')
+    expect(app).not.toContain("from '@theokit/tui/ai-sdk'")
+    expect(app).not.toContain("from 'ai'")
     expect(read('tui/main.tsx')).toContain("from './App.js'")
 
     // Deps: @theokit/tui + ink + ai added, agent runtime + theokit peers kept, UI-only removed
     const p = pkg()
-    expect(p.dependencies['@theokit/tui']).toBeDefined() // M46 — renders the conversation
+    expect(p.dependencies['@theokit/tui']).toBeDefined() // renders the conversation
     expect(p.dependencies.ink).toBeDefined()
-    expect(p.dependencies.ai).toBeDefined() // UIMessageStream reader (was transitive via @theokit/ui)
+    expect(p.dependencies.figlet).toBeDefined() // @theokit/tui banner peer (pnpm never auto-installs peers)
+    expect(p.dependencies.lowlight).toBeDefined() // @theokit/tui code-highlight peer
+    expect(p.dependencies.ai).toBeDefined() // theokit's in-process agent runtime imports it (render is ai-free)
     expect(p.dependencies['@theokit/sdk']).toBeDefined()
     expect(p.dependencies['@theokit/agents']).toBeDefined()
     expect(p.dependencies.react).toBeDefined()
