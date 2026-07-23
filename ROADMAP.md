@@ -1204,51 +1204,32 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 **Dependencies:** none blocking — M0–M51 `[x]`. Builds on the M49 narrow-waist precedent.
 
 **Top risks:**
-1. The capability model does not express something a decorator does today (e.g. `@Compaction`, `@Observability` semantics), forcing a leaky escape hatch. Mitigation: M52 covers only 3 capabilities and runs SIDE BY SIDE with the decorator path; the 1:1 migration audit is M53's gate, before any deletion.
+1. The capability model does not express something a decorator does today (e.g. `@Compaction`, `@Observability` semantics), forcing a leaky escape hatch. Mitigation: M52 covers only 3 capabilities; the 1:1 migration audit is M53's HARD gate, and M53 migrates + deletes atomically (no sugar layer, no deprecation window).
 2. `AgentSpec` over-fits the web pipeline and cannot serve Agent Builder's file-based authoring. Mitigation: the `CapabilityRegistry` (name → capability) is in M52's DoD precisely so the file-based path is proven at skeleton time, not retrofitted.
 
 ---
 
-### M53 — [ ] Migrate all 24 agent decorators → capabilities (1:1), repointing the existing suite unchanged
+### M53 — [ ] Remove the agent decorators COMPLETELY — migrate the remaining 21 + delete, atomically (major)
 
-> Added 2026-07-23 by `/roadmap-feature` (slug: `decorators-to-capabilities`). See CHANGELOG.
+> Added 2026-07-23 by `/roadmap-feature` (slug: `remove-agent-decorators`). **No deprecation window and no sugar layer** — the owner waived backward compatibility, so a decorator kept as a thin wrapper would be code written to be deleted next milestone (re-work) while every cost it imposes (`reflect-metadata`, `experimentalDecorators`, the ESLint ignores) stayed alive. The M49 precedent is the playbook: repoint the existing suite to the new implementation and delete the old one IN THE SAME milestone. **Scope guard:** the `@theokit/http` **controller** decorators (`@Controller`/`@Get`/`@Post`) are untouched. See CHANGELOG.
 
-**Objective:** Port every agent decorator (`@Agent`, `@Model`, `@Tool`, `@Sandbox`, `@Skills`, `@Memory`, `@Checkpoint`, `@Compaction`, `@ContextWindow`, `@Guardrails`, `@Hook`, `@HumanInTheLoop`, `@Mcp`, `@Observability`, `@Policies`, `@ProjectContext`, `@SubAgents`, `@EditFormat`, `@Gateway`, `@MainLoop`, `@Artifact`, `@Observable`, `@Mixin`, `@ApplyDecorators`) to a capability of equal behavior, and make the decorator a THIN sugar layer that delegates to the same capability — so the knowledge exists once (DRY) while the public decorator API still works during the deprecation window.
+**Objective:** Make `@theokit/agents` 100% capability-based in one atomic cut: port the remaining agent decorators to capabilities, repoint every decorator test to the capability path WITHOUT changing an expectation, then DELETE the decorator surface, the metadata walk, and the build-config coupling it forced.
 
 **Definition of done:**
-- [ ] A 1:1 audit table (`docs/agents/decorator-to-capability.md`) maps every decorator to its capability, with the semantic delta (if any) called out; a decorator with NO capability equivalent blocks the milestone.
-- [ ] Each decorator's implementation body is reduced to constructing + applying its capability (zero duplicated logic); `walk-agent-metadata` reads the capability list rather than re-deriving behavior.
-- [ ] **Zero behavior change (the oracle):** the existing ~57 decorator test files are REPOINTED to the capability path WITHOUT changing a single expectation, and stay green — the same technique that proved M49's web refactor.
-- [ ] `agent-compiler` compiles from `AgentSpec` only; a golden snapshot of `Agent.create` options for the fixture agents is byte-identical pre/post.
-- [ ] `pnpm test` / `typecheck` / `lint` / `check:direction` green.
+- [ ] A 1:1 audit table (`docs/agents/decorator-to-capability.md`) maps every one of the 24 decorators to its capability with any semantic delta called out; a decorator with NO capability equivalent BLOCKS the milestone (hard gate — an ADR decides keep-or-drop before code proceeds).
+- [ ] **Zero behavior change (the oracle):** the ~57 existing decorator test files are repointed to the capability path with **no expectation edited**, and stay green; a golden snapshot of `Agent.create` options for the fixture agents is byte-identical pre/post.
+- [ ] `packages/agents/src/decorators/` and `bridge/walk-agent-metadata.ts` DELETED; `grep -rE "@Agent\(|reflect-metadata" packages/agents/src` returns 0; `agent-compiler` compiles from `AgentSpec` only.
+- [ ] `@theokit/http/src/app.ts` no longer consumes agent decorators (controller decorators untouched); `reflect-metadata` dropped from `packages/agents` deps and `experimentalDecorators`/`emitDecoratorMetadata` removed from its tsconfig; the ESLint ignores that existed for decorator configs are removed.
+- [ ] `docs/agents/{guardrails,mcp,using-tools}.md` + `create-theokit` templates author agents with capabilities only; `MIGRATION.md` maps every removed decorator to its capability call + a codemod entry (SDK 2.0/3.0 precedent).
+- [ ] Full monorepo `pnpm test` / `typecheck` / `lint --max-warnings=0` / `check:direction` / `validate:publint` green; **major** bump for `@theokit/agents` with the breaking change in the changeset.
+- [ ] Dogfood: Agent Builder authors at least one real agent through the published capability API (proves the file-based/terminal path end-to-end).
 
 **Dependencies:** M52 (`[ ]`).
 
 **Top risks:**
-1. A decorator carries behavior that only works via class metadata (e.g. DI-scoped construction) and has no value-level equivalent. Mitigation: the audit table is a HARD gate — the milestone blocks rather than shipping a half-migrated surface; such a decorator gets an explicit ADR (keep, or drop with rationale).
-2. Repointing 57 test files hides a regression behind a mechanical edit. Mitigation: expectations MUST NOT change — only the import/entry-point; any expectation edit requires justification in the PR body.
-
----
-
-### M54 — [ ] Remove the agent decorators completely — capability-only surface, no `reflect-metadata` (major)
-
-> Added 2026-07-23 by `/roadmap-feature` (slug: `remove-agent-decorators`). See CHANGELOG.
-
-**Objective:** Delete the agent-decorator surface entirely so `@theokit/agents` is 100% capability-based: no `src/decorators/`, no metadata walk, no `experimentalDecorators` / `emitDecoratorMetadata` / `reflect-metadata` requirement for authoring an agent. This removes the build-config coupling that today forces the repo's own ESLint to ignore decorator configs, and makes the agent wiring inspectable as data (`spec.provenance`).
-
-**Definition of done:**
-- [ ] `packages/agents/src/decorators/` and `bridge/walk-agent-metadata.ts` are DELETED; `grep -rE "@Agent\(|reflect-metadata" packages/agents/src` returns 0.
-- [ ] `@theokit/http/src/app.ts` no longer consumes agent decorators (the **controller** decorators `@Controller`/`@Get`/`@Post` are untouched — locked scope guard); `packages/agents` drops `reflect-metadata` from deps and `experimentalDecorators`/`emitDecoratorMetadata` from its tsconfig where the agent surface no longer needs them.
-- [ ] The ESLint ignores added for decorator configs are removed (the tooling friction they existed for is gone).
-- [ ] `docs/agents/{guardrails,mcp,using-tools}.md` + the `create-theokit` templates author agents with capabilities only; a migration guide (`MIGRATION.md`) maps every removed decorator to its capability call.
-- [ ] Full monorepo `pnpm test` / `typecheck` / `lint` / `check:direction` / `validate:publint` green; **major** version bump for `@theokit/agents` with the breaking change documented in the changeset.
-- [ ] Agent Builder consumes the published capability API for at least one real capability (dogfood evidence that the file-based/terminal authoring path works end-to-end).
-
-**Dependencies:** M52, M53 (`[ ]`).
-
-**Top risks:**
-1. Downstream apps (fixtures, examples, `agent-saas`, external users) break on the major. Mitigation: M53 ships the capability path FIRST with decorators still working, so consumers migrate before the removal; `MIGRATION.md` + a codemod entry follow the SDK 2.0/3.0 precedent.
-2. Removing `experimentalDecorators` from a shared tsconfig breaks the HTTP controller decorators. Mitigation: the flag is removed ONLY where the agent surface owns it; `@theokit/http`'s controller path keeps its own decorator config (explicit scope guard, verified by that package's suite).
+1. A decorator carries behavior with no value-level equivalent (e.g. DI-scoped construction). Mitigation: the audit table is a HARD gate — the milestone blocks rather than shipping a half-migrated surface.
+2. Repointing 57 test files hides a regression behind a mechanical edit. Mitigation: expectations MUST NOT change — only the import/entry-point; any expectation edit requires explicit justification.
+3. Removing `experimentalDecorators` from a shared tsconfig breaks the HTTP controller decorators. Mitigation: the flag is removed ONLY where the agent surface owns it; `@theokit/http` keeps its own decorator config, verified by that package's suite.
 
 ---
 
