@@ -23,7 +23,7 @@ import type { AgentStreamEvent } from './agent-stream-events.js'
 import { compileAgentDefinition, isAgentDefinition } from './define-agent.js'
 import { createHitlPlugin, type HitlWiring } from './hitl-plugin.js'
 import { createSdkAgentStream, type RuntimeOverrides } from './sdk-adapter.js'
-import { translateToUIMessageStream } from './ui-message-stream-translator.js'
+import { presentUIMessageStream } from './present-ui-message-stream.js'
 import { walkAgentMetadata } from './walk-agent-metadata.js'
 
 /** Thrown when an `agents/` file default-exports neither a `defineAgent` value nor an `@Agent` class. */
@@ -259,5 +259,5 @@ export function streamAgentUIMessages(
   // don't retroactively promise a resume handle the agent never asked to advertise).
   const durableCheckpoint = compiled.checkpoint?.storage === 'filesystem'
   const events = durableCheckpoint ? appendCheckpointSaved(source, input.sessionId) : source
-  return translateToUIMessageStream(events, { textId })
+  return presentUIMessageStream(events, { textId })
 }
