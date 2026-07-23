@@ -5,16 +5,24 @@ import type { AgentOutputEvent } from './agent-output-event.js'
  * output (M49). Web (`UIMessageStream`), terminal (ANSI), and JSON API are peer implementations; each
  * consumes the SAME canonical event, so a source is translated once and every surface reuses it.
  *
- * A presenter is **per-event and pure**: `present(event)` returns zero or more output chunks. Statefulness
- * (e.g. a web stream's start/finish framing) is the presenter's own concern, kept behind this contract.
+ * The contract is **per-event, driven by the caller**: the host loops the event stream and calls
+ * `present(event)` for each, so it can INTERLEAVE a presenter's pure-output chunks with framework chunks
+ * (HITL approval, checkpoints, done-metadata — `@theokit/agents`) in true model order (ADR-4). Optional
+ * `start()` / `finish()` bracket the stream for stateful surfaces (the web stream's `start` framing and
+ * its open-block close + `finish`). A stateful presenter (web) holds its open-block state internally and
+ * is therefore instantiated **per stream**; stateless presenters (terminal/json) may be singletons.
  *
  * @public
  */
 export interface Presenter<TOut> {
   /** Stable surface key (`"ui-message-stream" | "terminal" | "json" | …`) — the registry resolves by it. */
   readonly surface: string
-  /** Translate one canonical event into zero or more surface chunks. */
+  /** Optional opening framing emitted once before any event (e.g. the web stream's `{ type: 'start' }`). */
+  start?(): TOut[]
+  /** Translate one canonical event into zero or more surface chunks (may maintain internal stream state). */
   present(event: AgentOutputEvent): TOut[]
+  /** Optional closing framing emitted once after the last event (e.g. close the open block + `finish`). */
+  finish?(): TOut[]
 }
 
 /** Thrown when a surface key is resolved but no presenter is registered for it (fail-fast, typed). */
