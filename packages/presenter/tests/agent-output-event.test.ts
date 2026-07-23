@@ -5,6 +5,7 @@ import {
   type AgentOutputEvent,
   isErrorEvent,
   isFinishEvent,
+  isPartialToolCallEvent,
   isReasoningEvent,
   isStatusEvent,
   isTextEvent,
@@ -14,11 +15,12 @@ import {
 
 // M49 T0.2 — the canonical event is the narrow waist. Each variant must construct + discriminate cleanly.
 describe('AgentOutputEvent (M49 — canonical narrow-waist event)', () => {
-  it('exposes exactly the 7 variant discriminants', () => {
+  it('exposes exactly the 8 variant discriminants', () => {
     expect([...AGENT_OUTPUT_EVENT_TYPES]).toEqual([
       'text',
       'reasoning',
       'tool-call',
+      'partial-tool-call',
       'tool-result',
       'error',
       'finish',
@@ -31,6 +33,12 @@ describe('AgentOutputEvent (M49 — canonical narrow-waist event)', () => {
       text: { type: 'text', text: 'hi' },
       reasoning: { type: 'reasoning', text: 'thinking' },
       'tool-call': { type: 'tool-call', callId: 'c1', name: 'grep', input: { q: 'x' } },
+      'partial-tool-call': {
+        type: 'partial-tool-call',
+        callId: 'c1',
+        name: 'grep',
+        input: { q: 'x' },
+      },
       'tool-result': { type: 'tool-result', callId: 'c1', name: 'grep', result: 'ok' },
       error: { type: 'error', message: 'boom', code: 'E_X' },
       finish: { type: 'finish', reason: 'stop', usage: { totalTokens: 42 } },
@@ -40,6 +48,7 @@ describe('AgentOutputEvent (M49 — canonical narrow-waist event)', () => {
       text: isTextEvent,
       reasoning: isReasoningEvent,
       'tool-call': isToolCallEvent,
+      'partial-tool-call': isPartialToolCallEvent,
       'tool-result': isToolResultEvent,
       error: isErrorEvent,
       finish: isFinishEvent,
