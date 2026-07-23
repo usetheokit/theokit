@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { compileAgentDefinition, defineAgent } from '../../src/bridge/define-agent.js'
+
 import {
   applyCapabilities,
   CapabilityConflictError,
@@ -171,17 +173,37 @@ describe('Registry + Preset (M52 T0.3)', () => {
  * six vectors). Each `it` reproduces a defect the FIXES introduced.
  */
 describe('Second-review regressions (M52)', () => {
-  it('composition never MANUFACTURES a duplicate skill the author never wrote', () => {
-    // The accumulate fix concatenated blindly: two capabilities each enabling 'a' produced
-    // ['a','a'] — a waist state the reference compiler never emits for that authoring input.
-    const draft = applyCapabilities([skills(['a']), skills(['a'])])
-    expect(draft.skills).toEqual({ enabled: ['a'], autoInject: true })
+  it('the capability list IS the authoring list — concat, matching the reference exactly', () => {
+    // A dedupe was tried here (a review asked for it) and REVERTED: it made the merge path the only
+    // place in this layer that diverges from the reference compiler. The faithful rule is that
+    // composing N capabilities corresponds to authoring their concatenation, in order.
+    const equivalent = (caps: Capability[], authored: string[]): void => {
+      expect(applyCapabilities(caps).skills).toEqual(
+        compileAgentDefinition(defineAgent({ skills: authored })).skills,
+      )
+    }
+    equivalent([skills(['a', 'a'])], ['a', 'a']) // author's own duplicate survives, as upstream
+    equivalent([skills(['a']), skills(['b'])], ['a', 'b']) // ordered concatenation
+    equivalent([skills(['a']), skills(['a'])], ['a', 'a']) // two capabilities ≡ authoring twice
+  })
+
+  it('a malformed inline skill is rejected — it would reach the system prompt with holes', () => {
+    // `InlineSkill extends Skill` requires name + description + instructions. Accepting `{name}`
+    // alone reopened the silent-corruption class one level below the array check.
+    expect(() => skills([{ name: 'x' } as never])).toThrow(ConfigurationError)
+    expect(() => skills([{ name: 'x', description: 'd' } as never])).toThrow(/instructions/)
+    expect(() => skills([{ name: 'x', description: 'd', instructions: '  ' } as never])).toThrow(
+      ConfigurationError,
+    )
+    expect(() =>
+      skills([{ name: 'x', description: 'd', instructions: 'body' } as never]),
+    ).not.toThrow()
   })
 
   it('inline skills are accepted — the layer must not be LESS expressive than the reference', () => {
     // `compileSkillsSelection` accepts `string | InlineSkill`; validating "strings only" made
     // `skills.inline` unreachable through capabilities.
-    const inline = { name: 'my-inline', description: 'd', content: 'c' }
+    const inline = { name: 'my-inline', description: 'd', instructions: 'body' }
     const draft = applyCapabilities([skills([inline as never, 'code-review'])])
     expect(draft.skills).toEqual({
       enabled: ['code-review'],
