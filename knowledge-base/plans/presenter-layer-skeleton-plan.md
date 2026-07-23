@@ -189,3 +189,10 @@ oráculo do zero-behavior. As assinaturas estão fixadas.
 - [ ] `UIMessageStreamPresenter` substitui o inline (clean break); callers ajustados.
 - [ ] Zero-behavior no path web: snapshot `UIMessageStream` idêntico + E2E M1 verde.
 - [ ] `pnpm test`/`typecheck`/`lint`/`check:direction`/`validate:publint` verdes; CHANGELOG atualizado.
+
+## ADR-4 — Split de concern (descoberto na implementação): AgentOutputEvent (puro) ⊂ AgentStreamEvent (framework)
+
+- **Achado:** o `AgentStreamEvent` real tem 15 variantes misturando output puro + HITL (approval) + checkpoints + devtools/HMR (artifact/state_update/file_edit) + lifecycle (iteration/run_started). É público e consumido por devtools (theo/devtools), sdk-adapter, agent-endpoint.
+- **Decisão:** `@theokit/presenter` possui `AgentOutputEvent` = SÓ o output puro (text/reasoning/tool-call/partial-tool-call/tool-result/error/finish/status) — o que terminal/json/API consomem (o fix real da duplicação). O `@theokit/agents` mantém `AgentStreamEvent = AgentOutputEvent | ApprovalRequired | CheckpointSaved | Artifact* | StateUpdate | FileEdit | Iteration | RunStarted` (estende o canônico com os extras de framework/devtools).
+- **Alternativas rejeitadas:** (a) realocar TODO o AgentStreamEvent p/ presenter — acoplaria apresentação a devtools/HMR (errado); (b) manter meu subset SEM reframe — o web perderia approval/checkpoint (não-zero-behavior). 
+- **Rationale:** variantes de output definidas UMA vez (presenter), reusadas pelo superset (DRY); camadas corretas (presenter = output puro; agents = framework). O web `UIMessageStreamPresenter` consome o superset; terminal/json consomem o narrow. Meu `AgentOutputEvent` commitado fica (+`partial-tool-call` adicionado).
