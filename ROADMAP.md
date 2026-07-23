@@ -1124,7 +1124,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
-### M49 — [ ] Presenter layer skeleton — `@theokit/presenter` canonical event + Strategy contract + web refactor (zero-behavior)
+### M49 — [x] Presenter layer skeleton — `@theokit/presenter` canonical event + Strategy contract + web refactor (zero-behavior)
 
 > Added 2026-07-23 by discover (blueprint: `knowledge-base/discoveries/blueprints/multi-surface-presentation-layer-blueprint.md`). Origin: dogfood learnings from agent-builder — the terminal re-implements the web translators. See CHANGELOG `[Unreleased] § Added`.
 
