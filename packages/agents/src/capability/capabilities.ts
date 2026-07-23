@@ -1,3 +1,5 @@
+import type { InlineSkill } from '@theokit/sdk'
+
 import type { CompiledTool } from '../bridge/agent-compiler.js'
 import { compileSkillsSelection } from '../bridge/define-agent.js'
 
@@ -60,17 +62,23 @@ export class ToolsCapability implements Capability {
  * Enables skills by name. FUNCTION, not class: it carries no behavior beyond assignment — a class here
  * would be ceremony (the honest counter-example to "everything must be a class").
  */
-export const skills = (names: readonly string[]): Capability => {
+export const skills = (entries: readonly (string | InlineSkill)[]): Capability => {
   // Boundary validation BEFORE anything spreads: a config file carrying `skills: "code-review"`
   // would otherwise spread into eleven single-character skill names and reach Agent.create with no
   // error at all — silent corruption, the worst failure mode for file-based authoring.
-  if (!Array.isArray(names)) {
-    throw new ConfigurationError(`skills: esperava array de nomes, recebi ${describe(names)}`)
+  if (!Array.isArray(entries)) {
+    throw new ConfigurationError(`skills: esperava array de nomes, recebi ${describe(entries)}`)
   }
-  for (const n of names) {
-    if (typeof n !== 'string' || n.trim().length === 0) {
+  for (const e of entries) {
+    // The reference compiler accepts `string | InlineSkill` (define-agent.ts § compileSkillsSelection);
+    // rejecting inline skills here would make this layer strictly LESS expressive than the path it
+    // claims equivalence with.
+    const isName = typeof e === 'string' && e.trim().length > 0
+    const isInline =
+      typeof e === 'object' && e !== null && typeof (e as InlineSkill).name === 'string'
+    if (!isName && !isInline) {
       throw new ConfigurationError(
-        `skills: nome inválido (${describe(n)}) — use strings não vazias`,
+        `skills: entrada inválida (${describe(e)}) — use um nome não vazio ou um skill inline com \`name\``,
       )
     }
   }
@@ -80,15 +88,13 @@ export const skills = (names: readonly string[]): Capability => {
       // DELEGA ao compilador canônico (não reimplementa): `autoInject`, skills inline e o caminho
       // resolver vivem numa fonte só — reimplementar aqui divergiria (foi o que a prova de
       // equivalência pegou).
-      const compiled = compileSkillsSelection([...names])
-      if (compiled.skillsResolver !== undefined) {
-        setOnce(draft, 'skillsResolver', compiled.skillsResolver, 'skills')
-        return
-      }
+      const compiled = compileSkillsSelection([...entries])
       if (compiled.skills === undefined) return
       // ACCUMULATES, never setOnce: skills is a merge-semantics field in the reference compiler
       // (`defineAgent({skills:['a','b']})` → `['a','b']`). With setOnce a preset's baseline skills
       // could never be extended at the call site — defeating the whole point of the Composite.
+      // DEDUPED: composition must never MANUFACTURE a duplicate the author never wrote (two
+      // capabilities each enabling 'a' means 'a' is enabled, not enabled twice).
       const previous = draft.skills
       draft.skills =
         previous === undefined
@@ -96,7 +102,12 @@ export const skills = (names: readonly string[]): Capability => {
           : {
               ...previous,
               ...compiled.skills,
-              enabled: [...(previous.enabled ?? []), ...(compiled.skills.enabled ?? [])],
+              enabled: [
+                ...new Set([...(previous.enabled ?? []), ...(compiled.skills.enabled ?? [])]),
+              ],
+              ...(previous.inline !== undefined || compiled.skills.inline !== undefined
+                ? { inline: [...(previous.inline ?? []), ...(compiled.skills.inline ?? [])] }
+                : {}),
             }
       draft.provenance.push({ capability: 'skills', contributed: ['skills'] })
     },
