@@ -1147,7 +1147,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
-### M50 — [ ] `TerminalPresenter` (ANSI) — single source for terminal output; kill the tui/agent-builder duplication
+### M50 — [x] `TerminalPresenter` (ANSI) — single source for terminal output; kill the tui/agent-builder duplication
 
 > Added 2026-07-23 by discover. Origin: agent-builder's `tui/*` + `@theokit/tui` re-implement the terminal translation. See CHANGELOG.
 
@@ -1168,7 +1168,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
-### M51 — [ ] `JsonPresenter` (API) — third surface proves generality; documented Ports track (YAGNI-deferred)
+### M51 — [x] `JsonPresenter` (API) — third surface proves generality; documented Ports track (YAGNI-deferred)
 
 > Added 2026-07-23 by discover. See CHANGELOG.
 
