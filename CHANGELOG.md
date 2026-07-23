@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **Terminal + JSON surfaces on the presentation layer (M50/M51).** `@theokit/presenter` now ships `TerminalPresenter` (canonical event → semantic terminal rows, ANSI opt-in — format separated from render) and `JsonPresenter` (namespaced machine-readable records), joining the web `UIMessageStreamPresenter`. One agent run drives all three surfaces from the SAME canonical `AgentOutputEvent` — no surface re-translates the SDK. Proven live against a real agent run (terminal rows + JSON records from one stream).
+
+### Added
 - **Roadmap: presentation layer (M49–M51).** New milestones to make theokit the named adaptation/presentation boundary between `@theokit/sdk` and every UI surface: a new `@theokit/presenter` package with a canonical `AgentOutputEvent`, a `Presenter` Strategy contract + registry, and three presenters (`UIMessageStream` web, `Terminal` ANSI, `Json` API) sourced from ONE canonical event — closing the terminal/web translation duplication surfaced by dogfooding agent-builder. Multi-protocol Ports (PTY/WS input) are a documented, YAGNI-deferred future track behind an OCP seam. Discover blueprint at `knowledge-base/discoveries/blueprints/multi-surface-presentation-layer-blueprint.md`.
 
 ### Changed
