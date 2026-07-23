@@ -1,5 +1,12 @@
 # theo
 
+## 0.43.9
+
+### Patch Changes
+
+- Updated dependencies [5793ec1]
+  - @theokit/agents@0.47.0
+
 ## 0.43.8
 
 ### Patch Changes
