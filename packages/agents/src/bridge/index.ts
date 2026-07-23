@@ -71,7 +71,7 @@ export {
   type Segment,
 } from './think-tag-extractor.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
-export { translateToUIMessageStream } from './ui-message-stream-translator.js'
+export { presentUIMessageStream } from './present-ui-message-stream.js'
 // M31 builder-only: `agent()` (below) is the public authoring surface; `defineAgent` is now
 // internal (the agent() builder's `.build()` delegates to it via source path), removed from the
 // public API. `compileAgentDefinition` + the branded types stay public (the framework adapter

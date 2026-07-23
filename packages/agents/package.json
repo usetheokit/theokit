@@ -55,7 +55,8 @@
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.6",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@theokit/presenter": "workspace:*"
   },
   "engines": {
     "node": ">=22.12.0"
