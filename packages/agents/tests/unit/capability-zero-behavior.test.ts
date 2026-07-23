@@ -9,6 +9,22 @@ import { MainLoop } from '../../src/decorators/main-loop.js'
 import { Skills } from '../../src/decorators/skills.js'
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
+import {
+  AgentConfigCapability,
+  checkpoint,
+  contextWindow,
+  guardrails,
+  humanInTheLoop,
+  MainLoopCapability,
+  mcpServers,
+  memory,
+  plugins,
+  projectContext,
+  runContext,
+  settingSources,
+  skillsResolver,
+  subAgents,
+} from '../../src/capability/agent-capabilities.js'
 import { ModelCapability, skills, ToolsCapability } from '../../src/capability/capabilities.js'
 import { CapabilityRegistry } from '../../src/capability/registry.js'
 
@@ -68,29 +84,13 @@ type _Exhaustive =
 const WAIST_FIELDS_ARE_EXHAUSTIVE: _Exhaustive = true
 
 /**
- * Waist fields NO capability can express yet. Every one must gain a capability (or an ADR dropping
- * it) before M53 may delete `src/decorators/`. `satisfies` makes a fabricated name a compile error;
- * the assertion below is exact set equality, so an over-claim fails just as loudly as an omission.
+ * Waist fields NO capability can express — EMPTY since M53 § A landed the remaining twelve. This
+ * being empty IS M53's entry criterion: the decorator source may only be deleted when nothing it
+ * produces is left without a replacement. The assertion is exact set equality, so if a capability
+ * ever stops producing its field the gap reappears and the test fails; `satisfies` makes a
+ * fabricated name a compile error.
  */
-const NOT_EXPRESSIBLE_YET = [
-  'parseThinkTags',
-  'stripToolDialect',
-  'recoverLeakedToolCalls',
-  'systemPrompt',
-  'settingSources',
-  'plugins',
-  'memory',
-  'context',
-  'runContext',
-  'projectContext',
-  'mcpServers',
-  'maxIterations',
-  'timeoutMs',
-  'hitl',
-  'checkpoint',
-  'guardrails',
-  'skillsResolver',
-] as const satisfies readonly WaistField[]
+const NOT_EXPRESSIBLE_YET = [] as const satisfies readonly WaistField[]
 
 /** The draft carries `provenance` (new diagnostics) — not part of the waist, so it is stripped. */
 function waistOf(draft: Record<string, unknown>): Record<string, unknown> {
@@ -184,6 +184,26 @@ describe('capability path vs the DECORATOR path (the artifact M53 deletes)', () 
       new ModelCapability('openai/gpt-5.4', 'high'),
       new ToolsCapability([{ name: 't' } as never]),
       skills(['a']),
+      new AgentConfigCapability({
+        systemPrompt: 's',
+        parseThinkTags: true,
+        stripToolDialect: true,
+        recoverLeakedToolCalls: true,
+        stream: true,
+      }),
+      new MainLoopCapability({ maxIterations: 1, timeoutMs: 1 }),
+      memory({ provider: 'mem0' } as never),
+      contextWindow({ maxTokens: 1 } as never),
+      projectContext({ enabled: true } as never),
+      mcpServers({} as never),
+      guardrails([] as never),
+      checkpoint({ storage: 'memory' } as never),
+      humanInTheLoop(new Map() as never),
+      subAgents({ c: {} } as never),
+      settingSources([] as never),
+      plugins([] as never),
+      runContext({} as never),
+      skillsResolver((() => []) as never),
     ])
     const expressible = new Set(Object.keys(everything).filter((k) => k !== 'provenance'))
     const gap = WAIST_FIELDS.filter((f) => !expressible.has(f))
@@ -193,7 +213,11 @@ describe('capability path vs the DECORATOR path (the artifact M53 deletes)', () 
     )
   })
 
-  it('the decorator compiler DOES emit fields no capability expresses — the deletion is not free', () => {
+  it('the decorator compiler emits NOTHING the capability layer cannot express (M53 entry criterion)', () => {
+    // The inverse of what this test asserted before M53 § A: back then the decorator path emitted
+    // six fields no capability could produce, and deleting `src/decorators/` would have removed
+    // authoring surface. Now every field it emits has a capability — which is exactly the condition
+    // the ADR set for the deletion to be safe.
     @DecoratorAgent({
       name: 'rich',
       route: '/rich',
@@ -211,24 +235,14 @@ describe('capability path vs the DECORATOR path (the artifact M53 deletes)', () 
     }
 
     const decorated = compileAgent(walkAgentMetadata(Rich))
-    const everything = applyCapabilities([new ModelCapability('openai/gpt-5.4')])
-    const emittedButUnexpressible = Object.entries(decorated)
-      .filter(([k, v]) => v !== undefined && !(k in everything))
+    const emitted = Object.entries(decorated)
+      .filter(([, v]) => v !== undefined)
       .map(([k]) => k)
+    expect(emitted).toEqual(expect.arrayContaining(['systemPrompt', 'parseThinkTags', 'timeoutMs']))
 
-    // These are live in the decorator path today and have NO capability replacement.
-    expect(emittedButUnexpressible).toEqual(
-      expect.arrayContaining([
-        'systemPrompt',
-        'parseThinkTags',
-        'stripToolDialect',
-        'recoverLeakedToolCalls',
-        'maxIterations',
-        'timeoutMs',
-      ]),
+    const unexpressible = emitted.filter((f) =>
+      (NOT_EXPRESSIBLE_YET as readonly string[]).includes(f),
     )
-    for (const field of emittedButUnexpressible) {
-      expect(NOT_EXPRESSIBLE_YET as readonly string[]).toContain(field)
-    }
+    expect(unexpressible).toEqual([])
   })
 })
