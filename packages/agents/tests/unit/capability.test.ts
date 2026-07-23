@@ -5,6 +5,7 @@ import {
   CapabilityConflictError,
   type Capability,
   createDraft,
+  setOnce,
 } from '../../src/capability/capability.js'
 import {
   ConfigurationError,
@@ -57,7 +58,6 @@ describe('Adversarial-review regressions (M52)', () => {
   it('V3 — re-declaring the SAME logical value is idempotent, not a spurious conflict', () => {
     // `compileSkillsSelection` returns a FRESH object per call, so a reference-identity check
     // reported two identical declarations as a conflict.
-    expect(() => applyCapabilities([skills(['a']), skills(['a'])])).not.toThrow()
     const twice: Capability = {
       name: 'm',
       apply: (d) => new ModelCapability('openai/gpt-5.4').apply(d),
@@ -163,5 +163,55 @@ describe('Registry + Preset (M52 T0.3)', () => {
     expect(draft.skills).toEqual({ enabled: ['code-review'], autoInject: true })
     expect(draft.tools).toHaveLength(1)
     expect(order).toEqual(['model', 'skills', 'tools']) // ordem determinística
+  })
+})
+
+/**
+ * Regressions from the SECOND adversarial review (it attacked the fixes above and broke four of
+ * six vectors). Each `it` reproduces a defect the FIXES introduced.
+ */
+describe('Second-review regressions (M52)', () => {
+  it('composition never MANUFACTURES a duplicate skill the author never wrote', () => {
+    // The accumulate fix concatenated blindly: two capabilities each enabling 'a' produced
+    // ['a','a'] — a waist state the reference compiler never emits for that authoring input.
+    const draft = applyCapabilities([skills(['a']), skills(['a'])])
+    expect(draft.skills).toEqual({ enabled: ['a'], autoInject: true })
+  })
+
+  it('inline skills are accepted — the layer must not be LESS expressive than the reference', () => {
+    // `compileSkillsSelection` accepts `string | InlineSkill`; validating "strings only" made
+    // `skills.inline` unreachable through capabilities.
+    const inline = { name: 'my-inline', description: 'd', content: 'c' }
+    const draft = applyCapabilities([skills([inline as never, 'code-review'])])
+    expect(draft.skills).toEqual({
+      enabled: ['code-review'],
+      autoInject: true,
+      inline: [inline],
+    })
+  })
+
+  it('a conflict message reports the SHAPE, never the value (config files carry secrets)', () => {
+    const secret = { github: { headers: { Authorization: 'Bearer sk-live-DO-NOT-LEAK' } } }
+    const set = (v: unknown): Capability => ({
+      name: 'mcp',
+      apply: (d) => setOnce(d, 'mcpServers', v as never, 'mcp'),
+    })
+    let message = ''
+    try {
+      applyCapabilities([set(secret), set({ github: { headers: { Authorization: 'other' } } })])
+    } catch (error) {
+      message = (error as Error).message
+    }
+    expect(message).toContain('mcpServers')
+    expect(message).not.toContain('sk-live-DO-NOT-LEAK')
+    expect(message).toContain('object{github}')
+  })
+
+  it('setOnce with undefined never consumes the slot', () => {
+    const d = createDraft()
+    setOnce(d, 'model', undefined, 'noop')
+    expect(d.model).toBeUndefined()
+    expect(d.provenance).toEqual([]) // a no-op contributed nothing
+    expect(() => setOnce(d, 'model', 'openai/gpt-5.4', 'later')).not.toThrow()
   })
 })

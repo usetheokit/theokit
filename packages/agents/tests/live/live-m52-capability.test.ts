@@ -2,12 +2,14 @@
  * M52 LIVE proof — an agent authored ENTIRELY by capabilities (including the FILE/registry route)
  * reaches a real provider and answers. Run inside tmux `agentbuilder`:
  *
- *   node --env-file=<agent-builder>/.env node_modules/tsx/dist/cli.mjs packages/agents/tests/live/live-m52-capability.ts
+ *   node --env-file=<agent-builder>/.env node_modules/vitest/vitest.mjs run tests/live
  *
  * Prints (a) which env key is present — never its value, (b) the deep-equal check against the
  * existing `defineAgent` path, (c) the REAL streamed answer from the provider.
  */
 import { isDeepStrictEqual } from 'node:util'
+
+import { describe, expect, it } from 'vitest'
 
 import { Agent } from '@theokit/sdk'
 
@@ -49,6 +51,25 @@ function waistOf(draft: Record<string, unknown>): Record<string, unknown> {
   return waist
 }
 
+const HAS_KEY = [
+  'OPENROUTER_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'THEOKIT_API_KEY',
+].some((n) => (process.env[n] ?? '').length > 0)
+
+/**
+ * Runs whenever a provider key is present (locally, and in CI when a key is configured); skips
+ * loudly otherwise. It used to be a standalone script that NOTHING executed — so the
+ * "confirmed end-to-end" claim rested on a manual run that could rot silently.
+ */
+describe.skipIf(!HAS_KEY)('M52 LIVE — capability-authored agent reaches a real provider', () => {
+  it('file/registry authoring → same waist → real answer', { timeout: 120_000 }, async () => {
+    await main()
+    expect(process.exitCode ?? 0).toBe(0)
+  })
+})
+
 async function main(): Promise<void> {
   console.error(`[live] provider key present: ${keyPresence()}`)
   console.error(`[live] model: ${MODEL}`)
@@ -65,7 +86,9 @@ async function main(): Promise<void> {
   const draft = applyCapabilities(configFromFile.map((c) => registry.resolve(c.name, c.arg)))
 
   // (2) Equivalence against the EXISTING authoring path, live (not only in unit tests).
-  const reference = compileAgentDefinition(defineAgent({ model: MODEL, skills: ['code-review'] }))
+  const reference = compileAgentDefinition(
+    defineAgent({ model: MODEL, skills: ['code-review'] }),
+  ) as unknown as Record<string, unknown>
   const waist = waistOf(draft as unknown as Record<string, unknown>)
   // O contrato é EQUIVALÊNCIA SEMÂNTICA, não ordem de chaves: nada no pacote serializa ou
   // hasheia as opções compiladas (`Object.keys` só aparece sobre valores aninhados —
@@ -91,6 +114,7 @@ async function main(): Promise<void> {
   const { options, applied } = assembleM8CreateOptions(waist as never)
   console.error(`[live] adapter applied: ${applied.join(', ')}`)
 
+  if (draft.model === undefined) throw new Error('capability draft carries no model')
   await using agent = await Agent.create({
     ...options,
     model: buildModelSelection(draft.model, draft.reasoningEffort),
@@ -119,5 +143,3 @@ async function main(): Promise<void> {
   console.error(`[live] answer non-empty: ${answer.trim().length > 0 ? 'YES' : 'NO'}`)
   if (result.status !== 'finished' || answer.trim().length === 0) process.exitCode = 1
 }
-
-await main()
