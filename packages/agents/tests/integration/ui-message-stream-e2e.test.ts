@@ -9,7 +9,7 @@
  *
  * Chain under test:
  *   fixed AgentStreamEvent[]  (mock run.stream — no live LLM, D3/EC-2)
- *     → translateToUIMessageStream(..., { textId })   [@theokit/agents]
+ *     → presentUIMessageStream(..., { textId })   [@theokit/agents]
  *     → uiMessageStreamResponse(chunks)               [theokit/server/define]
  *     → parseJsonEventStream + readUIMessageStream     [ai — the consumer]
  *     → reconstructed text === emitted text
@@ -27,7 +27,7 @@ import { parseJsonEventStream, readUIMessageStream, uiMessageChunkSchema } from 
 import { describe, expect, it } from 'vitest'
 
 import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
-import { translateToUIMessageStream } from '../../src/bridge/ui-message-stream-translator.js'
+import { presentUIMessageStream } from '../../src/bridge/present-ui-message-stream.js'
 // Test-only cross-package composition — see file header.
 import { uiMessageStreamResponse } from '../../../theo/src/server/define/ui-message-stream-response.js'
 
@@ -106,7 +106,7 @@ async function readLastMessageParts(response: Response): Promise<ParsedPart[]> {
 describe('UIMessageStream end-to-end (M0)', () => {
   it('test_usechat_transport_parses_theokit_text_without_custom_adapter', async () => {
     const response = uiMessageStreamResponse(
-      translateToUIMessageStream(mockRunStream(FIXTURE_EVENTS), { textId: TEXT_ID }),
+      presentUIMessageStream(mockRunStream(FIXTURE_EVENTS), { textId: TEXT_ID }),
     )
     const text = await reconstructText(response)
     expect(text).toBe('Hello, world')
@@ -114,7 +114,7 @@ describe('UIMessageStream end-to-end (M0)', () => {
 
   it('test_response_carries_ui_message_stream_v1_header', () => {
     const response = uiMessageStreamResponse(
-      translateToUIMessageStream(mockRunStream(FIXTURE_EVENTS), { textId: TEXT_ID }),
+      presentUIMessageStream(mockRunStream(FIXTURE_EVENTS), { textId: TEXT_ID }),
     )
     expect(response.headers.get('x-vercel-ai-ui-message-stream')).toBe('v1')
   })
@@ -144,7 +144,7 @@ const TOOL_FIXTURE_EVENTS: AgentStreamEvent[] = [
 describe('UIMessageStream end-to-end — tool + reasoning (M1)', () => {
   it('test_usechat_renders_theokit_tool_call_part', async () => {
     const response = uiMessageStreamResponse(
-      translateToUIMessageStream(mockRunStream(TOOL_FIXTURE_EVENTS), { textId: TEXT_ID }),
+      presentUIMessageStream(mockRunStream(TOOL_FIXTURE_EVENTS), { textId: TEXT_ID }),
     )
     const parts = await readLastMessageParts(response)
     // EC-1: locate by the STABLE toolCallId — theokit runtime tools parse as a
@@ -160,7 +160,7 @@ describe('UIMessageStream end-to-end — tool + reasoning (M1)', () => {
 
   it('test_usechat_renders_theokit_reasoning_part', async () => {
     const response = uiMessageStreamResponse(
-      translateToUIMessageStream(mockRunStream(TOOL_FIXTURE_EVENTS), { textId: TEXT_ID }),
+      presentUIMessageStream(mockRunStream(TOOL_FIXTURE_EVENTS), { textId: TEXT_ID }),
     )
     const parts = await readLastMessageParts(response)
     const reasoning = parts.find((p) => p.type === 'reasoning')

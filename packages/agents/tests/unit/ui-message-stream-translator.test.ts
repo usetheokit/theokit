@@ -1,5 +1,5 @@
 /**
- * M0 (theokit-ai-first) — translateToUIMessageStream.
+ * M0 (theokit-ai-first) — presentUIMessageStream.
  *
  * The translator maps the theokit `AgentStreamEvent` bridge stream (already
  * deduped by mergeDeltaStream) into the Vercel ai-sdk `UIMessageChunk`
@@ -21,7 +21,7 @@ import { uiMessageChunkSchema, type UIMessageChunk } from 'ai'
 import { describe, expect, it } from 'vitest'
 
 import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
-import { translateToUIMessageStream } from '../../src/bridge/ui-message-stream-translator.js'
+import { presentUIMessageStream } from '../../src/bridge/present-ui-message-stream.js'
 
 const TEXT_ID = 't0'
 
@@ -41,7 +41,18 @@ async function collect(chunks: AsyncIterable<UIMessageChunk>): Promise<UIMessage
   return out
 }
 
-describe('translateToUIMessageStream — text (M0)', () => {
+/**
+ * The finish chunk a run terminated by the common `done` stub (usage {0,0,0}, durationMs 1, no cost)
+ * now carries — the translator attaches the turn's authoritative metadata (see
+ * `test_done_usage_lands_on_finish_message_metadata`). Shared so the sequence tests below assert the
+ * FULL contract without repeating the metadata shape.
+ */
+const FINISH_ZERO_USAGE = {
+  type: 'finish',
+  messageMetadata: { usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 1 },
+} as const
+
+describe('presentUIMessageStream — text (M0)', () => {
   it('test_translates_text_run_to_ordered_chunks', async () => {
     const events: AgentStreamEvent[] = [
       { type: 'run_started', runId: 'r1', agentName: 'echo' },
@@ -54,25 +65,82 @@ describe('translateToUIMessageStream — text (M0)', () => {
         durationMs: 1,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
       { type: 'text-delta', id: TEXT_ID, delta: 'he' },
       { type: 'text-delta', id: TEXT_ID, delta: 'llo' },
       { type: 'text-end', id: TEXT_ID },
-      { type: 'finish' },
+      FINISH_ZERO_USAGE,
     ])
   })
 
   it('test_empty_run_emits_start_then_finish', async () => {
-    const chunks = await collect(translateToUIMessageStream(fromArray([]), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray([]), { textId: TEXT_ID }))
     expect(chunks).toEqual([{ type: 'start' }, { type: 'finish' }])
+  })
+
+  it('test_done_usage_lands_on_finish_message_metadata', async () => {
+    // The turn's authoritative usage/cost/durationMs (DoneEvent) MUST ride the finish chunk's
+    // `messageMetadata`, so it reconstructs onto the client's assistant UIMessage.metadata (via
+    // readUIMessageStream) — the seam a TUI status bar / cost meter reads with no extra wiring.
+    const events: AgentStreamEvent[] = [
+      { type: 'text_delta', content: 'hi' },
+      {
+        type: 'done',
+        result: 'hi',
+        usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46, reasoningTokens: 5 },
+        durationMs: 1234,
+        cost: 0.0021,
+      },
+    ]
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const finish = chunks.at(-1)
+    expect(finish?.type).toBe('finish')
+    expect((finish as { messageMetadata?: unknown }).messageMetadata).toEqual({
+      usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46, reasoningTokens: 5 },
+      durationMs: 1234,
+      cost: 0.0021,
+    })
+  })
+
+  it('test_finish_metadata_validates_against_ui_message_chunk_schema', async () => {
+    // `messageMetadata` is `unknown` in ai-sdk's finish chunk schema — a metadata-bearing finish
+    // MUST still validate (guards against a shape the strictObject union would reject).
+    const events: AgentStreamEvent[] = [
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+        durationMs: 9,
+        cost: 0.0001,
+      },
+    ]
+    const schema = uiMessageChunkSchema()
+    const validate = schema.validate
+    if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const finish = chunks.at(-1)
+    expect((finish as { messageMetadata?: unknown }).messageMetadata).toBeDefined()
+    for (const chunk of chunks) {
+      const result = await validate(chunk)
+      expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
+    }
+  })
+
+  it('test_error_terminated_run_finish_has_no_metadata', async () => {
+    // A run that ends via `error` (no `done`) has no authoritative usage — the finish stays bare.
+    const events: AgentStreamEvent[] = [
+      { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
+    ]
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    expect(chunks.at(-1)).toEqual({ type: 'finish' })
   })
 
   it('test_run_started_only_emits_no_orphan_text', async () => {
     const events: AgentStreamEvent[] = [{ type: 'run_started', runId: 'r1', agentName: 'echo' }]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([{ type: 'start' }, { type: 'finish' }])
   })
 
@@ -81,7 +149,7 @@ describe('translateToUIMessageStream — text (M0)', () => {
       { type: 'text_delta', content: 'partial' },
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
@@ -97,7 +165,7 @@ describe('translateToUIMessageStream — text (M0)', () => {
     // Must NOT reject — the boundary surfaces the underlying stream error as an
     // error chunk and closes the open text gracefully (failure-scenario row).
     const chunks = await collect(
-      translateToUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
+      presentUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
     )
     expect(chunks).toEqual([
       { type: 'start' },
@@ -113,7 +181,7 @@ describe('translateToUIMessageStream — text (M0)', () => {
     const events: AgentStreamEvent[] = [
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([
       { type: 'start' },
       { type: 'error', errorText: 'boom' },
@@ -136,7 +204,7 @@ describe('translateToUIMessageStream — text (M0)', () => {
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
@@ -151,7 +219,7 @@ describe('translateToUIMessageStream — text (M0)', () => {
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     // Prove the run actually produced the error chunk, then validate every chunk.
     expect(chunks).toContainEqual({ type: 'error', errorText: 'boom' })
     for (const chunk of chunks) {
@@ -168,7 +236,7 @@ function reasoningIdOf(chunks: UIMessageChunk[]): string {
   return start.id
 }
 
-describe('translateToUIMessageStream — reasoning + open-block state machine (M1 / T1.1)', () => {
+describe('presentUIMessageStream — reasoning + open-block state machine (M1 / T1.1)', () => {
   it('test_reasoning_run_emits_one_block', async () => {
     const events: AgentStreamEvent[] = [
       { type: 'thinking', content: 'let me ' },
@@ -180,7 +248,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
         durationMs: 1,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     const rid = reasoningIdOf(chunks)
     // Exactly one reasoning block (single -start/-end) wrapping N deltas (EC-3).
     expect(chunks).toEqual([
@@ -189,7 +257,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
       { type: 'reasoning-delta', id: rid, delta: 'let me ' },
       { type: 'reasoning-delta', id: rid, delta: 'think' },
       { type: 'reasoning-end', id: rid },
-      { type: 'finish' },
+      FINISH_ZERO_USAGE,
     ])
   })
 
@@ -198,7 +266,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
       { type: 'text_delta', content: 'hi' },
       { type: 'thinking', content: 'hmm' },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     const rid = reasoningIdOf(chunks)
     // EC-2: the open text block is closed (text-end) before the reasoning block opens.
     expect(chunks).toEqual([
@@ -220,7 +288,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
       { type: 'thinking', content: 'r' },
       { type: 'text_delta', content: 'b' },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     const rid = reasoningIdOf(chunks)
     expect(chunks).toEqual([
       { type: 'start' },
@@ -247,16 +315,16 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
         durationMs: 1,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     const rid = reasoningIdOf(chunks)
     // reasoning-end precedes finish; no orphan open block.
-    expect(chunks.slice(-2)).toEqual([{ type: 'reasoning-end', id: rid }, { type: 'finish' }])
+    expect(chunks.slice(-2)).toEqual([{ type: 'reasoning-end', id: rid }, FINISH_ZERO_USAGE])
   })
 
   it('test_reasoning_id_is_a_uuid_not_math_random', async () => {
     // G8: id minted via crypto.randomUUID() — assert RFC-4122 v4 shape.
     const events: AgentStreamEvent[] = [{ type: 'thinking', content: 'x' }]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(reasoningIdOf(chunks)).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     )
@@ -277,7 +345,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
@@ -291,7 +359,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
       { type: 'thinking', content: 'let me think' },
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     const rid = reasoningIdOf(chunks)
     expect(chunks).toEqual([
       { type: 'start' },
@@ -308,7 +376,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
     // the boundary. errorText mirrors the thrown-iterable format (String(err)).
     const events: AgentStreamEvent[] = [{ type: 'thinking', content: 'partial reasoning' }]
     const chunks = await collect(
-      translateToUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
+      presentUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
     )
     const rid = reasoningIdOf(chunks)
     expect(chunks).toEqual([
@@ -329,7 +397,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
       { type: 'tool_call', callId: 'c1', toolName: 'search', input: {} },
       { type: 'thinking', content: 'second' },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     const starts = chunks.filter((c) => c.type === 'reasoning-start')
     const ends = chunks.filter((c) => c.type === 'reasoning-end')
     expect(starts).toHaveLength(2)
@@ -342,7 +410,7 @@ describe('translateToUIMessageStream — reasoning + open-block state machine (M
   })
 })
 
-describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
+describe('presentUIMessageStream — tool chunks (M1 / T1.2)', () => {
   it('test_tool_call_then_result_maps_to_input_and_output_available', async () => {
     const events: AgentStreamEvent[] = [
       { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
@@ -361,7 +429,7 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
         durationMs: 1,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     // dynamic:true (EC-1) so the consumer produces a dynamic-tool part whose
     // toolName survives to the parsed part (ui-messages.ts:384-396).
     expect(chunks).toEqual([
@@ -374,7 +442,7 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
         dynamic: true,
       },
       { type: 'tool-output-available', toolCallId: 'c1', output: 'hit' },
-      { type: 'finish' },
+      FINISH_ZERO_USAGE,
     ])
   })
 
@@ -391,7 +459,7 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
         isError: true,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([
       { type: 'start' },
       {
@@ -420,7 +488,7 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
         isError: false,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([
       { type: 'start' },
       {
@@ -441,7 +509,7 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
       { type: 'text_delta', content: 'thinking about it' },
       { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
@@ -481,7 +549,7 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
@@ -489,7 +557,7 @@ describe('translateToUIMessageStream — tool chunks (M1 / T1.2)', () => {
   })
 })
 
-describe('translateToUIMessageStream — HITL approval (M4)', () => {
+describe('presentUIMessageStream — HITL approval (M4)', () => {
   it('test_maps_approval_required_to_tool_input_then_approval_request', async () => {
     // A HITL-gated tool pauses BEFORE running: the translator first synthesizes the
     // tool-input part (so the client has a tool to gate), then the ai-sdk-native
@@ -505,7 +573,7 @@ describe('translateToUIMessageStream — HITL approval (M4)', () => {
         timeoutMs: 300_000,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([
       { type: 'start' },
       {
@@ -535,7 +603,7 @@ describe('translateToUIMessageStream — HITL approval (M4)', () => {
         timeoutMs: 1000,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
@@ -543,7 +611,7 @@ describe('translateToUIMessageStream — HITL approval (M4)', () => {
   })
 })
 
-describe('translateToUIMessageStream — @Checkpoint (M4)', () => {
+describe('presentUIMessageStream — @Checkpoint (M4)', () => {
   it('test_maps_checkpoint_saved_to_transient_data_checkpoint_part', async () => {
     // A `@Checkpoint` agent emits `checkpoint_saved`; the translator maps it to an ai-sdk-native
     // `data-checkpoint` part carrying the resume handle, `transient` (kept out of message history).
@@ -558,7 +626,7 @@ describe('translateToUIMessageStream — @Checkpoint (M4)', () => {
         cost: 0,
       },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toContainEqual({
       type: 'data-checkpoint',
       data: { checkpointId: 'chk-1', resumeToken: 's1', step: 0 },
@@ -577,7 +645,7 @@ describe('translateToUIMessageStream — @Checkpoint (M4)', () => {
     const events: AgentStreamEvent[] = [
       { type: 'checkpoint_saved', checkpointId: 'chk-1', step: 2, resumeToken: 's1' },
     ]
-    const chunks = await collect(translateToUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)

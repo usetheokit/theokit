@@ -1,4 +1,4 @@
-import { tool } from 'theokit/server'
+import { tool } from 'theokit/server/define'
 import { z } from 'zod'
 
 /**
