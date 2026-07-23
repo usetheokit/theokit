@@ -1124,6 +1124,70 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
+### M49 — [ ] Presenter layer skeleton — `@theokit/presenter` canonical event + Strategy contract + web refactor (zero-behavior)
+
+> Added 2026-07-23 by discover (blueprint: `knowledge-base/discoveries/blueprints/multi-surface-presentation-layer-blueprint.md`). Origin: dogfood learnings from agent-builder — the terminal re-implements the web translators. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** Establish theokit's presentation layer as a named, reusable boundary between `@theokit/sdk` and every UI surface. Introduce a new package `@theokit/presenter` holding (a) the canonical `AgentOutputEvent` (the narrow-waist normalized event), (b) the `Presenter` Strategy contract + registry, and (c) `UIMessageStreamPresenter` — the existing web/SSE translator (`agents/bridge/ui-message-stream-translator.ts`) moved behind the contract with ZERO behavior change. The walking skeleton: proves the waist against the real, published web consumers.
+
+**Definition of done:**
+- [ ] New package `@theokit/presenter` (`packages/presenter/`) depends ONLY on `@theokit/sdk` types — NOT on `agents`/`http`/`theo`/`tui`. `pnpm check:direction` proves SDK → presenter → consumers (DIP); a reverse import fails the gate.
+- [ ] Canonical `AgentOutputEvent` DU (`packages/presenter/src/agent-output-event.ts`): text · reasoning · tool-call(input) · tool-result · error · finish · status — each variant with a RED→GREEN test. Defined from the SDK event discriminants (source-side), NOT from UIMessageStream.
+- [ ] `Presenter<TOut>` interface + `PresenterRegistry` (`packages/presenter/src/presenter.ts`) resolving by surface key.
+- [ ] Source translator `fromSdk` (`packages/presenter/src/source/from-sdk.ts`): `SDKMessage | InteractionUpdate → AgentOutputEvent`, reusing `agents/bridge/event-translator.ts` logic — RED→GREEN per discriminant.
+- [ ] `UIMessageStreamPresenter` (`packages/presenter/src/presenters/ui-message-stream.ts`): the current `translateToUIMessageStream` behavior as `AgentOutputEvent → UIMessageStream`. `@theokit/agents/bridge` imports it; the inline translator is deleted (clean break — no back-compat).
+- [ ] **Zero behavior change on the web path:** the M1 E2E (`@ai-sdk/react` `useChat` + assistant-ui) stays green; a `UIMessageStream` snapshot is byte-identical pre/post.
+- [ ] `pnpm test`/`typecheck`/`lint` green; `@theokit/presenter` builds + `validate:publint` passes.
+
+**Dependencies:** none blocking — all M0–M48 `[x]`. Builds on M1 (UIMessageStream) + the `agents/bridge` translators.
+
+**Top risks:**
+1. Moving the web translator breaks `useChat`/assistant-ui consumers. Mitigation: zero-behavior refactor behind the contract; M1 E2E + UIMessageStream snapshot are the oracle; clean-break delete only after green.
+2. `AgentOutputEvent` over-fits the ai-sdk shape → doesn't generalize to terminal. Mitigation: the DU is derived from SDK discriminants, not UIMessageStream; M50/M51 validate generality with two more presenters.
+
+---
+
+### M50 — [ ] `TerminalPresenter` (ANSI) — single source for terminal output; kill the tui/agent-builder duplication
+
+> Added 2026-07-23 by discover. Origin: agent-builder's `tui/*` + `@theokit/tui` re-implement the terminal translation. See CHANGELOG.
+
+**Objective:** Make terminal (ANSI) output a first-class `Presenter` peer of the web one, sourced from the SAME `AgentOutputEvent`. Port the terminal translation duplicated in `@theokit/tui` (`messages-to-events.ts`, `agent-event.ts`, `tool-call.tsx`) and agent-builder (`formatGoalEvent`, `tool-header`) into `TerminalPresenter` inside `@theokit/presenter`. `@theokit/tui` consumes it — no re-implementation.
+
+**Definition of done:**
+- [ ] `TerminalPresenter` (`packages/presenter/src/presenters/terminal.ts`): `AgentOutputEvent → TerminalChunk` (structured rows + ANSI), covering every variant, each RED→GREEN. Returns DATA (chunks); Ink components render them — format separated from render (SRP).
+- [ ] `@theokit/tui`'s `messages-to-events` path consumes `TerminalPresenter` (canonical event → terminal); no divergent translation logic remains in tui.
+- [ ] **A/B parity:** a golden-file test asserts the terminal output for a representative agent run is byte-identical to the current `@theokit/tui` output (ported verbatim before any cleanup).
+- [ ] agent-builder's scattered `tui/*` formatters documented as consumers of `TerminalPresenter` — the dogfood duplication closed.
+- [ ] `pnpm test`/`typecheck`/`lint` green across `presenter` + `tui`.
+
+**Dependencies:** M49 (`[ ]`).
+
+**Top risks:**
+1. Terminal ANSI has subtle details (colors, glyphs, Static windowing). Mitigation: golden-file A/B byte-for-byte; port verbatim, unify second.
+2. Ink couples formatting with components. Mitigation: `TerminalPresenter` returns structured `TerminalChunk`s; components render them.
+
+---
+
+### M51 — [ ] `JsonPresenter` (API) — third surface proves generality; documented Ports track (YAGNI-deferred)
+
+> Added 2026-07-23 by discover. See CHANGELOG.
+
+**Objective:** Add `JsonPresenter` (structured JSON for API/programmatic consumers) as the third `Presenter`, proving `AgentOutputEvent → Surface` generalizes beyond web+terminal, and give non-UI consumers (exec/CLI, webhooks) a clean output. Record the deferred Ports/Controller track (PTY/WS input adapters) as documented future work — the Presenter↔Controller seam is Port-ready (OCP) but no speculative Port code ships.
+
+**Definition of done:**
+- [ ] `JsonPresenter` (`packages/presenter/src/presenters/json.ts`): `AgentOutputEvent → JSON` per variant, RED→GREEN; a `--json`-style consumer test.
+- [ ] `PresenterRegistry` resolves all three (`ui-message-stream` | `terminal` | `json`); a test drives ONE agent run through all three from the same `AgentOutputEvent` stream.
+- [ ] `docs/architecture/presentation-layer.md`: the hexagonal map (SDK → [Ports future] → Controller → Presenter → UI), the three presenters, and the DEFERRED Ports/Controller track (PTY/WS) with the OCP seam — explicitly YAGNI-justified (no speculative Port code).
+- [ ] agent-builder's `exec --json` documented as a `JsonPresenter` consumer candidate.
+- [ ] `pnpm test`/`typecheck`/`lint` green; `@theokit/presenter` V1 CHANGELOG; M49–M51 `[x]`.
+
+**Dependencies:** M49, M50 (`[ ]`).
+
+**Top risks:**
+1. Scope creep into building Ports (PTY/WS) speculatively. Mitigation: the DoD DEFERS Ports to a documented track; only the OCP seam (an interface) ships.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
