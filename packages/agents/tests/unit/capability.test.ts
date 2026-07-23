@@ -38,11 +38,74 @@ describe('Capability contract (M52 T0.1)', () => {
     expect(draft.model).toBe('a/b')
   })
 
-  it('the draft seeds the waist required fields', () => {
+  it('the draft seeds the collection fields but NOT stream (so stream:false stays reachable)', () => {
     const d = createDraft()
     expect(d.tools).toEqual([])
     expect(d.agents).toEqual({})
-    expect(d.stream).toBe(true)
+    expect(d.stream).toBeUndefined()
+    // the default is applied at finalize, not seeded — a seeded value would make any capability
+    // declaring `stream: false` collide with a default nobody wrote.
+    expect(applyCapabilities([]).stream).toBe(true)
+  })
+})
+
+/**
+ * Regressions from the M52 adversarial review. Each `it` below reproduces a defect the review
+ * found in the first cut; they fail against that cut and pass against the fix.
+ */
+describe('Adversarial-review regressions (M52)', () => {
+  it('V3 — re-declaring the SAME logical value is idempotent, not a spurious conflict', () => {
+    // `compileSkillsSelection` returns a FRESH object per call, so a reference-identity check
+    // reported two identical declarations as a conflict.
+    expect(() => applyCapabilities([skills(['a']), skills(['a'])])).not.toThrow()
+    const twice: Capability = {
+      name: 'm',
+      apply: (d) => new ModelCapability('openai/gpt-5.4').apply(d),
+    }
+    expect(() => applyCapabilities([twice, twice])).not.toThrow()
+  })
+
+  it('V3 — a genuinely different value still fails fast and typed', () => {
+    expect(() => applyCapabilities([new ModelCapability('a'), new ModelCapability('b')])).toThrow(
+      CapabilityConflictError,
+    )
+  })
+
+  it('V3 — stream:false is reachable (it was structurally blocked by the seeded default)', () => {
+    const streamOff: Capability = {
+      name: 'stream',
+      apply: (d) => {
+        d.stream = false
+        d.provenance.push({ capability: 'stream', contributed: ['stream'] })
+      },
+    }
+    expect(applyCapabilities([streamOff]).stream).toBe(false)
+  })
+
+  it('V4 — skills ACCUMULATE across capabilities (a preset baseline stays extensible)', () => {
+    // With setOnce, a preset declaring baseline skills could never be extended at the call site —
+    // which defeats the Composite. The reference compiler treats skills as a merge-semantics field.
+    const preset = new CapabilityPreset('preset', [skills(['code-review'])])
+    const draft = applyCapabilities([preset, skills(['testing'])])
+    expect(draft.skills).toEqual({ enabled: ['code-review', 'testing'], autoInject: true })
+  })
+
+  it('V5 — a wrong-typed FILE value fails fast and typed, never corrupts silently', () => {
+    const registry = new CapabilityRegistry()
+      .register('model', (id) => new ModelCapability(id as string))
+      .register('skills', (names) => skills(names as string[]))
+    // `skills: "code-review"` used to spread into ELEVEN single-character skill names, with no error.
+    expect(() => registry.resolve('skills', 'code-review')).toThrow(ConfigurationError)
+    expect(() => registry.resolve('skills', ['ok', 42])).toThrow(ConfigurationError)
+    expect(() => registry.resolve('model', 42)).toThrow(ConfigurationError)
+    expect(() => registry.resolve('model', null)).toThrow(ConfigurationError)
+  })
+
+  it('V5 — the typed error names the offending type but never echoes the value', () => {
+    // config files can carry secrets: report the SHAPE, never the content.
+    expect(() => skills('sk-secret-value' as never)).toThrow(
+      /esperava array de nomes, recebi string/,
+    )
   })
 })
 

@@ -8,6 +8,7 @@ export type { HumanInTheLoopOptions, TimeoutAction } from './decorators/human-in
 // M35 — the settled HITL decision type is part of the public approval contract: an `awaitApproval`
 // resolver (the HTTP registry or the in-process seam) may return a bare boolean OR this structured value.
 export type { HitlDecision } from './bridge/hitl-plugin.js'
+export * from './capability/index.js'
 export * from './bridge/index.js'
 export * from './loop/index.js'
 export * from './guardrails/index.js'

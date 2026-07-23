@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util'
+
 import type { CompiledAgentOptions } from '../bridge/agent-compiler.js'
 
 /**
@@ -15,11 +17,10 @@ export interface ProvenanceEntry {
 
 /** The mutable draft a capability enriches. `tools`/`agents` are pre-seeded (required in the waist). */
 export interface CompiledAgentOptionsDraft extends Partial<
-  Omit<CompiledAgentOptions, 'tools' | 'agents' | 'stream'>
+  Omit<CompiledAgentOptions, 'tools' | 'agents'>
 > {
   tools: CompiledAgentOptions['tools']
   agents: CompiledAgentOptions['agents']
-  stream: boolean
   readonly provenance: ProvenanceEntry[]
 }
 
@@ -44,18 +45,26 @@ export class CapabilityConflictError extends Error {
   }
 }
 
-/** A fresh draft with the waist's required fields seeded. */
+/**
+ * A fresh draft. `stream` is deliberately NOT seeded: a pre-seeded value would make
+ * `setOnce(draft, 'stream', false, …)` throw a conflict against a default nobody declared, so
+ * `stream: false` would be structurally unreachable. The default is applied at finalize instead.
+ */
 export function createDraft(): CompiledAgentOptionsDraft {
-  return { tools: [], agents: {}, stream: true, provenance: [] }
+  return { tools: [], agents: {}, provenance: [] }
 }
+
+/** A draft that has been finalized — the waist's required `stream` is settled. */
+export type FinalizedDraft = CompiledAgentOptionsDraft & { stream: boolean }
 
 /** Apply capabilities in declaration order (deterministic) and return the draft. */
 export function applyCapabilities(
   capabilities: readonly Capability[],
   draft: CompiledAgentOptionsDraft = createDraft(),
-): CompiledAgentOptionsDraft {
+): FinalizedDraft {
   for (const c of capabilities) c.apply(draft)
-  return draft
+  draft.stream ??= true // same default the reference compiler emits
+  return draft as FinalizedDraft
 }
 
 /** Set a scalar exactly once — fail-fast on a conflicting redeclaration (Rule 8). */
@@ -66,7 +75,10 @@ export function setOnce<K extends keyof CompiledAgentOptionsDraft>(
   capability: string,
 ): void {
   const previous = draft[field]
-  if (previous !== undefined && previous !== value) {
+  // DEEP equality, never reference identity: two capabilities may legitimately build the SAME
+  // logical value in separate objects (`compileSkillsSelection` returns a fresh object per call),
+  // and `previous !== value` would report those as a conflict that does not exist.
+  if (previous !== undefined && !isDeepStrictEqual(previous, value)) {
     throw new CapabilityConflictError(field, previous, value, capability)
   }
   draft[field] = value
