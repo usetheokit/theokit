@@ -90,6 +90,28 @@ export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
     return out
   }
 
+  /**
+   * Close any open text/reasoning block WITHOUT finishing the stream. The host calls this before
+   * interleaving a framework chunk (HITL approval / checkpoint) that must not appear inside an open text
+   * block — mirroring the original translator's `closeOpenBlock` before those chunks. Idempotent.
+   */
+  closeBlock(): UIMessageChunk[] {
+    return this.#closeOpenBlock()
+  }
+
+  /**
+   * Whether a `callId` has already been introduced (a `tool-call` or a synthesized `tool-input`). The host
+   * uses this so a framework `approval_required` reuses the EC-1 synthesize-input-first rule exactly once.
+   */
+  hasSeen(callId: string): boolean {
+    return this.#seen.has(callId)
+  }
+
+  /** Mark a `callId` as introduced (the host synthesized its `tool-input` for a framework chunk). */
+  markSeen(callId: string): void {
+    this.#seen.add(callId)
+  }
+
   // --- internal open-block state machine (verbatim from the original translator) ---
 
   #closeOpenBlock(): UIMessageChunk[] {

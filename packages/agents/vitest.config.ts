@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '@theokit/http/runtime/node': resolve(__dirname, '../http/src/runtime-node.ts'),
       '@theokit/http': resolve(__dirname, '../http/src/index.ts'),
+      '@theokit/presenter': resolve(__dirname, '../presenter/src/index.ts'),
     },
   },
   test: {
