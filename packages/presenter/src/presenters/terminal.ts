@@ -56,10 +56,15 @@ function preview(value: unknown, max: number): string {
 function safeJson(value: unknown): string {
   if (value === undefined || value === null) return ''
   try {
-    return JSON.stringify(value) ?? ''
+    return JSON.stringify(value)
   } catch {
     return typeof value === 'bigint' ? value.toString() : ''
   }
+}
+
+/** Build an optional ` (code)` / ` — detail` suffix without nesting template literals. */
+function suffix(open: string, value: string | undefined, close: string): string {
+  return value === undefined ? '' : open + value + close
 }
 
 export class TerminalPresenter implements Presenter<TerminalRow> {
@@ -77,41 +82,33 @@ export class TerminalPresenter implements Presenter<TerminalRow> {
       case 'text':
         return event.text.length > 0 ? [this.#row('text', event.text)] : []
       case 'reasoning':
-        return event.text.length > 0 ? [this.#row('reasoning', `· ${event.text}`)] : []
+        return event.text.length > 0 ? [this.#row('reasoning', `\u00b7 ${event.text}`)] : []
       case 'tool-call':
-        return [this.#row('tool', `⏺ ${event.name}(${preview(event.input, this.#max)})`)]
+        return [this.#row('tool', `\u23fa ${event.name}(${preview(event.input, this.#max)})`)]
       case 'tool-result':
-        return [
-          this.#row(
-            event.isError === true ? 'tool-error' : 'tool-result',
-            `  ⎿ ${preview(event.result, this.#max)}`,
-          ),
-        ]
+        return [this.#toolResult(event.isError === true, preview(event.result, this.#max))]
       case 'error':
-        return [
-          this.#row(
-            'error',
-            `✖ ${event.message}${event.code !== undefined ? ` (${event.code})` : ''}`,
-          ),
-        ]
+        return [this.#row('error', `\u2716 ${event.message}${suffix(' (', event.code, ')')}`)]
       case 'status':
         return [
-          this.#row(
-            'status',
-            `● ${event.status}${event.detail !== undefined ? ` — ${event.detail}` : ''}`,
-          ),
+          this.#row('status', `\u25cf ${event.status}${suffix(' \u2014 ', event.detail, '')}`),
         ]
-      case 'finish': {
-        const tokens = event.usage?.totalTokens
-        const reason = event.reason !== undefined ? ` ${event.reason}` : ''
-        return [
-          this.#row('finish', `<<${reason}${tokens !== undefined ? ` · ${tokens} tokens` : ''} >>`),
-        ]
-      }
+      case 'finish':
+        return [this.#row('finish', this.#finishText(event.reason, event.usage?.totalTokens))]
       // `partial-tool-call` streams incremental args — the committed `tool-call` renders them.
       default:
         return []
     }
+  }
+
+  #toolResult(isError: boolean, body: string): TerminalRow {
+    return this.#row(isError ? 'tool-error' : 'tool-result', `  \u23bf ${body}`)
+  }
+
+  #finishText(reason: string | undefined, tokens: number | undefined): string {
+    const r = suffix(' ', reason, '')
+    const t = tokens === undefined ? '' : ` \u00b7 ${tokens} tokens`
+    return `<<${r}${t} >>`
   }
 
   #row(kind: TerminalRow['kind'], text: string): TerminalRow {
