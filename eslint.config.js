@@ -64,6 +64,8 @@ export default tseslint.config(
       'packages/http-decorators/tsup.config.ts',
       'packages/http/tsup.config.ts',
       'packages/agents/tsup.config.ts',
+      'packages/presenter/tsup.config.ts',
+      'packages/presenter/vitest.config.ts',
     ],
   },
 
