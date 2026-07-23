@@ -1188,7 +1188,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
-### M52 — [ ] Capability core — `AgentSpec` + `Capability` (OO) + registry + SDK adapter (walking skeleton, zero-behavior)
+### M52 — [x] Capability core — `AgentSpec` + `Capability` (OO) + registry + SDK adapter (walking skeleton, zero-behavior)
 
 > Added 2026-07-23 by `/roadmap-feature` (slug: `capability-core`). Design spike: `knowledge-base/discoveries/blueprints/capability-oo-design-spike.md`. **Out-of-scope cross-check:** the locked item *"Breaking the `@theokit/http` decorator path"* is ADJACENT, not violated — this initiative removes the **agent** decorators (the "agent surface" that item explicitly places in scope); the `@theokit/http` **controller** decorators (`@Controller`/`@Get`/`@Post`) stay intact. See CHANGELOG `[Unreleased] § Added`.
 
