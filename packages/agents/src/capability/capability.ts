@@ -39,10 +39,25 @@ export class CapabilityConflictError extends Error {
   override readonly name = 'CapabilityConflictError'
   constructor(field: string, previous: unknown, next: unknown, capability: string) {
     super(
-      `capability "${capability}": campo "${field}" já declarado como ${JSON.stringify(previous)} ` +
-        `e redeclarado como ${JSON.stringify(next)} — declare uma vez só.`,
+      // NUNCA ecoa os valores: um draft montado a partir de arquivo de config pode carregar
+      // token de MCP, header de auth, credencial de memória. Reporta a FORMA, como a validação
+      // de fronteira das capabilities já faz.
+      `capability "${capability}": campo "${field}" já declarado (${shapeOf(previous)}) ` +
+        `e redeclarado com valor diferente (${shapeOf(next)}) — declare uma vez só.`,
     )
   }
+}
+
+/** Type/shape of a value for diagnostics — never its content. */
+function shapeOf(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return `array(${value.length})`
+  if (typeof value === 'object') {
+    return `object{${Object.keys(value)
+      .sort((a, b) => a.localeCompare(b))
+      .join(',')}}`
+  }
+  return typeof value
 }
 
 /**
@@ -74,10 +89,14 @@ export function setOnce<K extends keyof CompiledAgentOptionsDraft>(
   value: CompiledAgentOptionsDraft[K],
   capability: string,
 ): void {
+  if (value === undefined) return // nothing to declare — never consume the slot with a hole
   const previous = draft[field]
   // DEEP equality, never reference identity: two capabilities may legitimately build the SAME
   // logical value in separate objects (`compileSkillsSelection` returns a fresh object per call),
-  // and `previous !== value` would report those as a conflict that does not exist.
+  // and `previous !== value` would report those as a conflict that does not exist. CAVEAT, stated
+  // because it is not obvious: `isDeepStrictEqual` compares FUNCTIONS by identity, so a field whose
+  // value carries functions (resolvers, guardrail methods) stays identity-idempotent, not
+  // value-idempotent. Fail-fast is the safe side of that asymmetry.
   if (previous !== undefined && !isDeepStrictEqual(previous, value)) {
     throw new CapabilityConflictError(field, previous, value, capability)
   }

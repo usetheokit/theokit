@@ -27,6 +27,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "test:live": "vitest run --config vitest.live.config.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
