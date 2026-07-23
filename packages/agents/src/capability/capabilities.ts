@@ -73,13 +73,29 @@ export const skills = (entries: readonly (string | InlineSkill)[]): Capability =
     // The reference compiler accepts `string | InlineSkill` (define-agent.ts § compileSkillsSelection);
     // rejecting inline skills here would make this layer strictly LESS expressive than the path it
     // claims equivalence with.
-    const isName = typeof e === 'string' && e.trim().length > 0
-    const isInline =
-      typeof e === 'object' && e !== null && typeof (e as InlineSkill).name === 'string'
-    if (!isName && !isInline) {
+    if (typeof e === 'string') {
+      if (e.trim().length === 0) {
+        throw new ConfigurationError('skills: nome vazio — use um nome de skill não vazio')
+      }
+      continue
+    }
+    if (typeof e !== 'object' || e === null || Array.isArray(e)) {
       throw new ConfigurationError(
-        `skills: entrada inválida (${describe(e)}) — use um nome não vazio ou um skill inline com \`name\``,
+        `skills: entrada inválida (${describe(e)}) — use um nome ou um skill inline`,
       )
+    }
+    // An inline skill reaches the `<skills>` system-prompt block. Accepting `{ name }` alone lets a
+    // malformed skill through with `undefined` description/instructions — the same silent
+    // corruption this boundary exists to stop, one level down. `InlineSkill extends Skill` requires
+    // all three (`@theokit/sdk` create-skill.d.ts + discover-skills.d.ts).
+    for (const field of ['name', 'description', 'instructions'] as const) {
+      const value = (e as Record<string, unknown>)[field]
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        throw new ConfigurationError(
+          `skills: skill inline sem \`${field}\` válido (${describe(value)}) — ` +
+            'name, description e instructions são obrigatórios',
+        )
+      }
     }
   }
   return {
@@ -93,8 +109,11 @@ export const skills = (entries: readonly (string | InlineSkill)[]): Capability =
       // ACCUMULATES, never setOnce: skills is a merge-semantics field in the reference compiler
       // (`defineAgent({skills:['a','b']})` → `['a','b']`). With setOnce a preset's baseline skills
       // could never be extended at the call site — defeating the whole point of the Composite.
-      // DEDUPED: composition must never MANUFACTURE a duplicate the author never wrote (two
-      // capabilities each enabling 'a' means 'a' is enabled, not enabled twice).
+      //
+      // CONCAT, never dedupe. The capability list IS the authoring list: `skills(['a']) +
+      // skills(['a'])` corresponds to authoring `['a','a']`, which the reference compiler maps to
+      // `['a','a']`. A dedupe here looks tidier but makes the merge path the ONLY place in this
+      // layer that diverges from the reference — the exact thing the milestone exists to prevent.
       const previous = draft.skills
       draft.skills =
         previous === undefined
@@ -102,9 +121,7 @@ export const skills = (entries: readonly (string | InlineSkill)[]): Capability =
           : {
               ...previous,
               ...compiled.skills,
-              enabled: [
-                ...new Set([...(previous.enabled ?? []), ...(compiled.skills.enabled ?? [])]),
-              ],
+              enabled: [...(previous.enabled ?? []), ...(compiled.skills.enabled ?? [])],
               ...(previous.inline !== undefined || compiled.skills.inline !== undefined
                 ? { inline: [...(previous.inline ?? []), ...(compiled.skills.inline ?? [])] }
                 : {}),
