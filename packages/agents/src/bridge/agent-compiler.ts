@@ -17,6 +17,7 @@ import { getAgentConfig } from '../decorators/agent.js'
 import type { CheckpointOptions } from '../decorators/checkpoint.js'
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import type { McpServersMap } from '../decorators/mcp.js'
+import type { MemorySettings } from '@theokit/sdk'
 import type { MemoryOptions } from '../decorators/memory.js'
 import type { ProjectContextOptions } from '../decorators/project-context.js'
 import type { Guardrail } from '../guardrails/index.js'
@@ -149,9 +150,11 @@ export interface CompiledAgentOptions {
    * (merged with `cwd`, decoupled from inline skills). Absent ⇒ inline (code) config only.
    */
   settingSources?: readonly SettingSource[]
+  /** Code `Plugin` objects forwarded to `Agent.create({ plugins })` (lifecycle-hook seam). */
+  plugins?: readonly unknown[]
   tools: CompiledTool[]
   agents: Record<string, CompiledSubAgent>
-  memory?: MemoryOptions
+  memory?: MemoryOptions | MemorySettings
   skills?: SkillsSettings
   context?: ContextSettings
   /**

@@ -1097,7 +1097,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 ---
 
-### M48 — [ ] Ecosystem integration guarantee — FAANG-grade theokit↔@theokit/sdk seam
+### M48 — [x] Ecosystem integration guarantee — FAANG-grade theokit↔@theokit/sdk seam
 
 > Added 2026-07-14 by `/roadmap-feature` (slug: `ecosystem-integration-guarantee`). See CHANGELOG `[Unreleased] § Added`.
 
@@ -1121,6 +1121,115 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 **Why now (from grill Q1):**
 
 The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo contract test (consumer + producer) and TheoCloud has the `services.json` schema-drift guard (EC-7), but the `theokit ↔ @theokit/sdk` seam — the load-bearing one (the SDK is the *only* agent runtime, per `sdk-runtime.md` / G2) — has NONE: ~35 symbols consumed via structural types + a dynamic import, one un-tested local `CustomTool` mirror, an open `>=3.5.0` range, and no seam doc. This surfaced concretely today: filing `theokit-sdk#119` (`CustomTool` ctx lacks `threadId` → stateful tools like `todolist` leak across sessions) showed that when the SDK adds that field, theokit's local mirror silently drifts and nothing catches it — the exact class of failure a type gate + contract test prevents. Closing this brings the SDK seam to parity with the other two.
+
+---
+
+### M49 — [x] Presenter layer skeleton — `@theokit/presenter` canonical event + Strategy contract + web refactor (zero-behavior)
+
+> Added 2026-07-23 by discover (blueprint: `knowledge-base/discoveries/blueprints/multi-surface-presentation-layer-blueprint.md`). Origin: dogfood learnings from agent-builder — the terminal re-implements the web translators. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** Establish theokit's presentation layer as a named, reusable boundary between `@theokit/sdk` and every UI surface. Introduce a new package `@theokit/presenter` holding (a) the canonical `AgentOutputEvent` (the narrow-waist normalized event), (b) the `Presenter` Strategy contract + registry, and (c) `UIMessageStreamPresenter` — the existing web/SSE translator (`agents/bridge/ui-message-stream-translator.ts`) moved behind the contract with ZERO behavior change. The walking skeleton: proves the waist against the real, published web consumers.
+
+**Definition of done:**
+- [ ] New package `@theokit/presenter` (`packages/presenter/`) depends ONLY on `@theokit/sdk` types — NOT on `agents`/`http`/`theo`/`tui`. `pnpm check:direction` proves SDK → presenter → consumers (DIP); a reverse import fails the gate.
+- [ ] Canonical `AgentOutputEvent` DU (`packages/presenter/src/agent-output-event.ts`): text · reasoning · tool-call(input) · tool-result · error · finish · status — each variant with a RED→GREEN test. Defined from the SDK event discriminants (source-side), NOT from UIMessageStream.
+- [ ] `Presenter<TOut>` interface + `PresenterRegistry` (`packages/presenter/src/presenter.ts`) resolving by surface key.
+- [ ] Source translator `fromSdk` (`packages/presenter/src/source/from-sdk.ts`): `SDKMessage | InteractionUpdate → AgentOutputEvent`, reusing `agents/bridge/event-translator.ts` logic — RED→GREEN per discriminant.
+- [ ] `UIMessageStreamPresenter` (`packages/presenter/src/presenters/ui-message-stream.ts`): the current `translateToUIMessageStream` behavior as `AgentOutputEvent → UIMessageStream`. `@theokit/agents/bridge` imports it; the inline translator is deleted (clean break — no back-compat).
+- [ ] **Zero behavior change on the web path:** the M1 E2E (`@ai-sdk/react` `useChat` + assistant-ui) stays green; a `UIMessageStream` snapshot is byte-identical pre/post.
+- [ ] `pnpm test`/`typecheck`/`lint` green; `@theokit/presenter` builds + `validate:publint` passes.
+
+**Dependencies:** none blocking — all M0–M48 `[x]`. Builds on M1 (UIMessageStream) + the `agents/bridge` translators.
+
+**Top risks:**
+1. Moving the web translator breaks `useChat`/assistant-ui consumers. Mitigation: zero-behavior refactor behind the contract; M1 E2E + UIMessageStream snapshot are the oracle; clean-break delete only after green.
+2. `AgentOutputEvent` over-fits the ai-sdk shape → doesn't generalize to terminal. Mitigation: the DU is derived from SDK discriminants, not UIMessageStream; M50/M51 validate generality with two more presenters.
+
+---
+
+### M50 — [x] `TerminalPresenter` (ANSI) — single source for terminal output; kill the tui/agent-builder duplication
+
+> Added 2026-07-23 by discover. Origin: agent-builder's `tui/*` + `@theokit/tui` re-implement the terminal translation. See CHANGELOG.
+
+**Objective:** Make terminal (ANSI) output a first-class `Presenter` peer of the web one, sourced from the SAME `AgentOutputEvent`. Port the terminal translation duplicated in `@theokit/tui` (`messages-to-events.ts`, `agent-event.ts`, `tool-call.tsx`) and agent-builder (`formatGoalEvent`, `tool-header`) into `TerminalPresenter` inside `@theokit/presenter`. `@theokit/tui` consumes it — no re-implementation.
+
+**Definition of done:**
+- [ ] `TerminalPresenter` (`packages/presenter/src/presenters/terminal.ts`): `AgentOutputEvent → TerminalChunk` (structured rows + ANSI), covering every variant, each RED→GREEN. Returns DATA (chunks); Ink components render them — format separated from render (SRP).
+- [ ] `@theokit/tui`'s `messages-to-events` path consumes `TerminalPresenter` (canonical event → terminal); no divergent translation logic remains in tui.
+- [ ] **A/B parity:** a golden-file test asserts the terminal output for a representative agent run is byte-identical to the current `@theokit/tui` output (ported verbatim before any cleanup).
+- [ ] agent-builder's scattered `tui/*` formatters documented as consumers of `TerminalPresenter` — the dogfood duplication closed.
+- [ ] `pnpm test`/`typecheck`/`lint` green across `presenter` + `tui`.
+
+**Dependencies:** M49 (`[ ]`).
+
+**Top risks:**
+1. Terminal ANSI has subtle details (colors, glyphs, Static windowing). Mitigation: golden-file A/B byte-for-byte; port verbatim, unify second.
+2. Ink couples formatting with components. Mitigation: `TerminalPresenter` returns structured `TerminalChunk`s; components render them.
+
+---
+
+### M51 — [x] `JsonPresenter` (API) — third surface proves generality; documented Ports track (YAGNI-deferred)
+
+> Added 2026-07-23 by discover. See CHANGELOG.
+
+**Objective:** Add `JsonPresenter` (structured JSON for API/programmatic consumers) as the third `Presenter`, proving `AgentOutputEvent → Surface` generalizes beyond web+terminal, and give non-UI consumers (exec/CLI, webhooks) a clean output. Record the deferred Ports/Controller track (PTY/WS input adapters) as documented future work — the Presenter↔Controller seam is Port-ready (OCP) but no speculative Port code ships.
+
+**Definition of done:**
+- [ ] `JsonPresenter` (`packages/presenter/src/presenters/json.ts`): `AgentOutputEvent → JSON` per variant, RED→GREEN; a `--json`-style consumer test.
+- [ ] `PresenterRegistry` resolves all three (`ui-message-stream` | `terminal` | `json`); a test drives ONE agent run through all three from the same `AgentOutputEvent` stream.
+- [ ] `docs/architecture/presentation-layer.md`: the hexagonal map (SDK → [Ports future] → Controller → Presenter → UI), the three presenters, and the DEFERRED Ports/Controller track (PTY/WS) with the OCP seam — explicitly YAGNI-justified (no speculative Port code).
+- [ ] agent-builder's `exec --json` documented as a `JsonPresenter` consumer candidate.
+- [ ] `pnpm test`/`typecheck`/`lint` green; `@theokit/presenter` V1 CHANGELOG; M49–M51 `[x]`.
+
+**Dependencies:** M49, M50 (`[ ]`).
+
+**Top risks:**
+1. Scope creep into building Ports (PTY/WS) speculatively. Mitigation: the DoD DEFERS Ports to a documented track; only the OCP seam (an interface) ships.
+
+---
+
+### M52 — [x] Capability core — `AgentSpec` + `Capability` (OO) + registry + SDK adapter (walking skeleton, zero-behavior)
+
+> Added 2026-07-23 by `/roadmap-feature` (slug: `capability-core`). Design spike: `knowledge-base/discoveries/blueprints/capability-oo-design-spike.md`. **Out-of-scope cross-check:** the locked item *"Breaking the `@theokit/http` decorator path"* is ADJACENT, not violated — this initiative removes the **agent** decorators (the "agent surface" that item explicitly places in scope); the `@theokit/http` **controller** decorators (`@Controller`/`@Get`/`@Post`) stay intact. See CHANGELOG `[Unreleased] § Added`.
+
+**Objective:** Replace the metadata-driven agent pipeline with an object-oriented, capability-based one. Introduce the canonical `AgentSpec` (the narrow waist between AUTHORING and RUNTIME — mirror of M49's `AgentOutputEvent`) plus the `Capability` contract (Strategy + value-level Decorator), a `CapabilityRegistry` (Factory Method + OCP resolution by name, which is what unlocks file-based authoring), a `CapabilityPreset` (Composite), and `SdkAgentAdapter` (`AgentSpec → Agent.create` options). Prove it by routing THREE real capabilities (`model`, `tools`, `sandbox`) through the new seam with the compiled `Agent.create` options byte-identical to today's.
+
+**Definition of done:**
+- [ ] `packages/agents/src/capability/` ships `AgentSpecDraft`, `Capability`, `CapabilityRegistry`, `CapabilityPreset`, `SdkAgentAdapter` — each with a RED→GREEN unit test; `provenance` records which capability contributed which field (replaces the opacity `@Expose`/M47 patched around).
+- [ ] Three real capabilities (`model`, `tools`, `sandbox`) implemented as classes WHERE behavior justifies it (validation + fail-fast conflict, e.g. two conflicting `sandbox` declarations throw a typed `ConfigurationError` instead of last-wins) and as plain factories where they are pure data (documented rationale — KISS).
+- [ ] **Zero behavior change:** a golden test asserts `SdkAgentAdapter.toCreateOptions(spec)` is deep-equal to what `agent-compiler` + `sdk-adapter-create-options` produce today for a representative agent (decorator path still in place — the two run side by side in this milestone).
+- [ ] `pnpm test` / `typecheck` / `lint --max-warnings=0` / `check:direction` / `validate:publint` green; no new runtime dependency.
+- [ ] An ADR records the pattern budget: the patterns ADOPTED with the variation that justifies each (Builder, Facade, Composite, Strategy, Registry, Factory Method, Adapter, value-Decorator, Chain of Responsibility, Specification, State, Memento, Null Object) and the ones REFUSED with the rule that forbids them (Singleton/DIP, Visitor/KISS, Abstract Factory/YAGNI, Mediator, Template Method/OCP, Observer, Flyweight-Prototype-Interpreter).
+
+**Dependencies:** none blocking — M0–M51 `[x]`. Builds on the M49 narrow-waist precedent.
+
+**Top risks:**
+1. The capability model does not express something a decorator does today (e.g. `@Compaction`, `@Observability` semantics), forcing a leaky escape hatch. Mitigation: M52 covers only 3 capabilities; the 1:1 migration audit is M53's HARD gate, and M53 migrates + deletes atomically (no sugar layer, no deprecation window).
+2. `AgentSpec` over-fits the web pipeline and cannot serve Agent Builder's file-based authoring. Mitigation: the `CapabilityRegistry` (name → capability) is in M52's DoD precisely so the file-based path is proven at skeleton time, not retrofitted.
+
+---
+
+### M53 — [ ] Remove the agent decorators COMPLETELY — migrate the remaining 21 + delete, atomically (major)
+
+> Added 2026-07-23 by `/roadmap-feature` (slug: `remove-agent-decorators`). **No deprecation window and no sugar layer** — the owner waived backward compatibility, so a decorator kept as a thin wrapper would be code written to be deleted next milestone (re-work) while every cost it imposes (`reflect-metadata`, `experimentalDecorators`, the ESLint ignores) stayed alive. The M49 precedent is the playbook: repoint the existing suite to the new implementation and delete the old one IN THE SAME milestone. **Scope guard:** the `@theokit/http` **controller** decorators (`@Controller`/`@Get`/`@Post`) are untouched. See CHANGELOG.
+
+**Objective:** Make `@theokit/agents` 100% capability-based in one atomic cut: port the remaining agent decorators to capabilities, repoint every decorator test to the capability path WITHOUT changing an expectation, then DELETE the decorator surface, the metadata walk, and the build-config coupling it forced.
+
+**Definition of done:**
+- [ ] A 1:1 audit table (`docs/agents/decorator-to-capability.md`) maps every one of the 24 decorators to its capability with any semantic delta called out; a decorator with NO capability equivalent BLOCKS the milestone (hard gate — an ADR decides keep-or-drop before code proceeds).
+- [ ] **Zero behavior change (the oracle):** the ~57 existing decorator test files are repointed to the capability path with **no expectation edited**, and stay green; a golden snapshot of `Agent.create` options for the fixture agents is byte-identical pre/post.
+- [ ] `packages/agents/src/decorators/` and `bridge/walk-agent-metadata.ts` DELETED; `grep -rE "@Agent\(|reflect-metadata" packages/agents/src` returns 0; `agent-compiler` compiles from `AgentSpec` only.
+- [ ] `@theokit/http/src/app.ts` no longer consumes agent decorators (controller decorators untouched); `reflect-metadata` dropped from `packages/agents` deps and `experimentalDecorators`/`emitDecoratorMetadata` removed from its tsconfig; the ESLint ignores that existed for decorator configs are removed.
+- [ ] `docs/agents/{guardrails,mcp,using-tools}.md` + `create-theokit` templates author agents with capabilities only; `MIGRATION.md` maps every removed decorator to its capability call + a codemod entry (SDK 2.0/3.0 precedent).
+- [ ] Full monorepo `pnpm test` / `typecheck` / `lint --max-warnings=0` / `check:direction` / `validate:publint` green; **major** bump for `@theokit/agents` with the breaking change in the changeset.
+- [ ] Dogfood: Agent Builder authors at least one real agent through the published capability API (proves the file-based/terminal path end-to-end).
+
+**Dependencies:** M52 (`[ ]`).
+
+**Top risks:**
+1. A decorator carries behavior with no value-level equivalent (e.g. DI-scoped construction). Mitigation: the audit table is a HARD gate — the milestone blocks rather than shipping a half-migrated surface.
+2. Repointing 57 test files hides a regression behind a mechanical edit. Mitigation: expectations MUST NOT change — only the import/entry-point; any expectation edit requires explicit justification.
+3. Removing `experimentalDecorators` from a shared tsconfig breaks the HTTP controller decorators. Mitigation: the flag is removed ONLY where the agent surface owns it; `@theokit/http` keeps its own decorator config, verified by that package's suite.
 
 ---
 

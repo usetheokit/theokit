@@ -13,7 +13,7 @@ import {
 } from '@theokit/ui'
 import { Button } from '@usetheo/ui'
 import { createTauriChannelSource, type TauriCore } from '@theokit/tauri'
-import { Bot, Plus, Sparkles } from 'lucide-react'
+import { Bot, Minus, Plus, Sparkles, Square, X } from 'lucide-react'
 import { ChannelTransport, useAgent } from 'theokit/client'
 
 import { AGENT } from '../../shared/agent'
@@ -40,6 +40,25 @@ if (tauri === undefined) {
 }
 const transport = new ChannelTransport({ source: createTauriChannelSource(tauri.core) })
 
+// The window is frameless (`decorations: false` in tauri.conf.json) so the OS title bar can't clash with
+// the app background — the app owns its top bar. These drive the native window from our custom controls.
+const appWindow = (
+  globalThis as {
+    __TAURI__?: {
+      window?: {
+        getCurrentWindow: () => {
+          minimize: () => Promise<void>
+          toggleMaximize: () => Promise<void>
+          close: () => Promise<void>
+        }
+      }
+    }
+  }
+).__TAURI__?.window
+const minimizeWindow = (): void => void appWindow?.getCurrentWindow().minimize()
+const maximizeWindow = (): void => void appWindow?.getCurrentWindow().toggleMaximize()
+const closeWindow = (): void => void appWindow?.getCurrentWindow().close()
+
 /** The agent's opening line (from `shared/agent.ts`) — so the conversation starts warm instead of empty. */
 const GREETING: UIMessage = {
   id: 'greeting',
@@ -55,24 +74,30 @@ const STARTERS: QuickAction[] = [
 ]
 
 // App-level layout in inline styles (the desktop bundle has no Tailwind). Colors read the theme CSS vars
-// `@theokit/ui` sets, so light/dark + the theme switcher cascade exactly like the web surface.
+// `@theokit/ui` sets — and those vars are `oklch()` colors, so wrap them in `color-mix(in oklch, …)` for
+// alpha (NOT `hsl(var(--x) / a)`, which is invalid CSS and silently renders transparent).
 const styles = {
   page: {
     display: 'flex',
     flexDirection: 'column',
     height: '100vh',
-    background: 'hsl(var(--background))',
-    color: 'hsl(var(--foreground))',
+    background: 'var(--background)',
+    color: 'var(--foreground)',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottom: '1px solid hsl(var(--border) / 0.6)',
-    padding: '8px 16px',
+    // The frameless title bar is its own DISTINCT band: the `--muted` surface reads clearly apart
+    // from the content background (adapts to light/dark), with a border to seal the strip.
+    background: 'var(--muted)',
+    borderBottom: '1px solid var(--border)',
+    // Slim title bar — thin vertical padding keeps the strip compact.
+    padding: '3px 12px',
   },
   brand: { display: 'inline-flex', alignItems: 'center', gap: 8 },
-  brandName: { fontWeight: 600, fontSize: 13, letterSpacing: '-0.01em' },
+  brandName: { fontWeight: 600, fontSize: 12, letterSpacing: '-0.01em' },
+  headerRight: { display: 'inline-flex', alignItems: 'center', gap: 2 },
   scroll: { flex: 1, overflowY: 'auto', minHeight: 0 },
   column: {
     margin: '0 auto',
@@ -84,8 +109,8 @@ const styles = {
     padding: 24,
   },
   composerBar: {
-    borderTop: '1px solid hsl(var(--border) / 0.6)',
-    background: 'hsl(var(--background) / 0.5)',
+    borderTop: '1px solid color-mix(in oklch, var(--border) 60%, transparent)',
+    background: 'color-mix(in oklch, var(--background) 50%, transparent)',
   },
   composerInner: { margin: '0 auto', width: '100%', maxWidth: 768, padding: '16px 24px' },
 } satisfies Record<string, CSSProperties>
@@ -115,13 +140,57 @@ export function App(): ReactElement {
 
   return (
     <TheoUIProvider>
+      {/* Window controls need :hover feedback — inline styles can't do pseudo-classes, so the button
+          appearance (incl. hover, and the classic red close) lives in this small stylesheet. */}
+      <style>{`
+        .tk-winbtn {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 20px; height: 20px; border: none; border-radius: 6px;
+          background: transparent; color: var(--muted-foreground); cursor: pointer;
+          transition: background 0.12s ease, color 0.12s ease;
+        }
+        .tk-winbtn:hover { background: color-mix(in oklch, var(--foreground) 12%, transparent); color: var(--foreground); }
+        .tk-winbtn--close:hover { background: #e5484d; color: #fff; }
+      `}</style>
       <div style={styles.page}>
-        <header style={styles.header}>
+        {/* Frameless title bar: `data-tauri-drag-region` makes the whole strip drag the window; the
+            background is the `--muted` band, so the bar reads as a distinct strip. Interactive
+            children (theme switcher, window buttons) still receive clicks. */}
+        <header style={styles.header} data-tauri-drag-region>
           <span style={styles.brand}>
-            <Bot size={18} style={{ color: 'hsl(var(--primary))' }} aria-hidden />
-            <span style={styles.brandName}>{{name}} — TheoKit agent</span>
+            <Bot size={18} style={{ color: 'var(--primary)' }} aria-hidden />
+            <span style={styles.brandName}>{{name}}</span>
           </span>
-          <ThemeSwitcher />
+          <span style={styles.headerRight}>
+            <ThemeSwitcher />
+            <button
+              type="button"
+              className="tk-winbtn"
+              onClick={minimizeWindow}
+              aria-label="Minimize"
+              title="Minimize"
+            >
+              <Minus size={15} />
+            </button>
+            <button
+              type="button"
+              className="tk-winbtn"
+              onClick={maximizeWindow}
+              aria-label="Maximize"
+              title="Maximize"
+            >
+              <Square size={12} />
+            </button>
+            <button
+              type="button"
+              className="tk-winbtn tk-winbtn--close"
+              onClick={closeWindow}
+              aria-label="Close"
+              title="Close"
+            >
+              <X size={15} />
+            </button>
+          </span>
         </header>
 
         <div style={styles.scroll}>

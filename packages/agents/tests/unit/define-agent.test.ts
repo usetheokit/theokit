@@ -51,6 +51,29 @@ describe('defineAgent (M2)', () => {
     expect(cfg.tools).toBe(sdkTools)
   })
 
+  it('preserves symbol-keyed tool metadata through compile (a2a subagent credential sink)', () => {
+    // A `@theokit/sdk/a2a` SubAgent installs its credential-inheritance sink under a `Symbol.for` key.
+    // `compileAgentDefinition` must carry symbol-keyed props onto the compiled tool — copying only the
+    // 4 known fields drops the sink, so the SDK runtime can't hand the parent's apiKey to the child
+    // (child fails with `provider_unresolved` / "(no response)"). Regression for the a2a-in-adapter path.
+    const SINK = Symbol.for('theokit.subagent.inheritCredentials')
+    let received: unknown
+    const subTool = {
+      name: 'sub',
+      description: 'delegates',
+      inputSchema: { type: 'object', properties: { input: { type: 'string' } } },
+      handler: async () => 'ok',
+      [SINK]: (creds: unknown) => {
+        received = creds
+      },
+    } as unknown as CustomTool
+    const compiled = compileAgentDefinition(defineAgent({ model: 'm', tools: [subTool] }))
+    const sink = (compiled.tools[0] as unknown as Record<symbol, (c: unknown) => void>)[SINK]
+    expect(typeof sink).toBe('function')
+    sink({ apiKey: 'k' })
+    expect(received).toEqual({ apiKey: 'k' })
+  })
+
   it('test_isAgentDefinition_rejects_non_agent_values', () => {
     expect(isAgentDefinition({ model: 'x' })).toBe(false)
     expect(isAgentDefinition(null)).toBe(false)

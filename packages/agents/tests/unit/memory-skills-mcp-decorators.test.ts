@@ -186,7 +186,8 @@ describe('Walk/Compile/Manifest with Memory/Skills/MCP', () => {
     }
 
     const compiled = compileAgent(walkAgentMetadata(FullAgent))
-    expect(compiled.memory!.provider).toBe('mem0')
+    // `memory` is a union (MemoryOptions | MemorySettings); only one arm carries `provider`.
+    expect(compiled.memory).toMatchObject({ provider: 'mem0' })
     // M8-3: skills now compiles to the SDK's SkillsSettings shape ({ enabled, autoInject }),
     // not the decorator's { include } shape (ADR D4 — Agent.create({ skills }) runtime).
     expect(compiled.skills).toEqual({ enabled: ['customer-service'], autoInject: true })
