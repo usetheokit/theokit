@@ -70,9 +70,15 @@ export const skills = (entries: readonly (string | InlineSkill)[]): Capability =
     throw new ConfigurationError(`skills: esperava array de nomes, recebi ${describe(entries)}`)
   }
   for (const e of entries) {
-    // The reference compiler accepts `string | InlineSkill` (define-agent.ts § compileSkillsSelection);
-    // rejecting inline skills here would make this layer strictly LESS expressive than the path it
-    // claims equivalence with.
+    // The reference compiler accepts `string | InlineSkill` (define-agent.ts § compileSkillsSelection),
+    // so inline skills must be accepted here too — rejecting them outright would make this layer less
+    // expressive than the path it claims equivalence with.
+    //
+    // ONE deliberate asymmetry, stated rather than glossed over: an inline skill with an empty
+    // `instructions` compiles through `defineAgent` but is REJECTED here. That object's body is
+    // unreachable at runtime (`SkillsManager.get` would fall back to `readFile(source)`, and a
+    // hand-rolled inline has no real `source`), so this rejects a broken agent at authoring time
+    // instead of at prompt-assembly time. It is an input rejection, never an output divergence.
     if (typeof e === 'string') {
       if (e.trim().length === 0) {
         throw new ConfigurationError('skills: nome vazio — use um nome de skill não vazio')
@@ -119,6 +125,12 @@ export const skills = (entries: readonly (string | InlineSkill)[]): Capability =
         previous === undefined
           ? compiled.skills
           : {
+              // The spread is exhaustive only because `compileSkillsSelection` emits a FIXED 3-key
+              // shape (`enabled`, `autoInject: true`, and `inline` iff non-empty) — `enabled` and
+              // `inline` are both re-derived below, and `autoInject` is the same literal on both
+              // sides. TRAP for the future: if a capability ever authors `autoInject: false`, this
+              // spread would silently normalize it back to `true`. Unreachable today (no capability
+              // and no reference array form can express it) — revisit when one can.
               ...previous,
               ...compiled.skills,
               enabled: [...(previous.enabled ?? []), ...(compiled.skills.enabled ?? [])],

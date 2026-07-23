@@ -54,7 +54,13 @@ const WAIST_FIELDS = [
   'skillsResolver',
 ] as const satisfies readonly WaistField[]
 
-/** Compile-time exhaustiveness: a new waist field must be classified here before tests compile. */
+/**
+ * Compile-time exhaustiveness: a new waist field must be classified here before tests compile.
+ * ENFORCED BY THE ROOT `tsconfig.json` ONLY — it is the one whose `include` reaches the packages'
+ * test trees. The package's own tsconfig covers sources only, and vitest strips types via esbuild,
+ * so `npm run typecheck` at the repo root is what keeps this half of the gap pin alive. A CI that
+ * only ran per-package checks would let it go dark; the runtime assertion below still fires.
+ */
 type _Exhaustive =
   Exclude<WaistField, (typeof WAIST_FIELDS)[number]> extends never
     ? true
