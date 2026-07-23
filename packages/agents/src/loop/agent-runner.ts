@@ -31,7 +31,7 @@ import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
 import { walkAgentMetadata } from '../bridge/walk-agent-metadata.js'
 import { moderateOutputStream, runInputGuards } from '../guardrails/index.js'
-import type { ReasoningEffort } from '../types.js'
+import type { MainLoopMeta, ReasoningEffort } from '../types.js'
 
 import {
   resolveCompactionStrategy,
@@ -205,6 +205,11 @@ export class AgentRunner {
     return new AgentRunnerBuilder(AgentClass)
   }
 
+  /** Start a fluent builder from an already-compiled spec — the capability-authored route. */
+  static fromSpec(spec: AgentRunnerSpec): AgentRunnerBuilder {
+    return new AgentRunnerBuilder(spec)
+  }
+
   /**
    * V4-D-stream: stream the agent's events LIVE across the reflective loop, returning
    * the aggregated {@link DelegationResult} as the generator's return value. This is the
@@ -287,13 +292,42 @@ export class AgentRunner {
   }
 }
 
+/**
+ * M53 — what the runner actually needs in order to run: an already-compiled agent plus the two
+ * loop knobs. It used to derive all of this from `walkAgentMetadata`, which chained the runner to
+ * the decorator surface. `strategy` and `compaction` are the two non-waist channels ADR 0002 keeps
+ * (the builder's `.compaction()` already outranked the decorator; this just names the input).
+ */
+export interface AgentRunnerSpec {
+  readonly compiled: CompiledAgentOptions
+  readonly agentName: string
+  readonly strategy?: MainLoopMeta['strategy']
+  readonly maxIterations?: number
+  readonly compaction?: { name: string; keepTokens?: number }
+}
+
+/** Derive the spec from a decorated class — the ONLY place the metadata walk is still needed. */
+function specFromClass(AgentClass: Function): AgentRunnerSpec {
+  const walk = walkAgentMetadata(AgentClass, [])
+  const toolboxInstances = new Map(
+    walk.toolboxes.map((tb) => [tb.class, new (tb.class as new () => object)()]),
+  )
+  return {
+    compiled: compileAgent(walk, toolboxInstances),
+    agentName: walk.agentConfig.name,
+    strategy: walk.mainLoop.strategy,
+    maxIterations: walk.mainLoop.maxIterations,
+    compaction: walk.compaction,
+  }
+}
+
 /** Fluent builder — accumulates config; `build()` is the compile boundary. */
 export class AgentRunnerBuilder {
   private reflectionOverride?: ReflectionStrategy
   private streamEnabled = true
   private compactionOverride?: { name: string; keepTokens?: number }
 
-  constructor(private readonly AgentClass: Function) {}
+  constructor(private readonly source: Function | AgentRunnerSpec) {}
 
   /** Override the default reflection strategy (OCP — plan Drawback #2). No arg ⇒ keep default. */
   reflection(strategy?: ReflectionStrategy): this {
@@ -317,28 +351,25 @@ export class AgentRunnerBuilder {
     return this
   }
 
-  /** Walk + compile + resolve strategies — the compile→execute boundary (no I/O). */
+  /** Resolve strategies from an already-compiled spec — the compile→execute boundary (no I/O). */
   build(): AgentRunner {
-    const walk = walkAgentMetadata(this.AgentClass, [])
-    const toolboxInstances = new Map(
-      walk.toolboxes.map((tb) => [tb.class, new (tb.class as new () => object)()]),
-    )
-    const compiled = compileAgent(walk, toolboxInstances)
-    const loopStrategy = resolveLoopStrategy(walk.mainLoop.strategy, walk.mainLoop.maxIterations)
+    const spec = typeof this.source === 'function' ? specFromClass(this.source) : this.source
+    // `'simple-chat'` is the SAME default `@MainLoop` applies (main-loop.ts:20), kept here so the
+    // spec path and the decorator path resolve identically when neither declares a strategy.
+    const strategy = spec.strategy ?? 'simple-chat'
+    const loopStrategy = resolveLoopStrategy(strategy, spec.maxIterations)
     const reflectionStrategy =
       this.reflectionOverride ??
-      (walk.mainLoop.strategy === 'plan-act-reflect'
-        ? ladderReflectionStrategy
-        : noopReflectionStrategy)
-    // V4-F: builder override WINS over the @Compaction decorator (EC-1); undefined when
-    // neither declares it (EC-4 — opt-in). resolveCompactionStrategy fails fast (EC-5/EC-2).
-    const compactionDecl = this.compactionOverride ?? walk.compaction
+      (strategy === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy)
+    // V4-F: builder override WINS over whatever the spec declares (EC-1); undefined when neither
+    // declares it (EC-4 — opt-in). resolveCompactionStrategy fails fast (EC-5/EC-2).
+    const compactionDecl = this.compactionOverride ?? spec.compaction
     const compaction = compactionDecl
       ? resolveCompactionStrategy(compactionDecl.name, { keepTokens: compactionDecl.keepTokens })
       : undefined
     return new AgentRunner({
-      compiled,
-      agentName: walk.agentConfig.name,
+      compiled: spec.compiled,
+      agentName: spec.agentName,
       loopStrategy,
       reflectionStrategy,
       streamEnabled: this.streamEnabled,
