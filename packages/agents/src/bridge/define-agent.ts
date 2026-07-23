@@ -262,7 +262,7 @@ function compileHooksAndPlugins(def: AgentDefinition): { plugins?: readonly unkn
   return { plugins: [...explicit, plugin] }
 }
 
-function compileSkillsSelection(
+export function compileSkillsSelection(
   skills: SkillsSelection | undefined,
 ): Pick<CompiledAgentOptions, 'skills' | 'skillsResolver'> {
   if (skills === undefined) return {}
