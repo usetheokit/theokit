@@ -7,5 +7,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   // Peer — consumed via types, provided by the host.
-  external: ['@theokit/sdk'],
+  external: ['@theokit/sdk', 'ai'],
 })
