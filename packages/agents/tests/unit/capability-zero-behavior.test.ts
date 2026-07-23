@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 
-import { compileAgent } from '../../src/bridge/agent-compiler.js'
+import { compileAgent, type CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { compileAgentDefinition, defineAgent } from '../../src/bridge/define-agent.js'
 import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
 import { Agent as DecoratorAgent } from '../../src/decorators/agent.js'
@@ -9,7 +9,7 @@ import { MainLoop } from '../../src/decorators/main-loop.js'
 import { Skills } from '../../src/decorators/skills.js'
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
-import { ModelCapability, skills } from '../../src/capability/capabilities.js'
+import { ModelCapability, skills, ToolsCapability } from '../../src/capability/capabilities.js'
 import { CapabilityRegistry } from '../../src/capability/registry.js'
 
 /**
@@ -23,21 +23,68 @@ import { CapabilityRegistry } from '../../src/capability/registry.js'
  */
 
 /**
- * Waist fields only the DECORATOR path can produce today. Every one of them must gain a capability
- * (or an explicit ADR dropping it) before M53 may delete `src/decorators/`.
+ * The waist's COMPLETE field set, derived from the type — `satisfies` rejects a name that is not a
+ * real field, and the `_Exhaustive` check below fails to COMPILE if `CompiledAgentOptions` gains a
+ * field nobody classified. The universe cannot drift away from reality silently.
  */
-const DECORATOR_ONLY_FIELDS = [
+type WaistField = keyof CompiledAgentOptions
+const WAIST_FIELDS = [
+  'model',
+  'reasoningEffort',
+  'parseThinkTags',
+  'stripToolDialect',
+  'recoverLeakedToolCalls',
   'systemPrompt',
-  'hitl',
-  'checkpoint',
+  'settingSources',
+  'plugins',
+  'tools',
+  'agents',
+  'memory',
+  'skills',
   'context',
+  'runContext',
   'projectContext',
   'mcpServers',
-  'guardrails',
-  'memory',
   'maxIterations',
   'timeoutMs',
-] as const
+  'stream',
+  'hitl',
+  'checkpoint',
+  'guardrails',
+  'skillsResolver',
+] as const satisfies readonly WaistField[]
+
+/** Compile-time exhaustiveness: a new waist field must be classified here before tests compile. */
+type _Exhaustive =
+  Exclude<WaistField, (typeof WAIST_FIELDS)[number]> extends never
+    ? true
+    : ['unclassified waist field']
+const WAIST_FIELDS_ARE_EXHAUSTIVE: _Exhaustive = true
+
+/**
+ * Waist fields NO capability can express yet. Every one must gain a capability (or an ADR dropping
+ * it) before M53 may delete `src/decorators/`. `satisfies` makes a fabricated name a compile error;
+ * the assertion below is exact set equality, so an over-claim fails just as loudly as an omission.
+ */
+const NOT_EXPRESSIBLE_YET = [
+  'parseThinkTags',
+  'stripToolDialect',
+  'recoverLeakedToolCalls',
+  'systemPrompt',
+  'settingSources',
+  'plugins',
+  'memory',
+  'context',
+  'runContext',
+  'projectContext',
+  'mcpServers',
+  'maxIterations',
+  'timeoutMs',
+  'hitl',
+  'checkpoint',
+  'guardrails',
+  'skillsResolver',
+] as const satisfies readonly WaistField[]
 
 /** The draft carries `provenance` (new diagnostics) — not part of the waist, so it is stripped. */
 function waistOf(draft: Record<string, unknown>): Record<string, unknown> {
@@ -119,16 +166,63 @@ describe('capability path vs the DECORATOR path (the artifact M53 deletes)', () 
     }
   })
 
-  it('PINS the waist fields no capability can express yet — M53 entry criterion, not a footnote', () => {
-    const draft = applyCapabilities([new ModelCapability('openai/gpt-5.4')])
-    const expressible = new Set([...Object.keys(draft), 'reasoningEffort', 'skillsResolver'])
-    const reference = compileAgentDefinition(defineAgent({ model: 'openai/gpt-5.4' }))
-    const waistFields = new Set([...Object.keys(reference), ...DECORATOR_ONLY_FIELDS])
-    const gap = [...waistFields]
-      .filter((f) => !expressible.has(f))
-      .sort((a, b) => a.localeCompare(b))
+  it('the waist field list is exhaustive (fails to COMPILE if a new field is unclassified)', () => {
+    expect(WAIST_FIELDS_ARE_EXHAUSTIVE).toBe(true)
+  })
 
-    // Deleting the decorator source while these have no replacement would REMOVE authoring surface.
-    expect(gap).toEqual([...DECORATOR_ONLY_FIELDS].sort((a, b) => a.localeCompare(b)))
+  it('PINS the gap by DERIVING both sides — an over-claim fails as loudly as an omission', () => {
+    // expressible = what the layer ACTUALLY produces when every capability it ships is applied.
+    // Deriving it (instead of hardcoding) is what makes this assertion able to fail: the earlier
+    // version unioned its own answer into the question and passed for any fabricated field.
+    const everything = applyCapabilities([
+      new ModelCapability('openai/gpt-5.4', 'high'),
+      new ToolsCapability([{ name: 't' } as never]),
+      skills(['a']),
+    ])
+    const expressible = new Set(Object.keys(everything).filter((k) => k !== 'provenance'))
+    const gap = WAIST_FIELDS.filter((f) => !expressible.has(f))
+
+    expect([...gap].sort((a, b) => a.localeCompare(b))).toEqual(
+      [...NOT_EXPRESSIBLE_YET].sort((a, b) => a.localeCompare(b)),
+    )
+  })
+
+  it('the decorator compiler DOES emit fields no capability expresses — the deletion is not free', () => {
+    @DecoratorAgent({
+      name: 'rich',
+      route: '/rich',
+      model: 'openai/gpt-5.4',
+      systemPrompt: 'you are rich',
+      parseThinkTags: true,
+      stripToolDialect: true,
+      recoverLeakedToolCalls: true,
+      maxIterations: 7,
+      timeoutMs: 1234,
+    })
+    class Rich {
+      @MainLoop()
+      async run(): Promise<void> {}
+    }
+
+    const decorated = compileAgent(walkAgentMetadata(Rich))
+    const everything = applyCapabilities([new ModelCapability('openai/gpt-5.4')])
+    const emittedButUnexpressible = Object.entries(decorated)
+      .filter(([k, v]) => v !== undefined && !(k in everything))
+      .map(([k]) => k)
+
+    // These are live in the decorator path today and have NO capability replacement.
+    expect(emittedButUnexpressible).toEqual(
+      expect.arrayContaining([
+        'systemPrompt',
+        'parseThinkTags',
+        'stripToolDialect',
+        'recoverLeakedToolCalls',
+        'maxIterations',
+        'timeoutMs',
+      ]),
+    )
+    for (const field of emittedButUnexpressible) {
+      expect(NOT_EXPRESSIBLE_YET as readonly string[]).toContain(field)
+    }
   })
 })

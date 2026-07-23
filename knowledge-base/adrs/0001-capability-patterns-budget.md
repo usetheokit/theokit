@@ -81,7 +81,7 @@ class.
   `compileAgentDefinition` (the `defineAgent` source) AND `compileAgent` (the DECORATOR compiler —
   the artifact M53 deletes) on every field the layer can express, including via the registry/file
   route, and is confirmed end-to-end against a real provider
-  (`tests/live/live-m52-capability.ts`). It does **not** authorize the deletion on its own: see
+  (`tests/live/live-m52-capability.test.ts`). It does **not** authorize the deletion on its own: see
   the entry criterion below.
 - **Equivalence is DEEP-EQUAL, not textual.** Top-level key order and undefined-valued keys differ
   between the paths and are not part of the contract — nothing in the package serializes or hashes
@@ -119,7 +119,23 @@ regressions`:
 | V5 | The registry had zero boundary validation: `skills: "code-review"` from a config file spread into eleven single-character skill names, silently. | Typed `ConfigurationError` at the boundary; the message names the offending TYPE, never the value (config files can hold secrets). |
 | V6 | `src/capability/index.ts` was exported from nowhere — the whole layer was unreachable by consumers (wiring pillar (a) missing). | Exported from `src/index.ts`. |
 
-The live run (`tests/live/live-m52-capability.ts`) exposed one more: `assembleM8CreateOptions` is a
+A SECOND adversarial review then attacked the fixes themselves and broke four of six vectors —
+proof that one review pass is not enough when the fixes are non-trivial:
+
+| # | Defect the FIXES introduced | Fix |
+|---|---|---|
+| R2 | The accumulate fix concatenated blindly, so composing `skills(['a'])` twice MANUFACTURED `['a','a']` — a waist state the reference never emits for that input. The V3 regression asserting "no throw" had also become vacuous, since skills no longer routes through `setOnce`. | `enabled` is deduped; a dedicated test asserts no duplicate is manufactured. |
+| R3 | The conflict message `JSON.stringify`d both values — leaking MCP tokens / auth headers from a config-file-built draft, 60 lines from the V5 rule that says report the shape, never the content. | The message reports `shapeOf(value)` (type, arity, key names). Regression test asserts a planted secret never appears. |
+| R3b | `setOnce(field, undefined)` silently consumed the slot. | `undefined` is a no-op. |
+| R4 | The V5 validation accepted only strings, rejecting the `InlineSkill` objects `compileSkillsSelection` accepts — making the layer strictly LESS expressive than the path it claims equivalence with. | Accepts `string \| InlineSkill`; regression test covers a mixed array. |
+| R5 | The gap pin was structurally incapable of failing: it unioned its own answer into the question, derived the universe from the NON-deleted compiler, missed `parseThinkTags`/`stripToolDialect`/`recoverLeakedToolCalls`, and falsely listed `skillsResolver` as expressible. | Universe is now the waist TYPE (`satisfies keyof CompiledAgentOptions` + a compile-time exhaustiveness check, so a new field cannot go unclassified); `expressible` is derived by applying every capability. **Verified failing in both directions**: a fabricated field fails the assertion, and omitting a real gap field fails two tests. |
+| R6 | The live proof was executed by nothing and did not even typecheck. | It is a `*.test.ts` under a dedicated `test:live` target (kept out of the deterministic suite per `rules/testing.md` § 3, since it hits a real provider) and is typechecked by the root tsconfig. |
+
+Honest residue: `setOnce`'s deep equality compares FUNCTIONS by identity, so fields carrying
+functions stay identity-idempotent rather than value-idempotent. That asymmetry is now stated at
+the call site instead of being contradicted by an over-promising comment.
+
+The live run (`tests/live/live-m52-capability.test.ts`) exposed one more: `assembleM8CreateOptions` is a
 PARTIAL projection (M8 extras only) — the model reaches `Agent.create` through
 `buildModelSelection`, exactly as `sdk-adapter.ts:669` does. The live path composes both instead of
 assuming one carries everything.
