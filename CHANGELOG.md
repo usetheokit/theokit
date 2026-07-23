@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **Roadmap: capability-based agent authoring, decorators removed (M52-M54).** `@theokit/agents` moves from a metadata/decorator-driven pipeline to an object-oriented, capability-based one: a canonical `AgentSpec` (the narrow waist between authoring and runtime), a `Capability` contract (Strategy + value-level Decorator), a registry (unlocks file-based authoring), presets (Composite) and an `SdkAgentAdapter` — then a 1:1 decorator→capability migration proven by repointing the existing suite unchanged, then the complete removal of the agent decorators (major, no `reflect-metadata`). The `@theokit/http` **controller** decorators are explicitly out of scope and stay. Design spike at `knowledge-base/discoveries/blueprints/capability-oo-design-spike.md`.
+
+### Added
 - **Terminal + JSON surfaces on the presentation layer (M50/M51).** `@theokit/presenter` now ships `TerminalPresenter` (canonical event → semantic terminal rows, ANSI opt-in — format separated from render) and `JsonPresenter` (namespaced machine-readable records), joining the web `UIMessageStreamPresenter`. One agent run drives all three surfaces from the SAME canonical `AgentOutputEvent` — no surface re-translates the SDK. Proven live against a real agent run (terminal rows + JSON records from one stream).
 
 ### Added
