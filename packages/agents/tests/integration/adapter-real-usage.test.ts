@@ -45,15 +45,11 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
 const { AgentRunner } = await import('../../src/index.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
 
-@Agent({ name: 'usage', route: '/usage', model: 'm' })
-class UsageAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const usageAgent = applyCapabilities([new ModelCapability('m')])
 
 async function drain(): Promise<StreamEvent[]> {
   const out: StreamEvent[] = []
@@ -119,14 +115,26 @@ describe('V4-N.1 adapter emits real SDK usage', () => {
       cacheReadTokens: 5,
       cacheWriteTokens: 2,
     }
-    const result = await AgentRunner.builder(UsageAgent).build().run('hi', { apiKey: 'k' })
+    const result = await AgentRunner.fromSpec({
+      compiled: usageAgent,
+      agentName: 'usageAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k' })
     expect(result.reasoningTokens).toBe(3)
     expect(result.cacheReadTokens).toBe(5)
     expect(result.cacheWriteTokens).toBe(2)
   })
 
   it('test_delegationresult_reports_real_split_usage', async () => {
-    const result = await AgentRunner.builder(UsageAgent).build().run('hi', { apiKey: 'k' })
+    const result = await AgentRunner.fromSpec({
+      compiled: usageAgent,
+      agentName: 'usageAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k' })
     expect(result.tokensInput).toBe(12)
     expect(result.tokensOutput).toBe(7)
     expect(result.tokens).toBe(19)
