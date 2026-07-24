@@ -137,17 +137,21 @@ export class ToolboxCapability implements Capability {
     }
   }
 
+  /** Compile an already-derived walk. Shared so `compile()` and `apply()` cannot diverge. */
+  #compileFrom(walk: ToolboxWalkResult): CompiledTool[] {
+    return compileTools([walk], new Map([[walk.class, this.#instance]]))
+  }
+
   /** The compiled tools this toolbox contributes — the same shape the decorator path produces. */
   compile(): CompiledTool[] {
-    const walk = this.#walk()
-    return compileTools([walk], new Map([[walk.class, this.#instance]]))
+    return this.#compileFrom(this.#walk())
   }
 
   apply(draft: CompiledAgentOptionsDraft): void {
     const walk = this.#walk()
 
     // ACCUMULATES: several toolboxes compose into one agent, exactly as several `@Toolbox` classes did.
-    draft.tools.push(...compileTools([walk], new Map([[walk.class, this.#instance]])))
+    draft.tools.push(...this.#compileFrom(walk))
     draft.provenance.push({ capability: this.name, contributed: ['tools'] })
 
     const gates = compileHitlGates([walk])

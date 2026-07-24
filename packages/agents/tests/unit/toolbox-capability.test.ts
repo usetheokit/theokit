@@ -156,6 +156,23 @@ describe('ToolboxCapability', () => {
       for (const key of compiled.hitl?.keys() ?? []) expect(names).toContain(key)
     })
 
+    it('`compile()` produces exactly what `apply()` contributes (both go through one derivation)', () => {
+      // Without this, `compile()` — a public method — is invisible to the whole suite: breaking its
+      // body entirely leaves all tests green. Found by mutation during review of this milestone.
+      const capability = new ToolboxCapability(new MixedTools(), { namespace: 'ops' })
+      const direct = capability.compile()
+      const viaApply = applyCapabilities([
+        new ToolboxCapability(new MixedTools(), { namespace: 'ops' }),
+      ]).tools
+
+      expect(direct.map((t) => t.name)).toEqual(viaApply.map((t) => t.name))
+      expect(direct).toHaveLength(2)
+      // The handler must be BOUND — a compile() that lost its instance map would still return
+      // two entries with the right names, so assert the handler actually runs.
+      expect(direct[0]?.handler({})).toBe('r')
+      expect(direct[1]?.handler({})).toBe('d')
+    })
+
     it('a toolbox with NO gated tool leaves `hitl` undefined', () => {
       // Load-bearing: `agent-compiler.ts` documents that an empty map ⇒ no gated tools ⇒ the
       // non-HITL stream path (M2, byte-unchanged). Creating an empty Map here would flip that

@@ -581,7 +581,8 @@ O único ponto que parece I/O é `Agent.create` no teste de contrato, mas a vali
 
 ## Desvios do DoD do M55 (registrados, não editados no ROADMAP)
 
-`cycle-roadmap` proíbe editar milestone em voo, então os dois desvios ficam aqui e no ADR:
+`cycle-roadmap` proíbe editar milestone em voo, então os três desvios ficam aqui e no ADR:
 
 1. **"`pnpm knip` limpo" foi substituído** por `pnpm knip:exports` sem achado. Motivo medido: com `rules.exports:"off"`, "knip limpo" passa com o órfão presente — é prova vazia (ADR D4). O critério novo é mais forte, não mais fraco: falha no baseline.
 2. **Escopo ampliado pela discovery:** o DoD original falava em validar "o nome"; a validação passa a cobrir as **três** regras do SDK, porque a cópia parcial é um defeito vivo (gap 7). Ampliação de escopo dentro do mesmo objetivo, sem tarefa nova de produto.
+3. **UMA expectativa pré-existente FOI editada** — contrariando a redação literal do Global DoD ("sem nenhuma expectativa existente editada"). Achado pelo **agente de cross-validation do `/review`**, não declarado por mim na hora. O teste era `'the generated name matches the SDK charset'` em `tool-name-sdk-contract.test.ts`, que **re-declarava o regex do charset** — a terceira cópia da regra que este milestone existe para eliminar. Virou asserção de comportamento (`toBe('ops_deploy')`), mais forte que o `toMatch` anterior, sem mascarar regressão. A promessa "zero expectativa editada" é o oráculo de **T0.1** (refactor estrutural puro) e foi restatada sem qualificador no nível global — erro de redação meu. Registrado em vez de silenciado: desvio não declarado é exatamente o que o gate de review existe para pegar.

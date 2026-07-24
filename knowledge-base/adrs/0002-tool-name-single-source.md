@@ -121,6 +121,12 @@ vindos de servidor MCP, onde a postura correta é **coagir** e não lançar (é 
   baseline. Ver D4.
 - **Escopo ampliado pela discovery:** o DoD falava em validar "o nome"; passou a cobrir as **três**
   regras do SDK, porque a cópia parcial era um defeito vivo. Ampliação dentro do mesmo objetivo.
+- **Uma expectativa pré-existente foi editada**, contrariando a redação literal do Global DoD. O
+  teste `'the generated name matches the SDK charset'` re-declarava o regex — a terceira cópia da
+  regra que este milestone elimina — e virou asserção de comportamento (`toBe('ops_deploy')`), mais
+  forte que o `toMatch` anterior. Desvio **achado pelo agente de cross-validation do `/review`**, não
+  declarado por mim no momento da mudança. A promessa de "zero expectativa editada" é o oráculo de
+  T0.1 (refactor estrutural puro) e foi restatada sem qualificador no nível global — erro de redação.
 
 ## Dívida reportada, não mascarada
 
