@@ -1277,7 +1277,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
-### M56 — [ ] Remover TODA concessão de retrocompatibilidade do M55 — as correções de raiz
+### M56 — [x] Remover TODA concessão de retrocompatibilidade do M55 — as correções de raiz
 
 > Added 2026-07-24 by `/roadmap-feature` (slug: `no-backcompat-concessions`). **Out-of-scope cross-check (2026-07-24):** o item travado *"Breaking the `@theokit/http` decorator path"* é ADJACENTE — o M56 toca `packages/http` mas **apenas em 4 tipos exportados órfãos** que nenhuma entry do pacote alcança (logo, nenhum consumidor externo importa hoje). O path de decorators de controller fica **intacto**, provado pela suíte de 411 testes do pacote. Demais itens travados sem interseção. Decisão do owner registrada em `knowledge-base/grills/no-backcompat-concessions-feature-grill.md`.
 
