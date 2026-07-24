@@ -24,8 +24,9 @@ import {
   resolveLoopStrategy,
 } from '../loop/index.js'
 import { type RoundStreamFactory, runReflectiveLoop } from '../loop/run-reflective-loop.js'
+import type { MainLoopMeta } from '../types.js'
 
-import { compileAgent, type CompiledTool } from './agent-compiler.js'
+import { compileAgent, type CompiledAgentOptions, type CompiledTool } from './agent-compiler.js'
 import { type DelegationResult, DelegationError } from './delegation-types.js'
 import { createSdkAgentStream } from './sdk-adapter.js'
 import { walkAgentMetadata } from './walk-agent-metadata.js'
@@ -120,24 +121,51 @@ function mergeTools(parentTools: CompiledTool[], subTools: CompiledTool[]): Comp
  *   metric (`THEO_AGENT_MAINLOOP_RUNTIME_APPLIED`) + typed-error + cumulative budget
  *   all live in the shared driver, so they fire identically on both paths.
  */
-export async function delegate(
-  SubAgentClass: Function,
-  message: string,
-  opts: DelegateOptions = {},
-): Promise<DelegationResult> {
-  const apiKey = requireApiKey(opts, SubAgentClass.name)
+/**
+ * M53 — what `delegate` needs from a sub-agent: a name and already-compiled options. A decorated
+ * CLASS still works (it is resolved through `subAgentSpec`), so the decorator path is unchanged
+ * while the migration is in flight; a capability-authored agent passes this directly.
+ */
+export interface SubAgentSpec {
+  readonly name: string
+  readonly compiled: CompiledAgentOptions
+  /** Loop strategy (`@MainLoop({ strategy })`); absent ⇒ the same `'simple-chat'` default. */
+  readonly strategy?: MainLoopMeta['strategy']
+  /** Loop ceiling (`@MainLoop({ maxIterations })`); a per-run override still wins. */
+  readonly maxIterations?: number
+}
 
-  // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
-  const effectiveMessage = opts.onDelegationStart
-    ? await opts.onDelegationStart({ subAgent: SubAgentClass.name, input: message })
-    : message
-
-  // 1. Walk + compile sub-agent (EC-1: auto-instantiate toolboxes)
-  const walk = walkAgentMetadata(SubAgentClass, [])
+/** Resolve a decorated class into a {@link SubAgentSpec} — the only place the walk is still needed. */
+function subAgentSpec(source: Function | SubAgentSpec): SubAgentSpec {
+  if (typeof source !== 'function') return source
+  const walk = walkAgentMetadata(source, [])
   const toolboxInstances = new Map(
     walk.toolboxes.map((tb) => [tb.class, new (tb.class as new () => object)()]),
   )
-  const compiled = compileAgent(walk, toolboxInstances)
+  return {
+    // The CLASS name, not `agentConfig.name`: the delegation hooks have always reported the class
+    // (`EchoAgent`), and this migration must not quietly change what a consumer's hook receives.
+    name: source.name,
+    compiled: compileAgent(walk, toolboxInstances),
+    strategy: walk.mainLoop.strategy,
+    maxIterations: walk.mainLoop.maxIterations,
+  }
+}
+
+export async function delegate(
+  subAgent: Function | SubAgentSpec,
+  message: string,
+  opts: DelegateOptions = {},
+): Promise<DelegationResult> {
+  const spec = subAgentSpec(subAgent)
+  const apiKey = requireApiKey(opts, spec.name)
+
+  // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
+  const effectiveMessage = opts.onDelegationStart
+    ? await opts.onDelegationStart({ subAgent: spec.name, input: message })
+    : message
+
+  const { compiled } = spec
 
   // 2. Merge parent tools + clamp budget (D4)
   const allTools = mergeTools(opts.parentTools ?? [], compiled.tools)
@@ -150,7 +178,7 @@ export async function delegate(
   const streamFactory =
     opts.streamFactory ??
     createSdkAgentStream(compiled, allTools, apiKey, {
-      model: opts.model ?? walk.agentConfig.model,
+      model: opts.model ?? compiled.model,
       cwd: opts.cwd,
       plugins: opts.plugins,
       providers: opts.providers,
@@ -163,8 +191,8 @@ export async function delegate(
   // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
   // V4-T: per-run maxIterations override (parity with AgentRunner.stream); absent ⇒ decorator ceiling.
   const loopStrategy = resolveLoopStrategy(
-    walk.mainLoop.strategy,
-    opts.maxIterations ?? walk.mainLoop.maxIterations,
+    spec.strategy ?? 'simple-chat',
+    opts.maxIterations ?? spec.maxIterations,
   )
   // V4-T: a custom reflection wins; absent ⇒ the strategy-derived default (ladder/noop).
   const reflection =
@@ -174,14 +202,14 @@ export async function delegate(
     loop: loopStrategy,
     reflection,
     budget,
-    agentName: SubAgentClass.name,
+    agentName: spec.name,
     signal: opts.signal,
     retry: opts.retry, // V4-T: per-round transient retry (V4-P) on the delegate path
   })
 
   // M12 — onDelegationComplete: let the supervisor transform the result before it returns.
   if (opts.onDelegationComplete) {
-    return await opts.onDelegationComplete({ subAgent: SubAgentClass.name, result })
+    return await opts.onDelegationComplete({ subAgent: spec.name, result })
   }
   return result
 }
