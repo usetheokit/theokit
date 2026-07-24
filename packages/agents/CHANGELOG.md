@@ -1,10 +1,12 @@
 # @theokit/agents
 
-## 2.1.0
+## 3.0.0
 
-### Minor Changes
+### Major Changes
 
 - 0e4ea93: Inject a custom loop stop-criterion via `AgentRunnerBuilder.loopStrategy(custom)` (M54).
+
+  **MAJOR — type-level break.** `LoopStrategy.name` changed from the `'simple-chat' | 'plan-act-reflect' | 'react'` union to `string`. A consumer doing an exhaustive `switch (strategy.name)` over the three literals (no `default`) will now fail to typecheck — `string` is not exhausted by three cases. There is no runtime-only semver policy in this repo, so a source-breaking type change takes a major bump (M54 review F-3).
 
   The runner already let you inject reflection, compaction, and the round stream factory; the stop
   criterion (`LoopStrategy.shouldContinue`) was the one axis locked to three built-in names. Now:
