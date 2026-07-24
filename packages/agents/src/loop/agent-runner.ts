@@ -31,7 +31,11 @@ import {
   resolveCompactionStrategy,
   type TranscriptCompactionStrategy,
 } from './compaction-strategy.js'
-import { type LoopStrategy, resolveLoopStrategy } from './loop-strategy.js'
+import {
+  assertValidCustomLoopStrategy,
+  type LoopStrategy,
+  resolveLoopStrategy,
+} from './loop-strategy.js'
 import {
   ladderReflectionStrategy,
   noopReflectionStrategy,
@@ -353,6 +357,9 @@ export class AgentRunnerBuilder {
    * ```
    */
   loopStrategy(custom: LoopStrategy): this {
+    // Fail fast at authoring: a custom bypasses the built-ins' zod ceiling check, and a non-finite
+    // or `< 1` ceiling would make the runner's `round < maxIterations` guard never fire (M54).
+    assertValidCustomLoopStrategy(custom)
     this.loopStrategyOverride = custom
     return this
   }
