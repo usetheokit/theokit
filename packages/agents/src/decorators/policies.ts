@@ -6,16 +6,12 @@
  */
 import { createDecorator } from '@theokit/http'
 
-import type { ApprovalOptions, BudgetOptions, PolicyHandler } from '../types.js'
+import type { ApprovalOptions } from '../types.js'
 
 /** Mark a tool as requiring human approval before execution. */
 export const RequiresApproval = createDecorator<ApprovalOptions>()
 
-/** Require specific capabilities (permissions) to execute a tool. */
-export const RequiresCapability = createDecorator<string[]>()
-
-/** Set a cost budget for an agent or tool scope. */
-export const Budget = createDecorator<BudgetOptions>()
-
-/** Attach policy handler functions (CASL-style authorization). */
-export const Policy = createDecorator<PolicyHandler[]>()
+// M53 — `RequiresCapability`, `Budget` and `Policy` were REMOVED (ADR 0002 § Group C): each wrote
+// metadata that no production code ever read. `@Budget` in particular only triggered a warning
+// saying it did nothing, and the walk hardcoded the per-tool `capabilities`/`budget` to `undefined`.
+// A decorator whose only effect is a warning that it has no effect is a misleading affordance.
