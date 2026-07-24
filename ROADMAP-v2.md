@@ -153,7 +153,7 @@ agent-builder passa a importá-lo do `@theokit/agents`.
 
 ---
 
-### M62 — [ ] `sdk-tools` via barrel `@theokit/agents/tools`
+### M62 — [x] `sdk-tools` via barrel `@theokit/agents/tools`
 
 **Objective:** As 13 factory tools do `@theokit/sdk-tools` (`createReadFileTool`, `createShellTool`, …)
 + `withName`/`withDescription` são re-exportadas via `@theokit/agents/tools` (pass-through — são
