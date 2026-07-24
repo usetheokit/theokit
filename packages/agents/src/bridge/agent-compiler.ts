@@ -202,8 +202,11 @@ export function compileTools(
     // EC-3: guard against missing toolbox instance
     const instance = toolboxInstances.get(tb.class)
     if (!instance) {
-      throw new Error(
-        `[@theokit/agents] Toolbox ${tb.class.name} not instantiated — add to providers or pass instances.`,
+      // M56 — typed, not a bare `Error`: the same module already throws `ConfigurationError` for
+      // name validation, and `rules/error-handling.md` § 2 requires explicit typed errors so a
+      // caller can distinguish an authoring mistake from an unexpected runtime failure.
+      throw new ConfigurationError(
+        `toolbox: ${tb.class.name} não foi instanciado — passe a instância em \`toolboxInstances\``,
       )
     }
 
@@ -212,8 +215,9 @@ export function compileTools(
         tool.propertyKey
       ]
       if (typeof handler !== 'function') {
-        throw new Error(
-          `[@theokit/agents] Toolbox ${tb.class.name}: '${String(tool.propertyKey)}' is not a function.`,
+        throw new ConfigurationError(
+          `toolbox: ${tb.class.name}.${String(tool.propertyKey)} não é um método ` +
+            `(tool "${tool.config.name}")`,
         )
       }
 
