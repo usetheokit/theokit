@@ -109,8 +109,8 @@ describe('compileAgentModule (M2)', () => {
     const compiled = compileAgentModule({
       default: applyCapabilities([new ToolboxCapability(new OpsTools(), { namespace: 'ops' })]),
     })
-    expect(compiled.tools.map((t) => t.name)).toContain('ops.deploy')
-    expect(compiled.hitl?.get('ops.deploy')).toMatchObject({ question: 'Deploy?' })
+    expect(compiled.tools.map((t) => t.name)).toContain('ops_deploy')
+    expect(compiled.hitl?.get('ops_deploy')).toMatchObject({ question: 'Deploy?' })
   })
 })
 
