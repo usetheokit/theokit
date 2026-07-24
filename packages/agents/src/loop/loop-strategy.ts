@@ -13,8 +13,6 @@
  */
 import { z } from 'zod'
 
-import type { MainLoopMeta } from '../types.js'
-
 /** Why a single round ended (or, for the V4-D terminals, why the whole loop ended). */
 export type LoopFinishReason =
   | 'tool-calls'
@@ -39,22 +37,50 @@ export interface LoopOutcome {
 
 /** The terminal-decision contract. `shouldContinue` is the inverted `stopWhen`. */
 export interface LoopStrategy {
-  /** The originating `@MainLoop` strategy name. */
-  readonly name: MainLoopMeta['strategy']
-  /** Hard ceiling on rounds — guarantees termination. */
+  /**
+   * The strategy name, surfaced in `finalize`/logs. M54 relaxes this from
+   * `MainLoopMeta['strategy']` to `string` so a caller-injected `.loopStrategy(custom)` can name
+   * itself freely — the three built-ins keep their names, but the seam is no longer union-locked.
+   * The INTERNAL resolution (`loopStrategyConfigSchema`) still validates the three built-in names
+   * via `z.enum`; a custom never passes through it (it enters by the seam, not by name).
+   */
+  readonly name: string
+  /** Hard ceiling on rounds — guarantees termination (enforced by the runner since M54). */
   readonly maxIterations: number
-  /** True ⇒ re-enter for another round; false ⇒ terminate. Never true forever. */
+  /** True ⇒ re-enter for another round; false ⇒ terminate. The runner caps it at `maxIterations`. */
   shouldContinue(outcome: LoopOutcome): boolean
 }
 
 /** Default round ceiling when `@MainLoop` declares no `maxIterations` (EC-3: finite, never Infinity). */
 export const DEFAULT_MAX_ITERATIONS = 8
 
+/** The ceiling contract every strategy must satisfy: a finite integer ≥ 1. SSoT for the rule. */
+const maxIterationsSchema = z.number().int().min(1)
+
 /** Serializable config for a LoopStrategy. SSoT per type-safety.md (ADR D3). */
 export const loopStrategyConfigSchema = z.object({
   name: z.enum(['simple-chat', 'plan-act-reflect', 'react']),
-  maxIterations: z.number().int().min(1),
+  maxIterations: maxIterationsSchema,
 })
+
+/**
+ * M54 — validate a CUSTOM strategy's ceiling at authoring time (`AgentRunnerBuilder.loopStrategy`).
+ * The three built-ins get this rule for free via {@link loopStrategyConfigSchema}; a custom bypasses
+ * that path, and `maxIterations: Infinity` (or `NaN`/`0`/negative/non-integer) would defeat the
+ * runner's `round < maxIterations` ceiling — an infinite loop, the exact failure the seam must not
+ * reopen. Fail fast, typed, at the boundary (`rules/error-handling.md` § 2).
+ *
+ * @throws {Error} when `maxIterations` is not a finite integer ≥ 1, with a message naming the value.
+ */
+export function assertValidCustomLoopStrategy(strategy: LoopStrategy): void {
+  const result = maxIterationsSchema.safeParse(strategy.maxIterations)
+  if (!result.success) {
+    throw new Error(
+      `loopStrategy: maxIterations inválido (${String(strategy.maxIterations)}) — ` +
+        'deve ser um inteiro finito ≥ 1 (senão o teto round < maxIterations nunca termina)',
+    )
+  }
+}
 
 export type LoopStrategyConfig = z.infer<typeof loopStrategyConfigSchema>
 
@@ -74,7 +100,10 @@ export type LoopStrategyConfig = z.infer<typeof loopStrategyConfigSchema>
  * Throws (Zod) when `maxIterations < 1` — fail fast, never a silent infinite loop.
  */
 export function resolveLoopStrategy(
-  strategy: MainLoopMeta['strategy'],
+  // M54 (D2): accepts `string`, but `loopStrategyConfigSchema` (`z.enum`) still admits ONLY the three
+  // built-in names — an unknown name throws here (fail-fast), never resolving. A custom strategy
+  // never reaches this function; it enters through `AgentRunnerBuilder.loopStrategy(obj)`.
+  strategy: string,
   maxIterations: number = DEFAULT_MAX_ITERATIONS,
 ): LoopStrategy {
   const cfg = loopStrategyConfigSchema.parse({ name: strategy, maxIterations })

@@ -1,5 +1,38 @@
 # @theokit/agents
 
+## 3.0.0
+
+### Major Changes
+
+- 0e4ea93: Inject a custom loop stop-criterion via `AgentRunnerBuilder.loopStrategy(custom)` (M54).
+
+  **MAJOR — type-level break.** `LoopStrategy.name` changed from the `'simple-chat' | 'plan-act-reflect' | 'react'` union to `string`. A consumer doing an exhaustive `switch (strategy.name)` over the three literals (no `default`) will now fail to typecheck — `string` is not exhausted by three cases. There is no runtime-only semver policy in this repo, so a source-breaking type change takes a major bump (M54 review F-3).
+
+  The runner already let you inject reflection, compaction, and the round stream factory; the stop
+  criterion (`LoopStrategy.shouldContinue`) was the one axis locked to three built-in names. Now:
+
+  ```ts
+  const stopWhenConfident: LoopStrategy = {
+    name: 'confident',
+    maxIterations: 8,
+    shouldContinue: (o) => !o.responseText.includes('confidence: high'),
+  }
+  AgentRunner.fromSpec(spec).loopStrategy(stopWhenConfident).build()
+  ```
+
+  The injected strategy WINS over the strategy the spec's name would resolve to, exactly as
+  `.compaction()` outranks the spec.
+
+  **The ceiling is now the runner's guarantee, not each strategy's convention.** Previously the three
+  built-ins embedded `round < maxIterations` inside their own `shouldContinue`, so a custom that never
+  returned `false` would loop forever. The runner now caps every strategy at `maxIterations` — a
+  `shouldContinue: () => true` terminates at the ceiling with `finishReason: 'step_limit'`.
+
+  **Type change (note):** `LoopStrategy.name` is now `string` (was the `'simple-chat' |
+'plan-act-reflect' | 'react'` union) so a custom can name itself freely. The internal resolver still
+  validates the three built-in names via Zod; a custom never passes through it. Code that reads
+  `strategy.name` expecting the exhaustive union should widen to `string`.
+
 ## 2.0.0
 
 ### Major Changes
