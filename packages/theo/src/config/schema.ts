@@ -20,17 +20,13 @@ import {
 export {
   cacheSchema,
   corsSchema,
-  disallowedConfigSchema,
-  headerSafeString,
-  loggingSchema,
   rateLimitSchema,
   securityHeadersSchema,
   securitySchema,
   storageSchema,
-  uploadSchema,
 } from './schemas/index.js'
 
-export type { FormatErrorContext, FormatErrorHook, StorageConfig } from './schemas/index.js'
+export type { StorageConfig } from './schemas/index.js'
 
 /**
  * Root `theo.config.ts` schema — composer assembled from the per-concern
@@ -314,8 +310,6 @@ export const theoConfigSchema = z
 
 export type TheoConfig = z.infer<typeof theoConfigSchema>
 
-export type OpenApiConfig = NonNullable<TheoConfig['openapi']>
-
 // Silence unused-import warnings for type-only re-exports — TS strips at compile,
 // but exports above re-introduce them for downstream consumers.
-export type _FormatErrorContext = FormatErrorContext
+type _FormatErrorContext = FormatErrorContext

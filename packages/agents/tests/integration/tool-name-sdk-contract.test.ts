@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import { toolRuntimeName } from '../../src/bridge/agent-compiler.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
-import { ConfigurationError } from '../../src/capability/capabilities.js'
+import { ConfigurationError } from '../../src/errors.js'
 import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/toolbox.js'
 
 /**

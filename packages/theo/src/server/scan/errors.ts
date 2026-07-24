@@ -18,7 +18,7 @@
  */
 export const ROUTER_MIGRATION_GUIDE_URL = 'https://theokit.dev/migration/0.3-to-0.4-router'
 
-export interface RouterConventionErrorOptions {
+interface RouterConventionErrorOptions {
   /** Absolute path of the offending route file. */
   file: string
   /** Suggested directory-nested replacement path (relative, e.g. `routes/auth/[provider]/login.ts`). */

@@ -7,7 +7,7 @@ import { resolve } from 'node:path'
 
 import { buildServicesProxyConfig, type ServicesConfig } from '../services/index.js'
 
-export interface ConfigHookCtx {
+interface ConfigHookCtx {
   projectRoot: string
   theoSrcDir: string
   services: ServicesConfig | undefined

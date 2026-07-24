@@ -17,7 +17,7 @@
  */
 import type { ManifestServiceEntry } from '../adapters-bridge/manifest.js'
 
-export interface GenerateClientOptions {
+interface GenerateClientOptions {
   service: ManifestServiceEntry
   /** Directory to write `<service-name>.ts` into. */
   outputDir: string
@@ -27,7 +27,7 @@ export interface GenerateClientOptions {
   customFetch?: typeof fetch
 }
 
-export interface GenerateClientResult {
+interface GenerateClientResult {
   generated: boolean
   outputFile?: string
   skippedReason?: string

@@ -7,11 +7,12 @@
  * EC-1: flush failure logs warning, does NOT throw, does NOT retry (KISS).
  * EC-2: startSpan after shutdown returns noop span.
  */
-import type { ObservabilityAdapter, SpanHandle, SpanAttributes } from './types.js'
-import { SpanImpl, NoopSpan, type SpanData } from '../span.js'
 import { serializeSpansToOtlp } from '../otlp-serializer.js'
+import { SpanImpl, NoopSpan, type SpanData } from '../span.js'
 
-export interface TheoCloudAdapterOptions {
+import type { ObservabilityAdapter, SpanHandle, SpanAttributes } from './types.js'
+
+interface TheoCloudAdapterOptions {
   /** TheoCloud ingest endpoint URL. */
   ingestUrl: string
   /** TheoCloud API key for authentication. */
@@ -26,7 +27,8 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
   readonly name = 'theo-cloud'
   private pendingSpans: SpanData[] = []
   private isShutdown = false
-  private readonly opts: Required<Pick<TheoCloudAdapterOptions, 'ingestUrl' | 'token'>> & TheoCloudAdapterOptions
+  private readonly opts: Required<Pick<TheoCloudAdapterOptions, 'ingestUrl' | 'token'>> &
+    TheoCloudAdapterOptions
 
   constructor(options: TheoCloudAdapterOptions) {
     this.opts = { flushIntervalMs: 5000, ...options }
@@ -36,8 +38,12 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
     if (this.isShutdown) return new NoopSpan()
     const span = new SpanImpl(name, attributes)
     return {
-      setAttribute: (k, v) => span.setAttribute(k, v),
-      setStatus: (s, m) => span.setStatus(s, m),
+      setAttribute: (k, v) => {
+        span.setAttribute(k, v)
+      },
+      setStatus: (s, m) => {
+        span.setStatus(s, m)
+      },
       end: () => {
         span.end()
         this.pendingSpans.push(span.getData())
@@ -45,9 +51,15 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
     }
   }
 
+  /* eslint-disable @typescript-eslint/no-empty-function -- metrics not shipped by this adapter yet; an empty body is honest, a fabricated one is not */
   counter(_name: string, _value: number, _attributes?: SpanAttributes): void {}
   histogram(_name: string, _value: number, _attributes?: SpanAttributes): void {}
-  log(_level: 'debug' | 'info' | 'warn' | 'error', _message: string, _attributes?: SpanAttributes): void {}
+  log(
+    _level: 'debug' | 'info' | 'warn' | 'error',
+    _message: string,
+    _attributes?: SpanAttributes,
+  ): void {}
+  /* eslint-enable @typescript-eslint/no-empty-function */
 
   async flush(): Promise<void> {
     if (this.isShutdown || this.pendingSpans.length === 0) return
@@ -61,7 +73,7 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'authorization': `Bearer ${this.opts.token}`,
+          authorization: `Bearer ${this.opts.token}`,
         },
         body,
       })

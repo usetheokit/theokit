@@ -23,7 +23,7 @@ import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes
 
 const MIGRATION_GUIDE_URL = 'docs/concepts/openapi.md'
 
-export interface OpenApiCommandOptions {
+interface OpenApiCommandOptions {
   /** Project root (defaults to `process.cwd()`). */
   cwd?: string
   /** Skip the filesystem write; print the document to stdout (EC-3). */

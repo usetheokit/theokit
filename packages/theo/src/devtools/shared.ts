@@ -168,8 +168,6 @@ export const CHANNEL_ERROR = 'theo:devtools:error' as const
 export const CHANNEL_CSRF_WARN = 'theo:devtools:csrf.warn' as const
 export const CHANNEL_MANIFEST = 'theo:devtools:manifest' as const
 export const CHANNEL_ROUTE_MATCHED = 'theo:devtools:route-matched' as const
-export const CHANNEL_AGENT_RUN = 'theo:devtools:agent.run' as const
-export const CHANNEL_ACTION_CALL = 'theo:devtools:action.call' as const
 export const CHANNEL_AGENT_STREAM = 'theo:devtools:agent.stream' as const
 
 export interface AgentStreamRecord {

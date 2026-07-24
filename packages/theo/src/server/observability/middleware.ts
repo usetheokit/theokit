@@ -11,13 +11,13 @@
  */
 import type { ObservabilityAdapter, SpanHandle } from './adapters/types.js'
 
-export interface PluginContext {
+interface PluginContext {
   requestId: string
   request: { method: string; url: string }
   response?: { statusCode: number }
 }
 
-export interface ObservabilityPlugin {
+interface ObservabilityPlugin {
   name: string
   onRequest(ctx: PluginContext): Promise<void>
   onResponse(ctx: PluginContext): Promise<void>
@@ -37,7 +37,9 @@ export function createObservabilityPlugin(adapter: ObservabilityAdapter): Observ
   return {
     name: 'theokit:observability',
 
-    async onRequest(ctx: PluginContext): Promise<void> {
+    // NOT `async`: every hook here is synchronous work on an in-memory span map. Declaring them
+    // async would advertise awaiting that never happens (M56).
+    onRequest(ctx: PluginContext): Promise<void> {
       const url = new URL(ctx.request.url, 'http://localhost')
       const span = adapter.startSpan('http.request', {
         method: ctx.request.method,
@@ -45,11 +47,12 @@ export function createObservabilityPlugin(adapter: ObservabilityAdapter): Observ
         requestId: ctx.requestId,
       })
       activeSpans.set(ctx.requestId, span)
+      return Promise.resolve()
     },
 
-    async onResponse(ctx: PluginContext): Promise<void> {
+    onResponse(ctx: PluginContext): Promise<void> {
       const span = activeSpans.get(ctx.requestId)
-      if (!span) return
+      if (!span) return Promise.resolve()
       activeSpans.delete(ctx.requestId)
 
       if (ctx.response) {
@@ -62,11 +65,12 @@ export function createObservabilityPlugin(adapter: ObservabilityAdapter): Observ
         method: ctx.request.method,
         status: ctx.response?.statusCode ?? 0,
       })
+      return Promise.resolve()
     },
 
-    async onError(ctx: PluginContext & { error: unknown }): Promise<void> {
+    onError(ctx: PluginContext & { error: unknown }): Promise<void> {
       const span = activeSpans.get(ctx.requestId)
-      if (!span) return
+      if (!span) return Promise.resolve()
       activeSpans.delete(ctx.requestId)
 
       const message = ctx.error instanceof Error ? ctx.error.message : 'unknown error'
@@ -77,6 +81,7 @@ export function createObservabilityPlugin(adapter: ObservabilityAdapter): Observ
       adapter.counter('http.errors', 1, {
         method: ctx.request.method,
       })
+      return Promise.resolve()
     },
   }
 }

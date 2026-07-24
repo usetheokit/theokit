@@ -34,7 +34,7 @@ export interface TheoUiDetectResult {
  * Raw user config shape (from theo.config.ts > ui field).
  * `false` = opt-out (force disabled); object = explicit config; undefined = default.
  */
-export type RawTheoUiConfig = false | undefined | { theme?: TheoUiTheme; fonts?: TheoUiFonts }
+type RawTheoUiConfig = false | undefined | { theme?: TheoUiTheme; fonts?: TheoUiFonts }
 
 /**
  * Resolve the TheoUI config with defaults applied.

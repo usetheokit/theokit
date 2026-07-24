@@ -287,7 +287,7 @@ function renderTreeNode(node: TreeNode, indent: string, _isRoot: boolean): strin
   return lines.join('\n')
 }
 
-export interface GenerateClientDtsOptions {
+interface GenerateClientDtsOptions {
   manifest: TheoManifest
   /** Absolute path to the .d.ts that will be emitted. Used to compute import paths. */
   dtsOutPath: string
@@ -362,7 +362,7 @@ ${importsBlock}${warningsBlock}  export interface AppClient ${treeBody}
 // Phase 4 — Vite plugin
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface AppTypedClientPluginOptions {
+interface AppTypedClientPluginOptions {
   /** Project root (cwd). */
   cwd: string
   /** Absolute path to the user's `server/` dir. */

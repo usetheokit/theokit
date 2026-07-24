@@ -39,7 +39,7 @@ export function encodeSse(text: string): Uint8Array {
   return new TextEncoder().encode(text)
 }
 
-export interface DurableStreamDeps {
+interface DurableStreamDeps {
   readonly runId: string
   readonly cache: RunEventCache
 }

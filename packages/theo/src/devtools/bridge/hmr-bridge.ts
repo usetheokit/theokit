@@ -26,7 +26,7 @@ import {
 
 import type { Dispatcher } from './dispatcher.js'
 
-export interface ViteHot {
+interface ViteHot {
   on(event: string, cb: (data: unknown) => void): void
   off?: (event: string, cb: (data: unknown) => void) => void
   send?: (event: string, data?: unknown) => void
@@ -63,7 +63,7 @@ function wrap<T>(label: string, fn: (data: T) => void): (data: unknown) => void 
   }
 }
 
-export interface BridgeSubscription {
+interface BridgeSubscription {
   unsubscribe(): void
 }
 

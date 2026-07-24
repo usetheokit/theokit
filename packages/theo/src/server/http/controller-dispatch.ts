@@ -23,7 +23,7 @@ type ControllerClass = new (...args: never[]) => object
 export type ControllerModuleLoader = (absPath: string) => Promise<Record<string, unknown>>
 
 /** A built controller route table exposed as a pure Web-Standard handler. */
-export interface ControllerDispatcher {
+interface ControllerDispatcher {
   /** `null` = no controller route matched — the host owns the miss (404 / fall-through). */
   dispatch(request: Request): Promise<Response | null>
   /** Non-executing route probe — true when a controller route owns `method` + `pathname`. */
@@ -54,7 +54,7 @@ function findControllerFiles(dir: string): string[] {
 }
 
 /** A discovered controller: its source file + the loaded `@Controller` class. */
-export interface ControllerModule {
+interface ControllerModule {
   filePath: string
   cls: ControllerClass
 }
@@ -83,7 +83,7 @@ export async function scanControllerModules(
 }
 
 /** Load every `@Controller` class under `controllersDir` (classes only). */
-export async function scanControllers(
+async function scanControllers(
   controllersDir: string,
   loadModule: ControllerModuleLoader,
 ): Promise<ControllerClass[]> {
