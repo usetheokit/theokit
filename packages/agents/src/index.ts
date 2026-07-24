@@ -8,6 +8,10 @@ export type { HumanInTheLoopOptions, TimeoutAction } from './types.js'
 // M35 — the settled HITL decision type is part of the public approval contract: an `awaitApproval`
 // resolver (the HTTP registry or the in-process seam) may return a bare boolean OR this structured value.
 export type { HitlDecision } from './bridge/hitl-plugin.js'
+// `ConfigurationError` is part of the public contract — consumers `catch` it. It used to reach the
+// barrel via a compat re-export inside `capability/capabilities.ts` (removed in M56); export it here
+// from its home module so removing that internal re-export does not drop it from the package API.
+export { ConfigurationError } from './errors.js'
 export * from './capability/index.js'
 export * from './bridge/index.js'
 export * from './loop/index.js'
