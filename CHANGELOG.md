@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **`AgentRunnerBuilder.loopStrategy(custom)` — critério de parada injetável (M54).** O quarto eixo de OCP do runner (os outros três — reflexão, compactação, produção do round — já eram injetáveis) abre por composição (Strategy). A custom vence sobre a estratégia derivada do spec, como `.compaction()`. **O teto de terminação passa a ser garantia do runner, não convenção de cada estratégia:** antes as 3 built-in embutiam `round < maxIterations` no próprio `shouldContinue`, então uma custom `() => true` rodaria para sempre; agora o runner limita qualquer estratégia em `maxIterations` (`finishReason: 'step_limit'`). Breaking de tipo: `LoopStrategy.name` relaxado para `string` (o `z.enum` interno valida os 3 nomes built-in em runtime). Prior art: `opencode` aplica o teto no runner (`step >= maxSteps`). Decisões em `knowledge-base/adrs/0004-loop-strategy-seam.md`.
+
 ### Removed
 - **Remoção de concessões de retrocompatibilidade do M55 (M56).** `ToolboxCapability.compile()` — método público com zero chamadores, mantido no M55 só porque remover API pública quebra consumidor — foi **deletado** (`apply()` é o único caminho). O reexport **interno duplicado** de `ConfigurationError` por `capability/capabilities.ts` saiu — a classe segue exportada pelo **barril público** (`import { ConfigurationError } from '@theokit/agents'` continua funcionando; um teste `public-api-surface` trava isso). Só um deep-import do caminho interno `capability/capabilities.js` é afetado. 8 devDependencies não usadas removidas (`@types/pg`, `autocannon`, `pg`, `unplugin-swc`, `wrangler` na raiz; `@types/pg`, `pg`, `pg-mem` em `packages/theo`). Decisões em `knowledge-base/adrs/0003-no-backcompat-concessions.md`.
 
