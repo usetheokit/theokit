@@ -9,16 +9,22 @@
  * TDD RED-first. Uses an injected `streamFactory` so no LLM is called (the loop is exercised for real).
  */
 import { describe, expect, it, vi } from 'vitest'
+import { MainLoopCapability } from '../../src/capability/agent-capabilities.js'
+import { ModelCapability } from '../../src/capability/capabilities.js'
+import { applyCapabilities } from '../../src/capability/capability.js'
 
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 import type { DelegationResult } from '../../src/bridge/delegation-types.js'
 import { delegate } from '../../src/bridge/agent-orchestrator.js'
-import { Agent, MainLoop } from '../../src/decorators/index.js'
 
-@Agent({ model: 'test-model' })
-class EchoAgent {
-  @MainLoop({ strategy: 'simple-chat', maxIterations: 1 })
-  async run() {}
+const echoAgent = {
+  name: 'EchoAgent',
+  compiled: applyCapabilities([
+    new ModelCapability('test-model'),
+    new MainLoopCapability({ maxIterations: 1 }),
+  ]),
+  strategy: 'simple-chat' as const,
+  maxIterations: 1,
 }
 
 /** A factory that records the message it was given and streams a fixed text answer. */
@@ -41,7 +47,7 @@ describe('M12 — delegation hooks on delegate()', () => {
       (ctx: { subAgent: string; input: string }) => `[persona] ${ctx.input}`,
     )
 
-    await delegate(EchoAgent, 'do the task', {
+    await delegate(echoAgent, 'do the task', {
       apiKey: 'k',
       streamFactory: factory,
       onDelegationStart,
@@ -59,7 +65,7 @@ describe('M12 — delegation hooks on delegate()', () => {
       response: ctx.result.response.toUpperCase(),
     }))
 
-    const result = await delegate(EchoAgent, 'hi', {
+    const result = await delegate(echoAgent, 'hi', {
       apiKey: 'k',
       streamFactory: factory,
       onDelegationComplete,
@@ -71,7 +77,7 @@ describe('M12 — delegation hooks on delegate()', () => {
 
   it('runs unchanged when no hooks are provided (backward-compatible)', async () => {
     const { factory, seen } = factoryRecording()
-    const result = await delegate(EchoAgent, 'plain', { apiKey: 'k', streamFactory: factory })
+    const result = await delegate(echoAgent, 'plain', { apiKey: 'k', streamFactory: factory })
     expect(seen[0]).toContain('plain')
     expect(result.response).toBe('ok')
   })

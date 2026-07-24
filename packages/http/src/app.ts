@@ -1,4 +1,4 @@
-/* eslint-disable security/detect-non-literal-regexp, complexity, sonarjs/cognitive-complexity, max-depth, sonarjs/no-collapsible-if, max-lines, max-lines-per-function */
+/* eslint-disable security/detect-non-literal-regexp, complexity, sonarjs/cognitive-complexity, max-depth, max-lines, max-lines-per-function */
 import 'reflect-metadata'
 
 import { createExecutionContext, type CanActivate } from './bridge/execution-context.js'
@@ -21,11 +21,35 @@ import { renderToStream, streamToResponse } from './stream-renderer.js'
 /** Readiness check — async function returning health status. */
 export type ReadinessCheck = () => Promise<{ name: string; healthy: boolean; message?: string }>
 
+/**
+ * One mounted agent. Replaces the decorated-class form: the app receives what it actually needs —
+ * a name, a mount route, and already-compiled agent options — instead of walking metadata off a class.
+ */
+export interface AgentAppEntry {
+  /** Display name (logs + fallback stream). */
+  readonly name: string
+  /** Mount point; routes are generated under it (`<route>/chat`, `<route>/runs/:id`). */
+  readonly route: string
+  /** `CompiledAgentOptions` from `@theokit/agents` (typed `unknown` — optional peer dependency). */
+  readonly compiled: unknown
+  /** Guards to run before the agent routes (same shape the controller pipeline uses). */
+  readonly guards?: Function[]
+  /** Method name reported for this agent's route (default `'run'`). */
+  readonly methodName?: string
+  /** Optional owning class, kept only for guard resolution parity with controllers. */
+  readonly agentClass?: Function
+}
+
 export interface TheoAppOptions {
   /** Controller classes decorated with @Controller. */
   controllers: Function[]
-  /** Agent classes decorated with @Agent — auto-wired with routes + SSE + tools. */
-  agents?: Function[]
+  /**
+   * Agents to auto-wire (routes + SSE + tools). M53 — these are prepared ENTRIES, not decorated
+   * classes: the app no longer reads agent metadata, so authoring is free to be capability-based
+   * (`applyCapabilities([...])` produces the `compiled` options). The `@theokit/http` CONTROLLER
+   * decorators are untouched.
+   */
+  agents?: AgentAppEntry[]
   /** @Module class for structured DI. */
   module?: Function
   /** Provider/toolbox classes — instantiated and injected into controllers + agents. */
@@ -36,10 +60,12 @@ export interface TheoAppOptions {
   llmModel?: string
   /** Agent stream factory override (for testing or custom SDK wiring). */
   agentStreamFactory?: (
-    walk: unknown,
+    /** The COMPILED agent options — not the metadata walk (which carries no `model`). */
+    compiled: unknown,
     tools: unknown[],
     apiKey: string,
-    model?: string,
+    /** Per-run overrides, mirroring `createSdkAgentStream`'s 4th argument (never a bare string). */
+    overrides?: { model?: string },
   ) => (message: string, sessionId: string) => AsyncIterable<unknown>
   /** HTML string to serve at GET / (inline frontend). */
   html?: string
@@ -261,28 +287,18 @@ export class TheoApp {
   }[] = []
 
   private async autoWireAgents(
-    agentClasses: Function[],
-    registry: Map<Function, object>,
+    entries: AgentAppEntry[],
+    _registry: Map<Function, object>,
     opts: TheoAppOptions,
   ) {
-    // Dynamic import — @theokit/agents is optional peer dependency
-    // SECURITY: new Function used for dynamic import of optional peer dep.
-    // Argument is HARDCODED ('@theokit/agents'), never user input. Safe.
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- dynamic import avoids compile-time dependency on optional peer
-    const importFn = new Function('specifier', 'return import(specifier)') as (
-      s: string,
-    ) => Promise<Record<string, Function>>
-    let walkAgentMetadata: Function,
-      compileAgent: Function,
-      generateAgentRoutes: Function,
-      getMixins: Function,
-      createSdkAgentStreamFn: Function
+    // `@theokit/agents` is an OPTIONAL peer, so it is imported dynamically. A plain `import()` is
+    // enough — the package is already marked external in tsup.config.ts, so nothing is bundled — and
+    // unlike the previous `new Function('return import(…)')` trick it is resolvable by the test
+    // runner. That trick is exactly why this whole branch had no test and shipped a real bug.
+    let generateAgentRoutes: Function, createSdkAgentStreamFn: Function
     try {
-      const mod = await importFn('@theokit/agents')
-      walkAgentMetadata = mod.walkAgentMetadata
-      compileAgent = mod.compileAgent
+      const mod = (await import('@theokit/agents')) as unknown as Record<string, Function>
       generateAgentRoutes = mod.generateAgentRoutes
-      getMixins = mod.getMixins
       createSdkAgentStreamFn = mod.createSdkAgentStream
     } catch {
       throw new Error(
@@ -292,60 +308,36 @@ export class TheoApp {
 
     const apiKey = opts.llmApiKey ?? process.env.OPENROUTER_API_KEY ?? ''
 
-    for (const AgentClass of agentClasses) {
-      // 1. Walk metadata (decorators → structured data)
-      const mixins = getMixins(AgentClass)
-      const allToolboxes = [...mixins]
-
-      // Also check providers for @Toolbox classes
-      for (const [Cls] of registry) {
-        if (Reflect.getMetadata(Symbol.for('theokit:agents:toolbox'), Cls)) {
-          if (!allToolboxes.includes(Cls)) allToolboxes.push(Cls)
-        }
-      }
-
-      const walk = walkAgentMetadata(AgentClass, allToolboxes)
-
-      // 2. Resolve toolbox instances from registry (DI)
-      const toolboxInstances = new Map<Function, object>()
-      for (const tb of walk.toolboxes) {
-        let instance = registry.get(tb.class)
-        if (!instance) {
-          instance = new (tb.class as new () => object)()
-          registry.set(tb.class, instance)
-        }
-        toolboxInstances.set(tb.class, instance)
-      }
-
-      // 3. Compile tools (decorator metadata → defineTool-compatible)
-      const compiled = compileAgent(walk, toolboxInstances)
-
-      // 4. Create SDK agent stream factory
+    for (const entry of entries) {
+      const compiled = entry.compiled as { tools: unknown[] }
       let createRun: (message: string, sessionId: string) => AsyncIterable<unknown>
-
       if (opts.agentStreamFactory) {
-        createRun = opts.agentStreamFactory(walk, compiled.tools, apiKey, opts.llmModel)
+        createRun = opts.agentStreamFactory(entry.compiled, compiled.tools, apiKey, {
+          model: opts.llmModel,
+        })
       } else if (apiKey) {
-        // SDK adapter: bridges @theokit/agents decorators → @theokit/sdk runtime
-        createRun = createSdkAgentStreamFn(walk, compiled.tools, apiKey, opts.llmModel) as (
-          m: string,
-          s: string,
-        ) => AsyncIterable<unknown>
+        createRun = createSdkAgentStreamFn(entry.compiled, compiled.tools, apiKey, {
+          model: opts.llmModel,
+        }) as (m: string, s: string) => AsyncIterable<unknown>
       } else {
-        createRun = this.createFallbackStream(walk.agentConfig.name, apiKey)
+        createRun = this.createFallbackStream(entry.name, apiKey)
       }
 
-      // 5. Generate routes (POST /chat, GET /runs/:id)
+      // Guards receive `ctx.getClass()`, and a capability-authored agent has no class — so ONE
+      // stable identity token per agent stands in (hoisted here, not per route, so the identity is
+      // the agent's). It is never invoked; it exists to be named and compared.
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- identity token, never called
+      const agentIdentity = entry.agentClass ?? function agent() {}
+
       const routes = generateAgentRoutes({
-        walkResult: walk,
-        compiledOptions: compiled,
+        walkResult: { route: entry.route },
+        compiledOptions: entry.compiled,
         createRun: createRun as (
           message: string,
           sessionId: string,
         ) => AsyncIterable<{ type: string; [k: string]: unknown }>,
       })
 
-      // 6. Mount routes
       for (const route of routes) {
         const paramNames: string[] = []
         const regexStr = route.path.replace(/:(\w+)/g, (_m: string, name: string) => {
@@ -357,14 +349,14 @@ export class TheoApp {
           pattern: new RegExp(`^${regexStr}$`),
           paramNames,
           handler: route.handler,
-          guards: walk.guards ?? [],
-          agentClass: AgentClass,
-          methodName: walk.mainLoop?.propertyKey ?? 'run',
+          guards: entry.guards ?? [],
+          agentClass: agentIdentity,
+          methodName: entry.methodName ?? 'run',
         })
       }
 
       console.log(
-        `  🤖 Agent "${walk.agentConfig.name}" mounted at ${walk.route}/chat (${compiled.tools.length} tools)`,
+        `  🤖 Agent "${entry.name}" mounted at ${entry.route}/chat (${compiled.tools.length} tools)`,
       )
     }
   }

@@ -31,14 +31,14 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
 }))
 
 const { AgentRunner } = await import('../../src/index.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
+const { MainLoopCapability } = await import('../../src/capability/agent-capabilities.js')
 
-@Agent({ model: 'test-model' })
-class ReflectAgent {
-  @MainLoop({ strategy: 'plan-act-reflect', maxIterations: 3 })
-  async run() {}
-}
+const reflectAgent = applyCapabilities([
+  new ModelCapability('test-model'),
+  new MainLoopCapability({ maxIterations: 3 }),
+])
 
 const td = (s: string): StreamEvent => ({ type: 'text_delta', content: s })
 const toolResult: StreamEvent = { type: 'tool_result', toolName: 'x', input: {}, output: 'r' }
@@ -54,7 +54,11 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     ]
     h.calls = 0
 
-    const runner = AgentRunner.builder(ReflectAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+    }).build()
     const seen: StreamEvent[] = []
     const gen = runner.stream('go', { apiKey: 'k' }) as AsyncGenerator<StreamEvent, unknown>
     let res = await gen.next()
@@ -82,7 +86,11 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     // .run() (collect mode) must keep working — drains the stream internally.
     h.rounds = [[td('only'), done]]
     h.calls = 0
-    const runner = AgentRunner.builder(ReflectAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+    }).build()
     const result = await runner.run('go', { apiKey: 'k' })
     expect(result.response).toBe('only')
     expect(result.rounds).toBe(1)
@@ -94,7 +102,11 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     // and only then the generator throws the typed DelegationError (fail-fast, B1/M2).
     h.rounds = [[td('partial'), errorEvent, done]]
     h.calls = 0
-    const runner = AgentRunner.builder(ReflectAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+    }).build()
     const gen = runner.stream('go', { apiKey: 'k' }) as AsyncGenerator<StreamEvent, unknown>
 
     const seen: StreamEvent[] = []
@@ -120,7 +132,11 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     // The collect-mode drain wrapper must SURFACE the same throw, not swallow it.
     h.rounds = [[td('partial'), errorEvent, done]]
     h.calls = 0
-    const runner = AgentRunner.builder(ReflectAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+    }).build()
     await expect(runner.run('go', { apiKey: 'k' })).rejects.toThrow(
       /DelegationError|partial|boom|agent/i,
     )
@@ -130,7 +146,11 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     // budget crossed by round-1 cost (0.01 > 0.005): events stream first, then BudgetExceededError.
     h.rounds = [[td('spend'), done]]
     h.calls = 0
-    const runner = AgentRunner.builder(ReflectAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+    }).build()
     const gen = runner.stream('go', { apiKey: 'k', budget: 0.005 }) as AsyncGenerator<
       StreamEvent,
       unknown

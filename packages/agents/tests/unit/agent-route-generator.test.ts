@@ -1,25 +1,16 @@
-import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
+import { ModelCapability } from '../../src/capability/capabilities.js'
+import { applyCapabilities } from '../../src/capability/capability.js'
 import http from 'node:http'
-import { z } from 'zod'
-import { Agent } from '../../src/decorators/agent.js'
-import { MainLoop } from '../../src/decorators/main-loop.js'
-import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
-import { compileAgent } from '../../src/bridge/agent-compiler.js'
 import { generateAgentRoutes } from '../../src/bridge/agent-route-generator.js'
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 import { nodeIncomingToRequest, writeResponseToNode } from '@theokit/http/runtime/node'
 
 describe('agent-route-generator', () => {
   function setupAgent() {
-    @Agent({ name: 'support', route: '/api/agents/support', model: 'claude-sonnet-4-5-20250929' })
-    class SupportAgent {
-      @MainLoop()
-      async run() {}
-    }
-
-    const walk = walkAgentMetadata(SupportAgent)
-    const compiled = compileAgent(walk)
+    // `route` is the generator's only input besides the compiled options (M53 § C narrowed it).
+    const walk = { route: '/api/agents/support' }
+    const compiled = applyCapabilities([new ModelCapability('claude-sonnet-4-5-20250929')])
     return { walk, compiled }
   }
 
@@ -100,7 +91,12 @@ describe('agent-route-generator', () => {
     const mockCreateRun = async function* (): AsyncGenerator<StreamEvent> {
       yield { type: 'run_started', runId: 'run-1', agentName: 'support' }
       yield { type: 'text_delta', content: 'Hello!' }
-      yield { type: 'done', result: 'Hello!', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 }, durationMs: 100 }
+      yield {
+        type: 'done',
+        result: 'Hello!',
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        durationMs: 100,
+      }
     }
 
     const routes = generateAgentRoutes({

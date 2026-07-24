@@ -27,14 +27,10 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
 }))
 
 const { AgentRunner } = await import('../../src/index.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
 
-@Agent({ model: 'test-model' })
-class BareAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const bareAgent = applyCapabilities([new ModelCapability('test-model')])
 
 const FAKE_TOOL = {
   name: 'override_tool',
@@ -46,16 +42,24 @@ const FAKE_TOOL = {
 describe('V4-J runtime tool override on AgentRunner', () => {
   it('test_stream_uses_opts_tools_when_provided', async () => {
     h.capturedTools = null
-    const runner = AgentRunner.builder(BareAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: bareAgent,
+      name: 'bareAgent',
+      strategy: 'simple-chat',
+    }).build()
     await runner.run('go', { apiKey: 'k', tools: [FAKE_TOOL] as never })
     expect(h.capturedTools).toEqual([FAKE_TOOL])
   })
 
   it('test_stream_falls_back_to_compiled_tools_when_opts_tools_absent', async () => {
     h.capturedTools = null
-    const runner = AgentRunner.builder(BareAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: bareAgent,
+      name: 'bareAgent',
+      strategy: 'simple-chat',
+    }).build()
     await runner.run('go', { apiKey: 'k' })
-    // BareAgent has no @Tool methods ⇒ compiled.tools === [] (NOT the override).
+    // bareAgent has no @Tool methods ⇒ compiled.tools === [] (NOT the override).
     expect(h.capturedTools).toEqual([])
   })
 })

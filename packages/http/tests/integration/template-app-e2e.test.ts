@@ -23,14 +23,10 @@ import {
   NotFoundException,
   HttpStatus,
 } from '../../src/index.js'
-import {
-  Agent,
-  MainLoop,
-  Toolbox,
-  Tool,
-  Mixin,
-  Budget,
-} from '../../../agents/src/decorators/index.js'
+import { applyCapabilities } from '../../../agents/src/capability/capability.js'
+import { ModelCapability } from '../../../agents/src/capability/capabilities.js'
+import { AgentConfigCapability } from '../../../agents/src/capability/agent-capabilities.js'
+import { ToolboxCapability, type ToolDeclaration } from '../../../agents/src/capability/toolbox.js'
 import { TheoApp } from '../../src/app.js'
 import { createTypedClient } from '../../src/index.js'
 import type { TypedClientError } from '../../src/index.js'
@@ -188,46 +184,40 @@ class TasksController {
   }
 }
 
-// -- toolboxes/task.tools.ts
-@Toolbox({ namespace: 'tasks' })
+// -- toolboxes/task.tools.ts (capability-authored: static tools + instance methods)
 class TaskTools {
-  @Tool({ name: 'list', description: 'List all tasks', input: z.object({}) })
-  async list() {
+  static readonly tools: ToolDeclaration[] = [
+    { name: 'list', description: 'List all tasks', input: z.object({}), method: 'list' },
+    {
+      name: 'create',
+      description: 'Create a task',
+      input: z.object({
+        title: z.string(),
+        priority: z.enum(['low', 'medium', 'high']).default('medium'),
+      }),
+      method: 'create',
+    },
+  ]
+  async list(): Promise<string> {
     return JSON.stringify(taskStore.list())
   }
-
-  @Tool({
-    name: 'create',
-    description: 'Create a task',
-    input: z.object({
-      title: z.string(),
-      priority: z.enum(['low', 'medium', 'high']).default('medium'),
-    }),
-  })
-  async create(input: { title: string; priority?: string }) {
+  async create(input: { title: string; priority?: string }): Promise<string> {
     return JSON.stringify(taskStore.create(input))
   }
 }
 
-// -- agents/assistant.agent.ts
-@Agent({
+// -- agents/assistant.agent.ts (capability-authored)
+const assistantAgent = {
   name: 'assistant',
   route: '/api/agents/assistant',
-  model: 'openai/gpt-4o-mini',
-  systemPrompt: 'You are a task assistant.',
-})
-@UseGuards(AuthGuard)
-@Roles(['user', 'admin'])
-@Budget({ maxCostUsd: 1.0 })
-@Mixin(TaskTools)
-class AssistantAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 5 })
-  async run() {}
+  compiled: applyCapabilities([
+    new ModelCapability('openai/gpt-4o-mini'),
+    new AgentConfigCapability({ systemPrompt: 'You are a task assistant.', maxIterations: 5 }),
+    new ToolboxCapability(new TaskTools(), { namespace: 'tasks' }),
+  ]),
 }
-// Exercises decorator metadata without booting the agent runtime.
-// Referenced here to satisfy no-unused-vars; agent E2E tested separately.
-const agentClasses: Function[] = [AssistantAgent]
-const _agentCount = agentClasses.length
+// Exercises the capability authoring path without booting the agent runtime.
+const _agentCount = [assistantAgent].length
 
 // ═══════════════════════════════════════
 //  TESTS — real HTTP against the template app

@@ -24,11 +24,11 @@ import {
   resolveLoopStrategy,
 } from '../loop/index.js'
 import { type RoundStreamFactory, runReflectiveLoop } from '../loop/run-reflective-loop.js'
+import type { MainLoopMeta } from '../types.js'
 
-import { compileAgent, type CompiledTool } from './agent-compiler.js'
+import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import { type DelegationResult, DelegationError } from './delegation-types.js'
 import { createSdkAgentStream } from './sdk-adapter.js'
-import { walkAgentMetadata } from './walk-agent-metadata.js'
 
 // Re-export the delegation value types for backward compatibility — they moved
 // to delegation-types.js to break the orchestrator↔loop import cycle (G1).
@@ -120,24 +120,32 @@ function mergeTools(parentTools: CompiledTool[], subTools: CompiledTool[]): Comp
  *   metric (`THEO_AGENT_MAINLOOP_RUNTIME_APPLIED`) + typed-error + cumulative budget
  *   all live in the shared driver, so they fire identically on both paths.
  */
+/**
+ * What `delegate` needs from a sub-agent: a name and already-compiled options (built by
+ * `applyCapabilities`). Compatible with {@link AgentRunnerSpec} — one spec drives both on-ramps.
+ */
+export interface SubAgentSpec {
+  readonly name: string
+  readonly compiled: CompiledAgentOptions
+  /** Loop strategy (`@MainLoop({ strategy })`); absent ⇒ the same `'simple-chat'` default. */
+  readonly strategy?: MainLoopMeta['strategy']
+  /** Loop ceiling (`@MainLoop({ maxIterations })`); a per-run override still wins. */
+  readonly maxIterations?: number
+}
+
 export async function delegate(
-  SubAgentClass: Function,
+  spec: SubAgentSpec,
   message: string,
   opts: DelegateOptions = {},
 ): Promise<DelegationResult> {
-  const apiKey = requireApiKey(opts, SubAgentClass.name)
+  const apiKey = requireApiKey(opts, spec.name)
 
   // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
   const effectiveMessage = opts.onDelegationStart
-    ? await opts.onDelegationStart({ subAgent: SubAgentClass.name, input: message })
+    ? await opts.onDelegationStart({ subAgent: spec.name, input: message })
     : message
 
-  // 1. Walk + compile sub-agent (EC-1: auto-instantiate toolboxes)
-  const walk = walkAgentMetadata(SubAgentClass, [])
-  const toolboxInstances = new Map(
-    walk.toolboxes.map((tb) => [tb.class, new (tb.class as new () => object)()]),
-  )
-  const compiled = compileAgent(walk, toolboxInstances)
+  const { compiled } = spec
 
   // 2. Merge parent tools + clamp budget (D4)
   const allTools = mergeTools(opts.parentTools ?? [], compiled.tools)
@@ -150,7 +158,7 @@ export async function delegate(
   const streamFactory =
     opts.streamFactory ??
     createSdkAgentStream(compiled, allTools, apiKey, {
-      model: opts.model ?? walk.agentConfig.model,
+      model: opts.model ?? compiled.model,
       cwd: opts.cwd,
       plugins: opts.plugins,
       providers: opts.providers,
@@ -163,8 +171,8 @@ export async function delegate(
   // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
   // V4-T: per-run maxIterations override (parity with AgentRunner.stream); absent ⇒ decorator ceiling.
   const loopStrategy = resolveLoopStrategy(
-    walk.mainLoop.strategy,
-    opts.maxIterations ?? walk.mainLoop.maxIterations,
+    spec.strategy ?? 'simple-chat',
+    opts.maxIterations ?? spec.maxIterations,
   )
   // V4-T: a custom reflection wins; absent ⇒ the strategy-derived default (ladder/noop).
   const reflection =
@@ -174,14 +182,14 @@ export async function delegate(
     loop: loopStrategy,
     reflection,
     budget,
-    agentName: SubAgentClass.name,
+    agentName: spec.name,
     signal: opts.signal,
     retry: opts.retry, // V4-T: per-round transient retry (V4-P) on the delegate path
   })
 
   // M12 — onDelegationComplete: let the supervisor transform the result before it returns.
   if (opts.onDelegationComplete) {
-    return await opts.onDelegationComplete({ subAgent: SubAgentClass.name, result })
+    return await opts.onDelegationComplete({ subAgent: spec.name, result })
   }
   return result
 }

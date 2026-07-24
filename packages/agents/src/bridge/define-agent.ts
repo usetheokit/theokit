@@ -13,10 +13,10 @@
 import type { CustomTool, InlineSkill, MemorySettings, SettingSource } from '@theokit/sdk'
 import type { z } from 'zod'
 
-import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
-import type { McpServersMap } from '../decorators/mcp.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
+import type { HumanInTheLoopOptions } from '../types.js'
+import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
@@ -36,7 +36,7 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
   model?: string
   /** Static system prompt. */
   system?: string
-  /** Extended-thinking effort (mirrors `@Agent({ reasoningEffort })`). */
+  /** Extended-thinking effort. */
   reasoningEffort?: ReasoningEffort
   /**
    * Pre-built tools. Accepts the `@theokit/sdk` `CustomTool` that `defineAgentTool`

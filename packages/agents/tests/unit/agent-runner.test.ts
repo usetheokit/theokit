@@ -27,22 +27,21 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
     },
 }))
 
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
 const { AgentRunner } = await import('../../src/loop/agent-runner.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
+const { MainLoopCapability } = await import('../../src/capability/agent-capabilities.js')
 const { resolveLoopStrategy } = await import('../../src/loop/loop-strategy.js')
 
-@Agent({ model: 'test-model' })
-class ReflectAgent {
-  @MainLoop({ strategy: 'plan-act-reflect', maxIterations: 3 })
-  async run() {}
-}
+const reflectAgent = applyCapabilities([
+  new ModelCapability('test-model'),
+  new MainLoopCapability({ maxIterations: 3 }),
+])
 
-@Agent({ model: 'test-model' })
-class ZeroAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 0 })
-  async run() {}
-}
+const zeroAgent = applyCapabilities([
+  new ModelCapability('test-model'),
+  new MainLoopCapability({ maxIterations: 0 }),
+])
 
 function script(rounds: StreamEvent[][]): void {
   h.rounds = rounds
@@ -51,12 +50,25 @@ function script(rounds: StreamEvent[][]): void {
 
 describe('AgentRunner (T3.1)', () => {
   it('test_agentrunner_builder_fluent_chain_returns_runner', () => {
-    const runner = AgentRunner.builder(ReflectAgent).reflection().stream().build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+      maxIterations: 3,
+    })
+      .reflection()
+      .stream()
+      .build()
     expect(runner).toBeInstanceOf(AgentRunner)
   })
 
   it('test_agentrunner_build_parity_with_delegate — same loopStrategy as delegate resolves (D4)', () => {
-    const runner = AgentRunner.builder(ReflectAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+      maxIterations: 3,
+    }).build()
     const expected = resolveLoopStrategy('plan-act-reflect', 3)
     expect(runner.loopStrategy.name).toBe(expected.name)
     expect(runner.loopStrategy.maxIterations).toBe(expected.maxIterations)
@@ -64,7 +76,12 @@ describe('AgentRunner (T3.1)', () => {
 
   it('test_agentrunner_run_multi_round_for_plan_act_reflect — 2 rounds', async () => {
     script([[{ type: 'tool_result', toolName: 'x', input: {}, output: 'r' }], [{ type: 'done' }]])
-    const runner = AgentRunner.builder(ReflectAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+      maxIterations: 3,
+    }).build()
     await runner.run('task', { apiKey: 'test' })
     expect(h.calls).toBe(2)
   })
@@ -79,13 +96,27 @@ describe('AgentRunner (T3.1)', () => {
       },
     }
     script([[{ type: 'tool_result', toolName: 'x', input: {}, output: 'r' }]])
-    const runner = AgentRunner.builder(ReflectAgent).reflection(custom).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reflectAgent,
+      name: 'reflectAgent',
+      strategy: 'plan-act-reflect',
+      maxIterations: 3,
+    })
+      .reflection(custom)
+      .build()
     expect(runner.reflectionStrategy).toBe(custom)
     await runner.run('task', { apiKey: 'test' })
     expect(used).toBe(true)
   })
 
   it('test_agentrunner_build_validates_maxiterations — maxIterations 0 throws (Zod)', () => {
-    expect(() => AgentRunner.builder(ZeroAgent).build()).toThrow()
+    expect(() =>
+      AgentRunner.fromSpec({
+        compiled: zeroAgent,
+        name: 'zeroAgent',
+        strategy: 'react',
+        maxIterations: 0,
+      }).build(),
+    ).toThrow()
   })
 })

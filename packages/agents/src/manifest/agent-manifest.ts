@@ -3,7 +3,36 @@
  *
  * Feeds: theokit agents list/inspect, TheoCloud deploy, UI agent consoles.
  */
-import type { AgentWalkResult } from '../bridge/walk-agent-metadata.js'
+/**
+ * M53 — the manifest's OWN input contract, listing exactly the members it reads. It used to take an
+ * `AgentWalkResult`, which chained the manifest to the decorator metadata walk that M53 deletes.
+ *
+ * `AgentWalkResult` satisfies this structurally, so the decorator path keeps working unchanged while
+ * the migration is in flight; once the walk is gone, the capability path builds this directly. The
+ * point is that the manifest never needed the whole walk — only these members.
+ */
+export interface AgentManifestSource {
+  readonly agentConfig: { name: string; model?: string; stream?: boolean }
+  readonly route: string
+  readonly mainLoop: { propertyKey: string | symbol; strategy: string }
+  readonly guards: readonly { name: string }[]
+  readonly interceptors: readonly { name: string }[]
+  readonly toolboxes: readonly {
+    namespace?: string
+    tools: readonly {
+      config: { name: string; description: string; risk?: string }
+      approval?: unknown
+      capabilities?: string[]
+      trace: boolean
+      audit: boolean
+    }[]
+  }[]
+  readonly gateway?: { platforms: string[]; sessionStrategy?: string }
+  readonly subAgentClasses: readonly { name: string }[]
+  readonly memory?: { provider?: string; embeddings?: boolean; fts?: boolean; scope?: string }
+  readonly skills?: { include?: string[] }
+  readonly mcpServers?: Record<string, unknown>
+}
 
 export interface AgentManifest {
   version: '1.0'
@@ -44,14 +73,14 @@ export interface AgentManifestTool {
 }
 
 /**
- * Generate a serializable agent manifest from walked metadata.
+ * Generate a serializable agent manifest from an {@link AgentManifestSource} per agent.
  * All Function references are converted to string names for JSON safety.
  */
-export function generateAgentManifest(walkResults: AgentWalkResult[]): AgentManifest {
+export function generateAgentManifest(sources: AgentManifestSource[]): AgentManifest {
   return {
     version: '1.0',
     generatedAt: new Date().toISOString(),
-    agents: walkResults.map((r) => ({
+    agents: sources.map((r) => ({
       name: r.agentConfig.name,
       route: r.route,
       model: r.agentConfig.model,
@@ -74,7 +103,10 @@ export function generateAgentManifest(walkResults: AgentWalkResult[]): AgentMani
         })),
       ),
       gateway: r.gateway
-        ? { platforms: r.gateway.platforms, sessionStrategy: r.gateway.sessionStrategy ?? 'per-user' }
+        ? {
+            platforms: r.gateway.platforms,
+            sessionStrategy: r.gateway.sessionStrategy ?? 'per-user',
+          }
         : undefined,
       subAgents: r.subAgentClasses.map((cls) => cls.name),
       memory: r.memory

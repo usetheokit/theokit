@@ -67,6 +67,7 @@ export default tseslint.config(
       'packages/presenter/tsup.config.ts',
       'packages/presenter/vitest.config.ts',
       'packages/agents/vitest.config.ts',
+      'packages/http/vitest.config.ts',
       'packages/agents/vitest.live.config.ts',
     ],
   },
@@ -358,19 +359,13 @@ export default tseslint.config(
     },
   },
 
-  // @theokit/http + @theokit/agents — decorator metadata bridge requires
-  // `Function` type (controller/agent classes are `Function` by definition),
-  // `any` from reflect-metadata returns (Reflect.getMetadata returns `any`
-  // per spec), and single-use type parameters (metadata facades are typed
-  // `<T>` for call-site inference even though T appears only in return
-  // position). These are inherent to the decorator/reflect-metadata pattern,
-  // not bugs. The packages/http path is the post-rename of http-decorators.
+  // @theokit/http — CONTROLLER decorator metadata bridge requires `Function` type,
+  // `any` from reflect-metadata returns (Reflect.getMetadata returns `any` per spec), and
+  // single-use type parameters. Inherent to the decorator/reflect-metadata pattern, not bugs.
+  // M53: `packages/agents` was REMOVED from this list — it no longer uses reflect-metadata, so
+  // the exemption had no reason to exist there.
   {
-    files: [
-      'packages/http-decorators/src/**/*.ts',
-      'packages/http/src/**/*.ts',
-      'packages/agents/src/**/*.ts',
-    ],
+    files: ['packages/http-decorators/src/**/*.ts', 'packages/http/src/**/*.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',

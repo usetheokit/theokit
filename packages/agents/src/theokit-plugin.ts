@@ -6,27 +6,47 @@
  *
  * Per ADR D6: structural { name, register } shape (no compile-time theokit dep).
  */
-import 'reflect-metadata'
 
-import { compileAgent, type CompiledAgentOptions } from './bridge/agent-compiler.js'
+import { type CompiledAgentOptions } from './bridge/agent-compiler.js'
 import { generateAgentRoutes, type AgentRoute } from './bridge/agent-route-generator.js'
 import type { StreamEvent } from './bridge/agent-sse-handler.js'
-import {
-  walkAgentMetadata,
-  validateUniqueRoutes,
-  type AgentWalkResult,
-} from './bridge/walk-agent-metadata.js'
-import { getMixins } from './decorators/mixin.js'
+
+/**
+ * An agent the plugin mounts: its name, route and already-compiled options (from `applyCapabilities`).
+ */
+export interface PluginAgentEntry {
+  readonly name: string
+  readonly route: string
+  readonly compiled: CompiledAgentOptions
+}
+
+/** Route/name identity used to detect duplicate agent routes. */
+export interface RouteIdentity {
+  readonly route: string
+  readonly agentConfig: { name: string }
+}
+
+/** Fail fast on two agents mounting the same route. */
+function validateUniqueRoutes(results: readonly RouteIdentity[]): void {
+  const seen = new Map<string, string>()
+  for (const r of results) {
+    const existing = seen.get(r.route)
+    if (existing !== undefined) {
+      throw new Error(
+        `[@theokit/agents] Duplicate agent route '${r.route}': ` +
+          `both '${existing}' and '${r.agentConfig.name}' declare it.`,
+      )
+    }
+    seen.set(r.route, r.agentConfig.name)
+  }
+}
 
 export interface AgentsPluginOptions {
-  /** Agent classes decorated with @Agent(). */
-  agents: Function[]
-  /** Toolbox classes (or use @Mixin on agents). */
-  toolboxes?: Function[]
+  /** Agents to mount: prepared entries built by `applyCapabilities`. */
+  agents: PluginAgentEntry[]
   /** Factory that creates agent runs — bridges to SDK Agent.create() + agent.send(). */
   createRunFactory?: (
     compiled: CompiledAgentOptions,
-    walkResult: AgentWalkResult,
   ) => (message: string, sessionId: string) => AsyncIterable<StreamEvent>
 }
 
@@ -64,31 +84,25 @@ export function agentsPlugin(opts: AgentsPluginOptions) {
 /** Initialize routes from agent metadata (once). */
 function initRoutes(opts: AgentsPluginOptions): CompiledRoute[] {
   const allRoutes: AgentRoute[] = []
-  const walkResults: AgentWalkResult[] = []
+  const routeIdentities: RouteIdentity[] = []
 
-  for (const AgentClass of opts.agents) {
-    // Resolve toolboxes: explicit + @Mixin
-    const mixins = getMixins(AgentClass)
-    const toolboxes = [...(opts.toolboxes ?? []), ...mixins]
+  for (const entry of opts.agents) {
+    routeIdentities.push({ route: entry.route, agentConfig: { name: entry.name } })
 
-    const walkResult = walkAgentMetadata(AgentClass, toolboxes)
-    walkResults.push(walkResult)
-
-    const compiled = compileAgent(walkResult, new Map())
     const createRun = opts.createRunFactory
-      ? opts.createRunFactory(compiled, walkResult)
-      : defaultCreateRun(compiled)
+      ? opts.createRunFactory(entry.compiled)
+      : defaultCreateRun(entry.compiled)
 
-    const agentRoutes = generateAgentRoutes({
-      walkResult,
-      compiledOptions: compiled,
-      createRun,
-    })
-
-    allRoutes.push(...agentRoutes)
+    allRoutes.push(
+      ...generateAgentRoutes({
+        walkResult: { route: entry.route },
+        compiledOptions: entry.compiled,
+        createRun,
+      }),
+    )
   }
 
-  validateUniqueRoutes(walkResults)
+  validateUniqueRoutes(routeIdentities)
   return compileRoutePatterns(allRoutes)
 }
 

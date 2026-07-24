@@ -1,14 +1,25 @@
-import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 
-import { compileAgent, type CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
+import type { CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { compileAgentDefinition, defineAgent } from '../../src/bridge/define-agent.js'
-import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
-import { Agent as DecoratorAgent } from '../../src/decorators/agent.js'
-import { MainLoop } from '../../src/decorators/main-loop.js'
-import { Skills } from '../../src/decorators/skills.js'
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
+import {
+  AgentConfigCapability,
+  checkpoint,
+  contextWindow,
+  guardrails,
+  humanInTheLoop,
+  MainLoopCapability,
+  mcpServers,
+  memory,
+  plugins,
+  projectContext,
+  runContext,
+  settingSources,
+  skillsResolver,
+  subAgents,
+} from '../../src/capability/agent-capabilities.js'
 import { ModelCapability, skills, ToolsCapability } from '../../src/capability/capabilities.js'
 import { CapabilityRegistry } from '../../src/capability/registry.js'
 
@@ -18,8 +29,8 @@ import { CapabilityRegistry } from '../../src/capability/registry.js'
  * or hashes compiled options — `Object.keys` appears only over nested values, see
  * sdk-adapter-create-options.ts:76,91). The capability path must produce the SAME `CompiledAgentOptions`
  * (the existing narrow waist) as the canonical `defineAgent` source, and therefore the SAME
- * `Agent.create` options out of the shared adapter. This is what authorizes M53 to delete the
- * decorator source: the new authoring is provably equivalent at the waist AND at the adapter.
+ * `Agent.create` options out of the shared adapter. This proved the capability path equivalent to the canonical defineAgent source at the
+ * waist AND at the adapter — the evidence M53 used to delete the decorator source (now gone).
  */
 
 /**
@@ -68,29 +79,13 @@ type _Exhaustive =
 const WAIST_FIELDS_ARE_EXHAUSTIVE: _Exhaustive = true
 
 /**
- * Waist fields NO capability can express yet. Every one must gain a capability (or an ADR dropping
- * it) before M53 may delete `src/decorators/`. `satisfies` makes a fabricated name a compile error;
- * the assertion below is exact set equality, so an over-claim fails just as loudly as an omission.
+ * Waist fields NO capability can express — EMPTY since M53 § A landed the remaining twelve. This
+ * being empty IS M53's entry criterion: the decorator source may only be deleted when nothing it
+ * produces is left without a replacement. The assertion is exact set equality, so if a capability
+ * ever stops producing its field the gap reappears and the test fails; `satisfies` makes a
+ * fabricated name a compile error.
  */
-const NOT_EXPRESSIBLE_YET = [
-  'parseThinkTags',
-  'stripToolDialect',
-  'recoverLeakedToolCalls',
-  'systemPrompt',
-  'settingSources',
-  'plugins',
-  'memory',
-  'context',
-  'runContext',
-  'projectContext',
-  'mcpServers',
-  'maxIterations',
-  'timeoutMs',
-  'hitl',
-  'checkpoint',
-  'guardrails',
-  'skillsResolver',
-] as const satisfies readonly WaistField[]
+const NOT_EXPRESSIBLE_YET = [] as const satisfies readonly WaistField[]
 
 /** The draft carries `provenance` (new diagnostics) — not part of the waist, so it is stripped. */
 function waistOf(draft: Record<string, unknown>): Record<string, unknown> {
@@ -143,35 +138,12 @@ describe('capability path ≡ defineAgent path (zero-behavior)', () => {
 })
 
 /**
- * The proof that actually matters for M53: equivalence against `compileAgent` — the DECORATOR
- * compiler, which is the artifact M53 deletes. The `defineAgent` comparison above is necessary but
- * NOT sufficient: `defineAgent` is not going away, so proving equality with it never licensed the
- * deletion. This block also PINS, as executable data, which waist fields the capability layer can
- * and cannot yet express — that gap list is M53's entry criterion, not a footnote.
+ * The waist-coverage pins. The decorator compiler these once compared against was DELETED in M53;
+ * what survives is the structural guarantee it protected: the field universe stays exhaustive
+ * (compile-time), and every waist field is expressible by some capability (`NOT_EXPRESSIBLE_YET`
+ * is empty). If a capability ever stops producing its field, the gap reappears and this fails.
  */
-describe('capability path vs the DECORATOR path (the artifact M53 deletes)', () => {
-  it('matches compileAgent on every field the capability layer can express', () => {
-    @DecoratorAgent({ name: 'x', route: '/x', model: 'openai/gpt-5.4' })
-    @Skills(['code-review'])
-    class Decorated {
-      @MainLoop()
-      async run(): Promise<void> {}
-    }
-
-    const viaDecorators = compileAgent(walkAgentMetadata(Decorated))
-    const viaCapabilities = applyCapabilities([
-      new ModelCapability('openai/gpt-5.4'),
-      skills(['code-review']),
-    ])
-
-    for (const field of ['model', 'skills', 'tools', 'agents', 'stream'] as const) {
-      expect({ field, value: viaCapabilities[field] }).toEqual({
-        field,
-        value: viaDecorators[field],
-      })
-    }
-  })
-
+describe('capability path — waist coverage is complete', () => {
   it('the waist field list is exhaustive (fails to COMPILE if a new field is unclassified)', () => {
     expect(WAIST_FIELDS_ARE_EXHAUSTIVE).toBe(true)
   })
@@ -184,51 +156,32 @@ describe('capability path vs the DECORATOR path (the artifact M53 deletes)', () 
       new ModelCapability('openai/gpt-5.4', 'high'),
       new ToolsCapability([{ name: 't' } as never]),
       skills(['a']),
+      new AgentConfigCapability({
+        systemPrompt: 's',
+        parseThinkTags: true,
+        stripToolDialect: true,
+        recoverLeakedToolCalls: true,
+        stream: true,
+      }),
+      new MainLoopCapability({ maxIterations: 1, timeoutMs: 1 }),
+      memory({ provider: 'mem0' } as never),
+      contextWindow({ maxTokens: 1 } as never),
+      projectContext({ enabled: true } as never),
+      mcpServers({} as never),
+      guardrails([] as never),
+      checkpoint({ storage: 'memory' } as never),
+      humanInTheLoop(new Map() as never),
+      subAgents({ c: {} } as never),
+      settingSources([] as never),
+      plugins([] as never),
+      runContext({} as never),
+      skillsResolver((() => []) as never),
     ])
     const expressible = new Set(Object.keys(everything).filter((k) => k !== 'provenance'))
     const gap = WAIST_FIELDS.filter((f) => !expressible.has(f))
 
     expect([...gap].sort((a, b) => a.localeCompare(b))).toEqual(
-      [...NOT_EXPRESSIBLE_YET].sort((a, b) => a.localeCompare(b)),
+      [...(NOT_EXPRESSIBLE_YET as readonly string[])].sort((a, b) => a.localeCompare(b)),
     )
-  })
-
-  it('the decorator compiler DOES emit fields no capability expresses — the deletion is not free', () => {
-    @DecoratorAgent({
-      name: 'rich',
-      route: '/rich',
-      model: 'openai/gpt-5.4',
-      systemPrompt: 'you are rich',
-      parseThinkTags: true,
-      stripToolDialect: true,
-      recoverLeakedToolCalls: true,
-      maxIterations: 7,
-      timeoutMs: 1234,
-    })
-    class Rich {
-      @MainLoop()
-      async run(): Promise<void> {}
-    }
-
-    const decorated = compileAgent(walkAgentMetadata(Rich))
-    const everything = applyCapabilities([new ModelCapability('openai/gpt-5.4')])
-    const emittedButUnexpressible = Object.entries(decorated)
-      .filter(([k, v]) => v !== undefined && !(k in everything))
-      .map(([k]) => k)
-
-    // These are live in the decorator path today and have NO capability replacement.
-    expect(emittedButUnexpressible).toEqual(
-      expect.arrayContaining([
-        'systemPrompt',
-        'parseThinkTags',
-        'stripToolDialect',
-        'recoverLeakedToolCalls',
-        'maxIterations',
-        'timeoutMs',
-      ]),
-    )
-    for (const field of emittedButUnexpressible) {
-      expect(NOT_EXPRESSIBLE_YET as readonly string[]).toContain(field)
-    }
   })
 })

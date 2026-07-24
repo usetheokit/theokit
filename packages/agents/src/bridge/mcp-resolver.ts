@@ -9,8 +9,8 @@
  *  - `mcpToolApprovals` — mark MCP tools for approval, producing the M14 `approvals` entries so a
  *    gated MCP tool routes through the (E2E-proven) HITL flow.
  */
-import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
-import type { McpServersMap } from '../decorators/mcp.js'
+import type { HumanInTheLoopOptions } from '../types.js'
+import type { McpServersMap } from '../types.js'
 
 /** The request context handed to an MCP resolver (the M7 run-context — opaque per-request data). */
 export type McpRequestContext = Record<string, unknown>
