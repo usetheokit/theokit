@@ -117,7 +117,7 @@ describe('V4-N.1 adapter emits real SDK usage', () => {
     }
     const result = await AgentRunner.fromSpec({
       compiled: usageAgent,
-      agentName: 'usageAgent',
+      name: 'usageAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -130,7 +130,7 @@ describe('V4-N.1 adapter emits real SDK usage', () => {
   it('test_delegationresult_reports_real_split_usage', async () => {
     const result = await AgentRunner.fromSpec({
       compiled: usageAgent,
-      agentName: 'usageAgent',
+      name: 'usageAgent',
       strategy: 'simple-chat',
     })
       .build()

@@ -41,7 +41,7 @@ describe('V4-F AgentRunner.compaction — callable strategy on the runner (T3.1)
   it('test_builder_compaction_resolves_token_budget', () => {
     const runner = AgentRunner.fromSpec({
       compiled: bareAgent,
-      agentName: 'bareAgent',
+      name: 'bareAgent',
       strategy: 'plan-act-reflect',
     })
       .compaction('token-budget', { keepTokens: 8000 })
@@ -68,7 +68,7 @@ describe('V4-F AgentRunner.compaction — callable strategy on the runner (T3.1)
     // EC-4 — neither decorator nor builder ⇒ undefined (opt-in); app must null-check
     const runner = AgentRunner.fromSpec({
       compiled: bareAgent,
-      agentName: 'bareAgent',
+      name: 'bareAgent',
       strategy: 'plan-act-reflect',
     }).build()
     expect(runner.compaction).toBeUndefined()

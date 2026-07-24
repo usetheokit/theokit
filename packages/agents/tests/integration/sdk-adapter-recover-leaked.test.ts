@@ -7,6 +7,7 @@
  * Asserts the wiring at the boundary: the `providers` object handed to `Agent.getOrCreate`.
  */
 import 'reflect-metadata'
+import type { CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ProviderRoutingSettings } from '@theokit/sdk'
@@ -48,11 +49,11 @@ const PROVIDERS = {
 } as unknown as ProviderRoutingSettings
 
 async function createOptsFor(
-  compiled: object,
+  compiled: CompiledAgentOptions,
   opts: Record<string, unknown> = {},
 ): Promise<{ providers?: { routes: Array<{ extractToolCallsFromContent?: boolean }> } }> {
   getOrCreateMock.mockClear()
-  const gen = AgentRunner.fromSpec({ compiled, agentName: 'a', strategy: 'simple-chat' })
+  const gen = AgentRunner.fromSpec({ compiled, name: 'a', strategy: 'simple-chat' })
     .build()
     .stream('hi', { apiKey: 'k', providers: PROVIDERS, ...opts })
   for await (const _e of gen) {

@@ -1,5 +1,8 @@
-import { compileTools, type CompiledTool } from '../bridge/agent-compiler.js'
-import type { ToolboxWalkResult } from '../bridge/walk-agent-metadata.js'
+import {
+  compileTools,
+  type CompiledTool,
+  type ToolboxWalkResult,
+} from '../bridge/agent-compiler.js'
 import type { ApprovalOptions, HumanInTheLoopOptions, ToolOptions } from '../types.js'
 
 import { ConfigurationError } from './capabilities.js'
@@ -11,7 +14,7 @@ import type { Capability, CompiledAgentOptionsDraft } from './capability.js'
  * A toolbox class declares its tools as DATA (`static tools`) and keeps its handlers as ordinary
  * methods; the capability takes an INSTANCE. That preserves what the decorators actually bought —
  * grouping under a namespace and handlers bound to the instance (so a toolbox can hold state and
- * injected dependencies) — while dropping `reflect-metadata` entirely.
+ * injected dependencies) — with no metadata reflection at all.
  *
  * The compilation itself is NOT reimplemented: it delegates to `compileTools`, the same function the
  * decorator path calls, so namespacing (`toolRuntimeName`), handler binding and the fail-fast checks
