@@ -1,5 +1,13 @@
 # @theokit/agents
 
+## 4.3.1
+
+### Patch Changes
+
+- M60 follow-up: `AuthProvider.ensureFresh(resolved, deps, env)` — the HTTP deps and `env` are now
+  separate params (was a single `opts` bag). Corrects the just-shipped 4.3.0 shape before any consumer
+  depends on it; behavior (delegation to `ensureFreshCredential`) is unchanged.
+
 ## 4.3.0
 
 ### Minor Changes
