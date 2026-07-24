@@ -12,7 +12,7 @@
  * out-of-band approve route) → allow (`undefined`) or veto (`{ block, message }`, which the SDK
  * surfaces as a tool result the model self-corrects on).
  */
-import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
+import type { HumanInTheLoopOptions } from '../types.js'
 
 import type { ApprovalRequiredEvent } from './agent-stream-events.js'
 

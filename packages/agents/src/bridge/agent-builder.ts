@@ -18,10 +18,10 @@
 import type { CustomTool, SettingSource, MemorySettings } from '@theokit/sdk'
 import type { z } from 'zod'
 
-import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
-import type { McpServersMap } from '../decorators/mcp.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
+import type { HumanInTheLoopOptions } from '../types.js'
+import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
 import { defineAgent, type AgentDefinition, type DefineAgentConfig } from './define-agent.js'

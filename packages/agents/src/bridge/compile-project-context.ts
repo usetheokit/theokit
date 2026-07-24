@@ -16,7 +16,7 @@
  */
 import type { SystemPromptResolver } from '@theokit/sdk'
 
-import type { ProjectContextOptions } from '../decorators/project-context.js'
+import type { ProjectContextOptions } from '../types.js'
 
 /** `@ProjectContext` knobs with no primitive mapping (reported, not executed). */
 const UNMAPPED_KNOBS = [

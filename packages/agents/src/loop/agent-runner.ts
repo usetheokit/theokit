@@ -1,9 +1,8 @@
 /**
  * AgentRunner — the imperative twin of `@MainLoop` (plan ADR D4, V4-B).
  *
- * `AgentRunner.builder(AgentClass).reflection().stream().build()` walks +
- * compiles the agent and resolves the SAME `{ compiled, loopStrategy }` that
- * `delegate()` resolves for the decorator path (two on-ramps, one runtime).
+ * `AgentRunner.fromSpec(spec).reflection().stream().build()` resolves the loop strategy from
+ * an already-compiled spec (the capability-authored agent). `delegate()` shares the same runtime.
  * `build()` is the compile boundary (no I/O, no IoC — standalone, mirrors
  * Spring's `ChatClient.builder(...).build()`); `stream()`/`run()` do the I/O via
  * `runReflectiveLoopStream` (the SAME loop `delegate()` drains — DRY, ADR 0031).
@@ -21,17 +20,12 @@ import type {
 } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
-import {
-  type CompiledAgentOptions,
-  type CompiledTool,
-  compileAgent,
-} from '../bridge/agent-compiler.js'
+import type { CompiledAgentOptions, CompiledTool } from '../bridge/agent-compiler.js'
 import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
-import { walkAgentMetadata } from '../bridge/walk-agent-metadata.js'
 import { moderateOutputStream, runInputGuards } from '../guardrails/index.js'
-import type { ReasoningEffort } from '../types.js'
+import type { MainLoopMeta, ReasoningEffort } from '../types.js'
 
 import {
   resolveCompactionStrategy,
@@ -70,7 +64,7 @@ export interface AgentRunnerRunOptions {
    * M1 (Axis-A SWAP): per-run extended-thinking effort. Merge-over-compiled —
    * `opts.reasoningEffort ?? compiled.reasoningEffort` (resolved in the adapter, single site).
    * Mapped to the SDK `ModelSelection.params` so the provider reasons (surfaced as `thinking`
-   * StreamEvents). Absent ⇒ the compiled `@Agent({ reasoningEffort })` (or none).
+   * StreamEvents). Absent ⇒ the compiled reasoning effort (or none).
    */
   readonly reasoningEffort?: ReasoningEffort
   /**
@@ -152,7 +146,7 @@ export interface AgentRunnerRunOptions {
 }
 
 /**
- * A built, runnable agent. Construct via {@link AgentRunner.builder} — the
+ * A built, runnable agent. Construct via {@link AgentRunner.fromSpec} — the
  * constructor takes already-resolved state and is an internal detail.
  */
 /** Already-resolved state handed to the {@link AgentRunner} constructor (internal). */
@@ -200,9 +194,9 @@ export class AgentRunner {
     this.compaction = state.compaction
   }
 
-  /** Start a fluent builder for `AgentClass`. */
-  static builder(AgentClass: Function): AgentRunnerBuilder {
-    return new AgentRunnerBuilder(AgentClass)
+  /** Start a fluent builder from an already-compiled spec. */
+  static fromSpec(spec: AgentRunnerSpec): AgentRunnerBuilder {
+    return new AgentRunnerBuilder(spec)
   }
 
   /**
@@ -287,13 +281,31 @@ export class AgentRunner {
   }
 }
 
+/**
+ * M53 — what the runner actually needs in order to run: an already-compiled agent plus the two
+ * loop knobs. It used to derive all of this from `walkAgentMetadata`, which chained the runner to
+ * the decorator surface. `strategy` and `compaction` are the two non-waist channels ADR 0002 keeps
+ * (the builder's `.compaction()` already outranked the decorator; this just names the input).
+ */
+/**
+ * The already-compiled agent the runner executes. Field-compatible with `SubAgentSpec` on purpose —
+ * one spec drives both `AgentRunner.fromSpec` and `delegate`.
+ */
+export interface AgentRunnerSpec {
+  readonly name: string
+  readonly compiled: CompiledAgentOptions
+  readonly strategy?: MainLoopMeta['strategy']
+  readonly maxIterations?: number
+  readonly compaction?: { name: string; keepTokens?: number }
+}
+
 /** Fluent builder — accumulates config; `build()` is the compile boundary. */
 export class AgentRunnerBuilder {
   private reflectionOverride?: ReflectionStrategy
   private streamEnabled = true
   private compactionOverride?: { name: string; keepTokens?: number }
 
-  constructor(private readonly AgentClass: Function) {}
+  constructor(private readonly spec: AgentRunnerSpec) {}
 
   /** Override the default reflection strategy (OCP — plan Drawback #2). No arg ⇒ keep default. */
   reflection(strategy?: ReflectionStrategy): this {
@@ -317,28 +329,24 @@ export class AgentRunnerBuilder {
     return this
   }
 
-  /** Walk + compile + resolve strategies — the compile→execute boundary (no I/O). */
+  /** Resolve strategies from the spec — the compile→execute boundary (no I/O). */
   build(): AgentRunner {
-    const walk = walkAgentMetadata(this.AgentClass, [])
-    const toolboxInstances = new Map(
-      walk.toolboxes.map((tb) => [tb.class, new (tb.class as new () => object)()]),
-    )
-    const compiled = compileAgent(walk, toolboxInstances)
-    const loopStrategy = resolveLoopStrategy(walk.mainLoop.strategy, walk.mainLoop.maxIterations)
+    const { spec } = this
+    // `'simple-chat'` is the default when the spec declares no strategy.
+    const strategy = spec.strategy ?? 'simple-chat'
+    const loopStrategy = resolveLoopStrategy(strategy, spec.maxIterations)
     const reflectionStrategy =
       this.reflectionOverride ??
-      (walk.mainLoop.strategy === 'plan-act-reflect'
-        ? ladderReflectionStrategy
-        : noopReflectionStrategy)
-    // V4-F: builder override WINS over the @Compaction decorator (EC-1); undefined when
-    // neither declares it (EC-4 — opt-in). resolveCompactionStrategy fails fast (EC-5/EC-2).
-    const compactionDecl = this.compactionOverride ?? walk.compaction
+      (strategy === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy)
+    // V4-F: builder override WINS over whatever the spec declares (EC-1); undefined when neither
+    // declares it (EC-4 — opt-in). resolveCompactionStrategy fails fast (EC-5/EC-2).
+    const compactionDecl = this.compactionOverride ?? spec.compaction
     const compaction = compactionDecl
       ? resolveCompactionStrategy(compactionDecl.name, { keepTokens: compactionDecl.keepTokens })
       : undefined
     return new AgentRunner({
-      compiled,
-      agentName: walk.agentConfig.name,
+      compiled: spec.compiled,
+      agentName: spec.name,
       loopStrategy,
       reflectionStrategy,
       streamEnabled: this.streamEnabled,

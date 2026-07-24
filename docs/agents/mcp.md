@@ -16,28 +16,33 @@ Connect a local MCP server via the `@MCP` decorator on the `@Agent` class:
 
 ```ts
 // agents/dev-agent.ts
-import { Agent } from '@theokit/agents'
-import { MCP } from '@theokit/agents'
+import {
+  applyCapabilities,
+  AgentConfigCapability,
+  ModelCapability,
+  mcpServers,
+} from '@theokit/agents'
 
-@Agent({
-  model: 'anthropic/claude-sonnet-4-6',
-  system: 'You are a developer assistant. Use the GitHub and filesystem tools as needed.',
-})
-@MCP({
-  github: {
-    command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-github'],
-    env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN! },
-  },
-  filesystem: {
-    command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()],
-  },
-})
-export class DevAgent {}
+export const devAgent = applyCapabilities([
+  new ModelCapability('anthropic/claude-sonnet-4-6'),
+  new AgentConfigCapability({
+    systemPrompt: 'You are a developer assistant. Use the GitHub and filesystem tools as needed.',
+  }),
+  mcpServers({
+    github: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN! },
+    },
+    filesystem: {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', process.cwd()],
+    },
+  }),
+])
 ```
 
-`@MCP` maps server names to their launch configuration. The SDK starts each server as a
+`mcpServers()` maps server names to their launch configuration. The SDK starts each server as a
 subprocess when the agent initializes, connects via stdio, and registers all the server's
 tools on the agent automatically.
 
@@ -166,14 +171,19 @@ An agent can connect to as many MCP servers as needed. The agent discovers all t
 all connected servers and can call any of them during a run:
 
 ```ts
-@MCP({
-  github: { command: 'npx', args: ['-y', '@mcp/server-github'] },
-  slack: { command: 'npx', args: ['-y', '@mcp/server-slack'] },
-  browser: { command: 'npx', args: ['-y', '@mcp/server-puppeteer'] },
-  postgres: { command: 'npx', args: ['-y', '@mcp/server-postgres', DATABASE_URL] },
-})
-export class ResearchAgent {}
+export const researchAgent = applyCapabilities([
+  new ModelCapability('anthropic/claude-sonnet-4-6'),
+  mcpServers({
+    github: { command: 'npx', args: ['-y', '@mcp/server-github'] },
+    slack: { command: 'npx', args: ['-y', '@mcp/server-slack'] },
+    browser: { command: 'npx', args: ['-y', '@mcp/server-puppeteer'] },
+    postgres: { command: 'npx', args: ['-y', '@mcp/server-postgres', DATABASE_URL] },
+  }),
+])
 ```
+
+> **Migrating from `@MCP`?** The decorator was removed in `@theokit/agents` v1.0 (M53).
+> See [`MIGRATION.md`](../../MIGRATION.md).
 
 ---
 

@@ -14,7 +14,7 @@ export interface AgentRunInfo {
 }
 
 export interface AgentExecutionContext extends ExecutionContext {
-  /** The agent's configuration from @Agent() decorator. */
+  /** The agent's scalar configuration. */
   getAgent(): AgentOptions
   /** The current run information. */
   getRun(): AgentRunInfo

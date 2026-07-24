@@ -11,7 +11,28 @@
  */
 import type { ContextSettings } from '@theokit/sdk'
 
-import type { ContextWindowOptions } from '../decorators/context-window.js'
+/** How to compact the transcript when `maxTokens` is exceeded. */
+export type ContextCompactionStrategy =
+  | 'truncate-oldest'
+  | 'summarize-oldest'
+  | 'sliding-window'
+  | 'priority-based'
+
+/**
+ * M53 — declared here, with its conversion, instead of on the decorator being deleted.
+ */
+export interface ContextWindowOptions {
+  /** Maximum tokens before compaction triggers. */
+  maxTokens?: number
+  /** How to compact when maxTokens is exceeded. */
+  compactionStrategy?: ContextCompactionStrategy
+  /** Always preserve the system prompt during compaction (default: true). */
+  preserveSystemPrompt?: boolean
+  /** Number of recent messages to always keep intact (default: 10). */
+  preserveLastN?: number
+  /** Keep all tool results even during compaction (default: true). */
+  preserveToolResults?: boolean
+}
 
 /** `@ContextWindow` knobs with no native SDK `AgentOptions` mapping. */
 const STRATEGY_KNOBS = [
