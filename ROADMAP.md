@@ -1277,6 +1277,30 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
+### M56 — [ ] Remover TODA concessão de retrocompatibilidade do M55 — as correções de raiz
+
+> Added 2026-07-24 by `/roadmap-feature` (slug: `no-backcompat-concessions`). **Out-of-scope cross-check (2026-07-24):** o item travado *"Breaking the `@theokit/http` decorator path"* é ADJACENTE — o M56 toca `packages/http` mas **apenas em 4 tipos exportados órfãos** que nenhuma entry do pacote alcança (logo, nenhum consumidor externo importa hoje). O path de decorators de controller fica **intacto**, provado pela suíte de 411 testes do pacote. Demais itens travados sem interseção. Decisão do owner registrada em `knowledge-base/grills/no-backcompat-concessions-feature-grill.md`.
+
+**Objective:** O M55 fechou com seis compromissos, cada um motivado por **não quebrar quem já consome**. O owner removeu essa restrição (*"não importa o esforço, não vamos ter retrocompatibilidade"*). Duas dessas concessões são a **mesma patologia que o M55 existiu para corrigir**, deixada de pé: `ToolboxCapability.compile()` é um método público com **zero** chamadores — código morto, exatamente o que o milestone caçava — e o gate de exports foi ligado **só para `packages/agents`**, deixando os outros cinco workspaces com a política cega (`rules.exports: "off"`) que fez "knip limpo" passar com o órfão presente. Este milestone faz as correções de raiz e aceita o custo: **major bump** de `@theokit/agents`.
+
+**Definition of done:**
+- [ ] **(GATE) `pnpm knip` verde no repositório inteiro**, com `rules.exports` e `rules.types` em `error` no `knip.json` **real** — `knip-exports.json` e o script `knip:exports` deletados. Hoje o comando sai 1; a limpeza cobre os **109 arquivos / 25 exports / 170 types** medidos em 2026-07-24 (`theo` 95, `create-theokit` 4, `agents` 6, `http` 4). Regra: remover apenas o `export` quando houver uso interno; deletar quando não houver.
+- [ ] **(GATE) `pnpm check:direction` verde** — `packages/tauri` deixa de declarar dependência em `theokit` (ADR 0030: sub-pacotes de biblioteca nunca dependem do principal).
+- [ ] `ConfigurationError` importado de `src/errors.ts` por **todos** os consumidores; o reexport de compatibilidade em `capability/capabilities.ts` **não existe mais** — `grep -rn "ConfigurationError" packages/agents | grep "capabilities.js"` retorna vazio.
+- [ ] `ToolboxCapability.compile()` **deletado**, junto do teste de caracterização que o M55 criou para ele; `apply()` é o único caminho. Entrada em `CHANGELOG.md § Removed` declarando a remoção de API.
+- [ ] Os dois `throw new Error` genéricos em `compileTools` são `ConfigurationError` tipados (`.claude/rules/error-handling.md` § 2), com caso negativo assertando tipo **e** mensagem.
+- [ ] As 8 devDependencies não usadas removidas (`@types/pg`, `autocannon`, `pg`, `unplugin-swc`, `wrangler` na raiz; `@types/pg`, `pg`, `pg-mem` em `packages/theo`).
+- [ ] Nenhum tipo órfão que um milestone **aberto** declara como superfície de trabalho é deletado — `AgentRunnerSpec` (alvo do M54) é allowlistado com sunset citando M54.
+- [ ] Suítes dos 4 pacotes verdes; `tsc --noEmit` na raiz limpo; `lint --max-warnings=0`; `publint` OK; prova live contra provider real; `@theokit/agents` publicado em **major**.
+
+**Dependencies:** M55 (`[x]`) — as seis concessões foram criadas nele e este milestone opera sobre o código que ele deixou.
+
+**Top risks:**
+1. Remover tipo público que um consumidor externo importa. Os 170 tipos são hoje inalcançáveis a partir de qualquer entry (é por isso que o knip os acusa), mas o raio é grande — 95 arquivos no pacote principal. Mitigação: remover **só o `export`** quando houver uso interno, mantendo o tipo; `tsc --noEmit` na raiz e as 4 suítes são o gate; o major bump comunica.
+2. `types: "error"` virar ruído permanente — um tipo de vocabulário público legitimamente sem consumidor interno seria acusado para sempre, empurrando allowlist em massa (o oposto do objetivo). Mitigação: decidir **com o número na mão depois da limpeza**; se sobrar categoria recorrente legítima, `types` volta a `off` com ADR declarando por quê, e só `exports` fica em `error`.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
