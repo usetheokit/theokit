@@ -16,28 +16,14 @@
  * class ResearchAgent { ... }
  * ```
  */
+import type { ContextWindowOptions } from '../bridge/compile-context-window.js'
 import { setMeta, getMeta } from '../metadata/index.js'
 
 const CONTEXT_WINDOW_CONFIG = Symbol.for('theokit:agents:context-window')
 
-export type ContextCompactionStrategy =
-  | 'truncate-oldest'      // Drop oldest messages beyond limit
-  | 'summarize-oldest'     // LLM-summarize oldest messages into a single message
-  | 'sliding-window'       // Keep last N messages only
-  | 'priority-based'       // Keep tool results + recent; summarize reasoning
+export type { ContextCompactionStrategy } from '../bridge/compile-context-window.js'
 
-export interface ContextWindowOptions {
-  /** Maximum tokens before compaction triggers. */
-  maxTokens?: number
-  /** How to compact when maxTokens is exceeded. */
-  compactionStrategy?: ContextCompactionStrategy
-  /** Always preserve the system prompt during compaction (default: true). */
-  preserveSystemPrompt?: boolean
-  /** Number of recent messages to always keep intact (default: 10). */
-  preserveLastN?: number
-  /** Keep all tool results even during compaction (default: true). */
-  preserveToolResults?: boolean
-}
+export type { ContextWindowOptions } from '../bridge/compile-context-window.js'
 
 export function ContextWindow(options: ContextWindowOptions = {}): ClassDecorator {
   return (target: Function) => {

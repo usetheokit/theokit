@@ -1,4 +1,9 @@
 import type { CompiledAgentOptions } from '../bridge/agent-compiler.js'
+import {
+  compileContextWindow,
+  type ContextWindowOptions,
+} from '../bridge/compile-context-window.js'
+import { compileSkills, type SkillsOptions } from '../bridge/compile-skills.js'
 
 import { ConfigurationError } from './capabilities.js'
 import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capability.js'
@@ -30,8 +35,18 @@ function fieldCapability<K extends keyof CompiledAgentOptionsDraft>(
 
 /** `@Memory` → `memory`. */
 export const memory = fieldCapability('memory', 'memory')
-/** `@ContextWindow` → `context`. */
-export const contextWindow = fieldCapability('context-window', 'context')
+/**
+ * `@ContextWindow` → `context`. DELEGATES to `compileContextWindow`, which is the canonical
+ * `ContextWindowOptions → ContextSettings` conversion (it also reports the metadata-only knobs).
+ * Taking a pre-converted value here would duplicate that knowledge — the exact divergence the M52
+ * zero-behavior proof caught in `skills`.
+ */
+export const contextWindow = (options: ContextWindowOptions): Capability => ({
+  name: 'context-window',
+  apply: (draft) => {
+    setOnce(draft, 'context', compileContextWindow(options).context, 'context-window')
+  },
+})
 /** `@ProjectContext` → `projectContext`. */
 export const projectContext = fieldCapability('project-context', 'projectContext')
 /** `@MCP` → `mcpServers`. */
@@ -62,6 +77,17 @@ export const subAgents = (children: CompiledAgentOptions['agents']): Capability 
     draft.provenance.push({ capability: 'sub-agents', contributed: ['agents'] })
   },
 })
+/**
+ * `@Skills({ include, autoDiscover })` → `skills`. Delegates to `compileSkills` (same reason as
+ * `contextWindow`). Distinct from the M52 `skills([...])`, which takes the plain name/inline list.
+ */
+export const skillsOptions = (options: SkillsOptions): Capability => ({
+  name: 'skills',
+  apply: (draft) => {
+    setOnce(draft, 'skills', compileSkills(options), 'skills')
+  },
+})
+
 /** Functional-path fields that had no decorator source — closing the gap list, not adding surface. */
 export const settingSources = fieldCapability('setting-sources', 'settingSources')
 export const plugins = fieldCapability('plugins', 'plugins')
