@@ -53,8 +53,25 @@ export const projectContext = fieldCapability('project-context', 'projectContext
 export const mcpServers = fieldCapability('mcp', 'mcpServers')
 /** `@Guardrails` → `guardrails`. */
 export const guardrails = fieldCapability('guardrails', 'guardrails')
-/** `@Checkpoint` → `checkpoint`. */
-export const checkpoint = fieldCapability('checkpoint', 'checkpoint')
+/**
+ * `@Checkpoint` → `checkpoint`. Carries the non-durable WARNING the metadata walk used to emit: only
+ * `'filesystem'` selects the SDK's durable store, so any other storage cannot resume across
+ * requests. The warning moves WITH the feature — a declared checkpoint that silently cannot resume
+ * is exactly the kind of no-op this project refuses to ship.
+ */
+export const checkpoint = (options: CompiledAgentOptions['checkpoint']): Capability => ({
+  name: 'checkpoint',
+  apply: (draft) => {
+    if (options !== undefined && options.storage !== 'filesystem') {
+      console.warn(
+        `[THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY] checkpoint({ storage: '${options.storage ?? 'memory'}' }) ` +
+          `does NOT resume across requests — only 'filesystem' selects the SDK's durable conversation ` +
+          `store. Use checkpoint({ storage: 'filesystem' }) for cross-request resume.`,
+      )
+    }
+    setOnce(draft, 'checkpoint', options, 'checkpoint')
+  },
+})
 /** `@HumanInTheLoop` → `hitl` (keyed `"<toolbox>.<tool>"`, as `compileHitlGates` keys it today). */
 export const humanInTheLoop = fieldCapability('human-in-the-loop', 'hitl')
 /**
