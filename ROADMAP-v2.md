@@ -93,7 +93,7 @@ reponta esses imports de `@theokit/sdk*` para `@theokit/*`. Pass-through, **não
 
 ---
 
-### M59 — [ ] Goal enriquecido: `GoalRunner` classe sobre `runGoalLoop`
+### M59 — [x] Goal enriquecido: `GoalRunner` classe sobre `runGoalLoop`
 
 **Objective:** `runGoalLoop` é free function de orquestração no SDK. O Theokit a envolve numa classe
 `GoalRunner` (paralela ao `AgentRunner` que já existe), impondo o padrão OO. O agent-builder
