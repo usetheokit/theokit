@@ -63,6 +63,36 @@ describe('M54 — AgentRunnerBuilder.loopStrategy() seam', () => {
     expect(runner.loopStrategy.name).toBe('never-stop')
   })
 
+  describe('a custom ceiling that could not terminate is rejected at authoring (fail-fast)', () => {
+    // The built-ins get `z.number().int().min(1)` for free via resolveLoopStrategy. A custom bypasses
+    // it — and `maxIterations: Infinity` makes `round < maxIterations` true forever, the exact
+    // infinite loop this milestone exists to prevent. Validate at the seam, typed, before build.
+    const bad: [string, number][] = [
+      ['Infinity', Number.POSITIVE_INFINITY],
+      ['NaN', Number.NaN],
+      ['zero', 0],
+      ['negative', -1],
+      ['non-integer', 2.5],
+    ]
+    for (const [label, value] of bad) {
+      it(`rejects maxIterations = ${label}`, () => {
+        expect(() =>
+          AgentRunner.fromSpec({ compiled: agent, name: 'agent' }).loopStrategy({
+            name: 'bad',
+            maxIterations: value,
+            shouldContinue: () => true,
+          }),
+        ).toThrow(/maxIterations|inteiro|≥ 1|finito/)
+      })
+    }
+
+    it('accepts a finite integer ceiling ≥ 1', () => {
+      expect(() =>
+        AgentRunner.fromSpec({ compiled: agent, name: 'agent' }).loopStrategy(neverStop(1)),
+      ).not.toThrow()
+    })
+  })
+
   describe('per-run maxIterations override (D4)', () => {
     it('does NOT crash for a custom strategy, and applies as the runner ceiling', async () => {
       const runner = AgentRunner.fromSpec({ compiled: agent, name: 'agent' })
