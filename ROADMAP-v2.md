@@ -46,7 +46,7 @@ a superfície de autoria do `@theokit/agents` com **zero factory functions livre
 
 ---
 
-### M57 — [ ] Sugar → OO: as 12 factory functions viram classes `Capability` (major)
+### M57 — [x] Sugar → OO: as 12 factory functions viram classes `Capability` (major)
 
 **Objective:** Terminar a migração OO que o M52 começou (2/12 já são classe). Cada factory function
 livre do `@theokit/agents` — `skills()`, `memory()`, `mcpServers()`, `guardrails()`, `checkpoint()`,
