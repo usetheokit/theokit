@@ -12,16 +12,9 @@ import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capa
  * factory, because a class with no behavior would be ceremony: KISS).
  */
 
-/**
- * Re-exported, not defined here (M55): `bridge/agent-compiler.ts` needs to throw the same typed
- * error, and this module imports FROM `bridge/` — defining it here would force a cycle. The class
- * now lives in the leaf module `../errors.js`; this re-export keeps every existing import path
- * working, so no consumer had to change.
- *
- * IMPORTED then re-exported, not `export … from` in one line: this module's own capabilities throw
- * it, and a bare re-export creates no local binding (the suite caught exactly that).
- */
-export { ConfigurationError }
+// `ConfigurationError` lives in `../errors.js` and is imported above. The M55 compatibility
+// re-export from this module is GONE (M56): a second import path for one class is exactly the kind
+// of concession that keeps dead surface alive. Import it from where it is defined.
 
 /** Human-readable type of a rejected value — never its content (config files may hold secrets). */
 function describe(value: unknown): string {
