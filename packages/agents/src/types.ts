@@ -109,3 +109,25 @@ export interface ApprovalOptions {
 
 /** Policy handler function type. */
 export type PolicyHandler = (user: { roles: string[] }) => boolean
+
+/**
+ * M53 — moved here from the `@HumanInTheLoop` decorator, which is being deleted: the type is
+ * consumed by `compileHitlGates` and the toolbox capability, not by the decorator alone.
+ */
+export type TimeoutAction = 'abort' | 'proceed' | 'retry'
+export interface HumanInTheLoopOptions {
+  /** Question shown to the human approver. */
+  question: string
+  /** Timeout in milliseconds before onTimeout fires (default: 300_000 = 5 min). */
+  timeout?: number
+  /** Action when timeout expires (default: 'abort'). */
+  onTimeout?: TimeoutAction
+  /** Show the tool input to the approver (default: true). */
+  showInput?: boolean
+  /**
+   * M20 — an optional JSON-schema descriptor of the custom payload the approver may attach (edited
+   * args, a review note). Carried into the `approval_required` event + `GET /approvals` so the UI
+   * knows what to collect. A plain JSON object, not a live Zod schema (keeps the wire serializable).
+   */
+  payloadSchema?: Record<string, unknown>
+}

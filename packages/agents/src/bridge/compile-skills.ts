@@ -14,7 +14,16 @@
  */
 import type { SkillsSettings } from '@theokit/sdk'
 
-import type { SkillsOptions } from '../decorators/skills.js'
+/**
+ * M53 — the options shape lives WITH its conversion now. It used to be declared on the decorator
+ * that is being deleted, which would have taken a type the compiler needs down with it.
+ */
+export interface SkillsOptions {
+  /** Skill names to include (resolved from `.theokit/skills/<name>/SKILL.md`). */
+  include: string[]
+  /** Auto-discover every skill under `.theokit/skills/` (default: false). */
+  autoDiscover?: boolean
+}
 
 export function compileSkills(options: SkillsOptions): SkillsSettings {
   if (options.autoDiscover) {
