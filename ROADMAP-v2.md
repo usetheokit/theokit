@@ -132,7 +132,7 @@ num contrato OO (`CredentialStore`/`AuthProvider`). O agent-builder reponta os 3
 
 ---
 
-### M61 — [ ] `ConfigurationError` unificado (resolve a duplicação)
+### M61 — [x] `ConfigurationError` unificado (resolve a duplicação)
 
 **Objective:** Há dois `ConfigurationError` — o do Theokit (`errors.ts:16`, `extends Error`) e o do SDK
 (`extends TheokitAgentError`). O agent-builder importa o do SDK. Um `catch (e instanceof
