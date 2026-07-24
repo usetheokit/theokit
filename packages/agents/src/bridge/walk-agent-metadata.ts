@@ -320,7 +320,13 @@ export function walkAgentMetadata(
  *
  * @throws Error on duplicate routes (EC-4)
  */
-export function validateUniqueRoutes(results: AgentWalkResult[]): void {
+/** M53 — the route/name pair is all this check needs; `AgentWalkResult` satisfies it structurally. */
+export interface RouteIdentity {
+  readonly route: string
+  readonly agentConfig: { name: string }
+}
+
+export function validateUniqueRoutes(results: readonly RouteIdentity[]): void {
   const seen = new Map<string, string>()
   for (const r of results) {
     const existing = seen.get(r.route)
