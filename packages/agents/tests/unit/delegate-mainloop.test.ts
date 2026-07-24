@@ -34,20 +34,21 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
     },
 }))
 
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
 const { delegate, BudgetExceededError } = await import('../../src/bridge/agent-orchestrator.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
 
-@Agent({ model: 'test-model' })
-class ReflectAgent {
-  @MainLoop({ strategy: 'plan-act-reflect', maxIterations: 3 })
-  async run() {}
+const reflectAgent = {
+  name: 'ReflectAgent',
+  compiled: applyCapabilities([new ModelCapability('test-model')]),
+  strategy: 'plan-act-reflect' as const,
+  maxIterations: 3,
 }
 
-@Agent({ model: 'test-model' })
-class ChatAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
+const chatAgent = {
+  name: 'ChatAgent',
+  compiled: applyCapabilities([new ModelCapability('test-model')]),
+  strategy: 'simple-chat' as const,
 }
 
 function script(rounds: StreamEvent[][]): void {
@@ -59,21 +60,21 @@ function script(rounds: StreamEvent[][]): void {
 describe('delegate() @MainLoop routing (T2.2)', () => {
   it('test_delegate_plan_act_reflect_multi_rounds — 2 rounds + feedback injected', async () => {
     script([[{ type: 'tool_result', toolName: 'x', input: {}, output: 'r' }], [{ type: 'done' }]])
-    await delegate(ReflectAgent, 'task', { apiKey: 'test' })
+    await delegate(reflectAgent, 'task', { apiKey: 'test' })
     expect(h.calls).toBe(2)
     expect(h.prompts[1]).toContain('reflection')
   })
 
   it('test_delegate_simple_chat_single_round — single-shot preserved (EC-2)', async () => {
     script([[{ type: 'tool_result', toolName: 'x', input: {}, output: 'r' }]])
-    await delegate(ChatAgent, 'task', { apiKey: 'test' })
+    await delegate(chatAgent, 'task', { apiKey: 'test' })
     expect(h.calls).toBe(1)
   })
 
   it('test_delegate_budget_clamp_across_rounds — cumulative cost throws (EC-4)', async () => {
     script([[{ type: 'done', cost: 0.5, finishReason: 'tool-calls' }]])
     await expect(
-      delegate(ReflectAgent, 'task', { apiKey: 'test', budget: 1.2 }),
+      delegate(reflectAgent, 'task', { apiKey: 'test', budget: 1.2 }),
     ).rejects.toBeInstanceOf(BudgetExceededError)
   })
 })

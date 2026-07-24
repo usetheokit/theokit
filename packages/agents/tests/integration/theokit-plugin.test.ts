@@ -1,16 +1,16 @@
 import 'reflect-metadata'
+import { ModelCapability } from '../../src/capability/capabilities.js'
+import { applyCapabilities } from '../../src/capability/capability.js'
 import { describe, it, expect } from 'vitest'
 import http from 'node:http'
-import { Agent } from '../../src/decorators/agent.js'
-import { MainLoop } from '../../src/decorators/main-loop.js'
 import { agentsPlugin } from '../../src/theokit-plugin.js'
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 import { nodeIncomingToRequest, writeResponseToNode } from '@theokit/http/runtime/node'
 
-@Agent({ name: 'test-agent', route: '/api/agents/test', model: 'mock' })
-class TestAgent {
-  @MainLoop()
-  async run() {}
+const testAgent = {
+  name: 'test',
+  route: '/api/agents/test',
+  compiled: applyCapabilities([new ModelCapability('mock')]),
 }
 
 /** Wrap agent plugin hooks behind a Node HTTP server for testing. */
@@ -19,7 +19,9 @@ function createPluginServer(hooks: Function[], fallbackHandler?: (request: Reque
     const request = nodeIncomingToRequest(nodeReq)
 
     for (const hook of hooks) {
-      const response = await (hook as (ctx: { request: Request }) => Promise<Response | void>)({ request })
+      const response = await (hook as (ctx: { request: Request }) => Promise<Response | undefined>)(
+        { request },
+      )
       if (response instanceof Response) {
         await writeResponseToNode(response, nodeRes)
         return
@@ -36,12 +38,14 @@ function createPluginServer(hooks: Function[], fallbackHandler?: (request: Reque
 
 describe('agentsPlugin()', () => {
   it('test_plugin_registers_hook', () => {
-    const plugin = agentsPlugin({ agents: [TestAgent] })
+    const plugin = agentsPlugin({ agents: [testAgent] })
     expect(plugin.name).toBe('@theokit/agents')
 
     let hookName = ''
     plugin.register({
-      addHook(name: string, _fn: Function) { hookName = name },
+      addHook(name: string, _fn: Function) {
+        hookName = name
+      },
     })
     expect(hookName).toBe('onRequest')
   })
@@ -50,16 +54,25 @@ describe('agentsPlugin()', () => {
     const mockStream = async function* (): AsyncGenerator<StreamEvent> {
       yield { type: 'run_started', runId: 'r1', agentName: 'test-agent' }
       yield { type: 'text_delta', content: 'Hi from agent!' }
-      yield { type: 'done', result: 'Hi!', usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 }, durationMs: 50 }
+      yield {
+        type: 'done',
+        result: 'Hi!',
+        usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+        durationMs: 50,
+      }
     }
 
     const plugin = agentsPlugin({
-      agents: [TestAgent],
+      agents: [testAgent],
       createRunFactory: () => () => mockStream(),
     })
 
     const hooks: Function[] = []
-    plugin.register({ addHook(_name: string, fn: Function) { hooks.push(fn) } })
+    plugin.register({
+      addHook(_name: string, fn: Function) {
+        hooks.push(fn)
+      },
+    })
 
     const server = createPluginServer(hooks)
     await new Promise<void>((r) => server.listen(0, r))
@@ -83,13 +96,22 @@ describe('agentsPlugin()', () => {
   })
 
   it('test_plugin_falls_through_non_agent_routes', async () => {
-    const plugin = agentsPlugin({ agents: [TestAgent] })
+    const plugin = agentsPlugin({ agents: [testAgent] })
 
     const hooks: Function[] = []
-    plugin.register({ addHook(_name: string, fn: Function) { hooks.push(fn) } })
+    plugin.register({
+      addHook(_name: string, fn: Function) {
+        hooks.push(fn)
+      },
+    })
 
-    const server = createPluginServer(hooks, () =>
-      new Response(JSON.stringify({ controller: true }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    const server = createPluginServer(
+      hooks,
+      () =>
+        new Response(JSON.stringify({ controller: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
     )
     await new Promise<void>((r) => server.listen(0, r))
     const port = (server.address() as { port: number }).port
@@ -105,10 +127,14 @@ describe('agentsPlugin()', () => {
   })
 
   it('test_plugin_default_factory_returns_sdk_not_wired', async () => {
-    const plugin = agentsPlugin({ agents: [TestAgent] })
+    const plugin = agentsPlugin({ agents: [testAgent] })
 
     const hooks: Function[] = []
-    plugin.register({ addHook(_name: string, fn: Function) { hooks.push(fn) } })
+    plugin.register({
+      addHook(_name: string, fn: Function) {
+        hooks.push(fn)
+      },
+    })
 
     const server = createPluginServer(hooks)
     await new Promise<void>((r) => server.listen(0, r))
