@@ -145,3 +145,107 @@ export interface McpServerConfig {
 }
 
 export type McpServersMap = Record<string, McpServerConfig>
+
+/** M53 — moved from the `@ProjectContext` decorator being deleted; read by the compiler. */
+export type IndexStrategy =
+  | 'tree-sitter' // Parse AST for structural understanding
+  | 'regex' // Simple regex-based symbol extraction
+  | 'none' // No indexing — rely on grep/glob only
+export type RelevanceStrategy =
+  | 'git-history' // Prioritize recently-edited files
+  | 'import-graph' // Follow import chains from entry points
+  | 'semantic' // Embedding-based similarity search
+  | 'manual' // Only files explicitly provided
+export interface ProjectContextOptions {
+  /** Files that mark the project root (searched upward from cwd). */
+  rootMarkers?: string[]
+  /** How to index the codebase for structural understanding. */
+  indexStrategy?: IndexStrategy
+  /** Maximum files to include in context per request. */
+  maxFilesInContext?: number
+  /** How to rank file relevance when selecting context. */
+  relevanceStrategy?: RelevanceStrategy
+  /** Glob patterns to exclude from indexing and context. */
+  ignorePatterns?: string[]
+  /** File extensions to include in indexing (default: all text files). */
+  includeExtensions?: string[]
+}
+
+export type PlatformName =
+  | 'telegram'
+  | 'discord'
+  | 'slack'
+  | 'whatsapp'
+  | 'teams'
+  | 'email'
+  | 'sms'
+  | 'mattermost'
+  | 'line'
+  | 'matrix'
+
+export type SessionStrategy =
+  | 'per-user' // telegram-dm-{userId}
+  | 'per-channel' // telegram-grp-{channelId}
+  | 'per-thread' // telegram-tpc-{channelId}-{topicId}
+
+export interface GatewayOptions {
+  /** Platform adapters this agent supports. */
+  platforms: PlatformName[]
+  /** How to resolve agentId from inbound events (default: 'per-user'). */
+  sessionStrategy?: SessionStrategy
+  /** Auto-start typing indicator while agent processes (default: true). */
+  typing?: boolean
+}
+
+export type CheckpointStrategy =
+  | 'after-tool-call' // checkpoint after every successful tool execution
+  | 'after-iteration' // checkpoint after every loop iteration
+  | 'manual' // only checkpoint when explicitly called via ctx.checkpoint()
+
+export type CheckpointStorage = 'memory' | 'filesystem' | 'drizzle' | 'redis'
+
+export interface CheckpointOptions {
+  /** Where to persist checkpoints. */
+  storage?: CheckpointStorage
+  /** When to auto-checkpoint (default: 'after-tool-call'). */
+  strategy?: CheckpointStrategy
+  /** Maximum checkpoints to retain per run (rolling window). */
+  maxCheckpoints?: number
+  /** Time-to-live in ms before checkpoints expire (default: 3_600_000 = 1h). */
+  ttl?: number
+}
+
+export interface CheckpointState {
+  id: string
+  runId: string
+  agentName: string
+  step: number
+  messages: unknown[]
+  toolResults: unknown[]
+  createdAt: number
+  resumeToken: string
+}
+
+export type MemoryProvider = 'built-in' | 'honcho' | 'supermemory' | 'mem0'
+
+export type MemoryScope = 'per-user' | 'per-agent' | 'per-tenant' | 'global'
+
+export interface MemoryOptions {
+  /** Memory provider backend. */
+  provider?: MemoryProvider
+  /** Enable semantic search via embeddings. */
+  embeddings?: boolean
+  /** Enable full-text search (FTS5). */
+  fts?: boolean
+  /** Memory isolation scope (default: 'per-user'). */
+  scope?: MemoryScope
+  /** Maximum facts to retain per scope (0 = unlimited). */
+  maxFacts?: number
+}
+
+export interface CompactionDecoratorConfig {
+  /** Strategy name (e.g. `'token-budget'`). Validated at resolve time. */
+  name: string
+  /** Token budget for `'token-budget'`. Required at resolve time (EC-2). */
+  keepTokens?: number
+}

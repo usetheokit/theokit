@@ -16,16 +16,12 @@
  * ```
  */
 import { setMeta, getMeta } from '../metadata/index.js'
+import type { CompactionDecoratorConfig } from '../types.js'
 
 const COMPACTION_CONFIG = Symbol.for('theokit:agents:compaction')
 
 /** Stored `@Compaction` declaration (resolved + validated at `AgentRunner.build()`). */
-export interface CompactionDecoratorConfig {
-  /** Strategy name (e.g. `'token-budget'`). Validated at resolve time. */
-  name: string
-  /** Token budget for `'token-budget'`. Required at resolve time (EC-2). */
-  keepTokens?: number
-}
+export type { CompactionDecoratorConfig } from '../types.js'
 
 export function Compaction(name: string, options: { keepTokens?: number } = {}): ClassDecorator {
   return (target: Function) => {
