@@ -119,7 +119,7 @@ describe('Agent Orchestrator — delegate()', () => {
   })
 
   it('test_toolbox_capability_compiles_tools_onto_the_agent', () => {
-    expect(TooledHelperAgent.compiled.tools.map((t) => t.name)).toEqual(['math.add'])
+    expect(TooledHelperAgent.compiled.tools.map((t) => t.name)).toEqual(['math_add'])
   })
 
   it('test_delegate_auto_instantiates_toolboxes', () => {

@@ -208,7 +208,7 @@ export class SupportTools {
 
 const compiled = applyCapabilities([
   new ModelCapability('anthropic/claude-sonnet-4-6'),
-  new ToolboxCapability(new SupportTools(db), { namespace: 'support' }), // → support.lookup_order
+  new ToolboxCapability(new SupportTools(db), { namespace: 'support' }), // → support_lookup_order
 ])
 ```
 
