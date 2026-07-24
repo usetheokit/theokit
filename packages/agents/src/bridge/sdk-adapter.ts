@@ -147,9 +147,14 @@ function buildExtraCreateOptions(
   // and every `createToolHooksPlugin` hook was lost whenever HITL was active. Concatenate when both
   // sides are arrays; keep the previous replace semantics for the legacy `{ enabled }` object form.
   if (overrides.plugins !== undefined) {
+    // `Array.isArray` narrows to `any[]`, losing the element type — a local guard keeps it.
+    const asArray = (v: unknown): readonly unknown[] | undefined =>
+      Array.isArray(v) ? (v as readonly unknown[]) : undefined
+    const overrideList = asArray(overrides.plugins)
+    const compiledList = asArray(compiled.plugins)
     extra.plugins =
-      Array.isArray(overrides.plugins) && Array.isArray(compiled.plugins)
-        ? [...compiled.plugins, ...overrides.plugins]
+      overrideList !== undefined && compiledList !== undefined
+        ? [...compiledList, ...overrideList]
         : overrides.plugins
   }
   if (overrides.providers !== undefined) {
