@@ -528,7 +528,7 @@ export function createSdkAgentStream(
   // (keyed by `sessionId`/`agentId` under `local.baseDir`). No theokit-side store — the SDK owns it.
 
   // `factoryOpts.disableTools` (step-cap force-close) → `tool_choice:"none"` at send-time.
-  return (
+  const factory = (
     message: string,
     sessionId: string,
     factoryOpts?: { disableTools?: boolean },
@@ -605,6 +605,11 @@ export function createSdkAgentStream(
       }
     },
   })
+
+  // The resolved model is the one silent fallback in this path that matters: a caller passing the
+  // wrong argument shape (as the HTTP app builder did) gets `openai/gpt-4o-mini` with no error and
+  // no way to tell. Exposing it makes the resolution observable — and testable.
+  return Object.assign(factory, { resolvedModel: model })
 }
 
 interface StreamSdkAgentOpts {

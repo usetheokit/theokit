@@ -36,10 +36,12 @@ export interface TheoAppOptions {
   llmModel?: string
   /** Agent stream factory override (for testing or custom SDK wiring). */
   agentStreamFactory?: (
-    walk: unknown,
+    /** The COMPILED agent options — not the metadata walk (which carries no `model`). */
+    compiled: unknown,
     tools: unknown[],
     apiKey: string,
-    model?: string,
+    /** Per-run overrides, mirroring `createSdkAgentStream`'s 4th argument (never a bare string). */
+    overrides?: { model?: string },
   ) => (message: string, sessionId: string) => AsyncIterable<unknown>
   /** HTML string to serve at GET / (inline frontend). */
   html?: string
@@ -324,13 +326,18 @@ export class TheoApp {
       let createRun: (message: string, sessionId: string) => AsyncIterable<unknown>
 
       if (opts.agentStreamFactory) {
-        createRun = opts.agentStreamFactory(walk, compiled.tools, apiKey, opts.llmModel)
+        createRun = opts.agentStreamFactory(compiled, compiled.tools, apiKey, {
+          model: opts.llmModel,
+        })
       } else if (apiKey) {
         // SDK adapter: bridges @theokit/agents decorators → @theokit/sdk runtime
-        createRun = createSdkAgentStreamFn(walk, compiled.tools, apiKey, opts.llmModel) as (
-          m: string,
-          s: string,
-        ) => AsyncIterable<unknown>
+        // `compiled`, NOT `walk`: the walk carries no `model`, so passing it made every HTTP agent
+        // fall back to `openai/gpt-4o-mini`, ignoring `@Agent({ model })`. And the 4th argument is
+        // `RuntimeOverrides`, not a bare string — `llmModel` was being dropped too. The dynamic
+        // import is typed `Function`, so TypeScript caught neither.
+        createRun = createSdkAgentStreamFn(compiled, compiled.tools, apiKey, {
+          model: opts.llmModel,
+        }) as (m: string, s: string) => AsyncIterable<unknown>
       } else {
         createRun = this.createFallbackStream(walk.agentConfig.name, apiKey)
       }

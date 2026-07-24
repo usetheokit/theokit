@@ -9,7 +9,6 @@
  */
 import type { CompiledAgentOptions } from './agent-compiler.js'
 import { streamAgentResponse, type StreamEvent } from './agent-sse-handler.js'
-import type { AgentWalkResult } from './walk-agent-metadata.js'
 
 export interface AgentRoute {
   method: 'POST' | 'GET'
@@ -18,7 +17,12 @@ export interface AgentRoute {
 }
 
 export interface AgentRouteContext {
-  walkResult: AgentWalkResult
+  /**
+   * M53 — only the mounting `route` was ever read from the walk, so the generator declares that
+   * instead of the whole `AgentWalkResult` (which chained it to the decorator metadata walk).
+   * `AgentWalkResult` satisfies this structurally, so the decorator path is unchanged.
+   */
+  walkResult: { route: string }
   compiledOptions: CompiledAgentOptions
   createRun: (message: string, sessionId: string) => AsyncIterable<StreamEvent>
   getRun?: (runId: string) => Promise<{ id: string; status: string; result?: string } | null>
