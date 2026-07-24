@@ -14,7 +14,7 @@ import { extname, join, resolve } from 'node:path'
  *
  * Tested on macOS + Linux. Windows long-path support not validated (EC-20).
  */
-export interface WalkOptions {
+interface WalkOptions {
   /** File extensions to include (e.g., new Set(['.ts', '.tsx'])). */
   extensions: ReadonlySet<string>
   /** Skip directories whose name starts with any of these (default: ['_', '.']). */

@@ -26,7 +26,7 @@ export interface CollectOptions {
   loadStaticPaths: LoadStaticPaths
 }
 
-export type ParsedSegment =
+type ParsedSegment =
   | { kind: 'static' }
   | { kind: 'param'; name: string }
   | { kind: 'catch-all'; name: string }

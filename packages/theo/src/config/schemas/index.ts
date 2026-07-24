@@ -16,16 +16,10 @@
  * individual schema files — so future additions stay in one place.
  */
 
-export { headerSafeString } from './header-safe.js'
 export type { FormatErrorContext, FormatErrorHook } from './format-error.js'
 export { rateLimitSchema } from './rate-limit.js'
 export { uploadSchema } from './upload.js'
 export { loggingSchema } from './logging.js'
 export { cacheSchema } from './cache.js'
-export {
-  securityHeadersSchema,
-  disallowedConfigSchema,
-  corsSchema,
-  securitySchema,
-} from './security.js'
+export { securityHeadersSchema, corsSchema, securitySchema } from './security.js'
 export { storageSchema, type StorageConfig } from './storage.js'

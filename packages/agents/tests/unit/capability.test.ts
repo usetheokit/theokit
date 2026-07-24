@@ -9,12 +9,8 @@ import {
   createDraft,
   setOnce,
 } from '../../src/capability/capability.js'
-import {
-  ConfigurationError,
-  ModelCapability,
-  skills,
-  ToolsCapability,
-} from '../../src/capability/capabilities.js'
+import { ModelCapability, skills, ToolsCapability } from '../../src/capability/capabilities.js'
+import { ConfigurationError } from '../../src/errors.js'
 import {
   CapabilityPreset,
   CapabilityRegistry,

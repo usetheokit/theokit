@@ -81,7 +81,7 @@ const NOOP_UNSUBSCRIBE = (): void => {
   // No live listener was registered (unknown or already-ended run).
 }
 
-export interface RunEventCacheOptions {
+interface RunEventCacheOptions {
   /** Milliseconds after `end()` before a run's buffer is evicted. Default 5 min. */
   readonly evictAfterMs?: number
 }

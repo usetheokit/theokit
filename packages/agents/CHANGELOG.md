@@ -1,5 +1,27 @@
 # @theokit/agents
 
+## 2.0.0
+
+### Major Changes
+
+- 96c0b05: Remove the backward-compatibility concessions the previous release carried (M56).
+
+  **BREAKING — `ToolboxCapability.compile()` deleted.** It had zero callers anywhere and was kept only
+  because removing a public method breaks consumers. `apply()` is the one path an agent's tools flow
+  through. If you called `compile()` directly, apply the capability instead:
+  `applyCapabilities([new ToolboxCapability(...)])`.
+
+  **`ConfigurationError` is still exported from the package root — only the internal duplicate
+  re-export was removed.** It used to reach the barrel through a compat shim in
+  `capability/capabilities.js`; M56 removes the shim and pins the class to the barrel directly, so
+  `import { ConfigurationError } from '@theokit/agents'` keeps working. Only a deep import from the
+  internal `capability/capabilities.js` path — never a documented entry point — is affected. A
+  `public-api-surface` test now locks the root export in place.
+
+  Also in this release: the two `compileTools` failure paths that threw a bare `Error` (missing toolbox
+  instance, non-method handler) now throw the typed `ConfigurationError` the rest of the module uses, so
+  an authoring mistake is distinguishable from an unexpected runtime failure.
+
 ## 1.1.0
 
 ### Minor Changes

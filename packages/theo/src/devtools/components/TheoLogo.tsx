@@ -8,7 +8,7 @@
  */
 import { THEO_LOGO_BASE64 } from '../assets/logo-data.js'
 
-export interface TheoLogoProps {
+interface TheoLogoProps {
   size?: number
 }
 

@@ -19,9 +19,10 @@
  * Bundle target: ≤ 2KB gzipped.
  */
 
+import { HTTP_METHOD_LOWERCASE } from '../core/contracts/http-methods.js'
+
 import { theoFetch, TheoFetchError } from './theo-fetch.js'
 import type { TheoFetchOptions } from './theo-fetch.js'
-import { HTTP_METHOD_LOWERCASE } from '../core/contracts/http-methods.js'
 
 const HTTP_METHODS_SET = new Set(HTTP_METHOD_LOWERCASE)
 
@@ -65,9 +66,11 @@ function injectParams(path: string, params?: Record<string, string | number>): s
     }
     return path
   }
-  return path.replace(/:(?:\.\.\.)?([A-Za-z_][A-Za-z0-9_]*)/g, (_match, key: string) => {
+  return path.replace(/:(?:\.\.\.)?([A-Za-z_]\w*)/g, (_match, key: string) => {
     const value = params[key]
-    if (value === undefined || value === null || value === '') {
+    // `params` is typed as fully-populated, but it crosses a runtime boundary (a caller may hand
+    // it raw JSON), so the emptiness guard stays. Narrowed to the check the type cannot rule out.
+    if (value === '') {
       throw new TheoFetchError(0, {
         error: {
           code: 'MISSING_PARAM',
@@ -107,13 +110,13 @@ function makeProxy(ctx: ProxyContext): unknown {
             const segmentsWithDynamic = ctx.segments.map((seg) =>
               Object.prototype.hasOwnProperty.call(opts.params, seg) ? `:${seg}` : seg,
             )
-            finalPath = injectParams(
-              `${ctx.baseUrl}/${segmentsWithDynamic.join('/')}`,
-              opts.params,
-            )
+            finalPath = injectParams(`${ctx.baseUrl}/${segmentsWithDynamic.join('/')}`, opts.params)
           }
           const { params: _ignored, ...rest } = opts ?? {}
-          const init = { method: key.toUpperCase(), ...rest } as unknown as TheoFetchOptions<unknown>
+          const init = {
+            method: key.toUpperCase(),
+            ...rest,
+          } as unknown as TheoFetchOptions<unknown>
           return ctx.fetchImpl(finalPath, init)
         }
       }
@@ -142,6 +145,9 @@ export interface CreateAppClientOptions {
   fetchImpl?: FetchImpl
 }
 
+// TAppClient is the caller-supplied shape of the generated client. It appears once by design — the
+// proxy is untyped at runtime — and removing it would force every call site to cast.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- see above
 export function createAppClient<TAppClient = unknown>(
   baseUrlOrOptions?: string | CreateAppClientOptions,
   legacyFetchImpl?: FetchImpl,

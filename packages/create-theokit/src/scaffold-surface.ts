@@ -173,7 +173,7 @@ function substituteTmpls(dir: string, projectName: string): void {
   }
 }
 
-export interface ApplySurfaceOptions {
+interface ApplySurfaceOptions {
   targetDir: string
   projectName: string
   surface: SurfaceKind

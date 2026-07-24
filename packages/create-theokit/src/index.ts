@@ -30,7 +30,7 @@ function isValidProjectName(name: string): boolean {
   return /^[a-z0-9][a-z0-9._-]*$/.test(name)
 }
 
-export interface ScaffoldOptions {
+interface ScaffoldOptions {
   bare?: boolean
   /** Test-only — force the bare transform to throw to validate EC-4 rollback. */
   _testForceTransformError?: string
