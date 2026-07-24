@@ -11,15 +11,12 @@
   through. If you called `compile()` directly, apply the capability instead:
   `applyCapabilities([new ToolboxCapability(...)])`.
 
-  **BREAKING — `ConfigurationError` is no longer re-exported from the capability module.** One class
-  with two import paths was compatibility, not design. Import it from where it is defined:
-
-  ```diff
-  - import { ConfigurationError } from '@theokit/agents'   // still works — barrel unchanged
-  ```
-
-  The barrel export is unchanged; only the internal `capability/capabilities.js` re-export was removed.
-  Consumers importing from the package root are unaffected.
+  **`ConfigurationError` is still exported from the package root — only the internal duplicate
+  re-export was removed.** It used to reach the barrel through a compat shim in
+  `capability/capabilities.js`; M56 removes the shim and pins the class to the barrel directly, so
+  `import { ConfigurationError } from '@theokit/agents'` keeps working. Only a deep import from the
+  internal `capability/capabilities.js` path — never a documented entry point — is affected. A
+  `public-api-surface` test now locks the root export in place.
 
   Also in this release: the two `compileTools` failure paths that threw a bare `Error` (missing toolbox
   instance, non-method handler) now throw the typed `ConfigurationError` the rest of the module uses, so
