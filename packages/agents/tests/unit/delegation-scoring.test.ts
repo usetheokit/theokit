@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { SubAgentSpec } from '../../src/bridge/agent-orchestrator.js'
+import { ModelCapability } from '../../src/capability/capabilities.js'
+import { applyCapabilities } from '../../src/capability/capability.js'
 
 import { delegateBackground, delegateWithScoring } from '../../src/bridge/delegation-scoring.js'
 import type { DelegationResult } from '../../src/bridge/delegation-types.js'
@@ -13,8 +16,11 @@ function result(response: string): DelegationResult {
   return { response, toolCalls: [], cost: 0, tokens: 0 }
 }
 
-class FakeSubAgent {
-  readonly kind = 'fake-sub-agent'
+// The delegate function is mocked in every test here, so the spec is only an identity token; a
+// minimal SubAgentSpec stands in for what used to be a decorated class.
+const fakeSubAgent: SubAgentSpec = {
+  name: 'fakeSubAgent',
+  compiled: applyCapabilities([new ModelCapability('fake-model')]),
 }
 
 describe('M25 — delegateBackground', () => {
@@ -25,7 +31,7 @@ describe('M25 — delegateBackground', () => {
     })
     const delegateFn = vi.fn(() => pending)
 
-    const handle = delegateBackground(FakeSubAgent, 'do the thing', { delegateFn })
+    const handle = delegateBackground(fakeSubAgent, 'do the thing', { delegateFn })
 
     // The supervisor keeps working while the sub-agent is still running.
     expect(handle.settled()).toBe(false)
@@ -42,7 +48,7 @@ describe('M25 — delegateBackground', () => {
 
   it('marks settled on failure too (rejection is observable via wait())', async () => {
     const delegateFn = vi.fn(() => Promise.reject(new Error('sub-agent blew up')))
-    const handle = delegateBackground(FakeSubAgent, 'x', { delegateFn })
+    const handle = delegateBackground(fakeSubAgent, 'x', { delegateFn })
     await expect(handle.wait()).rejects.toThrow('sub-agent blew up')
     expect(handle.settled()).toBe(true)
   })
@@ -62,7 +68,7 @@ describe('M25 — delegateWithScoring', () => {
         : { pass: false, score: 0.2, feedback: 'be more specific' },
     )
 
-    const out = await delegateWithScoring(FakeSubAgent, 'summarize', {
+    const out = await delegateWithScoring(fakeSubAgent, 'summarize', {
       scorer,
       maxRounds: 3,
       delegateFn,
@@ -81,7 +87,7 @@ describe('M25 — delegateWithScoring', () => {
     const delegateFn = vi.fn(() => Promise.resolve(result('always weak')))
     const scorer = vi.fn(() => ({ pass: false, feedback: 'still weak' }))
 
-    const out = await delegateWithScoring(FakeSubAgent, 'x', { scorer, maxRounds: 2, delegateFn })
+    const out = await delegateWithScoring(fakeSubAgent, 'x', { scorer, maxRounds: 2, delegateFn })
 
     expect(delegateFn).toHaveBeenCalledTimes(2)
     expect(out.passed).toBe(false)
@@ -92,7 +98,7 @@ describe('M25 — delegateWithScoring', () => {
   it('passes first try ⇒ one delegate call, no feedback loop', async () => {
     const delegateFn = vi.fn(() => Promise.resolve(result('perfect')))
     const scorer = vi.fn(() => ({ pass: true }))
-    const out = await delegateWithScoring(FakeSubAgent, 'x', { scorer, delegateFn })
+    const out = await delegateWithScoring(fakeSubAgent, 'x', { scorer, delegateFn })
     expect(delegateFn).toHaveBeenCalledOnce()
     expect(out.passed).toBe(true)
     expect(out.rounds).toBe(1)

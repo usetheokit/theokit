@@ -7,9 +7,9 @@
  *  - `realUsageDone` builds the terminal `done` StreamEvent from the SDK `RunResult`.
  */
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
-
 import type { MemorySettings } from '@theokit/sdk'
-import type { McpServersMap } from '../decorators/mcp.js'
+
+import type { McpServersMap } from '../types.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
@@ -83,7 +83,7 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   // minimal opt-in — declaring `@Memory()` means the author wants memory ON.
   if (compiled.memory !== undefined) {
     if ('enabled' in compiled.memory) {
-      options.memory = compiled.memory as MemorySettings
+      options.memory = compiled.memory
     } else {
       // Legacy decorator shape ({provider, embeddings, fts, scope, maxFacts}) — those knobs have no
       // SDK counterpart yet, so they are DISCARDED on normalization. Loud, never silent (M49 review

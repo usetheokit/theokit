@@ -39,20 +39,12 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { AgentRunner } = await import('../../src/index.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
 
-@Agent({ name: 'thinker', route: '/thinker', model: 'compiled-model', reasoningEffort: 'high' })
-class ThinkerAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const thinkerAgent = applyCapabilities([new ModelCapability('compiled-model', 'high')])
 
-@Agent({ name: 'plain', route: '/plain', model: 'compiled-model' })
-class PlainAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const plainAgent = applyCapabilities([new ModelCapability('compiled-model')])
 
 describe('M1 reasoningEffort → Agent.getOrCreate model params', () => {
   beforeEach(() => {
@@ -62,7 +54,13 @@ describe('M1 reasoningEffort → Agent.getOrCreate model params', () => {
 
   it('test_createSdkAgentStream_forwards_reasoningEffort_to_getOrCreate', async () => {
     // compiled @Agent({ reasoningEffort: 'high' }) ⇒ getOrCreate opts.model carries the thinking param.
-    await AgentRunner.builder(ThinkerAgent).build().run('hi', { apiKey: 'k' })
+    await AgentRunner.fromSpec({
+      compiled: thinkerAgent,
+      name: 'thinkerAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k' })
     expect(h.captured?.model).toEqual({
       id: 'compiled-model',
       params: [{ id: 'thinking', value: 'high' }],
@@ -71,7 +69,11 @@ describe('M1 reasoningEffort → Agent.getOrCreate model params', () => {
 
   it('test_run_override_reasoningEffort_beats_compiled', async () => {
     // overrides.reasoningEffort ('low') wins over the compiled 'high' (merge-over-compiled).
-    await AgentRunner.builder(ThinkerAgent)
+    await AgentRunner.fromSpec({
+      compiled: thinkerAgent,
+      name: 'thinkerAgent',
+      strategy: 'simple-chat',
+    })
       .build()
       .run('hi', { apiKey: 'k', reasoningEffort: 'low' })
     expect(h.captured?.model).toEqual({
@@ -82,13 +84,23 @@ describe('M1 reasoningEffort → Agent.getOrCreate model params', () => {
 
   it('test_no_reasoningEffort_passes_bare_model_id', async () => {
     // No compiled effort, no override ⇒ bare { id } (backward-compat, no params key).
-    await AgentRunner.builder(PlainAgent).build().run('hi', { apiKey: 'k' })
+    await AgentRunner.fromSpec({
+      compiled: plainAgent,
+      name: 'plainAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k' })
     expect(h.captured?.model).toEqual({ id: 'compiled-model' })
   })
 
   it('test_run_override_reasoningEffort_on_plain_agent', async () => {
     // EC: a per-run override enables reasoning even when the agent declared none at compile time.
-    await AgentRunner.builder(PlainAgent)
+    await AgentRunner.fromSpec({
+      compiled: plainAgent,
+      name: 'plainAgent',
+      strategy: 'simple-chat',
+    })
       .build()
       .run('hi', { apiKey: 'k', reasoningEffort: 'medium' })
     expect(h.captured?.model).toEqual({

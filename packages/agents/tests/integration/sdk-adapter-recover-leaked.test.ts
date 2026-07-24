@@ -7,6 +7,7 @@
  * Asserts the wiring at the boundary: the `providers` object handed to `Agent.getOrCreate`.
  */
 import 'reflect-metadata'
+import type { CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ProviderRoutingSettings } from '@theokit/sdk'
@@ -32,33 +33,27 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { AgentRunner } = await import('../../src/index.js')
-const { compileAgent } = await import('../../src/bridge/agent-compiler.js')
-const { walkAgentMetadata } = await import('../../src/bridge/walk-agent-metadata.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
+const { AgentConfigCapability } = await import('../../src/capability/agent-capabilities.js')
 
-@Agent({ name: 'rec-on', route: '/rec-on', model: 'm', recoverLeakedToolCalls: true })
-class RecoverAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const recoverAgent = applyCapabilities([
+  new ModelCapability('m'),
+  new AgentConfigCapability({ recoverLeakedToolCalls: true }),
+])
 
-@Agent({ name: 'rec-off', route: '/rec-off', model: 'm' })
-class PlainAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const plainAgent = applyCapabilities([new ModelCapability('m')])
 
 const PROVIDERS = {
   routes: [{ capability: 'chat', provider: 'openrouter' }],
 } as unknown as ProviderRoutingSettings
 
 async function createOptsFor(
-  AgentClass: Parameters<typeof AgentRunner.builder>[0],
+  compiled: CompiledAgentOptions,
   opts: Record<string, unknown> = {},
 ): Promise<{ providers?: { routes: Array<{ extractToolCallsFromContent?: boolean }> } }> {
   getOrCreateMock.mockClear()
-  const gen = AgentRunner.builder(AgentClass)
+  const gen = AgentRunner.fromSpec({ compiled, name: 'a', strategy: 'simple-chat' })
     .build()
     .stream('hi', { apiKey: 'k', providers: PROVIDERS, ...opts })
   for await (const _e of gen) {
@@ -69,24 +64,24 @@ async function createOptsFor(
 
 describe('theokit#58 recoverLeakedToolCalls wiring', () => {
   it('test_agent_config_recoverLeakedToolCalls_compiles', () => {
-    expect(compileAgent(walkAgentMetadata(RecoverAgent)).recoverLeakedToolCalls).toBe(true)
-    expect(compileAgent(walkAgentMetadata(PlainAgent)).recoverLeakedToolCalls).toBeUndefined()
+    expect(recoverAgent.recoverLeakedToolCalls).toBe(true)
+    expect(plainAgent.recoverLeakedToolCalls).toBeUndefined()
   })
 
   it('test_enables_extractToolCallsFromContent_on_route_when_opted_in', async () => {
-    const createOpts = await createOptsFor(RecoverAgent)
+    const createOpts = await createOptsFor(recoverAgent)
     expect(createOpts.providers?.routes[0]?.extractToolCallsFromContent).toBe(true)
   })
 
   it('test_routes_untouched_when_disabled_default', async () => {
-    const createOpts = await createOptsFor(PlainAgent)
+    const createOpts = await createOptsFor(plainAgent)
     // backward-compat: the route is forwarded unchanged (no recovery flag injected).
     expect(createOpts.providers?.routes[0]?.extractToolCallsFromContent).toBeUndefined()
   })
 
   it('test_run_override_recoverLeakedToolCalls_beats_compiled', async () => {
-    // compiled false (PlainAgent) + per-run override true ⇒ the route gets the recovery flag.
-    const createOpts = await createOptsFor(PlainAgent, { recoverLeakedToolCalls: true })
+    // compiled false (plainAgent) + per-run override true ⇒ the route gets the recovery flag.
+    const createOpts = await createOptsFor(plainAgent, { recoverLeakedToolCalls: true })
     expect(createOpts.providers?.routes[0]?.extractToolCallsFromContent).toBe(true)
   })
 })

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { agent } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
-import type { McpServersMap } from '../../src/decorators/mcp.js'
+import type { McpServersMap } from '../../src/types.js'
 
 /**
  * #11 — the `.mcp({...})` builder value (builder-chain equivalent of the `@MCP` decorator) flows

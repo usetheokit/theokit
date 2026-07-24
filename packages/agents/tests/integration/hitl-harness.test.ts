@@ -119,33 +119,27 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
 const { streamAgentUIMessages } = await import('../../src/bridge/agent-endpoint.js')
 const { createInProcessApprovalRegistry } =
   await import('../../../theo/src/server/agent/approval-registry.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
-const { Toolbox, Tool } = await import('../../src/decorators/tool.js')
-const { HumanInTheLoop } = await import('../../src/decorators/human-in-the-loop.js')
-const { walkAgentMetadata } = await import('../../src/bridge/walk-agent-metadata.js')
-const { compileAgent } = await import('../../src/bridge/agent-compiler.js')
 const { z } = await import('zod')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ToolboxCapability } = await import('../../src/capability/toolbox.js')
 
 /** Build a compiled agent with one HITL-gated tool + the harness HITL wiring over a registry. */
 function gatedAgentFixture() {
-  @Toolbox({ namespace: 'ops' })
   class OpsTools {
-    @Tool({ name: 'deploy', description: 'Deploy to prod', input: z.object({ env: z.string() }) })
-    @HumanInTheLoop({ question: 'Deploy to prod?', onTimeout: 'abort' })
+    static readonly tools = [
+      {
+        name: 'deploy',
+        description: 'Deploy to prod',
+        input: z.object({ env: z.string() }),
+        method: 'deploy',
+        hitl: { question: 'Deploy to prod?', onTimeout: 'abort' as const },
+      },
+    ]
     async deploy(): Promise<string> {
       return 'deployed'
     }
   }
-  @Agent({ name: 'ops', route: '/ops' })
-  class OpsAgent {
-    @MainLoop({ strategy: 'simple-chat' })
-    async run(): Promise<void> {}
-  }
-  const compiled = compileAgent(
-    walkAgentMetadata(OpsAgent, [OpsTools]),
-    new Map([[OpsTools, new OpsTools()]]),
-  )
+  const compiled = applyCapabilities([new ToolboxCapability(new OpsTools(), { namespace: 'ops' })])
   const registry = createInProcessApprovalRegistry()
   const gated = compiled.hitl
   if (!gated) throw new Error('fixture: expected a gated tool')
@@ -252,12 +246,7 @@ describe('HITL harness E2E (M4 / DoD-3)', () => {
 
   it('test_e2e_non_gated_agent_never_pauses', async () => {
     // A compiled agent with NO gated tool takes the M2 path — no approval chunk at all.
-    @Agent({ name: 'plain', route: '/plain' })
-    class PlainAgent {
-      @MainLoop({ strategy: 'simple-chat' })
-      async run(): Promise<void> {}
-    }
-    const compiled = compileAgent(walkAgentMetadata(PlainAgent))
+    const compiled = applyCapabilities([])
     const chunks: { type: string; [k: string]: unknown }[] = []
     for await (const c of streamAgentUIMessages(compiled, 'k', {
       message: 'hi',

@@ -1,6 +1,6 @@
-import 'reflect-metadata'
-import { describe, it, expect, beforeAll } from 'vitest'
 import { execSync } from 'node:child_process'
+import 'reflect-metadata'
+import { describe, it, expect } from 'vitest'
 import { resolve } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { z } from 'zod'
@@ -14,11 +14,7 @@ const PKG_ROOT = resolve(__dirname, '../..')
 const DIST = resolve(PKG_ROOT, 'dist')
 
 describe.skipIf(!isVitest)('dist build validation', () => {
-  beforeAll(() => {
-    // Build before tests — ensures dist/ is fresh
-    // eslint-disable-next-line sonarjs/no-os-command-from-path -- test deliberately runs build CLI to validate dist output
-    execSync('npx tsup', { cwd: PKG_ROOT, stdio: 'pipe' })
-  })
+  // dist/ is built once by tests/global-setup.ts — rebuilding here raced with bundle-size.test.ts.
 
   describe('build output structure', () => {
     it('should emit all 3 entry points as ESM', () => {
