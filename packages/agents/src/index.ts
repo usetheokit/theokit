@@ -45,3 +45,10 @@ export type {
 // SDK's own subpath split (`@theokit/agents/{sandbox,persistence,interactive,pty}`).
 export { Agent, Squad, Tool, Provider } from '@theokit/sdk'
 export type { SDKAgent, CustomTool, SessionRecord } from '@theokit/sdk'
+
+// M63 — closing the layered boundary so the consumer imports ZERO `@theokit/sdk*` directly. Same
+// PASS-THROUGH doctrine as the M58 core above (Rung 9): these are already the target shape.
+//  - `SubAgent` (a2a delegation primitive): `SubAgent.create()` is already OO; wrapping it adds nothing.
+//  - the path-safety helpers are pure functions — a class would be ceremony (parsimony-ladder Rung 5).
+export { SubAgent } from '@theokit/sdk/a2a'
+export { assertNoSymlinkEscape, isForbiddenPath, safePathJoin } from '@theokit/sdk/path-safety'
