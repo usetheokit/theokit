@@ -24,36 +24,48 @@ run resumes from exactly the same state.
 
 ## Gating a tool
 
-Use `@HumanInTheLoop` on any `@Tool` method in an `@Agent` class:
+Declare `hitl` on the tool in the toolbox's `static tools`:
 
 ```ts
-import { Agent, Tool, Toolbox } from '@theokit/agents'
-import { HumanInTheLoop } from '@theokit/agents'
+import {
+  applyCapabilities,
+  ModelCapability,
+  ToolboxCapability,
+  type ToolDeclaration,
+} from '@theokit/agents'
 import { z } from 'zod'
 
-@Agent({ model: 'anthropic/claude-sonnet-4-6' })
-export class OpsAgent {
-  @Tool({
-    name: 'deploy',
-    description: 'Deploy the app to production. Requires human approval.',
-    input: z.object({
-      environment: z.enum(['staging', 'production']),
-      version: z.string(),
-    }),
-  })
-  @HumanInTheLoop({
-    question: 'Confirm deployment to production?',
-    timeout: 300_000,        // 5 minutes (default)
-    onTimeout: 'abort',      // 'abort' | 'proceed' | 'retry'
-    showInput: true,         // show the tool arguments to the approver (default: true)
-  })
-  async deploy({ environment, version }: { environment: string; version: string }) {
+export class OpsTools {
+  static readonly tools: ToolDeclaration[] = [
+    {
+      name: 'deploy',
+      description: 'Deploy the app to production. Requires human approval.',
+      input: z.object({
+        environment: z.enum(['staging', 'production']),
+        version: z.string(),
+      }),
+      method: 'deploy',
+      hitl: {
+        question: 'Confirm deployment to production?',
+        timeout: 300_000,   // 5 minutes (default)
+        onTimeout: 'abort', // 'abort' | 'proceed' | 'retry'
+        showInput: true,    // show the tool arguments to the approver (default: true)
+      },
+    },
+  ]
+
+  async deploy({ environment, version }: { environment: string; version: string }): Promise<string> {
     return deployToEnvironment(environment, version)
   }
 }
+
+export const opsAgent = applyCapabilities([
+  new ModelCapability('anthropic/claude-sonnet-4-6'),
+  new ToolboxCapability(new OpsTools(), { namespace: 'ops' }),
+])
 ```
 
-`@HumanInTheLoop` options:
+`hitl` options:
 
 | Option | Type | Default | Description |
 |---|---|---|---|
@@ -170,18 +182,18 @@ event — the agent can only proceed with one at a time (it holds at the first t
 requires approval until that approval resolves).
 
 ```ts
-@Agent({ model: 'anthropic/claude-opus-4-8' })
+// (toolbox declaration — abbreviated)
 export class AdminAgent {
-  @Tool({ name: 'delete_user', ... })
-  @HumanInTheLoop({ question: 'Delete this user account? This cannot be undone.', timeout: 120_000 })
+  { name: 'delete_user', ..., method: 'deleteUser',
+    hitl: { question: 'Delete this user account? This cannot be undone.', timeout: 120_000 } },
   async deleteUser({ userId }: { userId: string }) { ... }
 
-  @Tool({ name: 'send_email', ... })
-  @HumanInTheLoop({ question: 'Send this email to the customer?', showInput: true })
+  { name: 'send_email', ..., method: 'sendEmail',
+    hitl: { question: 'Send this email to the customer?', showInput: true } },
   async sendEmail({ to, subject, body }: { to: string; subject: string; body: string }) { ... }
 
-  @Tool({ name: 'list_users', ... })
-  // No @HumanInTheLoop — this tool runs immediately without approval
+  // No `hitl` — this tool runs immediately without approval
+  { name: 'list_users', ..., method: 'listUsers' },
   async listUsers() { ... }
 }
 ```
@@ -217,14 +229,14 @@ const { runId } = await approval.run({ topic: 'AI trends 2025' })
 await approval.resume(runId, { approved: true })
 ```
 
-`Workflow.suspend()` is for structured multi-step workflows. `@HumanInTheLoop` is for
+`Workflow.suspend()` is for structured multi-step workflows. `hitl` is for
 per-tool approvals within a single agent run. Pick the right primitive for the job.
 
 ---
 
 ## Approvals on `defineAgent` (M14)
 
-`@HumanInTheLoop` gates tools on the `@Agent` class surface; the `defineAgent` surface gates
+`hitl` gates tools declared on a toolbox; the `defineAgent` surface gates
 them via the `approvals` map, keyed by tool name — reusing the same endpoint HITL wiring:
 
 ```ts
@@ -264,7 +276,7 @@ await fetch(`/api/agents/support/approve/${callId}`, {
 })
 ```
 
-A gated tool may declare an optional `payloadSchema` (`@HumanInTheLoop({ payloadSchema })` or
+A gated tool may declare an optional `payloadSchema` (`hitl: { payloadSchema }` or
 `approvals: { <tool>: { payloadSchema } }`) that flows into the `approval_required` event +
 `GET /approvals` so the UI knows what to collect. Backward-compatible with `{ approved, reason? }`.
 `theokit@0.17.0` + `@theokit/agents@0.32.0`.

@@ -95,23 +95,25 @@ For `redact`, put the transformed text in `text`.
 
 ---
 
-## `@Guardrails` — class decorator (M9)
+## `guardrails()` — the capability (M53)
 
-The `@Agent` class path has the same guardrail capability as `defineAgent({ guardrails })`:
+The composable authoring path declares guardrails as a capability, alongside the others:
 
 ```ts
-import { Agent, MainLoop, Guardrails } from '@theokit/agents'
+import { applyCapabilities, ModelCapability, guardrails } from '@theokit/agents'
 import { promptInjectionDetector, piiDetector } from '@theokit/agents'
 
-@Agent({ name: 'support', route: '/api/agents/support' })
-@Guardrails([promptInjectionDetector(), piiDetector({ redact: true })])
-class SupportAgent {
-  @MainLoop() loop() {}
-}
+const compiled = applyCapabilities([
+  new ModelCapability('anthropic/claude-sonnet-4-6'),
+  guardrails([promptInjectionDetector(), piiDetector({ redact: true })]),
+])
 ```
 
-The declared guards compile into `compiled.guardrails` and `AgentRunner` applies them at the
-framework boundary — identical to the functional path. `@theokit/agents@0.32.0`.
+The declared guards land in `compiled.guardrails` and `AgentRunner` applies them at the framework
+boundary — identical to the `defineAgent({ guardrails })` path.
+
+> **Migrating from `@Guardrails`?** The class decorator was removed in `@theokit/agents` v1.0
+> (M53). See [`MIGRATION.md`](../../MIGRATION.md).
 
 ## Related
 
