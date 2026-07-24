@@ -1254,7 +1254,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
-### M55 — [ ] Nome de tool com fonte única — validar onde se minta, matar o código morto do gate HITL
+### M55 — [x] Nome de tool com fonte única — validar onde se minta, matar o código morto do gate HITL
 
 > Added 2026-07-24 by `/roadmap-feature` (slug: `tool-name-single-source`). **Out-of-scope cross-check (2026-07-24):** nenhum item travado é tocado — a lista cobre virar SDK, reimplementar o loop / orquestração, dispatch engine, framework de signals + pub/sub, sandbox embutido do Code-Mode, RSC, abstração de provider e quebrar o path de decorators do `@theokit/http`. Este milestone é higiene de desenho na fronteira `@theokit/agents` ↔ `@theokit/sdk` (`bridge/agent-compiler.ts` + `capability/toolbox.ts`) e **preserva** o path do `@theokit/http` intacto. Achados e evidência medida em `knowledge-base/grills/tool-name-single-source-feature-grill.md`.
 
