@@ -19,34 +19,15 @@
  * ```
  */
 import { setMeta, getMeta } from '../metadata/index.js'
+import type { GatewayOptions, SessionStrategy } from '../types.js'
 
 const GATEWAY_CONFIG = Symbol.for('theokit:agents:gateway')
 
-export type PlatformName =
-  | 'telegram'
-  | 'discord'
-  | 'slack'
-  | 'whatsapp'
-  | 'teams'
-  | 'email'
-  | 'sms'
-  | 'mattermost'
-  | 'line'
-  | 'matrix'
+export type { PlatformName } from '../types.js'
 
-export type SessionStrategy =
-  | 'per-user'       // telegram-dm-{userId}
-  | 'per-channel'    // telegram-grp-{channelId}
-  | 'per-thread'     // telegram-tpc-{channelId}-{topicId}
+export type { SessionStrategy } from '../types.js'
 
-export interface GatewayOptions {
-  /** Platform adapters this agent supports. */
-  platforms: PlatformName[]
-  /** How to resolve agentId from inbound events (default: 'per-user'). */
-  sessionStrategy?: SessionStrategy
-  /** Auto-start typing indicator while agent processes (default: true). */
-  typing?: boolean
-}
+export type { GatewayOptions } from '../types.js'
 
 export function Gateway(options: GatewayOptions): ClassDecorator {
   return (target: Function) => {

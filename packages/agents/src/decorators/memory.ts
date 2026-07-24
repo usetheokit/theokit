@@ -12,24 +12,14 @@
  * ```
  */
 import { setMeta, getMeta } from '../metadata/index.js'
+import type { MemoryOptions } from '../types.js'
 
 const MEMORY_CONFIG = Symbol.for('theokit:agents:memory')
 
-export type MemoryProvider = 'built-in' | 'honcho' | 'supermemory' | 'mem0'
-export type MemoryScope = 'per-user' | 'per-agent' | 'per-tenant' | 'global'
+export type { MemoryProvider } from '../types.js'
+export type { MemoryScope } from '../types.js'
 
-export interface MemoryOptions {
-  /** Memory provider backend. */
-  provider?: MemoryProvider
-  /** Enable semantic search via embeddings. */
-  embeddings?: boolean
-  /** Enable full-text search (FTS5). */
-  fts?: boolean
-  /** Memory isolation scope (default: 'per-user'). */
-  scope?: MemoryScope
-  /** Maximum facts to retain per scope (0 = unlimited). */
-  maxFacts?: number
-}
+export type { MemoryOptions } from '../types.js'
 
 export function Memory(options: MemoryOptions = {}): ClassDecorator {
   return (target: Function) => {

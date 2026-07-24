@@ -18,14 +18,12 @@ import type { ContextWindowOptions } from '../decorators/context-window.js'
 import type { GatewayOptions } from '../decorators/gateway.js'
 import { getGatewayConfig } from '../decorators/gateway.js'
 import { getGuardrailsConfig } from '../decorators/guardrails.js'
-import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import { getHumanInTheLoopConfig } from '../decorators/human-in-the-loop.js'
 import { getMcpConfig } from '../decorators/mcp.js'
 import { getMemoryConfig } from '../decorators/memory.js'
 import type { MemoryOptions } from '../decorators/memory.js'
 import { Trace, Audit } from '../decorators/observability.js'
 import { RequiresApproval } from '../decorators/policies.js'
-import type { ProjectContextOptions } from '../decorators/project-context.js'
 import { getProjectContextConfig } from '../decorators/project-context.js'
 import { getSkillsConfig } from '../decorators/skills.js'
 import type { SkillsOptions } from '../decorators/skills.js'
@@ -39,6 +37,8 @@ import {
   TOOL_CONFIG,
   TOOL_METHODS,
 } from '../metadata/keys.js'
+import type { ProjectContextOptions } from '../types.js'
+import type { HumanInTheLoopOptions } from '../types.js'
 import type { McpServersMap } from '../types.js'
 import type {
   AgentOptions,
