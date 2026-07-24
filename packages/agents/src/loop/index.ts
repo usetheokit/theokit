@@ -8,6 +8,8 @@
  * DRIVER `runReflectiveLoop` stays internal.
  */
 export { AgentRunner, AgentRunnerBuilder, type AgentRunnerRunOptions } from './agent-runner.js'
+// M59 — `GoalRunner` (the OO twin of the SDK's free `runGoalLoop`), parallel to `AgentRunner`.
+export { GoalRunner, type GoalRunnerDeps } from './goal-runner.js'
 // V4-R: the per-round stream factory type — public so a consumer can type an injected `streamFactory`
 // (the loop DRIVER `runReflectiveLoop` stays internal; only the factory contract is exported).
 export type { RoundStreamFactory } from './run-reflective-loop.js'
