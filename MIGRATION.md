@@ -126,11 +126,17 @@ can still hold state and receive injected dependencies:
 ```
 
 Compose it with `new ToolboxCapability(new OpsTools(k8s), { namespace: 'ops' })`. The tool is still
-named `ops.deploy`, the handler is still bound to the instance, and the `hitl` gate still lands in
+named `ops_deploy`, the handler is still bound to the instance, and the `hitl` gate still lands in
 the same `compiled.hitl` map.
 
 **One improvement:** a typo in `method` now fails at **authoring** time (`ConfigurationError`),
 instead of when the model finally decides to call the tool.
+
+> **Namespace separator changed (theokit#145).** A namespaced tool is now `ns_tool`, not `ns.tool`.
+> The dot is outside the charset `@theokit/sdk` accepts (`/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/`), so the
+> old form was rejected by `Agent.create` — a namespaced toolbox never actually worked against a
+> real provider. If you hardcoded a gate key or an allow-list entry as `ns.tool`, update it to
+> `ns_tool`. A namespace that cannot produce a valid name now fails at authoring time.
 
 ## Mounting (name / route)
 
