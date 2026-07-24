@@ -1233,6 +1233,27 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
+### M54 — [ ] Abrir o seam de `LoopStrategy` — critério de parada injetável (OCP), sem herança
+
+> Added 2026-07-24 by `/roadmap-feature` (slug: `loop-strategy-seam`). **Out-of-scope cross-check (2026-07-24):** o item travado *"Reimplementing the agent loop / own multi-agent orchestration"* é ADJACENTE, não violado — o `AgentRunner` e a interface `LoopStrategy` **já existem** (V4-B / T3.1); este milestone **não** reimplementa loop nem adiciona orquestração. Seguindo o precedente M38/M39/M40, ele pega **SOMENTE a fatia do seam** (injetar o critério de parada que hoje é escolhido entre 3 nomes fixos) e **reafirma** loop próprio, runner paralelo e orquestração multi-agente como OUT. Decisão do owner registrada em `knowledge-base/grills/loop-strategy-seam-feature-grill.md` § Q0.
+
+**Objective:** Fechar a assimetria de OCP do `AgentRunner`. Três dos quatro eixos de comportamento já aceitam injeção — reflexão (`.reflection(custom)`, objeto), compactação (`.compaction(name)`) e produção do round (`streamFactory`) — mas o **critério de parada** é o único trancado: `resolveLoopStrategy` valida `z.enum(['simple-chat','plan-act-reflect','react'])` e não existe `.loopStrategy()` no builder. A interface `LoopStrategy` já é aberta (`{ name, maxIterations, shouldContinue(outcome) }`); só o construtor a fecha. Abrir a injeção **por composição (Strategy)** — nunca por herança/subclasse (Template Method segue recusado, ADR-0001).
+
+**Definition of done:**
+- [ ] `AgentRunnerBuilder.loopStrategy(custom: LoopStrategy)` existe e VENCE sobre a estratégia derivada do spec, com a mesma semântica de precedência de `.reflection()`/`.compaction()`; teste RED→GREEN.
+- [ ] `LoopStrategy.name` relaxado de `MainLoopMeta['strategy']` para `string`, e `resolveLoopStrategy` continua validando os 3 nomes internos pelo zod (uma estratégia custom NUNCA passa pelo enum — ela entra pelo seam, não pela resolução por nome).
+- [ ] **Zero-behavior:** as três estratégias existentes resolvem idênticas — a suíte atual passa **sem editar uma expectativa**.
+- [ ] **Guardrail de terminação (GATE):** uma custom NÃO pode causar loop infinito — `maxIterations` permanece o teto duro aplicado pelo runner, provado por um teste em que `shouldContinue: () => true` para no teto.
+- [ ] `pnpm test` / `typecheck` / `lint --max-warnings=0` verdes; doc de extensão ("como injetar sua própria estratégia de parada") + entrada no CHANGELOG marcando o breaking de tipo.
+
+**Dependencies:** M53 (`[ ]`) — a mudança toca `AgentRunnerBuilder`/`AgentRunnerSpec`, reescritos naquele milestone; começar antes invalidaria sua prova de zero-behavior.
+
+**Top risks:**
+1. Uma estratégia custom mal escrita (`shouldContinue` sempre `true`) queima orçamento rodando até o teto. Mitigação: `maxIterations` é teto duro NÃO sobrescrevível pela custom, com teste que prova a terminação (é um gate do DoD, não um comentário).
+2. Relaxar `LoopStrategy.name` para `string` é breaking sutil para quem lê `.name` esperando a union (ex.: `switch` exaustivo). Mitigação: declarado como breaking de tipo no CHANGELOG, absorvido pelo major que o M53 já carrega.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
