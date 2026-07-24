@@ -109,7 +109,7 @@ TheoKit gives you three surfaces. Pick by how much compile-time safety you want.
 | Surface | When to use |
 |---|---|
 | [`defineAgent`](../guides/agent-surfaces.md#1-defineagent--the-zero-config-shortcut) | Shortest path. No guarantees enforced at compile time. |
-| [`agent()` builder](../guides/agent-surfaces.md#2-agent--the-fluent-builder-with-type-state) | Recommended. Missing model = compile error. Context and tool types checked. |
+| [`AgentBuilder.create()` builder](../guides/agent-surfaces.md#2-agent--the-fluent-builder-with-type-state) | Recommended. Missing model = compile error. Context and tool types checked. |
 | [`@Agent` class](../guides/agent-surfaces.md#3-agent--the-classdI-surface) | DI, guards, mixins, human-in-the-loop, checkpoints. |
 
 All three produce the same result at runtime. See [Agent surfaces](../guides/agent-surfaces.md)
@@ -165,7 +165,7 @@ prop-drilling across tool definitions.
 
 ```ts
 // agents/coder.ts
-export default agent()
+export default AgentBuilder.create()
   .model('anthropic/claude-sonnet-4-6')
   .context({ projectRoot: process.cwd(), language: 'typescript' })
   .tool(readFileTool)  // receives ctx.context.projectRoot automatically

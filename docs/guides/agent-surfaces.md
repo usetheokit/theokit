@@ -29,16 +29,16 @@ export default defineAgent({
 **Use it when:** you want the shortest path and don't need compile-time guarantees about the shape
 of the agent.
 
-## 2. `agent()` — the fluent builder with type-state
+## 2. `AgentBuilder.create()` — the fluent builder with type-state
 
 A composable builder that accumulates **type-state** the way Zod, tRPC, and Hono do. The compiler
 catches mistakes before the first request:
 
 ```ts
 // agents/assistant.ts
-import { agent, contextualTool } from '@theokit/agents'
+import { AgentBuilder, ContextualTool } from '@theokit/agents'
 
-export default agent()
+export default AgentBuilder.create()
   .model('anthropic/claude-sonnet-4-6') // required — `.build()` is a compile error without it
   .system('You are a senior engineer working inside this repository.')
   .context({ projectRoot: process.cwd() }) // set shared config ONCE (run-context, M7)
@@ -61,7 +61,7 @@ type-state:
 const withRepoContext = <B extends ReturnType<typeof agent>>(b: B) =>
   b.context({ projectRoot: process.cwd() }).system('Ground every answer in the real code.')
 
-export default agent().model('…').use(withRepoContext).tool(readFileTool).build()
+export default AgentBuilder.create().model('…').use(withRepoContext).tool(readFileTool).build()
 ```
 
 **Use it when:** you want compile-time guarantees, reusable partial chains, or a typed tool-name
@@ -106,7 +106,7 @@ por checkpoint — é onde o harness avançado vive. Cada capability é composta
 | You are… | Use | Why |
 |---|---|---|
 | Shipping a quick agent, no ceremony | `defineAgent` | Shortest path; a config object is enough. |
-| Building something real, want the compiler on your side | **`agent()` builder** | Type-state: forgotten model / unsatisfied tool-context / tool-name union are all compile-time. Recommended default. |
+| Building something real, want the compiler on your side | **`AgentBuilder.create()` builder** | Type-state: forgotten model / unsatisfied tool-context / tool-name union are all compile-time. Recommended default. |
 | Using DI, guards, mixins, HITL, or checkpoints | `@Agent` class | The advanced surface; decorators wire the harness. |
 
 All three land on the same `AgentDefinition`. Mixing them across different `agents/*.ts` files is
