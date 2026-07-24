@@ -1,5 +1,12 @@
 # theo
 
+## 0.43.12
+
+### Patch Changes
+
+- Updated dependencies [fcd1536]
+  - @theokit/agents@4.0.0
+
 ## 0.43.11
 
 ### Patch Changes
