@@ -67,6 +67,7 @@ export default tseslint.config(
       'packages/presenter/tsup.config.ts',
       'packages/presenter/vitest.config.ts',
       'packages/agents/vitest.config.ts',
+      'packages/http/vitest.config.ts',
       'packages/agents/vitest.live.config.ts',
     ],
   },
