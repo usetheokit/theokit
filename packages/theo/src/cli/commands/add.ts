@@ -1,7 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * CLI `theo add` — detects pkg manager + writes manifests under user `cwd`.
- * Build-time tool. No HTTP input.
- */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -41,7 +37,7 @@ export function validatePackageInput(input: string): true {
   return true
 }
 
-export type PackageManager = 'pnpm' | 'bun' | 'yarn' | 'npm'
+type PackageManager = 'pnpm' | 'bun' | 'yarn' | 'npm'
 
 export function detectPackageManager(lockfiles: Record<string, boolean>): PackageManager {
   if (lockfiles['pnpm-lock.yaml']) return 'pnpm'
@@ -51,7 +47,7 @@ export function detectPackageManager(lockfiles: Record<string, boolean>): Packag
   return 'npm'
 }
 
-export interface PackageRegistryEntry {
+interface PackageRegistryEntry {
   /** 'bundled' = adapter already shipped inside theokit; no npm install needed.
    *  'external' = adapter/plugin lives as a separate npm package. */
   kind: 'bundled' | 'external'
@@ -113,7 +109,7 @@ function findSuggestion(input: string, candidates: string[]): string | undefined
   return undefined
 }
 
-export interface RunAddDeps {
+interface RunAddDeps {
   input: string
   cwd: string
   existsSync?: (path: string) => boolean
@@ -125,7 +121,7 @@ export interface RunAddDeps {
   registry?: Record<string, PackageRegistryEntry>
 }
 
-export interface AddResult {
+interface AddResult {
   packageInstalled: string
   packageManager: PackageManager | 'bundled'
   usage: string

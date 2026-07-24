@@ -50,7 +50,7 @@ export interface OpenApiEmitConfig {
   outDir: string
 }
 
-export interface OpenApiOperation {
+interface OpenApiOperation {
   operationId?: string
   parameters?: OpenApiParameter[]
   requestBody?: {
@@ -63,7 +63,7 @@ export interface OpenApiOperation {
   >
 }
 
-export interface OpenApiParameter {
+interface OpenApiParameter {
   name: string
   in: 'path' | 'query' | 'header' | 'cookie'
   required: boolean
@@ -71,11 +71,11 @@ export interface OpenApiParameter {
   description?: string
 }
 
-export type OpenApiPathItem = Partial<
+type OpenApiPathItem = Partial<
   Record<'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options', OpenApiOperation>
 >
 
-export interface OpenApiDocument {
+interface OpenApiDocument {
   openapi: '3.1.0' | '3.0.3'
   info: { title: string; version: string }
   servers: { url: string; description?: string }[]
@@ -83,12 +83,12 @@ export interface OpenApiDocument {
   components?: { schemas?: Record<string, OpenApiSchema> }
 }
 
-export interface EmitOpenApiInput {
+interface EmitOpenApiInput {
   manifest: OpenApiManifestRoute[]
   config: OpenApiEmitConfig
 }
 
-export interface EmitOpenApiResult {
+interface EmitOpenApiResult {
   document: OpenApiDocument
   path: string
 }
@@ -104,7 +104,7 @@ const METHOD_TO_KEY: Record<string, keyof OpenApiPathItem> = {
 }
 
 /** Convert `/users/:id/posts/:postId?` → `/users/{id}/posts/{postId}`. */
-export function templatePath(routePath: string): string {
+function templatePath(routePath: string): string {
   // Bounded quantifier (\w{0,64}) is OSS-safe — TheoKit route param names
   // never exceed 64 chars in practice; cap prevents super-linear backtracking.
   return routePath.replace(/:([A-Za-z_]\w{0,64})\??/g, '{$1}')

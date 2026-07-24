@@ -171,32 +171,6 @@ export interface ProjectContextOptions {
   includeExtensions?: string[]
 }
 
-export type PlatformName =
-  | 'telegram'
-  | 'discord'
-  | 'slack'
-  | 'whatsapp'
-  | 'teams'
-  | 'email'
-  | 'sms'
-  | 'mattermost'
-  | 'line'
-  | 'matrix'
-
-export type SessionStrategy =
-  | 'per-user' // telegram-dm-{userId}
-  | 'per-channel' // telegram-grp-{channelId}
-  | 'per-thread' // telegram-tpc-{channelId}-{topicId}
-
-export interface GatewayOptions {
-  /** Platform adapters this agent supports. */
-  platforms: PlatformName[]
-  /** How to resolve agentId from inbound events (default: 'per-user'). */
-  sessionStrategy?: SessionStrategy
-  /** Auto-start typing indicator while agent processes (default: true). */
-  typing?: boolean
-}
-
 export type CheckpointStrategy =
   | 'after-tool-call' // checkpoint after every successful tool execution
   | 'after-iteration' // checkpoint after every loop iteration
@@ -215,17 +189,6 @@ export interface CheckpointOptions {
   ttl?: number
 }
 
-export interface CheckpointState {
-  id: string
-  runId: string
-  agentName: string
-  step: number
-  messages: unknown[]
-  toolResults: unknown[]
-  createdAt: number
-  resumeToken: string
-}
-
 export type MemoryProvider = 'built-in' | 'honcho' | 'supermemory' | 'mem0'
 
 export type MemoryScope = 'per-user' | 'per-agent' | 'per-tenant' | 'global'
@@ -241,11 +204,4 @@ export interface MemoryOptions {
   scope?: MemoryScope
   /** Maximum facts to retain per scope (0 = unlimited). */
   maxFacts?: number
-}
-
-export interface CompactionDecoratorConfig {
-  /** Strategy name (e.g. `'token-budget'`). Validated at resolve time. */
-  name: string
-  /** Token budget for `'token-budget'`. Required at resolve time (EC-2). */
-  keepTokens?: number
 }

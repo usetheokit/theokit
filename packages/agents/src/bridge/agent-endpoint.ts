@@ -148,12 +148,12 @@ async function* appendCheckpointSaved(
 }
 
 /** HITL wiring supplied by the harness (mount-agent): the gated-tool map + the approval resolver. */
-export interface StreamHitlOptions {
+interface StreamHitlOptions {
   gated: HitlWiring['gated']
   awaitApproval: HitlWiring['awaitApproval']
 }
 
-export interface StreamAgentOptions {
+interface StreamAgentOptions {
   message: string
   sessionId: string
   /** M35 (multimodal) — images to send alongside the text. Absent ⇒ the string send path is unchanged. */

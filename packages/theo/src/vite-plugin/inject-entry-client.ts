@@ -17,7 +17,7 @@
 const ENTRY_CLIENT_URL = '/@theo/entry-client'
 const SCRIPT_TAG = `<script type="module" src="${ENTRY_CLIENT_URL}"></script>`
 
-export interface InjectResult {
+interface InjectResult {
   html: string
   injected: boolean
   warning?: string

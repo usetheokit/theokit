@@ -11,7 +11,7 @@
  */
 import { warnOnce } from '../observability/logger.js'
 
-export interface CsrfWarnPayload {
+interface CsrfWarnPayload {
   event: string
   method: string
   path?: string

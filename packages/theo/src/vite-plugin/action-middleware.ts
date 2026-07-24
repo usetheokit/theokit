@@ -16,7 +16,7 @@ import {
 
 const PREFIX = '/api/__actions/'
 
-export interface ActionMiddlewareOptions {
+interface ActionMiddlewareOptions {
   pluginRunner?: PluginRunner
   /**
    * CSRF mode passed through to `executeAction`. Parity with the route

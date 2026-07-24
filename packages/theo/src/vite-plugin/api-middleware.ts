@@ -37,7 +37,7 @@ import {
 } from '../server/internal-api.js'
 import type { TheoTransformer } from '../server/transformer.js'
 
-export interface ApiMiddlewareOptions {
+interface ApiMiddlewareOptions {
   rateLimitConfig?: RateLimitConfig
   pluginRunner?: PluginRunner
   transformer?: TheoTransformer

@@ -42,7 +42,7 @@ export interface QueueClient {
   ): Promise<{ jobId: string }>
 }
 
-export interface CreateQueueClientOptions {
+interface CreateQueueClientOptions {
   /** W3C traceparent to propagate to enqueued jobs. */
   traceparent?: string
 }

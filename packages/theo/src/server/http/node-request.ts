@@ -11,7 +11,7 @@ import type { IncomingMessage } from 'node:http'
 import { Readable } from 'node:stream'
 
 /** Pick the first usable string from Node's `string | string[] | undefined` headers. */
-export function pickHeaderString(value: string | string[] | undefined): string | undefined {
+function pickHeaderString(value: string | string[] | undefined): string | undefined {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) {
     for (const v of value) if (typeof v === 'string' && v.length > 0) return v
@@ -20,7 +20,7 @@ export function pickHeaderString(value: string | string[] | undefined): string |
 }
 
 /** Web Request requires an absolute URL; synthesize one from the Host header. */
-export function synthesizeAbsoluteUrl(req: IncomingMessage): string {
+function synthesizeAbsoluteUrl(req: IncomingMessage): string {
   const host = pickHeaderString(req.headers.host) ?? 'localhost'
   return `http://${host}${req.url ?? '/'}`
 }
@@ -30,7 +30,7 @@ export function synthesizeAbsoluteUrl(req: IncomingMessage): string {
  * headers are comma-joined (not `.append`ed) because `Headers.append` creates
  * multi-value entries that behave differently on `.get()` (EC-1).
  */
-export function nodeHeadersToWeb(req: IncomingMessage): Headers {
+function nodeHeadersToWeb(req: IncomingMessage): Headers {
   const headers = new Headers()
   for (const [key, value] of Object.entries(req.headers)) {
     if (value === undefined) continue

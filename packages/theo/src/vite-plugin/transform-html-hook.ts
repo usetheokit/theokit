@@ -10,7 +10,7 @@ import { injectDevtoolsScript } from './inject-devtools.js'
 import { injectEntryClient } from './inject-entry-client.js'
 import { injectStylesheets } from './inject-stylesheets.js'
 
-export interface TransformHtmlCtx {
+interface TransformHtmlCtx {
   isDevMode: { value: boolean }
   devtoolsEnabled: boolean
   projectRoot: string

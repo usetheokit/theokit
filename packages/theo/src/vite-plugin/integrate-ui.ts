@@ -26,7 +26,7 @@ import type { Plugin } from 'vite'
 
 import { detectPackage } from './auto-detect.js'
 
-export interface IntegrateUiOptions {
+interface IntegrateUiOptions {
   /** When `false`, disable auto-config regardless of detection. Default: true. */
   enabled?: boolean
   /** Path to the consumer's tailwind.config.* (any extension), if present. D3 deferral. */
@@ -111,7 +111,7 @@ function normalizePluginReturn(value: unknown): Plugin[] | null {
 /** Test-only side-door so EC-6 shape guard can be unit-tested directly. */
 export const _isValidPluginForTest = isValidPlugin
 /** Test-only side-door for the v3/v4 normalizer. */
-export const _normalizePluginReturnForTest = normalizePluginReturn
+const _normalizePluginReturnForTest = normalizePluginReturn
 
 // eslint-disable-next-line complexity -- canonical auto-config gate (5 detection branches + 2 import guards + 2 shape guards); flattening to micro-helpers would hide the linear contract
 export async function integrateUseTheoUI(

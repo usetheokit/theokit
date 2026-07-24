@@ -18,7 +18,7 @@ import { durableUiMessageStreamResponse } from './durable-ui-message-stream-resp
 import { getRunEventCache, mintRunId } from './run-event-cache.js'
 
 /** The message + session extracted from a chat request, or `null` when the body is invalid. */
-export interface AgentRequestInput {
+interface AgentRequestInput {
   message: string
   sessionId: string
 }
@@ -66,7 +66,7 @@ export function parseAgentRequestBody(body: unknown): AgentRequestInput | null {
 }
 
 /** Non-runtime options for {@link mountAgent} (grouped so the call stays ≤ 5 params). */
-export interface MountAgentOptions {
+interface MountAgentOptions {
   /** Labels a fail-fast `AgentDefinitionError` (the agent file path). Default `'agent module'`. */
   source?: string
   /** CSRF posture at this boundary. Default `'strict'`; `'off'` when a controller already gated (G5). */
@@ -157,6 +157,13 @@ function resolveDiscoveryCwd(
   return projectRoot !== undefined && optedIn ? projectRoot : undefined
 }
 
+/** Strip trailing `/` without a backtracking regex (linear scan). */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value[end - 1] === '/') end -= 1
+  return value.slice(0, end)
+}
+
 /**
  * SDK 4.0 (SE40) — resolve the root of the native `.jsonl` session transcript. Unlike `.theokit/`
  * discovery, persistence is NOT gated on a file-based-config opt-in — every agent session persists.
@@ -168,5 +175,7 @@ export function resolveSessionBaseDir(projectRoot: string | undefined): string |
   if (projectRoot === undefined) return undefined
   // Web-Standards discipline (R3a/G8): no `node:path` in `server/` — append with `/` (the SDK
   // normalizes the separator). Strip a trailing slash on `projectRoot` so we never emit `//`.
-  return `${projectRoot.replace(/\/+$/, '')}/.data/agent-sessions`
+  // A trailing-slash strip written as a loop-free replace: `/\/+$/` is super-linear under
+  // backtracking on a long run of slashes, and this value can come from user config.
+  return `${trimTrailingSlashes(projectRoot)}/.data/agent-sessions`
 }

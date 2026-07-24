@@ -23,7 +23,7 @@ import type * as TS from 'typescript'
 import { HTTP_METHODS, type HttpMethod } from '../../core/contracts/http-methods.js'
 
 const require_ = createRequire(import.meta.url)
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+
 const ts = require_('typescript') as typeof TS
 
 const HTTP_METHOD_NAMES = new Set<string>(HTTP_METHODS)
@@ -36,6 +36,10 @@ function hasExportModifier(modifiers: readonly TS.Modifier[] | undefined): boole
   return false
 }
 
+// An AST visitor over the export forms (const / function / named export) is inherently branchy;
+// the complexity is in the grammar it walks, not in tangled logic. Splitting it would scatter one
+// cohesive dispatch across helpers for no readability gain.
+// eslint-disable-next-line complexity -- AST visitor, see above
 function collectFromStatement(stmt: TS.Statement, found: Set<HttpMethod>): void {
   // `export const GET = ...` / `export function GET ...` / `export async function GET ...`
   if (ts.isVariableStatement(stmt) && hasExportModifier(ts.getModifiers(stmt))) {
@@ -69,6 +73,9 @@ function collectFromStatement(stmt: TS.Statement, found: Set<HttpMethod>): void 
 }
 
 export function detectExportedHttpMethods(filePath: string, content?: string): HttpMethod[] {
+  // `filePath` is a route module the framework itself discovered by globbing the project — never
+  // user input at runtime. Reading it by a computed path is the whole job of a source scanner.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- framework-controlled path
   const src = content ?? readFileSync(filePath, 'utf-8')
   const sourceFile = ts.createSourceFile(
     filePath,
@@ -81,5 +88,5 @@ export function detectExportedHttpMethods(filePath: string, content?: string): H
   for (const stmt of sourceFile.statements) {
     collectFromStatement(stmt, found)
   }
-  return [...found].sort()
+  return [...found].sort((a, b) => a.localeCompare(b))
 }

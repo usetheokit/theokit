@@ -21,7 +21,7 @@
 
 import type { BuildTarget, DeployAdapter } from './types.js'
 
-export const adapterRegistry: Record<BuildTarget, () => Promise<DeployAdapter>> = {
+const adapterRegistry: Record<BuildTarget, () => Promise<DeployAdapter>> = {
   node: async () => (await import('./node.js')).nodeAdapter,
   vercel: async () => (await import('./vercel.js')).vercelAdapter,
   cloudflare: async () => (await import('./cloudflare.js')).cloudflareAdapter,

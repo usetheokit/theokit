@@ -34,7 +34,7 @@ export interface ConvertCtx {
   components: Record<string, OpenApiSchema>
 }
 
-export interface ConvertOptions {
+interface ConvertOptions {
   ctx?: ConvertCtx
   name?: string
 }

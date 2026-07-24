@@ -19,7 +19,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
-    "knip:exports": "knip --config knip-exports.json --workspace packages/agents --include exports",
     "knip:strict": "knip --strict",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:audit": "pnpm audit --prod --audit-level=high",

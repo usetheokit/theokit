@@ -52,7 +52,7 @@ interface RoundInputs {
 }
 
 /** Strategies + options for {@link runReflectiveLoop}. */
-export interface RunReflectiveLoopConfig {
+interface RunReflectiveLoopConfig {
   /** The terminal-decision strategy (resolved from `@MainLoop.strategy`). */
   readonly loop: LoopStrategy
   /** Between-round reflection (default `'ladder'` for `'plan-act-reflect'`). */

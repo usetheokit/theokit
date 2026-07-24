@@ -40,7 +40,7 @@ function jsonError(status: number, code: string, message: string): Response {
 }
 
 /** Dependencies the aux dispatcher needs from its caller (dev or prod). */
-export interface AuxRouteDeps {
+interface AuxRouteDeps {
   /** Discovered agents (from `scanAgents`). */
   agents: readonly AgentNode[]
   /** Load an agent module from its file path (dev: vite loader; prod: dynamic import). */
