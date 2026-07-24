@@ -12,10 +12,7 @@ import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-opt
  */
 describe('builder .memory() → Agent.create projection', () => {
   it('builder_memory_reaches_create_options', () => {
-    const def = agent()
-      .model('openai/gpt-4o')
-      .memory({ enabled: true, autoInject: true })
-      .build()
+    const def = agent().model('openai/gpt-4o').memory({ enabled: true, autoInject: true }).build()
     const compiled = compileAgentDefinition(def)
     const { options, applied } = assembleM8CreateOptions(compiled)
     expect(options.memory).toEqual({ enabled: true, autoInject: true })
@@ -26,20 +23,11 @@ describe('builder .memory() → Agent.create projection', () => {
     // M49 review F8 — exercise the REAL decorator→walk→compiler→projection chain end-to-end
     // (pattern from memory-skills-mcp-decorators.test.ts).
     await import('reflect-metadata')
-    const { Agent } = await import('../../src/decorators/agent.js')
-    const { MainLoop } = await import('../../src/decorators/main-loop.js')
-    const { Memory } = await import('../../src/decorators/memory.js')
-    const { walkAgentMetadata } = await import('../../src/bridge/walk-agent-metadata.js')
-    const { compileAgent } = await import('../../src/bridge/agent-compiler.js')
 
-    @Agent({ name: 'mem-agent', route: '/mem' })
-    @Memory({ provider: 'built-in', maxFacts: 100 })
-    class MemAgent {
-      @MainLoop()
-      async run() {}
-    }
+    const { applyCapabilities } = await import('../../src/capability/capability.js')
+    const { memory } = await import('../../src/capability/agent-capabilities.js')
 
-    const compiled = compileAgent(walkAgentMetadata(MemAgent))
+    const compiled = applyCapabilities([memory({ provider: 'built-in', maxFacts: 100 } as never)])
     expect(compiled.memory).toBeDefined()
     const warns: string[] = []
     const orig = process.stderr.write.bind(process.stderr)
