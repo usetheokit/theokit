@@ -26,10 +26,22 @@ o M55 criou contra `compile()` migrou para o caminho de `apply()`.
 **Alternativa considerada:** deprecar com aviso e remover depois — é retrocompatibilidade, exatamente
 o que a diretriz proíbe.
 
-### D2 — `ConfigurationError` deixa de ser reexportado por `capability/capabilities.ts` (breaking de API)
+### D2 — Remover o reexport interno DUPLICADO de `ConfigurationError` (sem quebrar a API pública)
 
-Dois caminhos de import para uma classe era compatibilidade, não design. Todos os ~20 consumidores
-passam a importar de `src/errors.ts`, onde a classe é definida.
+`capability/capabilities.ts` reexportava `ConfigurationError` — um segundo caminho de import para uma
+classe que já vinha da definição em `src/errors.ts`. Dentro do pacote, todos os ~20 consumidores
+passam a importar de `errors.ts`.
+
+**Correção de um erro que este ADR primeiro cometeu (honestidade):** a primeira versão de D2 removeu
+o reexport interno **e**, por efeito colateral, derrubou `ConfigurationError` do **barril público** —
+o barril reexporta `capability/index.js → capabilities.js`, então a classe chegava aos consumidores
+por essa cadeia. `ConfigurationError` é contrato (consumidores fazem `catch (e) { if (e instanceof
+ConfigurationError) … }`), não detalhe interno. A regressão foi pega de duas formas independentes (o
+próprio dono verificando a API buildada em runtime, e o agente de review adversarial, com uma sonda
+`import { ConfigurationError } from '@theokit/agents'`). Correção: o **barril** (`src/index.ts`) passa
+a exportar `ConfigurationError` direto de `errors.ts`, e um teste `public-api-surface.test.ts` trava a
+garantia. O único deep-import interno (`capability/capabilities.js`), nunca um entry point
+documentado, é o que muda.
 
 ### D3 — `knip.json` real com `exports` e `types` em `error`; override deletado
 
