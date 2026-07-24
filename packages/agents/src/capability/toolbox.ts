@@ -1,6 +1,6 @@
 import {
+  compileHitlGates,
   compileTools,
-  SDK_TOOL_NAME,
   toolRuntimeName,
   type ClassToken,
   type CompiledTool,
@@ -56,7 +56,10 @@ export interface ToolboxSource {
 }
 
 export interface ToolboxOptions {
-  /** Prefix for every tool name (`"<namespace>.<tool>"`), as `@Toolbox({ namespace })` did. */
+  /**
+   * Prefix for every tool name (`"<namespace>_<tool>"`), as `@Toolbox({ namespace })` did.
+   * The separator is `_`, not `.` — the dot is outside the charset the SDK accepts (theokit#145).
+   */
   readonly namespace?: string
   /** Declarations, when they are not on the class as `static tools`. */
   readonly tools?: readonly ToolDeclaration[]
@@ -97,24 +100,29 @@ export class ToolboxCapability implements Capability {
     // Fail at AUTHORING, not when the model finally calls the tool: a namespace/tool pair that
     // cannot mint a name the SDK accepts is a broken agent, and `Agent.create` would only say so
     // at runtime (theokit#145).
-    for (const tool of declared) {
-      const runtime = toolRuntimeName(this.#namespace, tool.name)
-      if (!SDK_TOOL_NAME.test(runtime)) {
-        throw new ConfigurationError(
-          `toolbox: nome de tool inválido "${runtime}" — deve casar ${String(SDK_TOOL_NAME)} ` +
-            '(o SDK rejeita o resto; verifique o namespace e o nome da tool)',
-        )
-      }
-    }
+    //
+    // The CALL is the validation (M55): `toolRuntimeName` validates what it mints, so this loop no
+    // longer knows the name format — one module owns that rule. Re-testing it here would be the
+    // very duplication that let the gate key and the tool name drift apart in #145. The minted
+    // value is intentionally discarded; `compile()` mints again when it actually needs it.
+    for (const tool of declared) toolRuntimeName(this.#namespace, tool.name)
   }
 
-  /** The compiled tools this toolbox contributes — the same shape the decorator path produces. */
-  compile(): CompiledTool[] {
-    // `constructor` is typed `Function` by lib.d.ts; here it is used purely as an IDENTITY key
-    // into the instances map, which is what `ClassToken` models.
-    const token = this.#instance.constructor as ClassToken
-    const walk: ToolboxWalkResult = {
-      class: token,
+  /**
+   * The single derivation of this toolbox (M55). Both compilers below consume THIS object, so the
+   * tool registry and the HITL gate map cannot disagree on a name — the property is structural, not
+   * a convention repeated in two loops. That repetition is precisely how the two drifted apart in
+   * #145: the tool became `ns_tool` while its gate stayed `ns.tool`, silently ungating it.
+   *
+   * Same technique the `opencode` harness uses for the analogous tool↔permission coupling, where
+   * `Permission.visibleTools` filters the tool record itself rather than keeping a parallel map
+   * ("so the two cannot drift" — `permission/index.ts`).
+   */
+  #walk(): ToolboxWalkResult {
+    return {
+      // `constructor` is typed `Function` by lib.d.ts; here it is used purely as an IDENTITY key
+      // into the instances map, which is what `ClassToken` models.
+      class: this.#instance.constructor as ClassToken,
       namespace: this.#namespace,
       guards: [],
       tools: this.#declarations.map((tool) => ({
@@ -127,24 +135,30 @@ export class ToolboxCapability implements Capability {
         ...(tool.hitl !== undefined ? { hitl: tool.hitl } : {}),
       })),
     }
-    return compileTools([walk], new Map([[token, this.#instance]]))
+  }
+
+  /** Compile an already-derived walk. Shared so `compile()` and `apply()` cannot diverge. */
+  #compileFrom(walk: ToolboxWalkResult): CompiledTool[] {
+    return compileTools([walk], new Map([[walk.class, this.#instance]]))
+  }
+
+  /** The compiled tools this toolbox contributes — the same shape the decorator path produces. */
+  compile(): CompiledTool[] {
+    return this.#compileFrom(this.#walk())
   }
 
   apply(draft: CompiledAgentOptionsDraft): void {
+    const walk = this.#walk()
+
     // ACCUMULATES: several toolboxes compose into one agent, exactly as several `@Toolbox` classes did.
-    draft.tools.push(...this.compile())
+    draft.tools.push(...this.#compileFrom(walk))
     draft.provenance.push({ capability: this.name, contributed: ['tools'] })
 
-    // The gate key comes from `toolRuntimeName` — the SAME function `compileTools` uses. It was
-    // duplicated inline here, which is exactly how the two drifted apart when the separator changed
-    // (theokit#145): the tool became `ns_tool` while its gate stayed `ns.tool`, silently ungating it.
-    // Collecting the pairs first keeps `hitl` narrowed by the guard, with no assertion.
-    const gates: [string, HumanInTheLoopOptions][] = []
-    for (const tool of this.#declarations) {
-      if (tool.hitl === undefined) continue
-      gates.push([toolRuntimeName(this.#namespace, tool.name), tool.hitl])
-    }
-    if (gates.length === 0) return
+    const gates = compileHitlGates([walk])
+    // The early return comes BEFORE `??=`, deliberately: `agent-compiler.ts` documents that an
+    // empty gate map means "no gated tools ⇒ the non-HITL stream path (M2, byte-unchanged)".
+    // Creating an empty Map here would flip that branch for every agent that has no HITL at all.
+    if (gates.size === 0) return
     draft.hitl ??= new Map()
     for (const [key, options] of gates) draft.hitl.set(key, options)
     draft.provenance.push({ capability: this.name, contributed: ['hitl'] })
