@@ -1209,7 +1209,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
-### M53 — [ ] Remove the agent decorators COMPLETELY — migrate the remaining 21 + delete, atomically (major)
+### M53 — [x] Remove the agent decorators COMPLETELY — migrate the remaining 21 + delete, atomically (major)
 
 > Added 2026-07-23 by `/roadmap-feature` (slug: `remove-agent-decorators`). **No deprecation window and no sugar layer** — the owner waived backward compatibility, so a decorator kept as a thin wrapper would be code written to be deleted next milestone (re-work) while every cost it imposes (`reflect-metadata`, `experimentalDecorators`, the ESLint ignores) stayed alive. The M49 precedent is the playbook: repoint the existing suite to the new implementation and delete the old one IN THE SAME milestone. **Scope guard:** the `@theokit/http` **controller** decorators (`@Controller`/`@Get`/`@Post`) are untouched. See CHANGELOG.
 
