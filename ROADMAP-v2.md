@@ -72,7 +72,7 @@ uniforme 12/12 (registrado em ADR novo, ADR-0001 citado não apagado).
 
 ---
 
-### M58 — [ ] Barrel dos domínios já-OO/puros + repointing do agent-builder
+### M58 — [x] Barrel dos domínios já-OO/puros + repointing do agent-builder
 
 **Objective:** O `@theokit/agents` re-exporta (pass-through) os 5 domínios que já são OO ou helpers
 puros — core (`Agent`/`Tool`/`Provider`/tipos), persistence (`transcriptPath`/`encodeProjectDir`),
