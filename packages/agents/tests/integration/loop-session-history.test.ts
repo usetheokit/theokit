@@ -52,14 +52,14 @@ vi.mock('@theokit/sdk', () => {
 })
 
 const { AgentRunner } = await import('../../src/index.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
+const { MainLoopCapability } = await import('../../src/capability/agent-capabilities.js')
 
-@Agent({ name: 'sess', route: '/sess', model: 'compiled-model' })
-class SessAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 8 })
-  async run() {}
-}
+const sessAgent = applyCapabilities([
+  new ModelCapability('compiled-model'),
+  new MainLoopCapability({ maxIterations: 8 }),
+])
 
 describe('V4-M reflective-loop session history', () => {
   beforeEach(() => {
@@ -69,7 +69,11 @@ describe('V4-M reflective-loop session history', () => {
   })
 
   it('test_each_round_getOrCreate_uses_the_same_session', async () => {
-    const result = await AgentRunner.builder(SessAgent)
+    const result = await AgentRunner.fromSpec({
+      compiled: sessAgent,
+      agentName: 'sessAgent',
+      strategy: 'react',
+    })
       .build()
       .run('the-task', { apiKey: 'k', maxIterations: 2 })
     expect(result.rounds).toBe(2)
@@ -79,7 +83,9 @@ describe('V4-M reflective-loop session history', () => {
   })
 
   it('test_round1_sends_original_round2_sends_continuation', async () => {
-    await AgentRunner.builder(SessAgent).build().run('the-task', { apiKey: 'k', maxIterations: 2 })
+    await AgentRunner.fromSpec({ compiled: sessAgent, agentName: 'sessAgent', strategy: 'react' })
+      .build()
+      .run('the-task', { apiKey: 'k', maxIterations: 2 })
     expect(h.sends).toHaveLength(2)
     expect(h.sends[0]).toContain('the-task') // round 1 = original message
     expect(h.sends[1]).not.toContain('the-task') // round 2 = continuation, NOT the original
