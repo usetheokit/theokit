@@ -16,7 +16,7 @@ import { Agent } from '@theokit/sdk'
 import { compileAgentDefinition, defineAgent } from '../../src/bridge/define-agent.js'
 import { buildModelSelection } from '../../src/bridge/model-selection.js'
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
-import { ModelCapability, skills } from '../../src/capability/capabilities.js'
+import { ModelCapability, SkillsCapability } from '../../src/capability/capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { CapabilityRegistry } from '../../src/capability/registry.js'
 
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   ]
   const registry = new CapabilityRegistry()
     .register('model', (id) => new ModelCapability(id as string))
-    .register('skills', (names) => skills(names as string[]))
+    .register('skills', (names) => new SkillsCapability(names as string[]))
   const draft = applyCapabilities(configFromFile.map((c) => registry.resolve(c.name, c.arg)))
 
   // (2) Equivalence against the EXISTING authoring path, live (not only in unit tests).

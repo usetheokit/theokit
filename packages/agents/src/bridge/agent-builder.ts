@@ -1,7 +1,7 @@
 /**
- * M8 — `agent()`, the fluent agent builder with accumulative **type-state**.
+ * M8 — `AgentBuilder.create()`, the fluent agent builder with accumulative **type-state**.
  *
- * `agent().context<C>().tool(t).model(id).system(s).build()` accumulates type parameters the way
+ * `AgentBuilder.create().context<C>().tool(t).model(id).system(s).build()` accumulates type parameters the way
  * the most-loved TS DX does (tRPC `t.procedure.input().query()`, Zod, Hono) and resolves to the
  * **SAME branded `AgentDefinition`** that {@link defineAgent} produces — one runtime, N syntaxes
  * (ADR-B1). The value is entirely at the type level; `.build()` delegates to `defineAgent`, so
@@ -51,7 +51,7 @@ type EmptyContext = Record<never, never>
 /**
  * A tool that MAY declare, at the type level, the run-context shape it needs. A plain
  * {@link CustomTool} (`TRequired = unknown`) is satisfied by any agent context. Build one that
- * carries a literal name + optional required-context via {@link contextualTool}.
+ * carries a literal name + optional required-context via {@link ContextualTool.of}.
  */
 export interface ContextualTool<
   TName extends string = string,
@@ -63,15 +63,23 @@ export interface ContextualTool<
 }
 
 /**
- * Tag a {@link CustomTool} with a literal name (so `.tool()` can accumulate the tool-name union)
- * and, optionally, a required run-context type. The `requiredContext` argument is a type-only
- * witness — pass `undefined as C` or a sample value; it is never read at runtime.
+ * Static factory for {@link ContextualTool}. M57: OO surface (`ContextualTool.of(...)`) aligned with
+ * the SDK's `X.create()` shape — was the free `contextualTool(...)` function. `ContextualTool` is a
+ * TYPE (the interface above) and a VALUE (this const) at once, the same dual-space pattern the SDK
+ * uses for `Tool`/`Agent`. No instance state, so the factory is `static`-style (`of`), not `create`.
  */
-export function contextualTool<TName extends string, TRequired = unknown>(
-  tool: CustomTool & { name: TName },
-  _requiredContext?: TRequired,
-): ContextualTool<TName, TRequired> {
-  return tool
+export const ContextualTool = {
+  /**
+   * Tag a {@link CustomTool} with a literal name (so `.tool()` can accumulate the tool-name union)
+   * and, optionally, a required run-context type. The `requiredContext` argument is a type-only
+   * witness — pass `undefined as C` or a sample value; it is never read at runtime.
+   */
+  of<TName extends string, TRequired = unknown>(
+    tool: CustomTool & { name: TName },
+    _requiredContext?: TRequired,
+  ): ContextualTool<TName, TRequired> {
+    return tool
+  },
 }
 
 /**
@@ -151,7 +159,7 @@ export interface AgentBuilder<
    * it runs; the other events are observational.
    *
    * ```ts
-   * agent().hooks({
+   * AgentBuilder.create().hooks({
    *   pre_tool_call: (c) => guard(c.name) ? undefined : { block: true, message: 'not allowed' },
    *   on_session_start: () => log('session up'),
    * })
@@ -233,9 +241,17 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
 }
 
 /**
- * Start a fluent agent definition. Chain `.model()` (required) + `.context()` / `.system()` /
- * `.input()` / `.tool()` / `.use()`, then `.build()` to get the branded {@link AgentDefinition}.
+ * Static entry point for the fluent builder. M57: OO surface (`AgentBuilder.create()`) aligned with
+ * the SDK's `X.create()` shape — was the free `agent()` function. `AgentBuilder` is a TYPE (the
+ * generic interface above) and a VALUE (this const) at once; in type position the interface wins, in
+ * value position the const wins — no collision, the same dual-space pattern the SDK uses for `Agent`.
  */
-export function agent(): AgentBuilder {
-  return makeBuilder({})
+export const AgentBuilder = {
+  /**
+   * Start a fluent agent definition. Chain `.model()` (required) + `.context()` / `.system()` /
+   * `.input()` / `.tool()` / `.use()`, then `.build()` to get the branded {@link AgentDefinition}.
+   */
+  create(): AgentBuilder {
+    return makeBuilder({})
+  },
 }

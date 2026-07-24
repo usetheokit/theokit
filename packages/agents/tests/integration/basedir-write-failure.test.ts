@@ -20,12 +20,12 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
-import { agent } from '../../src/bridge/agent-builder.js'
+import { AgentBuilder } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
 
 describe('EC-3 — an unwritable transcript baseDir surfaces a typed error, never swallowed', () => {
   it('test_transcript_write_surfaces_typed_error_when_baseDir_unwritable', async () => {
-    const compiled = compileAgentDefinition(agent().model('m').build())
+    const compiled = compileAgentDefinition(AgentBuilder.create().model('m').build())
     const events: Array<{ type: string; code?: string; message?: string }> = []
     for await (const e of createSdkAgentStream(compiled, [], 'test-key', {
       baseDir: '/read-only/.data/agent-sessions',
