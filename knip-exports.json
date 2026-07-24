@@ -1,5 +1,4 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
   "ignore": [
     ".claude/**",
     "**/templates/**",
@@ -74,8 +73,9 @@
     "files": "error",
     "dependencies": "error",
     "unlisted": "error",
-    "exports": "off",
+    "exports": "error",
     "types": "off",
     "duplicates": "warn"
-  }
+  },
+  "$schema": "https://unpkg.com/knip@5/schema.json"
 }
