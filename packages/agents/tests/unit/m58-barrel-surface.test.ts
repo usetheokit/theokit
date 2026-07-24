@@ -65,3 +65,18 @@ describe('M58 — @theokit/agents pass-through barrels for the 5 already-OO/pure
     expect(m).toBeTypeOf('object')
   })
 })
+
+describe('M63 — the last pass-through re-exports that close the zero-`@theokit/sdk*` boundary', () => {
+  it('a2a: SubAgent reaches the main barrel with its `.create()` shape intact', async () => {
+    const m = await import('../../src/index.js')
+    expect(m.SubAgent, 'SubAgent').toBeTypeOf('function')
+    expect(m.SubAgent.create, 'SubAgent.create').toBeTypeOf('function')
+  })
+
+  it('path-safety: the pure guard helpers reach the main barrel', async () => {
+    const m = await import('../../src/index.js')
+    for (const name of ['assertNoSymlinkEscape', 'isForbiddenPath', 'safePathJoin'] as const) {
+      expect(m[name], name).toBeTypeOf('function')
+    }
+  })
+})
