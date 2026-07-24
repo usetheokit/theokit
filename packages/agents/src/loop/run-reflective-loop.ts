@@ -437,11 +437,8 @@ async function* consumeOneRound(
  * Step-cap force-close: on the ceiling round (`round === maxIterations`) wrap the factory so it is
  * called with `disableTools: true` (the adapter maps it to `tool_choice:"none"` at send-time),
  * forcing the model to emit the closing summary STEP_LIMIT_HINT requests instead of more tool calls.
- * Below the ceiling, the factory is returned unchanged.
- *
- * NOT exported (M55): its only caller is `runReflectiveLoopStream`, right below. A stray `export`
- * used to sit between the loop's own JSDoc and this function, which both leaked this helper into the
- * module's public surface and separated that doc block from the function it describes.
+ * Below the ceiling, the factory is returned unchanged. NOT exported (M55): its only caller is
+ * `runReflectiveLoopStream` below — a stray `export` used to leak it and split that function's JSDoc.
  */
 function ceilingRoundFactory(
   factory: RoundStreamFactory,
