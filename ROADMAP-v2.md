@@ -112,7 +112,7 @@ reponta esses imports de `@theokit/sdk*` para `@theokit/*`. Pass-through, **não
 
 ---
 
-### M60 — [ ] Auth enriquecido: `CredentialStore` / `AuthProvider`
+### M60 — [x] Auth enriquecido: `CredentialStore` / `AuthProvider`
 
 **Objective:** O fluxo de auth do SDK (`ensureFreshCredential`, `openaiDeviceLogin`,
 `persistOAuthTokens`) são free functions com estado (login → persist → refresh). O Theokit as unifica
