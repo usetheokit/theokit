@@ -31,7 +31,7 @@ export interface ResolvedOpenApi {
   version: string
 }
 
-export interface ResolvedPluginConfig {
+interface ResolvedPluginConfig {
   pluginRunner: PluginRunner | undefined
   transformer: TheoTransformer | undefined
   resolvedBatching: { max?: number } | undefined

@@ -19,7 +19,7 @@ export const DEVTOOLS_RESOLVED_ID = '\0@theo/devtools/entry.js'
 
 const SCRIPT_TAG = `<script type="module" src="${DEVTOOLS_VIRTUAL_ID}"></script>`
 
-export interface InjectDevtoolsResult {
+interface InjectDevtoolsResult {
   html: string
   injected: boolean
   warning?: string

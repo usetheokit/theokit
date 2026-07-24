@@ -37,7 +37,7 @@ import { incomingMessageToWebRequest } from './node-request.js'
 // The primitive `IncomingMessage` → Web `Request` converters live in
 // `node-request.js` (dependency-free, shared with the executor). Re-exported
 // here so existing importers of the adapter keep resolving them.
-export { incomingMessageToWebRequest, incomingMessageToHandlerRequest } from './node-request.js'
+export { incomingMessageToWebRequest } from './node-request.js'
 
 /**
  * Write a Web `Response` into a Node `ServerResponse`. Mirrors the Node

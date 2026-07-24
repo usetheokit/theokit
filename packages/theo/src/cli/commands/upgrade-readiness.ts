@@ -1,7 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * CLI lint scanner. Reads user source files under `projectRoot` (CLI
- * argument resolved to absolute). Read-only; never writes. No HTTP input.
- */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve, relative, sep } from 'node:path'
 
@@ -27,7 +23,7 @@ import { resolve, relative, sep } from 'node:path'
  * 'no-project-detected' report with exitCode 0 (no crash).
  */
 
-export type ViolationRule =
+type ViolationRule =
   | 'csrf-missing-header'
   | 'inline-script'
   | 'dangerously-set-inline-script'
@@ -54,7 +50,7 @@ export interface UpgradeReadinessReport {
   violations: Violation[]
 }
 
-export interface ScanOptions {
+interface ScanOptions {
   cwd: string
   /** When true, exitCode is forced to 0 even when violations exist. */
   allowWarnings?: boolean

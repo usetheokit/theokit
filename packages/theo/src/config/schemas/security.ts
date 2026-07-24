@@ -55,7 +55,7 @@ export const securityHeadersSchema = z.object({
  * Use to roll out strict mode per-route (e.g., flip /api/auth/* first)
  * without committing the entire surface to strict at once.
  */
-export const disallowedConfigSchema = z.object({
+const disallowedConfigSchema = z.object({
   routes: z.array(z.union([z.string(), z.instanceof(RegExp)])),
   behavior: z.enum(['warn', 'raise']).default('raise'),
 })

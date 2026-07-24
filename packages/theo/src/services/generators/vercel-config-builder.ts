@@ -11,7 +11,7 @@
  */
 import type { ManifestServiceEntry, ServicesManifest } from '../adapters-bridge/manifest.js'
 
-export interface VercelServiceEntry {
+interface VercelServiceEntry {
   name: string
   runtime: 'python' | 'node'
   src: string
@@ -19,7 +19,7 @@ export interface VercelServiceEntry {
   excludeFiles?: string[]
 }
 
-export interface VercelServicesBlock {
+interface VercelServicesBlock {
   version: 2
   services: VercelServiceEntry[]
 }

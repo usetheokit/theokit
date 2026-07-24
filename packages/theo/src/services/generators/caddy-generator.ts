@@ -12,7 +12,7 @@
  */
 import type { ServicesManifest } from '../adapters-bridge/manifest.js'
 
-export interface CaddyfileOptions {
+interface CaddyfileOptions {
   /** Port Caddy listens on (TheoKit web port; default 3000). */
   port: number
   /** TheoKit web container hostname (compose service name). Default 'web'. */

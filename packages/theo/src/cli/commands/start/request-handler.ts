@@ -32,7 +32,7 @@ import {
   type SsrRenderStreaming,
 } from './ssr-setup.js'
 
-export interface RequestHandlerContext {
+interface RequestHandlerContext {
   buildCtx: (
     req: IncomingMessage,
     res: ServerResponse,

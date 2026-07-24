@@ -1,4 +1,4 @@
-export interface EntryServerOptions {
+interface EntryServerOptions {
   /** When true, emit a streaming entry using onShellReady + signal cleanup.
    *  When false (default), emit the legacy single-shot onAllReady entry. */
   streaming?: boolean

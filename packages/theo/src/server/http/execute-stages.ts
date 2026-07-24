@@ -16,7 +16,7 @@ import { sendError } from './send-response.js'
  * keeps that responsibility in one place.
  */
 
-export type StageResult<T> = { ok: true; data: T } | { ok: false }
+type StageResult<T> = { ok: true; data: T } | { ok: false }
 
 /**
  * Parse URL query + request body (multipart/form-data or JSON).
@@ -58,7 +58,7 @@ export async function parseQueryAndBody(
  * On validation failure, sends 400 with Zod issues + returns `{ ok: false }`.
  * On success, returns the (possibly-transformed) values from `schema.safeParse(...).data`.
  */
-export interface ZodLike {
+interface ZodLike {
   safeParse: (value: unknown) => {
     success: boolean
     data?: unknown

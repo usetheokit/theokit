@@ -8,14 +8,14 @@ import type { GenerateResult } from './generate-types.js'
 const ALLOWED_FIELD_TYPES = new Set(['string', 'text', 'number', 'boolean'])
 const RESERVED_FIELDS = new Set(['id', 'createdAt', 'created_at'])
 
-export interface ResourceField {
+interface ResourceField {
   name: string
   type: 'string' | 'text' | 'number' | 'boolean'
   drizzleColumn: string
   zodType: string
 }
 
-export function parseResourceFields(args: string[]): ResourceField[] {
+function parseResourceFields(args: string[]): ResourceField[] {
   if (args.length === 0) {
     throw new Error(
       'Resource requires at least one field. Example: theokit generate resource posts title:string',

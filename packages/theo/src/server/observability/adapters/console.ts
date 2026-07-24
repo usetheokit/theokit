@@ -4,10 +4,11 @@
  * Emits JSON-structured lines to a configurable writer (default: process.stderr).
  * Inspired by Hono middleware timing pattern.
  */
-import type { ObservabilityAdapter, SpanHandle, SpanAttributes } from './types.js'
 import { SpanImpl, NoopSpan, type SpanData } from '../span.js'
 
-export interface ConsoleAdapterOptions {
+import type { ObservabilityAdapter, SpanHandle, SpanAttributes } from './types.js'
+
+interface ConsoleAdapterOptions {
   /** Writer function — defaults to process.stderr.write. */
   write?: (line: string) => void
 }
@@ -27,8 +28,12 @@ export class ConsoleObservabilityAdapter implements ObservabilityAdapter {
     const span = new SpanImpl(name, attributes)
     this.spans.push(span)
     return {
-      setAttribute: (k, v) => span.setAttribute(k, v),
-      setStatus: (s, m) => span.setStatus(s, m),
+      setAttribute: (k, v) => {
+        span.setAttribute(k, v)
+      },
+      setStatus: (s, m) => {
+        span.setStatus(s, m)
+      },
       end: () => {
         span.end()
         this.emitSpan(span.getData())
@@ -38,23 +43,43 @@ export class ConsoleObservabilityAdapter implements ObservabilityAdapter {
 
   counter(name: string, value: number, attributes?: SpanAttributes): void {
     if (this.isShutdown) return
-    this.emit({ type: 'counter', metric: name, value, attributes: attributes ?? {}, timestamp: Date.now() })
+    this.emit({
+      type: 'counter',
+      metric: name,
+      value,
+      attributes: attributes ?? {},
+      timestamp: Date.now(),
+    })
   }
 
   histogram(name: string, value: number, attributes?: SpanAttributes): void {
     if (this.isShutdown) return
-    this.emit({ type: 'histogram', metric: name, value, attributes: attributes ?? {}, timestamp: Date.now() })
+    this.emit({
+      type: 'histogram',
+      metric: name,
+      value,
+      attributes: attributes ?? {},
+      timestamp: Date.now(),
+    })
   }
 
-  log(level: 'debug' | 'info' | 'warn' | 'error', message: string, attributes?: SpanAttributes): void {
+  log(
+    level: 'debug' | 'info' | 'warn' | 'error',
+    message: string,
+    attributes?: SpanAttributes,
+  ): void {
     if (this.isShutdown) return
     this.emit({ type: 'log', level, message, attributes: attributes ?? {}, timestamp: Date.now() })
   }
 
-  async flush(): Promise<void> {}
+  // Not `async`: this adapter writes synchronously, so there is nothing to await.
+  flush(): Promise<void> {
+    return Promise.resolve()
+  }
 
-  async shutdown(): Promise<void> {
+  shutdown(): Promise<void> {
     this.isShutdown = true
+    return Promise.resolve()
   }
 
   private emitSpan(data: SpanData): void {

@@ -150,7 +150,7 @@ export interface AgentRunnerRunOptions {
  * constructor takes already-resolved state and is an internal detail.
  */
 /** Already-resolved state handed to the {@link AgentRunner} constructor (internal). */
-export interface AgentRunnerState {
+interface AgentRunnerState {
   readonly compiled: CompiledAgentOptions
   readonly agentName: string
   /** The resolved terminal-decision strategy (parity with `delegate()`). */
@@ -291,7 +291,7 @@ export class AgentRunner {
  * The already-compiled agent the runner executes. Field-compatible with `SubAgentSpec` on purpose —
  * one spec drives both `AgentRunner.fromSpec` and `delegate`.
  */
-export interface AgentRunnerSpec {
+interface AgentRunnerSpec {
   readonly name: string
   readonly compiled: CompiledAgentOptions
   readonly strategy?: MainLoopMeta['strategy']

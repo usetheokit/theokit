@@ -8,9 +8,7 @@
  * or full OTel SDK wrappers via defineObservabilityAdapter().
  */
 
-export interface SpanAttributes {
-  [key: string]: string | number | boolean | undefined
-}
+export type SpanAttributes = Record<string, string | number | boolean | undefined>
 
 /** Handle to an active span — setAttribute, setStatus, end. */
 export interface SpanHandle {
@@ -37,7 +35,11 @@ export interface ObservabilityAdapter {
   histogram(name: string, value: number, attributes?: SpanAttributes): void
 
   /** Emit a structured log. */
-  log(level: 'debug' | 'info' | 'warn' | 'error', message: string, attributes?: SpanAttributes): void
+  log(
+    level: 'debug' | 'info' | 'warn' | 'error',
+    message: string,
+    attributes?: SpanAttributes,
+  ): void
 
   /** Flush any buffered telemetry (async — may involve I/O). */
   flush(): Promise<void>

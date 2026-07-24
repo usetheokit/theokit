@@ -29,7 +29,7 @@ import { setupWsUpgrade } from './ws-upgrade.js'
  * resolvedOpenApi from `config-resolve.ts`. Kept as a struct so the
  * extraction is a pure pass-through with no behavior change.
  */
-export interface ConfigureServerCtx {
+interface ConfigureServerCtx {
   projectRoot: string
   appDir: string
   /** Absolute backend root (config `serverDir`, default `<projectRoot>/server`) — route/action scan (#95). */

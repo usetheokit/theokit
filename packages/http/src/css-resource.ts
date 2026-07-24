@@ -6,7 +6,7 @@
  */
 
 /** Describes a CSS resource — either external (href) or inline (content). */
-export interface CssResource {
+interface CssResource {
   /** External CSS URL. */
   href?: string
   /** Inline CSS content. */

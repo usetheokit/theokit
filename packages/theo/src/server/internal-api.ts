@@ -16,11 +16,7 @@
 // --- http ---
 export { executeAction } from './http/action-execute.js'
 export { executeRoute, sendError } from './http/execute.js'
-export {
-  createControllerDispatcher,
-  dispatchControllerRequest,
-  type ControllerDispatcher,
-} from './http/controller-dispatch.js'
+export { dispatchControllerRequest } from './http/controller-dispatch.js'
 export { incomingMessageToHandlerRequest } from './http/node-request.js'
 export { handleBatchRequest, BATCH_PATH } from './http/batch-handler.js'
 export { createCorsHandler } from './http/cors.js'
@@ -44,7 +40,6 @@ export type { RateLimitConfig } from './rate-limit/rate-limit.js'
 export { scanServerActions, scanServerActionsEnriched } from './scan/action-scan.js'
 export type { ActionManifestEntry } from './scan/action-scan.js'
 export { scanAgents } from './scan/agent-scan.js'
-export type { AgentNode } from './scan/agent-scan.js'
 export { mountAgent } from './agent/mount-agent.js'
 export { resolveProvider } from './agent/provider-resolver.js'
 export { createViteLoader, type LoadModule } from './scan/module-loader.js'
