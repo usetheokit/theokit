@@ -1,5 +1,21 @@
 # @theokit/agents
 
+## 4.3.0
+
+### Minor Changes
+
+- `AuthProvider` — the OO OAuth-lifecycle contract at `@theokit/agents/auth` (M60).
+
+  The SDK ships OAuth as free functions stateful across a shared config + store
+  (`openaiDeviceLogin` → `persistOAuthTokens` → `ensureFreshCredential`). The Theokit layer now unifies
+  them into an `AuthProvider` class that HOLDS the `config`+`store` and delegates each step, so a
+  consumer authors `new AuthProvider(config, store).persist(...)` / `.ensureFresh(...)` instead of
+  threading the shared state through every call. Enrich, not pass-through (auth carries state); it
+  DELEGATES, never reimplements (Rung 9) — login → persist → refresh yields identical state. SECRET-SAFE
+  by contract: the wrapper never logs or emits token material (pinned by a secret-safety test). The auth
+  domain's types (`OAuthProviderConfig`/`CredentialStoreConfig`/`OpenAIDeviceConfig`/`ResolvedCredential`/
+  `OAuthTokens`/`DeviceDeps`) are re-exported alongside it.
+
 ## 4.2.2
 
 ### Patch Changes
