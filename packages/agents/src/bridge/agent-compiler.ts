@@ -33,10 +33,13 @@ import type {
  * metadata walk that used to own it is gone. `ToolboxCapability` builds this from a class'
  * `static tools` declaration.
  */
+/** A guard/interceptor class token — identity only (the DI container instantiates it). */
+export type ClassToken = abstract new (...args: never[]) => object
+
 export interface ToolWalkResult {
   propertyKey: string | symbol
   config: ToolOptions
-  guards: Function[]
+  guards: ClassToken[]
   approval?: ApprovalOptions
   capabilities?: string[]
   budget?: BudgetOptions
@@ -47,11 +50,15 @@ export interface ToolWalkResult {
 }
 
 export interface ToolboxWalkResult {
-  class: Function
+  /** The toolbox class — used as the identity key into `toolboxInstances`. */
+  class: ClassToken
   namespace: string
   tools: ToolWalkResult[]
-  guards: Function[]
+  guards: ClassToken[]
 }
+
+/** A tool method on a toolbox instance. */
+type ToolHandler = (input: unknown) => string | Promise<string>
 
 /** Minimal interface matching defineTool() result shape. */
 export interface CompiledTool {
@@ -108,7 +115,7 @@ export function compileHitlGates(
  */
 export function compileTools(
   toolboxes: ToolboxWalkResult[],
-  toolboxInstances: Map<Function, object>,
+  toolboxInstances: Map<ClassToken, object>,
 ): CompiledTool[] {
   const tools: CompiledTool[] = []
 
@@ -122,7 +129,9 @@ export function compileTools(
     }
 
     for (const tool of tb.tools) {
-      const handler = (instance as unknown as Record<string | symbol, Function>)[tool.propertyKey]
+      const handler = (instance as unknown as Record<string | symbol, ToolHandler>)[
+        tool.propertyKey
+      ]
       if (typeof handler !== 'function') {
         throw new Error(
           `[@theokit/agents] Toolbox ${tb.class.name}: '${String(tool.propertyKey)}' is not a function.`,
@@ -135,7 +144,7 @@ export function compileTools(
         name,
         description: tool.config.description,
         inputSchema: tool.config.input,
-        handler: (input: unknown) => handler.call(instance, input) as string | Promise<string>,
+        handler: (input: unknown) => handler.call(instance, input),
       })
     }
   }

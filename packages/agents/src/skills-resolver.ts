@@ -38,9 +38,15 @@ export async function resolveEnabledSkills(
   if (typeof selection !== 'function') {
     return selection.filter((s): s is string => typeof s === 'string')
   }
-  const resolved = await selection(ctx)
+  const resolved: unknown = await selection(ctx)
   if (!Array.isArray(resolved)) {
     throw new Error('[@theokit/agents] skills resolver must return an array of skill names')
   }
-  return [...resolved]
+  // The resolver is USER code, so the array's ITEMS are validated too — previously only the array
+  // shape was checked and a `[42, null]` would have reached `Agent.create` as "skill names".
+  const names = resolved as readonly unknown[]
+  if (!names.every((n): n is string => typeof n === 'string' && n.trim().length > 0)) {
+    throw new Error('[@theokit/agents] skills resolver must return non-empty skill NAME strings')
+  }
+  return [...names]
 }

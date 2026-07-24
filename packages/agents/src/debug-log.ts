@@ -9,6 +9,7 @@
 export function debugLog(marker: string, data: Record<string, unknown>): void {
   const flag = process.env.THEOKIT_DEBUG
   if (flag !== undefined && flag !== '' && flag !== '0' && flag !== 'false') {
+    // eslint-disable-next-line no-console -- this IS the debug channel, gated by THEOKIT_DEBUG
     console.debug(marker, data)
   }
 }
