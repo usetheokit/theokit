@@ -79,13 +79,24 @@ export interface CompiledTool {
 }
 
 /**
- * The runtime name the SDK loop reports in `pre_tool_call` — `namespace.tool` when a toolbox
+ * The charset `@theokit/sdk` accepts for a custom tool name. Declared here because this module is
+ * what MINTS the name — a name that fails this is rejected by `Agent.create`, so producing one is a
+ * bug, not a caller error (theokit#145).
+ */
+export const SDK_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
+
+/**
+ * The runtime name the SDK loop reports in `pre_tool_call` — `namespace_tool` when a toolbox
  * declares a namespace, else the bare tool name. Single source of this convention (DRY): both
  * {@link compileTools} and {@link compileHitlGates} key off it, so the HITL gate map and the SDK
  * tool registry can never disagree on a name.
+ *
+ * SEPARATOR (theokit#145): `_`, not `.`. The dot is outside {@link SDK_TOOL_NAME}, so every
+ * namespaced toolbox produced a name `Agent.create` REJECTS — a documented path that never once
+ * worked against a real provider. Nothing caught it because the suites mock the SDK.
  */
 export function toolRuntimeName(namespace: string, toolName: string): string {
-  return namespace ? `${namespace}.${toolName}` : toolName
+  return namespace ? `${namespace}_${toolName}` : toolName
 }
 
 /**
