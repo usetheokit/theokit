@@ -112,6 +112,30 @@ describe('M54 — AgentRunnerBuilder.loopStrategy() seam', () => {
       expect(result.finishReason).toBe('step_limit')
     }, 5000)
 
+    it('preserves a CLASS-based custom strategy shouldContinue under a per-run override', async () => {
+      // Strategy-via-class is the idiomatic OOP shape; `shouldContinue` lives on the prototype, not as
+      // an own property. A naive `{ ...loop, maxIterations }` spread would DROP it (own-enumerable only)
+      // and crash the run with `loop.shouldContinue is not a function`. Object literals hid this — every
+      // other test here uses one. (Found by the M54 adversarial review, F-2.)
+      class NeverStopClass implements LoopStrategy {
+        readonly name = 'never-stop-class'
+        constructor(readonly maxIterations: number) {}
+        shouldContinue(): boolean {
+          return true
+        }
+      }
+      const runner = AgentRunner.fromSpec({ compiled: agent, name: 'agent' })
+        .loopStrategy(new NeverStopClass(8))
+        .build()
+      const result = await runner.run('go', {
+        apiKey: 'sk-fake-unused-streamFactory-drives-the-loop',
+        maxIterations: 2,
+        streamFactory: everToolCalling(),
+      })
+      expect(result.rounds).toBe(2)
+      expect(result.finishReason).toBe('step_limit')
+    }, 5000)
+
     it('leaves a built-in strategy re-resolved by name (zero-behavior)', () => {
       const runner = AgentRunner.fromSpec({
         compiled: agent,
