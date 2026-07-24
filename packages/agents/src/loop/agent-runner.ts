@@ -1,9 +1,8 @@
 /**
  * AgentRunner — the imperative twin of `@MainLoop` (plan ADR D4, V4-B).
  *
- * `AgentRunner.builder(AgentClass).reflection().stream().build()` walks +
- * compiles the agent and resolves the SAME `{ compiled, loopStrategy }` that
- * `delegate()` resolves for the decorator path (two on-ramps, one runtime).
+ * `AgentRunner.fromSpec(spec).reflection().stream().build()` resolves the loop strategy from
+ * an already-compiled spec (the capability-authored agent). `delegate()` shares the same runtime.
  * `build()` is the compile boundary (no I/O, no IoC — standalone, mirrors
  * Spring's `ChatClient.builder(...).build()`); `stream()`/`run()` do the I/O via
  * `runReflectiveLoopStream` (the SAME loop `delegate()` drains — DRY, ADR 0031).
@@ -21,15 +20,10 @@ import type {
 } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
-import {
-  type CompiledAgentOptions,
-  type CompiledTool,
-  compileAgent,
-} from '../bridge/agent-compiler.js'
+import type { CompiledAgentOptions, CompiledTool } from '../bridge/agent-compiler.js'
 import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
-import { walkAgentMetadata } from '../bridge/walk-agent-metadata.js'
 import { moderateOutputStream, runInputGuards } from '../guardrails/index.js'
 import type { MainLoopMeta, ReasoningEffort } from '../types.js'
 
@@ -152,7 +146,7 @@ export interface AgentRunnerRunOptions {
 }
 
 /**
- * A built, runnable agent. Construct via {@link AgentRunner.builder} — the
+ * A built, runnable agent. Construct via {@link AgentRunner.fromSpec} — the
  * constructor takes already-resolved state and is an internal detail.
  */
 /** Already-resolved state handed to the {@link AgentRunner} constructor (internal). */
@@ -200,12 +194,7 @@ export class AgentRunner {
     this.compaction = state.compaction
   }
 
-  /** Start a fluent builder for `AgentClass`. */
-  static builder(AgentClass: Function): AgentRunnerBuilder {
-    return new AgentRunnerBuilder(AgentClass)
-  }
-
-  /** Start a fluent builder from an already-compiled spec — the capability-authored route. */
+  /** Start a fluent builder from an already-compiled spec. */
   static fromSpec(spec: AgentRunnerSpec): AgentRunnerBuilder {
     return new AgentRunnerBuilder(spec)
   }
@@ -306,28 +295,13 @@ export interface AgentRunnerSpec {
   readonly compaction?: { name: string; keepTokens?: number }
 }
 
-/** Derive the spec from a decorated class — the ONLY place the metadata walk is still needed. */
-function specFromClass(AgentClass: Function): AgentRunnerSpec {
-  const walk = walkAgentMetadata(AgentClass, [])
-  const toolboxInstances = new Map(
-    walk.toolboxes.map((tb) => [tb.class, new (tb.class as new () => object)()]),
-  )
-  return {
-    compiled: compileAgent(walk, toolboxInstances),
-    agentName: walk.agentConfig.name,
-    strategy: walk.mainLoop.strategy,
-    maxIterations: walk.mainLoop.maxIterations,
-    compaction: walk.compaction,
-  }
-}
-
 /** Fluent builder — accumulates config; `build()` is the compile boundary. */
 export class AgentRunnerBuilder {
   private reflectionOverride?: ReflectionStrategy
   private streamEnabled = true
   private compactionOverride?: { name: string; keepTokens?: number }
 
-  constructor(private readonly source: Function | AgentRunnerSpec) {}
+  constructor(private readonly spec: AgentRunnerSpec) {}
 
   /** Override the default reflection strategy (OCP — plan Drawback #2). No arg ⇒ keep default. */
   reflection(strategy?: ReflectionStrategy): this {
@@ -351,11 +325,10 @@ export class AgentRunnerBuilder {
     return this
   }
 
-  /** Resolve strategies from an already-compiled spec — the compile→execute boundary (no I/O). */
+  /** Resolve strategies from the spec — the compile→execute boundary (no I/O). */
   build(): AgentRunner {
-    const spec = typeof this.source === 'function' ? specFromClass(this.source) : this.source
-    // `'simple-chat'` is the SAME default `@MainLoop` applies (main-loop.ts:20), kept here so the
-    // spec path and the decorator path resolve identically when neither declares a strategy.
+    const { spec } = this
+    // `'simple-chat'` is the default when the spec declares no strategy.
     const strategy = spec.strategy ?? 'simple-chat'
     const loopStrategy = resolveLoopStrategy(strategy, spec.maxIterations)
     const reflectionStrategy =

@@ -8,20 +8,13 @@
  */
 import 'reflect-metadata'
 
-import { compileAgent, type CompiledAgentOptions } from './bridge/agent-compiler.js'
+import { type CompiledAgentOptions } from './bridge/agent-compiler.js'
 import { generateAgentRoutes, type AgentRoute } from './bridge/agent-route-generator.js'
 import type { StreamEvent } from './bridge/agent-sse-handler.js'
-import {
-  walkAgentMetadata,
-  validateUniqueRoutes,
-  type AgentWalkResult,
-  type RouteIdentity,
-} from './bridge/walk-agent-metadata.js'
-import { getMixins } from './decorators/mixin.js'
+import { validateUniqueRoutes, type RouteIdentity } from './bridge/walk-agent-metadata.js'
 
 /**
- * M53 — an agent the plugin can mount. A decorated CLASS still works (resolved through
- * `pluginAgentEntry`); a capability-authored agent passes its name, route and compiled options.
+ * An agent the plugin mounts: its name, route and already-compiled options (from `applyCapabilities`).
  */
 export interface PluginAgentEntry {
   readonly name: string
@@ -31,14 +24,12 @@ export interface PluginAgentEntry {
 
 export interface AgentsPluginOptions {
   /** Agents to mount: prepared entries, or classes decorated with `@Agent()`. */
-  agents: (Function | PluginAgentEntry)[]
+  agents: PluginAgentEntry[]
   /** Toolbox classes (or use @Mixin on agents). */
   toolboxes?: Function[]
   /** Factory that creates agent runs — bridges to SDK Agent.create() + agent.send(). */
   createRunFactory?: (
     compiled: CompiledAgentOptions,
-    /** Present only for the decorated-class form — absent for a prepared entry (M53). */
-    walkResult?: AgentWalkResult,
   ) => (message: string, sessionId: string) => AsyncIterable<StreamEvent>
 }
 
@@ -76,14 +67,13 @@ export function agentsPlugin(opts: AgentsPluginOptions) {
 /** Initialize routes from agent metadata (once). */
 function initRoutes(opts: AgentsPluginOptions): CompiledRoute[] {
   const allRoutes: AgentRoute[] = []
-  const walkResults: RouteIdentity[] = []
+  const routeIdentities: RouteIdentity[] = []
 
-  for (const source of opts.agents) {
-    const { entry, walkResult } = resolveAgentEntry(source, opts.toolboxes ?? [])
-    walkResults.push(walkResult ?? { route: entry.route, agentConfig: { name: entry.name } })
+  for (const entry of opts.agents) {
+    routeIdentities.push({ route: entry.route, agentConfig: { name: entry.name } })
 
     const createRun = opts.createRunFactory
-      ? opts.createRunFactory(entry.compiled, walkResult)
+      ? opts.createRunFactory(entry.compiled)
       : defaultCreateRun(entry.compiled)
 
     allRoutes.push(
@@ -95,25 +85,8 @@ function initRoutes(opts: AgentsPluginOptions): CompiledRoute[] {
     )
   }
 
-  validateUniqueRoutes(walkResults)
+  validateUniqueRoutes(routeIdentities)
   return compileRoutePatterns(allRoutes)
-}
-
-/** Resolve either form into the entry the plugin mounts (the walk survives only for the class form). */
-function resolveAgentEntry(
-  source: Function | PluginAgentEntry,
-  toolboxes: Function[],
-): { entry: PluginAgentEntry; walkResult?: AgentWalkResult } {
-  if (typeof source !== 'function') return { entry: source }
-  const walkResult = walkAgentMetadata(source, [...toolboxes, ...getMixins(source)])
-  return {
-    entry: {
-      name: walkResult.agentConfig.name,
-      route: walkResult.route,
-      compiled: compileAgent(walkResult, new Map()),
-    },
-    walkResult,
-  }
 }
 
 /** Default run factory — returns a mock stream when SDK not wired. */
