@@ -529,7 +529,13 @@ export async function* runReflectiveLoopStream(
       responseText: r.responseText,
     }
     const reflectionResult = reflection.reflect(outcome, reflectionContext)
-    if (!(reflectionResult.continue && loop.shouldContinue(outcome))) {
+    // M54 — the `round < loop.maxIterations` term makes the ceiling the RUNNER's guarantee, not each
+    // strategy's convention. Redundant for the three built-ins (they already embed it in
+    // `shouldContinue`, so the whole expression is unchanged — zero-behavior), determinative for a
+    // custom `.loopStrategy()` that never returns false: without it such a strategy loops forever.
+    if (
+      !(reflectionResult.continue && loop.shouldContinue(outcome) && round < loop.maxIterations)
+    ) {
       const reason = terminalReason(
         reflectionResult.continue,
         r.finishReason,
