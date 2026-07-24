@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Roadmap amended: added M54 — abrir o seam de `LoopStrategy` (critério de parada injetável) (`/roadmap-feature loop-strategy-seam`)
 - **Capability core for agent authoring (M52).** `@theokit/agents` gains `Capability` — a two-member contract (`name`, `apply`) that enriches the EXISTING `CompiledAgentOptions` waist instead of inventing a parallel representation. Ships `ModelCapability`/`ToolsCapability`/`skills()`, a `CapabilityRegistry` (unlocks declaring an agent from a config FILE, not only from code), `CapabilityPreset` (a preset behaves as one capability), typed fail-fast conflicts (`CapabilityConflictError` — decorators silently let the last write win; the message reports the value's SHAPE, never its content, since a config-built draft can carry tokens), and `provenance` so composition is auditable. A zero-behavior proof asserts the capability path is deep-equal to BOTH the `defineAgent` path and the decorator compiler at the waist and through the shared `Agent.create` projection — via the file/registry route, and confirmed end-to-end against a real provider. The proof also pins the waist fields no capability expresses yet — derived from the type, with a compile-time exhaustiveness check, and verified to fail in both directions — which is M53's entry criterion. Patterns budget (13 adopted / 8 refused, each justified) recorded in `knowledge-base/adrs/0001-capability-patterns-budget.md`.
 
 ### Added
