@@ -1,6 +1,5 @@
 import {
   compileTools,
-  SDK_TOOL_NAME,
   toolRuntimeName,
   type ClassToken,
   type CompiledTool,
@@ -97,15 +96,12 @@ export class ToolboxCapability implements Capability {
     // Fail at AUTHORING, not when the model finally calls the tool: a namespace/tool pair that
     // cannot mint a name the SDK accepts is a broken agent, and `Agent.create` would only say so
     // at runtime (theokit#145).
-    for (const tool of declared) {
-      const runtime = toolRuntimeName(this.#namespace, tool.name)
-      if (!SDK_TOOL_NAME.test(runtime)) {
-        throw new ConfigurationError(
-          `toolbox: nome de tool inválido "${runtime}" — deve casar ${String(SDK_TOOL_NAME)} ` +
-            '(o SDK rejeita o resto; verifique o namespace e o nome da tool)',
-        )
-      }
-    }
+    //
+    // The CALL is the validation (M55): `toolRuntimeName` validates what it mints, so this loop no
+    // longer knows the name format — one module owns that rule. Re-testing it here would be the
+    // very duplication that let the gate key and the tool name drift apart in #145. The minted
+    // value is intentionally discarded; `compile()` mints again when it actually needs it.
+    for (const tool of declared) toolRuntimeName(this.#namespace, tool.name)
   }
 
   /** The compiled tools this toolbox contributes — the same shape the decorator path produces. */
