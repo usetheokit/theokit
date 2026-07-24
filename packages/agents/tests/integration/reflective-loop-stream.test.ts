@@ -56,7 +56,7 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
 
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
     }).build()
     const seen: StreamEvent[] = []
@@ -88,7 +88,7 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     h.calls = 0
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
     }).build()
     const result = await runner.run('go', { apiKey: 'k' })
@@ -104,7 +104,7 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     h.calls = 0
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
     }).build()
     const gen = runner.stream('go', { apiKey: 'k' }) as AsyncGenerator<StreamEvent, unknown>
@@ -134,7 +134,7 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     h.calls = 0
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
     }).build()
     await expect(runner.run('go', { apiKey: 'k' })).rejects.toThrow(
@@ -148,7 +148,7 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     h.calls = 0
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
     }).build()
     const gen = runner.stream('go', { apiKey: 'k', budget: 0.005 }) as AsyncGenerator<

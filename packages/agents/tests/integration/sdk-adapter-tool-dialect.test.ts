@@ -7,6 +7,7 @@
  * Also covers the transform-level guards directly (EC-1 non-string passthrough, EC-2 flush-on-error).
  */
 import 'reflect-metadata'
+import type { CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
@@ -51,8 +52,8 @@ const bothAgent = applyCapabilities([
   new AgentConfigCapability({ parseThinkTags: true, stripToolDialect: true }),
 ])
 
-async function streamEvents(compiled: object, opts = {}) {
-  const gen = AgentRunner.fromSpec({ compiled, agentName: 'a', strategy: 'simple-chat' })
+async function streamEvents(compiled: CompiledAgentOptions, opts = {}) {
+  const gen = AgentRunner.fromSpec({ compiled, name: 'a', strategy: 'simple-chat' })
     .build()
     .stream('hi', { apiKey: 'k', ...opts })
   const events: StreamEvent[] = []

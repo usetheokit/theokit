@@ -64,7 +64,7 @@ export interface AgentRunnerRunOptions {
    * M1 (Axis-A SWAP): per-run extended-thinking effort. Merge-over-compiled —
    * `opts.reasoningEffort ?? compiled.reasoningEffort` (resolved in the adapter, single site).
    * Mapped to the SDK `ModelSelection.params` so the provider reasons (surfaced as `thinking`
-   * StreamEvents). Absent ⇒ the compiled `@Agent({ reasoningEffort })` (or none).
+   * StreamEvents). Absent ⇒ the compiled reasoning effort (or none).
    */
   readonly reasoningEffort?: ReasoningEffort
   /**
@@ -287,9 +287,13 @@ export class AgentRunner {
  * the decorator surface. `strategy` and `compaction` are the two non-waist channels ADR 0002 keeps
  * (the builder's `.compaction()` already outranked the decorator; this just names the input).
  */
+/**
+ * The already-compiled agent the runner executes. Field-compatible with `SubAgentSpec` on purpose —
+ * one spec drives both `AgentRunner.fromSpec` and `delegate`.
+ */
 export interface AgentRunnerSpec {
+  readonly name: string
   readonly compiled: CompiledAgentOptions
-  readonly agentName: string
   readonly strategy?: MainLoopMeta['strategy']
   readonly maxIterations?: number
   readonly compaction?: { name: string; keepTokens?: number }
@@ -342,7 +346,7 @@ export class AgentRunnerBuilder {
       : undefined
     return new AgentRunner({
       compiled: spec.compiled,
-      agentName: spec.agentName,
+      agentName: spec.name,
       loopStrategy,
       reflectionStrategy,
       streamEnabled: this.streamEnabled,

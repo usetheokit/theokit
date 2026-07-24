@@ -29,7 +29,7 @@ describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
     })
     const r = await AgentRunner.fromSpec({
       compiled: sFAgent,
-      agentName: 'sFAgent',
+      name: 'sFAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -51,7 +51,7 @@ describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
         },
       }
     }
-    await AgentRunner.fromSpec({ compiled: sFAgent, agentName: 'sFAgent', strategy: 'simple-chat' })
+    await AgentRunner.fromSpec({ compiled: sFAgent, name: 'sFAgent', strategy: 'simple-chat' })
       .build()
       .run('do it', { apiKey: 'k', sessionId: 'sess-1', streamFactory: factory })
     expect(seen.message).toBe('do it')
@@ -79,7 +79,7 @@ describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
     }
     const r = await AgentRunner.fromSpec({
       compiled: reactAgent,
-      agentName: 'reactAgent',
+      name: 'reactAgent',
       strategy: 'react',
     })
       .build()

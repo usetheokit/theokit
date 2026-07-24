@@ -56,7 +56,7 @@ describe('M1 reasoningEffort → Agent.getOrCreate model params', () => {
     // compiled @Agent({ reasoningEffort: 'high' }) ⇒ getOrCreate opts.model carries the thinking param.
     await AgentRunner.fromSpec({
       compiled: thinkerAgent,
-      agentName: 'thinkerAgent',
+      name: 'thinkerAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -71,7 +71,7 @@ describe('M1 reasoningEffort → Agent.getOrCreate model params', () => {
     // overrides.reasoningEffort ('low') wins over the compiled 'high' (merge-over-compiled).
     await AgentRunner.fromSpec({
       compiled: thinkerAgent,
-      agentName: 'thinkerAgent',
+      name: 'thinkerAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -86,7 +86,7 @@ describe('M1 reasoningEffort → Agent.getOrCreate model params', () => {
     // No compiled effort, no override ⇒ bare { id } (backward-compat, no params key).
     await AgentRunner.fromSpec({
       compiled: plainAgent,
-      agentName: 'plainAgent',
+      name: 'plainAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -98,7 +98,7 @@ describe('M1 reasoningEffort → Agent.getOrCreate model params', () => {
     // EC: a per-run override enables reasoning even when the agent declared none at compile time.
     await AgentRunner.fromSpec({
       compiled: plainAgent,
-      agentName: 'plainAgent',
+      name: 'plainAgent',
       strategy: 'simple-chat',
     })
       .build()

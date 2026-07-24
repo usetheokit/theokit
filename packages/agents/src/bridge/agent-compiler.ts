@@ -8,25 +8,50 @@
  */
 import type {
   ContextSettings,
+  MemorySettings,
   SettingSource,
   SkillsSettings,
   SystemPromptResolver,
 } from '@theokit/sdk'
-import type { MemorySettings } from '@theokit/sdk'
 
-import { getAgentConfig } from '../decorators/agent.js'
-import type { CheckpointOptions } from '../decorators/checkpoint.js'
-import type { MemoryOptions } from '../decorators/memory.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
-import type { HumanInTheLoopOptions } from '../types.js'
-import type { McpServersMap } from '../types.js'
-import type { ProjectContextOptions } from '../types.js'
-import type { ReasoningEffort } from '../types.js'
+import type {
+  ApprovalOptions,
+  BudgetOptions,
+  CheckpointOptions,
+  HumanInTheLoopOptions,
+  McpServersMap,
+  MemoryOptions,
+  ProjectContextOptions,
+  ReasoningEffort,
+  ToolOptions,
+} from '../types.js'
 
-import { compileContextWindow } from './compile-context-window.js'
-import { compileSkills } from './compile-skills.js'
-import type { ToolboxWalkResult, AgentWalkResult } from './walk-agent-metadata.js'
+/**
+ * M53 — the input shape `compileTools`/`compileHitlGates` consume, declared WITH them now that the
+ * metadata walk that used to own it is gone. `ToolboxCapability` builds this from a class'
+ * `static tools` declaration.
+ */
+export interface ToolWalkResult {
+  propertyKey: string | symbol
+  config: ToolOptions
+  guards: Function[]
+  approval?: ApprovalOptions
+  capabilities?: string[]
+  budget?: BudgetOptions
+  trace: boolean
+  audit: boolean
+  /** HITL config when the tool is gated (M4); absent ⇒ not gated. */
+  hitl?: HumanInTheLoopOptions
+}
+
+export interface ToolboxWalkResult {
+  class: Function
+  namespace: string
+  tools: ToolWalkResult[]
+  guards: Function[]
+}
 
 /** Minimal interface matching defineTool() result shape. */
 export interface CompiledTool {
@@ -134,13 +159,13 @@ export interface CompiledSubAgent {
 /** Compiled agent options ready for SDK Agent.create(). */
 export interface CompiledAgentOptions {
   model?: string
-  /** Extended-thinking effort declared via `@Agent({ reasoningEffort })`; mapped to SDK ModelSelection.params. */
+  /** Extended-thinking effort; mapped to SDK ModelSelection.params. */
   reasoningEffort?: ReasoningEffort
-  /** Opt-in `<think>`-tag extraction declared via `@Agent({ parseThinkTags })` (M2); wraps the stream when true. */
+  /** Opt-in `<think>`-tag extraction (M2); wraps the stream when true. */
   parseThinkTags?: boolean
-  /** Opt-in tool-dialect stripping declared via `@Agent({ stripToolDialect })` (theocode#32); strips leaked `<function=…></tool_call>` from text when true. */
+  /** Opt-in tool-dialect stripping (theocode#32); strips leaked `<function=…></tool_call>` from text when true. */
   stripToolDialect?: boolean
-  /** Opt-in leaked-dialect recovery declared via `@Agent({ recoverLeakedToolCalls })` (theokit#58); enables the SDK route's `extractToolCallsFromContent` so leaked tool calls EXECUTE when true. */
+  /** Opt-in leaked-dialect recovery (theokit#58); enables the SDK route's `extractToolCallsFromContent` so leaked tool calls EXECUTE when true. */
   recoverLeakedToolCalls?: boolean
   /** Static prompt OR a per-request {@link SystemPromptResolver} (V4-L.1, Axis-B). */
   systemPrompt?: string | SystemPromptResolver
@@ -192,59 +217,4 @@ export interface CompiledAgentOptions {
    * before the SDK runs. Not consumed by the SDK directly (it reads `skills`). Absent ⇒ no resolver.
    */
   skillsResolver?: SkillsSelection
-}
-
-/**
- * Compile @SubAgents references into SDK agents map.
- * Each sub-agent class must have @Agent() metadata.
- */
-export function compileSubAgents(subAgentClasses: Function[]): Record<string, CompiledSubAgent> {
-  const agents: Record<string, CompiledSubAgent> = {}
-  for (const cls of subAgentClasses) {
-    const config = getAgentConfig(cls)
-    if (!config) continue // validated at decoration time
-    agents[config.name] = {
-      model: config.model,
-      systemPrompt: config.systemPrompt,
-    }
-  }
-  return agents
-}
-
-/**
- * Compile @Agent metadata into SDK-compatible options.
- *
- * EC-7: agents without toolboxes produce tools: [].
- */
-export function compileAgent(
-  walkResult: AgentWalkResult,
-  toolboxInstances = new Map<Function, object>(),
-): CompiledAgentOptions {
-  const tools = compileTools(walkResult.toolboxes, toolboxInstances)
-  const agents = compileSubAgents(walkResult.subAgentClasses)
-  const hitl = compileHitlGates(walkResult.toolboxes)
-
-  return {
-    model: walkResult.agentConfig.model,
-    reasoningEffort: walkResult.agentConfig.reasoningEffort,
-    parseThinkTags: walkResult.agentConfig.parseThinkTags,
-    stripToolDialect: walkResult.agentConfig.stripToolDialect,
-    recoverLeakedToolCalls: walkResult.agentConfig.recoverLeakedToolCalls,
-    systemPrompt: walkResult.agentConfig.systemPrompt,
-    tools,
-    agents,
-    memory: walkResult.memory,
-    skills: walkResult.skills ? compileSkills(walkResult.skills) : undefined,
-    context: walkResult.contextWindow
-      ? compileContextWindow(walkResult.contextWindow).context
-      : undefined,
-    projectContext: walkResult.projectContext,
-    mcpServers: walkResult.mcpServers,
-    guardrails: walkResult.guardrails,
-    maxIterations: walkResult.mainLoop.maxIterations ?? walkResult.agentConfig.maxIterations,
-    timeoutMs: walkResult.mainLoop.timeoutMs ?? walkResult.agentConfig.timeoutMs,
-    stream: walkResult.agentConfig.stream ?? true,
-    hitl: hitl.size > 0 ? hitl : undefined,
-    checkpoint: walkResult.checkpoint,
-  }
 }

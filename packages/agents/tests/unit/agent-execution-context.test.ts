@@ -1,11 +1,15 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
-import { createAgentExecutionContext, isAgentContext } from '../../src/bridge/agent-execution-context.js'
+import {
+  createAgentExecutionContext,
+  isAgentContext,
+} from '../../src/bridge/agent-execution-context.js'
 import type { ExecutionContext, CanActivate } from '@theokit/http'
 
 describe('AgentExecutionContext', () => {
   const mockReq = new Request('http://localhost/test', { method: 'POST' })
   const mockUrl = new URL('http://localhost/test')
+  // eslint-disable-next-line @typescript-eslint/no-extraneous-class -- identity token for a fixture ExecutionContext
   class TestAgent {}
 
   function makeBase(): ExecutionContext {

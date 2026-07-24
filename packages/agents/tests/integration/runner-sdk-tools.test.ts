@@ -39,7 +39,7 @@ describe('V4-Q AgentRunner forwards pre-built sdkTools', () => {
 
   it('test_sdktools_forwarded_raw_to_agent_create', async () => {
     const fakeTool = { name: 'x', description: 'd', inputSchema: {}, handler: () => 'ok' }
-    await AgentRunner.fromSpec({ compiled: sTAgent, agentName: 'sTAgent', strategy: 'simple-chat' })
+    await AgentRunner.fromSpec({ compiled: sTAgent, name: 'sTAgent', strategy: 'simple-chat' })
       .build()
       .run('hi', { apiKey: 'k', sdkTools: [fakeTool] as never })
     // Forwarded BY REFERENCE (not wrapped by the mock defineTool → no `__defined` marker).
@@ -48,7 +48,7 @@ describe('V4-Q AgentRunner forwards pre-built sdkTools', () => {
   })
 
   it('test_absent_sdktools_is_compiled_only', async () => {
-    await AgentRunner.fromSpec({ compiled: sTAgent, agentName: 'sTAgent', strategy: 'simple-chat' })
+    await AgentRunner.fromSpec({ compiled: sTAgent, name: 'sTAgent', strategy: 'simple-chat' })
       .build()
       .run('hi', { apiKey: 'k' })
     // sTAgent has no @Tool → compiled tools empty → no sdkTools appended → empty tools array.
@@ -60,7 +60,7 @@ describe('V4-Q AgentRunner forwards pre-built sdkTools', () => {
     // A realistic @Tool CompiledTool carries a live Zod inputSchema (has `.parse`) → defineTool path.
     const compiled = { name: 'c', description: 'd', inputSchema: z.object({}), handler: () => 'ok' }
     const fakeTool = { name: 'x', description: 'd', inputSchema: {}, handler: () => 'ok' }
-    await AgentRunner.fromSpec({ compiled: sTAgent, agentName: 'sTAgent', strategy: 'simple-chat' })
+    await AgentRunner.fromSpec({ compiled: sTAgent, name: 'sTAgent', strategy: 'simple-chat' })
       .build()
       .run('hi', { apiKey: 'k', tools: [compiled] as never, sdkTools: [fakeTool] as never })
     const tools = h.captured?.tools ?? []
