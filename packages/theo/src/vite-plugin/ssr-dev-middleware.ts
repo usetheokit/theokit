@@ -47,7 +47,7 @@ function isSsrRenderResult(value: unknown): value is SsrRenderResult {
   return typeof (value as Record<string, unknown>).html === 'string'
 }
 
-export interface SsrDevMiddlewareOptions {
+interface SsrDevMiddlewareOptions {
   projectRoot: string
   virtualEntryServerId: string
   securityHeaders: SecurityHeadersConfig | undefined

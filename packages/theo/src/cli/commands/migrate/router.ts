@@ -1,8 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * Build-time codemod: derives all FS paths from the user's `<routesDir>`
- * argument (defaults to `<cwd>/server/routes`). No HTTP input reaches
- * these fs calls. Operator runs this manually via `theokit migrate router`.
- */
 /**
  * G6 T2.1 — `theokit migrate router` CLI subcommand.
  *
@@ -30,7 +25,7 @@ import {
   type RouterMigrationPlanItem,
 } from './router-codemod.js'
 
-export interface RouterMigrateOptions {
+interface RouterMigrateOptions {
   /** Absolute path to `<project>/server/routes`. Defaults to `<cwd>/server/routes`. */
   routesDir?: string
   /**
@@ -49,7 +44,7 @@ export interface RouterMigrateOptions {
  * AND at least one failure — caller can re-run safely (idempotent) and
  * the second pass will skip already-migrated files.
  */
-export class RouterMigrationPartialFailure extends Error {
+class RouterMigrationPartialFailure extends Error {
   override readonly name = 'RouterMigrationPartialFailure'
   readonly filesAlreadyMigrated: string[]
   readonly failedFile: string
@@ -104,7 +99,7 @@ function tryGitMv(from: string, to: string): boolean {
     // Pass as argv to avoid shell parsing entirely (no `shell: true`).
     // `git` is resolved via the operator's PATH (same security model as
     // every other CLI tool — `theokit dev`, `pnpm install`, etc.).
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
+
     execFileSync('git', ['mv', from, to], { stdio: 'pipe' })
     return true
   } catch {
@@ -152,7 +147,7 @@ function applyImportRewrite(item: RouterMigrationPlanItem, routesDir: string): v
   }
 }
 
-export interface RouterMigrateResult {
+interface RouterMigrateResult {
   /** Successfully renamed (from, to) pairs. */
   migrated: RouterMigrationPlanItem[]
   /** Plan was empty — nothing to do (already-nested). */

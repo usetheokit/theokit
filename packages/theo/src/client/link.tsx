@@ -9,11 +9,8 @@
  * Uses `<link rel="prefetch">` (not modulepreload) because route paths
  * can be prefetched directly — no Vite manifest resolution needed (EC-1).
  */
-import {
-  Link as RouterLink,
-  type LinkProps as RouterLinkProps,
-} from 'react-router'
 import { useRef, useCallback, useEffect } from 'react'
+import { Link as RouterLink, type LinkProps as RouterLinkProps } from 'react-router'
 
 export type PrefetchBehavior = 'none' | 'intent' | 'viewport'
 
@@ -39,7 +36,7 @@ function injectPrefetch(href: string): void {
 
 function resolveTo(to: LinkProps['to']): string {
   if (typeof to === 'string') return to
-  return to?.pathname ?? ''
+  return to.pathname ?? ''
 }
 
 /**
@@ -54,7 +51,13 @@ function resolveTo(to: LinkProps['to']): string {
  * <Link to="/settings" prefetch="none">Settings</Link>
  * ```
  */
-export function Link({ prefetch = 'intent', to, onMouseEnter, onFocus, ...rest }: LinkProps) {
+export function Link({
+  prefetch = 'intent',
+  to,
+  onMouseEnter,
+  onFocus,
+  ...rest
+}: Readonly<LinkProps>) {
   const ref = useRef<HTMLAnchorElement>(null)
 
   const handleIntent = useCallback(
@@ -64,10 +67,10 @@ export function Link({ prefetch = 'intent', to, onMouseEnter, onFocus, ...rest }
       }
       // Forward original handlers
       if (event.type === 'mouseenter' && onMouseEnter) {
-        ;(onMouseEnter as React.MouseEventHandler<HTMLAnchorElement>)(event as React.MouseEvent<HTMLAnchorElement>)
+        onMouseEnter(event as React.MouseEvent<HTMLAnchorElement>)
       }
       if (event.type === 'focus' && onFocus) {
-        ;(onFocus as React.FocusEventHandler<HTMLAnchorElement>)(event as React.FocusEvent<HTMLAnchorElement>)
+        onFocus(event as React.FocusEvent<HTMLAnchorElement>)
       }
     },
     [prefetch, to, onMouseEnter, onFocus],
@@ -88,16 +91,12 @@ export function Link({ prefetch = 'intent', to, onMouseEnter, onFocus, ...rest }
       { rootMargin: '200px' }, // prefetch slightly before visible
     )
     observer.observe(ref.current)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+    }
   }, [prefetch, to])
 
   return (
-    <RouterLink
-      ref={ref}
-      to={to}
-      onMouseEnter={handleIntent}
-      onFocus={handleIntent}
-      {...rest}
-    />
+    <RouterLink ref={ref} to={to} onMouseEnter={handleIntent} onFocus={handleIntent} {...rest} />
   )
 }

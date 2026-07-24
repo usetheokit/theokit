@@ -45,7 +45,7 @@ function importPath(dtsOutPath: string, projectRoot: string, filePath: string): 
   return rel
 }
 
-export interface GenerateAgentsDtsOptions {
+interface GenerateAgentsDtsOptions {
   manifest: TheoManifest
   /** Absolute path to the .d.ts that will be emitted (drives the import paths). */
   dtsOutPath: string
@@ -138,7 +138,7 @@ export function generateAgentsRuntimeModule(agentNames: string[]): string {
 const VIRTUAL_AGENTS_ID = '@theo/agents'
 const RESOLVED_AGENTS_ID = '\0@theo/agents'
 
-export interface AgentsTypedClientPluginOptions {
+interface AgentsTypedClientPluginOptions {
   /** Absolute project root (agents live at `<projectRoot>/<agentsDir>`). */
   projectRoot: string
   /** Agents dir name (config `agentsDir`, default "agents"), relative to projectRoot — the watch glob. */

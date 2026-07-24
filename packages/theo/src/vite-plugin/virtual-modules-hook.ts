@@ -29,7 +29,7 @@ export interface VirtualModuleIds {
   RESOLVED_RUNTIME_CONFIG_ID: string
 }
 
-export interface VirtualModulesCtx {
+interface VirtualModulesCtx {
   ids: VirtualModuleIds
   appDir: string
   ssrEnabled: boolean

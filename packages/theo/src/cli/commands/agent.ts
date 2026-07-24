@@ -12,7 +12,7 @@ import { resolveProvider } from '../../server/agent/provider-resolver.js'
 import { runAgentInTerminal } from '../../server/agent/run-terminal-agent.js'
 import { scanAgents } from '../../server/scan/agent-scan.js'
 
-export interface AgentCommandDeps {
+interface AgentCommandDeps {
   projectRoot?: string
   /** Load a TS agent module; defaults to a fresh minimal Vite SSR server (framework transpile). */
   loadModule?: (filePath: string) => Promise<Record<string, unknown>>

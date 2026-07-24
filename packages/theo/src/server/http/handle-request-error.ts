@@ -25,7 +25,7 @@ import { sendError } from './send-response.js'
  * - `onResponse({ inErrorPath: true })` always fires at the end (swallowed
  *   if it throws — EC-9).
  */
-export interface HandleRequestErrorCtx {
+interface HandleRequestErrorCtx {
   req: IncomingMessage
   res: ServerResponse
   requestId: string | undefined
@@ -128,7 +128,7 @@ export async function handleRequestError(err: unknown, c: HandleRequestErrorCtx)
  * catches a throw, calls `handleWebRequestError(err, { requestId })` to
  * build the Response, then routes through onError hooks separately.
  */
-export interface HandleWebRequestErrorCtx {
+interface HandleWebRequestErrorCtx {
   requestId?: string
 }
 

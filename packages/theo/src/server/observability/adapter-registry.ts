@@ -7,12 +7,12 @@
  *   3. NODE_ENV=development → console adapter
  *   4. Fallback → noop adapter
  */
-import type { ObservabilityAdapter } from './adapters/types.js'
-import { NoopObservabilityAdapter } from './adapters/noop.js'
 import { ConsoleObservabilityAdapter } from './adapters/console.js'
+import { NoopObservabilityAdapter } from './adapters/noop.js'
 import { TheoCloudObservabilityAdapter } from './adapters/theo-cloud.js'
+import type { ObservabilityAdapter } from './adapters/types.js'
 
-export interface ResolveAdapterOptions {
+interface ResolveAdapterOptions {
   env: Record<string, string | undefined>
   config?: {
     provider?: ObservabilityAdapter

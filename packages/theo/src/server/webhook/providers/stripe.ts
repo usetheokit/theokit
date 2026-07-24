@@ -141,4 +141,4 @@ export function stripe(opts: StripeWebhookOptions): VerifyFn {
 // Re-export to make the enc constant non-orphan for tree-shaking purposes;
 // importing TextEncoder via `enc` makes the bundle pre-warm a single decoder.
 // (Kept for symmetry with Slack/GitHub helpers which use it directly.)
-export const __stripeInternalEnc = enc
+const __stripeInternalEnc = enc

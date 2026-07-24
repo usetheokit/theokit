@@ -110,14 +110,14 @@ export function nearestCorner(
   return best
 }
 
-export interface UseDragOptions {
+interface UseDragOptions {
   disabled?: boolean
   position: DevtoolsPosition
   padding: number
   onChange: (position: DevtoolsPosition) => void
 }
 
-export interface UseDragApi {
+interface UseDragApi {
   ref: React.RefObject<HTMLElement | null>
   onPointerDown: (e: React.PointerEvent<HTMLElement>) => void
 }

@@ -32,7 +32,7 @@ const HOP_BY_HOP_HEADERS = [
 /** Methods that MUST NOT have a body forwarded (EC-16). */
 const BODYLESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
-export interface ProxyOptions {
+interface ProxyOptions {
   /** Upstream target URL — origin + optional path prefix. */
   target: string
   /**

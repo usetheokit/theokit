@@ -1,25 +1,21 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * CLI `theo check` runner. Reads files under `cwd` only. Build-time tool.
- * No HTTP input.
- */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-export type StepStatus = 'ok' | 'fail' | 'skipped'
+type StepStatus = 'ok' | 'fail' | 'skipped'
 
-export interface CheckStep {
+interface CheckStep {
   name: 'typecheck' | 'eslint' | 'scan'
   status: StepStatus
   output: string
 }
 
-export interface CheckResult {
+interface CheckResult {
   exitCode: 0 | 1
   steps: CheckStep[]
 }
 
-export interface RunCheckDeps {
+interface RunCheckDeps {
   cwd: string
   hasTsConfig?: () => boolean
   hasEslintConfig?: () => boolean

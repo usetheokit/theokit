@@ -21,7 +21,7 @@ import {
   type TerminalOut,
 } from './render-terminal.js'
 
-export interface RunTerminalAgentInput {
+interface RunTerminalAgentInput {
   message: string
   /** Resume key; a fresh id per run when omitted. */
   sessionId?: string
