@@ -10,6 +10,8 @@ export default defineConfig({
     persistence: 'src/persistence-entry.ts',
     interactive: 'src/interactive-entry.ts',
     pty: 'src/pty-entry.ts',
+    // M60 — enriched auth domain.
+    auth: 'src/auth-entry.ts',
   },
   format: ['esm'],
   dts: true,
