@@ -1,5 +1,12 @@
 # @theokit/agents
 
+## 4.2.2
+
+### Patch Changes
+
+- fb89c9e: Fix: the goal domain types (`GoalEvent`/`GoalLoopAgent`/`GoalOptions`/`GoalResult`) are now actually
+  re-exported from the top-level barrel (the M59 re-export was only reachable from the loop submodule).
+
 ## 4.2.1
 
 ### Patch Changes
