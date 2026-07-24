@@ -454,7 +454,7 @@ function hasZodInputSchema(schema: unknown): boolean {
 /**
  * M7 — wrap a tool handler so it receives the run-context as `ctx.context`, injected from a closure
  * over `runContext`. theokit owns the run-context concern (the `defineAgent({ context })` /
- * `agent().context()` API is theokit's), so it injects it at THIS adapter layer instead of relying
+ * `AgentBuilder.create().context()` API is theokit's), so it injects it at THIS adapter layer instead of relying
  * on the SDK to forward it — decoupling the framework from the SDK's tool-call internals. The
  * incoming `ctx.signal` (from the SDK) is preserved; `context` is set to the agent's run-context.
  */
@@ -722,7 +722,7 @@ export interface SdkAgentHandle {
 /**
  * #12 — bridge a builder/`defineAgent` {@link TheokitAgentDefinition} to a real `SDKAgent` FACTORY,
  * so surfaces that require an `SDKAgent` (or `(sessionId) => SDKAgent`) — notably `theokit acp`,
- * whose entry default-export must be one — can serve an agent defined with the `agent()` chain.
+ * whose entry default-export must be one — can serve an agent defined with the `AgentBuilder.create()` chain.
  *
  * The factory reuses the SAME projection the streaming path uses (`compileAgentDefinition` → tools /
  * model / `assembleM8CreateOptions`), so the served agent has identical tools, model, system prompt,

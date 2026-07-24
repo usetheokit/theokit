@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest'
 
 import {
   AgentConfigCapability,
-  checkpoint,
-  contextWindow,
-  guardrails,
-  humanInTheLoop,
+  CheckpointCapability,
+  ContextWindowCapability,
+  GuardrailsCapability,
+  HumanInTheLoopCapability,
   MainLoopCapability,
-  mcpServers,
-  memory,
-  plugins,
-  projectContext,
-  runContext,
-  settingSources,
-  skillsResolver,
-  subAgents,
+  McpServersCapability,
+  MemoryCapability,
+  PluginsCapability,
+  ProjectContextCapability,
+  RunContextCapability,
+  SettingSourcesCapability,
+  SkillsResolverCapability,
+  SubAgentsCapability,
 } from '../../src/capability/agent-capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { ConfigurationError } from '../../src/errors.js'
@@ -27,18 +27,18 @@ import { ConfigurationError } from '../../src/errors.js'
 describe('waist-bound capabilities (M53 § A)', () => {
   it('each pure-data capability places its field, and only its field', () => {
     const cases = [
-      [memory({ provider: 'mem0' } as never), 'memory'],
-      [contextWindow({ maxTokens: 100 } as never), 'context'],
-      [projectContext({ enabled: true } as never), 'projectContext'],
-      [mcpServers({ gh: { type: 'stdio', command: 'x' } } as never), 'mcpServers'],
-      [guardrails([{ name: 'g' }] as never), 'guardrails'],
-      [checkpoint({ storage: 'filesystem' } as never), 'checkpoint'],
-      [humanInTheLoop(new Map([['tb.tool', {}]]) as never), 'hitl'],
-      [subAgents({ child: {} } as never), 'agents'],
-      [settingSources(['project'] as never), 'settingSources'],
-      [plugins([{ name: 'p' }] as never), 'plugins'],
-      [runContext({ k: 1 } as never), 'runContext'],
-      [skillsResolver((() => []) as never), 'skillsResolver'],
+      [new MemoryCapability({ provider: 'mem0' } as never), 'memory'],
+      [new ContextWindowCapability({ maxTokens: 100 } as never), 'context'],
+      [new ProjectContextCapability({ enabled: true } as never), 'projectContext'],
+      [new McpServersCapability({ gh: { type: 'stdio', command: 'x' } } as never), 'mcpServers'],
+      [new GuardrailsCapability([{ name: 'g' }] as never), 'guardrails'],
+      [new CheckpointCapability({ storage: 'filesystem' } as never), 'checkpoint'],
+      [new HumanInTheLoopCapability(new Map([['tb.tool', {}]]) as never), 'hitl'],
+      [new SubAgentsCapability({ child: {} } as never), 'agents'],
+      [new SettingSourcesCapability(['project'] as never), 'settingSources'],
+      [new PluginsCapability([{ name: 'p' }] as never), 'plugins'],
+      [new RunContextCapability({ k: 1 } as never), 'runContext'],
+      [new SkillsResolverCapability((() => []) as never), 'skillsResolver'],
     ] as const
 
     for (const [capability, field] of cases) {

@@ -1,9 +1,9 @@
 // M31 builder-only: the `@Agent/@Tool/@Toolbox/@HumanInTheLoop/@Guardrails/@Skills/@MainLoop/
 // @SubAgents/@Checkpoint/@Mixin/…` decorators are removed from the public API (ADR-0043 D1/D2). The
-// `agent()` / `tool()` builders are the single authoring surface. The decorator implementations +
+// `AgentBuilder.create()` / `tool()` builders are the single authoring surface. The decorator implementations +
 // their metadata getters remain internal (the compiler reads them via source-path imports).
 // The decorator OPTION TYPES stay public (the framework + consumers annotate with them — e.g. the
-// HITL `TimeoutAction` used by the approval-registry and the `agent().approval(...)` options).
+// HITL `TimeoutAction` used by the approval-registry and the `AgentBuilder.create().approval(...)` options).
 export type { HumanInTheLoopOptions, TimeoutAction } from './types.js'
 // M35 — the settled HITL decision type is part of the public approval contract: an `awaitApproval`
 // resolver (the HTTP registry or the in-process seam) may return a bare boolean OR this structured value.

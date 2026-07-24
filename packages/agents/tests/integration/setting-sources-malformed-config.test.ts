@@ -19,12 +19,14 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
-import { agent } from '../../src/bridge/agent-builder.js'
+import { AgentBuilder } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
 
 describe('EC-4 — malformed .theokit/ config surfaces a typed error, never swallowed', () => {
   it('test_malformed_theokit_file_surfaces_configuration_error', async () => {
-    const compiled = compileAgentDefinition(agent().model('m').settingSources(['project']).build())
+    const compiled = compileAgentDefinition(
+      AgentBuilder.create().model('m').settingSources(['project']).build(),
+    )
     const events: Array<{ type: string; message?: string }> = []
     for await (const e of createSdkAgentStream(compiled, [], 'test-key', { cwd: '/app/root' })(
       'hi',

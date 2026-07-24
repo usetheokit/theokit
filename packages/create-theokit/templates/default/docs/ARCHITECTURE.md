@@ -53,7 +53,7 @@ prompts/tools/skills are **shared** across every agent in `agents/`.
 `agents/chat.ts` is thin on purpose — it wires the pieces together:
 
 ```ts
-export default agent()
+export default AgentBuilder.create()
   .input(z.object({ message: z.string() }))
   .model('openai/gpt-4o-mini')
   .system(BASE_INSTRUCTIONS)   // agents/prompts/instructions.ts
