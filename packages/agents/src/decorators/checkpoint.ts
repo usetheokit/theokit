@@ -30,38 +30,18 @@
  * ```
  */
 import { setMeta, getMeta } from '../metadata/index.js'
+import type { CheckpointOptions } from '../types.js'
 
 const CHECKPOINT_CONFIG = Symbol.for('theokit:agents:checkpoint')
 
-export type CheckpointStrategy =
-  | 'after-tool-call' // checkpoint after every successful tool execution
-  | 'after-iteration' // checkpoint after every loop iteration
-  | 'manual' // only checkpoint when explicitly called via ctx.checkpoint()
+export type { CheckpointStrategy } from '../types.js'
 
-export type CheckpointStorage = 'memory' | 'filesystem' | 'drizzle' | 'redis'
+export type { CheckpointStorage } from '../types.js'
 
-export interface CheckpointOptions {
-  /** Where to persist checkpoints. */
-  storage?: CheckpointStorage
-  /** When to auto-checkpoint (default: 'after-tool-call'). */
-  strategy?: CheckpointStrategy
-  /** Maximum checkpoints to retain per run (rolling window). */
-  maxCheckpoints?: number
-  /** Time-to-live in ms before checkpoints expire (default: 3_600_000 = 1h). */
-  ttl?: number
-}
+export type { CheckpointOptions } from '../types.js'
 
 /** Serializable checkpoint state. */
-export interface CheckpointState {
-  id: string
-  runId: string
-  agentName: string
-  step: number
-  messages: unknown[]
-  toolResults: unknown[]
-  createdAt: number
-  resumeToken: string
-}
+export type { CheckpointState } from '../types.js'
 
 export function Checkpoint(options: CheckpointOptions = {}): ClassDecorator {
   return (target: Function) => {

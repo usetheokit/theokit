@@ -12,16 +12,16 @@ import type {
   SkillsSettings,
   SystemPromptResolver,
 } from '@theokit/sdk'
+import type { MemorySettings } from '@theokit/sdk'
 
 import { getAgentConfig } from '../decorators/agent.js'
 import type { CheckpointOptions } from '../decorators/checkpoint.js'
-import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
-import type { McpServersMap } from '../decorators/mcp.js'
-import type { MemorySettings } from '@theokit/sdk'
 import type { MemoryOptions } from '../decorators/memory.js'
-import type { ProjectContextOptions } from '../decorators/project-context.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
+import type { HumanInTheLoopOptions } from '../types.js'
+import type { McpServersMap } from '../types.js'
+import type { ProjectContextOptions } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
 import { compileContextWindow } from './compile-context-window.js'
