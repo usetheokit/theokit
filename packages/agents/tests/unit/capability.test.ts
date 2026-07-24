@@ -9,7 +9,11 @@ import {
   createDraft,
   setOnce,
 } from '../../src/capability/capability.js'
-import { ModelCapability, skills, ToolsCapability } from '../../src/capability/capabilities.js'
+import {
+  ModelCapability,
+  SkillsCapability,
+  ToolsCapability,
+} from '../../src/capability/capabilities.js'
 import { ConfigurationError } from '../../src/errors.js'
 import {
   CapabilityPreset,
@@ -83,15 +87,15 @@ describe('Adversarial-review regressions (M52)', () => {
   it('V4 — skills ACCUMULATE across capabilities (a preset baseline stays extensible)', () => {
     // With setOnce, a preset declaring baseline skills could never be extended at the call site —
     // which defeats the Composite. The reference compiler treats skills as a merge-semantics field.
-    const preset = new CapabilityPreset('preset', [skills(['code-review'])])
-    const draft = applyCapabilities([preset, skills(['testing'])])
+    const preset = new CapabilityPreset('preset', [new SkillsCapability(['code-review'])])
+    const draft = applyCapabilities([preset, new SkillsCapability(['testing'])])
     expect(draft.skills).toEqual({ enabled: ['code-review', 'testing'], autoInject: true })
   })
 
   it('V5 — a wrong-typed FILE value fails fast and typed, never corrupts silently', () => {
     const registry = new CapabilityRegistry()
       .register('model', (id) => new ModelCapability(id as string))
-      .register('skills', (names) => skills(names as string[]))
+      .register('skills', (names) => new SkillsCapability(names as string[]))
     // `skills: "code-review"` used to spread into ELEVEN single-character skill names, with no error.
     expect(() => registry.resolve('skills', 'code-review')).toThrow(ConfigurationError)
     expect(() => registry.resolve('skills', ['ok', 42])).toThrow(ConfigurationError)
@@ -101,7 +105,7 @@ describe('Adversarial-review regressions (M52)', () => {
 
   it('V5 — the typed error names the offending type but never echoes the value', () => {
     // config files can carry secrets: report the SHAPE, never the content.
-    expect(() => skills('sk-secret-value' as never)).toThrow(
+    expect(() => new SkillsCapability('sk-secret-value' as never)).toThrow(
       /esperava array de nomes, recebi string/,
     )
   })
@@ -121,7 +125,7 @@ describe('Concrete capabilities (M52 T0.2)', () => {
   })
 
   it('skills is a plain factory (pure data — a class here would be ceremony)', () => {
-    const draft = applyCapabilities([skills(['code-review', 'testing'])])
+    const draft = applyCapabilities([new SkillsCapability(['code-review', 'testing'])])
     expect(draft.skills).toEqual({ enabled: ['code-review', 'testing'], autoInject: true })
   })
 })
@@ -130,7 +134,7 @@ describe('Registry + Preset (M52 T0.3)', () => {
   it('resolves by name — the seam that unlocks FILE-BASED authoring', () => {
     const reg = new CapabilityRegistry()
       .register('model', (id) => new ModelCapability(id as string))
-      .register('skills', (n) => skills(n as string[]))
+      .register('skills', (n) => new SkillsCapability(n as string[]))
     const draft = applyCapabilities([reg.resolve('model', 'x/y'), reg.resolve('skills', ['s'])])
     expect(draft.model).toBe('x/y')
     expect(draft.skills).toEqual({ enabled: ['s'], autoInject: true })
@@ -148,7 +152,7 @@ describe('Registry + Preset (M52 T0.3)', () => {
   it('a preset behaves like ONE capability and applies members in declaration order', () => {
     const preset = new CapabilityPreset('preset:coding', [
       new ModelCapability('openai/gpt-5.4'),
-      skills(['code-review']),
+      new SkillsCapability(['code-review']),
       new ToolsCapability([fakeTool('shell')]),
     ])
     const order: string[] = []
@@ -178,21 +182,23 @@ describe('Second-review regressions (M52)', () => {
         compileAgentDefinition(defineAgent({ skills: authored })).skills,
       )
     }
-    equivalent([skills(['a', 'a'])], ['a', 'a']) // author's own duplicate survives, as upstream
-    equivalent([skills(['a']), skills(['b'])], ['a', 'b']) // ordered concatenation
-    equivalent([skills(['a']), skills(['a'])], ['a', 'a']) // two capabilities ≡ authoring twice
+    equivalent([new SkillsCapability(['a', 'a'])], ['a', 'a']) // author's own duplicate survives, as upstream
+    equivalent([new SkillsCapability(['a']), new SkillsCapability(['b'])], ['a', 'b']) // ordered concatenation
+    equivalent([new SkillsCapability(['a']), new SkillsCapability(['a'])], ['a', 'a']) // two capabilities ≡ authoring twice
   })
 
   it('a malformed inline skill is rejected — it would reach the system prompt with holes', () => {
     // `InlineSkill extends Skill` requires name + description + instructions. Accepting `{name}`
     // alone reopened the silent-corruption class one level below the array check.
-    expect(() => skills([{ name: 'x' } as never])).toThrow(ConfigurationError)
-    expect(() => skills([{ name: 'x', description: 'd' } as never])).toThrow(/instructions/)
-    expect(() => skills([{ name: 'x', description: 'd', instructions: '  ' } as never])).toThrow(
-      ConfigurationError,
+    expect(() => new SkillsCapability([{ name: 'x' } as never])).toThrow(ConfigurationError)
+    expect(() => new SkillsCapability([{ name: 'x', description: 'd' } as never])).toThrow(
+      /instructions/,
     )
-    expect(() =>
-      skills([{ name: 'x', description: 'd', instructions: 'body' } as never]),
+    expect(
+      () => new SkillsCapability([{ name: 'x', description: 'd', instructions: '  ' } as never]),
+    ).toThrow(ConfigurationError)
+    expect(
+      () => new SkillsCapability([{ name: 'x', description: 'd', instructions: 'body' } as never]),
     ).not.toThrow()
   })
 
@@ -200,7 +206,7 @@ describe('Second-review regressions (M52)', () => {
     // `compileSkillsSelection` accepts `string | InlineSkill`; validating "strings only" made
     // `skills.inline` unreachable through capabilities.
     const inline = { name: 'my-inline', description: 'd', instructions: 'body' }
-    const draft = applyCapabilities([skills([inline as never, 'code-review'])])
+    const draft = applyCapabilities([new SkillsCapability([inline as never, 'code-review'])])
     expect(draft.skills).toEqual({
       enabled: ['code-review'],
       autoInject: true,

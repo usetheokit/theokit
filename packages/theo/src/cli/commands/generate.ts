@@ -119,12 +119,12 @@ function generateActionTemplate(name: string): string {
  */
 function generateAgentTemplate(name: string): string {
   return [
-    `import { agent } from '@theokit/agents'`,
+    `import { AgentBuilder } from '@theokit/agents'`,
     `import { z } from 'zod'`,
     ``,
     `// Zero-config: this file is auto-served at POST /api/agents/${name}.`,
     `// Add tools with tool('name')...build() and chain them via .tool(...).`,
-    `export default agent()`,
+    `export default AgentBuilder.create()`,
     `  .input(z.object({ message: z.string() }))`,
     `  .model('openai/gpt-4o-mini')`,
     `  .system('You are a helpful ${name} assistant.')`,
@@ -209,7 +209,7 @@ function generateSandboxTemplate(name: string): string {
     ` *`,
     ` *   // agents/chat.ts`,
     ` *   import { ${camel}Tool } from './sandbox/${base}.js'`,
-    ` *   agent().model(...).tool(${camel}Tool).build()`,
+    ` *   AgentBuilder.create().model(...).tool(${camel}Tool).build()`,
     ` */`,
     `export const ${camel}Tool = tool('${snake}')`,
     `  .describe('Run a shell command in an isolated sandbox and return its output.')`,

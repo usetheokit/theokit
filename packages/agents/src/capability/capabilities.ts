@@ -59,86 +59,91 @@ export class ToolsCapability implements Capability {
 }
 
 /**
- * Enables skills by name. FUNCTION, not class: it carries no behavior beyond assignment — a class here
- * would be ceremony (the honest counter-example to "everything must be a class").
+ * Enables skills by name (or inline). M57: a CLASS now (was a factory function). Validation moves to
+ * the constructor — fail-fast at authoring, the same place `ModelCapability`/`AgentConfigCapability`
+ * validate. The `apply` body (delegate + merge) is unchanged, so the compiled output is identical.
  */
-export const skills = (entries: readonly (string | InlineSkill)[]): Capability => {
-  // Boundary validation BEFORE anything spreads: a config file carrying `skills: "code-review"`
-  // would otherwise spread into eleven single-character skill names and reach Agent.create with no
-  // error at all — silent corruption, the worst failure mode for file-based authoring.
-  if (!Array.isArray(entries)) {
-    throw new ConfigurationError(`skills: esperava array de nomes, recebi ${describe(entries)}`)
-  }
-  for (const e of entries) {
-    // The reference compiler accepts `string | InlineSkill` (define-agent.ts § compileSkillsSelection),
-    // so inline skills must be accepted here too — rejecting them outright would make this layer less
-    // expressive than the path it claims equivalence with.
-    //
-    // ONE deliberate asymmetry, stated rather than glossed over: an inline skill with an empty
-    // `instructions` compiles through `defineAgent` but is REJECTED here. That object's body is
-    // unreachable at runtime (`SkillsManager.get` would fall back to `readFile(source)`, and a
-    // hand-rolled inline has no real `source`), so this rejects a broken agent at authoring time
-    // instead of at prompt-assembly time. It is an input rejection, never an output divergence.
-    if (typeof e === 'string') {
-      if (e.trim().length === 0) {
-        throw new ConfigurationError('skills: nome vazio — use um nome de skill não vazio')
+export class SkillsCapability implements Capability {
+  readonly name = 'skills'
+  readonly #entries: readonly (string | InlineSkill)[]
+
+  constructor(entries: readonly (string | InlineSkill)[]) {
+    // Boundary validation BEFORE anything spreads: a config file carrying `skills: "code-review"`
+    // would otherwise spread into eleven single-character skill names and reach Agent.create with no
+    // error at all — silent corruption, the worst failure mode for file-based authoring.
+    if (!Array.isArray(entries)) {
+      throw new ConfigurationError(`skills: esperava array de nomes, recebi ${describe(entries)}`)
+    }
+    for (const e of entries) {
+      // The reference compiler accepts `string | InlineSkill` (define-agent.ts § compileSkillsSelection),
+      // so inline skills must be accepted here too — rejecting them outright would make this layer less
+      // expressive than the path it claims equivalence with.
+      //
+      // ONE deliberate asymmetry, stated rather than glossed over: an inline skill with an empty
+      // `instructions` compiles through `defineAgent` but is REJECTED here. That object's body is
+      // unreachable at runtime (`SkillsManager.get` would fall back to `readFile(source)`, and a
+      // hand-rolled inline has no real `source`), so this rejects a broken agent at authoring time
+      // instead of at prompt-assembly time. It is an input rejection, never an output divergence.
+      if (typeof e === 'string') {
+        if (e.trim().length === 0) {
+          throw new ConfigurationError('skills: nome vazio — use um nome de skill não vazio')
+        }
+        continue
       }
-      continue
-    }
-    if (typeof e !== 'object' || e === null || Array.isArray(e)) {
-      throw new ConfigurationError(
-        `skills: entrada inválida (${describe(e)}) — use um nome ou um skill inline`,
-      )
-    }
-    // An inline skill reaches the `<skills>` system-prompt block. Accepting `{ name }` alone lets a
-    // malformed skill through with `undefined` description/instructions — the same silent
-    // corruption this boundary exists to stop, one level down. `InlineSkill extends Skill` requires
-    // all three (`@theokit/sdk` create-skill.d.ts + discover-skills.d.ts).
-    for (const field of ['name', 'description', 'instructions'] as const) {
-      const value = (e as Record<string, unknown>)[field]
-      if (typeof value !== 'string' || value.trim().length === 0) {
+      if (typeof e !== 'object' || e === null || Array.isArray(e)) {
         throw new ConfigurationError(
-          `skills: skill inline sem \`${field}\` válido (${describe(value)}) — ` +
-            'name, description e instructions são obrigatórios',
+          `skills: entrada inválida (${describe(e)}) — use um nome ou um skill inline`,
         )
       }
+      // An inline skill reaches the `<skills>` system-prompt block. Accepting `{ name }` alone lets a
+      // malformed skill through with `undefined` description/instructions — the same silent
+      // corruption this boundary exists to stop, one level down. `InlineSkill extends Skill` requires
+      // all three (`@theokit/sdk` create-skill.d.ts + discover-skills.d.ts).
+      for (const field of ['name', 'description', 'instructions'] as const) {
+        const value = (e as Record<string, unknown>)[field]
+        if (typeof value !== 'string' || value.trim().length === 0) {
+          throw new ConfigurationError(
+            `skills: skill inline sem \`${field}\` válido (${describe(value)}) — ` +
+              'name, description e instructions são obrigatórios',
+          )
+        }
+      }
     }
+    this.#entries = entries
   }
-  return {
-    name: 'skills',
-    apply: (draft) => {
-      // DELEGA ao compilador canônico (não reimplementa): `autoInject`, skills inline e o caminho
-      // resolver vivem numa fonte só — reimplementar aqui divergiria (foi o que a prova de
-      // equivalência pegou).
-      const compiled = compileSkillsSelection(entries.slice())
-      if (compiled.skills === undefined) return
-      // ACCUMULATES, never setOnce: skills is a merge-semantics field in the reference compiler
-      // (`defineAgent({skills:['a','b']})` → `['a','b']`). With setOnce a preset's baseline skills
-      // could never be extended at the call site — defeating the whole point of the Composite.
-      //
-      // CONCAT, never dedupe. The capability list IS the authoring list: `skills(['a']) +
-      // skills(['a'])` corresponds to authoring `['a','a']`, which the reference compiler maps to
-      // `['a','a']`. A dedupe here looks tidier but makes the merge path the ONLY place in this
-      // layer that diverges from the reference — the exact thing the milestone exists to prevent.
-      const previous = draft.skills
-      draft.skills =
-        previous === undefined
-          ? compiled.skills
-          : {
-              // The spread is exhaustive only because `compileSkillsSelection` emits a FIXED 3-key
-              // shape (`enabled`, `autoInject: true`, and `inline` iff non-empty) — `enabled` and
-              // `inline` are both re-derived below, and `autoInject` is the same literal on both
-              // sides. TRAP for the future: if a capability ever authors `autoInject: false`, this
-              // spread would silently normalize it back to `true`. Unreachable today (no capability
-              // and no reference array form can express it) — revisit when one can.
-              ...previous,
-              ...compiled.skills,
-              enabled: [...(previous.enabled ?? []), ...(compiled.skills.enabled ?? [])],
-              ...(previous.inline !== undefined || compiled.skills.inline !== undefined
-                ? { inline: [...(previous.inline ?? []), ...(compiled.skills.inline ?? [])] }
-                : {}),
-            }
-      draft.provenance.push({ capability: 'skills', contributed: ['skills'] })
-    },
+
+  apply(draft: CompiledAgentOptionsDraft): void {
+    // DELEGA ao compilador canônico (não reimplementa): `autoInject`, skills inline e o caminho
+    // resolver vivem numa fonte só — reimplementar aqui divergiria (foi o que a prova de
+    // equivalência pegou).
+    const compiled = compileSkillsSelection(this.#entries.slice())
+    if (compiled.skills === undefined) return
+    // ACCUMULATES, never setOnce: skills is a merge-semantics field in the reference compiler
+    // (`defineAgent({skills:['a','b']})` → `['a','b']`). With setOnce a preset's baseline skills
+    // could never be extended at the call site — defeating the whole point of the Composite.
+    //
+    // CONCAT, never dedupe. The capability list IS the authoring list: `skills(['a']) +
+    // skills(['a'])` corresponds to authoring `['a','a']`, which the reference compiler maps to
+    // `['a','a']`. A dedupe here looks tidier but makes the merge path the ONLY place in this
+    // layer that diverges from the reference — the exact thing the milestone exists to prevent.
+    const previous = draft.skills
+    draft.skills =
+      previous === undefined
+        ? compiled.skills
+        : {
+            // The spread is exhaustive only because `compileSkillsSelection` emits a FIXED 3-key
+            // shape (`enabled`, `autoInject: true`, and `inline` iff non-empty) — `enabled` and
+            // `inline` are both re-derived below, and `autoInject` is the same literal on both
+            // sides. TRAP for the future: if a capability ever authors `autoInject: false`, this
+            // spread would silently normalize it back to `true`. Unreachable today (no capability
+            // and no reference array form can express it) — revisit when one can.
+            ...previous,
+            ...compiled.skills,
+            enabled: [...(previous.enabled ?? []), ...(compiled.skills.enabled ?? [])],
+            ...(previous.inline !== undefined || compiled.skills.inline !== undefined
+              ? { inline: [...(previous.inline ?? []), ...(compiled.skills.inline ?? [])] }
+              : {}),
+          }
+    draft.provenance.push({ capability: this.name, contributed: ['skills'] })
   }
 }

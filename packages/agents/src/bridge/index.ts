@@ -64,8 +64,8 @@ export {
 } from './think-tag-extractor.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
 export { presentUIMessageStream } from './present-ui-message-stream.js'
-// M31 builder-only: `agent()` (below) is the public authoring surface; `defineAgent` is now
-// internal (the agent() builder's `.build()` delegates to it via source path), removed from the
+// M31 builder-only: `AgentBuilder.create()` (below) is the public authoring surface; `defineAgent` is now
+// internal (the AgentBuilder.create() builder's `.build()` delegates to it via source path), removed from the
 // public API. `compileAgentDefinition` + the branded types stay public (the framework adapter
 // consumes them).
 export {
@@ -77,7 +77,10 @@ export {
   type InferAgentInput,
   type InferAgentToolNames,
 } from './define-agent.js'
-export { agent, contextualTool, type AgentBuilder, type ContextualTool } from './agent-builder.js'
+// `AgentBuilder` / `ContextualTool` are each a TYPE (generic interface) and a VALUE (static factory:
+// `AgentBuilder.create()` / `ContextualTool.of()`) — M57 replaced the free `agent()`/`contextualTool()`
+// functions with the SDK's `X.create()` shape. A plain re-export carries both spaces.
+export { AgentBuilder, ContextualTool } from './agent-builder.js'
 export {
   compileAgentModule,
   streamAgentUIMessages,
