@@ -1,29 +1,25 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * CLI `theo info` reader. Reads `package.json`, `theo.config.*`, lock
- * files under the user's `cwd`. Read-only build-time tool. No HTTP input.
- */
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
 import { scanRoutes } from '../../router/scan.js'
 
-export interface RuntimeInfo {
+interface RuntimeInfo {
   name: 'node' | 'bun' | 'deno' | 'unknown'
   version: string
 }
 
-export interface PackageJsonMinimal {
+interface PackageJsonMinimal {
   name?: string
   version?: string
 }
 
-export interface ConfigSummary {
+interface ConfigSummary {
   ok: boolean
   summary: string
 }
 
-export interface BuildInfoDeps {
+interface BuildInfoDeps {
   cwd: string
   readPackageJson?: () => PackageJsonMinimal | null
   detectRuntime?: () => RuntimeInfo

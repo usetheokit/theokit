@@ -10,7 +10,6 @@ import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import type { Readable, Writable } from 'node:stream'
 
 import { AcpClient, type AcpTransport } from '@theokit/agents'
-import { encodeAcpMessage } from '@theokit/agents'
 import type { CustomTool } from '@theokit/sdk'
 
 /** Stdio transport backed by a spawned subprocess (the default for {@link createACPTool}). */
@@ -64,7 +63,9 @@ function defaultTransport(config: AcpToolConfig): AcpTransport {
 /** Wrap a coding agent as a `CustomTool`. Fails fast if `onPermissionRequest` is missing. */
 export function createACPTool(config: AcpToolConfig): CustomTool {
   if (typeof config.onPermissionRequest !== 'function') {
-    throw new Error('[theokit] createACPTool requires onPermissionRequest (security by default — no default-allow)')
+    throw new Error(
+      '[theokit] createACPTool requires onPermissionRequest (security by default — no default-allow)',
+    )
   }
   const makeTransport = config.transportFactory ?? defaultTransport
   return {
@@ -72,7 +73,9 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
     description: config.description,
     inputSchema: {
       type: 'object',
-      properties: { message: { type: 'string', description: 'The task/prompt for the coding agent.' } },
+      properties: {
+        message: { type: 'string', description: 'The task/prompt for the coding agent.' },
+      },
       required: ['message'],
     },
     handler: async (input: Record<string, unknown>): Promise<string> => {
@@ -85,5 +88,5 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
   }
 }
 
-// `encodeAcpMessage` is re-exported for callers building custom transports/handshakes.
-export { encodeAcpMessage }
+// M56: the `encodeAcpMessage` re-export had no consumer — callers building custom transports
+// import it from `@theokit/agents` directly, which is where it is defined.

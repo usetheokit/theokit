@@ -15,7 +15,7 @@
 
 const DEFAULT_MAX_BYTES = 4096
 
-export interface BodyPreview {
+interface BodyPreview {
   /** Preview string (already truncated to <= maxBytes). */
   readonly preview: string
   /** Total length of the source body in bytes (or chars for strings). */
@@ -24,7 +24,7 @@ export interface BodyPreview {
   readonly truncated: boolean
 }
 
-export interface BuildBodyPreviewOptions {
+interface BuildBodyPreviewOptions {
   maxBytes?: number
 }
 

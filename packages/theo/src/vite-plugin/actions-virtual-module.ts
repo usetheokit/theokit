@@ -26,7 +26,7 @@ import { scanServerActionsEnriched, type ActionManifestEntry } from '../server/i
 const VIRTUAL_ID = '@theo/actions'
 const RESOLVED_ID = `\0${VIRTUAL_ID}`
 
-export interface ActionsVirtualModuleOptions {
+interface ActionsVirtualModuleOptions {
   /** Path to server directory (where `actions/` lives). */
   serverDir: string
   /**

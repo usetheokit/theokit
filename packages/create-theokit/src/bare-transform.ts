@@ -43,7 +43,7 @@ export default function RootLayout() {
 }
 `
 
-export interface BareTransformOptions {
+interface BareTransformOptions {
   /** Test-only — force a synthetic write failure to validate rollback path. */
   _testForceError?: string
 }

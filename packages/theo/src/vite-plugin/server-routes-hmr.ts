@@ -22,7 +22,7 @@ import { sep } from 'node:path'
 
 import type { Plugin, ViteDevServer } from 'vite'
 
-export interface ServerRoutesHmrPluginOptions {
+interface ServerRoutesHmrPluginOptions {
   /** Absolute path of the consumer's `server/` directory. */
   serverDir: string
   /** Debounce window in milliseconds (default 50 ms per EC-6). */

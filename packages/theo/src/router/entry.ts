@@ -1,4 +1,4 @@
-export interface EntryClientOptions {
+interface EntryClientOptions {
   theoUi?: {
     fonts?: 'bundled' | 'cdn'
     theme?: 'violet-forge' | 'noir' | 'paper'

@@ -13,7 +13,7 @@
  */
 import type { ServicesManifest } from './manifest.js'
 
-export interface TheoCloudAdapterArtifacts {
+interface TheoCloudAdapterArtifacts {
   /** Manifest schemaVersion the adapter consumed (v1 deprecated, v2 current). */
   manifestVersion: 1 | 2
   /** Service names that will be deployed. */

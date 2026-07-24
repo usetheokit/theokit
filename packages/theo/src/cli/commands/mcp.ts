@@ -14,7 +14,7 @@ import { scanAgents } from '../../server/scan/agent-scan.js'
 
 import { createAgentSsrLoader } from './agent.js'
 
-export interface McpCommandDeps {
+interface McpCommandDeps {
   projectRoot?: string
   /** Load a TS agent module; defaults to the framework's Vite SSR loader (same transpile as dev). */
   loadModule?: (filePath: string) => Promise<Record<string, unknown>>

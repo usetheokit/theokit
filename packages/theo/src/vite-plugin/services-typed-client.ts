@@ -13,7 +13,7 @@ import type { Plugin } from 'vite'
 
 import { generateTypedClient, type ServicesConfig } from '../services/index.js'
 
-export interface ServicesTypedClientPluginOptions {
+interface ServicesTypedClientPluginOptions {
   cwd: string
   services: ServicesConfig
 }

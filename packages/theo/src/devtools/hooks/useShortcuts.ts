@@ -12,7 +12,7 @@ import { useEffect } from 'react'
 
 import { useDevtoolsContext } from './useDevtoolsContext.js'
 
-export interface ShortcutEvent {
+interface ShortcutEvent {
   key: string
   shiftKey: boolean
   metaKey: boolean

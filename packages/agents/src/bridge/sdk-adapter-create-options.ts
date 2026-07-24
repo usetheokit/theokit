@@ -16,7 +16,7 @@ import type { StreamEvent } from './agent-sse-handler.js'
 import { compileProjectContext } from './compile-project-context.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
-export interface M8CreateOptions {
+interface M8CreateOptions {
   skills?: SkillsSettings
   context?: ContextSettings
   systemPrompt?: string | SystemPromptResolver

@@ -11,7 +11,7 @@
  */
 
 /** Interface for managing server-inserted HTML chunks. */
-export interface ServerInsertedHTML {
+interface ServerInsertedHTML {
   /** Add an HTML chunk with a dedup key. Adding the same id replaces content. */
   add(id: string, html: string): void
   /** Return all pending (unflushed) chunks and mark them as flushed. */

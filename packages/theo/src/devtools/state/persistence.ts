@@ -60,10 +60,7 @@ function writeKey(key: string, value: unknown): void {
   }
 }
 
-export type PersistedState = Pick<
-  DevtoolsState,
-  'position' | 'theme' | 'open' | 'activeTab' | 'visible'
->
+type PersistedState = Pick<DevtoolsState, 'position' | 'theme' | 'open' | 'activeTab' | 'visible'>
 
 const VALID_POSITIONS = new Set<DevtoolsPosition>([
   'top-left',

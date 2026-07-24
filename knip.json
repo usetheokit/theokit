@@ -44,7 +44,8 @@
         "src/bridge/runtime/bun.ts",
         "src/bridge/runtime/deno.ts"
       ],
-      "project": ["src/**/*.{ts,tsx}"]
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["@theokit/agents"]
     },
     "packages/agents": {
       "entry": [
@@ -74,8 +75,8 @@
     "files": "error",
     "dependencies": "error",
     "unlisted": "error",
-    "exports": "off",
-    "types": "off",
+    "exports": "error",
+    "types": "error",
     "duplicates": "warn"
   }
 }

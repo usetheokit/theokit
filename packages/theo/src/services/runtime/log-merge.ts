@@ -18,11 +18,11 @@ interface LogEntry {
   service?: string
 }
 
-export interface LogMergerOptions {
+interface LogMergerOptions {
   write: (s: string) => void
 }
 
-export interface LogMerger {
+interface LogMerger {
   onLog: (service: string, stream: 'stdout' | 'stderr', chunk: string) => void
 }
 
