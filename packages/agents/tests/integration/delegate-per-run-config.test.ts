@@ -45,19 +45,21 @@ vi.mock('../../src/loop/run-reflective-loop.js', () => ({
 }))
 
 const { delegate } = await import('../../src/bridge/agent-orchestrator.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
 
-@Agent({ name: 'sub', route: '/sub', model: 'decorator-model' })
-class SubAgent {
-  @MainLoop({ strategy: 'plan-act-reflect', maxIterations: 4 })
-  async run() {}
+const subAgent = {
+  name: 'SubAgent',
+  compiled: applyCapabilities([new ModelCapability('decorator-model')]),
+  strategy: 'plan-act-reflect' as const,
+  maxIterations: 4,
 }
 
-@Agent({ name: 'reactsub', route: '/reactsub', model: 'decorator-model' })
-class ReactSubAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 4 })
-  async run() {}
+const reactSubAgent = {
+  name: 'ReactSubAgent',
+  compiled: applyCapabilities([new ModelCapability('decorator-model')]),
+  strategy: 'react' as const,
+  maxIterations: 4,
 }
 
 const customReflection = { name: 'custom', reflect: () => ({ continue: false }) }
@@ -71,7 +73,7 @@ describe('V4-T delegate() forwards per-run config', () => {
 
   it('test_forwards_runtime_overrides_to_createSdkAgentStream', async () => {
     const fakeTool = { name: 'x', description: 'd', inputSchema: {}, handler: () => 'ok' }
-    await delegate(SubAgent, 'hi', {
+    await delegate(subAgent, 'hi', {
       apiKey: 'k',
       model: 'override-model',
       cwd: '/repo',
@@ -91,7 +93,7 @@ describe('V4-T delegate() forwards per-run config', () => {
   })
 
   it('test_model_defaults_to_decorator_when_opts_absent', async () => {
-    await delegate(SubAgent, 'hi', { apiKey: 'k' })
+    await delegate(subAgent, 'hi', { apiKey: 'k' })
     expect(h.overrides?.model).toBe('decorator-model')
     expect(h.overrides?.cwd).toBeUndefined()
     expect(h.overrides?.plugins).toBeUndefined()
@@ -100,28 +102,28 @@ describe('V4-T delegate() forwards per-run config', () => {
 
   it('test_forwards_retry_and_custom_reflection_to_loop', async () => {
     const retry = { retries: 2, initialDelayMs: 0 }
-    await delegate(SubAgent, 'hi', { apiKey: 'k', retry, reflection: customReflection })
+    await delegate(subAgent, 'hi', { apiKey: 'k', retry, reflection: customReflection })
     expect(h.loopConfig?.retry).toEqual(retry)
     expect(h.loopConfig?.reflection).toBe(customReflection)
   })
 
   it('test_reflection_defaults_to_ladder_for_plan_act_reflect', async () => {
-    await delegate(SubAgent, 'hi', { apiKey: 'k' })
+    await delegate(subAgent, 'hi', { apiKey: 'k' })
     expect((h.loopConfig?.reflection as { name: string }).name).toBe('ladder')
     expect(h.loopConfig?.retry).toBeUndefined()
   })
 
   it('test_reflection_defaults_to_noop_for_react', async () => {
-    await delegate(ReactSubAgent, 'hi', { apiKey: 'k' })
+    await delegate(reactSubAgent, 'hi', { apiKey: 'k' })
     expect((h.loopConfig?.reflection as { name: string }).name).toBe('noop')
   })
 
   it('test_maxIterations_override_re_resolves_the_loop_ceiling', async () => {
     // V4-T parity with AgentRunner.stream: opts.maxIterations re-resolves the loop ceiling.
-    await delegate(SubAgent, 'hi', { apiKey: 'k', maxIterations: 9 })
+    await delegate(subAgent, 'hi', { apiKey: 'k', maxIterations: 9 })
     expect((h.loopConfig?.loop as { maxIterations: number }).maxIterations).toBe(9)
     // absent ⇒ decorator ceiling (4)
-    await delegate(SubAgent, 'hi', { apiKey: 'k' })
+    await delegate(subAgent, 'hi', { apiKey: 'k' })
     expect((h.loopConfig?.loop as { maxIterations: number }).maxIterations).toBe(4)
   })
 })
