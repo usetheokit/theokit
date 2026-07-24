@@ -1,5 +1,16 @@
 # @theokit/agents
 
+## 4.6.0
+
+### Minor Changes
+
+- M63 — close the `SDK → Theokit → AgentBuilder` boundary: the main barrel now also re-exports
+  `SubAgent` (the a2a delegation primitive, `SubAgent.create()`) and the pure `path-safety` helpers
+  (`assertNoSymlinkEscape`, `isForbiddenPath`, `safePathJoin`). Same PASS-THROUGH doctrine as the M58
+  core re-exports (parsimony Rung 9 — already the target OO/pure shape, wrapping would be ceremony), so
+  a consumer can import ITS full runtime surface from `@theokit/agents` without touching `@theokit/sdk*`
+  directly. Additive only — no existing export changes.
+
 ## 4.5.0
 
 ### Minor Changes
