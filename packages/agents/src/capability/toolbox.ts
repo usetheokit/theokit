@@ -1,5 +1,6 @@
 import {
   compileTools,
+  type ClassToken,
   type CompiledTool,
   type ToolboxWalkResult,
 } from '../bridge/agent-compiler.js'
@@ -95,8 +96,11 @@ export class ToolboxCapability implements Capability {
 
   /** The compiled tools this toolbox contributes — the same shape the decorator path produces. */
   compile(): CompiledTool[] {
+    // `constructor` is typed `Function` by lib.d.ts; here it is used purely as an IDENTITY key
+    // into the instances map, which is what `ClassToken` models.
+    const token = this.#instance.constructor as ClassToken
     const walk: ToolboxWalkResult = {
-      class: this.#instance.constructor,
+      class: token,
       namespace: this.#namespace,
       guards: [],
       tools: this.#declarations.map((tool) => ({
@@ -109,7 +113,7 @@ export class ToolboxCapability implements Capability {
         ...(tool.hitl !== undefined ? { hitl: tool.hitl } : {}),
       })),
     }
-    return compileTools([walk], new Map([[this.#instance.constructor, this.#instance]]))
+    return compileTools([walk], new Map([[token, this.#instance]]))
   }
 
   apply(draft: CompiledAgentOptionsDraft): void {

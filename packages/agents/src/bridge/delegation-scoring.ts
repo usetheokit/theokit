@@ -121,9 +121,13 @@ export async function delegateWithScoring(
   }
 
   // Exhausted maxRounds without passing — return the last attempt honestly (passed: false).
-  // lastResult is defined: the clamped maxRounds ≥ 1 guarantees at least one delegate call.
+  // The clamped `maxRounds >= 1` guarantees at least one delegate call — but assert it instead of
+  // asserting the type away: if the invariant ever breaks, fail loudly rather than return undefined.
+  if (lastResult === undefined) {
+    throw new Error('[@theokit/agents] delegateWithScoring: no round ran (maxRounds < 1)')
+  }
   return {
-    result: lastResult!,
+    result: lastResult,
     rounds: maxRounds,
     passed: false,
     verdicts,
