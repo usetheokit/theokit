@@ -11,16 +11,12 @@
  * class SupportAgent { ... }
  * ```
  */
+import type { SkillsOptions } from '../bridge/compile-skills.js'
 import { setMeta, getMeta } from '../metadata/index.js'
 
 const SKILLS_CONFIG = Symbol.for('theokit:agents:skills')
 
-export interface SkillsOptions {
-  /** Skill names to include (resolved from .theokit/skills/<name>/SKILL.md). */
-  include: string[]
-  /** Auto-discover all skills in .theokit/skills/ (default: false). */
-  autoDiscover?: boolean
-}
+export type { SkillsOptions } from '../bridge/compile-skills.js'
 
 export function Skills(namesOrOptions: string[] | SkillsOptions): ClassDecorator {
   return (target: Function) => {
