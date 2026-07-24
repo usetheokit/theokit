@@ -45,6 +45,10 @@ O `AgentRunner` ganhou `loopStrategyIsCustom` no state. `resolvePerRunLoop(maxIt
 
 **Rationale:** o compilador **forçou** esse fix — com `.name: string` (D2), a re-resolução por nome em `stream()` deixou de tipar, exatamente o ponto de quebra que a discovery (Q6) previu. Como o teto duro do runner (D1) lê `loop.maxIterations`, sobrescrever só esse campo aplica o override per-run à custom sem tocar sua lógica nem passar pelo `z.enum`.
 
+**Correção pós-review (F-2):** a primeira implementação usava `{ ...this.loopStrategy, maxIterations }`. O spread copia só **own enumerable props** — uma custom implementada como **instância de classe** (o shape idiomático do Strategy) carrega `shouldContinue` no **prototype**, que o spread descarta, crashando a run com `loop.shouldContinue is not a function`. O review adversarial pegou isso (todos os testes usavam object literal, que escondia o bug). Corrigido com `Object.assign(Object.create(Object.getPrototypeOf(base)), base, { maxIterations })` — preserva a cadeia de prototype, sobrescreve só o teto. Teste de regressão com custom baseada em classe.
+
+**Guardrail adicional (F-1):** uma custom bypassa o `z.number().int().min(1)` das built-in. `maxIterations: Infinity` torna `round < maxIterations` sempre true — loop infinito. `.loopStrategy()` valida o teto na autoria (`assertValidCustomLoopStrategy`, mesma regra SSoT das built-in), fail-fast, typed.
+
 **Alternativas consideradas:** (a) ignorar `opts.maxIterations` para custom — override sem efeito, surpreendente; (b) detectar custom por "nome fora do enum" — frágil, uma custom pode se chamar `react`. O flag explícito é honesto.
 
 ## Consequências

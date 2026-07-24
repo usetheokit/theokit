@@ -293,7 +293,16 @@ export class AgentRunner {
    */
   private resolvePerRunLoop(maxIterations: number | undefined): LoopStrategy {
     if (maxIterations == null) return this.loopStrategy
-    if (this.loopStrategyIsCustom) return { ...this.loopStrategy, maxIterations }
+    if (this.loopStrategyIsCustom) {
+      // Preserve the prototype: a class-based strategy carries `shouldContinue` on its prototype, and
+      // an object-literal spread (`{ ...loop }`) copies only OWN enumerable props — dropping the method
+      // and crashing the run. `Object.create` + `assign` keeps the prototype chain, overriding only the
+      // ceiling field (M54 review F-2; ADR-0004 D4 promised the custom's shouldContinue survives).
+      const base = this.loopStrategy
+      return Object.assign(Object.create(Object.getPrototypeOf(base) as object), base, {
+        maxIterations,
+      }) as LoopStrategy
+    }
     return resolveLoopStrategy(this.loopStrategy.name, maxIterations)
   }
 
