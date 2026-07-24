@@ -66,22 +66,15 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
-const { compileAgent } = await import('../../src/bridge/agent-compiler.js')
-const { walkAgentMetadata } = await import('../../src/bridge/walk-agent-metadata.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
 await import('reflect-metadata')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
 
-@Agent({ name: 'st', route: '/st' })
-class StAgent {
-  @MainLoop()
-  async run() {}
-}
+const stAgent = applyCapabilities([]) // `@Agent({name, route})` declared no waist field — name/route are HTTP concerns
 
 async function drain(deltas: string[], messages: SdkMsg[]) {
   h.deltas = deltas
   h.messages = messages
-  const compiled = compileAgent(walkAgentMetadata(StAgent))
+  const compiled = stAgent
   const factory = createSdkAgentStream(compiled, [], 'test-key', { model: 'openai/gpt-4o-mini' })
   const out: { type: string; [k: string]: unknown }[] = []
   for await (const ev of factory('hi', 's1')) out.push(ev)
@@ -92,7 +85,7 @@ async function drain(deltas: string[], messages: SdkMsg[]) {
 async function drainUpdates(updates: { type: string; [k: string]: unknown }[], messages: SdkMsg[]) {
   h.updates = updates
   h.messages = messages
-  const compiled = compileAgent(walkAgentMetadata(StAgent))
+  const compiled = stAgent
   const factory = createSdkAgentStream(compiled, [], 'test-key', { model: 'openai/gpt-4o-mini' })
   const out: { type: string; [k: string]: unknown }[] = []
   for await (const ev of factory('hi', 's1')) out.push(ev)

@@ -33,39 +33,26 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { AgentRunner } = await import('../../src/index.js')
-const { compileAgent } = await import('../../src/bridge/agent-compiler.js')
-const { walkAgentMetadata } = await import('../../src/bridge/walk-agent-metadata.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
+const { AgentConfigCapability } = await import('../../src/capability/agent-capabilities.js')
 
 const LEAK = '<function=write_file><parameter=path>x</parameter></function></tool_call>'
 
-@Agent({ name: 'td-on', route: '/td-on', model: 'm', stripToolDialect: true })
-class StripAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const stripAgent = applyCapabilities([
+  new ModelCapability('m'),
+  new AgentConfigCapability({ stripToolDialect: true }),
+])
 
-@Agent({ name: 'td-off', route: '/td-off', model: 'm' })
-class PlainAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const plainAgent = applyCapabilities([new ModelCapability('m')])
 
-@Agent({
-  name: 'td-both',
-  route: '/td-both',
-  model: 'm',
-  parseThinkTags: true,
-  stripToolDialect: true,
-})
-class BothAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const bothAgent = applyCapabilities([
+  new ModelCapability('m'),
+  new AgentConfigCapability({ parseThinkTags: true, stripToolDialect: true }),
+])
 
-async function streamEvents(AgentClass: Parameters<typeof AgentRunner.builder>[0], opts = {}) {
-  const gen = AgentRunner.builder(AgentClass)
+async function streamEvents(compiled: object, opts = {}) {
+  const gen = AgentRunner.fromSpec({ compiled, agentName: 'a', strategy: 'simple-chat' })
     .build()
     .stream('hi', { apiKey: 'k', ...opts })
   const events: StreamEvent[] = []
@@ -85,28 +72,28 @@ describe('theocode#32 stripToolDialect wiring', () => {
   })
 
   it('test_agent_config_stripToolDialect_compiles', () => {
-    expect(compileAgent(walkAgentMetadata(StripAgent)).stripToolDialect).toBe(true)
-    expect(compileAgent(walkAgentMetadata(PlainAgent)).stripToolDialect).toBeUndefined()
+    expect(stripAgent.stripToolDialect).toBe(true)
+    expect(plainAgent.stripToolDialect).toBeUndefined()
   })
 
   it('test_stream_strips_dialect_when_enabled', async () => {
-    expect(text(await streamEvents(StripAgent))).toBe('answer') // leak removed from visible text
+    expect(text(await streamEvents(stripAgent))).toBe('answer') // leak removed from visible text
   })
 
   it('test_stream_no_strip_when_disabled', async () => {
     // backward-compat: the raw leak stays in the text stream (no transform applied).
-    expect(text(await streamEvents(PlainAgent))).toContain('<function=')
-    expect(text(await streamEvents(PlainAgent))).toContain('</tool_call>')
+    expect(text(await streamEvents(plainAgent))).toContain('<function=')
+    expect(text(await streamEvents(plainAgent))).toContain('</tool_call>')
   })
 
   it('test_run_override_stripToolDialect_beats_compiled', async () => {
-    // compiled false (PlainAgent) + per-run override true ⇒ stripping applies.
-    expect(text(await streamEvents(PlainAgent, { stripToolDialect: true }))).toBe('answer')
+    // compiled false (plainAgent) + per-run override true ⇒ stripping applies.
+    expect(text(await streamEvents(plainAgent, { stripToolDialect: true }))).toBe('answer')
   })
 
   it('test_strip_composes_with_parseThinkTags', async () => {
     h.deltaText = `<think>r</think>${LEAK}ans`
-    const events = await streamEvents(BothAgent)
+    const events = await streamEvents(bothAgent)
     const thinking = events.filter((e) => e.type === 'thinking').map((e) => e.content)
     expect(thinking).toContain('r') // think extraction still fires
     expect(text(events)).toBe('ans') // AND the leak is stripped

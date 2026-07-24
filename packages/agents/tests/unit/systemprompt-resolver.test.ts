@@ -12,10 +12,8 @@ import 'reflect-metadata'
 import { describe, it, expect, expectTypeOf, vi } from 'vitest'
 import type { SystemPromptResolver, SystemPromptContext } from '@theokit/sdk'
 
-import { Agent } from '../../src/decorators/agent.js'
-import { MainLoop } from '../../src/decorators/main-loop.js'
-import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
-import { compileAgent } from '../../src/bridge/agent-compiler.js'
+import { AgentConfigCapability } from '../../src/capability/agent-capabilities.js'
+import { applyCapabilities } from '../../src/capability/capability.js'
 import { compileProjectContext } from '../../src/bridge/compile-project-context.js'
 import type { AgentOptions } from '../../src/types.js'
 
@@ -49,25 +47,15 @@ describe('V4-L.1 systemPrompt resolver', () => {
   it('test_compileAgent_carries_resolver_byref', () => {
     const resolver: SystemPromptResolver = (ctx) => `prompt for ${ctx.cwd ?? '?'}`
 
-    @Agent({ name: 'res', route: '/res', systemPrompt: resolver })
-    class ResolverAgent {
-      @MainLoop({ strategy: 'simple-chat' })
-      async run() {}
-    }
-
-    const walk = walkAgentMetadata(ResolverAgent, [])
-    const compiled = compileAgent(walk)
+    const compiled = applyCapabilities([new AgentConfigCapability({ systemPrompt: resolver })])
     // The exact same function reference must survive the compile boundary.
     expect(compiled.systemPrompt).toBe(resolver)
   })
 
   it('test_compileAgent_still_carries_string', () => {
-    @Agent({ name: 'str', route: '/str', systemPrompt: 'static prompt' })
-    class StringAgent {
-      @MainLoop({ strategy: 'simple-chat' })
-      async run() {}
-    }
-    const compiled = compileAgent(walkAgentMetadata(StringAgent, []))
+    const compiled = applyCapabilities([
+      new AgentConfigCapability({ systemPrompt: 'static prompt' }),
+    ])
     expect(compiled.systemPrompt).toBe('static prompt')
   })
 
