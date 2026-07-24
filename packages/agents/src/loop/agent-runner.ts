@@ -155,6 +155,13 @@ interface AgentRunnerState {
   readonly agentName: string
   /** The resolved terminal-decision strategy (parity with `delegate()`). */
   readonly loopStrategy: LoopStrategy
+  /**
+   * M54 — true when `loopStrategy` came from `.loopStrategy(custom)` rather than a built-in name.
+   * A custom must NOT be re-resolved by name (its name is outside the `z.enum`); a per-run
+   * `maxIterations` override applies to it as a runner ceiling instead (see `stream`). Optional and
+   * defaults to `false`: a state built directly (tests, `delegate()`) is a by-name built-in.
+   */
+  readonly loopStrategyIsCustom?: boolean
   /** The resolved between-round reflection (default or `.reflection(custom)` override). */
   readonly reflectionStrategy: ReflectionStrategy
   /** Recorded streaming preference (see {@link AgentRunner.streamEnabled}). */
@@ -168,6 +175,8 @@ export class AgentRunner {
   private readonly agentName: string
   /** The resolved terminal-decision strategy (parity with `delegate()`). */
   readonly loopStrategy: LoopStrategy
+  /** M54 — whether {@link loopStrategy} is a caller-injected custom (see {@link AgentRunnerState}). */
+  private readonly loopStrategyIsCustom: boolean
   /** The resolved between-round reflection (default or `.reflection(custom)` override). */
   readonly reflectionStrategy: ReflectionStrategy
   /**
@@ -189,6 +198,7 @@ export class AgentRunner {
     this.compiled = state.compiled
     this.agentName = state.agentName
     this.loopStrategy = state.loopStrategy
+    this.loopStrategyIsCustom = state.loopStrategyIsCustom ?? false
     this.reflectionStrategy = state.reflectionStrategy
     this.streamEnabled = state.streamEnabled
     this.compaction = state.compaction
@@ -237,11 +247,8 @@ export class AgentRunner {
   ): AsyncGenerator<StreamEvent, DelegationResult> {
     // V4-J: per-run tool override replaces compiled.tools for this call only.
     const tools = opts.tools ? [...opts.tools] : this.compiled.tools
-    // Re-resolve the ceiling per call (zod fail-loud on `< 1`); preserve the strategy name.
-    const loop =
-      opts.maxIterations != null
-        ? resolveLoopStrategy(this.loopStrategy.name, opts.maxIterations)
-        : this.loopStrategy
+    // Re-resolve the ceiling per call (see {@link resolvePerRunLoop} for the M54 D4 rules).
+    const loop = this.resolvePerRunLoop(opts.maxIterations)
     // V4-R: a caller-injected factory drives the loop directly (tests / custom transport); absent ⇒
     // the SDK adapter. V4-L.2 + V4-L.3 (Axis-A SWAP): the per-request overrides forwarded to Agent.create.
     // `model` resolves against compiled.model in the adapter (single resolution site).
@@ -273,6 +280,19 @@ export class AgentRunner {
   }
 
   /** Run the agent to a terminal result via the shared reflective loop (collect mode). */
+  /**
+   * Apply a per-call `maxIterations` override (M54 D4). A custom strategy must NOT be re-resolved by
+   * name — its name is outside the `z.enum`, which would throw — and its `shouldContinue` closure
+   * must survive; since the runner enforces the ceiling via `round < loop.maxIterations` (T1.1),
+   * overriding just that field bounds a custom without touching its logic. A built-in keeps the
+   * by-name re-resolution (zod fail-loud on `< 1`) — unchanged, zero-behavior.
+   */
+  private resolvePerRunLoop(maxIterations: number | undefined): LoopStrategy {
+    if (maxIterations == null) return this.loopStrategy
+    if (this.loopStrategyIsCustom) return { ...this.loopStrategy, maxIterations }
+    return resolveLoopStrategy(this.loopStrategy.name, maxIterations)
+  }
+
   async run(message: string, opts: AgentRunnerRunOptions): Promise<DelegationResult> {
     const gen = this.stream(message, opts)
     let res = await gen.next()
@@ -304,12 +324,36 @@ export class AgentRunnerBuilder {
   private reflectionOverride?: ReflectionStrategy
   private streamEnabled = true
   private compactionOverride?: { name: string; keepTokens?: number }
+  private loopStrategyOverride?: LoopStrategy
 
   constructor(private readonly spec: AgentRunnerSpec) {}
 
   /** Override the default reflection strategy (OCP — plan Drawback #2). No arg ⇒ keep default. */
   reflection(strategy?: ReflectionStrategy): this {
     if (strategy) this.reflectionOverride = strategy
+    return this
+  }
+
+  /**
+   * M54 — inject a custom terminal-decision strategy (the fourth OCP axis, alongside
+   * `.reflection()`/`.compaction()`/`streamFactory`). WINS over the strategy the spec's name would
+   * resolve to, exactly as `.compaction()` outranks the spec. The runner caps ANY strategy at
+   * `custom.maxIterations` (T1.1), so a `shouldContinue: () => true` still terminates — never an
+   * infinite loop.
+   *
+   * @example
+   * ```ts
+   * // Stop as soon as the confidence in the last round crosses 0.9, else run to the ceiling.
+   * const stopWhenConfident: LoopStrategy = {
+   *   name: 'confident',
+   *   maxIterations: 8,
+   *   shouldContinue: (o) => !o.responseText.includes('confidence: high'),
+   * }
+   * AgentRunner.fromSpec(spec).loopStrategy(stopWhenConfident).build()
+   * ```
+   */
+  loopStrategy(custom: LoopStrategy): this {
+    this.loopStrategyOverride = custom
     return this
   }
 
@@ -334,7 +378,12 @@ export class AgentRunnerBuilder {
     const { spec } = this
     // `'simple-chat'` is the default when the spec declares no strategy.
     const strategy = spec.strategy ?? 'simple-chat'
-    const loopStrategy = resolveLoopStrategy(strategy, spec.maxIterations)
+    // M54: `.loopStrategy(custom)` WINS over the spec's name-derived strategy (same precedence as
+    // `.compaction()`). `loopStrategyIsCustom` flows to the runner so a per-run `maxIterations`
+    // override applies to a custom as a ceiling instead of re-resolving it by name (D4).
+    const loopStrategyIsCustom = this.loopStrategyOverride !== undefined
+    const loopStrategy =
+      this.loopStrategyOverride ?? resolveLoopStrategy(strategy, spec.maxIterations)
     const reflectionStrategy =
       this.reflectionOverride ??
       (strategy === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy)
@@ -348,6 +397,7 @@ export class AgentRunnerBuilder {
       compiled: spec.compiled,
       agentName: spec.name,
       loopStrategy,
+      loopStrategyIsCustom,
       reflectionStrategy,
       streamEnabled: this.streamEnabled,
       compaction,
