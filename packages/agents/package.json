@@ -1,6 +1,6 @@
 {
   "name": "@theokit/agents",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "AI agents as first-class citizens of the TheoKit pipeline. The fluent agent()/tool() builders compile to SDK Agent.create() (M31 builder-only authoring API).",
   "type": "module",
   "sideEffects": false,
