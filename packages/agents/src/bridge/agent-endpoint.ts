@@ -14,17 +14,13 @@
  */
 import type { UIMessageChunk } from 'ai'
 
-import { getAgentConfig } from '../decorators/agent.js'
-import { getMixins } from '../decorators/mixin.js'
-
-import { compileAgent, type CompiledAgentOptions } from './agent-compiler.js'
+import { type CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 import { compileAgentDefinition, isAgentDefinition } from './define-agent.js'
 import { createHitlPlugin, type HitlWiring } from './hitl-plugin.js'
-import { createSdkAgentStream, type RuntimeOverrides } from './sdk-adapter.js'
 import { presentUIMessageStream } from './present-ui-message-stream.js'
-import { walkAgentMetadata } from './walk-agent-metadata.js'
+import { createSdkAgentStream, type RuntimeOverrides } from './sdk-adapter.js'
 
 /** Thrown when an `agents/` file default-exports neither a `defineAgent` value nor an `@Agent` class. */
 export class AgentDefinitionError extends Error {
@@ -55,19 +51,21 @@ function extractDefaultExport(mod: unknown): unknown {
  * zero-config file convention has no DI container. This is what makes a `@HumanInTheLoop`-gated
  * tool on a mixin actually gate through the M2 endpoint (M4): its config reaches `compiled.hitl`.
  */
+/** A capability-built waist: has the two collection fields `applyCapabilities` always seeds. */
+function isCompiledAgentOptions(value: unknown): value is CompiledAgentOptions {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Record<string, unknown>
+  return Array.isArray(v.tools) && typeof v.agents === 'object' && v.agents !== null
+}
+
 export function compileAgentModule(mod: unknown, source = 'agent module'): CompiledAgentOptions {
   const def = extractDefaultExport(mod)
   if (isAgentDefinition(def)) {
     return compileAgentDefinition(def)
   }
-  if (typeof def === 'function' && getAgentConfig(def) !== undefined) {
-    const walk = walkAgentMetadata(def, getMixins(def))
-    const instances = new Map<Function, object>()
-    for (const tb of walk.toolboxes) {
-      instances.set(tb.class, new (tb.class as new () => object)())
-    }
-    return compileAgent(walk, instances)
-  }
+  // M53 — the decorated-class branch is gone with the decorators. An agent module now default-exports
+  // either a `defineAgent(...)` definition or a capability-built `CompiledAgentOptions`.
+  if (isCompiledAgentOptions(def)) return def
   throw new AgentDefinitionError(source)
 }
 

@@ -21,7 +21,6 @@ import { getGuardrailsConfig } from '../decorators/guardrails.js'
 import type { HumanInTheLoopOptions } from '../decorators/human-in-the-loop.js'
 import { getHumanInTheLoopConfig } from '../decorators/human-in-the-loop.js'
 import { getMcpConfig } from '../decorators/mcp.js'
-import type { McpServersMap } from '../decorators/mcp.js'
 import { getMemoryConfig } from '../decorators/memory.js'
 import type { MemoryOptions } from '../decorators/memory.js'
 import { Trace, Audit } from '../decorators/observability.js'
@@ -40,6 +39,7 @@ import {
   TOOL_CONFIG,
   TOOL_METHODS,
 } from '../metadata/keys.js'
+import type { McpServersMap } from '../types.js'
 import type {
   AgentOptions,
   MainLoopMeta,
