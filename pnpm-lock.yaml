@@ -299,6 +299,9 @@ importers:
       '@swc/core':
         specifier: ^1.15.41
         version: 1.15.41(@swc/helpers@0.5.23)
+      '@theokit/agents':
+        specifier: workspace:*
+        version: link:../agents
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
