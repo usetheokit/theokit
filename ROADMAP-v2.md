@@ -173,7 +173,7 @@ factories de terceiro-pacote sem estado; enriquecer seria reinventar, blueprint 
 
 ---
 
-### M63 — [ ] Gate de fronteira: proibir `from '@theokit/sdk*'` no agent-builder
+### M63 — [x] Gate de fronteira: proibir `from '@theokit/sdk*'` no agent-builder
 
 **Objective:** Mecanizar o invariante da v2 — o agent-builder nunca importa `@theokit/sdk*`. Um teste
 de fronteira no agent-builder faz o grep e falha se um import direto reaparecer (precedente: o
