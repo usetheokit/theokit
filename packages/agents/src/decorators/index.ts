@@ -1,7 +1,7 @@
 export { Agent, getAgentConfig } from './agent.js'
 export { MainLoop, getMainLoop } from './main-loop.js'
 export { Toolbox, Tool, getToolboxConfig, getToolMethods, getToolConfig } from './tool.js'
-export { RequiresApproval, RequiresCapability, Budget, Policy } from './policies.js'
+export { RequiresApproval } from './policies.js'
 export { Trace, Audit } from './observability.js'
 export {
   Gateway,
@@ -22,7 +22,6 @@ export {
 export { Skills, getSkillsConfig, type SkillsOptions } from './skills.js'
 export { Guardrails, getGuardrailsConfig } from './guardrails.js'
 export { MCP, getMcpConfig, type McpServerConfig, type McpServersMap } from './mcp.js'
-export { Hook, getHooks, getHooksByPoint, type HookPoint, type HookEntry } from './hook.js'
 export {
   HumanInTheLoop,
   getHumanInTheLoopConfig,
@@ -36,13 +35,6 @@ export {
   type ContextCompactionStrategy,
 } from './context-window.js'
 export { Compaction, getCompactionConfig, type CompactionDecoratorConfig } from './compaction.js'
-export { Model } from './model.js'
-export {
-  Artifact,
-  getArtifactConfig,
-  type ArtifactOptions,
-  type ArtifactResult,
-} from './artifact.js'
 export {
   Checkpoint,
   getCheckpointConfig,
@@ -51,22 +43,6 @@ export {
   type CheckpointStrategy,
   type CheckpointStorage,
 } from './checkpoint.js'
-export {
-  Observable,
-  getObservables,
-  getObservableByChannel,
-  type ObservableEntry,
-} from './observable.js'
-export {
-  Sandbox,
-  getSandboxConfig,
-  isPathAllowed,
-  isCommandAllowed,
-  type SandboxOptions,
-  type FilesystemPermissions,
-  type CommandPermissions,
-} from './sandbox.js'
-export { EditFormat, type EditFormatType } from './edit-format.js'
 export {
   ProjectContext,
   getProjectContextConfig,
