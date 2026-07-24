@@ -1,9 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { TheoApp } from '../../src/app.js'
+import { TheoApp } from '@theokit/http'
 
 /**
- * M53 — the agents branch of `TheoApp` had NO test at all (the only reference to `agents:` in the
+ * M53 — lives in `@theokit/agents` (not `@theokit/http`) on purpose: `agents` already depends on
+ * `http`, so testing the bridge here keeps the dependency graph ACYCLIC. Declaring `agents` as a
+ * devDep of `http` (the first attempt) created a build cycle that broke `pnpm -r build` ordering.
+ *
+ * The agents branch of `TheoApp` had NO test at all (the only reference to `agents:` in the
  * suite was commented out), which is how a bug that made every HTTP agent run the fallback model
  * survived. This mounts an agent the new way — a prepared entry, no decorated class — and asserts
  * both that the route is served and that the compiled options actually reach the stream factory.
