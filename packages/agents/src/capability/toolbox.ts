@@ -56,7 +56,10 @@ export interface ToolboxSource {
 }
 
 export interface ToolboxOptions {
-  /** Prefix for every tool name (`"<namespace>.<tool>"`), as `@Toolbox({ namespace })` did. */
+  /**
+   * Prefix for every tool name (`"<namespace>_<tool>"`), as `@Toolbox({ namespace })` did.
+   * The separator is `_`, not `.` — the dot is outside the charset the SDK accepts (theokit#145).
+   */
   readonly namespace?: string
   /** Declarations, when they are not on the class as `static tools`. */
   readonly tools?: readonly ToolDeclaration[]
