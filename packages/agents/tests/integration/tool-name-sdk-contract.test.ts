@@ -76,6 +76,14 @@ describe('tool name ↔ SDK contract (#145)', () => {
     expect(() => new ToolboxCapability(new OpsTools(), { namespace: '9leading-digit' })).toThrow(
       ConfigurationError,
     )
+    // Message half added in M55 (rules/testing.md § 4.1): asserting only the type would pass even
+    // if the failure came from an unrelated ConfigurationError in the same constructor.
+    expect(() => new ToolboxCapability(new OpsTools(), { namespace: 'has space' })).toThrow(
+      /has space_deploy/,
+    )
+    expect(() => new ToolboxCapability(new OpsTools(), { namespace: '9leading-digit' })).toThrow(
+      /9leading-digit_deploy/,
+    )
   })
 })
 
@@ -115,6 +123,7 @@ describe('tool name minting validates at the mint point (M55)', () => {
 
     it('rejects a bare tool already carrying the reserved prefix (the rule is on the FINAL name)', () => {
       expect(() => toolRuntimeName('', 'mcp_foo')).toThrow(ConfigurationError)
+      expect(() => toolRuntimeName('', 'mcp_foo')).toThrow(/mcp_/)
     })
   })
 
@@ -129,6 +138,12 @@ describe('tool name minting validates at the mint point (M55)', () => {
 
     it('ACCEPTS a name of exactly 64 characters (the largest valid)', () => {
       expect(toolRuntimeName('', 'a'.repeat(64))).toHaveLength(64)
+    })
+
+    it('REJECTS a name of exactly 65 characters (the first invalid)', () => {
+      // The tight boundary pair. Without it, an off-by-one in the regex (`{0,63}` → `{0,64}`)
+      // survives: 64 stays valid and the 67-char case stays invalid either way.
+      expect(() => toolRuntimeName('', 'a'.repeat(65))).toThrow(ConfigurationError)
     })
   })
 

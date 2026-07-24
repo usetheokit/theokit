@@ -117,6 +117,9 @@ describe.skipIf(!HAS_KEY)('M55 LIVE — namespaced tool name against a real prov
     expect(() => new ToolboxCapability(new VaultTools(), { namespace: 'mcp' })).toThrow(
       ConfigurationError,
     )
+    // Type alone is not enough (rules/testing.md § 4.1): a DIFFERENT ConfigurationError — say the
+    // "toolbox declares no tools" one — would satisfy the assertion above while proving nothing.
+    expect(() => new ToolboxCapability(new VaultTools(), { namespace: 'mcp' })).toThrow(/mcp_/)
 
     // And the SDK it mirrors still rejects the same name, with a real key in the environment.
     await expect(
