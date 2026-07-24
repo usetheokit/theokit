@@ -43,25 +43,34 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
 
 // Import from the ROOT barrel — proves the public surface + INVARIANT #3.
 const { delegate, AgentRunner } = await import('../../src/index.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
+const { MainLoopCapability } = await import('../../src/capability/agent-capabilities.js')
 
-@Agent({ model: 'test-model' })
-class PlanActReflectAgent {
-  @MainLoop({ strategy: 'plan-act-reflect', maxIterations: 3 })
-  async run() {}
+const planActReflectAgent = {
+  name: 'PlanActReflectAgent',
+  compiled: applyCapabilities([
+    new ModelCapability('test-model'),
+    new MainLoopCapability({ maxIterations: 3 }),
+  ]),
+  strategy: 'plan-act-reflect' as const,
+  maxIterations: 3,
 }
 
-@Agent({ model: 'test-model' })
-class SimpleChatAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
+const simpleChatAgent = {
+  name: 'SimpleChatAgent',
+  compiled: applyCapabilities([new ModelCapability('test-model')]),
+  strategy: 'simple-chat' as const,
 }
 
-@Agent({ model: 'test-model' })
-class CeilingAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 4 })
-  async run() {}
+const ceilingAgent = {
+  name: 'CeilingAgent',
+  compiled: applyCapabilities([
+    new ModelCapability('test-model'),
+    new MainLoopCapability({ maxIterations: 4 }),
+  ]),
+  strategy: 'react' as const,
+  maxIterations: 4,
 }
 
 const toolResult: StreamEvent = { type: 'tool_result', toolName: 'x', input: {}, output: 'r' }
@@ -79,7 +88,7 @@ afterEach(() => vi.restoreAllMocks())
 describe('reflective loop wiring — end-to-end (T4.1)', () => {
   it('test_plan_act_reflect_loops_twice_via_delegate — 2 rounds', async () => {
     script([[toolResult], [done]])
-    await delegate(PlanActReflectAgent, 'task', { apiKey: 'test' })
+    await delegate(planActReflectAgent, 'task', { apiKey: 'test' })
     expect(h.calls).toBe(2)
     expect(h.prompts[1]).toContain('reflection')
   })
@@ -92,19 +101,19 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
     //   round1 = [tool_result, done(no finishReason)]  → tool-using turn ⇒ continue
     //   round2 = [done(no finishReason)]               → pure answer       ⇒ stop
     script([[toolResult, done], [done]])
-    await delegate(PlanActReflectAgent, 'task', { apiKey: 'test' })
+    await delegate(planActReflectAgent, 'task', { apiKey: 'test' })
     expect(h.calls).toBe(2) // pre-B1-fix this collapsed to 1 (the bare done short-circuited to stop)
     expect(h.prompts[1]).toContain('reflection')
 
     // D4 parity: the AgentRunner on-ramp loops identically on the same production shape.
     script([[toolResult, done], [done]])
-    await AgentRunner.builder(PlanActReflectAgent).build().run('task', { apiKey: 'test' })
+    await AgentRunner.fromSpec(planActReflectAgent).build().run('task', { apiKey: 'test' })
     expect(h.calls).toBe(2)
   })
 
   it('test_plan_act_reflect_loops_twice_via_agentrunner — 2 rounds (D4 parity)', async () => {
     script([[toolResult], [done]])
-    await AgentRunner.builder(PlanActReflectAgent).build().run('task', { apiKey: 'test' })
+    await AgentRunner.fromSpec(planActReflectAgent).build().run('task', { apiKey: 'test' })
     expect(h.calls).toBe(2)
     expect(h.prompts[1]).toContain('reflection')
   })
@@ -113,7 +122,7 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
     process.env.THEOKIT_DEBUG = '1' // the wiring metric is now opt-in (silent by default — TUI/pipe hygiene)
     const spy = vi.spyOn(console, 'debug').mockImplementation(() => {})
     script([[toolResult], [done]])
-    await delegate(PlanActReflectAgent, 'task', { apiKey: 'test' })
+    await delegate(planActReflectAgent, 'task', { apiKey: 'test' })
     expect(spy).toHaveBeenCalledWith(
       '[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]',
       expect.objectContaining({ strategy: 'plan-act-reflect', rounds: 2 }),
@@ -123,11 +132,11 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
 
   it('test_simple_chat_single_round_regression — 1 round through both on-ramps', async () => {
     script([[toolResult]])
-    await delegate(SimpleChatAgent, 'task', { apiKey: 'test' })
+    await delegate(simpleChatAgent, 'task', { apiKey: 'test' })
     expect(h.calls).toBe(1)
 
     script([[toolResult]])
-    await AgentRunner.builder(SimpleChatAgent).build().run('task', { apiKey: 'test' })
+    await AgentRunner.fromSpec(simpleChatAgent).build().run('task', { apiKey: 'test' })
     expect(h.calls).toBe(1)
   })
 
@@ -141,11 +150,11 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
       output: 'r',
     })
     script([[tr(1)], [tr(2)], [tr(3)], [tr(4)], [tr(5)]]) // never emits done → ceiling stops it at 4
-    await delegate(CeilingAgent, 'task', { apiKey: 'test' })
+    await delegate(ceilingAgent, 'task', { apiKey: 'test' })
     expect(h.calls).toBe(4)
 
     script([[tr(1)], [tr(2)], [tr(3)], [tr(4)], [tr(5)]])
-    await AgentRunner.builder(CeilingAgent).build().run('task', { apiKey: 'test' })
+    await AgentRunner.fromSpec(ceilingAgent).build().run('task', { apiKey: 'test' })
     expect(h.calls).toBe(4)
   })
 
@@ -156,13 +165,13 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
       input: { p: 'x' },
       output: 'r',
     }
-    script([[same]]) // SAME signature every round; CeilingAgent maxIterations=4 ⇒ no_progress (3) < ceiling (4)
-    const viaDelegate = await delegate(CeilingAgent, 'task', { apiKey: 'test' })
+    script([[same]]) // SAME signature every round; ceilingAgent maxIterations=4 ⇒ no_progress (3) < ceiling (4)
+    const viaDelegate = await delegate(ceilingAgent, 'task', { apiKey: 'test' })
     expect(viaDelegate.finishReason).toBe('no_progress')
     expect(h.calls).toBe(3)
 
     script([[same]])
-    const viaRunner = await AgentRunner.builder(CeilingAgent)
+    const viaRunner = await AgentRunner.fromSpec(ceilingAgent)
       .build()
       .run('task', { apiKey: 'test' })
     expect(viaRunner.finishReason).toBe('no_progress') // on-ramp parity
@@ -177,12 +186,12 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
       output: 'r',
     })
     script([[tr(1)], [tr(2)], [tr(3)], [tr(4)], [tr(5)]]) // distinct → no no_progress → ceiling
-    const viaDelegate = await delegate(CeilingAgent, 'task', { apiKey: 'test' })
+    const viaDelegate = await delegate(ceilingAgent, 'task', { apiKey: 'test' })
     expect(viaDelegate.finishReason).toBe('step_limit')
     expect(viaDelegate.rounds).toBe(4)
 
     script([[tr(1)], [tr(2)], [tr(3)], [tr(4)], [tr(5)]])
-    const viaRunner = await AgentRunner.builder(CeilingAgent)
+    const viaRunner = await AgentRunner.fromSpec(ceilingAgent)
       .build()
       .run('task', { apiKey: 'test' })
     expect(viaRunner.finishReason).toBe('step_limit') // on-ramp parity
@@ -192,7 +201,7 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
   it('test_delegate_missing_apikey_throws_typed_error — L4: no apiKey ⇒ DelegationError, before any round', async () => {
     const { DelegationError } = await import('../../src/index.js')
     script([[toolResult], [done]])
-    await expect(delegate(PlanActReflectAgent, 'task', {})).rejects.toBeInstanceOf(DelegationError)
+    await expect(delegate(planActReflectAgent, 'task', {})).rejects.toBeInstanceOf(DelegationError)
     expect(h.calls).toBe(0) // failed fast at the boundary — never opened a stream
   })
 
@@ -202,7 +211,7 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
     const costlyContinue: StreamEvent = { type: 'done', cost: 0.5, finishReason: 'tool-calls' }
     script([[costlyContinue]])
     await expect(
-      delegate(PlanActReflectAgent, 'task', {
+      delegate(planActReflectAgent, 'task', {
         apiKey: 'test',
         budget: 10,
         parentBudgetRemaining: 0.4,
@@ -214,13 +223,13 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
     const ctrl1 = new AbortController()
     script([[toolResult]])
     h.abortCtrl = ctrl1
-    await delegate(PlanActReflectAgent, 'task', { apiKey: 'test', signal: ctrl1.signal })
+    await delegate(planActReflectAgent, 'task', { apiKey: 'test', signal: ctrl1.signal })
     expect(h.calls).toBe(1) // ran round 1, did not re-enter after abort
 
     const ctrl2 = new AbortController()
     script([[toolResult]])
     h.abortCtrl = ctrl2
-    await AgentRunner.builder(PlanActReflectAgent)
+    await AgentRunner.fromSpec(planActReflectAgent)
       .build()
       .run('task', { apiKey: 'test', signal: ctrl2.signal })
     expect(h.calls).toBe(1)
