@@ -9,7 +9,7 @@
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
 import type { MemorySettings } from '@theokit/sdk'
 
-import type { McpServersMap } from '../decorators/mcp.js'
+import type { McpServersMap } from '../types.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'

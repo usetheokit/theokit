@@ -7,8 +7,11 @@
  * wires `createSdkAgentStream` (SDK-mocked here — no LLM) through the M0/M1 translator, so
  * `agents/echo.ts` produces the exact `UIMessageStream` `useChat` consumes.
  */
-import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
+import { ModelCapability } from '../../src/capability/capabilities.js'
+import { checkpoint } from '../../src/capability/agent-capabilities.js'
+import { applyCapabilities } from '../../src/capability/capability.js'
+import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/toolbox.js'
 
 interface FakeStreamEvent {
   type: string
@@ -41,12 +44,6 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
 const { defineAgent } = await import('../../src/bridge/define-agent.js')
 const { compileAgentModule, streamAgentUIMessages, AgentDefinitionError } =
   await import('../../src/bridge/agent-endpoint.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
-const { Checkpoint } = await import('../../src/decorators/checkpoint.js')
-const { Mixin } = await import('../../src/decorators/mixin.js')
-const { Toolbox, Tool } = await import('../../src/decorators/tool.js')
-const { HumanInTheLoop } = await import('../../src/decorators/human-in-the-loop.js')
 const { z } = await import('zod')
 
 const DONE: FakeStreamEvent = {
@@ -74,14 +71,12 @@ describe('compileAgentModule (M2)', () => {
     expect(compileAgentModule(defineAgent({ model: 'm' })).model).toBe('m')
   })
 
-  it('test_compiles_Agent_decorated_class', () => {
-    @Agent({ model: 'deco-model' })
-    class Support {
-      @MainLoop({ strategy: 'simple-chat' })
-      async run(): Promise<void> {}
-    }
-    const compiled = compileAgentModule({ default: Support })
-    expect(compiled.model).toBe('deco-model')
+  it('test_compiles_capability_built_options', () => {
+    // M53 — the decorated-class branch is gone; a module may default-export the compiled waist.
+    const compiled = compileAgentModule({
+      default: applyCapabilities([new ModelCapability('capability-model')]),
+    })
+    expect(compiled.model).toBe('capability-model')
     expect(compiled.tools).toEqual([])
   })
 
@@ -94,25 +89,26 @@ describe('compileAgentModule (M2)', () => {
     )
   })
 
-  it('test_gathers_mixin_toolboxes_and_gates_hitl_tool', () => {
-    // The M2 file convention associates a class agent's tools via @Mixin (like app.ts). A gated
-    // tool on the mixin must reach compiled.tools AND compiled.hitl so the endpoint pauses (M4).
-    @Toolbox({ namespace: 'ops' })
+  it('test_gathers_toolboxes_and_gates_hitl_tool', () => {
+    // A gated tool must reach compiled.tools AND compiled.hitl so the endpoint pauses (M4).
     class OpsTools {
-      @Tool({ name: 'deploy', description: 'Deploy', input: z.object({ env: z.string() }) })
-      @HumanInTheLoop({ question: 'Deploy?' })
+      static readonly tools: ToolDeclaration[] = [
+        {
+          name: 'deploy',
+          description: 'Deploy',
+          input: z.object({ env: z.string() }),
+          method: 'deploy',
+          hitl: { question: 'Deploy?' },
+        },
+      ]
       async deploy(): Promise<string> {
         return 'ok'
       }
     }
-    @Agent({ name: 'ops', route: '/ops' })
-    @Mixin(OpsTools)
-    class OpsAgent {
-      @MainLoop({ strategy: 'simple-chat' })
-      async run(): Promise<void> {}
-    }
 
-    const compiled = compileAgentModule({ default: OpsAgent })
+    const compiled = compileAgentModule({
+      default: applyCapabilities([new ToolboxCapability(new OpsTools(), { namespace: 'ops' })]),
+    })
     expect(compiled.tools.map((t) => t.name)).toContain('ops.deploy')
     expect(compiled.hitl?.get('ops.deploy')).toMatchObject({ question: 'Deploy?' })
   })
@@ -173,13 +169,9 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
     h.calls = []
     h.overrides = []
 
-    @Agent({ model: 'm' })
-    @Checkpoint({ storage: 'filesystem' })
-    class CheckpointedAgent {
-      @MainLoop({ strategy: 'simple-chat' })
-      async run(): Promise<void> {}
-    }
-    const compiled = compileAgentModule({ default: CheckpointedAgent })
+    const compiled = compileAgentModule({
+      default: applyCapabilities([new ModelCapability('m'), checkpoint({ storage: 'filesystem' })]),
+    })
     expect(compiled.checkpoint?.storage).toBe('filesystem')
 
     const chunks = await collectStream(
@@ -212,13 +204,9 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
       h.calls = []
       h.overrides = []
 
-      @Agent({ model: 'm' })
-      @Checkpoint({ storage: 'memory' })
-      class MemAgent {
-        @MainLoop({ strategy: 'simple-chat' })
-        async run(): Promise<void> {}
-      }
-      const compiled = compileAgentModule({ default: MemAgent })
+      const compiled = compileAgentModule({
+        default: applyCapabilities([new ModelCapability('m'), checkpoint({ storage: 'memory' })]),
+      })
       const chunks = await collectStream(
         streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),
       )
