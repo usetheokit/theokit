@@ -31,16 +31,16 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
 }))
 
 const { AgentRunner } = await import('../../src/index.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
+const { MainLoopCapability } = await import('../../src/capability/agent-capabilities.js')
 const { ladderReflectionStrategy, noopReflectionStrategy } =
   await import('../../src/loop/reflection-strategy.js')
 
-@Agent({ model: 'test-model' })
-class ReactAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 8 })
-  async run() {}
-}
+const reactAgent = applyCapabilities([
+  new ModelCapability('test-model'),
+  new MainLoopCapability({ maxIterations: 8 }),
+])
 
 describe('V4-K ReflectionContext threading', () => {
   it('test_reflect_receives_same_context_object_across_rounds', async () => {
@@ -54,7 +54,11 @@ describe('V4-K ReflectionContext threading', () => {
         return { continue: (ctx.n as number) < 3 }
       },
     }
-    const runner = AgentRunner.builder(ReactAgent)
+    const runner = AgentRunner.fromSpec({
+      compiled: reactAgent,
+      agentName: 'reactAgent',
+      strategy: 'react',
+    })
       .reflection(custom as never)
       .build()
     const result = await runner.run('go', { apiKey: 'k' })
@@ -75,7 +79,11 @@ describe('V4-K ReflectionContext threading', () => {
         return { continue: (ctx.count as number) < 2 } // stop once the cumulative count hits 2
       },
     }
-    const runner = AgentRunner.builder(ReactAgent)
+    const runner = AgentRunner.fromSpec({
+      compiled: reactAgent,
+      agentName: 'reactAgent',
+      strategy: 'react',
+    })
       .reflection(custom as never)
       .build()
     const result = await runner.run('go', { apiKey: 'k' })
@@ -94,7 +102,11 @@ describe('V4-K ReflectionContext threading', () => {
         return { continue: false } // one round per run
       },
     }
-    const runner = AgentRunner.builder(ReactAgent)
+    const runner = AgentRunner.fromSpec({
+      compiled: reactAgent,
+      agentName: 'reactAgent',
+      strategy: 'react',
+    })
       .reflection(custom as never)
       .build()
     h.calls = 0
@@ -119,7 +131,11 @@ describe('V4-K ReflectionContext threading', () => {
         return { continue: (ctx.k as number) < 2 }
       },
     }
-    const runner = AgentRunner.builder(ReactAgent)
+    const runner = AgentRunner.fromSpec({
+      compiled: reactAgent,
+      agentName: 'reactAgent',
+      strategy: 'react',
+    })
       .reflection(custom as never)
       .build()
     const tool = { name: 'x', description: 'd', inputSchema: {}, handler: async () => 'r' }

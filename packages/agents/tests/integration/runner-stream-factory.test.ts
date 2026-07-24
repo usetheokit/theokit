@@ -5,23 +5,19 @@
  * The injected factory bypasses the SDK entirely — no `@theokit/sdk` mock is needed here.
  */
 import 'reflect-metadata'
+import { MainLoopCapability } from '../../src/capability/agent-capabilities.js'
+import { ModelCapability } from '../../src/capability/capabilities.js'
+import { applyCapabilities } from '../../src/capability/capability.js'
 import { describe, expect, it } from 'vitest'
 
 import { AgentRunner, type RoundStreamFactory } from '../../src/index.js'
-import { Agent } from '../../src/decorators/agent.js'
-import { MainLoop } from '../../src/decorators/main-loop.js'
 
-@Agent({ name: 'sf', route: '/sf', model: 'm' })
-class SFAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const sFAgent = applyCapabilities([new ModelCapability('m')])
 
-@Agent({ name: 'rf', route: '/rf', model: 'm' })
-class ReactAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 5 })
-  async run() {}
-}
+const reactAgent = applyCapabilities([
+  new ModelCapability('m'),
+  new MainLoopCapability({ maxIterations: 5 }),
+])
 
 describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
   it('test_injected_factory_drives_the_loop_without_sdk', async () => {
@@ -31,7 +27,11 @@ describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
         yield { type: 'done', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } }
       },
     })
-    const r = await AgentRunner.builder(SFAgent)
+    const r = await AgentRunner.fromSpec({
+      compiled: sFAgent,
+      agentName: 'sFAgent',
+      strategy: 'simple-chat',
+    })
       .build()
       .run('hi', { apiKey: 'k', streamFactory: factory })
     // The response + usage come from the INJECTED stream (proof the SDK adapter was bypassed).
@@ -51,7 +51,7 @@ describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
         },
       }
     }
-    await AgentRunner.builder(SFAgent)
+    await AgentRunner.fromSpec({ compiled: sFAgent, agentName: 'sFAgent', strategy: 'simple-chat' })
       .build()
       .run('do it', { apiKey: 'k', sessionId: 'sess-1', streamFactory: factory })
     expect(seen.message).toBe('do it')
@@ -77,7 +77,11 @@ describe('V4-R AgentRunner accepts an injected RoundStreamFactory', () => {
         },
       }
     }
-    const r = await AgentRunner.builder(ReactAgent)
+    const r = await AgentRunner.fromSpec({
+      compiled: reactAgent,
+      agentName: 'reactAgent',
+      strategy: 'react',
+    })
       .build()
       .run('go', { apiKey: 'k', streamFactory: factory, maxIterations: 5 })
     expect(round).toBe(2) // round 1 (tool-calls → continue) then round 2 (stop)
