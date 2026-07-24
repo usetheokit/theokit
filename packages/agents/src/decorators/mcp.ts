@@ -15,21 +15,11 @@
  * ```
  */
 import { setMeta, getMeta } from '../metadata/index.js'
+import type { McpServersMap } from '../types.js'
 
 const MCP_CONFIG = Symbol.for('theokit:agents:mcp')
 
-export interface McpServerConfig {
-  /** Command to start the MCP server. */
-  command: string
-  /** Arguments passed to the command. */
-  args?: string[]
-  /** Environment variables for the server process. */
-  env?: Record<string, string>
-  /** Working directory for the server process. */
-  cwd?: string
-}
-
-export type McpServersMap = Record<string, McpServerConfig>
+export type { McpServerConfig, McpServersMap } from '../types.js'
 
 export function MCP(servers: McpServersMap): ClassDecorator {
   return (target: Function) => {

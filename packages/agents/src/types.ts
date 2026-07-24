@@ -131,3 +131,17 @@ export interface HumanInTheLoopOptions {
    */
   payloadSchema?: Record<string, unknown>
 }
+
+/** M53 — moved from the `@MCP` decorator being deleted; consumed by the bridge and the adapter. */
+export interface McpServerConfig {
+  /** Command to start the MCP server. */
+  command: string
+  /** Arguments passed to the command. */
+  args?: string[]
+  /** Environment variables for the server process. */
+  env?: Record<string, string>
+  /** Working directory for the server process. */
+  cwd?: string
+}
+
+export type McpServersMap = Record<string, McpServerConfig>
