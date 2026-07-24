@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **ROADMAP-v2 aberto — camada OO `SDK → Theokit → AgentBuilder` (M57–M63).** A segunda geração (v1 está 57/57) elimina as ~12 factory functions livres do `@theokit/agents` (sugar → classes, terminando a migração `X.create()` que o SDK já fez) e corta o import direto de `@theokit/sdk*` no agent-builder (20 arquivos, 8 domínios), com re-export enriquecido **seletivo** (pass-through onde é já-OO/puro, interface/classe onde há orquestração/estado). Design em `knowledge-base/discoveries/blueprints/layered-oo-boundary-blueprint.md` (SHIPPABLE 100). O M57 reverte o ADR-0001 (skills-como-função) com fundamento registrado.
+
+### Added
 - **`AgentRunnerBuilder.loopStrategy(custom)` — critério de parada injetável (M54).** O quarto eixo de OCP do runner (os outros três — reflexão, compactação, produção do round — já eram injetáveis) abre por composição (Strategy). A custom vence sobre a estratégia derivada do spec, como `.compaction()`. **O teto de terminação passa a ser garantia do runner, não convenção de cada estratégia:** antes as 3 built-in embutiam `round < maxIterations` no próprio `shouldContinue`, então uma custom `() => true` rodaria para sempre; agora o runner limita qualquer estratégia em `maxIterations` (`finishReason: 'step_limit'`). Breaking de tipo: `LoopStrategy.name` relaxado para `string` (o `z.enum` interno valida os 3 nomes built-in em runtime). Prior art: `opencode` aplica o teto no runner (`step >= maxSteps`). Decisões em `knowledge-base/adrs/0004-loop-strategy-seam.md`.
 
 ### Removed
