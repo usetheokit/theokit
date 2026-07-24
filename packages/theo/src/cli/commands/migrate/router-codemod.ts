@@ -1,7 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * Build-time codemod: walks `<routesDir>` derived from the operator's
- * cwd via `theokit migrate router`. No HTTP input reaches these fs calls.
- */
 /**
  * G6 T2.1 — Pure codemod core for `theokit migrate router`.
  *

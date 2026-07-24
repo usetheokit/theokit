@@ -82,10 +82,11 @@ describe('createTauriChannelSource (@theokit/tauri)', () => {
   it('wraps a non-Error rejection (the common Rust-side string) into an Error for onError', async () => {
     const core = {
       invoke: vi.fn((cmd: string) => {
-        // Intentionally reject with a plain string — the exact non-Error shape a Rust command emits.
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        // Intentionally reject with a plain string — the exact non-Error shape a Rust command
+        // emits. Asserting we survive it is the whole point of this test.
         return cmd === 'run_turn'
-          ? Promise.reject('sidecar spawn failed')
+          ? // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- see above
+            Promise.reject('sidecar spawn failed')
           : Promise.resolve(undefined)
       }),
       Channel: class implements TauriChannel {

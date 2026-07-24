@@ -16,7 +16,7 @@ import { limitUntrustedHeaderValueForLogs } from '../_internal/log-safe.js'
 
 import { isCsrfOriginAllowed } from './wildcard-origin.js'
 
-export interface CsrfMultiHeaderOptions {
+interface CsrfMultiHeaderOptions {
   /**
    * Wildcard-aware allowlist of additional origins (beyond same-origin).
    * Example: `['app.example.com', '*.staging.example.com']`.
@@ -37,7 +37,7 @@ export interface CsrfMultiHeaderOptions {
   allowRequestsWithoutOriginCheck?: boolean
 }
 
-export type CsrfDecision =
+type CsrfDecision =
   | { allow: true; signal: 'sec-fetch-site' | 'origin' | 'referer' | 'no-headers-allowed' }
   | {
       allow: false

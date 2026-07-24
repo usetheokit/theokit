@@ -20,16 +20,10 @@ export { assertServicesUnsupported } from './adapters-bridge/adapter-support.js'
 
 // Generators
 export { generateCaddyfile } from './generators/caddy-generator.js'
-export type { CaddyfileOptions } from './generators/caddy-generator.js'
 export { generateComposeYaml } from './generators/compose-generator.js'
-export type { ComposeOptions } from './generators/compose-generator.js'
 export { generateTypedClient } from './generators/openapi-client-gen.js'
-export type {
-  GenerateClientOptions,
-  GenerateClientResult,
-} from './generators/openapi-client-gen.js'
+export type {} from './generators/openapi-client-gen.js'
 export { buildVercelServicesBlock, mergeVercelJson } from './generators/vercel-config-builder.js'
-export type { VercelServiceEntry, VercelServicesBlock } from './generators/vercel-config-builder.js'
 
 // Manifest
 export { buildManifest, writeManifest, readManifest } from './adapters-bridge/manifest.js'
@@ -46,17 +40,10 @@ export type {
 
 // Runtime (dev orchestration)
 export { orchestrateDev } from './runtime/orchestrator.js'
-export type {
-  SpawnedService,
-  OrchestrateDevOptions,
-  OrchestrateDevResult,
-} from './runtime/orchestrator.js'
+export type {} from './runtime/orchestrator.js'
 export { pollHealthcheck } from './runtime/healthcheck-poller.js'
-export type { HealthcheckOptions, HealthcheckResult } from './runtime/healthcheck-poller.js'
 export { proxyFetch } from './runtime/proxy.js'
-export type { ProxyOptions } from './runtime/proxy.js'
 export { createLogMerger } from './runtime/log-merge.js'
-export type { LogMergerOptions, LogMerger } from './runtime/log-merge.js'
 export {
   buildSpawnEnv,
   formatLogPrefix,
@@ -66,8 +53,6 @@ export { isPathInScope } from './runtime/path-scope.js'
 
 // Vite dev-server proxy
 export { buildServicesProxyConfig } from './adapters-bridge/vite-proxy-builder.js'
-export type { ViteProxyEntry, ViteProxyConfig } from './adapters-bridge/vite-proxy-builder.js'
 
 // TheoCloud (Wave 3 stub)
 export { prepareTheoCloudArtifacts } from './adapters-bridge/theo-cloud-adapter-stub.js'
-export type { TheoCloudAdapterArtifacts } from './adapters-bridge/theo-cloud-adapter-stub.js'

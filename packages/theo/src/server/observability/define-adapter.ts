@@ -24,12 +24,16 @@
  */
 import type { ObservabilityAdapter, SpanHandle, SpanAttributes } from './adapters/types.js'
 
-export interface DefineAdapterConfig {
+interface DefineAdapterConfig {
   name: string
   startSpan(name: string, attributes?: SpanAttributes): SpanHandle
   counter(name: string, value: number, attributes?: SpanAttributes): void
   histogram(name: string, value: number, attributes?: SpanAttributes): void
-  log(level: 'debug' | 'info' | 'warn' | 'error', message: string, attributes?: SpanAttributes): void
+  log(
+    level: 'debug' | 'info' | 'warn' | 'error',
+    message: string,
+    attributes?: SpanAttributes,
+  ): void
   flush(): Promise<void>
   shutdown(): Promise<void>
 }
@@ -38,9 +42,15 @@ export function defineObservabilityAdapter(config: DefineAdapterConfig): Observa
   return {
     name: config.name,
     startSpan: (name, attrs) => config.startSpan(name, attrs),
-    counter: (name, value, attrs) => config.counter(name, value, attrs),
-    histogram: (name, value, attrs) => config.histogram(name, value, attrs),
-    log: (level, message, attrs) => config.log(level, message, attrs),
+    counter: (name, value, attrs) => {
+      config.counter(name, value, attrs)
+    },
+    histogram: (name, value, attrs) => {
+      config.histogram(name, value, attrs)
+    },
+    log: (level, message, attrs) => {
+      config.log(level, message, attrs)
+    },
     flush: () => config.flush(),
     shutdown: () => config.shutdown(),
   }

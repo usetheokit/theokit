@@ -11,7 +11,7 @@
 import type { z } from 'zod'
 
 /** Definition of a single server action. */
-export interface ActionDefinition<T extends z.ZodType = z.ZodType> {
+interface ActionDefinition<T extends z.ZodType = z.ZodType> {
   /** Unique action identifier. */
   id: string
   /** Zod schema for input validation. */
@@ -21,7 +21,7 @@ export interface ActionDefinition<T extends z.ZodType = z.ZodType> {
 }
 
 /** Registry that stores and retrieves action definitions by id. */
-export interface ActionRegistry {
+interface ActionRegistry {
   register<T extends z.ZodType>(action: ActionDefinition<T>): void
   get(id: string): ActionDefinition | undefined
 }

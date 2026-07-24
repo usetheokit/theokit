@@ -169,7 +169,7 @@ export function injectHeyApiDep(packageJsonSource: string): string {
   return JSON.stringify(pkg, null, 2) + '\n'
 }
 
-export interface ScaffoldServicesOptions {
+interface ScaffoldServicesOptions {
   /** Target project directory (already scaffolded with the TS template). */
   targetDir: string
   /** Project name (substituted into .tmpl files). */

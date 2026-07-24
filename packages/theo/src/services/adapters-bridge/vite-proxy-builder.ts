@@ -17,13 +17,13 @@ import type { ServicesConfig } from '../schema.js'
  * import Vite's `ProxyOptions` so this module stays platform-neutral and
  * unit-testable without Vite.
  */
-export interface ViteProxyEntry {
+interface ViteProxyEntry {
   target: string
   changeOrigin: boolean
   rewrite?: (path: string) => string
 }
 
-export type ViteProxyConfig = Record<string, string | ViteProxyEntry>
+type ViteProxyConfig = Record<string, string | ViteProxyEntry>
 
 export function buildServicesProxyConfig(
   services: ServicesConfig,

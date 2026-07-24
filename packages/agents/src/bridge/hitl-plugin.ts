@@ -30,7 +30,7 @@ interface PreToolCallVeto {
 interface PluginContext {
   on(hook: string, handler: (ctx: PreToolCallContext) => unknown): void
 }
-export interface HitlPlugin {
+interface HitlPlugin {
   name: string
   /** SDK `BasePlugin.version` — required by the `@theokit/sdk` Plugin contract. */
   version: string

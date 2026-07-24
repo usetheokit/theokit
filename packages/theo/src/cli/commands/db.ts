@@ -2,11 +2,11 @@ import { execSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-export type DbAction = 'migrate' | 'generate' | 'seed'
+type DbAction = 'migrate' | 'generate' | 'seed'
 
 const VALID_ACTIONS = new Set<DbAction>(['migrate', 'generate', 'seed'])
 
-export interface DbCommandResult {
+interface DbCommandResult {
   status: 'success' | 'error' | 'invalid_action'
   message: string
   action?: DbAction
@@ -25,7 +25,7 @@ function assertBinExists(cwd: string, bin: string): void {
   }
 }
 
-export function dbCommand(action: string, cwd: string): DbCommandResult {
+function dbCommand(action: string, cwd: string): DbCommandResult {
   if (!VALID_ACTIONS.has(action as DbAction)) {
     return {
       status: 'invalid_action',

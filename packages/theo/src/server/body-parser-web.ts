@@ -6,7 +6,7 @@
  * cache via WeakMap so multiple parse calls on the same Request are idempotent.
  */
 
-export interface ParsedWebBody {
+interface ParsedWebBody {
   json?: unknown
   fields: Record<string, string>
   files: {
@@ -18,7 +18,7 @@ export interface ParsedWebBody {
   }[]
 }
 
-export interface WebBodyParserOptions {
+interface WebBodyParserOptions {
   maxFileSize?: number
   maxFiles?: number
 }

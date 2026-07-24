@@ -15,7 +15,7 @@ import {
 
 const BATCH_ENDPOINT = '/api/__theo_batch__'
 
-export interface CreateBatchTransportOptions {
+interface CreateBatchTransportOptions {
   /** Override fetch (default: globalThis.fetch). Used by tests. */
   fetchImpl?: typeof fetch
   /** Override endpoint (default '/api/__theo_batch__'). */

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { NoopObservabilityAdapter } from '../../src/server/observability/adapters/noop.js'
-import { SpanImpl, NoopSpan } from '../../src/server/observability/span.js'
+import { SpanImpl } from '../../src/server/observability/span.js'
 
 describe('T30.1 — ObservabilityAdapter interface + SpanHandle + noop', () => {
   it('noop adapter startSpan returns a SpanHandle', () => {

@@ -50,7 +50,7 @@ function jsonError(status: number, code: string, message: string): Response {
 }
 
 /** Inputs for {@link handleThreadMessage} (bundled to stay within the arity budget). */
-export interface ThreadMessageArgs {
+interface ThreadMessageArgs {
   readonly mod: unknown
   readonly apiKey: string
   readonly sessionId: string

@@ -31,7 +31,7 @@ export type SsrRenderStreaming = (
   options?: { signal?: AbortSignal; nonce?: string },
 ) => Promise<RenderStreamingResult>
 
-export interface SsrSetupResult {
+interface SsrSetupResult {
   enabled: boolean
   streamingEnabled: boolean
   render: SsrRender | null
