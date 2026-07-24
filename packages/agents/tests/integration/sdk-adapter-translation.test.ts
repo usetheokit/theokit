@@ -37,21 +37,14 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
-const { compileAgent } = await import('../../src/bridge/agent-compiler.js')
-const { walkAgentMetadata } = await import('../../src/bridge/walk-agent-metadata.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
 await import('reflect-metadata')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
 
-@Agent({ name: 'tr', route: '/tr' })
-class TrAgent {
-  @MainLoop()
-  async run() {}
-}
+const trAgent = applyCapabilities([]) // `@Agent({name, route})` declared no waist field — name/route are HTTP concerns
 
 async function drain(messages: SdkMsg[]) {
   h.messages = messages
-  const compiled = compileAgent(walkAgentMetadata(TrAgent))
+  const compiled = trAgent
   const factory = createSdkAgentStream(compiled, [], 'test-key', { model: 'openai/gpt-4o-mini' })
   const out: { type: string; [k: string]: unknown }[] = []
   for await (const ev of factory('hi', 's1')) out.push(ev)
