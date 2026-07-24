@@ -217,10 +217,18 @@ export function streamAgentUIMessages(
     const queue = new EventQueue<AgentStreamEvent>()
     // On client disconnect, stop buffering into the detached pump's queue (bounded memory) and
     // terminate the client stream at once; `EventQueue.push` no-ops once closed.
-    input.signal?.addEventListener('abort', () => queue.close(), { once: true })
+    input.signal?.addEventListener(
+      'abort',
+      () => {
+        queue.close()
+      },
+      { once: true },
+    )
     const plugin = createHitlPlugin({
       gated: input.hitl.gated,
-      emit: (e) => queue.push(e),
+      emit: (e) => {
+        queue.push(e)
+      },
       awaitApproval: input.hitl.awaitApproval,
     })
     const sdkStream = createSdkAgentStream(compiled, compiled.tools, apiKey, {

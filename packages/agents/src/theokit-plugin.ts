@@ -44,8 +44,6 @@ function validateUniqueRoutes(results: readonly RouteIdentity[]): void {
 export interface AgentsPluginOptions {
   /** Agents to mount: prepared entries built by `applyCapabilities`. */
   agents: PluginAgentEntry[]
-  /** Toolbox classes (or use @Mixin on agents). */
-  toolboxes?: Function[]
   /** Factory that creates agent runs — bridges to SDK Agent.create() + agent.send(). */
   createRunFactory?: (
     compiled: CompiledAgentOptions,
