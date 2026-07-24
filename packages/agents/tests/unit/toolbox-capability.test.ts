@@ -111,6 +111,93 @@ describe('ToolboxCapability', () => {
     expect(() => new ToolboxCapability(new Broken())).toThrow(ConfigurationError)
   })
 
+  /**
+   * M55 — the tool name and its HITL gate key must be derived from ONE structure, not built twice.
+   * They were built twice before, and that is exactly how they drifted apart in #145: the tool
+   * became `ns_tool` while its gate stayed `ns.tool`, silently ungating the tool.
+   */
+  describe('one derivation, two consumers (M55)', () => {
+    class MixedTools {
+      static readonly tools: ToolDeclaration[] = [
+        { name: 'read', description: 'Read', input: z.object({}), method: 'read' },
+        {
+          name: 'deploy',
+          description: 'Deploy',
+          input: z.object({}),
+          method: 'deploy',
+          hitl: { question: 'Confirm?' },
+        },
+      ]
+      read(): string {
+        return 'r'
+      }
+      deploy(): string {
+        return 'd'
+      }
+    }
+
+    class ReadOnlyTools {
+      static readonly tools: ToolDeclaration[] = [
+        { name: 'list', description: 'List', input: z.object({}), method: 'list' },
+      ]
+      list(): string {
+        return 'l'
+      }
+    }
+
+    it('gates ONLY the gated tools, and every gate key exists as a compiled tool', () => {
+      const compiled = applyCapabilities([
+        new ToolboxCapability(new MixedTools(), { namespace: 'ops' }),
+      ])
+      const names = compiled.tools.map((t) => t.name)
+      expect(names).toEqual(['ops_read', 'ops_deploy'])
+      expect([...(compiled.hitl ?? new Map()).keys()]).toEqual(['ops_deploy'])
+      // Inclusion, not equality: a gate keyed to a tool that does not exist is the #145 failure.
+      for (const key of compiled.hitl?.keys() ?? []) expect(names).toContain(key)
+    })
+
+    it('`compile()` produces exactly what `apply()` contributes (both go through one derivation)', () => {
+      // Without this, `compile()` — a public method — is invisible to the whole suite: breaking its
+      // body entirely leaves all tests green. Found by mutation during review of this milestone.
+      const capability = new ToolboxCapability(new MixedTools(), { namespace: 'ops' })
+      const direct = capability.compile()
+      const viaApply = applyCapabilities([
+        new ToolboxCapability(new MixedTools(), { namespace: 'ops' }),
+      ]).tools
+
+      expect(direct.map((t) => t.name)).toEqual(viaApply.map((t) => t.name))
+      expect(direct).toHaveLength(2)
+      // The handler must be BOUND — a compile() that lost its instance map would still return
+      // two entries with the right names, so assert the handler actually runs.
+      expect(direct[0]?.handler({})).toBe('r')
+      expect(direct[1]?.handler({})).toBe('d')
+    })
+
+    it('a toolbox with NO gated tool leaves `hitl` undefined', () => {
+      // Load-bearing: `agent-compiler.ts` documents that an empty map ⇒ no gated tools ⇒ the
+      // non-HITL stream path (M2, byte-unchanged). Creating an empty Map here would flip that
+      // branch for every agent that has no HITL at all.
+      const compiled = applyCapabilities([
+        new ToolboxCapability(new ReadOnlyTools(), { namespace: 'ro' }),
+      ])
+      expect(compiled.hitl).toBeUndefined()
+    })
+
+    it('two toolboxes merge their gates without overwriting each other', () => {
+      const compiled = applyCapabilities([
+        new ToolboxCapability(new MixedTools(), { namespace: 'ops' }),
+        new ToolboxCapability(new MixedTools(), { namespace: 'infra' }),
+      ])
+      expect([...(compiled.hitl ?? new Map()).keys()]).toEqual(['ops_deploy', 'infra_deploy'])
+      expect(compiled.tools.map((t) => t.name)).toEqual([
+        'ops_read',
+        'ops_deploy',
+        'infra_read',
+        'infra_deploy',
+      ])
+    })
+  })
+
   it('a toolbox declaring no tools fails fast', () => {
     // eslint-disable-next-line @typescript-eslint/no-extraneous-class -- fixture: a toolbox declaring nothing
     class Empty {}
