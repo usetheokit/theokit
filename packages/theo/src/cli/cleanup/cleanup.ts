@@ -1,7 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * Cleanup helpers. Paths are caller-controlled (CLI/config); EC-3 path-safety
- * guard rejects absolute paths outside cwd to prevent catastrophic data loss.
- */
 /**
  * State cleanup utilities (Phase 2 of
  * docs/plans/framework-zero-config-polish-plan.md).

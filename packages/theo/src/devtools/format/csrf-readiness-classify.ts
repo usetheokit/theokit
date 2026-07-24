@@ -31,7 +31,7 @@ export interface ClassifiedCsrfReadinessError {
   readonly hint: string
 }
 
-export type CsrfReadinessFailureInput =
+type CsrfReadinessFailureInput =
   | { readonly kind: 'http'; readonly status: number }
   | { readonly kind: 'thrown'; readonly error: unknown }
 

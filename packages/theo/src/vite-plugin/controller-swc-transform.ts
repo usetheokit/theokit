@@ -21,7 +21,7 @@ function toPosix(p: string): string {
  * The swc-loader is REUSED, never reimplemented (ADR-1 / Rule 9 / G12): the swc
  * option block lives once in `@theokit/http`.
  */
-export interface ControllerSwcTransformOptions {
+interface ControllerSwcTransformOptions {
   /** Absolute backend root (config `serverDir`). Only `controllers/` under it is transformed. */
   serverDir: string
   /**

@@ -20,13 +20,13 @@ import { pollHealthcheck } from './healthcheck-poller.js'
 import { createLogMerger } from './log-merge.js'
 import { buildSpawnEnv, installLifecycleHandlers } from './process-spawn-helpers.js'
 
-export interface SpawnedService {
+interface SpawnedService {
   name: string
   port: number
   process: ChildProcess
 }
 
-export interface OrchestrateDevOptions {
+interface OrchestrateDevOptions {
   cwd: string
   services: ServicesConfig
   /** Defaults to `process.stdout.write.bind(process.stdout)`. */
@@ -41,7 +41,7 @@ export interface OrchestrateDevOptions {
   installSignalHandlers?: boolean
 }
 
-export interface OrchestrateDevResult {
+interface OrchestrateDevResult {
   spawned: SpawnedService[]
   /** Whether ALL services passed healthcheck. */
   allHealthy: boolean

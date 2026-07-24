@@ -12,7 +12,7 @@
  *  - Respects external AbortSignal (pre-aborted → immediate return, EC-18)
  */
 
-export interface HealthcheckOptions {
+interface HealthcheckOptions {
   /** Full URL to poll, e.g. 'http://localhost:8001/health' */
   url: string
   /** Total time budget in ms. Default 30_000. */
@@ -25,7 +25,7 @@ export interface HealthcheckOptions {
   customFetch?: typeof fetch
 }
 
-export interface HealthcheckResult {
+interface HealthcheckResult {
   healthy: boolean
   attempts: number
   durationMs: number

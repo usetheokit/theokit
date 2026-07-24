@@ -21,7 +21,7 @@ import type { UIMessageChunk } from 'ai'
 import { type RunEventCache, mintRunId } from './run-event-cache.js'
 import type { ThreadRunRegistry } from './thread-run-registry.js'
 
-export interface ThreadDispatchDeps {
+interface ThreadDispatchDeps {
   readonly registry: ThreadRunRegistry
   readonly cache: RunEventCache
   /** Start a run for a follow-up on `sessionId`; returns the SDK chunk stream. */
@@ -29,7 +29,7 @@ export interface ThreadDispatchDeps {
 }
 
 /** Result of posting a follow-up: the started `runId` (idle thread) or `queued` (active thread). */
-export type PostFollowUpResult = { runId: string } | { queued: true }
+type PostFollowUpResult = { runId: string } | { queued: true }
 
 /**
  * Post a follow-up on a thread. IDLE ⇒ start a run (returns its `runId`); ACTIVE

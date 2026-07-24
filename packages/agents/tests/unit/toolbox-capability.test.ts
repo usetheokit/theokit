@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import { applyCapabilities } from '../../src/capability/capability.js'
-import { ConfigurationError } from '../../src/capability/capabilities.js'
+import { ConfigurationError } from '../../src/errors.js'
 import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/toolbox.js'
 
 /**
@@ -156,21 +156,48 @@ describe('ToolboxCapability', () => {
       for (const key of compiled.hitl?.keys() ?? []) expect(names).toContain(key)
     })
 
-    it('`compile()` produces exactly what `apply()` contributes (both go through one derivation)', () => {
-      // Without this, `compile()` — a public method — is invisible to the whole suite: breaking its
-      // body entirely leaves all tests green. Found by mutation during review of this milestone.
-      const capability = new ToolboxCapability(new MixedTools(), { namespace: 'ops' })
-      const direct = capability.compile()
-      const viaApply = applyCapabilities([
+    it('the compiled handlers stay BOUND to the instance through `apply()`', () => {
+      // M55 added this against a public `compile()`; M56 deleted that method (zero callers), so the
+      // assertion moved to the one remaining path. The binding half is what matters: names alone
+      // would still be right if the instance map were lost — only calling the handler proves it.
+      const { tools } = applyCapabilities([
         new ToolboxCapability(new MixedTools(), { namespace: 'ops' }),
-      ]).tools
+      ])
+      expect(tools.map((t) => t.name)).toEqual(['ops_read', 'ops_deploy'])
+      expect(tools[0]?.handler({})).toBe('r')
+      expect(tools[1]?.handler({})).toBe('d')
+    })
 
-      expect(direct.map((t) => t.name)).toEqual(viaApply.map((t) => t.name))
-      expect(direct).toHaveLength(2)
-      // The handler must be BOUND — a compile() that lost its instance map would still return
-      // two entries with the right names, so assert the handler actually runs.
-      expect(direct[0]?.handler({})).toBe('r')
-      expect(direct[1]?.handler({})).toBe('d')
+    it('a missing instance and a non-method handler fail as TYPED errors (M56)', async () => {
+      // These two throw sites were bare `Error` until M56, inconsistent with the ConfigurationError
+      // the same module throws for name validation (`rules/error-handling.md` § 2).
+      const { compileTools } = await import('../../src/bridge/agent-compiler.js')
+      const token = MixedTools as unknown as Parameters<typeof compileTools>[0][0]['class']
+      const walk = {
+        class: token,
+        namespace: 'ops',
+        guards: [],
+        tools: [
+          {
+            propertyKey: 'read',
+            config: MixedTools.tools[0]!,
+            guards: [],
+            trace: false,
+            audit: false,
+          },
+        ],
+      }
+
+      expect(() => compileTools([walk], new Map())).toThrow(ConfigurationError)
+      expect(() => compileTools([walk], new Map())).toThrow(/não foi instanciado/)
+
+      const noMethod = { ...walk, tools: [{ ...walk.tools[0]!, propertyKey: 'missing' }] }
+      expect(() => compileTools([noMethod], new Map([[token, new MixedTools()]]))).toThrow(
+        ConfigurationError,
+      )
+      expect(() => compileTools([noMethod], new Map([[token, new MixedTools()]]))).toThrow(
+        /não é um método/,
+      )
     })
 
     it('a toolbox with NO gated tool leaves `hitl` undefined', () => {

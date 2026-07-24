@@ -41,7 +41,7 @@ interface DefaultLoader {
 /** Method names recognized as per-route named exports (UPPERCASE). */
 const HTTP_METHOD_KEYS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
-export interface LoadRoutesOptions {
+interface LoadRoutesOptions {
   serverDir: string
   routes: ManifestRoute[]
   /** Injectable for tests; defaults to a fresh Vite SSR dev server. */

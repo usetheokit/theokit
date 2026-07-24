@@ -91,7 +91,7 @@ const SSR_EXTENSIONS = ['.mjs', '.js'] as const
 export function resolveSsrEntry(distDir: string): string | null {
   for (const ext of SSR_EXTENSIONS) {
     const path = resolve(distDir, `server/entry-server${ext}`)
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- distDir is from `theokit start`'s own caller-controlled config; the suffix is from a const literal array
+
     if (existsSync(path)) return path
   }
   return null

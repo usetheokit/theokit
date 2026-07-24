@@ -162,6 +162,6 @@ export function trackAgentTools(opts: TrackAgentToolsOptions): TrackAgentToolsHo
  * @internal — testing helper. Inspects the size of the pending-starts Map of
  * a factory instance. Not in the public API.
  */
-export const __internalsForTesting = {
+const __internalsForTesting = {
   ORPHAN_TTL_MS,
 }

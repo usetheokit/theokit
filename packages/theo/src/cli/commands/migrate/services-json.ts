@@ -18,7 +18,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
-export interface ServicesJsonMigrateOptions {
+interface ServicesJsonMigrateOptions {
   /** Override theo.config.ts path. Defaults to `<cwd>/theo.config.ts`. */
   configPath?: string
   /** Override package.json path. Defaults to `<cwd>/package.json`. */
@@ -33,7 +33,7 @@ export interface ServicesJsonMigrateOptions {
   cwd?: string
 }
 
-export interface ServicesJsonMigratePlan {
+interface ServicesJsonMigratePlan {
   /** The DNS-1123 project name that will land in theo.config.ts. */
   projectName: string
   /** Reason describing where the name came from. */

@@ -8,7 +8,7 @@ import { createContext, useContext } from 'react'
 import type { DevtoolsAction, DevtoolsState } from '../shared.js'
 import type { StyleFactory } from '../styles/styles.js'
 
-export interface DevtoolsContextValue {
+interface DevtoolsContextValue {
   shadowRoot: ShadowRoot
   state: DevtoolsState
   dispatch: (action: DevtoolsAction) => void

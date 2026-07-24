@@ -28,7 +28,7 @@ function paint(text: string, color: keyof typeof ANSI, tty: boolean | undefined)
 /** A stdout-like sink; `isTTY` gates color (Node's `process.stdout` carries it, a test sink does not). */
 export type TerminalOut = Writable & { isTTY?: boolean }
 
-export interface TerminalRenderOptions {
+interface TerminalRenderOptions {
   stdout: TerminalOut
   /** Resolve a HITL approval (the entry prompts + resolves the registry). */
   onApproval: (req: { approvalId: string; toolName: string }) => Promise<void>
@@ -105,7 +105,7 @@ export async function renderAgentStreamToTerminal(
 }
 
 /** Injectable I/O for the approval prompt (defaults to the process streams at the CLI entry). */
-export interface PromptIO {
+interface PromptIO {
   input: Readable & { isTTY?: boolean }
   output: Writable & { isTTY?: boolean }
 }

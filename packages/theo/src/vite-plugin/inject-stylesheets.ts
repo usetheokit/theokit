@@ -53,12 +53,12 @@ const TARGETS: StylesheetTarget[] = [
  * in @theokit/ui itself — not framework-side preload.
  */
 
-export interface InjectStylesheetsResult {
+interface InjectStylesheetsResult {
   html: string
   injected: string[]
 }
 
-export interface InjectStylesheetsOptions {
+interface InjectStylesheetsOptions {
   /** Only inject in dev (default). Skip when building for production. */
   isDev: boolean
   /** Function that checks whether a package is installed at projectRoot. */

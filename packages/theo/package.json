@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.43.10",
+  "version": "0.43.11",
   "type": "module",
   "sideEffects": false,
   "license": "Apache-2.0",
@@ -165,13 +165,10 @@
   "devDependencies": {
     "@theokit/sdk": "^4.1.0",
     "@types/busboy": "^1.5.4",
-    "@types/pg": "^8.20.0",
     "@types/picomatch": "^4.0.3",
     "ai": "^7.0.14",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
-    "pg": "^8.22.0",
-    "pg-mem": "^3.0.14",
     "unstorage": "^1.17.5"
   },
   "publishConfig": {

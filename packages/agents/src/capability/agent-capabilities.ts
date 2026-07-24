@@ -4,8 +4,8 @@ import {
   type ContextWindowOptions,
 } from '../bridge/compile-context-window.js'
 import { compileSkills, type SkillsOptions } from '../bridge/compile-skills.js'
+import { ConfigurationError } from '../errors.js'
 
-import { ConfigurationError } from './capabilities.js'
 import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capability.js'
 
 /**

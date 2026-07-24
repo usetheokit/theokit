@@ -10,7 +10,7 @@
  */
 import type { ManifestServiceEntry, ServicesManifest } from '../adapters-bridge/manifest.js'
 
-export interface ComposeOptions {
+interface ComposeOptions {
   /** Port for the web container (TheoKit). Default 3000. */
   webPort: number
   /** Caddy listening port (default same as webPort — Caddy fronts everything). */

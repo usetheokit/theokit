@@ -23,7 +23,7 @@ import {
 
 const DEFAULT_RESPONSE_BODY_SIZE_LIMIT = 5 * 1024 * 1024 // 5 MB
 
-export interface SerializeOptions {
+interface SerializeOptions {
   /**
    * Maximum allowed length of the serialized response body in BYTES (UTF-8
    * length of `body` string is checked, not the JS string length). Default

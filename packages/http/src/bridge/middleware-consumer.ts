@@ -28,7 +28,7 @@ export interface ResolvedMiddleware {
   excludePatterns: string[]
 }
 
-export type RouteInfo = string | { path: string; method?: string }
+type RouteInfo = string | { path: string; method?: string }
 
 export interface MiddlewareConfigProxy {
   forRoutes(...routes: RouteInfo[]): MiddlewareConsumerImpl
@@ -55,7 +55,11 @@ export class MiddlewareConsumerImpl {
       forRoutes: (...routes: RouteInfo[]) => {
         const routePatterns = routes.map((r) => (typeof r === 'string' ? r : r.path))
         for (const handler of resolved) {
-          this.entries.push({ handler, routePatterns: [...routePatterns], excludePatterns: [...excludePatterns] })
+          this.entries.push({
+            handler,
+            routePatterns: [...routePatterns],
+            excludePatterns: [...excludePatterns],
+          })
         }
         return this
       },
