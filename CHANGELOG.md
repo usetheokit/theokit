@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Nome de tool: a regra do SDK era replicada pela metade, e o defeito continuava vivo (M55).** O fix do #145 corrigiu o separador mas copiou **uma** das **três** regras que o `@theokit/sdk` impõe a um nome de tool. Consequência mensurável: um toolbox com `namespace: 'mcp'` mintava `mcp_deploy`, passava na validação de autoria e era **rejeitado pelo `Agent.create`** (`tool_reserved_name`) — a mesma classe do #145, por outro eixo. Agora a validação vive **dentro** do único produtor do nome (`toolRuntimeName`), então nenhum caminho escapa dela — incluindo `compileTools`, que é exportado publicamente. **BREAKING (comportamento):** `compileTools` passa a lançar `ConfigurationError` na compilação para um par namespace/tool que antes só era rejeitado depois, pelo `Agent.create`; a mensagem nomeia o nome ofensor e distingue "composição estourou 64 caracteres" de "caractere inválido". Decisões e gatilhos de revisão em `knowledge-base/adrs/0002-tool-name-single-source.md`.
+
+### Changed
+- **O gate HITL e a tool passam a ser derivados de UMA estrutura (M55).** `ToolboxCapability` montava o walk para compilar as tools e percorria as declarações **de novo** para montar as chaves do gate — duas derivações da mesma identidade, que foi exatamente como as duas divergiram no #145 (a tool virou `ns_tool`, o gate ficou `ns.tool`, e o HITL foi silenciosamente desgatilhado). Agora uma derivação alimenta os dois compiladores, então elas não podem discordar por construção. Sem mudança observável de saída.
+
+### Fixed
 - **Toolbox com `namespace` gerava um nome de tool que o SDK REJEITA (#145).** `toolRuntimeName` unia namespace e tool com `.`, fora do charset aceito pelo `@theokit/sdk` (`/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/`) — ou seja, um caminho **documentado** nunca funcionou contra um provider real. O separador passa a ser `_` (`ops_deploy`), o nome é validado na **autoria** (um namespace impossível falha ali, não quando o modelo chama a tool), e a `ToolboxCapability` deixa de duplicar a construção da chave HITL — a duplicação era o que deixava o gate divergir da tool. Teste de regressão exercita a validação **real** do `Agent.create`, sem mock: era o mock universal do SDK nas suítes que escondia o defeito desde M4.
 
 ### Added
