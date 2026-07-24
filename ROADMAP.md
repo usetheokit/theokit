@@ -1233,7 +1233,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
-### M54 — [ ] Abrir o seam de `LoopStrategy` — critério de parada injetável (OCP), sem herança
+### M54 — [x] Abrir o seam de `LoopStrategy` — critério de parada injetável (OCP), sem herança
 
 > Added 2026-07-24 by `/roadmap-feature` (slug: `loop-strategy-seam`). **Out-of-scope cross-check (2026-07-24):** o item travado *"Reimplementing the agent loop / own multi-agent orchestration"* é ADJACENTE, não violado — o `AgentRunner` e a interface `LoopStrategy` **já existem** (V4-B / T3.1); este milestone **não** reimplementa loop nem adiciona orquestração. Seguindo o precedente M38/M39/M40, ele pega **SOMENTE a fatia do seam** (injetar o critério de parada que hoje é escolhido entre 3 nomes fixos) e **reafirma** loop próprio, runner paralelo e orquestração multi-agente como OUT. Decisão do owner registrada em `knowledge-base/grills/loop-strategy-seam-feature-grill.md` § Q0.
 
