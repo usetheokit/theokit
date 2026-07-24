@@ -44,7 +44,7 @@ describe('V4-J runtime tool override on AgentRunner', () => {
     h.capturedTools = null
     const runner = AgentRunner.fromSpec({
       compiled: bareAgent,
-      agentName: 'bareAgent',
+      name: 'bareAgent',
       strategy: 'simple-chat',
     }).build()
     await runner.run('go', { apiKey: 'k', tools: [FAKE_TOOL] as never })
@@ -55,7 +55,7 @@ describe('V4-J runtime tool override on AgentRunner', () => {
     h.capturedTools = null
     const runner = AgentRunner.fromSpec({
       compiled: bareAgent,
-      agentName: 'bareAgent',
+      name: 'bareAgent',
       strategy: 'simple-chat',
     }).build()
     await runner.run('go', { apiKey: 'k' })

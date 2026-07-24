@@ -6,19 +6,11 @@ export {
 } from './agent-execution-context.js'
 
 export {
-  walkAgentMetadata,
-  validateUniqueRoutes,
-  AgentWarningCode,
-  type AgentWalkResult,
-  type ToolboxWalkResult,
-  type ToolWalkResult,
-} from './walk-agent-metadata.js'
-
-export {
   compileTools,
-  compileAgent,
   type CompiledTool,
   type CompiledAgentOptions,
+  type ToolboxWalkResult,
+  type ToolWalkResult,
 } from './agent-compiler.js'
 
 export { compileSkills } from './compile-skills.js'

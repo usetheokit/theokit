@@ -21,7 +21,7 @@ describe('V4-L.2 invalid maxIterations fails loudly', () => {
   it('test_maxIterations_zero_throws_at_stream', () => {
     const runner = AgentRunner.fromSpec({
       compiled: mlAgent,
-      agentName: 'mlAgent',
+      name: 'mlAgent',
       strategy: 'react',
     }).build()
     // zod `.int().min(1)` in resolveLoopStrategy rejects 0 synchronously at stream() call.
@@ -31,7 +31,7 @@ describe('V4-L.2 invalid maxIterations fails loudly', () => {
   it('test_maxIterations_negative_throws_at_stream', () => {
     const runner = AgentRunner.fromSpec({
       compiled: mlAgent,
-      agentName: 'mlAgent',
+      name: 'mlAgent',
       strategy: 'react',
     }).build()
     expect(() => runner.stream('x', { apiKey: 'k', maxIterations: -3 })).toThrow()

@@ -36,7 +36,7 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
   model?: string
   /** Static system prompt. */
   system?: string
-  /** Extended-thinking effort (mirrors `@Agent({ reasoningEffort })`). */
+  /** Extended-thinking effort. */
   reasoningEffort?: ReasoningEffort
   /**
    * Pre-built tools. Accepts the `@theokit/sdk` `CustomTool` that `defineAgentTool`

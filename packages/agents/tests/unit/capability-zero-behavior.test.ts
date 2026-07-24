@@ -1,12 +1,7 @@
-import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 
-import { compileAgent, type CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
+import type { CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { compileAgentDefinition, defineAgent } from '../../src/bridge/define-agent.js'
-import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
-import { Agent as DecoratorAgent } from '../../src/decorators/agent.js'
-import { MainLoop } from '../../src/decorators/main-loop.js'
-import { Skills } from '../../src/decorators/skills.js'
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 import {
@@ -34,8 +29,8 @@ import { CapabilityRegistry } from '../../src/capability/registry.js'
  * or hashes compiled options — `Object.keys` appears only over nested values, see
  * sdk-adapter-create-options.ts:76,91). The capability path must produce the SAME `CompiledAgentOptions`
  * (the existing narrow waist) as the canonical `defineAgent` source, and therefore the SAME
- * `Agent.create` options out of the shared adapter. This is what authorizes M53 to delete the
- * decorator source: the new authoring is provably equivalent at the waist AND at the adapter.
+ * `Agent.create` options out of the shared adapter. This proved the capability path equivalent to the canonical defineAgent source at the
+ * waist AND at the adapter — the evidence M53 used to delete the decorator source (now gone).
  */
 
 /**
@@ -143,35 +138,12 @@ describe('capability path ≡ defineAgent path (zero-behavior)', () => {
 })
 
 /**
- * The proof that actually matters for M53: equivalence against `compileAgent` — the DECORATOR
- * compiler, which is the artifact M53 deletes. The `defineAgent` comparison above is necessary but
- * NOT sufficient: `defineAgent` is not going away, so proving equality with it never licensed the
- * deletion. This block also PINS, as executable data, which waist fields the capability layer can
- * and cannot yet express — that gap list is M53's entry criterion, not a footnote.
+ * The waist-coverage pins. The decorator compiler these once compared against was DELETED in M53;
+ * what survives is the structural guarantee it protected: the field universe stays exhaustive
+ * (compile-time), and every waist field is expressible by some capability (`NOT_EXPRESSIBLE_YET`
+ * is empty). If a capability ever stops producing its field, the gap reappears and this fails.
  */
-describe('capability path vs the DECORATOR path (the artifact M53 deletes)', () => {
-  it('matches compileAgent on every field the capability layer can express', () => {
-    @DecoratorAgent({ name: 'x', route: '/x', model: 'openai/gpt-5.4' })
-    @Skills(['code-review'])
-    class Decorated {
-      @MainLoop()
-      async run(): Promise<void> {}
-    }
-
-    const viaDecorators = compileAgent(walkAgentMetadata(Decorated))
-    const viaCapabilities = applyCapabilities([
-      new ModelCapability('openai/gpt-5.4'),
-      skills(['code-review']),
-    ])
-
-    for (const field of ['model', 'skills', 'tools', 'agents', 'stream'] as const) {
-      expect({ field, value: viaCapabilities[field] }).toEqual({
-        field,
-        value: viaDecorators[field],
-      })
-    }
-  })
-
+describe('capability path — waist coverage is complete', () => {
   it('the waist field list is exhaustive (fails to COMPILE if a new field is unclassified)', () => {
     expect(WAIST_FIELDS_ARE_EXHAUSTIVE).toBe(true)
   })
@@ -209,40 +181,7 @@ describe('capability path vs the DECORATOR path (the artifact M53 deletes)', () 
     const gap = WAIST_FIELDS.filter((f) => !expressible.has(f))
 
     expect([...gap].sort((a, b) => a.localeCompare(b))).toEqual(
-      [...NOT_EXPRESSIBLE_YET].sort((a, b) => a.localeCompare(b)),
+      [...(NOT_EXPRESSIBLE_YET as readonly string[])].sort((a, b) => a.localeCompare(b)),
     )
-  })
-
-  it('the decorator compiler emits NOTHING the capability layer cannot express (M53 entry criterion)', () => {
-    // The inverse of what this test asserted before M53 § A: back then the decorator path emitted
-    // six fields no capability could produce, and deleting `src/decorators/` would have removed
-    // authoring surface. Now every field it emits has a capability — which is exactly the condition
-    // the ADR set for the deletion to be safe.
-    @DecoratorAgent({
-      name: 'rich',
-      route: '/rich',
-      model: 'openai/gpt-5.4',
-      systemPrompt: 'you are rich',
-      parseThinkTags: true,
-      stripToolDialect: true,
-      recoverLeakedToolCalls: true,
-      maxIterations: 7,
-      timeoutMs: 1234,
-    })
-    class Rich {
-      @MainLoop()
-      async run(): Promise<void> {}
-    }
-
-    const decorated = compileAgent(walkAgentMetadata(Rich))
-    const emitted = Object.entries(decorated)
-      .filter(([, v]) => v !== undefined)
-      .map(([k]) => k)
-    expect(emitted).toEqual(expect.arrayContaining(['systemPrompt', 'parseThinkTags', 'timeoutMs']))
-
-    const unexpressible = emitted.filter((f) =>
-      (NOT_EXPRESSIBLE_YET as readonly string[]).includes(f),
-    )
-    expect(unexpressible).toEqual([])
   })
 })

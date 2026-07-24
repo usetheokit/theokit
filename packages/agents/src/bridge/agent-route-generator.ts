@@ -1,7 +1,7 @@
 /**
  * Auto-generate HTTP routes from @Agent metadata — Web Standard.
  *
- * Per ADR D5: @Agent({ route }) auto-generates two endpoints:
+ * Per ADR D5: an agent's `route` auto-generates two endpoints:
  * - POST {route}/chat  — send message, receive SSE stream
  * - GET  {route}/runs/:runId — get run status/result
  *
