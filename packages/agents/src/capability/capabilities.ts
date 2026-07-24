@@ -2,6 +2,7 @@ import type { InlineSkill } from '@theokit/sdk'
 
 import type { CompiledTool } from '../bridge/agent-compiler.js'
 import { compileSkillsSelection } from '../bridge/define-agent.js'
+import { ConfigurationError } from '../errors.js'
 
 import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capability.js'
 
@@ -11,10 +12,16 @@ import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capa
  * factory, because a class with no behavior would be ceremony: KISS).
  */
 
-/** Typed authoring failure — surfaced at build time, never a silent bad agent. */
-export class ConfigurationError extends Error {
-  override readonly name = 'ConfigurationError'
-}
+/**
+ * Re-exported, not defined here (M55): `bridge/agent-compiler.ts` needs to throw the same typed
+ * error, and this module imports FROM `bridge/` — defining it here would force a cycle. The class
+ * now lives in the leaf module `../errors.js`; this re-export keeps every existing import path
+ * working, so no consumer had to change.
+ *
+ * IMPORTED then re-exported, not `export … from` in one line: this module's own capabilities throw
+ * it, and a bare re-export creates no local binding (the suite caught exactly that).
+ */
+export { ConfigurationError }
 
 /** Human-readable type of a rejected value — never its content (config files may hold secrets). */
 function describe(value: unknown): string {
