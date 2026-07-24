@@ -1,6 +1,12 @@
 import { runGoalLoop } from '@theokit/sdk'
 import type { GoalEvent, GoalLoopAgent, GoalOptions, GoalResult } from '@theokit/sdk'
 
+// M59 — the goal domain's types travel WITH `GoalRunner` (the layer owns the whole goal surface now):
+// a consumer types against `GoalRunner` — `run(): AsyncGenerator<GoalEvent, GoalResult>`, the
+// `GoalLoopAgent` it binds, the `GoalOptions` it takes — entirely from `@theokit/agents`, never
+// reaching back to `@theokit/sdk`.
+export type { GoalEvent, GoalLoopAgent, GoalOptions, GoalResult } from '@theokit/sdk'
+
 /**
  * M59 — `GoalRunner`, the OO twin of the SDK's free `runGoalLoop`, parallel to {@link AgentRunner}.
  *
