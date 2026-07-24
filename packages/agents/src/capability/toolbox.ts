@@ -1,5 +1,7 @@
 import {
   compileTools,
+  SDK_TOOL_NAME,
+  toolRuntimeName,
   type ClassToken,
   type CompiledTool,
   type ToolboxWalkResult,
@@ -92,6 +94,18 @@ export class ToolboxCapability implements Capability {
     this.#instance = instance
     this.#declarations = declared
     this.#namespace = options.namespace ?? ''
+    // Fail at AUTHORING, not when the model finally calls the tool: a namespace/tool pair that
+    // cannot mint a name the SDK accepts is a broken agent, and `Agent.create` would only say so
+    // at runtime (theokit#145).
+    for (const tool of declared) {
+      const runtime = toolRuntimeName(this.#namespace, tool.name)
+      if (!SDK_TOOL_NAME.test(runtime)) {
+        throw new ConfigurationError(
+          `toolbox: nome de tool inválido "${runtime}" — deve casar ${String(SDK_TOOL_NAME)} ` +
+            '(o SDK rejeita o resto; verifique o namespace e o nome da tool)',
+        )
+      }
+    }
   }
 
   /** The compiled tools this toolbox contributes — the same shape the decorator path produces. */
@@ -121,15 +135,14 @@ export class ToolboxCapability implements Capability {
     draft.tools.push(...this.compile())
     draft.provenance.push({ capability: this.name, contributed: ['tools'] })
 
-    // `hitl` is keyed `"<namespace>.<tool>"` — the same key `compileHitlGates` builds. Collecting
-    // the pairs first keeps `hitl` narrowed by the guard, with no assertion.
+    // The gate key comes from `toolRuntimeName` — the SAME function `compileTools` uses. It was
+    // duplicated inline here, which is exactly how the two drifted apart when the separator changed
+    // (theokit#145): the tool became `ns_tool` while its gate stayed `ns.tool`, silently ungating it.
+    // Collecting the pairs first keeps `hitl` narrowed by the guard, with no assertion.
     const gates: [string, HumanInTheLoopOptions][] = []
     for (const tool of this.#declarations) {
       if (tool.hitl === undefined) continue
-      gates.push([
-        this.#namespace === '' ? tool.name : `${this.#namespace}.${tool.name}`,
-        tool.hitl,
-      ])
+      gates.push([toolRuntimeName(this.#namespace, tool.name), tool.hitl])
     }
     if (gates.length === 0) return
     draft.hitl ??= new Map()

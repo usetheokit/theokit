@@ -34,7 +34,7 @@ describe('ToolboxCapability', () => {
       description: tool.description,
       inputSchema: tool.inputSchema,
     }).toEqual({
-      name: 'support.search', // namespace prefix preserved
+      name: 'support_search', // namespace prefix preserved
       description: 'Search tickets',
       inputSchema: searchInput,
     })
@@ -75,10 +75,10 @@ describe('ToolboxCapability', () => {
       new ToolboxCapability(new A(), { namespace: 'x' }),
       new ToolboxCapability(new B(), { namespace: 'y' }),
     ])
-    expect(draft.tools.map((t) => t.name)).toEqual(['x.a', 'y.b'])
+    expect(draft.tools.map((t) => t.name)).toEqual(['x_a', 'y_b'])
   })
 
-  it('a HITL-gated tool lands in the `hitl` map keyed `<namespace>.<tool>`', () => {
+  it('a HITL-gated tool lands in the `hitl` map keyed `<namespace>_<tool>`', () => {
     class PlainGated {
       static readonly tools: ToolDeclaration[] = [
         {
@@ -97,8 +97,8 @@ describe('ToolboxCapability', () => {
       new ToolboxCapability(new PlainGated(), { namespace: 'ops' }),
     ])
 
-    expect([...(viaCapability.hitl ?? new Map()).keys()]).toEqual(['ops.deploy'])
-    expect(viaCapability.hitl?.get('ops.deploy')).toMatchObject({ question: 'Deploy?' })
+    expect([...(viaCapability.hitl ?? new Map()).keys()]).toEqual(['ops_deploy'])
+    expect(viaCapability.hitl?.get('ops_deploy')).toMatchObject({ question: 'Deploy?' })
   })
 
   it('a typo in `method` fails at AUTHORING time, not when the model calls the tool', () => {

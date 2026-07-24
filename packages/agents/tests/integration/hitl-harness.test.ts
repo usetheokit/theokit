@@ -77,7 +77,7 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
         // The SDK fires pre_tool_call BEFORE dispatching the tool; the plugin emits approval_required
         // (synchronously) then returns a Promise the SDK loop awaits — a genuine pause.
         const decision = handler
-          ? await handler({ name: 'ops.deploy', args: { env: 'prod' }, agentId: 'a', runId: 'r' })
+          ? await handler({ name: 'ops_deploy', args: { env: 'prod' }, agentId: 'a', runId: 'r' })
           : undefined
         const callId = hoisted.toolCallId
         if (hoisted.throwAfterApproval) {
@@ -86,11 +86,11 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
         }
         if (decision === undefined) {
           // Approved → the SDK dispatches the tool and streams its result.
-          yield { type: 'tool_call', callId, toolName: 'ops.deploy', input: { env: 'prod' } }
+          yield { type: 'tool_call', callId, toolName: 'ops_deploy', input: { env: 'prod' } }
           yield {
             type: 'tool_result',
             callId,
-            toolName: 'ops.deploy',
+            toolName: 'ops_deploy',
             output: 'deployed',
             isError: false,
           }
@@ -100,7 +100,7 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
           yield {
             type: 'tool_result',
             callId,
-            toolName: 'ops.deploy',
+            toolName: 'ops_deploy',
             output: `Plugin blocked this tool call: ${message}`,
             isError: false,
           }
