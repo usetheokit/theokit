@@ -68,7 +68,12 @@ describe('G1 dependency DAG — @theokit/http ↛ @theokit/agents (ADR-0044 D4)'
 
   it('the documented dynamic optional-peer bridge still exists (guarded, not a static edge)', () => {
     const app = readFileSync(join(HTTP_SRC, 'app.ts'), 'utf8')
-    // Sanity: the ONLY agents reference in http is the guarded dynamic import (ADR-0044 exception).
-    expect(app).toMatch(/importFn\(\s*['"]@theokit\/agents['"]\s*\)/)
+    // Sanity: the ONLY agents reference in http is the guarded DYNAMIC import (ADR-0044 exception).
+    // M53 changed the FORM of that bridge — `new Function('return import(…)')` became a native
+    // `await import('@theokit/agents')` — while preserving the invariant this test exists for: the
+    // edge is dynamic (optional peer), never a static `import … from`. The native form is also what
+    // let the agents branch of TheoApp finally be TESTED (the Function trick was unresolvable by the
+    // test runner, which is why that branch had shipped with no coverage at all).
+    expect(app).toMatch(/(?:importFn|await import)\(\s*['"]@theokit\/agents['"]\s*\)/)
   })
 })
