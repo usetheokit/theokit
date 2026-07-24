@@ -1,5 +1,19 @@
 # @theokit/agents
 
+## 4.5.0
+
+### Minor Changes
+
+- `@theokit/agents/tools` — pass-through of the `@theokit/sdk-tools` factory surface (M62).
+
+  The consumer imports its ready-made built-in tools (`createReadFileTool`, `createShellTool`, … +
+  `withName`/`withDescription`) from the Theokit layer instead of `@theokit/sdk-tools` directly. Pure
+  re-export, never enriched (parsimony Rung 9 — the sugar is the SDK-tools' own; wrapping it would be
+  reinventing, blueprint Q5). A surface test locks the 16 symbols the consumer uses. `@theokit/sdk-tools`
+  stays an OPTIONAL peer (only consumers of this subpath need it) and its range moves to `>=0.20.0` —
+  the newer tool factories (`createCurrentTimeTool`/`createInteractiveShellTool`/`createUpdatePlanTool`/
+  `createWriteStdinTool`) live there.
+
 ## 4.4.0
 
 ### Minor Changes

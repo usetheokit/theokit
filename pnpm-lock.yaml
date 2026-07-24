@@ -248,8 +248,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))
       '@theokit/sdk-tools':
-        specifier: ^0.11.0
-        version: 0.11.0(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)
+        specifier: ^0.20.0
+        version: 0.20.1(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)
       ai:
         specifier: ^7.0.14
         version: 7.0.14(zod@4.4.3)
@@ -276,7 +276,7 @@ importers:
     dependencies:
       '@theokit/agents':
         specifier: '>=0.47.0'
-        version: 1.0.0(@theokit/http@1.0.0)(@theokit/sdk-tools@0.11.0(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3))(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(ai@7.0.14(zod@4.4.3))(zod@4.4.3)
+        version: 1.0.0(@theokit/http@1.0.0)(@theokit/sdk-tools@0.20.1(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3))(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(ai@7.0.14(zod@4.4.3))(zod@4.4.3)
       react:
         specifier: '>=18.0.0'
         version: 19.2.7
@@ -2759,11 +2759,11 @@ packages:
     peerDependencies:
       '@theokit/sdk': '>=4.4.1'
 
-  '@theokit/sdk-tools@0.11.0':
-    resolution: {integrity: sha512-UBiARM8WOEgJVnKeZ4OnAp4BHA5wIks+X8mKGS6C3vRDZWpdV9UkpqLTaX8Q6gnme9Ubk3XGA4CIPq2CIgjmFw==}
+  '@theokit/sdk-tools@0.20.1':
+    resolution: {integrity: sha512-phWQAsrPuyy60HOGouaGIgttWKyTodzJNMgCfuue5pzPhl9SOGI2TuXCwkerBd0SnLQ46N7VrPniAdvfYOkUFg==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
-      '@theokit/sdk': '>=1.7.0'
+      '@theokit/sdk': '>=4.4.1'
       simple-git: ^3.0.0
       vitest: '>=2.0.0'
       zod: ^4.0.0
@@ -9396,13 +9396,13 @@ snapshots:
 
   '@tauri-apps/api@2.11.1': {}
 
-  '@theokit/agents@1.0.0(@theokit/http@1.0.0)(@theokit/sdk-tools@0.11.0(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3))(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(ai@7.0.14(zod@4.4.3))(zod@4.4.3)':
+  '@theokit/agents@1.0.0(@theokit/http@1.0.0)(@theokit/sdk-tools@0.20.1(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3))(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(ai@7.0.14(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@theokit/http': 1.0.0(@swc/core@1.15.41(@swc/helpers@0.5.23))(@theokit/agents@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(zod@4.4.3)
       '@theokit/sdk': 4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
-      '@theokit/sdk-tools': 0.11.0(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)
+      '@theokit/sdk-tools': 0.20.1(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)
       ai: 7.0.14(zod@4.4.3)
 
   '@theokit/http@1.0.0(@swc/core@1.15.41(@swc/helpers@0.5.23))(@theokit/agents@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(reflect-metadata@0.2.2)(zod@4.4.3)':
@@ -9411,7 +9411,7 @@ snapshots:
       zod: 4.4.3
     optionalDependencies:
       '@swc/core': 1.15.41(@swc/helpers@0.5.23)
-      '@theokit/agents': 1.0.0(@theokit/http@1.0.0)(@theokit/sdk-tools@0.11.0(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3))(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(ai@7.0.14(zod@4.4.3))(zod@4.4.3)
+      '@theokit/agents': 1.0.0(@theokit/http@1.0.0)(@theokit/sdk-tools@0.20.1(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3))(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(ai@7.0.14(zod@4.4.3))(zod@4.4.3)
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
@@ -9421,7 +9421,7 @@ snapshots:
     optionalDependencies:
       node-pty: 1.1.0
 
-  '@theokit/sdk-tools@0.11.0(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)':
+  '@theokit/sdk-tools@0.20.1(@theokit/sdk@4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3))(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)':
     dependencies:
       '@theokit/sdk': 4.19.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3)
       zod: 4.4.3
