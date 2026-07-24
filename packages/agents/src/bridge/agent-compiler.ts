@@ -91,7 +91,7 @@ export interface CompiledTool {
  * REVIEW TRIGGER (ADR D1): if the SDK ever exports `TOOL_NAME_PATTERN`/`validateToolName`, consume
  * it and delete this copy.
  */
-export const SDK_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
+const SDK_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
 
 /** Longest name {@link SDK_TOOL_NAME} admits (1 leading + 63) — split out so an overflow can say so. */
 const SDK_TOOL_NAME_MAX_LENGTH = 64
@@ -107,7 +107,7 @@ const SDK_TOOL_NAME_CHARSET = /^[a-zA-Z][a-zA-Z0-9_-]*$/
  * minted `mcp_*`, passed our authoring check, and was rejected by `Agent.create` with
  * `tool_reserved_name` — the same defect class, by a different axis.
  */
-export const SDK_RESERVED_TOOL_NAMES: ReadonlySet<string> = new Set([
+const SDK_RESERVED_TOOL_NAMES: ReadonlySet<string> = new Set([
   'shell',
   'memory_search',
   'memory_get',
