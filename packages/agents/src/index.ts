@@ -36,3 +36,12 @@ export type {
   PolicyHandler,
   ReasoningEffort,
 } from './types.js'
+
+// M58 — layered boundary `SDK → Theokit → AgentBuilder`: the consumer imports the SDK's already-OO
+// core primitives from `@theokit/agents`, not from `@theokit/sdk` directly. PASS-THROUGH, never a
+// wrapper (parsimony-ladder Rung 9): `Agent.create()` / `Tool.create()` / `Provider` are already the
+// target OO shape, so wrapping them would be ceremony without value. The domains with their own
+// infra surface (sandbox / persistence / interactive / pty) live on matching subpaths that mirror the
+// SDK's own subpath split (`@theokit/agents/{sandbox,persistence,interactive,pty}`).
+export { Agent, Squad, Tool, Provider } from '@theokit/sdk'
+export type { SDKAgent, CustomTool, SessionRecord } from '@theokit/sdk'

@@ -5,10 +5,15 @@ export default defineConfig({
     index: 'src/index.ts',
     bridge: 'src/bridge-entry.ts',
     testing: 'src/testing/index.ts',
+    // M58 — pass-through subpaths mirroring the SDK's own split.
+    sandbox: 'src/sandbox-entry.ts',
+    persistence: 'src/persistence-entry.ts',
+    interactive: 'src/interactive-entry.ts',
+    pty: 'src/pty-entry.ts',
   },
   format: ['esm'],
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ['@theokit/http', '@theokit/sdk', 'zod'],
+  external: ['@theokit/http', '@theokit/sdk', '@theokit/sdk-pty', 'zod'],
 })
