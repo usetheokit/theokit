@@ -8,12 +8,12 @@
  * hit. The `delegate` implementation is injectable (`delegateFn`) so this is testable without a
  * SubAgent class or an LLM — and so it NEVER re-implements the delegation runtime.
  */
-import { delegate, type DelegateOptions } from './agent-orchestrator.js'
+import { delegate, type DelegateOptions, type SubAgentSpec } from './agent-orchestrator.js'
 import type { DelegationResult } from './delegation-types.js'
 
 /** The delegation primitive both wrappers drive. Defaults to the M12 {@link delegate}. */
 export type DelegateFn = (
-  subAgent: Function,
+  subAgent: SubAgentSpec,
   message: string,
   opts?: DelegateOptions,
 ) => Promise<DelegationResult>
@@ -32,7 +32,7 @@ export interface BackgroundDelegation {
  * `delegate` — not a scheduler (Top-risk 1). Rejections are still observable via `wait()`.
  */
 export function delegateBackground(
-  subAgent: Function,
+  subAgent: SubAgentSpec,
   message: string,
   opts: DelegateOptions & { delegateFn?: DelegateFn } = {},
 ): BackgroundDelegation {
@@ -85,7 +85,7 @@ function defaultFeedbackTemplate(message: string, feedback: string): string {
  * the final result (passing, or the last attempt) with the per-round verdict trail.
  */
 export async function delegateWithScoring(
-  subAgent: Function,
+  subAgent: SubAgentSpec,
   message: string,
   opts: DelegateOptions & {
     scorer: Scorer
