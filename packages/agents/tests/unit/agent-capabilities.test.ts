@@ -17,7 +17,7 @@ import {
   subAgents,
 } from '../../src/capability/agent-capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
-import { ConfigurationError } from '../../src/capability/capabilities.js'
+import { ConfigurationError } from '../../src/errors.js'
 
 /**
  * M53 § A — one capability per waist-bound decorator. The oracle for the pass-through ones is that
