@@ -6,12 +6,10 @@
  *
  * Per ADR D6: structural { name, register } shape (no compile-time theokit dep).
  */
-import 'reflect-metadata'
 
 import { type CompiledAgentOptions } from './bridge/agent-compiler.js'
 import { generateAgentRoutes, type AgentRoute } from './bridge/agent-route-generator.js'
 import type { StreamEvent } from './bridge/agent-sse-handler.js'
-import { validateUniqueRoutes, type RouteIdentity } from './bridge/walk-agent-metadata.js'
 
 /**
  * An agent the plugin mounts: its name, route and already-compiled options (from `applyCapabilities`).
@@ -22,8 +20,29 @@ export interface PluginAgentEntry {
   readonly compiled: CompiledAgentOptions
 }
 
+/** Route/name identity used to detect duplicate agent routes. */
+export interface RouteIdentity {
+  readonly route: string
+  readonly agentConfig: { name: string }
+}
+
+/** Fail fast on two agents mounting the same route. */
+function validateUniqueRoutes(results: readonly RouteIdentity[]): void {
+  const seen = new Map<string, string>()
+  for (const r of results) {
+    const existing = seen.get(r.route)
+    if (existing !== undefined) {
+      throw new Error(
+        `[@theokit/agents] Duplicate agent route '${r.route}': ` +
+          `both '${existing}' and '${r.agentConfig.name}' declare it.`,
+      )
+    }
+    seen.set(r.route, r.agentConfig.name)
+  }
+}
+
 export interface AgentsPluginOptions {
-  /** Agents to mount: prepared entries, or classes decorated with `@Agent()`. */
+  /** Agents to mount: prepared entries built by `applyCapabilities`. */
   agents: PluginAgentEntry[]
   /** Toolbox classes (or use @Mixin on agents). */
   toolboxes?: Function[]

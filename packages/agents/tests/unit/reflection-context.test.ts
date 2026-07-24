@@ -56,7 +56,7 @@ describe('V4-K ReflectionContext threading', () => {
     }
     const runner = AgentRunner.fromSpec({
       compiled: reactAgent,
-      agentName: 'reactAgent',
+      name: 'reactAgent',
       strategy: 'react',
     })
       .reflection(custom as never)
@@ -81,7 +81,7 @@ describe('V4-K ReflectionContext threading', () => {
     }
     const runner = AgentRunner.fromSpec({
       compiled: reactAgent,
-      agentName: 'reactAgent',
+      name: 'reactAgent',
       strategy: 'react',
     })
       .reflection(custom as never)
@@ -104,7 +104,7 @@ describe('V4-K ReflectionContext threading', () => {
     }
     const runner = AgentRunner.fromSpec({
       compiled: reactAgent,
-      agentName: 'reactAgent',
+      name: 'reactAgent',
       strategy: 'react',
     })
       .reflection(custom as never)
@@ -133,7 +133,7 @@ describe('V4-K ReflectionContext threading', () => {
     }
     const runner = AgentRunner.fromSpec({
       compiled: reactAgent,
-      agentName: 'reactAgent',
+      name: 'reactAgent',
       strategy: 'react',
     })
       .reflection(custom as never)

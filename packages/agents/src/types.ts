@@ -9,7 +9,7 @@ import type { z } from 'zod'
  */
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | (string & {})
 
-/** Configuration stored by @Agent() decorator. */
+/** Scalar agent configuration. */
 export interface AgentOptions {
   /** Unique agent name (kebab-case). */
   name: string

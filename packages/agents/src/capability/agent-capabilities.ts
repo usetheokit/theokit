@@ -111,7 +111,7 @@ export const plugins = fieldCapability('plugins', 'plugins')
 export const runContext = fieldCapability('run-context', 'runContext')
 export const skillsResolver = fieldCapability('skills-resolver', 'skillsResolver')
 
-/** The scalar half of `@Agent` (its `name`/`route` are HTTP concerns, never agent config). */
+/** The scalar agent config (name/route are HTTP concerns, never agent config). */
 export interface AgentConfig {
   readonly systemPrompt?: CompiledAgentOptions['systemPrompt']
   readonly parseThinkTags?: boolean
@@ -123,7 +123,7 @@ export interface AgentConfig {
 }
 
 /**
- * `@Agent({...})` → the scalar waist fields. CLASS, not a factory: it validates, and it is the one
+ * Scalar waist fields (formerly the `@Agent` options). CLASS, not a factory: it validates, and it is the one
  * capability that writes fields another capability may legitimately override (see
  * {@link MainLoopCapability}).
  */

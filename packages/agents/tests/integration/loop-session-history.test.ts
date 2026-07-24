@@ -71,7 +71,7 @@ describe('V4-M reflective-loop session history', () => {
   it('test_each_round_getOrCreate_uses_the_same_session', async () => {
     const result = await AgentRunner.fromSpec({
       compiled: sessAgent,
-      agentName: 'sessAgent',
+      name: 'sessAgent',
       strategy: 'react',
     })
       .build()
@@ -83,7 +83,7 @@ describe('V4-M reflective-loop session history', () => {
   })
 
   it('test_round1_sends_original_round2_sends_continuation', async () => {
-    await AgentRunner.fromSpec({ compiled: sessAgent, agentName: 'sessAgent', strategy: 'react' })
+    await AgentRunner.fromSpec({ compiled: sessAgent, name: 'sessAgent', strategy: 'react' })
       .build()
       .run('the-task', { apiKey: 'k', maxIterations: 2 })
     expect(h.sends).toHaveLength(2)

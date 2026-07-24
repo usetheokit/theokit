@@ -1,8 +1,5 @@
-import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 
-import { compileAgent } from '../../src/bridge/agent-compiler.js'
-import { walkAgentMetadata } from '../../src/bridge/walk-agent-metadata.js'
 import {
   AgentConfigCapability,
   checkpoint,
@@ -21,8 +18,6 @@ import {
 } from '../../src/capability/agent-capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { ConfigurationError } from '../../src/capability/capabilities.js'
-import { Agent as DecoratorAgent } from '../../src/decorators/agent.js'
-import { MainLoop } from '../../src/decorators/main-loop.js'
 
 /**
  * M53 § A — one capability per waist-bound decorator. The oracle for the pass-through ones is that
@@ -53,16 +48,9 @@ describe('waist-bound capabilities (M53 § A)', () => {
     }
   })
 
-  it('@MainLoop WINS over @Agent on maxIterations/timeoutMs — the decorator path says so', () => {
-    @DecoratorAgent({ name: 'p', route: '/p', model: 'm', maxIterations: 3, timeoutMs: 300 })
-    class Decorated {
-      @MainLoop({ maxIterations: 9, timeoutMs: 900 })
-      async run(): Promise<void> {}
-    }
-    const viaDecorators = compileAgent(walkAgentMetadata(Decorated))
-    expect([viaDecorators.maxIterations, viaDecorators.timeoutMs]).toEqual([9, 900])
-
-    // Same precedence through capabilities, and it must NOT depend on declaration order.
+  it('main-loop WINS over agent-config on maxIterations/timeoutMs, order-independent', () => {
+    // Preserves the precedence the decorator compiler had (`mainLoop.x ?? agentConfig.x`): when both
+    // declare the loop knobs, main-loop wins — and it must NOT depend on declaration order.
     const agentCfg = new AgentConfigCapability({ maxIterations: 3, timeoutMs: 300 })
     const mainLoop = new MainLoopCapability({ maxIterations: 9, timeoutMs: 900 })
     for (const order of [

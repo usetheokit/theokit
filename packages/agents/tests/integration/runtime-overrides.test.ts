@@ -100,7 +100,7 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
   it('test_model_override_reaches_agent_create', async () => {
     const runner = AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     }).build()
     await runner.run('hi', { apiKey: 'k', model: 'anthropic/claude-x' })
@@ -110,7 +110,7 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
   it('test_cwd_override_reaches_agent_create_local', async () => {
     const runner = AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     }).build()
     await runner.run('hi', { apiKey: 'k', cwd: '/proj/root' })
@@ -122,7 +122,7 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
     // `Agent.create({ local: { baseDir } })`, so the SDK persists (and resumes) sessions under it.
     const runner = AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     }).build()
     await runner.run('hi', { apiKey: 'k', baseDir: '/app/.data/agent-sessions' })
@@ -132,7 +132,7 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
   it('test_maxIterations_override_caps_loop_with_step_limit', async () => {
     const runner = AgentRunner.fromSpec({
       compiled: reactAgent,
-      agentName: 'reactAgent',
+      name: 'reactAgent',
       strategy: 'react',
     }).build()
     const result = await runner.run('go', { apiKey: 'k', maxIterations: 3 })
@@ -143,7 +143,7 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
   it('test_no_overrides_uses_compiled_defaults', async () => {
     const runner = AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     }).build()
     await runner.run('hi', { apiKey: 'k' })
@@ -155,7 +155,7 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
     // EC-1: tools (V4-J) + model + cwd + maxIterations all in one call coexist.
     const runner = AgentRunner.fromSpec({
       compiled: reactAgent,
-      agentName: 'reactAgent',
+      name: 'reactAgent',
       strategy: 'react',
     }).build()
     const result = await runner.run('go', {
@@ -176,7 +176,7 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
     // EC-2: simple-chat is single-round by definition; a maxIterations override cannot make it loop.
     const runner = AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     }).build()
     const result = await runner.run('hi', { apiKey: 'k', maxIterations: 5 })
@@ -216,7 +216,7 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   it('test_plugins_override_reaches_agent_create', async () => {
     await AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -227,7 +227,7 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   it('test_providers_override_reaches_agent_create', async () => {
     await AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -238,7 +238,7 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   it('test_agents_override_reaches_agent_create', async () => {
     await AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -249,7 +249,7 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   it('test_budgetTracker_override_reaches_agent_create', async () => {
     await AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -260,7 +260,7 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   it('test_v4l3_compose_all_reach_agent_create', async () => {
     await AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -284,7 +284,7 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   it('test_no_v4l3_overrides_omits_keys', async () => {
     await AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -299,7 +299,7 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
     // EC-1: outer-loop `budget` (USD) and inner-SDK `budgetTracker` are different layers.
     const result = await AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     })
       .build()
@@ -313,7 +313,7 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
     const empty = [] as unknown as PluginsSettings
     await AgentRunner.fromSpec({
       compiled: simpleAgent,
-      agentName: 'simpleAgent',
+      name: 'simpleAgent',
       strategy: 'simple-chat',
     })
       .build()

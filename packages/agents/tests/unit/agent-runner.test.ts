@@ -52,7 +52,7 @@ describe('AgentRunner (T3.1)', () => {
   it('test_agentrunner_builder_fluent_chain_returns_runner', () => {
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
       maxIterations: 3,
     })
@@ -65,7 +65,7 @@ describe('AgentRunner (T3.1)', () => {
   it('test_agentrunner_build_parity_with_delegate — same loopStrategy as delegate resolves (D4)', () => {
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
       maxIterations: 3,
     }).build()
@@ -78,7 +78,7 @@ describe('AgentRunner (T3.1)', () => {
     script([[{ type: 'tool_result', toolName: 'x', input: {}, output: 'r' }], [{ type: 'done' }]])
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
       maxIterations: 3,
     }).build()
@@ -98,7 +98,7 @@ describe('AgentRunner (T3.1)', () => {
     script([[{ type: 'tool_result', toolName: 'x', input: {}, output: 'r' }]])
     const runner = AgentRunner.fromSpec({
       compiled: reflectAgent,
-      agentName: 'reflectAgent',
+      name: 'reflectAgent',
       strategy: 'plan-act-reflect',
       maxIterations: 3,
     })
@@ -113,7 +113,7 @@ describe('AgentRunner (T3.1)', () => {
     expect(() =>
       AgentRunner.fromSpec({
         compiled: zeroAgent,
-        agentName: 'zeroAgent',
+        name: 'zeroAgent',
         strategy: 'react',
         maxIterations: 0,
       }).build(),
