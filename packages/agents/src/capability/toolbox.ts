@@ -1,4 +1,5 @@
 import {
+  compileHitlGates,
   compileTools,
   toolRuntimeName,
   type ClassToken,
@@ -104,13 +105,21 @@ export class ToolboxCapability implements Capability {
     for (const tool of declared) toolRuntimeName(this.#namespace, tool.name)
   }
 
-  /** The compiled tools this toolbox contributes — the same shape the decorator path produces. */
-  compile(): CompiledTool[] {
-    // `constructor` is typed `Function` by lib.d.ts; here it is used purely as an IDENTITY key
-    // into the instances map, which is what `ClassToken` models.
-    const token = this.#instance.constructor as ClassToken
-    const walk: ToolboxWalkResult = {
-      class: token,
+  /**
+   * The single derivation of this toolbox (M55). Both compilers below consume THIS object, so the
+   * tool registry and the HITL gate map cannot disagree on a name — the property is structural, not
+   * a convention repeated in two loops. That repetition is precisely how the two drifted apart in
+   * #145: the tool became `ns_tool` while its gate stayed `ns.tool`, silently ungating it.
+   *
+   * Same technique the `opencode` harness uses for the analogous tool↔permission coupling, where
+   * `Permission.visibleTools` filters the tool record itself rather than keeping a parallel map
+   * ("so the two cannot drift" — `permission/index.ts`).
+   */
+  #walk(): ToolboxWalkResult {
+    return {
+      // `constructor` is typed `Function` by lib.d.ts; here it is used purely as an IDENTITY key
+      // into the instances map, which is what `ClassToken` models.
+      class: this.#instance.constructor as ClassToken,
       namespace: this.#namespace,
       guards: [],
       tools: this.#declarations.map((tool) => ({
@@ -123,24 +132,26 @@ export class ToolboxCapability implements Capability {
         ...(tool.hitl !== undefined ? { hitl: tool.hitl } : {}),
       })),
     }
-    return compileTools([walk], new Map([[token, this.#instance]]))
+  }
+
+  /** The compiled tools this toolbox contributes — the same shape the decorator path produces. */
+  compile(): CompiledTool[] {
+    const walk = this.#walk()
+    return compileTools([walk], new Map([[walk.class, this.#instance]]))
   }
 
   apply(draft: CompiledAgentOptionsDraft): void {
+    const walk = this.#walk()
+
     // ACCUMULATES: several toolboxes compose into one agent, exactly as several `@Toolbox` classes did.
-    draft.tools.push(...this.compile())
+    draft.tools.push(...compileTools([walk], new Map([[walk.class, this.#instance]])))
     draft.provenance.push({ capability: this.name, contributed: ['tools'] })
 
-    // The gate key comes from `toolRuntimeName` — the SAME function `compileTools` uses. It was
-    // duplicated inline here, which is exactly how the two drifted apart when the separator changed
-    // (theokit#145): the tool became `ns_tool` while its gate stayed `ns.tool`, silently ungating it.
-    // Collecting the pairs first keeps `hitl` narrowed by the guard, with no assertion.
-    const gates: [string, HumanInTheLoopOptions][] = []
-    for (const tool of this.#declarations) {
-      if (tool.hitl === undefined) continue
-      gates.push([toolRuntimeName(this.#namespace, tool.name), tool.hitl])
-    }
-    if (gates.length === 0) return
+    const gates = compileHitlGates([walk])
+    // The early return comes BEFORE `??=`, deliberately: `agent-compiler.ts` documents that an
+    // empty gate map means "no gated tools ⇒ the non-HITL stream path (M2, byte-unchanged)".
+    // Creating an empty Map here would flip that branch for every agent that has no HITL at all.
+    if (gates.size === 0) return
     draft.hitl ??= new Map()
     for (const [key, options] of gates) draft.hitl.set(key, options)
     draft.provenance.push({ capability: this.name, contributed: ['hitl'] })

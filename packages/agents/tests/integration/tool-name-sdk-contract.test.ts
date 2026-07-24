@@ -52,10 +52,13 @@ describe('tool name ↔ SDK contract (#145)', () => {
     ).resolves.toBeDefined()
   })
 
-  it('the generated name matches the SDK charset', () => {
-    const SDK_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
-    expect(toolRuntimeName('ops', 'deploy')).toMatch(SDK_TOOL_NAME)
-    expect(toolRuntimeName('', 'deploy')).toMatch(SDK_TOOL_NAME)
+  it('the generated name is the composed one, and minting a valid pair never throws', () => {
+    // This used to re-declare the charset regex here — a THIRD copy of the rule, which is the very
+    // duplication M55 removes. The mint point validates now, so the behavioural assertion (it
+    // returns the composed name and does not throw) is the honest one; the charset itself is
+    // asserted where it lives, through the negative cases below and the real `Agent.create`.
+    expect(toolRuntimeName('ops', 'deploy')).toBe('ops_deploy')
+    expect(toolRuntimeName('', 'deploy')).toBe('deploy')
   })
 
   it('the HITL gate map uses the SAME name as the compiled tool (they cannot disagree)', () => {
