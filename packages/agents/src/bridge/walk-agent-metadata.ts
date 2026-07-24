@@ -25,7 +25,7 @@ import type { McpServersMap } from '../decorators/mcp.js'
 import { getMemoryConfig } from '../decorators/memory.js'
 import type { MemoryOptions } from '../decorators/memory.js'
 import { Trace, Audit } from '../decorators/observability.js'
-import { RequiresApproval, Budget } from '../decorators/policies.js'
+import { RequiresApproval } from '../decorators/policies.js'
 import type { ProjectContextOptions } from '../decorators/project-context.js'
 import { getProjectContextConfig } from '../decorators/project-context.js'
 import { getSkillsConfig } from '../decorators/skills.js'
@@ -269,20 +269,6 @@ export function walkAgentMetadata(
         `@UseFilters is metadata-only on agents and will not catch agent runtime errors. ` +
         `Agent errors flow through SSE error events, not HTTP exception filters. ` +
         `Filters are reserved for future agent-specific error handling.`,
-    )
-  }
-
-  // @Budget on agent class: metadata-only for top-level agents.
-  // Budget enforcement is active only in delegate() (sub-agent calls) where
-  // the orchestrator clamps cost mid-stream. Top-level agent budget depends
-  // on the SDK's cost reporting in DoneEvent.
-  const agentBudget = reflectorInstance.get(Budget, AgentClass)
-  if (agentBudget) {
-    console.warn(
-      `[${AgentWarningCode.BUDGET_TOP_LEVEL_METADATA_ONLY}] Agent ${AgentClass.name}: ` +
-        `@Budget on top-level agents is metadata-only in this version. ` +
-        `Budget enforcement currently applies to delegate() calls only. ` +
-        `Top-level run enforcement will be wired through SDK cost tracking in a future release.`,
     )
   }
 
