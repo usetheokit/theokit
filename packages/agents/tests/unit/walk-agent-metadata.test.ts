@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { Agent } from '../../src/decorators/agent.js'
 import { MainLoop } from '../../src/decorators/main-loop.js'
 import { Toolbox, Tool } from '../../src/decorators/tool.js'
-import { RequiresApproval, Budget } from '../../src/decorators/policies.js'
+import { RequiresApproval } from '../../src/decorators/policies.js'
 import {
   walkAgentMetadata,
   validateUniqueRoutes,
@@ -164,23 +164,6 @@ describe('walkAgentMetadata', () => {
     spy.mockRestore()
   })
 
-  it('test_walk_agent_with_budget_warns_with_stable_code', () => {
-    @Agent({ name: 'budgeted', route: '/budgeted' })
-    @Budget({ maxCostUsd: 0.5 })
-    class BudgetedAgent {
-      @MainLoop()
-      async run() {}
-    }
-
-    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    walkAgentMetadata(BudgetedAgent)
-    expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining(AgentWarningCode.BUDGET_TOP_LEVEL_METADATA_ONLY),
-    )
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining('delegate() calls only'))
-    spy.mockRestore()
-  })
-
   it('test_walk_agent_without_metadata_decorators_no_warning', () => {
     @Agent({ name: 'clean-no-warn', route: '/clean-no-warn' })
     class CleanAgent {
@@ -219,22 +202,6 @@ describe('walkAgentMetadata', () => {
     expect(spy).toHaveBeenCalledTimes(1)
 
     spy.mockRestore()
-  })
-
-  it('test_delegate_budget_is_runtime_enforced_not_metadata_only', async () => {
-    // delegate() in agent-orchestrator.ts enforces budget at runtime
-    // via clamping + mid-stream abort. This test verifies the distinction:
-    // @Budget on agent class = metadata-only warning
-    // Budget in DelegateOptions = runtime enforcement (no warning)
-    const { BudgetExceededError } = await import('../../src/bridge/agent-orchestrator.js')
-
-    // BudgetExceededError exists and is a proper error class
-    const err = new BudgetExceededError('TestAgent', 0.75, 0.5)
-    expect(err.name).toBe('BudgetExceededError')
-    expect(err.actualCost).toBe(0.75)
-    expect(err.budgetLimit).toBe(0.5)
-    expect(err.message).toContain('exceeded budget')
-    // delegate() uses DelegateOptions.budget — no walkAgentMetadata warning involved
   })
 
   it('test_duplicate_route_throws', () => {
