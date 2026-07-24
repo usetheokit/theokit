@@ -26,10 +26,9 @@ import {
 import { type RoundStreamFactory, runReflectiveLoop } from '../loop/run-reflective-loop.js'
 import type { MainLoopMeta } from '../types.js'
 
-import { compileAgent, type CompiledAgentOptions, type CompiledTool } from './agent-compiler.js'
+import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import { type DelegationResult, DelegationError } from './delegation-types.js'
 import { createSdkAgentStream } from './sdk-adapter.js'
-import { walkAgentMetadata } from './walk-agent-metadata.js'
 
 // Re-export the delegation value types for backward compatibility — they moved
 // to delegation-types.js to break the orchestrator↔loop import cycle (G1).
@@ -122,9 +121,8 @@ function mergeTools(parentTools: CompiledTool[], subTools: CompiledTool[]): Comp
  *   all live in the shared driver, so they fire identically on both paths.
  */
 /**
- * M53 — what `delegate` needs from a sub-agent: a name and already-compiled options. A decorated
- * CLASS still works (it is resolved through `subAgentSpec`), so the decorator path is unchanged
- * while the migration is in flight; a capability-authored agent passes this directly.
+ * What `delegate` needs from a sub-agent: a name and already-compiled options (built by
+ * `applyCapabilities`). Compatible with {@link AgentRunnerSpec} — one spec drives both on-ramps.
  */
 export interface SubAgentSpec {
   readonly name: string
@@ -135,29 +133,11 @@ export interface SubAgentSpec {
   readonly maxIterations?: number
 }
 
-/** Resolve a decorated class into a {@link SubAgentSpec} — the only place the walk is still needed. */
-function subAgentSpec(source: Function | SubAgentSpec): SubAgentSpec {
-  if (typeof source !== 'function') return source
-  const walk = walkAgentMetadata(source, [])
-  const toolboxInstances = new Map(
-    walk.toolboxes.map((tb) => [tb.class, new (tb.class as new () => object)()]),
-  )
-  return {
-    // The CLASS name, not `agentConfig.name`: the delegation hooks have always reported the class
-    // (`EchoAgent`), and this migration must not quietly change what a consumer's hook receives.
-    name: source.name,
-    compiled: compileAgent(walk, toolboxInstances),
-    strategy: walk.mainLoop.strategy,
-    maxIterations: walk.mainLoop.maxIterations,
-  }
-}
-
 export async function delegate(
-  subAgent: Function | SubAgentSpec,
+  spec: SubAgentSpec,
   message: string,
   opts: DelegateOptions = {},
 ): Promise<DelegationResult> {
-  const spec = subAgentSpec(subAgent)
   const apiKey = requireApiKey(opts, spec.name)
 
   // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
