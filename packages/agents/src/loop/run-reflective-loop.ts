@@ -434,18 +434,14 @@ async function* consumeOneRound(
 }
 
 /**
- * Drive the reflective loop to a terminal {@link DelegationResult}.
- *
- * Terminates when: the reflection/strategy says stop, the `maxIterations` ceiling
- * is reached (via `loop.shouldContinue`), the signal aborts, or a degenerate round
- * resolves to `stop`. Throws `DelegationError` on a mid-round error event
- * (fail-fast, typed) and `BudgetExceededError` when cumulative cost crosses `budget`.
- */
-export /**
  * Step-cap force-close: on the ceiling round (`round === maxIterations`) wrap the factory so it is
  * called with `disableTools: true` (the adapter maps it to `tool_choice:"none"` at send-time),
  * forcing the model to emit the closing summary STEP_LIMIT_HINT requests instead of more tool calls.
  * Below the ceiling, the factory is returned unchanged.
+ *
+ * NOT exported (M55): its only caller is `runReflectiveLoopStream`, right below. A stray `export`
+ * used to sit between the loop's own JSDoc and this function, which both leaked this helper into the
+ * module's public surface and separated that doc block from the function it describes.
  */
 function ceilingRoundFactory(
   factory: RoundStreamFactory,
@@ -456,6 +452,14 @@ function ceilingRoundFactory(
   return (m, s) => factory(m, s, { disableTools: true })
 }
 
+/**
+ * Drive the reflective loop to a terminal {@link DelegationResult}.
+ *
+ * Terminates when: the reflection/strategy says stop, the `maxIterations` ceiling
+ * is reached (via `loop.shouldContinue`), the signal aborts, or a degenerate round
+ * resolves to `stop`. Throws `DelegationError` on a mid-round error event
+ * (fail-fast, typed) and `BudgetExceededError` when cumulative cost crosses `budget`.
+ */
 export async function* runReflectiveLoopStream(
   factory: RoundStreamFactory,
   message: string,
