@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **`@theokit/agents/tools` — pass-through da superfície de `@theokit/sdk-tools` (M62).** O consumidor importa seus tools built-in prontos (`createReadFileTool`/`createShellTool`/… + `withName`/`withDescription`) da camada Theokit em vez de `@theokit/sdk-tools` direto. Re-export puro, nunca enriquecido (parcimônia Rung 9 — o sugar é do próprio SDK-tools; envolver seria reinventar, blueprint Q5). Teste de superfície trava os 16 símbolos usados. `@theokit/sdk-tools` segue peer **opcional** (só quem usa o subpath precisa) e o range sobe para `>=0.20.0` (os factories mais novos vivem lá).
+
 ### Changed
 - **`ConfigurationError` unificado na classe do SDK (M61).** Havia **dois** `ConfigurationError` — o do `@theokit/agents` (`extends Error`) e o do `@theokit/sdk` (`extends TheokitAgentError`) — e um `catch (e instanceof ConfigurationError)` pegava um caminho de throw e **silenciosamente perdia o outro**. A camada agora **re-exporta a classe do SDK**, então throws de autoria (`@theokit/agents`) e de runtime (`@theokit/sdk`) são a **mesma** classe: `instanceof` vale através da fronteira nos dois sentidos. `new ConfigurationError('msg')` single-arg segue igual (opções do SDK são opcionais); continua `instanceof Error`. Re-export, não subclasse (subclasse seria `instanceof` assimétrico). Suíte 623 verde (zero-behavior). ADR `knowledge-base/adrs/0006-configuration-error-unification.md`.
 
