@@ -7,6 +7,7 @@
  * `send` drives `onDelta` with a `text-delta` (the adapter's real token-stream path, #44).
  */
 import 'reflect-metadata'
+import type { CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
 import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
@@ -33,25 +34,19 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { AgentRunner } = await import('../../src/index.js')
-const { compileAgent } = await import('../../src/bridge/agent-compiler.js')
-const { walkAgentMetadata } = await import('../../src/bridge/walk-agent-metadata.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability } = await import('../../src/capability/capabilities.js')
+const { AgentConfigCapability } = await import('../../src/capability/agent-capabilities.js')
 
-@Agent({ name: 'tt-on', route: '/tt-on', model: 'm', parseThinkTags: true })
-class ThinkTagsAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+/** Capability-authored equivalents of the former `@Agent`-decorated fixtures. */
+const thinkTagsAgent = applyCapabilities([
+  new ModelCapability('m'),
+  new AgentConfigCapability({ parseThinkTags: true }),
+])
+const plainAgent = applyCapabilities([new ModelCapability('m')])
 
-@Agent({ name: 'tt-off', route: '/tt-off', model: 'm' })
-class PlainAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
-
-async function streamEvents(AgentClass: Parameters<typeof AgentRunner.builder>[0], opts = {}) {
-  const gen = AgentRunner.builder(AgentClass)
+async function streamEvents(compiled: CompiledAgentOptions, opts = {}) {
+  const gen = AgentRunner.fromSpec({ compiled, name: 'a', strategy: 'simple-chat' })
     .build()
     .stream('hi', { apiKey: 'k', ...opts })
   const events: StreamEvent[] = []
@@ -65,12 +60,12 @@ describe('M2 parseThinkTags wiring', () => {
   })
 
   it('test_agent_config_parseThinkTags_compiles', () => {
-    expect(compileAgent(walkAgentMetadata(ThinkTagsAgent)).parseThinkTags).toBe(true)
-    expect(compileAgent(walkAgentMetadata(PlainAgent)).parseThinkTags).toBeUndefined()
+    expect(thinkTagsAgent.parseThinkTags).toBe(true)
+    expect(plainAgent.parseThinkTags).toBeUndefined()
   })
 
   it('test_stream_extracts_think_when_enabled', async () => {
-    const events = await streamEvents(ThinkTagsAgent)
+    const events = await streamEvents(thinkTagsAgent)
     const thinking = events.filter((e) => e.type === 'thinking').map((e) => e.content)
     const text = events.filter((e) => e.type === 'text_delta').map((e) => e.content)
     expect(thinking).toContain('reasoning')
@@ -78,7 +73,7 @@ describe('M2 parseThinkTags wiring', () => {
   })
 
   it('test_stream_no_extract_when_disabled', async () => {
-    const events = await streamEvents(PlainAgent)
+    const events = await streamEvents(plainAgent)
     expect(events.some((e) => e.type === 'thinking')).toBe(false)
     // The raw <think> stays in the text stream (backward-compat — no transform applied).
     const text = events
@@ -90,7 +85,7 @@ describe('M2 parseThinkTags wiring', () => {
 
   it('test_run_override_parseThinkTags_beats_compiled', async () => {
     // compiled false (PlainAgent) + per-run override true ⇒ extraction applies.
-    const events = await streamEvents(PlainAgent, { parseThinkTags: true })
+    const events = await streamEvents(plainAgent, { parseThinkTags: true })
     expect(events.some((e) => e.type === 'thinking' && e.content === 'reasoning')).toBe(true)
   })
 })

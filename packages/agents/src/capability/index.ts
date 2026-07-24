@@ -5,3 +5,5 @@
 export * from './capability.js'
 export * from './capabilities.js'
 export * from './registry.js'
+export * from './agent-capabilities.js'
+export * from './toolbox.js'

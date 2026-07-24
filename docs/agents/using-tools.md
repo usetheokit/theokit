@@ -176,28 +176,47 @@ export default defineAgent({
 
 ## Tools on the `@Agent` class surface
 
-On the decorator surface, mark a method with `@Tool`:
+On the class surface, a **toolbox** declares its tools as DATA and keeps the handlers as ordinary
+methods — so the class can hold state and injected dependencies:
 
 ```ts
-import { Agent, Tool } from '@theokit/agents'
+import {
+  applyCapabilities,
+  ModelCapability,
+  ToolboxCapability,
+  type ToolDeclaration,
+} from '@theokit/agents'
 import { z } from 'zod'
 
-@Agent({ model: 'anthropic/claude-sonnet-4-6' })
-export class Support {
-  @Tool({
-    name: 'lookup_order',
-    description: 'Look up an order by ID. Call when the user asks about an order.',
-    input: z.object({ orderId: z.string() }),
-  })
-  async lookupOrder({ orderId }: { orderId: string }) {
-    const order = await db.orders.findById(orderId)
+export class SupportTools {
+  static readonly tools: ToolDeclaration[] = [
+    {
+      name: 'lookup_order',
+      description: 'Look up an order by ID. Call when the user asks about an order.',
+      input: z.object({ orderId: z.string() }),
+      method: 'lookupOrder',
+    },
+  ]
+
+  constructor(private readonly db: Db) {} // dependências injetadas de verdade
+
+  async lookupOrder({ orderId }: { orderId: string }): Promise<string> {
+    const order = await this.db.orders.findById(orderId)
     return order ? JSON.stringify(order) : `Order ${orderId} not found`
   }
 }
+
+const compiled = applyCapabilities([
+  new ModelCapability('anthropic/claude-sonnet-4-6'),
+  new ToolboxCapability(new SupportTools(db), { namespace: 'support' }), // → support.lookup_order
+])
 ```
 
-The method receives the parsed input directly. For shared context access on the class
-surface, inject dependencies via the constructor (DI pattern).
+The method receives the parsed input directly, bound to the instance. A typo in `method` fails at
+**authoring** time, not when the model decides to call the tool.
+
+> **Migrating from `@Tool`/`@Toolbox`?** The decorators were removed in `@theokit/agents` v1.0
+> (M53). See [`MIGRATION.md`](../../MIGRATION.md).
 
 ---
 

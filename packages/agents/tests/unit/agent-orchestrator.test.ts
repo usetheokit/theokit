@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import 'reflect-metadata'
-import { Agent } from '../../src/decorators/agent.js'
-import { MainLoop } from '../../src/decorators/main-loop.js'
-import { Toolbox, Tool } from '../../src/decorators/tool.js'
+import type { DoneEvent } from '../../src/bridge/agent-stream-events.js'
+import { ModelCapability } from '../../src/capability/capabilities.js'
+import { applyCapabilities } from '../../src/capability/capability.js'
+import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/toolbox.js'
 import { z } from 'zod'
 import {
   delegate,
@@ -12,22 +12,33 @@ import {
 
 // ── Test fixtures ──
 
-@Toolbox({ namespace: 'math' })
 class MathTools {
-  @Tool({ name: 'add', description: 'Add two numbers', input: z.object({ a: z.number(), b: z.number() }) })
-  add(input: { a: number; b: number }) { return String(input.a + input.b) }
+  static readonly tools: ToolDeclaration[] = [
+    {
+      name: 'add',
+      description: 'Add two numbers',
+      input: z.object({ a: z.number(), b: z.number() }),
+      method: 'add',
+    },
+  ]
+  add(input: { a: number; b: number }): string {
+    return String(input.a + input.b)
+  }
 }
 
-@Agent({ name: 'helper', route: '/api/agents/helper', model: 'test-model' })
-class HelperAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() { /* no-op */ }
+const HelperAgent = {
+  name: 'HelperAgent',
+  compiled: applyCapabilities([new ModelCapability('test-model')]),
+  strategy: 'simple-chat' as const,
 }
 
-@Agent({ name: 'tooled-helper', route: '/api/agents/tooled-helper', model: 'test-model' })
-class TooledHelperAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() { /* no-op */ }
+const TooledHelperAgent = {
+  name: 'TooledHelperAgent',
+  compiled: applyCapabilities([
+    new ModelCapability('test-model'),
+    new ToolboxCapability(new MathTools(), { namespace: 'math' }),
+  ]),
+  strategy: 'simple-chat' as const,
 }
 
 // ── Tests ──
@@ -43,11 +54,13 @@ describe('Agent Orchestrator — delegate()', () => {
     const clamp = (budget?: number, parentRemaining?: number) =>
       Math.min(budget ?? Infinity, parentRemaining ?? Infinity)
 
-    expect(clamp(2, 1)).toBe(1)        // parent limited
-    expect(clamp(0.5, 1)).toBe(0.5)    // explicit limited
+    expect(clamp(2, 1)).toBe(1) // parent limited
+    expect(clamp(0.5, 1)).toBe(0.5) // explicit limited
+    /* eslint-disable sonarjs/no-undefined-argument -- the explicit undefined IS the case under test */
     expect(clamp(undefined, 1)).toBe(1) // inherit parent
     expect(clamp(2, undefined)).toBe(2) // no parent limit
-    expect(clamp()).toBe(Infinity)      // no limits
+    /* eslint-enable sonarjs/no-undefined-argument */
+    expect(clamp()).toBe(Infinity) // no limits
   })
 
   it('test_budget_exceeded_error_message', () => {
@@ -81,18 +94,32 @@ describe('Agent Orchestrator — delegate()', () => {
   it('test_delegate_tool_collision_sub_wins', () => {
     // When parent and sub have a tool with same name, sub's version wins
     const parentTools = [
-      { name: 'search', description: 'parent search', inputSchema: z.object({}), handler: async () => 'parent' },
+      {
+        name: 'search',
+        description: 'parent search',
+        inputSchema: z.object({}),
+        handler: async () => 'parent',
+      },
     ]
     const subTools = [
-      { name: 'search', description: 'sub search', inputSchema: z.object({}), handler: async () => 'sub' },
+      {
+        name: 'search',
+        description: 'sub search',
+        inputSchema: z.object({}),
+        handler: async () => 'sub',
+      },
     ]
     // Merge logic: filter parent tools whose name conflicts with sub tools
-    const subToolNames = new Set(subTools.map(t => t.name))
-    const inherited = parentTools.filter(t => !subToolNames.has(t.name))
+    const subToolNames = new Set(subTools.map((t) => t.name))
+    const inherited = parentTools.filter((t) => !subToolNames.has(t.name))
     const allTools = [...inherited, ...subTools]
 
     expect(allTools).toHaveLength(1)
     expect(allTools[0].description).toBe('sub search')
+  })
+
+  it('test_toolbox_capability_compiles_tools_onto_the_agent', () => {
+    expect(TooledHelperAgent.compiled.tools.map((t) => t.name)).toEqual(['math.add'])
   })
 
   it('test_delegate_auto_instantiates_toolboxes', () => {
@@ -105,7 +132,7 @@ describe('Agent Orchestrator — delegate()', () => {
 
   it('test_done_event_has_cost_field', async () => {
     // EC-2: DoneEvent type now includes cost?: number
-    const event: import('../../src/bridge/agent-stream-events.js').DoneEvent = {
+    const event: DoneEvent = {
       type: 'done',
       result: 'test',
       usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
@@ -115,7 +142,7 @@ describe('Agent Orchestrator — delegate()', () => {
     expect(event.cost).toBe(0.005)
 
     // cost is optional — undefined is valid
-    const event2: import('../../src/bridge/agent-stream-events.js').DoneEvent = {
+    const event2: DoneEvent = {
       type: 'done',
       result: 'test',
       usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },

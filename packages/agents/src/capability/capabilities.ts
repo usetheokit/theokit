@@ -110,7 +110,7 @@ export const skills = (entries: readonly (string | InlineSkill)[]): Capability =
       // DELEGA ao compilador canônico (não reimplementa): `autoInject`, skills inline e o caminho
       // resolver vivem numa fonte só — reimplementar aqui divergiria (foi o que a prova de
       // equivalência pegou).
-      const compiled = compileSkillsSelection([...entries])
+      const compiled = compileSkillsSelection(entries.slice())
       if (compiled.skills === undefined) return
       // ACCUMULATES, never setOnce: skills is a merge-semantics field in the reference compiler
       // (`defineAgent({skills:['a','b']})` → `['a','b']`). With setOnce a preset's baseline skills

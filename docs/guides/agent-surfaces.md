@@ -69,25 +69,37 @@ union in the client. This is the recommended surface for anything beyond a one-l
 
 ## 3. `@Agent` — the class/DI surface
 
-A class with decorators, for dependency injection, guards, mixins, and the advanced harness
-(human-in-the-loop, checkpoints).
+Composable **capabilities** — for dependency injection, toolboxes with state, and the advanced
+harness (human-in-the-loop, checkpoints).
 
 ```ts
 // agents/support.ts
-import { Agent, MainLoop, Tool } from '@theokit/agents'
+import {
+  applyCapabilities,
+  ModelCapability,
+  ToolboxCapability,
+  type ToolDeclaration,
+} from '@theokit/agents'
 
-@Agent({ model: 'anthropic/claude-sonnet-4-6' })
-export class Support {
-  @Tool({ name: 'lookup', description: '…', input: /* zod */ })
-  async lookup() {/* … */}
-
-  @MainLoop({ strategy: 'react' })
-  async run() {/* … */}
+class SupportTools {
+  static readonly tools: ToolDeclaration[] = [
+    { name: 'lookup', description: '…', input: /* zod */, method: 'lookup' },
+  ]
+  constructor(private readonly db: Db) {} // DI real, por construtor
+  async lookup(): Promise<string> {/* … */}
 }
+
+export const support = applyCapabilities([
+  new ModelCapability('anthropic/claude-sonnet-4-6'),
+  new ToolboxCapability(new SupportTools(db), { namespace: 'support' }),
+])
 ```
 
-**Use it when:** you need DI, `@UseGuards`, `@Mixin` toolboxes, `@HumanInTheLoop` gates, or
-`@Checkpoint` resume — the class form is where the advanced harness lives.
+**Use it when:** you need DI, toolboxes com estado, gates de human-in-the-loop (`hitl`) ou resume
+por checkpoint — é onde o harness avançado vive. Cada capability é composta, não herdada.
+
+> **Migrando de decorators?** `@Agent`/`@Tool`/`@Toolbox`/`@MainLoop` foram removidos em
+> `@theokit/agents` v1.0 (M53). Veja [`MIGRATION.md`](../../MIGRATION.md).
 
 ## Which one should I use?
 

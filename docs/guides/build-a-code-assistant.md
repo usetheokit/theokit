@@ -215,43 +215,50 @@ Create `agents/coder.ts`:
 
 ```ts
 // agents/coder.ts
-import { Agent, Toolbox, Tool, HumanInTheLoop, Checkpoint, Mixin, MainLoop } from '@theokit/agents'
+import {
+  applyCapabilities,
+  AgentConfigCapability,
+  ModelCapability,
+  ToolboxCapability,
+  checkpoint,
+  type ToolDeclaration,
+} from '@theokit/agents'
 import { z } from 'zod'
 import { writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-@Toolbox({ namespace: 'fs' })
 class WriteTools {
-  @Tool({
-    name: 'write_file',
-    description: 'Write UTF-8 content to a path relative to the project root.',
-    input: z.object({ path: z.string(), content: z.string() }),
-  })
-  @HumanInTheLoop({
-    question: 'Approve writing this file?',
-    timeout: 300_000,
-    onTimeout: 'abort', // a timed-out approval is a denial — never write on silence
-  })
+  static readonly tools: ToolDeclaration[] = [
+    {
+      name: 'write_file',
+      description: 'Write UTF-8 content to a path relative to the project root.',
+      input: z.object({ path: z.string(), content: z.string() }),
+      method: 'writeFile',
+      hitl: {
+        question: 'Approve writing this file?',
+        timeout: 300_000,
+        onTimeout: 'abort', // a timed-out approval is a denial — never write on silence
+      },
+    },
+  ]
+
   async writeFile(input: { path: string; content: string }): Promise<string> {
     await writeFile(resolve(process.cwd(), input.path), input.content, 'utf8')
     return `Wrote ${input.path} (${input.content.length} bytes).`
   }
 }
 
-@Agent({
-  name: 'coder',
-  route: '/coder',
-  model: 'anthropic/claude-sonnet-4-6',
-  systemPrompt:
-    'You are a coding agent. Read before you write. When you write a file, keep the diff minimal ' +
-    'and explain the change — the human will review your write before it lands.',
-})
-@Checkpoint({ storage: 'filesystem', strategy: 'after-tool-call' })
-@Mixin(WriteTools) // its @HumanInTheLoop tool becomes a gate on this agent
-export default class CoderAgent {
-  @MainLoop({ strategy: 'plan-act-reflect', maxIterations: 10 })
-  async run(): Promise<void> {}
-}
+export default applyCapabilities([
+  new ModelCapability('anthropic/claude-sonnet-4-6'),
+  new AgentConfigCapability({
+    systemPrompt:
+      'You are a coding agent. Read before you write. When you write a file, keep the diff minimal ' +
+      'and explain the change — the human will review your write before it lands.',
+    maxIterations: 10,
+  }),
+  new ToolboxCapability(new WriteTools(), { namespace: 'fs' }), // seu tool com `hitl` vira um gate
+  checkpoint({ storage: 'filesystem', strategy: 'after-tool-call' }),
+])
 ```
 
 What you get at `POST /api/agents/coder`, with zero extra wiring:
@@ -260,9 +267,9 @@ What you get at `POST /api/agents/coder`, with zero extra wiring:
   `tool-approval-request`. Approve it with
   `POST /api/agents/coder/approve/<approvalId>` (the `approvalId` arrives on the stream). On approve
   the tool runs; on deny or timeout the model receives the denial and carries on.
-- **Resume.** `@Checkpoint({ storage: 'filesystem' })` persists the conversation; a follow-up request
+- **Resume.** `checkpoint({ storage: 'filesystem' })` persists the conversation; a follow-up request
   with the same session id replays the prior turns instead of starting over.
-- **A bounded loop.** `@MainLoop({ strategy: 'plan-act-reflect', maxIterations: 10 })` runs a real
+- **A bounded loop.** The runner's `plan-act-reflect` strategy with `maxIterations: 10` runs a real
   read→plan→act→reflect loop, capped so it can never spin forever.
 
 > **`@theokit/sdk` stays the only runtime.** These decorators are *metadata* the harness adapts —
@@ -318,7 +325,7 @@ either surface:
 export default defineAgent({ /* … */ reasoningEffort: 'high' })
 
 // class surface
-@Agent({ /* … */ reasoningEffort: 'high' })
+new ModelCapability('anthropic/claude-sonnet-4-6', 'high')
 ```
 
 Valid values: `'minimal' | 'low' | 'medium' | 'high' | 'xhigh'` (or any provider-specific string).
