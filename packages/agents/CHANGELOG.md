@@ -1,5 +1,30 @@
 # @theokit/agents
 
+## 1.1.0
+
+### Minor Changes
+
+- Tool names are now validated where they are minted, against all three rules the SDK enforces.
+
+  The fix for #145 changed the namespace separator but replicated only **one** of the three rules
+  `@theokit/sdk`'s `validateToolName` imposes. The rule it missed was live: a toolbox with
+  `namespace: 'mcp'` minted `mcp_*`, passed authoring validation, and was **rejected by
+  `Agent.create`** with `tool_reserved_name` — the same defect class as #145, on a different axis.
+
+  Validation now lives inside `toolRuntimeName`, the only function that mints a runtime name, so no
+  path can escape it — including `compileTools`, which is exported publicly. The message names the
+  offending **composed** name (the parts often look valid alone) and tells "the composition overflowed
+  64 characters" apart from "invalid character".
+
+  **Behavior change:** `compileTools` now throws `ConfigurationError` at compile time for a
+  namespace/tool pair that previously failed later, at `Agent.create`. No working agent breaks — a
+  name that reaches this error was already being rejected downstream; it now fails earlier and says
+  why.
+
+  Also: the HITL gate map and the tool registry are derived from a **single** structure instead of
+  being built twice. Building them twice is exactly how they drifted apart in #145 — the tool became
+  `ns_tool` while its gate stayed `ns.tool`, silently ungating it. No observable output change.
+
 ## 1.0.1
 
 ### Patch Changes

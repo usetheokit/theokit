@@ -1254,6 +1254,29 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ---
 
+### M55 — [ ] Nome de tool com fonte única — validar onde se minta, matar o código morto do gate HITL
+
+> Added 2026-07-24 by `/roadmap-feature` (slug: `tool-name-single-source`). **Out-of-scope cross-check (2026-07-24):** nenhum item travado é tocado — a lista cobre virar SDK, reimplementar o loop / orquestração, dispatch engine, framework de signals + pub/sub, sandbox embutido do Code-Mode, RSC, abstração de provider e quebrar o path de decorators do `@theokit/http`. Este milestone é higiene de desenho na fronteira `@theokit/agents` ↔ `@theokit/sdk` (`bridge/agent-compiler.ts` + `capability/toolbox.ts`) e **preserva** o path do `@theokit/http` intacto. Achados e evidência medida em `knowledge-base/grills/tool-name-single-source-feature-grill.md`.
+
+**Objective:** O fix do issue theokit#145 (`@theokit/agents@1.0.1`) corrigiu o **sintoma** — o separador de namespace virou `_`, e `tests/integration/tool-name-sdk-contract.test.ts` prova contra o `Agent.create` real (sem mock) que o nome é aceito. A revisão de System Design + Design Pattern desse fix achou que o **desenho** ficou com a mesma classe de defeito que causou o bug: conhecimento duplicado, validado num lugar e assumido nos outros. São 6 achados, dois deles introduzidos pela própria correção — (1) `SDK_TOOL_NAME` é cópia de um contrato que o SDK não exporta; (2) o nome é mintado em `toolRuntimeName` mas validado em `ToolboxCapability`, e `compileTools` é público e escapa; (3) `compileHitlGates` ficou **órfão** enquanto `ToolboxCapability.apply` reimplementa seu loop; (4) dois comentários ainda documentam o separador com **ponto**; (5) a reversibilidade do nome foi trocada sem ADR; (6) o achado (3) é `dead_code_unallowlisted_typescript` e passou. Este milestone fecha os seis: **uma regra, um ponto de mintagem, um ponto de validação** — sem inventar camada nova.
+
+**Definition of done:**
+- [ ] **Validar onde se minta:** `toolRuntimeName` valida o nome que produz e lança `ConfigurationError` tipado nomeando o nome ofensor. `ToolboxCapability` deixa de testar o regex por conta própria — passa a apenas chamar `toolRuntimeName`, de modo que a regra existe em **um** lugar e nenhum caminho (incluindo o público `compileTools`) escapa. Pré-requisito estrutural: `ConfigurationError` extraído de `capability/capabilities.ts` para um módulo neutro, para que `bridge/` possa lançá-lo sem fechar ciclo — provado por `pnpm check:direction`.
+- [ ] **(GATE) Código morto zerado:** `compileHitlGates` passa a ter chamador de produção real (`ToolboxCapability` deriva o `ToolboxWalkResult` UMA vez e alimenta `compileTools` **e** `compileHitlGates`) **ou** é deletado. Orfandade + lógica duplicada é o achado (3) e não pode sobreviver ao milestone: `pnpm knip` limpo e nenhum símbolo exportado do pacote sem chamador.
+- [ ] **(GATE) Zero-behavior:** a suíte atual passa **sem editar uma única expectativa**, e `tests/integration/tool-name-sdk-contract.test.ts` (que não mocka o SDK) segue verde — é ele o alarme de drift entre a nossa cópia do charset e o contrato real.
+- [ ] **Caso negativo coberto:** um par namespace/tool que não pode mintar nome válido falha na autoria com `ConfigurationError`, e o teste asserta a **mensagem e o tipo** — não apenas "lança" (`rules/testing.md` § 4.1).
+- [ ] **Documentação que não mente:** `capability/agent-capabilities.ts:75` e `capability/toolbox.ts:59` corrigidos para o separador real; `grep -rn '"<toolbox>\.<tool>"\|"<namespace>\.<tool>"' packages/*/src` → vazio.
+- [ ] **ADR registrando as três decisões conscientes:** (a) a duplicação de `SDK_TOOL_NAME` é deliberada porque `@theokit/sdk` não exporta a regra — o teste de contrato é o guard de drift, e o gatilho de revisão é "o SDK passar a exportar ⇒ consumir e apagar a cópia"; (b) o separador `_` e a **reversibilidade perdida** (`ns_tool` não é reparseável), aceitável enquanto ninguém fizer parse reverso — hoje ninguém faz; (c) o Value Object `ToolName` é **RECUSADO com justificativa** — validar no ponto de mintagem já torna o estado ilegal inalcançável, e o VO custaria mudança de tipo em API pública por ganho marginal (parsimônia, rungs 1 e 5). Recusa registrada no mesmo formato do orçamento de patterns do ADR-0001.
+- [ ] `pnpm test` / `typecheck` / `lint --max-warnings=0` / `knip` / `check:direction` verdes; entrada no CHANGELOG declarando a falha nova em `compileTools`.
+
+**Dependencies:** M53 (`[x]`) — todo o código tocado foi reescrito ou movido naquele milestone, e o fix #145 (`1.0.1`) já está em cima dele. M54 **não** é dependência: toca `loop/agent-runner.ts`, arquivo disjunto destes.
+
+**Top risks:**
+1. **Ciclo de import `bridge ↔ capability`.** Lançar o erro tipado a partir de `bridge/` exige que `ConfigurationError` saia de `capability/capabilities.ts`. Mitigação: extrair o erro para um módulo neutro **antes** de mover a validação; `pnpm check:direction` + pre-push são o guard mecânico, e a ordem está fixada como pré-requisito no primeiro item do DoD.
+2. **Falha nova em caminho antes silencioso.** `compileTools` é API pública: um par que hoje passa e só é rejeitado depois pelo `Agent.create` passará a lançar na compilação. É exatamente a correção pretendida (falhar cedo, tipado, na fronteira), mas é observável. Mitigação: declarado como breaking de comportamento no CHANGELOG, com mensagem que nomeia o nome ofensor e teste negativo cobrindo tipo + mensagem.
+
+---
+
 ## State-of-the-art references
 
 Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)

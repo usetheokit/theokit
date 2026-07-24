@@ -14,6 +14,7 @@ import type {
   SystemPromptResolver,
 } from '@theokit/sdk'
 
+import { ConfigurationError } from '../errors.js'
 import type { Guardrail } from '../guardrails/index.js'
 import type { SkillsSelection } from '../skills-resolver.js'
 import type {
@@ -79,24 +80,91 @@ export interface CompiledTool {
 }
 
 /**
- * The charset `@theokit/sdk` accepts for a custom tool name. Declared here because this module is
- * what MINTS the name — a name that fails this is rejected by `Agent.create`, so producing one is a
- * bug, not a caller error (theokit#145).
+ * The charset `@theokit/sdk` accepts for a custom tool name.
+ *
+ * MIRROR of `@theokit/sdk@4.1.0 › validateToolName` (`TOOL_NAME_PATTERN`). The SDK does NOT export
+ * the rule — it exists there as an internal constant plus prose in a JSDoc — so consuming it is
+ * impossible and duplicating is the only option. The duplication is deliberate and alarmed: the
+ * non-mocked contract suite (`tests/integration/tool-name-sdk-contract.test.ts`) exercises the real
+ * `Agent.create`, so it fails the day the SDK tightens the rule.
+ *
+ * REVIEW TRIGGER (ADR D1): if the SDK ever exports `TOOL_NAME_PATTERN`/`validateToolName`, consume
+ * it and delete this copy.
  */
-export const SDK_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
+const SDK_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
+
+/** Longest name {@link SDK_TOOL_NAME} admits (1 leading + 63) — split out so an overflow can say so. */
+const SDK_TOOL_NAME_MAX_LENGTH = 64
+
+/** Same charset as {@link SDK_TOOL_NAME} but unbounded — tells "too long" apart from "bad character". */
+const SDK_TOOL_NAME_CHARSET = /^[a-zA-Z][a-zA-Z0-9_-]*$/
+
+/**
+ * Names the SDK refuses even when they match the charset. MIRROR of `RESERVED_TOOL_NAMES` plus the
+ * `mcp_` prefix guard in the same function.
+ *
+ * This is the rule the #145 fix MISSED: it replicated the charset alone, so `namespace: 'mcp'`
+ * minted `mcp_*`, passed our authoring check, and was rejected by `Agent.create` with
+ * `tool_reserved_name` — the same defect class, by a different axis.
+ */
+const SDK_RESERVED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'shell',
+  'memory_search',
+  'memory_get',
+])
+const SDK_RESERVED_TOOL_PREFIX = 'mcp_'
 
 /**
  * The runtime name the SDK loop reports in `pre_tool_call` — `namespace_tool` when a toolbox
- * declares a namespace, else the bare tool name. Single source of this convention (DRY): both
- * {@link compileTools} and {@link compileHitlGates} key off it, so the HITL gate map and the SDK
- * tool registry can never disagree on a name.
+ * declares a namespace, else the bare tool name.
+ *
+ * This function is the ONLY place a runtime name is minted, and it validates what it produces
+ * (M55). Validating anywhere else leaves the gap #145 exposed twice: a caller that composes the
+ * name itself, or a public entry point ({@link compileTools} is exported) that skips the check.
+ * "Validate where you mint" is the invariant; both {@link compileTools} and {@link compileHitlGates}
+ * key off this function, so the HITL gate map and the SDK tool registry cannot disagree on a name.
  *
  * SEPARATOR (theokit#145): `_`, not `.`. The dot is outside {@link SDK_TOOL_NAME}, so every
  * namespaced toolbox produced a name `Agent.create` REJECTS — a documented path that never once
- * worked against a real provider. Nothing caught it because the suites mock the SDK.
+ * worked against a real provider. Nothing caught it because the other suites mock the SDK.
+ *
+ * @throws ConfigurationError with a message naming the offending COMPOSED name — the parts often
+ *   look valid on their own, so echoing them back would send the author hunting in the wrong place.
  */
 export function toolRuntimeName(namespace: string, toolName: string): string {
-  return namespace ? `${namespace}_${toolName}` : toolName
+  // OUR rule, stricter than the SDK's, and deliberately so: `ns` + `''` mints "ns_", which passes
+  // the charset and `Agent.create` ACCEPTS — a nonsense tool reaches the LLM. The SDK cannot know a
+  // part was empty; at authoring time we can.
+  if (toolName.trim().length === 0) {
+    const where = namespace ? ` no namespace "${namespace}"` : ''
+    throw new ConfigurationError(`tool: nome vazio${where} — declare um nome não vazio para a tool`)
+  }
+
+  const name = namespace ? `${namespace}_${toolName}` : toolName
+
+  if (!SDK_TOOL_NAME.test(name)) {
+    // Length is reported apart from charset: when the only problem is the total, a generic
+    // "must match /regex/" sends the author looking for an invalid character that is not there.
+    if (SDK_TOOL_NAME_CHARSET.test(name)) {
+      throw new ConfigurationError(
+        `tool: nome "${name}" tem comprimento ${name.length} — a composição ` +
+          `namespace + "_" + tool excede o máximo de ${SDK_TOOL_NAME_MAX_LENGTH} que o SDK aceita`,
+      )
+    }
+    throw new ConfigurationError(
+      `tool: nome inválido "${name}" — deve casar ${String(SDK_TOOL_NAME)} ` +
+        '(o SDK rejeita o resto; verifique o namespace e o nome da tool)',
+    )
+  }
+
+  if (SDK_RESERVED_TOOL_NAMES.has(name) || name.startsWith(SDK_RESERVED_TOOL_PREFIX)) {
+    throw new ConfigurationError(
+      `tool: nome reservado "${name}" — o SDK reserva ` +
+        `${[...SDK_RESERVED_TOOL_NAMES].join(', ')} e o prefixo "${SDK_RESERVED_TOOL_PREFIX}"`,
+    )
+  }
+
+  return name
 }
 
 /**

@@ -72,7 +72,11 @@ export const checkpoint = (options: CompiledAgentOptions['checkpoint']): Capabil
     setOnce(draft, 'checkpoint', options, 'checkpoint')
   },
 })
-/** `@HumanInTheLoop` → `hitl` (keyed `"<toolbox>.<tool>"`, as `compileHitlGates` keys it today). */
+/**
+ * `@HumanInTheLoop` → `hitl`, keyed `"<namespace>_<tool>"` — the same key `compileHitlGates` mints
+ * via `toolRuntimeName`. The separator is `_`, not `.`: the dot is outside the charset the SDK
+ * accepts, and a gate keyed with a dot silently failed to match its tool (theokit#145).
+ */
 export const humanInTheLoop = fieldCapability('human-in-the-loop', 'hitl')
 /**
  * `@SubAgents` → `agents`. MERGES instead of `setOnce`: `agents` is a pre-seeded collection on the

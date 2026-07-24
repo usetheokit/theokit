@@ -52,10 +52,13 @@ describe('tool name ↔ SDK contract (#145)', () => {
     ).resolves.toBeDefined()
   })
 
-  it('the generated name matches the SDK charset', () => {
-    const SDK_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
-    expect(toolRuntimeName('ops', 'deploy')).toMatch(SDK_TOOL_NAME)
-    expect(toolRuntimeName('', 'deploy')).toMatch(SDK_TOOL_NAME)
+  it('the generated name is the composed one, and minting a valid pair never throws', () => {
+    // This used to re-declare the charset regex here — a THIRD copy of the rule, which is the very
+    // duplication M55 removes. The mint point validates now, so the behavioural assertion (it
+    // returns the composed name and does not throw) is the honest one; the charset itself is
+    // asserted where it lives, through the negative cases below and the real `Agent.create`.
+    expect(toolRuntimeName('ops', 'deploy')).toBe('ops_deploy')
+    expect(toolRuntimeName('', 'deploy')).toBe('deploy')
   })
 
   it('the HITL gate map uses the SAME name as the compiled tool (they cannot disagree)', () => {
@@ -73,5 +76,154 @@ describe('tool name ↔ SDK contract (#145)', () => {
     expect(() => new ToolboxCapability(new OpsTools(), { namespace: '9leading-digit' })).toThrow(
       ConfigurationError,
     )
+    // Message half added in M55 (rules/testing.md § 4.1): asserting only the type would pass even
+    // if the failure came from an unrelated ConfigurationError in the same constructor.
+    expect(() => new ToolboxCapability(new OpsTools(), { namespace: 'has space' })).toThrow(
+      /has space_deploy/,
+    )
+    expect(() => new ToolboxCapability(new OpsTools(), { namespace: '9leading-digit' })).toThrow(
+      /9leading-digit_deploy/,
+    )
+  })
+})
+
+/**
+ * M55 — the mint point validates. Every case below asserts the typed error AND the message
+ * (`rules/testing.md` § 4.1: a negative test that only asserts "it throws" passes even when the
+ * message blames the wrong field).
+ *
+ * The rule set mirrors `@theokit/sdk@4.1.0 › validateToolName`, which imposes THREE rules — not
+ * one. The previous fix for #145 replicated only the charset, so `namespace: 'mcp'` still produced
+ * an agent that `Agent.create` rejects. That defect is what `reserved` covers here.
+ */
+describe('tool name minting validates at the mint point (M55)', () => {
+  describe('rules mirrored from the SDK', () => {
+    it('rejects an empty composed name', () => {
+      expect(() => toolRuntimeName('', '')).toThrow(ConfigurationError)
+      expect(() => toolRuntimeName('', '')).toThrow(/vazio/)
+    })
+
+    it('rejects a name outside the charset, naming the OFFENDING composed name', () => {
+      expect(() => toolRuntimeName('has space', 'deploy')).toThrow(ConfigurationError)
+      // The message must show what was actually minted — not the parts, which look fine alone.
+      expect(() => toolRuntimeName('has space', 'deploy')).toThrow(/has space_deploy/)
+    })
+
+    it('rejects a reserved name', () => {
+      for (const reserved of ['shell', 'memory_search', 'memory_get']) {
+        expect(() => toolRuntimeName('', reserved)).toThrow(ConfigurationError)
+        expect(() => toolRuntimeName('', reserved)).toThrow(/reservad/)
+      }
+    })
+
+    it('rejects the `mcp_` prefix — the defect the #145 fix left behind', () => {
+      expect(() => toolRuntimeName('mcp', 'deploy')).toThrow(ConfigurationError)
+      expect(() => toolRuntimeName('mcp', 'deploy')).toThrow(/mcp_/)
+    })
+
+    it('rejects a bare tool already carrying the reserved prefix (the rule is on the FINAL name)', () => {
+      expect(() => toolRuntimeName('', 'mcp_foo')).toThrow(ConfigurationError)
+      expect(() => toolRuntimeName('', 'mcp_foo')).toThrow(/mcp_/)
+    })
+  })
+
+  describe('boundaries — being STRICTER than the SDK is as wrong as being looser', () => {
+    it('ACCEPTS `x_shell`: the SDK reserves exact matches, not substrings', () => {
+      expect(toolRuntimeName('x', 'shell')).toBe('x_shell')
+    })
+
+    it('ACCEPTS `mcpx_deploy`: the prefix rule is `mcp_`, not `mcp`', () => {
+      expect(toolRuntimeName('mcpx', 'deploy')).toBe('mcpx_deploy')
+    })
+
+    it('ACCEPTS a name of exactly 64 characters (the largest valid)', () => {
+      expect(toolRuntimeName('', 'a'.repeat(64))).toHaveLength(64)
+    })
+
+    it('REJECTS a name of exactly 65 characters (the first invalid)', () => {
+      // The tight boundary pair. Without it, an off-by-one in the regex (`{0,63}` → `{0,64}`)
+      // survives: 64 stays valid and the 67-char case stays invalid either way.
+      expect(() => toolRuntimeName('', 'a'.repeat(65))).toThrow(ConfigurationError)
+    })
+  })
+
+  describe('rules of OUR authoring layer (stricter than the SDK, deliberately)', () => {
+    it('rejects an empty tool name even when a namespace makes it look valid', () => {
+      // `ops` + `''` mints "ops_", which passes the charset and the SDK ACCEPTS it — a nonsense
+      // tool reaches the LLM. The SDK cannot know a part was empty; we can.
+      expect(() => toolRuntimeName('ops', '')).toThrow(ConfigurationError)
+      expect(() => toolRuntimeName('ops', '')).toThrow(/vazio/)
+    })
+
+    it('says the COMPOSITION overflowed when length is the only rule broken', () => {
+      const namespace = 'a'.repeat(60) // valid alone
+      expect(() => toolRuntimeName(namespace, 'deploy')).toThrow(ConfigurationError)
+      // A generic charset message would send the author hunting for an invalid character that
+      // does not exist. The message must name the length.
+      expect(() => toolRuntimeName(namespace, 'deploy')).toThrow(/67|comprimento|64/)
+    })
+  })
+
+  describe('the mirror is real, not invented', () => {
+    it('the SDK rejects every name we reject', async () => {
+      const { Agent } = await import('@theokit/sdk')
+      const invalid = [
+        'has space_deploy',
+        'shell',
+        'mcp_deploy',
+        'memory_get',
+        `${'a'.repeat(60)}_deploy`,
+      ]
+
+      for (const name of invalid) {
+        await expect(
+          Agent.create({
+            apiKey: 'sk-fake-not-used-validation-runs-first',
+            model: { id: 'openai/gpt-4o-mini' },
+            tools: [{ name, description: 'x', inputSchema: z.object({}), handler: () => 'ok' }],
+            local: { cwd: process.cwd() },
+          } as never),
+        ).rejects.toThrow()
+      }
+    })
+
+    it('the SDK accepts every boundary name we accept', async () => {
+      const { Agent } = await import('@theokit/sdk')
+      for (const name of ['x_shell', 'mcpx_deploy', 'ops_deploy']) {
+        await expect(
+          Agent.create({
+            apiKey: 'sk-fake-not-used-validation-runs-first',
+            model: { id: 'openai/gpt-4o-mini' },
+            tools: [{ name, description: 'x', inputSchema: z.object({}), handler: () => 'ok' }],
+            local: { cwd: process.cwd() },
+          } as never),
+        ).resolves.toBeDefined()
+      }
+    })
+  })
+
+  describe('no partial mutation when a toolbox carries one invalid tool', () => {
+    class MixedTools {
+      static readonly tools: ToolDeclaration[] = [
+        { name: 'ok', description: 'fine', input: z.object({}), method: 'ok' },
+        { name: 'bad name', description: 'broken', input: z.object({}), method: 'bad' },
+      ]
+      ok(): string {
+        return 'ok'
+      }
+      bad(): string {
+        return 'bad'
+      }
+    }
+
+    it('fails in the CONSTRUCTOR, so no draft is ever half-populated', () => {
+      expect(() => new ToolboxCapability(new MixedTools(), { namespace: 'ops' })).toThrow(
+        ConfigurationError,
+      )
+      // The capability never exists, so `apply` can never have pushed the first (valid) tool.
+      expect(() => new ToolboxCapability(new MixedTools(), { namespace: 'ops' })).toThrow(
+        /bad name/,
+      )
+    })
   })
 })
