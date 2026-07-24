@@ -38,24 +38,21 @@ The endpoint streams the ai-sdk `UIMessageStream` that `useAgent` (client hook) 
 
 ## Advanced Surface — @Agent Decorator (DI / class-based)
 
-When you need dependency injection or class-based composition, use the `@Agent` class
-decorator from `@theokit/agents`. The class name determines the route:
-`AssistantAgent` → `POST /api/agents/assistant`.
+When you need dependency injection or composition, build the agent from **capabilities**
+(`@theokit/agents`). Each capability enriches the same compiled options; conflicts fail fast.
 
 ```typescript
 // server/agents/assistant.agent.ts
-import { Agent, MainLoop } from '@theokit/agents'
+import { applyCapabilities, AgentConfigCapability, ModelCapability } from '@theokit/agents'
 
-@Agent({
-  model: 'openai/gpt-4o-mini',
-  systemPrompt: 'You are a helpful assistant.',
-})
-export class AssistantAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 5 })
-  async run() {
-    // Framework handles the LLM loop via @theokit/sdk
-  }
-}
+export const assistantAgent = applyCapabilities([
+  new ModelCapability('openai/gpt-4o-mini'),
+  new AgentConfigCapability({
+    systemPrompt: 'You are a helpful assistant.',
+    maxIterations: 5,
+  }),
+])
+// The framework runs the LLM loop via @theokit/sdk.
 ```
 
 ## Tools — defineAgentTool
@@ -84,23 +81,34 @@ export default defineAgent({
 })
 ```
 
-### @Tool Decorator (advanced / class-based)
+### Toolbox class (advanced — state + injected dependencies)
+
+A toolbox declares its tools as DATA and keeps handlers as ordinary methods, so the class can hold
+state and receive dependencies by constructor:
 
 ```typescript
-import { Toolbox, Tool } from '@theokit/agents'
+import { ToolboxCapability, type ToolDeclaration } from '@theokit/agents'
 import { z } from 'zod'
 
-@Toolbox()
 export class TaskTools {
-  @Tool({
-    name: 'list_tasks',
-    description: 'List all tasks, optionally filtered by status',
-    input: z.object({ done: z.boolean().optional() }),
-  })
-  async listTasks({ done }: { done?: boolean }) {
-    return db.select().from(tasks).all()
+  static readonly tools: ToolDeclaration[] = [
+    {
+      name: 'list_tasks',
+      description: 'List all tasks, optionally filtered by status',
+      input: z.object({ done: z.boolean().optional() }),
+      method: 'listTasks',
+    },
+  ]
+
+  constructor(private readonly db: Db) {}
+
+  async listTasks({ done }: { done?: boolean }): Promise<string> {
+    return JSON.stringify(this.db.select().from(tasks).all())
   }
 }
+
+// compõe no agente:
+//   new ToolboxCapability(new TaskTools(db), { namespace: 'tasks' })  → tasks.list_tasks
 ```
 
 ## Client — useAgent (React hook)
