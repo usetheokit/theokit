@@ -67,27 +67,21 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { AgentRunner } = await import('../../src/index.js')
-const { Agent } = await import('../../src/decorators/agent.js')
-const { MainLoop } = await import('../../src/decorators/main-loop.js')
-const { Skills } = await import('../../src/decorators/skills.js')
+const { applyCapabilities } = await import('../../src/capability/capability.js')
+const { ModelCapability, skills } = await import('../../src/capability/capabilities.js')
+const { MainLoopCapability } = await import('../../src/capability/agent-capabilities.js')
 
-@Agent({ name: 'simple', route: '/simple', model: 'compiled-model' })
-class SimpleAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
-}
+const simpleAgent = applyCapabilities([new ModelCapability('compiled-model')])
 
-@Agent({ name: 'react', route: '/react', model: 'compiled-model' })
-class ReactAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 8 })
-  async run() {}
-}
+const reactAgent = applyCapabilities([
+  new ModelCapability('compiled-model'),
+  new MainLoopCapability({ maxIterations: 8 }),
+])
 
-@Agent({ name: 'skilled', route: '/skilled', model: 'compiled-model' })
-@Skills(['code-review'])
-class SkilledAgent {
-  @MainLoop({ strategy: 'simple-chat' })
-  async run() {}
+const skilledAgent = {
+  name: 'SkilledAgent',
+  compiled: applyCapabilities([new ModelCapability('compiled-model'), skills(['code-review'])]),
+  strategy: 'simple-chat' as const,
 }
 
 const FAKE_TOOL = {
@@ -104,13 +98,21 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
   })
 
   it('test_model_override_reaches_agent_create', async () => {
-    const runner = AgentRunner.builder(SimpleAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    }).build()
     await runner.run('hi', { apiKey: 'k', model: 'anthropic/claude-x' })
     expect((h.captured?.model as { id: string }).id).toBe('anthropic/claude-x')
   })
 
   it('test_cwd_override_reaches_agent_create_local', async () => {
-    const runner = AgentRunner.builder(SimpleAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    }).build()
     await runner.run('hi', { apiKey: 'k', cwd: '/proj/root' })
     expect((h.captured?.local as { cwd: string }).cwd).toBe('/proj/root')
   })
@@ -118,20 +120,32 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
   it('test_baseDir_override_reaches_agent_create_local', async () => {
     // SDK 4.0 (SE40): the per-run root of the native `.jsonl` session transcript is threaded into
     // `Agent.create({ local: { baseDir } })`, so the SDK persists (and resumes) sessions under it.
-    const runner = AgentRunner.builder(SimpleAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    }).build()
     await runner.run('hi', { apiKey: 'k', baseDir: '/app/.data/agent-sessions' })
     expect((h.captured?.local as { baseDir: string }).baseDir).toBe('/app/.data/agent-sessions')
   })
 
   it('test_maxIterations_override_caps_loop_with_step_limit', async () => {
-    const runner = AgentRunner.builder(ReactAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reactAgent,
+      agentName: 'reactAgent',
+      strategy: 'react',
+    }).build()
     const result = await runner.run('go', { apiKey: 'k', maxIterations: 3 })
     expect(result.rounds).toBe(3)
     expect(result.finishReason).toBe('step_limit')
   })
 
   it('test_no_overrides_uses_compiled_defaults', async () => {
-    const runner = AgentRunner.builder(SimpleAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    }).build()
     await runner.run('hi', { apiKey: 'k' })
     expect((h.captured?.model as { id: string }).id).toBe('compiled-model') // build-time model
     expect(h.captured?.local).toBeUndefined() // no cwd ⇒ no local key
@@ -139,7 +153,11 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
 
   it('test_v4j_tools_and_v4l2_overrides_compose', async () => {
     // EC-1: tools (V4-J) + model + cwd + maxIterations all in one call coexist.
-    const runner = AgentRunner.builder(ReactAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: reactAgent,
+      agentName: 'reactAgent',
+      strategy: 'react',
+    }).build()
     const result = await runner.run('go', {
       apiKey: 'k',
       tools: [FAKE_TOOL] as never,
@@ -156,7 +174,11 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
 
   it('test_maxIterations_override_noop_on_simple_chat', async () => {
     // EC-2: simple-chat is single-round by definition; a maxIterations override cannot make it loop.
-    const runner = AgentRunner.builder(SimpleAgent).build()
+    const runner = AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    }).build()
     const result = await runner.run('hi', { apiKey: 'k', maxIterations: 5 })
     expect(result.rounds).toBe(1)
   })
@@ -164,7 +186,7 @@ describe('V4-L.2 per-request overrides on AgentRunner', () => {
   it('test_cwd_override_preserves_skills_settingSources_in_local', async () => {
     // Review M1: a skills agent sets local.settingSources; a cwd override must MERGE
     // (both present), never clobber. Guards `m8.local = { ...m8.local, cwd }`.
-    const runner = AgentRunner.builder(SkilledAgent).build()
+    const runner = AgentRunner.fromSpec(skilledAgent).build()
     await runner.run('hi', { apiKey: 'k', cwd: '/proj' })
     const local = h.captured?.local as { settingSources?: string[]; cwd?: string }
     expect(local.cwd).toBe('/proj')
@@ -192,37 +214,65 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   })
 
   it('test_plugins_override_reaches_agent_create', async () => {
-    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k', plugins: PLUGINS })
+    await AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k', plugins: PLUGINS })
     expect(h.captured?.plugins).toBe(PLUGINS)
   })
 
   it('test_providers_override_reaches_agent_create', async () => {
-    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k', providers: PROVIDERS })
+    await AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k', providers: PROVIDERS })
     expect(h.captured?.providers).toBe(PROVIDERS)
   })
 
   it('test_agents_override_reaches_agent_create', async () => {
-    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k', agents: AGENTS })
+    await AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k', agents: AGENTS })
     expect(h.captured?.agents).toBe(AGENTS)
   })
 
   it('test_budgetTracker_override_reaches_agent_create', async () => {
-    await AgentRunner.builder(SimpleAgent)
+    await AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    })
       .build()
       .run('hi', { apiKey: 'k', budgetTracker: TRACKER })
     expect(h.captured?.budgetTracker).toBe(TRACKER)
   })
 
   it('test_v4l3_compose_all_reach_agent_create', async () => {
-    await AgentRunner.builder(SimpleAgent).build().run('hi', {
-      apiKey: 'k',
-      model: 'anthropic/claude-x',
-      cwd: '/proj',
-      plugins: PLUGINS,
-      providers: PROVIDERS,
-      agents: AGENTS,
-      budgetTracker: TRACKER,
+    await AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
     })
+      .build()
+      .run('hi', {
+        apiKey: 'k',
+        model: 'anthropic/claude-x',
+        cwd: '/proj',
+        plugins: PLUGINS,
+        providers: PROVIDERS,
+        agents: AGENTS,
+        budgetTracker: TRACKER,
+      })
     expect((h.captured?.model as { id: string }).id).toBe('anthropic/claude-x')
     expect((h.captured?.local as { cwd: string }).cwd).toBe('/proj')
     expect(h.captured?.plugins).toBe(PLUGINS)
@@ -232,7 +282,13 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   })
 
   it('test_no_v4l3_overrides_omits_keys', async () => {
-    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k' })
+    await AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k' })
     expect(h.captured?.plugins).toBeUndefined()
     expect(h.captured?.providers).toBeUndefined()
     expect(h.captured?.agents).toBeUndefined()
@@ -241,7 +297,11 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
 
   it('test_budget_and_budgetTracker_coexist', async () => {
     // EC-1: outer-loop `budget` (USD) and inner-SDK `budgetTracker` are different layers.
-    const result = await AgentRunner.builder(SimpleAgent)
+    const result = await AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    })
       .build()
       .run('hi', { apiKey: 'k', budget: 10, budgetTracker: TRACKER })
     expect(h.captured?.budgetTracker).toBe(TRACKER) // inner cap reaches Agent.create
@@ -251,7 +311,13 @@ describe('V4-L.3 per-request Agent.create surface on AgentRunner', () => {
   it('test_empty_plugins_array_is_forwarded', async () => {
     // EC-2: `plugins: []` is a deliberate "no plugins" — guarded by `!== undefined`, not truthiness.
     const empty = [] as unknown as PluginsSettings
-    await AgentRunner.builder(SimpleAgent).build().run('hi', { apiKey: 'k', plugins: empty })
+    await AgentRunner.fromSpec({
+      compiled: simpleAgent,
+      agentName: 'simpleAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k', plugins: empty })
     expect(h.captured?.plugins).toEqual([])
   })
 })
