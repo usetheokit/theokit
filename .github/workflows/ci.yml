@@ -95,6 +95,20 @@ jobs:
       # exercise `theokit build` (cron/job manifest tests, scaffold-build-start
       # E2E) find the bin at `packages/theo/dist/cli/index.js`.
       - run: pnpm --filter "./packages/*" build
+      # M75 T1.2 — os testes de confinamento de kernel que o agent-builder migra para cá exigem
+      # bubblewrap. `apt install` sozinho NÃO basta no ubuntu-latest: o Ubuntu 24.04 bloqueia user
+      # namespaces não-privilegiados via AppArmor, e a detecção ativa (`bwrap --unshare-user ...`)
+      # falha com "user namespaces unavailable (container/kernel restriction)". Medido no
+      # agent-builder run 30179607376: o binário instalou e 10 testes CONTINUARAM pulando; só depois
+      # do sysctl (run 30179704525) foram a 856 passed | 0 skipped.
+      #
+      # O smoke ao final falha o passo se o userns seguir bloqueado — sem ele, um teste de
+      # confinamento que pula é reportado verde, e o gate certificaria por ausência de execução.
+      - name: Install bubblewrap + enable unprivileged userns (kernel-confinement tests)
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --unshare-user --unshare-net --ro-bind / / /bin/true && echo "bwrap OK: userns liberado"
       - run: pnpm test
       - run: pnpm test:types
 
