@@ -192,29 +192,31 @@ de fronteira no agent-builder faz o grep e falha se um import direto reaparecer 
 
 ---
 
-### M66 — [ ] Unificar o transporte in-process em `@theokit/agents@4.x` (fecha o split 0.44.x)
+### M66 — [x] Fechar o #77: a rota OAuth Codex usa a credencial OAuth (causa real, não o transporte)
 
-**Objective:** Hoje a AUTORIA roda em `@theokit/agents@4.x` mas o TRANSPORTE in-process
-(`streamAgentTurnInProcess`) vem de `theokit/server/agent` — o CLI `theokit` ainda preso em
-`@theokit/agents@0.44.x` (ver o dedup guard re-escopado no M62 e a "Nota de runtime" no `CLAUDE.md`). O
-monorepo já tem o CLI migrado (`packages/theo` = `theokit@0.43.12`, `@theokit/agents: workspace:^` →
-4.5.0); falta **publicar** e o agent-builder **consumir**. Isso mata a segunda cópia de `@theokit/agents`,
-remove o workaround load-bearing do `AgentDefinition` como fronteira de dados entre 4.x e 0.44.x, e é a
-**causa-raiz provável do #77** (a rota OAuth Codex `openai-chatgpt` retorna vazio — `input_tokens=0` —
-mesmo com a credencial cabeada, porque o transporte 0.44.x é quem resolve o builtin).
+**Objective (RE-ESCOPADO pelo discover — a premissa original foi falsificada):** A hipótese deste
+milestone — "o transporte in-process `theokit/server/agent`@0.44.x é a causa-raiz do #77" — foi
+**FALSIFICADA por um PoC de discover** (empacotar o `theokit`@4.x local com `pnpm pack`, transporte em
+`@theokit/agents@4.6.0`, cópia única verificada): a rota OAuth Codex seguiu `input_tokens=0` mesmo no
+transporte 4.x. Um trace com patch no `fetch` provou a causa REAL: passando a credencial OAuth,
+`POST chatgpt.com/backend-api/codex/responses` retorna **200** e o modelo responde. O `exec` (e o
+transporte do TUI) passava a **api-key errada** — `process.loadEnvFile()` carrega `OPENROUTER_API_KEY`,
+`resolveCredential` retornava a chave OpenRouter, e o builtin `openai-chatgpt` (que precisa do Bearer OAuth)
+a rejeitava → o modelo nunca era chamado. O objetivo passou a ser **corrigir o roteamento de credencial**
+(fix limpo no agent-builder, SEM publish). A unificação de transporte/dedup fica **decoplada** (não tem
+ligação com o #77 — o transporte sempre funcionou; é concern separado, endereçável em milestone futuro se o
+dedup guard re-escopado do M62 incomodar).
 
-**Definition of done:**
-- [ ] `theokit@0.43.12` (ou superior) publicado no npm dependendo de `@theokit/agents@^4.x` (via CI — o pacote tem `provenance:true`, não sai local).
-- [ ] O agent-builder bumpa `theokit`; `npm ls @theokit/agents` mostra UMA cópia (sem a aninhada `0.44.x`), e o dedup guard (`agents/lib/hooks-wiring.test.ts`) volta ao invariante ORIGINAL "exatamente uma cópia" (reverte o re-escopo do M62).
-- [ ] Rota OAuth Codex destravada: `exec --model openai-chatgpt/*` e o `/login` no TUI respondem de verdade (`input_tokens>0`) OU emitem erro tipado — NUNCA mais `status=finished tokens=0` silencioso. Prova live no tmux `agentbuilder`. **Issue #77 fechada com evidência.**
-- [ ] Suíte verde nos dois repos; TUI + `exec` smoke live sem regressão (o transporte 4.x é comportamentalmente equivalente ao 0.44.x nos fluxos verificados).
+**Definition of done (entregue):**
+- [x] Helper `resolveCredentialForModel(model, {env, home})` (`agents/lib/credentials.ts`): `openai-chatgpt/*` força a credencial OAuth (ignora env); senão resolução normal. TDD (3 testes).
+- [x] Cabeado em `exec` (chat/goal/review) e `tui/lib/chat-transport.ts` (rota model-driven).
+- [x] **Prova live no tmux `agentbuilder` (com OPENROUTER no `.env`):** `exec chat --model openai-chatgpt/*` → `codex-chat-ok` (`input_tokens:5839`); `exec goal --model openai-chatgpt/*` → `goal.completed turns:1`; TUI `/codex` (model `openai-chatgpt`) → `codex-tui-ok`. Sem `tokens=0` silencioso (o fail-loud do #77 anterior guarda o caso de credencial ausente).
+- [x] Gates: suíte 692 verde, TSC=0, ESLint=0, `/code-quality` PASS_WITH_CAVEATS. Commit `agent-builder@911642c`. **Issue #77 fechada com evidência.**
 
-**Dependencies:** M63 (`[x]`) — a fronteira zero-`@theokit/sdk*` já fechada; este milestone alinha a última peça (o transporte) na linha 4.x. Numeração global reconciliada: v1 (`ROADMAP.md`) chegou a M65, então o next-free é **M66**.
+**Dependencies:** M63 (`[x]`). Numeração global reconciliada: v1 (`ROADMAP.md`) chegou a M65 → next-free M66.
 
-**Top risks:**
-1. `theokit@0.43.12` (4.x) pode divergir de `0.44.7` no transporte in-process (resolução do builtin `openai-chatgpt`, wiring de hooks). Mitigação: smoke live completo TUI+`exec` ANTES de fechar; a prova do #77 é o teste de aceitação real.
-2. Publicar `theokit` exige CI/provenance (não sai local). Mitigação: acionar o release pipeline do monorepo; se bloqueado, documentar o blocker e NÃO fechar o milestone (honestidade > checkbox verde).
-3. Reverter o re-escopo do dedup pode reintroduzir o guard vermelho se o bump não resultar em cópia única. Mitigação: o guard voltar verde É DoD — não fecha sem isso.
+**Outcome:** O discover fez seu trabalho — evitou um publish de `theokit` desperdiçado (a hipótese do
+transporte estava errada) e achou a causa real. #77 resolvido de verdade, sem workaround, validado ao vivo.
 
 ---
 
