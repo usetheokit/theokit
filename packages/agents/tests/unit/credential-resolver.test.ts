@@ -20,6 +20,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
+import { classificarFalhaDeRefresh, esperaComJitter } from '../../src/auth/auth-provider.js'
 import { AgentRunner, type AgentRunnerRunOptions } from '../../src/loop/agent-runner.js'
 
 describe('M74 — o seam de credencial aceita resolvedor', () => {
@@ -134,5 +135,39 @@ describe('M74 T1.2 — reentrância resolve pela promise, não pelo lock', () =>
 
     await Promise.all([refrescar('/tmp/a.json'), refrescar('/tmp/b.json')])
     expect(execucoes).toBe(2)
+  })
+})
+
+describe('M74 T1.3 — o retry distingue transitório de terminal', () => {
+  it('test_invalid_grant_e_terminal', () => {
+    const f = classificarFalhaDeRefresh(
+      new Error('server responded 400: {"error":"invalid_grant"}'),
+    )
+    expect(f.transitorio, 'invalid_grant não é transitório — o token foi revogado').toBe(false)
+    expect(f.message).toMatch(/refaça o login/)
+  })
+
+  it('test_rede_e_5xx_sao_transitorios', () => {
+    for (const e of ['ETIMEDOUT', 'ECONNRESET', 'server responded 503', 'network error']) {
+      expect(
+        classificarFalhaDeRefresh(new Error(e)).transitorio,
+        `${e} deveria ser transitório`,
+      ).toBe(true)
+    }
+  })
+
+  it('test_a_falha_nao_ecoa_material_de_token', () => {
+    // O erro do provider pode conter o corpo da resposta. A classificação lê o texto mas NUNCA o
+    // repassa: a mensagem carrega a classe e o motivo, não o que veio da rede.
+    const f = classificarFalhaDeRefresh(new Error('invalid_grant refresh_token=RT-SEGREDO-123'))
+    expect(f.message).not.toContain('RT-SEGREDO-123')
+  })
+
+  it('test_o_backoff_cresce_e_tem_jitter', () => {
+    // Cresce exponencialmente...
+    expect(esperaComJitter(0, 200, () => 0.5)).toBeLessThan(esperaComJitter(2, 200, () => 0.5))
+    // ...e dois processos com a mesma tentativa NÃO esperam o mesmo tempo, senão retentam em uníssono
+    // e reproduzem a colisão que o backoff existe para dispersar.
+    expect(esperaComJitter(1, 200, () => 0)).not.toBe(esperaComJitter(1, 200, () => 0.99))
   })
 })
