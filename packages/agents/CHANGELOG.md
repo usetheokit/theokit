@@ -1,5 +1,15 @@
 # @theokit/agents
 
+## 4.9.1
+
+### Patch Changes
+
+- O retry com backoff do refresh de OAuth passa a existir de fato no caminho de execução. As funções que
+  classificam a falha e calculam a espera estavam presentes e testadas, mas nenhuma era chamada — uma
+  reescrita de bloco as desconectou, e os testes que existiam validavam o classificador isolado, o que
+  não prova que ele está ligado. Uma falha transitória agora é repetida até três vezes; `invalid_grant`
+  continua falhando na primeira, porque repetir um token revogado só atrasa a mensagem.
+
 ## 4.9.0
 
 ### Minor Changes
