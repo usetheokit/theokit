@@ -161,11 +161,26 @@ export class AuthProvider {
         doDisco !== undefined
           ? { ...resolved, apiKey: doDisco.access, expiresAt: doDisco.expires }
           : resolved
-      return await ensureFreshCredential(
-        atual,
-        { config: this.config, store: this.store, env },
-        deps,
-      )
+      // Retry SÓ no transitório. Um `invalid_grant` falha na PRIMEIRA: o token foi revogado e nenhuma
+      // tentativa muda isso — insistir só atrasa a mensagem que o usuário precisa ler.
+      //
+      // Este laço já existiu e foi APAGADO por um lint-fix meu que reescreveu o bloco inteiro; o
+      // review pegou (`tentativas de POST = 1`, contra as 3 que a DoD exige). Testar o classificador
+      // isolado prova que ele classifica, não que está LIGADO — por isso há um gate estrutural.
+      const MAX_TENTATIVAS = 3
+      for (let tentativa = 0; ; tentativa++) {
+        try {
+          return await ensureFreshCredential(
+            atual,
+            { config: this.config, store: this.store, env },
+            deps,
+          )
+        } catch (err) {
+          const falha = classificarFalhaDeRefresh(err)
+          if (!falha.transitorio || tentativa >= MAX_TENTATIVAS - 1) throw falha
+          await new Promise((resolve) => setTimeout(resolve, esperaComJitter(tentativa)))
+        }
+      }
     }) as Promise<ResolvedCredential>
     /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
   }
