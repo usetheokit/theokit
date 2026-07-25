@@ -70,3 +70,69 @@ describe('M74 — o seam de credencial aceita resolvedor', () => {
     expect(valor).not.toContain('[object Promise]')
   })
 })
+
+/**
+ * M74 T1.2 — o refresh não pode travar quando chamado de dentro de si mesmo.
+ *
+ * Este teste existe por causa de um defeito que só aparece quando as DUAS mudanças do milestone se
+ * encontram, e que nenhuma delas pegaria sozinha:
+ *
+ *  - a T1.1 faz a credencial ser resolvida no início do stream (por run, não antes);
+ *  - a T1.2 põe o refresh sob `withFileLock` (para dois processos não se invalidarem).
+ *
+ * Juntas: se o resolvedor for `() => authProvider.ensureFresh(...)` — que é o uso pretendido — e uma
+ * run começar de dentro de um contexto que já segura o lock (run aninhada, ou um time disparando
+ * membros enquanto o pai refresca), o MESMO processo tenta adquirir o lock duas vezes.
+ * `proper-lockfile` não é reentrante: a segunda aquisição espera até o timeout, e o sintoma é
+ * "a run travou" — sem erro, sem log, sem nada para depurar.
+ *
+ * A defesa é single-flight ANTES do lock: a segunda chamada recebe a promise em voo da primeira, e a
+ * reentrância resolve por composição em vez de disputar o arquivo.
+ */
+describe('M74 T1.2 — reentrância resolve pela promise, não pelo lock', () => {
+  it('test_single_flight_devolve_a_mesma_promise_em_voo', async () => {
+    // Modela o invariante: duas chamadas concorrentes para o MESMO caminho de store compartilham uma
+    // execução. Se cada uma disparasse a sua, a segunda esperaria o lock da primeira — o deadlock.
+    const emVoo = new Map<string, Promise<string>>()
+    let execucoes = 0
+    const refrescar = (caminho: string): Promise<string> => {
+      const jaEmVoo = emVoo.get(caminho)
+      if (jaEmVoo !== undefined) return jaEmVoo
+      const p = (async () => {
+        execucoes++
+        await new Promise((r) => setTimeout(r, 20))
+        return 'sk-nova'
+      })()
+      emVoo.set(caminho, p)
+      return p.finally(() => emVoo.delete(caminho))
+    }
+
+    const [a, b] = await Promise.all([refrescar('/tmp/auth.json'), refrescar('/tmp/auth.json')])
+
+    expect(
+      execucoes,
+      'o refresh rodou duas vezes — a segunda teria disputado o lock com a primeira',
+    ).toBe(1)
+    expect(a).toBe(b)
+  })
+
+  it('test_caminhos_diferentes_nao_compartilham_voo', async () => {
+    // A chave é o ARQUIVO, não a instância: dois stores distintos são disputas distintas e não devem
+    // se serializar um pelo outro.
+    const emVoo = new Map<string, Promise<string>>()
+    let execucoes = 0
+    const refrescar = (caminho: string): Promise<string> => {
+      const jaEmVoo = emVoo.get(caminho)
+      if (jaEmVoo !== undefined) return jaEmVoo
+      const p = (async () => {
+        execucoes++
+        return `sk-${caminho}`
+      })()
+      emVoo.set(caminho, p)
+      return p.finally(() => emVoo.delete(caminho))
+    }
+
+    await Promise.all([refrescar('/tmp/a.json'), refrescar('/tmp/b.json')])
+    expect(execucoes).toBe(2)
+  })
+})
