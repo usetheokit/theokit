@@ -1,5 +1,17 @@
 # @theokit/agents
 
+## 4.9.0
+
+### Minor Changes
+
+- `toAgentFactory` também aceita um resolvedor de credencial (`() => string | Promise<string>`), resolvido
+  quando a sessão é criada.
+
+  A 4.8.0 alargou `AgentRunnerRunOptions.apiKey`, que é um seam real — mas não é o que as superfícies de
+  consumidor usam. Um cliente ACP, um loop autônomo e uma delegação de time constroem o agente por
+  `toAgentFactory`, e ali a credencial continuava sendo uma string obtida antes. O alargamento sem este
+  complemento não alcançava nenhuma das três.
+
 ## 4.8.0
 
 ### Minor Changes
