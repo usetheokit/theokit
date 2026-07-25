@@ -517,7 +517,9 @@ function buildSdkTools(
 export function createSdkAgentStream(
   compiled: CompiledAgentOptions,
   compiledTools: CompiledTool[],
-  apiKey: string,
+  // M74 — aceita o resolvedor além do valor. A resolução acontece dentro do async iterator, ou seja,
+  // quando o stream de fato começa — não aqui, na construção do factory.
+  apiKey: string | (() => string | Promise<string>),
   overrides: RuntimeOverrides = {},
 ) {
   const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
@@ -587,8 +589,11 @@ export function createSdkAgentStream(
       })
 
       try {
+        // M74 — resolve AQUI, no início do stream. Se for uma função, é chamada a cada stream: uma
+        // sessão longa deixa de carregar o bearer que foi resolvido antes do primeiro turno.
+        const apiKeyResolvida = typeof apiKey === 'function' ? await apiKey() : apiKey
         yield* streamSdkAgent(rt, compiled, sdkTools, {
-          apiKey,
+          apiKey: apiKeyResolvida,
           model,
           reasoningEffort,
           overrides,
