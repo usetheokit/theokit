@@ -171,3 +171,67 @@ describe('M74 T1.3 — o retry distingue transitório de terminal', () => {
     expect(esperaComJitter(1, 200, () => 0)).not.toBe(esperaComJitter(1, 200, () => 0.99))
   })
 })
+
+/**
+ * M74 review (M74-02) — o teste do CONTADOR, que faltava.
+ *
+ * A T1.3 tinha `classificarFalhaDeRefresh` e `esperaComJitter` testados como funções puras, e os dois
+ * passavam. Mas o laço que os USA foi apagado por um lint-fix que reescreveu o bloco inteiro, e nenhum
+ * teste percebeu: o review mediu `tentativas de POST = 1` contra as 3 que a DoD exige.
+ *
+ * Testar o classificador isolado prova que ele classifica. Não prova que ele está LIGADO.
+ */
+describe('M74 review — o retry está ligado ao caminho de produção', () => {
+  it('test_transitorio_tenta_de_novo_ate_o_limite', async () => {
+    let tentativas = 0
+    const chamar = async (): Promise<string> => {
+      const MAX = 3
+      for (let t = 0; ; t++) {
+        try {
+          tentativas++
+          throw new Error('ETIMEDOUT')
+        } catch (err) {
+          const f = classificarFalhaDeRefresh(err)
+          if (!f.transitorio || t >= MAX - 1) throw f
+          await new Promise((r) => setTimeout(r, 1))
+        }
+      }
+    }
+    await expect(chamar()).rejects.toThrow(/transitória/)
+    expect(tentativas, 'o transitório deveria tentar 3 vezes').toBe(3)
+  })
+
+  it('test_invalid_grant_para_na_primeira', async () => {
+    let tentativas = 0
+    const chamar = async (): Promise<string> => {
+      const MAX = 3
+      for (let t = 0; ; t++) {
+        try {
+          tentativas++
+          throw new Error('{"error":"invalid_grant"}')
+        } catch (err) {
+          const f = classificarFalhaDeRefresh(err)
+          if (!f.transitorio || t >= MAX - 1) throw f
+          await new Promise((r) => setTimeout(r, 1))
+        }
+      }
+    }
+    await expect(chamar()).rejects.toThrow(/refaça o login/)
+    expect(tentativas, 'invalid_grant não pode ser repetido').toBe(1)
+  })
+
+  it('test_o_laco_de_retry_existe_no_fonte_de_producao', async () => {
+    // GATE ESTRUTURAL, e a razão dele é o defeito acima: os dois testes anteriores modelam o laço.
+    // Se o laço REAL sumir de novo, eles continuam verdes. Este lê o fonte de produção.
+    const { readFileSync } = await import('node:fs')
+    const fonte = readFileSync(new URL('../../src/auth/auth-provider.ts', import.meta.url), 'utf8')
+    const corpo = fonte.slice(fonte.indexOf('private refrescarSobLock'))
+    expect(
+      corpo.length,
+      'não achei `refrescarSobLock` — o gate passaria por vacuidade',
+    ).toBeGreaterThan(200)
+    expect(corpo, 'o laço de retry sumiu do caminho de produção').toMatch(/for \(let tentativa/)
+    expect(corpo, 'o classificador não está ligado ao laço').toContain('classificarFalhaDeRefresh')
+    expect(corpo, 'o backoff não está ligado ao laço').toContain('esperaComJitter')
+  })
+})

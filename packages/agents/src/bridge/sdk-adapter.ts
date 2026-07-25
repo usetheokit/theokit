@@ -514,11 +514,13 @@ function buildSdkTools(
  * Returns a function that, given a message + sessionId, yields TheoKit
  * AgentStreamEvent via the SDK's Agent.create() + Run.stream() pipeline.
  */
+/** M74 — resolve a credencial quando o stream/sessão COMEÇA; com `string`, o valor vinha congelado. */
+const resolverApiKey = async (k: string | (() => string | Promise<string>)): Promise<string> =>
+  typeof k === 'function' ? await k() : k
+
 export function createSdkAgentStream(
   compiled: CompiledAgentOptions,
   compiledTools: CompiledTool[],
-  // M74 — aceita o resolvedor além do valor. A resolução acontece dentro do async iterator, ou seja,
-  // quando o stream de fato começa — não aqui, na construção do factory.
   apiKey: string | (() => string | Promise<string>),
   overrides: RuntimeOverrides = {},
 ) {
@@ -589,11 +591,8 @@ export function createSdkAgentStream(
       })
 
       try {
-        // M74 — resolve AQUI, no início do stream. Se for uma função, é chamada a cada stream: uma
-        // sessão longa deixa de carregar o bearer que foi resolvido antes do primeiro turno.
-        const apiKeyResolvida = typeof apiKey === 'function' ? await apiKey() : apiKey
         yield* streamSdkAgent(rt, compiled, sdkTools, {
-          apiKey: apiKeyResolvida,
+          apiKey: await resolverApiKey(apiKey),
           model,
           reasoningEffort,
           overrides,
@@ -739,7 +738,8 @@ export interface SdkAgentHandle {
  */
 export function toAgentFactory(
   def: TheokitAgentDefinition,
-  opts: { apiKey: string; overrides?: RuntimeOverrides },
+  // M74 — o seam que as superfícies do consumidor usam de fato (ACP, loop autônomo, delegação).
+  opts: { apiKey: string | (() => string | Promise<string>); overrides?: RuntimeOverrides },
 ): (sessionId: string) => Promise<SdkAgentHandle> {
   const compiled = compileAgentDefinition(def)
   const overrides = opts.overrides ?? {}
@@ -770,7 +770,7 @@ export function toAgentFactory(
     if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
     const extra = buildExtraCreateOptions(overrides, compiled)
     const agent = await rt.Agent.getOrCreate(sessionId, {
-      apiKey: opts.apiKey,
+      apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
       tools: sdkTools,
       ...m8,
