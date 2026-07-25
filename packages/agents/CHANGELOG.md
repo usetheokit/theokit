@@ -1,5 +1,30 @@
 # @theokit/agents
 
+## 4.8.0
+
+### Minor Changes
+
+- `AgentRunnerRunOptions.apiKey` passa a aceitar um resolvedor (`() => string | Promise<string>`) além do
+  valor. Ele é chamado quando o stream começa, não quando o agente é construído.
+
+  O ponto de injeção já era por run; o que travava era o tipo. Com `string`, quem chama precisa ter o
+  valor em mãos antes — então o momento era por run, mas o valor era obtido antes e congelado, e um
+  bearer OAuth de validade curta atravessava a run inteira sem ser reconsultado. Uma sessão de IDE que
+  dura horas, um loop autônomo de vinte turnos e uma delegação de time longa exibem o mesmo sintoma.
+
+  `string` continua válido e continua sendo o caminho de quem usa chave de API: ela não expira, e exigir
+  um resolvedor ali seria cerimônia sem ganho.
+
+  O refresh de OAuth passa a rodar sob lock entre processos, com releitura depois de adquiri-lo — sem a
+  releitura o lock apenas serializa, e o segundo processo refresca com estado velho, invalidando o token
+  que o primeiro acabou de gravar. Como o lock não é reentrante e o resolvedor agora é chamado de dentro
+  do stream, há um single-flight em processo antes dele: uma execução aninhada resolve pela promise em
+  voo em vez de disputar o arquivo consigo mesma.
+
+  Falhas de refresh passam a ser classificadas: rede e 5xx são repetidos com backoff e jitter,
+  `invalid_grant` falha na primeira tentativa. Repetir um token revogado só atrasa a mensagem que o
+  usuário precisa ler. A mensagem de erro nunca carrega material de token.
+
 ## 4.7.0
 
 ### Minor Changes
