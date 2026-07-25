@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Roadmap amended: added **M66 — Unificar o transporte in-process em `@theokit/agents@4.x`** ao `ROADMAP-v2.md` (`/roadmap-feature transport-unification-4x`). Fecha o split 0.44.x↔4.x (dedup + causa-raiz provável do #77). Numeração global reconciliada (v1 chegou a M65 → next-free M66). A investigação da mutação espúria do `chat.ts` foi separada como **ad-hoc** (não milestone).
 - **`@theokit/agents/tools` — pass-through da superfície de `@theokit/sdk-tools` (M62).** O consumidor importa seus tools built-in prontos (`createReadFileTool`/`createShellTool`/… + `withName`/`withDescription`) da camada Theokit em vez de `@theokit/sdk-tools` direto. Re-export puro, nunca enriquecido (parcimônia Rung 9 — o sugar é do próprio SDK-tools; envolver seria reinventar, blueprint Q5). Teste de superfície trava os 16 símbolos usados. `@theokit/sdk-tools` segue peer **opcional** (só quem usa o subpath precisa) e o range sobe para `>=0.20.0` (os factories mais novos vivem lá).
 
 ### Changed
