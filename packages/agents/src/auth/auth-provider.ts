@@ -36,6 +36,63 @@ type EnsureFreshHttpDeps = Parameters<typeof ensureFreshCredential>[2]
 type DeviceLoginDeps = Parameters<typeof openaiDeviceLogin>[1]
 type DeviceLoginHooks = Parameters<typeof openaiDeviceLogin>[2]
 
+/**
+ * Falha de refresh, classificada — porque a decisão de tentar de novo depende da classe, não do texto.
+ *
+ * M74: repetir um `invalid_grant` não é resiliência, é ruído. O refresh token foi revogado e nenhuma
+ * tentativa muda isso; o usuário que revogou o login espera três backoffs para ler uma mensagem que já
+ * era conhecida na primeira resposta. Rede e 5xx são o oposto: quase sempre passam na segunda.
+ *
+ * SECRET-SAFETY: a mensagem nunca carrega material de token — só a classe e o motivo.
+ */
+export class RefreshFailure extends Error {
+  constructor(
+    message: string,
+    /** `true` ⇒ vale tentar de novo com backoff. `false` ⇒ terminal, falha na primeira. */
+    readonly transitorio: boolean,
+  ) {
+    super(message)
+    this.name = 'RefreshFailure'
+  }
+}
+
+/**
+ * O que conta como transitório. Lista NOMEADA de propósito: é decisão de produto que envelhece, e
+ * espalhá-la em `if` faz cada sítio envelhecer sozinho.
+ */
+const MOTIVOS_TRANSITORIOS = [
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'AbortError',
+]
+
+/** Classifica uma falha de refresh. `invalid_grant` é terminal; rede e 5xx são transitórios. */
+export function classificarFalhaDeRefresh(err: unknown): RefreshFailure {
+  const texto = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+  if (/invalid_grant|invalid_request|unauthorized_client/i.test(texto)) {
+    return new RefreshFailure(
+      'o refresh token não é mais válido — refaça o login. Tentar de novo não muda o resultado.',
+      false,
+    )
+  }
+  const transitorio =
+    MOTIVOS_TRANSITORIOS.some((m) => texto.includes(m)) ||
+    /\b(5\d{2})\b|timeout|network/i.test(texto)
+  return new RefreshFailure(
+    transitorio ? 'falha transitória ao refrescar a credencial' : 'falha ao refrescar a credencial',
+    transitorio,
+  )
+}
+
+/** Espera com jitter: backoff exponencial ±25%, para dois processos não retentarem em uníssono. */
+export function esperaComJitter(tentativa: number, baseMs = 200, aleatorio = Math.random): number {
+  const base = baseMs * 2 ** tentativa
+  return Math.round(base * (0.75 + aleatorio() * 0.5))
+}
+
 export class AuthProvider {
   constructor(
     private readonly config: OAuthProviderConfig,
