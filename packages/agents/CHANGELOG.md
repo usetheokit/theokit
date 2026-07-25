@@ -1,5 +1,26 @@
 # @theokit/agents
 
+## 4.7.0
+
+### Minor Changes
+
+- `@theokit/agents/auth` passa a re-exportar a mecânica de store do `@theokit/sdk/auth` como
+  pass-through puro: `credentialHome`, `authFilePath`, `CredentialError`, `readAuthFile`,
+  `readStoredOAuth`, `writeCredential` e o tipo `ResolveCredentialOptions`.
+
+  O subpath exportava um valor e seis tipos contra os dezenove símbolos do SDK — nenhuma função
+  atravessava. Para um consumidor que não pode importar `@theokit/sdk*` direto, reimplementar era a
+  única saída legal; um deles reescreveu seis destes nomes. A camada existe para enriquecer, e enriquecer
+  nunca deve reduzir.
+
+  Pass-through puro, e não wrapper: são funções de I/O sem estado a segurar, e envolvê-las quebraria
+  `instanceof` para quem captura `CredentialError`. O novo `check:auth-parity` exige decisão escrita por
+  símbolo do SDK — coberto, ou fora de escopo com a razão — para que a lacuna não se repita em silêncio.
+
+  `resolveCredential` deliberadamente não atravessa: o SDK e o consumidor têm funções diferentes com
+  esse nome, e o próprio SDK declara a precedência de env e a inferência de provider como política do
+  consumidor.
+
 ## 4.6.0
 
 ### Minor Changes
