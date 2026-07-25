@@ -45,19 +45,20 @@ const PISO_DE_SIMBOLOS = { auth: 15 }
  */
 const DECISOES = {
   auth: {
-    // — a mecânica de store: pass-through puro (M73)
-    authFilePath: 'coberto',
-    CredentialError: 'coberto',
-    credentialHome: 'coberto',
-    readAuthFile: 'coberto',
-    readStoredOAuth: 'coberto',
-    writeCredential: 'coberto',
-    ResolveCredentialOptions: 'coberto',
+    // — a mecânica de store: pass-through puro (M73). `reexportado` é VERIFICADO contra o entry.
+    authFilePath: 'reexportado',
+    CredentialError: 'reexportado',
+    credentialHome: 'reexportado',
+    readAuthFile: 'reexportado',
+    readStoredOAuth: 'reexportado',
+    writeCredential: 'reexportado',
+    ResolveCredentialOptions: 'reexportado',
 
-    // — o ciclo de vida OAuth: a camada expõe via `AuthProvider`, que segura config+store
-    ensureFreshCredential: 'coberto',
-    openaiDeviceLogin: 'coberto',
-    persistOAuthTokens: 'coberto',
+    // — o ciclo de vida OAuth: alcançável pela classe `AuthProvider`, que segura config+store. NÃO é
+    // re-export, e o token diferente existe para o gate não afirmar o que não checou.
+    ensureFreshCredential: 'via-AuthProvider',
+    openaiDeviceLogin: 'via-AuthProvider',
+    persistOAuthTokens: 'via-AuthProvider',
 
     // — fora de escopo, com razão
     resolveCredential: {
@@ -99,14 +100,49 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
     continue
   }
 
+  // Três formas emitidas, porque o `.d.ts` usa as três e ler só uma deixa símbolo novo passar SEM
+  // decisão — silenciosamente, que é exatamente o defeito que este gate existe para impedir. O piso de
+  // não-vacuidade não protege disso: com o bloco `export { … }` intacto a contagem segue acima do piso
+  // e só o símbolo novo some.
+  const nomesDeBloco = [...fonte.matchAll(/export\s*\{([^}]*)\}/g)]
+    .flatMap((m) => m[1].split(','))
+    // `a as b` re-exporta sob o nome `b` — é ELE que o consumidor enxerga.
+    .map((t) =>
+      t
+        .replace(/\btype\b/, '')
+        .split(/\bas\b/)
+        .pop()
+        .trim(),
+    )
+  const nomesDeclarados = [
+    ...fonte.matchAll(/export\s+declare\s+(?:function|class|const|let|var)\s+(\w+)/g),
+  ].map((m) => m[1])
+  const tiposDeclarados = [...fonte.matchAll(/export\s+(?:type|interface)\s+(\w+)/g)].map(
+    (m) => m[1],
+  )
   const exports = [
     ...new Set(
-      [...fonte.matchAll(/export\s*\{([^}]*)\}/g)]
-        .flatMap((m) => m[1].split(','))
-        .map((s) => s.replace(/\btype\b/, '').trim())
-        .filter((s) => /^[A-Za-z_]\w*$/.test(s)),
+      [...nomesDeBloco, ...nomesDeclarados, ...tiposDeclarados].filter((n) =>
+        /^[A-Za-z_]\w*$/.test(n),
+      ),
     ),
   ]
+
+  // O que o entry da camada REALMENTE re-exporta. Sem isto, `reexportado` é uma afirmação que o gate
+  // nunca conferiu: remover um símbolo de `auth-entry.ts` deixava tudo verde (review F-02).
+  const entry = readFileSync(join(ROOT, `packages/agents/src/${subpath}-entry.ts`), 'utf8')
+  const reexportados = new Set(
+    [...entry.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}\s*from/g)]
+      .flatMap((m) => m[1].split(','))
+      .map((t) =>
+        t
+          .replace(/\btype\b/, '')
+          .split(/\bas\b/)
+          .pop()
+          .trim(),
+      )
+      .filter(Boolean),
+  )
 
   // ÂNCORA DE NÃO-VACUIDADE. Sem ela, uma enumeração quebrada devolve [] e o laço abaixo não roda:
   // "0 símbolos sem decisão" fica trivialmente verdadeiro e o gate certifica sem ter olhado nada.
@@ -130,6 +166,14 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
           '  reimplementar. Escreva a decisão em scripts/check-auth-parity.mjs:\n' +
           `    ${nome}: 'coberto'                              // e re-exporte em src/${subpath}-entry.ts\n` +
           `    ${nome}: { fora: '<por que não atravessa>' }    // decisão explícita, não omissão`,
+      )
+      continue
+    }
+    if (d === 'reexportado' && !reexportados.has(nome)) {
+      problemas.push(
+        `\`${nome}\` está declarado como \`'reexportado'\` mas \`src/${subpath}-entry.ts\` NÃO o re-exporta.\n` +
+          '  A decisão dizia que ele atravessa, e ele não atravessa — a lista virou afirmação não conferida.\n' +
+          `  Ou acrescente o símbolo ao re-export, ou mude a decisão para \`'via-AuthProvider'\` / \`{ fora }\`.`,
       )
       continue
     }
