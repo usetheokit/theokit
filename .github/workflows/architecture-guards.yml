@@ -20,6 +20,8 @@ on:
       - '.claude/rules/architecture.md'
       - 'packages/*/package.json'
       - 'scripts/check-package-direction.mjs'
+      - 'scripts/check-auth-parity.mjs'
+      - 'packages/agents/src/auth-entry.ts'
   pull_request:
     branches: [main]
     paths:
@@ -29,6 +31,8 @@ on:
       - '.claude/rules/architecture.md'
       - 'packages/*/package.json'
       - 'scripts/check-package-direction.mjs'
+      - 'scripts/check-auth-parity.mjs'
+      - 'packages/agents/src/auth-entry.ts'
 
 jobs:
   direction:
@@ -41,6 +45,24 @@ jobs:
           node-version: 22
       # Pure package.json scan — no install / no cross-repo sibling needed.
       - run: node scripts/check-package-direction.mjs
+
+  auth-parity:
+    name: surface parity (a camada enriquece o SDK, nunca reduz — M73)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # Precisa do install: o gate le a superficie REAL do @theokit/sdk instalado e a compara com
+      # o que `packages/agents/src/auth-entry.ts` re-exporta. Sem install nao ha o que comparar.
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-auth-parity.mjs
+      # O lock de identidade referencial (`toBe`) vive nos testes do pacote, e o vitest da raiz so
+      # cobre `tests/**` — sem isto ele nunca rodaria em CI.
+      - run: pnpm --filter @theokit/agents test
 
   dep-cruiser:
     name: dependency-cruiser (architecture rules)
