@@ -87,7 +87,10 @@ const DECISOES: Record<string, Decisao> = {
     verdict: 'in',
     via: '../../src/index.js',
     cobertura: 'amostra',
-    simbolos: ['Agent', 'Squad', 'Tool', 'Provider'],
+    // M80 — `JudgeCredentialError` entra na amostra do barril: é o erro que a falha-rápida do judge
+    // lança, e um consumidor atrás da fronteira precisa dele para distinguir credencial-do-judge de
+    // qualquer outra falha do goal loop.
+    simbolos: ['Agent', 'Squad', 'Tool', 'Provider', 'JudgeCredentialError'],
   },
   './errors': {
     verdict: 'in',
