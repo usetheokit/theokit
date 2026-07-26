@@ -1,9 +1,9 @@
 import 'reflect-metadata'
 import {
   AgentConfigCapability,
-  contextWindow,
-  projectContext,
-  skillsOptions,
+  ContextWindowCapability,
+  ProjectContextCapability,
+  SkillsOptionsCapability,
 } from '../../src/capability/agent-capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -29,7 +29,7 @@ vi.mock('@theokit/sdk', () => ({
 import type { CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
 import { streamAgentUIMessages } from '../../src/bridge/agent-endpoint.js'
-import { agent } from '../../src/bridge/agent-builder.js'
+import { AgentBuilder } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
 
 async function drain(compiled: CompiledAgentOptions) {
@@ -45,14 +45,16 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
   afterEach(() => vi.restoreAllMocks())
 
   it('test_adapter_passes_skills_to_create', async () => {
-    const opts = await drain(applyCapabilities([skillsOptions({ include: ['x'] })]))
+    const opts = await drain(applyCapabilities([new SkillsOptionsCapability({ include: ['x'] })]))
     expect(opts.skills).toEqual({ enabled: ['x'], autoInject: true })
     // EC-1: skills need a settings source for the SDK to discover SKILL.md files.
     expect((opts.local as { settingSources?: string[] }).settingSources).toContain('project')
   })
 
   it('test_adapter_passes_context_to_create', async () => {
-    const opts = await drain(applyCapabilities([contextWindow({ maxTokens: 42_000 })]))
+    const opts = await drain(
+      applyCapabilities([new ContextWindowCapability({ maxTokens: 42_000 })]),
+    )
     expect((opts.context as { maxTokens?: number }).maxTokens).toBe(42_000)
   })
 
@@ -62,7 +64,7 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
     try {
       const pcAgent = applyCapabilities([
         new AgentConfigCapability({ systemPrompt: 'BASE' }),
-        projectContext({}),
+        new ProjectContextCapability({}),
       ])
       const opts = await drain(pcAgent)
       expect(typeof opts.systemPrompt).toBe('function')
@@ -101,7 +103,9 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
     // discovery points at the app root — proven by a fakeRoot that is NOT the process cwd.
     const fakeRoot = '/fake/app/root'
     expect(fakeRoot).not.toBe(process.cwd())
-    const compiled = compileAgentDefinition(agent().model('m').settingSources(['project']).build())
+    const compiled = compileAgentDefinition(
+      AgentBuilder.create().model('m').settingSources(['project']).build(),
+    )
     const gen = streamAgentUIMessages(compiled, 'test-key', {
       message: 'hi',
       sessionId: 's',
@@ -117,7 +121,7 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
   it('test_adapter_emits_runtime_applied_log', async () => {
     process.env.THEOKIT_DEBUG = '1' // the wiring metric is now opt-in (silent by default — TUI/pipe hygiene)
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
-    await drain(applyCapabilities([skillsOptions({ include: ['y'] })]))
+    await drain(applyCapabilities([new SkillsOptionsCapability({ include: ['y'] })]))
     const hits = debug.mock.calls.filter((c) =>
       String(c[0]).includes('THEO_AGENT_M8_RUNTIME_APPLIED'),
     )

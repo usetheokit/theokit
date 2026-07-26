@@ -454,7 +454,7 @@ function hasZodInputSchema(schema: unknown): boolean {
 /**
  * M7 — wrap a tool handler so it receives the run-context as `ctx.context`, injected from a closure
  * over `runContext`. theokit owns the run-context concern (the `defineAgent({ context })` /
- * `agent().context()` API is theokit's), so it injects it at THIS adapter layer instead of relying
+ * `AgentBuilder.create().context()` API is theokit's), so it injects it at THIS adapter layer instead of relying
  * on the SDK to forward it — decoupling the framework from the SDK's tool-call internals. The
  * incoming `ctx.signal` (from the SDK) is preserved; `context` is set to the agent's run-context.
  */
@@ -514,10 +514,14 @@ function buildSdkTools(
  * Returns a function that, given a message + sessionId, yields TheoKit
  * AgentStreamEvent via the SDK's Agent.create() + Run.stream() pipeline.
  */
+/** M74 — resolve a credencial quando o stream/sessão COMEÇA; com `string`, o valor vinha congelado. */
+const resolverApiKey = async (k: string | (() => string | Promise<string>)): Promise<string> =>
+  typeof k === 'function' ? await k() : k
+
 export function createSdkAgentStream(
   compiled: CompiledAgentOptions,
   compiledTools: CompiledTool[],
-  apiKey: string,
+  apiKey: string | (() => string | Promise<string>),
   overrides: RuntimeOverrides = {},
 ) {
   const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
@@ -588,7 +592,7 @@ export function createSdkAgentStream(
 
       try {
         yield* streamSdkAgent(rt, compiled, sdkTools, {
-          apiKey,
+          apiKey: await resolverApiKey(apiKey),
           model,
           reasoningEffort,
           overrides,
@@ -722,7 +726,7 @@ export interface SdkAgentHandle {
 /**
  * #12 — bridge a builder/`defineAgent` {@link TheokitAgentDefinition} to a real `SDKAgent` FACTORY,
  * so surfaces that require an `SDKAgent` (or `(sessionId) => SDKAgent`) — notably `theokit acp`,
- * whose entry default-export must be one — can serve an agent defined with the `agent()` chain.
+ * whose entry default-export must be one — can serve an agent defined with the `AgentBuilder.create()` chain.
  *
  * The factory reuses the SAME projection the streaming path uses (`compileAgentDefinition` → tools /
  * model / `assembleM8CreateOptions`), so the served agent has identical tools, model, system prompt,
@@ -734,7 +738,8 @@ export interface SdkAgentHandle {
  */
 export function toAgentFactory(
   def: TheokitAgentDefinition,
-  opts: { apiKey: string; overrides?: RuntimeOverrides },
+  // M74 — o seam que as superfícies do consumidor usam de fato (ACP, loop autônomo, delegação).
+  opts: { apiKey: string | (() => string | Promise<string>); overrides?: RuntimeOverrides },
 ): (sessionId: string) => Promise<SdkAgentHandle> {
   const compiled = compileAgentDefinition(def)
   const overrides = opts.overrides ?? {}
@@ -765,7 +770,7 @@ export function toAgentFactory(
     if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
     const extra = buildExtraCreateOptions(overrides, compiled)
     const agent = await rt.Agent.getOrCreate(sessionId, {
-      apiKey: opts.apiKey,
+      apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
       tools: sdkTools,
       ...m8,

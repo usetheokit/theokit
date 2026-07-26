@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agent } from '../../src/index.js'
+import { AgentBuilder } from '../../src/index.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
 
@@ -12,7 +12,10 @@ import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-opt
  */
 describe('builder .memory() → Agent.create projection', () => {
   it('builder_memory_reaches_create_options', () => {
-    const def = agent().model('openai/gpt-4o').memory({ enabled: true, autoInject: true }).build()
+    const def = AgentBuilder.create()
+      .model('openai/gpt-4o')
+      .memory({ enabled: true, autoInject: true })
+      .build()
     const compiled = compileAgentDefinition(def)
     const { options, applied } = assembleM8CreateOptions(compiled)
     expect(options.memory).toEqual({ enabled: true, autoInject: true })
@@ -25,9 +28,11 @@ describe('builder .memory() → Agent.create projection', () => {
     await import('reflect-metadata')
 
     const { applyCapabilities } = await import('../../src/capability/capability.js')
-    const { memory } = await import('../../src/capability/agent-capabilities.js')
+    const { MemoryCapability } = await import('../../src/capability/agent-capabilities.js')
 
-    const compiled = applyCapabilities([memory({ provider: 'built-in', maxFacts: 100 } as never)])
+    const compiled = applyCapabilities([
+      new MemoryCapability({ provider: 'built-in', maxFacts: 100 } as never),
+    ])
     expect(compiled.memory).toBeDefined()
     const warns: string[] = []
     const orig = process.stderr.write.bind(process.stderr)
@@ -47,7 +52,7 @@ describe('builder .memory() → Agent.create projection', () => {
   })
 
   it('no_memory_declared_projects_nothing', () => {
-    const def = agent().model('openai/gpt-4o').build()
+    const def = AgentBuilder.create().model('openai/gpt-4o').build()
     const { options, applied } = assembleM8CreateOptions(compileAgentDefinition(def))
     expect(options.memory).toBeUndefined()
     expect(applied).not.toContain('memory')

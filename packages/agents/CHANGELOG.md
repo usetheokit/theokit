@@ -1,5 +1,233 @@
 # @theokit/agents
 
+## 4.9.1
+
+### Patch Changes
+
+- O retry com backoff do refresh de OAuth passa a existir de fato no caminho de execução. As funções que
+  classificam a falha e calculam a espera estavam presentes e testadas, mas nenhuma era chamada — uma
+  reescrita de bloco as desconectou, e os testes que existiam validavam o classificador isolado, o que
+  não prova que ele está ligado. Uma falha transitória agora é repetida até três vezes; `invalid_grant`
+  continua falhando na primeira, porque repetir um token revogado só atrasa a mensagem.
+
+## 4.9.0
+
+### Minor Changes
+
+- `toAgentFactory` também aceita um resolvedor de credencial (`() => string | Promise<string>`), resolvido
+  quando a sessão é criada.
+
+  A 4.8.0 alargou `AgentRunnerRunOptions.apiKey`, que é um seam real — mas não é o que as superfícies de
+  consumidor usam. Um cliente ACP, um loop autônomo e uma delegação de time constroem o agente por
+  `toAgentFactory`, e ali a credencial continuava sendo uma string obtida antes. O alargamento sem este
+  complemento não alcançava nenhuma das três.
+
+## 4.8.0
+
+### Minor Changes
+
+- `AgentRunnerRunOptions.apiKey` passa a aceitar um resolvedor (`() => string | Promise<string>`) além do
+  valor. Ele é chamado quando o stream começa, não quando o agente é construído.
+
+  O ponto de injeção já era por run; o que travava era o tipo. Com `string`, quem chama precisa ter o
+  valor em mãos antes — então o momento era por run, mas o valor era obtido antes e congelado, e um
+  bearer OAuth de validade curta atravessava a run inteira sem ser reconsultado. Uma sessão de IDE que
+  dura horas, um loop autônomo de vinte turnos e uma delegação de time longa exibem o mesmo sintoma.
+
+  `string` continua válido e continua sendo o caminho de quem usa chave de API: ela não expira, e exigir
+  um resolvedor ali seria cerimônia sem ganho.
+
+  O refresh de OAuth passa a rodar sob lock entre processos, com releitura depois de adquiri-lo — sem a
+  releitura o lock apenas serializa, e o segundo processo refresca com estado velho, invalidando o token
+  que o primeiro acabou de gravar. Como o lock não é reentrante e o resolvedor agora é chamado de dentro
+  do stream, há um single-flight em processo antes dele: uma execução aninhada resolve pela promise em
+  voo em vez de disputar o arquivo consigo mesma.
+
+  Falhas de refresh passam a ser classificadas: rede e 5xx são repetidos com backoff e jitter,
+  `invalid_grant` falha na primeira tentativa. Repetir um token revogado só atrasa a mensagem que o
+  usuário precisa ler. A mensagem de erro nunca carrega material de token.
+
+## 4.7.0
+
+### Minor Changes
+
+- `@theokit/agents/auth` passa a re-exportar a mecânica de store do `@theokit/sdk/auth` como
+  pass-through puro: `credentialHome`, `authFilePath`, `CredentialError`, `readAuthFile`,
+  `readStoredOAuth`, `writeCredential` e o tipo `ResolveCredentialOptions`.
+
+  O subpath exportava um valor e seis tipos contra os dezenove símbolos do SDK — nenhuma função
+  atravessava. Para um consumidor que não pode importar `@theokit/sdk*` direto, reimplementar era a
+  única saída legal; um deles reescreveu seis destes nomes. A camada existe para enriquecer, e enriquecer
+  nunca deve reduzir.
+
+  Pass-through puro, e não wrapper: são funções de I/O sem estado a segurar, e envolvê-las quebraria
+  `instanceof` para quem captura `CredentialError`. O novo `check:auth-parity` exige decisão escrita por
+  símbolo do SDK — coberto, ou fora de escopo com a razão — para que a lacuna não se repita em silêncio.
+
+  `resolveCredential` deliberadamente não atravessa: o SDK e o consumidor têm funções diferentes com
+  esse nome, e o próprio SDK declara a precedência de env e a inferência de provider como política do
+  consumidor.
+
+## 4.6.0
+
+### Minor Changes
+
+- M63 — close the `SDK → Theokit → AgentBuilder` boundary: the main barrel now also re-exports
+  `SubAgent` (the a2a delegation primitive, `SubAgent.create()`) and the pure `path-safety` helpers
+  (`assertNoSymlinkEscape`, `isForbiddenPath`, `safePathJoin`). Same PASS-THROUGH doctrine as the M58
+  core re-exports (parsimony Rung 9 — already the target OO/pure shape, wrapping would be ceremony), so
+  a consumer can import ITS full runtime surface from `@theokit/agents` without touching `@theokit/sdk*`
+  directly. Additive only — no existing export changes.
+
+## 4.5.0
+
+### Minor Changes
+
+- `@theokit/agents/tools` — pass-through of the `@theokit/sdk-tools` factory surface (M62).
+
+  The consumer imports its ready-made built-in tools (`createReadFileTool`, `createShellTool`, … +
+  `withName`/`withDescription`) from the Theokit layer instead of `@theokit/sdk-tools` directly. Pure
+  re-export, never enriched (parsimony Rung 9 — the sugar is the SDK-tools' own; wrapping it would be
+  reinventing, blueprint Q5). A surface test locks the 16 symbols the consumer uses. `@theokit/sdk-tools`
+  stays an OPTIONAL peer (only consumers of this subpath need it) and its range moves to `>=0.20.0` —
+  the newer tool factories (`createCurrentTimeTool`/`createInteractiveShellTool`/`createUpdatePlanTool`/
+  `createWriteStdinTool`) live there.
+
+## 4.4.0
+
+### Minor Changes
+
+- ee9fb7b: Unify `ConfigurationError` on the SDK's class (M61).
+
+  `@theokit/agents` used to define its own `ConfigurationError extends Error` while `@theokit/sdk`
+  shipped a separate `ConfigurationError extends TheokitAgentError`. A `catch (e instanceof
+ConfigurationError)` caught one throw path and silently missed the other. The layer now RE-EXPORTS the
+  SDK's class, so authoring throws (`@theokit/agents`) and runtime throws (`@theokit/sdk`) are the SAME
+  class — `instanceof` holds across the boundary in both directions. Existing single-arg
+  `new ConfigurationError('msg')` calls are unchanged (the SDK options are optional); the class stays
+  `instanceof Error`. Decision in `knowledge-base/adrs/0006-configuration-error-unification.md`.
+
+## 4.3.1
+
+### Patch Changes
+
+- M60 follow-up: `AuthProvider.ensureFresh(resolved, deps, env)` — the HTTP deps and `env` are now
+  separate params (was a single `opts` bag). Corrects the just-shipped 4.3.0 shape before any consumer
+  depends on it; behavior (delegation to `ensureFreshCredential`) is unchanged.
+
+## 4.3.0
+
+### Minor Changes
+
+- `AuthProvider` — the OO OAuth-lifecycle contract at `@theokit/agents/auth` (M60).
+
+  The SDK ships OAuth as free functions stateful across a shared config + store
+  (`openaiDeviceLogin` → `persistOAuthTokens` → `ensureFreshCredential`). The Theokit layer now unifies
+  them into an `AuthProvider` class that HOLDS the `config`+`store` and delegates each step, so a
+  consumer authors `new AuthProvider(config, store).persist(...)` / `.ensureFresh(...)` instead of
+  threading the shared state through every call. Enrich, not pass-through (auth carries state); it
+  DELEGATES, never reimplements (Rung 9) — login → persist → refresh yields identical state. SECRET-SAFE
+  by contract: the wrapper never logs or emits token material (pinned by a secret-safety test). The auth
+  domain's types (`OAuthProviderConfig`/`CredentialStoreConfig`/`OpenAIDeviceConfig`/`ResolvedCredential`/
+  `OAuthTokens`/`DeviceDeps`) are re-exported alongside it.
+
+## 4.2.2
+
+### Patch Changes
+
+- fb89c9e: Fix: the goal domain types (`GoalEvent`/`GoalLoopAgent`/`GoalOptions`/`GoalResult`) are now actually
+  re-exported from the top-level barrel (the M59 re-export was only reachable from the loop submodule).
+
+## 4.2.1
+
+### Patch Changes
+
+- 87fa3bb: Re-export the goal domain's types alongside `GoalRunner` (M59 follow-up).
+
+  `GoalEvent`, `GoalLoopAgent`, `GoalOptions`, `GoalResult` now travel with `GoalRunner` from
+  `@theokit/agents`, so a consumer types against the goal surface entirely from the Theokit layer
+  without reaching back to `@theokit/sdk`.
+
+## 4.2.0
+
+### Minor Changes
+
+- 7e37347: `GoalRunner` — the OO twin of the SDK's free `runGoalLoop` (M59).
+
+  The layered boundary continues: the SDK ships goal orchestration as a free function
+  (`runGoalLoop(agent, goal, options, deps)`); the Theokit layer now imposes its OO shape with a
+  `GoalRunner` class parallel to `AgentRunner`, so a consumer authors `new GoalRunner(agent).run(goal,
+options)` instead of a bare call. Unlike the M58 pass-through barrels, this ENRICHES an orchestration
+  primitive with a contract — but it DELEGATES, never reimplements (parsimony Rung 9): `run` forwards
+  verbatim to `runGoalLoop`, so the emitted `GoalEvent` stream and the final `GoalResult` are identical.
+  A parity test pins that both ways (exact forwarded tuple + identical stream/result).
+
+## 4.1.0
+
+### Minor Changes
+
+- dd044c1: Pass-through barrels for the 5 already-OO / pure SDK domains (M58).
+
+  The layered boundary `SDK → Theokit → AgentBuilder`: `@theokit/agents` now re-exports the SDK domains
+  that are already object-oriented or pure helpers, so a consumer imports them from the Theokit layer
+  instead of `@theokit/sdk*` directly. Re-export, never a wrapper (parsimony Rung 9) — wrapping
+  `Agent.create()` or a pure `transcriptPath()` would be ceremony without value.
+
+  - **core** (main barrel): `Agent`, `Squad`, `Tool`, `Provider` + `SDKAgent` / `CustomTool` /
+    `SessionRecord` types.
+  - **`@theokit/agents/sandbox`**: `LocalSandbox`, `SandboxBackend`, `SandboxConfig`.
+  - **`@theokit/agents/persistence`**: `transcriptPath`, `encodeProjectDir`, `atomicWriteText`,
+    `SessionRecord`.
+  - **`@theokit/agents/interactive`**: `InteractiveBackend`, `StartInteractiveOptions`,
+    `StartInteractiveResult`.
+  - **`@theokit/agents/pty`**: `PtyInteractiveBackend` (optional peer `@theokit/sdk-pty` — only consumers
+    of this subpath need it installed).
+
+  A surface test locks each barrel's symbols so a dropped re-export fails loudly. The `@theokit/sdk`
+  peer range moves to `^4.19.0` — the `/interactive` and `/sandbox` subpaths this layer re-exports live
+  there. Consumers already on SDK 4.19+ are unaffected.
+
+## 4.0.0
+
+### Major Changes
+
+- fcd1536: Authoring surface is now 100% object-oriented (M57) — the free "sugar" factories are gone.
+
+  The ~14 free capability factories and the two free builders are replaced by classes and static
+  factories, finishing the `X.create()` migration `@theokit/sdk` completed at v3.0. One idiom, aligned
+  with the runtime this layer wraps.
+
+  **BREAKING — mechanical 1:1 rename, no behaviour change:**
+
+  ```ts
+  // before                          // after
+  memory(x)                          new MemoryCapability(x)
+  skills(x)                          new SkillsCapability(x)
+  contextWindow(x)                   new ContextWindowCapability(x)
+  checkpoint(x)                      new CheckpointCapability(x)
+  subAgents(x)                       new SubAgentsCapability(x)
+  projectContext(x)                  new ProjectContextCapability(x)
+  mcpServers(x)                      new McpServersCapability(x)
+  guardrails(x)                      new GuardrailsCapability(x)
+  humanInTheLoop(x)                  new HumanInTheLoopCapability(x)
+  skillsOptions(x)                   new SkillsOptionsCapability(x)
+  settingSources(x)                  new SettingSourcesCapability(x)
+  plugins(x)                         new PluginsCapability(x)
+  runContext(x)                      new RunContextCapability(x)
+  skillsResolver(x)                  new SkillsResolverCapability(x)
+  agent()                            AgentBuilder.create()
+  contextualTool(t)                  ContextualTool.of(t)
+  ```
+
+  The nine pure-assignment capabilities share a `FieldCapability` base (one line each); the five that
+  carry behaviour (validation / delegation / merge / storage-metadata warning) keep the exact body.
+  `AgentBuilder` / `ContextualTool` are each a type (generic interface) and a value (static factory) at
+  once — the fluent type-state chain is unchanged.
+
+  Zero-behavior: the deterministic suite (608) and type suite (104) pass without editing a single
+  expectation after repointing call-sites. Reverses ADR 0001 § 4; rationale in
+  `knowledge-base/adrs/0005-sugar-to-oo.md`.
+
 ## 3.0.0
 
 ### Major Changes
