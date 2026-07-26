@@ -12,7 +12,7 @@ name: architecture-guards
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'packages/theo/src/**'
       - '.dependency-cruiser.cjs'
@@ -22,9 +22,10 @@ on:
       - 'scripts/check-package-direction.mjs'
       - 'scripts/check-auth-parity.mjs'
       - 'scripts/check-sandbox-parity.mjs'
+      - 'packages/agents/src/sandbox-entry.ts'
       - 'packages/agents/src/auth-entry.ts'
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'packages/theo/src/**'
       - '.dependency-cruiser.cjs'
@@ -34,6 +35,7 @@ on:
       - 'scripts/check-package-direction.mjs'
       - 'scripts/check-auth-parity.mjs'
       - 'scripts/check-sandbox-parity.mjs'
+      - 'packages/agents/src/sandbox-entry.ts'
       - 'packages/agents/src/auth-entry.ts'
 
 jobs:
