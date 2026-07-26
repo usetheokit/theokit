@@ -32,9 +32,23 @@ type _TypeSurface = [
   StartInteractiveResult,
 ]
 
+/**
+ * M79 — o barril é importado no ESCOPO DO MÓDULO, não dentro do teste.
+ *
+ * Ele custa ~1,5 s para carregar (o M78 o engordou com `export *` de cinco subpaths do SDK), e um
+ * `await import()` dentro do corpo do teste paga esse custo DENTRO do orçamento de 5 s do vitest.
+ * Sozinho passava; na suíte completa, sob contenção, estourava — e a mensagem era "Test timed out",
+ * que não diz nada sobre a causa ser carga de módulo.
+ *
+ * O gatilho foi o M79 mover os `@theokit/sdk*` de peer para dependency, o que muda o caminho de
+ * resolução do pnpm. Mas o defeito é anterior: custo de carga de módulo não pertence ao orçamento de
+ * um teste que só verifica o formato do que foi carregado. No escopo do módulo, ele é pago na coleta.
+ */
+const barril = await import('../../src/index.js')
+
 describe('M58 — @theokit/agents pass-through barrels for the 5 already-OO/pure SDK domains', () => {
-  it('core: Agent / Squad / Tool / Provider reach the main barrel', async () => {
-    const m = await import('../../src/index.js')
+  it('core: Agent / Squad / Tool / Provider reach the main barrel', () => {
+    const m = barril
     for (const name of ['Agent', 'Squad', 'Tool', 'Provider'] as const) {
       expect(m[name], name).toBeTypeOf('function')
     }
