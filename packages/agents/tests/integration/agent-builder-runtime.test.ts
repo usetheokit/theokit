@@ -1,5 +1,5 @@
 /**
- * M8 — the `agent()` builder is a TYPE-STATE wrapper whose `.build()` resolves to the SAME branded
+ * M8 — the `AgentBuilder.create()` builder is a TYPE-STATE wrapper whose `.build()` resolves to the SAME branded
  * `AgentDefinition` the `defineAgent` / `@Agent` surfaces produce (ADR-B1, one runtime N syntaxes).
  *
  * Two properties proven here at runtime:
@@ -40,7 +40,7 @@ vi.mock('@theokit/sdk', () => ({
   },
 }))
 
-const { agent } = await import('../../src/bridge/agent-builder.js')
+const { AgentBuilder } = await import('../../src/bridge/agent-builder.js')
 const { defineAgent, compileAgentDefinition, isAgentDefinition } =
   await import('../../src/bridge/define-agent.js')
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
@@ -62,13 +62,17 @@ async function drain(stream: AsyncIterable<unknown>): Promise<void> {
   }
 }
 
-describe('M8 agent() builder', () => {
+describe('M8 AgentBuilder.create() builder', () => {
   beforeEach(() => {
     h.handlerContext = undefined
   })
 
   it('converges: builder output equals the equivalent defineAgent output (branded + compiled)', () => {
-    const built = agent().model('claude-sonnet-4-6').system('be terse').tool(tool).build()
+    const built = AgentBuilder.create()
+      .model('claude-sonnet-4-6')
+      .system('be terse')
+      .tool(tool)
+      .build()
     const declared = defineAgent({
       model: 'claude-sonnet-4-6',
       system: 'be terse',
@@ -89,7 +93,11 @@ describe('M8 agent() builder', () => {
   })
 
   it('carries .context() to the built definition and on to the tool handler at runtime (M7 seam)', async () => {
-    const def = agent().model('m').context({ projectRoot: '/repo' }).tool(tool).build()
+    const def = AgentBuilder.create()
+      .model('m')
+      .context({ projectRoot: '/repo' })
+      .tool(tool)
+      .build()
 
     // The run-context landed on the branded definition ...
     expect(def.context).toEqual({ projectRoot: '/repo' })
@@ -104,7 +112,7 @@ describe('M8 agent() builder', () => {
   it('.use(preset) applies a partial chain and preserves type-state (model set before .use flows through)', () => {
     // `b` is inferred as the model-set builder, so the preset's added system/tool flow through and
     // `.build()` is callable without re-setting the model — proving `.use()` carries the type-state.
-    const built = agent()
+    const built = AgentBuilder.create()
       .model('m')
       .use((b) => b.system('log everything').tool(tool))
       .build()

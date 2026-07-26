@@ -38,7 +38,7 @@ The fluent builder is the **single** public authoring API across all 8 define-su
 
 | Surface | Builder | `.build()` emits | Source |
 |---|---|---|---|
-| agent | `agent().input(z).model(m).context(c).tool(t).approval(n,{…}).build()` | branded `AgentDefinition` | `packages/agents/src/bridge/agent-builder.ts` |
+| agent | `AgentBuilder.create().input(z).model(m).context(c).tool(t).approval(n,{…}).build()` | branded `AgentDefinition` | `packages/agents/src/bridge/agent-builder.ts` |
 | tool | `tool('read').describe(d).input(z).execute(fn).build()` | `CustomTool` | `packages/theo/src/server/define/tool-builder.ts` |
 | route | `route().query(z).body(z).params(z).handler(fn).build()` | `RouteConfig` | `packages/theo/src/server/define/route-builder.ts` |
 | action | `action().input(z).accept('form').handler(fn).build()` | `ActionConfig` | `packages/theo/src/server/define/action-builder.ts` |
@@ -47,7 +47,7 @@ The fluent builder is the **single** public authoring API across all 8 define-su
 | plugin | `plugin('cors').onRequest(fn).build()` | `TheoPlugin` (synthesized `register`) | `packages/theo/src/server/define/plugin-builder.ts` |
 | config | `config().serverDir('core').set({…}).build()` | `Partial<TheoConfig>` | `packages/theo/src/config/config-builder.ts` |
 
-**Technique:** type-state accumulation (tRPC `UnsetMarker`). A terminal `.build()` is a **compile error** when a required setter was skipped — e.g. `route().build()` fails until `.handler()` is set; `agent().build()` fails until `.model()`; `tool()` needs `.input()` + `.execute()`. The runtime is a plain config accumulator; the generics live entirely at the type level and the object is bridged once (`as unknown as XBuilder`) — the documented type-state seam.
+**Technique:** type-state accumulation (tRPC `UnsetMarker`). A terminal `.build()` is a **compile error** when a required setter was skipped — e.g. `route().build()` fails until `.handler()` is set; `AgentBuilder.create().build()` fails until `.model()`; `tool()` needs `.input()` + `.execute()`. The runtime is a plain config accumulator; the generics live entirely at the type level and the object is bridged once (`as unknown as XBuilder`) — the documented type-state seam.
 
 `config()` is deliberately **hybrid** (ADR-0043 D3): dedicated setters for the common flat fields + a `.set(partial)` escape for the ~20-field long tail, because a 30-setter chain would be worse DX than the object literal Vite/Nuxt/Astro keep on purpose.
 
@@ -88,7 +88,7 @@ Prior art: tRPC `callProcedure` / `createCallerFactory`. Parity with the HTTP pa
 
 ```
                  authored ONCE (builder-only)
-        route() / action() / tool() / agent() ...
+        route() / action() / tool() / AgentBuilder.create() ...
                           │
         ┌─────────────────┼──────────────────────┐
         │                 │                       │

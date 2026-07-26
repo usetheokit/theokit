@@ -111,7 +111,7 @@ block — only metadata.
 To disable auto-injection (for example, when you control the system prompt yourself):
 
 ```ts
-export default agent()
+export default AgentBuilder.create()
   .model('anthropic/claude-sonnet-4-6')
   .skills({ autoInject: false })
   .build()
@@ -153,7 +153,7 @@ per-environment skill sets — use `discoverSkills()` and `buildSkillsBlock()` f
 
 ```ts
 import { discoverSkills, buildSkillsBlock } from '@theokit/sdk/skills'
-import { agent } from '@theokit/sdk'
+import { AgentBuilder } from '@theokit/agents'
 
 // Pick the skills directory at startup
 const skillsDir = process.env.SKILLS_DIR ?? '.theokit/skills'
@@ -161,7 +161,7 @@ const skills = await discoverSkills(skillsDir, {
   onInvalidSkill: (info) => console.warn(`Skipping skill ${info.name}: ${info.message}`),
 })
 
-export default agent()
+export default AgentBuilder.create()
   .model('anthropic/claude-sonnet-4-6')
   .skills({ autoInject: false })   // disable built-in injection
   .systemPrompt(async (ctx) => {
@@ -182,7 +182,7 @@ build agents that ship skill packages or pick skills based on environment.
 ## Skills and the `defineAgent` surface
 
 Skills are discovered automatically when using any agent surface — `defineAgent`,
-`agent()` builder, or `@Agent` class. The `skills` option is available on all three:
+`AgentBuilder.create()` builder, or `@Agent` class. The `skills` option is available on all three:
 
 ```ts
 // defineAgent
@@ -192,7 +192,7 @@ export default defineAgent({
 })
 
 // fluent builder
-export default agent()
+export default AgentBuilder.create()
   .model('anthropic/claude-sonnet-4-6')
   .skills({ autoInject: false })
   .build()

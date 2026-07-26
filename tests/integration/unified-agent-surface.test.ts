@@ -66,9 +66,9 @@ beforeAll(() => {
   writeFileSync(
     join(projectDir, 'agents', 'echo.ts'),
     [
-      `import { agent } from '@theokit/agents'`,
+      `import { AgentBuilder } from '@theokit/agents'`,
       `import { z } from 'zod'`,
-      `export default agent()`,
+      `export default AgentBuilder.create()`,
       `  .input(z.object({ message: z.string() }))`,
       `  .model('test-model')`,
       `  .system('echo')`,

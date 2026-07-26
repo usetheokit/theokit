@@ -132,9 +132,9 @@ On first use, the SDK runs the PKCE flow (opens the browser), stores the tokens 
 The `@MCP` decorator is for the class surface. With the fluent builder:
 
 ```ts
-import { agent } from '@theokit/sdk'
+import { AgentBuilder } from '@theokit/agents'
 
-export default agent()
+export default AgentBuilder.create()
   .model('anthropic/claude-sonnet-4-6')
   .mcpServers({
     github: {

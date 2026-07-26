@@ -26,7 +26,8 @@
     "check:deps": "dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs",
     "check:naming": "ls-lint",
     "check:direction": "node scripts/check-package-direction.mjs",
-    "check:all": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm knip && pnpm check:licenses && pnpm check:audit && pnpm check:direction",
+    "check:auth-parity": "node scripts/check-auth-parity.mjs",
+    "check:all": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm knip && pnpm check:licenses && pnpm check:audit && pnpm check:direction && pnpm check:auth-parity",
     "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test",
     "try:dev": "cd my-test && npx tsx ../packages/theo/src/cli/index.ts dev",
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
@@ -39,7 +40,8 @@
     "check:templates": "node scripts/sync-template-versions.mjs",
     "theo-ui:link": "bash scripts/theo-ui-link.sh",
     "theo-ui:unlink": "bash scripts/theo-ui-unlink.sh",
-    "openapi:regen-fixtures": "tsx scripts/regen-openapi-fixtures.ts"
+    "openapi:regen-fixtures": "tsx scripts/regen-openapi-fixtures.ts",
+    "check:sandbox-parity": "node scripts/check-sandbox-parity.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
@@ -48,7 +50,9 @@
     "@eslint/js": "^9.39.4",
     "@ls-lint/ls-lint": "^2.3.1",
     "@playwright/test": "^1.61.0",
-    "@theokit/sdk": "^4.1.0",
+    "@theokit/sdk": "^4.25.0",
+    "@theokit/sdk-pty": "0.3.0",
+    "@theokit/sdk-tools": "0.26.0",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17",
