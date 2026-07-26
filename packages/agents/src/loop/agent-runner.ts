@@ -43,10 +43,25 @@ import {
 } from './reflection-strategy.js'
 import { type RoundStreamFactory, runReflectiveLoopStream } from './run-reflective-loop.js'
 
+/**
+ * Resolve a credencial no início do stream, em vez de exigir o valor pronto antes da chamada.
+ *
+ * M74 — o ponto de injeção da credencial JÁ era por run; o que travava era o tipo. Com `string`, quem
+ * chama precisa ter o valor em mãos antes, então o *momento* é por run mas o *valor* é congelado
+ * antes — e um bearer OAuth com validade curta atravessa a run inteira sem ser reconsultado. Foi a
+ * causa estrutural de um turno silencioso em produção.
+ */
+export type CredentialResolver = () => string | Promise<string>
+
 /** Options for {@link AgentRunner.run}. */
 export interface AgentRunnerRunOptions {
-  /** LLM API key. */
-  readonly apiKey: string
+  /**
+   * LLM API key, ou um resolvedor chamado quando o stream começa.
+   *
+   * `string` continua válido e é o caminho de quem tem chave de API — ela não expira, e exigir um
+   * resolvedor ali seria cerimônia sem ganho. O resolvedor existe para credencial que EXPIRA.
+   */
+  readonly apiKey: string | CredentialResolver
   /** Session id override (default: a fresh isolated id). */
   readonly sessionId?: string
   /** Cumulative USD budget across rounds. */

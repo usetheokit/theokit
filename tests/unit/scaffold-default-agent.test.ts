@@ -103,7 +103,7 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
 
   it('M31: agents/chat.ts default-exports the agent() builder from @theokit/agents', () => {
     const agent = read('agents/chat.ts')
-    expect(agent).toMatch(/export\s+default\s+agent\(\)/)
+    expect(agent).toMatch(/export\s+default\s+AgentBuilder\.create\(\)/)
     expect(agent).toMatch(/\.build\(\)/)
     expect(agent).toMatch(/from\s+['"]@theokit\/agents['"]/)
   })

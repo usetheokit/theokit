@@ -6,21 +6,25 @@ import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-opt
 import { applyCapabilities } from '../../src/capability/capability.js'
 import {
   AgentConfigCapability,
-  checkpoint,
-  contextWindow,
-  guardrails,
-  humanInTheLoop,
+  CheckpointCapability,
+  ContextWindowCapability,
+  GuardrailsCapability,
+  HumanInTheLoopCapability,
   MainLoopCapability,
-  mcpServers,
-  memory,
-  plugins,
-  projectContext,
-  runContext,
-  settingSources,
-  skillsResolver,
-  subAgents,
+  McpServersCapability,
+  MemoryCapability,
+  PluginsCapability,
+  ProjectContextCapability,
+  RunContextCapability,
+  SettingSourcesCapability,
+  SkillsResolverCapability,
+  SubAgentsCapability,
 } from '../../src/capability/agent-capabilities.js'
-import { ModelCapability, skills, ToolsCapability } from '../../src/capability/capabilities.js'
+import {
+  ModelCapability,
+  SkillsCapability,
+  ToolsCapability,
+} from '../../src/capability/capabilities.js'
 import { CapabilityRegistry } from '../../src/capability/registry.js'
 
 /**
@@ -100,7 +104,7 @@ describe('capability path ≡ defineAgent path (zero-behavior)', () => {
     )
     const viaCapabilities = applyCapabilities([
       new ModelCapability('openai/gpt-5.4'),
-      skills(['code-review', 'testing']),
+      new SkillsCapability(['code-review', 'testing']),
     ])
     expect(waistOf(viaCapabilities as unknown as Record<string, unknown>)).toEqual(reference)
   })
@@ -112,7 +116,7 @@ describe('capability path ≡ defineAgent path (zero-behavior)', () => {
       waistOf(
         applyCapabilities([
           new ModelCapability('openai/gpt-5.4'),
-          skills(['code-review']),
+          new SkillsCapability(['code-review']),
         ]) as unknown as Record<string, unknown>,
       ) as never,
     )
@@ -123,7 +127,7 @@ describe('capability path ≡ defineAgent path (zero-behavior)', () => {
   it('the FILE-BASED path (registry) reaches the same waist — the Agent Builder authoring route', () => {
     const registry = new CapabilityRegistry()
       .register('model', (id) => new ModelCapability(id as string))
-      .register('skills', (names) => skills(names as string[]))
+      .register('skills', (names) => new SkillsCapability(names as string[]))
     const fromFile = applyCapabilities(
       [
         { name: 'model', arg: 'openai/gpt-5.4' },
@@ -155,7 +159,7 @@ describe('capability path — waist coverage is complete', () => {
     const everything = applyCapabilities([
       new ModelCapability('openai/gpt-5.4', 'high'),
       new ToolsCapability([{ name: 't' } as never]),
-      skills(['a']),
+      new SkillsCapability(['a']),
       new AgentConfigCapability({
         systemPrompt: 's',
         parseThinkTags: true,
@@ -164,18 +168,18 @@ describe('capability path — waist coverage is complete', () => {
         stream: true,
       }),
       new MainLoopCapability({ maxIterations: 1, timeoutMs: 1 }),
-      memory({ provider: 'mem0' } as never),
-      contextWindow({ maxTokens: 1 } as never),
-      projectContext({ enabled: true } as never),
-      mcpServers({} as never),
-      guardrails([] as never),
-      checkpoint({ storage: 'memory' } as never),
-      humanInTheLoop(new Map() as never),
-      subAgents({ c: {} } as never),
-      settingSources([] as never),
-      plugins([] as never),
-      runContext({} as never),
-      skillsResolver((() => []) as never),
+      new MemoryCapability({ provider: 'mem0' } as never),
+      new ContextWindowCapability({ maxTokens: 1 } as never),
+      new ProjectContextCapability({ enabled: true } as never),
+      new McpServersCapability({} as never),
+      new GuardrailsCapability([] as never),
+      new CheckpointCapability({ storage: 'memory' } as never),
+      new HumanInTheLoopCapability(new Map() as never),
+      new SubAgentsCapability({ c: {} } as never),
+      new SettingSourcesCapability([] as never),
+      new PluginsCapability([] as never),
+      new RunContextCapability({} as never),
+      new SkillsResolverCapability((() => []) as never),
     ])
     const expressible = new Set(Object.keys(everything).filter((k) => k !== 'provenance'))
     const gap = WAIST_FIELDS.filter((f) => !expressible.has(f))

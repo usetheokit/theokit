@@ -1,4 +1,4 @@
-import { agent } from '@theokit/agents'
+import { AgentBuilder } from '@theokit/agents'
 import { z } from 'zod'
 
 import { BASE_INSTRUCTIONS } from './prompts/instructions.js'
@@ -19,7 +19,7 @@ import { weatherTool } from './tools/weather.js'
  * the environment — OPENROUTER_API_KEY (preferred) OR ANTHROPIC_API_KEY / OPENAI_API_KEY; the model id is
  * provider-prefixed so OpenRouter routes it upstream (https://openrouter.ai/models).
  */
-export default agent()
+export default AgentBuilder.create()
   .input(z.object({ message: z.string() }))
   .model('openai/gpt-4o-mini')
   .system(BASE_INSTRUCTIONS)

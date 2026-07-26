@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { agent } from '../src/bridge/agent-builder.js'
+import { AgentBuilder } from '../src/bridge/agent-builder.js'
 import { compileAgentDefinition, defineAgent } from '../src/bridge/define-agent.js'
 
 /**
@@ -24,9 +24,9 @@ const registered = (plugin: Record<string, unknown>): string[] => {
   return seen
 }
 
-describe('agent().hooks()', () => {
+describe('AgentBuilder.create().hooks()', () => {
   it('reaches the compiled options as a code plugin the SDK will accept', () => {
-    const a = agent()
+    const a = AgentBuilder.create()
       .input(z.object({ m: z.string() }))
       .model('x')
       .hooks({ pre_tool_call: () => undefined })
@@ -37,7 +37,7 @@ describe('agent().hooks()', () => {
   })
 
   it('registers every function-valued hook under its own event name', () => {
-    const a = agent()
+    const a = AgentBuilder.create()
       .input(z.object({ m: z.string() }))
       .model('x')
       .hooks({ pre_tool_call: () => undefined, on_session_start: () => {}, bogus: 'nope' })
@@ -49,7 +49,7 @@ describe('agent().hooks()', () => {
 
   it('COMPOSES with plugins() — hooks and plugins are additive, not exclusive', () => {
     const mine = { name: 'mine', kind: 'general', register: () => {} }
-    const a = agent()
+    const a = AgentBuilder.create()
       .input(z.object({ m: z.string() }))
       .model('x')
       .plugins([mine])
@@ -59,7 +59,7 @@ describe('agent().hooks()', () => {
   })
 
   it('a later hooks() call REPLACES the map rather than accumulating', () => {
-    const a = agent()
+    const a = AgentBuilder.create()
       .input(z.object({ m: z.string() }))
       .model('x')
       .hooks({ pre_tool_call: () => undefined })
@@ -70,7 +70,7 @@ describe('agent().hooks()', () => {
   })
 
   it('adds no plugin when no hook is declared', () => {
-    const a = agent()
+    const a = AgentBuilder.create()
       .input(z.object({ m: z.string() }))
       .model('x')
       .hooks({})

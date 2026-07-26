@@ -68,7 +68,7 @@ vi.mock('@theokit/sdk', () => ({
 
 const { AgentRunner } = await import('../../src/index.js')
 const { applyCapabilities } = await import('../../src/capability/capability.js')
-const { ModelCapability, skills } = await import('../../src/capability/capabilities.js')
+const { ModelCapability, SkillsCapability } = await import('../../src/capability/capabilities.js')
 const { MainLoopCapability } = await import('../../src/capability/agent-capabilities.js')
 
 const simpleAgent = applyCapabilities([new ModelCapability('compiled-model')])
@@ -80,7 +80,10 @@ const reactAgent = applyCapabilities([
 
 const skilledAgent = {
   name: 'SkilledAgent',
-  compiled: applyCapabilities([new ModelCapability('compiled-model'), skills(['code-review'])]),
+  compiled: applyCapabilities([
+    new ModelCapability('compiled-model'),
+    new SkillsCapability(['code-review']),
+  ]),
   strategy: 'simple-chat' as const,
 }
 

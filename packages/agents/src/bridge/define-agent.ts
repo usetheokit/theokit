@@ -110,7 +110,7 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
 /**
  * A branded agent definition — the value {@link defineAgent} returns.
  *
- * `TTools` (M8) is a phantom type parameter carrying the tool-name union: the `agent()` builder
+ * `TTools` (M8) is a phantom type parameter carrying the tool-name union: the `AgentBuilder.create()` builder
  * threads its accumulated literal tool names here (`.build()` returns `AgentDefinition<TInput,
  * 'a' | 'b'>`), so the generated client (`.theokit/agents.d.ts`) can expose them via
  * {@link InferAgentToolNames}. `defineAgent` leaves it `string` (its tools array carries no literal
@@ -130,7 +130,7 @@ export type InferAgentInput<T> =
 
 /**
  * Infer the tool-name union of an agent definition (M8). Yields the literal union for agents built
- * with the `agent()` builder (`'read_file' | 'count_lines'`), or `string` for `defineAgent` agents
+ * with the `AgentBuilder.create()` builder (`'read_file' | 'count_lines'`), or `string` for `defineAgent` agents
  * whose tools array carries no literal names.
  */
 export type InferAgentToolNames<T> = T extends AgentDefinition<z.ZodType, infer N> ? N : never
