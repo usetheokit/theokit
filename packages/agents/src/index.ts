@@ -67,3 +67,46 @@ export {
   resolveEffectiveContextWindow,
 } from '@theokit/sdk/compaction'
 export type { ContextWindowSource, EffectiveContextWindow } from '@theokit/sdk/compaction'
+
+// M78 — a política de cobertura declarada. Antes deste milestone o barril crescia de forma REATIVA
+// (símbolo a símbolo, sob pressão de bug) e cobria 9 dos 28 subpaths do SDK, sem nada avisar quando
+// um subpath novo aparecia. `tests/unit/subpath-coverage.test.ts` agora exige veredito para TODOS os
+// 28 — `in` (verificado) ou `out` (com razão escrita).
+//
+// Mesma doutrina de PASS-THROUGH do M58/M63 (Rung 9): estes já são a forma alvo — a hierarquia de
+// erro é OO, `Retry`/`Semaphore` são classes, e as de `/messages` e `/models` são funções puras.
+// Envolver qualquer uma seria cerimônia sem nada dentro.
+//
+// `/errors` é o eixo do milestone: o consumidor tem como regra INQUEBRÁVEL erro tipado, e sem acesso
+// a esta hierarquia a única saída legal era criar uma PARALELA — foi o que aconteceu, cinco classes
+// estendendo `Error` nu. E como `isTransientError` exige `TheokitAgentError`, o predicado que separa
+// recuperável de irrecuperável era inútil lá por construção.
+// `export *` e não uma lista curada, de propósito. A primeira versão re-exportava quatro classes
+// escolhidas a dedo e `RateLimitError` — que o refresh OAuth precisa para reconhecer um 429 — ficou
+// de fora sem nada acusar. Uma hierarquia de erro PELA METADE é exatamente o defeito que este
+// milestone fecha: o consumidor voltaria a criar a classe que falta.
+//
+// O mesmo vale para os outros quatro: são subpaths pequenos e coesos, onde "parte do domínio" não é
+// uma unidade que faça sentido. `tests/unit/subpath-coverage.test.ts` verifica a cobertura TOTAL
+// destes, não uma amostra.
+export * from '@theokit/sdk/errors'
+export * from '@theokit/sdk/retry'
+export * from '@theokit/sdk/concurrency'
+export * from '@theokit/sdk/messages'
+export * from '@theokit/sdk/models'
+
+// COLISÃO DE NOME, declarada em vez de resolvida por acidente de ordem de import.
+//
+// `@theokit/sdk/errors` e `./bridge/index.js` exportam ambos `BudgetExceededError`, e NÃO são a
+// mesma coisa: a do SDK é orçamento por JANELA (`budgetName`, `window`, `spentUsd`, `mode`); a da
+// camada é orçamento por DELEGAÇÃO (`agentName`, `actualCost`, `budgetLimit`). Construtores e
+// domínios diferentes — colapsar uma na outra seria perder semântica, não deduplicar.
+//
+// O re-export explícito abaixo mantém a da CAMADA vencendo no barril, que é o comportamento de antes
+// deste milestone: nenhum consumidor existente muda. A consequência é que a do SDK fica inalcançável
+// pelo barril, e isso está registrado como lacuna conhecida em `subpath-coverage.test.ts`.
+//
+// O defeito de fundo é o nome, não o re-export: duas classes homônimas em camadas vizinhas é o que o
+// M73 documentou como origem de `instanceof` que falha em silêncio. Renomear a da camada é breaking
+// e está fora do escopo do M78 — filado como issue.
+export { BudgetExceededError } from './bridge/delegation-types.js'
