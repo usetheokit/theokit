@@ -52,3 +52,18 @@ export type { SDKAgent, CustomTool, SessionRecord } from '@theokit/sdk'
 //  - the path-safety helpers are pure functions — a class would be ceremony (parsimony-ladder Rung 5).
 export { SubAgent } from '@theokit/sdk/a2a'
 export { assertNoSymlinkEscape, isForbiddenPath, safePathJoin } from '@theokit/sdk/path-safety'
+
+// M77 — the context-window resolver, so a surface can render a budget meter against the REAL window
+// instead of a constant. Same PASS-THROUGH doctrine (Rung 9): `resolveEffectiveContextWindow` is a
+// pure function and `CONTEXT_WINDOW_*` are constants — wrapping them in a class would be ceremony.
+//
+// The consumer needs this because its TUI hardcoded `contextWindow: 400_000`, decoupled from the
+// configured model: change the model and the meter silently lies. A meter that lies is worse than no
+// meter, because it is trusted.
+export {
+  CONTEXT_WINDOW_FLOOR,
+  CONTEXT_WINDOW_MARGIN,
+  ContextWindowMarginError,
+  resolveEffectiveContextWindow,
+} from '@theokit/sdk/compaction'
+export type { ContextWindowSource, EffectiveContextWindow } from '@theokit/sdk/compaction'
