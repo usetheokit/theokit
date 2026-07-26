@@ -94,13 +94,13 @@ export default defineAgent({
 })
 ```
 
-**`agent()` builder — recommended when you want compile-time guarantees (M8):**
+**`AgentBuilder.create()` builder — recommended when you want compile-time guarantees (M8):**
 
 ```ts
 // agents/assistant.ts
-import { agent } from '@theokit/agents'
+import { AgentBuilder } from '@theokit/agents'
 
-export default agent()
+export default AgentBuilder.create()
   .model('anthropic/claude-sonnet-4-6')
   .system([
     'You are a senior engineer working inside this repository.',
@@ -355,7 +355,7 @@ tested locally is the endpoint that ships.
 ## What's real vs. what you verify
 
 - **Verified against shipped code (v1.0.0):** `defineAgent({ input, model, system, context, reasoningEffort, tools })`;
-  `agent().model().system().context().tool().use().build()` fluent builder (M8);
+  `AgentBuilder.create().model().system().context().tool().use().build()` fluent builder (M8);
   `defineAgentTool({ name, description, inputSchema, handler(input, ctx) })` from `theokit/server` —
   `ctx.context` carries the agent-level context declared in `defineAgent`/`.context()` (M7);
   `@Agent / @Tool / @Toolbox / @HumanInTheLoop / @Checkpoint / @Mixin / @MainLoop` surface;

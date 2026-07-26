@@ -42,7 +42,7 @@ next to your other controllers — bind the (separately-built) agent with `@Expo
 
 ```ts
 // agents/chat.ts — the pure agent (behavior only)
-export default agent().input(z.object({ message: z.string() })).model('openai/gpt-4o-mini').tool(weatherTool).build()
+export default AgentBuilder.create().input(z.object({ message: z.string() })).model('openai/gpt-4o-mini').tool(weatherTool).build()
 
 // server/controllers/agents.controller.ts — the EXPOSURE, visible
 import { Controller, Expose, UseGuards } from '@theokit/http'

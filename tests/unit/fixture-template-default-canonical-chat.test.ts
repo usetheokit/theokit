@@ -52,7 +52,7 @@ describe('fixtures/template-default canonical agents/chat.ts (M3)', () => {
     expect(existsSync(AGENT_PATH)).toBe(true)
     const src = readAgent()
     // M31 builder-only: `export default agent()...build()` (was `defineAgent({...})`).
-    expect(src).toMatch(/export\s+default\s+agent\(\)/)
+    expect(src).toMatch(/export\s+default\s+AgentBuilder\.create\(\)/)
     expect(src).toMatch(/\.build\(\)/)
     expect(src).toMatch(/from\s+['"]@theokit\/agents['"]/)
   })

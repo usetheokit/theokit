@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { guardrails } from '../../src/capability/agent-capabilities.js'
+import { GuardrailsCapability } from '../../src/capability/agent-capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 
 import { promptInjectionDetector } from '../../src/guardrails/index.js'
@@ -19,7 +19,7 @@ const customGuard: Guardrail = {
 describe('guardrails capability (M9)', () => {
   it('flows the declared guards into compiled.guardrails, in order', () => {
     const guards = [promptInjectionDetector(), customGuard]
-    const compiled = applyCapabilities([guardrails(guards)])
+    const compiled = applyCapabilities([new GuardrailsCapability(guards)])
     expect(compiled.guardrails).toHaveLength(2)
     expect(compiled.guardrails?.map((g) => g.name)).toEqual(['prompt-injection', 'custom'])
   })

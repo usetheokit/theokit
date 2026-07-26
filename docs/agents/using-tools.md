@@ -70,7 +70,7 @@ const readFile = defineAgentTool({
     // ctx.signal — AbortSignal, fired when the user aborts the stream
     if (ctx?.signal?.aborted) throw new Error('Aborted')
 
-    // ctx.context — the object from defineAgent({ context }) or agent().context()
+    // ctx.context — the object from defineAgent({ context }) or AgentBuilder.create().context()
     const root = (ctx?.context as { projectRoot: string } | undefined)?.projectRoot
                  ?? process.cwd()
 
@@ -105,7 +105,7 @@ export default defineAgent({
 Or with the fluent builder:
 
 ```ts
-export default agent()
+export default AgentBuilder.create()
   .model('anthropic/claude-sonnet-4-6')
   .tool(readFileTool)
   .tool(searchTextTool)
@@ -321,5 +321,5 @@ const runPipeline = createWorkflowTool(myWorkflow, {
 ## Related
 
 - [Run context](./run-context.md) — pass shared config (projectRoot, user info) to tool handlers
-- [Agent surfaces](../guides/agent-surfaces.md) — `defineAgent`, `agent()` builder, `@Agent` class
+- [Agent surfaces](../guides/agent-surfaces.md) — `defineAgent`, `AgentBuilder.create()` builder, `@Agent` class
 - [Build a code assistant](../guides/build-a-code-assistant.md) — end-to-end tutorial using `@theokit/sdk-tools`

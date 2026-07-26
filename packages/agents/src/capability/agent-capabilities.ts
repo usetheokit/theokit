@@ -12,82 +12,104 @@ import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capa
  * M53 — the capabilities that replace the waist-bound agent decorators, one per field the decorator
  * pipeline produces today (`docs/agents/decorator-to-capability.md` § A).
  *
- * Most are pure assignment: a class per field would be 13 near-identical classes, which ADR 0001 § 4
- * already rejects as ceremony. They are built by one factory instead; the two that carry real
- * behavior (`AgentConfigCapability`, `MainLoopCapability`) are written out.
+ * M57 reverses ADR 0001 § 4 (which kept the pure-assignment ones as a factory function to avoid
+ * "13 near-identical classes"): the authoring surface is now 100% classes, aligned with the SDK's
+ * `X.create()`/class shape. The `FieldCapability` base keeps the assignment ones DRY (one line each);
+ * the behaviour-carrying ones are written out. Rationale in ADR 0005.
  */
 
 /**
- * A capability for a waist field that is pure data — no validation, no merge, no precedence.
- * The declared field name doubles as the capability's identity in `provenance` and conflicts.
+ * Base for a capability whose only job is to assign one waist field — no validation, no merge, no
+ * precedence. M57: this replaces the `fieldCapability(name, field)` factory function with a class, so
+ * the authoring surface is 100% classes (aligned with the SDK's `X.create()` and the existing
+ * `ModelCapability`). The subclasses below are one line each; the shared `apply` lives here (DRY).
+ * NOT the Template-Method the ADR-0001 refused — that was inheritance of variable *behaviour*
+ * (`shouldContinue`); here the base carries *data* (name/field) and `apply` is identical for all.
  */
-function fieldCapability<K extends keyof CompiledAgentOptionsDraft>(
-  name: string,
-  field: K,
-): (value: NonNullable<CompiledAgentOptionsDraft[K]>) => Capability {
-  return (value) => ({
-    name,
-    apply: (draft) => {
-      setOnce(draft, field, value as CompiledAgentOptionsDraft[K], name)
-    },
-  })
+export abstract class FieldCapability<
+  K extends keyof CompiledAgentOptionsDraft,
+> implements Capability {
+  abstract readonly name: string
+  protected abstract readonly field: K
+  constructor(private readonly value: NonNullable<CompiledAgentOptionsDraft[K]>) {}
+  apply(draft: CompiledAgentOptionsDraft): void {
+    setOnce(draft, this.field, this.value as CompiledAgentOptionsDraft[K], this.name)
+  }
 }
 
 /** `@Memory` → `memory`. */
-export const memory = fieldCapability('memory', 'memory')
+export class MemoryCapability extends FieldCapability<'memory'> {
+  readonly name = 'memory'
+  protected readonly field = 'memory' as const
+}
 /**
  * `@ContextWindow` → `context`. DELEGATES to `compileContextWindow`, which is the canonical
  * `ContextWindowOptions → ContextSettings` conversion (it also reports the metadata-only knobs).
  * Taking a pre-converted value here would duplicate that knowledge — the exact divergence the M52
  * zero-behavior proof caught in `skills`.
  */
-export const contextWindow = (options: ContextWindowOptions): Capability => ({
-  name: 'context-window',
-  apply: (draft) => {
-    setOnce(draft, 'context', compileContextWindow(options).context, 'context-window')
-  },
-})
+export class ContextWindowCapability implements Capability {
+  readonly name = 'context-window'
+  constructor(private readonly options: ContextWindowOptions) {}
+  apply(draft: CompiledAgentOptionsDraft): void {
+    setOnce(draft, 'context', compileContextWindow(this.options).context, this.name)
+  }
+}
 /** `@ProjectContext` → `projectContext`. */
-export const projectContext = fieldCapability('project-context', 'projectContext')
+export class ProjectContextCapability extends FieldCapability<'projectContext'> {
+  readonly name = 'project-context'
+  protected readonly field = 'projectContext' as const
+}
 /** `@MCP` → `mcpServers`. */
-export const mcpServers = fieldCapability('mcp', 'mcpServers')
+export class McpServersCapability extends FieldCapability<'mcpServers'> {
+  readonly name = 'mcp'
+  protected readonly field = 'mcpServers' as const
+}
 /** `@Guardrails` → `guardrails`. */
-export const guardrails = fieldCapability('guardrails', 'guardrails')
+export class GuardrailsCapability extends FieldCapability<'guardrails'> {
+  readonly name = 'guardrails'
+  protected readonly field = 'guardrails' as const
+}
 /**
  * `@Checkpoint` → `checkpoint`. Carries the non-durable WARNING the metadata walk used to emit: only
  * `'filesystem'` selects the SDK's durable store, so any other storage cannot resume across
  * requests. The warning moves WITH the feature — a declared checkpoint that silently cannot resume
  * is exactly the kind of no-op this project refuses to ship.
  */
-export const checkpoint = (options: CompiledAgentOptions['checkpoint']): Capability => ({
-  name: 'checkpoint',
-  apply: (draft) => {
-    if (options !== undefined && options.storage !== 'filesystem') {
+export class CheckpointCapability implements Capability {
+  readonly name = 'checkpoint'
+  constructor(private readonly options: CompiledAgentOptions['checkpoint']) {}
+  apply(draft: CompiledAgentOptionsDraft): void {
+    if (this.options !== undefined && this.options.storage !== 'filesystem') {
       console.warn(
-        `[THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY] checkpoint({ storage: '${options.storage ?? 'memory'}' }) ` +
+        `[THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY] checkpoint({ storage: '${this.options.storage ?? 'memory'}' }) ` +
           `does NOT resume across requests — only 'filesystem' selects the SDK's durable conversation ` +
           `store. Use checkpoint({ storage: 'filesystem' }) for cross-request resume.`,
       )
     }
-    setOnce(draft, 'checkpoint', options, 'checkpoint')
-  },
-})
+    setOnce(draft, 'checkpoint', this.options, this.name)
+  }
+}
 /**
  * `@HumanInTheLoop` → `hitl`, keyed `"<namespace>_<tool>"` — the same key `compileHitlGates` mints
  * via `toolRuntimeName`. The separator is `_`, not `.`: the dot is outside the charset the SDK
  * accepts, and a gate keyed with a dot silently failed to match its tool (theokit#145).
  */
-export const humanInTheLoop = fieldCapability('human-in-the-loop', 'hitl')
+export class HumanInTheLoopCapability extends FieldCapability<'hitl'> {
+  readonly name = 'human-in-the-loop'
+  protected readonly field = 'hitl' as const
+}
 /**
  * `@SubAgents` → `agents`. MERGES instead of `setOnce`: `agents` is a pre-seeded collection on the
  * draft (`createDraft` gives it `{}`), so a `setOnce` would conflict against the seed itself — the
  * same trap the pre-seeded `stream` sprang in M52. Merging also lets a preset declare a baseline
  * child set that a call site extends.
  */
-export const subAgents = (children: CompiledAgentOptions['agents']): Capability => ({
-  name: 'sub-agents',
-  apply: (draft) => {
-    for (const [name, child] of Object.entries(children)) {
+export class SubAgentsCapability implements Capability {
+  readonly name = 'sub-agents'
+  constructor(private readonly children: CompiledAgentOptions['agents']) {}
+  apply(draft: CompiledAgentOptionsDraft): void {
+    for (const [name, child] of Object.entries(this.children)) {
       if (name in draft.agents && draft.agents[name] !== child) {
         throw new ConfigurationError(
           `sub-agents: filho "${name}" declarado duas vezes com definições diferentes`,
@@ -95,25 +117,38 @@ export const subAgents = (children: CompiledAgentOptions['agents']): Capability 
       }
       draft.agents[name] = child
     }
-    draft.provenance.push({ capability: 'sub-agents', contributed: ['agents'] })
-  },
-})
+    draft.provenance.push({ capability: this.name, contributed: ['agents'] })
+  }
+}
 /**
  * `@Skills({ include, autoDiscover })` → `skills`. Delegates to `compileSkills` (same reason as
  * `contextWindow`). Distinct from the M52 `skills([...])`, which takes the plain name/inline list.
  */
-export const skillsOptions = (options: SkillsOptions): Capability => ({
-  name: 'skills',
-  apply: (draft) => {
-    setOnce(draft, 'skills', compileSkills(options), 'skills')
-  },
-})
+export class SkillsOptionsCapability implements Capability {
+  readonly name = 'skills'
+  constructor(private readonly options: SkillsOptions) {}
+  apply(draft: CompiledAgentOptionsDraft): void {
+    setOnce(draft, 'skills', compileSkills(this.options), this.name)
+  }
+}
 
 /** Functional-path fields that had no decorator source — closing the gap list, not adding surface. */
-export const settingSources = fieldCapability('setting-sources', 'settingSources')
-export const plugins = fieldCapability('plugins', 'plugins')
-export const runContext = fieldCapability('run-context', 'runContext')
-export const skillsResolver = fieldCapability('skills-resolver', 'skillsResolver')
+export class SettingSourcesCapability extends FieldCapability<'settingSources'> {
+  readonly name = 'setting-sources'
+  protected readonly field = 'settingSources' as const
+}
+export class PluginsCapability extends FieldCapability<'plugins'> {
+  readonly name = 'plugins'
+  protected readonly field = 'plugins' as const
+}
+export class RunContextCapability extends FieldCapability<'runContext'> {
+  readonly name = 'run-context'
+  protected readonly field = 'runContext' as const
+}
+export class SkillsResolverCapability extends FieldCapability<'skillsResolver'> {
+  readonly name = 'skills-resolver'
+  protected readonly field = 'skillsResolver' as const
+}
 
 /** The scalar agent config (name/route are HTTP concerns, never agent config). */
 export interface AgentConfig {

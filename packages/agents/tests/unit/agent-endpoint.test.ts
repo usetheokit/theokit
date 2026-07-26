@@ -9,7 +9,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { ModelCapability } from '../../src/capability/capabilities.js'
-import { checkpoint } from '../../src/capability/agent-capabilities.js'
+import { CheckpointCapability } from '../../src/capability/agent-capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/toolbox.js'
 
@@ -170,7 +170,10 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
     h.overrides = []
 
     const compiled = compileAgentModule({
-      default: applyCapabilities([new ModelCapability('m'), checkpoint({ storage: 'filesystem' })]),
+      default: applyCapabilities([
+        new ModelCapability('m'),
+        new CheckpointCapability({ storage: 'filesystem' }),
+      ]),
     })
     expect(compiled.checkpoint?.storage).toBe('filesystem')
 
@@ -205,7 +208,10 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
       h.overrides = []
 
       const compiled = compileAgentModule({
-        default: applyCapabilities([new ModelCapability('m'), checkpoint({ storage: 'memory' })]),
+        default: applyCapabilities([
+          new ModelCapability('m'),
+          new CheckpointCapability({ storage: 'memory' }),
+        ]),
       })
       const chunks = await collectStream(
         streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),

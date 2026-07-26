@@ -36,7 +36,7 @@ describe('create-theokit default template — agents/chat.ts parity with fixture
 
   it('template agents/chat.ts default-exports the agent() builder (M31 builder-only API)', () => {
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
-    expect(src).toMatch(/export\s+default\s+agent\(\)/)
+    expect(src).toMatch(/export\s+default\s+AgentBuilder\.create\(\)/)
     expect(src).toMatch(/\.build\(\)/)
     expect(src).toMatch(/from\s+['"]@theokit\/agents['"]/)
   })

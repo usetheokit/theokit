@@ -12,7 +12,7 @@ name: architecture-guards
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'packages/theo/src/**'
       - '.dependency-cruiser.cjs'
@@ -20,8 +20,12 @@ on:
       - '.claude/rules/architecture.md'
       - 'packages/*/package.json'
       - 'scripts/check-package-direction.mjs'
+      - 'scripts/check-auth-parity.mjs'
+      - 'scripts/check-sandbox-parity.mjs'
+      - 'packages/agents/src/sandbox-entry.ts'
+      - 'packages/agents/src/auth-entry.ts'
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'packages/theo/src/**'
       - '.dependency-cruiser.cjs'
@@ -29,6 +33,10 @@ on:
       - '.claude/rules/architecture.md'
       - 'packages/*/package.json'
       - 'scripts/check-package-direction.mjs'
+      - 'scripts/check-auth-parity.mjs'
+      - 'scripts/check-sandbox-parity.mjs'
+      - 'packages/agents/src/sandbox-entry.ts'
+      - 'packages/agents/src/auth-entry.ts'
 
 jobs:
   direction:
@@ -41,6 +49,42 @@ jobs:
           node-version: 22
       # Pure package.json scan — no install / no cross-repo sibling needed.
       - run: node scripts/check-package-direction.mjs
+
+  auth-parity:
+    name: surface parity (a camada enriquece o SDK, nunca reduz — M73)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # Precisa do install: o gate le a superficie REAL do @theokit/sdk instalado e a compara com
+      # o que `packages/agents/src/auth-entry.ts` re-exporta. Sem install nao ha o que comparar.
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-auth-parity.mjs
+      # O lock de identidade referencial (`toBe`) vive nos testes do pacote, e o vitest da raiz so
+      # cobre `tests/**` — sem isto ele nunca rodaria em CI.
+      - run: pnpm --filter @theokit/agents test
+
+  sandbox-parity:
+    name: sandbox parity (todo simbolo publico tem decisao escrita — M75)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # O gate le a FONTE DE AUTORIA do SDK (o irmao clonado), nao o link de workspace: na primeira
+      # execucao o link resolvia para uma copia 2 minors atrasada e o gate acusou 18 "decisoes orfas"
+      # que nao eram orfas. Clonar o irmao antes e o que torna a leitura correta aqui tambem.
+      - name: Checkout sibling theokit-sdk (a fonte de autoria)
+        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-sandbox-parity.mjs
 
   dep-cruiser:
     name: dependency-cruiser (architecture rules)
