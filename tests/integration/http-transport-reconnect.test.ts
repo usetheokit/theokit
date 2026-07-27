@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import type { UIMessageChunk } from 'ai'
 
-import { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
+import { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
 import {
   handleAgentRunReconnect,
   isAgentRunStreamPath,

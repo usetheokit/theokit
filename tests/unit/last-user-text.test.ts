@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import type { UIMessage } from 'ai'
 
-import { extractLastUserText } from '../../packages/theo/src/client/last-user-text.js'
+import { extractLastUserText } from '../../packages/agents/src/client/last-user-text.js'
 
 const user = (text: string): UIMessage => ({
   id: 'u',

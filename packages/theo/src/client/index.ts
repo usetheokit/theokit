@@ -1,3 +1,9 @@
+/**
+ * M84 — os símbolos de cliente do agente agora VIVEM em `@theokit/agents/client`. O que resta aqui é
+ * PASS-THROUGH: manter uma segunda implementação do mesmo transporte no mesmo processo é exatamente
+ * o que o M79 acabou de eliminar. O re-export existe para que quem já importava `theokit/client` não
+ * quebre.
+ */
 export { theoFetch, TheoFetchError } from './theo-fetch.js'
 export type { InferResponse, InferQuery, InferBody, TheoFetchOptions } from './theo-fetch.js'
 
@@ -24,36 +30,36 @@ export {
   consumeUIMessageStream,
   responseToChunkStream,
   consumeChunkStream,
-} from './consume-ui-message-stream.js'
-export { useAgent } from './use-agent.js'
-export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from './use-agent.js'
+} from '@theokit/agents/client'
+export { useAgent } from '@theokit/agents/client/react'
+export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from '@theokit/agents/client/react'
 
 // M47 (ADR-M47-2) — the typed, client-safe agent handle (`useAgent(chat)` — no magic string, no dup type).
-export { agentHandle, isAgentHandle } from './agent-handle.js'
-export type { AgentHandle } from './agent-handle.js'
+export { agentHandle, isAgentHandle } from '@theokit/agents/client'
+export type { AgentHandle } from '@theokit/agents/client'
 
 // M41 (ADR-0050) — the unified agent-client transport seam (`ai`'s ChatTransport + optional approve),
 // the two shipped transports, and the framework-agnostic store `useAgent` binds over.
-export type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
-export { HttpTransport } from './http-transport.js'
-export type { HttpTransportOptions } from './http-transport.js'
-export { InProcessTransport } from './in-process-transport.js'
+export type { AgentTransport, ApprovalDecision, RequestContext } from '@theokit/agents/client'
+export { HttpTransport } from '@theokit/agents/client'
+export type { HttpTransportOptions } from '@theokit/agents/client'
+export { InProcessTransport } from '@theokit/agents/client'
 export type {
   InProcessTransportOptions,
   InProcessRunner,
   InProcessRunInput,
   InProcessApprovalRequestLike,
   InProcessAwaitApproval,
-} from './in-process-transport.js'
+} from '@theokit/agents/client'
 // M42 (ADR-0051) — Tauri desktop push transport over an injected Channel-shaped source.
-export { ChannelTransport } from './channel-transport.js'
+export { ChannelTransport } from '@theokit/agents/client'
 export type {
   ChannelTransportOptions,
   ChannelPushSource,
   ChannelTurnHandlers,
-} from './channel-transport.js'
-export { AgentClient } from './agent-client.js'
-export type { AgentClientState } from './agent-client.js'
+} from '@theokit/agents/client'
+export { AgentClient } from '@theokit/agents/client'
+export type { AgentClientState } from '@theokit/agents/client'
 // M44 (ADR-0053) — the standalone (no-React) client is also re-exported here for convenience; a node
 // consumer should import it from the React-free `theokit/client/core` entry instead.
 export { createAgentClient } from './create-agent-client.js'

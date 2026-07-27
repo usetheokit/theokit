@@ -25,16 +25,14 @@ export { handleChannelWebhook, parseChannelPath, isChannelPath } from './channel
 export type { ChannelMessage, ChannelWebhookConfig } from './channel-webhook.js'
 
 // In-process agent-turn seam (M35, Model A): drive an agent turn in one process with inline HITL.
-export {
-  streamAgentTurnInProcess,
-  InProcessApprovalRequiredError,
-} from './stream-agent-turn-in-process.js'
+// M84 — o transporte VIVE em `@theokit/agents`. Pass-through, não cópia (ADR-2).
+export { streamAgentTurnInProcess, InProcessApprovalRequiredError } from '@theokit/agents'
 export type {
   StreamAgentTurnInProcessInput,
   StreamAgentTurnDeps,
   InProcessApprovalRequest,
   InProcessAwaitApproval,
-} from './stream-agent-turn-in-process.js'
+} from '@theokit/agents'
 
 // MCP stdio transport + `ui://` app resources served by the MCP server.
 export { serveMcpStdio, handleMcpStdioLine, type StdioStreams } from './mcp-stdio.js'

@@ -1,7 +1,6 @@
+import { AgentClient, type AgentClientState } from '@theokit/agents/client'
+import type { AgentTransport, ApprovalDecision, RequestContext } from '@theokit/agents/client'
 import type { UIMessage } from 'ai'
-
-import { AgentClient, type AgentClientState } from './agent-client.js'
-import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
 
 export interface CreateAgentClientOptions {
   /**

@@ -6,8 +6,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
 
-import { AgentClient } from '../../packages/theo/src/client/agent-client.js'
-import type { AgentTransport, ApprovalDecision } from '../../packages/theo/src/client/transport.js'
+import { AgentClient } from '../../packages/agents/src/client/agent-client.js'
+import type {
+  AgentTransport,
+  ApprovalDecision,
+} from '../../packages/agents/src/client/transport.js'
 
 /** Build a ReadableStream<UIMessageChunk> from literal chunks. */
 function chunkStream(chunks: Array<Record<string, unknown>>): ReadableStream<UIMessageChunk> {

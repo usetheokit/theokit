@@ -10,7 +10,7 @@ import type { UIMessage, UIMessageChunk } from 'ai'
 import {
   InProcessTransport,
   type InProcessRunInput,
-} from '../../packages/theo/src/client/in-process-transport.js'
+} from '../../packages/agents/src/client/in-process-transport.js'
 
 async function collect(stream: ReadableStream<UIMessageChunk>): Promise<UIMessageChunk[]> {
   const out: UIMessageChunk[] = []
