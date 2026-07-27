@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { UIMessageChunk } from 'ai'
 
-import { agentHandle } from '../../packages/theo/src/client/agent-handle.js'
-import { InProcessTransport } from '../../packages/theo/src/client/in-process-transport.js'
-import { ChannelTransport } from '../../packages/theo/src/client/channel-transport.js'
+import { agentHandle } from '../../packages/agents/src/client/agent-handle.js'
+import { InProcessTransport } from '../../packages/agents/src/client/in-process-transport.js'
+import { ChannelTransport } from '../../packages/agents/src/client/channel-transport.js'
 
 /**
  * M47 (ADR-M47-2, DoD 2) — the SAME handle drives all three surfaces: web via `handle.path` (HttpTransport,

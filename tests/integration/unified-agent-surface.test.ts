@@ -45,7 +45,7 @@ vi.mock('../../packages/agents/src/bridge/sdk-adapter.js', () => ({
 const { generateManifest } = await import('../../packages/theo/src/server/scan/manifest.js')
 const { mountAgent } = await import('../../packages/theo/src/server/agent/mount-agent.js')
 const { consumeUIMessageStream } =
-  await import('../../packages/theo/src/client/consume-ui-message-stream.js')
+  await import('../../packages/agents/src/client/consume-ui-message-stream.js')
 
 let projectDir: string
 

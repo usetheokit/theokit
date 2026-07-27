@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
 
-import { agentHandle } from '../../packages/theo/src/client/agent-handle.js'
-import type { AgentHandle } from '../../packages/theo/src/client/agent-handle.js'
+import { agentHandle } from '../../packages/agents/src/client/agent-handle.js'
+import type { AgentHandle } from '../../packages/agents/src/client/agent-handle.js'
 import { createAgentClient } from '../../packages/theo/src/client/create-agent-client.js'
-import { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
+import { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
 
 /**
  * M47 (ADR-M47-2) — the typed handle is a client-safe value carrying only the agent's HTTP `path` plus

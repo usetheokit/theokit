@@ -15,8 +15,11 @@ import { createAgentClient } from '../../packages/theo/src/client/create-agent-c
 import {
   InProcessTransport,
   type InProcessRunInput,
-} from '../../packages/theo/src/client/in-process-transport.js'
-import type { AgentTransport, ApprovalDecision } from '../../packages/theo/src/client/transport.js'
+} from '../../packages/agents/src/client/in-process-transport.js'
+import type {
+  AgentTransport,
+  ApprovalDecision,
+} from '../../packages/agents/src/client/transport.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const CLIENT_DIR = resolve(HERE, '../../packages/theo/src/client')
@@ -176,6 +179,21 @@ describe('createAgentClient (M44)', () => {
 
   it('test_client_core_entry_imports_no_react', () => {
     // Recursively resolve the import closure of the React-free entry and assert none imports React.
+    //
+    // M84 — a clausura passou a CRUZAR PACOTE: a cadeia de cliente mudou para `@theokit/agents`, e o
+    // walk parava na fronteira porque só seguia `./x.js`. A garantia é sobre o BUNDLE, e o bundle
+    // cruza o pacote — então o walk cruza também. Sem isto o teste passaria por VACUIDADE (clausura
+    // vazia ⇒ nenhum React encontrado); quem pegou foi a checagem de sanidade no fim, que existe
+    // exatamente para isso.
+    const CAMADA = resolve(__dirname, '../../packages/agents/src')
+    const resolverEspecificador = (spec: string, abs: string): string | undefined => {
+      if (spec.startsWith('.') && spec.endsWith('.js')) {
+        return resolve(dirname(abs), spec.replace(/\.js$/, '.ts'))
+      }
+      if (spec === '@theokit/agents/client') return resolve(CAMADA, 'client-entry.ts')
+      if (spec === '@theokit/agents/client/react') return resolve(CAMADA, 'client-react-entry.ts')
+      return undefined
+    }
     const seen = new Set<string>()
     const walk = (file: string): void => {
       const abs = resolve(file)
@@ -188,10 +206,8 @@ describe('createAgentClient (M44)', () => {
         // A React import in the closure defeats the React-free guarantee (ADR-0053 D3) — catch the bare
         // `react` AND any subpath (`react/jsx-runtime`, …), all of which pull React into a bundle.
         expect(spec === 'react' || spec.startsWith('react/')).toBe(false)
-        // Recurse into local `.js` imports (ESM convention → resolve to the `.ts` source).
-        if (spec.startsWith('.') && spec.endsWith('.js')) {
-          walk(resolve(dirname(abs), spec.replace(/\.js$/, '.ts')))
-        }
+        const alvo = resolverEspecificador(spec, abs)
+        if (alvo !== undefined) walk(alvo)
       }
     }
     walk(resolve(CLIENT_DIR, 'core.ts'))

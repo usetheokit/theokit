@@ -119,3 +119,14 @@ export { BudgetExceededError } from './bridge/delegation-types.js'
 // M82 — o tipo público dos handlers de `.hooks()`. Publicado porque a alternativa é o consumidor
 // declarar o seu (foi o que o agent-builder fez, com `ctx: unknown` em quatro de cinco handlers).
 export type { HookHandlers } from './bridge/hook-handlers.js'
+
+// M84 — o transporte in-process veio do pacote CLI, onde era folha. Fica na barra principal (e não
+// num subpath novo) porque "rodar um turn de agente" é exatamente o que a barra principal faz;
+// separá-lo multiplicaria superfície sem separar nada. O CLI passa a re-exportar daqui.
+export { streamAgentTurnInProcess, InProcessApprovalRequiredError } from './in-process-turn.js'
+export type {
+  StreamAgentTurnInProcessInput,
+  StreamAgentTurnDeps,
+  InProcessApprovalRequest,
+  InProcessAwaitApproval,
+} from './in-process-turn.js'
