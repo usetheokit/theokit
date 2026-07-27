@@ -141,6 +141,15 @@ const DECISOES: Record<string, Decisao> = {
     cobertura: 'amostra',
     simbolos: ['isForbiddenPath', 'safePathJoin', 'assertNoSymlinkEscape'],
   },
+  './subagents-loader': {
+    verdict: 'in',
+    via: '../../src/index.js',
+    cobertura: 'amostra',
+    // M81 — o loader de subagents em disco. Atravessa porque a assimetria oposta (skills com porta
+    // pública, subagents sem) é o que fez o consumidor escrever um SEGUNDO parser de `.md`, junto
+    // com um teste cuja única função era vigiar a divergência entre os dois.
+    simbolos: ['discoverSubagents', 'loadSubagentDefinition'],
+  },
   './a2a': {
     verdict: 'in',
     via: '../../src/index.js',
