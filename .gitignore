@@ -64,6 +64,9 @@ token.json
 vault.json
 .htpasswd
 .npmrc
+# M90 —  escreve o token em ; o  cobre
+# saida normal, mas SIGKILL/queda deixaria o arquivo commitavel.  sozinho nao casa o sufixo.
+.npmrc*
 .pypirc
 id_rsa
 id_dsa

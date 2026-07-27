@@ -348,9 +348,11 @@ export default tseslint.config(
   {
     files: [
       '**/*.config.{ts,mts,cts,js,mjs,cjs}',
-      // M90 — `.mts` entrou: `packages/agents/scripts/gerar-reexports.mts` é ferramenta de autoria
-      // (enumera a superfície dos subpaths de infra) e o padrão anterior não cobria a extensão.
-      'scripts/**/*.{ts,mts,js,mjs}',
+      'scripts/**/*.{ts,js,mjs}',
+      // M90 — só `packages/*/scripts/**`, e só por causa de `gerar-reexports.mts`. A primeira versão
+      // ampliou `scripts/**` para `.mts` também, e a revisão mediu o excesso: relaxava
+      // `no-explicit-any`/`no-unsafe-*` em `scripts/preflight-native-bindings.d.mts` e
+      // `scripts/sync-template-versions.d.mts`, que não pediram nada.
       'packages/*/scripts/**/*.{ts,mts,js,mjs}',
       '**/tsup.config.ts',
     ],
