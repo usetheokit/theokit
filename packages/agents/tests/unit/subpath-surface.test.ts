@@ -1,9 +1,13 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { SUBPATHS_DE_INFRA, enumerarSuperficie } from '../../scripts/gerar-reexports.mjs'
+import {
+  SUBPATHS_DE_INFRA,
+  enumerarSuperficie,
+  enumerarSuperficieDaCamada,
+} from '../../scripts/gerar-reexports.mjs'
 
 const RAIZ = join(import.meta.dirname, '..', '..')
 const SNAPSHOT = JSON.parse(
@@ -40,34 +44,72 @@ describe('M90 — a superfície dos subpaths de infra está travada', () => {
     expect(chaves).toEqual(['interactive', 'persistence', 'pty', 'sandbox', 'tools'])
   })
 
-  it('test_o_snapshot_tem_os_172_simbolos_medidos_no_baseline', () => {
+  it('test_o_snapshot_tem_os_173_simbolos_medidos', () => {
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.valores.length + s.tipos.length, 0)
-    expect(total).toBe(172)
+    expect(total).toBe(173)
   })
 
-  it('test_a_superficie_de_hoje_e_IDENTICA_ao_snapshot', async () => {
-    const divergencias: string[] = []
+  /**
+   * O CORAÇÃO DO GATE — e o que a primeira versão dele NÃO fazia.
+   *
+   * Comparava `enumerarSuperficie(spec)` (a FONTE) contra o snapshot. Nunca comparava o que a CAMADA
+   * exporta. Resultado medido pela revisão: remover quatro símbolos reais de `/tools` e `/pty` deixava
+   * a suíte inteira verde — 98 dos 173 símbolos (57%) sem oráculo nenhum. Foi por essa fresta que
+   * `TruncationMode` sumiu da superfície publicada do `4.25.0`.
+   *
+   * Agora compara os dois lados **contra a fonte**: nada da fonte pode faltar na camada, e nada pode
+   * aparecer na camada sem existir na fonte.
+   */
+  it('test_a_camada_re_exporta_TUDO_que_a_fonte_exporta', async () => {
+    const faltando: string[] = []
     for (const [sub, spec] of Object.entries(SUBPATHS_DE_INFRA)) {
-      const agora = await enumerarSuperficie(spec)
+      const camada = enumerarSuperficieDaCamada(sub)
+      const fonte = await enumerarSuperficie(spec)
+      const naCamada = new Set([...camada.valores, ...camada.tipos])
+      for (const n of [...fonte.valores, ...fonte.tipos]) {
+        if (!naCamada.has(n)) faltando.push(`${sub}: ${n}`)
+      }
+    }
+    expect(
+      [...faltando].sort((a, b) => a.localeCompare(b)),
+      'símbolos da FONTE que a camada não re-exporta. Regenere:\n' +
+        '  npx tsx scripts/gerar-reexports.mts --json\n' +
+        'e atualize os `*-entry.ts` + o snapshot no MESMO commit.',
+    ).toEqual([])
+  }, 60_000)
+
+  it('test_a_camada_nao_inventa_simbolo_que_a_fonte_nao_tem', async () => {
+    const inventados: string[] = []
+    for (const [sub, spec] of Object.entries(SUBPATHS_DE_INFRA)) {
+      const camada = enumerarSuperficieDaCamada(sub)
+      const fonte = await enumerarSuperficie(spec)
+      const naFonte = new Set([...fonte.valores, ...fonte.tipos])
+      for (const n of [...camada.valores, ...camada.tipos]) {
+        if (!naFonte.has(n)) inventados.push(`${sub}: ${n}`)
+      }
+    }
+    expect([...inventados].sort((a, b) => a.localeCompare(b))).toEqual([])
+  }, 60_000)
+
+  it('test_a_superficie_de_hoje_e_IDENTICA_ao_snapshot', () => {
+    const divergencias: string[] = []
+    for (const sub of Object.keys(SUBPATHS_DE_INFRA)) {
+      const agora = enumerarSuperficieDaCamada(sub)
       const esperado = SNAPSHOT[sub]
       if (esperado === undefined) {
         divergencias.push(`${sub}: sem entrada no snapshot`)
         continue
       }
-      for (const n of esperado.valores) if (!agora.valores.includes(n)) divergencias.push(`${sub}: valor SUMIU ${n}`)
-      for (const n of esperado.tipos) if (!agora.tipos.includes(n)) divergencias.push(`${sub}: tipo SUMIU ${n}`)
-      for (const n of agora.valores) if (!esperado.valores.includes(n)) divergencias.push(`${sub}: valor NOVO ${n}`)
-      for (const n of agora.tipos) if (!esperado.tipos.includes(n)) divergencias.push(`${sub}: tipo NOVO ${n}`)
+      const antes = new Set([...esperado.valores, ...esperado.tipos])
+      const hoje = new Set([...agora.valores, ...agora.tipos])
+      for (const n of antes) if (!hoje.has(n)) divergencias.push(`${sub}: SUMIU ${n}`)
+      for (const n of hoje) if (!antes.has(n)) divergencias.push(`${sub}: NOVO ${n}`)
     }
     expect(
-      // Cópia explícita e não `toSorted`: o lint pede `toSorted` (`sonarjs/no-misleading-array-reverse`)
-      // mas o `lib` do tsconfig é anterior a es2023 e o `tsc` reprova. Ordenar uma cópia satisfaz os
-      // dois — e a intenção (não mutar) é a mesma.
       [...divergencias].sort((a, b) => a.localeCompare(b)),
-      'a superfície mudou. Se foi de propósito: regenere com `npx tsx scripts/gerar-reexports.mts --json`,\n' +
-        'atualize os `*-entry.ts` e o snapshot no MESMO commit, para a mudança aparecer em diff.',
+      'a superfície da camada mudou. Se foi de propósito, atualize o snapshot no mesmo commit.',
     ).toEqual([])
-  }, 60_000)
+  })
 
   it('test_nenhum_entry_de_infra_usa_export_estrela', () => {
     const comEstrela = Object.keys(SUBPATHS_DE_INFRA).filter((sub) =>
@@ -76,15 +118,21 @@ describe('M90 — a superfície dos subpaths de infra está travada', () => {
     expect(comEstrela).toEqual([])
   })
 
-  it('test_o_dist_EMITIDO_tambem_esta_sem_export_estrela — o que o consumidor ve', () => {
-    const comEstrela = Object.keys(SUBPATHS_DE_INFRA).filter((sub) => {
-      const d = join(RAIZ, 'dist', `${sub}.d.ts`)
-      try {
-        return /^export \* from/m.test(readFileSync(d, 'utf8'))
-      } catch {
-        return false // sem build ainda — o teste de fonte acima já cobre a intenção
-      }
-    })
+  /**
+   * Sem `catch { return false }`.
+   *
+   * A primeira versão engolia a ausência de `dist/` e devolvia verde — num clone limpo sem build, o
+   * único teste que olhava o artefato entregue passava por vacuidade. Ausência de build é falha do
+   * teste, não sucesso silencioso (`error-handling.md § 2`).
+   */
+  it('test_o_dist_EMITIDO_existe_e_esta_sem_export_estrela — o que o consumidor ve', () => {
+    const semBuild = Object.keys(SUBPATHS_DE_INFRA).filter(
+      (sub) => !existsSync(join(RAIZ, 'dist', `${sub}.d.ts`)),
+    )
+    expect(semBuild, 'rode `npm run build` — sem `dist/` este gate não mede nada').toEqual([])
+    const comEstrela = Object.keys(SUBPATHS_DE_INFRA).filter((sub) =>
+      /^export \* from/m.test(readFileSync(join(RAIZ, 'dist', `${sub}.d.ts`), 'utf8')),
+    )
     expect(comEstrela).toEqual([])
   })
 })

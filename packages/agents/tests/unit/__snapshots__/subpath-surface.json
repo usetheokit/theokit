@@ -194,6 +194,7 @@
       "TodoItem",
       "TodolistTool",
       "ToolGuidanceMap",
+      "TruncationMode",
       "TruncationOptions",
       "TruncationResult",
       "VitestSummary",

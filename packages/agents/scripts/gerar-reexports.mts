@@ -14,6 +14,7 @@
  *
  *   npx tsx scripts/gerar-reexports.mts [--json]
  */
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -130,4 +131,41 @@ if (invocadoComoCli) {
       process.stdout.write(`\n// \u2550\u2550 ${sub}-entry.ts \u2550\u2550\n${renderizarBloco(spec, s)}\n`)
     }
   }
+}
+
+/**
+ * Enumera o que a CAMADA exporta num subpath, lendo o `dist/*.d.ts` emitido.
+ *
+ * Existe porque `enumerarSuperficie` responde outra pergunta — "o que a FONTE exporta". A primeira
+ * versão do gate de superfície comparava fonte×snapshot e nunca camada×fonte, então era **vacuo para
+ * `/tools` e `/pty`** (98 dos 173 símbolos, 57%): remover quatro símbolos reais dos entries deixava a
+ * suíte inteira verde. Foi por essa fresta que `TruncationMode` sumiu da superfície publicada do
+ * `4.25.0` — o gerador rodou contra um `sdk-tools@0.26.0` local enquanto o registro já tinha `0.26.1`,
+ * e nada comparou o resultado com a fonte.
+ *
+ * Lê o `.d.ts` **emitido**, e não o `src/*-entry.ts`, porque é o artefato que o consumidor vê — é o que
+ * a ADR-3 do plano prometia e a primeira implementação não entregou.
+ */
+export function enumerarSuperficieDaCamada(sub: string): Superficie {
+  const dts = join(RAIZ, 'dist', `${sub}.d.ts`)
+  const fonte = readFileSync(dts, 'utf8')
+  const valores: string[] = []
+  const tipos: string[] = []
+  // `export { a, b } from '…'` e `export type { c } from '…'`, em uma ou várias linhas.
+  //
+  // Quantificadores de espaço são `\s?` e não `\s+`: o lint sinalizou `security/detect-unsafe-regex` na
+  // primeira versão, e com razão — `\s+` adjacente a `\s*` abre backtracking quadrático num arquivo que
+  // é entrada não-controlada (o `.d.ts` vem do bundler). Um único espaço basta para o formato emitido.
+  for (const m of fonte.matchAll(/export (type )?\{([^}]*)\} ?from/g)) {
+    // `m[1]`/`m[2]` são tipados `string` (sem `noUncheckedIndexedAccess`), então checar `undefined`
+    // é código morto que o lint reprova. O grupo 1 é opcional na regex e vem `''` quando ausente.
+    const alvo = m[1] === '' ? valores : tipos
+    for (const bruto of m[2].split(',')) {
+      const nome = bruto.trim().split(' as ')[0].trim()
+      if (nome !== '') alvo.push(nome)
+    }
+  }
+  const alfabetica = (a: string, b: string): number => a.localeCompare(b)
+  // Cópia explícita: o lint pede `toSorted`, o `lib` do tsconfig é anterior a es2023 e o `tsc` reprova.
+  return { valores: [...valores].sort(alfabetica), tipos: [...tipos].sort(alfabetica) }
 }
