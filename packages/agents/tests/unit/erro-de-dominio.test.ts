@@ -48,15 +48,37 @@ describe('M91 — o erro de delegação não sombreia mais o do SDK', () => {
     expect(barril.DelegationBudgetExceededError).toBe(DelegationBudgetExceededError)
   })
 
-  it('o barril agora exporta TAMBEM o erro de JANELA do SDK — antes era inalcancavel', () => {
-    const doSdk = barril.BudgetExceededError
-    expect(doSdk).toBeDefined()
+  /**
+   * NÃO-QUEBRA — o achado que a revisão do M91 pegou depois de eu já ter publicado.
+   *
+   * A primeira tentativa (`4.26.0`) **reaproveitou** o nome: o barril passou a exportar a classe do
+   * SDK sob `BudgetExceededError`. Um consumidor em `^4.25` com
+   * `catch (e) { if (e instanceof BudgetExceededError) … }` viu o ramo de delegação **parar de casar,
+   * em silêncio** — o modo de falha que este milestone existe para matar, em espelho, publicado como
+   * MINOR. Este teste é o que impede a repetição.
+   */
+  it('NAO-QUEBRA — o barril mantem BudgetExceededError = classe de DELEGACAO', () => {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- é o alias que este teste protege
+    expect(barril.BudgetExceededError).toBe(DelegationBudgetExceededError)
   })
 
-  it('CONTRAPROVA — os dois erros do barril sao classes DIFERENTES', () => {
-    // Este é o invariante que o milestone comprou. Antes, `barril.BudgetExceededError` era a classe
-    // da camada, e a do SDK não tinha caminho nenhum.
-    expect(barril.BudgetExceededError).not.toBe(barril.DelegationBudgetExceededError)
+  it('o erro de JANELA do SDK atravessa sob nome PROPRIO, sem reaproveitar o de ninguem', () => {
+    expect(barril.WindowBudgetExceededError).toBeDefined()
+  })
+
+  it('CONTRAPROVA — janela e delegacao sao classes DIFERENTES', () => {
+    // O invariante que o milestone comprou: as duas alcançáveis, cada uma com seu nome.
+    expect(barril.WindowBudgetExceededError).not.toBe(barril.DelegationBudgetExceededError)
+  })
+
+  it('a classe de JANELA do SDK constroi com a forma DELA — a prova de que sao dominios distintos', () => {
+    const janela = new barril.WindowBudgetExceededError({
+      budgetName: 'ctx',
+      window: 'session',
+      spentUsd: 5,
+      limitUsd: 1,
+    } as never)
+    expect(janela).toBeInstanceOf(barril.WindowBudgetExceededError)
   })
 
   it('a mensagem preserva o formato — o rename nao muda comportamento', () => {
