@@ -32,7 +32,13 @@ import { createSdkAgentStream } from './sdk-adapter.js'
 
 // Re-export the delegation value types for backward compatibility — they moved
 // to delegation-types.js to break the orchestrator↔loop import cycle (G1).
-export { BudgetExceededError, type DelegationResult, DelegationError } from './delegation-types.js'
+export {
+  DelegationBudgetExceededError,
+  /** @deprecated M91 — use `DelegationBudgetExceededError`; é a MESMA classe, alias por uma major. */
+  BudgetExceededError,
+  type DelegationResult,
+  DelegationError,
+} from './delegation-types.js'
 
 export interface DelegateOptions {
   /** Max USD for this sub-agent call. */

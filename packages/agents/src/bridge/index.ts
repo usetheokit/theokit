@@ -55,7 +55,16 @@ export {
   type AgentRouteContext,
 } from './agent-route-generator.js'
 
-export { createSdkAgentStream, toAgentFactory, type SdkAgentHandle } from './sdk-adapter.js'
+export {
+  createSdkAgentStream,
+  toAgentFactory,
+  type SdkAgentHandle,
+  // M91 — os tipos que tornam `send` honesto atravessam junto: sem eles o consumidor não consegue
+  // nomear o retorno, e volta a escrever o adaptador que o milestone existe para apagar.
+  type SdkSendOptions,
+  type SdkTurnHandle,
+} from './sdk-adapter.js'
+export type { DefinicaoOuThunk } from './definicao-ou-thunk.js'
 export { buildModelSelection } from './model-selection.js'
 export {
   createThinkTagExtractor,
@@ -89,6 +98,10 @@ export {
 
 export {
   delegate,
+  DelegationBudgetExceededError,
+  // O alias EXISTE para ser deprecado; re-exportá-lo é o contrato de compatibilidade do M91, não um
+  // uso descuidado. Sai numa major.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   BudgetExceededError,
   DelegationError,
   type DelegateOptions,
