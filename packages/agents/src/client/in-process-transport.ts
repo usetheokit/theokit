@@ -115,16 +115,34 @@ export class InProcessTransport implements AgentTransport {
     this.#run = options.run
   }
 
-  #awaitApproval: InProcessAwaitApproval = (req) =>
-    new Promise<boolean | ApprovalDecision>((resolve, reject) => {
-      // Approval ids are server-minted UUIDs — a collision means a real bug (two turns reusing an id).
-      // Fail fast rather than silently overwrite the earlier turn's parked resolver (Rule 8).
-      if (this.#pending.has(req.approvalId)) {
-        reject(new Error(`Duplicate pending approval id '${req.approvalId}' — ids must be unique.`))
-        return
-      }
-      this.#pending.set(req.approvalId, { resolve, reject, turno: this.#turno })
-    })
+  /**
+   * Cria o `awaitApproval` DESTE turno, com o número e o sinal fechados no closure.
+   *
+   * Campo compartilhado não serve, e a revisão do M92 mediu por quê: um runner do turno 1 que
+   * estaciona **depois** do `send` do turno 2 lê o campo já sobrescrito e nasce etiquetado turno 2 —
+   * o abort do turno 1 não o varre, e a promessa pendura. A primeira correção do M92 trocou "ler no
+   * momento da aprovação" por "ler no `send`", e continuou errada pela mesma razão: um campo só.
+   *
+   * O closure é o único lugar onde o turno de um runner pode viver sem ser sobrescrito por outro.
+   */
+  #criarAwaitApproval(turno: number, sinal: AbortSignal | undefined): InProcessAwaitApproval {
+    return (req) =>
+      new Promise<boolean | ApprovalDecision>((resolve, reject) => {
+        // Abortado ANTES de a aprovação estacionar: varrer no `sendMessages` não alcança este caso,
+        // porque naquele momento não havia nada a varrer.
+        if (sinal?.aborted === true) {
+          reject(new ApprovalAbortedError(req.approvalId, 'o turno já estava abortado'))
+          return
+        }
+        // Ids de aprovação são UUIDs do servidor — colisão é bug real (dois turnos reusando um id).
+        // Falha rápido em vez de sobrescrever em silêncio o resolver estacionado do turno anterior.
+        if (this.#pending.has(req.approvalId)) {
+          reject(new Error(`Duplicate pending approval id '${req.approvalId}' — ids must be unique.`))
+          return
+        }
+        this.#pending.set(req.approvalId, { resolve, reject, turno })
+      })
+  }
 
   /**
    * Varre as aprovações de um turno, rejeitando cada uma com erro TIPADO.
@@ -155,19 +173,27 @@ export class InProcessTransport implements AgentTransport {
     this.#varrerTurno(this.#turno, 'um turno novo começou')
     this.#turno += 1
     const turnoAtual = this.#turno
+
     // O sinal de abort do turno é a costura que já chegava aqui e não era usada. `once` porque um
     // `AbortSignal` dispara no máximo uma vez, e reter o listener manteria o transporte vivo.
-    abortSignal?.addEventListener(
-      'abort',
-      () => {
-        this.#varrerTurno(turnoAtual, 'o turno foi abortado')
-      },
-      { once: true },
-    )
+    // Sinal JÁ abortado não dispara `addEventListener` — a revisão do M92 mediu: `pendentes=1` e a
+    // promessa PENDENTE, ou seja, exatamente o travamento que este milestone existe para fechar,
+    // ainda alcançável. A varredura roda na hora e o listener cobre o abort que vier depois.
+    if (abortSignal?.aborted === true) {
+      this.#varrerTurno(turnoAtual, 'o turno já estava abortado')
+    } else {
+      abortSignal?.addEventListener(
+        'abort',
+        () => {
+          this.#varrerTurno(turnoAtual, 'o turno foi abortado')
+        },
+        { once: true },
+      )
+    }
     const generator = this.#run({
       message: extractLastUserText(messages),
       signal: abortSignal ?? undefined,
-      awaitApproval: this.#awaitApproval,
+      awaitApproval: this.#criarAwaitApproval(turnoAtual, abortSignal ?? undefined),
       // M43 — forward per-request context (the seam's `metadata`) to the runner.
       context: metadata,
     })

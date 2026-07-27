@@ -136,9 +136,18 @@ export class AgentClient<TInput = unknown> {
     // thread = prefixo commitado + o user deste turno + o assistant em voo (`messages`). O prefixo vem
     // materializado (`#prefixo`); só a cauda é concatenada aqui. A referência do SNAPSHOT muda só neste
     // ponto, que é o contrato que `useSyncExternalStore` exige.
-    const thread = this.#currentUser
-      ? [...this.#prefixo, this.#currentUser, ...this.#messages]
-      : [...this.#prefixo, ...this.#messages]
+    // `concat` ÚNICO, não dois spreads.
+    //
+    // A primeira versão do M92 trocou `#committed` por `#prefixo` e manteve o spread — e `#prefixo` era
+    // o **mesmo array**, um alias puro. A revisão mediu: 0,16 µs @C=20 → ~2 µs @C=400, ainda linear em
+    // C, ou seja, byte-idêntico ao anterior. O DoD pedia getter preguiçoso ou concat único; eu tinha
+    // entregue um rename.
+    //
+    // `concat` copia o prefixo uma vez por emit em vez de espalhá-lo elemento a elemento, e o motor
+    // usa memcpy para arrays densos. Continua O(C) — não há como devolver um array novo sem copiar —
+    // mas com constante menor, e é honesto dizer que o ganho aqui é de constante, não de ordem.
+    const cauda = this.#currentUser ? [this.#currentUser, ...this.#messages] : this.#messages
+    const thread = this.#prefixo.concat(cauda)
     this.#snapshot = { messages: this.#messages, thread, status: this.#status, error: this.#error }
     for (const listener of this.#listeners) listener()
   }
