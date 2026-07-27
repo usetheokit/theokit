@@ -6,7 +6,7 @@ import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/to
 import { z } from 'zod'
 import {
   delegate,
-  BudgetExceededError,
+  DelegationBudgetExceededError,
   DelegationError,
 } from '../../src/bridge/agent-orchestrator.js'
 
@@ -64,8 +64,8 @@ describe('Agent Orchestrator — delegate()', () => {
   })
 
   it('test_budget_exceeded_error_message', () => {
-    const err = new BudgetExceededError('TestAgent', 1.5, 1.0)
-    expect(err.name).toBe('BudgetExceededError')
+    const err = new DelegationBudgetExceededError('TestAgent', 1.5, 1.0)
+    expect(err.name).toBe('DelegationBudgetExceededError')
     expect(err.agentName).toBe('TestAgent')
     expect(err.actualCost).toBe(1.5)
     expect(err.budgetLimit).toBe(1.0)

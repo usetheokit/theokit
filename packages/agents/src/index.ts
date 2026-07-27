@@ -100,21 +100,24 @@ export * from '@theokit/sdk/models'
 // formato de arquivo: exportar o formato congelaria um detalhe interno como API pública.
 export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagents-loader'
 
-// COLISÃO DE NOME, declarada em vez de resolvida por acidente de ordem de import.
+// COLISÃO DE NOME RESOLVIDA no M91 — era declarada e agora está paga.
 //
-// `@theokit/sdk/errors` e `./bridge/index.js` exportam ambos `BudgetExceededError`, e NÃO são a
+// `@theokit/sdk/errors` e `./bridge/index.js` exportavam ambos `BudgetExceededError`, e NÃO eram a
 // mesma coisa: a do SDK é orçamento por JANELA (`budgetName`, `window`, `spentUsd`, `mode`); a da
-// camada é orçamento por DELEGAÇÃO (`agentName`, `actualCost`, `budgetLimit`). Construtores e
-// domínios diferentes — colapsar uma na outra seria perder semântica, não deduplicar.
+// camada é orçamento por DELEGAÇÃO (`agentName`, `actualCost`, `budgetLimit`).
 //
-// O re-export explícito abaixo mantém a da CAMADA vencendo no barril, que é o comportamento de antes
-// deste milestone: nenhum consumidor existente muda. A consequência é que a do SDK fica inalcançável
-// pelo barril, e isso está registrado como lacuna conhecida em `subpath-coverage.test.ts`.
+// Como o consumidor tem regra inquebrável de nunca importar `@theokit/sdk` direto, ele **nunca
+// alcançava a do SDK** pelo barril — e um `instanceof` casava com o domínio errado em silêncio. O
+// comentário anterior registrava isso como lacuna conhecida e dizia que renomear era breaking, fora
+// do escopo do M78. O M91 renomeou, com alias `@deprecated` por uma major.
 //
-// O defeito de fundo é o nome, não o re-export: duas classes homônimas em camadas vizinhas é o que o
-// M73 documentou como origem de `instanceof` que falha em silêncio. Renomear a da camada é breaking
-// e está fora do escopo do M78 — filado como issue.
-export { BudgetExceededError } from './bridge/delegation-types.js'
+// Agora as duas atravessam: `DelegationBudgetExceededError` daqui, `BudgetExceededError` do SDK.
+export {
+  DelegationBudgetExceededError,
+  /** @deprecated Use `DelegationBudgetExceededError` — mesma classe, alias por uma major. */
+  BudgetExceededError as DelegationBudgetExceededErrorAlias,
+} from './bridge/delegation-types.js'
+export { BudgetExceededError } from '@theokit/sdk/errors'
 
 // M82 — o tipo público dos handlers de `.hooks()`. Publicado porque a alternativa é o consumidor
 // declarar o seu (foi o que o agent-builder fez, com `ctx: unknown` em quatro de cinco handlers).

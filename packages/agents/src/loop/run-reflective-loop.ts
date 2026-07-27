@@ -20,7 +20,7 @@ import type { RetryOptions } from '@theokit/sdk/retry'
 
 import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import {
-  BudgetExceededError,
+  DelegationBudgetExceededError,
   type DelegationResult,
   DelegationError,
 } from '../bridge/delegation-types.js'
@@ -57,7 +57,7 @@ interface RunReflectiveLoopConfig {
   readonly loop: LoopStrategy
   /** Between-round reflection (default `'ladder'` for `'plan-act-reflect'`). */
   readonly reflection: ReflectionStrategy
-  /** Cumulative USD budget across ALL rounds (EC-4). Exceeding throws BudgetExceededError. */
+  /** Cumulative USD budget across ALL rounds (EC-4). Exceeding throws DelegationBudgetExceededError. */
   readonly budget?: number
   /** Cancellation — when aborted, the loop stops re-entering and advancing the in-flight stream. */
   readonly signal?: AbortSignal
@@ -175,7 +175,7 @@ function buildPrompt(
 /**
  * Consume one round, normalizing a RAW stream/iterator exception (not an `error` event —
  * e.g. the SDK dynamic import rejecting) into a typed `DelegationError` (M2). Typed errors
- * (`BudgetExceededError`/`DelegationError`) propagate unchanged.
+ * (`DelegationBudgetExceededError`/`DelegationError`) propagate unchanged.
  */
 async function* consumeRoundOrThrow(
   inputs: RoundInputs,
@@ -190,7 +190,7 @@ async function* consumeRoundOrThrow(
       inputs.retry,
     )
   } catch (err) {
-    if (err instanceof BudgetExceededError || err instanceof DelegationError) throw err
+    if (err instanceof DelegationBudgetExceededError || err instanceof DelegationError) throw err
     throw new DelegationError(agentName, err)
   }
 }
@@ -455,7 +455,7 @@ function ceilingRoundFactory(
  * Terminates when: the reflection/strategy says stop, the `maxIterations` ceiling
  * is reached (via `loop.shouldContinue`), the signal aborts, or a degenerate round
  * resolves to `stop`. Throws `DelegationError` on a mid-round error event
- * (fail-fast, typed) and `BudgetExceededError` when cumulative cost crosses `budget`.
+ * (fail-fast, typed) and `DelegationBudgetExceededError` when cumulative cost crosses `budget`.
  */
 export async function* runReflectiveLoopStream(
   factory: RoundStreamFactory,
@@ -505,7 +505,7 @@ export async function* runReflectiveLoopStream(
 
     if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
     if (Number.isFinite(budget) && acc.cost > budget) {
-      throw new BudgetExceededError(agentName, acc.cost, budget)
+      throw new DelegationBudgetExceededError(agentName, acc.cost, budget)
     }
 
     // V4-D no_progress: only on would-continue rounds (EC-1: stop/error/length/empty already

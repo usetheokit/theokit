@@ -24,9 +24,9 @@ import type { ReasoningEffort } from '../types.js'
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
 import {
-  compileAgentDefinition,
   type AgentDefinition as TheokitAgentDefinition,
 } from './define-agent.js'
+import { type DefinicaoOuThunk, resolverProjecao } from './definicao-ou-thunk.js'
 import {
   translateInteractionUpdate,
   translateSdkEvent,
@@ -717,9 +717,32 @@ async function* streamSdkAgent(
  * `Agent.getOrCreate` returns the real SDK agent — this alias just types what {@link toAgentFactory}
  * hands back without re-exporting the full `@theokit/sdk` `Agent` type.
  */
+/**
+ * O mínimo que um turno devolve. Estrutural de propósito (ADR-2 do M91).
+ *
+ * Re-exportar o tipo do SDK amarraria a assinatura pública desta camada à dele — o oposto do que a
+ * fronteira existe para fazer, e a mesma razão pela qual `SdkAgentHandle` já era um alias em vez de um
+ * re-export.
+ */
+export interface SdkTurnHandle {
+  wait: () => Promise<unknown>
+}
+
+/** Opções por turno. Aberto por ora — o SDK aceita mais do que a camada precisa declarar. */
+export type SdkSendOptions = Record<string, unknown>
+
 export interface SdkAgentHandle {
   readonly agentId: string
-  send: (msg: string, opts?: unknown) => unknown
+  /**
+   * M91 — era `(msg: string, opts?: unknown) => unknown`.
+   *
+   * O `unknown` de retorno custava ao consumidor um módulo inteiro: `agents/lib/goal/runner-facade.ts`,
+   * 38 linhas cujo único trabalho era re-estreitar este retorno para o contrato `send → wait` que o
+   * loop de goal exige. O docstring daquele módulo registra que, antes dele, o chamador escrevia
+   * `as never` — e que **foi sob essa capa que a superfície goal divergiu do agente real por vários
+   * milestones**. A camada sempre soube a forma; ela só não a declarava.
+   */
+  send: (msg: string, opts?: SdkSendOptions) => SdkTurnHandle
   dispose: () => Promise<void>
 }
 
@@ -737,16 +760,15 @@ export interface SdkAgentHandle {
  * surface (e.g. the ACP client) owns approval. Tools still execute; they are simply not HITL-gated here.
  */
 export function toAgentFactory(
-  def: TheokitAgentDefinition,
+  def: DefinicaoOuThunk,
   // M74 — o seam que as superfícies do consumidor usam de fato (ACP, loop autônomo, delegação).
   opts: { apiKey: string | (() => string | Promise<string>); overrides?: RuntimeOverrides },
 ): (sessionId: string) => Promise<SdkAgentHandle> {
-  const compiled = compileAgentDefinition(def)
   const overrides = opts.overrides ?? {}
-  const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
-  const reasoningEffort = overrides.reasoningEffort ?? compiled.reasoningEffort
-  const runContext = overrides.runContext ?? compiled.runContext
+  const projetarPorSessao = resolverProjecao(def, overrides)
   return async (sessionId: string): Promise<SdkAgentHandle> => {
+    // Forma OBJETO: devolve a projeção já pronta. Forma THUNK: projeta agora, para esta sessão.
+    const { compiled, model, reasoningEffort, runContext } = await projetarPorSessao(sessionId)
     const rt = await loadSdkRuntime()
     if (!rt) {
       throw new Error(
