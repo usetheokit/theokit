@@ -1,5 +1,16 @@
 # @theokit/agents
 
+## 4.28.0
+
+### Minor Changes
+
+- M94 — re-exporta os resolvedores que o SDK passou a publicar.
+
+  - `transcriptRoot` — a raiz do estado de transcript, que honra `THEOKIT_HOME`. O consumidor a duplicava em três arquivos, e as três cópias ignoravam a variável junto com a original.
+  - `TranscriptMessage` / `TranscriptBlock` — a forma do corpo de um registro de sessão, que antes era `Record<string, unknown>` e obrigava o consumidor a recuperar o tipo com cast a cada leitura.
+
+  `Provider.forModel` já atravessa a camada pelo re-export existente de `Provider`.
+
 ## 4.27.1
 
 ### Patch Changes
