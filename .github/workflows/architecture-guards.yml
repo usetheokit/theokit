@@ -22,8 +22,15 @@ on:
       - 'scripts/check-package-direction.mjs'
       - 'scripts/check-auth-parity.mjs'
       - 'scripts/check-sandbox-parity.mjs'
-      - 'packages/agents/src/sandbox-entry.ts'
-      - 'packages/agents/src/auth-entry.ts'
+      # M91 — a suíte do pacote inteiro, não só dois entries.
+      #
+      # O job `auth-parity` roda `pnpm --filter @theokit/agents test`, e o comentário dele já dizia
+      # que "o vitest da raiz só cobre `tests/**` — sem isto ele nunca rodaria em CI". Mas o filtro
+      # listava apenas `sandbox-entry.ts` e `auth-entry.ts`: um PR que tocasse
+      # `src/capability/toolset.ts` ou `tests/unit/*` **não disparava nada**. Os gates do M91 só
+      # rodaram por acidente — o commit de release mexeu no `package.json`, que estava na lista.
+      - 'packages/agents/src/**'
+      - 'packages/agents/tests/**'
   pull_request:
     branches: [main, develop]
     paths:
@@ -35,8 +42,15 @@ on:
       - 'scripts/check-package-direction.mjs'
       - 'scripts/check-auth-parity.mjs'
       - 'scripts/check-sandbox-parity.mjs'
-      - 'packages/agents/src/sandbox-entry.ts'
-      - 'packages/agents/src/auth-entry.ts'
+      # M91 — a suíte do pacote inteiro, não só dois entries.
+      #
+      # O job `auth-parity` roda `pnpm --filter @theokit/agents test`, e o comentário dele já dizia
+      # que "o vitest da raiz só cobre `tests/**` — sem isto ele nunca rodaria em CI". Mas o filtro
+      # listava apenas `sandbox-entry.ts` e `auth-entry.ts`: um PR que tocasse
+      # `src/capability/toolset.ts` ou `tests/unit/*` **não disparava nada**. Os gates do M91 só
+      # rodaram por acidente — o commit de release mexeu no `package.json`, que estava na lista.
+      - 'packages/agents/src/**'
+      - 'packages/agents/tests/**'
 
 jobs:
   direction:
