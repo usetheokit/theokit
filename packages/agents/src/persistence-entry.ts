@@ -36,6 +36,9 @@ export {
   sanitizeFts5Query,
   SessionBusyError,
   transcriptPath,
+  // M94 — a raiz do estado de transcript. O consumidor a duplicava em TRÊS arquivos, e as três
+  // cópias ignoravam `THEOKIT_HOME` junto com a original.
+  transcriptRoot,
   withCwdMutex,
   withFileLock,
 } from '@theokit/sdk/persistence'
@@ -49,4 +52,7 @@ export type {
   ResilientSqliteDb,
   SessionWriterLease,
   WalApplyResult,
+  // M94 — a forma do registro deixa de ser `Record<string, unknown>`.
+  TranscriptBlock,
+  TranscriptMessage,
 } from '@theokit/sdk/persistence'
