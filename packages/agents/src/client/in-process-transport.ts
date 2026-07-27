@@ -73,10 +73,43 @@ function generatorToStream(gen: AsyncGenerator<UIMessageChunk>): ReadableStream<
  * throws SYNCHRONOUSLY surfaces the error when the stream is READ (via `controller.error`), not from the
  * `sendMessages` promise — whereas `HttpTransport` throws from `sendMessages` on a non-2xx response.
  */
+/**
+ * Uma aprovação estacionada foi descartada porque o turno terminou sem decisão.
+ *
+ * M92 — tipado de propósito. Antes a promessa simplesmente **nunca** resolvia, e a chamada de tool do
+ * SDK pendurava; `resolve(false)` seria pior ainda, porque é indistinguível de "o usuário negou".
+ */
+export class ApprovalAbortedError extends Error {
+  constructor(
+    readonly approvalId: string,
+    motivo: string,
+  ) {
+    super(`Aprovação '${approvalId}' descartada: ${motivo}.`)
+    this.name = 'ApprovalAbortedError'
+  }
+}
+
 export class InProcessTransport implements AgentTransport {
   readonly #run: InProcessRunner
-  /** Pending inline approvals: approvalId → resolver of the parked `awaitApproval` promise. */
-  readonly #pending = new Map<string, (decision: boolean | ApprovalDecision) => void>()
+  /**
+   * Aprovações inline estacionadas: `approvalId` → como resolver **ou rejeitar** a promessa parada.
+   *
+   * M92 — o `reject` entrou junto com a eviction. Antes havia só o `resolve`, e nada apagava a entrada
+   * quando o turno abortava: a promessa ficava pendente **para sempre**, e a chamada de tool do SDK
+   * pendurava com ela. Uma promessa que nunca resolve **nem** rejeita é a forma mais silenciosa de
+   * engolir um erro — nem stack trace existe (`error-handling.md § 2`).
+   */
+  readonly #pending = new Map<
+    string,
+    {
+      resolve: (decision: boolean | ApprovalDecision) => void
+      reject: (err: Error) => void
+      turno: number
+    }
+  >()
+
+  /** O turno corrente. Um `send()` novo incrementa e varre o anterior. */
+  #turno = 0
 
   constructor(options: InProcessTransportOptions) {
     this.#run = options.run
@@ -90,13 +123,47 @@ export class InProcessTransport implements AgentTransport {
         reject(new Error(`Duplicate pending approval id '${req.approvalId}' — ids must be unique.`))
         return
       }
-      this.#pending.set(req.approvalId, resolve)
+      this.#pending.set(req.approvalId, { resolve, reject, turno: this.#turno })
     })
+
+  /**
+   * Varre as aprovações de um turno, rejeitando cada uma com erro TIPADO.
+   *
+   * Rejeitar e não `resolve(false)`: um `false` é indistinguível de *"o usuário negou"*, e a diferença
+   * importa — negar é decisão, abortar é interrupção. O SDK precisa das duas para desenrolar a chamada
+   * de tool corretamente.
+   */
+  #varrerTurno(turno: number, motivo: string): void {
+    for (const [id, entrada] of [...this.#pending]) {
+      if (entrada.turno !== turno) continue
+      this.#pending.delete(id)
+      entrada.reject(new ApprovalAbortedError(id, motivo))
+    }
+  }
+
+  /** Quantas aprovações estão estacionadas. Existe para o teste poder provar a eviction. */
+  get pendentes(): number {
+    return this.#pending.size
+  }
 
   sendMessages(
     options: Parameters<ChatTransport<UIMessage>['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
     const { messages, abortSignal, metadata } = options
+    // M92 — um `send()` novo varre o turno anterior: aprovações daquele turno nunca mais serão
+    // decididas, e deixá-las no `Map` é vazamento com uma promessa pendurada em cada uma.
+    this.#varrerTurno(this.#turno, 'um turno novo começou')
+    this.#turno += 1
+    const turnoAtual = this.#turno
+    // O sinal de abort do turno é a costura que já chegava aqui e não era usada. `once` porque um
+    // `AbortSignal` dispara no máximo uma vez, e reter o listener manteria o transporte vivo.
+    abortSignal?.addEventListener(
+      'abort',
+      () => {
+        this.#varrerTurno(turnoAtual, 'o turno foi abortado')
+      },
+      { once: true },
+    )
     const generator = this.#run({
       message: extractLastUserText(messages),
       signal: abortSignal ?? undefined,
@@ -112,14 +179,14 @@ export class InProcessTransport implements AgentTransport {
   }
 
   approve(approvalId: string, decision: ApprovalDecision): Promise<void> {
-    const resolve = this.#pending.get(approvalId)
-    if (resolve === undefined) {
+    const entrada = this.#pending.get(approvalId)
+    if (entrada === undefined) {
       return Promise.reject(
         new Error(`No pending approval '${approvalId}' (unknown or already settled).`),
       )
     }
     this.#pending.delete(approvalId)
-    resolve(decision)
+    entrada.resolve(decision)
     return Promise.resolve()
   }
 }

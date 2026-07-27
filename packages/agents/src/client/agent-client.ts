@@ -50,6 +50,19 @@ function buildUserMessage(input: unknown): UIMessage {
  * `useSyncExternalStore`; a standalone (no-React) client (M44) can subscribe directly. Being
  * framework-agnostic, it is unit-tested without a DOM.
  */
+/**
+ * M92 — opções do cliente. Aditivo: sem elas, o comportamento é o de sempre.
+ */
+export interface AgentClientOptions {
+  /**
+   * Janela de coalescing em ms. `0` ou ausente = emite por delta de token (comportamento pré-M92).
+   *
+   * Opt-in de propósito: este é um pacote publicado, e mudar a frequência de emit por padrão mudaria o
+   * comportamento observável de quem conta emits ou depende da latência do primeiro token.
+   */
+  readonly emitIntervalMs?: number
+}
+
 export class AgentClient<TInput = unknown> {
   readonly #transport: AgentTransport
   readonly #chatId = crypto.randomUUID()
@@ -70,9 +83,35 @@ export class AgentClient<TInput = unknown> {
   #currentAssistantId = ''
   #snapshot: AgentClientState = { messages: [], thread: [], status: 'idle', error: undefined }
 
-  constructor(transport: AgentTransport, contextResolver?: () => RequestContext | undefined) {
+  /**
+   * M92 — o prefixo commitado, materializado UMA vez por escrita em vez de por delta de token.
+   *
+   * `#committed` só muda em dois lugares (medido): no `done` de `send()` e em `reset()`. Entre deltas
+   * ele é constante, então reconstruí-lo a cada `#emit` é trabalho que a estrutura já garante inútil.
+   *
+   * Invalidação é **na escrita**, não por comparação: comparar custaria o mesmo O(C) que isto evita, e
+   * memoizar por comprimento erraria em `reset()` — comprimento igual com conteúdo diferente é
+   * possível, e o bug seria invisível.
+   *
+   * Honestidade sobre o tamanho do ganho: medido, o spread custa **0,0062 ms por delta @400 mensagens**
+   * — 3,1 ms num turno de 500 deltas. É real e é micro. A ordem de grandeza deste milestone está no
+   * coalescing abaixo, porque o que pende de cada emit (a derivação da timeline) custa **3,274 ms por
+   * chamada** no mesmo tamanho de thread (M86).
+   */
+  #prefixo: UIMessage[] = []
+
+  /** Coalescing opt-in: `0` (default) emite por delta, como sempre. */
+  readonly #emitIntervalMs: number
+  #timerDeEmit: ReturnType<typeof setTimeout> | undefined
+
+  constructor(
+    transport: AgentTransport,
+    contextResolver?: () => RequestContext | undefined,
+    options?: AgentClientOptions,
+  ) {
     this.#transport = transport
     this.#contextResolver = contextResolver
+    this.#emitIntervalMs = options?.emitIntervalMs ?? 0
   }
 
   /** Subscribe to state changes; returns an unsubscribe fn. */
@@ -86,14 +125,45 @@ export class AgentClient<TInput = unknown> {
   /** The current immutable snapshot (stable reference until the next emit). */
   getSnapshot = (): AgentClientState => this.#snapshot
 
+  /**
+   * Emite AGORA. Usado diretamente nas transições de status — ver `#agendarEmit`.
+   */
   #emit(): void {
-    // thread = committed turns + this turn's user + the in-flight assistant (`messages`). New array per
-    // emit is fine — the SNAPSHOT reference only changes here, satisfying useSyncExternalStore.
+    if (this.#timerDeEmit !== undefined) {
+      clearTimeout(this.#timerDeEmit)
+      this.#timerDeEmit = undefined
+    }
+    // thread = prefixo commitado + o user deste turno + o assistant em voo (`messages`). O prefixo vem
+    // materializado (`#prefixo`); só a cauda é concatenada aqui. A referência do SNAPSHOT muda só neste
+    // ponto, que é o contrato que `useSyncExternalStore` exige.
     const thread = this.#currentUser
-      ? [...this.#committed, this.#currentUser, ...this.#messages]
-      : [...this.#committed, ...this.#messages]
+      ? [...this.#prefixo, this.#currentUser, ...this.#messages]
+      : [...this.#prefixo, ...this.#messages]
     this.#snapshot = { messages: this.#messages, thread, status: this.#status, error: this.#error }
     for (const listener of this.#listeners) listener()
+  }
+
+  /**
+   * Emite por JANELA quando o coalescing está ligado; imediatamente quando não está.
+   *
+   * Borda de saída: o timer emite ao **fim** da janela, com o estado mais recente. O que isto compra
+   * não é um emit mais barato — é **menos emits**, e o que pende de cada um é a derivação de 3,274 ms
+   * medida no M86.
+   *
+   * As transições de status (`done`/`error`/`abort`) NÃO passam por aqui: elas chamam `#emit` direto,
+   * porque um estado final preso num timer de 16 ms é um estado final perdido se o processo sair antes
+   * — e `exec` sai logo após o turno.
+   */
+  #agendarEmit(): void {
+    if (this.#emitIntervalMs <= 0) {
+      this.#emit()
+      return
+    }
+    if (this.#timerDeEmit !== undefined) return
+    this.#timerDeEmit = setTimeout(() => {
+      this.#timerDeEmit = undefined
+      this.#emit()
+    }, this.#emitIntervalMs)
   }
 
   #upsert(message: UIMessage): void {
@@ -127,7 +197,9 @@ export class AgentClient<TInput = unknown> {
         // upserts into the SAME message and the committed copy has a collision-free key (M46).
         const stamped = message.id ? message : { ...message, id: this.#currentAssistantId }
         this.#upsert(stamped)
-        this.#emit()
+        // O ÚNICO ponto por delta de token — todos os outros `#emit` deste arquivo são transições de
+        // status, e essas nunca esperam timer (ADR-2).
+        this.#agendarEmit()
       })
       if (aborted()) return
       this.#status = 'done'
@@ -146,6 +218,8 @@ export class AgentClient<TInput = unknown> {
     // An errored or aborted turn (status !== 'done') is dropped, keeping committed history uncorrupted.
     if (this.#status === 'done' && this.#currentUser) {
       this.#committed = [...this.#committed, this.#currentUser, ...this.#messages]
+      // Invalidação NA ESCRITA (ADR-3): este é um dos dois únicos pontos que mexem em `#committed`.
+      this.#prefixo = this.#committed
     }
     this.abort()
     const controller = new AbortController()
@@ -220,6 +294,9 @@ export class AgentClient<TInput = unknown> {
     this.#messages = []
     // M46 — reset means a NEW conversation: clear committed history + the current turn's user too.
     this.#committed = []
+    // O outro ponto de escrita. Sem isto o `reset()` serviria o prefixo velho — e comprimento igual
+    // com conteúdo diferente é exatamente o caso que uma memoização por tamanho não pegaria.
+    this.#prefixo = this.#committed
     this.#currentUser = undefined
     this.#error = undefined
     this.#status = 'idle'
