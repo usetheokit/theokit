@@ -14,6 +14,9 @@ export default defineConfig({
     auth: 'src/auth-entry.ts',
     // M62 — pass-through of the sdk-tools factories.
     tools: 'src/tools-entry.ts',
+    // M84 — a cadeia de cliente veio do CLI; subpath próprio porque `use-agent` importa React.
+    client: 'src/client-entry.ts',
+    'client-react': 'src/client-react-entry.ts',
   },
   format: ['esm'],
   dts: true,
