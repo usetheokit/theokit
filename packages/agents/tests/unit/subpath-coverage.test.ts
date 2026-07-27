@@ -160,19 +160,31 @@ const DECISOES: Record<string, Decisao> = {
   './sandbox': {
     verdict: 'in',
     via: '../../src/sandbox-entry.js',
-    cobertura: 'amostra',
+    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
+    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
+    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
+    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
+    cobertura: 'total',
     simbolos: [],
   },
   './persistence': {
     verdict: 'in',
     via: '../../src/persistence-entry.js',
-    cobertura: 'amostra',
+    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
+    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
+    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
+    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
+    cobertura: 'total',
     simbolos: [],
   },
   './interactive': {
     verdict: 'in',
     via: '../../src/interactive-entry.js',
-    cobertura: 'amostra',
+    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
+    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
+    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
+    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
+    cobertura: 'total',
     simbolos: [],
   },
 
