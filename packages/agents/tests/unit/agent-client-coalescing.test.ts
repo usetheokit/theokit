@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { AgentClient } from '../../src/client/agent-client.js'
 
@@ -21,16 +21,36 @@ import { AgentClient } from '../../src/client/agent-client.js'
  * suíte paralela — é a razão que `gates/perf-budget.test.ts` do consumidor registra para contar causa
  * em vez de medir parede.
  */
+/**
+ * Transporte falso que emite N deltas de texto no MESMO tick — a forma do caminho quente.
+ *
+ * A primeira versão destes testes instalava `vi.useFakeTimers()` e **nunca os avançava**, e só
+ * exercitava `reset()` — que faz flush síncrono por decisão. Resultado medido pela revisão: substituir
+ * o corpo inteiro de `#agendarEmit` por `return` deixava **580/580 testes verdes**. O gate não
+ * conseguia falhar; era o pior tipo de gate.
+ */
+const transporteComDeltas = (n: number): unknown => ({
+  sendMessages: () =>
+    Promise.resolve(
+      new ReadableStream({
+        start(controller) {
+          for (let i = 0; i < n; i++) {
+            controller.enqueue({
+              type: 'data-message',
+              data: {
+                id: 'a1',
+                role: 'assistant',
+                parts: [{ type: 'text', text: 'x'.repeat(i + 1) }],
+              },
+            })
+          }
+          controller.close()
+        },
+      }),
+    ),
+})
+
 describe('M92 — coalescing opt-in do AgentClient', () => {
-  const transporteFalso = { sendMessages: () => Promise.resolve(new ReadableStream()) } as never
-
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
   const contarEmits = (c: AgentClient): { n: () => number } => {
     let n = 0
     c.subscribe(() => {
@@ -39,36 +59,92 @@ describe('M92 — coalescing opt-in do AgentClient', () => {
     return { n: () => n }
   }
 
-  it('SEM emitIntervalMs, cada agendamento emite na hora — comportamento pre-M92', () => {
-    const c = new AgentClient(transporteFalso)
+  /** Deixa o stream drenar; sem fake timers, para o coalescing usar o relógio real. */
+  const drenar = async (c: AgentClient): Promise<void> => {
+    await vi.waitFor(
+      () => {
+        if (c.getSnapshot().status === 'streaming') throw new Error('ainda streaming')
+      },
+      { timeout: 2000 },
+    )
+  }
+
+  it('SEM coalescing, cada delta emite — o comportamento pre-M92', async () => {
+    const c = new AgentClient(transporteComDeltas(30) as never)
     const contador = contarEmits(c)
-    for (let i = 0; i < 5; i++) c.reset()
-    expect(contador.n()).toBe(5)
+    c.send('oi' as never)
+    await drenar(c)
+    // 30 deltas + as transições de status. O piso é o que importa: um emit POR delta.
+    expect(contador.n()).toBeGreaterThanOrEqual(30)
   })
 
-  it('COM emitIntervalMs, o snapshot mantem referencia estavel entre emits', () => {
-    const c = new AgentClient(transporteFalso, undefined, { emitIntervalMs: 16 })
+  it('COM coalescing, MUITO menos emits para os mesmos deltas — o ponto do milestone', async () => {
+    const c = new AgentClient(transporteComDeltas(30) as never, undefined, { emitIntervalMs: 16 })
+    const contador = contarEmits(c)
+    c.send('oi' as never)
+    await drenar(c)
+    // Os 30 deltas caem na mesma janela de 16 ms; sobram as transições de status, que fazem flush.
+    expect(contador.n()).toBeLessThan(30)
+  })
+
+  it('o ESTADO FINAL sobrevive ao coalescing — nenhum token se perde', async () => {
+    const c = new AgentClient(transporteComDeltas(30) as never, undefined, { emitIntervalMs: 16 })
+    c.send('oi' as never)
+    await drenar(c)
+    // O último delta carrega 30 caracteres. Se o flush síncrono não rodasse, o snapshot pararia num
+    // prefixo — que é exatamente o risco nº 1 do plano: estado final preso num timer é estado perdido.
+    const parte = c.getSnapshot().messages.at(-1)?.parts.at(-1) as
+      | { data?: { parts?: { text?: string }[] } }
+      | undefined
+    expect(parte?.data?.parts?.[0]?.text).toHaveLength(30)
+  })
+
+  it('CONTRAPROVA — a reducao de emits e material, nao marginal', async () => {
+    const sem = new AgentClient(transporteComDeltas(30) as never)
+    const com = new AgentClient(transporteComDeltas(30) as never, undefined, { emitIntervalMs: 16 })
+    let nSem = 0
+    let nCom = 0
+    sem.subscribe(() => {
+      nSem += 1
+    })
+    com.subscribe(() => {
+      nCom += 1
+    })
+    sem.send('oi' as never)
+    com.send('oi' as never)
+    await drenar(sem)
+    await drenar(com)
+    // Medido no probe: 32 contra 2 para 30 deltas. O piso de 5× é folgado o bastante para não piscar
+    // sob contenção de CPU e apertado o bastante para reprovar se o coalescing sumir.
+    expect(nSem / nCom).toBeGreaterThan(5)
+  })
+
+  it('o status final e done nas duas configuracoes', async () => {
+    const sem = new AgentClient(transporteComDeltas(10) as never)
+    const com = new AgentClient(transporteComDeltas(10) as never, undefined, { emitIntervalMs: 16 })
+    sem.send('a' as never)
+    com.send('a' as never)
+    await drenar(sem)
+    await drenar(com)
+    expect(sem.getSnapshot().status).toBe(com.getSnapshot().status)
+  })
+
+  it('o snapshot mantem referencia estavel entre emits', () => {
+    const c = new AgentClient(transporteComDeltas(0) as never, undefined, { emitIntervalMs: 16 })
     const a = c.getSnapshot()
     const b = c.getSnapshot()
     expect(b).toBe(a)
   })
 
   it('FLUSH — reset() e transicao de status e emite NA HORA, sem esperar a janela', () => {
-    const c = new AgentClient(transporteFalso, undefined, { emitIntervalMs: 16 })
+    const c = new AgentClient(transporteComDeltas(0) as never, undefined, { emitIntervalMs: 16 })
     const contador = contarEmits(c)
     c.reset()
-    // Sem avançar o relógio: se o reset tivesse ido para o timer, isto seria 0.
     expect(contador.n()).toBe(1)
   })
 
-  it('o construtor aceita a terceira posicao sem quebrar as duas primeiras', () => {
-    const semOpcoes = new AgentClient(transporteFalso)
-    const comOpcoes = new AgentClient(transporteFalso, undefined, { emitIntervalMs: 16 })
-    expect(semOpcoes.getSnapshot().status).toBe(comOpcoes.getSnapshot().status)
-  })
-
   it('emitIntervalMs = 0 e tratado como DESLIGADO, nao como janela de zero', () => {
-    const c = new AgentClient(transporteFalso, undefined, { emitIntervalMs: 0 })
+    const c = new AgentClient(transporteComDeltas(0) as never, undefined, { emitIntervalMs: 0 })
     const contador = contarEmits(c)
     c.reset()
     expect(contador.n()).toBe(1)
