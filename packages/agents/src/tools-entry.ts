@@ -12,7 +12,7 @@
 // na superfície e o build DESTA camada passa; o consumidor descobre em call site. Com nome explícito,
 // o `tsc` aponta a linha. É a propriedade que `auth-entry.ts` já tinha e estes cinco não.
 //
-// A superfície é preservada INTEIRA (medido: 92 símbolos, paridade idêntica à fonte). Reduzir seria
+// A superfície é preservada INTEIRA (medido: 93 símbolos, paridade idêntica à fonte). Reduzir seria
 // breaking para outros consumidores, e o M73 já escreveu a regra no `auth-entry.ts`: enriquecer nunca
 // reduz. Se um símbolo for deliberadamente retido no futuro, a razão vem escrita aqui, como lá.
 //
@@ -109,6 +109,7 @@ export type {
   TodoItem,
   TodolistTool,
   ToolGuidanceMap,
+  TruncationMode,
   TruncationOptions,
   TruncationResult,
   VitestSummary,

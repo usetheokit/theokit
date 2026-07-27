@@ -66,8 +66,8 @@
   "peerDependencies": {
     "@theokit/http": ">=0.1.0-alpha.0",
     "ai": ">=7.0.0",
-    "zod": "^4.0.0",
-    "react": ">=18"
+    "react": ">=18",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@theokit/sdk-pty": {
@@ -100,6 +100,6 @@
   "dependencies": {
     "@theokit/sdk": "^4.30.0",
     "@theokit/sdk-pty": ">=0.2.0 <1.0.0",
-    "@theokit/sdk-tools": ">=0.24.1 <1.0.0"
+    "@theokit/sdk-tools": "^0.26.1"
   }
 }

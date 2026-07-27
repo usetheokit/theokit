@@ -266,6 +266,20 @@ const DECISOES: Record<string, Decisao> = {
   },
 }
 
+/**
+ * M90 — por que `/tools` e `/pty` NÃO entram neste mapa.
+ *
+ * A revisão do M90 apontou, corretamente, que eles ficavam sem oráculo — 98 dos 173 símbolos (57%), e
+ * foi por ali que `TruncationMode` sumiu da superfície publicada do `4.25.0`. A correção **não** foi
+ * estendê-los aqui: este mapa enumera os subpaths de `@theokit/sdk`, e `/tools` e `/pty` vêm de
+ * pacotes IRMÃOS (`@theokit/sdk-tools`, `@theokit/sdk-pty`). Trazê-los exigiria uma segunda fonte de
+ * verdade ao lado desta, e duas listas que precisam ficar em sincronia é o defeito que o review F-10
+ * deste próprio arquivo registrou (a cópia que perdeu `bench` enquanto o comentário jurava "mesmo
+ * escopo").
+ *
+ * Quem cobre os cinco é `subpath-surface.test.ts`, com um oráculo MAIS forte que `cobertura: 'total'`:
+ * compara o que a camada emite (`dist/*.d.ts`) contra o que a fonte exporta, nas duas direções.
+ */
 const SUBPATHS_DO_SDK = Object.keys(
   (require_('@theokit/sdk/package.json') as { exports: Record<string, unknown> }).exports,
 ).filter((k) => k !== './package.json')
