@@ -100,24 +100,34 @@ export * from '@theokit/sdk/models'
 // formato de arquivo: exportar o formato congelaria um detalhe interno como API pública.
 export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagents-loader'
 
-// COLISÃO DE NOME RESOLVIDA no M91 — era declarada e agora está paga.
+// COLISÃO DE NOME RESOLVIDA no M91 — e a PRIMEIRA tentativa estava errada.
 //
 // `@theokit/sdk/errors` e `./bridge/index.js` exportavam ambos `BudgetExceededError`, e NÃO eram a
 // mesma coisa: a do SDK é orçamento por JANELA (`budgetName`, `window`, `spentUsd`, `mode`); a da
-// camada é orçamento por DELEGAÇÃO (`agentName`, `actualCost`, `budgetLimit`).
+// camada é orçamento por DELEGAÇÃO (`agentName`, `actualCost`, `budgetLimit`). Como o consumidor tem
+// regra inquebrável de nunca importar `@theokit/sdk` direto, ele nunca alcançava a do SDK — e um
+// `instanceof` casava com o domínio errado em silêncio.
 //
-// Como o consumidor tem regra inquebrável de nunca importar `@theokit/sdk` direto, ele **nunca
-// alcançava a do SDK** pelo barril — e um `instanceof` casava com o domínio errado em silêncio. O
-// comentário anterior registrava isso como lacuna conhecida e dizia que renomear era breaking, fora
-// do escopo do M78. O M91 renomeou, com alias `@deprecated` por uma major.
+// ## O que o `4.26.0` fez de errado, medido
 //
-// Agora as duas atravessam: `DelegationBudgetExceededError` daqui, `BudgetExceededError` do SDK.
+// Ele **reaproveitou** o nome: o barril passou a exportar a classe do SDK sob `BudgetExceededError`.
+// Para um consumidor em `^4.25` que fazia `catch (e) { if (e instanceof BudgetExceededError) … }`, o
+// ramo de orçamento de delegação **deixou de casar, em silêncio** — exatamente o modo de falha que
+// este milestone existe para matar, em espelho. E foi publicado como MINOR.
+//
+// ## A correção
+//
+// O nome antigo volta a ser a classe de DELEGAÇÃO — é o alias `@deprecated` que o DoD pediu, mesma
+// identidade referencial de sempre, zero quebra para quem está em `^4.25`. A classe do SDK atravessa
+// sob um nome que não colide, o que fecha a lacuna original sem reaproveitar nome de ninguém:
+// "enriquecer nunca reduz" (M73) vale também para não redefinir o que um nome significa.
+export { DelegationBudgetExceededError } from './bridge/delegation-types.js'
 export {
-  DelegationBudgetExceededError,
-  /** @deprecated Use `DelegationBudgetExceededError` — mesma classe, alias por uma major. */
-  BudgetExceededError as DelegationBudgetExceededErrorAlias,
+  // O alias EXISTE para ser deprecado; re-exportá-lo é o contrato de compatibilidade, não descuido.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
+  BudgetExceededError,
 } from './bridge/delegation-types.js'
-export { BudgetExceededError } from '@theokit/sdk/errors'
+export { BudgetExceededError as WindowBudgetExceededError } from '@theokit/sdk/errors'
 
 // M82 — o tipo público dos handlers de `.hooks()`. Publicado porque a alternativa é o consumidor
 // declarar o seu (foi o que o agent-builder fez, com `ctx: unknown` em quatro de cinco handlers).
