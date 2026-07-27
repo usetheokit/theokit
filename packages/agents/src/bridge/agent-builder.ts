@@ -25,6 +25,7 @@ import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
 import { defineAgent, type AgentDefinition, type DefineAgentConfig } from './define-agent.js'
+import type { HookHandlers } from './hook-handlers.js'
 
 /**
  * A required-but-unset builder field. Branded (a literal intersected with a unique brand) so no
@@ -170,7 +171,9 @@ export interface AgentBuilder<
    * assembling plumbing. Call once — a later call replaces the map. Composes with
    * {@link AgentBuilder.plugins}: hooks and plugins are additive, not exclusive.
    */
-  hooks(map: Readonly<Record<string, unknown>>): AgentBuilder<TInput, TModel, TContext, TTools>
+  hooks(
+    map: HookHandlers | Readonly<Record<string, unknown>>,
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * Register code `Plugin` objects for this agent — the builder-chain equivalent of
    * `Agent.create({ plugins })`. A plugin is an EXTENSION UNIT: it can register tools and commands,
@@ -231,7 +234,8 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     settingSources: (sources: readonly SettingSource[]) =>
       makeBuilder({ ...config, settingSources: sources }),
     memory: (settings: MemorySettings) => makeBuilder({ ...config, memory: settings }),
-    hooks: (map: Readonly<Record<string, unknown>>) => makeBuilder({ ...config, hooks: map }),
+    hooks: (map: HookHandlers | Readonly<Record<string, unknown>>) =>
+      makeBuilder({ ...config, hooks: map }),
     plugins: (list: readonly unknown[]) => makeBuilder({ ...config, plugins: list }),
     mcp: (servers: McpServersMap) => makeBuilder({ ...config, mcpServers: servers }),
     use: (preset: (b: unknown) => unknown) => preset(runtime),
