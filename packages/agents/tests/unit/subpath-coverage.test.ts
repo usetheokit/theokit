@@ -97,13 +97,10 @@ const DECISOES: Record<string, Decisao> = {
     via: '../../src/index.js',
     cobertura: 'total',
     simbolos: ['TheokitAgentError', 'AuthenticationError', 'isTransientError', 'RateLimitError'],
-    lacunas: {
-      BudgetExceededError:
-        'Colisão de NOME com a classe homônima da camada (`bridge/delegation-types.ts`), que é de ' +
-        'outro domínio: orçamento por DELEGAÇÃO (agentName/actualCost) vs por JANELA ' +
-        '(budgetName/window/mode). A da camada vence no barril para não quebrar consumidor ' +
-        'existente. Renomear é breaking e está fora do escopo do M78.',
-    },
+    // M91 — a `lacuna` de `BudgetExceededError` SAIU: a classe da camada foi renomeada para
+    // `DelegationBudgetExceededError` (com alias `@deprecated` por uma major), e o barril passou a
+    // exportar as DUAS. A razão escrita aqui dizia que renomear era breaking e estava fora do escopo
+    // do M78 — o M91 pagou a conta, e a lacuna some junto com o conflito que a criou.
   },
   './retry': {
     verdict: 'in',

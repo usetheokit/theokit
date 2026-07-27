@@ -34,7 +34,7 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
     },
 }))
 
-const { delegate, BudgetExceededError } = await import('../../src/bridge/agent-orchestrator.js')
+const { delegate, DelegationBudgetExceededError } = await import('../../src/bridge/agent-orchestrator.js')
 const { applyCapabilities } = await import('../../src/capability/capability.js')
 const { ModelCapability } = await import('../../src/capability/capabilities.js')
 
@@ -75,6 +75,6 @@ describe('delegate() @MainLoop routing (T2.2)', () => {
     script([[{ type: 'done', cost: 0.5, finishReason: 'tool-calls' }]])
     await expect(
       delegate(reflectAgent, 'task', { apiKey: 'test', budget: 1.2 }),
-    ).rejects.toBeInstanceOf(BudgetExceededError)
+    ).rejects.toBeInstanceOf(DelegationBudgetExceededError)
   })
 })
