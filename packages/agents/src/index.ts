@@ -94,6 +94,11 @@ export * from '@theokit/sdk/retry'
 export * from '@theokit/sdk/concurrency'
 export * from '@theokit/sdk/messages'
 export * from '@theokit/sdk/models'
+// M81 — o loader de subagents em disco. A assimetria oposta (skills com porta pública, subagents
+// sem) é o que fez o consumidor escrever um SEGUNDO parser de `.md` — e depois um teste cuja única
+// função era vigiar a divergência entre os dois. O que atravessa é a config PARSEADA, nunca o
+// formato de arquivo: exportar o formato congelaria um detalhe interno como API pública.
+export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagents-loader'
 
 // COLISÃO DE NOME, declarada em vez de resolvida por acidente de ordem de import.
 //
