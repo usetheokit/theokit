@@ -20,6 +20,7 @@ import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
+import type { HookHandlers } from './hook-handlers.js'
 
 /**
  * Brand tag for a `defineAgent` value. `Symbol.for` (global registry, not `Symbol()`) so
@@ -98,7 +99,7 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * the builder's `hooks()`; converted into a code plugin at `build()` and never reaching the SDK
    * under this name — the plugin is the TRANSPORT, this is the contract callers write against.
    */
-  hooks?: Readonly<Record<string, unknown>>
+  hooks?: HookHandlers | Readonly<Record<string, unknown>>
   /**
    * MCP servers available to the agent — the builder-chain equivalent of the `@MCP` class
    * decorator. Each key is a server name; the value is the server configuration. Forwarded
