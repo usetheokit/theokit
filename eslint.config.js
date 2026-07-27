@@ -346,7 +346,14 @@ export default tseslint.config(
 
   // Scripts / config files (Node-only, less strict typing).
   {
-    files: ['**/*.config.{ts,mts,cts,js,mjs,cjs}', 'scripts/**/*.{ts,js,mjs}', '**/tsup.config.ts'],
+    files: [
+      '**/*.config.{ts,mts,cts,js,mjs,cjs}',
+      // M90 — `.mts` entrou: `packages/agents/scripts/gerar-reexports.mts` é ferramenta de autoria
+      // (enumera a superfície dos subpaths de infra) e o padrão anterior não cobria a extensão.
+      'scripts/**/*.{ts,mts,js,mjs}',
+      'packages/*/scripts/**/*.{ts,mts,js,mjs}',
+      '**/tsup.config.ts',
+    ],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
