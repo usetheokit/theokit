@@ -115,3 +115,7 @@ export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagent
 // M73 documentou como origem de `instanceof` que falha em silêncio. Renomear a da camada é breaking
 // e está fora do escopo do M78 — filado como issue.
 export { BudgetExceededError } from './bridge/delegation-types.js'
+
+// M82 — o tipo público dos handlers de `.hooks()`. Publicado porque a alternativa é o consumidor
+// declarar o seu (foi o que o agent-builder fez, com `ctx: unknown` em quatro de cinco handlers).
+export type { HookHandlers } from './bridge/hook-handlers.js'
