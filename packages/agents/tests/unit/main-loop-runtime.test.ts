@@ -7,7 +7,7 @@
  * `maxSteps` ceiling per plan ADR D1. Zod config (ADR D3).
  */
 import { describe, expect, it } from 'vitest'
-import { BudgetExceededError, DelegationError } from '../../src/bridge/agent-orchestrator.js'
+import { DelegationBudgetExceededError, DelegationError } from '../../src/bridge/agent-orchestrator.js'
 import * as loopBarrel from '../../src/loop/index.js'
 import { type LoopOutcome, resolveLoopStrategy } from '../../src/loop/loop-strategy.js'
 import {
@@ -233,7 +233,7 @@ describe('runReflectiveLoop (T2.1)', () => {
         reflection: ladderReflectionStrategy,
         budget: 1.2,
       }),
-    ).rejects.toBeInstanceOf(BudgetExceededError)
+    ).rejects.toBeInstanceOf(DelegationBudgetExceededError)
   })
 
   // Concurrency tests (structural invariants — plan § Concurrency tests)
@@ -308,7 +308,7 @@ describe('runReflectiveLoop (T2.1)', () => {
     expect(result.cost).toBe(0.5)
   })
 
-  it('test_loop_budget_zero_throws_on_any_cost — budget 0 + positive cost ⇒ BudgetExceededError', async () => {
+  it('test_loop_budget_zero_throws_on_any_cost — budget 0 + positive cost ⇒ DelegationBudgetExceededError', async () => {
     const { factory } = mockFactory([[{ type: 'done', cost: 0.01, finishReason: 'tool-calls' }]])
     const loop = resolveLoopStrategy('react', 8)
     await expect(
@@ -317,7 +317,7 @@ describe('runReflectiveLoop (T2.1)', () => {
         reflection: ladderReflectionStrategy,
         budget: 0,
       }),
-    ).rejects.toBeInstanceOf(BudgetExceededError)
+    ).rejects.toBeInstanceOf(DelegationBudgetExceededError)
   })
 
   it('test_loop_aborts_mid_stream — signal during event iteration stops accumulating (vs between-rounds)', async () => {
