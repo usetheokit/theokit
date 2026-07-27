@@ -19,14 +19,12 @@
  * INFORMATIONAL (render them or ignore them). The authoritative human gate is `awaitApproval`, which
  * the SDK awaits BEFORE the gated tool runs; the chunk is not the gate.
  */
-import {
-  compileAgentModule,
-  resolveEnabledSkills,
-  streamAgentUIMessages,
-  type HitlDecision,
-  type HumanInTheLoopOptions,
-} from '@theokit/agents'
 import type { UIMessageChunk } from 'ai'
+
+import { compileAgentModule, streamAgentUIMessages } from './bridge/agent-endpoint.js'
+import type { HitlDecision } from './bridge/hitl-plugin.js'
+import { resolveEnabledSkills } from './skills-resolver.js'
+import type { HumanInTheLoopOptions } from './types.js'
 
 /** An inline approval request handed to the caller's `awaitApproval` (the Ink/Tauri prompt). */
 export interface InProcessApprovalRequest {

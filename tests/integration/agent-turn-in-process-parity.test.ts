@@ -25,8 +25,7 @@ vi.mock('@theokit/agents', () => ({
     })(),
 }))
 
-const { streamAgentTurnInProcess } =
-  await import('../../packages/theo/src/server/agent/stream-agent-turn-in-process.js')
+const { streamAgentTurnInProcess } = await import('../../packages/agents/src/in-process-turn.js')
 
 /** The SAME translator the Ink TUI uses (theo-code-v2 apps/tui/renderer.ts), inlined here as the
  * canonical chunk→dispatch contract both paths must honor. */

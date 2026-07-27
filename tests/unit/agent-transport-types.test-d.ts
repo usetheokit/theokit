@@ -1,13 +1,13 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import type { ChatTransport, UIMessage } from 'ai'
 
-import type { ChannelTransport } from '../../packages/theo/src/client/channel-transport.js'
-import type { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
-import type { InProcessTransport } from '../../packages/theo/src/client/in-process-transport.js'
-import type { AgentTransport } from '../../packages/theo/src/client/transport.js'
-import { agentHandle } from '../../packages/theo/src/client/agent-handle.js'
-import type { AgentHandle } from '../../packages/theo/src/client/agent-handle.js'
-import type { UseAgentReturn } from '../../packages/theo/src/client/use-agent.js'
+import type { ChannelTransport } from '../../packages/agents/src/client/channel-transport.js'
+import type { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
+import type { InProcessTransport } from '../../packages/agents/src/client/in-process-transport.js'
+import type { AgentTransport } from '../../packages/agents/src/client/transport.js'
+import { agentHandle } from '../../packages/agents/src/client/agent-handle.js'
+import type { AgentHandle } from '../../packages/agents/src/client/agent-handle.js'
+import type { UseAgentReturn } from '../../packages/agents/src/client/use-agent.js'
 
 /**
  * M41 (ADR-0050 D1/D2) — the seam IS `ai`'s `ChatTransport<UIMessage>`. Both shipped transports MUST

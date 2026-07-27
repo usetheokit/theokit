@@ -10,31 +10,31 @@
 // The standalone client + the store it wraps.
 export { createAgentClient } from './create-agent-client.js'
 export type { AgentClientHandle, CreateAgentClientOptions } from './create-agent-client.js'
-export { AgentClient } from './agent-client.js'
-export type { AgentClientState, UseAgentStatus } from './agent-client.js'
+export { AgentClient } from '@theokit/agents/client'
+export type { AgentClientState, UseAgentStatus } from '@theokit/agents/client'
 
 // The transport seam + the three shipped transports (identical to the React entry's exports).
-export type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
-export { HttpTransport } from './http-transport.js'
-export type { HttpTransportOptions, HeadersResolver } from './http-transport.js'
-export { InProcessTransport } from './in-process-transport.js'
+export type { AgentTransport, ApprovalDecision, RequestContext } from '@theokit/agents/client'
+export { HttpTransport } from '@theokit/agents/client'
+export type { HttpTransportOptions, HeadersResolver } from '@theokit/agents/client'
+export { InProcessTransport } from '@theokit/agents/client'
 export type {
   InProcessTransportOptions,
   InProcessRunner,
   InProcessRunInput,
   InProcessApprovalRequestLike,
   InProcessAwaitApproval,
-} from './in-process-transport.js'
-export { ChannelTransport } from './channel-transport.js'
+} from '@theokit/agents/client'
+export { ChannelTransport } from '@theokit/agents/client'
 export type {
   ChannelTransportOptions,
   ChannelPushSource,
   ChannelTurnHandlers,
-} from './channel-transport.js'
+} from '@theokit/agents/client'
 
 // The wire readers (used to build custom transports).
 export {
   consumeUIMessageStream,
   responseToChunkStream,
   consumeChunkStream,
-} from './consume-ui-message-stream.js'
+} from '@theokit/agents/client'
