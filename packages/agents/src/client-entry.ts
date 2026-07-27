@@ -47,6 +47,10 @@ export type {
 
 export { AgentClient } from './client/agent-client.js'
 export type { AgentClientState } from './client/agent-client.js'
+// M92 — sem estes o consumidor não consegue ligar o coalescing nem distinguir aprovação abortada de
+// negada; a capacidade existiria e seria inalcançável pela fronteira.
+export type { AgentClientOptions } from './client/agent-client.js'
+export { ApprovalAbortedError } from './client/in-process-transport.js'
 
 export { agentHandle, isAgentHandle } from './client/agent-handle.js'
 export type { AgentHandle } from './client/agent-handle.js'
