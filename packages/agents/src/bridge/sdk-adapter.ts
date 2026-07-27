@@ -725,7 +725,7 @@ async function* streamSdkAgent(
  * re-export.
  */
 export interface SdkTurnHandle {
-  wait: () => Promise<unknown>
+  wait: () => Promise<{ result?: string; usage?: { totalTokens?: number } }>
 }
 
 /** Opções por turno. Aberto por ora — o SDK aceita mais do que a camada precisa declarar. */
@@ -741,8 +741,14 @@ export interface SdkAgentHandle {
    * loop de goal exige. O docstring daquele módulo registra que, antes dele, o chamador escrevia
    * `as never` — e que **foi sob essa capa que a superfície goal divergiu do agente real por vários
    * milestones**. A camada sempre soube a forma; ela só não a declarava.
+   *
+   * A forma é **assíncrona**: `SDKAgent.send` devolve `Promise<Run>`, e o `GoalLoopAgent` do SDK
+   * declara `send(prompt): Promise<{ wait(): Promise<…> }>`. A primeira tentativa deste milestone
+   * tipou como síncrona e o `tsc` do consumidor não teria pego — o `as never` do facade absorvia a
+   * diferença. É literalmente a divergência que o docstring do facade descrevia, reencontrada ao
+   * tentar removê-lo.
    */
-  send: (msg: string, opts?: SdkSendOptions) => SdkTurnHandle
+  send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
   dispose: () => Promise<void>
 }
 
