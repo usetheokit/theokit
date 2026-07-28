@@ -7,8 +7,10 @@ import { compileAgentDefinition, type AgentDefinition as TheokitAgentDefinition 
  * ciclo, e `module-graph.test.ts` reprova ciclo por decisão do M69. Três campos estruturais custam menos
  * que mover um tipo público de lugar.
  */
+
+import type { ModelSelection } from '@theokit/sdk'
 export interface OverridesDeProjecao {
-  readonly model?: string
+  readonly model?: string | ModelSelection
   readonly reasoningEffort?: unknown
   readonly runContext?: unknown
 }
@@ -28,7 +30,7 @@ export type DefinicaoOuThunk =
 /** A projeção que a fábrica precisa: compilada + overrides resolvidos. */
 export interface ProjecaoCompilada {
   compiled: ReturnType<typeof compileAgentDefinition>
-  model: string
+  model: string | ModelSelection
   reasoningEffort: ReturnType<typeof compileAgentDefinition>['reasoningEffort']
   runContext: ReturnType<typeof compileAgentDefinition>['runContext']
 }
