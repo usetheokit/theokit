@@ -6,17 +6,7 @@
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
-import type {
-  AgentDefinition,
-  BudgetTracker,
-  CustomTool,
-  InlineSkill,
-  InteractionUpdate,
-  Plugin,
-  PluginsSettings,
-  ProviderRoutingSettings,
-  SendOptions,
-} from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, SendOptions } from '@theokit/sdk'
 
 import { debugLog } from '../debug-log.js'
 import type { ReasoningEffort } from '../types.js'
@@ -50,7 +40,7 @@ export type BridgeImage = { url: string } | { data: string; mimeType: string }
 
 export interface RuntimeOverrides {
   /** Overrides the model for this call (`?? compiled.model ?? default`). */
-  model?: string
+  model?: string | ModelSelection
   /**
    * M35 (multimodal) — images to send alongside the text. When present, the SDK send switches from the
    * plain-string form to the structured `{ text, images }` form (`SDKUserMessage`). Absent ⇒ the
@@ -623,7 +613,7 @@ export function createSdkAgentStream(
 
 interface StreamSdkAgentOpts {
   apiKey: string
-  model: string
+  model: string | ModelSelection
   reasoningEffort: string | undefined
   overrides: RuntimeOverrides
   parseThinkTags: boolean

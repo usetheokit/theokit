@@ -1,5 +1,13 @@
 # @theokit/agents
 
+## 4.29.1
+
+### Patch Changes
+
+- Corrige um turno que quebrava quando a janela de contexto era declarada na seleção de modelo.
+
+  A versão anterior passou a **aceitar** a seleção completa em `AgentBuilder.model()` e parou aí: o caminho de runtime por onde todo turno passa continuava assumindo um id em texto, e aninhava a seleção dentro de si mesma. O resultado era uma falha em **todo** turno de quem declarasse a janela. Passar um id continua funcionando exatamente como antes, e a janela declarada agora sobrevive à conversão.
+
 ## 4.29.0
 
 ### Minor Changes
