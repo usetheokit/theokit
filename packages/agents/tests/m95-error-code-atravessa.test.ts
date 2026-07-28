@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { presentUIMessageStream } from '../src/bridge/present-ui-message-stream.js'
-import { eventoDeErroDoSdk } from '../src/bridge/sdk-adapter.js'
+import { eventoDeErroDoSdk } from '../src/bridge/erro-do-sdk.js'
 
 interface Chunk {
   type: string
