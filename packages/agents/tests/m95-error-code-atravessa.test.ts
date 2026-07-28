@@ -12,8 +12,13 @@
  */
 import { describe, expect, it } from 'vitest'
 import { presentUIMessageStream } from '../src/bridge/present-ui-message-stream.js'
+import { eventoDeErroDoSdk } from '../src/bridge/sdk-adapter.js'
 
-type Chunk = { type: string; errorText?: string; errorCode?: string }
+interface Chunk {
+  type: string
+  errorText?: string
+  errorCode?: string
+}
 
 async function chunksDe(eventos: unknown[]): Promise<Chunk[]> {
   const fonte = (async function* () {
@@ -41,5 +46,38 @@ describe('M95 — o code do erro chega ao consumidor', () => {
     const erro = chunks.find((c) => c.type === 'error')
     expect(erro?.errorText).toBe('falha qualquer')
     expect(erro?.errorCode).toBeUndefined()
+  })
+})
+
+describe('M95 — o PRODUTOR preserva o code (o estágio onde ele morria)', () => {
+  it('um erro do SDK com code chega ao evento como esse code, não como SDK_ERROR', () => {
+    // Os testes acima afirmam o SEGUNDO estágio do pipeline, alimentando o evento à mão. A revisão
+    // adversarial mediu que isso não prova nada sobre o primeiro: `sdk-adapter.ts` descartava o
+    // code e emitia `SDK_ERROR`, e a correção anterior pousou um estágio DEPOIS de onde a
+    // informação morre. Este teste exerce o produtor.
+    const erro = Object.assign(new Error('another process is already writing this session'), {
+      name: 'SessionBusyError',
+      code: 'session_busy',
+      isRetryable: false,
+    })
+    const err = eventoDeErroDoSdk(erro)
+    expect(err?.code, 'o produtor achatou o code para SDK_ERROR').toBe('session_busy')
+    expect(err?.retryable, 'retryable foi fixado em false, contradizendo o erro').toBe(false)
+  })
+
+  it('um erro transitório preserva code E retryable', () => {
+    const erro = Object.assign(new Error('rate limited'), {
+      name: 'RateLimitError',
+      code: 'rate_limit',
+      isRetryable: true,
+    })
+    const err = eventoDeErroDoSdk(erro)
+    expect(err?.code).toBe('rate_limit')
+    expect(err?.retryable).toBe(true)
+  })
+
+  it('um erro SEM code continua virando SDK_ERROR — compatibilidade preservada', () => {
+    const err = eventoDeErroDoSdk(new Error('falha crua'))
+    expect(err?.code).toBe('SDK_ERROR')
   })
 })
