@@ -90,7 +90,13 @@ export async function* presentUIMessageStream(
         continue
       }
       if (event.type === 'error') {
-        yield { type: 'error', errorText: event.message }
+        // M95 — o `code` acompanha o texto. Um consumidor que precise DISTINGUIR a falha (o `exec`
+        // forkando quando a sessão já tem escritor) só tinha a mensagem, e casar texto de erro é a
+        // heurística que este ecossistema já pagou caro uma vez: o M93 classificava transitório por
+        // regex sobre a mensagem e tratava `ECONNREFUSED …:443` como definitivo, porque a PORTA
+        // casava o padrão de "4xx". `RunErrorDetail` sempre teve `code`; ele só não atravessava.
+        const code = (event as { code?: string }).code
+        yield { type: 'error', errorText: event.message, ...(code !== undefined ? { errorCode: code } : {}) }
         break
       }
       if (event.type === 'done') {
@@ -100,7 +106,12 @@ export async function* presentUIMessageStream(
       // run_started, iteration, partial_tool_call, artifact_*, state_update, file_edit → no web chunk.
     }
   } catch (err) {
-    yield { type: 'error', errorText: String(err) }
+    const code = (err as { code?: string }).code
+    yield {
+      type: 'error',
+      errorText: String(err),
+      ...(typeof code === 'string' ? { errorCode: code } : {}),
+    }
   }
   yield* presenter.finish(turnMetadata)
 }

@@ -1,5 +1,13 @@
 # @theokit/agents
 
+## 4.30.0
+
+### Minor Changes
+
+- O chunk de erro do stream passa a carregar o código do erro, não só o texto.
+
+  Uma falha de runtime não sobe como exceção para quem consome o stream — é convertida num chunk de erro, e esse é o contrato. Mas o chunk levava **só a mensagem**, então um consumidor que precise distinguir a falha (por exemplo, derivar uma sessão nova quando a original já tem escritor) não tinha alternativa senão casar texto de mensagem de erro. O código sempre existiu no evento de origem; ele só não atravessava. Um erro sem código continua exatamente como antes.
+
 ## 4.29.1
 
 ### Patch Changes
