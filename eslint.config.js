@@ -201,6 +201,16 @@ export default tseslint.config(
       'sonarjs/no-collapsible-if': 'warn',
       'sonarjs/no-redundant-jump': 'warn',
       'sonarjs/no-small-switch': 'off',
+      // `todo-tag` casa a palavra "TODO" em qualquer caixa — e "todo" é uma palavra comum do
+      // português, presente em comentários explicativos deste repositório. A regra reprovou o
+      // build TRÊS vezes por prosa legítima ("para todo erro", "todo turno", "todo estado"), e
+      // corrigir palavra por palavra só adia a próxima ocorrência: o custo é permanente e o
+      // benefício é zero, porque marcador de tarefa de verdade não é o que ela estava pegando.
+      //
+      // O que a regra existiria para proteger — dívida marcada e esquecida — continua coberto:
+      // este projeto trata dívida em `## Correções` de ADR e em resíduo declarado no código, não
+      // em comentário `TODO`.
+      'sonarjs/todo-tag': 'off',
       // Duplicate rules — already covered by other plugins, surfaced once
       // is enough (turning off the duplicate is not a bypass; it removes
       // the redundant report). The "kept" rule is named in the comment.
