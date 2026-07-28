@@ -64,6 +64,10 @@ export {
   type SdkSendOptions,
   type SdkTurnHandle,
 } from './sdk-adapter.js'
+// M96 — a postura de aprovação atravessa a fronteira: sem ela nomeável, o consumidor não consegue
+// declarar o que `toAgentFactory` agora exige. `AgentDefinition` (nome já ocupado logo abaixo, pelo
+// tipo brandado do builder) é intocado — a postura tem nome próprio.
+export type { ApprovalPosture } from './approval-posture.js'
 export type { DefinicaoOuThunk } from './definicao-ou-thunk.js'
 export { buildModelSelection } from './model-selection.js'
 export {
