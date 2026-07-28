@@ -1,3 +1,5 @@
+import type { ModelSelection } from '@theokit/sdk'
+
 import { compileAgentDefinition, type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 
 /**
@@ -8,7 +10,6 @@ import { compileAgentDefinition, type AgentDefinition as TheokitAgentDefinition 
  * que mover um tipo público de lugar.
  */
 
-import type { ModelSelection } from '@theokit/sdk'
 export interface OverridesDeProjecao {
   readonly model?: string | ModelSelection
   readonly reasoningEffort?: unknown

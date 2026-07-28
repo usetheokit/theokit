@@ -1,5 +1,13 @@
 # @theokit/agents
 
+## 4.30.2
+
+### Patch Changes
+
+- O mapeamento de erro do SDK para o evento de stream ganha módulo próprio.
+
+  Um mapeador puro, com o mesmo tratamento que a seleção de modelo já tinha. Ter casa própria também deixa óbvio que existe **um** lugar construindo o evento de erro — antes era um objeto literal dentro de um `catch`, e era exatamente ali que o código do erro se perdia.
+
 ## 4.30.1
 
 ### Patch Changes
