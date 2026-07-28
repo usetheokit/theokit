@@ -1,5 +1,13 @@
 # @theokit/agents
 
+## 4.29.0
+
+### Minor Changes
+
+- `AgentBuilder.model()` aceita `ModelSelection`, não só o id cru.
+
+  A implementação do SDK sempre aceitou as duas formas; era a fachada tipada desta camada que estreitava para `string`. O estreitamento tornava **inalcançável** qualquer campo da seleção — incluindo a janela de contexto que o SDK passou a publicar. Passar um id continua funcionando exatamente como antes.
+
 ## 4.28.0
 
 ### Minor Changes
