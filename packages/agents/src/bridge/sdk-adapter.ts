@@ -6,6 +6,11 @@
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
+// M96 — a rationale abaixo, e o `prettier-ignore`, existem por orcamento de lint: este arquivo esta
+// no teto de `max-lines` (500 linhas de codigo) e a quebra que o prettier faria neste import custa
+// +11 linhas, o bastante para estourar o gate. O `prettier-ignore` precisa ser o ULTIMO comentario
+// antes do no. Quando `sdk-adapter.ts` for dividido, a diretiva sai junto.
+// prettier-ignore
 import type { AgentDefinition, BudgetTracker, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, SendOptions } from '@theokit/sdk'
 
 import { debugLog } from '../debug-log.js'
@@ -13,9 +18,8 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
-import {
-  type AgentDefinition as TheokitAgentDefinition,
-} from './define-agent.js'
+import { aplicarPostura, type ApprovalPosture } from './approval-posture.js'
+import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinicaoOuThunk, resolverProjecao } from './definicao-ou-thunk.js'
 import { eventoDeErroDoSdk } from './erro-do-sdk.js'
 import {
@@ -747,14 +751,19 @@ export interface SdkAgentHandle {
  * model / `assembleM8CreateOptions`), so the served agent has identical tools, model, system prompt,
  * skills, and `mcpServers`. Keyed per `sessionId` via `Agent.getOrCreate` (matches the run path).
  *
- * NOTE: HITL approvals (`.approval(...)`) are driven by the framework's streaming runner, not by
- * `Agent.create`; a raw `SDKAgent` from this factory does not auto-pause gated tools — the serving
- * surface (e.g. the ACP client) owns approval. Tools still execute; they are simply not HITL-gated here.
+ * M96 — a superfície DECLARA sua {@link ApprovalPosture} e o factory instala o plugin que a variante
+ * exige. Antes, o mapa `compiled.hitl` era compilado e DESCARTADO aqui. Rationale em
+ * `./approval-posture.ts`.
  */
 export function toAgentFactory(
   def: DefinicaoOuThunk,
   // M74 — o seam que as superfícies do consumidor usam de fato (ACP, loop autônomo, delegação).
-  opts: { apiKey: string | (() => string | Promise<string>); overrides?: RuntimeOverrides },
+  // M96 — `approvals` é OBRIGATÓRIO: a ausência era o defeito, e um campo opcional o reintroduziria.
+  opts: {
+    apiKey: string | (() => string | Promise<string>)
+    approvals: ApprovalPosture
+    overrides?: RuntimeOverrides
+  },
 ): (sessionId: string) => Promise<SdkAgentHandle> {
   const overrides = opts.overrides ?? {}
   const projetarPorSessao = resolverProjecao(def, overrides)
@@ -783,6 +792,7 @@ export function toAgentFactory(
     if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
     if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
     const extra = buildExtraCreateOptions(overrides, compiled)
+    aplicarPostura(extra, m8, opts.approvals, compiled.hitl)
     const agent = await rt.Agent.getOrCreate(sessionId, {
       apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
