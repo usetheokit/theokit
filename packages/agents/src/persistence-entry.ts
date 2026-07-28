@@ -38,6 +38,8 @@ export {
   transcriptPath,
   // M94 — a raiz do estado de transcript. O consumidor a duplicava em TRÊS arquivos, e as três
   // cópias ignoravam `THEOKIT_HOME` junto com a original.
+  // M95 — consulta sem tomar a trava; perguntar tomando cria a disputa que se queria detectar.
+  sessaoTemEscritor,
   transcriptRoot,
   withCwdMutex,
   withFileLock,

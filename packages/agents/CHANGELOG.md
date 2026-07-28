@@ -1,5 +1,11 @@
 # @theokit/agents
 
+## 4.30.1
+
+### Patch Changes
+
+- Re-exporta a consulta que responde se uma sessão já tem escritor, sem tomar a trava.
+
 ## 4.30.0
 
 ### Minor Changes
