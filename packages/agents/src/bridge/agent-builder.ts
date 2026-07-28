@@ -15,7 +15,7 @@
  *
  * PURE metadata (sdk-runtime.md / G2): the builder describes an agent, it NEVER calls an LLM.
  */
-import type { CustomTool, SettingSource, MemorySettings } from '@theokit/sdk'
+import type { CustomTool, MemorySettings, ModelSelection, SettingSource } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { Guardrail } from '../guardrails/index.js'
@@ -96,11 +96,17 @@ export interface AgentBuilder<
   /** Set the request schema (lifted into the typed client via {@link AgentDefinition}). */
   input<S extends z.ZodType>(schema: S): AgentBuilder<S, TModel, TContext, TTools>
   /**
-   * Set the model id. Required before `.build()`. COMPILE ERROR when called twice — the argument
+   * Set the model. Required before `.build()`. COMPILE ERROR when called twice — the argument
    * type collapses to `never` once the model is set (tRPC's set-once technique).
+   *
+   * M94 — aceita `ModelSelection` além do id cru. A implementação do SDK **sempre** aceitou
+   * (`agent-builder.ts:50`: `model(m: string | ModelSelection)`); era esta fachada que estreitava
+   * para `string`, e o estreitamento tornava inalcançável qualquer campo da seleção — incluindo o
+   * `contextWindow` que o SDK passou a publicar. Fachada divergindo da implementação é a mesma
+   * classe de defeito que o M91 pagou dois patches para corrigir.
    */
   model(
-    id: TModel extends UnsetMarker ? string : never,
+    id: TModel extends UnsetMarker ? string | ModelSelection : never,
   ): AgentBuilder<TInput, string, TContext, TTools>
   /** Set the static system prompt. */
   system(prompt: string): AgentBuilder<TInput, TModel, TContext, TTools>
