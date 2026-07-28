@@ -20,9 +20,9 @@ export function buildModelSelection(
   // M95 (revisão adversarial do M94, BLOCKER) — `model` pode chegar como `ModelSelection`.
   //
   // O M94 alargou `AgentBuilder.model()` para aceitar a seleção completa, e parou aí: este site,
-  // que é por onde TODO turno passa, seguia assumindo `string` e produzia `{ id: {id, …} }` — um
+  // por onde cada turno passa, seguia assumindo `string` e produzia `{ id: {id, …} }` — um
   // objeto onde o runtime espera um id, e o primeiro `modelId.indexOf('/')` adiante quebrava
-  // **todo turno** com `context_window` configurado.
+  // cada turno com `context_window` configurado.
   //
   // Alargar o tipo sem alargar o runtime é a mesma divergência fachada↔implementação que o M94
   // veio corrigir, só que na direção oposta. Aqui os campos da seleção são preservados, e o
