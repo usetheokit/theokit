@@ -99,6 +99,12 @@ export * from '@theokit/sdk/models'
 // função era vigiar a divergência entre os dois. O que atravessa é a config PARSEADA, nunca o
 // formato de arquivo: exportar o formato congelaria um detalhe interno como API pública.
 export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagents-loader'
+// M96 U2 — o TIPO que o carregador acima devolve, publicado na linha vizinha (o par literal do peer,
+// `gemini-cli/packages/core/src/index.ts:191-192`). O nome de origem está OCUPADO neste índice —
+// `bridge/index.js` já exporta `AgentDefinition`, o tipo BRANDADO do builder —, então o consumidor
+// que importasse o nome de origem receberia o tipo errado em silêncio, e a única saída restante era
+// redeclarar a forma à mão. O alias resolve a colisão sem tocar no nome ocupado.
+export type { AgentDefinition as SubagentDefinition } from '@theokit/sdk/subagents-loader'
 
 // COLISÃO DE NOME RESOLVIDA no M91 — e a PRIMEIRA tentativa estava errada.
 //
