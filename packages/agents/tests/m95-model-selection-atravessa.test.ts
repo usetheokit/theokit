@@ -2,7 +2,7 @@
  * Regressão do BLOCKER que a revisão adversarial do M94 encontrou.
  *
  * O M94 alargou `AgentBuilder.model()` para aceitar `ModelSelection` — e parou aí. O caminho de
- * runtime por onde **todo turno** passa, `buildModelSelection`, seguia assumindo `string` e
+ * runtime por onde cada turno passa, `buildModelSelection`, seguia assumindo `string` e
  * produzia `{ id: { id: 'openrouter/x', contextWindow: 400000 } }`: um objeto onde o SDK espera um
  * id, e o primeiro `modelId.indexOf('/')` adiante quebrava o turno inteiro.
  *
@@ -19,7 +19,7 @@ describe('M95 — ModelSelection atravessa buildModelSelection', () => {
 
   it('uma ModelSelection NÃO é aninhada dentro de `id`', () => {
     const r = buildModelSelection({ id: 'openrouter/x', contextWindow: 400_000 })
-    expect(typeof r.id, 'o id virou objeto — é isto que quebra todo turno').toBe('string')
+    expect(typeof r.id, 'o id virou objeto — é isto que quebra cada turno').toBe('string')
     expect(r.id).toBe('openrouter/x')
   })
 
@@ -30,11 +30,11 @@ describe('M95 — ModelSelection atravessa buildModelSelection', () => {
 
   it('o effort compõe com os params que já vieram, em vez de descartá-los', () => {
     const r = buildModelSelection(
-      { id: 'openrouter/x', params: [{ id: 'temperature', value: 0.2 }] },
+      { id: 'openrouter/x', params: [{ id: 'temperature', value: '0.2' }] },
       'high',
     )
     expect(r.params).toEqual([
-      { id: 'temperature', value: 0.2 },
+      { id: 'temperature', value: '0.2' },
       { id: 'thinking', value: 'high' },
     ])
   })
