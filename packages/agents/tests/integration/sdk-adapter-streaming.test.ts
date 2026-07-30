@@ -342,6 +342,67 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     expect(out.filter((e) => e.type === 'tool_result')).toHaveLength(1)
   })
 
+  // #138 — o teste acima usa `c1` NOS DOIS caminhos e por isso nunca exercitou o defeito:
+  // com os ids iguais, qualquer implementação de dedup casa. No mundo real os dois caminhos
+  // falam namespaces DIFERENTES — `onDelta` traz o `callId` do SDK, `run.stream()` traz o
+  // `ToolUseBlock.id`, que é o `modelCallId` do provider. A dedup registrava um e consultava o
+  // outro, então a mesma chamada renderizava DUAS vezes (o duplo card que o #47 perseguia).
+  it('test_tool_events_deduped_across_MISMATCHED_id_namespaces (#138)', async () => {
+    const out = await drainUpdates(
+      // onDelta: callId do SDK = 'c1', modelCallId = 'm-c1'
+      [tcStarted('c1', 'glob', { p: '*' }), tcCompleted('c1', 'glob', { files: ['a'] })],
+      [
+        // run.stream(): identifica a MESMA chamada pelo id do MODELO
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          call_id: 'm-c1',
+          name: 'glob',
+          status: 'running',
+          input: { p: '*' },
+        },
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          call_id: 'm-c1',
+          name: 'glob',
+          status: 'completed',
+          result: { files: ['a'] },
+        },
+        { type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' },
+      ],
+    )
+    expect(out.filter((e) => e.type === 'tool_call')).toHaveLength(1)
+    expect(out.filter((e) => e.type === 'tool_result')).toHaveLength(1)
+  })
+
+  // #138 — o `tc-${Date.now()}` que preenchia um `call_id` ausente NUNCA estava no conjunto de
+  // dedup, então derrotava a dedup por construção. Pior: parecia um id de verdade para quem lê.
+  // Duas chamadas sem id devem seguir aparecendo (fail-loud > supressão silenciosa), mas o id
+  // não pode fingir identidade que não existe.
+  it('test_missing_call_id_does_not_fabricate_a_timestamp_id (#138)', async () => {
+    const out = await drainUpdates(
+      [],
+      [
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          name: 'glob',
+          status: 'running',
+          input: {},
+        },
+        { type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' },
+      ],
+    )
+    const chamadas = out.filter((e) => e.type === 'tool_call') as { callId: string }[]
+    expect(chamadas).toHaveLength(1)
+    expect(chamadas[0]?.callId).toBe('')
+    expect(chamadas[0]?.callId).not.toMatch(/^tc-\d+$/)
+  })
+
   it('test_text_only_onDelta_still_gets_tools_from_run_stream', async () => {
     const out = await drainUpdates(
       [td('Hi')],

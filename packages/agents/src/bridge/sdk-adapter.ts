@@ -302,6 +302,29 @@ function streamCallId(ev: StreamEvent): string {
 }
 
 /**
+ * #138 — TODOS os ids sob os quais a MESMA chamada de tool pode ser reconhecida.
+ *
+ * O SDK dá dois por chamada: o `callId` dele e o `modelCallId` que o provider gerou. Os dois
+ * caminhos do merge veem namespaces DIFERENTES — `onDelta` entrega o `callId`, e `run.stream()`
+ * entrega o `ToolUseBlock.id`, que é o `modelCallId`. A dedup registrava um e consultava o outro:
+ * nunca casava, e a mesma chamada renderizava DUAS vezes (o duplo card que o #47 perseguia).
+ *
+ * A leitura acontece AQUI, no sink, onde o `InteractionUpdate` cru ainda está à mão — e não como
+ * um campo a mais no `StreamEvent`. O id do modelo é detalhe da correlação entre as duas fontes,
+ * não parte do contrato que o consumidor renderiza; carregá-lo no evento público obrigaria todo
+ * consumidor a conhecer uma distinção que só o merge precisa fazer.
+ */
+function idsDaMesmaChamada(ev: StreamEvent, update: { modelCallId?: unknown }): string[] {
+  const ids: string[] = []
+  const call = streamCallId(ev)
+  if (call !== '') ids.push(call)
+  const model = update.modelCallId
+  if (typeof model === 'string' && model !== '' && model !== call) ids.push(model)
+  return ids
+}
+
+
+/**
  * #44 — skip a run.stream() content event ONLY when onDelta already drove that exact (category, id).
  * Tool dedup is keyed by callId; an empty/missing callId never matches (returns false) so two distinct
  * id-less tool events cannot collide and wrongly suppress each other (favours a visible double-emit
@@ -396,11 +419,9 @@ function createDeltaSink(queue: AsyncQueue<MergeItem>): {
       if (event.type === 'text_delta') state.sawTextDelta = true
       else if (event.type === 'thinking') state.sawThinkingDelta = true
       else if (event.type === 'tool_call') {
-        const id = streamCallId(event)
-        if (id !== '') state.emittedToolCallIds.add(id)
+        for (const id of idsDaMesmaChamada(event, d.update)) state.emittedToolCallIds.add(id)
       } else if (event.type === 'tool_result') {
-        const id = streamCallId(event)
-        if (id !== '') state.emittedToolResultIds.add(id)
+        for (const id of idsDaMesmaChamada(event, d.update)) state.emittedToolResultIds.add(id)
       }
       queue.push({ kind: 'delta', event })
     }
