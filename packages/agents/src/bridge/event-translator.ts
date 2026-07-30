@@ -64,7 +64,11 @@ function translateAssistantEvent(msg: SdkMessage): StreamEvent[] {
     if (b.type === 'tool_use') {
       events.push({
         type: 'tool_call',
-        callId: b.id ?? `tc-${Date.now()}`,
+        // #138 — era `tc-${Date.now()}`. Um id novo a cada chamada NUNCA está no conjunto de
+        // dedup, então o fallback derrotava a dedup por construção — e ainda parecia um id de
+        // verdade para quem lê. String vazia é honesta: `isDuplicatedByDelta` a trata como
+        // "não sei identificar" e prefere um duplo-render visível a uma supressão silenciosa.
+        callId: b.id ?? '',
         toolName: b.name ?? 'unknown',
         input: b.input ?? {},
       })
@@ -77,7 +81,8 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
   // Real SDKToolUseMessage (messages.ts:89): call_id (not id), status running|completed|error,
   // tool output in `result` (no separate `error` field).
   const status = msg.status as string
-  const callId = asString(msg.call_id, `tc-${Date.now()}`)
+  // #138 — idem: sem `call_id` a identidade é desconhecida, e um timestamp só disfarça isso.
+  const callId = asString(msg.call_id, '')
   const toolName = asString(msg.name, 'unknown')
   if (status === 'completed') {
     return [
