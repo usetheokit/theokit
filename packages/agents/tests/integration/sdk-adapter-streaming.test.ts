@@ -272,6 +272,32 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     expect(errs[0]).toMatchObject({ type: 'error', message: 'run failed' })
   })
 
+  // #142 — INVARIANTE: o stream sempre acaba num frame terminal (`done` OU `error`).
+  //
+  // HONESTIDADE SOBRE O QUE ESTE TESTE PROVA. A issue descreve o risco de o stream acabar sem
+  // frame terminal quando `sawError` suprime o `done`. Tentei construir esse caso — conteúdo
+  // chegando DEPOIS do erro — e não consegui: um `status: ERROR` encerra o stream, então `error`
+  // já era o último frame nos caminhos que este harness cobre. Este teste passa antes e depois
+  // da correção.
+  //
+  // Ele fica porque é o POST-CONDITION que faltava estar escrito. A correção deixou de depender
+  // de "acontece de o erro ser o último" e passou a garanti-lo; o teste trava a garantia para que
+  // um caminho futuro que emita depois do erro não a quebre em silêncio.
+  it('test_stream_always_ends_on_a_terminal_frame (#142)', async () => {
+    const comErro = await drainUpdates(
+      [],
+      [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'ERROR', message: 'run failed' }],
+    )
+    expect(comErro.filter((e) => e.type === 'done')).toHaveLength(0) // H1 preservado
+    expect(comErro.at(-1)?.type).toBe('error')
+
+    const semErro = await drainUpdates(
+      [td('oi')],
+      [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' }],
+    )
+    expect(semErro.at(-1)?.type).toBe('done')
+  })
+
   it('test_run_stream_throw_mid_iteration_emits_content_then_error', async () => {
     // M1 + HIGH-1: run.stream() yields a tool message then throws; the queued content drains BEFORE
     // the error surfaces (no lost event), the error is yielded (no unhandled rejection), dispose runs.
