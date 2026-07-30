@@ -2,9 +2,14 @@
  * T2.3 (architecture-medium-deferrals plan, ADR D2) — WebSocket upgrade
  * handler extracted from `vite-plugin/index.ts` for SRP.
  *
- * `setupWsUpgrade(server, projectRoot)` scans `server/ws/*` and attaches an
+ * `setupWsUpgrade(server, serverDir)` scans `<serverDir>/ws/*` and attaches an
  * upgrade handler to `server.httpServer`. Lazy-imports the `ws` package so
  * non-WS apps don't pay the cost.
+ *
+ * **#95:** recebe o `serverDir` JA RESOLVIDO, em vez de derivar `resolve(projectRoot, 'server')`.
+ * O #95 foi corrigido no route-serving, no typed-client, nas actions e no HMR, e este ponto ficou
+ * para tras — num projeto com `serverDir: 'core'` as rotas HTTP passavam a ser encontradas e as de
+ * WebSocket nao. Uma correcao parcial e pior que a falha inteira: faz a opcao parecer que funciona.
  *
  * **EC-1 (architecture-medium-deferrals plan v1.1 MUST FIX):** must tolerate
  * `server.httpServer === null` (Vite middleware mode — embed in Express/etc).
@@ -16,12 +21,14 @@
  */
 
 import type { IncomingMessage } from 'node:http'
-import { resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
 
 import type { ViteDevServer } from 'vite'
 
-import { scanWebSocketRoutes } from '../server/internal-api.js'
+// Import direto do scanner, nao do barrel `internal-api.js`: o barrel arrasta o grafo inteiro do
+// servidor (csrf, actions, controllers) para dentro do plugin de dev, que precisa de UMA funcao.
+// Alem do custo, era o que impedia esta unidade de ser exercitada isoladamente.
+import { scanWebSocketRoutes } from '../server/scan/ws-scan.js'
 
 interface WsHandler {
   onOpen?: (ws: unknown, request: unknown) => void | Promise<void>
@@ -30,8 +37,8 @@ interface WsHandler {
   onError?: (ws: unknown, err: Error) => void | Promise<void>
 }
 
-export function setupWsUpgrade(server: ViteDevServer, projectRoot: string): void {
-  const wsRoutes = scanWebSocketRoutes(resolve(projectRoot, 'server'))
+export function setupWsUpgrade(server: ViteDevServer, serverDir: string): void {
+  const wsRoutes = scanWebSocketRoutes(serverDir)
   if (wsRoutes.length === 0) return
 
   // EC-1 — middleware-mode Vite has no httpServer. Silently skip; the host
