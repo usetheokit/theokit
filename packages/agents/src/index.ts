@@ -4,6 +4,10 @@
 // their metadata getters remain internal (the compiler reads them via source-path imports).
 // The decorator OPTION TYPES stay public (the framework + consumers annotate with them — e.g. the
 // HITL `TimeoutAction` used by the approval-registry and the `AgentBuilder.create().approval(...)` options).
+// M103 — the SDK value + types behind the narrowed `Agent` re-export at the bottom of the M58 block.
+import { Agent as AgentDoSdk } from '@theokit/sdk'
+import type { ListAgentsOptions, ListResult, SDKAgentInfo } from '@theokit/sdk'
+
 export type { HumanInTheLoopOptions, TimeoutAction } from './types.js'
 // M35 — the settled HITL decision type is part of the public approval contract: an `awaitApproval`
 // resolver (the HTTP registry or the in-process seam) may return a bare boolean OR this structured value.
@@ -43,8 +47,34 @@ export type {
 // target OO shape, so wrapping them would be ceremony without value. The domains with their own
 // infra surface (sandbox / persistence / interactive / pty) live on matching subpaths that mirror the
 // SDK's own subpath split (`@theokit/agents/{sandbox,persistence,interactive,pty}`).
-export { Agent, Squad, Tool, Provider } from '@theokit/sdk'
+export { Squad, Tool, Provider } from '@theokit/sdk'
 export type { SDKAgent, CustomTool, SessionRecord } from '@theokit/sdk'
+
+// M103 (agent-builder) — `Agent` is the ONE exception to the pass-through doctrine above, and it is a
+// narrowing of the TYPE only: the exported VALUE is the SDK's `Agent`, byte-identical.
+//
+// `ListAgentsOptions` promises `limit` and `cursor`; the runtime references NEITHER
+// (`@theokit/sdk` `Agent.list` reads only `options.runtime`). A caller that passes `limit: 500`
+// against a 688-entry registry believes it asked for a bounded page and silently receives the whole
+// set — and the day the runtime starts honouring the parameter, the SAME code silently receives a
+// TRUNCATED set instead. Both directions are silent, and one of them feeds a NEVER-delete guard in
+// a garbage collector. The result type is narrowed for the same reason: `nextCursor` is never set,
+// so a caller branching on it is branching on a value that cannot arrive.
+//
+// This is a `tipo fechado` control, not a lint: the call does not compile, so a new call site cannot
+// be born wrong by omission. Residue (declared, not hidden): it binds TypeScript consumers only — a
+// `.js` caller or an `as any` escapes.
+//
+// EXIT CRITERION: when the SDK runtime actually honours `limit`/`cursor`/`cwd` (tracked as the
+// agent-builder's M107 upstream request), delete this block and restore `Agent` to the plain
+// re-export on the line above.
+type ListOptionsSemPaginacao = ListAgentsOptions & { limit?: never; cursor?: never }
+
+type AgentComListaEstreitada = Omit<typeof AgentDoSdk, 'list'> & {
+  list(options?: ListOptionsSemPaginacao): Promise<Omit<ListResult<SDKAgentInfo>, 'nextCursor'>>
+}
+
+export const Agent: AgentComListaEstreitada = AgentDoSdk
 
 // M63 — closing the layered boundary so the consumer imports ZERO `@theokit/sdk*` directly. Same
 // PASS-THROUGH doctrine as the M58 core above (Rung 9): these are already the target shape.
