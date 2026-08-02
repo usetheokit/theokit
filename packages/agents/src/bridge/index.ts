@@ -69,7 +69,9 @@ export {
 // tipo brandado do builder) é intocado — a postura tem nome próprio.
 export type { ApprovalPosture } from './approval-posture.js'
 export type { DefinicaoOuThunk } from './definicao-ou-thunk.js'
-export { buildModelSelection } from './model-selection.js'
+// M107 — a leitura atravessa junto com a escrita. Enquanto só a escrita era pública, o consumidor
+// remontava a chave do param à mão para ler, o que é um segundo oráculo sobre o mesmo fato.
+export { buildModelSelection, reasoningEffortOf } from './model-selection.js'
 export {
   createThinkTagExtractor,
   extractThinkTagStream,
