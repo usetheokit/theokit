@@ -150,3 +150,7 @@ export {
   type McpRegistryConfig,
   type McpApprovalSpec,
 } from './mcp-resolver.js'
+// M107 — o vizinho que TOCA disco. `mcp-resolver` decide quais servidores uma requisição recebe;
+// este lê `<cwd>/.mcp.json`. A camada expunha os casos raros e não o comum, então cada consumidor
+// escrevia o carregador à mão.
+export { loadMcpJson, McpFileError } from './mcp-file.js'
