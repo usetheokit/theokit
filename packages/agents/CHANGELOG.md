@@ -1,5 +1,21 @@
 # @theokit/agents
 
+## 6.1.1
+
+### Patch Changes
+
+- M107 (review HIGH-2) — require `@theokit/sdk@^4.37.0`, not `^4.36.0`.
+
+  `6.1.0` shipped with `^4.36.0`, so a fresh install could resolve `4.36.0` — where `Agent.list`
+  **silently ignores the `cwd` it advertises**. That is not a cosmetic mismatch: a consumer that
+  narrows a listing by workspace to decide which sessions are still active would get the _process_
+  directory's answer instead, and this project consumes exactly that list to protect transcripts from
+  deletion.
+
+  The range now names the version that actually honours the contract. Nothing else changed; `6.1.0`
+  and `6.1.1` are byte-identical apart from this field. Consumers already resolving `4.37.0` (through
+  an override or a fresh install) were never affected.
+
 ## 6.1.0
 
 ### Minor Changes
