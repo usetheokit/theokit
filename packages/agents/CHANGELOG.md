@@ -1,5 +1,59 @@
 # @theokit/agents
 
+## 6.3.0
+
+### Minor Changes
+
+- e7d99d9: O device flow **RFC 8628** atravessa a camada, e o do Codex também.
+
+  `@theokit/sdk` já implementava o padrão (`deviceLogin`, `requestDeviceCode`, `pollDeviceToken`,
+  `DeviceOAuthConfig`), e `@theokit/agents/auth` não re-exportava nenhum deles. Como o consumidor tem
+  regra inquebrável de nunca importar `@theokit/sdk*` direto, quem precisasse do padrão tinha duas
+  saídas: violar a fronteira, ou reimplementar o protocolo — exatamente a situação que o M73 já
+  documentou neste arquivo (_"a lacuna era daqui, não indisciplina de lá"_).
+
+  Medido junto: `openaiDeviceLogin` era **importado** para uso interno do `AuthProvider` e nunca
+  re-exportado. Consequência — o flow do Codex só era alcançável construindo um `AuthProvider` (que
+  exige `config` + `store`). Ele atravessa agora também.
+
+  As duas formas **coexistem e não são unificadas**: `DeviceOAuthConfig` tem um `deviceCodeEndpoint`
+  (RFC); `OpenAIDeviceConfig` tem dois (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com PKCE).
+  Fundi-las quebraria o Codex.
+
+  Pass-through **puro**, pelo critério que o M73 escreveu: são funções de I/O sem estado a segurar, e
+  envolver quebraria `instanceof`. `tests/unit/auth-parity.test.ts` trava a identidade dos quatro com
+  `toBe`.
+
+- 18fa6ef: Autenticar por device flow passa a caber numa chamada, e um provider novo entra sem editar a camada.
+
+  Antes, quem usava `@theokit/agents/auth` para autenticar no Codex precisava saber que existem **duas**
+  formas de device flow, copiar o `clientId` e três URLs da OpenAI para dentro do próprio código, montar
+  `{ fetch, sleep, now }`, chamar `deviceLogin` e **lembrar** de chamar `persist` — e esquecer o último
+  custava um round-trip OAuth completo que não guardava nada.
+
+  Agora:
+
+  ```ts
+  import { CODEX_PROVIDER, loginWithDevice } from '@theokit/agents/auth'
+
+  const [metodo] = CODEX_PROVIDER.methods // rotulado, para a sua UI mostrar
+  const { path } = await loginWithDevice(CODEX_PROVIDER, metodo, store, { onPrompt })
+  ```
+
+  Um provider de terceiro usa a **mesma** chamada: basta construir um `DeviceAuthProvider` com os seus
+  métodos. Nada na camada muda.
+
+  **Novos símbolos:** `CODEX_PROVIDER`, `loginWithDevice`, `CODEX_CLIENT_ID_ENV_VAR`, e os tipos
+  `AuthMethod`, `DeviceAuthProvider`, `PromptHooks`, `LoginWithDeviceOptions`.
+
+  `AuthMethod` é união discriminada — um método `type: 'oauth'` **tem** de carregar `authorize`, e o
+  compilador recusa `{ label, type: 'oauth' }`. Não há discriminante de protocolo: cada método aponta
+  para a sua própria função, então o RFC 8628 e a variante da OpenAI coexistem sem `switch` e sem risco
+  de serem fundidas.
+
+  `deps` é opcional; `AuthProvider.deviceLogin` e `.persist` continuam públicos para quem precisa da
+  granularidade. Nenhum símbolo existente mudou de assinatura.
+
 ## 6.1.1
 
 ### Patch Changes
