@@ -43,8 +43,57 @@ const MECANICA_DE_STORE = [
   'writeCredential',
 ] as const
 
+/**
+ * M110 — o device flow **RFC 8628**, pelo MESMO argumento do M73, sobre símbolos que ele não cobriu.
+ *
+ * Medido antes de re-exportar: o SDK implementa o padrão e este subpath re-exportava **apenas** a
+ * variante da OpenAI. Um consumidor que precisasse do RFC tinha duas saídas — violar a fronteira
+ * INQUEBRÁVEL, ou reimplementar o protocolo. A segunda é legal, e é exatamente a classe de defeito
+ * que o M73 documenta ter custado ~120 linhas duplicadas noutro subsistema.
+ *
+ * Estes entram na MESMA bateria de `toBe` de propósito: pass-through puro tem um só oráculo, e é a
+ * identidade de referência. Uma lista separada com asserção mais fraca seria um segundo oráculo sobre
+ * o mesmo fato.
+ */
+const DEVICE_FLOW_PADRAO = [
+  'deviceLogin',
+  'requestDeviceCode',
+  'pollDeviceToken',
+  // `openaiDeviceLogin` entra AQUI, e a review do M110 mediu por que isso importa: envolvê-lo num
+  // wrapper passava a bateria inteira (21/21, EXIT=0). Ele era checado só por `toBeDefined` e por
+  // `not.toBe(deviceLogin)` — nenhum dos dois vê um wrapper.
+  //
+  // Era o símbolo que o milestone existe para tornar alcançável, e o único sem a trava forte.
+  'openaiDeviceLogin',
+] as const
+
+const PASS_THROUGH = [...MECANICA_DE_STORE, ...DEVICE_FLOW_PADRAO] as const
+
+describe('M110 — a camada NÃO esconde o device flow padrão atrás da variante da OpenAI', () => {
+  it('test_a_variante_da_OPENAI_continua_atravessando', () => {
+    // PISO ANTI-VACUIDADE: se nenhuma das duas atravessasse, "o padrão atravessa" seria satisfeito
+    // por um subpath vazio. E o Codex é o provider que este trabalho existe para facilitar — perdê-lo
+    // enquanto se abre o padrão inverteria o resultado.
+    expect(
+      camada.openaiDeviceLogin,
+      'a variante da OpenAI parou de atravessar — o Codex ficou inalcançável',
+    ).toBeDefined()
+  })
+
+  it('test_as_DUAS_formas_coexistem_e_sao_DISTINTAS', () => {
+    // Fundir os dois protocolos quebraria o Codex: o RFC tem UM `deviceCodeEndpoint`; a OpenAI tem
+    // DOIS (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com PKCE). Este teste falha se alguém
+    // "simplificar" apontando os dois nomes para a mesma função.
+    expect(
+      camada.deviceLogin,
+      'o flow padrão e o da OpenAI viraram a mesma referência — os protocolos são diferentes, e ' +
+        'unificá-los quebra o Codex',
+    ).not.toBe(camada.openaiDeviceLogin)
+  })
+})
+
 describe('M73 — @theokit/agents/auth deixa a mecânica de store atravessar', () => {
-  it.each(MECANICA_DE_STORE)('test_a_camada_reexporta_%s_do_sdk', (nome) => {
+  it.each(PASS_THROUGH)('test_a_camada_reexporta_%s_do_sdk', (nome) => {
     expect(
       (camada as Record<string, unknown>)[nome],
       `\`${nome}\` não atravessa a camada. O consumidor não pode importar \`@theokit/sdk*\` direto ` +
@@ -53,7 +102,7 @@ describe('M73 — @theokit/agents/auth deixa a mecânica de store atravessar', (
     ).toBeDefined()
   })
 
-  it.each(MECANICA_DE_STORE)('test_%s_e_a_MESMA_referencia_do_sdk', (nome) => {
+  it.each(PASS_THROUGH)('test_%s_e_a_MESMA_referencia_do_sdk', (nome) => {
     // `toBe`, não `toBeDefined`: pass-through PURO. Um wrapper passaria no teste anterior e falharia
     // aqui — e é o wrapper que quebra `instanceof` sem nada ficar vermelho.
     expect(

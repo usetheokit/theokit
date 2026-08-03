@@ -30,6 +30,34 @@ export {
   readStoredOAuth,
   writeCredential,
 } from '@theokit/sdk/auth'
+
+// M110 — o device flow **RFC 8628** atravessa, pelo MESMO argumento do M73 acima, sobre símbolos que
+// aquele milestone não cobriu.
+//
+// Medido: o SDK implementa o padrão (`deviceLogin`, `requestDeviceCode`, `pollDeviceToken`,
+// `DeviceOAuthConfig`), e este subpath re-exportava **apenas** a variante da OpenAI
+// (`openaiDeviceLogin`, `OpenAIDeviceConfig`). Um consumidor que precisasse do padrão tinha duas
+// saídas: violar a regra INQUEBRÁVEL, ou reimplementar o RFC. É literalmente a frase do M73 — *"a
+// lacuna era daqui, não indisciplina de lá"* — reencenada num subsistema vizinho.
+//
+// PURO, não wrapper, pelo critério que o M73 escreveu: são funções de I/O sem estado a segurar.
+// `DeviceDeps` já é injetável, então um consumidor testa o próprio provider sem rede.
+//
+// As duas formas COEXISTEM e nada é unificado: `DeviceOAuthConfig` tem **um** `deviceCodeEndpoint`
+// (RFC), e `OpenAIDeviceConfig` tem **dois** (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com
+// PKCE). Fundi-las quebraria o Codex — o provider que este trabalho existe para facilitar.
+// E `openaiDeviceLogin` atravessa JUNTO, o que a medição do M110 mostrou faltar: ele era **importado**
+// aqui para uso interno do `AuthProvider` e nunca re-exportado. Consequência — o flow do Codex só era
+// alcançável construindo um `AuthProvider` (que exige `config`+`store`), quando o pedido concreto era
+// *"facilitar usar o provider Codex"*. Exportá-lo é o mesmo argumento das linhas acima, aplicado à
+// variante que já existia.
+export {
+  deviceLogin,
+  openaiDeviceLogin,
+  pollDeviceToken,
+  requestDeviceCode,
+} from '@theokit/sdk/auth'
+export type { DeviceCodeGrant, DeviceOAuthConfig } from '@theokit/sdk/auth'
 export type { ResolveCredentialOptions } from '@theokit/sdk/auth'
 export type {
   CredentialStoreConfig,
