@@ -67,3 +67,21 @@ export type {
   OpenAIDeviceConfig,
   ResolvedCredential,
 } from '@theokit/sdk/auth'
+
+// M111 — device auth PLUG-AND-PLAY. O M110 fez o flow RFC 8628 atravessar; ele não tocou a ergonomia.
+//
+// Para autenticar no Codex, o consumidor tinha de saber que existem DUAS formas de device flow, copiar
+// um `clientId` e três URLs da OpenAI para dentro do próprio código, montar `{fetch, sleep, now}`,
+// chamar `deviceLogin` e LEMBRAR de chamar `persist` — esquecer o último custa um round-trip OAuth
+// completo que não guarda nada.
+//
+// O desenho veio de medição contra três peers e REFUTOU a proposta original (um descritor plano com
+// discriminante `kind`): nenhum dos três discrimina protocolo por campo. `AuthMethod` é união
+// discriminada e cada método aponta para a SUA função — sem `switch`, e sem tornar representável um
+// método OAuth que não sabe autorizar.
+//
+// ENRIQUECE, não é pass-through: `loginWithDevice` orquestra `authorize` + `persist` (a forma de
+// `run_device_code_login` do codex, que retorna `()`), e `CODEX_PROVIDER` é identidade pública que
+// antes cada consumidor copiava — dois donos do mesmo fato é violação de DRY através da fronteira.
+export { CODEX_CLIENT_ID_ENV_VAR, CODEX_PROVIDER, loginWithDevice } from './auth/device-provider.js'
+export type { AuthMethod, DeviceAuthProvider, PromptHooks } from './auth/device-provider.js'
