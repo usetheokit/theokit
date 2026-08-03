@@ -39,6 +39,15 @@ export type {
   ApprovalOptions,
   PolicyHandler,
   ReasoningEffort,
+  // M112 — a configuração de servidor MCP atravessa até a RAIZ. Sem isto, os nomes ficam em
+  // `types.ts` e não alcançam `index.d.ts`: o consumidor volta a não conseguir nomear o tipo do
+  // mapa que `loadMcpJson` devolve, que é metade do pedido P2 que este milestone atende.
+  McpAuthConfig,
+  McpHttpServerConfig,
+  McpOAuthConfig,
+  McpServerConfig,
+  McpServersMap,
+  McpStdioServerConfig,
 } from './types.js'
 
 // M58 — layered boundary `SDK → Theokit → AgentBuilder`: the consumer imports the SDK's already-OO
