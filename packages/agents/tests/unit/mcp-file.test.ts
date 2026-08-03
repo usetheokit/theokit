@@ -90,27 +90,51 @@ describe('loadMcpJson — disco', () => {
     expect(() => loadMcpJson(dir)).toThrow(McpFileError)
   })
 
-  it('test_servidor_sem_comando_lanca_erro_tipado', () => {
-    escrever(JSON.stringify({ mcpServers: { a: { args: ['x'] } } }))
-    expect(() => loadMcpJson(dir)).toThrow(/requires a non-empty "command"/)
-    escrever(JSON.stringify({ mcpServers: { a: { command: '' } } }))
-    expect(() => loadMcpJson(dir)).toThrow(/requires a non-empty "command"/)
+  // ─── M112: MUDANÇA DELIBERADA DE CONTRATO ────────────────────────────────────────────────────
+  //
+  // Os três testes abaixo codificavam o contrato antigo: qualquer defeito de UMA entrada lançava e
+  // derrubava o arquivo inteiro. Medido, isso significava que um `.mcp.json` com um servidor stdio
+  // perfeito e um vizinho inválido perdia OS DOIS — fail-closed no raio errado.
+  //
+  // O contrato novo separa os dois raios, e os testes foram reescritos para afirmar essa separação
+  // em vez de serem apagados: o registro do que mudou vale mais que a ausência do teste antigo.
+  //
+  //   defeito de ENTRADA  → omitida, NOMEADA no aviso, vizinhas sobem
+  //   defeito de ARQUIVO  → continua lançando (não há entradas para separar)
+  //
+  // A cobertura da forma nova vive em `mcp-file-remoto.test.ts`.
+
+  it('test_M112_servidor_sem_comando_e_OMITIDO_e_nomeado_em_vez_de_derrubar_o_arquivo', () => {
+    const avisos: string[] = []
+    escrever(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: { args: ['x'] } } }))
+    const mapa = loadMcpJson(dir, { onWarn: (m) => avisos.push(m) })
+    expect(Object.keys(mapa), 'a entrada boa foi perdida junto com a ruim').toEqual(['bom'])
+    expect(avisos.join(' '), 'a omissão foi silenciosa — isso seria fail-OPEN').toContain('"a"')
   })
 
-  it('test_args_env_cwd_com_tipo_errado_lancam_erro_tipado', () => {
-    escrever(JSON.stringify({ mcpServers: { a: { command: 'c', args: [1] } } }))
-    expect(() => loadMcpJson(dir)).toThrow(/"args" must be a string array/)
-    escrever(JSON.stringify({ mcpServers: { a: { command: 'c', env: { K: 2 } } } }))
-    expect(() => loadMcpJson(dir)).toThrow(/"env" must be a string map/)
-    escrever(JSON.stringify({ mcpServers: { a: { command: 'c', cwd: 3 } } }))
-    expect(() => loadMcpJson(dir)).toThrow(/"cwd" must be a string/)
+  it('test_M112_args_env_cwd_com_tipo_errado_OMITEM_a_entrada_e_nomeiam', () => {
+    for (const ruim of [
+      { command: 'c', args: [1] },
+      { command: 'c', env: { K: 2 } },
+      { command: 'c', cwd: 3 },
+    ]) {
+      const avisos: string[] = []
+      escrever(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: ruim } }))
+      expect(Object.keys(loadMcpJson(dir, { onWarn: (m) => avisos.push(m) }))).toEqual(['bom'])
+      expect(avisos.join(' ')).toContain('"a"')
+    }
   })
 
-  it('test_mcpServers_que_nao_e_objeto_lanca_erro_tipado', () => {
+  it('test_M112_o_defeito_de_ARQUIVO_continua_lancando_o_de_ENTRADA_nao', () => {
+    // A metade que NÃO mudou, e que é o que separa "raio certo" de fail-open.
     escrever(JSON.stringify({ mcpServers: [] }))
     expect(() => loadMcpJson(dir)).toThrow(/must be an object keyed by server name/)
-    escrever(JSON.stringify({ mcpServers: { a: 5 } }))
-    expect(() => loadMcpJson(dir)).toThrow(/server "a" must be an object/)
+
+    // …e a metade que mudou: `a: 5` é uma ENTRADA malformada, não um arquivo malformado.
+    const avisos: string[] = []
+    escrever(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: 5 } }))
+    expect(Object.keys(loadMcpJson(dir, { onWarn: (m) => avisos.push(m) }))).toEqual(['bom'])
+    expect(avisos.join(' ')).toContain('"a"')
   })
 
   it('test_o_erro_desce_da_hierarquia_da_camada', () => {
