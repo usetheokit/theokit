@@ -9,7 +9,7 @@ Take an approved implementation from `READY_TO_MERGE` to a released, tagged vers
 ## Pre-conditions
 
 - `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `knowledge-base/reviews/{slug}-review-{date}.md`).
-- Working branch is `develop` (never `main` — `main` is release-only).
+- Working branch is `workspace` (never `develop` or `main` directly — see `git-safety.md` § 1). The release commits are authored on `workspace` and reach `develop` through the promotion PR, like every other change.
 - No uncommitted changes (`git status --porcelain` empty).
 - CHANGELOG `[Unreleased]` section has ≥ 1 entry — otherwise the release has nothing to announce.
 - The `gh` CLI is authenticated (`gh auth status` exits 0).
@@ -28,12 +28,13 @@ Do NOT trigger when:
      ↓ detect last semver tag (git describe --tags --abbrev=0; fall back to v0.0.0)
      ↓ determine next version (bump-level OR auto-derive from CHANGELOG sections)
      ↓ rewrite CHANGELOG: move [Unreleased] body under [{next-version}] - {date}
-     ↓ commit "chore(release): {next-version}" on develop
+     ↓ commit "chore(release): {next-version}" on workspace
+     ↓ open PR workspace → develop; merge it (promotion — git-safety.md § 1)
      ↓ open PR develop → main with the rendered release notes as body
      ↓ wait for human approval (hard gate — Unbreakable Rule 4 mandate)
      ↓ on merge: create annotated tag {next-version} pointing at the merge commit
      ↓ push tag; gh release create
-     ↓ POST-MERGE checkbox flip — see § Post-merge ROADMAP.md checkbox flip
+     ↓ RELEASED — hand off to /acceptance M<N> for the checkbox flip
 ```
 
 ## Phase contracts
@@ -45,28 +46,19 @@ Do NOT trigger when:
 | changelog-rewrite | CHANGELOG.md | CHANGELOG with [Unreleased] empty and a new versioned section | [Unreleased] had ≥ 1 entry before the rewrite |
 | pr-open | release branch state | PR URL | `gh pr create` exit 0; PR body = release notes |
 | tag-cut (post-merge) | merged commit on main | annotated tag + GitHub release | `git tag --verify` resolves AND tag points at the merge commit |
-| roadmap-checkbox-flip (post-merge) | plan frontmatter `milestone_id` + ROADMAP.md | ROADMAP.md edited: `## M<N> — [ ] ...` → `## M<N> — [x] ...`; commit `chore(roadmap): mark M<N> done`; roadmap-runs file updated | plan declared `milestone_id`; matching milestone exists in ROADMAP.md; current state is `[ ]` (idempotent — if already `[x]`, skip with INFO) |
 
-## Post-merge ROADMAP.md checkbox flip
+## Post-merge ROADMAP.md checkbox flip — MOVED to cycle-acceptance
 
-Closes the `cycle-roadmap` super-loop. Runs after Step 7 (tag-cut) succeeds.
+This cycle no longer flips the milestone checkbox. The flip is the `flip` phase of [`cycle-acceptance`](cycle-acceptance.md), gated on its verdict.
 
-Algorithm:
+The reason is what `[x]` is allowed to claim. Flipping at tag-cut made it mean *"we shipped it"* — a statement no gate in this chain can distinguish from *"we shipped something broken"*, because nothing here ever touched the released artifact. Flipping after `cycle-acceptance` makes it mean *"we shipped it and watched it work."*
 
-1. Read `milestone_id` from `knowledge-base/plans/{slug}-plan.md` frontmatter.
-   - **If missing:** emit `WARN roadmap-checkbox: plan has no milestone_id — skipping flip (ad-hoc release)`. Continue cycle as `RELEASED`. This is the documented escape hatch for hotfixes and off-roadmap work — never block the release on roadmap metadata.
-2. Read `ROADMAP.md`; locate the header `## M<N> — [ ] <name>` exactly.
-   - **If not found:** emit `WARN roadmap-checkbox: M<N> not found in ROADMAP.md — skipping flip`. Surface the mismatch to the human.
-   - **If already `[x]`:** emit `INFO roadmap-checkbox: M<N> already [x] — no-op`. Continue.
-3. In-place edit: replace `## M<N> — [ ] <name>` with `## M<N> — [x] <name>`. NEVER use fuzzy matching; the slot is the literal milestone header.
-4. Commit on `develop` (NOT `main` — Unbreakable Rule 4): `chore(roadmap): mark M<N> done (v<NEXT_VERSION>)`.
-5. Append to `knowledge-base/roadmap-runs/{milestone-id}-{date}.md`:
-   - `status: completed`
-   - `checkbox_flipped_at: <ISO timestamp>`
-   - `flip_commit_sha: <sha>`
-   - Link to the release log.
+Consequences for this cycle:
 
-The single-flip invariant (`cycle-roadmap § Hard gates`) MUST hold: exactly one checkbox flipped per release. A release whose plan declares `milestone_id: M3` MUST NOT also flip M4 — even if both were implemented in the same commit set. Slot one milestone per release; bundling violates traceability.
+- `RELEASED` is the terminal verdict, emitted once the tag and GitHub release exist. It no longer implies the roadmap advanced.
+- After `RELEASED`, hand off: `/acceptance M<N>`.
+- `skills/release/scripts/flip_milestone_checkbox.py` stays in this slice — it is the single implementation of the single-flip invariant, and `cycle-acceptance` invokes it rather than duplicating it.
+- The escape hatch is unchanged in spirit: a plan with no `milestone_id` still releases normally. It simply never reaches a flip, because there is no milestone to accept.
 
 ## Verdicts
 
@@ -88,7 +80,7 @@ If the rule cannot pick deterministically, the chain pauses and the human choose
 
 - **PR approval gate (LOCKED)** — the merge step ALWAYS waits for a human-approved PR. Auto-merging into `main` violates Unbreakable Rule 4.
 - **No direct commits to `main`** — even from this skill. Every change reaches `main` via the PR opened above.
-- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop`.
+- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`.
 - **CHANGELOG must have content** — refuse if `[Unreleased]` is empty after stripping headers.
 - **Single-flip invariant** — at most ONE ROADMAP.md checkbox flipped per `RELEASED` verdict. Per `cycle-roadmap § Hard gates`.
 - **No silent flip** — the roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.
