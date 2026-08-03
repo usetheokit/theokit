@@ -87,4 +87,5 @@ A blueprint that turns out wrong is simply not consumed downstream — delete or
 - Optional skill distillation (out of cycle): `skills/skill-creator/SKILL.md`
 - Allowlist: `rules/discover-web-allowlist.txt`
 - Macro super-loop: `rules/cycle-roadmap.md` — seeds `knowledge-base/references/` at project inception via `/roadmap-init`
+- Provenance of the study zone (4 guard layers): `rules/reference-provenance.md`
 - Downstream: `rules/cycle-plan.md` (consumes blueprints as input to `/to-plan`)

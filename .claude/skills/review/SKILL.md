@@ -2,7 +2,7 @@
 name: review
 version: 0.1.0
 requires: [code-quality]
-description: Most rigorous gate of the ecosystem. Validates quality gates + line-by-line plan vs implementation + 100% integration + integration test depth + edge-case coverage. Before starting, generates specialized review agents for the plan's domain (architecture, tests, wiring, cross-validation, domain-specific) and spawns them in parallel. Single entry-point for cycle-review. Use after /implement passed on `develop` and recent commits are ready to be audited (typically before a release cut).
+description: Most rigorous gate of the ecosystem. Validates quality gates + line-by-line plan vs implementation + 100% integration + integration test depth + edge-case coverage. Before starting, generates specialized review agents for the plan's domain (architecture, tests, wiring, cross-validation, domain-specific) and spawns them in parallel. Single entry-point for cycle-review. Use after /implement passed on `workspace` and recent commits are ready to be audited (typically before a release cut).
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Agent Skill
 argument-hint: "{plan-slug}"
@@ -30,14 +30,14 @@ This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md
 
 User explicitly invokes `/review {plan-slug}` when:
 
-- Recent commits on `develop` passed `/implement` validation. PASS is the canonical state; PARTIAL with documented SKIPs (e.g., pre-code phase skipping npm gates) is acceptable only when `cycle-review.md § Trigger conditions` explicitly permits it for the current project lifecycle stage
+- Recent commits on `workspace` passed `/implement` validation. PASS is the canonical state; PARTIAL with documented SKIPs (e.g., pre-code phase skipping npm gates) is acceptable only when `cycle-review.md § Trigger conditions` explicitly permits it for the current project lifecycle stage
 - All tests are green on the branch
 - The implementation plan at `plans/{slug}-plan.md` is the canonical contract (un-revised since /implement)
 - PR is drafted OR ready to be drafted
 
 Refuse to start when:
 
-- `develop` has uncommitted changes
+- `workspace` has uncommitted changes
 - `/implement` validation FAILed and was not addressed
 - `/code-quality` audit is missing OR its verdict is `FAIL_SOFT` / `FAIL_HARD` / `INVALID` (per `rules/cycle-code-quality.md`)
 - Tests are red
@@ -66,8 +66,8 @@ Total: 4 baseline + 1-3 domain-specific = 5-7 agents per `/review` invocation.
 test -f .claude/knowledge-base/plans/{slug}-plan.md
 # Branch state clean (no uncommitted changes)
 [ -z "$(git status --porcelain)" ]
-# On develop (NEVER on main — main is release-only)
-[ "$(git branch --show-current)" = "develop" ]
+# On workspace (NEVER on develop/main — review audits work before promotion)
+[ "$(git branch --show-current)" = "workspace" ]
 # /implement validation passed (or PARTIAL with acceptable SKIPs)
 test -f .claude/knowledge-base/reviews/{slug}-implement-validate-*.md
 # /code-quality audit exists AND verdict ∈ {PASS, PASS_WITH_CAVEATS}
@@ -249,7 +249,7 @@ Every spawned agent MUST return findings in this format:
 
 ```yaml
 agent: architecture
-review_target: commits on `develop` for plan {slug}
+review_target: commits on `workspace` for plan {slug}
 findings:
   - id: F-arch-1
     severity: HIGH  # BLOCKER / HIGH / MEDIUM / LOW / INFO
@@ -269,7 +269,7 @@ findings:
 
 ## Inviolable rules
 
-- The skill NEVER modifies code on `develop` — only writes review reports
+- The skill NEVER modifies code on `workspace` — only writes review reports
 - The skill NEVER approves a PR with unresolved BLOCKER findings — even on human override, requires explicit ADR-style dismissal IN THE REPORT
 - The skill NEVER fabricates findings — if a file has no issues, the finding is "INFO: no issues found"
 - The skill SHOULD cover every file in the diff (each baseline agent is briefed to enumerate touched files via the diff base). When a file is genuinely trivial — pure rename, single-line typo — the finding is "INFO: no issues found". Coverage is enforced by agent prompts today; a future `consolidate_findings.py` check may mechanically assert "every changed file appears in ≥1 finding"

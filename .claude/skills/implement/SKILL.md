@@ -2,7 +2,7 @@
 name: implement
 version: 0.1.0
 requires: [plan-confidence]
-description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + quality gates (SOLID, Clean Code, DRY, Design Patterns). Single entry-point for cycle-implement. Use after /to-plan chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `develop`.
+description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + quality gates (SOLID, Clean Code, DRY, Design Patterns). Single entry-point for cycle-implement. Use after /to-plan chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `workspace`.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill Agent
 argument-hint: "{plan-slug}"
@@ -10,13 +10,13 @@ argument-hint: "{plan-slug}"
 
 # Implement — Plan → Code Halt-Loop
 
-Single entry-point for [`cycle-implement`](../../rules/cycle-implement.md). Reads a validated implementation plan, drives an autonomous TDD halt-loop task-by-task, enforces the **wiring triad** + quality rules, and produces commits on `develop` ready for `cycle-review`.
+Single entry-point for [`cycle-implement`](../../rules/cycle-implement.md). Reads a validated implementation plan, drives an autonomous TDD halt-loop task-by-task, enforces the **wiring triad** + quality rules, and produces commits on `workspace` ready for `cycle-review`.
 
 ## Cycle contract
 
 This skill is **the only phase** of [`cycle-implement`](../../rules/cycle-implement.md). The cycle rule is the **source of truth** for:
 
-- Pre-conditions (plan verdict ≥ SHIPPABLE_WITH_CAVEATS; on `develop`; never on `main`)
+- Pre-conditions (plan verdict ≥ SHIPPABLE_WITH_CAVEATS; on `workspace`; never on `develop`/`main`)
 - Hard gates (TDD RED phase MUST fail; TDD GREEN MUST pass; wiring triad; validate gate)
 - Stop conditions (3-attempt fail per task; no-progress detection; environment broken; plan-defect halt)
 - Anti-patterns (no TDD-skip, no main commits, no `git checkout`/`git revert`/`git push --force`)
@@ -29,7 +29,7 @@ This skill is **the only phase** of [`cycle-implement`](../../rules/cycle-implem
 User explicitly invokes `/implement {plan-slug}` when:
 
 - A plan at `knowledge-base/plans/{slug}-plan.md` has `/plan-confidence` verdict ≥ SHIPPABLE_WITH_CAVEATS
-- Current branch is `develop` (verify: `git branch --show-current` == `develop`)
+- Current branch is `workspace` (verify: `git branch --show-current` == `workspace`)
 - The development environment is operational (language toolchain installed; external services up if integration tests require them)
 
 Refuse to start when any pre-condition fails — surface the missing piece honestly.
@@ -115,8 +115,8 @@ Failure of any pillar = HALT before commit. The halt-loop iterates until all thr
 ```bash
 # Check 1: plan exists and verdict is acceptable
 test -f knowledge-base/plans/{slug}-plan.md
-# Check 2: on develop (NEVER on main — main is release-only per Unbreakable Rule 4)
-[ "$(git branch --show-current)" = "develop" ]
+# Check 2: on workspace (NEVER on develop/main — develop integrates, main is release-only)
+[ "$(git branch --show-current)" = "workspace" ]
 # Check 3: no uncommitted changes
 [ -z "$(git status --porcelain)" ]
 # Check 4: project bootstrapped (language toolchain ready)
