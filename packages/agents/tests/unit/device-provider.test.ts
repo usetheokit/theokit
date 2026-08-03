@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   CODEX_PROVIDER,
@@ -253,14 +253,32 @@ describe('M111 — provider com métodos rotulados', () => {
     )
   })
 
-  it('test_NEGATIVO_recusa_sobrescrever_credencial_existente_sem_permissao', () => {
-    // `rename(2)` substitui incondicionalmente; um segundo login com a chave errada destruiria uma
-    // credencial que pode não existir em nenhum outro lugar. A recusa é do chamador que tem a intenção.
-    // Aqui apenas fixamos o pré-requisito: o arquivo plantado permanece legível e intacto.
-    const dir = join(home, '.m111')
-    mkdirSync(dir, { recursive: true })
-    const alvo = join(dir, 'auth.json')
-    writeFileSync(alvo, '{"provider":"openai","apiKey":"ORIGINAL"}')
-    expect(readFileSync(alvo, 'utf8')).toContain('ORIGINAL')
+  it('test_o_override_de_clientId_por_ambiente_FUNCIONA_e_so_no_load', async () => {
+    // MEDIUM-4 do review: `CODEX_CLIENT_ID_ENV_VAR` era API pública exportada, documentada em cinco
+    // linhas, com ZERO teste — remover o `process.env[…] ??` mantinha tudo verde. Um knob sem oráculo
+    // é indistinguível de um knob que não funciona.
+    //
+    // A leitura acontece na avaliação do MÓDULO, então `vi.resetModules()` é o que torna o teste
+    // possível — e essa é exatamente a limitação que o consumidor precisa conhecer: definir a variável
+    // depois do import não tem efeito nenhum.
+    const { CODEX_CLIENT_ID_ENV_VAR } = await import('../../src/auth-entry.js')
+    const anterior = process.env[CODEX_CLIENT_ID_ENV_VAR]
+    process.env[CODEX_CLIENT_ID_ENV_VAR] = 'app_DE_OUTRO_TENANT'
+    try {
+      vi.resetModules()
+      const recarregado = (await import('../../src/auth/device-provider.js')) as {
+        CODEX_PROVIDER: { oauth: { clientId: string } }
+      }
+      expect(
+        recarregado.CODEX_PROVIDER.oauth.clientId,
+        'o override por ambiente não teve efeito — o knob é decorativo',
+      ).toBe('app_DE_OUTRO_TENANT')
+    } finally {
+      // `vi.stubEnv`/restauração por atribuição em vez de `delete` com chave computada: a regra do
+      // monorepo proíbe o `delete` dinâmico, e a string vazia é indistinguível de ausente para o
+      // `??` que lê o knob.
+      process.env[CODEX_CLIENT_ID_ENV_VAR] = anterior ?? ''
+      vi.resetModules()
+    }
   })
 })
