@@ -68,6 +68,43 @@ export interface ApprovalRequiredEvent {
   payloadSchema?: Record<string, unknown>
 }
 
+/**
+ * The run is blocked awaiting user input or approval — theokit#141.
+ *
+ * The SDK's low-fidelity pause signal (`SDKRequestMessage`), distinct from {@link
+ * ApprovalRequiredEvent}. The latter is the framework's own, produced by `createHitlPlugin`, and
+ * carries everything an approval UI needs to be actionable. This one carries only the request id,
+ * because that is all the SDK provides — and it matters most exactly where the plugin is absent
+ * (the ACP/serving path of theokit#139), which is where a dropped pause reads to the user as a
+ * hang with no explanation.
+ *
+ * A consumer that cannot resolve the request should still SHOW that the run is waiting. Silence is
+ * the one response that is always wrong.
+ */
+export interface InputRequestedEvent {
+  type: 'input_requested'
+  requestId: string
+}
+
+/** Task-level milestone or summary — theokit#141. Both fields are optional at the source. */
+export interface TaskProgressEvent {
+  type: 'task_progress'
+  status?: string
+  text?: string
+}
+
+/**
+ * Live output from a shell command the SDK is running — theokit#141.
+ *
+ * `event` is passed through opaquely because the SDK types it as `Record<string, unknown>`. The
+ * layer deliberately does not interpret or render it: guessing a shape here would be a second,
+ * weaker oracle over a payload whose real contract lives upstream.
+ */
+export interface ShellOutputEvent {
+  type: 'shell_output'
+  event: Record<string, unknown>
+}
+
 /** Agent encountered an error. */
 export interface ErrorEvent {
   type: 'error'
@@ -171,6 +208,9 @@ export type AgentStreamEvent =
   | ThinkingEvent
   | IterationEvent
   | ApprovalRequiredEvent
+  | InputRequestedEvent
+  | TaskProgressEvent
+  | ShellOutputEvent
   | ArtifactStartEvent
   | ArtifactChunkEvent
   | StateUpdateEvent
