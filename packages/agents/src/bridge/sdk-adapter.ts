@@ -294,12 +294,40 @@ interface MergeState {
   emittedToolCallIds: Set<string>
   emittedToolResultIds: Set<string>
   sawError: boolean
+  /** #142 — tipo do ultimo evento emitido, para saber se o stream ja terminou num frame terminal. */
+  lastEventType: string
 }
 
 /** Read a StreamEvent's `callId` as a string (the union is index-typed `unknown`). */
 function streamCallId(ev: StreamEvent): string {
   return typeof ev.callId === 'string' ? ev.callId : ''
 }
+
+/**
+ * #138 — TODOS os ids sob os quais a MESMA chamada de tool pode ser reconhecida.
+ *
+ * O SDK dá dois por chamada: o `callId` dele e o `modelCallId` que o provider gerou. Os dois
+ * caminhos do merge veem namespaces DIFERENTES — `onDelta` entrega o `callId`, e `run.stream()`
+ * entrega o `ToolUseBlock.id`, que é o `modelCallId`. A dedup registrava um e consultava o outro:
+ * nunca casava, e a mesma chamada renderizava DUAS vezes (o duplo card que o #47 perseguia).
+ *
+ * A leitura acontece AQUI, no sink, onde o `InteractionUpdate` cru ainda está à mão — e não como
+ * um campo a mais no `StreamEvent`. O id do modelo é detalhe da correlação entre as duas fontes,
+ * não parte do contrato que o consumidor renderiza; carregá-lo no evento público obrigaria todo
+ * consumidor a conhecer uma distinção que só o merge precisa fazer.
+ */
+function idsDaMesmaChamada(ev: StreamEvent, update: unknown): string[] {
+  const ids: string[] = []
+  const call = streamCallId(ev)
+  if (call !== '') ids.push(call)
+  // `InteractionUpdate` e uma UNIAO: so as tres variantes de tool-call carregam `modelCallId`.
+  // Tipar o parametro como `{ modelCallId?: unknown }` faz o TS recusar a uniao inteira, entao a
+  // leitura e defensiva — e correta para as variantes que nao tem o campo (nenhum id extra).
+  const model = (update as { modelCallId?: unknown } | null | undefined)?.modelCallId
+  if (typeof model === 'string' && model !== '' && model !== call) ids.push(model)
+  return ids
+}
+
 
 /**
  * #44 — skip a run.stream() content event ONLY when onDelta already drove that exact (category, id).
@@ -360,6 +388,7 @@ async function* mergeDeltaStream(
   // + the sink's `emittedTool*Ids`), so nothing double-renders and text streams token-by-token again.
   for await (const item of queue) {
     if (item.kind === 'delta') {
+      state.lastEventType = item.event.type // #142 — o chamador precisa saber se ja terminou
       yield item.event
       continue
     }
@@ -367,6 +396,7 @@ async function* mergeDeltaStream(
       if (out.type === 'done') continue // suppressed; the real-usage done is emitted by the caller
       if (isDuplicatedByDelta(out, state)) continue // #44 per-category/callId dedup vs onDelta
       if (out.type === 'error') state.sawError = true
+      state.lastEventType = out.type // #142
       yield out
     }
   }
@@ -390,17 +420,16 @@ function createDeltaSink(queue: AsyncQueue<MergeItem>): {
     emittedToolCallIds: new Set<string>(),
     emittedToolResultIds: new Set<string>(),
     sawError: false,
+    lastEventType: '',
   }
   const onDelta = (d: { update: InteractionUpdate }) => {
     for (const event of translateInteractionUpdate(d.update)) {
       if (event.type === 'text_delta') state.sawTextDelta = true
       else if (event.type === 'thinking') state.sawThinkingDelta = true
       else if (event.type === 'tool_call') {
-        const id = streamCallId(event)
-        if (id !== '') state.emittedToolCallIds.add(id)
+        for (const id of idsDaMesmaChamada(event, d.update)) state.emittedToolCallIds.add(id)
       } else if (event.type === 'tool_result') {
-        const id = streamCallId(event)
-        if (id !== '') state.emittedToolResultIds.add(id)
+        for (const id of idsDaMesmaChamada(event, d.update)) state.emittedToolResultIds.add(id)
       }
       queue.push({ kind: 'delta', event })
     }
@@ -693,8 +722,29 @@ async function* streamSdkAgent(
     for await (const event of applyTextTransforms(merged, { parseThinkTags, stripToolDialect })) {
       yield event
     }
-    // V4-N.1: ONE real-usage `done` after run.wait(); errors short-circuit it.
-    if (!state.sawError) {
+    // #142 — o stream SEMPRE termina num frame terminal.
+    //
+    // O `done` do SDK e suprimido no merge, na promessa de que este bloco emite o frame final.
+    // Antes, essa promessa quebrava quando `sawError`: nada era emitido, e o stream simplesmente
+    // acabava. So seria correto se `error` fosse sempre o ULTIMO evento — e nao e: o merge marca
+    // `sawError` e SEGUE emitindo. Uma UI que vira a flag de "turno concluido" num frame terminal
+    // ficava presa.
+    //
+    // O `done` continua SUPRIMIDO quando houve erro (contrato H1, travado por
+    // `test_run_stream_error_status_emits_error_and_suppresses_done`) — `done` segue significando
+    // "terminou bem". O que muda e a garantia: quando houve erro e o ultimo evento nao foi o
+    // `error`, um `error` terminal fecha o stream. Assim vale sempre "o ultimo frame e `done` OU
+    // `error`", que e o post-condition que faltava.
+    if (state.sawError) {
+      if (state.lastEventType !== 'error') {
+        yield {
+          type: 'error',
+          code: 'RUN_FAILED',
+          message: 'O turno terminou com erro; veja o evento `error` anterior.',
+          retryable: false,
+        }
+      }
+    } else {
       yield realUsageDone(await (await sendPromise).wait(), t0)
     }
   } finally {
