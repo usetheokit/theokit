@@ -41,7 +41,8 @@
     "theo-ui:link": "bash scripts/theo-ui-link.sh",
     "theo-ui:unlink": "bash scripts/theo-ui-unlink.sh",
     "openapi:regen-fixtures": "tsx scripts/regen-openapi-fixtures.ts",
-    "check:sandbox-parity": "node scripts/check-sandbox-parity.mjs"
+    "check:sandbox-parity": "node scripts/check-sandbox-parity.mjs",
+    "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
