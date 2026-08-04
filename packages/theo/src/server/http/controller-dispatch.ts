@@ -34,7 +34,12 @@ interface ControllerDispatcher {
 const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 /** Recursively collect `*.controller.ts` files under `dir` (absolute paths). */
-function findControllerFiles(dir: string): string[] {
+/**
+ * Every `*.controller.ts` under `dir`, recursively. Exported for theokit#123: the build emitter
+ * must find exactly the same set the dev dispatcher does, and two independent walks would be two
+ * definitions of "a controller" that drift.
+ */
+export function findControllerFiles(dir: string): string[] {
   const found: string[] = []
   const walk = (current: string): void => {
     let entries: Dirent[]
@@ -46,7 +51,12 @@ function findControllerFiles(dir: string): string[] {
     for (const entry of entries) {
       const full = join(current, entry.name)
       if (entry.isDirectory()) walk(full)
-      else if (entry.name.endsWith('.controller.ts')) found.push(full)
+      // theokit#123 — `.mjs` alongside `.ts`. Dev walks the SOURCE tree; production walks the
+      // COMPILED tree under `dist/controllers`, where the same files exist as `*.controller.mjs`.
+      // One walk for both keeps a single definition of "a controller file"; two would drift, and a
+      // file that counts in dev and not in production is exactly the dev/prod split this fixes.
+      else if (entry.name.endsWith('.controller.ts') || entry.name.endsWith('.controller.mjs'))
+        found.push(full)
     }
   }
   walk(dir)
@@ -57,6 +67,17 @@ function findControllerFiles(dir: string): string[] {
 interface ControllerModule {
   filePath: string
   cls: ControllerClass
+  /**
+   * The module's full export namespace — theokit#124.
+   *
+   * Kept alongside the class because it is the ONLY place a `@Body(schema)` regains a name. The
+   * schema on `WalkResult.bodySchema` is a runtime `z.ZodType` with no source identifier, but it is
+   * the very object this module exported, so matching it back by reference identity recovers the
+   * exported name the typed-client codegen needs to write `z.infer<typeof ...>`.
+   *
+   * Unused by the dispatch path, which needs only the class.
+   */
+  exports: Readonly<Record<string, unknown>>
 }
 
 /**
@@ -75,7 +96,7 @@ export async function scanControllerModules(
     const mod = await loadModule(filePath)
     for (const exported of Object.values(mod)) {
       if (typeof exported === 'function' && isControllerClass(exported)) {
-        modules.push({ filePath, cls: exported as ControllerClass })
+        modules.push({ filePath, cls: exported as ControllerClass, exports: mod })
       }
     }
   }
