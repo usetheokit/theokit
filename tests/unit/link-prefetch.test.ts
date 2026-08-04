@@ -46,7 +46,11 @@ describe('<Link> component — export and type contract', () => {
 describe('prefetch logic — unit', () => {
   it('Set deduplication prevents duplicate entries', () => {
     const prefetched = new Set<string>()
+    // O `add` repetido É o teste (agent-builder#319): a asserção é que o `Set` deduplica. A regra
+    // `no-element-overwrite` acusa a segunda escrita como engano, o que aqui inverteria o sentido —
+    // remover a linha apagaria exatamente o comportamento sob teste.
     prefetched.add('/contacts')
+    // eslint-disable-next-line sonarjs/no-element-overwrite -- ver acima
     prefetched.add('/contacts')
     prefetched.add('/deals')
     expect(prefetched.size).toBe(2)
@@ -54,19 +58,19 @@ describe('prefetch logic — unit', () => {
 
   it('resolveTo: string → string', () => {
     const to = '/contacts'
-    const resolved = typeof to === 'string' ? to : (to as { pathname?: string }).pathname ?? ''
+    const resolved = typeof to === 'string' ? to : ((to as { pathname?: string }).pathname ?? '')
     expect(resolved).toBe('/contacts')
   })
 
   it('resolveTo: object → pathname', () => {
     const to = { pathname: '/deals' }
-    const resolved = typeof to === 'string' ? to : to.pathname ?? ''
+    const resolved = typeof to === 'string' ? to : (to.pathname ?? '')
     expect(resolved).toBe('/deals')
   })
 
   it('resolveTo: object without pathname → empty', () => {
     const to = {} as { pathname?: string }
-    const resolved = typeof to === 'string' ? to : to.pathname ?? ''
+    const resolved = typeof to === 'string' ? to : (to.pathname ?? '')
     expect(resolved).toBe('')
   })
 
