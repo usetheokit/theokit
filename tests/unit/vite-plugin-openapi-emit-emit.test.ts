@@ -130,7 +130,7 @@ describe('emitOpenApi — operations + components', () => {
     const route: OpenApiManifestRoute = {
       routePath: '/users',
       methods: ['POST'],
-      body: z.object({ name: z.string(), email: z.string().email() }),
+      body: z.object({ name: z.string(), email: z.email() }),
     }
     const { document } = emitOpenApi({
       manifest: [route],
@@ -149,7 +149,7 @@ describe('emitOpenApi — operations + components', () => {
     const route: OpenApiManifestRoute = {
       routePath: '/users/:id',
       methods: ['GET'],
-      params: z.object({ id: z.string().uuid() }),
+      params: z.object({ id: z.uuid() }),
     }
     const { document } = emitOpenApi({
       manifest: [route],
