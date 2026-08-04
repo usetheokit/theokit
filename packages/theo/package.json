@@ -140,7 +140,8 @@
     "react-router": "^7.0.0",
     "unstorage": "^1.10.0",
     "ws": "^8.20.1",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "@theokit/studio": "^0.1.0"
   },
   "peerDependenciesMeta": {
     "@theokit/sdk": {
@@ -159,6 +160,9 @@
       "optional": true
     },
     "ws": {
+      "optional": true
+    },
+    "@theokit/studio": {
       "optional": true
     }
   },
