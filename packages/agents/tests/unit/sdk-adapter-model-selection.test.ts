@@ -72,7 +72,7 @@ describe('reasoningEffortOf (M107 — o inverso de buildModelSelection)', () => 
     //
     // A segunda asserção fecha uma lacuna que a contraprova por mutação do M107 encontrou: o
     // docblock do M95 declara que o esforço compõe "em vez de descartá-los", e NENHUM teste
-    // afirmava isso — um `buildModelSelection` que jogasse fora os params recebidos passava a
+    // afirmava isso — um `buildModelSelection` que jogasse fora os params received passava a
     // suíte inteira verde. Descartar `temperature` num turno é uma mudança silenciosa de
     // comportamento do provedor, que é exatamente a classe de defeito que o M95 corrigiu.
     const base: ModelSelection = { id: 'm', params: [{ id: 'temperature', value: '0.2' }] }

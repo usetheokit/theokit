@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  DATA_PART_DO_CODE_DE_ERRO,
+  ERROR_CODE_DATA_PART,
   presentUIMessageStream,
 } from '../src/bridge/present-ui-message-stream.js'
 import { eventoDeErroDoSdk } from '../src/bridge/erro-do-sdk.js'
@@ -31,8 +31,8 @@ interface Chunk {
  * emitted just before the error. What M95 asserts is unchanged and still asserted here: the code
  * reaches the consumer, so nobody has to match on error text. Only the carrier moved.
  */
-function codeDoErro(chunks: Chunk[]): string | undefined {
-  return chunks.find((c) => c.type === DATA_PART_DO_CODE_DE_ERRO)?.data?.code
+function errorCodeOf(chunks: Chunk[]): string | undefined {
+  return chunks.find((c) => c.type === ERROR_CODE_DATA_PART)?.data?.code
 }
 
 async function chunksDe(eventos: unknown[]): Promise<Chunk[]> {
@@ -56,7 +56,7 @@ describe('M95 — o code do erro chega ao consumidor', () => {
     ])
     const erro = chunks.find((c) => c.type === 'error')
     expect(
-      codeDoErro(chunks),
+      errorCodeOf(chunks),
       'the code did not cross — the consumer would have to match text',
     ).toBe('session_busy')
     expect(erro?.errorText).toContain('already writing')
@@ -65,7 +65,7 @@ describe('M95 — o code do erro chega ao consumidor', () => {
     expect(erro).toEqual({ type: 'error', errorText: erro?.errorText })
     // Ordering is contract, not accident: a sequential consumer must already hold the code when the
     // error arrives, otherwise it has to handle the failure before learning which one it was.
-    expect(chunks.findIndex((c) => c.type === DATA_PART_DO_CODE_DE_ERRO)).toBeLessThan(
+    expect(chunks.findIndex((c) => c.type === ERROR_CODE_DATA_PART)).toBeLessThan(
       chunks.findIndex((c) => c.type === 'error'),
     )
   })
@@ -75,11 +75,11 @@ describe('M95 — o code do erro chega ao consumidor', () => {
     const erro = chunks.find((c) => c.type === 'error')
     expect(erro?.errorText).toBe('falha qualquer')
     expect(
-      codeDoErro(chunks),
+      errorCodeOf(chunks),
       'a code was invented for a failure that carries none',
     ).toBeUndefined()
     expect(
-      chunks.some((c) => c.type === DATA_PART_DO_CODE_DE_ERRO),
+      chunks.some((c) => c.type === ERROR_CODE_DATA_PART),
       'an empty data part was emitted for a codeless failure — noise on the wire',
     ).toBe(false)
   })

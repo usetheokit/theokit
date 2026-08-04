@@ -66,7 +66,7 @@ describe('M92 — o transporte in-process evicta aprovação de turno abortado',
     expect(transporte.pendentes).toBe(0)
   })
 
-  it('o erro nomeia a aprovacao e o motivo — diagnostico, nao so o tipo', async () => {
+  it('o erro nomeia a aprovacao e o motivo — diagnostic, nao so o tipo', async () => {
     const { aprovar, abortar } = montar()
     const p = aprovar()
     abortar()
@@ -116,7 +116,13 @@ describe('M92 — furos da primeira versão da eviction', () => {
       messages: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: 'oi' }] }],
       abortSignal: controller.signal,
     } as never)
-    return { transporte, estacionar: (id?: string) => estacionar!(id), abortar: () => { controller.abort() } }
+    return {
+      transporte,
+      estacionar: (id?: string) => estacionar!(id),
+      abortar: () => {
+        controller.abort()
+      },
+    }
   }
 
   it('SINAL JA ABORTADO — a aprovacao nao fica pendurada', async () => {
