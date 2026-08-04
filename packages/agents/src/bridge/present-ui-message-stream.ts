@@ -1,4 +1,3 @@
-
 import { UIMessageStreamPresenter } from '@theokit/presenter'
 import type { AgentOutputEvent } from '@theokit/presenter'
 import type { UIMessageChunk } from 'ai'
@@ -43,6 +42,53 @@ function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
   return event.cost === undefined
     ? { usage: event.usage, durationMs: event.durationMs }
     : { usage: event.usage, durationMs: event.durationMs, cost: event.cost }
+}
+
+/** O nome do data part que carrega o `code`. Público de fato: o consumidor casa por ele. */
+export const DATA_PART_DO_CODE_DE_ERRO = 'data-error-code'
+
+/**
+ * O erro, em chunks que o protocolo aceita — theokit#161 (B).
+ *
+ * ## O defeito medido
+ *
+ * O M95 pôs o `code` DENTRO do chunk de erro (`{type:'error', errorText, errorCode}`), e a razão era
+ * boa: sem ele, um consumidor que precise **distinguir** a falha só tem a mensagem, e casar texto de
+ * erro é a heurística que este ecossistema já pagou caro — o M93 classificava transitório por regex
+ * sobre a mensagem e tratava `ECONNREFUSED …:443` como definitivo porque a **porta** casava o padrão
+ * de "4xx".
+ *
+ * Só que a variante `error` do `uiMessageChunkSchema` do `ai` é **estrita**: qualquer chave a mais a
+ * invalida. Medido contra `ai@7.0.14` — `{type:'error',errorText:'boom'}` valida; o mesmo chunk com
+ * `errorCode` **não**. Ou seja, desde o M95 este caminho emitia um chunk fora do protocolo que ele
+ * afirma falar, e um consumidor que valide o rejeitaria inteiro — perdendo também o texto.
+ *
+ * Ninguém viu porque o teste que existia para pegar isso parava **antes** de validar: a asserção de
+ * pré-condição (`toContainEqual({type:'error',errorText:'boom'})`) ficou desatualizada quando o
+ * `errorCode` apareceu, e o laço de validação nunca chegou a rodar.
+ *
+ * ## Por que data part, e não uma das saídas fáceis
+ *
+ * Dropar o `errorCode` devolveria o consumidor ao casamento de texto que o M95 removeu. Embutir o
+ * code no `errorText` é a mesma coisa com outro nome. O protocolo já tem o lugar certo — um data
+ * part —, e este arquivo já o usa para `data-checkpoint`. Medido: valida.
+ *
+ * `transient: true` porque um code de erro é diagnóstico do turno, não conteúdo de mensagem: o SDK
+ * não o persiste no histórico, que é exatamente o que se quer.
+ *
+ * O data part vem **antes** do chunk de erro de propósito: quem consome sequencialmente já tem o
+ * code na mão quando o erro chega. Na ordem inversa, o consumidor teria de tratar o erro para só
+ * depois descobrir qual era.
+ */
+function* chunksDeErro(errorText: string, code: string | undefined): Generator<UIMessageChunk> {
+  if (code !== undefined) {
+    yield {
+      type: DATA_PART_DO_CODE_DE_ERRO,
+      data: { code },
+      transient: true,
+    } as unknown as UIMessageChunk
+  }
+  yield { type: 'error', errorText }
 }
 
 export async function* presentUIMessageStream(
@@ -90,13 +136,7 @@ export async function* presentUIMessageStream(
         continue
       }
       if (event.type === 'error') {
-        // M95 — o `code` acompanha o texto. Um consumidor que precise DISTINGUIR a falha (o `exec`
-        // forkando quando a sessão já tem escritor) só tinha a mensagem, e casar texto de erro é a
-        // heurística que este ecossistema já pagou caro uma vez: o M93 classificava transitório por
-        // regex sobre a mensagem e tratava `ECONNREFUSED …:443` como definitivo, porque a PORTA
-        // casava o padrão de "4xx". `RunErrorDetail` sempre teve `code`; ele só não atravessava.
-        const code = (event as { code?: string }).code
-        yield { type: 'error', errorText: event.message, ...(code !== undefined ? { errorCode: code } : {}) }
+        yield* chunksDeErro(event.message, (event as { code?: string }).code)
         break
       }
       if (event.type === 'done') {
@@ -107,11 +147,7 @@ export async function* presentUIMessageStream(
     }
   } catch (err) {
     const code = (err as { code?: string }).code
-    yield {
-      type: 'error',
-      errorText: String(err),
-      ...(typeof code === 'string' ? { errorCode: code } : {}),
-    }
+    yield* chunksDeErro(String(err), typeof code === 'string' ? code : undefined)
   }
   yield* presenter.finish(turnMetadata)
 }
