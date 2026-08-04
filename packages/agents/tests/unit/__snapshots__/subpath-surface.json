@@ -33,8 +33,10 @@
       "readJsonlTail",
       "replaceFileAtomic",
       "sanitizeFts5Query",
+      "sessaoTemEscritor",
       "SessionBusyError",
       "transcriptPath",
+      "transcriptRoot",
       "withCwdMutex",
       "withFileLock"
     ],
@@ -46,6 +48,8 @@
       "ReadJsonlTailOptions",
       "ResilientSqliteDb",
       "SessionWriterLease",
+      "TranscriptBlock",
+      "TranscriptMessage",
       "WalApplyResult"
     ]
   },
@@ -57,7 +61,9 @@
       "YIELD_MAX_MS",
       "YIELD_MIN_MS"
     ],
-    "tipos": ["PtyInteractiveBackendOptions"]
+    "tipos": [
+      "PtyInteractiveBackendOptions"
+    ]
   },
   "sandbox": {
     "valores": [

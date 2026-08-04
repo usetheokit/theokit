@@ -24,13 +24,13 @@ const AQUI = dirname(fileURLToPath(import.meta.url))
 const RAIZ = join(AQUI, '..')
 
 /**
- * Os cinco subpaths de infra: nome do entry → especificador da fonte.
+ * The five infra subpaths: entry name → source specifier.
  *
- * **A ordem é alfabética por contrato, não por gosto** — theokit#161 (A). `--json` serializa nesta
- * ordem, e o snapshot em `tests/unit/__snapshots__/subpath-surface.json` é gravado a partir dela.
- * Numa ordem qualquer, regenerar o snapshot reescrevia 145 linhas para acrescentar 4 símbolos, e o
- * revisor perdia a mudança real dentro do ruído — atrito que empurra para "regenero depois", que é
- * exatamente o modo de falha por omissão que deixou este gate vermelho no `develop`.
+ * **The order is alphabetical by contract, not by taste** — theokit#161 (A). `--json` serializes in
+ * this order, and the snapshot at `tests/unit/__snapshots__/subpath-surface.json` is written from it.
+ * In any other order, regenerating the snapshot rewrote 145 lines to add 4 symbols, and the reviewer
+ * lost the real change inside the noise — friction that pushes towards "I'll regenerate later", which
+ * is exactly the omission failure mode that left this gate red on `develop`.
  */
 export const SUBPATHS_DE_INFRA: Readonly<Record<string, string>> = {
   interactive: '@theokit/sdk/interactive',
