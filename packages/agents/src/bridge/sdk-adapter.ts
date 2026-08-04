@@ -14,6 +14,7 @@
 import type { AgentDefinition, BudgetTracker, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 
 import { debugLog } from '../debug-log.js'
+import { runInputGuards, runOutputGuards, type Guardrail } from '../guardrails/index.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
@@ -670,6 +671,65 @@ export function toAgentFactory(
       ...m8,
       ...extra,
     })
-    return agent as unknown as SdkAgentHandle
+    return withGuardrails(agent as unknown as SdkAgentHandle, compiled.guardrails)
+  }
+}
+
+/**
+ * theokit#139 — wrap a served handle so the declared guardrails actually run.
+ *
+ * The other half of the reported bypass. `compileAgentDefinition` produces `compiled.guardrails`
+ * from `.guardrails([...])`, and only `loop/agent-runner.ts` ever read it — so the SAME definition
+ * served over ACP ran with every input and output guard absent. An agent whose author declared
+ * "block prompt injection" answered injected prompts; one that declared "redact secrets" returned
+ * them. (The HITL half was closed by M96, which made `approvals` a mandatory `ApprovalPosture`.)
+ *
+ * ## Why here, and not as an SDK plugin
+ *
+ * The issue proposes compiling guardrails into a `Plugin` so enforcement is runtime-level. Measured
+ * against the SDK's hook surface at 4.37.0, that is not achievable: `pre_user_send` returns only
+ * `PreUserSendResult { recalledContext? }`, so a handler can add memory context but cannot block or
+ * rewrite the prompt; and `post_assistant_reply` is documented fire-and-forget — its return value is
+ * discarded and `wait()` never blocks on it. Neither can reject or redact, which is the entire job
+ * of a guard. Enforcing there would produce a gate that reports without gating, which is worse than
+ * the current honest absence.
+ *
+ * So it lands where the framework already owns the boundary (ADR-0040 § D2 — guards at the boundary
+ * are framework core, not runtime), reusing `runInputGuards`/`runOutputGuards` rather than
+ * reimplementing the policy: two copies of a security rule is how the two paths diverged in the
+ * first place.
+ *
+ * ## The residual gap, stated
+ *
+ * The runner moderates the STREAM as it flows (`moderateOutputStream`); this handle exposes no
+ * stream, only `wait()`, so output guards land on the completed reply. A blocked output is still
+ * blocked — it is simply not blocked mid-token. Closing that needs a streaming seam on the handle,
+ * which is a change to the served contract and belongs to its own slice.
+ */
+function withGuardrails(
+  handle: SdkAgentHandle,
+  guardrails: readonly Guardrail[] | undefined,
+): SdkAgentHandle {
+  // No guards ⇒ the original handle, untouched. Wrapping unconditionally would put an await on the
+  // hot path of every served agent to enforce an empty list.
+  if (guardrails === undefined || guardrails.length === 0) return handle
+  return {
+    get agentId() {
+      return handle.agentId
+    },
+    dispose: () => handle.dispose(),
+    send: async (msg: string, sendOpts?: SdkSendOptions): Promise<SdkTurnHandle> => {
+      // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
+      // not merely annotate it afterwards.
+      const guarded = await runInputGuards(msg, guardrails)
+      const turn = await handle.send(guarded, sendOpts)
+      return {
+        wait: async () => {
+          const out = await turn.wait()
+          if (out.result === undefined) return out
+          return { ...out, result: await runOutputGuards(out.result, guardrails) }
+        },
+      }
+    },
   }
 }
