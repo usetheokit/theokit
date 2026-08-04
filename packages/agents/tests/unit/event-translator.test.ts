@@ -432,22 +432,36 @@ describe('eventos desconhecidos avisam em vez de sumir (#141)', () => {
     spy.mockRestore()
   })
 
-  it('um tipo de SDKMessage que o tradutor não conhece produz um aviso nomeando o tipo', () => {
-    const out = translateSdkEvent({ type: 'request', agent_id: 'a', run_id: 'r' } as never, 'r')
+  /**
+   * The example type is SYNTHETIC on purpose.
+   *
+   * The first version of these tests used `request` and `task` — real SDK types that happened to be
+   * untranslated at the time. Both are translated now (theokit#141's other half), so the tests
+   * started asserting that a delivered signal was dropped: they had become a guard against the fix.
+   *
+   * A type the SDK will never emit cannot be implemented out from under the test, so what is pinned
+   * here is the MECHANISM — unknown warns, once, naming the type — rather than a snapshot of which
+   * types happen to be unhandled today.
+   */
+  const TYPE_THE_SDK_WILL_NEVER_EMIT = 'carrier-pigeon'
 
-    // Continua não emitindo evento — traduzir `request` para um evento de aprovação é escopo do
-    // #139 (o buraco de HITL no ACP), não desta correção. O que muda é o rastro.
+  it('um tipo de SDKMessage que o tradutor não conhece produz um aviso nomeando o tipo', () => {
+    const out = translateSdkEvent(
+      { type: TYPE_THE_SDK_WILL_NEVER_EMIT, agent_id: 'a', run_id: 'r' } as never,
+      'r',
+    )
+
     expect(out).toEqual([])
-    expect(avisos.join('\n')).toContain('request')
+    expect(avisos.join('\n')).toContain(TYPE_THE_SDK_WILL_NEVER_EMIT)
     expect(avisos.join('\n')).toContain('#141')
   })
 
   it('avisa UMA vez por tipo — um stream emite milhares de eventos por turno', () => {
     for (let i = 0; i < 5; i++) {
-      translateSdkEvent({ type: 'task', agent_id: 'a', run_id: 'r' } as never, 'r')
+      translateSdkEvent({ type: 'homing-albatross', agent_id: 'a', run_id: 'r' } as never, 'r')
     }
 
-    expect(avisos.filter((a) => a.includes('"task"'))).toHaveLength(1)
+    expect(avisos.filter((a) => a.includes('"homing-albatross"'))).toHaveLength(1)
   })
 
   it('tipo ignorado DE PROPÓSITO não avisa — o silêncio ali é decisão, não descuido', () => {

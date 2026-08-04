@@ -11,13 +11,28 @@
  * definitivo porque a **porta** casava o padrão de "4xx". `RunErrorDetail` sempre teve `code`.
  */
 import { describe, expect, it } from 'vitest'
-import { presentUIMessageStream } from '../src/bridge/present-ui-message-stream.js'
+import {
+  ERROR_CODE_DATA_PART,
+  presentUIMessageStream,
+} from '../src/bridge/present-ui-message-stream.js'
 import { eventoDeErroDoSdk } from '../src/bridge/erro-do-sdk.js'
 
 interface Chunk {
   type: string
   errorText?: string
-  errorCode?: string
+  data?: { code?: string }
+}
+
+/**
+ * The failure `code`, read the way a consumer reads it — theokit#161 (B).
+ *
+ * It used to ride inside the error chunk as `errorCode`. That shape is REJECTED by ai's
+ * `uiMessageChunkSchema` (the `error` variant is strict), so it now travels as its own data part
+ * emitted just before the error. What M95 asserts is unchanged and still asserted here: the code
+ * reaches the consumer, so nobody has to match on error text. Only the carrier moved.
+ */
+function errorCodeOf(chunks: Chunk[]): string | undefined {
+  return chunks.find((c) => c.type === ERROR_CODE_DATA_PART)?.data?.code
 }
 
 async function chunksDe(eventos: unknown[]): Promise<Chunk[]> {
@@ -25,27 +40,48 @@ async function chunksDe(eventos: unknown[]): Promise<Chunk[]> {
     for (const e of eventos) yield e
   })()
   const out: Chunk[] = []
-  for await (const c of presentUIMessageStream(fonte as never, { textId: 't' })) out.push(c as Chunk)
+  for await (const c of presentUIMessageStream(fonte as never, { textId: 't' }))
+    out.push(c as Chunk)
   return out
 }
 
 describe('M95 — o code do erro chega ao consumidor', () => {
   it('um erro COM code entrega errorCode junto do texto', async () => {
     const chunks = await chunksDe([
-      { type: 'error', message: 'another process is already writing this session', code: 'session_busy' },
+      {
+        type: 'error',
+        message: 'another process is already writing this session',
+        code: 'session_busy',
+      },
     ])
     const erro = chunks.find((c) => c.type === 'error')
-    expect(erro?.errorCode, 'o code não atravessou — o consumidor teria de casar texto').toBe(
-      'session_busy',
-    )
+    expect(
+      errorCodeOf(chunks),
+      'the code did not cross — the consumer would have to match text',
+    ).toBe('session_busy')
     expect(erro?.errorText).toContain('already writing')
+    // The code must NOT be back inside the error chunk: that shape fails ai's strict schema, and a
+    // consumer validating chunks would reject the failure entirely — losing the text with it.
+    expect(erro).toEqual({ type: 'error', errorText: erro?.errorText })
+    // Ordering is contract, not accident: a sequential consumer must already hold the code when the
+    // error arrives, otherwise it has to handle the failure before learning which one it was.
+    expect(chunks.findIndex((c) => c.type === ERROR_CODE_DATA_PART)).toBeLessThan(
+      chunks.findIndex((c) => c.type === 'error'),
+    )
   })
 
   it('um erro SEM code continua exatamente como antes', async () => {
     const chunks = await chunksDe([{ type: 'error', message: 'falha qualquer' }])
     const erro = chunks.find((c) => c.type === 'error')
     expect(erro?.errorText).toBe('falha qualquer')
-    expect(erro?.errorCode).toBeUndefined()
+    expect(
+      errorCodeOf(chunks),
+      'a code was invented for a failure that carries none',
+    ).toBeUndefined()
+    expect(
+      chunks.some((c) => c.type === ERROR_CODE_DATA_PART),
+      'an empty data part was emitted for a codeless failure — noise on the wire',
+    ).toBe(false)
   })
 })
 
