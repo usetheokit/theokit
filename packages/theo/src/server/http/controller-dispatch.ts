@@ -34,7 +34,12 @@ interface ControllerDispatcher {
 const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 /** Recursively collect `*.controller.ts` files under `dir` (absolute paths). */
-function findControllerFiles(dir: string): string[] {
+/**
+ * Every `*.controller.ts` under `dir`, recursively. Exported for theokit#123: the build emitter
+ * must find exactly the same set the dev dispatcher does, and two independent walks would be two
+ * definitions of "a controller" that drift.
+ */
+export function findControllerFiles(dir: string): string[] {
   const found: string[] = []
   const walk = (current: string): void => {
     let entries: Dirent[]
@@ -46,7 +51,12 @@ function findControllerFiles(dir: string): string[] {
     for (const entry of entries) {
       const full = join(current, entry.name)
       if (entry.isDirectory()) walk(full)
-      else if (entry.name.endsWith('.controller.ts')) found.push(full)
+      // theokit#123 — `.mjs` alongside `.ts`. Dev walks the SOURCE tree; production walks the
+      // COMPILED tree under `dist/controllers`, where the same files exist as `*.controller.mjs`.
+      // One walk for both keeps a single definition of "a controller file"; two would drift, and a
+      // file that counts in dev and not in production is exactly the dev/prod split this fixes.
+      else if (entry.name.endsWith('.controller.ts') || entry.name.endsWith('.controller.mjs'))
+        found.push(full)
     }
   }
   walk(dir)
