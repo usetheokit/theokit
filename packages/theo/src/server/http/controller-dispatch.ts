@@ -57,6 +57,17 @@ function findControllerFiles(dir: string): string[] {
 interface ControllerModule {
   filePath: string
   cls: ControllerClass
+  /**
+   * The module's full export namespace — theokit#124.
+   *
+   * Kept alongside the class because it is the ONLY place a `@Body(schema)` regains a name. The
+   * schema on `WalkResult.bodySchema` is a runtime `z.ZodType` with no source identifier, but it is
+   * the very object this module exported, so matching it back by reference identity recovers the
+   * exported name the typed-client codegen needs to write `z.infer<typeof ...>`.
+   *
+   * Unused by the dispatch path, which needs only the class.
+   */
+  exports: Readonly<Record<string, unknown>>
 }
 
 /**
@@ -75,7 +86,7 @@ export async function scanControllerModules(
     const mod = await loadModule(filePath)
     for (const exported of Object.values(mod)) {
       if (typeof exported === 'function' && isControllerClass(exported)) {
-        modules.push({ filePath, cls: exported as ControllerClass })
+        modules.push({ filePath, cls: exported as ControllerClass, exports: mod })
       }
     }
   }
