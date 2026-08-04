@@ -443,16 +443,16 @@ describe('eventos desconhecidos avisam em vez de sumir (#141)', () => {
    * here is the MECHANISM — unknown warns, once, naming the type — rather than a snapshot of which
    * types happen to be unhandled today.
    */
-  const TIPO_QUE_NAO_EXISTE = 'carrier-pigeon'
+  const TYPE_THE_SDK_WILL_NEVER_EMIT = 'carrier-pigeon'
 
   it('um tipo de SDKMessage que o tradutor não conhece produz um aviso nomeando o tipo', () => {
     const out = translateSdkEvent(
-      { type: TIPO_QUE_NAO_EXISTE, agent_id: 'a', run_id: 'r' } as never,
+      { type: TYPE_THE_SDK_WILL_NEVER_EMIT, agent_id: 'a', run_id: 'r' } as never,
       'r',
     )
 
     expect(out).toEqual([])
-    expect(avisos.join('\n')).toContain(TIPO_QUE_NAO_EXISTE)
+    expect(avisos.join('\n')).toContain(TYPE_THE_SDK_WILL_NEVER_EMIT)
     expect(avisos.join('\n')).toContain('#141')
   })
 

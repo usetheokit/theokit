@@ -19,9 +19,9 @@ import { uiMessageChunkSchema, type UIMessageChunk } from 'ai'
 
 import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
 import {
-  DATA_PART_DO_INPUT_REQUESTED,
-  DATA_PART_DO_SHELL_OUTPUT,
-  DATA_PART_DO_TASK_PROGRESS,
+  INPUT_REQUESTED_DATA_PART,
+  SHELL_OUTPUT_DATA_PART,
+  TASK_PROGRESS_DATA_PART,
   presentUIMessageStream,
 } from '../../src/bridge/present-ui-message-stream.js'
 
@@ -42,7 +42,7 @@ describe('theokit#141 — the three signals survive the presenter', () => {
       chunks,
       'the pause signal died in the presenter — the UI still shows a silent hang',
     ).toContainEqual({
-      type: DATA_PART_DO_INPUT_REQUESTED,
+      type: INPUT_REQUESTED_DATA_PART,
       data: { requestId: 'req-7' },
       transient: true,
     })
@@ -53,7 +53,7 @@ describe('theokit#141 — the three signals survive the presenter', () => {
       { type: 'task_progress', status: 'RUNNING', text: 'indexing repo' },
     ])
     expect(chunks).toContainEqual({
-      type: DATA_PART_DO_TASK_PROGRESS,
+      type: TASK_PROGRESS_DATA_PART,
       data: { status: 'RUNNING', text: 'indexing repo' },
       transient: true,
     })
@@ -64,7 +64,7 @@ describe('theokit#141 — the three signals survive the presenter', () => {
       { type: 'shell_output', event: { stream: 'stdout', data: 'building...' } },
     ])
     expect(chunks).toContainEqual({
-      type: DATA_PART_DO_SHELL_OUTPUT,
+      type: SHELL_OUTPUT_DATA_PART,
       data: { event: { stream: 'stdout', data: 'building...' } },
       transient: true,
     })
@@ -84,7 +84,7 @@ describe('theokit#141 — the three signals survive the presenter', () => {
         durationMs: 1,
       },
     ])
-    const iShell = chunks.findIndex((c) => c.type === DATA_PART_DO_SHELL_OUTPUT)
+    const iShell = chunks.findIndex((c) => c.type === SHELL_OUTPUT_DATA_PART)
     const iEnd = chunks.findIndex((c) => c.type === 'text-end')
     expect(iEnd, 'the open text block was never closed').toBeGreaterThanOrEqual(0)
     expect(iEnd, 'the data part landed INSIDE the open text block').toBeLessThan(iShell)
