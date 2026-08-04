@@ -1,5 +1,10 @@
 import { z } from 'zod'
 
+// `.finite()` foi removido dos 4 schemas numéricos abaixo (agent-builder#319): em zod 4 ele é
+// no-op — `z.number()` já rejeita `Infinity`, `-Infinity` e `NaN` por padrão. Medido antes de
+// remover, contra zod 4.4.3 instalado, e não presumido a partir da mensagem de depreciação:
+// os cinco casos (`Infinity`, `-Infinity`, `NaN`, `1.5`, `0`) dão o MESMO veredito com e sem ele.
+
 /**
  * Cache subsystem config (caching-and-revalidation-plan).
  * Default `cache: undefined` keeps the framework backward-compatible
@@ -8,8 +13,8 @@ import { z } from 'zod'
  * Setting `cache: {}` opts in with all defaults.
  */
 const routeRuleSchema = z.object({
-  maxAge: z.number().nonnegative().finite().optional(),
-  swr: z.number().nonnegative().finite().optional(),
+  maxAge: z.number().nonnegative().optional(),
+  swr: z.number().nonnegative().optional(),
   tags: z.array(z.string()).optional(),
 })
 
@@ -20,8 +25,8 @@ export const cacheSchema = z.object({
   maxEntries: z.number().int().positive().default(1000),
   defaults: z
     .object({
-      maxAge: z.number().nonnegative().finite().default(1),
-      swr: z.number().nonnegative().finite().optional(),
+      maxAge: z.number().nonnegative().default(1),
+      swr: z.number().nonnegative().optional(),
       cacheErrors: z.boolean().default(false),
     })
     .default({ maxAge: 1, cacheErrors: false }),
