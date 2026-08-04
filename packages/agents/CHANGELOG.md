@@ -1,5 +1,24 @@
 # @theokit/agents
 
+## 6.4.2
+
+### Patch Changes
+
+- **Correção de segurança.** O release anterior repassava a entrada do `.mcp.json` como veio do arquivo,
+  em vez de montá-la a partir dos campos declarados. Isso deixava o `envPolicy` atravessar — e ele é o
+  campo que decide se o processo do servidor MCP herda o ambiente **com** ou **sem** as variáveis
+  sensíveis do host. Um `.mcp.json` (arquivo de projeto, versionado) podia declarar `envPolicy: "all"` e
+  entregar chaves de API do ambiente a um binário de terceiro.
+
+  Agora a entrada é montada por allowlist, ramo a ramo: `command`/`args`/`env`/`cwd` no stdio,
+  `url`/`type`/`headers`/`auth`/`requestTimeoutMs` no remoto. Campo desconhecido não atravessa —
+  inclusive um que o SDK venha a criar. `envPolicy` fica de fora deliberadamente: é decisão de postura do
+  host, e o SDK a aceita do código que constrói o agente, onde um humano revisa.
+
+  **E o aviso deixou de poder sumir.** `onWarn` continua opcional, mas quando omitido os avisos vão para
+  `stderr` em vez de para lugar nenhum — antes, um chamador que não assinasse o canal descartava entradas
+  em silêncio absoluto.
+
 ## 6.4.1
 
 ### Patch Changes
