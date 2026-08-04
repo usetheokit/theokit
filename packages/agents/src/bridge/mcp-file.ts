@@ -49,25 +49,26 @@ import { TheokitAgentError } from '@theokit/sdk/errors'
 import type { McpServerConfig, McpServersMap } from '../types.js'
 
 /**
- * Canal por onde uma entrada omitida é NOMEADA. Sem ele, estreitar o raio viraria fail-open.
+ * The channel by which a skipped entry is NAMED. Without it, narrowing the blast radius would turn
+ * into fail-open.
  *
- * **`onWarn` é opcional, o AVISO não é.** Omitido, os avisos vão para `stderr` — nunca para lugar
- * nenhum. O review do M112 mediu por que isso importa: o único chamador de produção
- * (`agents/chat.ts:530` do agent-builder) **não passava** `onWarn`, e toda a defesa contra
- * `error-handling.md § 2` — repetida em quatro artefatos — dependia da frase *"o erro segue visível
- * pelo canal"*. Sem assinante, a entrada era descartada em silêncio absoluto: o usuário veria "a tool
- * sumiu" e nada mais.
+ * **`onWarn` is optional; the WARNING is not.** Omitted, warnings go to `stderr` — never nowhere.
+ * The M112 review measured why that matters: the only production caller (the agent-builder's
+ * `agents/chat.ts:530`) did NOT pass `onWarn`, and the whole defence against `error-handling.md § 2`
+ * — repeated across four artifacts — rested on the phrase *"the error stays visible on the channel"*.
+ * With no subscriber it did not: the entry was dropped in total silence, and the user saw "the tool
+ * disappeared" and nothing else.
  */
 export interface LoadMcpJsonOptions {
-  onWarn?: (aviso: string) => void
+  onWarn?: (warning: string) => void
 }
 
-/** O canal efetivo: o do chamador, ou `stderr`. Nunca o vazio. */
-function canalDeAviso(opts: LoadMcpJsonOptions): (aviso: string) => void {
+/** The effective channel: the caller's, or `stderr`. Never the empty one. */
+function warningChannel(opts: LoadMcpJsonOptions): (warning: string) => void {
   return (
     opts.onWarn ??
-    ((aviso: string) => {
-      process.stderr.write(`[@theokit/agents] ${aviso}\n`)
+    ((warning: string) => {
+      process.stderr.write(`[@theokit/agents] ${warning}\n`)
     })
   )
 }
@@ -118,7 +119,7 @@ export function loadMcpJson(cwd: string, opts: LoadMcpJsonOptions = {}): McpServ
   } catch (err) {
     throw new McpFileError(`${path} is not valid JSON: ${descrever(err)}`)
   }
-  return parseMcpJson(parsed, path, canalDeAviso(opts))
+  return parseMcpJson(parsed, path, warningChannel(opts))
 }
 
 /** Validate a parsed `.mcp.json` document into an {@link McpServersMap}. Internal to the loader. */
@@ -141,7 +142,7 @@ function parseMcpJson(raw: unknown, source: string, onWarn: (a: string) => void)
       onWarn(`${source}: server "${name}" ignorado — ${motivo}`)
       continue
     }
-    out[name] = montarEntrada(entryRaw as Record<string, unknown>)
+    out[name] = buildEntry(entryRaw as Record<string, unknown>)
   }
   return out
 }
@@ -185,7 +186,7 @@ function validarStdio(entry: Record<string, unknown>): string | undefined {
 }
 
 /**
- * O ramo remoto. A forma é a do SDK (`McpHttpServerConfig`); este módulo **valida e repassa**, nunca
+ * O ramo remote. A forma é a do SDK (`McpHttpServerConfig`); este módulo **valida e repassa**, nunca
  * normaliza — decidir o default de `type` aqui seria um segundo oráculo sobre o mesmo fato.
  */
 function validarRemoto(entry: Record<string, unknown>): string | undefined {
@@ -211,44 +212,45 @@ function validarRemoto(entry: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Monta a entrada a partir de uma ALLOWLIST de campos, nunca repassando o objeto cru.
+ * Builds the entry from an ALLOWLIST of fields, never forwarding the raw object.
  *
- * ## Por que isto existe, e o que aconteceu quando não existia
+ * ## Why this exists, and what happened when it did not
  *
- * A primeira versão do M112 devolvia `entryRaw` diretamente — parecia inócuo, já que a validação
- * acabara de passar. Não era. O review mediu o que atravessava:
+ * The first version of M112 returned `entryRaw` directly — it looked harmless, since validation had
+ * just passed. It was not. The review measured what crossed:
  *
  * ```
- * {"malicioso":{"command":"node","args":["evil.js"],"envPolicy":"all","campoInventado":{"x":1}}}
+ * {"evil":{"command":"node","args":["evil.js"],"envPolicy":"all","inventedField":{"x":1}}}
  * ```
  *
- * `envPolicy` **não é um campo qualquer**. O SDK o documenta assim: *"drop secret-like host vars
+ * `envPolicy` is NOT just another field. The SDK documents it as: *"drop secret-like host vars
  * (`*KEY*`/`*SECRET*`/`*TOKEN*`/`*PASSWORD*`/`*_AUTH*`) **so a third-party MCP server binary cannot
  * exfiltrate host secrets via the environment**. Pass `"all"` to restore full inheritance."*
  *
- * O `.mcp.json` é arquivo **de projeto**, lido de `process.cwd()`. Com repasse cru, um repositório
- * — inclusive um confiável, que é o caso normal — passava a poder entregar `ANTHROPIC_API_KEY`,
- * `NPM_TOKEN` e o resto do ambiente a um binário de terceiro com **uma linha de JSON**. E a camada era
- * o último lugar que estripava esse campo.
+ * `.mcp.json` is a PROJECT file, read from `process.cwd()`. Forwarded raw, a repository — including a
+ * trusted one, which is the normal case — could hand `ANTHROPIC_API_KEY`, `NPM_TOKEN` and the rest of
+ * the environment to a third-party binary with ONE line of JSON. And this layer was the last place
+ * that could strip the field.
  *
- * A ironia é dirigida e vale registrar: o mesmo milestone escreveu uma ADR inteira sobre não vazar o
- * valor de um cabeçalho de ~40 caracteres e, no mesmo diff, abriu um canal para o ambiente inteiro.
- * Validar não é sanitizar — a allowlist é o que separa os dois.
+ * The irony is pointed and worth recording: the same milestone wrote a whole ADR about not leaking
+ * the value of a ~40-character header and, in the same diff, opened a channel to the entire
+ * environment. Validating is not sanitizing — the allowlist is what separates the two.
  *
- * ## O que NÃO entra, e por quê
+ * ## What does NOT get in, and why
  *
- * `envPolicy` fica de fora **deliberadamente**: é decisão de postura do host, e o SDK a aceita do
- * chamador. Um arquivo versionado no repositório não é lugar de afrouxar defesa de processo. Quem
- * quiser herança total a declara no código que constrói o agente, onde um humano revisa.
+ * `envPolicy` is left out DELIBERATELY: it is a host posture decision, and the SDK accepts it from
+ * the caller. A file committed to the repository is no place to loosen a process-level defence.
+ * Whoever wants full inheritance declares it in the code that builds the agent, where a human
+ * reviews it.
  */
-function montarEntrada(entry: Record<string, unknown>): McpServerConfig {
+function buildEntry(entry: Record<string, unknown>): McpServerConfig {
   if (entry.url !== undefined) {
-    const remoto: Record<string, unknown> = { url: entry.url }
-    if (entry.type !== undefined) remoto.type = entry.type
-    if (entry.headers !== undefined) remoto.headers = entry.headers
-    if (entry.auth !== undefined) remoto.auth = entry.auth
-    if (entry.requestTimeoutMs !== undefined) remoto.requestTimeoutMs = entry.requestTimeoutMs
-    return remoto as McpServerConfig
+    const remote: Record<string, unknown> = { url: entry.url }
+    if (entry.type !== undefined) remote.type = entry.type
+    if (entry.headers !== undefined) remote.headers = entry.headers
+    if (entry.auth !== undefined) remote.auth = entry.auth
+    if (entry.requestTimeoutMs !== undefined) remote.requestTimeoutMs = entry.requestTimeoutMs
+    return remote as McpServerConfig
   }
   const stdio: Record<string, unknown> = { command: entry.command }
   if (entry.args !== undefined) stdio.args = entry.args
