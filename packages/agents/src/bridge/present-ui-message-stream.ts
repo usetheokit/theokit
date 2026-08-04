@@ -48,6 +48,14 @@ function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
 export const DATA_PART_DO_CODE_DE_ERRO = 'data-error-code'
 
 /**
+ * Data-part names for the three signals theokit#141 restored. Public in effect — a consumer matches
+ * on the literal — so they are exported and asserted from the constant, never re-typed at call sites.
+ */
+export const DATA_PART_DO_INPUT_REQUESTED = 'data-input-requested'
+export const DATA_PART_DO_TASK_PROGRESS = 'data-task-progress'
+export const DATA_PART_DO_SHELL_OUTPUT = 'data-shell-output'
+
+/**
  * O erro, em chunks que o protocolo aceita — theokit#161 (B).
  *
  * ## O defeito medido
@@ -80,15 +88,57 @@ export const DATA_PART_DO_CODE_DE_ERRO = 'data-error-code'
  * code na mão quando o erro chega. Na ordem inversa, o consumidor teria de tratar o erro para só
  * depois descobrir qual era.
  */
+/**
+ * A transient data part. Centralised because the cast is the interesting bit: `UIMessageChunk`'s
+ * data variant is keyed on `data-${string}`, which a `const` name does not narrow to on its own.
+ * One place to hold the cast beats one per call site.
+ */
+function dataPart(type: string, data: Record<string, unknown>): UIMessageChunk {
+  return { type, data, transient: true } as unknown as UIMessageChunk
+}
+
 function* chunksDeErro(errorText: string, code: string | undefined): Generator<UIMessageChunk> {
-  if (code !== undefined) {
-    yield {
-      type: DATA_PART_DO_CODE_DE_ERRO,
-      data: { code },
-      transient: true,
-    } as unknown as UIMessageChunk
-  }
+  if (code !== undefined) yield dataPart(DATA_PART_DO_CODE_DE_ERRO, { code })
   yield { type: 'error', errorText }
+}
+
+/**
+ * The turn-diagnostic events, as the single data part each becomes — or `null` when the event is
+ * not one of them.
+ *
+ * These are framework variants, so they never entered the presenter's canonical `AgentOutputEvent`
+ * (ADR-4). They share one shape — close the open block, emit one transient data part — so they
+ * share one function: written as four inline branches in the dispatch loop they pushed
+ * `presentUIMessageStream` past both the cyclomatic and cognitive complexity ceilings, and the
+ * repetition of `closeBlock()` at each branch was an invitation to forget it at the fifth.
+ *
+ * `checkpoint_saved` joins them because it always was one of these; only its name predates the
+ * pattern. `approval_required` stays inline: it emits TWO chunks and consults presenter state, so
+ * it is genuinely a different shape rather than the same one spelled differently.
+ */
+function dataPartDeDiagnostico(event: AgentStreamEvent): UIMessageChunk | null {
+  switch (event.type) {
+    case 'checkpoint_saved':
+      return dataPart('data-checkpoint', {
+        checkpointId: event.checkpointId,
+        resumeToken: event.resumeToken,
+        step: event.step,
+      })
+    // theokit#141 — without these cases the three restored events would be dropped by the loop's
+    // catch-all, which is the reported defect one layer down: translating an event and never
+    // presenting it leaves the consumer just as blind, minus even the warning.
+    case 'input_requested':
+      return dataPart(DATA_PART_DO_INPUT_REQUESTED, { requestId: event.requestId })
+    case 'task_progress':
+      return dataPart(DATA_PART_DO_TASK_PROGRESS, {
+        ...(event.status !== undefined ? { status: event.status } : {}),
+        ...(event.text !== undefined ? { text: event.text } : {}),
+      })
+    case 'shell_output':
+      return dataPart(DATA_PART_DO_SHELL_OUTPUT, { event: event.event })
+    default:
+      return null
+  }
 }
 
 export async function* presentUIMessageStream(
@@ -122,17 +172,10 @@ export async function* presentUIMessageStream(
         yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId: event.callId }
         continue
       }
-      if (event.type === 'checkpoint_saved') {
+      const diagnostico = dataPartDeDiagnostico(event)
+      if (diagnostico !== null) {
         yield* presenter.closeBlock()
-        yield {
-          type: 'data-checkpoint',
-          data: {
-            checkpointId: event.checkpointId,
-            resumeToken: event.resumeToken,
-            step: event.step,
-          },
-          transient: true,
-        }
+        yield diagnostico
         continue
       }
       if (event.type === 'error') {
