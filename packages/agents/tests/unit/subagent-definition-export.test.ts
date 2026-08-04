@@ -41,6 +41,17 @@ import type { AgentDefinition, SubagentDefinition } from '../../src/index.js'
 /** A versão do SDK publicada na Fase 1 — a primeira que tem `settingSources` (D11). */
 const VERSAO_DA_FASE_1 = '4.36.0'
 
+/**
+ * Compares plain `X.Y.Z` versions. Not a semver library, and does not need to be: both sides here
+ * are release versions from this repo's own manifest, with no pre-release or build metadata.
+ */
+function ordemDeVersao(a: string, b: string): number {
+  const partes = (v: string): number[] => v.split('.').map(Number)
+  const [x, y] = [partes(a), partes(b)]
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0)
+  return 0
+}
+
 const RAIZ_DO_PACOTE = join(import.meta.dirname, '..', '..')
 
 const cwd = mkdtempSync(join(tmpdir(), 'm96-subagent-definition-'))
@@ -91,9 +102,20 @@ describe('M96 U2 — SubagentDefinition ao lado do carregador', () => {
     }
     const faixa = manifesto.dependencies['@theokit/sdk']
     expect(faixa).toBeDefined()
-    // PISO, nunca pertinência (D11): `^4.35.0` "inclui" 4.36.0 e ainda assim permite instalar a
-    // versão sem `settingSources`.
-    expect(faixa!.replace(/^[\^~]/, '')).toBe(VERSAO_DA_FASE_1)
+    // FLOOR, never membership (D11): `^4.35.0` "includes" 4.36.0 and still permits installing the
+    // version without `settingSources`.
+    //
+    // Asserted as `>=`, not `==`. Equality read the floor as "exactly the version that introduced
+    // settingSources", which is not what D11 says and made the assertion fail on every legitimate
+    // raise: M107 review HIGH-2 moved the floor to 4.37.0 because 4.36.0 silently ignores the `cwd`
+    // that `Agent.list` advertises, and this test went red for guarding the opposite of its purpose.
+    // A floor BELOW the settingSources version is the defect; a floor above it is the mechanism.
+    const piso = faixa!.replace(/^[\^~]/, '')
+    expect(
+      ordemDeVersao(piso, VERSAO_DA_FASE_1),
+      `the floor ${piso} is below ${VERSAO_DA_FASE_1}, the first version with settingSources — a ` +
+        'fresh install could resolve an SDK that lacks it',
+    ).toBeGreaterThanOrEqual(0)
   })
 
   it('test_o_sdk_instalado_de_fato_aceita_settingSources', async () => {
