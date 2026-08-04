@@ -98,7 +98,11 @@ describe('PresenterRegistry — one canonical stream drives every surface (M51 D
       .register(new TerminalPresenter())
       .register(new JsonPresenter())
       .register(new UIMessageStreamPresenter({ textId: 't' }))
-    expect(registry.surfaces().sort()).toEqual(['json', 'terminal', 'ui-message-stream'])
+    expect(registry.surfaces().sort((a, b) => a.localeCompare(b))).toEqual([
+      'json',
+      'terminal',
+      'ui-message-stream',
+    ])
 
     const term = registry.resolve<{ kind: string; text: string }>('terminal')
     const json = registry.resolve<{ type: string }>('json')

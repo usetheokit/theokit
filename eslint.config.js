@@ -279,7 +279,19 @@ export default tseslint.config(
 
   // Test files — relaxed (test code is documentation, not production).
   {
-    files: ['tests/**/*.{ts,tsx}', '**/*.test.{ts,tsx}', '**/*.test-d.{ts,tsx}'],
+    // `**/*.bench.{ts,tsx}` entrou em agent-builder#319: um benchmark do vitest é código de teste
+    // pela mesma razão que um `.test.ts` — ele não embarca, e mede em vez de afirmar. Sem ele,
+    // `packages/agents/tests/bench/guardrails.bench.ts` era o ÚNICO arquivo de teste do repositório
+    // sob regra de produção, e pagava 5 avisos de `no-non-null-assertion` pelo idioma normal de
+    // teste. Só o padrão de bench foi acrescentado: `tests/**` NÃO virou `**/tests/**`, porque os
+    // testes dentro de `packages/*` passam nas regras de produção hoje, e alargar a relaxação para
+    // eles esconderia achados sem que ninguém tivesse pedido.
+    files: [
+      'tests/**/*.{ts,tsx}',
+      '**/*.test.{ts,tsx}',
+      '**/*.test-d.{ts,tsx}',
+      '**/*.bench.{ts,tsx}',
+    ],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',

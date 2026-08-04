@@ -21,6 +21,68 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(4)}`
 }
 
+/**
+ * A seção de stream ao vivo, extraída de `AgentsTab` em agent-builder#319.
+ *
+ * O motivo é o teto de `max-lines-per-function` (144 > 120), mas a costura não foi escolhida pelo
+ * lint: este bloco já era o único pedaço do componente com **estado próprio** (`agentStreamEvents`)
+ * e ação própria (`RESET_AGENT_STREAM`), e só renderiza quando há eventos. Cortar aqui separa duas
+ * coisas que a tab mostra lado a lado mas que nunca dependeram uma da outra.
+ *
+ * Recebe as classes por prop em vez de recriá-las: `styles.css` memoiza por conteúdo, então
+ * duplicá-las funcionaria — e produziria duas fontes da mesma aparência, que é como elas divergem.
+ */
+function LiveStreamSection({
+  headerClass,
+  clearBtn,
+}: Readonly<{ headerClass: string; clearBtn: string }>) {
+  const { state, dispatch } = useDevtoolsContext()
+  if (state.agentStreamEvents.length === 0) return null
+
+  return (
+    <>
+      <div className={headerClass} style={{ marginTop: 12 }}>
+        <span>🔴 Live Stream ({state.agentStreamEvents.length} events)</span>
+        <button
+          type="button"
+          className={clearBtn}
+          onClick={() => {
+            dispatch({ type: 'RESET_AGENT_STREAM' })
+          }}
+        >
+          clear
+        </button>
+      </div>
+      <div
+        style={{
+          maxHeight: 200,
+          overflow: 'auto',
+          fontSize: tokens.font.sizeXs,
+          fontFamily: 'monospace',
+        }}
+      >
+        {state.agentStreamEvents.slice(-30).map((e, i) => (
+          <div
+            key={i}
+            style={{ padding: '2px 4px', borderBottom: `1px solid ${tokens.colors.border}` }}
+          >
+            <span style={{ color: tokens.colors.textDim }}>
+              {new Date(e.timestamp).toLocaleTimeString()}
+            </span>{' '}
+            <span style={{ color: e.type === 'error' ? '#c92a2a' : tokens.colors.accent }}>
+              {e.type}
+            </span>
+            {e.content && (
+              <span style={{ color: tokens.colors.text }}> {e.content.substring(0, 80)}</span>
+            )}
+            {e.toolName && <span style={{ color: tokens.colors.textMuted }}> → {e.toolName}</span>}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
 export function AgentsTab() {
   const { state, dispatch, styles } = useDevtoolsContext()
 
@@ -122,51 +184,7 @@ export function AgentsTab() {
         </tbody>
       </table>
 
-      {/* Live stream events */}
-      {state.agentStreamEvents.length > 0 && (
-        <>
-          <div className={headerClass} style={{ marginTop: 12 }}>
-            <span>🔴 Live Stream ({state.agentStreamEvents.length} events)</span>
-            <button
-              type="button"
-              className={clearBtn}
-              onClick={() => {
-                dispatch({ type: 'RESET_AGENT_STREAM' })
-              }}
-            >
-              clear
-            </button>
-          </div>
-          <div
-            style={{
-              maxHeight: 200,
-              overflow: 'auto',
-              fontSize: tokens.font.sizeXs,
-              fontFamily: 'monospace',
-            }}
-          >
-            {state.agentStreamEvents.slice(-30).map((e, i) => (
-              <div
-                key={i}
-                style={{ padding: '2px 4px', borderBottom: `1px solid ${tokens.colors.border}` }}
-              >
-                <span style={{ color: tokens.colors.textDim }}>
-                  {new Date(e.timestamp).toLocaleTimeString()}
-                </span>{' '}
-                <span style={{ color: e.type === 'error' ? '#c92a2a' : tokens.colors.accent }}>
-                  {e.type}
-                </span>
-                {e.content && (
-                  <span style={{ color: tokens.colors.text }}> {e.content.substring(0, 80)}</span>
-                )}
-                {e.toolName && (
-                  <span style={{ color: tokens.colors.textMuted }}> → {e.toolName}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <LiveStreamSection headerClass={headerClass} clearBtn={clearBtn} />
     </div>
   )
 }
