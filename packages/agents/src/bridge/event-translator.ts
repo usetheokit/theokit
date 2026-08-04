@@ -64,7 +64,11 @@ function translateAssistantEvent(msg: SdkMessage): StreamEvent[] {
     if (b.type === 'tool_use') {
       events.push({
         type: 'tool_call',
-        callId: b.id ?? `tc-${Date.now()}`,
+        // #138 — era `tc-${Date.now()}`. Um id novo a cada chamada NUNCA está no conjunto de
+        // dedup, então o fallback derrotava a dedup por construção — e ainda parecia um id de
+        // verdade para quem lê. String vazia é honesta: `isDuplicatedByDelta` a trata como
+        // "não sei identificar" e prefere um duplo-render visível a uma supressão silenciosa.
+        callId: b.id ?? '',
         toolName: b.name ?? 'unknown',
         input: b.input ?? {},
       })
@@ -77,7 +81,8 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
   // Real SDKToolUseMessage (messages.ts:89): call_id (not id), status running|completed|error,
   // tool output in `result` (no separate `error` field).
   const status = msg.status as string
-  const callId = asString(msg.call_id, `tc-${Date.now()}`)
+  // #138 — idem: sem `call_id` a identidade é desconhecida, e um timestamp só disfarça isso.
+  const callId = asString(msg.call_id, '')
   const toolName = asString(msg.name, 'unknown')
   if (status === 'completed') {
     return [
@@ -146,6 +151,42 @@ function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
   return []
 }
 
+
+/**
+ * #141 — silêncio DELIBERADO é legítimo; silêncio por IGNORÂNCIA não.
+ *
+ * Os dois `default` deste arquivo devolviam `[]` com um comentário de "ignorado", misturando duas
+ * coisas muito diferentes: tipos que decidimos não expor (`token-delta`, `step-*` — ruído de alta
+ * frequência) e tipos que simplesmente não conhecíamos (`request`, `task`, `ShellOutputDelta`).
+ * O segundo caso é o que a regra de falhar-alto proíbe: um sinal de aprovação pendente sumindo
+ * sem deixar rastro é indistinguível de "não havia sinal".
+ *
+ * A lista explícita separa os dois. O que está nela some em silêncio, porque alguém decidiu; o
+ * que não está avisa UMA vez por tipo — o suficiente para aparecer num diagnóstico, sem inundar
+ * um stream que emite milhares de eventos por turno.
+ */
+const jaAvisados = new Set<string>()
+
+function avisarSeDesconhecido(tipo: string, ignoradosDeProposito: ReadonlySet<string>): void {
+  if (ignoradosDeProposito.has(tipo) || jaAvisados.has(tipo)) return
+  jaAvisados.add(tipo)
+  console.warn(
+    `[theokit] agents.bridge: evento "${tipo}" do SDK não é traduzido e foi descartado. ` +
+      `Se ele carrega informação que a UI precisa, o tradutor precisa de um caso para ele (#141).`,
+  )
+}
+
+/** Tipos de `SDKMessage` que decidimos NÃO expor — o silêncio aqui é escolha, não descuido. */
+const SDK_MESSAGE_IGNORADOS: ReadonlySet<string> = new Set(['user'])
+
+/** Tipos de `InteractionUpdate` de alta frequência que a UI não consome. */
+const INTERACTION_UPDATE_IGNORADOS: ReadonlySet<string> = new Set([
+  'thinking-completed',
+  'token-delta',
+  'step-started',
+  'step-completed',
+])
+
 /**
  * Translate a single SDK message to zero or more TheoKit stream events.
  * Returns an array because one SDK message may map to multiple TheoKit events.
@@ -164,7 +205,8 @@ export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
     case 'status':
       return translateStatusEvent(msg)
     default:
-      return [] // Unknown message types silently ignored
+      avisarSeDesconhecido(String(msg.type), SDK_MESSAGE_IGNORADOS)
+      return []
   }
 }
 
@@ -217,6 +259,7 @@ export function translateInteractionUpdate(update: InteractionUpdate): StreamEve
         },
       ]
     default:
-      return [] // thinking-completed, token-delta, step-*, etc. — not surfaced
+      avisarSeDesconhecido(String(update.type), INTERACTION_UPDATE_IGNORADOS)
+      return []
   }
 }

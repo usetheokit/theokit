@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, it, expect } from 'vitest'
 
 import { runConfigHook } from '../../packages/theo/src/vite-plugin/config-hook.js'
@@ -30,5 +33,32 @@ describe('runConfigHook — server.watch.ignored (#121)', () => {
 
   it('has no duplicate ignore entries', () => {
     expect(new Set(ignored).size).toBe(ignored.length)
+  })
+})
+
+/**
+ * #121, o degrau que faltava: os ignores têm de CHEGAR ao watcher.
+ *
+ * O teste acima prova que `runConfigHook` produz a lista. Não prova que ela sobrevive —
+ * `cli/commands/dev.ts` chama `createServer({ server: { ... } })`, e a config inline tem
+ * precedência sobre a do plugin. Hoje ela não declara `watch`, então o merge do Vite preserva o
+ * do plugin. No dia em que alguém adicionar um `watch` ali, a correção some **em silêncio**: o
+ * único sintoma é a tela voltar a piscar, e o teste acima continua verde.
+ *
+ * A checagem é sobre a FONTE porque é ali que a regressão nasceria. Tentei fazê-la mesclando as
+ * duas configs com o `mergeConfig` do próprio Vite — mais fiel — mas `vite` não é resolvível a
+ * partir do diretório de testes da raiz neste workspace pnpm, e cravar o caminho profundo
+ * (`packages/theo/node_modules/vite`) seria trocar uma fragilidade por outra.
+ */
+describe('dev.ts não pode sobrescrever o watch do plugin (#121)', () => {
+  it('a config inline de createServer não declara server.watch', () => {
+    const fonte = readFileSync(
+      resolve(__dirname, '../../packages/theo/src/cli/commands/dev.ts'),
+      'utf-8',
+    )
+    const chamada = fonte.slice(fonte.indexOf('server = await createServer({'))
+    const blocoServer = chamada.slice(chamada.indexOf('server: {'), chamada.indexOf('logLevel:'))
+
+    expect(blocoServer).not.toMatch(/\bwatch\s*:/)
   })
 })
