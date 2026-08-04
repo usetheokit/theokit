@@ -196,6 +196,30 @@ describe('M112 — o .mcp.json degrada por entrada', () => {
       mcpServers: {
         vazador: {
           type: 'http',
+          url: 'https://ok.invalido/mcp',
+          headers: { Authorization: 12345 },
+        },
+      },
+    })
+    carregar()
+    // A URL é VÁLIDA de propósito. A primeira versão usava `url: 'não-é-url'`, e `validarRemoto`
+    // retorna no primeiro erro — o aviso era sobre a URL e **nunca tocava `headers`**. O review provou
+    // por mutação: trocar a mensagem do ramo de headers por uma que despeja o valor mantinha os 28
+    // testes verdes. Um controle que nunca alcança o ramo que protegeria é indistinguível de nenhum
+    // controle (`mecanismo-anti-esquecimento.md § 5.3`).
+    expect(avisos, 'o ramo de headers não disparou — o teste voltou a não alcançá-lo').toHaveLength(
+      1,
+    )
+    expect(avisos.join(' '), 'o aviso deve nomear a entrada').toContain('vazador')
+    expect(avisos.join(' '), 'o aviso deve falar da FORMA do campo').toContain('headers')
+    expect(avisos.join(' '), 'o aviso vazou o conteúdo do header').not.toContain('12345')
+
+    // O caso anterior segue coberto, como cenário SEPARADO: URL inválida com header presente.
+    avisos.length = 0
+    escrever({
+      mcpServers: {
+        outro: {
+          type: 'http',
           url: 'não-é-url',
           headers: { Authorization: 'Bearer SEGREDO-XYZ-123' },
         },
@@ -203,7 +227,6 @@ describe('M112 — o .mcp.json degrada por entrada', () => {
     })
     carregar()
     expect(avisos.join(' '), 'o aviso vazou o valor do header').not.toContain('SEGREDO-XYZ-123')
-    expect(avisos.join(' '), 'o aviso deve nomear a entrada').toContain('vazador')
   })
 
   it('test_NEGATIVO_arquivo_impartivel_CONTINUA_lancando', () => {
@@ -222,9 +245,55 @@ describe('M112 — o .mcp.json degrada por entrada', () => {
     expect(loadMcpJson(join(dir, 'nao-existe'))).toEqual({})
   })
 
-  it('test_onWarn_omitido_nao_quebra', () => {
-    // O canal de aviso é opcional: um consumidor que não o passa continua funcionando.
-    escrever({ mcpServers: { bom: { command: 'echo' }, ruim: {} } })
-    expect(Object.keys(loadMcpJson(dir))).toEqual(['bom'])
+  it('test_onWarn_omitido_cai_em_stderr_NUNCA_em_silencio', () => {
+    // HIGH-1 do review: `onWarn` opcional deixava a omissão SILENCIOSA quando o chamador não assinava
+    // — e o único chamador de produção não assinava. Toda a defesa contra `error-handling.md § 2`
+    // dependia da frase "o erro segue visível pelo canal"; sem assinante, não seguia.
+    const original = process.stderr.write.bind(process.stderr)
+    const capturado: string[] = []
+    process.stderr.write = ((s: string) => {
+      capturado.push(s)
+      return true
+    }) as typeof process.stderr.write
+    try {
+      escrever({ mcpServers: { bom: { command: 'echo' }, ruim: {} } })
+      expect(Object.keys(loadMcpJson(dir))).toEqual(['bom'])
+    } finally {
+      process.stderr.write = original
+    }
+    expect(capturado.join(' '), 'a omissão foi silenciosa sem `onWarn` — é fail-open').toContain(
+      'ruim',
+    )
+  })
+
+  it('test_SEGURANCA_envPolicy_do_arquivo_NAO_atravessa', () => {
+    // BLOCKER-1 do review. `envPolicy: 'all'` desliga o scrub que impede um binário de terceiro de
+    // exfiltrar segredos do host via ambiente — e o `.mcp.json` é arquivo de PROJETO. A primeira
+    // versão do M112 repassava o objeto cru e deixava esse campo atravessar.
+    escrever({ mcpServers: { s: { command: 'node', args: ['x.js'], envPolicy: 'all' } } })
+    const entrada = carregar().s as unknown as Record<string, unknown>
+    expect(
+      'envPolicy' in entrada,
+      'o `.mcp.json` conseguiu desligar o scrub de segredos do host — um repositório passa a poder ' +
+        'entregar ANTHROPIC_API_KEY e NPM_TOKEN a um binário de terceiro com uma linha de JSON',
+    ).toBe(false)
+    expect(entrada, 'o resto da entrada stdio deve atravessar normalmente').toEqual({
+      command: 'node',
+      args: ['x.js'],
+    })
+  })
+
+  it('test_SEGURANCA_campo_desconhecido_NAO_atravessa', () => {
+    // A allowlist é a REGRA, não uma lista de proibidos: um campo que ninguém previu também não passa.
+    // Sem isto, o próximo campo perigoso do SDK atravessaria sozinho no dia em que fosse criado.
+    escrever({
+      mcpServers: {
+        s: { command: 'node', campoInventado: { x: 1 } },
+        r: { type: 'http', url: 'https://ok.invalido/mcp', outroInventado: 'y' },
+      },
+    })
+    const m = carregar()
+    expect(m.s).toEqual({ command: 'node' })
+    expect(m.r).toEqual({ type: 'http', url: 'https://ok.invalido/mcp' })
   })
 })
