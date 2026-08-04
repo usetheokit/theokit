@@ -45,9 +45,9 @@ const VERSAO_DA_FASE_1 = '4.36.0'
  * Compares plain `X.Y.Z` versions. Not a semver library, and does not need to be: both sides here
  * are release versions from this repo's own manifest, with no pre-release or build metadata.
  */
-function ordemDeVersao(a: string, b: string): number {
-  const partes = (v: string): number[] => v.split('.').map(Number)
-  const [x, y] = [partes(a), partes(b)]
+function compareVersions(a: string, b: string): number {
+  const parts = (v: string): number[] => v.split('.').map(Number)
+  const [x, y] = [parts(a), parts(b)]
   for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0)
   return 0
 }
@@ -110,10 +110,10 @@ describe('M96 U2 — SubagentDefinition ao lado do carregador', () => {
     // raise: M107 review HIGH-2 moved the floor to 4.37.0 because 4.36.0 silently ignores the `cwd`
     // that `Agent.list` advertises, and this test went red for guarding the opposite of its purpose.
     // A floor BELOW the settingSources version is the defect; a floor above it is the mechanism.
-    const piso = faixa!.replace(/^[\^~]/, '')
+    const floor = faixa!.replace(/^[\^~]/, '')
     expect(
-      ordemDeVersao(piso, VERSAO_DA_FASE_1),
-      `the floor ${piso} is below ${VERSAO_DA_FASE_1}, the first version with settingSources — a ` +
+      compareVersions(floor, VERSAO_DA_FASE_1),
+      `the floor ${floor} is below ${VERSAO_DA_FASE_1}, the first version with settingSources — a ` +
         'fresh install could resolve an SDK that lacks it',
     ).toBeGreaterThanOrEqual(0)
   })

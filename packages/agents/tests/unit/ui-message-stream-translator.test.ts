@@ -29,7 +29,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
 import {
-  DATA_PART_DO_CODE_DE_ERRO,
+  ERROR_CODE_DATA_PART,
   presentUIMessageStream,
 } from '../../src/bridge/present-ui-message-stream.js'
 
@@ -42,7 +42,7 @@ const TEXT_ID = 't0'
  * every consumer matching on it, and hard-coding the literal here would let that rename ship green.
  */
 function codeChunk(code: string): UIMessageChunk {
-  return { type: DATA_PART_DO_CODE_DE_ERRO, data: { code }, transient: true } as UIMessageChunk
+  return { type: ERROR_CODE_DATA_PART, data: { code }, transient: true } as UIMessageChunk
 }
 
 async function* fromArray(events: AgentStreamEvent[]): AsyncIterable<AgentStreamEvent> {
