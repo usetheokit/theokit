@@ -423,10 +423,14 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
         { type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' },
       ],
     )
-    const chamadas = out.filter((e) => e.type === 'tool_call') as { callId: string }[]
-    expect(chamadas).toHaveLength(1)
-    expect(chamadas[0]?.callId).toBe('')
-    expect(chamadas[0]?.callId).not.toMatch(/^tc-\d+$/)
+    // Narrowed by a type predicate rather than a cast. The direct `as { callId: string }[]` was
+    // rejected by `tsc --noEmit -p tsconfig.test.json` (TS2352 — the index-signature element type
+    // does not overlap), leaving the mandatory typecheck gate red on a clean tree; widening through
+    // `unknown` would have silenced it while removing the only check that the field is there at all.
+    const toolCalls = out.filter((e): e is typeof e & { callId: string } => e.type === 'tool_call')
+    expect(toolCalls).toHaveLength(1)
+    expect(toolCalls[0]?.callId).toBe('')
+    expect(toolCalls[0]?.callId).not.toMatch(/^tc-\d+$/)
   })
 
   it('test_text_only_onDelta_still_gets_tools_from_run_stream', async () => {
