@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`theokit start` serves decorator controllers (#123).** `theokit build` compiles `server/controllers/**` into `dist`, and production serves them after a file-route miss — closing the split where a controller worked in `theokit dev` and 404'd in production. Apps with no controllers emit nothing and are unaffected.
 - **Observe a run's typed SDK events (#132).** `streamAgentUIMessages({ onRunEvent })` forwards the SDK's `tool_progress`, `rate_limit`, `permission_denied`, `task_*`, `compact_boundary`, `tripwire` and `completion_check` events. The chat stream is unchanged for anyone who does not opt in.
 - **Pending-input, task-progress and shell output reach the UI (#141).** Three SDK signals that were silently discarded now arrive as `data-input-requested`, `data-task-progress` and `data-shell-output`. `request` is the one that mattered: it is the pause signal, so dropping it meant a blocked run showed nothing at all.
+- **TheoKit Studio mounts at `/_studio` in `theokit dev` (#133).** Install `@theokit/studio` and the reflection API + SPA are served same-origin, no config. It is an **optional** peer and dev-only: an app that does not install it is unaffected and its production build never mounts it.
 - **Pre-publish guard against the `workspace:` protocol (#153).** CI packs every publishable package and fails if a tarball still carries `workspace:` — the defect that made `theokit` 0.19.0–0.30.0 uninstallable. Those versions are now deprecated on npm.
 
 ### Fixed
