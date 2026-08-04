@@ -151,7 +151,6 @@ function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
   return []
 }
 
-
 /**
  * #141 — silêncio DELIBERADO é legítimo; silêncio por IGNORÂNCIA não.
  *
@@ -204,8 +203,29 @@ export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
       return [{ type: 'thinking', content: asString(msg.text, '') }]
     case 'status':
       return translateStatusEvent(msg)
+    case 'request':
+      // theokit#141 — the pause signal. Only `request_id` is available (`SDKRequestMessage`), so it
+      // becomes its own event rather than a synthesized `approval_required`: that one drives an
+      // actionable UI and needs a tool name, a question and a callback URL, none of which exist
+      // here. An approval prompt the user cannot answer is worse than an honest "waiting".
+      return [{ type: 'input_requested', requestId: asString(msg.request_id, '') }]
+    case 'task': {
+      // theokit#141 — milestones/summaries. Both fields are optional upstream; an event carrying
+      // neither costs a frame and tells the consumer nothing, so it is not emitted.
+      const status = typeof msg.status === 'string' ? msg.status : undefined
+      const text = typeof msg.text === 'string' ? msg.text : undefined
+      if (status === undefined && text === undefined) return []
+      return [
+        {
+          type: 'task_progress',
+          ...(status !== undefined ? { status } : {}),
+          ...(text !== undefined ? { text } : {}),
+        },
+      ]
+    }
     default:
-      avisarSeDesconhecido(String(msg.type), SDK_MESSAGE_IGNORADOS)
+      // `msg.type` is already `string` on `SdkMessage`; the wrapper was a no-op the lint rejects.
+      avisarSeDesconhecido(msg.type, SDK_MESSAGE_IGNORADOS)
       return []
   }
 }
@@ -258,8 +278,15 @@ export function translateInteractionUpdate(update: InteractionUpdate): StreamEve
           isError: false,
         },
       ]
+    case 'shell-output-delta':
+      // theokit#141 — live shell output. Passed through opaquely: the SDK types the payload as
+      // `Record<string, unknown>`, so any shape this layer assumed would be a second, weaker oracle
+      // over a contract that lives upstream. What it must NOT be is `text_delta` — that would
+      // splice command output into the assistant message the consumer persists as the transcript.
+      return [{ type: 'shell_output', event: update.event }]
     default:
-      avisarSeDesconhecido(String(update.type), INTERACTION_UPDATE_IGNORADOS)
+      // Same as above: the union's discriminant is already `string`.
+      avisarSeDesconhecido(update.type, INTERACTION_UPDATE_IGNORADOS)
       return []
   }
 }
