@@ -1,5 +1,188 @@
 # @theokit/agents
 
+## 6.4.2
+
+### Patch Changes
+
+- **Correção de segurança.** O release anterior repassava a entrada do `.mcp.json` como veio do arquivo,
+  em vez de montá-la a partir dos campos declarados. Isso deixava o `envPolicy` atravessar — e ele é o
+  campo que decide se o processo do servidor MCP herda o ambiente **com** ou **sem** as variáveis
+  sensíveis do host. Um `.mcp.json` (arquivo de projeto, versionado) podia declarar `envPolicy: "all"` e
+  entregar chaves de API do ambiente a um binário de terceiro.
+
+  Agora a entrada é montada por allowlist, ramo a ramo: `command`/`args`/`env`/`cwd` no stdio,
+  `url`/`type`/`headers`/`auth`/`requestTimeoutMs` no remoto. Campo desconhecido não atravessa —
+  inclusive um que o SDK venha a criar. `envPolicy` fica de fora deliberadamente: é decisão de postura do
+  host, e o SDK a aceita do código que constrói o agente, onde um humano revisa.
+
+  **E o aviso deixou de poder sumir.** `onWarn` continua opcional, mas quando omitido os avisos vão para
+  `stderr` em vez de para lugar nenhum — antes, um chamador que não assinasse o canal descartava entradas
+  em silêncio absoluto.
+
+## 6.4.1
+
+### Patch Changes
+
+- a432fda: Os tipos de configuração de servidor MCP passaram a alcançar a raiz do pacote. Estavam em `types.ts` e
+  não chegavam ao `index.d.ts` — na prática, o consumidor conseguia _usar_ um servidor remoto mas não
+  conseguia **nomear** o tipo do mapa que `loadMcpJson` devolve, que é metade do problema que o release
+  anterior resolveu. `McpServerConfig`, `McpServersMap`, `McpStdioServerConfig`, `McpHttpServerConfig`,
+  `McpAuthConfig` e `McpOAuthConfig` agora atravessam.
+
+## 6.4.0
+
+### Minor Changes
+
+- f950538: Um servidor MCP que o carregador não entende deixou de derrubar os que ele entende, e o transporte
+  remoto passou a atravessar.
+
+  Antes, um `.mcp.json` com um servidor stdio perfeitamente válido e um vizinho que o parser não
+  reconhecia produzia `McpFileError` — e **os dois** eram perdidos. Fail-closed no raio errado: recusar
+  _uma entrada_ é correto; recusar _o arquivo_ transforma "esse servidor não é suportado" em "você não
+  tem MCP nenhum".
+
+  Agora o raio é a entrada:
+
+  ```jsonc
+  {
+    "mcpServers": {
+      "local": { "command": "npx", "args": ["servidor"] },
+      "remoto": { "type": "http", "url": "https://…/mcp", "headers": { "Authorization": "…" } },
+    },
+  }
+  ```
+
+  Os dois sobem. Uma entrada inválida é **omitida e NOMEADA** pelo canal `onWarn` — o erro continua
+  tipado e visível, apenas deixou de ser fatal para os vizinhos. Um arquivo **impartível** (JSON quebrado,
+  `mcpServers` que não é objeto) continua lançando: ali não há entradas para separar.
+
+  **Nenhuma dependência nova.** O transporte remoto já era do SDK — `McpServerConfig` é
+  `McpStdioServerConfig | McpHttpServerConfig`, com `type`/`url`/`headers`/`auth`/`requestTimeoutMs`.
+  Este pacote declarava um tipo **mais estreito** e recusava o que o runtime aceita; agora re-exporta o
+  do SDK. `McpAuthConfig`, `McpHttpServerConfig`, `McpOAuthConfig` e `McpStdioServerConfig` passaram a
+  atravessar junto.
+
+  **Mudança de contrato:** `loadMcpJson` deixa de lançar em defeito de entrada. Quem dependia disso
+  recebe a entrada omitida e um aviso no `onWarn` opcional; o comportamento em defeito de **arquivo** é
+  o mesmo de antes.
+
+  O valor de `headers` nunca entra num aviso — a mensagem descreve a **forma** do campo, nunca o
+  conteúdo.
+
+## 6.3.1
+
+### Patch Changes
+
+- 8847d94: Testes do device provider endurecidos após review: o override de `clientId` por ambiente
+  (`CODEX_CLIENT_ID_ENV_VAR`) ganhou oráculo — antes era API pública documentada com zero teste, e
+  remover a leitura da variável mantinha tudo verde. Um teste que não invocava nenhum símbolo de
+  produção (passava com o pacote deletado) foi removido; a cobertura real do caso vive no consumidor.
+  Nenhuma mudança de comportamento.
+
+## 6.3.0
+
+### Minor Changes
+
+- e7d99d9: O device flow **RFC 8628** atravessa a camada, e o do Codex também.
+
+  `@theokit/sdk` já implementava o padrão (`deviceLogin`, `requestDeviceCode`, `pollDeviceToken`,
+  `DeviceOAuthConfig`), e `@theokit/agents/auth` não re-exportava nenhum deles. Como o consumidor tem
+  regra inquebrável de nunca importar `@theokit/sdk*` direto, quem precisasse do padrão tinha duas
+  saídas: violar a fronteira, ou reimplementar o protocolo — exatamente a situação que o M73 já
+  documentou neste arquivo (_"a lacuna era daqui, não indisciplina de lá"_).
+
+  Medido junto: `openaiDeviceLogin` era **importado** para uso interno do `AuthProvider` e nunca
+  re-exportado. Consequência — o flow do Codex só era alcançável construindo um `AuthProvider` (que
+  exige `config` + `store`). Ele atravessa agora também.
+
+  As duas formas **coexistem e não são unificadas**: `DeviceOAuthConfig` tem um `deviceCodeEndpoint`
+  (RFC); `OpenAIDeviceConfig` tem dois (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com PKCE).
+  Fundi-las quebraria o Codex.
+
+  Pass-through **puro**, pelo critério que o M73 escreveu: são funções de I/O sem estado a segurar, e
+  envolver quebraria `instanceof`. `tests/unit/auth-parity.test.ts` trava a identidade dos quatro com
+  `toBe`.
+
+- 18fa6ef: Autenticar por device flow passa a caber numa chamada, e um provider novo entra sem editar a camada.
+
+  Antes, quem usava `@theokit/agents/auth` para autenticar no Codex precisava saber que existem **duas**
+  formas de device flow, copiar o `clientId` e três URLs da OpenAI para dentro do próprio código, montar
+  `{ fetch, sleep, now }`, chamar `deviceLogin` e **lembrar** de chamar `persist` — e esquecer o último
+  custava um round-trip OAuth completo que não guardava nada.
+
+  Agora:
+
+  ```ts
+  import { CODEX_PROVIDER, loginWithDevice } from '@theokit/agents/auth'
+
+  const [metodo] = CODEX_PROVIDER.methods // rotulado, para a sua UI mostrar
+  const { path } = await loginWithDevice(CODEX_PROVIDER, metodo, store, { onPrompt })
+  ```
+
+  Um provider de terceiro usa a **mesma** chamada: basta construir um `DeviceAuthProvider` com os seus
+  métodos. Nada na camada muda.
+
+  **Novos símbolos:** `CODEX_PROVIDER`, `loginWithDevice`, `CODEX_CLIENT_ID_ENV_VAR`, e os tipos
+  `AuthMethod`, `DeviceAuthProvider`, `PromptHooks`, `LoginWithDeviceOptions`.
+
+  `AuthMethod` é união discriminada — um método `type: 'oauth'` **tem** de carregar `authorize`, e o
+  compilador recusa `{ label, type: 'oauth' }`. Não há discriminante de protocolo: cada método aponta
+  para a sua própria função, então o RFC 8628 e a variante da OpenAI coexistem sem `switch` e sem risco
+  de serem fundidas.
+
+  `deps` é opcional; `AuthProvider.deviceLogin` e `.persist` continuam públicos para quem precisa da
+  granularidade. Nenhum símbolo existente mudou de assinatura.
+
+## 6.1.1
+
+### Patch Changes
+
+- M107 (review HIGH-2) — require `@theokit/sdk@^4.37.0`, not `^4.36.0`.
+
+  `6.1.0` shipped with `^4.36.0`, so a fresh install could resolve `4.36.0` — where `Agent.list`
+  **silently ignores the `cwd` it advertises**. That is not a cosmetic mismatch: a consumer that
+  narrows a listing by workspace to decide which sessions are still active would get the _process_
+  directory's answer instead, and this project consumes exactly that list to protect transcripts from
+  deletion.
+
+  The range now names the version that actually honours the contract. Nothing else changed; `6.1.0`
+  and `6.1.1` are byte-identical apart from this field. Consumers already resolving `4.37.0` (through
+  an override or a fresh install) were never affected.
+
+## 6.1.0
+
+### Minor Changes
+
+- 3575c8e: Two additions: `loadMcpJson(cwd)` reads the `.mcp.json` project convention from disk, and `reasoningEffortOf(model)` reads back the reasoning effort that `buildModelSelection` writes.
+
+  **`loadMcpJson(cwd)`** — the layer already shipped the rare MCP cases (`resolveMcpServers` for per-request selection, `mcpRegistry` for a known provider) and not the common one: reading `<cwd>/.mcp.json`, the convention Claude Code and Cursor established. Every application that wanted it wrote the loader by hand, which is why the same 120-odd lines of read-parse-validate exist in more than one consumer.
+
+  It returns the `McpServersMap` the package already exports — no new type. An **absent** file returns `{}`, because MCP is opt-in and a project without the file is a project without MCP. A **present but broken** file throws `McpFileError` naming the path: a read failure, invalid JSON, a root that is not an object, a server without a non-empty `command`, or an `args`/`env`/`cwd` of the wrong type. A valid JSON object with no `mcpServers` key returns `{}` — that is a project declaring no server, not a malformed file. An empty (0-byte) file is invalid JSON and throws, deliberately: "absent" and "present and empty" are different situations, and treating the second as `{}` would disable MCP in silence.
+
+  `McpFileError` descends from `TheokitAgentError`, so `isTransientError` classifies it like every other error from this package (`isRetryable` is `false` — a malformed config file does not improve on retry).
+
+  **Scope, so it is not a surprise later:** stdio servers only. HTTP/SSE entries are not accepted in this release. Widening it later is additive and breaks nothing written against this version.
+
+  **`reasoningEffortOf(model)`** — the inverse of `buildModelSelection`, which is documented as the single site that maps a reasoning effort onto a `ModelSelection`. Only the write half was public, so callers that needed to read the effort back re-derived the parameter key by hand. Two spellings of one key drift apart quietly; now both directions live in one module and share one constant.
+
+  It accepts a bare model id or a full selection, and returns `undefined` when there is no effort to read — a string id, a selection without parameters, or parameters that do not include the reasoning key. None of those throw: absence is a normal answer, not a failure. A value that is present but not one of the documented levels comes back **verbatim**, and the return type is `string | undefined` for exactly that reason: validating the value stays with the caller, and typing the result as the effort union would promise a check this function does not perform.
+
+  Both symbols are reachable from the package root and from `@theokit/agents/bridge`.
+
+## 6.0.0
+
+### Major Changes
+
+- 24c8011: **BREAKING:** `Agent.list` no longer accepts `limit` or `cursor`, and its result no longer declares `nextCursor`.
+
+  The SDK's type promises all three; the runtime references none of them — `Agent.list` reads only `options.runtime`. A caller that writes `limit: 500` against a 688-entry registry believes it asked for a bounded page and silently gets the whole set, and on the day the runtime starts honouring the parameter that _same_ line silently gets a truncated one instead. Both directions are silent, and the consumer that motivated this change feeds the result into a NEVER-delete guard of a session garbage collector: a truncated list there means deleting a transcript the guard should have protected.
+
+  This is a type-only change — the exported value is still the SDK's `Agent`, asserted by identity in `tests/unit/agent-list-narrowed.test.ts`. Every other static (`create`, `getOrCreate`, `get`, `delete`, `archive`, `unarchive`, `rename`, `compact`, `listRuns`, `getRun`, `registry`) keeps its shape, asserted in `tests/type/agent-list-narrowed.test-d.ts`.
+
+  Migration is one line per call site: delete the `limit`/`cursor` property. The result is the full population, which is what the runtime was already returning.
+
+  Exit criterion, written in `src/index.ts` next to the narrowing: when the SDK runtime actually honours `limit`/`cursor`/`cwd`, delete the block and restore the plain re-export.
+
 ## 5.0.0
 
 ### Major Changes

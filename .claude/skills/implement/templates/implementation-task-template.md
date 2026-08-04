@@ -5,13 +5,13 @@
 **Slug:** `{slug}`
 **Source plan:** `.claude/knowledge-base/plans/{slug}-plan.md`
 **Plan verdict:** `{SHIPPABLE / SHIPPABLE_WITH_CAVEATS}` (score `{N}`)
-**Working branch:** `develop` (Unbreakable Rule 4 — all work happens on `develop`; `main` is release-only)
+**Working branch:** `workspace` (Unbreakable Rule 4 — work is born on `workspace`, promoted to `develop` via PR; `main` is release-only)
 **Started:** `{YYYY-MM-DD}`
 
 ## Pre-condition audit (verified at /implement start)
 
 - [ ] Plan verdict ≥ SHIPPABLE_WITH_CAVEATS
-- [ ] On `develop` (current branch: `{branch}`)
+- [ ] On `workspace` (current branch: `{branch}`)
 - [ ] No uncommitted changes at start
 - [ ] `npm install` complete (or N/A for pre-code phase)
 - [ ] External dependencies up (Postgres if integration tests need it)

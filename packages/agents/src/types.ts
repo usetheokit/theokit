@@ -1,4 +1,4 @@
-import type { SystemPromptResolver } from '@theokit/sdk'
+import type { McpServerConfig as McpServerConfigDoSdk, SystemPromptResolver } from '@theokit/sdk'
 import type { z } from 'zod'
 
 /**
@@ -133,18 +133,31 @@ export interface HumanInTheLoopOptions {
 }
 
 /** M53 — moved from the `@MCP` decorator being deleted; consumed by the bridge and the adapter. */
-export interface McpServerConfig {
-  /** Command to start the MCP server. */
-  command: string
-  /** Arguments passed to the command. */
-  args?: string[]
-  /** Environment variables for the server process. */
-  env?: Record<string, string>
-  /** Working directory for the server process. */
-  cwd?: string
-}
+/**
+ * M112 — a configuração de servidor MCP é a **do SDK**, re-exportada, não uma declarada aqui.
+ *
+ * Até o M112 este arquivo declarava a sua própria `McpServerConfig` com `command` obrigatório — mais
+ * **estreita** que a do SDK, que é `McpStdioServerConfig | McpHttpServerConfig` e cobre transporte
+ * remoto com `type`/`url`/`headers`/`auth`/`requestTimeoutMs` desde antes deste milestone.
+ *
+ * Dois donos do mesmo fato (`mecanismo-anti-esquecimento.md § 5.6`), e o estreito ganhava: o
+ * consumidor recebia um tipo que recusava configuração que o runtime aceita. É o **eixo 2** da
+ * fronteira em camadas — o tipo que o consumidor recebe resolvia para a camada quando deveria
+ * resolver para o SDK.
+ *
+ * PASS-THROUGH PURO, deliberadamente: envolver acrescentaria indireção sem nada dentro, e a união
+ * discriminada do SDK é o que torna `{}` — uma entrada sem `command` **e** sem `url` —
+ * irrepresentável no compilador.
+ */
+export type {
+  McpAuthConfig,
+  McpHttpServerConfig,
+  McpOAuthConfig,
+  McpServerConfig,
+  McpStdioServerConfig,
+} from '@theokit/sdk'
 
-export type McpServersMap = Record<string, McpServerConfig>
+export type McpServersMap = Record<string, McpServerConfigDoSdk>
 
 /** M53 — moved from the `@ProjectContext` decorator being deleted; read by the compiler. */
 export type IndexStrategy =

@@ -11,6 +11,13 @@
  * - Error mid-stream (event OR thrown iterable): SURFACE an ai-sdk error chunk
  *   ({ type:'error', errorText }), close an OPEN text with text-end, then finish;
  *   NEVER throw past the boundary (error-handling.md — surface, don't swallow).
+ *   When the failure carries a `code`, it goes in a SEPARATE data part emitted
+ *   just BEFORE the error chunk — theokit#161 (B). It cannot ride inside the
+ *   error chunk: the `error` variant of `uiMessageChunkSchema` is strict, and a
+ *   measured probe against ai@7.0.14 shows `{type:'error',errorText,errorCode}`
+ *   is REJECTED while the bare chunk validates. The assertions below therefore
+ *   pin BOTH chunks — a code that stops being emitted, and a code that leaks
+ *   back INTO the error chunk, both fail here.
  * - One shared `id` for the whole text block, injected via opts.textId
  *   for determinism (D3).
  *
@@ -21,9 +28,22 @@ import { uiMessageChunkSchema, type UIMessageChunk } from 'ai'
 import { describe, expect, it } from 'vitest'
 
 import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
-import { presentUIMessageStream } from '../../src/bridge/present-ui-message-stream.js'
+import {
+  ERROR_CODE_DATA_PART,
+  presentUIMessageStream,
+} from '../../src/bridge/present-ui-message-stream.js'
 
 const TEXT_ID = 't0'
+
+/**
+ * The data part that carries the failure `code`, as the consumer sees it.
+ *
+ * Built from the EXPORTED constant on purpose: renaming the data part is a breaking change for
+ * every consumer matching on it, and hard-coding the literal here would let that rename ship green.
+ */
+function codeChunk(code: string): UIMessageChunk {
+  return { type: ERROR_CODE_DATA_PART, data: { code }, transient: true } as UIMessageChunk
+}
 
 async function* fromArray(events: AgentStreamEvent[]): AsyncIterable<AgentStreamEvent> {
   for (const ev of events) yield ev
@@ -154,6 +174,7 @@ describe('presentUIMessageStream — text (M0)', () => {
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
       { type: 'text-delta', id: TEXT_ID, delta: 'partial' },
+      codeChunk('provider_error'),
       { type: 'error', errorText: 'boom' },
       { type: 'text-end', id: TEXT_ID },
       { type: 'finish' },
@@ -184,6 +205,7 @@ describe('presentUIMessageStream — text (M0)', () => {
     const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
     expect(chunks).toEqual([
       { type: 'start' },
+      codeChunk('provider_error'),
       { type: 'error', errorText: 'boom' },
       { type: 'finish' },
     ])
@@ -220,12 +242,18 @@ describe('presentUIMessageStream — text (M0)', () => {
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
     const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
-    // Prove the run actually produced the error chunk, then validate every chunk.
-    expect(chunks).toContainEqual({ type: 'error', errorText: 'boom' })
+    // Prove the run actually produced BOTH halves of the failure, then validate every chunk.
+    //
+    // The pre-condition runs FIRST and `expect` throws, so a stale pre-condition disables the
+    // validation loop below without ever reporting that it did — which is exactly how the
+    // out-of-protocol chunk survived from M95 to theokit#161. Validate first, assert after, so
+    // the oracle always runs.
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
     }
+    expect(chunks).toContainEqual({ type: 'error', errorText: 'boom' })
+    expect(chunks).toContainEqual(codeChunk('provider_error'))
   })
 })
 
@@ -365,6 +393,7 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
       { type: 'start' },
       { type: 'reasoning-start', id: rid },
       { type: 'reasoning-delta', id: rid, delta: 'let me think' },
+      codeChunk('provider_error'),
       { type: 'error', errorText: 'boom' },
       { type: 'reasoning-end', id: rid },
       { type: 'finish' },

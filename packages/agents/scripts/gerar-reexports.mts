@@ -23,13 +23,21 @@ import ts from 'typescript'
 const AQUI = dirname(fileURLToPath(import.meta.url))
 const RAIZ = join(AQUI, '..')
 
-/** Os cinco subpaths de infra: nome do entry → especificador da fonte. */
+/**
+ * The five infra subpaths: entry name → source specifier.
+ *
+ * **The order is alphabetical by contract, not by taste** — theokit#161 (A). `--json` serializes in
+ * this order, and the snapshot at `tests/unit/__snapshots__/subpath-surface.json` is written from it.
+ * In any other order, regenerating the snapshot rewrote 145 lines to add 4 symbols, and the reviewer
+ * lost the real change inside the noise — friction that pushes towards "I'll regenerate later", which
+ * is exactly the omission failure mode that left this gate red on `develop`.
+ */
 export const SUBPATHS_DE_INFRA: Readonly<Record<string, string>> = {
-  tools: '@theokit/sdk-tools',
-  sandbox: '@theokit/sdk/sandbox',
+  interactive: '@theokit/sdk/interactive',
   persistence: '@theokit/sdk/persistence',
   pty: '@theokit/sdk-pty',
-  interactive: '@theokit/sdk/interactive',
+  sandbox: '@theokit/sdk/sandbox',
+  tools: '@theokit/sdk-tools',
 }
 
 export interface Superficie {
@@ -93,7 +101,8 @@ export async function enumerarSuperficie(especificador: string): Promise<Superfi
 
   // Piso anti-vacuidade: um `todos` vazio significaria que a resolução quebrou, e o entry gerado sairia
   // vazio — reduzindo a superfície pública a zero em silêncio. É o risco nº 1 do plano.
-  if (todos.length === 0) throw new Error(`superfície vazia para ${especificador} — resolução quebrou`)
+  if (todos.length === 0)
+    throw new Error(`superfície vazia para ${especificador} — resolução quebrou`)
   return { valores, tipos }
 }
 
@@ -128,7 +137,9 @@ if (invocadoComoCli) {
     )
   } else {
     for (const [sub, spec, s] of medidas) {
-      process.stdout.write(`\n// \u2550\u2550 ${sub}-entry.ts \u2550\u2550\n${renderizarBloco(spec, s)}\n`)
+      process.stdout.write(
+        `\n// \u2550\u2550 ${sub}-entry.ts \u2550\u2550\n${renderizarBloco(spec, s)}\n`,
+      )
     }
   }
 }

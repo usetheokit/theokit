@@ -26,7 +26,7 @@ End-to-end autonomous orchestration of the 6-cycle pipeline: `cycle-discover` �
 Do NOT invoke when:
 
 - Plan already exists and just needs `/implement` — invoke `/implement` directly.
-- Current branch is not `develop` — switch to `develop` first (`git switch develop`). `main` is release-only per Unbreakable Rule 4.
+- Current branch is not `workspace` — switch to `workspace` first (`git switch workspace`). `develop` integrates and `main` is release-only per Unbreakable Rule 4.
 - Context is < 50 chars AND no related artifacts exist in repo — orchestrator will refuse (LOW confidence).
 
 ## Argument parsing
@@ -225,7 +225,7 @@ If any phase blocked → honest report listing what blocked + recommended human 
 
 ## Hard gates (cannot proceed)
 
-1. **Branch != `develop`** → refuse; require working on `develop` (Unbreakable Rule 4 — `main` is release-only).
+1. **Branch != `workspace`** → refuse; require working on `workspace` (Unbreakable Rule 4 — `develop` integrates, `main` is release-only).
 2. **Uncommitted changes from prior cycle** → refuse; require git status clean OR explicit `--allow-dirty-tree`.
 3. **Confidence < 30 without `--force-override`** → refuse with suggested next actions.
 4. **`/discover-confidence` final verdict INVALID after improve** → halt; surface blockers; do NOT proceed to plan.
