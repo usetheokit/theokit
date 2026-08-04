@@ -33,6 +33,12 @@ export default tseslint.config(
       '**/coverage/**',
       '**/test-results/**',
       'referencias/**',
+      // Zona de estudo: clones de projetos de terceiros, lidos para aprender e nunca editados.
+      // Medido em agent-builder#119: `.claude/knowledge-base/references/next.js` sozinho custava
+      // 264 s dos 867 s do lint — 30% do tempo total gasto lintando código que não é nosso e que
+      // ninguém pode consertar aqui.
+      '.claude/knowledge-base/references/**',
+      '.claude/worktrees/**',
       'pnpm-lock.yaml',
       'fixtures/**/dist/**',
       'examples/**/dist/**',
@@ -59,7 +65,12 @@ export default tseslint.config(
       // that the root parser projectService cannot resolve. Tests are
       // covered by vitest; config files are trivial. Lint the src/ only.
       'packages/http-decorators/tests/**',
-      'packages/http-decorators/examples/**',
+      // `packages/*/examples/**` e não `packages/http-decorators/examples/**`: a razão acima vale
+      // para os examples de QUALQUER pacote, e enumerar um por um falha por omissão — foi assim que
+      // `packages/http/examples/**` ficou de fora e produziu 3 erros de PARSER
+      // (`was not found by the project service`), invisíveis até o lint voltar a terminar
+      // (agent-builder#119).
+      'packages/*/examples/**',
       'packages/http-decorators/vitest.config.ts',
       'packages/http-decorators/tsup.config.ts',
       'packages/http/tsup.config.ts',
@@ -81,6 +92,26 @@ export default tseslint.config(
 
   // SonarJS (code smells).
   sonarjsPlugin.configs.recommended,
+
+  // `todo-tag`, desligada em TODA extensão — agent-builder#120.
+  //
+  // A regra casa a palavra "TODO" em qualquer caixa, e "todo" é palavra comum do português,
+  // presente na prosa explicativa deste repositório. Ela derrubou o build TRÊS vezes no M95 por
+  // texto legítimo ("para todo erro", "todo turno", "todo estado"), e consertar palavra por palavra
+  // só adia a próxima. Medido na revisão: marcadores REAIS no fonte da camada → 0. Zero verdadeiros
+  // positivos contra três falsos é custo permanente com benefício nulo.
+  //
+  // Estava só no bloco `files: ['**/*.{ts,tsx,mts,cts}']`, e por isso NÃO alcançava `.js` — o
+  // próprio `eslint.config.js` reprovava, três vezes, no comentário que explicava o desligamento.
+  // Ninguém tinha visto porque `npm run lint` não terminava (#119); o primeiro veredito do lint por
+  // grupo foi este. Sem `files`, o bloco vale para tudo, que é o que a decisão sempre quis dizer.
+  //
+  // O sinal que a regra dava não foi abandonado: `tests/lint/marcador-de-tarefa.test.ts` casa a
+  // forma que um marcador de verdade tem — MAIÚSCULA + dois-pontos, dentro de comentário — e
+  // ignora a palavra solta. Gate, não convenção.
+  {
+    rules: { 'sonarjs/todo-tag': 'off' },
+  },
 
   // Project-wide language options.
   {
@@ -201,16 +232,7 @@ export default tseslint.config(
       'sonarjs/no-collapsible-if': 'warn',
       'sonarjs/no-redundant-jump': 'warn',
       'sonarjs/no-small-switch': 'off',
-      // `todo-tag` casa a palavra "TODO" em qualquer caixa — e "todo" é uma palavra comum do
-      // português, presente em comentários explicativos deste repositório. A regra reprovou o
-      // build TRÊS vezes por prosa legítima ("para todo erro", "todo turno", "todo estado"), e
-      // corrigir palavra por palavra só adia a próxima ocorrência: o custo é permanente e o
-      // benefício é zero, porque marcador de tarefa de verdade não é o que ela estava pegando.
-      //
-      // O que a regra existiria para proteger — dívida marcada e esquecida — continua coberto:
-      // este projeto trata dívida em `## Correções` de ADR e em resíduo declarado no código, não
-      // em comentário `TODO`.
-      'sonarjs/todo-tag': 'off',
+      // Ver o bloco `sonarjs/todo-tag` mais abaixo — o desligamento é global, não só-TS.
       // Duplicate rules — already covered by other plugins, surfaced once
       // is enough (turning off the duplicate is not a bypass; it removes
       // the redundant report). The "kept" rule is named in the comment.
