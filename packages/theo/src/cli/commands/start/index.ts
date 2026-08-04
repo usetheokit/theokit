@@ -23,6 +23,7 @@ import { createRateLimiter } from '../../../server/rate-limit/rate-limit.js'
 import { createProductionLoader } from '../../../server/scan/module-loader.js'
 import { resolveTransformer } from '../../../server/transformer.js'
 import { preflightNodeAndBindings } from '../../preflight-node-version.js'
+import { CONTROLLER_MANIFEST_FILE } from '../build/emit-controllers.js'
 
 import { assertSdkCompatible } from './assert-sdk-compatible.js'
 import {
@@ -59,6 +60,15 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   const distDir = resolve(cwd, '.theokit')
   const clientDir = resolve(distDir, 'client')
+  // theokit#123 — compiled controllers, when `theokit build` emitted any.
+  //
+  // Keyed on the MANIFEST rather than on the directory existing: a stale `dist/controllers` left by
+  // an earlier build whose sources were since deleted would otherwise keep serving routes the app
+  // no longer declares. `theokit build` writes the manifest only when it compiles something, and
+  // `cleanOutDir` removes both, so the manifest is the authoritative "this build has controllers".
+  const controllersDistDir = existsSync(resolve(distDir, CONTROLLER_MANIFEST_FILE))
+    ? resolve(distDir, 'controllers')
+    : undefined
   // #95 — honor config `serverDir` (default "server") in production start, matching dev.
   const serverDir = resolve(cwd, config.serverDir)
 
@@ -115,6 +125,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
         loadModule,
         serverDir,
         projectRoot: cwd,
+        controllersDistDir,
         pluginRunner,
         transformer,
         csrfMode: config.security?.csrf ?? 'strict',
