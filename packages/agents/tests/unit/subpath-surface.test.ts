@@ -44,9 +44,18 @@ describe('M90 — a superfície dos subpaths de infra está travada', () => {
     expect(chaves).toEqual(['interactive', 'persistence', 'pty', 'sandbox', 'tools'])
   })
 
-  it('test_o_snapshot_tem_os_173_simbolos_medidos', () => {
+  /**
+   * Anti-truncation floor. The number is measured, and it rises when the source grows — 173 until
+   * `@theokit/sdk` started exporting `sessaoTemEscritor`, `transcriptRoot`, `TranscriptBlock` and
+   * `TranscriptMessage` from `/persistence` (theokit#161 A), 177 since then.
+   *
+   * Not redundant with the identity gate below: that one compares the snapshot against the LAYER, so
+   * a regeneration that produced an empty file from a broken layer would pass on both sides. This one
+   * fails a snapshot that shrank, whatever the cause.
+   */
+  it('test_snapshot_holds_the_177_measured_symbols', () => {
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.valores.length + s.tipos.length, 0)
-    expect(total).toBe(173)
+    expect(total).toBe(177)
   })
 
   /**
@@ -72,9 +81,11 @@ describe('M90 — a superfície dos subpaths de infra está travada', () => {
     }
     expect(
       [...faltando].sort((a, b) => a.localeCompare(b)),
-      'símbolos da FONTE que a camada não re-exporta. Regenere:\n' +
-        '  npx tsx scripts/gerar-reexports.mts --json\n' +
-        'e atualize os `*-entry.ts` + o snapshot no MESMO commit.',
+      'SOURCE symbols the layer does not re-export. Regenerate the blocks:\n' +
+        '  npx tsx scripts/gerar-reexports.mts\n' +
+        'paste them into the `*-entry.ts`, run `npm run build`, then rewrite the snapshot IN THE SAME\n' +
+        'commit:\n' +
+        '  npx tsx scripts/gerar-reexports.mts --json > tests/unit/__snapshots__/subpath-surface.json',
     ).toEqual([])
   }, 60_000)
 
@@ -107,7 +118,10 @@ describe('M90 — a superfície dos subpaths de infra está travada', () => {
     }
     expect(
       [...divergencias].sort((a, b) => a.localeCompare(b)),
-      'a superfície da camada mudou. Se foi de propósito, atualize o snapshot no mesmo commit.',
+      'the layer surface changed. If that was intentional, rewrite the snapshot IN THE SAME commit:\n' +
+        '  npx tsx scripts/gerar-reexports.mts --json > tests/unit/__snapshots__/subpath-surface.json\n' +
+        'the command reproduces the file byte for byte — if `git diff` does not settle at zero after\n' +
+        'applying the intended change, a real divergence is left over.',
     ).toEqual([])
   })
 
