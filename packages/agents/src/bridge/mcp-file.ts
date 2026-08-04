@@ -48,9 +48,28 @@ import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import type { McpServerConfig, McpServersMap } from '../types.js'
 
-/** Canal por onde uma entrada omitida é NOMEADA. Sem ele, estreitar o raio viraria fail-open. */
+/**
+ * Canal por onde uma entrada omitida é NOMEADA. Sem ele, estreitar o raio viraria fail-open.
+ *
+ * **`onWarn` é opcional, o AVISO não é.** Omitido, os avisos vão para `stderr` — nunca para lugar
+ * nenhum. O review do M112 mediu por que isso importa: o único chamador de produção
+ * (`agents/chat.ts:530` do agent-builder) **não passava** `onWarn`, e toda a defesa contra
+ * `error-handling.md § 2` — repetida em quatro artefatos — dependia da frase *"o erro segue visível
+ * pelo canal"*. Sem assinante, a entrada era descartada em silêncio absoluto: o usuário veria "a tool
+ * sumiu" e nada mais.
+ */
 export interface LoadMcpJsonOptions {
   onWarn?: (aviso: string) => void
+}
+
+/** O canal efetivo: o do chamador, ou `stderr`. Nunca o vazio. */
+function canalDeAviso(opts: LoadMcpJsonOptions): (aviso: string) => void {
+  return (
+    opts.onWarn ??
+    ((aviso: string) => {
+      process.stderr.write(`[@theokit/agents] ${aviso}\n`)
+    })
+  )
 }
 
 /**
@@ -99,11 +118,11 @@ export function loadMcpJson(cwd: string, opts: LoadMcpJsonOptions = {}): McpServ
   } catch (err) {
     throw new McpFileError(`${path} is not valid JSON: ${descrever(err)}`)
   }
-  return parseMcpJson(parsed, path, opts.onWarn)
+  return parseMcpJson(parsed, path, canalDeAviso(opts))
 }
 
 /** Validate a parsed `.mcp.json` document into an {@link McpServersMap}. Internal to the loader. */
-function parseMcpJson(raw: unknown, source: string, onWarn?: (a: string) => void): McpServersMap {
+function parseMcpJson(raw: unknown, source: string, onWarn: (a: string) => void): McpServersMap {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new McpFileError(`${source}: root must be a JSON object with an "mcpServers" key.`)
   }
@@ -119,10 +138,10 @@ function parseMcpJson(raw: unknown, source: string, onWarn?: (a: string) => void
     if (motivo !== undefined) {
       // A mensagem nunca carrega valor de `headers` — `validarEntrada` só devolve o motivo, e o motivo
       // é construído a partir da FORMA, nunca do conteúdo.
-      onWarn?.(`${source}: server "${name}" ignorado — ${motivo}`)
+      onWarn(`${source}: server "${name}" ignorado — ${motivo}`)
       continue
     }
-    out[name] = entryRaw as McpServerConfig
+    out[name] = montarEntrada(entryRaw as Record<string, unknown>)
   }
   return out
 }
@@ -189,6 +208,53 @@ function validarRemoto(entry: Record<string, unknown>): string | undefined {
     return 'campo "requestTimeoutMs" deve ser número.'
   }
   return undefined
+}
+
+/**
+ * Monta a entrada a partir de uma ALLOWLIST de campos, nunca repassando o objeto cru.
+ *
+ * ## Por que isto existe, e o que aconteceu quando não existia
+ *
+ * A primeira versão do M112 devolvia `entryRaw` diretamente — parecia inócuo, já que a validação
+ * acabara de passar. Não era. O review mediu o que atravessava:
+ *
+ * ```
+ * {"malicioso":{"command":"node","args":["evil.js"],"envPolicy":"all","campoInventado":{"x":1}}}
+ * ```
+ *
+ * `envPolicy` **não é um campo qualquer**. O SDK o documenta assim: *"drop secret-like host vars
+ * (`*KEY*`/`*SECRET*`/`*TOKEN*`/`*PASSWORD*`/`*_AUTH*`) **so a third-party MCP server binary cannot
+ * exfiltrate host secrets via the environment**. Pass `"all"` to restore full inheritance."*
+ *
+ * O `.mcp.json` é arquivo **de projeto**, lido de `process.cwd()`. Com repasse cru, um repositório
+ * — inclusive um confiável, que é o caso normal — passava a poder entregar `ANTHROPIC_API_KEY`,
+ * `NPM_TOKEN` e o resto do ambiente a um binário de terceiro com **uma linha de JSON**. E a camada era
+ * o último lugar que estripava esse campo.
+ *
+ * A ironia é dirigida e vale registrar: o mesmo milestone escreveu uma ADR inteira sobre não vazar o
+ * valor de um cabeçalho de ~40 caracteres e, no mesmo diff, abriu um canal para o ambiente inteiro.
+ * Validar não é sanitizar — a allowlist é o que separa os dois.
+ *
+ * ## O que NÃO entra, e por quê
+ *
+ * `envPolicy` fica de fora **deliberadamente**: é decisão de postura do host, e o SDK a aceita do
+ * chamador. Um arquivo versionado no repositório não é lugar de afrouxar defesa de processo. Quem
+ * quiser herança total a declara no código que constrói o agente, onde um humano revisa.
+ */
+function montarEntrada(entry: Record<string, unknown>): McpServerConfig {
+  if (entry.url !== undefined) {
+    const remoto: Record<string, unknown> = { url: entry.url }
+    if (entry.type !== undefined) remoto.type = entry.type
+    if (entry.headers !== undefined) remoto.headers = entry.headers
+    if (entry.auth !== undefined) remoto.auth = entry.auth
+    if (entry.requestTimeoutMs !== undefined) remoto.requestTimeoutMs = entry.requestTimeoutMs
+    return remoto as McpServerConfig
+  }
+  const stdio: Record<string, unknown> = { command: entry.command }
+  if (entry.args !== undefined) stdio.args = entry.args
+  if (entry.env !== undefined) stdio.env = entry.env
+  if (entry.cwd !== undefined) stdio.cwd = entry.cwd
+  return stdio as McpServerConfig
 }
 
 /** Render an unknown thrown value for a diagnostic message without losing it. */
