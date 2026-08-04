@@ -24,6 +24,7 @@ import { type ServicesConfig } from '../services/index.js'
 import { runConfigHook } from './config-hook.js'
 import { resolvePluginConfig, type ResolvedOpenApi } from './config-resolve.js'
 import { runConfigureServer } from './configure-server-hook.js'
+import { integrateStudio } from './integrate-studio.js'
 import { integrateUseTheoUI } from './integrate-ui.js'
 import { resolveTheoRootDir } from './resolve-theo-root.js'
 import type { TheoUiDetectResult } from './theoui-detect.js'
@@ -170,6 +171,8 @@ export async function theoPluginAsync(
     consumerTailwindConfig,
     consumerPostcssConfig,
   })
+  // theokit#133 — mount TheoKit Studio at `/_studio` when the optional package is installed.
+  const studioPlugins = await integrateStudio()
 
   // Wave 2 (T3.1) — typed-client plugin wired only when services declared.
   // Empty `services: {}` (default) → plugin is a no-op (no fetch fired).
@@ -238,6 +241,7 @@ export async function theoPluginAsync(
   return [
     theoPlugin(rootOrOptions),
     ...uiPlugins,
+    ...studioPlugins,
     ...servicesPlugins,
     // #122 — swc-compile controllers/** (enforce:'pre'; order-independent).
     controllerTransformPlugin,
