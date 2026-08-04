@@ -19,40 +19,63 @@ concurrency:
 
 jobs:
   preflight:
-    # v1.1 EC-1 MUST FIX — secret missing = fail fast antes da matrix.
-    # Sem isso, helpers SKIP gracioso = matrix exit 0 = false-positive PASS.
-    name: Preflight — verify OPENROUTER_API_KEY secret
+    # theokit#152 — the key decides whether the run HAPPENS, not whether it FAILS.
+    #
+    # This job used to `exit 1` when the secret was absent. The secret was never configured, so the
+    # scheduled run failed at its first step every single day and the repo sat at 0/20 green. The
+    # defect graded MEDIUM on its own; the side effect is worse — a permanent red trains the team to
+    # ignore the dashboard, which is precisely how a real failure would go unnoticed here.
+    #
+    # The original rationale was sound and is preserved: helpers that SKIP gracefully would make the
+    # matrix exit 0, and "no provider key" would read as a passing dogfood. That is a false PASS, and
+    # it must not happen. But "fail" is not the only alternative to "false pass" — the job can decide
+    # NOT TO RUN, which is what an unconfigured key actually means. That is the ecosystem pattern
+    # (theo-memory ADR D4: "without it the tier SKIPs honestly and never fabricates a passing score").
+    #
+    # The distinction is enforced by `outputs.enabled`: downstream jobs are gated on it, so with no
+    # key they never execute — and a skipped job is not a green job. Nothing reports a dogfood that
+    # did not happen.
+    #
+    # `env` at job level, then `if: env.X != ''` — NOT `if: secrets.X != ''`, which GitHub rejects at
+    # parse time (usetheodev/theo-memory#155, same family of defect).
+    name: Preflight — is the dogfood runnable?
     runs-on: ubuntu-latest
     timeout-minutes: 1
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
     steps:
-      - name: Verify secret present
-        env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      - name: Check provider key
+        id: check
         run: |
           if [[ -z "$OPENROUTER_API_KEY" ]]; then
-            echo "::error::OPENROUTER_API_KEY secret missing — dogfood cannot run without provider key"
-            echo "::error::Fix: gh secret set OPENROUTER_API_KEY --body=sk-or-v1-..."
-            exit 1
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::OPENROUTER_API_KEY is not configured — the dogfood is SKIPPED, not passed."
+            echo "::warning::Nothing below runs, so no result is reported for a run that did not happen."
+            echo "::warning::To enable: gh secret set OPENROUTER_API_KEY --repo <owner>/<repo>"
+            exit 0
           fi
-          echo "✓ OPENROUTER_API_KEY present (length: ${#OPENROUTER_API_KEY})"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "✓ provider key present (length: ${#OPENROUTER_API_KEY})"
 
   multi-template-smoke:
     name: Multi-template smoke (${{ matrix.template }})
     needs: preflight
+    if: needs.preflight.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        # theokit#152 (second defect, found while fixing the first) — this matrix listed `dashboard`,
+        # `api-only`, `postgres` and `saas`. ADR-0023 narrowed the shipped template set to `default`
+        # only and REMOVED those four, so every leg would have scaffolded a template that no longer
+        # exists. Nobody noticed because preflight failed first, every time: one broken gate was
+        # hiding the next one behind it.
         include:
-          - template: dashboard
+          - template: default
             port: 4100
-          - template: api-only
-            port: 4200
-          - template: postgres
-            port: 4300
-          - template: saas
-            port: 4400
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -83,6 +106,7 @@ jobs:
   chaos-providers:
     name: Chaos providers (D14 fault injection)
     needs: [preflight, multi-template-smoke]
+    if: needs.preflight.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -134,8 +158,10 @@ jobs:
 
   upload-artifacts:
     name: Upload dogfood report
-    needs: [multi-template-smoke, chaos-providers]
-    if: always()
+    needs: [preflight, multi-template-smoke, chaos-providers]
+    # `always()` alone also fires when the dogfood was SKIPPED, publishing an empty report as if a
+    # run had happened — the exact false signal theokit#152 is about. Gated on the same flag.
+    if: always() && needs.preflight.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
