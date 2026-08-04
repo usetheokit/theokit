@@ -388,4 +388,10 @@ jobs:
       - run: pnpm build
       - run: pnpm validate:publint
       - run: pnpm validate:attw
+      # theokit#153 — the guard that did not exist when the leak shipped.
+      # `theokit` 0.19.0-0.30.0 published raw `workspace:^` and every `npm install` of those
+      # twelve versions still fails; the code was fixed in 0.31.0, but a published version can
+      # only be deprecated, never corrected. This packs each publishable package and inspects
+      # the TARBALL, so the leak is caught while it is still cheap.
+      - run: node scripts/check-pack-no-workspace.mjs
       - run: npx vitest run tests/smoke/
