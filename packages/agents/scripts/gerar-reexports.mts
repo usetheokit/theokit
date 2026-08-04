@@ -23,13 +23,21 @@ import ts from 'typescript'
 const AQUI = dirname(fileURLToPath(import.meta.url))
 const RAIZ = join(AQUI, '..')
 
-/** Os cinco subpaths de infra: nome do entry → especificador da fonte. */
+/**
+ * Os cinco subpaths de infra: nome do entry → especificador da fonte.
+ *
+ * **A ordem é alfabética por contrato, não por gosto** — theokit#161 (A). `--json` serializa nesta
+ * ordem, e o snapshot em `tests/unit/__snapshots__/subpath-surface.json` é gravado a partir dela.
+ * Numa ordem qualquer, regenerar o snapshot reescrevia 145 linhas para acrescentar 4 símbolos, e o
+ * revisor perdia a mudança real dentro do ruído — atrito que empurra para "regenero depois", que é
+ * exatamente o modo de falha por omissão que deixou este gate vermelho no `develop`.
+ */
 export const SUBPATHS_DE_INFRA: Readonly<Record<string, string>> = {
-  tools: '@theokit/sdk-tools',
-  sandbox: '@theokit/sdk/sandbox',
+  interactive: '@theokit/sdk/interactive',
   persistence: '@theokit/sdk/persistence',
   pty: '@theokit/sdk-pty',
-  interactive: '@theokit/sdk/interactive',
+  sandbox: '@theokit/sdk/sandbox',
+  tools: '@theokit/sdk-tools',
 }
 
 export interface Superficie {
@@ -93,7 +101,8 @@ export async function enumerarSuperficie(especificador: string): Promise<Superfi
 
   // Piso anti-vacuidade: um `todos` vazio significaria que a resolução quebrou, e o entry gerado sairia
   // vazio — reduzindo a superfície pública a zero em silêncio. É o risco nº 1 do plano.
-  if (todos.length === 0) throw new Error(`superfície vazia para ${especificador} — resolução quebrou`)
+  if (todos.length === 0)
+    throw new Error(`superfície vazia para ${especificador} — resolução quebrou`)
   return { valores, tipos }
 }
 
@@ -128,7 +137,9 @@ if (invocadoComoCli) {
     )
   } else {
     for (const [sub, spec, s] of medidas) {
-      process.stdout.write(`\n// \u2550\u2550 ${sub}-entry.ts \u2550\u2550\n${renderizarBloco(spec, s)}\n`)
+      process.stdout.write(
+        `\n// \u2550\u2550 ${sub}-entry.ts \u2550\u2550\n${renderizarBloco(spec, s)}\n`,
+      )
     }
   }
 }
