@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents@7.2.0] - 2026-08-05
+
+### Fixed
+- **O canal de diagnóstico do #173 agora funciona de verdade — antes ele resolvia e não entregava.** O reexport shipado no #173 instalava o sink num registro diferente daquele em que o SDK escreve, sempre que a árvore tinha duas cópias do `@theokit/sdk` (o que acontece quando dois dependentes resolvem conjuntos de peers diferentes — medido nesta árvore). O símbolo existia, a função era chamável, nada lançava, e nenhum diagnóstico chegava. Corrigido no `@theokit/sdk@4.39.2`, que passa a guardar o registro num slot compartilhado por todas as cópias do processo; este bump é o que traz a correção. Provado com as duas cópias vivas: o sink instalado via `@theokit/agents` recebe o que a outra cópia emite.
+
+### Added
+- **`@theokit/agents` reexporta `setDiagnosticsSink` e o tipo `DiagnosticsSink` (#173).** Um consumidor cuja fronteira de camadas proíbe importar `@theokit/sdk` diretamente não tinha como instalar um sink: o canal existia e era inalcançável de dentro da fronteira. Reexport puro, sem semântica nova — o silêncio-por-padrão do SDK continua sendo a postura certa para uma biblioteca, e **onde** escrever segue sendo decisão do consumidor. O custo da lacuna foi medido antes de ser fechado: em theokit-sdk#165 um 429 foi investigado pela hipótese errada porque a retentativa era invisível, e a correção do SDK que a tornou visível não alcançava quem respeitava a fronteira.
+
 ## [@theokit/presenter@0.4.0 + @theokit/agents@7.1.0 + theokit@0.45.0] - 2026-08-05
 
 ### Changed
