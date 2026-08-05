@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **`@theokit/agents` reexporta `setDiagnosticsSink` e o tipo `DiagnosticsSink` (#173).** Um consumidor cuja fronteira de camadas proíbe importar `@theokit/sdk` diretamente não tinha como instalar um sink: o canal existia e era inalcançável de dentro da fronteira. Reexport puro, sem semântica nova — o silêncio-por-padrão do SDK continua sendo a postura certa para uma biblioteca, e **onde** escrever segue sendo decisão do consumidor. O custo da lacuna foi medido antes de ser fechado: em theokit-sdk#165 um 429 foi investigado pela hipótese errada porque a retentativa era invisível, e a correção do SDK que a tornou visível não alcançava quem respeitava a fronteira.
+
 ## [@theokit/presenter@0.4.0 + @theokit/agents@7.1.0 + theokit@0.45.0] - 2026-08-05
 
 ### Changed
