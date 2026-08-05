@@ -136,6 +136,10 @@ jobs:
   wire-ownership:
     name: wire ownership (nenhum pacote publicado carrega o ai-sdk)
     runs-on: ubuntu-latest
+    # O DTS dos ~24 entrypoints do `theokit` estoura a heap default do runner
+    # (ERR_WORKER_OUT_OF_MEMORY). O `release.yml` ja carrega esta mesma linha pelo mesmo motivo.
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
