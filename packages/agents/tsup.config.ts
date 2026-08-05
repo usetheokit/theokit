@@ -35,5 +35,12 @@ export default defineConfig({
     options.sourcesContent = false
   },
   clean: true,
-  external: ['@theokit/http', '@theokit/sdk', '@theokit/sdk-pty', '@theokit/sdk-tools', 'zod'],
+  external: [
+    '@theokit/http',
+    '@theokit/presenter',
+    '@theokit/sdk',
+    '@theokit/sdk-pty',
+    '@theokit/sdk-tools',
+    'zod',
+  ],
 })

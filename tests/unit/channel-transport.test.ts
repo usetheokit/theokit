@@ -4,7 +4,7 @@
  * abort; `reconnectToStream` → null (single-process parity); `approve` routes to the injected settle.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { UIMessage, UIMessageChunk } from 'ai'
+import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { AgentClient } from '../../packages/agents/src/client/agent-client.js'
 import {

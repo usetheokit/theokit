@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- **O ai-sdk sai da superfície publicada: instalar `theokit` não traz mais o pacote `ai`.** O TheoKit passa a ser dono do wire `UIMessageStream` — schema, parser e reconstrutor próprios em `@theokit/presenter/wire`. **O formato da frame não muda**: um cliente ai-sdk continua conversando com um servidor TheoKit, e nenhum app existente precisa de migração. Antes, `ai` era peer obrigatório na prática porque o consumidor do stream o importava em runtime.
+- **BREAKING (interno): `ai` deixa de ser `peerDependency` de `theokit` e `@theokit/agents`.** Apps que o declaravam só por causa do TheoKit podem removê-lo. Quem usa `@ai-sdk/react`/`useChat` diretamente continua instalando por conta própria — e continua funcionando, porque o wire é o mesmo.
+- **O template do `create-theokit` não fixa mais `ai`.** Um app novo instala zero pacotes ai-sdk.
+
+### Fixed
+- **Um erro de provider no meio do stream não descarta mais o texto já entregue.** O tratamento de erro do wire preserva o turno parcial e só então falha — antes, a forma como a falha era propagada podia levar junto o conteúdo que o usuário já tinha visto.
+- **Frames com terminador CRLF passam a ser lidos.** O SSE admite CRLF, LF e CR; um proxy que reescreve o terminador produzia silêncio total — nenhum erro, nenhuma renderização. Agora os três são normalizados.
+- **O frame terminal `[DONE]` deixa de ser um risco.** Ele não é JSON, e qualquer parser que o tratasse como tal quebraria no último frame de toda resposta.
+
+### Added
+- **Dois gates novos:** `pnpm check:ai-free` prova que nenhum pacote publicável carrega `ai` (falha se o `dist/` não existir — sem artefato ele não mede nada); `pnpm check:wire-parity` avisa quando o ai-sdk ganha uma variante de frame que o nosso espelho não modela. O `ai` permanece como `devDependency` para servir de **oráculo**: um teste diferencial alimenta o mesmo stream nos dois parsers e exige saída idêntica, variante por variante.
+
 ## [@theokit/agents@7.0.0 + theokit@0.44.3] - 2026-08-05
 
 ### Added

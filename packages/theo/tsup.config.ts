@@ -63,6 +63,7 @@ export default defineConfig([
     clean: true,
     target: 'node20',
     external: [
+      '@theokit/presenter',
       'vite',
       'react',
       'react-dom',
@@ -91,6 +92,7 @@ export default defineConfig([
       js: '#!/usr/bin/env node\nimport "tsx/esm";',
     },
     external: [
+      '@theokit/presenter',
       'vite',
       'react',
       'react-dom',

@@ -14,8 +14,13 @@
  * run, done — and deny surfaces + continues.
  */
 import 'reflect-metadata'
-import { readUIMessageStream, type UIMessageChunk } from 'ai'
+// `ai` is imported ON PURPOSE: these are ORACLE tests — they assert that what our bridge emits
+// still satisfies the REAL ai-sdk reader, the strongest statement of wire compatibility we can
+// make. Our `WireChunk` is a strict union, so the value crosses the ai type boundary via
+// `as never`; the assertion being made is about RUNTIME behaviour.
+import { readUIMessageStream } from 'ai'
 import { describe, expect, it, vi } from 'vitest'
+import type { WireChunk, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 interface FakeEvent {
   type: string
@@ -34,9 +39,7 @@ type ParsedPart = { type: string; state?: string; approval?: { id?: string } } &
  * it is NOT the same as the raw chunk list (ai mutates a tool part to `state:'approval-requested'`
  * rather than surfacing a `tool-approval-request` part of its own).
  */
-async function reconstructParts(
-  chunks: { type: string; [k: string]: unknown }[],
-): Promise<ParsedPart[]> {
+async function reconstructParts(chunks: WireChunk[]): Promise<ParsedPart[]> {
   const stream = new ReadableStream<UIMessageChunk>({
     start(controller) {
       for (const c of chunks) controller.enqueue(c as unknown as UIMessageChunk)
@@ -44,7 +47,7 @@ async function reconstructParts(
     },
   })
   let parts: ParsedPart[] = []
-  for await (const message of readUIMessageStream({ stream })) {
+  for await (const message of readUIMessageStream({ stream: stream as never })) {
     parts = message.parts as ParsedPart[]
   }
   return parts
@@ -157,7 +160,7 @@ function gatedAgentFixture() {
 /** Consume the stream; when the approval-request chunk arrives, resolve it via the registry. */
 async function runWithDecision(approved: boolean) {
   const { compiled, registry, hitl } = gatedAgentFixture()
-  const chunks: { type: string; [k: string]: unknown }[] = []
+  const chunks: WireChunk[] = []
   for await (const c of streamAgentUIMessages(compiled, 'k', {
     message: 'deploy please',
     sessionId: 's1',
@@ -247,7 +250,7 @@ describe('HITL harness E2E (M4 / DoD-3)', () => {
   it('test_e2e_non_gated_agent_never_pauses', async () => {
     // A compiled agent with NO gated tool takes the M2 path — no approval chunk at all.
     const compiled = applyCapabilities([])
-    const chunks: { type: string; [k: string]: unknown }[] = []
+    const chunks: WireChunk[] = []
     for await (const c of streamAgentUIMessages(compiled, 'k', {
       message: 'hi',
       sessionId: 's1',

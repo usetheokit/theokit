@@ -5,7 +5,7 @@
  * HITL pending-map so `approve(id, decision)` resolves a parked approval.
  */
 import { describe, expect, it } from 'vitest'
-import type { UIMessage, UIMessageChunk } from 'ai'
+import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import {
   InProcessTransport,
