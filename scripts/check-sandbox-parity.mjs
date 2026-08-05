@@ -62,7 +62,7 @@ const DECISOES = {
   buildBwrapArgv: 'M75 — construção pura do argv; testável sem host',
   buildSeccompFilter: 'M75 — o programa cBPF como Buffer, JS puro',
   detectBwrap: 'M75 — detecção com probes injetáveis',
-  detectBwrapMemoizado: 'M75 — detecção memoizada, com revalidação de positivo obsoleto (M71)',
+  detectBwrapMemoized: 'M75 — detecção memoizada, com revalidação de positivo obsoleto (M71)',
   realProbes: 'M75 — as sondagens reais; exportado para testes decidirem se rodam',
   realProbeCount: 'M75 — contador de sondagens; é o oráculo de gates de performance',
   resetBwrapMemo: 'M75 — reset do memo, para isolamento entre testes',

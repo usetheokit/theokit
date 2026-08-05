@@ -1,5 +1,31 @@
 # @theokit/agents
 
+## 7.0.0
+
+### Major Changes
+
+- Dois re-exports mudam de nome, acompanhando o `@theokit/sdk@4.39.0`.
+
+  - `@theokit/agents/persistence`: `sessaoTemEscritor` → `sessionHasWriter`
+  - `@theokit/agents/sandbox`: `detectBwrapMemoizado` → `detectBwrapMemoized`
+
+  Os dois nomes eram portugueses e atravessavam a camada verbatim. O SDK os traduziu
+  ao tornar seu código inglês-only, e a camada **não guarda alias**: um alias manteria
+  o identificador português vivo na superfície publicada, que é justamente o que a
+  mudança existe para remover. Quem importa qualquer um dos dois renomeia na chamada;
+  o comportamento é idêntico.
+
+  Junto vem o bump de `@theokit/sdk` 4.27.0 → 4.39.0, com doze correções pedidas deste
+  repo — entre elas `run.stream()` deixando de terminar em silêncio quando o run falha
+  (#101), `Agent.describe()` reportando os subagents que o runtime de fato resolve
+  (#123), `mcpLifecycle: 'session'` mantendo o servidor MCP vivo entre turnos (#155) e
+  as embeddings de `azure-openai`/`cohere`/`gemini` passando a funcionar (#128, #159).
+
+  Atenção a uma quebra de **comportamento** herdada do SDK: as diagnostics agora são
+  silenciosas por padrão. Sem um sink instalado a biblioteca não escreve no terminal —
+  antes ia direto ao stderr e corrompia o frame de qualquer TUI. Para restaurar:
+  `setDiagnosticsSink((m) => process.stderr.write(m))`.
+
 ## 6.4.2
 
 ### Patch Changes
