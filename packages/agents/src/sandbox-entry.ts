@@ -22,7 +22,7 @@ export {
   buildSeccompFilter,
   createSandboxBackend,
   detectBwrap,
-  detectBwrapMemoizado,
+  detectBwrapMemoized,
   interactiveWrapCommand,
   LinuxSandbox,
   LocalSandbox,
