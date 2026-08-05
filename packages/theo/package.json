@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.44.2",
+  "version": "0.44.3",
   "type": "module",
   "sideEffects": false,
   "license": "Apache-2.0",
@@ -167,7 +167,7 @@
     }
   },
   "devDependencies": {
-    "@theokit/sdk": "^4.1.0",
+    "@theokit/sdk": "^4.39.0",
     "@types/busboy": "^1.5.4",
     "@types/picomatch": "^4.0.3",
     "ai": "^7.0.14",
