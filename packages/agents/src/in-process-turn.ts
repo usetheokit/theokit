@@ -19,14 +19,13 @@
  * INFORMATIONAL (render them or ignore them). The authoritative human gate is `awaitApproval`, which
  * the SDK awaits BEFORE the gated tool runs; the chunk is not the gate.
  */
-import {
-  compileAgentModule,
-  resolveEnabledSkills,
-  streamAgentUIMessages,
-  type HitlDecision,
-  type HumanInTheLoopOptions,
-} from '@theokit/agents'
 import type { UIMessageChunk } from 'ai'
+
+import { compileAgentModule, streamAgentUIMessages } from './bridge/agent-endpoint.js'
+import type { ApprovalPosture } from './bridge/approval-posture.js'
+import type { HitlDecision } from './bridge/hitl-plugin.js'
+import { resolveEnabledSkills } from './skills-resolver.js'
+import type { HumanInTheLoopOptions } from './types.js'
 
 /** An inline approval request handed to the caller's `awaitApproval` (the Ink/Tauri prompt). */
 export interface InProcessApprovalRequest {
@@ -54,6 +53,16 @@ export interface StreamAgentTurnInProcessInput {
    * gated agent is a fail-fast error, never a silent bypass (Rule 8, the #99 lesson).
    */
   awaitApproval?: InProcessAwaitApproval
+  /**
+   * M96 — the declared {@link ApprovalPosture}, ADDITIVE by design (ADR D2 of the M96 plan).
+   *
+   * Omitting it preserves today's behaviour byte for byte, including the fail-closed refusal above:
+   * this bridge was already the CORRECT side of the divergence the milestone closes, so breaking its
+   * signature would charge five call sites — one of them outside this repo — a migration that fixes
+   * no defect. What it lacked was the other half: the permissive posture was INEXPRESSIBLE here
+   * while `toAgentFactory` reached it by omission. Naming it closes that asymmetry.
+   */
+  approvals?: ApprovalPosture
   /** Labels a fail-fast `AgentDefinitionError` (the file path). */
   source?: string
   /** Abort signal forwarded to the SDK stream (client disconnect / window close). */
@@ -82,6 +91,35 @@ export class InProcessApprovalRequiredError extends Error {
 }
 
 /**
+ * M96 — the resolver a declared posture implies, or `undefined` when the posture installs no gate
+ * (`owned-by-surface`: the serving surface asks by its own protocol) or when none was declared.
+ *
+ * `interactive` carries its own resolver; the two automatic postures answer without a human, in the
+ * direction they name. An explicit `awaitApproval` still wins — it is the more specific answer.
+ */
+function resolvedorDaPostura(
+  postura: ApprovalPosture | undefined,
+):
+  | ((
+      approvalId: string,
+      opts: HumanInTheLoopOptions,
+      toolName: string,
+    ) => Promise<boolean | HitlDecision>)
+  | undefined {
+  if (postura === undefined) return undefined
+  switch (postura.kind) {
+    case 'interactive':
+      return postura.awaitApproval
+    case 'auto-approve':
+      return () => Promise.resolve({ approved: true, reason: postura.reason })
+    case 'auto-reject':
+      return () => Promise.resolve({ approved: false, reason: postura.reason })
+    case 'owned-by-surface':
+      return undefined
+  }
+}
+
+/**
  * Run a compiled agent in-process and return its `UIMessageChunk` stream. `apiKey` is resolved by the
  * caller (same contract as the HTTP mount). Validation + compile happen SYNCHRONOUSLY (so a gated
  * agent without a resolver throws at call time, not lazily on first iteration); the returned value is
@@ -96,22 +134,26 @@ export function streamAgentTurnInProcess(
   const compiled = compileAgentModule(mod, input.source)
   const gated = compiled.hitl
 
-  // Fail-fast BEFORE building the stream: a gated agent with no inline resolver would silently bypass
-  // the human gate (the #99 class of bug). Refuse loudly (Rule 8, fail-closed).
-  if (gated && gated.size > 0 && !input.awaitApproval) {
+  // Fail-fast BEFORE building the stream: a gated agent with no inline resolver AND no declared
+  // posture would silently bypass the human gate (the #99 class of bug). Refuse loudly (Rule 8,
+  // fail-closed). A DECLARED posture is an answer to the same question, so it satisfies the guard —
+  // an omission still does not.
+  if (gated && gated.size > 0 && !input.awaitApproval && input.approvals === undefined) {
     throw new InProcessApprovalRequiredError([...gated.keys()])
   }
   const resolve = input.awaitApproval
 
   // Mirror mount-agent's HITL wiring cast-free (structural inference); absent gate ⇒ the non-HITL
   // stream path (M2), unchanged. The SDK calls (approvalId, opts, toolName); route to the caller.
+  // An explicit `awaitApproval` wins over the posture: it is the more specific answer to the same
+  // question, and honouring it keeps every pre-M96 call site byte-identical.
+  const resolverDeAprovacao = resolve
+    ? (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) =>
+        resolve({ approvalId, toolName, opts })
+    : resolvedorDaPostura(input.approvals)
   const hitl =
-    gated && gated.size > 0 && resolve
-      ? {
-          gated,
-          awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) =>
-            resolve({ approvalId, toolName, opts }),
-        }
+    gated && gated.size > 0 && resolverDeAprovacao
+      ? { gated, awaitApproval: resolverDeAprovacao }
       : undefined
 
   const sessionId = input.sessionId ?? crypto.randomUUID()

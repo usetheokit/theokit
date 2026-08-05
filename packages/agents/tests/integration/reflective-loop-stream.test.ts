@@ -143,7 +143,7 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
   })
 
   it('test_budget_exceeded_throws_after_events_streamed', async () => {
-    // budget crossed by round-1 cost (0.01 > 0.005): events stream first, then BudgetExceededError.
+    // budget crossed by round-1 cost (0.01 > 0.005): events stream first, then DelegationBudgetExceededError.
     h.rounds = [[td('spend'), done]]
     h.calls = 0
     const runner = AgentRunner.fromSpec({
@@ -169,6 +169,6 @@ describe('V4-D-stream — AgentRunner.stream() streams live + returns aggregated
     }
 
     expect(seen.map((e) => e.type)).toEqual(['text_delta', 'done'])
-    expect((threw as Error)?.constructor.name).toBe('BudgetExceededError')
+    expect((threw as Error)?.constructor.name).toBe('DelegationBudgetExceededError')
   })
 })

@@ -179,6 +179,19 @@ interface StreamAgentOptions {
    * follow-up. The non-HITL path is pull-based and already tears down on the consumer's return.
    */
   signal?: AbortSignal
+  /**
+   * theokit#132 — observe the SDK's typed `RunEvent`s for this run (`tool_progress`, `rate_limit`,
+   * `permission_denied`, `task_*`, `compact_boundary`, `tripwire`, `completion_check`).
+   *
+   * The seam theokit-studio's M1 event inspector needs: without it the run endpoint can only stream
+   * `{kind:"message"}`, and the inspector degrades to showing nothing about the run itself.
+   *
+   * Deliberately a SINK rather than extra chunks on the returned generator. The generator's contract
+   * is the UIMessage protocol a chat consumer renders; run diagnostics are a different audience, and
+   * multiplexing them would make every chat consumer step over frames it has no use for. Absent ⇒
+   * the stream is byte-identical to before.
+   */
+  onRunEvent?: RuntimeOverrides['onRunEvent']
 }
 
 /**
@@ -201,6 +214,8 @@ export function streamAgentUIMessages(
   if (input.baseDir !== undefined) overrides.baseDir = input.baseDir
   // M35 (multimodal) — thread images so the adapter sends the structured `{ text, images }` form.
   if (input.images !== undefined) overrides.images = input.images
+  // theokit#132 — thread the RunEvent sink so it reaches `SendOptions.onRunEvent`.
+  if (input.onRunEvent !== undefined) overrides.onRunEvent = input.onRunEvent
 
   let source: AsyncGenerator<AgentStreamEvent>
   if (!input.hitl || input.hitl.gated.size === 0) {

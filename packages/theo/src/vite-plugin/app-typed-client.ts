@@ -43,6 +43,13 @@ interface ControllerLeaf {
   classAlias: string
   /** Controller method name backing the route (`findById`). */
   methodName: string
+  /**
+   * theokit#124 — module specifier + exported name of the `@Body` schema, when it has one, so the
+   * emitted signature can say `z.infer<typeof import('...').zCreate>` instead of `unknown`.
+   */
+  bodySchema?: { importPath: string; exportName: string }
+  /** theokit#124 — same for `@Query`. */
+  querySchema?: { importPath: string; exportName: string }
 }
 
 interface TreeNode {
@@ -206,7 +213,35 @@ function buildOneController(cr: ControllerRouteData, classAlias: string, ctx: Bu
     )
     return
   }
-  node.controllerMethods.set(method, { classAlias, methodName: cr.methodName })
+  if (cr.schemaNotExported === true) {
+    // theokit#124 — a note, not a warning: the author did nothing wrong, and the emitted file is
+    // valid. It exists so a reader who sees one typed method beside an untyped one knows the reason
+    // is reachability, and knows the one-word fix.
+    const note = `NOTE (#124): ${cr.className}.${cr.methodName} validates with a schema that is not exported, so its request type falls back to \`unknown\`. To get the type, export the schema (\`export const zX = z.object({...})\`).`
+    if (!ctx.warnings.includes(note)) ctx.warnings.push(note)
+  }
+  node.controllerMethods.set(method, {
+    classAlias,
+    methodName: cr.methodName,
+    // theokit#124 — an EXPORTED schema is referenceable from the emitted `.d.ts`; an inline one is
+    // not, and falls through to the documented `unknown`.
+    ...(cr.bodySchemaExport !== undefined
+      ? {
+          bodySchema: {
+            importPath: importPathFor(ctx.dtsOutPath, cr.filePath),
+            exportName: cr.bodySchemaExport,
+          },
+        }
+      : {}),
+    ...(cr.querySchemaExport !== undefined
+      ? {
+          querySchema: {
+            importPath: importPathFor(ctx.dtsOutPath, cr.filePath),
+            exportName: cr.querySchemaExport,
+          },
+        }
+      : {}),
+  })
 }
 
 /**
@@ -264,16 +299,30 @@ function renderTreeNode(node: TreeNode, indent: string, _isRoot: boolean): strin
     )
   }
   // #122 (T2.1) — decorator-controller methods. Response inferred via
-  // `Awaited<ReturnType<...>>`; body is `unknown` (ADR-2 checkpoint — @Body types
-  // are not recoverable from the class type). params typed from the route pattern.
+  // `Awaited<ReturnType<...>>`; params typed from the route pattern.
+  //
+  // theokit#124 — the request side too, when the `@Body`/`@Query` schema is EXPORTED. The ADR-2
+  // checkpoint was right that the type cannot come from the class (parameter decorators erase to
+  // runtime metadata, so `Parameters<...>[N]` is positional-only), and right that the runtime schema
+  // carries no source identifier. What it missed is that the codegen LOADS the module, so the schema
+  // object can be matched back to an export by reference identity — see `exportedNameOf`. An inline
+  // schema has no name to reference and keeps the documented `unknown`.
   for (const [method, leaf] of node.controllerMethods) {
     const lower = method.toLowerCase()
     const paramsList = node.paramNamesAccumulated.map((p) => `${p}: string`).join('; ')
     const paramsField =
       node.paramNamesAccumulated.length > 0 ? `{ params: { ${paramsList} } } & ` : ''
     const optionalMark = node.paramNamesAccumulated.length === 0 ? '?' : ''
+    const bodyType =
+      leaf.bodySchema === undefined
+        ? 'body?: unknown'
+        : `body: import('zod').infer<typeof import('${leaf.bodySchema.importPath}').${leaf.bodySchema.exportName}>`
+    const queryType =
+      leaf.querySchema === undefined
+        ? 'query?: Record<string, string>'
+        : `query: import('zod').infer<typeof import('${leaf.querySchema.importPath}').${leaf.querySchema.exportName}>`
     lines.push(
-      `${indent}  ${lower}: (opts${optionalMark}: ${paramsField}{ body?: unknown; query?: Record<string, string> }) => Promise<Awaited<ReturnType<InstanceType<typeof ${leaf.classAlias}>['${leaf.methodName}']>>>`,
+      `${indent}  ${lower}: (opts${optionalMark}: ${paramsField}{ ${bodyType}; ${queryType} }) => Promise<Awaited<ReturnType<InstanceType<typeof ${leaf.classAlias}>['${leaf.methodName}']>>>`,
     )
   }
   // Children

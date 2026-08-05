@@ -25,12 +25,12 @@ const hoisted = vi.hoisted(() => ({
   skillsResolved: [] as unknown[],
 }))
 
-vi.mock('@theokit/agents', () => ({
+// M84 — o transporte MUDOU DE PACOTE: era `theokit/server/agent` e agora vive dentro de
+// `@theokit/agents`. Mockar o PACOTE deixou de interceptar qualquer coisa, porque de dentro dele os
+// imports são internos. Os mocks passam a mirar os módulos de origem — que é onde as funções sempre
+// estiveram; o pacote era só o caminho por onde elas chegavam.
+vi.mock('../../packages/agents/src/bridge/agent-endpoint.js', () => ({
   compileAgentModule: (mod: { __compiled: unknown }) => mod.__compiled,
-  resolveEnabledSkills: (selection: unknown, ctx: unknown) => {
-    hoisted.skillsResolved.push({ selection, ctx })
-    return Promise.resolve(hoisted.resolveEnabledSkills)
-  },
   streamAgentUIMessages: (compiled: unknown, apiKey: string, input: unknown) => {
     hoisted.lastCompiled = compiled
     hoisted.lastApiKey = apiKey
@@ -41,8 +41,15 @@ vi.mock('@theokit/agents', () => ({
   },
 }))
 
+vi.mock('../../packages/agents/src/skills-resolver.js', () => ({
+  resolveEnabledSkills: (selection: unknown, ctx: unknown) => {
+    hoisted.skillsResolved.push({ selection, ctx })
+    return Promise.resolve(hoisted.resolveEnabledSkills)
+  },
+}))
+
 const { streamAgentTurnInProcess, InProcessApprovalRequiredError } =
-  await import('../../packages/theo/src/server/agent/stream-agent-turn-in-process.js')
+  await import('../../packages/agents/src/in-process-turn.js')
 
 const GATED = {
   __compiled: {

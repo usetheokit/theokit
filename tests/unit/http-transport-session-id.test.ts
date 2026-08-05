@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
+import { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
 
 describe('HttpTransport — sends a stable session id so the server keeps one conversation across turns', () => {
   it('serializes the transport chatId as the top-level `id` in the POST body', async () => {

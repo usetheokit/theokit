@@ -87,20 +87,20 @@ const DECISOES: Record<string, Decisao> = {
     verdict: 'in',
     via: '../../src/index.js',
     cobertura: 'amostra',
-    simbolos: ['Agent', 'Squad', 'Tool', 'Provider'],
+    // M80 — `JudgeCredentialError` entra na amostra do barril: é o erro que a falha-rápida do judge
+    // lança, e um consumidor atrás da fronteira precisa dele para distinguir credencial-do-judge de
+    // qualquer outra falha do goal loop.
+    simbolos: ['Agent', 'Squad', 'Tool', 'Provider', 'JudgeCredentialError'],
   },
   './errors': {
     verdict: 'in',
     via: '../../src/index.js',
     cobertura: 'total',
     simbolos: ['TheokitAgentError', 'AuthenticationError', 'isTransientError', 'RateLimitError'],
-    lacunas: {
-      BudgetExceededError:
-        'Colisão de NOME com a classe homônima da camada (`bridge/delegation-types.ts`), que é de ' +
-        'outro domínio: orçamento por DELEGAÇÃO (agentName/actualCost) vs por JANELA ' +
-        '(budgetName/window/mode). A da camada vence no barril para não quebrar consumidor ' +
-        'existente. Renomear é breaking e está fora do escopo do M78.',
-    },
+    // M91 — a `lacuna` de `BudgetExceededError` SAIU: a classe da camada foi renomeada para
+    // `DelegationBudgetExceededError` (com alias `@deprecated` por uma major), e o barril passou a
+    // exportar as DUAS. A razão escrita aqui dizia que renomear era breaking e estava fora do escopo
+    // do M78 — o M91 pagou a conta, e a lacuna some junto com o conflito que a criou.
   },
   './retry': {
     verdict: 'in',
@@ -138,6 +138,15 @@ const DECISOES: Record<string, Decisao> = {
     cobertura: 'amostra',
     simbolos: ['isForbiddenPath', 'safePathJoin', 'assertNoSymlinkEscape'],
   },
+  './subagents-loader': {
+    verdict: 'in',
+    via: '../../src/index.js',
+    cobertura: 'amostra',
+    // M81 — o loader de subagents em disco. Atravessa porque a assimetria oposta (skills com porta
+    // pública, subagents sem) é o que fez o consumidor escrever um SEGUNDO parser de `.md`, junto
+    // com um teste cuja única função era vigiar a divergência entre os dois.
+    simbolos: ['discoverSubagents', 'loadSubagentDefinition'],
+  },
   './a2a': {
     verdict: 'in',
     via: '../../src/index.js',
@@ -148,23 +157,44 @@ const DECISOES: Record<string, Decisao> = {
   './sandbox': {
     verdict: 'in',
     via: '../../src/sandbox-entry.js',
-    cobertura: 'amostra',
+    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
+    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
+    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
+    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
+    cobertura: 'total',
     simbolos: [],
   },
   './persistence': {
     verdict: 'in',
     via: '../../src/persistence-entry.js',
-    cobertura: 'amostra',
+    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
+    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
+    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
+    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
+    cobertura: 'total',
     simbolos: [],
   },
   './interactive': {
     verdict: 'in',
     via: '../../src/interactive-entry.js',
-    cobertura: 'amostra',
+    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
+    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
+    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
+    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
+    cobertura: 'total',
     simbolos: [],
   },
 
   // --- FORA, com razão. Nenhuma destas é silenciosa. ---
+  './internal/memory-adapters': {
+    verdict: 'out',
+    razao:
+      'Subpath SEMVER-EXEMPT, publicado pelo `@theokit/sdk@4.39.0` (theokit#160) com um único ' +
+      'propósito: deixar o `@theokit/sdk-memory` reusar o runtime de embeddings do SDK em vez de ' +
+      'manter a cópia de 342 linhas que causou a lacuna de adapters do theokit#128. Atravessar a ' +
+      'camada com ele colocaria na superfície pública um caminho que o SDK declara livre para ' +
+      'quebrar em minor — o oposto do contrato que esta lista existe para proteger.',
+  },
   './cron': {
     verdict: 'out',
     razao:
@@ -242,6 +272,20 @@ const DECISOES: Record<string, Decisao> = {
   },
 }
 
+/**
+ * M90 — por que `/tools` e `/pty` NÃO entram neste mapa.
+ *
+ * A revisão do M90 apontou, corretamente, que eles ficavam sem oráculo — 98 dos 173 símbolos (57%), e
+ * foi por ali que `TruncationMode` sumiu da superfície publicada do `4.25.0`. A correção **não** foi
+ * estendê-los aqui: este mapa enumera os subpaths de `@theokit/sdk`, e `/tools` e `/pty` vêm de
+ * pacotes IRMÃOS (`@theokit/sdk-tools`, `@theokit/sdk-pty`). Trazê-los exigiria uma segunda fonte de
+ * verdade ao lado desta, e duas listas que precisam ficar em sincronia é o defeito que o review F-10
+ * deste próprio arquivo registrou (a cópia que perdeu `bench` enquanto o comentário jurava "mesmo
+ * escopo").
+ *
+ * Quem cobre os cinco é `subpath-surface.test.ts`, com um oráculo MAIS forte que `cobertura: 'total'`:
+ * compara o que a camada emite (`dist/*.d.ts`) contra o que a fonte exporta, nas duas direções.
+ */
 const SUBPATHS_DO_SDK = Object.keys(
   (require_('@theokit/sdk/package.json') as { exports: Record<string, unknown> }).exports,
 ).filter((k) => k !== './package.json')

@@ -15,7 +15,7 @@
  *
  * PURE metadata (sdk-runtime.md / G2): the builder describes an agent, it NEVER calls an LLM.
  */
-import type { CustomTool, SettingSource, MemorySettings } from '@theokit/sdk'
+import type { CustomTool, MemorySettings, ModelSelection, SettingSource } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { Guardrail } from '../guardrails/index.js'
@@ -25,6 +25,7 @@ import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
 import { defineAgent, type AgentDefinition, type DefineAgentConfig } from './define-agent.js'
+import type { HookHandlers } from './hook-handlers.js'
 
 /**
  * A required-but-unset builder field. Branded (a literal intersected with a unique brand) so no
@@ -95,11 +96,17 @@ export interface AgentBuilder<
   /** Set the request schema (lifted into the typed client via {@link AgentDefinition}). */
   input<S extends z.ZodType>(schema: S): AgentBuilder<S, TModel, TContext, TTools>
   /**
-   * Set the model id. Required before `.build()`. COMPILE ERROR when called twice — the argument
+   * Set the model. Required before `.build()`. COMPILE ERROR when called twice — the argument
    * type collapses to `never` once the model is set (tRPC's set-once technique).
+   *
+   * M94 — aceita `ModelSelection` além do id cru. A implementação do SDK **sempre** aceitou
+   * (`agent-builder.ts:50`: `model(m: string | ModelSelection)`); era esta fachada que estreitava
+   * para `string`, e o estreitamento tornava inalcançável qualquer campo da seleção — incluindo o
+   * `contextWindow` que o SDK passou a publicar. Fachada divergindo da implementação é a mesma
+   * classe de defeito que o M91 pagou dois patches para corrigir.
    */
   model(
-    id: TModel extends UnsetMarker ? string : never,
+    id: TModel extends UnsetMarker ? string | ModelSelection : never,
   ): AgentBuilder<TInput, string, TContext, TTools>
   /** Set the static system prompt. */
   system(prompt: string): AgentBuilder<TInput, TModel, TContext, TTools>
@@ -170,7 +177,9 @@ export interface AgentBuilder<
    * assembling plumbing. Call once — a later call replaces the map. Composes with
    * {@link AgentBuilder.plugins}: hooks and plugins are additive, not exclusive.
    */
-  hooks(map: Readonly<Record<string, unknown>>): AgentBuilder<TInput, TModel, TContext, TTools>
+  hooks(
+    map: HookHandlers | Readonly<Record<string, unknown>>,
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * Register code `Plugin` objects for this agent — the builder-chain equivalent of
    * `Agent.create({ plugins })`. A plugin is an EXTENSION UNIT: it can register tools and commands,
@@ -231,7 +240,8 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     settingSources: (sources: readonly SettingSource[]) =>
       makeBuilder({ ...config, settingSources: sources }),
     memory: (settings: MemorySettings) => makeBuilder({ ...config, memory: settings }),
-    hooks: (map: Readonly<Record<string, unknown>>) => makeBuilder({ ...config, hooks: map }),
+    hooks: (map: HookHandlers | Readonly<Record<string, unknown>>) =>
+      makeBuilder({ ...config, hooks: map }),
     plugins: (list: readonly unknown[]) => makeBuilder({ ...config, plugins: list }),
     mcp: (servers: McpServersMap) => makeBuilder({ ...config, mcpServers: servers }),
     use: (preset: (b: unknown) => unknown) => preset(runtime),
