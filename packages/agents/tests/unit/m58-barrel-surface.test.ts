@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * `SessionRecord`) have no runtime footprint; they are locked by the type-import lines at the top of
  * this file — if any were dropped from the barrel, `tsc` would fail to compile this file.
  */
-import type { SDKAgent, CustomTool, SessionRecord } from '../../src/index.js'
+import type { SDKAgent, CustomTool, SessionRecord, DiagnosticsSink } from '../../src/index.js'
 import type { SandboxBackend, SandboxConfig } from '../../src/sandbox-entry.js'
 import type {
   InteractiveBackend,
@@ -23,6 +23,7 @@ import type {
 // point is that these type names resolve through the barrel.
 type _TypeSurface = [
   SDKAgent,
+  DiagnosticsSink,
   CustomTool,
   SessionRecord,
   SandboxBackend,
@@ -55,6 +56,16 @@ describe('M58 — @theokit/agents pass-through barrels for the 5 already-OO/pure
     // The SDK's `X.create()` shape survives the pass-through (not wrapped).
     expect(m.Tool.create).toBeTypeOf('function')
     expect(m.Agent.create).toBeTypeOf('function')
+  })
+
+  it('theokit#173 — setDiagnosticsSink reaches the main barrel', () => {
+    // The SDK owns the channel; the consumer must be able to INSTALL a sink without importing
+    // `@theokit/sdk` directly, because a layered consumer forbids exactly that import.
+    //
+    // The cost of the gap is measured, not hypothetical: theokit-sdk#165 chased the wrong hypothesis
+    // for a 429 because the retry was unobservable, and the SDK fix that made it observable
+    // (`8323f1f38`) could not reach a consumer that had no way to install the sink receiving it.
+    expect(barril.setDiagnosticsSink).toBeTypeOf('function')
   })
 
   it('sandbox: LocalSandbox reaches @theokit/agents/sandbox', async () => {
