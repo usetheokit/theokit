@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/presenter@0.4.0 + @theokit/agents@7.1.0 + theokit@0.45.0] - 2026-08-05
+
 ### Changed
 - **O ai-sdk sai da superfície publicada: instalar `theokit` não traz mais o pacote `ai`.** O TheoKit passa a ser dono do wire `UIMessageStream` — schema, parser e reconstrutor próprios em `@theokit/presenter/wire`. **O formato da frame não muda**: um cliente ai-sdk continua conversando com um servidor TheoKit, e nenhum app existente precisa de migração. Antes, `ai` era peer obrigatório na prática porque o consumidor do stream o importava em runtime.
 - **BREAKING (interno): `ai` deixa de ser `peerDependency` de `theokit` e `@theokit/agents`.** Apps que o declaravam só por causa do TheoKit podem removê-lo. Quem usa `@ai-sdk/react`/`useChat` diretamente continua instalando por conta própria — e continua funcionando, porque o wire é o mesmo.
