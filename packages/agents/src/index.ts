@@ -59,6 +59,20 @@ export type {
 export { Squad, Tool, Provider } from '@theokit/sdk'
 export type { SDKAgent, CustomTool, SessionRecord } from '@theokit/sdk'
 
+// theokit#173 — the diagnostics channel crosses the layer too, for the same reason as the rest of
+// this block: a consumer whose boundary forbids importing `@theokit/sdk` directly had no way to
+// install a sink, so the channel existed and was unreachable from inside the boundary.
+//
+// The cost was measured before it was fixed. In theokit-sdk#165 a 429 was investigated on the wrong
+// hypothesis — the retry WAS running, but silently, so the evidence could not distinguish "retried
+// three times" from "never retried". The SDK fix that made it observable landed and still did not
+// reach a layered consumer, because the sink receiving it could not be installed from here.
+//
+// Pass-through, never a wrapper (parsimony ladder, rung 5): the SDK's silent-by-default is already
+// the right posture for a library, and WHERE to write stays the consumer's decision.
+export { setDiagnosticsSink } from '@theokit/sdk'
+export type { DiagnosticsSink } from '@theokit/sdk'
+
 // M103 (agent-builder) — `Agent` is the ONE exception to the pass-through doctrine above, and it is a
 // narrowing of the TYPE only: the exported VALUE is the SDK's `Agent`, byte-identical.
 //
