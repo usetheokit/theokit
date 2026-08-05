@@ -1,5 +1,8 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import type { ChatTransport, UIMessage } from 'ai'
+import type {
+  WireTransport as ChatTransport,
+  WireMessage as UIMessage,
+} from '@theokit/presenter/wire'
 
 import type { ChannelTransport } from '../../packages/agents/src/client/channel-transport.js'
 import type { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
@@ -16,19 +19,19 @@ import type { UseAgentReturn } from '../../packages/agents/src/client/use-agent.
  */
 describe('AgentTransport seam (types)', () => {
   it('D1 — HttpTransport implements the adopted ChatTransport seam', () => {
-    expectTypeOf<HttpTransport>().toExtend<ChatTransport<UIMessage>>()
+    expectTypeOf<HttpTransport>().toExtend<ChatTransport>()
   })
 
   it('D4 — InProcessTransport implements the same seam', () => {
-    expectTypeOf<InProcessTransport>().toExtend<ChatTransport<UIMessage>>()
+    expectTypeOf<InProcessTransport>().toExtend<ChatTransport>()
   })
 
   it('M42 — ChannelTransport implements the same seam', () => {
-    expectTypeOf<ChannelTransport>().toExtend<ChatTransport<UIMessage>>()
+    expectTypeOf<ChannelTransport>().toExtend<ChatTransport>()
   })
 
   it('D2 — AgentTransport is the ChatTransport seam plus the optional approve method', () => {
-    expectTypeOf<AgentTransport>().toExtend<ChatTransport<UIMessage>>()
+    expectTypeOf<AgentTransport>().toExtend<ChatTransport>()
     expectTypeOf<HttpTransport>().toExtend<AgentTransport>()
     expectTypeOf<InProcessTransport>().toExtend<AgentTransport>()
     expectTypeOf<ChannelTransport>().toExtend<AgentTransport>()

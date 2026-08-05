@@ -4,7 +4,11 @@
  * accumulate messages by id, status transitions, abort, approve routing, reconnect. Tested DOM-free.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
+import type {
+  WireTransport as ChatTransport,
+  WireMessage as UIMessage,
+  WireChunk as UIMessageChunk,
+} from '@theokit/presenter/wire'
 
 import { AgentClient } from '../../packages/agents/src/client/agent-client.js'
 import type {
@@ -33,8 +37,8 @@ const TEXT_TURN = [
 /** A minimal fake transport that returns a fixed chunk stream from sendMessages. */
 function fakeTransport(overrides: Partial<AgentTransport> = {}): AgentTransport {
   return {
-    sendMessages: (async () => chunkStream(TEXT_TURN)) as ChatTransport<UIMessage>['sendMessages'],
-    reconnectToStream: (async () => null) as ChatTransport<UIMessage>['reconnectToStream'],
+    sendMessages: (async () => chunkStream(TEXT_TURN)) as ChatTransport['sendMessages'],
+    reconnectToStream: (async () => null) as ChatTransport['reconnectToStream'],
     ...overrides,
   }
 }
@@ -93,7 +97,7 @@ describe('AgentClient (M41)', () => {
         },
       })
     const transport = fakeTransport({
-      sendMessages: (async () => gatedStream()) as ChatTransport<UIMessage>['sendMessages'],
+      sendMessages: (async () => gatedStream()) as ChatTransport['sendMessages'],
     })
     const client = new AgentClient(transport)
     const tick = () => new Promise((r) => setTimeout(r, 15))
@@ -138,7 +142,7 @@ describe('AgentClient (M41)', () => {
       })
     }
     const transport = fakeTransport({
-      sendMessages: (async () => gatedStream()) as ChatTransport<UIMessage>['sendMessages'],
+      sendMessages: (async () => gatedStream()) as ChatTransport['sendMessages'],
     })
     const client = new AgentClient(transport)
     const tick = () => new Promise((r) => setTimeout(r, 15))
@@ -163,8 +167,7 @@ describe('AgentClient (M41)', () => {
   it('test_drives_in_process_transport_with_same_shape', async () => {
     // The SAME store over an in-process-style transport (generator-backed stream) — proves unification.
     const transport = fakeTransport({
-      sendMessages: (async () =>
-        chunkStream(TEXT_TURN)) as ChatTransport<UIMessage>['sendMessages'],
+      sendMessages: (async () => chunkStream(TEXT_TURN)) as ChatTransport['sendMessages'],
     })
     const client = new AgentClient(transport)
     client.send({ message: 'hi' })
@@ -177,7 +180,7 @@ describe('AgentClient (M41)', () => {
     const transport = fakeTransport({
       sendMessages: (async () => {
         throw new Error('Agent request failed: 500 Server Error')
-      }) as ChatTransport<UIMessage>['sendMessages'],
+      }) as ChatTransport['sendMessages'],
     })
     const client = new AgentClient(transport)
     client.send({ message: 'hi' })
@@ -198,7 +201,7 @@ describe('AgentClient (M41)', () => {
           { type: 'text-delta', id: 't0', delta: 'Hi' },
           { type: 'text-end', id: 't0' },
           { type: 'error', errorText: 'OpenRouter: 401 No auth credentials found' },
-        ])) as ChatTransport<UIMessage>['sendMessages'],
+        ])) as ChatTransport['sendMessages'],
     })
     const client = new AgentClient(transport)
     client.send({ message: 'hi' })
@@ -221,8 +224,7 @@ describe('AgentClient (M41)', () => {
 
   it('test_reconnect_accumulates_replayed_messages', async () => {
     const transport = fakeTransport({
-      reconnectToStream: (async () =>
-        chunkStream(TEXT_TURN)) as ChatTransport<UIMessage>['reconnectToStream'],
+      reconnectToStream: (async () => chunkStream(TEXT_TURN)) as ChatTransport['reconnectToStream'],
     })
     const client = new AgentClient(transport)
     client.reconnect()
@@ -325,7 +327,7 @@ describe('AgentClient — conversation thread (M46)', () => {
         call += 1
         if (call === 2) throw new Error('Agent request failed: 500')
         return chunkStream(TEXT_TURN)
-      }) as ChatTransport<UIMessage>['sendMessages'],
+      }) as ChatTransport['sendMessages'],
     })
     const client = new AgentClient<{ message: string }>(transport)
     client.send({ message: 'one' })
@@ -354,7 +356,7 @@ describe('AgentClient — conversation thread (M46)', () => {
       })
     const client = new AgentClient<{ message: string }>(
       fakeTransport({
-        sendMessages: (async () => gatedStream()) as ChatTransport<UIMessage>['sendMessages'],
+        sendMessages: (async () => gatedStream()) as ChatTransport['sendMessages'],
       }),
     )
     const tick = () => new Promise((r) => setTimeout(r, 15))
@@ -399,7 +401,7 @@ describe('AgentClient — conversation thread (M46)', () => {
         sendMessages: (async () => {
           call += 1
           return call === 1 ? gatedFirst() : chunkStream(TEXT_TURN)
-        }) as ChatTransport<UIMessage>['sendMessages'],
+        }) as ChatTransport['sendMessages'],
       }),
     )
     const tick = () => new Promise((r) => setTimeout(r, 15))
@@ -429,7 +431,7 @@ describe('AgentClient — conversation thread (M46)', () => {
             { type: 'text-delta', id: 't0', delta: 'Hi' },
             { type: 'text-end', id: 't0' },
             { type: 'finish' },
-          ])) as ChatTransport<UIMessage>['sendMessages'],
+          ])) as ChatTransport['sendMessages'],
       }),
     )
     client.send({ message: 'hi' })
@@ -444,7 +446,7 @@ describe('AgentClient — conversation thread (M46)', () => {
     const client = new AgentClient<{ message: string }>(
       fakeTransport({
         reconnectToStream: (async () =>
-          chunkStream(TEXT_TURN)) as ChatTransport<UIMessage>['reconnectToStream'],
+          chunkStream(TEXT_TURN)) as ChatTransport['reconnectToStream'],
       }),
     )
     client.reconnect()
@@ -460,11 +462,11 @@ describe('AgentClient — conversation thread (M46)', () => {
       fakeTransport({
         sendMessages: (async () => {
           throw new Error('Agent request failed: 500')
-        }) as ChatTransport<UIMessage>['sendMessages'],
+        }) as ChatTransport['sendMessages'],
         reconnectToStream: (async () => {
           call += 1
           return chunkStream(TEXT_TURN)
-        }) as ChatTransport<UIMessage>['reconnectToStream'],
+        }) as ChatTransport['reconnectToStream'],
       }),
     )
     client.send({ message: 'hi' })

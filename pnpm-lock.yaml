@@ -30,6 +30,9 @@ importers:
       '@playwright/test':
         specifier: ^1.61.0
         version: 1.61.0
+      '@theokit/presenter':
+        specifier: workspace:*
+        version: link:packages/presenter
       '@theokit/sdk':
         specifier: ^4.39.0
         version: 4.39.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3)
@@ -58,7 +61,7 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(vitest@4.1.9)
       ai:
-        specifier: ^7.0.14
+        specifier: 7.0.14
         version: 7.0.14(zod@4.4.3)
       better-sqlite3:
         specifier: ^12.11.1
@@ -241,6 +244,9 @@ importers:
 
   packages/agents:
     dependencies:
+      '@theokit/presenter':
+        specifier: workspace:*
+        version: link:../presenter
       '@theokit/sdk':
         specifier: ^4.39.0
         version: 4.39.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3)
@@ -257,11 +263,8 @@ importers:
       '@theokit/http':
         specifier: workspace:*
         version: link:../http
-      '@theokit/presenter':
-        specifier: workspace:*
-        version: link:../presenter
       ai:
-        specifier: ^7.0.14
+        specifier: 7.0.14
         version: 7.0.14(zod@4.4.3)
       tsup:
         specifier: ^8.5.1
@@ -319,7 +322,7 @@ importers:
         specifier: ^3.5.0
         version: 3.8.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.1)(zod@4.4.3)
       ai:
-        specifier: ^7.0.0
+        specifier: 7.0.14
         version: 7.0.14(zod@4.4.3)
       tsup:
         specifier: ^8.5.1
@@ -330,6 +333,9 @@ importers:
       vitest:
         specifier: ^3.2.6
         version: 3.2.6(@types/debug@4.1.13)(@types/node@25.9.5)(happy-dom@20.9.0)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.5)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0)
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
 
   packages/tauri:
     dependencies:
@@ -337,6 +343,9 @@ importers:
         specifier: '>=2.0.0'
         version: 2.11.1
     devDependencies:
+      '@theokit/presenter':
+        specifier: workspace:*
+        version: link:../presenter
       theokit:
         specifier: workspace:*
         version: link:../theo
@@ -349,6 +358,9 @@ importers:
       '@theokit/http':
         specifier: workspace:^
         version: link:../http
+      '@theokit/presenter':
+        specifier: workspace:^
+        version: link:../presenter
       '@theokit/studio':
         specifier: ^0.1.0
         version: 0.1.0(@tailwindcss/vite@4.3.1(vite@6.4.3(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)))(@theokit/agents@packages+agents)(@theokit/sdk@4.39.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.0)(zod@4.4.3))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(hast-util-from-html@2.0.3)(hast-util-sanitize@5.0.2)(hast-util-to-jsx-runtime@2.3.6)(katex@0.16.47)(mdast-util-from-markdown@2.0.3)(mdast-util-gfm@3.1.0)(mdast-util-math@3.0.0)(mdast-util-to-hast@13.2.1)(mermaid@11.15.0)(micromark-extension-gfm@3.0.0)(micromark-extension-math@3.1.0)(perfect-freehand@1.2.3)(roughjs@4.6.6)(shiki@1.29.2)(tailwindcss@4.3.1)(typescript@5.9.3)(unist-util-visit-parents@6.0.2)(unist-util-visit@5.1.0)(vite@6.4.3(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))(yaml@2.9.0)
@@ -423,7 +435,7 @@ importers:
         specifier: ^4.0.3
         version: 4.0.3
       ai:
-        specifier: ^7.0.14
+        specifier: 7.0.14
         version: 7.0.14(zod@4.4.3)
       better-sqlite3:
         specifier: ^12.11.1

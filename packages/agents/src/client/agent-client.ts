@@ -1,4 +1,4 @@
-import type { UIMessage, UIMessageChunk } from 'ai'
+import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { consumeChunkStream } from './consume-ui-message-stream.js'
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'

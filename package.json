@@ -42,7 +42,9 @@
     "theo-ui:unlink": "bash scripts/theo-ui-unlink.sh",
     "openapi:regen-fixtures": "tsx scripts/regen-openapi-fixtures.ts",
     "check:sandbox-parity": "node scripts/check-sandbox-parity.mjs",
-    "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs"
+    "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
+    "check:ai-free": "node scripts/check-ai-free-surface.mjs",
+    "check:wire-parity": "node scripts/check-wire-parity.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
@@ -51,6 +53,7 @@
     "@eslint/js": "^9.39.4",
     "@ls-lint/ls-lint": "^2.3.1",
     "@playwright/test": "^1.61.0",
+    "@theokit/presenter": "workspace:*",
     "@theokit/sdk": "^4.39.0",
     "@theokit/sdk-pty": "0.3.0",
     "@theokit/sdk-tools": "0.26.0",
@@ -60,7 +63,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.9",
-    "ai": "^7.0.14",
+    "ai": "7.0.14",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
     "dependency-cruiser": "^17.4.3",
