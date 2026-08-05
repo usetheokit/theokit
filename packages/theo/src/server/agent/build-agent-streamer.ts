@@ -11,7 +11,7 @@ import {
   resolveEnabledSkills,
   streamAgentUIMessages,
 } from '@theokit/agents'
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { getApprovalRegistry } from './approval-registry.js'
 

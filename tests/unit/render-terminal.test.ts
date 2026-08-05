@@ -8,7 +8,7 @@
  */
 import { PassThrough, Writable } from 'node:stream'
 
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 import { describe, expect, it, vi } from 'vitest'
 
 import {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { agentHandle } from '../../packages/agents/src/client/agent-handle.js'
 import { InProcessTransport } from '../../packages/agents/src/client/in-process-transport.js'

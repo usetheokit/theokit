@@ -1,4 +1,4 @@
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import type { RunEventCache } from './run-event-cache.js'
 

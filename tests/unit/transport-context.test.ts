@@ -4,7 +4,7 @@
  * `start` arg, resolved per request (never stale). Back-compat: no context → today's behavior.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { AgentClient } from '../../packages/agents/src/client/agent-client.js'
 import {

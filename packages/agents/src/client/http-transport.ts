@@ -1,4 +1,7 @@
-import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
+import type {
+  WireTransport as ChatTransport,
+  WireChunk as UIMessageChunk,
+} from '@theokit/presenter/wire'
 
 import { responseToChunkStream } from './consume-ui-message-stream.js'
 import type { AgentTransport, ApprovalDecision } from './transport.js'
@@ -65,7 +68,7 @@ export class HttpTransport implements AgentTransport {
   }
 
   async sendMessages(
-    options: Parameters<ChatTransport<UIMessage>['sendMessages']>[0],
+    options: Parameters<ChatTransport['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
     const { messages, abortSignal, headers, body, chatId } = options
     // Only spread an object body (never a primitive — that would emit char-indexed keys). `body` is typed
@@ -99,7 +102,7 @@ export class HttpTransport implements AgentTransport {
   }
 
   async reconnectToStream(
-    options: Parameters<ChatTransport<UIMessage>['reconnectToStream']>[0],
+    options: Parameters<ChatTransport['reconnectToStream']>[0],
   ): Promise<ReadableStream<UIMessageChunk> | null> {
     if (this.#lastRunId === undefined) return null
     const response = await this.#fetch(`${this.#api}/runs/${this.#lastRunId}/stream`, {
