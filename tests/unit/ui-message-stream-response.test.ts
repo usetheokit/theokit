@@ -18,7 +18,7 @@
  * file lives where it is actually executed (CLAUDE.md "code/README win").
  */
 import { describe, expect, it } from 'vitest'
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { uiMessageStreamResponse } from '../../packages/theo/src/server/define/ui-message-stream-response.js'
 

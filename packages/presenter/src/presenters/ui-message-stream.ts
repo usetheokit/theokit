@@ -1,7 +1,12 @@
-import type { UIMessageChunk } from 'ai'
-
 import type { AgentOutputEvent } from '../agent-output-event.js'
 import type { Presenter } from '../presenter.js'
+import type { WireChunk } from '../wire/chunk-schema.js'
+
+/**
+ * The frame type is TheoKit's own since the `remover-dependencia-ai` plan; it is structurally the
+ * ai-sdk `UIMessageChunk`, so the emitted wire is unchanged and an ai-sdk client still reads it.
+ */
+type UIMessageChunk = WireChunk
 
 /**
  * `UIMessageStreamPresenter` (M49) — the web surface: the canonical {@link AgentOutputEvent} → the Vercel

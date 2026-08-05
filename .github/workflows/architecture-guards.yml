@@ -132,3 +132,23 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:naming
+
+  wire-ownership:
+    name: wire ownership (nenhum pacote publicado carrega o ai-sdk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Os dois gates leem `dist/`. `check-ai-free-surface` FALHA quando ele nao existe, de
+      # proposito — sem o artefato ele nao mede nada, e um gate que nao mede nao pode reportar
+      # sucesso. E a mesma licao que deixou `surface parity` vermelho por semanas.
+      - run: TURBO_CONCURRENCY=1 pnpm --filter "./packages/*" build
+      - run: pnpm check:ai-free
+      - run: pnpm check:wire-parity
+      # O oraculo diferencial: prova que o espelho reproduz o `ai` variante por variante.
+      - run: pnpm --filter @theokit/presenter test

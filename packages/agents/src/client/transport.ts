@@ -1,4 +1,4 @@
-import type { ChatTransport, UIMessage } from 'ai'
+import type { WireTransport as ChatTransport } from '@theokit/presenter/wire'
 
 /**
  * M41 (ADR-0050 D2) — a HITL approval decision sent to settle a paused gated-tool call. Mirrors the
@@ -41,6 +41,6 @@ export interface RequestContext {
  *
  * `HttpTransport` (web) and `InProcessTransport` (TUI/desktop) implement this; `useAgent` drives it.
  */
-export type AgentTransport = ChatTransport<UIMessage> & {
+export type AgentTransport = ChatTransport & {
   approve?(approvalId: string, decision: ApprovalDecision): Promise<void>
 }

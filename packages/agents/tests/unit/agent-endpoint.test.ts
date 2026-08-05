@@ -12,6 +12,7 @@ import { ModelCapability } from '../../src/capability/capabilities.js'
 import { CheckpointCapability } from '../../src/capability/agent-capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/toolbox.js'
+import type { WireChunk, WireDataPart } from '@theokit/presenter/wire'
 
 interface FakeStreamEvent {
   type: string
@@ -128,7 +129,7 @@ describe('streamAgentUIMessages (M2)', () => {
     h.calls = []
     const compiled = compileAgentModule(defineAgent({ model: 'm' }))
 
-    const chunks: { type: string; [k: string]: unknown }[] = []
+    const chunks: WireChunk[] = []
     for await (const c of streamAgentUIMessages(compiled, 'sk-test', {
       message: 'hi',
       sessionId: 's1',
@@ -148,7 +149,7 @@ describe('streamAgentUIMessages (M2)', () => {
     h.calls = []
     const compiled = compileAgentModule(defineAgent({ model: 'm' }))
 
-    const chunks: { type: string; [k: string]: unknown }[] = []
+    const chunks: WireChunk[] = []
     for await (const c of streamAgentUIMessages(compiled, 'k', { message: 'x', sessionId: 's' })) {
       chunks.push(c)
     }
@@ -157,8 +158,8 @@ describe('streamAgentUIMessages (M2)', () => {
   })
 })
 
-async function collectStream(gen: AsyncIterable<{ type: string; [k: string]: unknown }>) {
-  const chunks: { type: string; [k: string]: unknown }[] = []
+async function collectStream(gen: AsyncIterable<WireChunk>) {
+  const chunks: WireChunk[] = []
   for await (const c of gen) chunks.push(c)
   return chunks
 }
@@ -181,7 +182,7 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
       streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),
     )
     // The resume handle rides an ai-sdk-native transient `data-checkpoint` part, keyed by sessionId.
-    const cp = chunks.find((c) => c.type === 'data-checkpoint')
+    const cp = chunks.find((c): c is WireDataPart => c.type === 'data-checkpoint')
     expect(cp).toBeDefined()
     expect((cp?.data as { resumeToken: string }).resumeToken).toBe('s1')
     expect(cp?.transient).toBe(true)
