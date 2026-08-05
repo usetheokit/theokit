@@ -20,20 +20,20 @@ export const FULL_APP_MANIFEST: OpenApiManifestRoute[] = [
     methods: ['POST'],
     body: z.object({
       name: z.string(),
-      email: z.string().email(),
+      email: z.email(),
       role: z.enum(['admin', 'user']),
     }),
   },
   {
     routePath: '/users/:id',
     methods: ['PUT'],
-    params: z.object({ id: z.string().uuid() }),
+    params: z.object({ id: z.uuid() }),
     body: z.object({ name: z.string().optional(), role: z.enum(['admin', 'user']).optional() }),
   },
   {
     routePath: '/users/:id',
     methods: ['DELETE'],
-    params: z.object({ id: z.string().uuid() }),
+    params: z.object({ id: z.uuid() }),
   },
   {
     routePath: '/posts',

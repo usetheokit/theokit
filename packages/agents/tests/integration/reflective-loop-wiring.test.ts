@@ -206,7 +206,7 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
   })
 
   it('test_delegate_clamps_parent_budget — D4/L4: parentBudgetRemaining < budget ⇒ min wins, throws when crossed', async () => {
-    const { BudgetExceededError } = await import('../../src/index.js')
+    const { DelegationBudgetExceededError } = await import('../../src/index.js')
     // each round costs 0.5 and continues; budget 10 but parentBudgetRemaining 0.4 ⇒ clamp to 0.4 ⇒ throws round 1
     const costlyContinue: StreamEvent = { type: 'done', cost: 0.5, finishReason: 'tool-calls' }
     script([[costlyContinue]])
@@ -216,7 +216,7 @@ describe('reflective loop wiring — end-to-end (T4.1)', () => {
         budget: 10,
         parentBudgetRemaining: 0.4,
       }),
-    ).rejects.toBeInstanceOf(BudgetExceededError)
+    ).rejects.toBeInstanceOf(DelegationBudgetExceededError)
   })
 
   it('test_reflective_loop_cancellation_integration — abort stops re-entry (both on-ramps)', async () => {

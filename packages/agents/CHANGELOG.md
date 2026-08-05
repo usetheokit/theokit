@@ -1,5 +1,430 @@
 # @theokit/agents
 
+## 7.0.0
+
+### Major Changes
+
+- Dois re-exports mudam de nome, acompanhando o `@theokit/sdk@4.39.0`.
+
+  - `@theokit/agents/persistence`: `sessaoTemEscritor` → `sessionHasWriter`
+  - `@theokit/agents/sandbox`: `detectBwrapMemoizado` → `detectBwrapMemoized`
+
+  Os dois nomes eram portugueses e atravessavam a camada verbatim. O SDK os traduziu
+  ao tornar seu código inglês-only, e a camada **não guarda alias**: um alias manteria
+  o identificador português vivo na superfície publicada, que é justamente o que a
+  mudança existe para remover. Quem importa qualquer um dos dois renomeia na chamada;
+  o comportamento é idêntico.
+
+  Junto vem o bump de `@theokit/sdk` 4.27.0 → 4.39.0, com doze correções pedidas deste
+  repo — entre elas `run.stream()` deixando de terminar em silêncio quando o run falha
+  (#101), `Agent.describe()` reportando os subagents que o runtime de fato resolve
+  (#123), `mcpLifecycle: 'session'` mantendo o servidor MCP vivo entre turnos (#155) e
+  as embeddings de `azure-openai`/`cohere`/`gemini` passando a funcionar (#128, #159).
+
+  Atenção a uma quebra de **comportamento** herdada do SDK: as diagnostics agora são
+  silenciosas por padrão. Sem um sink instalado a biblioteca não escreve no terminal —
+  antes ia direto ao stderr e corrompia o frame de qualquer TUI. Para restaurar:
+  `setDiagnosticsSink((m) => process.stderr.write(m))`.
+
+## 6.4.2
+
+### Patch Changes
+
+- **Correção de segurança.** O release anterior repassava a entrada do `.mcp.json` como veio do arquivo,
+  em vez de montá-la a partir dos campos declarados. Isso deixava o `envPolicy` atravessar — e ele é o
+  campo que decide se o processo do servidor MCP herda o ambiente **com** ou **sem** as variáveis
+  sensíveis do host. Um `.mcp.json` (arquivo de projeto, versionado) podia declarar `envPolicy: "all"` e
+  entregar chaves de API do ambiente a um binário de terceiro.
+
+  Agora a entrada é montada por allowlist, ramo a ramo: `command`/`args`/`env`/`cwd` no stdio,
+  `url`/`type`/`headers`/`auth`/`requestTimeoutMs` no remoto. Campo desconhecido não atravessa —
+  inclusive um que o SDK venha a criar. `envPolicy` fica de fora deliberadamente: é decisão de postura do
+  host, e o SDK a aceita do código que constrói o agente, onde um humano revisa.
+
+  **E o aviso deixou de poder sumir.** `onWarn` continua opcional, mas quando omitido os avisos vão para
+  `stderr` em vez de para lugar nenhum — antes, um chamador que não assinasse o canal descartava entradas
+  em silêncio absoluto.
+
+## 6.4.1
+
+### Patch Changes
+
+- a432fda: Os tipos de configuração de servidor MCP passaram a alcançar a raiz do pacote. Estavam em `types.ts` e
+  não chegavam ao `index.d.ts` — na prática, o consumidor conseguia _usar_ um servidor remoto mas não
+  conseguia **nomear** o tipo do mapa que `loadMcpJson` devolve, que é metade do problema que o release
+  anterior resolveu. `McpServerConfig`, `McpServersMap`, `McpStdioServerConfig`, `McpHttpServerConfig`,
+  `McpAuthConfig` e `McpOAuthConfig` agora atravessam.
+
+## 6.4.0
+
+### Minor Changes
+
+- f950538: Um servidor MCP que o carregador não entende deixou de derrubar os que ele entende, e o transporte
+  remoto passou a atravessar.
+
+  Antes, um `.mcp.json` com um servidor stdio perfeitamente válido e um vizinho que o parser não
+  reconhecia produzia `McpFileError` — e **os dois** eram perdidos. Fail-closed no raio errado: recusar
+  _uma entrada_ é correto; recusar _o arquivo_ transforma "esse servidor não é suportado" em "você não
+  tem MCP nenhum".
+
+  Agora o raio é a entrada:
+
+  ```jsonc
+  {
+    "mcpServers": {
+      "local": { "command": "npx", "args": ["servidor"] },
+      "remoto": { "type": "http", "url": "https://…/mcp", "headers": { "Authorization": "…" } },
+    },
+  }
+  ```
+
+  Os dois sobem. Uma entrada inválida é **omitida e NOMEADA** pelo canal `onWarn` — o erro continua
+  tipado e visível, apenas deixou de ser fatal para os vizinhos. Um arquivo **impartível** (JSON quebrado,
+  `mcpServers` que não é objeto) continua lançando: ali não há entradas para separar.
+
+  **Nenhuma dependência nova.** O transporte remoto já era do SDK — `McpServerConfig` é
+  `McpStdioServerConfig | McpHttpServerConfig`, com `type`/`url`/`headers`/`auth`/`requestTimeoutMs`.
+  Este pacote declarava um tipo **mais estreito** e recusava o que o runtime aceita; agora re-exporta o
+  do SDK. `McpAuthConfig`, `McpHttpServerConfig`, `McpOAuthConfig` e `McpStdioServerConfig` passaram a
+  atravessar junto.
+
+  **Mudança de contrato:** `loadMcpJson` deixa de lançar em defeito de entrada. Quem dependia disso
+  recebe a entrada omitida e um aviso no `onWarn` opcional; o comportamento em defeito de **arquivo** é
+  o mesmo de antes.
+
+  O valor de `headers` nunca entra num aviso — a mensagem descreve a **forma** do campo, nunca o
+  conteúdo.
+
+## 6.3.1
+
+### Patch Changes
+
+- 8847d94: Testes do device provider endurecidos após review: o override de `clientId` por ambiente
+  (`CODEX_CLIENT_ID_ENV_VAR`) ganhou oráculo — antes era API pública documentada com zero teste, e
+  remover a leitura da variável mantinha tudo verde. Um teste que não invocava nenhum símbolo de
+  produção (passava com o pacote deletado) foi removido; a cobertura real do caso vive no consumidor.
+  Nenhuma mudança de comportamento.
+
+## 6.3.0
+
+### Minor Changes
+
+- e7d99d9: O device flow **RFC 8628** atravessa a camada, e o do Codex também.
+
+  `@theokit/sdk` já implementava o padrão (`deviceLogin`, `requestDeviceCode`, `pollDeviceToken`,
+  `DeviceOAuthConfig`), e `@theokit/agents/auth` não re-exportava nenhum deles. Como o consumidor tem
+  regra inquebrável de nunca importar `@theokit/sdk*` direto, quem precisasse do padrão tinha duas
+  saídas: violar a fronteira, ou reimplementar o protocolo — exatamente a situação que o M73 já
+  documentou neste arquivo (_"a lacuna era daqui, não indisciplina de lá"_).
+
+  Medido junto: `openaiDeviceLogin` era **importado** para uso interno do `AuthProvider` e nunca
+  re-exportado. Consequência — o flow do Codex só era alcançável construindo um `AuthProvider` (que
+  exige `config` + `store`). Ele atravessa agora também.
+
+  As duas formas **coexistem e não são unificadas**: `DeviceOAuthConfig` tem um `deviceCodeEndpoint`
+  (RFC); `OpenAIDeviceConfig` tem dois (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com PKCE).
+  Fundi-las quebraria o Codex.
+
+  Pass-through **puro**, pelo critério que o M73 escreveu: são funções de I/O sem estado a segurar, e
+  envolver quebraria `instanceof`. `tests/unit/auth-parity.test.ts` trava a identidade dos quatro com
+  `toBe`.
+
+- 18fa6ef: Autenticar por device flow passa a caber numa chamada, e um provider novo entra sem editar a camada.
+
+  Antes, quem usava `@theokit/agents/auth` para autenticar no Codex precisava saber que existem **duas**
+  formas de device flow, copiar o `clientId` e três URLs da OpenAI para dentro do próprio código, montar
+  `{ fetch, sleep, now }`, chamar `deviceLogin` e **lembrar** de chamar `persist` — e esquecer o último
+  custava um round-trip OAuth completo que não guardava nada.
+
+  Agora:
+
+  ```ts
+  import { CODEX_PROVIDER, loginWithDevice } from '@theokit/agents/auth'
+
+  const [metodo] = CODEX_PROVIDER.methods // rotulado, para a sua UI mostrar
+  const { path } = await loginWithDevice(CODEX_PROVIDER, metodo, store, { onPrompt })
+  ```
+
+  Um provider de terceiro usa a **mesma** chamada: basta construir um `DeviceAuthProvider` com os seus
+  métodos. Nada na camada muda.
+
+  **Novos símbolos:** `CODEX_PROVIDER`, `loginWithDevice`, `CODEX_CLIENT_ID_ENV_VAR`, e os tipos
+  `AuthMethod`, `DeviceAuthProvider`, `PromptHooks`, `LoginWithDeviceOptions`.
+
+  `AuthMethod` é união discriminada — um método `type: 'oauth'` **tem** de carregar `authorize`, e o
+  compilador recusa `{ label, type: 'oauth' }`. Não há discriminante de protocolo: cada método aponta
+  para a sua própria função, então o RFC 8628 e a variante da OpenAI coexistem sem `switch` e sem risco
+  de serem fundidas.
+
+  `deps` é opcional; `AuthProvider.deviceLogin` e `.persist` continuam públicos para quem precisa da
+  granularidade. Nenhum símbolo existente mudou de assinatura.
+
+## 6.1.1
+
+### Patch Changes
+
+- M107 (review HIGH-2) — require `@theokit/sdk@^4.37.0`, not `^4.36.0`.
+
+  `6.1.0` shipped with `^4.36.0`, so a fresh install could resolve `4.36.0` — where `Agent.list`
+  **silently ignores the `cwd` it advertises**. That is not a cosmetic mismatch: a consumer that
+  narrows a listing by workspace to decide which sessions are still active would get the _process_
+  directory's answer instead, and this project consumes exactly that list to protect transcripts from
+  deletion.
+
+  The range now names the version that actually honours the contract. Nothing else changed; `6.1.0`
+  and `6.1.1` are byte-identical apart from this field. Consumers already resolving `4.37.0` (through
+  an override or a fresh install) were never affected.
+
+## 6.1.0
+
+### Minor Changes
+
+- 3575c8e: Two additions: `loadMcpJson(cwd)` reads the `.mcp.json` project convention from disk, and `reasoningEffortOf(model)` reads back the reasoning effort that `buildModelSelection` writes.
+
+  **`loadMcpJson(cwd)`** — the layer already shipped the rare MCP cases (`resolveMcpServers` for per-request selection, `mcpRegistry` for a known provider) and not the common one: reading `<cwd>/.mcp.json`, the convention Claude Code and Cursor established. Every application that wanted it wrote the loader by hand, which is why the same 120-odd lines of read-parse-validate exist in more than one consumer.
+
+  It returns the `McpServersMap` the package already exports — no new type. An **absent** file returns `{}`, because MCP is opt-in and a project without the file is a project without MCP. A **present but broken** file throws `McpFileError` naming the path: a read failure, invalid JSON, a root that is not an object, a server without a non-empty `command`, or an `args`/`env`/`cwd` of the wrong type. A valid JSON object with no `mcpServers` key returns `{}` — that is a project declaring no server, not a malformed file. An empty (0-byte) file is invalid JSON and throws, deliberately: "absent" and "present and empty" are different situations, and treating the second as `{}` would disable MCP in silence.
+
+  `McpFileError` descends from `TheokitAgentError`, so `isTransientError` classifies it like every other error from this package (`isRetryable` is `false` — a malformed config file does not improve on retry).
+
+  **Scope, so it is not a surprise later:** stdio servers only. HTTP/SSE entries are not accepted in this release. Widening it later is additive and breaks nothing written against this version.
+
+  **`reasoningEffortOf(model)`** — the inverse of `buildModelSelection`, which is documented as the single site that maps a reasoning effort onto a `ModelSelection`. Only the write half was public, so callers that needed to read the effort back re-derived the parameter key by hand. Two spellings of one key drift apart quietly; now both directions live in one module and share one constant.
+
+  It accepts a bare model id or a full selection, and returns `undefined` when there is no effort to read — a string id, a selection without parameters, or parameters that do not include the reasoning key. None of those throw: absence is a normal answer, not a failure. A value that is present but not one of the documented levels comes back **verbatim**, and the return type is `string | undefined` for exactly that reason: validating the value stays with the caller, and typing the result as the effort union would promise a check this function does not perform.
+
+  Both symbols are reachable from the package root and from `@theokit/agents/bridge`.
+
+## 6.0.0
+
+### Major Changes
+
+- 24c8011: **BREAKING:** `Agent.list` no longer accepts `limit` or `cursor`, and its result no longer declares `nextCursor`.
+
+  The SDK's type promises all three; the runtime references none of them — `Agent.list` reads only `options.runtime`. A caller that writes `limit: 500` against a 688-entry registry believes it asked for a bounded page and silently gets the whole set, and on the day the runtime starts honouring the parameter that _same_ line silently gets a truncated one instead. Both directions are silent, and the consumer that motivated this change feeds the result into a NEVER-delete guard of a session garbage collector: a truncated list there means deleting a transcript the guard should have protected.
+
+  This is a type-only change — the exported value is still the SDK's `Agent`, asserted by identity in `tests/unit/agent-list-narrowed.test.ts`. Every other static (`create`, `getOrCreate`, `get`, `delete`, `archive`, `unarchive`, `rename`, `compact`, `listRuns`, `getRun`, `registry`) keeps its shape, asserted in `tests/type/agent-list-narrowed.test-d.ts`.
+
+  Migration is one line per call site: delete the `limit`/`cursor` property. The result is the full population, which is what the runtime was already returning.
+
+  Exit criterion, written in `src/index.ts` next to the narrowing: when the SDK runtime actually honours `limit`/`cursor`/`cwd`, delete the block and restore the plain re-export.
+
+## 5.0.0
+
+### Major Changes
+
+- 6aa5b6d: **BREAKING:** `toAgentFactory` now requires an `approvals` option declaring the surface's `ApprovalPosture` — one of `interactive`, `auto-approve`, `auto-reject` or `owned-by-surface`.
+
+  Until now the factory compiled the HITL gate map that `.approvals({…})` produces and then discarded it, so tools declared as requiring approval executed with no policy consulted — while the sibling bridge (`streamAgentTurnInProcess`) refused for the same definition. The permissive behaviour is still fully available; it just has to be named, with a written reason, instead of happening by omission. Migration is one line per call site: pass the posture that describes what your surface actually does.
+
+  `streamAgentTurnInProcess` also accepts `approvals`, but additively — omitting it preserves today's fail-closed refusal exactly.
+
+## 4.30.2
+
+### Patch Changes
+
+- O mapeamento de erro do SDK para o evento de stream ganha módulo próprio.
+
+  Um mapeador puro, com o mesmo tratamento que a seleção de modelo já tinha. Ter casa própria também deixa óbvio que existe **um** lugar construindo o evento de erro — antes era um objeto literal dentro de um `catch`, e era exatamente ali que o código do erro se perdia.
+
+## 4.30.1
+
+### Patch Changes
+
+- Re-exporta a consulta que responde se uma sessão já tem escritor, sem tomar a trava.
+
+## 4.30.0
+
+### Minor Changes
+
+- O chunk de erro do stream passa a carregar o código do erro, não só o texto.
+
+  Uma falha de runtime não sobe como exceção para quem consome o stream — é convertida num chunk de erro, e esse é o contrato. Mas o chunk levava **só a mensagem**, então um consumidor que precise distinguir a falha (por exemplo, derivar uma sessão nova quando a original já tem escritor) não tinha alternativa senão casar texto de mensagem de erro. O código sempre existiu no evento de origem; ele só não atravessava. Um erro sem código continua exatamente como antes.
+
+## 4.29.1
+
+### Patch Changes
+
+- Corrige um turno que quebrava quando a janela de contexto era declarada na seleção de modelo.
+
+  A versão anterior passou a **aceitar** a seleção completa em `AgentBuilder.model()` e parou aí: o caminho de runtime por onde todo turno passa continuava assumindo um id em texto, e aninhava a seleção dentro de si mesma. O resultado era uma falha em **todo** turno de quem declarasse a janela. Passar um id continua funcionando exatamente como antes, e a janela declarada agora sobrevive à conversão.
+
+## 4.29.0
+
+### Minor Changes
+
+- `AgentBuilder.model()` aceita `ModelSelection`, não só o id cru.
+
+  A implementação do SDK sempre aceitou as duas formas; era a fachada tipada desta camada que estreitava para `string`. O estreitamento tornava **inalcançável** qualquer campo da seleção — incluindo a janela de contexto que o SDK passou a publicar. Passar um id continua funcionando exatamente como antes.
+
+## 4.28.0
+
+### Minor Changes
+
+- M94 — re-exporta os resolvedores que o SDK passou a publicar.
+
+  - `transcriptRoot` — a raiz do estado de transcript, que honra `THEOKIT_HOME`. O consumidor a duplicava em três arquivos, e as três cópias ignoravam a variável junto com a original.
+  - `TranscriptMessage` / `TranscriptBlock` — a forma do corpo de um registro de sessão, que antes era `Record<string, unknown>` e obrigava o consumidor a recuperar o tipo com cast a cada leitura.
+
+  `Provider.forModel` já atravessa a camada pelo re-export existente de `Provider`.
+
+## 4.27.1
+
+### Patch Changes
+
+- 191aef8: **Correções da revisão adversarial do M92 — dois BLOCKERs e três furos de eviction.**
+
+  - **O `concat` que o `4.27.0` prometeu e não entregou.** O `#prefixo` era um **alias** do `#committed`
+    (mesma referência) e o `#emit` continuava espalhando: byte-idêntico ao anterior, medido em ~2 µs @400.
+    Agora é um `concat` único. O ganho é de constante, não de ordem — e é honesto dizer isso.
+  - **O coalescing não tinha teste capaz de falhar.** Substituir o corpo inteiro de `#agendarEmit` por
+    `return` deixava **580/580 verdes**: os testes instalavam timers falsos e nunca os avançavam, e só
+    exercitavam `reset()`, que faz flush síncrono por decisão. Os testes novos dirigem 30 deltas por um
+    transporte falso e medem a razão de emits — **32 contra 2**, e o mutante mata 2 testes.
+  - **Três furos na eviction de aprovação, todos medidos:**
+    - Sinal **já abortado** no `sendMessages` não dispara `addEventListener`, então uma aprovação que
+      estacionasse depois ficava pendente para sempre — o travamento que o milestone existe para fechar,
+      alcançável por outro caminho. Agora o sinal é consultado **no momento em que a aprovação estaciona**.
+    - O turno era lido de um **campo compartilhado**, então um runner do turno 1 estacionando depois do
+      `send` do turno 2 nascia etiquetado turno 2 e o abort do turno 1 não o alcançava. O turno passou a
+      viver num **closure por turno** — o único lugar onde não é sobrescrito.
+    - Rejeitar sem handler mata o processo em Node ≥ 15; o caminho tem teste.
+
+## 4.27.0
+
+### Minor Changes
+
+- f486258: **O stream ganha coalescing opt-in, e o transporte para de vazar aprovação estacionada.**
+
+  - **`AgentClient` cacheia o prefixo commitado.** `#committed` só muda em dois lugares (o `done` de
+    `send()` e o `reset()`), então reconstruí-lo por delta de token era trabalho que a estrutura já
+    garantia inútil. Honestidade sobre o tamanho: medido, o spread custa **0,0062 ms por delta @400
+    mensagens** — 3,1 ms no turno inteiro. É real e é micro.
+  - **Coalescing opt-in: `new AgentClient(transport, ctx, { emitIntervalMs })`.** Sem o campo, emite por
+    delta como sempre. É aqui que está a ordem de grandeza: o que pende de cada emit é a derivação da
+    timeline, medida em **3,274 ms por chamada** no mesmo tamanho de thread — **≈ 528×** o spread. O
+    coalescing não torna o emit mais barato; faz **menos emits acontecerem**. As transições de status
+    (`done`/`error`/`abort`) fazem **flush síncrono**, porque um estado final preso num timer de 16 ms é
+    um estado final perdido se o processo sair antes.
+  - **`InProcessTransport` evicta aprovação de turno abortado**, rejeitando com `ApprovalAbortedError`.
+    Antes, `#pending` guardava só o `resolve` e nada apagava a entrada: a promessa ficava pendente **para
+    sempre** e a chamada de tool do SDK pendurava com ela. Uma promessa que nunca resolve **nem** rejeita
+    é a forma mais silenciosa de engolir um erro — nem stack trace existe. Rejeitar e não `resolve(false)`
+    porque `false` é indistinguível de _"o usuário negou"_: negar é decisão, abortar é interrupção. As
+    entradas passaram a ser chaveadas por turno, então um `send()` novo varre o anterior.
+
+## 4.26.2
+
+### Patch Changes
+
+- 379e5c0: **Restaura a compatibilidade que o `4.26.0` quebrou em silêncio: `BudgetExceededError` volta a ser a
+  classe de DELEGAÇÃO no barril raiz.**
+
+  O `4.26.0` **reaproveitou** o nome — o barril passou a exportar a classe do SDK (orçamento de JANELA)
+  sob `BudgetExceededError`. Medido contra os tarballs publicados:
+
+  |                                                   | 4.25.1   | 4.26.1                                           |
+  | ------------------------------------------------- | -------- | ------------------------------------------------ |
+  | `new BudgetExceededError('agente', 5, 1)` da raiz | funciona | `TypeError: Cannot read properties of undefined` |
+  | raiz `===` `/bridge`                              | `true`   | `false`                                          |
+
+  Para quem estava em `^4.25` com `catch (e) { if (e instanceof BudgetExceededError) … }`, o ramo de
+  orçamento de delegação **deixou de casar, em silêncio** — o modo de falha exato que o rename existia
+  para matar, em espelho, e publicado como MINOR.
+
+  Agora: `BudgetExceededError` é o alias `@deprecated` de `DelegationBudgetExceededError` — mesma
+  identidade referencial de sempre, zero quebra. A classe do SDK atravessa como
+  `WindowBudgetExceededError`, que fecha a lacuna original **sem redefinir o que um nome significa**.
+  Travado por `tests/unit/erro-de-dominio.test.ts`, que assere `barril.BudgetExceededError` **é** a
+  classe de delegação e que as duas são classes distintas.
+
+## 4.26.1
+
+### Patch Changes
+
+- 228d423: Corrige o tipo de `SdkAgentHandle.send` introduzido no `4.26.0`: ele devolve
+  `Promise<SdkTurnHandle>`, não `SdkTurnHandle`.
+
+  `SDKAgent.send` é `(message, options?) => Promise<Run>`, e o `GoalLoopAgent` do SDK declara
+  `send(prompt): Promise<{ wait(): … }>`. A primeira versão do tipo era síncrona — e o detalhe é que o
+  `tsc` do consumidor **não teria pegado**, porque o adaptador que este milestone existe para apagar
+  (`runner-facade.ts`, com um `as never` na origem) absorvia exatamente essa diferença.
+
+  É a divergência que o docstring daquele adaptador descrevia, reencontrada ao tentar removê-lo — a
+  prova de que o `unknown` não era só feio: ele desligava a checagem no ponto onde o contrato importa.
+
+## 4.26.0
+
+### Minor Changes
+
+- 3fb0d9e: **Contratos de tipo honestos: a camada passa a devolver o tipo que já sabe.**
+
+  - **`toAgentFactory` aceita um THUNK de definição** — `(sessionId) => AgentDefinition`. O parâmetro
+    `apiKey` já aceitava thunk desde o M74, adicionado por exatamente esta razão; a assimetria custava
+    caro: com a forma objeto, trust, hooks, skills e MCP são compilados no load do módulo e ficam
+    **congelados para o processo inteiro**. Num `theokit acp` que uma IDE mantém aberto por horas, isso
+    reintroduzia a obsolescência que o M67 removeu. A forma objeto continua **byte-idêntica** — projeta
+    uma vez, fora do closure; só o thunk paga por sessão.
+  - **`SdkAgentHandle.send` deixa de ser `=> unknown`** e passa a `(msg, opts?) => { wait(): … }`, com
+    `SdkSendOptions`/`SdkTurnHandle` publicados. O `unknown` custava ao consumidor um módulo inteiro de
+    38 linhas cujo único trabalho era re-estreitar este retorno — e o docstring daquele módulo registra
+    que, antes dele, o chamador escrevia `as never`, sob cuja capa a superfície goal divergiu do agente
+    real por vários milestones.
+  - **`Toolset` é a primitiva que faltava** (`@theokit/agents` barril). Coleção nomeada e imutável com
+    política de resolução que falha alto em nome **desconhecido** e em **duplicado** — nos dois casos, o
+    silêncio seria uma mudança de autoridade não observável, que é o que uma whitelist existe para
+    impedir. **Não prefixa namespace**: o nome de uma tool é contrato com o modelo. Não constrói tools —
+    quais e com que escopo é decisão do consumidor.
+  - **`BudgetExceededError` → `DelegationBudgetExceededError`**, com alias `@deprecated` por uma major.
+    O nome antigo **sombreava** a classe homônima do SDK (orçamento de JANELA contra orçamento de
+    DELEGAÇÃO), e como o consumidor tem regra de nunca importar `@theokit/sdk` direto, ele nunca
+    alcançava a do SDK: `instanceof` casava com o domínio errado **em silêncio**. O barril agora exporta
+    as duas. A `lacuna` registrada em `subpath-coverage.test.ts` saiu junto com o conflito que a criou.
+
+## 4.25.1
+
+### Patch Changes
+
+- 5167910: **Corrige uma regressão de superfície introduzida no `4.25.0`: `TruncationMode` voltou a ser exportado
+  por `@theokit/agents/tools`.**
+
+  A entrada do `4.25.0` afirma _"172 símbolos, superfície preservada inteira (nada sai)"_. Isso era falso:
+  o gerador de re-exports rodou contra uma cópia local de `@theokit/sdk-tools@0.26.0` (92 exports)
+  enquanto o registro já publicara `0.26.1` (93, com `TruncationMode`). O peer é uma faixa flutuante
+  (`>=0.24.1 <1.0.0`), então consumidores instalavam a versão nova e perdiam o símbolo: sob `export *` ele
+  atravessava; enumerado a partir da cópia velha, sumiu. A entrada anterior não pode ser editada, então
+  a correção fica aqui.
+
+  O gate que deveria ter pego isso era **vacuo para `/tools` e `/pty`** — 98 dos 173 símbolos, 57% da
+  superfície. Ele comparava _a fonte_ contra o snapshot, e nunca _a camada_ contra a fonte; remover
+  símbolos reais desses dois entries deixava a suíte inteira verde. `tests/unit/subpath-surface.test.ts`
+  passa a enumerar o `dist/*.d.ts` **emitido** e a comparar nas duas direções (nada da fonte falta na
+  camada; nada na camada é inventado), e deixa de engolir a ausência de `dist/`, que o fazia passar por
+  vacuidade num clone sem build.
+
+  Superfície agora: **173 símbolos** (`tools` 93, `sandbox` 36, `persistence` 29, `pty` 6,
+  `interactive` 9).
+
+## 4.25.0
+
+### Minor Changes
+
+- 9aea11c: Os cinco subpaths de infra (`/tools`, `/sandbox`, `/persistence`, `/pty`, `/interactive`) deixam de ser
+  alias e viram camada.
+
+  Até aqui, o corpo inteiro de cada `*-entry.ts` era uma linha `export *`, e o `dist/*.d.ts` emitido
+  carregava a mesma coisa: o pacote emprestava o nome sem interpor decisão. Um rename upstream se
+  propagava verbatim, **sem erro de build aqui**, e o consumidor descobria em call site.
+
+  Agora os cinco enumeram — **172 símbolos**, superfície preservada inteira (nada sai; reduzir seria
+  breaking, e a regra do `auth-entry.ts` desde o M73 é que enriquecer nunca reduz). Medido lado a lado no
+  mesmo cenário de rename: com `export *` o build passa; com lista nomeada, `tsc` reprova com `TS2724` e
+  sugere o nome novo.
+
+  Acompanham a mudança um snapshot da superfície sobre `dist/*.d.ts`
+  (`tests/unit/subpath-surface.test.ts`) e a promoção dos três subpaths de SDK em
+  `subpath-coverage.test.ts` de `cobertura: 'amostra'` com lista **vazia** para `'total'`.
+
 ## 4.9.1
 
 ### Patch Changes

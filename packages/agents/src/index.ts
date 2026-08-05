@@ -4,6 +4,10 @@
 // their metadata getters remain internal (the compiler reads them via source-path imports).
 // The decorator OPTION TYPES stay public (the framework + consumers annotate with them — e.g. the
 // HITL `TimeoutAction` used by the approval-registry and the `AgentBuilder.create().approval(...)` options).
+// M103 — the SDK value + types behind the narrowed `Agent` re-export at the bottom of the M58 block.
+import { Agent as AgentDoSdk } from '@theokit/sdk'
+import type { ListAgentsOptions, ListResult, SDKAgentInfo } from '@theokit/sdk'
+
 export type { HumanInTheLoopOptions, TimeoutAction } from './types.js'
 // M35 — the settled HITL decision type is part of the public approval contract: an `awaitApproval`
 // resolver (the HTTP registry or the in-process seam) may return a bare boolean OR this structured value.
@@ -35,6 +39,15 @@ export type {
   ApprovalOptions,
   PolicyHandler,
   ReasoningEffort,
+  // M112 — a configuração de servidor MCP atravessa até a RAIZ. Sem isto, os nomes ficam em
+  // `types.ts` e não alcançam `index.d.ts`: o consumidor volta a não conseguir nomear o tipo do
+  // mapa que `loadMcpJson` devolve, que é metade do pedido P2 que este milestone atende.
+  McpAuthConfig,
+  McpHttpServerConfig,
+  McpOAuthConfig,
+  McpServerConfig,
+  McpServersMap,
+  McpStdioServerConfig,
 } from './types.js'
 
 // M58 — layered boundary `SDK → Theokit → AgentBuilder`: the consumer imports the SDK's already-OO
@@ -43,8 +56,34 @@ export type {
 // target OO shape, so wrapping them would be ceremony without value. The domains with their own
 // infra surface (sandbox / persistence / interactive / pty) live on matching subpaths that mirror the
 // SDK's own subpath split (`@theokit/agents/{sandbox,persistence,interactive,pty}`).
-export { Agent, Squad, Tool, Provider } from '@theokit/sdk'
+export { Squad, Tool, Provider } from '@theokit/sdk'
 export type { SDKAgent, CustomTool, SessionRecord } from '@theokit/sdk'
+
+// M103 (agent-builder) — `Agent` is the ONE exception to the pass-through doctrine above, and it is a
+// narrowing of the TYPE only: the exported VALUE is the SDK's `Agent`, byte-identical.
+//
+// `ListAgentsOptions` promises `limit` and `cursor`; the runtime references NEITHER
+// (`@theokit/sdk` `Agent.list` reads only `options.runtime`). A caller that passes `limit: 500`
+// against a 688-entry registry believes it asked for a bounded page and silently receives the whole
+// set — and the day the runtime starts honouring the parameter, the SAME code silently receives a
+// TRUNCATED set instead. Both directions are silent, and one of them feeds a NEVER-delete guard in
+// a garbage collector. The result type is narrowed for the same reason: `nextCursor` is never set,
+// so a caller branching on it is branching on a value that cannot arrive.
+//
+// This is a `tipo fechado` control, not a lint: the call does not compile, so a new call site cannot
+// be born wrong by omission. Residue (declared, not hidden): it binds TypeScript consumers only — a
+// `.js` caller or an `as any` escapes.
+//
+// EXIT CRITERION: when the SDK runtime actually honours `limit`/`cursor`/`cwd` (tracked as the
+// agent-builder's M107 upstream request), delete this block and restore `Agent` to the plain
+// re-export on the line above.
+type ListOptionsSemPaginacao = ListAgentsOptions & { limit?: never; cursor?: never }
+
+type AgentComListaEstreitada = Omit<typeof AgentDoSdk, 'list'> & {
+  list(options?: ListOptionsSemPaginacao): Promise<Omit<ListResult<SDKAgentInfo>, 'nextCursor'>>
+}
+
+export const Agent: AgentComListaEstreitada = AgentDoSdk
 
 // M63 — closing the layered boundary so the consumer imports ZERO `@theokit/sdk*` directly. Same
 // PASS-THROUGH doctrine as the M58 core above (Rung 9): these are already the target shape.
@@ -94,19 +133,58 @@ export * from '@theokit/sdk/retry'
 export * from '@theokit/sdk/concurrency'
 export * from '@theokit/sdk/messages'
 export * from '@theokit/sdk/models'
+// M81 — o loader de subagents em disco. A assimetria oposta (skills com porta pública, subagents
+// sem) é o que fez o consumidor escrever um SEGUNDO parser de `.md` — e depois um teste cuja única
+// função era vigiar a divergência entre os dois. O que atravessa é a config PARSEADA, nunca o
+// formato de arquivo: exportar o formato congelaria um detalhe interno como API pública.
+export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagents-loader'
+// M96 U2 — o TIPO que o carregador acima devolve, publicado na linha vizinha (o par literal do peer,
+// `gemini-cli/packages/core/src/index.ts:191-192`). O nome de origem está OCUPADO neste índice —
+// `bridge/index.js` já exporta `AgentDefinition`, o tipo BRANDADO do builder —, então o consumidor
+// que importasse o nome de origem receberia o tipo errado em silêncio, e a única saída restante era
+// redeclarar a forma à mão. O alias resolve a colisão sem tocar no nome ocupado.
+export type { AgentDefinition as SubagentDefinition } from '@theokit/sdk/subagents-loader'
 
-// COLISÃO DE NOME, declarada em vez de resolvida por acidente de ordem de import.
+// COLISÃO DE NOME RESOLVIDA no M91 — e a PRIMEIRA tentativa estava errada.
 //
-// `@theokit/sdk/errors` e `./bridge/index.js` exportam ambos `BudgetExceededError`, e NÃO são a
+// `@theokit/sdk/errors` e `./bridge/index.js` exportavam ambos `BudgetExceededError`, e NÃO eram a
 // mesma coisa: a do SDK é orçamento por JANELA (`budgetName`, `window`, `spentUsd`, `mode`); a da
-// camada é orçamento por DELEGAÇÃO (`agentName`, `actualCost`, `budgetLimit`). Construtores e
-// domínios diferentes — colapsar uma na outra seria perder semântica, não deduplicar.
+// camada é orçamento por DELEGAÇÃO (`agentName`, `actualCost`, `budgetLimit`). Como o consumidor tem
+// regra inquebrável de nunca importar `@theokit/sdk` direto, ele nunca alcançava a do SDK — e um
+// `instanceof` casava com o domínio errado em silêncio.
 //
-// O re-export explícito abaixo mantém a da CAMADA vencendo no barril, que é o comportamento de antes
-// deste milestone: nenhum consumidor existente muda. A consequência é que a do SDK fica inalcançável
-// pelo barril, e isso está registrado como lacuna conhecida em `subpath-coverage.test.ts`.
+// ## O que o `4.26.0` fez de errado, medido
 //
-// O defeito de fundo é o nome, não o re-export: duas classes homônimas em camadas vizinhas é o que o
-// M73 documentou como origem de `instanceof` que falha em silêncio. Renomear a da camada é breaking
-// e está fora do escopo do M78 — filado como issue.
-export { BudgetExceededError } from './bridge/delegation-types.js'
+// Ele **reaproveitou** o nome: o barril passou a exportar a classe do SDK sob `BudgetExceededError`.
+// Para um consumidor em `^4.25` que fazia `catch (e) { if (e instanceof BudgetExceededError) … }`, o
+// ramo de orçamento de delegação **deixou de casar, em silêncio** — exatamente o modo de falha que
+// este milestone existe para matar, em espelho. E foi publicado como MINOR.
+//
+// ## A correção
+//
+// O nome antigo volta a ser a classe de DELEGAÇÃO — é o alias `@deprecated` que o DoD pediu, mesma
+// identidade referencial de sempre, zero quebra para quem está em `^4.25`. A classe do SDK atravessa
+// sob um nome que não colide, o que fecha a lacuna original sem reaproveitar nome de ninguém:
+// "enriquecer nunca reduz" (M73) vale também para não redefinir o que um nome significa.
+export { DelegationBudgetExceededError } from './bridge/delegation-types.js'
+export {
+  // O alias EXISTE para ser deprecado; re-exportá-lo é o contrato de compatibilidade, não descuido.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
+  BudgetExceededError,
+} from './bridge/delegation-types.js'
+export { BudgetExceededError as WindowBudgetExceededError } from '@theokit/sdk/errors'
+
+// M82 — o tipo público dos handlers de `.hooks()`. Publicado porque a alternativa é o consumidor
+// declarar o seu (foi o que o agent-builder fez, com `ctx: unknown` em quatro de cinco handlers).
+export type { HookHandlers } from './bridge/hook-handlers.js'
+
+// M84 — o transporte in-process veio do pacote CLI, onde era folha. Fica na barra principal (e não
+// num subpath novo) porque "rodar um turn de agente" é exatamente o que a barra principal faz;
+// separá-lo multiplicaria superfície sem separar nada. O CLI passa a re-exportar daqui.
+export { streamAgentTurnInProcess, InProcessApprovalRequiredError } from './in-process-turn.js'
+export type {
+  StreamAgentTurnInProcessInput,
+  StreamAgentTurnDeps,
+  InProcessApprovalRequest,
+  InProcessAwaitApproval,
+} from './in-process-turn.js'

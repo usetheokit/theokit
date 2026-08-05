@@ -6,13 +6,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { UIMessage, UIMessageChunk } from 'ai'
 
-import { AgentClient } from '../../packages/theo/src/client/agent-client.js'
+import { AgentClient } from '../../packages/agents/src/client/agent-client.js'
 import {
   ChannelTransport,
   type ChannelPushSource,
   type ChannelTurnHandlers,
-} from '../../packages/theo/src/client/channel-transport.js'
-import type { ApprovalDecision } from '../../packages/theo/src/client/transport.js'
+} from '../../packages/agents/src/client/channel-transport.js'
+import type { ApprovalDecision } from '../../packages/agents/src/client/transport.js'
 
 async function collect(stream: ReadableStream<UIMessageChunk>): Promise<UIMessageChunk[]> {
   const out: UIMessageChunk[] = []

@@ -12,7 +12,7 @@ The cycle produces no new files of its own. It produces **state transitions on `
 
 - `ROADMAP.md` exists at the repo root (typically created by `/roadmap-init` at project inception).
 - `ROADMAP.md` has at least one milestone with `[ ]` (unchecked).
-- The working branch is `develop` (per Unbreakable Rule 4 — `main` is release-only).
+- The working branch is `workspace` (per `git-safety.md` § 1 — `develop` integrates, `main` is release-only).
 - `knowledge-base/references/` may be populated by `/roadmap-init`; downstream `cycle-discover` will read from it when invoked.
 
 Do NOT trigger when:
@@ -46,9 +46,15 @@ DELEGATE to /auto-plan:
      ↓   /auto-plan exits with auto-plan verdict (RELEASED | PR_OPEN_AWAITING_APPROVAL | BLOCKED)
      ↓
 ON RESUME after PR merge (when /auto-plan paused at PR_OPEN_AWAITING_APPROVAL):
-     ↓ /release --resume triggers the post-merge phase
-     ↓ post-merge phase flips ROADMAP.md M<N> checkbox [ ] → [x]
-     ↓ updates roadmap-runs/{milestone-id}-{date}.md (status: completed)
+     ↓ /release --resume cuts the tag and publishes → RELEASED
+     ↓
+ACCEPT the released delivery:
+     ↓ /acceptance M<N>   (cycle-acceptance — end-user validation of what shipped)
+     ↓   ACCEPTED | ACCEPTED_WITH_CAVEATS → flips ROADMAP.md M<N> [ ] → [x]
+     ↓                                      updates roadmap-runs (status: completed)
+     ↓                                      → MILESTONE_RELEASED
+     ↓   REJECTED | NOT_VALIDATED          → checkbox stays [ ]
+     ↓                                      → MILESTONE_BLOCKED (hotfix, re-enter at cycle-plan)
      ↓
 LOOP back to SELECT until ROADMAP_COMPLETE or ROADMAP_BLOCKED.
 ```
@@ -64,19 +70,21 @@ When invoked autonomously (rare — only the `/auto-plan --until=ROADMAP_COMPLET
 | select | ROADMAP.md | milestone_id ∈ {M0…M8} OR cycle terminator | exactly one eligible milestone (or terminator) chosen deterministically |
 | lock | milestone_id | `knowledge-base/roadmap-runs/{milestone-id}-{date}.md` with `status: in_progress` | no other run-file for the same milestone with status: in_progress |
 | delegate | milestone_id + objective + DoD from ROADMAP.md | auto-plan verdict | auto-plan ran with `--milestone={milestone_id}` injected into the plan frontmatter |
-| flip-checkbox (post-merge) | RELEASED verdict from cycle-release | ROADMAP.md edited; `[ ]` → `[x]` on the milestone header | exactly one milestone flipped per release; plan frontmatter `milestone_id` matched a ROADMAP.md milestone exactly |
+| accept | RELEASED verdict from cycle-release + the milestone's Definition of done | acceptance record + verdict | every Definition-of-done bullet exercised against the released delivery, with evidence (`cycle-acceptance § Hard gates`) |
+| flip-checkbox (post-acceptance) | `ACCEPTED` / `ACCEPTED_WITH_CAVEATS` from cycle-acceptance | ROADMAP.md edited; `[ ]` → `[x]` on the milestone header | exactly one milestone flipped per release; plan frontmatter `milestone_id` matched a ROADMAP.md milestone exactly; verdict was green |
 
 ## Verdicts
 
-- `MILESTONE_RELEASED` — one milestone completed end-to-end this invocation; checkbox flipped to `[x]`; loop ready to advance to next.
-- `MILESTONE_IN_FLIGHT` — auto-plan paused at `PR_OPEN_AWAITING_APPROVAL`; human approval pending; checkbox NOT flipped yet.
+- `MILESTONE_RELEASED` — one milestone completed end-to-end this invocation: released AND accepted against its Definition of done; checkbox flipped to `[x]`; loop ready to advance to next.
+- `MILESTONE_IN_FLIGHT` — auto-plan paused at `PR_OPEN_AWAITING_APPROVAL`, or `cycle-release` emitted `RELEASED` and `cycle-acceptance` has not run yet; checkbox NOT flipped.
 - `ROADMAP_COMPLETE` — every milestone is `[x]`; the roadmap as written is fully delivered. The next decision (V2? archive?) is human-only.
 - `ROADMAP_BLOCKED` — `[ ]` milestones remain but each one's dependencies are themselves still `[ ]`. Cannot pick a target without violating the dependency graph. Surface the dependency wall to the human.
-- `MILESTONE_BLOCKED` — auto-plan returned `BLOCKED` for the selected milestone. The roadmap run-file records why; the human resolves.
+- `MILESTONE_BLOCKED` — auto-plan returned `BLOCKED`, or `cycle-acceptance` returned `REJECTED` / `NOT_VALIDATED` for the released delivery. The roadmap run-file records why; the human resolves.
 
 ## Hard gates
 
-- **Single-flip invariant.** Every successful `cycle-release` flips at most ONE milestone checkbox. Multi-milestone releases violate the wiring triad assumption and corrupt traceability.
+- **No flip without acceptance.** The checkbox flips only on `ACCEPTED` / `ACCEPTED_WITH_CAVEATS` from `cycle-acceptance`. `RELEASED` alone no longer advances the roadmap: shipping and working are different claims, and `[x]` asserts the second.
+- **Single-flip invariant.** Every successful acceptance flips at most ONE milestone checkbox. Multi-milestone releases violate the wiring triad assumption and corrupt traceability.
 - **No silent flip.** Flipping `[ ]` → `[x]` MUST be recorded in `knowledge-base/roadmap-runs/{milestone-id}-{date}.md` with the release SHA, the plan slug, and the merge commit. Flips without a run-file are forbidden.
 - **No flip without plan metadata.** If the plan at `knowledge-base/plans/{slug}-plan.md` does not declare `milestone_id: M<N>` in its frontmatter, the flip step is SKIPPED with a WARN — the human edits the checkbox manually. Silent flips based on slug-matching heuristics are forbidden.
 - **Dependency respect.** The select phase MUST honor declared milestone dependencies. Skipping M3 to run M5 when M5 depends on M3 corrupts the project's structural sequence.
@@ -146,7 +154,7 @@ This file is the audit trail between strategic intent (ROADMAP.md) and shipped r
 
 ## Anti-patterns
 
-- **Flipping a checkbox without running cycle-release.** The roadmap reflects shipped state, not intent. Manual flips bypass the audit trail.
+- **Flipping a checkbox without running cycle-acceptance.** The roadmap reflects validated state, not intent and not merely shipped state. Manual flips bypass the audit trail.
 - **Running multiple milestones in parallel by editing two plans simultaneously.** The wiring triad assumes one milestone in flight; concurrent plans collide on shared modules and corrupt the audit trail.
 - **Skipping the milestone-id population.** Plans without `milestone_id` lose roadmap traceability. Acceptable for hotfixes; never acceptable for planned work.
 - **Editing ROADMAP.md mid-cycle.** Changing milestone objectives or DoD while the milestone is `in_progress` invalidates the plan-to-roadmap mapping. Revisions wait for the milestone to finish.
@@ -157,8 +165,9 @@ This file is the audit trail between strategic intent (ROADMAP.md) and shipped r
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Bootstrapper skill (single-shot at project inception): `skills/roadmap-init/SKILL.md` — produces `ROADMAP.md` and `knowledge-base/references/`
+- Session-binding skill (sets the termination condition before delegating): `skills/cycle-goal/SKILL.md` — validates the requested milestones against this rule's select-phase gates and hands Claude Code's built-in `/goal` a condition naming each phase's artifact
 - Orchestrator (delegated to per milestone): `rules/cycle-auto-plan.md`
-- Downstream chained cycles (via `cycle-auto-plan`): `rules/cycle-discover.md`, `rules/cycle-plan.md`, `rules/cycle-implement.md`, `rules/cycle-code-quality.md`, `rules/cycle-review.md`, `rules/cycle-release.md`
-- Cycle that performs the checkbox flip: `rules/cycle-release.md § post-merge checkbox flip`
+- Downstream chained cycles (via `cycle-auto-plan`): `rules/cycle-discover.md`, `rules/cycle-plan.md`, `rules/cycle-implement.md`, `rules/cycle-code-quality.md`, `rules/cycle-review.md`, `rules/cycle-release.md`, `rules/cycle-acceptance.md`
+- Cycle that performs the checkbox flip: `rules/cycle-acceptance.md § Phase contracts`
 - Conventions: `rules/loop-engine-convention.md`
 - Unbreakable rules consumed: Rule 4 (no commit to `main`; release-PR-only)

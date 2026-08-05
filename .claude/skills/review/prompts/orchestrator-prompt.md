@@ -111,7 +111,7 @@ Next:
 
 ## Inviolable rules during orchestration
 
-- NEVER modify code on `develop` — only writes review artifacts (YAML findings + markdown report + agent audit trail)
+- NEVER modify code on `workspace` — only writes review artifacts (YAML findings + markdown report + agent audit trail)
 - NEVER skip Step 3 (parallel agents) to move faster — the rigor IS the agents
 - NEVER approve with unresolved BLOCKER findings
 - NEVER fabricate findings or fill in default findings to "look thorough"

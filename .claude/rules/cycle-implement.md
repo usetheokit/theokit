@@ -9,7 +9,7 @@ Execute a confidence-approved plan into code, tests, and commits. TDD-discipline
 ## Pre-conditions
 
 - A plan exists at `knowledge-base/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
-- The repository is on a branch other than `main` (per Unbreakable Rule 4 — work on `develop` or a feature branch).
+- The repository is on `workspace` (per Unbreakable Rule 4 — work is born on `workspace` and promoted to `develop` via PR; see `git-safety.md` § 1).
 - The project bootstrapped its language toolchain (e.g., `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`).
 
 If any pre-condition fails, refuse and surface the missing item.

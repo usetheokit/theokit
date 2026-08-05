@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
+import { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
 
 describe('HttpTransport — default fetch is called with the right receiver', () => {
   it('does not throw "Illegal invocation" when the global fetch is strict about its this', async () => {

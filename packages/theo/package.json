@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.43.12",
+  "version": "0.44.3",
   "type": "module",
   "sideEffects": false,
   "license": "Apache-2.0",
@@ -140,7 +140,8 @@
     "react-router": "^7.0.0",
     "unstorage": "^1.10.0",
     "ws": "^8.20.1",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "@theokit/studio": "^0.1.0"
   },
   "peerDependenciesMeta": {
     "@theokit/sdk": {
@@ -160,10 +161,13 @@
     },
     "ws": {
       "optional": true
+    },
+    "@theokit/studio": {
+      "optional": true
     }
   },
   "devDependencies": {
-    "@theokit/sdk": "^4.1.0",
+    "@theokit/sdk": "^4.39.0",
     "@types/busboy": "^1.5.4",
     "@types/picomatch": "^4.0.3",
     "ai": "^7.0.14",

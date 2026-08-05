@@ -63,6 +63,7 @@ Each `cycle-{name}.md` defines:
 | `testing.md` | TDD discipline and pyramid |
 | `error-handling.md` | Fail-fast discipline, typed errors (Unbreakable Rule 8) |
 | `git-safety.md` | Forbidden git commands + safe substitutes (Unbreakable Rule 4) |
+| `reference-provenance.md` | Keeping third-party study material out of the project (4 layers) |
 | `parsimony-ladder.md` | Pre-write minimalism ladder (YAGNI/KISS/Don't-Reinvent) enforced in GREEN phase |
 | `public-copy.md` | Banned framings in README/marketing |
 | `audit-trail-rotation.md` | When to archive/delete artifacts |

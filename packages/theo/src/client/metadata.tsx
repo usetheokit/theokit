@@ -38,7 +38,8 @@ export interface MetadataProps {
   children?: React.ReactNode
 }
 
-export function Metadata(props: MetadataProps) {
+// Mesmo racional de `image.tsx`: props de React não são mutadas (agent-builder#319).
+export function Metadata(props: Readonly<MetadataProps>) {
   const ogTitle = props.ogTitle ?? props.title
   const ogDesc = props.ogDescription ?? props.description
 

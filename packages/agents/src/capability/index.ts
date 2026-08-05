@@ -7,3 +7,7 @@ export * from './capabilities.js'
 export * from './registry.js'
 export * from './agent-capabilities.js'
 export * from './toolbox.js'
+
+// M91 — a primitiva de coleção de tools; a contraparte que faltava às costuras de sandbox e
+// interactive que a camada já publica.
+export { Toolset, ToolsetError, type ToolComNome } from './toolset.js'

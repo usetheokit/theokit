@@ -48,9 +48,15 @@ fi
 TEMPLATE="$1"
 PORT="$2"
 
-# Validate template against known set
+# Validate template against known set.
+#
+# theokit#152 — `dashboard|api-only|postgres|saas` were removed by ADR-0023, which narrowed the
+# shipped set to `default` only. They stayed in this allowlist, so asking for one of them took the
+# ACCEPTED branch and then failed further down at scaffold time, with a message about
+# create-theokit rather than about a template that no longer exists. Listing only what ships means
+# a removed template now emits `unknown_template:<name>` — which names the real problem.
 case "$TEMPLATE" in
-  default|dashboard|api-only|postgres|saas) ;;
+  default) ;;
   *)
     emit_result SKIP "unknown_template:$TEMPLATE"
     echo "HTTP_CODE="

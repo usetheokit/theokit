@@ -57,7 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # - skill-creator: standalone skill-authoring tool (the official Anthropic skill-creator);
 #   invoked on demand to create/improve any skill at skills/{purpose}/. Deliberately decoupled
 #   from every cycle (replaced the retired skill-writer/validator/register discover tail).
-AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "roadmap-init", "roadmap-feature", "plan-help", "quality-init", "skill-creator", "frontend-design"}
+AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "roadmap-init", "roadmap-feature", "roadmap-review", "cycle-goal", "plan-help", "quality-init", "skill-creator", "frontend-design"}
 
 # Patterns to detect file references in markdown
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
@@ -150,7 +150,7 @@ def _extract_cycle_phases(cycle_rule_content: str) -> set[str]:
         # Match /skill-name in the chain. Accept either:
         #   - kebab-case skills (e.g. /to-plan, /edge-case-plan)
         #   - single-word skills explicitly listed (release, implement, review)
-        for m in re.finditer(r"/([a-z][a-z0-9]+(?:-[a-z0-9]+)+|to-plan|implement|review|release|analysis)[\s{]", chain):
+        for m in re.finditer(r"/([a-z][a-z0-9]+(?:-[a-z0-9]+)+|to-plan|implement|review|release|analysis|acceptance)[\s{]", chain):
             skills.add(m.group(1))
 
     return skills

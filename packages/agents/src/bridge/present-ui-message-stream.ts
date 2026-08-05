@@ -1,4 +1,3 @@
-
 import { UIMessageStreamPresenter } from '@theokit/presenter'
 import type { AgentOutputEvent } from '@theokit/presenter'
 import type { UIMessageChunk } from 'ai'
@@ -45,6 +44,103 @@ function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
     : { usage: event.usage, durationMs: event.durationMs, cost: event.cost }
 }
 
+/** The data-part name carrying the failure `code`. Public in effect: the consumer matches on it. */
+export const ERROR_CODE_DATA_PART = 'data-error-code'
+
+/**
+ * Data-part names for the three signals theokit#141 restored. Public in effect — a consumer matches
+ * on the literal — so they are exported and asserted from the constant, never re-typed at call sites.
+ */
+export const INPUT_REQUESTED_DATA_PART = 'data-input-requested'
+export const TASK_PROGRESS_DATA_PART = 'data-task-progress'
+export const SHELL_OUTPUT_DATA_PART = 'data-shell-output'
+
+/**
+ * A transient data part. Centralised because the cast is the interesting bit: `UIMessageChunk`'s
+ * data variant is keyed on `data-${string}`, which a `const` name does not narrow to on its own.
+ * One place to hold the cast beats one per call site.
+ */
+function dataPart(type: string, data: Record<string, unknown>): UIMessageChunk {
+  return { type, data, transient: true } as unknown as UIMessageChunk
+}
+
+/**
+ * The failure, as chunks the protocol accepts — theokit#161 (B).
+ *
+ * ## The measured defect
+ *
+ * M95 put the `code` INSIDE the error chunk (`{type:'error', errorText, errorCode}`), for a good
+ * reason: without it a consumer that must DISTINGUISH the failure has only the message, and matching
+ * on error text is the heuristic this ecosystem already paid for once — M93 classified failures as
+ * transient by regex over the message and read `ECONNREFUSED ...:443` as definitive because the PORT
+ * matched its "4xx" pattern.
+ *
+ * But the `error` variant of ai's `uiMessageChunkSchema` is STRICT: any extra key invalidates it.
+ * Measured against `ai@7.0.14` — `{type:'error',errorText:'boom'}` validates; the same chunk with
+ * `errorCode` does NOT. So since M95 this path emitted a chunk outside the protocol it claims to
+ * speak, and a consumer that validates would reject the whole frame — losing the text along with it.
+ *
+ * Nobody saw it because the test written to catch exactly this stopped BEFORE validating: its
+ * precondition (`toContainEqual({type:'error',errorText:'boom'})`) went stale when `errorCode`
+ * appeared, `expect` threw, and the validation loop never ran.
+ *
+ * ## Why a data part, and not one of the easy exits
+ *
+ * Dropping the code returns the consumer to the text matching M95 removed. Embedding it in
+ * `errorText` is the same thing under another name. The protocol already has the right place — a
+ * data part — and this file already uses one for `data-checkpoint`. Measured: it validates.
+ *
+ * `transient: true` because an error code is turn diagnostics, not message content: the SDK does not
+ * persist it in history, which is exactly what we want.
+ *
+ * The data part comes BEFORE the error chunk deliberately: a sequential consumer already holds the
+ * code when the failure arrives. In the other order it would have to handle the error first and only
+ * then learn which one it was.
+ */
+function* errorChunks(errorText: string, code: string | undefined): Generator<UIMessageChunk> {
+  if (code !== undefined) yield dataPart(ERROR_CODE_DATA_PART, { code })
+  yield { type: 'error', errorText }
+}
+
+/**
+ * The turn-diagnostic events, as the single data part each becomes — or `null` when the event is
+ * not one of them.
+ *
+ * These are framework variants, so they never entered the presenter's canonical `AgentOutputEvent`
+ * (ADR-4). They share one shape — close the open block, emit one transient data part — so they
+ * share one function: written as four inline branches in the dispatch loop they pushed
+ * `presentUIMessageStream` past both the cyclomatic and cognitive complexity ceilings, and the
+ * repetition of `closeBlock()` at each branch was an invitation to forget it at the fifth.
+ *
+ * `checkpoint_saved` joins them because it always was one of these; only its name predates the
+ * pattern. `approval_required` stays inline: it emits TWO chunks and consults presenter state, so
+ * it is genuinely a different shape rather than the same one spelled differently.
+ */
+function diagnosticDataPart(event: AgentStreamEvent): UIMessageChunk | null {
+  switch (event.type) {
+    case 'checkpoint_saved':
+      return dataPart('data-checkpoint', {
+        checkpointId: event.checkpointId,
+        resumeToken: event.resumeToken,
+        step: event.step,
+      })
+    // theokit#141 — without these cases the three restored events would be dropped by the loop's
+    // catch-all, which is the reported defect one layer down: translating an event and never
+    // presenting it leaves the consumer just as blind, minus even the warning.
+    case 'input_requested':
+      return dataPart(INPUT_REQUESTED_DATA_PART, { requestId: event.requestId })
+    case 'task_progress':
+      return dataPart(TASK_PROGRESS_DATA_PART, {
+        ...(event.status !== undefined ? { status: event.status } : {}),
+        ...(event.text !== undefined ? { text: event.text } : {}),
+      })
+    case 'shell_output':
+      return dataPart(SHELL_OUTPUT_DATA_PART, { event: event.event })
+    default:
+      return null
+  }
+}
+
 export async function* presentUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
   opts: { textId: string },
@@ -76,21 +172,14 @@ export async function* presentUIMessageStream(
         yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId: event.callId }
         continue
       }
-      if (event.type === 'checkpoint_saved') {
+      const diagnostic = diagnosticDataPart(event)
+      if (diagnostic !== null) {
         yield* presenter.closeBlock()
-        yield {
-          type: 'data-checkpoint',
-          data: {
-            checkpointId: event.checkpointId,
-            resumeToken: event.resumeToken,
-            step: event.step,
-          },
-          transient: true,
-        }
+        yield diagnostic
         continue
       }
       if (event.type === 'error') {
-        yield { type: 'error', errorText: event.message }
+        yield* errorChunks(event.message, (event as { code?: string }).code)
         break
       }
       if (event.type === 'done') {
@@ -100,7 +189,8 @@ export async function* presentUIMessageStream(
       // run_started, iteration, partial_tool_call, artifact_*, state_update, file_edit → no web chunk.
     }
   } catch (err) {
-    yield { type: 'error', errorText: String(err) }
+    const code = (err as { code?: string }).code
+    yield* errorChunks(String(err), typeof code === 'string' ? code : undefined)
   }
   yield* presenter.finish(turnMetadata)
 }

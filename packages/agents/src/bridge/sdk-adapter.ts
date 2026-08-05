@@ -6,34 +6,32 @@
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
-import type {
-  AgentDefinition,
-  BudgetTracker,
-  CustomTool,
-  InlineSkill,
-  InteractionUpdate,
-  Plugin,
-  PluginsSettings,
-  ProviderRoutingSettings,
-  SendOptions,
-} from '@theokit/sdk'
+// M96 — a rationale abaixo, e o `prettier-ignore`, existem por orcamento de lint: este arquivo esta
+// no teto de `max-lines` (500 linhas de codigo) e a quebra que o prettier faria neste import custa
+// +11 linhas, o bastante para estourar o gate. O `prettier-ignore` precisa ser o ULTIMO comentario
+// antes do no. Quando `sdk-adapter.ts` for dividido, a diretiva sai junto.
+// prettier-ignore
+import type { AgentDefinition, BudgetTracker, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 
 import { debugLog } from '../debug-log.js'
+import { runInputGuards, runOutputGuards, type Guardrail } from '../guardrails/index.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
-import {
-  compileAgentDefinition,
-  type AgentDefinition as TheokitAgentDefinition,
-} from './define-agent.js'
-import {
-  translateInteractionUpdate,
-  translateSdkEvent,
-  type SdkMessage,
-} from './event-translator.js'
+import { aplicarPostura, type ApprovalPosture } from './approval-posture.js'
+import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
+import { type DefinicaoOuThunk, resolverProjecao } from './definicao-ou-thunk.js'
+import { eventoDeErroDoSdk } from './erro-do-sdk.js'
+import { type SdkMessage } from './event-translator.js'
 import { buildModelSelection } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
+import {
+  createAsyncQueue,
+  createDeltaSink,
+  mergeDeltaStream,
+  type MergeItem,
+} from './sdk-adapter-merge.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
 import { stripToolDialectStream } from './tool-dialect-stripper.js'
 
@@ -50,7 +48,7 @@ export type BridgeImage = { url: string } | { data: string; mimeType: string }
 
 export interface RuntimeOverrides {
   /** Overrides the model for this call (`?? compiled.model ?? default`). */
-  model?: string
+  model?: string | ModelSelection
   /**
    * M35 (multimodal) — images to send alongside the text. When present, the SDK send switches from the
    * plain-string form to the structured `{ text, images }` form (`SDKUserMessage`). Absent ⇒ the
@@ -114,6 +112,18 @@ export interface RuntimeOverrides {
    * come from imperative SDK factories supply them without the `@Tool` compile path.
    */
   sdkTools?: readonly CustomTool[]
+  /**
+   * theokit#132 — sink for the SDK's typed `RunEvent`s (`tool_progress`, `rate_limit`,
+   * `permission_denied`, `task_*`, `compact_boundary`, `tripwire`, `completion_check`), threaded
+   * straight to `SendOptions.onRunEvent`.
+   *
+   * Threaded, NOT multiplexed into the UIMessage stream. These are run diagnostics for an observer —
+   * theokit-studio's event inspector is the demand that opened the issue — and folding them into the
+   * message protocol would force every consumer of the chat stream to know about frames it has no
+   * use for. Threading leaves the chat path byte-identical for anyone who does not opt in, which is
+   * why the key is omitted entirely rather than set to `undefined` when absent.
+   */
+  onRunEvent?: RunEventSink
 }
 
 /**
@@ -242,175 +252,6 @@ async function loadSdkRuntime(): Promise<SdkRuntime | null> {
     console.warn('[theokit] @theokit/sdk import failed:', err)
     return null
   }
-}
-
-/** #40: tagged item flowing through the merge queue — an incremental delta or a complete SDK message. */
-type MergeItem = { kind: 'delta'; event: StreamEvent } | { kind: 'sdk'; msg: SdkMessage }
-
-/** Minimal single-producer/single-consumer async queue (#40 — merge onDelta tokens with run.stream()). */
-interface AsyncQueue<T> {
-  push: (item: T) => void
-  close: () => void
-  [Symbol.asyncIterator]: () => AsyncIterator<T>
-}
-
-function createAsyncQueue<T>(): AsyncQueue<T> {
-  const items: T[] = []
-  let wake: (() => void) | null = null
-  let closed = false
-  return {
-    push(item: T) {
-      items.push(item)
-      if (wake) {
-        wake()
-        wake = null
-      }
-    },
-    close() {
-      closed = true
-      if (wake) {
-        wake()
-        wake = null
-      }
-    },
-    async *[Symbol.asyncIterator]() {
-      for (;;) {
-        while (items.length > 0) {
-          const next = items.shift()
-          if (next !== undefined) yield next
-        }
-        if (closed) return
-        await new Promise<void>((resolve) => {
-          wake = resolve
-        })
-      }
-    },
-  }
-}
-
-/**
- * #44 dedup state — text/thinking by category flag (no per-event id); tool by callId Set, so a
- * `run.stream()` tool result whose callId onDelta only reported as `tool-call-started` (e.g. a tool
- * ERROR surfaced only via the stream) is NOT suppressed. `sawError` short-circuits the real-usage done.
- */
-interface MergeState {
-  sawTextDelta: boolean
-  sawThinkingDelta: boolean
-  emittedToolCallIds: Set<string>
-  emittedToolResultIds: Set<string>
-  sawError: boolean
-}
-
-/** Read a StreamEvent's `callId` as a string (the union is index-typed `unknown`). */
-function streamCallId(ev: StreamEvent): string {
-  return typeof ev.callId === 'string' ? ev.callId : ''
-}
-
-/**
- * #44 — skip a run.stream() content event ONLY when onDelta already drove that exact (category, id).
- * Tool dedup is keyed by callId; an empty/missing callId never matches (returns false) so two distinct
- * id-less tool events cannot collide and wrongly suppress each other (favours a visible double-emit
- * over silent loss — fail-loud).
- */
-function isDuplicatedByDelta(ev: StreamEvent, state: MergeState): boolean {
-  if (ev.type === 'text_delta') return state.sawTextDelta
-  if (ev.type === 'thinking') return state.sawThinkingDelta
-  if (ev.type === 'tool_call') {
-    const id = streamCallId(ev)
-    return id !== '' && state.emittedToolCallIds.has(id)
-  }
-  if (ev.type === 'tool_result') {
-    const id = streamCallId(ev)
-    return id !== '' && state.emittedToolResultIds.has(id)
-  }
-  return false
-}
-
-/**
- * #44: merge real-time content events (queued via onDelta — text/tool/thinking in chronological
- * arrival order) with the complete SDK messages from `run.stream()`. Deltas are yielded as they
- * arrive; the pump opens `run.stream()` (post-completion) for structural events (`run_started`/`done`)
- * + the no-onDelta fallback, deduped per-category (`isDuplicatedByDelta`) so nothing double-emits.
- * The `done` SDK event stays suppressed (real-usage `done` emitted by the caller after `run.wait()`);
- * errors set `state.sawError`. `openStream` is a thunk so the consumer drains CONCURRENTLY with
- * `send()` (the run only resolves after the loop completes). Extracted to keep the generator within G6.
- */
-async function* mergeDeltaStream(
-  queue: AsyncQueue<MergeItem>,
-  openStream: () => Promise<AsyncGenerator<SdkMessage>>,
-  runId: string,
-  state: MergeState,
-): AsyncGenerator<StreamEvent> {
-  // The catch is attached AT CREATION (not deferred to `await pump`): the consumer loop below is
-  // paced by the external puller (SSE backpressure), so a send()/stream() rejection could otherwise
-  // sit unhandled across macrotask gaps and crash the process (Node unhandledRejection). The captured
-  // error is re-thrown after the drain so it still surfaces in the caller's try/catch as one error event.
-  let pumpError: { thrown: unknown } | undefined
-  const pump = (async () => {
-    try {
-      const stream = await openStream()
-      for await (const msg of stream) queue.push({ kind: 'sdk', msg })
-    } finally {
-      queue.close()
-    }
-  })().catch((thrown: unknown) => {
-    pumpError = { thrown }
-  })
-  // #47-followup — stream ALL deltas (text / tool / thinking) LIVE in arrival order. The tool
-  // lifecycle (`tool-call-started` + `tool-call-completed`) is now emitted via `onDelta` from the SDK's
-  // tool-dispatch, which runs BETWEEN LLM rounds — so a tool call and its result arrive in the queue at
-  // their true chronological position, BEFORE the post-tool answer text. That removes the need to HOLD
-  // the answer (the earlier #47 fix), which had regressed text-ONLY turns to batch-at-completion. The
-  // `run.stream()` (pump) replay of the same tool call/result is deduped by callId (`isDuplicatedByDelta`
-  // + the sink's `emittedTool*Ids`), so nothing double-renders and text streams token-by-token again.
-  for await (const item of queue) {
-    if (item.kind === 'delta') {
-      yield item.event
-      continue
-    }
-    for (const out of translateSdkEvent(item.msg, runId)) {
-      if (out.type === 'done') continue // suppressed; the real-usage done is emitted by the caller
-      if (isDuplicatedByDelta(out, state)) continue // #44 per-category/callId dedup vs onDelta
-      if (out.type === 'error') state.sawError = true
-      yield out
-    }
-  }
-  await pump // settled (handled at creation); re-throw any captured error into the generator's try/catch
-  if (pumpError) throw pumpError.thrown
-}
-
-/**
- * #44 — build the onDelta sink: a fresh per-run dedup `MergeState` + the callback that routes every
- * content update (text/tool/thinking) into the merge queue in chronological arrival order, recording
- * per-category flags + per-callId Sets so the run.stream() fallback is deduped without losing
- * stream-only tool results. Extracted to keep `createSdkAgentStream` within the function-size budget.
- */
-function createDeltaSink(queue: AsyncQueue<MergeItem>): {
-  state: MergeState
-  onDelta: (d: { update: InteractionUpdate }) => void
-} {
-  const state: MergeState = {
-    sawTextDelta: false,
-    sawThinkingDelta: false,
-    emittedToolCallIds: new Set<string>(),
-    emittedToolResultIds: new Set<string>(),
-    sawError: false,
-  }
-  const onDelta = (d: { update: InteractionUpdate }) => {
-    for (const event of translateInteractionUpdate(d.update)) {
-      if (event.type === 'text_delta') state.sawTextDelta = true
-      else if (event.type === 'thinking') state.sawThinkingDelta = true
-      else if (event.type === 'tool_call') {
-        const id = streamCallId(event)
-        if (id !== '') state.emittedToolCallIds.add(id)
-      } else if (event.type === 'tool_result') {
-        const id = streamCallId(event)
-        if (id !== '') state.emittedToolResultIds.add(id)
-      }
-      queue.push({ kind: 'delta', event })
-    }
-  }
-  return { state, onDelta }
 }
 
 /**
@@ -605,12 +446,7 @@ export function createSdkAgentStream(
           t0,
         })
       } catch (err) {
-        yield {
-          type: 'error',
-          code: 'SDK_ERROR',
-          message: err instanceof Error ? err.message : 'SDK agent error',
-          retryable: false,
-        }
+        yield eventoDeErroDoSdk(err)
       }
     },
   })
@@ -623,7 +459,7 @@ export function createSdkAgentStream(
 
 interface StreamSdkAgentOpts {
   apiKey: string
-  model: string
+  model: string | ModelSelection
   reasoningEffort: string | undefined
   overrides: RuntimeOverrides
   parseThinkTags: boolean
@@ -691,6 +527,10 @@ async function* streamSdkAgent(
     const { state, onDelta } = createDeltaSink(queue)
     const sendOptions: SendOptions = { onDelta }
     if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
+    // theokit#132 — hand the caller's sink to the SDK. Set only when supplied: an `onRunEvent:
+    // undefined` riding along would still change what the SDK receives on the non-opted-in path,
+    // and back-compat here is a floor, not a preference.
+    if (overrides.onRunEvent !== undefined) sendOptions.onRunEvent = overrides.onRunEvent
     // M35 — when images are present, use the SDK's structured `SDKUserMessage { text, images }` form so
     // the model receives them alongside the text; otherwise the plain-string form is unchanged (back-compat).
     const sendInput =
@@ -703,8 +543,29 @@ async function* streamSdkAgent(
     for await (const event of applyTextTransforms(merged, { parseThinkTags, stripToolDialect })) {
       yield event
     }
-    // V4-N.1: ONE real-usage `done` after run.wait(); errors short-circuit it.
-    if (!state.sawError) {
+    // #142 — o stream SEMPRE termina num frame terminal.
+    //
+    // O `done` do SDK e suprimido no merge, na promessa de que este bloco emite o frame final.
+    // Antes, essa promessa quebrava quando `sawError`: nada era emitido, e o stream simplesmente
+    // acabava. So seria correto se `error` fosse sempre o ULTIMO evento — e nao e: o merge marca
+    // `sawError` e SEGUE emitindo. Uma UI que vira a flag de "turno concluido" num frame terminal
+    // ficava presa.
+    //
+    // O `done` continua SUPRIMIDO quando houve erro (contrato H1, travado por
+    // `test_run_stream_error_status_emits_error_and_suppresses_done`) — `done` segue significando
+    // "terminou bem". O que muda e a garantia: quando houve erro e o ultimo evento nao foi o
+    // `error`, um `error` terminal fecha o stream. Assim vale sempre "o ultimo frame e `done` OU
+    // `error`", que e o post-condition que faltava.
+    if (state.sawError) {
+      if (state.lastEventType !== 'error') {
+        yield {
+          type: 'error',
+          code: 'RUN_FAILED',
+          message: 'O turno terminou com erro; veja o evento `error` anterior.',
+          retryable: false,
+        }
+      }
+    } else {
       yield realUsageDone(await (await sendPromise).wait(), t0)
     }
   } finally {
@@ -717,9 +578,38 @@ async function* streamSdkAgent(
  * `Agent.getOrCreate` returns the real SDK agent — this alias just types what {@link toAgentFactory}
  * hands back without re-exporting the full `@theokit/sdk` `Agent` type.
  */
+/**
+ * O mínimo que um turno devolve. Estrutural de propósito (ADR-2 do M91).
+ *
+ * Re-exportar o tipo do SDK amarraria a assinatura pública desta camada à dele — o oposto do que a
+ * fronteira existe para fazer, e a mesma razão pela qual `SdkAgentHandle` já era um alias em vez de um
+ * re-export.
+ */
+export interface SdkTurnHandle {
+  wait: () => Promise<{ result?: string; usage?: { totalTokens?: number } }>
+}
+
+/** Opções por turno. Aberto por ora — o SDK aceita mais do que a camada precisa declarar. */
+export type SdkSendOptions = Record<string, unknown>
+
 export interface SdkAgentHandle {
   readonly agentId: string
-  send: (msg: string, opts?: unknown) => unknown
+  /**
+   * M91 — era `(msg: string, opts?: unknown) => unknown`.
+   *
+   * O `unknown` de retorno custava ao consumidor um módulo inteiro: `agents/lib/goal/runner-facade.ts`,
+   * 38 linhas cujo único trabalho era re-estreitar este retorno para o contrato `send → wait` que o
+   * loop de goal exige. O docstring daquele módulo registra que, antes dele, o chamador escrevia
+   * `as never` — e que **foi sob essa capa que a superfície goal divergiu do agente real por vários
+   * milestones**. A camada sempre soube a forma; ela só não a declarava.
+   *
+   * A forma é **assíncrona**: `SDKAgent.send` devolve `Promise<Run>`, e o `GoalLoopAgent` do SDK
+   * declara `send(prompt): Promise<{ wait(): Promise<…> }>`. A primeira tentativa deste milestone
+   * tipou como síncrona e o `tsc` do consumidor não teria pego — o `as never` do facade absorvia a
+   * diferença. É literalmente a divergência que o docstring do facade descrevia, reencontrada ao
+   * tentar removê-lo.
+   */
+  send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
   dispose: () => Promise<void>
 }
 
@@ -732,21 +622,25 @@ export interface SdkAgentHandle {
  * model / `assembleM8CreateOptions`), so the served agent has identical tools, model, system prompt,
  * skills, and `mcpServers`. Keyed per `sessionId` via `Agent.getOrCreate` (matches the run path).
  *
- * NOTE: HITL approvals (`.approval(...)`) are driven by the framework's streaming runner, not by
- * `Agent.create`; a raw `SDKAgent` from this factory does not auto-pause gated tools — the serving
- * surface (e.g. the ACP client) owns approval. Tools still execute; they are simply not HITL-gated here.
+ * M96 — a superfície DECLARA sua {@link ApprovalPosture} e o factory instala o plugin que a variante
+ * exige. Antes, o mapa `compiled.hitl` era compilado e DESCARTADO aqui. Rationale em
+ * `./approval-posture.ts`.
  */
 export function toAgentFactory(
-  def: TheokitAgentDefinition,
+  def: DefinicaoOuThunk,
   // M74 — o seam que as superfícies do consumidor usam de fato (ACP, loop autônomo, delegação).
-  opts: { apiKey: string | (() => string | Promise<string>); overrides?: RuntimeOverrides },
+  // M96 — `approvals` é OBRIGATÓRIO: a ausência era o defeito, e um campo opcional o reintroduziria.
+  opts: {
+    apiKey: string | (() => string | Promise<string>)
+    approvals: ApprovalPosture
+    overrides?: RuntimeOverrides
+  },
 ): (sessionId: string) => Promise<SdkAgentHandle> {
-  const compiled = compileAgentDefinition(def)
   const overrides = opts.overrides ?? {}
-  const model = overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'
-  const reasoningEffort = overrides.reasoningEffort ?? compiled.reasoningEffort
-  const runContext = overrides.runContext ?? compiled.runContext
+  const projetarPorSessao = resolverProjecao(def, overrides)
   return async (sessionId: string): Promise<SdkAgentHandle> => {
+    // Forma OBJETO: devolve a projeção já pronta. Forma THUNK: projeta agora, para esta sessão.
+    const { compiled, model, reasoningEffort, runContext } = await projetarPorSessao(sessionId)
     const rt = await loadSdkRuntime()
     if (!rt) {
       throw new Error(
@@ -769,6 +663,7 @@ export function toAgentFactory(
     if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
     if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
     const extra = buildExtraCreateOptions(overrides, compiled)
+    aplicarPostura(extra, m8, opts.approvals, compiled.hitl)
     const agent = await rt.Agent.getOrCreate(sessionId, {
       apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
@@ -776,6 +671,65 @@ export function toAgentFactory(
       ...m8,
       ...extra,
     })
-    return agent as unknown as SdkAgentHandle
+    return withGuardrails(agent as unknown as SdkAgentHandle, compiled.guardrails)
+  }
+}
+
+/**
+ * theokit#139 — wrap a served handle so the declared guardrails actually run.
+ *
+ * The other half of the reported bypass. `compileAgentDefinition` produces `compiled.guardrails`
+ * from `.guardrails([...])`, and only `loop/agent-runner.ts` ever read it — so the SAME definition
+ * served over ACP ran with every input and output guard absent. An agent whose author declared
+ * "block prompt injection" answered injected prompts; one that declared "redact secrets" returned
+ * them. (The HITL half was closed by M96, which made `approvals` a mandatory `ApprovalPosture`.)
+ *
+ * ## Why here, and not as an SDK plugin
+ *
+ * The issue proposes compiling guardrails into a `Plugin` so enforcement is runtime-level. Measured
+ * against the SDK's hook surface at 4.37.0, that is not achievable: `pre_user_send` returns only
+ * `PreUserSendResult { recalledContext? }`, so a handler can add memory context but cannot block or
+ * rewrite the prompt; and `post_assistant_reply` is documented fire-and-forget — its return value is
+ * discarded and `wait()` never blocks on it. Neither can reject or redact, which is the entire job
+ * of a guard. Enforcing there would produce a gate that reports without gating, which is worse than
+ * the current honest absence.
+ *
+ * So it lands where the framework already owns the boundary (ADR-0040 § D2 — guards at the boundary
+ * are framework core, not runtime), reusing `runInputGuards`/`runOutputGuards` rather than
+ * reimplementing the policy: two copies of a security rule is how the two paths diverged in the
+ * first place.
+ *
+ * ## The residual gap, stated
+ *
+ * The runner moderates the STREAM as it flows (`moderateOutputStream`); this handle exposes no
+ * stream, only `wait()`, so output guards land on the completed reply. A blocked output is still
+ * blocked — it is simply not blocked mid-token. Closing that needs a streaming seam on the handle,
+ * which is a change to the served contract and belongs to its own slice.
+ */
+function withGuardrails(
+  handle: SdkAgentHandle,
+  guardrails: readonly Guardrail[] | undefined,
+): SdkAgentHandle {
+  // No guards ⇒ the original handle, untouched. Wrapping unconditionally would put an await on the
+  // hot path of every served agent to enforce an empty list.
+  if (guardrails === undefined || guardrails.length === 0) return handle
+  return {
+    get agentId() {
+      return handle.agentId
+    },
+    dispose: () => handle.dispose(),
+    send: async (msg: string, sendOpts?: SdkSendOptions): Promise<SdkTurnHandle> => {
+      // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
+      // not merely annotate it afterwards.
+      const guarded = await runInputGuards(msg, guardrails)
+      const turn = await handle.send(guarded, sendOpts)
+      return {
+        wait: async () => {
+          const out = await turn.wait()
+          if (out.result === undefined) return out
+          return { ...out, result: await runOutputGuards(out.result, guardrails) }
+        },
+      }
+    },
   }
 }

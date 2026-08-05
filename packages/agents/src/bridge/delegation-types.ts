@@ -32,7 +32,24 @@ export interface DelegationResult {
   finishReason?: LoopFinishReason
 }
 
-export class BudgetExceededError extends Error {
+/**
+ * Orçamento de DELEGAÇÃO estourado — custo em dólares de um agente delegado.
+ *
+ * ## Por que o nome mudou no M91
+ *
+ * Chamava-se `BudgetExceededError` e **sombreava** a classe homônima do SDK, que é de outro domínio:
+ * orçamento de JANELA de contexto (`budgetName`/`window`/`mode`) contra orçamento de DELEGAÇÃO
+ * (`agentName`/`actualCost`). Como o consumidor tem regra inquebrável de nunca importar `@theokit/sdk`
+ * direto, ele **nunca conseguia alcançar a do SDK** — e um `instanceof` contra este barril casava
+ * silenciosamente com o domínio errado.
+ *
+ * É o modo de falha que o M73 documentou em `auth-parity.test.ts`: quando duas classes competem pelo
+ * mesmo nome, nenhum teste de comportamento fica vermelho — só o `toBe` de identidade pega.
+ *
+ * `subpath-coverage.test.ts` registrava a colisão como `lacuna` de `./errors`, com a razão escrita e o
+ * reconhecimento de que renomear era breaking e estava fora do escopo do M78. O M91 pagou a conta.
+ */
+export class DelegationBudgetExceededError extends Error {
   constructor(
     public readonly agentName: string,
     public readonly actualCost: number,
@@ -41,9 +58,18 @@ export class BudgetExceededError extends Error {
     super(
       `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > $${budgetLimit.toFixed(4)}`,
     )
-    this.name = 'BudgetExceededError'
+    this.name = 'DelegationBudgetExceededError'
   }
 }
+
+/**
+ * @deprecated Use {@link DelegationBudgetExceededError}. Alias mantido por uma major para não quebrar
+ * quem captura pelo nome antigo; é a **mesma** classe, não uma cópia — `instanceof` continua valendo
+ * nos dois sentidos, e um teste de identidade referencial (`toBe`) trava isso.
+ */
+export const BudgetExceededError = DelegationBudgetExceededError
+/** @deprecated Use {@link DelegationBudgetExceededError}. */
+export type BudgetExceededError = DelegationBudgetExceededError
 
 export class DelegationError extends Error {
   constructor(
