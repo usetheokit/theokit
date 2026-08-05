@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents@7.0.0 + theokit@0.44.3] - 2026-08-05
+
 ### Added
 - **Request types for decorator controllers in the typed client (#124).** `client.<ns>.post({ body })` now autocompletes and type-checks the body/query from the `@Body`/`@Query` Zod schema, instead of `body?: unknown`. Requires the schema to be **exported** (`export const zCreate = z.object({…})`); an inline schema still falls back to `unknown`, and the generated file now says so, naming the method and the fix.
 - **`theokit start` serves decorator controllers (#123).** `theokit build` compiles `server/controllers/**` into `dist`, and production serves them after a file-route miss — closing the split where a controller worked in `theokit dev` and 404'd in production. Apps with no controllers emit nothing and are unaffected.
