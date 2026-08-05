@@ -6,6 +6,12 @@ import type { GoalEvent, GoalLoopAgent, GoalOptions, GoalResult } from '@theokit
 // `GoalLoopAgent` it binds, the `GoalOptions` it takes — entirely from `@theokit/agents`, never
 // reaching back to `@theokit/sdk`.
 export type { GoalEvent, GoalLoopAgent, GoalOptions, GoalResult } from '@theokit/sdk'
+// M80 — o vocabulário do judge atravessa junto. Sem `JudgeResult`/`Verdict`, um consumidor que
+// quisesse reagir a `blocked` sem string mágica teria de redeclarar a forma — e a fronteira
+// INQUEBRÁVEL o impede de importar do SDK. `JudgeCredentialError` é o erro que a falha-rápida do M80
+// lança; quem faz `catch` no goal loop precisa distingui-lo de qualquer outra falha.
+export type { JudgeResult, Verdict } from '@theokit/sdk'
+export { JudgeCredentialError } from '@theokit/sdk'
 
 /**
  * M59 — `GoalRunner`, the OO twin of the SDK's free `runGoalLoop`, parallel to {@link AgentRunner}.

@@ -12,7 +12,7 @@
  * swallowed (fail-loud violation). These RED tests script the EXACT real shapes
  * (verified against theokit-sdk/packages/sdk/src/types/messages.ts).
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { translateInteractionUpdate, translateSdkEvent } from '../../src/bridge/event-translator.js'
 
@@ -408,5 +408,65 @@ describe('translateInteractionUpdate — real-time InteractionUpdate shapes (#44
     })
     const toolCalls = out.filter((e) => e.type === 'tool_call')
     expect(toolCalls).toHaveLength(0)
+  })
+})
+
+// #141 — silêncio deliberado vs silêncio por ignorância.
+//
+// Os dois `default` do tradutor devolviam `[]` com um comentário de "ignorado", misturando tipos
+// que decidimos não expor (ruído de alta frequência) com tipos que simplesmente não conhecíamos
+// (`request` = aprovação pendente, `task` = marco, `ShellOutputDelta` = saída de shell ao vivo).
+// O segundo caso é o que a regra de falhar-alto proíbe: um sinal de aprovação sumindo sem rastro
+// é indistinguível de "não havia sinal".
+describe('eventos desconhecidos avisam em vez de sumir (#141)', () => {
+  let avisos: string[]
+  let spy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    avisos = []
+    spy = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      avisos.push(args.map(String).join(' '))
+    })
+  })
+  afterEach(() => {
+    spy.mockRestore()
+  })
+
+  /**
+   * The example type is SYNTHETIC on purpose.
+   *
+   * The first version of these tests used `request` and `task` — real SDK types that happened to be
+   * untranslated at the time. Both are translated now (theokit#141's other half), so the tests
+   * started asserting that a delivered signal was dropped: they had become a guard against the fix.
+   *
+   * A type the SDK will never emit cannot be implemented out from under the test, so what is pinned
+   * here is the MECHANISM — unknown warns, once, naming the type — rather than a snapshot of which
+   * types happen to be unhandled today.
+   */
+  const TYPE_THE_SDK_WILL_NEVER_EMIT = 'carrier-pigeon'
+
+  it('um tipo de SDKMessage que o tradutor não conhece produz um aviso nomeando o tipo', () => {
+    const out = translateSdkEvent(
+      { type: TYPE_THE_SDK_WILL_NEVER_EMIT, agent_id: 'a', run_id: 'r' } as never,
+      'r',
+    )
+
+    expect(out).toEqual([])
+    expect(avisos.join('\n')).toContain(TYPE_THE_SDK_WILL_NEVER_EMIT)
+    expect(avisos.join('\n')).toContain('#141')
+  })
+
+  it('avisa UMA vez por tipo — um stream emite milhares de eventos por turno', () => {
+    for (let i = 0; i < 5; i++) {
+      translateSdkEvent({ type: 'homing-albatross', agent_id: 'a', run_id: 'r' } as never, 'r')
+    }
+
+    expect(avisos.filter((a) => a.includes('"homing-albatross"'))).toHaveLength(1)
+  })
+
+  it('tipo ignorado DE PROPÓSITO não avisa — o silêncio ali é decisão, não descuido', () => {
+    translateSdkEvent({ type: 'user', agent_id: 'a', run_id: 'r' } as never, 'r')
+
+    expect(avisos).toEqual([])
   })
 })

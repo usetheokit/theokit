@@ -272,6 +272,32 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     expect(errs[0]).toMatchObject({ type: 'error', message: 'run failed' })
   })
 
+  // #142 — INVARIANTE: o stream sempre acaba num frame terminal (`done` OU `error`).
+  //
+  // HONESTIDADE SOBRE O QUE ESTE TESTE PROVA. A issue descreve o risco de o stream acabar sem
+  // frame terminal quando `sawError` suprime o `done`. Tentei construir esse caso — conteúdo
+  // chegando DEPOIS do erro — e não consegui: um `status: ERROR` encerra o stream, então `error`
+  // já era o último frame nos caminhos que este harness cobre. Este teste passa antes e depois
+  // da correção.
+  //
+  // Ele fica porque é o POST-CONDITION que faltava estar escrito. A correção deixou de depender
+  // de "acontece de o erro ser o último" e passou a garanti-lo; o teste trava a garantia para que
+  // um caminho futuro que emita depois do erro não a quebre em silêncio.
+  it('test_stream_always_ends_on_a_terminal_frame (#142)', async () => {
+    const comErro = await drainUpdates(
+      [],
+      [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'ERROR', message: 'run failed' }],
+    )
+    expect(comErro.filter((e) => e.type === 'done')).toHaveLength(0) // H1 preservado
+    expect(comErro.at(-1)?.type).toBe('error')
+
+    const semErro = await drainUpdates(
+      [td('oi')],
+      [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' }],
+    )
+    expect(semErro.at(-1)?.type).toBe('done')
+  })
+
   it('test_run_stream_throw_mid_iteration_emits_content_then_error', async () => {
     // M1 + HIGH-1: run.stream() yields a tool message then throws; the queued content drains BEFORE
     // the error surfaces (no lost event), the error is yielded (no unhandled rejection), dispose runs.
@@ -340,6 +366,71 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     )
     expect(out.filter((e) => e.type === 'tool_call')).toHaveLength(1)
     expect(out.filter((e) => e.type === 'tool_result')).toHaveLength(1)
+  })
+
+  // #138 — o teste acima usa `c1` NOS DOIS caminhos e por isso nunca exercitou o defeito:
+  // com os ids iguais, qualquer implementação de dedup casa. No mundo real os dois caminhos
+  // falam namespaces DIFERENTES — `onDelta` traz o `callId` do SDK, `run.stream()` traz o
+  // `ToolUseBlock.id`, que é o `modelCallId` do provider. A dedup registrava um e consultava o
+  // outro, então a mesma chamada renderizava DUAS vezes (o duplo card que o #47 perseguia).
+  it('test_tool_events_deduped_across_MISMATCHED_id_namespaces (#138)', async () => {
+    const out = await drainUpdates(
+      // onDelta: callId do SDK = 'c1', modelCallId = 'm-c1'
+      [tcStarted('c1', 'glob', { p: '*' }), tcCompleted('c1', 'glob', { files: ['a'] })],
+      [
+        // run.stream(): identifica a MESMA chamada pelo id do MODELO
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          call_id: 'm-c1',
+          name: 'glob',
+          status: 'running',
+          input: { p: '*' },
+        },
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          call_id: 'm-c1',
+          name: 'glob',
+          status: 'completed',
+          result: { files: ['a'] },
+        },
+        { type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' },
+      ],
+    )
+    expect(out.filter((e) => e.type === 'tool_call')).toHaveLength(1)
+    expect(out.filter((e) => e.type === 'tool_result')).toHaveLength(1)
+  })
+
+  // #138 — o `tc-${Date.now()}` que preenchia um `call_id` ausente NUNCA estava no conjunto de
+  // dedup, então derrotava a dedup por construção. Pior: parecia um id de verdade para quem lê.
+  // Duas chamadas sem id devem seguir aparecendo (fail-loud > supressão silenciosa), mas o id
+  // não pode fingir identidade que não existe.
+  it('test_missing_call_id_does_not_fabricate_a_timestamp_id (#138)', async () => {
+    const out = await drainUpdates(
+      [],
+      [
+        {
+          type: 'tool_call',
+          agent_id: 'a',
+          run_id: 'r',
+          name: 'glob',
+          status: 'running',
+          input: {},
+        },
+        { type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' },
+      ],
+    )
+    // Narrowed by a type predicate rather than a cast. The direct `as { callId: string }[]` was
+    // rejected by `tsc --noEmit -p tsconfig.test.json` (TS2352 — the index-signature element type
+    // does not overlap), leaving the mandatory typecheck gate red on a clean tree; widening through
+    // `unknown` would have silenced it while removing the only check that the field is there at all.
+    const toolCalls = out.filter((e): e is typeof e & { callId: string } => e.type === 'tool_call')
+    expect(toolCalls).toHaveLength(1)
+    expect(toolCalls[0]?.callId).toBe('')
+    expect(toolCalls[0]?.callId).not.toMatch(/^tc-\d+$/)
   })
 
   it('test_text_only_onDelta_still_gets_tools_from_run_stream', async () => {

@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { UIMessage, UIMessageChunk } from 'ai'
 
-import { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
+import { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
 
 /** Build a fake UIMessageStream SSE Response from chunks (+ optional headers, e.g. x-theokit-run-id). */
 function sseResponse(
@@ -174,7 +174,9 @@ describe('HttpTransport (M41)', () => {
     )
     // The turn's `messages` ride along + the stable `id` (chatId → server sessionId, session-continuity
     // fix). The point of THIS test is that a primitive body is NOT spread into char-indexed keys.
-    expect(body.messages).toEqual([{ id: 'u1', role: 'user', parts: [{ type: 'text', text: 'hi' }] }])
+    expect(body.messages).toEqual([
+      { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'hi' }] },
+    ])
     expect(Object.keys(body)).not.toContain('0')
   })
 

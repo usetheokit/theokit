@@ -1,4 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import { z } from 'zod'
+
 import {
   storageSchema,
   theoConfigSchema,
@@ -29,7 +31,10 @@ describe('T1.1 — storageSchema (ADR-0007 D4)', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      const flat = JSON.stringify(result.error.format())
+      // `z.treeifyError` no lugar de `error.format()`, depreciado em zod 4 (agent-builder#319). A
+      // asserção continua a mesma — o nome do campo ofensor aparece na árvore serializada — e isso
+      // foi medido, não presumido: as duas formas contêm `port` para esta entrada.
+      const flat = JSON.stringify(z.treeifyError(result.error))
       expect(flat).toContain('port')
     }
   })

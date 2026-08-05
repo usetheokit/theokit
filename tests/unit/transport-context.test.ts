@@ -6,17 +6,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { UIMessageChunk } from 'ai'
 
-import { AgentClient } from '../../packages/theo/src/client/agent-client.js'
+import { AgentClient } from '../../packages/agents/src/client/agent-client.js'
 import {
   ChannelTransport,
   type ChannelPushSource,
-} from '../../packages/theo/src/client/channel-transport.js'
-import { HttpTransport } from '../../packages/theo/src/client/http-transport.js'
+} from '../../packages/agents/src/client/channel-transport.js'
+import { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
 import {
   InProcessTransport,
   type InProcessRunInput,
-} from '../../packages/theo/src/client/in-process-transport.js'
-import type { RequestContext } from '../../packages/theo/src/client/transport.js'
+} from '../../packages/agents/src/client/in-process-transport.js'
+import type { RequestContext } from '../../packages/agents/src/client/transport.js'
 
 function sseResponse(
   chunks: Array<Record<string, unknown>>,

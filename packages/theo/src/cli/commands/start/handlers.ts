@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { extname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { getApprovalRegistry } from '../../../server/agent/approval-registry.js'
 import { handleAgentApproval, isApprovalPath } from '../../../server/agent/approve-agent.js'
@@ -7,6 +8,7 @@ import { mountAgent } from '../../../server/agent/mount-agent.js'
 import { resolveProvider } from '../../../server/agent/provider-resolver.js'
 import { serveAgentAuxRoute } from '../../../server/agent/serve-aux-routes.js'
 import { executeAction } from '../../../server/http/action-execute.js'
+import { dispatchControllerRequest } from '../../../server/http/controller-dispatch.js'
 import { executeRoute } from '../../../server/http/execute.js'
 import {
   incomingMessageToWebRequest,
@@ -24,6 +26,17 @@ import type { ServerRouteNode } from '../../../server/scan/match.js'
 import type { LoadModule } from '../../../server/scan/module-loader.js'
 import type { CsrfMode, DisallowedConfig } from '../../../server/security/csrf.js'
 import type { TheoTransformer } from '../../../server/transformer.js'
+
+/**
+ * Load a controller module that `theokit build` already compiled — theokit#123.
+ *
+ * A plain dynamic `import()`, deliberately: production must not need `@swc/core`. That peer is a
+ * native binary the app would otherwise carry solely to re-do work the build already did, and a
+ * missing optional peer would degrade into a runtime 404 instead of a build failure.
+ */
+async function loadCompiledController(absPath: string): Promise<Record<string, unknown>> {
+  return (await import(pathToFileURL(absPath).href)) as Record<string, unknown>
+}
 
 /** Response header carrying the per-request correlation id. */
 const X_REQUEST_ID = 'x-request-id'
@@ -54,6 +67,13 @@ export interface RequestHandlerCtx {
   serverDir: string
   /** App root (= `process.cwd()` at `theokit start`); mountAgent points `.theokit/` discovery here. */
   projectRoot: string
+  /**
+   * theokit#123 — absolute path to the COMPILED controllers emitted by `theokit build`
+   * (`<distDir>/controllers`), or `undefined` when the build produced none.
+   *
+   * `undefined` is the routes-only app, and it must stay free: no scan, no import, no cost.
+   */
+  controllersDistDir: string | undefined
   pluginRunner: PluginRunner | undefined
   transformer: TheoTransformer | undefined
   csrfMode: CsrfMode
@@ -309,6 +329,25 @@ export async function tryServeApiRoute(c: RequestHandlerCtx): Promise<boolean> {
 
   const match = matchRoute(c.url, c.cachedRoutes)
   if (!match) {
+    // theokit#123 — controller fall-through, mirroring the dev `api-middleware` arm.
+    //
+    // Before this, `theokit dev` served a decorator controller and `theokit start` 404'd it: the
+    // production path has no Vite/swc transform, so an uncompiled `.controller.ts` could not load.
+    // `theokit build` now emits compiled modules and this branch serves them, so the SAME app
+    // answers the same routes in both. Reached only after a file-route miss, so file routes keep
+    // precedence exactly as in dev.
+    if (c.controllersDistDir !== undefined) {
+      const handled = await dispatchControllerRequest({
+        controllersDir: c.controllersDistDir,
+        loadModule: loadCompiledController,
+        req: c.req,
+        res: c.res,
+        csrfMode: c.csrfMode,
+        disallowed: c.disallowed,
+        requestId: c.requestId,
+      })
+      if (handled) return true
+    }
     const urlPath = c.url.split('?')[0]
     const routePaths = c.cachedRoutes.map((r) => r.routePath)
     const suggestion = findSuggestion(urlPath, routePaths)

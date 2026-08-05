@@ -14,8 +14,8 @@
     "validate:publint": "npx publint packages/theo && npx publint packages/create-theokit",
     "validate:attw": "npx @arethetypeswrong/cli --pack packages/theo --ignore-rules cjs-resolves-to-esm no-resolution",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings=0",
-    "lint:fix": "eslint . --fix",
+    "lint": "node scripts/lint-por-grupo.mjs",
+    "lint:fix": "node scripts/lint-por-grupo.mjs --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
@@ -41,7 +41,8 @@
     "theo-ui:link": "bash scripts/theo-ui-link.sh",
     "theo-ui:unlink": "bash scripts/theo-ui-unlink.sh",
     "openapi:regen-fixtures": "tsx scripts/regen-openapi-fixtures.ts",
-    "check:sandbox-parity": "node scripts/check-sandbox-parity.mjs"
+    "check:sandbox-parity": "node scripts/check-sandbox-parity.mjs",
+    "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
@@ -50,7 +51,7 @@
     "@eslint/js": "^9.39.4",
     "@ls-lint/ls-lint": "^2.3.1",
     "@playwright/test": "^1.61.0",
-    "@theokit/sdk": "^4.25.0",
+    "@theokit/sdk": "^4.39.0",
     "@theokit/sdk-pty": "0.3.0",
     "@theokit/sdk-tools": "0.26.0",
     "@types/cross-spawn": "^6.0.6",

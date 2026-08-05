@@ -55,8 +55,23 @@ export {
   type AgentRouteContext,
 } from './agent-route-generator.js'
 
-export { createSdkAgentStream, toAgentFactory, type SdkAgentHandle } from './sdk-adapter.js'
-export { buildModelSelection } from './model-selection.js'
+export {
+  createSdkAgentStream,
+  toAgentFactory,
+  type SdkAgentHandle,
+  // M91 — os tipos que tornam `send` honesto atravessam junto: sem eles o consumidor não consegue
+  // nomear o retorno, e volta a escrever o adaptador que o milestone existe para apagar.
+  type SdkSendOptions,
+  type SdkTurnHandle,
+} from './sdk-adapter.js'
+// M96 — a postura de aprovação atravessa a fronteira: sem ela nomeável, o consumidor não consegue
+// declarar o que `toAgentFactory` agora exige. `AgentDefinition` (nome já ocupado logo abaixo, pelo
+// tipo brandado do builder) é intocado — a postura tem nome próprio.
+export type { ApprovalPosture } from './approval-posture.js'
+export type { DefinicaoOuThunk } from './definicao-ou-thunk.js'
+// M107 — a leitura atravessa junto com a escrita. Enquanto só a escrita era pública, o consumidor
+// remontava a chave do param à mão para ler, o que é um segundo oráculo sobre o mesmo fato.
+export { buildModelSelection, reasoningEffortOf } from './model-selection.js'
 export {
   createThinkTagExtractor,
   extractThinkTagStream,
@@ -89,6 +104,10 @@ export {
 
 export {
   delegate,
+  DelegationBudgetExceededError,
+  // O alias EXISTE para ser deprecado; re-exportá-lo é o contrato de compatibilidade do M91, não um
+  // uso descuidado. Sai numa major.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   BudgetExceededError,
   DelegationError,
   type DelegateOptions,
@@ -133,3 +152,7 @@ export {
   type McpRegistryConfig,
   type McpApprovalSpec,
 } from './mcp-resolver.js'
+// M107 — o vizinho que TOCA disco. `mcp-resolver` decide quais servidores uma requisição recebe;
+// este lê `<cwd>/.mcp.json`. A camada expunha os casos raros e não o comum, então cada consumidor
+// escrevia o carregador à mão.
+export { loadMcpJson, McpFileError } from './mcp-file.js'

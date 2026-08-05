@@ -10,3 +10,12 @@ fixtures/**/dist
 examples/**/dist
 *.md
 CHANGELOG.md
+
+# GENERATED artifacts, whose format belongs to the generator — not to prettier.
+#
+# theokit#161 (A): the surface snapshot is written by `gerar-reexports.mts --json`, and the gate asks
+# for it to be regenerated "in the same commit" that bumps the dep. With prettier reformatting on top,
+# the documented command stops reproducing the file byte for byte, the author's `git diff` never
+# settles at zero, and regenerating becomes something to postpone — which is the omission failure mode
+# that left the gate red on develop.
+packages/agents/tests/unit/__snapshots__/subpath-surface.json
