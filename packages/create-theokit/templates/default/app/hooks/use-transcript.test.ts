@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import type { UIMessage } from 'ai'
+import type { UIMessage } from 'theokit/client'
 
 // Mock the agent client. Since M46 the store owns the conversation `thread`; the hook is a thin
 // projection, so we drive the mock's `thread`/`status` and assert the hook maps + delegates correctly.

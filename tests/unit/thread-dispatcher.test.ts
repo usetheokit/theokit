@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { createInMemoryRunEventCache } from '../../packages/theo/src/server/agent/run-event-cache.js'
 import { createInProcessThreadRunRegistry } from '../../packages/theo/src/server/agent/thread-run-registry.js'

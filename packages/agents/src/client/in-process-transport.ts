@@ -1,4 +1,7 @@
-import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
+import type {
+  WireTransport as ChatTransport,
+  WireChunk as UIMessageChunk,
+} from '@theokit/presenter/wire'
 
 import { extractLastUserText } from './last-user-text.js'
 import type { AgentTransport, ApprovalDecision } from './transport.js'
@@ -137,7 +140,9 @@ export class InProcessTransport implements AgentTransport {
         // Ids de aprovação são UUIDs do servidor — colisão é bug real (dois turnos reusando um id).
         // Falha rápido em vez de sobrescrever em silêncio o resolver estacionado do turno anterior.
         if (this.#pending.has(req.approvalId)) {
-          reject(new Error(`Duplicate pending approval id '${req.approvalId}' — ids must be unique.`))
+          reject(
+            new Error(`Duplicate pending approval id '${req.approvalId}' — ids must be unique.`),
+          )
           return
         }
         this.#pending.set(req.approvalId, { resolve, reject, turno })
@@ -165,7 +170,7 @@ export class InProcessTransport implements AgentTransport {
   }
 
   sendMessages(
-    options: Parameters<ChatTransport<UIMessage>['sendMessages']>[0],
+    options: Parameters<ChatTransport['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
     const { messages, abortSignal, metadata } = options
     // M92 — um `send()` novo varre o turno anterior: aprovações daquele turno nunca mais serão
