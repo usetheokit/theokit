@@ -78,6 +78,13 @@ jobs:
       # o que `packages/agents/src/auth-entry.ts` re-exporta. Sem install nao ha o que comparar.
       - run: pnpm install --frozen-lockfile
       - run: node scripts/check-auth-parity.mjs
+      # O gate de superficie do M90 (`tests/unit/subpath-surface.test.ts`) le `dist/*.d.ts`, e nao o
+      # fonte, porque o `.d.ts` e o artefato que o consumidor realmente ve. Sem build ele morre em
+      # ENOENT e o job inteiro reprova sem nunca medir nada — foi o que aconteceu em TODO run desde
+      # 2026-07-30. `...` inclui as dependencias de workspace do pacote (@theokit/http, presenter),
+      # exigidas pelo DTS do tsup. TURBO_CONCURRENCY=1 pelo mesmo motivo do pre-push: o DTS dos ~24
+      # entrypoints estoura a memoria do runner com o default.
+      - run: TURBO_CONCURRENCY=1 pnpm --filter "@theokit/agents..." build
       # O lock de identidade referencial (`toBe`) vive nos testes do pacote, e o vitest da raiz so
       # cobre `tests/**` — sem isto ele nunca rodaria em CI.
       - run: pnpm --filter @theokit/agents test
