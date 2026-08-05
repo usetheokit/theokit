@@ -70,6 +70,12 @@ describe('CI Workflow', () => {
       (s: Record<string, string>) =>
         s.run?.includes('pnpm build') ||
         s.run?.includes('pnpm -r build') ||
+        // A regra acusa quantificador aninhado dentro do grupo opcional, mas não há ambiguidade:
+        // `\s+` e `[^\s]+` são conjuntos DISJUNTOS, e o grupo começa no literal `--filter`. Sem
+        // sobreposição, não há backtracking exponencial. Medido em vez de argumentado
+        // (agent-builder#319): entrada adversarial de 50 000 caracteres sem `build` no fim — o pior
+        // caso — resolve em **1 ms**; 50 000 espaços puros, em 0 ms.
+        // eslint-disable-next-line security/detect-unsafe-regex -- ver acima
         /pnpm\s+(?:--filter\s+[^\s]+\s+)?build/.test(s.run ?? ''),
     )
     expect(hasBuild).toBe(true)

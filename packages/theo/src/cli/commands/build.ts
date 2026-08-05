@@ -33,6 +33,8 @@ import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes
 import { cleanOutDir } from '../cleanup/cleanup.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
+import { describeControllerArtifacts, emitControllerArtifacts } from './build/emit-controllers.js'
+
 // Adapters that do NOT support cron triggers natively. Build still
 // succeeds with crons declared, but emits a warning + skip note.
 const CRON_NA_TARGETS = new Set<BuildTarget>(['bun', 'netlify', 'static'])
@@ -96,6 +98,20 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
 
   // T1.2 — job scan + manifest (no per-target translation needed)
   await emitJobArtifacts({ cwd, serverDir, distDir })
+
+  // theokit#123 — compile `server/controllers/**` so `theokit start` can serve them.
+  //
+  // #122 made controllers first-class in dev, where Vite's swc transform compiles them on the fly.
+  // Production has neither, so an uncompiled `.controller.ts` cannot load and its routes 404'd —
+  // working in dev and failing in prod, which is the worst place for a gap to live.
+  //
+  // Deliberately NOT folded into `generateManifest` (ADR-5): the manifest is the deploy-adapter
+  // contract, and a parallel route source in it would ripple through every adapter. This writes a
+  // separate artifact only the Node start path reads. No controllers ⇒ no artifact at all.
+  const controllerManifest = await emitControllerArtifacts({ serverDir, distDir })
+  if (controllerManifest !== null) {
+    console.log(`  ${describeControllerArtifacts(controllerManifest)}`)
+  }
 
   // Wave 2 (T1.2) — services manifest at <cwd>/.theokit/services.json. Always
   // emit (empty array when services: {} is empty) so adapters can rely on

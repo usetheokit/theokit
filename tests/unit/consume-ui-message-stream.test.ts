@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { consumeUIMessageStream } from '../../packages/theo/src/client/consume-ui-message-stream.js'
+import { consumeUIMessageStream } from '../../packages/agents/src/client/consume-ui-message-stream.js'
 
 /** Build a fake SSE Response on the UIMessageStream wire from a list of chunks. */
 function sseResponse(chunks: Array<Record<string, unknown>>): Response {
