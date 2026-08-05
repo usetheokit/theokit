@@ -67,8 +67,8 @@ if (upstream === null || upstream.size < PLAUSIBILITY_FLOOR) {
 }
 
 const ours = new Set(WIRE_CHUNK_TYPES)
-const invented = [...ours].filter((t) => !upstream.has(t)).sort()
-const missing = [...upstream].filter((t) => !ours.has(t)).sort()
+const invented = [...ours].filter((t) => !upstream.has(t)).sort((a, b) => a.localeCompare(b))
+const missing = [...upstream].filter((t) => !ours.has(t)).sort((a, b) => a.localeCompare(b))
 
 if (invented.length > 0) {
   console.error('\ncheck-wire-parity: FALHA — variantes que declaramos e o `ai` não tem:\n')

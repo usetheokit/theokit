@@ -40,26 +40,25 @@ function open(messageId: string | undefined): OpenState {
   }
 }
 
+/** The failure the server reported inside the stream. Thrown, never swallowed (theokit#136). */
+function raiseStreamError(chunk: WireChunk): never {
+  const text = (chunk as { errorText?: unknown }).errorText
+  throw new WireStreamError(
+    typeof text === 'string' && text.length > 0 ? text : 'agent stream failed without a message',
+  )
+}
+
 export async function* readMessageStream(
   chunks: ReadableStream<WireChunk>,
 ): AsyncGenerator<WireMessage> {
   let state: OpenState | null = null
 
   for await (const chunk of chunks as unknown as AsyncIterable<WireChunk>) {
-    const type = chunk.type
-
     // Error rejects ALWAYS — including before any `start`, where `state` is still null. Guarding on
     // state first would swallow an auth failure that happens before a single token is produced.
-    if (type === 'error') {
-      const text = (chunk as { errorText?: unknown }).errorText
-      throw new WireStreamError(
-        typeof text === 'string' && text.length > 0
-          ? text
-          : 'agent stream failed without a message',
-      )
-    }
+    if (chunk.type === 'error') raiseStreamError(chunk)
 
-    if (type === 'start') {
+    if (chunk.type === 'start') {
       // A second `start` closes the message in flight instead of dropping it on the floor.
       if (state !== null) yield snapshot(state.message)
       const messageId = (chunk as { messageId?: string }).messageId
@@ -72,12 +71,10 @@ export async function* readMessageStream(
       continue
     }
 
-    if (type === 'finish') {
-      // `finish` emits nothing AND does not close the message — both measured against the oracle.
-      // A chunk arriving after it keeps appending to the same message (`'a'` + `'B'` → `'aB'`),
-      // which is what the resumable path (`Last-Event-ID` reconnect) depends on.
-      continue
-    }
+    // `finish` emits nothing AND does not close the message — both measured against the oracle. A
+    // chunk arriving after it keeps appending to the same message (`'a'` + `'B'` → `'aB'`), which
+    // is what the resumable path (`Last-Event-ID` reconnect) depends on.
+    if (chunk.type === 'finish') continue
 
     // A content chunk with no `start` before it opens the message implicitly. The oracle does this,
     // and TheoKit code relies on it: the in-process transport pushes `data-message` chunks with no
@@ -88,8 +85,7 @@ export async function* readMessageStream(
     // a content chunk meets a missing message.
     state ??= open(undefined)
 
-    const changed = applyChunk(state, chunk)
-    if (changed) yield snapshot(state.message)
+    if (applyChunk(state, chunk)) yield snapshot(state.message)
   }
 }
 
