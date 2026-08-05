@@ -1,5 +1,27 @@
 # @theokit/agents
 
+## 7.2.0
+
+### Minor Changes
+
+- `setDiagnosticsSink` e o tipo `DiagnosticsSink` passam a ser exportados pelo barril (#173).
+
+  Um consumidor cuja fronteira de camadas proíbe importar `@theokit/sdk` diretamente não tinha como
+  instalar um sink: o canal existia e era inalcançável de dentro da fronteira. Reexport puro, sem
+  semântica nova — o silêncio-por-padrão do SDK continua sendo a postura certa para uma biblioteca, e
+  **onde** escrever segue sendo decisão do consumidor.
+
+  ```ts
+  import { setDiagnosticsSink } from '@theokit/agents'
+  setDiagnosticsSink((m) => process.stderr.write(m + '\n'))
+  // retry 1/3 in 431ms — RateLimitError (Retry-After: 400ms)
+  ```
+
+  Acompanha o `@theokit/sdk@4.39.2`, que é o release em que esse canal passou a funcionar de fato: até
+  o 4.39.1 o registro do sink era um singleton **por instância de módulo**, então com duas cópias do
+  SDK na árvore o sink instalado aqui caía num registro diferente daquele em que o emissor escreve — o
+  símbolo resolvia, nada lançava, e nenhum diagnóstico chegava.
+
 ## 7.1.0
 
 ### Minor Changes
