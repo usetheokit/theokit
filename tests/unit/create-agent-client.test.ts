@@ -9,7 +9,11 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it, vi } from 'vitest'
-import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
+import type {
+  WireTransport as ChatTransport,
+  WireMessage as UIMessage,
+  WireChunk as UIMessageChunk,
+} from '@theokit/presenter/wire'
 
 import { createAgentClient } from '../../packages/theo/src/client/create-agent-client.js'
 import {
@@ -43,8 +47,8 @@ const TEXT_TURN = [
 
 function fakeTransport(overrides: Partial<AgentTransport> = {}): AgentTransport {
   return {
-    sendMessages: (async () => chunkStream(TEXT_TURN)) as ChatTransport<UIMessage>['sendMessages'],
-    reconnectToStream: (async () => null) as ChatTransport<UIMessage>['reconnectToStream'],
+    sendMessages: (async () => chunkStream(TEXT_TURN)) as ChatTransport['sendMessages'],
+    reconnectToStream: (async () => null) as ChatTransport['reconnectToStream'],
     ...overrides,
   }
 }
@@ -80,7 +84,7 @@ describe('createAgentClient (M44)', () => {
     const transport = fakeTransport({
       sendMessages: (async () => {
         throw new Error('boom 500')
-      }) as ChatTransport<UIMessage>['sendMessages'],
+      }) as ChatTransport['sendMessages'],
     })
     const client = createAgentClient(transport)
     const iterate = async (): Promise<void> => {
@@ -106,7 +110,7 @@ describe('createAgentClient (M44)', () => {
             // never closes — a live turn
           },
         })
-      }) as unknown as ChatTransport<UIMessage>['sendMessages'],
+      }) as unknown as ChatTransport['sendMessages'],
     })
     const client = createAgentClient(transport)
     for await (const _ of client.stream({ message: 'hi' })) {

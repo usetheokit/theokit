@@ -1,4 +1,4 @@
-import type { UIMessage } from 'ai'
+import type { WireMessage as UIMessage } from '@theokit/presenter/wire'
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
 import { AgentClient, type UseAgentStatus } from './agent-client.js'

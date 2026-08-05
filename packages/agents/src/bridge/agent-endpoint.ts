@@ -12,7 +12,7 @@
  * DI-heavy classes). Neither runs an LLM directly — `@theokit/sdk` stays the sole
  * runtime (G2 / sdk-runtime.md); this module only wires its output onto the wire.
  */
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { type CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'

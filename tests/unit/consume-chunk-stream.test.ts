@@ -8,7 +8,7 @@
  * arrive, and a clean stream never throws.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { UIMessage, UIMessageChunk } from 'ai'
+import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import {
   consumeChunkStream,
