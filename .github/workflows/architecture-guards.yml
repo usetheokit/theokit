@@ -141,13 +141,17 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=8192
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      # Pinadas por SHA: uma tag e mutavel, e um workflow que instala dependencias
+      # confia no que a tag apontar no dia.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # `--ignore-scripts`: este job so builda e roda dois scripts de inspecao; nenhum
+      # lifecycle e necessario, e permiti-los amplia a superficie de supply chain a toa.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       # Os dois gates leem `dist/`. `check-ai-free-surface` FALHA quando ele nao existe, de
       # proposito — sem o artefato ele nao mede nada, e um gate que nao mede nao pode reportar
       # sucesso. E a mesma licao que deixou `surface parity` vermelho por semanas.
