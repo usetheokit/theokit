@@ -3,7 +3,7 @@
  * `Channel`/`invoke` into a `ChannelPushSource` (M42); `createTauriAgentClient` wires it to the M44 no-React
  * client. The Tauri primitives are injected (a fake `{ invoke, Channel }` — no `@tauri-apps` dep needed).
  */
-import type { UIMessage } from 'ai'
+import type { WireMessage as UIMessage } from '@theokit/presenter/wire'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
