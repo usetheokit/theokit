@@ -4,7 +4,7 @@
  * join) merits direct unit tests independent of the transports.
  */
 import { describe, expect, it } from 'vitest'
-import type { UIMessage } from 'ai'
+import type { WireMessage as UIMessage } from '@theokit/presenter/wire'
 
 import { extractLastUserText } from '../../packages/agents/src/client/last-user-text.js'
 

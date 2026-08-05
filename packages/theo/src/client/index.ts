@@ -86,3 +86,17 @@ export type {
 // M30 — client host for MCP App ui:// resources (sandboxed iframe + capability-scoped guest API).
 export { mountMcpApp, createGuestMessageHandler, MCP_APP_SANDBOX } from './mcp-app-host.js'
 export type { GuestMessage, McpAppHostOptions, McpAppHandle } from './mcp-app-host.js'
+
+/**
+ * The wire types, re-exported (plan `remover-dependencia-ai`, EC-7).
+ *
+ * A scaffolded app pins `theokit`, not `@theokit/presenter` — so an app that needs to name a
+ * message type must reach it through a package it already declares. Pointing app code at
+ * `@theokit/presenter/wire` directly would make the scaffold import something its manifest never
+ * mentions, and it would break on the user's first `npm test`.
+ */
+export type {
+  WireChunk as UIMessageChunk,
+  WireMessage as UIMessage,
+  WireMessagePart as UIMessagePart,
+} from '@theokit/presenter/wire'
