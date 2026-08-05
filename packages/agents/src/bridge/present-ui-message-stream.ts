@@ -1,6 +1,6 @@
 import { UIMessageStreamPresenter } from '@theokit/presenter'
 import type { AgentOutputEvent } from '@theokit/presenter'
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import type { AgentStreamEvent, AgentTurnMetadata, DoneEvent } from './agent-stream-events.js'
 

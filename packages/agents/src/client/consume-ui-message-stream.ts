@@ -1,18 +1,32 @@
-import type { UIMessage, UIMessageChunk } from 'ai'
+import { parseWireStream, readMessageStream } from '@theokit/presenter/wire'
+import type { WireChunk, WireMessage } from '@theokit/presenter/wire'
+
+type UIMessage = WireMessage
+type UIMessageChunk = WireChunk
 
 /**
- * M2 (theokit-ai-first) — read a TheoKit agent endpoint's `UIMessageStream` SSE `Response`
- * into reconstructed assistant `UIMessage`s, reusing the `ai` package's own consumer
- * primitives (`parseJsonEventStream` + `readUIMessageStream`) — the exact path
- * `@ai-sdk/react`'s `useChat` runs internally. No reinvented wire parser (Rule 9).
+ * Read a TheoKit agent endpoint's `UIMessageStream` SSE `Response` into reconstructed assistant
+ * messages.
  *
- * `ai` is an OPTIONAL peer dependency, so it is imported dynamically: an app that never
- * calls an agent never pays for it, and importing `theokit/client` does not hard-require
- * `ai` (mirrors how the agent runtime dynamically imports `@theokit/sdk`). An agent app
- * always has `ai` installed (it is the UIMessageStream consumer).
+ * ## What changed, and why (plan `remover-dependencia-ai`)
  *
- * `onMessage` is invoked on every reconstruction step with the latest snapshot of the
- * assistant message, so a caller (the `useAgent` hook) can render streaming updates.
+ * This file used to be the ONLY runtime use of `ai` in the whole published surface — two
+ * `await import('ai')` calls, measured in `@theokit/agents@7.0.0/dist/chunk-FCGL2PEC.js`. It now
+ * uses TheoKit's own wire module, so installing `theokit` no longer pulls the ai-sdk. The FRAME
+ * FORMAT is unchanged: an ai-sdk client still understands a TheoKit server and vice versa.
+ *
+ * The import is static again. It was dynamic only because `ai` was an OPTIONAL peer that an app
+ * might not have installed; `@theokit/presenter` is a real dependency, so there is nothing to defer.
+ *
+ * ## The #136 workaround is gone with the thing it worked around
+ *
+ * `ai`'s reader swallows an `error` chunk unless the caller passes BOTH `onError` and
+ * `terminateOnError` — eight lines of comment used to explain that trap here. Owning the reader
+ * makes rejecting on `error` the DEFAULT, so the workaround has nothing left to work around. The
+ * behaviour a consumer sees is identical; the regression test for #136 still guards it.
+ *
+ * `onMessage` is invoked on every reconstruction step with the latest snapshot of the assistant
+ * message, so a caller (the `useAgent` hook) can render streaming updates.
  */
 export async function consumeUIMessageStream(
   response: Response,
@@ -23,66 +37,38 @@ export async function consumeUIMessageStream(
 }
 
 /**
- * M41 (ADR-0050 D3) — the reusable middle piece: a UIMessageStream SSE `Response` →
- * `ReadableStream<UIMessageChunk>`, reusing `ai`'s own `parseJsonEventStream` (the exact primitive
- * `useChat` runs). This is precisely what a `ChatTransport.sendMessages` returns, so `HttpTransport`
- * builds on it directly (no reinvented wire parser — Rule 9). A body-less response yields an empty stream.
+ * A UIMessageStream SSE `Response` → `ReadableStream<UIMessageChunk>`. This is precisely what a
+ * `ChatTransport.sendMessages` returns, so `HttpTransport` builds on it directly. A body-less
+ * response yields an empty stream.
  */
-export async function responseToChunkStream(
-  response: Response,
-): Promise<ReadableStream<UIMessageChunk>> {
+export function responseToChunkStream(response: Response): Promise<ReadableStream<UIMessageChunk>> {
   if (response.body === null) {
-    return new ReadableStream<UIMessageChunk>({
-      start(controller) {
-        controller.close()
-      },
-    })
+    return Promise.resolve(
+      new ReadableStream<UIMessageChunk>({
+        start(controller) {
+          controller.close()
+        },
+      }),
+    )
   }
-
-  const { parseJsonEventStream, uiMessageChunkSchema } = await import('ai')
-
-  // ai validates each SSE JSON frame against its own strict chunk schema (the exact gate `useChat`
-  // runs), then yields `{ success, value }`; forward the valid chunks.
-  const parsed = parseJsonEventStream({ stream: response.body, schema: uiMessageChunkSchema })
-  return new ReadableStream<UIMessageChunk>({
-    async start(controller) {
-      for await (const result of parsed) {
-        if (result.success) controller.enqueue(result.value)
-      }
-      controller.close()
-    },
-  })
+  return Promise.resolve(parseWireStream(response.body))
 }
 
 /**
- * M41 (ADR-0050 D6) — read a `ReadableStream<UIMessageChunk>` into reconstructed assistant
- * `UIMessage`s via `ai`'s `readUIMessageStream`. Shared by `consumeUIMessageStream` (Response path)
- * and the framework-agnostic `AgentClient` store (transport path). `onMessage` fires on every
- * reconstruction step so a caller can render streaming updates.
+ * Read a `ReadableStream<UIMessageChunk>` into reconstructed assistant messages. Shared by
+ * {@link consumeUIMessageStream} (Response path) and the framework-agnostic `AgentClient` store
+ * (transport path). `onMessage` fires on every reconstruction step so a caller can render
+ * streaming updates.
+ *
+ * A provider failure (401/429/5xx) arrives as a `{ type: 'error', errorText }` chunk rather than a
+ * thrown rejection — both the in-process runner and the SSE path emit it as data. The reader
+ * rejects on it, so `AgentClient.#drive`'s existing catch surfaces it (`status='error'`).
  */
 export async function consumeChunkStream(
   stream: ReadableStream<UIMessageChunk>,
   onMessage: (message: UIMessage) => void,
 ): Promise<void> {
-  const { readUIMessageStream } = await import('ai')
-  // #136 — a provider failure (401/429/5xx) arrives as a `{ type: 'error', errorText }` chunk, NOT a
-  // thrown rejection (the in-process runner and the SSE path both emit it as data). With the default
-  // `readUIMessageStream({ stream })` (no `onError`, `terminateOnError` off) that chunk is silently
-  // swallowed — the stream ends "clean" and the store settles to 'done' instead of 'error'.
-  // `onError` captures the error; `terminateOnError` stops reconstructing partial messages after it AND
-  // (under ai@7.0.14) errors the underlying iterator — so the `for await` below rejects and
-  // `AgentClient.#drive`'s existing catch surfaces it (status='error', error set). The post-loop
-  // `throw` is a defensive fallback that still surfaces the captured error if a future `ai` version
-  // stops rejecting under `terminateOnError`; it is dead code under ai@7.0.14 but cheap version-robustness.
-  let streamError: Error | undefined
-  for await (const message of readUIMessageStream({
-    stream,
-    onError: (err) => {
-      streamError = err instanceof Error ? err : new Error(String(err))
-    },
-    terminateOnError: true,
-  })) {
+  for await (const message of readMessageStream(stream)) {
     onMessage(message)
   }
-  if (streamError !== undefined) throw streamError
 }

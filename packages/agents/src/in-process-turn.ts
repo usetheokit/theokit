@@ -19,7 +19,7 @@
  * INFORMATIONAL (render them or ignore them). The authoritative human gate is `awaitApproval`, which
  * the SDK awaits BEFORE the gated tool runs; the chunk is not the gate.
  */
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { compileAgentModule, streamAgentUIMessages } from './bridge/agent-endpoint.js'
 import type { ApprovalPosture } from './bridge/approval-posture.js'

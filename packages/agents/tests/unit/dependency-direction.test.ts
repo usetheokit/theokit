@@ -33,9 +33,24 @@ const deps = pkg.dependencies ?? {}
 const peers = pkg.peerDependencies ?? {}
 
 /** Implementação: o consumidor não pode importar, logo não pode fornecer. */
-const IMPLEMENTACAO = ['@theokit/sdk', '@theokit/sdk-tools', '@theokit/sdk-pty'] as const
-/** Genuinamente substituível pelo host. */
-const SUBSTITUIVEL = ['zod', 'ai', '@theokit/http'] as const
+const IMPLEMENTACAO = [
+  '@theokit/sdk',
+  '@theokit/sdk-tools',
+  '@theokit/sdk-pty',
+  // O wire (`@theokit/presenter/wire`) é implementação desta camada desde o plano
+  // `remover-dependencia-ai`: o consumidor não escolhe qual parser de frame usamos, então não pode
+  // fornecê-lo. Externalizado no tsup para que exista UMA instância do schema em runtime.
+  '@theokit/presenter',
+] as const
+/**
+ * Genuinamente substituível pelo host.
+ *
+ * `ai` SAIU desta lista: ele deixou de ser peer porque deixou de ser dependência publicada. O wire
+ * é nosso, e o pacote permanece apenas como devDependency — o oráculo do teste diferencial. Um
+ * consumidor não precisa mais fornecê-lo, então exigir que fosse peer passou a afirmar o contrário
+ * do contrato.
+ */
+const SUBSTITUIVEL = ['zod', '@theokit/http'] as const
 
 describe('M79 T1.1 — direção de dependência', () => {
   it.each(IMPLEMENTACAO)('test_%s_e_dependency_e_nao_peer', (nome) => {
