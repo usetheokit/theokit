@@ -46,8 +46,9 @@ describe('M90 — a superfície dos subpaths de infra está travada', () => {
 
   /**
    * Anti-truncation floor. The number is measured, and it rises when the source grows — 173 until
-   * `@theokit/sdk` started exporting `sessaoTemEscritor`, `transcriptRoot`, `TranscriptBlock` and
-   * `TranscriptMessage` from `/persistence` (theokit#161 A), 177 since then.
+   * `@theokit/sdk` started exporting `sessionHasWriter` (então `sessaoTemEscritor`, renomeado no
+   * `4.39.0`), `transcriptRoot`, `TranscriptBlock` and `TranscriptMessage` from `/persistence`
+   * (theokit#161 A), 177 since then — o rename não mexe na contagem, só no nome.
    *
    * Not redundant with the identity gate below: that one compares the snapshot against the LAYER, so
    * a regeneration that produced an empty file from a broken layer would pass on both sides. This one
