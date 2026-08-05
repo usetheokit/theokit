@@ -11,7 +11,7 @@
 import { createInterface } from 'node:readline'
 import type { Readable, Writable } from 'node:stream'
 
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 /** ANSI helpers — applied only on a TTY so a captured (non-TTY) sink stays plain-text for tests. */
 const ANSI = {

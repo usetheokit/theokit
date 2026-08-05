@@ -15,7 +15,12 @@
  * shell output.
  */
 import { describe, expect, it } from 'vitest'
-import { uiMessageChunkSchema, type UIMessageChunk } from 'ai'
+// `ai` is imported ON PURPOSE here: these are ORACLE tests — they assert that what our bridge
+// emits still satisfies the REAL ai-sdk schema, which is the strongest statement of wire
+// compatibility available. Our `WireChunk` is structurally wider (loose objects), so the runtime
+// value is passed through `as never` at the type boundary; the assertion being made is runtime.
+import { uiMessageChunkSchema } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import type { AgentStreamEvent } from '../../src/bridge/agent-stream-events.js'
 import {

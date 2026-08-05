@@ -5,7 +5,7 @@
  * `/runs/<runId>/stream`, which the real handler serves by replaying the cached frames.
  */
 import { describe, expect, it } from 'vitest'
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
 import {

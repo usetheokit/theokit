@@ -16,7 +16,7 @@
  * Single-process (ADR-0048 D2).
  */
 
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { type RunEventCache, mintRunId } from './run-event-cache.js'
 import type { ThreadRunRegistry } from './thread-run-registry.js'

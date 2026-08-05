@@ -4,7 +4,7 @@
  * (`GET <api>/runs/<runId>/stream`, 404 → null) and out-of-band approve (`POST <api>/approve/<id>`).
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { UIMessage, UIMessageChunk } from 'ai'
+import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { HttpTransport } from '../../packages/agents/src/client/http-transport.js'
 
