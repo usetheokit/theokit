@@ -1,4 +1,4 @@
-import type { UIMessage } from 'ai'
+import type { WireMessage as UIMessage } from '@theokit/presenter/wire'
 
 /**
  * M41/M42 — extract the turn text from the last user message's text parts. Shared by the transports

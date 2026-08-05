@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.44.3",
+  "version": "0.45.0",
   "type": "module",
   "sideEffects": false,
   "license": "Apache-2.0",
@@ -115,6 +115,7 @@
   "dependencies": {
     "@theokit/agents": "workspace:^",
     "@theokit/http": "workspace:^",
+    "@theokit/presenter": "workspace:^",
     "@vitejs/plugin-react": "^4.7.0",
     "busboy": "^1.6.0",
     "cac": "^6.7.14",
@@ -133,7 +134,6 @@
   "peerDependencies": {
     "@theokit/sdk": "^4.0.1",
     "@theokit/ui": "^1.1.0",
-    "ai": ">=7.0.0",
     "db0": "^0.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -148,9 +148,6 @@
       "optional": true
     },
     "@theokit/ui": {
-      "optional": true
-    },
-    "ai": {
       "optional": true
     },
     "db0": {
@@ -170,7 +167,7 @@
     "@theokit/sdk": "^4.39.0",
     "@types/busboy": "^1.5.4",
     "@types/picomatch": "^4.0.3",
-    "ai": "^7.0.14",
+    "ai": "7.0.14",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
     "unstorage": "^1.17.5"

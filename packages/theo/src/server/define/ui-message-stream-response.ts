@@ -1,4 +1,4 @@
-import type { UIMessageChunk } from 'ai'
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 /**
  * M0 (theokit-ai-first) — serialize a stream of ai-sdk `UIMessageChunk`s into a

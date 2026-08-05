@@ -1,4 +1,7 @@
-import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
+import type {
+  WireTransport as ChatTransport,
+  WireChunk as UIMessageChunk,
+} from '@theokit/presenter/wire'
 
 import { extractLastUserText } from './last-user-text.js'
 import type { AgentTransport, ApprovalDecision } from './transport.js'
@@ -56,7 +59,7 @@ export class ChannelTransport implements AgentTransport {
   }
 
   sendMessages(
-    options: Parameters<ChatTransport<UIMessage>['sendMessages']>[0],
+    options: Parameters<ChatTransport['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
     const { messages, abortSignal, metadata } = options
     const message = extractLastUserText(messages)
