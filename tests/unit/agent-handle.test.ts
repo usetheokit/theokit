@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
+import type {
+  WireTransport as ChatTransport,
+  WireChunk as UIMessageChunk,
+} from '@theokit/presenter/wire'
 
 import { agentHandle } from '../../packages/agents/src/client/agent-handle.js'
 import type { AgentHandle } from '../../packages/agents/src/client/agent-handle.js'
@@ -41,7 +44,7 @@ describe('M47 — agentHandle (typed, client-safe)', () => {
     )
     const chat: AgentHandle<{ message: string }> = agentHandle('/api/agents/chat')
     // Build the transport the handle implies and prove it targets the handle path.
-    const transport: ChatTransport<UIMessage> = new HttpTransport({
+    const transport: ChatTransport = new HttpTransport({
       api: chat.path,
       fetch: fetchMock as unknown as typeof fetch,
     })

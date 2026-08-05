@@ -1,6 +1,6 @@
 import { AgentClient, type AgentClientState } from '@theokit/agents/client'
 import type { AgentTransport, ApprovalDecision, RequestContext } from '@theokit/agents/client'
-import type { UIMessage } from 'ai'
+import type { WireMessage as UIMessage } from '@theokit/presenter/wire'
 
 export interface CreateAgentClientOptions {
   /**

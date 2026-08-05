@@ -1,7 +1,10 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/wire/index.ts'],
+  // `zod` is a peer — bundling it would put a second zod instance in a consumer's process, and two
+  // zod instances disagree on `instanceof` checks in ways that are miserable to diagnose.
+  external: ['zod', '@theokit/sdk'],
   format: ['esm'],
   dts: true,
   sourcemap: true,
