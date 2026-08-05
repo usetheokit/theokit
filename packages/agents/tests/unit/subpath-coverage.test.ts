@@ -186,6 +186,15 @@ const DECISOES: Record<string, Decisao> = {
   },
 
   // --- FORA, com razão. Nenhuma destas é silenciosa. ---
+  './internal/memory-adapters': {
+    verdict: 'out',
+    razao:
+      'Subpath SEMVER-EXEMPT, publicado pelo `@theokit/sdk@4.39.0` (theokit#160) com um único ' +
+      'propósito: deixar o `@theokit/sdk-memory` reusar o runtime de embeddings do SDK em vez de ' +
+      'manter a cópia de 342 linhas que causou a lacuna de adapters do theokit#128. Atravessar a ' +
+      'camada com ele colocaria na superfície pública um caminho que o SDK declara livre para ' +
+      'quebrar em minor — o oposto do contrato que esta lista existe para proteger.',
+  },
   './cron': {
     verdict: 'out',
     razao:
