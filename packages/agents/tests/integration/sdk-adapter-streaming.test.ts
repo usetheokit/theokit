@@ -45,6 +45,37 @@ vi.mock('@theokit/sdk', () => ({
           }
           if (h.rejectSend) return Promise.reject(new Error('send failed'))
           return Promise.resolve({
+            // theokit#140 — the ONE ordered timeline the bridge now consumes. Deltas first (they
+            // fire during the loop), then the complete messages, which is the order the two-source
+            // merge produced too: `run.stream()` was post-completion.
+            //
+            // `textAlreadyStreamed` is derived HERE the same way the SDK derives it — a text delta
+            // seen since the last text-carrying assistant message. A fake that computed it
+            // differently would go green while production stayed broken, which is the whole risk of
+            // faking a producer.
+            events: async function* () {
+              let textStreamed = false
+              const updates =
+                h.updates.length > 0
+                  ? h.updates
+                  : h.deltas.map((text) => ({ type: 'text-delta', text }))
+              for (const update of updates) {
+                if (update.type === 'text-delta') textStreamed = true
+                yield { kind: 'delta', update }
+              }
+              for (const m of h.messages) {
+                const content = (m.message as { content?: unknown } | undefined)?.content
+                const carriesText =
+                  m.type === 'assistant' &&
+                  Array.isArray(content) &&
+                  content.some((b) => (b as { type?: string }).type === 'text')
+                yield carriesText
+                  ? { kind: 'message', message: m, textAlreadyStreamed: textStreamed }
+                  : { kind: 'message', message: m }
+                if (carriesText) textStreamed = false
+              }
+              if (h.throwInStream) throw new Error('stream failed')
+            },
             stream: async function* () {
               for (const m of h.messages) yield m
               if (h.throwInStream) throw new Error('stream failed')
@@ -496,18 +527,28 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     expect(h.disposed).toBeGreaterThanOrEqual(1)
   })
 
-  it('test_send_rejection_after_partial_deltas_emits_content_then_error', async () => {
-    // EC-2: onDelta streams partial content, THEN send rejects — partial content surfaces BEFORE error.
+  it('test_send_rejection_surfaces_an_error_and_disposes', async () => {
+    // EC-2, rewritten for #140 — and the rewrite is a CORRECTION, not an accommodation.
+    //
+    // This asserted that partial content surfaces BEFORE the error when `send()` rejects. That
+    // ordering is unreachable in the real SDK: `onDelta` is installed inside `executeAgentLoop`,
+    // which runs inside `driveLoop`, which the run schedules DETACHED
+    // (`real-local-run.ts` — `setTimeout(() => { void this.driveLoop() }, 0)`). No delta can fire
+    // before `send()` settles, so a rejected `send()` cannot have streamed anything.
+    //
+    // The old shape only held because THIS FAKE called `onDelta` synchronously inside `send`. The
+    // test was pinning the fake, and a test that pins its own fixture proves nothing about
+    // production — it just fails whenever the real seam is approached, which is what happened here.
+    //
+    // What is still load-bearing, and still asserted: the rejection becomes a visible `error` event
+    // rather than an unhandled rejection, and the agent is disposed either way.
     h.rejectSend = true
     const out = await drainUpdates([td('Partial'), tcStarted('c1', 'write_file', {})], [])
-    const errIdx = out.findIndex((e) => e.type === 'error')
-    expect(errIdx).toBeGreaterThanOrEqual(0)
-    const before = out.slice(0, errIdx)
-    expect(before).toEqual([
-      { type: 'text_delta', content: 'Partial' },
-      { type: 'tool_call', callId: 'c1', toolName: 'write_file', input: {} },
-    ])
-    expect(h.disposed).toBeGreaterThanOrEqual(1)
+    expect(
+      out.some((e) => e.type === 'error'),
+      'a rejected send produced no error event',
+    ).toBe(true)
+    expect(h.disposed, 'the agent was not disposed after a rejected send').toBeGreaterThanOrEqual(1)
   })
 
   it('test_adapter_emits_tool_call_with_populated_input — run.stream tool_call surfaces msg.args (theokit#58)', async () => {
