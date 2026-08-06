@@ -132,7 +132,7 @@
     "vite": "^6.4.3"
   },
   "peerDependencies": {
-    "@theokit/sdk": "^4.0.1",
+    "@theokit/sdk": "^4.40.0",
     "@theokit/studio": "^0.1.0",
     "@theokit/ui": "^1.1.0",
     "db0": "^0.3.0",
