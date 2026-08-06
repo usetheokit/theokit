@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { AgentClient } from '../../src/client/agent-client.js'
 
@@ -44,9 +44,16 @@ const oneDeltaTransport = (): unknown => ({
     ),
 })
 
-/** Let the stream reader loop run: `#drive` awaits the transport, then each chunk. */
-const tick = async (times = 1): Promise<void> => {
-  for (let i = 0; i < times; i++) await new Promise((resolve) => setTimeout(resolve, 0))
+/**
+ * Yield once so a synchronous state change becomes observable.
+ *
+ * #165 — this took a `times` count until the count itself caused a flake. The parameter is gone on
+ * purpose: N macrotasks is not a synchronization primitive, and leaving the knob in place invites
+ * the next author to "fix" a timing failure by raising it. Waiting for an OBSERVABLE CONDITION is
+ * the tool for that — see `vi.waitFor` below.
+ */
+const tick = async (): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 describe('theokit-sdk#145 — abort() finalizes the turn status', () => {
@@ -66,11 +73,24 @@ describe('theokit-sdk#145 — abort() finalizes the turn status', () => {
   it('test_abort_after_partial_output_leaves_done_so_the_text_stays_readable', async () => {
     const client = new AgentClient(oneDeltaTransport() as never)
     client.send('hello' as never)
-    await tick(5)
-    expect(
-      client.getSnapshot().messages.length,
-      'precondition: the delta reached the store before the abort',
-    ).toBeGreaterThan(0)
+
+    // #165 — this used to be `await tick(5)`: wait five macrotasks and hope the reader loop got
+    // there. Under the full suite (123 files in parallel) it failed roughly one run in three, ON THE
+    // PRECONDITION, so the behaviour the test exists to prove was never reached.
+    //
+    // The count was not a small margin, it was the wrong axis. Measured: the loop needs ONE
+    // macrotask on an idle machine — but the timer queue drains independently of when the stream's
+    // promise chain gets its turn, so under contention five timers can fire with the reader still
+    // parked. Raising the number buys nothing.
+    //
+    // `vi.waitFor` retries until the observable condition holds, so the only machine-sensitive knob
+    // left is the timeout.
+    await vi.waitFor(() => {
+      expect(
+        client.getSnapshot().messages.length,
+        'precondition: the delta reached the store before the abort',
+      ).toBeGreaterThan(0)
+    })
 
     client.abort()
 
