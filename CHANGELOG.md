@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- **O merge de duas fontes do `agents.bridge` acabou (#140).** A bridge consome UMA timeline ordenada (`run.events()` do SDK) em vez de fundir `onDelta` com um `run.stream()` pós-conclusão. Some o aparelho inteiro — fila assíncrona, sink de delta, `mergeDeltaStream`, `MergeState` — e com ele a dedup **por comparação de conteúdo**, que era de onde saíam o #47 (ordem), o #138 (namespace de `callId`) e o fallback de timestamp. `sdk-adapter-merge.ts` (221 linhas) foi deletado; `sdk-timeline.ts` (137) o substitui.
+- **O que sobreviveu, e por quê.** Uma dedup de tool keyed por `callId`+`modelCallId`, porque nenhuma das duas fontes é completa: só o delta carrega `modelCallId`, e só a mensagem reporta um erro de tool que o delta apenas abriu. Preferir uma delas perde os casos da outra em silêncio. Isso é dedup por **id** — o que o produtor atribuiu —, não por texto, que era o palpite.
+
 ### Fixed
 - **O gate que protege o `abort()` deixa de reprovar por acaso (#165).** O teste esperava um número fixo de macrotasks para o delta chegar ao store; sob a suíte completa reprovava cerca de uma execução em três — e reprovava **na precondição**, então o comportamento que ele existe para provar nunca era exercido. A contagem não era uma margem apertada, era o eixo errado: medido, o loop precisa de **1** macrotask com a máquina ociosa, mas a fila de timers drena independente de quando a cadeia de promises do stream recebe sua vez. A espera agora é por condição observável, não por contagem.
 
