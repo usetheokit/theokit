@@ -164,7 +164,7 @@
     }
   },
   "devDependencies": {
-    "@theokit/sdk": "^4.39.2",
+    "@theokit/sdk": "^4.40.0",
     "@types/busboy": "^1.5.4",
     "@types/picomatch": "^4.0.3",
     "ai": "7.0.14",

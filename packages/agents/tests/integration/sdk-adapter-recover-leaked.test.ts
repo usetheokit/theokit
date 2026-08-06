@@ -20,6 +20,12 @@ vi.mock('@theokit/sdk', () => ({
       send: async (_msg: string, opts?: { onDelta?: (d: { update: unknown }) => void }) => {
         opts?.onDelta?.({ update: { type: 'text-delta', text: 'ok' } })
         return {
+          // theokit#140 — the fake's ONE ordered timeline. Delegates to this same fake's `stream()`
+          // rather than restating its script: two hand-written copies of one fixture drift, and a fake
+          // whose timeline disagreed with its stream would go green while production broke.
+          events: async function* (this: { stream: () => AsyncGenerator }) {
+            for await (const m of this.stream()) yield { kind: 'message', message: m }
+          },
           stream: async function* () {
             yield { type: 'status', status: 'FINISHED' }
           },
