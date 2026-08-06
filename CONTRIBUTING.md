@@ -5,7 +5,7 @@ contract between you and the codebase: what to install, what to test
 before opening a PR, and what shape contributions should take.
 
 If you're upgrading an existing TheoKit app from 0.2.x to 0.3.0, see the migration
-guides under [`docs/migration/`](docs/migration/) — the `0.2-to-0.3` guide referenced
+guides under [`wiki/migration/`](wiki/migration/) — the `0.2-to-0.3` guide referenced
 here is **not present in the repo** (verified 2026-08-06). This guide is for changes to
 the framework itself.
 
