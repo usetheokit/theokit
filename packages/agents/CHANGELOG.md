@@ -1,5 +1,12 @@
 # @theokit/agents
 
+## 7.3.1
+
+### Patch Changes
+
+- Updated dependencies [a6dd4c1]
+  - @theokit/presenter@0.5.0
+
 ## 7.3.0
 
 ### Minor Changes

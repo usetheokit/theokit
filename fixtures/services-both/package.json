@@ -2,7 +2,7 @@
   "name": "services-both-fixture",
   "private": true,
   "type": "module",
-  "version": "0.0.68",
+  "version": "0.0.69",
   "dependencies": {
     "theokit": "workspace:*"
   }
