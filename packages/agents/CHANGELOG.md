@@ -1,5 +1,30 @@
 # @theokit/agents
 
+## 7.3.0
+
+### Minor Changes
+
+- A bridge consome UMA timeline ordenada do SDK — o merge de duas fontes acabou (#140).
+
+  Antes, ela fundia `onDelta` (tokens e ciclo de vida de tool, sem `run_started`/`system`) com um
+  `run.stream()` pós-conclusão (mensagens completas, em lote). Nenhuma das duas era completa sozinha,
+  então todo o aparelho de dedup existia só para reconciliá-las — e essa reconciliação é de onde saíram
+  o #47 (ordem), o #138 (namespace de `callId`) e o fallback de timestamp.
+
+  `sdk-adapter-merge.ts` (221 linhas) foi deletado; `sdk-timeline.ts` (137) o substitui. Foram junto a
+  fila assíncrona, o sink de delta, `mergeDeltaStream`, `MergeState` — e a dedup **por comparação de
+  conteúdo**.
+
+  Sobrevive uma dedup de tool **keyed por id** (`callId` + `modelCallId`), e ela não é resíduo: só o
+  delta carrega `modelCallId`, e só a mensagem reporta um erro de tool que o delta apenas abriu.
+  Preferir uma das fontes perde os casos da outra em silêncio. Comparar texto era a doença; comparar
+  ids não é.
+
+  Nada muda no que o consumidor recebe: os mesmos `StreamEvent`s, na mesma ordem. O que muda é de onde
+  eles vêm — e que a classe de bug que produziu #47 e #138 deixa de ser representável.
+
+  Requer `@theokit/sdk >= 4.40.0` (já declarado como dependência direta deste pacote).
+
 ## 7.2.0
 
 ### Minor Changes
