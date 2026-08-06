@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **O gate que protege o `abort()` deixa de reprovar por acaso (#165).** O teste esperava um número fixo de macrotasks para o delta chegar ao store; sob a suíte completa reprovava cerca de uma execução em três — e reprovava **na precondição**, então o comportamento que ele existe para provar nunca era exercido. A contagem não era uma margem apertada, era o eixo errado: medido, o loop precisa de **1** macrotask com a máquina ociosa, mas a fila de timers drena independente de quando a cadeia de promises do stream recebe sua vez. A espera agora é por condição observável, não por contagem.
+
 ## [@theokit/agents@7.2.0] - 2026-08-05
 
 ### Fixed
