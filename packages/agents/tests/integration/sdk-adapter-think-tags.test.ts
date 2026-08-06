@@ -21,6 +21,13 @@ vi.mock('@theokit/sdk', () => ({
       send: async (_msg: string, opts?: { onDelta?: (d: { update: unknown }) => void }) => {
         opts?.onDelta?.({ update: { type: 'text-delta', text: h.deltaText } })
         return {
+          // theokit#140 — this fake's text arrives as a DELTA, so the timeline must carry it: a
+          // `stream()`-only delegation would hand the adapter no tokens at all, and these tests are
+          // about what happens to streamed text.
+          events: async function* (this: { stream: () => AsyncGenerator }) {
+            yield { kind: 'delta', update: { type: 'text-delta', text: h.deltaText } }
+            for await (const m of this.stream()) yield { kind: 'message', message: m }
+          },
           stream: async function* () {
             yield { type: 'status', status: 'FINISHED' }
           },
