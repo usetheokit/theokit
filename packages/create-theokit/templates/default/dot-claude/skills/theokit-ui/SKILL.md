@@ -25,8 +25,8 @@ paths:
 npm install @theokit/ui
 
 # Or from local tarball (when using source repo)
-cd ../theo-ui && npm pack    # produces theokit-ui-X.Y.Z.tgz
-cd ../my-app && npm install ../theo-ui/theokit-ui-X.Y.Z.tgz
+cd ../theokit-ui && npm pack    # produces theokit-ui-X.Y.Z.tgz
+cd ../my-app && npm install ../theokit-ui/theokit-ui-X.Y.Z.tgz
 ```
 
 **WARNING: NEVER use `npm link ../theo-ui` or `file:../theo-ui`.** The symlink exposes the sibling's nested `node_modules/react` (typically a different version), causing dual-React: "React Element from an older version" errors, broken hooks (`useState` null), and silent render failures. `resolve.dedupe` in Vite does NOT fix this — the pnpm structure physically has two React copies. Use tarball (`npm pack` → `npm install .tgz`) instead.
@@ -160,6 +160,6 @@ const myTheme = defineTheme({
 - NEVER build a custom markdown renderer — `ChatMessageContent` handles it (including streaming partial fences)
 - NEVER build a custom code highlighter — `CodeBlock` (from `@usetheo/ui`) uses shiki (lazy-loaded)
 - Import AI-agent-surface components (ChatThread, ChatMessage, ToolCallCard, etc.) from `@theokit/ui`; import generic primitives (Button, Input, CodeBlock, PageShell, Sidebar, Avatar, Alert) from `@usetheo/ui` — both are live packages since the 2026-07-03 pivot (`@theokit/ui` depends on `@usetheo/ui`)
-- NEVER use `npm link` or `file:../theo-ui` to install — causes dual-React (use tarball or npm registry)
+- NEVER use `npm link` or `file:../theokit-ui` to install — causes dual-React (use tarball or npm registry)
 - NEVER install ALL peer deps — only install the peers for components you actually use
 - NEVER use components without wrapping in `TheoUIProvider` + `ThemeProvider` first
