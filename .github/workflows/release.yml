@@ -37,11 +37,27 @@ jobs:
           node-version: 22
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
-      # Node 22 bundles npm 10.x, which signs provenance but CANNOT authenticate
-      # via OIDC trusted-publisher (tokenless publish needs npm >= 11.5.1). Without
-      # this, `changeset publish` 404s on PUT even with a trusted publisher configured.
-      - name: Upgrade npm for OIDC trusted-publisher (needs >= 11.5.1)
-        run: npm install -g npm@latest
+      # #169 — the `npm install -g npm@latest` step that used to sit here is GONE, and with it the
+      # failure that kept this workflow red from 2026-07-24 to 2026-08-06 (7 consecutive runs):
+      #
+      #   npm error code EUNKNOWNCONFIG / Unknown cli flag: --git-checks
+      #
+      # `changeset publish` always appends `--no-git-checks` for pnpm (`@changesets/cli`, any pnpm
+      # major >= 5), pnpm forwards it verbatim to npm, and npm >= 11 REJECTS unknown flags where
+      # npm 10 only warned. The step upgraded npm past that line, so the two requirements became
+      # mutually exclusive at the pinned versions.
+      #
+      # The step existed to enable tokenless OIDC trusted-publisher, which is what signs provenance.
+      # It cannot pay off here: npm refuses provenance attestation for a PRIVATE source repository
+      # (E422), and this repo is private. Measured — no published version of any package in it has
+      # a non-null `dist.attestations`, going back through every release. The requirement it served
+      # was unreachable from day one.
+      #
+      # Not "downgrade pnpm instead": measured with `npm verbose argv`, pnpm 9.15 AND 10.15 forward
+      # the flag identically, and `@changesets/cli@2.31.1` (latest) still injects it. There is no
+      # version pairing that keeps both.
+      #
+      # Same posture as the sibling `theokit-sdk`, where token-auth is validated in production.
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Create Release Pull Request or Publish
@@ -55,7 +71,18 @@ jobs:
           version: pnpm version-packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # NPM_TOKEN intentionally absent — per technical-hardening-sprint plan v1.1 EC-2
-          # absorbed: NPM_TOKEN env DISABLES OIDC trusted-publisher binding silently.
-          # Requires npm dashboard trusted-publisher binding at npmjs.com/package/<pkg>/settings.
-          NPM_CONFIG_PROVENANCE: true
+          # #169 — this used to read "NPM_TOKEN intentionally absent", because an NPM_TOKEN env
+          # silently disables the OIDC trusted-publisher binding. That reasoning was sound and its
+          # premise is not: the tokenless path buys provenance, and npm refuses provenance for a
+          # private source repository (E422). The comment described a decision whose benefit this
+          # repo could never collect, so it is reverted rather than left describing a policy that
+          # no longer holds.
+          #
+          # `setup-node` above wired the registry `.npmrc` to read NODE_AUTH_TOKEN.
+          #
+          # Migration path, when this repo goes public: restore NPM_CONFIG_PROVENANCE + the
+          # `publishConfig.provenance` fields, configure trusted publishers at
+          # npmjs.com/package/<pkg>/settings, drop NODE_AUTH_TOKEN — and only then re-add an npm
+          # upgrade, pinned to a version that tolerates pnpm's forwarded flag, or after changesets
+          # stops injecting it.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
