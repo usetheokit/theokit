@@ -28,7 +28,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@theokit/sdk": ">=3.5.0",
+    "@theokit/sdk": "^4.40.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
