@@ -10,7 +10,7 @@ import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capa
 
 /**
  * M53 — the capabilities that replace the waist-bound agent decorators, one per field the decorator
- * pipeline produces today (`docs/agents/decorator-to-capability.md` § A).
+ * pipeline produces today (`wiki/agents/decorator-to-capability.md` § A).
  *
  * M57 reverses ADR 0001 § 4 (which kept the pure-assignment ones as a factory function to avoid
  * "13 near-identical classes"): the authoring surface is now 100% classes, aligned with the SDK's
