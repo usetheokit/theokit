@@ -10,7 +10,7 @@
 #
 # EC-3 ORDERING NOTE: GATE 0 (theo-ui link guard) MUST come BEFORE GATE 3
 # (check:templates). When theo-ui is linked, the lockfile has @theokit/ui
-# resolved as link:../theo-ui (not semver), which makes the sync script
+# resolved as link:../theokit-ui (not semver), which makes the sync script
 # emit false-positive drift. Aborting at GATE 0 produces a clean error
 # message and avoids the "use --no-verify" trap (proibido CLAUDE.md §4).
 

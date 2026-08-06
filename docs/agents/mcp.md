@@ -296,4 +296,4 @@ an agent as a **stdio** MCP server — the sibling of the HTTP route, over the s
 
 - [Using tools](./using-tools.md) — define custom tools alongside MCP tools
 - [Overview](./overview.md) — agent fundamentals
-- [Run context](./run-context.md) — pass per-request config to tool handlers
+- `run-context.md` (**doc ausente** — verificado 2026-08-06) — pass per-request config to tool handlers

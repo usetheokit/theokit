@@ -62,7 +62,11 @@ AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "
 # Patterns to detect file references in markdown
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 BACKTICK_PATH_RE = re.compile(r"`(\.?[a-zA-Z0-9_./\-]+\.(?:md|py|sh|json|txt|yml|yaml))`")
-CYCLE_REF_RE = re.compile(r"`?cycle-([a-z]+)`?")
+# `(?<![a-z])` impede que o prefixo `cycle-` seja reconhecido no MEIO de outra
+# palavra. Sem ela, uma skill chamada `middleware-lifecycle-engineer` casava o
+# trecho "life<cycle-engineer>" e o gate reprovava pedindo um `cycle-engineer.md`
+# que ninguém jamais referenciou.
+CYCLE_REF_RE = re.compile(r"`?(?<![a-z])cycle-([a-z]+)`?")
 SKILL_REF_RE = re.compile(r"`?(?:\.claude/)?skills/([a-z0-9\-]+)/SKILL\.md`?")
 # Detect rules references in SKILL bodies and Python scripts.
 # Examples matched:

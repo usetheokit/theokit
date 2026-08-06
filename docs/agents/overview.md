@@ -185,7 +185,7 @@ const readFileTool = defineAgentTool({
 })
 ```
 
-See [Run context](./run-context.md) for per-run overrides and typed context patterns.
+See `run-context.md` (**doc ausente** — verificado 2026-08-06) for per-run overrides and typed context patterns.
 
 ---
 
@@ -224,7 +224,7 @@ Beyond the basics documented here:
 |---|---|
 | Three definition surfaces + type-state builder | [Agent surfaces](../guides/agent-surfaces.md) |
 | File system tools (read, write, glob, search) | [Using tools](./using-tools.md) |
-| Shared context for tools | [Run context](./run-context.md) |
+| Shared context for tools | `run-context.md` (**doc ausente** — verificado 2026-08-06) |
 | Human-in-the-loop approval gates | `@HumanInTheLoop` on the `@Agent` surface |
 | Checkpoints — pause and resume a run | `@Checkpoint` on the `@Agent` surface |
 | Conversation memory | Persistence via `@theokit/sdk` conversation storage |

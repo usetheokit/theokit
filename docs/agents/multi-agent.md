@@ -199,4 +199,4 @@ const scored = await delegateWithScoring(WriterAgent, 'draft the intro', {
 
 - [Using tools](./using-tools.md) — tools are the building block that subagents build on
 - [Overview](./overview.md) — agent fundamentals
-- [Run context](./run-context.md) — pass context (userId, tenantId) through delegation chains
+- `run-context.md` (**doc ausente** — verificado 2026-08-06) — pass context (userId, tenantId) through delegation chains

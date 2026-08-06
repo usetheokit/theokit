@@ -1,4 +1,4 @@
-# Opt-in workspace alternativo (ADR 0020) — cross-repo dev com theo-ui linkado.
+# Opt-in workspace alternativo (ADR 0020) — cross-repo dev com theokit-ui linkado.
 #
 # NÃO ATIVE EM CI nem em release. Usar via `pnpm theo-ui:link` que copia este
 # arquivo sobre `pnpm-workspace.yaml` (preservando o original como `.bak`).
@@ -7,7 +7,7 @@
 # CI sempre usa `pnpm-workspace.yaml` canonical (sem este link), validando
 # o ciclo "publish-and-bump" da UI.
 #
-# Diferença vs canonical: ÚLTIMA LINHA adiciona `../theo-ui`.
+# Diferença vs canonical: ÚLTIMA LINHA adiciona `../theokit-ui`.
 packages:
   - 'packages/*'
   - 'my-test'
@@ -25,4 +25,4 @@ packages:
   - '../theokit-sdk/packages/gateway'
   - '../theokit-sdk/packages/gateway-telegram'
   # ↓ Adicionado pelo modo linked-ui (ADR 0020 — opt-in cross-repo)
-  - '../theo-ui'
+  - '../theokit-ui'

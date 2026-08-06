@@ -234,5 +234,5 @@ Shipped in `@theokit/agents@0.31.0`.
 
 - [Overview](./overview.md) — agents, models, tools
 - [Using tools](./using-tools.md) — add tool capabilities to your agent
-- [Run context](./run-context.md) — pass per-run config (userId, tenantId) to tool handlers
+- `run-context.md` (**doc ausente** — verificado 2026-08-06) — pass per-run config (userId, tenantId) to tool handlers
 - [Build a code assistant](../guides/build-a-code-assistant.md) — end-to-end tutorial

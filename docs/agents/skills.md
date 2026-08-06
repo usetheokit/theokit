@@ -229,5 +229,5 @@ Both compose with the per-request enabled-name resolver. `@theokit/sdk@2.20.0`.
 
 - [Overview](./overview.md) — agents, models, tools in one place
 - [Using tools](./using-tools.md) — tools give agents access to data and operations
-- [Run context](./run-context.md) — pass per-run config to tool handlers
+- `run-context.md` (**doc ausente** — verificado 2026-08-06) — pass per-run config to tool handlers
 - [Build a code assistant](../guides/build-a-code-assistant.md) — tutorial that uses skills alongside file tools
