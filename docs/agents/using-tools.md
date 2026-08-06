@@ -59,7 +59,7 @@ not a crash.
 
 The `handler` receives the parsed input as the first argument. The optional second argument
 `ctx` provides the abort signal and the agent-level context (see
-[Run context](./run-context.md)):
+`run-context.md` (**doc ausente** — verificado 2026-08-06)):
 
 ```ts
 const readFile = defineAgentTool({
@@ -169,7 +169,7 @@ export default defineAgent({
 | `createShellTool` | Run a shell command in projectRoot (use carefully) |
 
 > `projectRoot` is baked in at creation time via closure — it's a security boundary, not
-> a runtime parameter. See [Run context](./run-context.md) if you need per-run config
+> a runtime parameter. See `run-context.md` (**doc ausente** — verificado 2026-08-06) if you need per-run config
 > that varies across requests.
 
 ---
@@ -320,6 +320,6 @@ const runPipeline = createWorkflowTool(myWorkflow, {
 
 ## Related
 
-- [Run context](./run-context.md) — pass shared config (projectRoot, user info) to tool handlers
+- `run-context.md` (**doc ausente** — verificado 2026-08-06) — pass shared config (projectRoot, user info) to tool handlers
 - [Agent surfaces](../guides/agent-surfaces.md) — `defineAgent`, `AgentBuilder.create()` builder, `@Agent` class
 - [Build a code assistant](../guides/build-a-code-assistant.md) — end-to-end tutorial using `@theokit/sdk-tools`

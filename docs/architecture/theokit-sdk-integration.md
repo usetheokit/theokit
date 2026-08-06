@@ -2,7 +2,7 @@
 
 Canonical manifest for the `theokit ↔ @theokit/sdk` seam — the load-bearing one, since `@theokit/sdk`
 is the **only** agent runtime (per `.claude/rules/sdk-runtime.md` / G2). This doc mirrors the structure
-of the TheoCloud integration manifest and is **mirrored into** `../theokit-sdk/docs/architecture/theokit-sdk-integration.md`
+of the TheoCloud integration manifest and was meant to be **mirrored into** `../theokit-sdk/docs/architecture/theokit-sdk-integration.md` — that mirror **does not exist** (verificado 2026-08-06; o repo `theokit-sdk` não tem `docs/architecture/`)
 (the sibling copy) — edit one, copy the diff to the other in the same change.
 
 > **Consult this doc BEFORE editing** any seam file listed under § Consult-before-editing.
