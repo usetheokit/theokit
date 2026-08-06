@@ -36,6 +36,33 @@ vi.mock('@theokit/sdk', () => ({
       h.captured = opts
       return {
         send: async () => ({
+          // theokit#140 — the fake's ONE ordered timeline. Deltas (when this fake scripts any) come
+          // first, then the same messages `stream()` yields, wrapped. Derived from the SAME script so
+          // the two views cannot disagree — a fake whose timeline drifted from its stream would go
+          // green while production broke.
+          events: async function* () {
+            const i = h.round++
+            yield {
+              kind: 'message',
+              message: {
+                type: 'assistant',
+                message: { content: [{ type: 'text', text: `round-${i}` }] },
+              },
+            }
+            yield {
+              kind: 'message',
+              message: {
+                type: 'tool_call',
+                status: 'completed',
+                call_id: `c-${i}`,
+                // UNIQUE tool name per round so the no_progress signature differs — see the twin
+                // comment on `stream()` below, which this timeline mirrors exactly.
+                name: `t-${i}`,
+                result: 'r',
+              },
+            }
+            yield { kind: 'message', message: { type: 'status', status: 'FINISHED' } }
+          },
           stream: async function* () {
             const i = h.round++
             yield {
