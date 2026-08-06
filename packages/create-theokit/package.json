@@ -20,7 +20,6 @@
     "cross-spawn": "^7.0.6"
   },
   "publishConfig": {
-    "provenance": true,
     "access": "public"
   },
   "engines": {
