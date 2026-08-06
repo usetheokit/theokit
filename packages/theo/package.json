@@ -173,7 +173,6 @@
     "unstorage": "^1.17.5"
   },
   "publishConfig": {
-    "provenance": true,
     "access": "public"
   },
   "engines": {
