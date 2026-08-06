@@ -26,12 +26,7 @@ import { eventoDeErroDoSdk } from './erro-do-sdk.js'
 import { type SdkMessage } from './event-translator.js'
 import { buildModelSelection } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
-import {
-  createAsyncQueue,
-  createDeltaSink,
-  mergeDeltaStream,
-  type MergeItem,
-} from './sdk-adapter-merge.js'
+import { createToolSeen, type SdkTimelineEvent, translateTimelineEvent } from './sdk-timeline.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
 import { stripToolDialectStream } from './tool-dialect-stripper.js'
 
@@ -522,10 +517,12 @@ async function* streamSdkAgent(
     ...extra,
   })
   try {
-    // #44: chronological token streaming via onDelta + merge queue (see createDeltaSink).
-    const queue = createAsyncQueue<MergeItem>()
-    const { state, onDelta } = createDeltaSink(queue)
-    const sendOptions: SendOptions = { onDelta }
+    // theokit#140 — ONE ordered source. The `onDelta` sink + merge queue are gone: the SDK's
+    // `run.events()` appends messages and deltas as the loop reports them, so arrival order IS
+    // model order, and `textAlreadyStreamed` tells us which text is a repeat instead of leaving us
+    // to compare content. `state` survives only to carry the two facts the tail block below needs.
+    const state = { sawError: false, lastEventType: '' }
+    const sendOptions: SendOptions = {}
     if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
     // theokit#132 — hand the caller's sink to the SDK. Set only when supplied: an `onRunEvent:
     // undefined` riding along would still change what the SDK receives on the non-opted-in path,
@@ -538,9 +535,29 @@ async function* streamSdkAgent(
         ? { text: message, images: overrides.images }
         : message
     const sendPromise = agent.send(sendInput as typeof message, sendOptions)
-    const openStream = async () => (await sendPromise).stream()
-    const merged = mergeDeltaStream(queue, openStream, runId, state)
-    for await (const event of applyTextTransforms(merged, { parseThinkTags, stripToolDialect })) {
+    // The generator is opened lazily so consumption starts only when the caller pulls — the loop is
+    // detached inside the SDK (`setTimeout(() => void driveLoop())`), so the run handle is available
+    // long before the turn finishes and the timeline streams live.
+    const timeline = async function* (): AsyncGenerator<StreamEvent> {
+      const run = (await sendPromise) as unknown as {
+        events: () => AsyncGenerator<SdkTimelineEvent>
+      }
+      const seen = createToolSeen()
+      for await (const ev of run.events()) {
+        for (const event of translateTimelineEvent(ev, runId, seen)) {
+          if (event.type === 'error') state.sawError = true
+          // #142 — the SDK's `done` stays suppressed here, on the promise that the tail block below
+          // emits the terminal frame (a real-usage `done`, or an `error` when the turn failed).
+          if (event.type === 'done') continue
+          state.lastEventType = event.type
+          yield event
+        }
+      }
+    }
+    for await (const event of applyTextTransforms(timeline(), {
+      parseThinkTags,
+      stripToolDialect,
+    })) {
       yield event
     }
     // #142 — o stream SEMPRE termina num frame terminal.
