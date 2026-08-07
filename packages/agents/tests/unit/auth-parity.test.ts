@@ -67,7 +67,52 @@ const DEVICE_FLOW_PADRAO = [
   'openaiDeviceLogin',
 ] as const
 
-const PASS_THROUGH = [...MECANICA_DE_STORE, ...DEVICE_FLOW_PADRAO] as const
+/**
+ * M112 — the OAuth ENGINE (exchange / refresh / persist), by the SAME argument as M73 and M110, over
+ * the subsystem neither of them covered.
+ *
+ * Measured in the TheoCode ↔ theokit cross-validation of 2026-08-07: `@theokit/sdk/auth` exports
+ * `ensureFreshCredential`, `persistOAuthTokens`, `refreshOAuthTokens` and `extractAccountId`; this
+ * subpath re-exported NONE of the four. The consumer, which cannot import `@theokit/sdk*` directly,
+ * did the only legal thing left — it rewrote the mechanics by hand (TheoCode's
+ * `packages/agent/src/auth/credentials.ts`, finding SAC-07).
+ *
+ * This is the third re-enactment of the SAME M73 sentence: *"the gap was ours, not their
+ * indiscipline"*. The pattern already cost ~120 duplicated lines in M73 and the whole RFC protocol
+ * in M110.
+ *
+ * `extractAccountId` comes along because it is the natural pair of refresh: whoever persists tokens
+ * needs to know which account they belong to, and the alternative is the consumer decoding the JWT
+ * on its own.
+ */
+const OAUTH_ENGINE = [
+  'ensureFreshCredential',
+  'persistOAuthTokens',
+  'refreshOAuthTokens',
+  'extractAccountId',
+] as const
+
+const PASS_THROUGH = [...MECANICA_DE_STORE, ...DEVICE_FLOW_PADRAO, ...OAUTH_ENGINE] as const
+
+describe('M112 — `resolveCredential` still does NOT cross over, on purpose', () => {
+  it('test_resolveCredential_does_not_cross_the_layer', () => {
+    // The deliberate exception `auth-entry.ts` has documented since M73: the SDK and the consumer
+    // have DIFFERENT functions under that name (sync vs async, throws vs `undefined`, reads env vs
+    // does not, infers provider vs refuses), and the SDK itself declares that env precedence, prefix
+    // inference and the declared provider are the consumer's **app policy**.
+    //
+    // This test exists because M112 opens the neighbouring subsystem: without an explicit lock, the
+    // next milestone that "completes the auth pass-through" adds it out of symmetry, and the consumer
+    // ends up with two identical names of divergent semantics in one scope — a silent failure, which
+    // is exactly what the original decision avoids.
+    expect(
+      (camada as Record<string, unknown>).resolveCredential,
+      '`resolveCredential` started crossing the layer. The omission is DELIBERATE and documented in ' +
+        '`src/auth-entry.ts`: two functions share this name with divergent semantics. Exposing both ' +
+        'in one scope invites importing the wrong one, silently.',
+    ).toBeUndefined()
+  })
+})
 
 describe('M110 — a camada NÃO esconde o device flow padrão atrás da variante da OpenAI', () => {
   it('test_a_variante_da_OPENAI_continua_atravessando', () => {
