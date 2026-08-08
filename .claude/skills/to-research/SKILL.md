@@ -560,7 +560,9 @@ Top disruptive bet: [1 frase]
 Mesmo comando da skill `/to-reference`. Para esta skill, clone PELO MENOS Tier 1 antes de pesquisar domínios críticos:
 
 ```bash
-cd /home/paulo/Projetos/usetheo/theo-agents/referencias
+# `theo-agents/` não existe mais no layout atual (verificado 2026-08-06);
+# use o mesmo diretório da skill /to-reference:
+cd /home/paulo/Projetos/theo/theokit-framework/theokit/referencias
 
 # Tier 1 — essenciais para pesquisa SOTA
 git clone --depth 1 https://github.com/remix-run/remix.git remix

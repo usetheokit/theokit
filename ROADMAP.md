@@ -312,7 +312,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 - [ ] `onDelegationComplete({ subAgent, result, supervisorMessages })` hook — supervisor scores, logs, or rejects the subagent's result before it is returned; proven by a test that redacts a keyword from subagent output.
 - [ ] `messageFilter: (messages) => messages` on each subagent declaration — controls which supervisor messages are passed down; proven by a test passing only the last 3 messages to the subagent.
 - [ ] `abortSignal` propagation — the supervisor's abort signal cancels in-flight subagent runs; proven by a test that aborts mid-delegation and confirms the subagent run is terminated.
-- [ ] `docs/agents/multi-agent.md` updated covering all four new primitives with copy-paste examples.
+- [ ] `wiki/agents/multi-agent.md` updated covering all four new primitives with copy-paste examples.
 
 **Dependencies:** M8.
 
@@ -354,7 +354,7 @@ TheoKit becomes AI-first by adopting the Vercel ai-sdk's **protocol and wiring e
 - [ ] `agent().tool(t).requireApproval({ question, onTimeout }).build()` on the fluent builder — same capability; proven by a test.
 - [ ] `GET /api/agents/:name/approvals` — lists all pending approval requests for the agent across all active runs; response shape: `[{ callId, toolName, question, input, expiresAt }]`.
 - [ ] `errorStrategy: 'throw' | 'return-partial' | 'return-raw'` on `Agent.generateObject()` — controls behavior when schema validation fails after all retries; `'throw'` is the default (existing behavior preserved, non-breaking).
-- [ ] `docs/agents/human-in-the-loop.md` updated covering `defineAgent` and builder surfaces.
+- [ ] `wiki/agents/human-in-the-loop.md` updated covering `defineAgent` and builder surfaces.
 
 **Dependencies:** M8.
 
@@ -750,7 +750,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 - [ ] **Terminal-only mode** — a documented flag/env selects in-process mode: no port bound, no CSRF gate crossed, no localhost server. HTTP loopback (Model B) preserved as the fallback for the multi-surface (web+TUI+MCP one-server) case.
 - [ ] **Parity** — integration test proving an in-process turn produces the SAME result as the HTTP path (extends `tests/integration/in-process-vs-http-parity.test.ts` to the turn/stream path).
 - [ ] **Distribution** — a single npm bin runs the terminal-only app as one process (no server child). Evidence: the `theo-code-v2` example runs BOTH modes live in the tmux (in-process + HTTP); the single-bin path documented.
-- [ ] Gates green; CHANGELOG `### Added`; `docs/architecture/multi-surface-architecture.md` gap closed ("callProcedure not yet wired into the TUI").
+- [ ] Gates green; CHANGELOG `### Added`; `wiki/architecture/multi-surface-architecture.md` gap closed ("callProcedure not yet wired into the TUI").
 
 **Dependencies:** M33 (in-process caller — [x]), M31 (builder authoring — [x]), M32 (surfaces authorized — [x]).
 
@@ -771,7 +771,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 
 **Definition of done:**
 
-- [ ] **Push-transport ADR accepted BEFORE any code (GATE)** — decides how server→client push (streaming tokens, tool events) crosses the Tauri boundary (`Channel`/`emit`/IPC), since the Request→Response waist is request/response only. Reconciles with **ADR-0040/0044** (transport of app logic = home; agent runtime = SDK). Evidence: `docs/architecture/multi-surface-architecture.md` §9 (Tauri deferred + gated), ADR-0044 D3.
+- [ ] **Push-transport ADR accepted BEFORE any code (GATE)** — decides how server→client push (streaming tokens, tool events) crosses the Tauri boundary (`Channel`/`emit`/IPC), since the Request→Response waist is request/response only. Reconciles with **ADR-0040/0044** (transport of app logic = home; agent runtime = SDK). Evidence: `wiki/architecture/multi-surface-architecture.md` §9 (Tauri deferred + gated), ADR-0044 D3.
 - [ ] **Sidecar reuses the M35 in-process path** — the desktop app drives turns via the same in-process caller + SDK runtime (no HTTP loopback); the sidecar bridges IPC↔core.
 - [ ] **Working Tauri app** — a window that streams a real agent turn (tokens + tool events) via the push transport from the ADR. Evidence: the desktop example runs.
 - [ ] **Packageable desktop artifact** (Tauri bundle) + sidecar↔core contract test.
@@ -1108,7 +1108,7 @@ The DX audit this cycle benchmarked our surface against Mastra (`new Agent`/`cre
 - [ ] **Contract test (consumer + producer).** `theokit/tests/integration/contract-sdk-seam.test.ts` runs a real `agent().build()` through the REAL published `@theokit/sdk` and asserts `Agent.getOrCreate` shape, `Tool.create` → `CustomTool`, and every `Run.stream()` event discriminant (text / tool-input / tool-result / reasoning / error / finish); a producer-side test in `theokit-sdk` gated by `prepublishOnly` asserts theokit's consumption still passes BEFORE publish. Both green.
 - [ ] **Type-assignability gate.** A `.test-d.ts` asserts the local `CustomTool` mirror (`packages/theo/src/server/define/define-agent-tool.ts:29`) is structurally assignable to `import('@theokit/sdk').CustomTool` via `expectTypeOf().toMatchTypeOf()`; an intentional divergence (e.g. the incoming `theokit-sdk#119` `ctx.threadId`) fails `tsc`.
 - [ ] **Version gate + fail-fast.** Peer ranges closed `>=3.5.0` → `^3.5.0` (`@theokit/sdk`) and `>=0.9.1` → `^0.9.1` (`@theokit/sdk-tools`) in `packages/{theo,agents}`; a presence + semver check fails fast with a typed error at boot / first-load (not only a lazy `SDK_NOT_INSTALLED` at first request) when the installed SDK is missing or outside the supported range.
-- [ ] **Seam manifest doc.** `docs/architecture/theokit-sdk-integration.md` enumerates the integration surface (~35 SDK symbols theokit consumes), the validated SDK version, and the 4 guarantee layers — mirroring `theokit-theocloud-integration.md`; the stale CLAUDE.md Ecosystem line ("permanent workspace link") is corrected to reality (npm registry; sibling links removed 2026-06-10).
+- [ ] **Seam manifest doc.** `wiki/architecture/theokit-sdk-integration.md` enumerates the integration surface (~35 SDK symbols theokit consumes), the validated SDK version, and the 4 guarantee layers — mirroring `theokit-theocloud-integration.md`; the stale CLAUDE.md Ecosystem line ("permanent workspace link") is corrected to reality (npm registry; sibling links removed 2026-06-10).
 - [ ] **Parity audit (breadth).** The seam doc records a passing check that `theo-ui`'s cross-repo contract test AND TheoCloud's `services.json` schema-drift guard (EC-7) still hold — so all three ecosystem seams are accounted for, none reinvented.
 
 **Dependencies:** none blocking — all M0–M47 are `[x]`. Builds on the agent bridge/surface: M31 (builder-only authoring), M33 (typed-ctx reconciliation), M46 (`thread` core), M47 (`@Expose`).
@@ -1126,7 +1126,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ### M49 — [x] Presenter layer skeleton — `@theokit/presenter` canonical event + Strategy contract + web refactor (zero-behavior)
 
-> Added 2026-07-23 by discover (blueprint: `knowledge-base/discoveries/blueprints/multi-surface-presentation-layer-blueprint.md`). Origin: dogfood learnings from agent-builder — the terminal re-implements the web translators. See CHANGELOG `[Unreleased] § Added`.
+> Added 2026-07-23 by discover (blueprint: `wiki/blueprints/multi-surface-presentation-layer.md`). Origin: dogfood learnings from agent-builder — the terminal re-implements the web translators. See CHANGELOG `[Unreleased] § Added`.
 
 **Objective:** Establish theokit's presentation layer as a named, reusable boundary between `@theokit/sdk` and every UI surface. Introduce a new package `@theokit/presenter` holding (a) the canonical `AgentOutputEvent` (the narrow-waist normalized event), (b) the `Presenter` Strategy contract + registry, and (c) `UIMessageStreamPresenter` — the existing web/SSE translator (`agents/bridge/ui-message-stream-translator.ts`) moved behind the contract with ZERO behavior change. The walking skeleton: proves the waist against the real, published web consumers.
 
@@ -1177,7 +1177,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 **Definition of done:**
 - [ ] `JsonPresenter` (`packages/presenter/src/presenters/json.ts`): `AgentOutputEvent → JSON` per variant, RED→GREEN; a `--json`-style consumer test.
 - [ ] `PresenterRegistry` resolves all three (`ui-message-stream` | `terminal` | `json`); a test drives ONE agent run through all three from the same `AgentOutputEvent` stream.
-- [ ] `docs/architecture/presentation-layer.md`: the hexagonal map (SDK → [Ports future] → Controller → Presenter → UI), the three presenters, and the DEFERRED Ports/Controller track (PTY/WS) with the OCP seam — explicitly YAGNI-justified (no speculative Port code).
+- [ ] `wiki/architecture/presentation-layer.md`: the hexagonal map (SDK → [Ports future] → Controller → Presenter → UI), the three presenters, and the DEFERRED Ports/Controller track (PTY/WS) with the OCP seam — explicitly YAGNI-justified (no speculative Port code).
 - [ ] agent-builder's `exec --json` documented as a `JsonPresenter` consumer candidate.
 - [ ] `pnpm test`/`typecheck`/`lint` green; `@theokit/presenter` V1 CHANGELOG; M49–M51 `[x]`.
 
@@ -1190,7 +1190,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ### M52 — [x] Capability core — `AgentSpec` + `Capability` (OO) + registry + SDK adapter (walking skeleton, zero-behavior)
 
-> Added 2026-07-23 by `/roadmap-feature` (slug: `capability-core`). Design spike: `knowledge-base/discoveries/blueprints/capability-oo-design-spike.md`. **Out-of-scope cross-check:** the locked item *"Breaking the `@theokit/http` decorator path"* is ADJACENT, not violated — this initiative removes the **agent** decorators (the "agent surface" that item explicitly places in scope); the `@theokit/http` **controller** decorators (`@Controller`/`@Get`/`@Post`) stay intact. See CHANGELOG `[Unreleased] § Added`.
+> Added 2026-07-23 by `/roadmap-feature` (slug: `capability-core`). Design spike: `wiki/blueprints/capability-oo-design-spike.md`. **Out-of-scope cross-check:** the locked item *"Breaking the `@theokit/http` decorator path"* is ADJACENT, not violated — this initiative removes the **agent** decorators (the "agent surface" that item explicitly places in scope); the `@theokit/http` **controller** decorators (`@Controller`/`@Get`/`@Post`) stay intact. See CHANGELOG `[Unreleased] § Added`.
 
 **Objective:** Replace the metadata-driven agent pipeline with an object-oriented, capability-based one. Introduce the canonical `AgentSpec` (the narrow waist between AUTHORING and RUNTIME — mirror of M49's `AgentOutputEvent`) plus the `Capability` contract (Strategy + value-level Decorator), a `CapabilityRegistry` (Factory Method + OCP resolution by name, which is what unlocks file-based authoring), a `CapabilityPreset` (Composite), and `SdkAgentAdapter` (`AgentSpec → Agent.create` options). Prove it by routing THREE real capabilities (`model`, `tools`, `sandbox`) through the new seam with the compiled `Agent.create` options byte-identical to today's.
 
@@ -1216,11 +1216,11 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 **Objective:** Make `@theokit/agents` 100% capability-based in one atomic cut: port the remaining agent decorators to capabilities, repoint every decorator test to the capability path WITHOUT changing an expectation, then DELETE the decorator surface, the metadata walk, and the build-config coupling it forced.
 
 **Definition of done:**
-- [ ] A 1:1 audit table (`docs/agents/decorator-to-capability.md`) maps every one of the 24 decorators to its capability with any semantic delta called out; a decorator with NO capability equivalent BLOCKS the milestone (hard gate — an ADR decides keep-or-drop before code proceeds).
+- [ ] A 1:1 audit table (`wiki/agents/decorator-to-capability.md`) maps every one of the 24 decorators to its capability with any semantic delta called out; a decorator with NO capability equivalent BLOCKS the milestone (hard gate — an ADR decides keep-or-drop before code proceeds).
 - [ ] **Zero behavior change (the oracle):** the ~57 existing decorator test files are repointed to the capability path with **no expectation edited**, and stay green; a golden snapshot of `Agent.create` options for the fixture agents is byte-identical pre/post.
 - [ ] `packages/agents/src/decorators/` and `bridge/walk-agent-metadata.ts` DELETED; `grep -rE "@Agent\(|reflect-metadata" packages/agents/src` returns 0; `agent-compiler` compiles from `AgentSpec` only.
 - [ ] `@theokit/http/src/app.ts` no longer consumes agent decorators (controller decorators untouched); `reflect-metadata` dropped from `packages/agents` deps and `experimentalDecorators`/`emitDecoratorMetadata` removed from its tsconfig; the ESLint ignores that existed for decorator configs are removed.
-- [ ] `docs/agents/{guardrails,mcp,using-tools}.md` + `create-theokit` templates author agents with capabilities only; `MIGRATION.md` maps every removed decorator to its capability call + a codemod entry (SDK 2.0/3.0 precedent).
+- [ ] `wiki/agents/{guardrails,mcp,using-tools}.md` + `create-theokit` templates author agents with capabilities only; `MIGRATION.md` maps every removed decorator to its capability call + a codemod entry (SDK 2.0/3.0 precedent).
 - [ ] Full monorepo `pnpm test` / `typecheck` / `lint --max-warnings=0` / `check:direction` / `validate:publint` green; **major** bump for `@theokit/agents` with the breaking change in the changeset.
 - [ ] Dogfood: Agent Builder authors at least one real agent through the published capability API (proves the file-based/terminal path end-to-end).
 
@@ -1235,7 +1235,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ### M54 — [x] Abrir o seam de `LoopStrategy` — critério de parada injetável (OCP), sem herança
 
-> Added 2026-07-24 by `/roadmap-feature` (slug: `loop-strategy-seam`). **Out-of-scope cross-check (2026-07-24):** o item travado *"Reimplementing the agent loop / own multi-agent orchestration"* é ADJACENTE, não violado — o `AgentRunner` e a interface `LoopStrategy` **já existem** (V4-B / T3.1); este milestone **não** reimplementa loop nem adiciona orquestração. Seguindo o precedente M38/M39/M40, ele pega **SOMENTE a fatia do seam** (injetar o critério de parada que hoje é escolhido entre 3 nomes fixos) e **reafirma** loop próprio, runner paralelo e orquestração multi-agente como OUT. Decisão do owner registrada em `knowledge-base/grills/loop-strategy-seam-feature-grill.md` § Q0.
+> Added 2026-07-24 by `/roadmap-feature` (slug: `loop-strategy-seam`). **Out-of-scope cross-check (2026-07-24):** o item travado *"Reimplementing the agent loop / own multi-agent orchestration"* é ADJACENTE, não violado — o `AgentRunner` e a interface `LoopStrategy` **já existem** (V4-B / T3.1); este milestone **não** reimplementa loop nem adiciona orquestração. Seguindo o precedente M38/M39/M40, ele pega **SOMENTE a fatia do seam** (injetar o critério de parada que hoje é escolhido entre 3 nomes fixos) e **reafirma** loop próprio, runner paralelo e orquestração multi-agente como OUT. Decisão do owner registrada em `wiki/grills/loop-strategy-seam.md` § Q0.
 
 **Objective:** Fechar a assimetria de OCP do `AgentRunner`. Três dos quatro eixos de comportamento já aceitam injeção — reflexão (`.reflection(custom)`, objeto), compactação (`.compaction(name)`) e produção do round (`streamFactory`) — mas o **critério de parada** é o único trancado: `resolveLoopStrategy` valida `z.enum(['simple-chat','plan-act-reflect','react'])` e não existe `.loopStrategy()` no builder. A interface `LoopStrategy` já é aberta (`{ name, maxIterations, shouldContinue(outcome) }`); só o construtor a fecha. Abrir a injeção **por composição (Strategy)** — nunca por herança/subclasse (Template Method segue recusado, ADR-0001).
 
@@ -1256,7 +1256,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ### M55 — [x] Nome de tool com fonte única — validar onde se minta, matar o código morto do gate HITL
 
-> Added 2026-07-24 by `/roadmap-feature` (slug: `tool-name-single-source`). **Out-of-scope cross-check (2026-07-24):** nenhum item travado é tocado — a lista cobre virar SDK, reimplementar o loop / orquestração, dispatch engine, framework de signals + pub/sub, sandbox embutido do Code-Mode, RSC, abstração de provider e quebrar o path de decorators do `@theokit/http`. Este milestone é higiene de desenho na fronteira `@theokit/agents` ↔ `@theokit/sdk` (`bridge/agent-compiler.ts` + `capability/toolbox.ts`) e **preserva** o path do `@theokit/http` intacto. Achados e evidência medida em `knowledge-base/grills/tool-name-single-source-feature-grill.md`.
+> Added 2026-07-24 by `/roadmap-feature` (slug: `tool-name-single-source`). **Out-of-scope cross-check (2026-07-24):** nenhum item travado é tocado — a lista cobre virar SDK, reimplementar o loop / orquestração, dispatch engine, framework de signals + pub/sub, sandbox embutido do Code-Mode, RSC, abstração de provider e quebrar o path de decorators do `@theokit/http`. Este milestone é higiene de desenho na fronteira `@theokit/agents` ↔ `@theokit/sdk` (`bridge/agent-compiler.ts` + `capability/toolbox.ts`) e **preserva** o path do `@theokit/http` intacto. Achados e evidência medida em `wiki/grills/tool-name-single-source.md`.
 
 **Objective:** O fix do issue theokit#145 (`@theokit/agents@1.0.1`) corrigiu o **sintoma** — o separador de namespace virou `_`, e `tests/integration/tool-name-sdk-contract.test.ts` prova contra o `Agent.create` real (sem mock) que o nome é aceito. A revisão de System Design + Design Pattern desse fix achou que o **desenho** ficou com a mesma classe de defeito que causou o bug: conhecimento duplicado, validado num lugar e assumido nos outros. São 6 achados, dois deles introduzidos pela própria correção — (1) `SDK_TOOL_NAME` é cópia de um contrato que o SDK não exporta; (2) o nome é mintado em `toolRuntimeName` mas validado em `ToolboxCapability`, e `compileTools` é público e escapa; (3) `compileHitlGates` ficou **órfão** enquanto `ToolboxCapability.apply` reimplementa seu loop; (4) dois comentários ainda documentam o separador com **ponto**; (5) a reversibilidade do nome foi trocada sem ADR; (6) o achado (3) é `dead_code_unallowlisted_typescript` e passou. Este milestone fecha os seis: **uma regra, um ponto de mintagem, um ponto de validação** — sem inventar camada nova.
 
@@ -1279,7 +1279,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ### M56 — [x] Remover TODA concessão de retrocompatibilidade do M55 — as correções de raiz
 
-> Added 2026-07-24 by `/roadmap-feature` (slug: `no-backcompat-concessions`). **Out-of-scope cross-check (2026-07-24):** o item travado *"Breaking the `@theokit/http` decorator path"* é ADJACENTE — o M56 toca `packages/http` mas **apenas em 4 tipos exportados órfãos** que nenhuma entry do pacote alcança (logo, nenhum consumidor externo importa hoje). O path de decorators de controller fica **intacto**, provado pela suíte de 411 testes do pacote. Demais itens travados sem interseção. Decisão do owner registrada em `knowledge-base/grills/no-backcompat-concessions-feature-grill.md`.
+> Added 2026-07-24 by `/roadmap-feature` (slug: `no-backcompat-concessions`). **Out-of-scope cross-check (2026-07-24):** o item travado *"Breaking the `@theokit/http` decorator path"* é ADJACENTE — o M56 toca `packages/http` mas **apenas em 4 tipos exportados órfãos** que nenhuma entry do pacote alcança (logo, nenhum consumidor externo importa hoje). O path de decorators de controller fica **intacto**, provado pela suíte de 411 testes do pacote. Demais itens travados sem interseção. Decisão do owner registrada em `wiki/grills/no-backcompat-concessions.md`.
 
 **Objective:** O M55 fechou com seis compromissos, cada um motivado por **não quebrar quem já consome**. O owner removeu essa restrição (*"não importa o esforço, não vamos ter retrocompatibilidade"*). Duas dessas concessões são a **mesma patologia que o M55 existiu para corrigir**, deixada de pé: `ToolboxCapability.compile()` é um método público com **zero** chamadores — código morto, exatamente o que o milestone caçava — e o gate de exports foi ligado **só para `packages/agents`**, deixando os outros cinco workspaces com a política cega (`rules.exports: "off"`) que fez "knip limpo" passar com o órfão presente. Este milestone faz as correções de raiz e aceita o custo: **major bump** de `@theokit/agents`.
 
@@ -1303,7 +1303,7 @@ The three ecosystem seams are not equally guarded — `theo-ui` has a cross-repo
 
 ## State-of-the-art references
 
-Peers cloned under `knowledge-base/references/`. See `knowledge-base/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
+Peers cloned under `knowledge-base/references/`. See `wiki/references-catalog.md` for license-gate decisions and study notes. (The catalog lives one level above `references/` because that folder is a read-only study zone enforced by `hooks/boundary-check.sh`.)
 
 | Peer | License | Why it's here | Supports milestone(s) |
 |---|---|---|---|
