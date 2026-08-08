@@ -58,6 +58,34 @@ export {
   requestDeviceCode,
 } from '@theokit/sdk/auth'
 export type { DeviceCodeGrant, DeviceOAuthConfig } from '@theokit/sdk/auth'
+
+// M112 — the OAuth ENGINE crosses over, by the SAME argument as M73 and M110, over the subsystem
+// neither of them covered.
+//
+// Measured in the TheoCode ↔ theokit cross-validation of 2026-08-07: `@theokit/sdk/auth` exports the
+// full engine (`ensureFreshCredential`, `persistOAuthTokens`, `refreshOAuthTokens`) plus the JWT
+// helper `extractAccountId`; this subpath re-exported NONE of the four. M73 opened the store and
+// M110 opened the device flow — what sits BETWEEN them (exchange a device grant for tokens, refresh
+// before expiry, persist the result) had no door at all.
+//
+// The consumer cannot import `@theokit/sdk*` directly, so it did the only legal thing left: it
+// rewrote the mechanics by hand in `packages/agent/src/auth/credentials.ts` (finding SAC-07). This
+// is the third re-enactment of the sentence M73 wrote — *"the gap was ours, not their indiscipline"*.
+//
+// PURE, not a wrapper, by the criterion M73 fixed: these are stateless I/O functions; what holds the
+// `config`+`store` pair is `AuthProvider`. `tests/unit/auth-parity.test.ts` locks referential
+// identity with `toBe`, so a future wrapper turns red.
+//
+// `resolveCredential` stays OUT, and now with a test proving it: see the M73 paragraph above — two
+// functions share that name with divergent semantics, and exposing both in one scope invites
+// importing the wrong one, silently. Opening the neighbouring subsystem is what makes that lock
+// necessary, because the symmetry invites the opposite.
+export {
+  ensureFreshCredential,
+  extractAccountId,
+  persistOAuthTokens,
+  refreshOAuthTokens,
+} from '@theokit/sdk/auth'
 export type { ResolveCredentialOptions } from '@theokit/sdk/auth'
 export type {
   CredentialStoreConfig,

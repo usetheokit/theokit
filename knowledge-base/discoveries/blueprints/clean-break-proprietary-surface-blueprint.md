@@ -1,1 +1,0 @@
-../../../.claude/knowledge-base/discoveries/blueprints/clean-break-proprietary-surface-blueprint.md

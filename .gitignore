@@ -105,8 +105,9 @@ my-test/
 # Reference framework implementations (cloned for SOTA research)
 # referencias/
 # SOTA peer clones from /roadmap-init — study-only, heavy (~850MB), never commit.
-# The curated catalog (knowledge-base/references-catalog.md) lives OUTSIDE this
-# folder and IS versioned; only the raw clones are ignored.
+# The curated catalog now lives at wiki/references-catalog.md and IS versioned;
+# only the raw clones are ignored. The clones themselves were removed 2026-08-06
+# (see wiki/log.md); the rules stay so a fresh clone is ignored by default.
 knowledge-base/references/
 .claude/knowledge-base/references/
 .gstack/
@@ -124,3 +125,6 @@ architecture-output/
 # Python bytecode (Claude Code skill scripts)
 __pycache__/
 *.pyc
+
+# Generated typecheck pre-flight records (gate documented at wiki/gates/typecheck-pre-flight.md)
+.audit/
