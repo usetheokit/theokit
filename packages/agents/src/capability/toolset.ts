@@ -1,3 +1,4 @@
+import { TheokitAgentError } from '@theokit/sdk/errors'
 /**
  * M91 — `Toolset`: coleção nomeada e imutável de tools, com política de resolução que falha alto.
  *
@@ -31,13 +32,28 @@ export interface ToolComNome {
   readonly name: string
 }
 
-export class ToolsetError extends Error {
+/**
+ * U-3 — inside the SDK hierarchy, not beside it.
+ *
+ * It extended `Error` directly, so `catch (e instanceof TheokitAgentError)` — how consumers tell an
+ * SDK failure from any other throw — missed it, leaving name or message matching as the only way to
+ * recognise it. A consumer reported having to write a translateError() shim for exactly that.
+ *
+ * This layer already settled the same argument in M61, when two `ConfigurationError` classes (one
+ * `extends Error`, one `extends TheokitAgentError`) made an `instanceof` catch one path and silently
+ * miss the other. Same defect, same package; it was simply left standing here.
+ *
+ * `code` stays a public readonly field rather than moving into the base options, so every existing
+ * `new ToolsetError(msg, 'unknown_tool')` and every `err.code` read is unchanged.
+ */
+export class ToolsetError extends TheokitAgentError {
+  override readonly name = 'ToolsetError'
+
   constructor(
     message: string,
     readonly code: 'unknown_tool' | 'duplicate_tool',
   ) {
     super(message)
-    this.name = 'ToolsetError'
   }
 }
 

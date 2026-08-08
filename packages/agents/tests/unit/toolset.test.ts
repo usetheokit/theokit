@@ -61,3 +61,42 @@ describe('M91 — Toolset', () => {
     }
   })
 })
+
+/**
+ * U-3 — `ToolsetError` belongs to the SDK's error hierarchy.
+ *
+ * It extended `Error` directly, so `catch (e) { if (e instanceof TheokitAgentError) }` — the shape
+ * consumers use to tell an SDK failure from any other throw — missed it entirely. The only way to
+ * recognise it was by name or by message.
+ *
+ * The layer already made this exact argument once, and wrote it down: M61 unified two
+ * `ConfigurationError` classes because one extended `Error` and the other `TheokitAgentError`, so an
+ * `instanceof` check caught one path and silently missed the other. `ToolsetError` is the same
+ * defect in the same package, left standing.
+ *
+ * Reported from a consumer that had to write a translateError() workaround for it (finding TIP-15).
+ */
+describe('U-3 — ToolsetError is a TheokitAgentError', () => {
+  it('test_it_is_recognised_by_the_sdk_error_hierarchy', async () => {
+    const { TheokitAgentError } = await import('@theokit/sdk/errors')
+
+    expect(
+      new ToolsetError('nope', 'unknown_tool'),
+      'a consumer catching TheokitAgentError misses this one, so it has to be recognised by name ' +
+        'or message — the exact failure M61 unified ConfigurationError to remove',
+    ).toBeInstanceOf(TheokitAgentError)
+  })
+
+  it('test_it_is_still_an_Error', () => {
+    // Anti-vacuity floor: the hierarchy change must not cost the base guarantee.
+    expect(new ToolsetError('nope', 'unknown_tool')).toBeInstanceOf(Error)
+  })
+
+  it('test_it_keeps_its_typed_code_and_name', () => {
+    const err = new ToolsetError('nope', 'duplicate_tool')
+
+    expect(err.code).toBe('duplicate_tool')
+    expect(err.name).toBe('ToolsetError')
+    expect(err.message).toBe('nope')
+  })
+})
