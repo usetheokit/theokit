@@ -91,13 +91,33 @@ export type { DiagnosticsSink } from '@theokit/sdk'
 // EXIT CRITERION: when the SDK runtime actually honours `limit`/`cursor`/`cwd` (tracked as the
 // agent-builder's M107 upstream request), delete this block and restore `Agent` to the plain
 // re-export on the line above.
-type ListOptionsSemPaginacao = ListAgentsOptions & { limit?: never; cursor?: never }
+type ListOptionsWithoutPagination = ListAgentsOptions & { limit?: never; cursor?: never }
 
-type AgentComListaEstreitada = Omit<typeof AgentDoSdk, 'list'> & {
-  list(options?: ListOptionsSemPaginacao): Promise<Omit<ListResult<SDKAgentInfo>, 'nextCursor'>>
+/**
+ * @deprecated Renamed to `ListOptionsWithoutPagination`. This alias exists so a consumer pinned to
+ * the previous minor keeps compiling; it will be removed in the next major.
+ */
+// Redundant on purpose: this is the migration path for a consumer pinned to the previous minor.
+// Sunset: the next major.
+// eslint-disable-next-line sonarjs/redundant-type-aliases
+export type ListOptionsSemPaginacao = ListOptionsWithoutPagination
+
+type AgentWithNarrowedList = Omit<typeof AgentDoSdk, 'list'> & {
+  list(
+    options?: ListOptionsWithoutPagination,
+  ): Promise<Omit<ListResult<SDKAgentInfo>, 'nextCursor'>>
 }
 
-export const Agent: AgentComListaEstreitada = AgentDoSdk
+/**
+ * @deprecated Renamed to `AgentWithNarrowedList`. This alias exists so a consumer pinned to the
+ * previous minor keeps compiling; it will be removed in the next major.
+ */
+// Redundant on purpose: this is the migration path for a consumer pinned to the previous minor.
+// Sunset: the next major.
+// eslint-disable-next-line sonarjs/redundant-type-aliases
+export type AgentComListaEstreitada = AgentWithNarrowedList
+
+export const Agent: AgentWithNarrowedList = AgentDoSdk
 
 // M63 — closing the layered boundary so the consumer imports ZERO `@theokit/sdk*` directly. Same
 // PASS-THROUGH doctrine as the M58 core above (Rung 9): these are already the target shape.
