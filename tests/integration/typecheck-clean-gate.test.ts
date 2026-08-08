@@ -21,7 +21,11 @@ describe('pnpm typecheck clean gate (T0.3)', () => {
   // EC-203: pre-flight isolation of SDK-rooted errors (kept as audit
   // even though count is currently 0 — the gate is "no NEW SDK errors").
   it('EC-203: pre-flight audit doc records SDK-rooted error count', () => {
-    const auditDir = resolve(REPO, 'docs/audit')
+    // Generated artifact, not authored knowledge: this file is rewritten on every
+    // run. It stays OUT of `wiki/` — a generated file carries no OKF frontmatter,
+    // and dropping one into the bundle breaks its one hard rule. The gate itself
+    // is documented at `wiki/gates/typecheck-pre-flight.md`.
+    const auditDir = resolve(REPO, '.audit/typecheck')
     if (!existsSync(auditDir)) mkdirSync(auditDir, { recursive: true })
 
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- developer-local gate invoking pnpm CLI

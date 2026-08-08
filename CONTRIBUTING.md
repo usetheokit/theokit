@@ -4,9 +4,10 @@ Thanks for your interest in TheoKit. This document is the short, runnable
 contract between you and the codebase: what to install, what to test
 before opening a PR, and what shape contributions should take.
 
-If you're upgrading an existing TheoKit app from 0.2.x to 0.3.0, see
-[docs/migrating/0.2-to-0.3.md](docs/migrating/0.2-to-0.3.md) — this
-guide is for changes to the framework itself.
+If you're upgrading an existing TheoKit app from 0.2.x to 0.3.0, see the migration
+guides under [`wiki/migration/`](wiki/migration/) — the `0.2-to-0.3` guide referenced
+here is **not present in the repo** (verified 2026-08-06). This guide is for changes to
+the framework itself.
 
 ## Quick start
 
@@ -107,27 +108,28 @@ The release engineer is the only person who runs `npm publish`. If your
 PR needs a new release to be visible to users, mention that in the PR
 description; the maintainer will queue the publish.
 
-For the 0.3.0 cutover specifically, see
-[docs/plans/theokit-0.3.0-cutover-execution-plan.md](docs/plans/theokit-0.3.0-cutover-execution-plan.md).
+For the 0.3.0 cutover specifically: the referenced plan
+(`docs/plans/theokit-0.3.0-cutover-execution-plan.md`) is **not present in the repo**
+(verified 2026-08-06). Plans now live under `.claude/knowledge-base/plans/`.
 
 ## Cross-repo dev: linking @theokit/ui
 
 Por default, `@theokit/ui` é consumido como npm dep (peerDep estável `1.0.0`).
-Edições locais em `../theo-ui/` NÃO refletem sem publish.
+Edições locais em `../theokit-ui/` NÃO refletem sem publish.
 
 Para iterar nos dois repos simultaneamente (ADR
-[`0020`](docs/adr/0020-cross-repo-workspace-link-opt-in.md)):
+[`0020`](.claude/knowledge-base/adrs/0020-cross-repo-workspace-link-opt-in.md)):
 
 ```sh
-# 1. Pré-requisito: ../theo-ui já buildado (vite-plugin.js precisa existir em dist/)
-pnpm --dir ../theo-ui build
+# 1. Pré-requisito: ../theokit-ui já buildado (vite-plugin.js precisa existir em dist/)
+pnpm --dir ../theokit-ui build
 
 # 2. Ativa workspace link cross-repo (preserva pnpm-workspace.yaml como .bak)
 pnpm theo-ui:link
 
 # 3. Itera com HMR
 pnpm dev
-# ... edita theo-ui/src/ e theokit/packages/theo/src/ ...
+# ... edita ../theokit-ui/src/ e packages/theo/src/ ...
 
 # 4. Restaura antes de commit
 pnpm theo-ui:unlink
@@ -138,15 +140,15 @@ pnpm theo-ui:unlink
 contra o `pnpm-workspace.yaml` canônico (publish-and-bump path), validando
 que o ciclo de release continua funcionando.
 
-CI nunca usa esse modo. Veja [ADR 0020](docs/adr/0020-cross-repo-workspace-link-opt-in.md).
+CI nunca usa esse modo. Veja [ADR 0020](.claude/knowledge-base/adrs/0020-cross-repo-workspace-link-opt-in.md).
 
 ### Cuidados (EC-9, EC-10, EC-link-9)
 
 - **Use um terminal por checkout.** Rodar `pnpm theo-ui:link` em paralelo no
   mesmo checkout pode disputar o `.bak` durante a janela de cópia (<100ms).
   Não é race destrutivo (guard `if [ -f .bak ] abort` cobre), mas evite.
-- **Você está editando DOIS repos independentes.** Edições em `../theo-ui/src/`
-  ficam em `theo-ui/`; edições em `packages/theo/src/` ficam em `theokit/`.
+- **Você está editando DOIS repos independentes.** Edições em `../theokit-ui/src/`
+  ficam em `theokit-ui/`; edições em `packages/theo/src/` ficam em `theokit/`.
   São DOIS `git commit`, DOIS `git push`, DOIS PRs. O modo linked acelera HMR,
   NÃO unifica commits.
 - **Se algo der errado e o link travar** (Ctrl+C durante `pnpm install`, etc):
@@ -164,9 +166,9 @@ perfil de acoplamento:
 | `@theokit/sdk` | runtime de produção (`server/agent/*`) | **link permanente** |
 | `@theokit/ui` | dep opcional via auto-detect | **link opt-in** |
 
-Ver [ADR 0020](docs/adr/0020-cross-repo-workspace-link-opt-in.md) (theokit) +
-[ADR 0001](../theokit-sdk/docs/adr/0001-workspace-link-default-status-quo.md)
-(theokit-sdk, mirror).
+Ver [ADR 0020](.claude/knowledge-base/adrs/0020-cross-repo-workspace-link-opt-in.md) (theokit).
+O mirror `ADR 0001` do lado do `theokit-sdk` **não existe** — aquele repo não tem
+`docs/adr/` (verificado 2026-08-06).
 
 ## Code of Conduct
 
