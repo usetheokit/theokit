@@ -2,7 +2,7 @@
  * T3.1 — Integration tests for theo-ui-link.sh / theo-ui-unlink.sh (ADR 0020).
  *
  * Validation strategy: spawn the shell scripts in a sandbox where we copy
- * the script files into a tmp dir + create fake `../theo-ui/dist/vite-plugin.js`.
+ * the script files into a tmp dir + create fake `../theokit-ui/dist/vite-plugin.js`.
  * The scripts use `cd "$(dirname "$0")/.."` to root themselves, so we mimic
  * the real layout: sandbox/scripts/{link,unlink}.sh + sandbox/{ws files}.
  *
@@ -60,15 +60,15 @@ function setupSandbox(
   writeFileSync(join(sandbox, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n")
   writeFileSync(
     join(sandbox, 'pnpm-workspace.linked-ui.yaml'),
-    "packages:\n  - 'packages/*'\n  - '../theo-ui'\n",
+    "packages:\n  - 'packages/*'\n  - '../theokit-ui'\n",
   )
 
   if (withSibling) {
-    mkdirSync(join(sandbox, '..', 'theo-ui'), { recursive: true })
+    mkdirSync(join(sandbox, '..', 'theokit-ui'), { recursive: true })
     if (withDist) {
-      mkdirSync(join(sandbox, '..', 'theo-ui', 'dist'), { recursive: true })
+      mkdirSync(join(sandbox, '..', 'theokit-ui', 'dist'), { recursive: true })
       writeFileSync(
-        join(sandbox, '..', 'theo-ui', 'dist', 'vite-plugin.js'),
+        join(sandbox, '..', 'theokit-ui', 'dist', 'vite-plugin.js'),
         'export default () => ({ name: "fake" });\n',
       )
     }
@@ -102,7 +102,7 @@ afterEach(() => {
   if (sandbox) {
     try {
       rmSync(sandbox, { recursive: true, force: true })
-      rmSync(join(sandbox, '..', 'theo-ui'), { recursive: true, force: true })
+      rmSync(join(sandbox, '..', 'theokit-ui'), { recursive: true, force: true })
     } catch {
       /* best effort */
     }
@@ -111,14 +111,14 @@ afterEach(() => {
 
 describe('T3.1 — theo-ui-link.sh / theo-ui-unlink.sh flow (ADR 0020)', () => {
   describe('theo-ui-link guards', () => {
-    it('should fail with exit 1 when ../theo-ui sibling is missing', () => {
+    it('should fail with exit 1 when ../theokit-ui sibling is missing', () => {
       setupSandbox({ withSibling: false })
       const r = runScript(linkScript)
       expect(r.status).toBe(1)
       expect(r.stderr + r.stdout).toMatch(/sibling checkout not found/)
     })
 
-    it('EC-5: should fail with exit 1 when ../theo-ui/dist/vite-plugin.js is missing', () => {
+    it('EC-5: should fail with exit 1 when ../theokit-ui/dist/vite-plugin.js is missing', () => {
       setupSandbox({ withSibling: true, withDist: false })
       const r = runScript(linkScript)
       expect(r.status).toBe(1)
@@ -138,7 +138,7 @@ describe('T3.1 — theo-ui-link.sh / theo-ui-unlink.sh flow (ADR 0020)', () => {
       expect(r.status).toBe(0)
       expect(existsSync(join(sandbox, 'pnpm-workspace.yaml.bak'))).toBe(true)
       const ws = readFileSync(join(sandbox, 'pnpm-workspace.yaml'), 'utf-8')
-      expect(ws).toContain('../theo-ui')
+      expect(ws).toContain('../theokit-ui')
     })
   })
 
@@ -162,7 +162,7 @@ describe('T3.1 — theo-ui-link.sh / theo-ui-unlink.sh flow (ADR 0020)', () => {
       expect(unlink.status).toBe(0)
       expect(existsSync(join(sandbox, 'pnpm-workspace.yaml.bak'))).toBe(false)
       const restored = readFileSync(join(sandbox, 'pnpm-workspace.yaml'), 'utf-8')
-      expect(restored).not.toContain('../theo-ui')
+      expect(restored).not.toContain('../theokit-ui')
     })
   })
 
