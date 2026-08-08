@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- `@theokit/agents` public type names are English: `ToolComNome` -> `NamedTool`, `ListOptionsSemPaginacao` -> `ListOptionsWithoutPagination`, `AgentComListaEstreitada` -> `AgentWithNarrowedList`. The old names remain as deprecated aliases and will be removed in the next major. Reported from a consumer (TheoCode B-053): it enforces English-only in its own source, and that rule cannot hold at the boundary — writing `const o: ListOptionsSemPaginacao = …` reintroduces Portuguese into an English file through a name the consumer does not own.
+
 ### Added
 - **A documentação e o rastro de decisão agora são uma wiki só, em `wiki/`.** As duas árvores separadas — `docs/` (produto e arquitetura) e `knowledge-base/` (grill → blueprint → plan → review → ADR → milestone) — viraram um bundle [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) v0.2 com 73 conceitos. Cada conceito declara um `type`, diz de onde veio (`sources`) e quem o escreveu (`generated`), e aponta para os conceitos com que se relaciona — então uma afirmação de produto se liga ao trabalho que a produziu sem que ninguém precise saber em qual das duas pastas procurar. O grafo passa no gate de produtor (`okf-validate --strict`): zero link quebrado, zero conceito órfão. Começa em `wiki/index.md`. (wiki-okf-2026-08)
 - Glossário em `wiki/glossary.md`: o vocabulário que a wiki usava sem definir, dos dois lados — o da superfície de agente (waist, capability, LoopStrategy, run-context, zero-behavior proof) e o do rastro de decisão (grill, blueprint, ADR, milestone run, out-of-scope cross-check). (wiki-okf-2026-08)
