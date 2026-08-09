@@ -4,24 +4,25 @@
 // reaching back to `@theokit/sdk/auth`.
 export { AuthProvider } from './auth/auth-provider.js'
 
-// M73 — "enriquecer nunca reduz". A mecânica de store do SDK atravessa como PASS-THROUGH PURO.
+// M73 — "enriching never reduces". The SDK's store mechanics cross as a PURE PASS-THROUGH.
 //
-// Antes disto, este subpath exportava 1 valor e 6 tipos enquanto `@theokit/sdk/auth` exportava 19
-// símbolos: nenhuma função atravessava. Como o consumidor tem regra INQUEBRÁVEL de nunca importar
-// `@theokit/sdk*` direto, **reimplementar era a única saída legal** — e o agent-builder reescreveu
-// seis destes nomes, ~120 linhas de mecânica duplicada. A lacuna era daqui, não indisciplina de lá.
+// Before this, this subpath exported 1 value and 6 types while `@theokit/sdk/auth` exported 19
+// symbols: no function crossed. Since the consumer holds an UNBREAKABLE rule never to import
+// `@theokit/sdk*` directly, **reimplementing was the only legal way out** — and agent-builder
+// rewrote six of these names, ~120 lines of duplicated mechanics. The gap was ours, not indiscipline
+// on their side.
 //
-// PURO, e não wrapper (parsimony Rung 9): estas são funções de I/O sem estado a segurar. A camada
-// enriquece onde há orquestração — é o que `AuthProvider` faz com o par `config`+`store`. Envolver
-// isto acrescentaria indireção sem nada dentro, e **quebraria `instanceof`**: o consumidor faz
-// `err instanceof CredentialError`, o que só vale enquanto a classe for a MESMA referência do SDK.
-// `tests/unit/auth-parity.test.ts` trava essa identidade com `toBe`.
+// PURE, not a wrapper (parsimony Rung 9): these are I/O functions with no state to hold. The layer
+// enriches where there is orchestration — which is what `AuthProvider` does with the `config`+`store`
+// pair. Wrapping this would add indirection with nothing inside, and would **break `instanceof`**:
+// the consumer writes `err instanceof CredentialError`, which only holds while the class is the SAME
+// reference as the SDK's. `tests/unit/auth-parity.test.ts` pins that identity with `toBe`.
 //
-// `resolveCredential` NÃO atravessa, de propósito: o SDK e o agent-builder têm funções DIFERENTES com
-// esse nome (sync vs async, lança vs `undefined`, lê env vs não lê, infere provider vs recusa), e o
-// próprio SDK declara que a precedência de env, a inferência por prefixo e o provider declarado são
-// app policy do consumidor (`internal/auth/credential-store.ts`). Expor os dois no mesmo escopo seria
-// convite a importar o errado, com falha silenciosa.
+// `resolveCredential` does NOT cross, on purpose: the SDK and agent-builder have DIFFERENT functions
+// under that name (sync vs async, throws vs `undefined`, reads env vs does not, infers the provider
+// vs refuses), and the SDK itself declares that env precedence, prefix inference and the declared
+// provider are the consumer's app policy (`internal/auth/credential-store.ts`). Exposing both in the
+// same scope would be an invitation to import the wrong one, failing silently.
 export {
   authFilePath,
   CredentialError,
@@ -31,26 +32,26 @@ export {
   writeCredential,
 } from '@theokit/sdk/auth'
 
-// M110 — o device flow **RFC 8628** atravessa, pelo MESMO argumento do M73 acima, sobre símbolos que
-// aquele milestone não cobriu.
+// M110 — the **RFC 8628** device flow crosses, on the SAME argument as M73 above, over symbols that
+// milestone did not cover.
 //
-// Medido: o SDK implementa o padrão (`deviceLogin`, `requestDeviceCode`, `pollDeviceToken`,
-// `DeviceOAuthConfig`), e este subpath re-exportava **apenas** a variante da OpenAI
-// (`openaiDeviceLogin`, `OpenAIDeviceConfig`). Um consumidor que precisasse do padrão tinha duas
-// saídas: violar a regra INQUEBRÁVEL, ou reimplementar o RFC. É literalmente a frase do M73 — *"a
-// lacuna era daqui, não indisciplina de lá"* — reencenada num subsistema vizinho.
+// Measured: the SDK implements the standard (`deviceLogin`, `requestDeviceCode`, `pollDeviceToken`,
+// `DeviceOAuthConfig`), and this subpath re-exported **only** OpenAI's variant (`openaiDeviceLogin`,
+// `OpenAIDeviceConfig`). A consumer needing the standard had two ways out: break the UNBREAKABLE
+// rule, or reimplement the RFC. It is literally M73's sentence — *"the gap was ours, not
+// indiscipline on their side"* — replayed in a neighbouring subsystem.
 //
-// PURO, não wrapper, pelo critério que o M73 escreveu: são funções de I/O sem estado a segurar.
-// `DeviceDeps` já é injetável, então um consumidor testa o próprio provider sem rede.
+// PURE, not a wrapper, by the criterion M73 wrote down: they are I/O functions with no state to
+// hold. `DeviceDeps` is already injectable, so a consumer tests its own provider without a network.
 //
-// As duas formas COEXISTEM e nada é unificado: `DeviceOAuthConfig` tem **um** `deviceCodeEndpoint`
-// (RFC), e `OpenAIDeviceConfig` tem **dois** (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com
-// PKCE). Fundi-las quebraria o Codex — o provider que este trabalho existe para facilitar.
-// E `openaiDeviceLogin` atravessa JUNTO, o que a medição do M110 mostrou faltar: ele era **importado**
-// aqui para uso interno do `AuthProvider` e nunca re-exportado. Consequência — o flow do Codex só era
-// alcançável construindo um `AuthProvider` (que exige `config`+`store`), quando o pedido concreto era
-// *"facilitar usar o provider Codex"*. Exportá-lo é o mesmo argumento das linhas acima, aplicado à
-// variante que já existia.
+// The two shapes COEXIST and nothing is unified: `DeviceOAuthConfig` has **one** `deviceCodeEndpoint`
+// (RFC), and `OpenAIDeviceConfig` has **two** (`deviceUsercodeEndpoint` → `devicePollEndpoint`, with
+// PKCE). Merging them would break Codex — the provider this work exists to make easier.
+// And `openaiDeviceLogin` crosses ALONGSIDE it, which M110's measurement showed was missing: it was
+// **imported** here for `AuthProvider`'s internal use and never re-exported. The consequence — the
+// Codex flow was only reachable by constructing an `AuthProvider` (which requires `config`+`store`),
+// when the concrete request was *"make using the Codex provider easier"*. Exporting it is the same
+// argument as the lines above, applied to the variant that already existed.
 export {
   deviceLogin,
   openaiDeviceLogin,
@@ -96,20 +97,21 @@ export type {
   ResolvedCredential,
 } from '@theokit/sdk/auth'
 
-// M111 — device auth PLUG-AND-PLAY. O M110 fez o flow RFC 8628 atravessar; ele não tocou a ergonomia.
+// M111 — device auth PLUG-AND-PLAY. M110 made the RFC 8628 flow cross; it did not touch ergonomics.
 //
-// Para autenticar no Codex, o consumidor tinha de saber que existem DUAS formas de device flow, copiar
-// um `clientId` e três URLs da OpenAI para dentro do próprio código, montar `{fetch, sleep, now}`,
-// chamar `deviceLogin` e LEMBRAR de chamar `persist` — esquecer o último custa um round-trip OAuth
-// completo que não guarda nada.
+// To authenticate against Codex, the consumer had to know that TWO device-flow shapes exist, copy a
+// `clientId` and three OpenAI URLs into its own code, assemble `{fetch, sleep, now}`, call
+// `deviceLogin` and REMEMBER to call `persist` — forgetting the last one costs a full OAuth
+// round-trip that stores nothing.
 //
-// O desenho veio de medição contra três peers e REFUTOU a proposta original (um descritor plano com
-// discriminante `kind`): nenhum dos três discrimina protocolo por campo. `AuthMethod` é união
-// discriminada e cada método aponta para a SUA função — sem `switch`, e sem tornar representável um
-// método OAuth que não sabe autorizar.
+// The design came from measuring three peers and REFUTED the original proposal (a flat descriptor
+// with a `kind` discriminant): none of the three discriminates protocol by field. `AuthMethod` is a
+// discriminated union and each method points at ITS OWN function — no `switch`, and no way to make
+// an OAuth method that cannot authorize representable.
 //
-// ENRIQUECE, não é pass-through: `loginWithDevice` orquestra `authorize` + `persist` (a forma de
-// `run_device_code_login` do codex, que retorna `()`), e `CODEX_PROVIDER` é identidade pública que
-// antes cada consumidor copiava — dois donos do mesmo fato é violação de DRY através da fronteira.
+// It ENRICHES, it is not a pass-through: `loginWithDevice` orchestrates `authorize` + `persist` (the
+// shape of codex's `run_device_code_login`, which returns `()`), and `CODEX_PROVIDER` is a public
+// identity every consumer used to copy — two owners of the same fact is a DRY violation across the
+// boundary.
 export { CODEX_CLIENT_ID_ENV_VAR, CODEX_PROVIDER, loginWithDevice } from './auth/device-provider.js'
 export type { AuthMethod, DeviceAuthProvider, PromptHooks } from './auth/device-provider.js'

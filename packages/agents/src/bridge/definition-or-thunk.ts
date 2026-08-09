@@ -6,11 +6,11 @@ import {
 } from './define-agent.js'
 
 /**
- * Só o que a projeção lê de `RuntimeOverrides`, declarado estruturalmente.
+ * Only what the projection reads from `RuntimeOverrides`, declared structurally.
  *
- * `RuntimeOverrides` mora em `sdk-adapter.ts`, que importa ESTE módulo — tipá-lo por import fecharia um
- * ciclo, e `module-graph.test.ts` reprova ciclo por decisão do M69. Três campos estruturais custam menos
- * que mover um tipo público de lugar.
+ * `RuntimeOverrides` lives in `sdk-adapter.ts`, which imports THIS module — typing it by import would
+ * close a cycle, and `module-graph.test.ts` fails on cycles by M69's decision. Three structural fields
+ * cost less than relocating a public type.
  */
 
 export interface ProjectionOverrides {
@@ -20,18 +20,18 @@ export interface ProjectionOverrides {
 }
 
 /**
- * Uma definição, ou um THUNK que a produz por sessão.
+ * A definition, or a THUNK that produces one per session.
  *
- * M91 — a linha do `apiKey` logo abaixo já aceitava thunk desde o M74, adicionada por **exatamente**
- * esta razão. A assimetria tinha uma linha de largura e custava caro: com a forma objeto, trust, hooks,
- * skills e MCP ficam congelados no load do módulo. Num processo `theokit acp` que uma IDE mantém aberto
- * por horas, isso reintroduz a obsolescência que o M67 removeu ao mover a construção para o entry point.
+ * M91 — the `apiKey` line just below has accepted a thunk since M74, added for **exactly** this
+ * reason. The asymmetry was one line wide and cost a lot: with the object shape, trust, hooks, skills
+ * and MCP are frozen at module load. In a `theokit acp` process an IDE keeps open for hours, that
+ * reintroduces the staleness M67 removed by moving construction to the entry point.
  */
 export type DefinitionOrThunk =
   | TheokitAgentDefinition
   | ((sessionId: string) => TheokitAgentDefinition | Promise<TheokitAgentDefinition>)
 
-/** A projeção que a fábrica precisa: compilada + overrides resolvidos. */
+/** The projection the factory needs: compiled + resolved overrides. */
 export interface CompiledProjection {
   compiled: ReturnType<typeof compileAgentDefinition>
   model: string | ModelSelection
@@ -55,11 +55,11 @@ export function project(
 }
 
 /**
- * Decide UMA vez qual das duas formas está em uso e devolve o projetor certo.
+ * Decides ONCE which of the two shapes is in use and returns the right projector.
  *
- * A forma OBJETO compila **fora** do closure e devolve sempre a mesma projeção — byte-idêntica ao
- * comportamento anterior ao M91. Mudar isso passaria o custo por sessão a cada consumidor que não pediu
- * nada (ADR-1). A forma THUNK projeta por sessão, que é o que ela compra.
+ * The OBJECT shape compiles **outside** the closure and always returns the same projection —
+ * byte-identical to the pre-M91 behaviour. Changing that would pass the per-session cost on to every
+ * consumer that asked for nothing (ADR-1). The THUNK shape projects per session, which is what it buys.
  */
 export function resolveProjection(
   def: DefinitionOrThunk,

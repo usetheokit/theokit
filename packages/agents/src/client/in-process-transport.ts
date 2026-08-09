@@ -131,14 +131,14 @@ export class InProcessTransport implements AgentTransport {
   #criarAwaitApproval(turn: number, sinal: AbortSignal | undefined): InProcessAwaitApproval {
     return (req) =>
       new Promise<boolean | ApprovalDecision>((resolve, reject) => {
-        // Abortado ANTES de a aprovação estacionar: varrer no `sendMessages` não alcança este caso,
-        // porque naquele momento não havia nada a varrer.
+        // Aborted BEFORE the approval parked: sweeping in `sendMessages` does not reach this case,
+        // because at that moment there was nothing to sweep.
         if (sinal?.aborted === true) {
-          reject(new ApprovalAbortedError(req.approvalId, 'o turn já estava abortado'))
+          reject(new ApprovalAbortedError(req.approvalId, 'the turn was already aborted'))
           return
         }
-        // Ids de aprovação são UUIDs do servidor — colisão é bug real (dois turnos reusando um id).
-        // Falha rápido em vez de sobrescrever em silêncio o resolver estacionado do turn anterior.
+        // Approval ids are server UUIDs — a collision is a real bug (two turns reusing one id).
+        // Fail fast instead of silently overwriting the previous turn's parked resolver.
         if (this.#pending.has(req.approvalId)) {
           reject(
             new Error(`Duplicate pending approval id '${req.approvalId}' — ids must be unique.`),
@@ -150,13 +150,13 @@ export class InProcessTransport implements AgentTransport {
   }
 
   /**
-   * Varre as aprovações de um turn, rejeitando cada uma com erro TIPADO.
+   * Sweeps a turn's approvals, rejecting each one with a TYPED error.
    *
-   * Rejeitar e não `resolve(false)`: um `false` é indistinguível de *"o usuário negou"*, e a diferença
-   * importa — negar é decisão, abortar é interrupção. O SDK precisa das duas para desenrolar a chamada
-   * de tool corretamente.
+   * Reject rather than `resolve(false)`: a `false` is indistinguishable from *"the user denied"*, and
+   * the difference matters — denying is a decision, aborting is an interruption. The SDK needs both to
+   * unwind the tool call correctly.
    */
-  #varrerTurno(turn: number, reason: string): void {
+  #sweepTurn(turn: number, reason: string): void {
     for (const [id, entry] of [...this.#pending]) {
       if (entry.turn !== turn) continue
       this.#pending.delete(id)
@@ -164,7 +164,7 @@ export class InProcessTransport implements AgentTransport {
     }
   }
 
-  /** Quantas aprovações estão estacionadas. Existe para o teste poder provar a eviction. */
+  /** How many approvals are parked. Exists so the test can prove the eviction. */
   get pendentes(): number {
     return this.#pending.size
   }
@@ -173,24 +173,24 @@ export class InProcessTransport implements AgentTransport {
     options: Parameters<ChatTransport['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
     const { messages, abortSignal, metadata } = options
-    // M92 — um `send()` novo varre o turn anterior: aprovações daquele turn nunca mais serão
-    // decididas, e deixá-las no `Map` é vazamento com uma promessa pendurada em cada uma.
-    this.#varrerTurno(this.#turn, 'um turn novo começou')
+    // M92 — a new `send()` sweeps the previous turn: approvals from that turn will never be decided
+    // again, and leaving them in the `Map` is a leak with a promise hanging off each one.
+    this.#sweepTurn(this.#turn, 'a new turn started')
     this.#turn += 1
     const currentTurn = this.#turn
 
-    // O sinal de abort do turn é a costura que já chegava aqui e não era usada. `once` porque um
-    // `AbortSignal` dispara no máximo uma vez, e reter o listener manteria o transporte vivo.
-    // Sinal JÁ abortado não dispara `addEventListener` — a revisão do M92 mediu: `pendentes=1` e a
-    // promessa PENDENTE, ou seja, exatamente o travamento que este milestone existe para fechar,
-    // ainda alcançável. A varredura roda na hora e o listener cobre o abort que vier depois.
+    // The turn's abort signal is the seam that already reached here and went unused. `once` because
+    // an `AbortSignal` fires at most once, and holding the listener would keep the transport alive.
+    // An ALREADY aborted signal does not fire `addEventListener` — M92's review measured it:
+    // `pending=1` with the promise PENDING, i.e. exactly the hang this milestone exists to close,
+    // still reachable. The sweep runs immediately and the listener covers any later abort.
     if (abortSignal?.aborted === true) {
-      this.#varrerTurno(currentTurn, 'o turn já estava abortado')
+      this.#sweepTurn(currentTurn, 'the turn was already aborted')
     } else {
       abortSignal?.addEventListener(
         'abort',
         () => {
-          this.#varrerTurno(currentTurn, 'o turn foi abortado')
+          this.#sweepTurn(currentTurn, 'the turn was aborted')
         },
         { once: true },
       )

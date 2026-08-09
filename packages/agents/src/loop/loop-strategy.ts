@@ -9,7 +9,7 @@
  * Config is Zod-validated so an invalid `maxIterations` fails fast at resolve
  * time, never as a silent infinite loop at runtime (plan ADR D3).
  *
- * referencia: knowledge-base/references/mastra agentic-loop/index.ts (stopWhen + maxSteps).
+ * reference: knowledge-base/references/mastra agentic-loop/index.ts (stopWhen + maxSteps).
  */
 import { z } from 'zod'
 
@@ -76,8 +76,8 @@ export function assertValidCustomLoopStrategy(strategy: LoopStrategy): void {
   const result = maxIterationsSchema.safeParse(strategy.maxIterations)
   if (!result.success) {
     throw new Error(
-      `loopStrategy: maxIterations inválido (${String(strategy.maxIterations)}) — ` +
-        'deve ser um inteiro finito ≥ 1 (senão o teto round < maxIterations nunca termina)',
+      `loopStrategy: invalid maxIterations (${String(strategy.maxIterations)}) — ` +
+        'must be a finite integer ≥ 1 (otherwise the round < maxIterations ceiling never terminates)',
     )
   }
 }
