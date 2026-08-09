@@ -62,7 +62,7 @@ export function runConfigHook(ctx: ConfigHookCtx): Record<string, unknown> {
       // and tears down the in-flight agent stream.
       watch: {
         ignored: [
-          '**/referencias/**',
+          '**/references/**',
           '**/.theokit/**',
           '**/dist/**',
           '**/node_modules/**',

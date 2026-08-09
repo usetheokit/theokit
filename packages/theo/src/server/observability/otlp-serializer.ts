@@ -41,12 +41,12 @@ interface OtlpAttributeValue {
 }
 
 /**
- * O `AnyValue` do OTLP: um dos campos preenchido, os outros ausentes.
+ * OTLP's `AnyValue`: one field filled in, the others absent.
  *
- * Era um ternário aninhado inline (agent-builder#319). Extraído com `switch`, e não achatado num
- * ternário mais esperto, porque a lista de tipos do OTLP é aberta — `arrayValue`, `doubleValue` e
- * `kvlistValue` existem na spec e ainda não são emitidos aqui. Com o `switch`, cada um vira um `case`
- * novo; com o ternário, viraria mais um nível de aninhamento.
+ * It was an inline nested ternary (agent-builder#319). Extracted with a `switch`, and not flattened
+ * into a cleverer ternary, because OTLP's type list is open — `arrayValue`, `doubleValue` and
+ * `kvlistValue` exist in the spec and are not emitted here yet. With the `switch`, each becomes a new
+ * `case`; with the ternary, each would become one more level of nesting.
  */
 function paraValorOtlp(value: string | number | boolean): OtlpAttributeValue {
   switch (typeof value) {

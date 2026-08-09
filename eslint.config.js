@@ -2,7 +2,7 @@
 //
 // Stack: typescript-eslint v8 + ESLint v9 + React 19. Rules selected to
 // catch real bugs, not stylistic preferences (Prettier owns style). See
-// CLAUDE.md "PARTE I — Regras de conduta" for the engineering principles.
+// CLAUDE.md "PART I — Rules of conduct" for the engineering principles.
 //
 // Severity policy:
 //   - "error" for bug-producing patterns (no-floating-promises, no-misused-promises, etc).
@@ -32,11 +32,11 @@ export default tseslint.config(
       '**/.theokit/**',
       '**/coverage/**',
       '**/test-results/**',
-      'referencias/**',
-      // Zona de estudo: clones de projetos de terceiros, lidos para aprender e nunca editados.
-      // Medido em agent-builder#119: `.claude/knowledge-base/references/next.js` sozinho custava
-      // 264 s dos 867 s do lint — 30% do tempo total gasto lintando código que não é nosso e que
-      // ninguém pode consertar aqui.
+      'references/**',
+      // Study zone: clones of third-party projects, read to learn from and never edited.
+      // Measured in agent-builder#119: `.claude/knowledge-base/references/next.js` alone cost
+      // 264 s of the lint's 867 s — 30% of the total time spent linting code that is not ours and
+      // that nobody can fix here.
       '.claude/knowledge-base/references/**',
       '.claude/worktrees/**',
       'pnpm-lock.yaml',
@@ -65,10 +65,10 @@ export default tseslint.config(
       // that the root parser projectService cannot resolve. Tests are
       // covered by vitest; config files are trivial. Lint the src/ only.
       'packages/http-decorators/tests/**',
-      // `packages/*/examples/**` e não `packages/http-decorators/examples/**`: a razão acima vale
-      // para os examples de QUALQUER pacote, e enumerar um por um falha por omissão — foi assim que
-      // `packages/http/examples/**` ficou de fora e produziu 3 erros de PARSER
-      // (`was not found by the project service`), invisíveis até o lint voltar a terminar
+      // `packages/*/examples/**` and not `packages/http-decorators/examples/**`: the reason above
+      // holds for the examples of ANY package, and enumerating them one by one fails by omission —
+      // that is how `packages/http/examples/**` was left out and produced 3 PARSER errors
+      // (`was not found by the project service`), invisible until the lint started finishing again
       // (agent-builder#119).
       'packages/*/examples/**',
       'packages/http-decorators/vitest.config.ts',
@@ -93,22 +93,23 @@ export default tseslint.config(
   // SonarJS (code smells).
   sonarjsPlugin.configs.recommended,
 
-  // `todo-tag`, desligada em TODA extensão — agent-builder#120.
+  // `todo-tag`, disabled across EVERY extension — agent-builder#120.
   //
-  // A regra casa a palavra "TODO" em qualquer caixa, e "todo" é palavra comum do português,
-  // presente na prosa explicativa deste repositório. Ela derrubou o build TRÊS vezes no M95 por
-  // texto legítimo ("para todo erro", "todo turno", "todo estado"), e consertar palavra por palavra
-  // só adia a próxima. Medido na revisão: marcadores REAIS no fonte da camada → 0. Zero verdadeiros
-  // positivos contra três falsos é custo permanente com benefício nulo.
+  // The rule matches the word "TODO" in any case, and "todo" is a common Portuguese word that was
+  // present throughout this repository's explanatory prose. It broke the build THREE times in M95 on
+  // legitimate Portuguese text (the word "todo" means "every"), and fixing it word by word only
+  // postpones the next one. Measured at review: REAL markers in the layer's source → 0. Zero true
+  // positives against three false ones is a permanent cost with no benefit.
   //
-  // Estava só no bloco `files: ['**/*.{ts,tsx,mts,cts}']`, e por isso NÃO alcançava `.js` — o
-  // próprio `eslint.config.js` reprovava, três vezes, no comentário que explicava o desligamento.
-  // Ninguém tinha visto porque `npm run lint` não terminava (#119); o primeiro veredito do lint por
-  // grupo foi este. Sem `files`, o bloco vale para tudo, que é o que a decisão sempre quis dizer.
+  // It was only in the `files: ['**/*.{ts,tsx,mts,cts}']` block, and therefore did NOT reach `.js` —
+  // `eslint.config.js` itself failed, three times, on the very comment explaining the shutdown.
+  // Nobody had seen it because `npm run lint` never finished (#119); this was the per-group lint's
+  // first verdict. Without `files`, the block applies to everything, which is what the decision always
+  // meant.
   //
-  // O sinal que a regra dava não foi abandonado: `tests/lint/task-marker.test.ts` casa a
-  // forma que um marcador de verdade tem — MAIÚSCULA + dois-pontos, dentro de comentário — e
-  // ignora a palavra solta. Gate, não convenção.
+  // The signal the rule provided was not abandoned: `tests/lint/task-marker.test.ts` matches the
+  // shape a real marker has — UPPERCASE + colon, inside a comment — and ignores the bare word.
+  // A gate, not a convention.
   {
     rules: { 'sonarjs/todo-tag': 'off' },
   },
@@ -232,7 +233,7 @@ export default tseslint.config(
       'sonarjs/no-collapsible-if': 'warn',
       'sonarjs/no-redundant-jump': 'warn',
       'sonarjs/no-small-switch': 'off',
-      // Ver o bloco `sonarjs/todo-tag` mais abaixo — o desligamento é global, não só-TS.
+      // See the `sonarjs/todo-tag` block further down — the shutdown is global, not TS-only.
       // Duplicate rules — already covered by other plugins, surfaced once
       // is enough (turning off the duplicate is not a bypass; it removes
       // the redundant report). The "kept" rule is named in the comment.
@@ -279,13 +280,13 @@ export default tseslint.config(
 
   // Test files — relaxed (test code is documentation, not production).
   {
-    // `**/*.bench.{ts,tsx}` entrou em agent-builder#319: um benchmark do vitest é código de teste
-    // pela mesma razão que um `.test.ts` — ele não embarca, e mede em vez de afirmar. Sem ele,
-    // `packages/agents/tests/bench/guardrails.bench.ts` era o ÚNICO arquivo de teste do repositório
-    // sob regra de produção, e pagava 5 avisos de `no-non-null-assertion` pelo idioma normal de
-    // teste. Só o padrão de bench foi acrescentado: `tests/**` NÃO virou `**/tests/**`, porque os
-    // testes dentro de `packages/*` passam nas regras de produção hoje, e alargar a relaxação para
-    // eles esconderia achados sem que ninguém tivesse pedido.
+    // `**/*.bench.{ts,tsx}` was added in agent-builder#319: a vitest benchmark is test code for the
+    // same reason a `.test.ts` is — it does not ship, and it measures rather than asserts. Without
+    // it, `packages/agents/tests/bench/guardrails.bench.ts` was the ONLY test file in the repository
+    // under production rules, and paid 5 `no-non-null-assertion` warnings for the ordinary test
+    // idiom. Only the bench pattern was added: `tests/**` did NOT become `**/tests/**`, because the
+    // tests inside `packages/*` pass the production rules today, and widening the relaxation to them
+    // would hide findings nobody asked to hide.
     files: [
       'tests/**/*.{ts,tsx}',
       '**/*.test.{ts,tsx}',
@@ -393,10 +394,10 @@ export default tseslint.config(
     files: [
       '**/*.config.{ts,mts,cts,js,mjs,cjs}',
       'scripts/**/*.{ts,js,mjs}',
-      // M90 — só `packages/*/scripts/**`, e só por causa de `generate-reexports.mts`. A primeira versão
-      // ampliou `scripts/**` para `.mts` também, e a revisão mediu o excesso: relaxava
+      // M90 — only `packages/*/scripts/**`, and only because of `generate-reexports.mts`. The first
+      // version widened `scripts/**` to `.mts` too, and the review measured the excess: it relaxed
       // `no-explicit-any`/`no-unsafe-*` em `scripts/preflight-native-bindings.d.mts` e
-      // `scripts/sync-template-versions.d.mts`, que não pediram nada.
+      // `scripts/sync-template-versions.d.mts`, which asked for nothing.
       'packages/*/scripts/**/*.{ts,mts,js,mjs}',
       '**/tsup.config.ts',
     ],

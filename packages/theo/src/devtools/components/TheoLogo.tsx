@@ -1,5 +1,5 @@
 /**
- * Theo brand logo — official purple logo from theo-business/arquivos.
+ * Theo brand logo — the official purple logo from the theo-business asset repository.
  *
  * Embedded as base64 PNG (see ./assets/logo-data.ts) so the devtools UI has
  * zero external asset dependency.
