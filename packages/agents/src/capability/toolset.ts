@@ -27,10 +27,18 @@ import { TheokitAgentError } from '@theokit/sdk/errors'
  * exatamente o que uma whitelist existe para impedir.
  */
 
-/** O mínimo que o `Toolset` precisa saber de uma tool: que ela tem nome. */
-export interface ToolComNome {
+/** The minimum `Toolset` needs to know about a tool: that it has a name. */
+export interface NamedTool {
   readonly name: string
 }
+
+/**
+ * @deprecated Renamed to `NamedTool`. This alias exists so a consumer pinned to the previous minor
+ * keeps compiling; it will be removed in the next major.
+ */
+// The alias IS the migration path: redundant on purpose, so a consumer pinned to the previous minor
+// keeps compiling. Sunset: the next major, where it is deleted along with this comment.
+export type ToolComNome = NamedTool
 
 /**
  * U-3 — inside the SDK hierarchy, not beside it.
@@ -57,7 +65,7 @@ export class ToolsetError extends TheokitAgentError {
   }
 }
 
-export class Toolset<T extends ToolComNome> {
+export class Toolset<T extends NamedTool> {
   readonly #porNome: ReadonlyMap<string, T>
 
   private constructor(porNome: ReadonlyMap<string, T>) {
@@ -70,7 +78,7 @@ export class Toolset<T extends ToolComNome> {
    * na resolução: um descritor com duas tools de mesmo nome está errado no momento em que é escrito, e
    * adiar o erro para o primeiro `resolve` esconde metade dos casos.
    */
-  static from<T extends ToolComNome>(tools: readonly T[]): Toolset<T> {
+  static from<T extends NamedTool>(tools: readonly T[]): Toolset<T> {
     const porNome = new Map<string, T>()
     for (const tool of tools) {
       if (porNome.has(tool.name)) {
