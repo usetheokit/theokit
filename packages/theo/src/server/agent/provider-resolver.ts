@@ -7,7 +7,7 @@
  * Principle: provider routing is the FRAMEWORK's responsibility, not the consumer's.
  * The consumer template uses a plain `model: { id: 'gpt-4o-mini' }` — no conditionals.
  *
- * Wire protocol: OpenAI Chat Completions (universal — implementado por todos
+ * Wire protocol: OpenAI Chat Completions (universal — implemented by every
  * os providers: OpenRouter, Groq, Mistral, Together, Anthropic via proxy, etc).
  *
  * Resolution by priority (FIRST match wins):

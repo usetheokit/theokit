@@ -58,10 +58,12 @@ const upstream = upstreamVariants()
 
 if (upstream === null || upstream.size < PLAUSIBILITY_FLOOR) {
   console.error(
-    'check-wire-parity: NÃO MEDIDO — não foi possível enumerar a união do `ai`' +
-      (upstream ? ` (só ${upstream.size} variantes, abaixo do piso ${PLAUSIBILITY_FLOOR}).` : '.') +
-      '\n  O oráculo é o que torna o espelho verificável; sem ele este gate não tem o que comparar.' +
-      '\n  Instale as devDependencies, ou conserte a extração se a declaração do `ai` mudou de forma.',
+    'check-wire-parity: NOT MEASURED — could not enumerate the `ai` union' +
+      (upstream
+        ? ` (only ${upstream.size} variants, below the floor of ${PLAUSIBILITY_FLOOR}).`
+        : '.') +
+      '\n  The oracle is what makes the mirror verifiable; without it this gate has nothing to compare.' +
+      '\n  Install the devDependencies, or fix the extraction if the `ai` declaration changed shape.',
   )
   process.exit(1)
 }
@@ -71,21 +73,21 @@ const invented = [...ours].filter((t) => !upstream.has(t)).sort((a, b) => a.loca
 const missing = [...upstream].filter((t) => !ours.has(t)).sort((a, b) => a.localeCompare(b))
 
 if (invented.length > 0) {
-  console.error('\ncheck-wire-parity: FALHA — variantes que declaramos e o `ai` não tem:\n')
+  console.error('\ncheck-wire-parity: FAILURE — variants we declare and `ai` does not have:\n')
   for (const t of invented) console.error(`  - ${t}`)
-  console.error('\nUma variante inventada não é entendida por ninguém do outro lado do wire.\n')
+  console.error('\nAn invented variant is understood by nobody on the other side of the wire.\n')
   process.exit(1)
 }
 
 console.log(
-  `check-wire-parity: OK — ${ours.size} variantes espelhadas, todas presentes no \`ai\` ` +
+  `check-wire-parity: OK — ${ours.size} mirrored variants, all present in \`ai\` ` +
     `(${upstream.size} upstream).`,
 )
 if (missing.length > 0) {
   console.log(
-    `\ncheck-wire-parity: AVISO — ${missing.length} variante(s) do \`ai\` fora do espelho.\n` +
-      'Esperado: a D2 espelha só o subconjunto que o TheoKit fala. Vira problema no dia em que\n' +
-      'o presenter ou o bridge passar a emitir uma delas — aí ela precisa entrar no schema.\n',
+    `\ncheck-wire-parity: WARNING — ${missing.length} \`ai\` variant(s) outside the mirror.\n` +
+      'Expected: D2 mirrors only the subset TheoKit speaks. It becomes a problem the day the\n' +
+      'presenter or the bridge starts emitting one of them — then it has to enter the schema.\n',
   )
   for (const t of missing) console.log(`  - ${t}`)
 }

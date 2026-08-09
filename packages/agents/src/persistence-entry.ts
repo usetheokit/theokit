@@ -36,7 +36,7 @@ export {
   sanitizeFts5Query,
   SessionBusyError,
   // M95 — queries without taking the lock; asking by taking it creates the contention it meant to
-  // detect. Renamed from `sessaoTemEscritor` in `@theokit/sdk@4.39.0`.
+  // detect. Renamed from its Portuguese original in `@theokit/sdk@4.39.0`.
   sessionHasWriter,
   transcriptPath,
   // M94 — the root of the transcript state. The consumer duplicated it across THREE files, and all

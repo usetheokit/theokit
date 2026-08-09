@@ -1,27 +1,29 @@
 #!/usr/bin/env node
 /**
- * Guard de PARIDADE DE SUPERFÍCIE — "enriquecer nunca reduz" (M73).
+ * SURFACE PARITY guard — "enriching never reduces" (M73).
  *
- * A camada `@theokit/agents` existe para ENRIQUECER o `@theokit/sdk`: acrescentar OO onde há estado ou
- * orquestração a segurar. Ela nunca deve REDUZIR — um símbolo que o SDK expõe e a camada não repassa
- * fica inalcançável para quem consome a camada.
+ * The `@theokit/agents` layer exists to ENRICH `@theokit/sdk`: to add OO where there is state or
+ * orchestration to hold. It must never REDUCE — a symbol the SDK exposes and the layer does not
+ * forward is unreachable to whoever consumes the layer.
  *
- * Isso não é teoria. O `agent-builder` tem como regra INQUEBRÁVEL nunca importar `@theokit/sdk*`
- * direto. Quando `@theokit/agents/auth` exportava 1 valor contra os 19 símbolos do SDK,
- * **reimplementar era a única saída legal** — e ele reescreveu seis nomes idênticos, ~120 linhas de
- * mecânica de credencial duplicada. A lacuna era da camada; a duplicação foi só o sintoma.
+ * This is not theory. `agent-builder` holds an UNBREAKABLE rule never to import `@theokit/sdk*`
+ * directly. When `@theokit/agents/auth` exported 1 value against the SDK's 19 symbols,
+ * **reimplementing was the only legal way out** — and it rewrote six identical names, ~120 lines of
+ * duplicated credential mechanics. The gap was the layer's; the duplication was only the symptom.
  *
- * ## O contrato: DECISÃO por símbolo, não cobertura
+ * ## The contract: a DECISION per symbol, not coverage
  *
- * Exigir que a camada repasse TUDO deixaria este gate permanentemente vermelho — há símbolos que ela
- * deliberadamente não quer expor (detalhe interno do device flow), e há um caso em que repassar seria
- * ATIVAMENTE ERRADO: `resolveCredential` existe nos dois lados com contratos diferentes.
+ * Demanding that the layer forward EVERYTHING would leave this gate permanently red — there are
+ * symbols it deliberately does not want to expose (internal device-flow detail), and one case where
+ * forwarding would be ACTIVELY WRONG: `resolveCredential` exists on both sides with different
+ * contracts.
  *
- * Então o gate não exige cobertura. Ele exige **decisão escrita**: cada símbolo do SDK é `'coberto'`
- * ou `{ fora: '<razão>' }`. Um símbolo novo sem decisão quebra o CI — que é barato — em vez de sumir
- * em silêncio, que foi o que custou 24 KB.
+ * So the gate does not demand coverage. It demands a **written decision**: every SDK symbol is
+ * `'covered'` or `{ out: '<reason>' }`. A new symbol with no decision breaks CI — which is cheap —
+ * instead of vanishing silently, which is what cost 24 KB.
  *
- * O desenho vem de `check-package-direction.mjs`, o guard irmão, e da lição escrita no cabeçalho dele:
+ * The design comes from `check-package-direction.mjs`, the sibling guard, and from the lesson
+ * written in its header:
  * *"a gate nobody can make green is a gate nobody reads"*.
  */
 import { readFileSync } from 'node:fs'
@@ -31,57 +33,58 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
- * Piso de não-vacuidade por subpath.
+ * Anti-vacuity floor, per subpath.
  *
- * Se a enumeração devolver menos que isto, o `import()` provavelmente falhou (build quebrado, subpath
- * fora do campo `exports`, versão incompatível) e a lista veio vazia — fazendo "0 símbolos sem
- * decisão" virar trivialmente verdadeiro. Um gate que não consegue ler nada NÃO está aprovando nada.
+ * If the enumeration returns fewer than this, the `import()` probably failed (broken build, subpath
+ * missing from the `exports` field, incompatible version) and the list came back empty — making
+ * "0 symbols without a decision" trivially true. A gate that cannot read anything is NOT approving
+ * anything.
  */
 const PISO_DE_SIMBOLOS = { auth: 15 }
 
 /**
- * A decisão, por símbolo do SDK. `'coberto'` = a camada repassa. `{ fora }` = deliberadamente não, com
- * a razão escrita — a razão é o que separa uma decisão de uma omissão.
+ * The decision, per SDK symbol. `'covered'` = the layer forwards it. `{ out }` = deliberately not,
+ * with the reason written down — the reason is what separates a decision from an omission.
  */
 const DECISIONS = {
   auth: {
-    // — a mecânica de store: pass-through puro (M73). `reexportado` é VERIFICADO contra o entry.
-    authFilePath: 'reexportado',
-    CredentialError: 'reexportado',
-    credentialHome: 'reexportado',
-    readAuthFile: 'reexportado',
-    readStoredOAuth: 'reexportado',
-    writeCredential: 'reexportado',
-    ResolveCredentialOptions: 'reexportado',
+    // — the store mechanics: a pure pass-through (M73). `re-exported` is VERIFIED against the entry.
+    authFilePath: 're-exported',
+    CredentialError: 're-exported',
+    credentialHome: 're-exported',
+    readAuthFile: 're-exported',
+    readStoredOAuth: 're-exported',
+    writeCredential: 're-exported',
+    ResolveCredentialOptions: 're-exported',
 
-    // — o ciclo de vida OAuth: alcançável pela classe `AuthProvider`, que segura config+store. NÃO é
-    // re-export, e o token diferente existe para o gate não afirmar o que não checou.
+    // — the OAuth lifecycle: reachable through the `AuthProvider` class, which holds config+store. It
+    // is NOT a re-export, and the distinct token exists so the gate does not assert what it did not check.
     ensureFreshCredential: 'via-AuthProvider',
     openaiDeviceLogin: 'via-AuthProvider',
     persistOAuthTokens: 'via-AuthProvider',
 
-    // — fora de escopo, com razão
+    // — out of scope, with a reason
     resolveCredential: {
-      fora:
-        'o SDK e o consumidor têm funções DIFERENTES com este nome (sync vs async, lança vs undefined, ' +
-        'lê env vs não lê, infere provider vs recusa). O próprio SDK declara que a precedência de env, ' +
-        'a inferência por prefixo e o provider declarado são app policy do consumidor. Expor os dois no ' +
-        'mesmo escopo seria convite a importar o errado, com falha silenciosa.',
+      out:
+        'the SDK and the consumer have DIFFERENT functions under this name (sync vs async, throws vs ' +
+        'undefined, reads env vs does not, infers the provider vs refuses). The SDK itself declares ' +
+        "that env precedence, prefix inference and the declared provider are the consumer's app " +
+        'policy. Exposing both in the same scope would invite importing the wrong one, failing silently.',
     },
     deviceLogin: {
-      fora: 'primitivo genérico do device flow; a camada expõe `openaiDeviceLogin`, que é a rota real',
+      out: 'a generic device-flow primitive; the layer exposes `openaiDeviceLogin`, which is the real route',
     },
     requestDeviceCode: {
-      fora: 'etapa interna do device flow, orquestrada por `openaiDeviceLogin`',
+      out: 'an internal device-flow step, orchestrated by `openaiDeviceLogin`',
     },
-    requestOpenAIUsercode: { fora: 'idem — etapa interna, não superfície de consumidor' },
-    pollDeviceToken: { fora: 'idem — o polling é detalhe de `openaiDeviceLogin`' },
-    exchangeCode: { fora: 'etapa interna do authorization-code flow' },
+    requestOpenAIUsercode: { out: 'likewise — an internal step, not consumer surface' },
+    pollDeviceToken: { out: 'likewise — the polling is a detail of `openaiDeviceLogin`' },
+    exchangeCode: { out: 'an internal step of the authorization-code flow' },
     refreshOAuthTokens: {
-      fora: 'a camada expõe `AuthProvider.ensureFresh`, que decide QUANDO refrescar',
+      out: 'the layer exposes `AuthProvider.ensureFresh`, which decides WHEN to refresh',
     },
-    parseJwtClaims: { fora: 'utilitário de parsing sem relação com o contrato de auth da camada' },
-    extractAccountId: { fora: 'idem — detalhe de leitura de claim' },
+    parseJwtClaims: { out: "a parsing utility unrelated to the layer's auth contract" },
+    extractAccountId: { out: 'likewise — a claim-reading detail' },
   },
 }
 
@@ -94,19 +97,19 @@ for (const [subpath, decisoes] of Object.entries(DECISIONS)) {
     source = readFileSync(dts, 'utf8')
   } catch (err) {
     problems.push(
-      `NÃO CONSEGUI LER a superfície de \`@theokit/sdk/${subpath}\` (${dts}): ${err.message}\n` +
-        '  Isto NÃO é aprovação: sem ler os exports do SDK o gate não tem como comparar nada.',
+      `COULD NOT READ the surface of \`@theokit/sdk/${subpath}\` (${dts}): ${err.message}\n` +
+        '  This is NOT approval: without reading the SDK exports the gate has nothing to compare.',
     )
     continue
   }
 
-  // Três formas emitidas, porque o `.d.ts` usa as três e ler só uma deixa símbolo novo passar SEM
-  // decisão — silenciosamente, que é exatamente o defeito que este gate existe para impedir. O piso de
-  // não-vacuidade não protege disso: com o bloco `export { … }` intacto a contagem segue acima do piso
-  // e só o símbolo novo some.
+  // Three emitted forms, because the `.d.ts` uses all three and reading only one lets a new symbol
+  // through WITHOUT a decision — silently, which is exactly the defect this gate exists to prevent.
+  // The anti-vacuity floor does not protect against it: with the `export { … }` block intact the
+  // count stays above the floor and only the new symbol disappears.
   const blockNames = [...source.matchAll(/export\s*\{([^}]*)\}/g)]
     .flatMap((m) => m[1].split(','))
-    // `a as b` re-exporta sob o nome `b` — é ELE que o consumidor enxerga.
+    // `a as b` re-exports under the name `b` — that is what the consumer sees.
     .map((t) =>
       t
         .replace(/\btype\b/, '')
@@ -126,8 +129,8 @@ for (const [subpath, decisoes] of Object.entries(DECISIONS)) {
     ),
   ]
 
-  // O que o entry da camada REALMENTE re-exporta. Sem isto, `reexportado` é uma afirmação que o gate
-  // nunca conferiu: remover um símbolo de `auth-entry.ts` deixava tudo verde (review F-02).
+  // What the layer's entry ACTUALLY re-exports. Without this, `re-exported` is a claim the gate never
+  // checked: removing a symbol from `auth-entry.ts` left everything green (review F-02).
   const entry = readFileSync(join(ROOT, `packages/agents/src/${subpath}-entry.ts`), 'utf8')
   const reExported = new Set(
     [...entry.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}\s*from/g)]
@@ -142,61 +145,61 @@ for (const [subpath, decisoes] of Object.entries(DECISIONS)) {
       .filter(Boolean),
   )
 
-  // ÂNCORA DE NÃO-VACUIDADE. Sem ela, uma enumeração quebrada devolve [] e o laço abaixo não roda:
-  // "0 símbolos sem decisão" fica trivialmente verdadeiro e o gate certifica sem ter olhado nada.
-  const piso = PISO_DE_SIMBOLOS[subpath] ?? 1
-  if (exports.length < piso) {
+  // ANTI-VACUITY ANCHOR. Without it, a broken enumeration returns [] and the loop below never runs:
+  // "0 symbols without a decision" becomes trivially true and the gate certifies without looking.
+  const floor = PISO_DE_SIMBOLOS[subpath] ?? 1
+  if (exports.length < floor) {
     problems.push(
-      `A enumeração de \`@theokit/sdk/${subpath}\` achou ${exports.length} símbolos (piso ${piso}).\n` +
-        '  A leitura dos exports provavelmente quebrou — e um gate que não acha nada passa por VACUIDADE,\n' +
-        '  não por paridade. Conserte a enumeração antes de confiar neste resultado.',
+      `The enumeration of \`@theokit/sdk/${subpath}\` found ${exports.length} symbols (floor ${floor}).\n` +
+        '  Reading the exports probably broke — and a gate that finds nothing passes by VACUITY,\n' +
+        '  not by parity. Fix the enumeration before trusting this result.',
     )
     continue
   }
 
-  for (const nome of exports) {
-    const d = decisoes[nome]
+  for (const name of exports) {
+    const d = decisoes[name]
     if (d === undefined) {
       problems.push(
-        `\`${nome}\` é exportado por \`@theokit/sdk/${subpath}\` e NÃO tem decisão registrada.\n` +
-          `  A camada nunca deve REDUZIR a superfície do SDK: um símbolo que ela não repassa fica\n` +
-          '  inalcançável para quem não pode importar o SDK direto — e a saída dele passa a ser\n' +
-          '  reimplementar. Escreva a decisão em scripts/check-auth-parity.mjs:\n' +
-          `    ${nome}: 'coberto'                              // e re-exporte em src/${subpath}-entry.ts\n` +
-          `    ${nome}: { fora: '<por que não atravessa>' }    // decisão explícita, não omissão`,
+        `\`${name}\` is exported by \`@theokit/sdk/${subpath}\` and has NO registered decision.\n` +
+          `  The layer must never REDUCE the SDK surface: a symbol it does not forward is unreachable\n` +
+          '  to anyone who cannot import the SDK directly — and their way out becomes reimplementing.\n' +
+          '  Write the decision in scripts/check-auth-parity.mjs:\n' +
+          `    ${name}: 'covered'                           // and re-export it in src/${subpath}-entry.ts\n` +
+          `    ${name}: { out: '<why it does not cross>' }  // an explicit decision, not an omission`,
       )
       continue
     }
-    if (d === 'reexportado' && !reExported.has(nome)) {
+    if (d === 're-exported' && !reExported.has(name)) {
       problems.push(
-        `\`${nome}\` está declarado como \`'reexportado'\` mas \`src/${subpath}-entry.ts\` NÃO o re-exporta.\n` +
-          '  A decisão dizia que ele atravessa, e ele não atravessa — a lista virou afirmação não conferida.\n' +
-          `  Ou acrescente o símbolo ao re-export, ou mude a decisão para \`'via-AuthProvider'\` / \`{ fora }\`.`,
+        `\`${name}\` is declared as \`'re-exported'\` but \`src/${subpath}-entry.ts\` does NOT re-export it.\n` +
+          '  The decision said it crosses, and it does not — the list became an unchecked claim.\n' +
+          `  Either add the symbol to the re-export, or change the decision to \`'via-AuthProvider'\` / \`{ out }\`.`,
       )
       continue
     }
-    if (typeof d === 'object' && !String(d.fora ?? '').trim()) {
+    if (typeof d === 'object' && !String(d.out ?? '').trim()) {
       problems.push(
-        `\`${nome}\` está marcado como fora de escopo SEM razão escrita.\n` +
-          '  Allowlist sem razão vira lista morta que ninguém revisa — escreva por que ele não atravessa.',
+        `\`${name}\` is marked out of scope with NO written reason.\n` +
+          '  An allowlist without reasons becomes a dead list nobody reviews — write why it does not cross.',
       )
     }
   }
 
-  for (const nome of Object.keys(decisoes)) {
-    if (!exports.includes(nome)) {
+  for (const name of Object.keys(decisoes)) {
+    if (!exports.includes(name)) {
       problems.push(
-        `\`${nome}\` tem decisão registrada mas o SDK NÃO o exporta mais.\n` +
-          '  Entrada morta engana quem lê a lista — remova.',
+        `\`${name}\` has a registered decision but the SDK NO LONGER exports it.\n` +
+          '  A dead entry misleads whoever reads the list — remove it.',
       )
     }
   }
 }
 
 if (problems.length > 0) {
-  console.error('\n✗ paridade de superfície SDK → camada\n')
+  console.error('\n✗ surface parity SDK → layer\n')
   for (const p of problems) console.error(`  • ${p}\n`)
   process.exit(1)
 }
 
-console.log('✓ paridade de superfície: todo símbolo do SDK tem decisão escrita')
+console.log('✓ surface parity: every SDK symbol has a written decision')

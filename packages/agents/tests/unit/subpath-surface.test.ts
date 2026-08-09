@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest'
 
 import {
   SUBPATHS_DE_INFRA,
-  enumerarSuperficie,
+  enumerateSurface,
   enumerarSuperficieDaCamada,
 } from '../../scripts/generate-reexports.mjs'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const SNAPSHOT = JSON.parse(
   readFileSync(join(ROOT, 'tests/unit/__snapshots__/subpath-surface.json'), 'utf8'),
-) as Record<string, { valores: string[]; tipos: string[] }>
+) as Record<string, { values: string[]; types: string[] }>
 
 /**
  * M90 T0.1/T1.1 — a superfície dos cinco subpaths de infra é um contrato, não um efeito colateral.
@@ -23,7 +23,7 @@ const SNAPSHOT = JSON.parse(
  * emitido tinha **uma linha** com a mesma coisa. A camada emprestava o nome sem interpor decisão: um
  * rename upstream se propagava verbatim, **sem erro de build aqui**, e o consumidor descobria em call
  * site. O gate de fronteira do consumidor prende a *string do especificador*, não a superfície de
- * tipos, então ele também não via.
+ * types, então ele também não via.
  *
  * ## Por que o snapshot lê o `dist`, e não o `src`
  *
@@ -32,7 +32,7 @@ const SNAPSHOT = JSON.parse(
  * pagou caro para aprender, quando um gate provava que alguém escrevera a raiz numa lista, e não que
  * os arquivos estavam no programa do compilador.
  *
- * ## Por que reusa `enumerarSuperficie` em vez de reimplementar
+ * ## Por que reusa `enumerateSurface` em vez de reimplementar
  *
  * Duas listas que precisam ficar em sincronia são uma violação de DRY com uma afirmação falsa por
  * cima — é o texto do próprio `subpath-coverage.test.ts` (review F-10 do M78), que perdeu `bench` de
@@ -55,14 +55,14 @@ describe('M90 — the infra subpath surface is locked', () => {
    * fails a snapshot that shrank, whatever the cause.
    */
   it('test_snapshot_holds_the_177_measured_symbols', () => {
-    const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.valores.length + s.tipos.length, 0)
+    const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
     expect(total).toBe(177)
   })
 
   /**
    * O CORAÇÃO DO GATE — e o que a primeira versão dele NÃO fazia.
    *
-   * Comparava `enumerarSuperficie(spec)` (a FONTE) contra o snapshot. Nunca comparava o que a CAMADA
+   * Comparava `enumerateSurface(spec)` (a FONTE) contra o snapshot. Nunca comparava o que a CAMADA
    * exporta. Resultado medido pela revisão: remover quatro símbolos reais de `/tools` e `/pty` deixava
    * a suíte inteira verde — 98 dos 173 símbolos (57%) sem oráculo nenhum. Foi por essa fresta que
    * `TruncationMode` sumiu da superfície publicada do `4.25.0`.
@@ -74,9 +74,9 @@ describe('M90 — the infra subpath surface is locked', () => {
     const missing: string[] = []
     for (const [sub, spec] of Object.entries(SUBPATHS_DE_INFRA)) {
       const layerDir = enumerarSuperficieDaCamada(sub)
-      const sourceText = await enumerarSuperficie(spec)
-      const inTheLayer = new Set([...layerDir.valores, ...layerDir.tipos])
-      for (const n of [...sourceText.valores, ...sourceText.tipos]) {
+      const sourceText = await enumerateSurface(spec)
+      const inTheLayer = new Set([...layerDir.values, ...layerDir.types])
+      for (const n of [...sourceText.values, ...sourceText.types]) {
         if (!inTheLayer.has(n)) missing.push(`${sub}: ${n}`)
       }
     }
@@ -94,9 +94,9 @@ describe('M90 — the infra subpath surface is locked', () => {
     const invented: string[] = []
     for (const [sub, spec] of Object.entries(SUBPATHS_DE_INFRA)) {
       const layerDir = enumerarSuperficieDaCamada(sub)
-      const sourceText = await enumerarSuperficie(spec)
-      const inTheSource = new Set([...sourceText.valores, ...sourceText.tipos])
-      for (const n of [...layerDir.valores, ...layerDir.tipos]) {
+      const sourceText = await enumerateSurface(spec)
+      const inTheSource = new Set([...sourceText.values, ...sourceText.types])
+      for (const n of [...layerDir.values, ...layerDir.types]) {
         if (!inTheSource.has(n)) invented.push(`${sub}: ${n}`)
       }
     }
@@ -112,8 +112,8 @@ describe('M90 — the infra subpath surface is locked', () => {
         divergences.push(`${sub}: sem entrada no snapshot`)
         continue
       }
-      const antes = new Set([...expected.valores, ...expected.tipos])
-      const today = new Set([...agora.valores, ...agora.tipos])
+      const antes = new Set([...expected.values, ...expected.types])
+      const today = new Set([...agora.values, ...agora.types])
       for (const n of antes) if (!today.has(n)) divergences.push(`${sub}: SUMIU ${n}`)
       for (const n of today) if (!antes.has(n)) divergences.push(`${sub}: NOVO ${n}`)
     }
