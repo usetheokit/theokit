@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { WIRE_CHUNK_TYPES, wireChunkSchema } from '../../src/wire/chunk-schema.js'
 
 /**
- * T1.1 — the wire chunk union is the WRITE contract (plan D2, lado estrito).
+ * T1.1 — the wire chunk union is the WRITE contract (plan D2, the strict side).
  *
  * The variant set is measured, not guessed: 12 come from `UIMessageStreamPresenter`
  * (`src/presenters/ui-message-stream.ts`) and 5 from the agents bridge
@@ -17,22 +17,21 @@ describe('wireChunkSchema — the write contract', () => {
     { type: 'text-delta', id: 't1', delta: 'oi' },
     { type: 'text-end', id: 't1' },
     { type: 'reasoning-start', id: 'r1' },
-    { type: 'reasoning-delta', id: 'r1', delta: 'pensando' },
+    { type: 'reasoning-delta', id: 'r1', delta: 'thinking' },
     { type: 'reasoning-end', id: 'r1' },
     { type: 'tool-input-available', toolCallId: 'c1', toolName: 'shell', input: {}, dynamic: true },
     { type: 'tool-output-available', toolCallId: 'c1', output: 'ok' },
     { type: 'tool-output-error', toolCallId: 'c1', errorText: 'boom' },
-    { type: 'error', errorText: 'falhou' },
+    { type: 'error', errorText: 'it failed' },
     { type: 'finish' },
   ] as const
 
   it('test_the_schema_accepts_every_variant_the_presenter_emits', () => {
     for (const chunk of EMITTED_BY_PRESENTER) {
       const parsed = wireChunkSchema.safeParse(chunk)
-      expect(
-        parsed.success,
-        `variante ${chunk.type} deveria parsear: ${JSON.stringify(chunk)}`,
-      ).toBe(true)
+      expect(parsed.success, `variant ${chunk.type} should parse: ${JSON.stringify(chunk)}`).toBe(
+        true,
+      )
     }
   })
 
@@ -40,17 +39,17 @@ describe('wireChunkSchema — the write contract', () => {
     const frameworkChunks = [
       { type: 'tool-approval-request', approvalId: 'a1', toolCallId: 'c1' },
       { type: 'data-checkpoint', data: { handle: 'h1' }, transient: true },
-      { type: 'data-input-requested', data: { prompt: 'qual?' }, transient: true },
+      { type: 'data-input-requested', data: { prompt: 'which?' }, transient: true },
       { type: 'data-task-progress', data: { done: 1 }, transient: true },
       { type: 'data-shell-output', data: { stdout: 'x' }, transient: true },
     ]
     for (const chunk of frameworkChunks) {
-      expect(wireChunkSchema.safeParse(chunk).success, `variante ${chunk.type}`).toBe(true)
+      expect(wireChunkSchema.safeParse(chunk).success, `variant ${chunk.type}`).toBe(true)
     }
   })
 
   it('test_the_schema_rejects_an_unknown_variant', () => {
-    expect(wireChunkSchema.safeParse({ type: 'inexistente' }).success).toBe(false)
+    expect(wireChunkSchema.safeParse({ type: 'nonexistent' }).success).toBe(false)
   })
 
   it('test_finish_accepts_an_optional_messageMetadata', () => {
