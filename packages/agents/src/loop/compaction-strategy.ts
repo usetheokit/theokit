@@ -12,7 +12,7 @@
  * the SDK's `CompressibleMessage` union (e.g. `'tool'`) cast at the call site, exactly
  * as the SDK's own type contract requires.
  *
- * referencia: knowledge-base/references/mastra compaction (named strategy over a budget).
+ * reference: knowledge-base/references/mastra compaction (named strategy over a budget).
  */
 import { compactTranscript, type CompressibleMessage } from '@theokit/sdk/compaction'
 import { z } from 'zod'

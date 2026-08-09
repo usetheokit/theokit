@@ -18,11 +18,11 @@
  * has passed.
  *
  * **What this module does NOT do, and the finding that shrank M112:** it does not build transports. The SDK
- * já entrega `McpServerConfig = McpStdioServerConfig | McpHttpServerConfig`, com `type`/`url`/
+ * already ships `McpServerConfig = McpStdioServerConfig | McpHttpServerConfig`, with `type`/`url`/
  * `headers` (*"Passed through. `Authorization` works here."*), `auth` (OAuth 2.1 PKCE) e
- * `requestTimeoutMs` (`AbortSignal.timeout`, erro tipado, default 30 s). Este arquivo declarava um
- * `McpServerConfig` mais **estreito** e recusava o que o SDK aceita — dois donos do mesmo fato. O
- * M112 para de estreitar; nenhuma dependência nova entrou.
+ * `requestTimeoutMs` (`AbortSignal.timeout`, typed error, 30 s default). This file declared a
+ * **narrower** `McpServerConfig` and refused what the SDK accepts — two owners of the same fact.
+ * M112 stops narrowing; no new dependency was added.
  *
  * **Degradation is per entry, not per file — and that is NOT swallowing an error.** Before, one entry
  * the parser did not understand took down the whole map: a `.mcp.json` with a perfect stdio server
@@ -140,7 +140,7 @@ function parseMcpJson(raw: unknown, source: string, onWarn: (a: string) => void)
     const reason = validateEntry(name, entryRaw)
     if (reason !== undefined) {
       // The message never carries a `headers` value — `validateEntry` returns only the reason, and it
-      // é construído a partir da FORMA, nunca do conteúdo.
+      // is built from the SHAPE, never from the content.
       onWarn(`${source}: server "${name}" ignored — ${reason}`)
       continue
     }

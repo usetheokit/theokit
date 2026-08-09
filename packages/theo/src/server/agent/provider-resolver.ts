@@ -1,22 +1,22 @@
 /**
  * Provider Resolver — Strategy + Registry pattern (FAANG-grade).
  *
- * Inspiração: Dapr Conversation Registry (`dapr/pkg/components/conversation/registry.go`)
+ * Inspiration: Dapr Conversation Registry (`dapr/pkg/components/conversation/registry.go`)
  * + Encore Manager provider array (`encore/runtimes/go/pubsub/manager_internal.go`).
  *
- * Princípio: provider routing é responsabilidade do FRAMEWORK, não do consumer.
- * Consumer template usa `model: { id: 'gpt-4o-mini' }` puro — sem conditionals.
+ * Principle: provider routing is the FRAMEWORK's responsibility, not the consumer's.
+ * The consumer template uses a plain `model: { id: 'gpt-4o-mini' }` — no conditionals.
  *
  * Wire protocol: OpenAI Chat Completions (universal — implementado por todos
  * os providers: OpenRouter, Groq, Mistral, Together, Anthropic via proxy, etc).
  *
- * Resolução por prioridade (FIRST match wins):
- *   1. OPENROUTER_API_KEY → baseUrl=openrouter.ai (gateway multi-modelo)
+ * Resolution by priority (FIRST match wins):
+ *   1. OPENROUTER_API_KEY → baseUrl=openrouter.ai (multi-model gateway)
  *   2. OPENAI_API_KEY     → baseUrl=api.openai.com
  *   3. ANTHROPIC_API_KEY  → direct Anthropic (Messages API, não OpenAI-compat)
  *
- * Escape hatch: `options.apiKey` explícito SOBREPÕE auto-resolution
- * (consumer pode forçar provider específico se quiser).
+ * Escape hatch: an explicit `options.apiKey` OVERRIDES auto-resolution
+ * (the consumer can force a specific provider if it wants to).
  */
 
 /**
@@ -25,7 +25,7 @@
  * @public
  */
 export interface ProviderDescriptor {
-  /** Stable name used internally — não exposto no wire. */
+  /** Stable name used internally — not exposed on the wire. */
   name: string
   /** Environment variable that holds the API key for this provider. */
   envKey: string

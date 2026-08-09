@@ -33,9 +33,9 @@ export class ModelCapability implements Capability {
     // type must fail here, typed and named — not as a raw `id.trim is not a function` three frames
     // deep (rules/error-handling.md § 2: validate at the boundary, fail typed).
     if (typeof id !== 'string') {
-      throw new ConfigurationError(`model: esperava string, recebi ${describe(id)}`)
+      throw new ConfigurationError(`model: expected a string, got ${describe(id)}`)
     }
-    if (id.trim().length === 0) throw new ConfigurationError('model: id não pode ser vazio')
+    if (id.trim().length === 0) throw new ConfigurationError('model: id cannot be empty')
   }
   apply(draft: CompiledAgentOptionsDraft): void {
     setOnce(draft, 'model', this.id, this.name)
@@ -72,7 +72,7 @@ export class SkillsCapability implements Capability {
     // would otherwise spread into eleven single-character skill names and reach Agent.create with no
     // error at all — silent corruption, the worst failure mode for file-based authoring.
     if (!Array.isArray(entries)) {
-      throw new ConfigurationError(`skills: esperava array de nomes, recebi ${describe(entries)}`)
+      throw new ConfigurationError(`skills: expected an array of names, got ${describe(entries)}`)
     }
     for (const e of entries) {
       // The reference compiler accepts `string | InlineSkill` (define-agent.ts § compileSkillsSelection),
@@ -86,13 +86,13 @@ export class SkillsCapability implements Capability {
       // instead of at prompt-assembly time. It is an input rejection, never an output divergence.
       if (typeof e === 'string') {
         if (e.trim().length === 0) {
-          throw new ConfigurationError('skills: nome vazio — use um nome de skill não vazio')
+          throw new ConfigurationError('skills: empty name — use a non-empty skill name')
         }
         continue
       }
       if (typeof e !== 'object' || e === null || Array.isArray(e)) {
         throw new ConfigurationError(
-          `skills: entrada inválida (${describe(e)}) — use um nome ou um skill inline`,
+          `skills: invalid entry (${describe(e)}) — use a name or an inline skill`,
         )
       }
       // An inline skill reaches the `<skills>` system-prompt block. Accepting `{ name }` alone lets a
@@ -103,7 +103,7 @@ export class SkillsCapability implements Capability {
         const value = (e as Record<string, unknown>)[field]
         if (typeof value !== 'string' || value.trim().length === 0) {
           throw new ConfigurationError(
-            `skills: skill inline sem \`${field}\` válido (${describe(value)}) — ` +
+            `skills: inline skill without a valid \`${field}\` (${describe(value)}) — ` +
               'name, description e instructions são obrigatórios',
           )
         }
@@ -113,9 +113,9 @@ export class SkillsCapability implements Capability {
   }
 
   apply(draft: CompiledAgentOptionsDraft): void {
-    // DELEGA ao compilador canônico (não reimplementa): `autoInject`, skills inline e o caminho
-    // resolver vivem numa fonte só — reimplementar aqui divergiria (foi o que a prova de
-    // equivalência pegou).
+    // DELEGATES to the canonical compiler (it does not reimplement): `autoInject`, inline skills and
+    // the resolver path live in a single source — reimplementing here would diverge (which is what
+    // the equivalence proof caught).
     const compiled = compileSkillsSelection(this.#entries.slice())
     if (compiled.skills === undefined) return
     // ACCUMULATES, never setOnce: skills is a merge-semantics field in the reference compiler

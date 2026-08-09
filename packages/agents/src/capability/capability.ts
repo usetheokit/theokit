@@ -39,11 +39,11 @@ export class CapabilityConflictError extends Error {
   override readonly name = 'CapabilityConflictError'
   constructor(field: string, previous: unknown, next: unknown, capability: string) {
     super(
-      // NUNCA ecoa os valores: um draft montado a partir de arquivo de config pode carregar
-      // token de MCP, header de auth, credencial de memória. Reporta a FORMA, como a validação
-      // de fronteira das capabilities já faz.
-      `capability "${capability}": campo "${field}" já declarado (${shapeOf(previous)}) ` +
-        `e redeclarado com valor diferente (${shapeOf(next)}) — declare uma vez só.`,
+      // NEVER echo the values: a draft assembled from a config file may carry an MCP token, an auth
+      // header, a memory credential. Report the SHAPE, as the capabilities' boundary validation
+      // already does.
+      `capability "${capability}": field "${field}" already declared (${shapeOf(previous)}) ` +
+        `and redeclared with a different value (${shapeOf(next)}) — declare it once.`,
     )
   }
 }
