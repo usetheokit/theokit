@@ -12,7 +12,7 @@
  * - reference: trpc/packages/server/src/unstable-core-do-not-import/error/TRPCError.ts:65-87
  * - reference: trpc/packages/server/src/unstable-core-do-not-import/rpc/codes.ts:11-44,76-81
  * - reference: hono/src/http-exception.ts:46-78
- * - referencia: encore/runtimes/go/beta/errs/error.go:38-55 (Go — D4 disclaimer applied)
+ * - reference: encore/runtimes/go/beta/errs/error.go:38-55 (Go — D4 disclaimer applied)
  *
  * Per blueprint ADR D2: retryable + hint are extension slots, NOT base fields
  * (3/3 references derive retryability from code identity; no reference ships
@@ -110,7 +110,7 @@ export interface HintExt {
 
 /**
  * Canonical retryable codes set. Aligned with trpc's `retryableRpcCodes` pattern
- * (referencia: trpc/packages/server/src/unstable-core-do-not-import/rpc/codes.ts:76-81).
+ * (reference: trpc/packages/server/src/unstable-core-do-not-import/rpc/codes.ts:76-81).
  *
  * Consumers SHOULD derive retry-policy via `isRetryable(env)` instead of a
  * field check — the canonical signal is code identity, not envelope shape.

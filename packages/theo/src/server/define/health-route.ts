@@ -87,7 +87,7 @@ export async function serveReservedRoute(
     } catch (err) {
       // 503 (the dependency is not ready) but NEVER swallow the cause — a
       // readiness probe failing silently is invisible to ops (project rule:
-      // "NUNCA engula exceções"). Log the cause, keep the 503 contract.
+      // "NEVER swallow exceptions"). Log the cause, keep the 503 contract.
       console.error('[theo] readiness probe threw — treating as not-ready', err)
       return { status: 503, body: { status: 'not-ready' } }
     }

@@ -1,9 +1,9 @@
 /**
- * Type declarations for sync-template-versions.mjs (T2.1 do plano cross-repo-integration-coesao).
+ * Type declarations for sync-template-versions.mjs (T2.1 of the cross-repo-integration-cohesion plan).
  *
- * O script é um ES module .mjs sem TS. Esta declaração existe para o
- * unit test (`tests/unit/sync-template-versions.test.ts`) poder importar
- * `syncTemplates` com tipagem em vez de `any`.
+ * The script is a plain .mjs ES module with no TS. This declaration exists so the unit test
+ * (`tests/unit/sync-template-versions.test.ts`) can import `syncTemplates` typed rather than as
+ * `any`.
  */
 
 export interface SyncTemplatesTruth {

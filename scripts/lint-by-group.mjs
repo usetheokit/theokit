@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * `npm run lint`, mas num processo por grupo — agent-builder#119.
+ * `npm run lint`, but one process per group — agent-builder#119.
  *
- * ## O que foi medido
+ * ## What was measured
  *
- * `eslint . --max-warnings=0` não terminava: OOM com heap padrão, OOM com 8 GB, e com 12 GB parava
- * de estourar mas não convergia — morto em 15 min com RSS de ~10,5 GB numa máquina de 15,6 GB. O
- * lint da camada ficou **sem veredito** por duas rodadas de revisão, e três erros reais chegaram a
- * `develop` porque só execução escopada (`npx eslint <paths>`) dava resposta.
+ * `eslint . --max-warnings=0` never finished: OOM with the default heap, OOM with 8 GB, and with
+ * 12 GB it stopped blowing up but did not converge — killed at 15 min with ~10.5 GB RSS on a 15.6 GB
+ * machine. The layer's lint went **without a verdict** for two review rounds, and three real errors
+ * reached `develop` because only a scoped run (`npx eslint <paths>`) gave an answer.
  *
- * Medido por grupo, cada um **termina sozinho**:
+ * Measured per group, each one **finishes on its own**:
  *
- * | Grupo | Tempo | Pico RSS |
+ * | Group | Time | Peak RSS |
  * |---|---|---|
  * | `packages/presenter` | 12 s | 0,85 GB |
  * | `tests` | 58 s | 1,6 GB |
@@ -19,28 +19,29 @@
  * | `packages/http` | 106 s | 2,6 GB |
  * | `packages/theo` | 206 s | 2,9 GB |
  *
- * Soma dos picos ≈ **9,6 GB** — que é o RSS observado. A causa não é um arquivo patológico nem uma
- * regra lenta: é `projectService: true` sobre um monorepo **num processo só**. O serviço mantém o
- * programa TypeScript de cada pacote vivo simultaneamente, e nada é liberado até o fim.
+ * The sum of the peaks ≈ **9.6 GB** — which is the observed RSS. The cause is neither a pathological
+ * file nor a slow rule: it is `projectService: true` over a monorepo **in a single process**. The
+ * service keeps every package's TypeScript program alive simultaneously, and nothing is released
+ * until the end.
  *
- * Um processo por grupo faz o sistema operacional liberar cada programa ao sair. O teto passa a ser
- * o **maior** grupo (2,9 GB), não a **soma**.
+ * One process per group makes the operating system release each program on exit. The ceiling becomes
+ * the **largest** group (2.9 GB), not the **sum**.
  *
- * ## Por que não `pnpm -r exec eslint`
+ * ## Why not `pnpm -r exec eslint`
  *
- * Porque ele varre só o que é workspace, e `tests/` (573 arquivos — o segundo maior grupo) e
- * `scripts/` moram na raiz. Um lint que cobre menos que o `eslint .` que substitui não é o mesmo
- * gate; é um gate menor com o mesmo nome.
+ * Because it only scans workspaces, and `tests/` (573 files — the second-largest group) and
+ * `scripts/` live at the root. A lint covering less than the `eslint .` it replaces is not the same
+ * gate; it is a smaller gate with the same name.
  *
- * ## A raiz é DERIVADA, e há piso anti-vacuidade
+ * ## The root is DERIVED, and there is an anti-vacuity floor
  *
- * Os grupos saem do **índice do git** cruzado com o `isPathIgnored` do próprio ESLint — nunca de uma
- * lista escrita à mão. Uma lista à mão falharia por **omissão**: um pacote novo simplesmente não
- * seria varrido, e ninguém notaria, que é como o gate morre em silêncio.
+ * The groups come from the **git index** crossed with ESLint's own `isPathIgnored` — never from a
+ * hand-written list. A hand-written list would fail by **omission**: a new package would simply not
+ * be scanned, and nobody would notice, which is how the gate dies in silence.
  *
- * E derivar não basta: antes de rodar qualquer coisa, este script confere que **todo** arquivo que o
- * ESLint linta cai em **algum** grupo. Se sobrar um, ele falha alto em vez de varrer 99% e reportar
- * verde — uma varredura que devolve menos do que devia passa igual a uma completa.
+ * And deriving is not enough: before running anything, this script checks that **every** file ESLint
+ * lints falls into **some** group. If one is left over, it fails loud instead of scanning 99% and
+ * reporting green — a scan that returns less than it should looks identical to a complete one.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -50,27 +51,27 @@ import { ESLint } from 'eslint'
 
 const EXTENSIONS = ['*.ts', '*.tsx', '*.mts', '*.cts', '*.js', '*.mjs', '*.cjs']
 
-/** Todo arquivo versionado que o ESLint realmente lintaria — o índice do git é a fonte. */
+/** Every tracked file ESLint would actually lint — the git index is the source. */
 async function lintableFiles() {
-  // `git` pelo PATH é o contrato deste script: ele roda como `npm run lint`, no repositório, com o
-  // mesmo `git` que o desenvolvedor usa. Caminho absoluto quebraria em macOS/nix e não fecha ameaça
-  // nenhuma — quem controla o PATH de um lint local já controla o `node` que o executa.
-  // eslint-disable-next-line sonarjs/no-os-command-from-path -- ver acima
-  const saida = spawnSync('git', ['ls-files', ...EXTENSIONS], {
+  // `git` from PATH is this script's contract: it runs as `npm run lint`, in the repository, with the
+  // same `git` the developer uses. An absolute path would break on macOS/nix and closes no threat —
+  // whoever controls the PATH of a local lint already controls the `node` that runs it.
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- see above
+  const out = spawnSync('git', ['ls-files', ...EXTENSIONS], {
     encoding: 'utf8',
     maxBuffer: 1 << 28,
   })
-  if (saida.status !== 0) throw new Error(`git ls-files falhou: ${saida.stderr}`)
+  if (out.status !== 0) throw new Error(`git ls-files failed: ${out.stderr}`)
   const eslint = new ESLint()
-  const todos = saida.stdout.trim().split('\n').filter(Boolean)
+  const todos = out.stdout.trim().split('\n').filter(Boolean)
   const lintable = []
   for (const f of todos) if (!(await eslint.isPathIgnored(f))) lintable.push(f)
   return lintable
 }
 
 /**
- * O grupo de um arquivo: `packages/<nome>` para pacote, o primeiro segmento para o resto, e `.` para
- * arquivo de raiz (`eslint.config.js`, `vitest.config.ts`, …).
+ * A file's group: `packages/<name>` for a package, the first segment for the rest, and `.` for a root
+ * file (`eslint.config.js`, `vitest.config.ts`, …).
  */
 function groupOf(file) {
   const parts = file.split('/')
@@ -80,15 +81,15 @@ function groupOf(file) {
 }
 
 function lintar(grupo, argsExtras) {
-  // Arquivo de raiz vira lista explícita: `eslint .` seria justamente o processo único que este
-  // script existe para não rodar.
+  // A root file becomes an explicit list: `eslint .` would be exactly the single process this script
+  // exists to avoid running.
   const target = grupo === '.' ? rootGroups : [grupo]
   const start = Date.now()
-  // Mesmo racional do `git` acima: é o `npx` do projeto que precisa rodar, e ele vem do PATH que o
-  // `npm run` já montou.
-  // eslint-disable-next-line sonarjs/no-os-command-from-path -- ver acima
+  // Same rationale as `git` above: it is the project's `npx` that must run, and it comes from the
+  // PATH `npm run` already assembled.
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- see above
   const r = spawnSync('npx', ['eslint', ...target, ...argsExtras], { stdio: 'inherit' })
-  return { grupo, segundos: (Date.now() - start) / 1000, ok: r.status === 0 }
+  return { grupo, seconds: (Date.now() - start) / 1000, ok: r.status === 0 }
 }
 
 let rootGroups = []
@@ -99,7 +100,7 @@ async function main() {
 
   const fileList = await lintableFiles()
   if (fileList.length === 0) {
-    console.error('lint: nenhum arquivo lintável — o filtro está errado, não o repositório')
+    console.error('lint: no lintable file — the filter is wrong, not the repository')
     process.exit(2)
   }
 
@@ -111,25 +112,25 @@ async function main() {
   }
   rootGroups = byGroup.get('.') ?? []
 
-  // Piso anti-vacuidade: a cobertura tem de fechar. Não fecha → falha alto.
+  // Anti-vacuity floor: the coverage must close. It does not → fail loud.
   const covered = [...byGroup.values()].reduce((n, v) => n + v.length, 0)
   if (covered !== fileList.length) {
     console.error(`lint: coverage does not close — ${covered} of ${fileList.length}`)
     process.exit(2)
   }
 
-  // Maior grupo primeiro: se algo vai estourar memória, que estoure em 3 min e não em 8.
+  // Largest group first: if something is going to blow memory, let it blow at 3 min and not at 8.
   const groups = [...byGroup.entries()].sort((a, b) => b[1].length - a[1].length).map(([g]) => g)
   console.error(`lint: ${fileList.length} files in ${groups.length} groups, one process each`)
 
   const results = []
   for (const g of groups) results.push(lintar(g, argsExtras))
 
-  console.error('\n— resumo —')
+  console.error('\n— summary —')
   for (const r of results) {
     const n = byGroup.get(r.grupo).length
     console.error(
-      `${r.ok ? 'ok  ' : 'FALHA'} ${r.segundos.toFixed(1).padStart(7)}s ${String(n).padStart(5)} arq  ${r.grupo}`,
+      `${r.ok ? 'ok  ' : 'FAIL'} ${r.seconds.toFixed(1).padStart(7)}s ${String(n).padStart(5)} files  ${r.group}`,
     )
   }
   const failures = results.filter((r) => !r.ok)
