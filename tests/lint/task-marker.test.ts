@@ -42,17 +42,17 @@ import { describe, expect, it } from 'vitest'
  */
 
 /** Maiúscula + dois-pontos, dentro de um comentário `//` ou `/* ... `. */
-const MARCADOR = /(?:\/\/|\/\*|^\s*\*)[^\n]*\b(TODO|FIXME|XXX|HACK):/
+const MARKER = /(?:\/\/|\/\*|^\s*\*)[^\n]*\b(TODO|FIXME|XXX|HACK):/
 
-const EXTENSOES = ['*.ts', '*.tsx', '*.mts', '*.cts']
+const EXTENSIONS = ['*.ts', '*.tsx', '*.mts', '*.cts']
 
 /** As raízes de produção e teste da camada — derivadas do índice do git, nunca transcritas. */
-function arquivosVersionados(): string[] {
+function trackedFiles(): string[] {
   // O `git` do PATH é o ponto: este gate pergunta ao índice do repositório em que está rodando.
   // Caminho absoluto quebraria fora do Linux e não fecha ameaça alguma num teste que já executa com
   // os privilégios de quem o invocou.
   // eslint-disable-next-line sonarjs/no-os-command-from-path -- ver acima
-  const saida = execFileSync('git', ['ls-files', ...EXTENSOES], {
+  const saida = execFileSync('git', ['ls-files', ...EXTENSIONS], {
     encoding: 'utf8',
     maxBuffer: 1 << 28,
   })
@@ -66,70 +66,70 @@ function arquivosVersionados(): string[] {
       )
       .filter((f) => !f.includes('/templates/') && !f.includes('/dist/'))
       // Este próprio arquivo escreve os marcadores na prosa que os explica.
-      .filter((f) => !f.endsWith('tests/lint/marcador-de-tarefa.test.ts'))
+      .filter((f) => !f.endsWith('tests/lint/task-marker.test.ts'))
   )
 }
 
-interface Achado {
-  readonly arquivo: string
-  readonly linha: number
-  readonly texto: string
+interface Finding {
+  readonly file: string
+  readonly lineText: number
+  readonly text: string
 }
 
-function marcadores(arquivos: readonly string[]): Achado[] {
-  const achados: Achado[] = []
-  for (const arquivo of arquivos) {
+function markers(fileList: readonly string[]): Finding[] {
+  const findings: Finding[] = []
+  for (const file of fileList) {
     let conteudo: string
     try {
-      conteudo = readFileSync(arquivo, 'utf8')
+      conteudo = readFileSync(file, 'utf8')
     } catch {
       // Um arquivo no índice que sumiu do disco não é um marcador — é um rename em voo.
       continue
     }
     if (!conteudo.includes('TODO:') && !/(FIXME|XXX|HACK):/.test(conteudo)) continue
-    const linhas = conteudo.split('\n')
-    for (const [i, linha] of linhas.entries()) {
-      if (MARCADOR.test(linha)) achados.push({ arquivo, linha: i + 1, texto: linha.trim() })
+    const lines = conteudo.split('\n')
+    for (const [i, lineText] of lines.entries()) {
+      if (MARKER.test(lineText)) findings.push({ file, lineText: i + 1, text: lineText.trim() })
     }
   }
-  return achados
+  return findings
 }
 
-describe('agent-builder#120 — marcador de tarefa em comentário', () => {
-  it('test_nenhum_marcador_de_tarefa_esquecido_no_fonte_da_camada', () => {
-    const arquivos = arquivosVersionados()
+describe('agent-builder#120 — a task marker in a comment', () => {
+  it('test_no_forgotten_task_marker_in_the_layers_source', () => {
+    const fileList = trackedFiles()
     expect(
-      marcadores(arquivos),
+      markers(fileList),
       'dívida marcada em comentário não é rastreada por ninguém — registre em `## Correções` de um ADR ou como resíduo declarado, e remova o marcador',
     ).toEqual([])
   })
 
-  it('test_PISO_a_varredura_enxerga_o_mesmo_que_o_indice_do_git', () => {
+  it('test_FLOOR_the_sweep_sees_the_same_as_the_git_index', () => {
     // Sem isto, um filtro quebrado devolveria zero arquivos e o teste acima passaria vazio.
-    const arquivos = arquivosVersionados()
-    expect(arquivos.length).toBeGreaterThan(500)
-    expect(arquivos.some((f) => f.startsWith('packages/agents/src/'))).toBe(true)
-    expect(arquivos.some((f) => f.startsWith('tests/'))).toBe(true)
+    const fileList = trackedFiles()
+    expect(fileList.length).toBeGreaterThan(500)
+    expect(fileList.some((f) => f.startsWith('packages/agents/src/'))).toBe(true)
+    expect(fileList.some((f) => f.startsWith('tests/'))).toBe(true)
   })
 
-  it('test_NEGATIVO_o_detector_acha_um_marcador_sintetico', () => {
-    const marcador = ['// ' + 'TODO' + ': trocar isto antes do release'].join('\n')
-    expect(MARCADOR.test(marcador)).toBe(true)
-    expect(MARCADOR.test(' * ' + 'FIXME' + ': idem')).toBe(true)
+  it('test_NEGATIVE_the_detector_finds_a_synthetic_marker', () => {
+    const markerText = ['// ' + 'TODO' + ': trocar isto antes do release'].join('\n')
+    expect(MARKER.test(markerText)).toBe(true)
+    expect(MARKER.test(' * ' + 'FIXME' + ': idem')).toBe(true)
   })
 
-  it('test_NEGATIVO_a_prosa_pt_BR_que_derrubou_o_M95_tres_vezes_NAO_casa', () => {
+  it('test_NEGATIVE_the_pt_BR_prose_that_broke_M95_three_times_does_NOT_match', () => {
     for (const prosa of [
       '// o adaptador por onde todo turno passa',
       '// para todo erro do provedor, um código nosso',
       ' * todo estado novo entra por aqui',
     ]) {
-      expect(MARCADOR.test(prosa), prosa).toBe(false)
+      expect(MARKER.test(prosa), prosa).toBe(false)
     }
   })
 
-  it('test_NEGATIVO_o_marcador_dentro_de_string_de_scaffold_NAO_casa', () => {
+  it('test_NEGATIVE_a_marker_inside_a_scaffold_string_does_NOT_match', () => {
     // A saída do `theo generate` — marcador para o usuário, não dívida deste repositório.
-    expect(MARCADOR.test("    `    return { message: 'TODO: implement ${name}' }`,")).toBe(false)
+    expect(MARKER.test("    `    return { message: 'TODO: implement ${name}' }`,")).toBe(false)
   })
 })

@@ -77,17 +77,17 @@ function generatorToStream(gen: AsyncGenerator<UIMessageChunk>): ReadableStream<
  * `sendMessages` promise — whereas `HttpTransport` throws from `sendMessages` on a non-2xx response.
  */
 /**
- * Uma aprovação estacionada foi descartada porque o turno terminou sem decisão.
+ * A parked approval was discarded because the turn ended with no decision.
  *
- * M92 — tipado de propósito. Antes a promessa simplesmente **nunca** resolvia, e a chamada de tool do
- * SDK pendurava; `resolve(false)` seria pior ainda, porque é indistinguível de "o usuário negou".
+ * M92 — typed on purpose. Before, the promise simply **never** settled and the SDK tool call hung;
+ * `resolve(false)` would be worse still, because it is indistinguishable from "the user denied".
  */
 export class ApprovalAbortedError extends Error {
   constructor(
     readonly approvalId: string,
-    motivo: string,
+    reason: string,
   ) {
-    super(`Aprovação '${approvalId}' descartada: ${motivo}.`)
+    super(`Approval '${approvalId}' discarded: ${reason}.`)
     this.name = 'ApprovalAbortedError'
   }
 }
@@ -95,72 +95,72 @@ export class ApprovalAbortedError extends Error {
 export class InProcessTransport implements AgentTransport {
   readonly #run: InProcessRunner
   /**
-   * Aprovações inline estacionadas: `approvalId` → como resolver **ou rejeitar** a promessa parada.
+   * Parked inline approvals: `approvalId` → how to resolve **or reject** the stalled promise.
    *
-   * M92 — o `reject` entrou junto com a eviction. Antes havia só o `resolve`, e nada apagava a entrada
-   * quando o turno abortava: a promessa ficava pendente **para sempre**, e a chamada de tool do SDK
-   * pendurava com ela. Uma promessa que nunca resolve **nem** rejeita é a forma mais silenciosa de
-   * engolir um erro — nem stack trace existe (`error-handling.md § 2`).
+   * M92 — `reject` arrived together with the eviction. Before there was only `resolve`, and nothing
+   * erased the entry when the turn aborted: the promise stayed pending **forever**, and the SDK tool
+   * call hung with it. A promise that neither resolves **nor** rejects is the quietest way to swallow
+   * an error — not even a stack trace exists (`error-handling.md § 2`).
    */
   readonly #pending = new Map<
     string,
     {
       resolve: (decision: boolean | ApprovalDecision) => void
       reject: (err: Error) => void
-      turno: number
+      turn: number
     }
   >()
 
-  /** O turno corrente. Um `send()` novo incrementa e varre o anterior. */
-  #turno = 0
+  /** The current turn. A new `send()` increments it and sweeps the previous one. */
+  #turn = 0
 
   constructor(options: InProcessTransportOptions) {
     this.#run = options.run
   }
 
   /**
-   * Cria o `awaitApproval` DESTE turno, com o número e o sinal fechados no closure.
+   * Creates the `awaitApproval` for THIS turn, with the number and the signal closed over.
    *
-   * Campo compartilhado não serve, e a revisão do M92 mediu por quê: um runner do turno 1 que
-   * estaciona **depois** do `send` do turno 2 lê o campo já sobrescrito e nasce etiquetado turno 2 —
-   * o abort do turno 1 não o varre, e a promessa pendura. A primeira correção do M92 trocou "ler no
-   * momento da aprovação" por "ler no `send`", e continuou errada pela mesma razão: um campo só.
+   * A shared field will not do, and the M92 review measured why: a turn-1 runner that parks **after**
+   * turn 2's `send` reads the already-overwritten field and is born labelled turn 2 — turn 1's abort
+   * does not sweep it, and the promise hangs. M92's first fix swapped "read at approval time" for
+   * "read at `send`", and stayed wrong for the same reason: a single field.
    *
-   * O closure é o único lugar onde o turno de um runner pode viver sem ser sobrescrito por outro.
+   * The closure is the only place a runner's turn can live without another one overwriting it.
    */
-  #criarAwaitApproval(turno: number, sinal: AbortSignal | undefined): InProcessAwaitApproval {
+  #criarAwaitApproval(turn: number, sinal: AbortSignal | undefined): InProcessAwaitApproval {
     return (req) =>
       new Promise<boolean | ApprovalDecision>((resolve, reject) => {
         // Abortado ANTES de a aprovação estacionar: varrer no `sendMessages` não alcança este caso,
         // porque naquele momento não havia nada a varrer.
         if (sinal?.aborted === true) {
-          reject(new ApprovalAbortedError(req.approvalId, 'o turno já estava abortado'))
+          reject(new ApprovalAbortedError(req.approvalId, 'o turn já estava abortado'))
           return
         }
         // Ids de aprovação são UUIDs do servidor — colisão é bug real (dois turnos reusando um id).
-        // Falha rápido em vez de sobrescrever em silêncio o resolver estacionado do turno anterior.
+        // Falha rápido em vez de sobrescrever em silêncio o resolver estacionado do turn anterior.
         if (this.#pending.has(req.approvalId)) {
           reject(
             new Error(`Duplicate pending approval id '${req.approvalId}' — ids must be unique.`),
           )
           return
         }
-        this.#pending.set(req.approvalId, { resolve, reject, turno })
+        this.#pending.set(req.approvalId, { resolve, reject, turn })
       })
   }
 
   /**
-   * Varre as aprovações de um turno, rejeitando cada uma com erro TIPADO.
+   * Varre as aprovações de um turn, rejeitando cada uma com erro TIPADO.
    *
    * Rejeitar e não `resolve(false)`: um `false` é indistinguível de *"o usuário negou"*, e a diferença
    * importa — negar é decisão, abortar é interrupção. O SDK precisa das duas para desenrolar a chamada
    * de tool corretamente.
    */
-  #varrerTurno(turno: number, motivo: string): void {
-    for (const [id, entrada] of [...this.#pending]) {
-      if (entrada.turno !== turno) continue
+  #varrerTurno(turn: number, reason: string): void {
+    for (const [id, entry] of [...this.#pending]) {
+      if (entry.turn !== turn) continue
       this.#pending.delete(id)
-      entrada.reject(new ApprovalAbortedError(id, motivo))
+      entry.reject(new ApprovalAbortedError(id, reason))
     }
   }
 
@@ -173,24 +173,24 @@ export class InProcessTransport implements AgentTransport {
     options: Parameters<ChatTransport['sendMessages']>[0],
   ): Promise<ReadableStream<UIMessageChunk>> {
     const { messages, abortSignal, metadata } = options
-    // M92 — um `send()` novo varre o turno anterior: aprovações daquele turno nunca mais serão
+    // M92 — um `send()` novo varre o turn anterior: aprovações daquele turn nunca mais serão
     // decididas, e deixá-las no `Map` é vazamento com uma promessa pendurada em cada uma.
-    this.#varrerTurno(this.#turno, 'um turno novo começou')
-    this.#turno += 1
-    const turnoAtual = this.#turno
+    this.#varrerTurno(this.#turn, 'um turn novo começou')
+    this.#turn += 1
+    const currentTurn = this.#turn
 
-    // O sinal de abort do turno é a costura que já chegava aqui e não era usada. `once` porque um
+    // O sinal de abort do turn é a costura que já chegava aqui e não era usada. `once` porque um
     // `AbortSignal` dispara no máximo uma vez, e reter o listener manteria o transporte vivo.
     // Sinal JÁ abortado não dispara `addEventListener` — a revisão do M92 mediu: `pendentes=1` e a
     // promessa PENDENTE, ou seja, exatamente o travamento que este milestone existe para fechar,
     // ainda alcançável. A varredura roda na hora e o listener cobre o abort que vier depois.
     if (abortSignal?.aborted === true) {
-      this.#varrerTurno(turnoAtual, 'o turno já estava abortado')
+      this.#varrerTurno(currentTurn, 'o turn já estava abortado')
     } else {
       abortSignal?.addEventListener(
         'abort',
         () => {
-          this.#varrerTurno(turnoAtual, 'o turno foi abortado')
+          this.#varrerTurno(currentTurn, 'o turn foi abortado')
         },
         { once: true },
       )
@@ -198,7 +198,7 @@ export class InProcessTransport implements AgentTransport {
     const generator = this.#run({
       message: extractLastUserText(messages),
       signal: abortSignal ?? undefined,
-      awaitApproval: this.#criarAwaitApproval(turnoAtual, abortSignal ?? undefined),
+      awaitApproval: this.#criarAwaitApproval(currentTurn, abortSignal ?? undefined),
       // M43 — forward per-request context (the seam's `metadata`) to the runner.
       context: metadata,
     })
@@ -210,14 +210,14 @@ export class InProcessTransport implements AgentTransport {
   }
 
   approve(approvalId: string, decision: ApprovalDecision): Promise<void> {
-    const entrada = this.#pending.get(approvalId)
-    if (entrada === undefined) {
+    const entry = this.#pending.get(approvalId)
+    if (entry === undefined) {
       return Promise.reject(
         new Error(`No pending approval '${approvalId}' (unknown or already settled).`),
       )
     }
     this.#pending.delete(approvalId)
-    entrada.resolve(decision)
+    entry.resolve(decision)
     return Promise.resolve()
   }
 }

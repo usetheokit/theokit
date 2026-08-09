@@ -26,7 +26,7 @@ describe('wireChunkSchema — the write contract', () => {
     { type: 'finish' },
   ] as const
 
-  it('test_schema_aceita_toda_variante_emitida_pelo_presenter', () => {
+  it('test_the_schema_accepts_every_variant_the_presenter_emits', () => {
     for (const chunk of EMITTED_BY_PRESENTER) {
       const parsed = wireChunkSchema.safeParse(chunk)
       expect(
@@ -36,7 +36,7 @@ describe('wireChunkSchema — the write contract', () => {
     }
   })
 
-  it('test_schema_aceita_os_chunks_do_framework', () => {
+  it('test_the_schema_accepts_the_frameworks_chunks', () => {
     const frameworkChunks = [
       { type: 'tool-approval-request', approvalId: 'a1', toolCallId: 'c1' },
       { type: 'data-checkpoint', data: { handle: 'h1' }, transient: true },
@@ -49,11 +49,11 @@ describe('wireChunkSchema — the write contract', () => {
     }
   })
 
-  it('test_schema_rejeita_variante_desconhecida', () => {
+  it('test_the_schema_rejects_an_unknown_variant', () => {
     expect(wireChunkSchema.safeParse({ type: 'inexistente' }).success).toBe(false)
   })
 
-  it('test_finish_aceita_messageMetadata_opcional', () => {
+  it('test_finish_accepts_an_optional_messageMetadata', () => {
     // theokit#141 — a per-turn usage rides `messageMetadata` on the finish chunk.
     const withMeta = {
       type: 'finish',
@@ -62,7 +62,7 @@ describe('wireChunkSchema — the write contract', () => {
     expect(wireChunkSchema.safeParse(withMeta).success).toBe(true)
   })
 
-  it('test_campos_extras_de_um_provider_nao_derrubam_o_parse', () => {
+  it('test_extra_fields_from_a_provider_do_not_break_the_parse', () => {
     // A real frame carries optional fields we do not model (providerMetadata, title...). Rejecting
     // them would make our reader stricter than the wire it claims to speak.
     const rich = {
@@ -77,7 +77,7 @@ describe('wireChunkSchema — the write contract', () => {
     expect(wireChunkSchema.safeParse(rich).success).toBe(true)
   })
 
-  it('test_WIRE_CHUNK_TYPES_lista_toda_variante_do_schema', () => {
+  it('test_WIRE_CHUNK_TYPES_lists_every_variant_of_the_schema', () => {
     // The exported list is what `check-wire-parity.mjs` diffs against the `ai` union. If it drifts
     // from the schema, the parity gate compares the wrong set and its verdict means nothing.
     for (const chunk of EMITTED_BY_PRESENTER) {

@@ -33,7 +33,7 @@ const deps = pkg.dependencies ?? {}
 const peers = pkg.peerDependencies ?? {}
 
 /** Implementação: o consumidor não pode importar, logo não pode fornecer. */
-const IMPLEMENTACAO = [
+const IMPLEMENTATION = [
   '@theokit/sdk',
   '@theokit/sdk-tools',
   '@theokit/sdk-pty',
@@ -50,10 +50,10 @@ const IMPLEMENTACAO = [
  * consumidor não precisa mais fornecê-lo, então exigir que fosse peer passou a afirmar o contrário
  * do contrato.
  */
-const SUBSTITUIVEL = ['zod', '@theokit/http'] as const
+const REPLACEABLE = ['zod', '@theokit/http'] as const
 
-describe('M79 T1.1 — direção de dependência', () => {
-  it.each(IMPLEMENTACAO)('test_%s_e_dependency_e_nao_peer', (nome) => {
+describe('M79 T1.1 — dependency direction', () => {
+  it.each(IMPLEMENTATION)('test_%s_e_dependency_e_nao_peer', (nome) => {
     expect(
       deps[nome],
       `\`${nome}\` é implementação desta camada: o consumidor é PROIBIDO de importá-lo pela ` +
@@ -63,7 +63,7 @@ describe('M79 T1.1 — direção de dependência', () => {
     expect(peers[nome]).toBeUndefined()
   })
 
-  it.each(SUBSTITUIVEL)('test_CONTRAPROVA_%s_continua_peer', (nome) => {
+  it.each(REPLACEABLE)('test_CONTRAPROVA_%s_continua_peer', (nome) => {
     // Sem esta, mover os SEIS passaria nos testes acima e quebraria o caso do `zod`: duas cópias
     // produzem validadores que não se reconhecem, e o consumidor cria schemas com a dele.
     expect(
@@ -73,16 +73,14 @@ describe('M79 T1.1 — direção de dependência', () => {
     expect(deps[nome]).toBeUndefined()
   })
 
-  it('test_nenhum_pacote_esta_nos_DOIS_lugares', () => {
+  it('test_no_package_sits_in_BOTH_places', () => {
     // Um pacote em `dependencies` E `peerDependencies` é ambiguidade de resolução: o npm satisfaz o
     // peer com a própria dep e o aviso some, escondendo qual das duas declarações governa.
-    const nosDois = Object.keys(deps).filter((n) => peers[n] !== undefined)
-    expect(nosDois, `Declarado em dependencies E peerDependencies: ${nosDois.join(', ')}`).toEqual(
-      [],
-    )
+    const inBoth = Object.keys(deps).filter((n) => peers[n] !== undefined)
+    expect(inBoth, `Declarado em dependencies E peerDependencies: ${inBoth.join(', ')}`).toEqual([])
   })
 
-  it('test_a_camada_deixou_de_ter_ZERO_dependencies', () => {
+  it('test_the_layer_no_longer_has_ZERO_dependencies', () => {
     // O estado anterior — zero deps, tudo peer — era a inversão em forma pura: a camada não assumia
     // NADA do que precisa para funcionar.
     expect(Object.keys(deps).length).toBeGreaterThan(0)

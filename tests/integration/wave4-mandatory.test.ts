@@ -13,7 +13,7 @@ async function devalueParse(s: string): Promise<unknown> {
   return mod.parse(s)
 }
 
-describe('Onda 4 — Server Actions', () => {
+describe('Wave 4 — Server Actions', () => {
   let server: Awaited<ReturnType<typeof startDevServer>>
   let port: number
   let baseUrl: string

@@ -14,7 +14,7 @@
 // breaking para outros consumidores, e o M73 já escreveu a regra no `auth-entry.ts`: enriquecer nunca
 // reduz. Se um símbolo for deliberadamente retido no futuro, a razão vem escrita aqui, como lá.
 //
-// Gerado por `scripts/gerar-reexports.mts`; travado por `tests/unit/subpath-surface.test.ts`.
+// Gerado por `scripts/generate-reexports.mts`; travado por `tests/unit/subpath-surface.test.ts`.
 
 export {
   acquireSessionWriter,

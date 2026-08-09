@@ -24,36 +24,36 @@ import { describe, expect, it } from 'vitest'
 
 import { AGENT_BRAND, defineAgent, isAgentDefinition } from '../../src/bridge/define-agent.js'
 
-describe('M79 — AgentDefinition atravessa cópias do pacote', () => {
-  it('test_o_brand_vem_do_REGISTRO_GLOBAL_de_simbolos', () => {
+describe('M79 — AgentDefinition crosses copies of the package', () => {
+  it('test_the_brand_comes_from_the_GLOBAL_symbol_REGISTRY', () => {
     // `Symbol.for` resolve no registro global do runtime — a MESMA identidade de símbolo em duas
     // cópias do pacote carregadas no mesmo processo. Um `Symbol()` local (ou um `unique symbol` sem
     // `for`) daria dois símbolos distintos, e cada cópia rejeitaria a definição da outra.
     expect(AGENT_BRAND).toBe(Symbol.for('theokit.agent.definition'))
   })
 
-  it('test_uma_definicao_construida_por_OUTRA_copia_e_reconhecida', () => {
+  it('test_a_definition_built_by_ANOTHER_copy_is_recognized', () => {
     // Simula a outra cópia: um objeto puro carimbado com o símbolo do registro global, SEM passar
     // por `defineAgent` desta cópia. É exatamente o que o transporte in-process recebia.
-    const deOutraCopia = {
+    const fromAnotherCopy = {
       model: 'x',
       system: 'oi',
       [Symbol.for('theokit.agent.definition')]: true,
     }
     expect(
-      isAgentDefinition(deOutraCopia),
+      isAgentDefinition(fromAnotherCopy),
       'a definição de outra cópia deixou de ser reconhecida — a interop cross-version quebrou',
     ).toBe(true)
   })
 
-  it('test_a_definicao_NAO_e_instancia_de_classe', () => {
+  it('test_the_definition_is_NOT_a_class_instance', () => {
     // O invariante central. Se isto virar uma classe, `instanceof` passa a ser tentador no consumo —
     // e `instanceof` é exatamente o que NÃO atravessa duas cópias do mesmo pacote.
     const def = defineAgent({ model: 'x', system: 'oi' })
     expect(Object.getPrototypeOf(def)).toBe(Object.prototype)
   })
 
-  it('test_CONTRAPROVA_um_objeto_SEM_o_brand_e_rejeitado', () => {
+  it('test_COUNTERPROOF_an_object_WITHOUT_the_brand_is_rejected', () => {
     // Sem esta, `isAgentDefinition` poderia devolver `true` para qualquer coisa e os testes acima
     // passariam. O reconhecimento tem de ser específico, não permissivo.
     expect(isAgentDefinition({ model: 'x', system: 'oi' })).toBe(false)

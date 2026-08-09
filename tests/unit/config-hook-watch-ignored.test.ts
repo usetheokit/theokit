@@ -50,15 +50,15 @@ describe('runConfigHook — server.watch.ignored (#121)', () => {
  * partir do diretório de testes da raiz neste workspace pnpm, e cravar o caminho profundo
  * (`packages/theo/node_modules/vite`) seria trocar uma fragilidade por outra.
  */
-describe('dev.ts não pode sobrescrever o watch do plugin (#121)', () => {
-  it('a config inline de createServer não declara server.watch', () => {
-    const fonte = readFileSync(
+describe('dev.ts must not overwrite the watch of the plugin (#121)', () => {
+  it('the inline config of createServer does not declare server.watch', () => {
+    const source = readFileSync(
       resolve(__dirname, '../../packages/theo/src/cli/commands/dev.ts'),
       'utf-8',
     )
-    const chamada = fonte.slice(fonte.indexOf('server = await createServer({'))
-    const blocoServer = chamada.slice(chamada.indexOf('server: {'), chamada.indexOf('logLevel:'))
+    const call = source.slice(source.indexOf('server = await createServer({'))
+    const serverBlock = call.slice(call.indexOf('server: {'), call.indexOf('logLevel:'))
 
-    expect(blocoServer).not.toMatch(/\bwatch\s*:/)
+    expect(serverBlock).not.toMatch(/\bwatch\s*:/)
   })
 })

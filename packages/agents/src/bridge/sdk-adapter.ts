@@ -19,13 +19,13 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
-import { aplicarPostura, type ApprovalPosture } from './approval-posture.js'
+import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
-import { type DefinicaoOuThunk, resolverProjecao } from './definicao-ou-thunk.js'
-import { eventoDeErroDoSdk } from './erro-do-sdk.js'
+import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
 import { buildModelSelection } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
+import { sdkErrorEvent } from './sdk-error.js'
 import { createToolSeen, type SdkTimelineEvent, translateTimelineEvent } from './sdk-timeline.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
 import { stripToolDialectStream } from './tool-dialect-stripper.js'
@@ -441,7 +441,7 @@ export function createSdkAgentStream(
           t0,
         })
       } catch (err) {
-        yield eventoDeErroDoSdk(err)
+        yield sdkErrorEvent(err)
       }
     },
   })
@@ -644,7 +644,7 @@ export interface SdkAgentHandle {
  * `./approval-posture.ts`.
  */
 export function toAgentFactory(
-  def: DefinicaoOuThunk,
+  def: DefinitionOrThunk,
   // M74 — o seam que as superfícies do consumidor usam de fato (ACP, loop autônomo, delegação).
   // M96 — `approvals` é OBRIGATÓRIO: a ausência era o defeito, e um campo opcional o reintroduziria.
   opts: {
@@ -654,10 +654,10 @@ export function toAgentFactory(
   },
 ): (sessionId: string) => Promise<SdkAgentHandle> {
   const overrides = opts.overrides ?? {}
-  const projetarPorSessao = resolverProjecao(def, overrides)
+  const projectPerSession = resolveProjection(def, overrides)
   return async (sessionId: string): Promise<SdkAgentHandle> => {
     // Forma OBJETO: devolve a projeção já pronta. Forma THUNK: projeta agora, para esta sessão.
-    const { compiled, model, reasoningEffort, runContext } = await projetarPorSessao(sessionId)
+    const { compiled, model, reasoningEffort, runContext } = await projectPerSession(sessionId)
     const rt = await loadSdkRuntime()
     if (!rt) {
       throw new Error(
@@ -680,7 +680,7 @@ export function toAgentFactory(
     if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
     if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
     const extra = buildExtraCreateOptions(overrides, compiled)
-    aplicarPostura(extra, m8, opts.approvals, compiled.hitl)
+    applyPosture(extra, m8, opts.approvals, compiled.hitl)
     const agent = await rt.Agent.getOrCreate(sessionId, {
       apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),
