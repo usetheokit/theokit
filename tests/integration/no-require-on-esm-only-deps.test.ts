@@ -1,14 +1,14 @@
 /**
  * D13 gate (T1.2 do plano dogfood-fixes-and-coverage-expansion).
  *
- * Invariante: nenhum code path em theokit/packages/theo/src pode usar
+ * Invariant: no code path in theokit/packages/theo/src may use
  * require() ou require.resolve() em @theokit/ui (que é ESM-only by design).
  *
- * Esse teste é o CANARY que previne regressão de EC-S5/EC-S4 root cause.
- * @theokit/ui declara `"type": "module"` + exports[.] apenas com condition
- * `import` — require() retorna ERR_PACKAGE_PATH_NOT_EXPORTED.
+ * This test is the CANARY that prevents a regression of the EC-S5/EC-S4 root cause.
+ * @theokit/ui declares `"type": "module"` + exports[.] with only the `import`
+ * condition — require() returns ERR_PACKAGE_PATH_NOT_EXPORTED.
  *
- * Substitutes obrigatórios para detecção:
+ * Mandatory substitutes for detection:
  *   - Filesystem walk via `existsSync(join(cwd, 'node_modules', '@theokit/ui', ...))`
  *   - `import.meta.resolve(...)` (Node 22+ stable)
  *   - Async `import('@theokit/ui')`
@@ -43,11 +43,11 @@ function walkTsFiles(dir: string): string[] {
 const FORBIDDEN_DEPS = ['@theokit/ui']
 
 /**
- * Files cujos code paths TOCAM @theokit/ui (mesmo via name parameterizado).
- * Aqui aplicamos check mais estrito: nenhum `createRequire(import.meta.url)` permitido
- * — porque o helper localRequire seria usado pra resolve `@theokit/ui` (ESM-only).
+ * Files whose code paths TOUCH @theokit/ui (even through a parameterized name).
+ * Here we apply the stricter check: no `createRequire(import.meta.url)` allowed —
+ * because the localRequire helper would be used to resolve `@theokit/ui` (ESM-only).
  *
- * Esses files DEVEM usar filesystem walk OR import.meta.resolve OR async import.
+ * These files MUST use a filesystem walk OR import.meta.resolve OR an async import.
  */
 const UI_TOUCHING_FILES = [
   'vite-plugin/theoui-detect.ts',
@@ -117,9 +117,9 @@ describe('D13: zero require.resolve / require on ESM-only deps in production cod
   )
 
   it('UI-touching files should not use createRequire(import.meta.url) or localRequire.resolve()', () => {
-    // Given files cujos paths processam @theokit/ui (parameterizado ou direto),
+    // Given files whose paths process @theokit/ui (parameterized or direct),
     // When we check for createRequire/localRequire patterns,
-    // Then nenhum desses files deve usar require helper (todos devem usar filesystem walk).
+    // Then none of those files may use the require helper (all must use a filesystem walk).
     const violations: Array<{ file: string; line: number; text: string }> = []
     for (const relative of UI_TOUCHING_FILES) {
       const file = join(SRC, relative)

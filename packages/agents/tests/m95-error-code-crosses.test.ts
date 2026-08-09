@@ -1,14 +1,14 @@
 /**
- * M95 — o `code` do sdkEvent atravessa até o chunk.
+ * M95 — the error's `code` crosses all the way to the chunk.
  *
- * Um sdkEvent de runtime não sobe como exceção para quem consome o stream: ele é convertido num chunk
- * `{type:'error', errorText}`. Isso é o contrato de streaming, e está certo — mas até aqui o chunk
- * carregava **só o texto**, então um consumidor que precise DISTINGUIR a falha (o `exec` forkando
- * quando a sessão já tem escritor) só tinha a mensagem para casar.
+ * A runtime error does not surface as an exception to whoever consumes the stream: it is converted
+ * into an `{type:'error', errorText}` chunk. That is the streaming contract, and it is right — but
+ * until now the chunk carried **only the text**, so a consumer needing to DISTINGUISH the failure
+ * (`exec` forking when the session already has a writer) had only the message to match on.
  *
- * Casar texto de sdkEvent é a heurística que este ecossistema já pagou caro: o M93 classificava
- * transitório por regex sobre a mensagem, e tratava `connect ECONNREFUSED 127.0.0.1:443` como
- * definitivo porque a **porta** casava o padrão de "4xx". `RunErrorDetail` sempre teve `code`.
+ * Matching on error text is the heuristic this ecosystem has already paid for: M93 classified
+ * transience by regex over the message, and treated `connect ECONNREFUSED 127.0.0.1:443` as final
+ * because the **port** matched the "4xx" pattern. `RunErrorDetail` always had a `code`.
  */
 import { describe, expect, it } from 'vitest'
 import {

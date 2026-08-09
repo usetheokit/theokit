@@ -59,7 +59,7 @@ describe('buildModelSelection (M1 reasoning-effort mapping)', () => {
  */
 describe('reasoningEffortOf (M107 — the inverse of buildModelSelection)', () => {
   it('test_a_round_trip_preserves_the_effort', () => {
-    // A asserção mais forte da task: é ela que prova que os dois lados não divergiram.
+    // The task's strongest assertion: it is what proves the two sides did not diverge.
     const niveis: ReasoningEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'ultra']
     for (const nivel of niveis) {
       expect(reasoningEffortOf(buildModelSelection('m', nivel))).toBe(nivel)
@@ -67,14 +67,14 @@ describe('reasoningEffortOf (M107 — the inverse of buildModelSelection)', () =
   })
 
   it('test_a_round_trip_preserves_the_effort_with_pre_existing_params', () => {
-    // `buildModelSelection` COMPÕE com os params que já vieram; a leitura tem de achar o esforço
-    // mesmo quando ele não é o primeiro da lista.
+    // `buildModelSelection` COMPOSES with the params that already arrived; the read has to find the
+    // effort even when it is not first in the list.
     //
-    // A segunda asserção fecha uma lacuna que a contraprova por mutação do M107 encontrou: o
-    // docblock do M95 declara que o esforço compõe "em vez de descartá-los", e NENHUM teste
-    // afirmava isso — um `buildModelSelection` que jogasse fora os params received passava a
-    // suíte inteira verde. Descartar `temperature` num turno é uma mudança silenciosa de
-    // comportamento do provedor, que é exatamente a classe de defeito que o M95 corrigiu.
+    // The second assertion closes a gap M107's mutation counterproof found: M95's docblock states
+    // that the effort composes "instead of discarding them", and NO test asserted it — a
+    // `buildModelSelection` that threw away the params it received passed the whole suite green.
+    // Discarding `temperature` on a turn is a silent change in the provider's behaviour, which is
+    // exactly the class of defect M95 fixed.
     const base: ModelSelection = { id: 'm', params: [{ id: 'temperature', value: '0.2' }] }
     const composed = buildModelSelection(base, 'high')
     expect(reasoningEffortOf(composed)).toBe('high')
@@ -85,7 +85,7 @@ describe('reasoningEffortOf (M107 — the inverse of buildModelSelection)', () =
   })
 
   it('test_a_selection_with_no_params_returns_undefined', () => {
-    // Ausência de esforço é DECLARADA, não excepcional — devolve indefinido, nunca lança.
+    // An absent effort is DECLARED, not exceptional — it returns undefined, never throws.
     expect(reasoningEffortOf({ id: 'm' })).toBeUndefined()
     expect(reasoningEffortOf(buildModelSelection('m'))).toBeUndefined()
   })
@@ -101,13 +101,13 @@ describe('reasoningEffortOf (M107 — the inverse of buildModelSelection)', () =
   })
 
   it('test_a_model_given_as_a_string_returns_undefined', () => {
-    // O atalho de id em string não carrega params — não há onde um esforço estar.
+    // The string-id shortcut carries no params — there is nowhere for an effort to be.
     expect(reasoningEffortOf('m')).toBeUndefined()
   })
 
   it('test_an_unrecognized_value_is_returned_raw_without_throwing', () => {
-    // Caso negativo: a validação continua sendo do consumidor (`parseEffort` no agent-builder).
-    // Sequestrá-la aqui alargaria a responsabilidade da camada sem ninguém ter pedido.
+    // Negative case: validation remains the consumer's (`parseEffort` in agent-builder). Hijacking it
+    // here would widen the layer's responsibility with nobody having asked.
     expect(reasoningEffortOf({ id: 'm', params: [{ id: 'thinking', value: 'banana' }] })).toBe(
       'banana',
     )
