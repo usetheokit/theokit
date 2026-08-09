@@ -1,23 +1,23 @@
 /**
- * Mapeamento de erro do SDK → evento de erro do stream.
+ * Mapping from an SDK error → the stream's error event.
  *
- * Módulo próprio pela mesma razão de `model-selection.ts`: é um mapeador puro, e o
- * `sdk-adapter.ts` tem teto de 500 linhas. Ter home próprio também torna óbvio que existe **um**
- * lugar construindo o evento de erro — antes havia um objeto literal dentro de um `catch`, e era
- * ali que a informação morria.
+ * Its own module for the same reason as `model-selection.ts`: it is a pure mapper, and
+ * `sdk-adapter.ts` sits under a 500-line ceiling. Having its own home also makes it obvious that
+ * **one** place builds the error event — before there was an object literal inside a `catch`, and
+ * that is where the information died.
  */
 /**
- * Converte um erro do SDK no evento de erro do stream, **preservando o `code`**.
+ * Converts an SDK error into the stream's error event, **preserving the `code`**.
  *
- * Função própria e exportada porque este era o ponto onde a informação morria: o `catch` fixava
- * `code: 'SDK_ERROR'` e `retryable: false` para todo erro, e quem consome o stream ficava só com o
- * texto da mensagem para distinguir uma falha de outra — a heurística que este ecossistema já
- * pagou caro (o M93 classificava transitório por regex sobre a mensagem e tratava
- * `ECONNREFUSED …:443` como definitivo, porque a PORTA casava o padrão de "4xx").
+ * Its own exported function because this was the point where the information died: the `catch`
+ * pinned `code: 'SDK_ERROR'` and `retryable: false` for every error, and whoever consumed the stream
+ * was left with only the message text to tell one failure from another — the heuristic this
+ * ecosystem has already paid for (M93 classified transience by regex over the message and treated
+ * `ECONNREFUSED …:443` as final, because the PORT matched the "4xx" pattern).
  *
- * Exportada para que o teste exerça **esta** função, e não uma entrada montada à mão alimentada no
- * estágio seguinte do pipeline. Três testes deste milestone caíram nessa armadilha: construíam a
- * entrada da unidade em vez de exercer quem a produz, e por isso não pegaram o achatamento aqui.
+ * Exported so the test exercises **this** function, and not a hand-assembled input fed into the next
+ * stage of the pipeline. Three tests in this milestone fell into that trap: they constructed the
+ * unit's input instead of exercising what produces it, and so missed the flattening here.
  *
  * @internal
  */
@@ -32,8 +32,8 @@ export function sdkErrorEvent(err: unknown): {
     type: 'error',
     code: sdkErr.code ?? 'SDK_ERROR',
     message: err instanceof Error ? err.message : 'SDK agent error',
-    // O SDK computa `isRetryable` por classe de erro na construção; fixá-lo em `false` aqui
-    // contradizia o próprio erro.
+    // The SDK computes `isRetryable` per error class at construction; pinning it to `false` here
+    // contradicted the error itself.
     retryable: sdkErr.isRetryable === true,
   }
 }

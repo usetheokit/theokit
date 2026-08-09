@@ -64,10 +64,10 @@ function translateAssistantEvent(msg: SdkMessage): StreamEvent[] {
     if (b.type === 'tool_use') {
       events.push({
         type: 'tool_call',
-        // #138 — era `tc-${Date.now()}`. Um id novo a cada chamada NUNCA está no conjunto de
-        // dedup, então o fallback derrotava a dedup por construção — e ainda parecia um id de
-        // verdade para quem lê. String vazia é honesta: `isDuplicatedByDelta` a trata como
-        // "não sei identificar" e prefere um duplo-render visível a uma supressão silenciosa.
+        // #138 — this was `tc-${Date.now()}`. A fresh id on every call is NEVER in the dedup set, so
+        // the fallback defeated dedup by construction — and still looked like a real id to a reader.
+        // An empty string is honest: `isDuplicatedByDelta` treats it as "I cannot identify this" and
+        // prefers a visible double render to a silent suppression.
         callId: b.id ?? '',
         toolName: b.name ?? 'unknown',
         input: b.input ?? {},
@@ -81,7 +81,7 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
   // Real SDKToolUseMessage (messages.ts:89): call_id (not id), status running|completed|error,
   // tool output in `result` (no separate `error` field).
   const status = msg.status as string
-  // #138 — idem: sem `call_id` a identidade é desconhecida, e um timestamp só disfarça isso.
+  // #138 — likewise: without a `call_id` the identity is unknown, and a timestamp only disguises that.
   const callId = asString(msg.call_id, '')
   const toolName = asString(msg.name, 'unknown')
   if (status === 'completed') {
@@ -152,33 +152,33 @@ function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
 }
 
 /**
- * #141 — silêncio DELIBERADO é legítimo; silêncio por IGNORÂNCIA não.
+ * #141 — DELIBERATE silence is legitimate; silence out of IGNORANCE is not.
  *
- * Os dois `default` deste arquivo devolviam `[]` com um comentário de "ignorado", misturando duas
- * coisas muito diferentes: tipos que decidimos não expor (`token-delta`, `step-*` — ruído de alta
- * frequência) e tipos que simplesmente não conhecíamos (`request`, `task`, `ShellOutputDelta`).
- * O segundo caso é o que a regra de falhar-alto proíbe: um sinal de aprovação pendente sumindo
- * sem deixar rastro é indistinguível de "não havia sinal".
+ * Both `default` branches in this file returned `[]` with an "ignored" comment, conflating two very
+ * different things: types we decided not to expose (`token-delta`, `step-*` — high-frequency noise)
+ * and types we simply did not know about (`request`, `task`, `ShellOutputDelta`). The second case is
+ * what the fail-loud rule forbids: a pending-approval signal vanishing without a trace is
+ * indistinguishable from "there was no signal".
  *
- * A lista explícita separa os dois. O que está nela some em silêncio, porque alguém decidiu; o
- * que não está avisa UMA vez por tipo — o suficiente para aparecer num diagnóstico, sem inundar
- * um stream que emite milhares de eventos por turno.
+ * The explicit list separates the two. What is in it vanishes silently, because somebody decided so;
+ * what is not warns ONCE per type — enough to show up in a diagnostic, without flooding a stream that
+ * emits thousands of events per turn.
  */
 const alreadyWarned = new Set<string>()
 
-function warnIfUnknown(tipo: string, ignoradosDeProposito: ReadonlySet<string>): void {
-  if (ignoradosDeProposito.has(tipo) || alreadyWarned.has(tipo)) return
-  alreadyWarned.add(tipo)
+function warnIfUnknown(type: string, ignoradosDeProposito: ReadonlySet<string>): void {
+  if (ignoradosDeProposito.has(type) || alreadyWarned.has(type)) return
+  alreadyWarned.add(type)
   console.warn(
-    `[theokit] agents.bridge: evento "${tipo}" do SDK não é traduzido e foi descartado. ` +
-      `Se ele carrega informação que a UI precisa, o tradutor precisa de um caso para ele (#141).`,
+    `[theokit] agents.bridge: SDK event "${type}" is not translated and was discarded. ` +
+      `If it carries information the UI needs, the translator needs a case for it (#141).`,
   )
 }
 
-/** Tipos de `SDKMessage` que decidimos NÃO expor — o silêncio aqui é escolha, não descuido. */
+/** `SDKMessage` types we decided NOT to expose — the silence here is a choice, not an oversight. */
 const SDK_MESSAGE_IGNORED: ReadonlySet<string> = new Set(['user'])
 
-/** Tipos de `InteractionUpdate` de alta frequência que a UI não consome. */
+/** High-frequency `InteractionUpdate` types the UI does not consume. */
 const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
   'thinking-completed',
   'token-delta',

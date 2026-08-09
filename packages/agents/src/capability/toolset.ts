@@ -1,30 +1,31 @@
 import { TheokitAgentError } from '@theokit/sdk/errors'
 /**
- * M91 — `Toolset`: coleção nomeada e imutável de tools, com política de resolução que falha alto.
+ * M91 — `Toolset`: a named, immutable collection of tools, with a resolution policy that fails loud.
  *
- * ## Por que na camada
+ * ## Why in the layer
  *
- * A camada já publica as costuras de `sandbox` e `interactive`; esta é a contraparte que faltava. Sem
- * ela, o consumidor escreveu a sua — `agents/tools/registry.ts` do agent-builder, 170 LoC — e a
- * política que importa (falhar alto em nome desconhecido **e** duplicado) ficou fora do framework,
- * onde o próximo consumidor teria de redescobri-la.
+ * The layer already publishes the `sandbox` and `interactive` seams; this is the counterpart that was
+ * missing. Without it the consumer wrote its own — agent-builder's `agents/tools/registry.ts`, 170
+ * LoC — and the policy that matters (failing loud on an unknown name **and** on a duplicate) stayed
+ * outside the framework, where the next consumer would have to rediscover it.
  *
- * ## O que ela NÃO faz, e por quê
+ * ## What it does NOT do, and why
  *
- * **Não prefixa namespace.** Foi isso que desqualificou o `ToolboxCapability` deste mesmo diretório
- * para este papel: o nome de uma tool é **contrato com o modelo**, e prefixar muda o que o modelo vê.
+ * **It does not prefix a namespace.** That is what disqualified `ToolboxCapability` from this same
+ * directory for this role: a tool's name is a **contract with the model**, and prefixing changes what
+ * the model sees.
  *
- * **Não constrói tools.** Quais tools, com quais opções e sob qual escopo é decisão do consumidor —
- * a camada não sabe o `projectRoot` nem a postura de sandbox de ninguém. O `Toolset` recebe as
- * entradas já construídas e é dono só da **política de resolução**. É a divisão que impede a
- * primitiva de virar uma segunda cópia do registry do consumidor.
+ * **It does not build tools.** Which tools, with which options and under which scope is the
+ * consumer's decision — the layer knows nobody's `projectRoot` and nobody's sandbox posture. The
+ * `Toolset` receives entries already built and owns only the **resolution policy**. That split is
+ * what stops the primitive from becoming a second copy of the consumer's registry.
  *
- * ## Por que falhar alto nos dois casos
+ * ## Why fail loud in both cases
  *
- * Nome **desconhecido**: um role que declara `run_shell` numa whitelist e recebe silêncio fica sem a
- * tool sem ninguém notar. Nome **duplicado**: registra a mesma tool duas vezes no `Agent.create`, sem
- * sinal nenhum. Nos dois, o resultado é uma mudança de autoridade **não observável** — que é
- * exatamente o que uma whitelist existe para impedir.
+ * An **unknown** name: a role that declares `run_shell` in a whitelist and gets silence ends up
+ * without the tool and nobody notices. A **duplicate** name: registers the same tool twice in
+ * `Agent.create`, with no signal at all. In both, the result is an **unobservable** change of
+ * authority — which is exactly what a whitelist exists to prevent.
  */
 
 /** The minimum `Toolset` needs to know about a tool: that it has a name. */
@@ -74,9 +75,9 @@ export class Toolset<T extends NamedTool> {
   }
 
   /**
-   * Constrói a partir das tools já instanciadas. Falha alto em nome duplicado **na construção** — não
-   * na resolução: um descritor com duas tools de mesmo nome está errado no momento em que é escrito, e
-   * adiar o erro para o primeiro `resolve` esconde metade dos casos.
+   * Builds from tools that are already instantiated. Fails loud on a duplicate name **at construction**
+   * — not at resolution: a descriptor with two tools of the same name is wrong the moment it is
+   * written, and deferring the error to the first `resolve` hides half the cases.
    */
   static from<T extends NamedTool>(tools: readonly T[]): Toolset<T> {
     const byName = new Map<string, T>()
@@ -89,7 +90,7 @@ export class Toolset<T extends NamedTool> {
     return new Toolset(byName)
   }
 
-  /** Uma tool pelo nome. Lança com o nome no erro — nunca devolve `undefined` em silêncio. */
+  /** One tool by name. Throws with the name in the error — never returns `undefined` silently. */
   get(name: string): T {
     const tool = this.#byName.get(name)
     if (tool === undefined) {
@@ -99,9 +100,8 @@ export class Toolset<T extends NamedTool> {
   }
 
   /**
-   * Resolve uma whitelist. Falha alto em desconhecido **e** em duplicado dentro da própria lista:
-   * um time nunca concede em silêncio uma tool que o role não declarou, nem descarta em silêncio uma
-   * que declarou.
+   * Resolves a whitelist. Fails loud on an unknown name **and** on a duplicate within the list itself:
+   * a team never silently grants a tool the role did not declare, nor silently drops one it did.
    */
   resolve(names: readonly string[]): readonly T[] {
     const seen = new Set<string>()
@@ -114,12 +114,12 @@ export class Toolset<T extends NamedTool> {
     })
   }
 
-  /** Os nomes conhecidos, na ordem de registro. */
+  /** The known names, in registration order. */
   names(): readonly string[] {
     return [...this.#byName.keys()]
   }
 
-  /** Todas as tools, na ordem de registro. */
+  /** All the tools, in registration order. */
   all(): readonly T[] {
     return [...this.#byName.values()]
   }

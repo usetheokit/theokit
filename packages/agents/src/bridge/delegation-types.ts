@@ -33,21 +33,21 @@ export interface DelegationResult {
 }
 
 /**
- * Orçamento de DELEGAÇÃO estourado — custo em dólares de um agente delegado.
+ * DELEGATION budget exceeded — the dollar cost of a delegated agent.
  *
- * ## Por que o nome mudou no M91
+ * ## Why the name changed in M91
  *
- * Chamava-se `BudgetExceededError` e **sombreava** a classe homônima do SDK, que é de outro domínio:
- * orçamento de JANELA de contexto (`budgetName`/`window`/`mode`) contra orçamento de DELEGAÇÃO
- * (`agentName`/`actualCost`). Como o consumidor tem regra inquebrável de nunca importar `@theokit/sdk`
- * direto, ele **nunca conseguia alcançar a do SDK** — e um `instanceof` contra este barril casava
- * silenciosamente com o domínio errado.
+ * It was called `BudgetExceededError` and **shadowed** the SDK class of the same name, which belongs
+ * to another domain: context-WINDOW budget (`budgetName`/`window`/`mode`) against DELEGATION budget
+ * (`agentName`/`actualCost`). Since the consumer holds an unbreakable rule never to import
+ * `@theokit/sdk` directly, it **could never reach the SDK's** — and an `instanceof` against this
+ * barrel silently matched the wrong domain.
  *
- * É o modo de falha que o M73 documentou em `auth-parity.test.ts`: quando duas classes competem pelo
- * mesmo nome, nenhum teste de comportamento fica vermelho — só o `toBe` de identidade pega.
+ * It is the failure mode M73 documented in `auth-parity.test.ts`: when two classes compete for the
+ * same name, no behavioural test goes red — only an identity `toBe` catches it.
  *
- * `subpath-coverage.test.ts` registrava a colisão como `lacuna` de `./errors`, com a razão escrita e o
- * reconhecimento de que renomear era breaking e estava fora do escopo do M78. O M91 pagou a conta.
+ * `subpath-coverage.test.ts` recorded the collision as a `gap` on `./errors`, with the reason written
+ * down and the acknowledgement that renaming was breaking and out of M78's scope. M91 paid the bill.
  */
 export class DelegationBudgetExceededError extends Error {
   constructor(
@@ -63,9 +63,9 @@ export class DelegationBudgetExceededError extends Error {
 }
 
 /**
- * @deprecated Use {@link DelegationBudgetExceededError}. Alias mantido por uma major para não quebrar
- * quem captura pelo nome antigo; é a **mesma** classe, não uma cópia — `instanceof` continua valendo
- * nos dois sentidos, e um teste de identidade referencial (`toBe`) trava isso.
+ * @deprecated Use {@link DelegationBudgetExceededError}. The alias is kept for one major so anyone
+ * catching by the old name is not broken; it is the **same** class, not a copy — `instanceof` still
+ * holds in both directions, and a referential-identity test (`toBe`) pins that.
  */
 export const BudgetExceededError = DelegationBudgetExceededError
 /** @deprecated Use {@link DelegationBudgetExceededError}. */

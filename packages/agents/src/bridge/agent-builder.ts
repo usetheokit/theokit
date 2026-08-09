@@ -99,11 +99,11 @@ export interface AgentBuilder<
    * Set the model. Required before `.build()`. COMPILE ERROR when called twice — the argument
    * type collapses to `never` once the model is set (tRPC's set-once technique).
    *
-   * M94 — aceita `ModelSelection` além do id cru. A implementação do SDK **sempre** aceitou
-   * (`agent-builder.ts:50`: `model(m: string | ModelSelection)`); era esta fachada que estreitava
-   * para `string`, e o estreitamento tornava inalcançável qualquer campo da seleção — incluindo o
-   * `contextWindow` que o SDK passou a publicar. Fachada divergindo da implementação é a mesma
-   * classe de defeito que o M91 pagou dois patches para corrigir.
+   * M94 — accepts a `ModelSelection` as well as the raw id. The SDK implementation **always**
+   * accepted it (`agent-builder.ts:50`: `model(m: string | ModelSelection)`); it was this facade that
+   * narrowed to `string`, and the narrowing made every field of the selection unreachable — including
+   * the `contextWindow` the SDK had started publishing. A facade diverging from the implementation is
+   * the same class of defect M91 paid two patches to fix.
    */
   model(
     id: TModel extends UnsetMarker ? string | ModelSelection : never,

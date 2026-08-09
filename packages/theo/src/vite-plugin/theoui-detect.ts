@@ -11,8 +11,8 @@
  * Paths come from a controlled CLI/config inputs; this is a build-time tool.
  *
  * D13 invariant (ADR 0021): @theokit/ui is ESM-only by design (`type: "module"`,
- * exports['.'] sem `require` condition). Não usar `createRequire(...).resolve()` —
- * `ERR_PACKAGE_PATH_NOT_EXPORTED` em runtime. Usar filesystem walk direto.
+ * exports['.'] with no `require` condition). Do NOT use `createRequire(...).resolve()` —
+ * `ERR_PACKAGE_PATH_NOT_EXPORTED` at runtime. Use a direct filesystem walk instead.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -68,17 +68,17 @@ export function resolveTheoUiConfig(
 export type SubpathResolver = (specifier: string, projectRoot: string) => boolean
 
 /**
- * D13 invariant: substituir `require.resolve` por filesystem walk que LÊ exports.
+ * D13 invariant: replace `require.resolve` with a filesystem walk that READS exports.
  *
  * Specifier shape: `<pkgScope>/<pkgName>/<subpath>` (e.g. `@theokit/ui/styles.css`)
  * OR `<pkgName>/<subpath>` (e.g. `react/jsx-runtime`).
  *
- * Algoritmo:
- *   1. Walk up node_modules a partir de projectRoot (handle pnpm hoist + workspaces).
- *   2. Em cada candidato, ler package.json + resolver subpath via exports field.
- *   3. Se exports mapeia o subpath, checar existsSync no path mapeado.
+ * Algorithm:
+ *   1. Walk up node_modules from projectRoot (handles pnpm hoist + workspaces).
+ *   2. At each candidate, read package.json and resolve the subpath through the exports field.
+ *   3. If exports maps the subpath, check existsSync on the mapped path.
  *
- * Mimica resolução ESM Node sem usar createRequire (D13).
+ * Mimics Node ESM resolution without using createRequire (D13).
  */
 function resolveExportSubpath(pkgRoot: string, subpath: string): string | null {
   const pkgJsonPath = join(pkgRoot, 'package.json')
@@ -90,7 +90,7 @@ function resolveExportSubpath(pkgRoot: string, subpath: string): string | null {
     const exportKey = `./${subpath}`
     const exp = pkg.exports?.[exportKey]
     if (!exp) {
-      // Fallback: tentar path direto (dist/<subpath> é convenção comum)
+      // Fallback: try the direct path (dist/<subpath> is a common convention)
       const fallback = join(pkgRoot, 'dist', subpath)
       return existsSync(fallback) ? fallback : null
     }
