@@ -9,9 +9,9 @@
  * + hono HTTPException + encore Error). Wasp confirms ecosystem gap.
  *
  * Reference anchors (verified file:line):
- * - referencia: trpc/packages/server/src/unstable-core-do-not-import/error/TRPCError.ts:65-87
- * - referencia: trpc/packages/server/src/unstable-core-do-not-import/rpc/codes.ts:11-44,76-81
- * - referencia: hono/src/http-exception.ts:46-78
+ * - reference: trpc/packages/server/src/unstable-core-do-not-import/error/TRPCError.ts:65-87
+ * - reference: trpc/packages/server/src/unstable-core-do-not-import/rpc/codes.ts:11-44,76-81
+ * - reference: hono/src/http-exception.ts:46-78
  * - referencia: encore/runtimes/go/beta/errs/error.go:38-55 (Go — D4 disclaimer applied)
  *
  * Per blueprint ADR D2: retryable + hint are extension slots, NOT base fields

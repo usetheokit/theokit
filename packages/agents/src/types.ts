@@ -134,20 +134,20 @@ export interface HumanInTheLoopOptions {
 
 /** M53 — moved from the `@MCP` decorator being deleted; consumed by the bridge and the adapter. */
 /**
- * M112 — a configuração de servidor MCP é a **do SDK**, re-exportada, não uma declarada aqui.
+ * M112 — the MCP server configuration is **the SDK's**, re-exported, not one declared here.
  *
- * Até o M112 este arquivo declarava a sua própria `McpServerConfig` com `command` obrigatório — mais
- * **estreita** que a do SDK, que é `McpStdioServerConfig | McpHttpServerConfig` e cobre transporte
- * remoto com `type`/`url`/`headers`/`auth`/`requestTimeoutMs` desde antes deste milestone.
+ * Until M112 this file declared its own `McpServerConfig` with a mandatory `command` — **narrower**
+ * than the SDK's, which is `McpStdioServerConfig | McpHttpServerConfig` and has covered remote
+ * transport with `type`/`url`/`headers`/`auth`/`requestTimeoutMs` since before this milestone.
  *
- * Dois donos do mesmo fato (`mecanismo-anti-esquecimento.md § 5.6`), e o estreito ganhava: o
- * consumidor recebia um tipo que recusava configuração que o runtime aceita. É o **eixo 2** da
- * fronteira em camadas — o tipo que o consumidor recebe resolvia para a camada quando deveria
+ * Two owners of the same fact (`anti-forgetting-mechanism.md § 5.6`), and the narrow one won: the
+ * consumer received a type that refused configuration the runtime accepts. It is **axis 2** of the
+ * layered boundary — the type the consumer receives resolved to the layer when it should
  * resolver para o SDK.
  *
- * PASS-THROUGH PURO, deliberadamente: envolver acrescentaria indireção sem nada dentro, e a união
- * discriminada do SDK é o que torna `{}` — uma entrada sem `command` **e** sem `url` —
- * irrepresentável no compilador.
+ * A PURE PASS-THROUGH, deliberately: wrapping would add indirection with nothing inside, and the
+ * SDK's discriminated union is what makes `{}` — an entry with neither `command` **nor** `url` —
+ * unrepresentable in the compiler.
  */
 export type {
   McpAuthConfig,

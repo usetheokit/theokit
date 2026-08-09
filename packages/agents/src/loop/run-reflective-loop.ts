@@ -12,7 +12,7 @@
  * `runReflectiveLoop` is INTERNAL (not re-exported from the package barrel,
  * Drawback #4) — consumed by `delegate()` (T2.2) and `AgentRunner` (T3.1).
  *
- * referencia: knowledge-base/references/mastra agent.ts (re-enter the loop with feedback).
+ * reference: knowledge-base/references/mastra agent.ts (re-enter the loop with feedback).
  */
 // V4-P: type-only import (erased at runtime) so the loop stays SDK-optional; the `withRetry`
 // VALUE is dynamic-imported inside consumeOneRound only when `retry` is configured.
@@ -113,7 +113,7 @@ function stableStringify(value: unknown): string {
  * ORDER is irrelevant — EC-3; input keys canonicalized so KEY order is irrelevant too).
  * Two consecutive rounds with an equal signature made no new progress. The assistant
  * narration text is DELIBERATELY excluded (theokit#53): a model that re-runs identical
- * tool calls while rephrasing its prose ("…e executá-lo." → "Agora vou executar…") would
+ * tool calls while rephrasing its prose ("…and run it." → "Now I will run…") would
  * otherwise evade the detector and spin. Mirrors opencode's `doom_loop`, which compares
  * tool name + JSON.stringify(input) and nothing else. Tool `output` is also excluded:
  * repeating the same call is no-progress even if the result text wobbles. (V4-D, ADR D2)

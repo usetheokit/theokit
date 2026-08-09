@@ -1,29 +1,30 @@
 /**
- * M84 — `@theokit/agents/client`: a cadeia de cliente do agente, vinda do pacote CLI.
+ * M84 — `@theokit/agents/client`: the agent's client chain, moved over from the CLI package.
  *
- * ## Por que ela mudou de pacote
+ * ## Why it changed package
  *
- * Estes nove módulos moravam em `theokit/client` (o pacote **CLI**), e nada dentro do CLI dependia
- * deles — eram folha ali. O que os prendia era história, não desenho. A consequência era concreta: um
- * consumidor da camada que quisesse um transporte in-process tinha de declarar dependência de runtime
- * no CLI, isto é, num pacote que a fronteira `SDK → Theokit → AgentBuilder` o proíbe de tratar como
- * camada. O agent-builder carregava seis isenções escritas só para sustentar essa contradição.
+ * These nine modules lived in `theokit/client` (the **CLI** package), and nothing inside the CLI
+ * depended on them — they were leaves there. What held them was history, not design. The consequence
+ * was concrete: a consumer of the layer that wanted an in-process transport had to declare a runtime
+ * dependency on the CLI, that is, on a package the `SDK → Theokit → AgentBuilder` boundary forbids it
+ * from treating as a layer. agent-builder carried six exemptions written purely to sustain that
+ * contradiction.
  *
- * ## Por que DOIS subpaths, e não a barra principal
+ * ## Why TWO subpaths, and not the main bar
  *
- * `use-agent.ts` — **um** dos nove — importa React. Colocar a cadeia na barra principal faria cada
- * consumidor da camada carregar React no grafo, inclusive quem nunca renderiza nada.
+ * `use-agent.ts` — **one** of the nine — imports React. Putting the chain on the main bar would make
+ * every consumer of the layer carry React in its graph, including those that never render anything.
  *
- * E um subpath só não bastava: um consumidor Node (um transporte num processo sem UI) importaria o
- * barril e arrastaria React junto. Esta entrada é **livre de React** por contrato — travado por
- * `test_client_core_entry_imports_no_react`, um gate que já existia no CLI e que pegou a regressão na
- * primeira execução. O hook mora em `@theokit/agents/client/react`.
+ * And one subpath was not enough: a Node consumer (a transport in a process with no UI) would import
+ * the barrel and drag React along. This entry is **React-free** by contract — pinned by
+ * `test_client_core_entry_imports_no_react`, a gate that already existed in the CLI and caught the
+ * regression on its first run. The hook lives in `@theokit/agents/client/react`.
  *
- * O CLI passa a re-exportar DAQUI (pass-through puro): duas implementações do mesmo transporte no
- * mesmo processo é exatamente o que o M79 acabou de eliminar.
+ * The CLI now re-exports FROM HERE (a pure pass-through): two implementations of the same transport
+ * in the same process is exactly what M79 just eliminated.
  */
 
-// O seam de transporte: `ai`'s ChatTransport + aprovação opcional, e o store que `useAgent` observa.
+// The transport seam: `ai`'s ChatTransport + optional approval, and the store `useAgent` observes.
 export type { AgentTransport, ApprovalDecision, RequestContext } from './client/transport.js'
 
 export { HttpTransport } from './client/http-transport.js'
@@ -47,8 +48,8 @@ export type {
 
 export { AgentClient } from './client/agent-client.js'
 export type { AgentClientState } from './client/agent-client.js'
-// M92 — sem estes o consumidor não consegue ligar o coalescing nem distinguir aprovação abortada de
-// negada; a capacidade existiria e seria inalcançável pela fronteira.
+// M92 — without these the consumer cannot turn on coalescing nor tell an aborted approval from a
+// denied one; the capability would exist and be unreachable across the boundary.
 export type { AgentClientOptions } from './client/agent-client.js'
 export { ApprovalAbortedError } from './client/in-process-transport.js'
 
@@ -63,5 +64,5 @@ export {
 
 export { extractLastUserText } from './client/last-user-text.js'
 
-// `useAgent` NÃO mora aqui — ver `client-react-entry.ts`. Esta entrada é livre de React por contrato.
+// `useAgent` does NOT live here — see `client-react-entry.ts`. This entry is React-free by contract.
 export type { UseAgentStatus } from './client/agent-client.js'
