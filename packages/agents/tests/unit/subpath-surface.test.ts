@@ -15,28 +15,28 @@ const SNAPSHOT = JSON.parse(
 ) as Record<string, { values: string[]; types: string[] }>
 
 /**
- * M90 T0.1/T1.1 — a superfície dos cinco subpaths de infra é um contrato, não um efeito colateral.
+ * M90 T0.1/T1.1 — the surface of the five infra subpaths is a contract, not a side effect.
  *
- * ## O defeito que este arquivo fecha
+ * ## The defect this file closes
  *
- * Até o M90, `tools-entry.ts` inteiro era `export * from '@theokit/sdk-tools'`, e o `dist/tools.d.ts`
- * emitido tinha **uma linha** com a mesma coisa. A camada emprestava o nome sem interpor decisão: um
- * rename upstream se propagava verbatim, **sem erro de build aqui**, e o consumidor descobria em call
- * site. O gate de fronteira do consumidor prende a *string do especificador*, não a superfície de
- * types, então ele também não via.
+ * Until M90, the whole of `tools-entry.ts` was `export * from '@theokit/sdk-tools'`, and the emitted
+ * `dist/tools.d.ts` had **one line** saying the same thing. The layer lent its name without
+ * interposing a decision: an upstream rename propagated verbatim, **with no build error here**, and
+ * the consumer found out at a call site. The consumer's boundary gate pins the *specifier string*,
+ * not the type surface, so it did not see it either.
  *
- * ## Por que o snapshot lê o `dist`, e não o `src`
+ * ## Why the snapshot reads `dist`, and not `src`
  *
- * O `.d.ts` é o artefato que o consumidor realmente vê. Um snapshot sobre o fonte provaria que
- * escrevemos a lista, não que ela chegou ao pacote — a mesma distinção que o M89 do agent-builder
- * pagou caro para aprender, quando um gate provava que alguém escrevera a raiz numa lista, e não que
- * os arquivos estavam no programa do compilador.
+ * The `.d.ts` is the artifact the consumer actually sees. A snapshot over the source would prove we
+ * wrote the list, not that it reached the package — the same distinction agent-builder's M89 paid
+ * dearly to learn, when a gate proved somebody had written the root into a list, and not that the
+ * files were in the compiler's program.
  *
- * ## Por que reusa `enumerateSurface` em vez de reimplementar
+ * ## Why it reuses `enumerateSurface` instead of reimplementing
  *
- * Duas listas que precisam ficar em sincronia são uma violação de DRY com uma afirmação falsa por
- * cima — é o texto do próprio `subpath-coverage.test.ts` (review F-10 do M78), que perdeu `bench` de
- * uma cópia enquanto o comentário jurava "mesmo escopo".
+ * Two lists that must stay in sync are a DRY violation with a false claim on top — it is the text of
+ * `subpath-coverage.test.ts` itself (M78's F-10 review), which lost `bench` from a copy while the
+ * comment swore "same scope".
  */
 describe('M90 — the infra subpath surface is locked', () => {
   it('test_the_snapshot_covers_all_five_subpaths', () => {
@@ -46,9 +46,9 @@ describe('M90 — the infra subpath surface is locked', () => {
 
   /**
    * Anti-truncation floor. The number is measured, and it rises when the source grows — 173 until
-   * `@theokit/sdk` started exporting `sessionHasWriter` (então `sessaoTemEscritor`, renomeado no
+   * `@theokit/sdk` started exporting `sessionHasWriter` (then under its Portuguese name, renamed in
    * `4.39.0`), `transcriptRoot`, `TranscriptBlock` and `TranscriptMessage` from `/persistence`
-   * (theokit#161 A), 177 since then — o rename não mexe na contagem, só no nome.
+   * (theokit#161 A), 177 since then — the rename does not change the count, only the name.
    *
    * Not redundant with the identity gate below: that one compares the snapshot against the LAYER, so
    * a regeneration that produced an empty file from a broken layer would pass on both sides. This one
@@ -60,15 +60,15 @@ describe('M90 — the infra subpath surface is locked', () => {
   })
 
   /**
-   * O CORAÇÃO DO GATE — e o que a primeira versão dele NÃO fazia.
+   * THE HEART OF THE GATE — and what its first version did NOT do.
    *
-   * Comparava `enumerateSurface(spec)` (a FONTE) contra o snapshot. Nunca comparava o que a CAMADA
-   * exporta. Resultado medido pela revisão: remover quatro símbolos reais de `/tools` e `/pty` deixava
-   * a suíte inteira verde — 98 dos 173 símbolos (57%) sem oráculo nenhum. Foi por essa fresta que
-   * `TruncationMode` sumiu da superfície publicada do `4.25.0`.
+   * It compared `enumerateSurface(spec)` (the SOURCE) against the snapshot. It never compared what the
+   * LAYER exports. Result measured by the review: removing four real symbols from `/tools` and `/pty`
+   * left the whole suite green — 98 of 173 symbols (57%) with no oracle at all. It was through that
+   * crack that `TruncationMode` disappeared from the published surface of `4.25.0`.
    *
-   * Agora compara os dois lados **contra a fonte**: nada da fonte pode faltar na camada, e nada pode
-   * aparecer na camada sem existir na fonte.
+   * It now compares both sides **against the source**: nothing from the source may be missing in the
+   * layer, and nothing may appear in the layer without existing in the source.
    */
   it('test_the_layer_re_exports_EVERYTHING_the_source_exports', async () => {
     const missing: string[] = []
@@ -109,13 +109,13 @@ describe('M90 — the infra subpath surface is locked', () => {
       const agora = enumerarSuperficieDaCamada(sub)
       const expected = SNAPSHOT[sub]
       if (expected === undefined) {
-        divergences.push(`${sub}: sem entrada no snapshot`)
+        divergences.push(`${sub}: no entry in the snapshot`)
         continue
       }
-      const antes = new Set([...expected.values, ...expected.types])
+      const before = new Set([...expected.values, ...expected.types])
       const today = new Set([...agora.values, ...agora.types])
-      for (const n of antes) if (!today.has(n)) divergences.push(`${sub}: SUMIU ${n}`)
-      for (const n of today) if (!antes.has(n)) divergences.push(`${sub}: NOVO ${n}`)
+      for (const n of before) if (!today.has(n)) divergences.push(`${sub}: GONE ${n}`)
+      for (const n of today) if (!before.has(n)) divergences.push(`${sub}: NEW ${n}`)
     }
     expect(
       [...divergences].sort((a, b) => a.localeCompare(b)),
@@ -136,15 +136,18 @@ describe('M90 — the infra subpath surface is locked', () => {
   /**
    * Sem `catch { return false }`.
    *
-   * A primeira versão engolia a ausência de `dist/` e devolvia verde — num clone limpo sem build, o
-   * único teste que olhava o artefato entregue passava por vacuidade. Ausência de build é falha do
-   * teste, não sucesso silencioso (`error-handling.md § 2`).
+   * The first version swallowed a missing `dist/` and returned green — in a clean clone with no
+   * build, the only test that looked at the delivered artifact passed by vacuity. A missing build is
+   * a test failure, not a silent success (`error-handling.md § 2`).
    */
   it('test_the_EMITTED_dist_exists_and_has_no_star_export — what the consumer sees', () => {
-    const semBuild = Object.keys(SUBPATHS_DE_INFRA).filter(
+    const withoutBuild = Object.keys(SUBPATHS_DE_INFRA).filter(
       (sub) => !existsSync(join(ROOT, 'dist', `${sub}.d.ts`)),
     )
-    expect(semBuild, 'rode `npm run build` — sem `dist/` este gate não mede nada').toEqual([])
+    expect(
+      withoutBuild,
+      'run `npm run build` — without `dist/` this gate measures nothing',
+    ).toEqual([])
     const withStar = Object.keys(SUBPATHS_DE_INFRA).filter((sub) =>
       /^export \* from/m.test(readFileSync(join(ROOT, 'dist', `${sub}.d.ts`), 'utf8')),
     )
