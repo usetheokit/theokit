@@ -4,23 +4,23 @@ import { AgentBuilder } from '../../src/index.js'
 import { project, resolveProjection } from '../../src/bridge/definition-or-thunk.js'
 
 /**
- * M91 T1.1 — `toAgentFactory` aceita um THUNK de definição.
+ * M91 T1.1 — `toAgentFactory` accepts a definition THUNK.
  *
- * ## O que estava errado
+ * ## What was wrong
  *
- * O parâmetro `apiKey` já aceitava thunk desde o M74, adicionado por **exatamente** esta razão. O `def`
- * não aceitava, e a assimetria tinha uma linha de largura — mas custava: com a forma objeto, trust,
- * hooks, skills e MCP são compilados no load do módulo e ficam **congelados para o processo inteiro**.
+ * The `apiKey` parameter had accepted a thunk since M74, added for **exactly** this reason. `def` did
+ * not, and the asymmetry was one line wide — but it cost: with the object shape, trust, hooks, skills
+ * and MCP are compiled at module load and stay **frozen for the whole process**.
  *
- * Num `theokit acp` que uma IDE mantém aberto por horas, isso reintroduz a obsolescência que o M67
- * removeu ao mover a construção da definição para o entry point. O M67 fechou metade; esta é a outra.
+ * In a `theokit acp` an IDE keeps open for hours, that reintroduces the staleness M67 removed by
+ * moving the definition's construction to the entry point. M67 closed half of it; this is the other.
  *
- * ## Por que os testes medem CONTAGEM DE PROJEÇÕES e não o handle
+ * ## Why the tests measure the PROJECTION COUNT and not the handle
  *
- * Construir o handle exige o runtime do SDK e uma credencial. O invariante que importa é anterior a
- * isso: **quantas vezes a definição é projetada**. Uma vez para N sessões (forma objeto, comportamento
- * preservado) versus uma vez por sessão (forma thunk, o que ela compra). `resolverProjecao` é o seam
- * que decide isso, e é onde o teste morde.
+ * Building the handle requires the SDK runtime and a credential. The invariant that matters comes
+ * before that: **how many times the definition is projected**. Once for N sessions (the object shape,
+ * behaviour preserved) versus once per session (the thunk shape, what it buys). `resolveProjection`
+ * is the seam that decides it, and it is where the test bites.
  */
 describe('M91 — resolveProjection decides between the object shape and the thunk', () => {
   const agentDef = (): ReturnType<typeof AgentBuilder.create>['build'] extends () => infer D
@@ -30,12 +30,13 @@ describe('M91 — resolveProjection decides between the object shape and the thu
   it('the OBJECT shape projects ONCE, regardless of how many sessions', async () => {
     const def = agentDef()
     const spy = vi.fn(() => def)
-    // `resolverProjecao` recebe o objeto direto; o espião conta chamadas ao thunk, que aqui não existe.
+    // `resolveProjection` receives the object directly; the spy counts calls to the thunk, which does
+    // not exist here.
     const projectPerSession = resolveProjection(def as never, {})
     const a = await projectPerSession('s1')
     const b = await projectPerSession('s2')
     expect(spy).not.toHaveBeenCalled()
-    // Mesma referência: a projeção é reaproveitada, não recalculada.
+    // The same reference: the projection is reused, not recomputed.
     expect(b).toBe(a)
   })
 
@@ -58,8 +59,8 @@ describe('M91 — resolveProjection decides between the object shape and the thu
       seen.push(id)
       return def as never
     }, {})
-    await projectPerSession('sessao-x')
-    expect(seen).toEqual(['sessao-x'])
+    await projectPerSession('session-x')
+    expect(seen).toEqual(['session-x'])
   })
 
   it('an ASYNC thunk is awaited before projecting', async () => {
@@ -89,12 +90,12 @@ describe('M91 — resolveProjection decides between the object shape and the thu
   })
 
   it('projecting applies the default when neither definition nor override has a model', () => {
-    // Construído como DADO, não pelo builder: `build()` recusa em tempo de compilação quando falta
-    // modelo (o parâmetro vira `MissingModelError`), então o estado é inalcançável pela API fluente.
-    // O default de `projetar` existe para definições que chegam por outro caminho — `defineAgent`, um
-    // módulo de agente em disco — e `AgentDefinition` é dado puro desde o M79, então isto é legítimo.
-    const semModelo = { name: 'sem-modelo', system: 'oi', tools: [] }
-    const p = project(semModelo as never, {})
+    // Built as DATA, not by the builder: `build()` refuses at compile time when a model is missing
+    // (the parameter becomes `MissingModelError`), so the state is unreachable through the fluent API.
+    // `project`'s default exists for definitions arriving another way — `defineAgent`, an agent module
+    // on disk — and `AgentDefinition` has been pure data since M79, so this is legitimate.
+    const withoutModel = { name: 'no-model', system: 'hi', tools: [] }
+    const p = project(withoutModel as never, {})
     expect(p.model).toBe('openai/gpt-4o-mini')
   })
 })
