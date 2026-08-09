@@ -136,7 +136,7 @@ export function toolRuntimeName(namespace: string, toolName: string): string {
   // the charset and `Agent.create` ACCEPTS — a nonsense tool reaches the LLM. The SDK cannot know a
   // part was empty; at authoring time we can.
   if (toolName.trim().length === 0) {
-    const where = namespace ? ` no namespace "${namespace}"` : ''
+    const where = namespace ? ` in namespace "${namespace}"` : ''
     throw new ConfigurationError(`tool: empty name${where} — declare a non-empty name for the tool`)
   }
 

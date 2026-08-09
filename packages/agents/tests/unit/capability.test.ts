@@ -106,7 +106,7 @@ describe('Adversarial-review regressions (M52)', () => {
   it('V5 — the typed error names the offending type but never echoes the value', () => {
     // config files can carry secrets: report the SHAPE, never the content.
     expect(() => new SkillsCapability('sk-secret-value' as never)).toThrow(
-      /esperava array de nameList, recebi string/,
+      /expected an array of names, got string/,
     )
   })
 })
@@ -146,7 +146,7 @@ describe('Registry + Preset (M52 T0.3)', () => {
       (id) => new ModelCapability(id as string),
     )
     expect(() => reg.resolve('nope')).toThrow(UnknownCapabilityError)
-    expect(() => reg.resolve('nope')).toThrow(/não registrada.*model/)
+    expect(() => reg.resolve('nope')).toThrow(/is not registered.*model/)
   })
 
   it('a preset behaves like ONE capability and applies members in declaration order', () => {
