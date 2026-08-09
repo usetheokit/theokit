@@ -4,54 +4,54 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * agent-builder#120 — o marcador de tarefa esquecido volta a ter sinal, sem a palavra `todo`.
+ * agent-builder#120 — the forgotten task marker gets a signal again, without the word `todo`.
  *
- * ## Por que a regra do lint saiu, e por que isto entrou no lugar
+ * ## Why the lint rule went away, and why this took its place
  *
- * `sonarjs/todo-tag` casa **TODO em qualquer caixa**, e `todo` é palavra comum do português. Ela
- * derrubou o build da camada **três vezes no M95**, sempre em prosa legítima — *"por onde todo turno
- * passa"*, *"para todo erro"*. A medição que fechou a decisão: marcadores **reais** no fonte da
- * camada → **0**. Zero verdadeiros positivos contra três falsos é custo permanente com benefício
- * nulo, então a regra foi desligada (`eslint.config.js`).
+ * `sonarjs/todo-tag` matches **TODO in any case**, and `todo` is a common Portuguese word (it means
+ * "every"). It broke the layer's build **three times in M95**, always on legitimate prose — *"por
+ * onde todo turno passa"*, *"para todo erro"*. The measurement that closed the decision: **real**
+ * markers in the layer's source → **0**. Zero true positives against three false ones is a permanent
+ * cost with no benefit, so the rule was disabled (`eslint.config.js`).
  *
- * O que ficou de resíduo, e é a razão deste arquivo: com ela desligada, um `// TODO:` **genuíno**
- * deixou de ser sinalizado, e o controle substituto passou a ser **convenção** — dívida em
- * `## Correções` de ADR e resíduo declarado no código. Convenção não é enforcement; um controle que
- * depende de alguém lembrar falha por **omissão**.
+ * What was left as residue, and is the reason for this file: with it disabled, a **genuine** `// TODO:`
+ * stopped being flagged, and the substitute control became **convention** — debt in an ADR's
+ * `## Corrections` and residue declared in the code. Convention is not enforcement; a control that
+ * depends on somebody remembering fails by **omission**.
  *
- * ## O que este gate casa, e por que essa forma
+ * ## What this gate matches, and why that shape
  *
- * Só a forma que um marcador de verdade tem: **maiúscula + dois-pontos**, e **dentro de comentário**.
+ * Only the shape a real marker has: **uppercase + colon**, and **inside a comment**.
  *
- * | Texto | Casa? | Por quê |
+ * | Text | Matches? | Why |
  * |---|---|---|
- * | `// TODO: trocar isto` | sim | é um marcador |
- * | `// por onde todo turno passa` | não | minúscula, sem dois-pontos — os 3 falsos do M95 |
+ * | `// TODO: replace this` | yes | it is a marker |
+ * | `// por onde todo turno passa` | no | lowercase, no colon — M95's 3 false positives |
  * | `` `return { message: 'TODO: implement ${name}' }` `` | não | não é comentário: é a **saída** do
- *   gerador de scaffold do `theo generate`, um marcador para o usuário, não dívida daqui |
+ *   the `theo generate` scaffold generator, a marker for the user, not debt of ours |
  *
- * A terceira linha é o motivo de exigir o comentário em vez de varrer o texto cru: as duas únicas
- * ocorrências de `TODO:` no repositório hoje são exatamente ela, e um gate que as acusasse nasceria
- * vermelho por ruído — e um gate que nasce vermelho é desligado na semana seguinte.
+ * The third row is why the comment is required instead of scanning raw text: the only two occurrences
+ * of `TODO:` in the repository today are exactly that one, and a gate that flagged them would be born
+ * red from noise — and a gate born red is switched off the following week.
  *
- * ## O piso anti-vacuidade
+ * ## The anti-vacuity floor
  *
- * Uma varredura que devolve zero passa verde, e é indistinguível de uma que não sabe procurar. Dois
- * testes negativos abaixo matam essa ambiguidade: o detector **acha** um marcador sintético, e a
- * varredura **enxerga** o mesmo número de arquivos que o índice do git reporta.
+ * A scan that returns zero passes green, and is indistinguishable from one that does not know how to
+ * look. Two negative tests below kill that ambiguity: the detector **finds** a synthetic marker, and
+ * the scan **sees** the same number of files the git index reports.
  */
 
-/** Maiúscula + dois-pontos, dentro de um comentário `//` ou `/* ... `. */
+/** Uppercase + colon, inside a `//` or `/* ... ` comment. */
 const MARKER = /(?:\/\/|\/\*|^\s*\*)[^\n]*\b(TODO|FIXME|XXX|HACK):/
 
 const EXTENSIONS = ['*.ts', '*.tsx', '*.mts', '*.cts']
 
-/** As raízes de produção e teste da camada — derivadas do índice do git, nunca transcritas. */
+/** The layer's production and test roots — derived from the git index, never transcribed. */
 function trackedFiles(): string[] {
-  // O `git` do PATH é o ponto: este gate pergunta ao índice do repositório em que está rodando.
-  // Caminho absoluto quebraria fora do Linux e não fecha ameaça alguma num teste que já executa com
-  // os privilégios de quem o invocou.
-  // eslint-disable-next-line sonarjs/no-os-command-from-path -- ver acima
+  // `git` from PATH is the point: this gate asks the index of the repository it is running in. An
+  // absolute path would break outside Linux and closes no threat at all in a test that already runs
+  // with the privileges of whoever invoked it.
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- see above
   const saida = execFileSync('git', ['ls-files', ...EXTENSIONS], {
     encoding: 'utf8',
     maxBuffer: 1 << 28,
@@ -65,7 +65,7 @@ function trackedFiles(): string[] {
         (f) => f.startsWith('packages/') || f.startsWith('tests/') || f.startsWith('scripts/'),
       )
       .filter((f) => !f.includes('/templates/') && !f.includes('/dist/'))
-      // Este próprio arquivo escreve os marcadores na prosa que os explica.
+      // This very file writes the markers into the prose that explains them.
       .filter((f) => !f.endsWith('tests/lint/task-marker.test.ts'))
   )
 }
@@ -83,7 +83,7 @@ function markers(fileList: readonly string[]): Finding[] {
     try {
       conteudo = readFileSync(file, 'utf8')
     } catch {
-      // Um arquivo no índice que sumiu do disco não é um marcador — é um rename em voo.
+      // A file in the index that vanished from disk is not a marker — it is a rename in flight.
       continue
     }
     if (!conteudo.includes('TODO:') && !/(FIXME|XXX|HACK):/.test(conteudo)) continue
@@ -100,12 +100,12 @@ describe('agent-builder#120 — a task marker in a comment', () => {
     const fileList = trackedFiles()
     expect(
       markers(fileList),
-      'dívida marcada em comentário não é rastreada por ninguém — registre em `## Correções` de um ADR ou como resíduo declarado, e remova o marcador',
+      "debt marked in a comment is tracked by nobody — record it in an ADR's `## Corrections` or as declared residue, and remove the marker",
     ).toEqual([])
   })
 
   it('test_FLOOR_the_sweep_sees_the_same_as_the_git_index', () => {
-    // Sem isto, um filtro quebrado devolveria zero arquivos e o teste acima passaria vazio.
+    // Without this, a broken filter would return zero files and the test above would pass empty.
     const fileList = trackedFiles()
     expect(fileList.length).toBeGreaterThan(500)
     expect(fileList.some((f) => f.startsWith('packages/agents/src/'))).toBe(true)
@@ -113,7 +113,7 @@ describe('agent-builder#120 — a task marker in a comment', () => {
   })
 
   it('test_NEGATIVE_the_detector_finds_a_synthetic_marker', () => {
-    const markerText = ['// ' + 'TODO' + ': trocar isto antes do release'].join('\n')
+    const markerText = ['// ' + 'TODO' + ': replace this before the release'].join('\n')
     expect(MARKER.test(markerText)).toBe(true)
     expect(MARKER.test(' * ' + 'FIXME' + ': idem')).toBe(true)
   })
@@ -129,7 +129,7 @@ describe('agent-builder#120 — a task marker in a comment', () => {
   })
 
   it('test_NEGATIVE_a_marker_inside_a_scaffold_string_does_NOT_match', () => {
-    // A saída do `theo generate` — marcador para o usuário, não dívida deste repositório.
+    // The output of `theo generate` — a marker for the user, not debt of this repository.
     expect(MARKER.test("    `    return { message: 'TODO: implement ${name}' }`,")).toBe(false)
   })
 })
