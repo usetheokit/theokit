@@ -44,8 +44,8 @@ async function lint(files: string[]): Promise<ESLint.LintResult[]> {
   return eslint.lintFiles(files)
 }
 
-describe('template default passa no próprio lint (#93)', () => {
-  it('nenhum `.d.ts` do template produz erro de lint', async () => {
+describe('the default template passes its own lint (#93)', () => {
+  it('no `.d.ts` in the template produces a lint error', async () => {
     const files = declarationFiles()
     // Se o template deixar de ter arquivos de declaração, este teste vira vácuo silencioso.
     expect(files.length).toBeGreaterThan(0)
@@ -55,12 +55,15 @@ describe('template default passa no próprio lint (#93)', () => {
     const errors = results.flatMap((r) =>
       r.messages
         .filter((m) => m.severity === 2)
-        .map((m) => `${r.filePath.replace(TEMPLATE_ROOT, '')}:${String(m.line)} ${m.ruleId ?? '?'} — ${m.message}`),
+        .map(
+          (m) =>
+            `${r.filePath.replace(TEMPLATE_ROOT, '')}:${String(m.line)} ${m.ruleId ?? '?'} — ${m.message}`,
+        ),
     )
     expect(errors).toEqual([])
   }, 60_000)
 
-  it('a augmentação `JobRegistry` continua vazia — é o ponto dela', () => {
+  it('the `JobRegistry` augmentation stays empty — that is its point', () => {
     // Se alguém "corrigir" o lint preenchendo a interface, o app scaffoldado passa a declarar um job
     // que não existe, e `ctx.queue.enqueue` mente sobre o que é enfileirável. O verde deste arquivo
     // tem de vir da CONFIG, não de mutilar a augmentação.

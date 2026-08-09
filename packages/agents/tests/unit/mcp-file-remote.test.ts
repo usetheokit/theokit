@@ -54,92 +54,92 @@ import { McpFileError, loadMcpJson } from '../../src/bridge/mcp-file.js'
  * era o arquivo, passa a ser a entrada. Um arquivo **impartível** (JSON quebrado, `mcpServers` que não
  * é objeto) continua lançando, porque ali não há entradas para separar.
  */
-describe('M112 — o .mcp.json degrada por entrada', () => {
+describe('M112 — .mcp.json degrades per entry', () => {
   let dir: string
-  let avisos: string[]
+  let warnings: string[]
 
-  const escrever = (doc: unknown): void => {
+  const writeIt = (doc: unknown): void => {
     writeFileSync(join(dir, '.mcp.json'), JSON.stringify(doc))
   }
-  const carregar = () => loadMcpJson(dir, { onWarn: (m: string) => avisos.push(m) })
+  const load = () => loadMcpJson(dir, { onWarn: (m: string) => warnings.push(m) })
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'm112-'))
-    avisos = []
+    warnings = []
   })
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('test_piso_o_caminho_feliz_stdio_continua_intacto', () => {
+  it('test_floor_the_stdio_happy_path_stays_intact', () => {
     // PISO ANTI-VACUIDADE: sem ele, "a entrada boa sobreviveu" seria satisfeito por um parser que
     // devolve tudo sem validar nada. O caminho que já funcionava tem de continuar funcionando.
-    escrever({ mcpServers: { local: { command: 'echo', args: ['ok'], cwd: '/tmp' } } })
-    const mapa = carregar()
-    expect(Object.keys(mapa)).toEqual(['local'])
-    expect(mapa.local).toEqual({ command: 'echo', args: ['ok'], cwd: '/tmp' })
-    expect(avisos, 'o caminho feliz não deve avisar nada').toEqual([])
+    writeIt({ mcpServers: { local: { command: 'echo', args: ['ok'], cwd: '/tmp' } } })
+    const map = load()
+    expect(Object.keys(map)).toEqual(['local'])
+    expect(map.local).toEqual({ command: 'echo', args: ['ok'], cwd: '/tmp' })
+    expect(warnings, 'o caminho feliz não deve avisar nada').toEqual([])
   })
 
-  it('test_uma_entrada_INVALIDA_nao_mata_as_validas', () => {
+  it('test_an_INVALID_entry_does_not_kill_the_valid_ones', () => {
     // O DEFEITO B. Antes do M112 isto lançava `McpFileError` e perdia as duas.
-    escrever({
+    writeIt({
       mcpServers: {
         'stdio-que-funciona': { command: 'echo', args: ['ok'] },
         'sem-command-nem-url': { args: ['x'] },
       },
     })
-    const mapa = carregar()
+    const map = load()
     expect(
-      Object.keys(mapa),
+      Object.keys(map),
       'a entrada boa foi perdida junto com a ruim — é o fail-closed no raio errado',
     ).toEqual(['stdio-que-funciona'])
   })
 
-  it('test_a_entrada_omitida_e_NOMEADA_no_aviso', () => {
+  it('test_the_omitted_entry_is_NAMED_in_the_warning', () => {
     // Sem esta asserção, "não lançar" escorrega para "ignorar em silêncio", que é o fail-OPEN — o
     // risco R-2 do plano. O aviso é o que mantém o erro visível depois de estreitar o raio.
-    escrever({
+    writeIt({
       mcpServers: { bom: { command: 'echo' }, 'ruim-sem-nada': { args: ['x'] } },
     })
-    carregar()
-    expect(avisos, 'a omissão foi silenciosa').toHaveLength(1)
-    expect(avisos.join(' '), 'o aviso não nomeia a entrada omitida').toContain('ruim-sem-nada')
+    load()
+    expect(warnings, 'a omissão foi silenciosa').toHaveLength(1)
+    expect(warnings.join(' '), 'o aviso não nomeia a entrada omitida').toContain('ruim-sem-nada')
   })
 
-  it('test_o_transporte_HTTP_atravessa_INTACTO', () => {
+  it('test_the_HTTP_transport_crosses_INTACT', () => {
     // O DEFEITO A. A forma é a do SDK (`McpHttpServerConfig`), não uma inventada aqui — o M112 para
     // de estreitar em vez de construir.
-    const entrada = {
+    const serverEntry = {
       type: 'http' as const,
       url: 'https://exemplo.invalido/mcp',
       headers: { Authorization: 'Bearer SENTINELA-M112' },
       requestTimeoutMs: 5_000,
     }
-    escrever({ mcpServers: { remoto: entrada } })
-    const mapa = carregar()
+    writeIt({ mcpServers: { remoto: serverEntry } })
+    const map = load()
     expect(
-      mapa.remoto,
+      map.remoto,
       'a entrada HTTP não atravessou intacta — a camada continua estreitando o que o SDK aceita',
-    ).toEqual(entrada)
-    expect(avisos).toEqual([])
+    ).toEqual(serverEntry)
+    expect(warnings).toEqual([])
   })
 
-  it('test_url_sem_type_atravessa_e_o_SDK_decide_o_default', () => {
+  it('test_a_url_without_type_crosses_and_the_SDK_decides_the_default', () => {
     // O `gemini-cli` faz `url` sem `type` cair em HTTP. A camada NÃO decide isso — ela repassa, e o
     // default é do SDK. Inventar o default aqui seria um segundo oráculo sobre o mesmo fato.
-    escrever({ mcpServers: { r: { url: 'https://exemplo.invalido/mcp' } } })
-    expect(carregar().r).toEqual({ url: 'https://exemplo.invalido/mcp' })
+    writeIt({ mcpServers: { r: { url: 'https://exemplo.invalido/mcp' } } })
+    expect(load().r).toEqual({ url: 'https://exemplo.invalido/mcp' })
   })
 
-  it('test_type_sse_tambem_atravessa', () => {
-    escrever({ mcpServers: { r: { type: 'sse', url: 'https://exemplo.invalido/sse' } } })
-    expect(carregar().r).toEqual({ type: 'sse', url: 'https://exemplo.invalido/sse' })
+  it('test_type_sse_also_crosses', () => {
+    writeIt({ mcpServers: { r: { type: 'sse', url: 'https://exemplo.invalido/sse' } } })
+    expect(load().r).toEqual({ type: 'sse', url: 'https://exemplo.invalido/sse' })
   })
 
-  it('test_o_stdio_e_o_remoto_COEXISTEM_no_mesmo_arquivo', () => {
+  it('test_stdio_and_remote_COEXIST_in_the_same_file', () => {
     // A forma exata do `.mcp.json` real que motivou o milestone: um stdio e um HTTP lado a lado.
-    escrever({
+    writeIt({
       mcpServers: {
         'add-fixture': { command: 'npx', args: ['fixture'] },
         'theo-skills': {
@@ -149,50 +149,50 @@ describe('M112 — o .mcp.json degrada por entrada', () => {
         },
       },
     })
-    const mapa = carregar()
-    expect([...Object.keys(mapa)].sort((a, b) => a.localeCompare(b))).toEqual([
+    const map = load()
+    expect([...Object.keys(map)].sort((a, b) => a.localeCompare(b))).toEqual([
       'add-fixture',
       'theo-skills',
     ])
-    expect(avisos, 'o arquivo do caso real não deve produzir aviso nenhum').toEqual([])
+    expect(warnings, 'o arquivo do caso real não deve produzir aviso nenhum').toEqual([])
   })
 
-  it('test_NEGATIVO_type_desconhecido_e_omitido_e_nomeado', () => {
-    escrever({
+  it('test_NEGATIVE_an_unknown_type_is_omitted_and_named', () => {
+    writeIt({
       mcpServers: {
         bom: { command: 'echo' },
         exotico: { type: 'carrier-pigeon', url: 'https://x.invalido' },
       },
     })
-    const mapa = carregar()
-    expect(Object.keys(mapa)).toEqual(['bom'])
-    expect(avisos.join(' ')).toContain('exotico')
+    const map = load()
+    expect(Object.keys(map)).toEqual(['bom'])
+    expect(warnings.join(' ')).toContain('exotico')
   })
 
-  it('test_NEGATIVO_url_e_command_juntos_e_omitido_e_nomeado', () => {
+  it('test_NEGATIVE_url_and_command_together_are_omitted_and_named', () => {
     // Config ambígua não é adivinhada — o SDK tem uma união discriminada, e uma entrada que satisfaz
     // os dois ramos não é nem um nem outro.
-    escrever({
+    writeIt({
       mcpServers: {
         bom: { command: 'echo' },
         ambiguo: { command: 'echo', url: 'https://x.invalido' },
       },
     })
-    expect(Object.keys(carregar())).toEqual(['bom'])
-    expect(avisos.join(' ')).toContain('ambiguo')
+    expect(Object.keys(load())).toEqual(['bom'])
+    expect(warnings.join(' ')).toContain('ambiguo')
   })
 
-  it('test_NEGATIVO_url_que_nao_e_url_e_omitida_e_nomeada', () => {
-    escrever({ mcpServers: { bom: { command: 'echo' }, r: { type: 'http', url: 'não-é-url' } } })
-    expect(Object.keys(carregar())).toEqual(['bom'])
-    expect(avisos.join(' ')).toContain('r')
+  it('test_NEGATIVE_a_url_that_is_not_a_url_is_omitted_and_named', () => {
+    writeIt({ mcpServers: { bom: { command: 'echo' }, r: { type: 'http', url: 'não-é-url' } } })
+    expect(Object.keys(load())).toEqual(['bom'])
+    expect(warnings.join(' ')).toContain('r')
   })
 
-  it('test_NEGATIVO_o_valor_do_header_NUNCA_aparece_no_aviso', () => {
+  it('test_NEGATIVE_the_header_value_NEVER_appears_in_the_warning', () => {
     // D5 do plano. Os peers DIVERGEM aqui — `gemini-cli` redige em 18 sítios, `opencode` em ZERO —, e
     // um peer não é precedente para segurança. Decide o precedente INTERNO: `AuthProvider` declara que
     // nunca expõe material de token. O `.mcp.json` é arquivo de PROJETO, que pode ser commitado.
-    escrever({
+    writeIt({
       mcpServers: {
         vazador: {
           type: 'http',
@@ -201,22 +201,23 @@ describe('M112 — o .mcp.json degrada por entrada', () => {
         },
       },
     })
-    carregar()
+    load()
     // A URL é VÁLIDA de propósito. A primeira versão usava `url: 'não-é-url'`, e `validarRemoto`
     // retorna no primeiro erro — o aviso era sobre a URL e **nunca tocava `headers`**. O review provou
     // por mutação: trocar a mensagem do ramo de headers por uma que despeja o valor mantinha os 28
     // testes verdes. Um controle que nunca alcança o ramo que protegeria é indistinguível de nenhum
     // controle (`mecanismo-anti-esquecimento.md § 5.3`).
-    expect(avisos, 'o ramo de headers não disparou — o teste voltou a não alcançá-lo').toHaveLength(
-      1,
-    )
-    expect(avisos.join(' '), 'o aviso deve nomear a entrada').toContain('vazador')
-    expect(avisos.join(' '), 'o aviso deve falar da FORMA do campo').toContain('headers')
-    expect(avisos.join(' '), 'o aviso vazou o conteúdo do header').not.toContain('12345')
+    expect(
+      warnings,
+      'o ramo de headers não disparou — o teste voltou a não alcançá-lo',
+    ).toHaveLength(1)
+    expect(warnings.join(' '), 'o aviso deve nomear a entrada').toContain('vazador')
+    expect(warnings.join(' '), 'o aviso deve falar da FORMA do campo').toContain('headers')
+    expect(warnings.join(' '), 'o aviso vazou o conteúdo do header').not.toContain('12345')
 
     // O caso anterior segue coberto, como cenário SEPARADO: URL inválida com header presente.
-    avisos.length = 0
-    escrever({
+    warnings.length = 0
+    writeIt({
       mcpServers: {
         outro: {
           type: 'http',
@@ -225,74 +226,74 @@ describe('M112 — o .mcp.json degrada por entrada', () => {
         },
       },
     })
-    carregar()
-    expect(avisos.join(' '), 'o aviso vazou o valor do header').not.toContain('SEGREDO-XYZ-123')
+    load()
+    expect(warnings.join(' '), 'o aviso vazou o valor do header').not.toContain('SEGREDO-XYZ-123')
   })
 
-  it('test_NEGATIVO_arquivo_impartivel_CONTINUA_lancando', () => {
+  it('test_NEGATIVE_an_unparseable_file_STILL_throws', () => {
     // O que separa "raio certo" de fail-open: sem entradas para separar, não há degradação possível.
     writeFileSync(join(dir, '.mcp.json'), '{ isto não é json')
-    expect(() => carregar()).toThrow(McpFileError)
+    expect(() => load()).toThrow(McpFileError)
   })
 
-  it('test_NEGATIVO_mcpServers_que_nao_e_objeto_CONTINUA_lancando', () => {
-    escrever({ mcpServers: ['isto', 'é', 'um', 'array'] })
-    expect(() => carregar()).toThrow(McpFileError)
+  it('test_NEGATIVE_an_mcpServers_that_is_not_an_object_STILL_throws', () => {
+    writeIt({ mcpServers: ['isto', 'é', 'um', 'array'] })
+    expect(() => load()).toThrow(McpFileError)
   })
 
-  it('test_arquivo_ausente_devolve_vazio_SEM_erro', () => {
+  it('test_a_missing_file_returns_empty_with_NO_error', () => {
     // MCP é opt-in — a ausência do arquivo nunca foi erro, e continua não sendo.
     expect(loadMcpJson(join(dir, 'nao-existe'))).toEqual({})
   })
 
-  it('test_onWarn_omitido_cai_em_stderr_NUNCA_em_silencio', () => {
+  it('test_omitting_onWarn_falls_back_to_stderr_NEVER_to_silence', () => {
     // HIGH-1 do review: `onWarn` opcional deixava a omissão SILENCIOSA quando o chamador não assinava
     // — e o único chamador de produção não assinava. Toda a defesa contra `error-handling.md § 2`
     // dependia da frase "o erro segue visível pelo canal"; sem assinante, não seguia.
     const original = process.stderr.write.bind(process.stderr)
-    const capturado: string[] = []
+    const captured: string[] = []
     process.stderr.write = ((s: string) => {
-      capturado.push(s)
+      captured.push(s)
       return true
     }) as typeof process.stderr.write
     try {
-      escrever({ mcpServers: { bom: { command: 'echo' }, ruim: {} } })
+      writeIt({ mcpServers: { bom: { command: 'echo' }, ruim: {} } })
       expect(Object.keys(loadMcpJson(dir))).toEqual(['bom'])
     } finally {
       process.stderr.write = original
     }
-    expect(capturado.join(' '), 'a omissão foi silenciosa sem `onWarn` — é fail-open').toContain(
+    expect(captured.join(' '), 'a omissão foi silenciosa sem `onWarn` — é fail-open').toContain(
       'ruim',
     )
   })
 
-  it('test_SEGURANCA_envPolicy_do_arquivo_NAO_atravessa', () => {
+  it('test_SECURITY_the_files_envPolicy_does_NOT_cross', () => {
     // BLOCKER-1 do review. `envPolicy: 'all'` desliga o scrub que impede um binário de terceiro de
     // exfiltrar segredos do host via ambiente — e o `.mcp.json` é arquivo de PROJETO. A primeira
     // versão do M112 repassava o objeto cru e deixava esse campo atravessar.
-    escrever({ mcpServers: { s: { command: 'node', args: ['x.js'], envPolicy: 'all' } } })
-    const entrada = carregar().s as unknown as Record<string, unknown>
+    writeIt({ mcpServers: { s: { command: 'node', args: ['x.js'], envPolicy: 'all' } } })
+    const serverEntry = load().s as unknown as Record<string, unknown>
     expect(
-      'envPolicy' in entrada,
+      'envPolicy' in serverEntry,
       'o `.mcp.json` conseguiu desligar o scrub de segredos do host — um repositório passa a poder ' +
         'entregar ANTHROPIC_API_KEY e NPM_TOKEN a um binário de terceiro com uma linha de JSON',
     ).toBe(false)
-    expect(entrada, 'o resto da entrada stdio deve atravessar normalmente').toEqual({
+    expect(serverEntry, 'o resto da entrada stdio deve atravessar normalmente').toEqual({
       command: 'node',
       args: ['x.js'],
     })
   })
 
-  it('test_SEGURANCA_campo_desconhecido_NAO_atravessa', () => {
+  it('test_SECURITY_an_unknown_field_does_NOT_cross', () => {
     // A allowlist é a REGRA, não uma lista de proibidos: um campo que ninguém previu também não passa.
     // Sem isto, o próximo campo perigoso do SDK atravessaria sozinho no dia em que fosse criado.
-    escrever({
+    writeIt({
       mcpServers: {
         s: { command: 'node', campoInventado: { x: 1 } },
         r: { type: 'http', url: 'https://ok.invalido/mcp', outroInventado: 'y' },
       },
     })
-    const m = carregar()
+    const m = load()
     expect(m.s).toEqual({ command: 'node' })
     expect(m.r).toEqual({ type: 'http', url: 'https://ok.invalido/mcp' })
   })

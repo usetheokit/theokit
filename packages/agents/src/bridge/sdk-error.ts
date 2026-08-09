@@ -21,7 +21,7 @@
  *
  * @internal
  */
-export function eventoDeErroDoSdk(err: unknown): {
+export function sdkErrorEvent(err: unknown): {
   type: 'error'
   code: string
   message: string
@@ -37,4 +37,3 @@ export function eventoDeErroDoSdk(err: unknown): {
     retryable: sdkErr.isRetryable === true,
   }
 }
-

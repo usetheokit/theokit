@@ -34,7 +34,7 @@ import { describe, expect, it } from 'vitest'
 const require_ = createRequire(import.meta.url)
 
 /** Um subpath re-exportado pela camada, com os símbolos que precisam atravessar. */
-interface Dentro {
+interface Inside {
   readonly verdict: 'in'
   /**
    * `'total'` — cada export do subpath atravessa, e o teste verifica isso enumerando o módulo do SDK.
@@ -54,7 +54,7 @@ interface Dentro {
    * …): ali a cobertura é o subpath inteiro, e o M73 já tem teste de paridade dedicado
    * (`auth-parity.test.ts`). Para um `in` via barril, lista vazia seria um veredito NÃO VERIFICADO —
    * exatamente o defeito que esta política existe para impedir, e o teste
-   * `test_in_via_barril_declara_simbolos` o proíbe.
+   * `test_in_via_the_barrel_declares_symbols` o proíbe.
    */
   readonly simbolos: readonly string[]
   /**
@@ -71,18 +71,18 @@ interface Dentro {
 /** Um subpath deliberadamente fora, com a razão — que é obrigatória. */
 interface Fora {
   readonly verdict: 'out'
-  readonly razao: string
+  readonly reason: string
 }
 
-type Decisao = Dentro | Fora
+type Decision = Inside | Fora
 
 /**
  * A lista de decisão. Cada subpath publicado pelo SDK aparece aqui.
  *
- * Adicionar um subpath ao SDK e não a esta lista quebra `test_cada_subpath_do_sdk_tem_veredito` —
+ * Adicionar um subpath ao SDK e não a esta lista quebra `test_every_sdk_subpath_has_a_verdict` —
  * de propósito.
  */
-const DECISOES: Record<string, Decisao> = {
+const DECISIONS: Record<string, Decision> = {
   '.': {
     verdict: 'in',
     via: '../../src/index.js',
@@ -188,7 +188,7 @@ const DECISOES: Record<string, Decisao> = {
   // --- FORA, com razão. Nenhuma destas é silenciosa. ---
   './internal/memory-adapters': {
     verdict: 'out',
-    razao:
+    reason:
       'Subpath SEMVER-EXEMPT, publicado pelo `@theokit/sdk@4.39.0` (theokit#160) com um único ' +
       'propósito: deixar o `@theokit/sdk-memory` reusar o runtime de embeddings do SDK em vez de ' +
       'manter a cópia de 342 linhas que causou a lacuna de adapters do theokit#128. Atravessar a ' +
@@ -197,76 +197,76 @@ const DECISOES: Record<string, Decisao> = {
   },
   './cron': {
     verdict: 'out',
-    razao:
+    reason:
       'Agendamento é responsabilidade do host (systemd/CI/cloud scheduler), não do agente. Nenhum ' +
       'consumidor pediu, e expor cria a expectativa de que a camada gerencia o ciclo de vida.',
   },
   './skills': {
     verdict: 'out',
-    razao:
+    reason:
       'A camada tem seu próprio `skills-resolver.ts`, que é a superfície OO desse domínio. Expor a ' +
       'primitiva do SDK ao lado criaria duas portas para a mesma coisa.',
   },
   './project': {
     verdict: 'out',
-    razao:
+    reason:
       'Descoberta de raiz de projeto — o consumidor resolve o cwd por conta própria. Sem demanda.',
   },
   './subagents': {
     verdict: 'out',
-    razao:
+    reason:
       'A delegação chega por `SubAgent` (via `/a2a`, já `in`). Este subpath é a mecânica de carga de ' +
       'arquivo, que é detalhe interno do runtime.',
   },
   './task-store': {
     verdict: 'out',
-    razao:
+    reason:
       'Persistência de tarefa é interna ao runtime; o consumidor observa por `Run`, não pelo store.',
   },
   './workflow': {
     verdict: 'out',
-    razao:
+    reason:
       'Orquestração de workflow é um domínio que a camada ainda não modelou. Entra quando houver demanda real.',
   },
   './eval': {
     verdict: 'out',
-    razao: 'Ferramental de avaliação é de desenvolvimento, não de runtime do agente.',
+    reason: 'Ferramental de avaliação é de desenvolvimento, não de runtime do agente.',
   },
   './server/auth': {
     verdict: 'out',
-    razao:
+    reason:
       'Superfície de servidor HTTP; a camada é de agente. `@theokit/http` é o pacote desse domínio.',
   },
   './server/errors-envelope': {
     verdict: 'out',
-    razao: 'Mesma razão de `/server/auth` — envelope de erro de transporte HTTP, não de agente.',
+    reason: 'Mesma razão de `/server/auth` — envelope de erro de transporte HTTP, não de agente.',
   },
   './subscription': {
     verdict: 'out',
-    razao: 'Billing/quota é do produto, não do framework de agente.',
+    reason: 'Billing/quota é do produto, não do framework de agente.',
   },
   './sanitize': {
     verdict: 'out',
-    razao:
+    reason:
       'Redação de segredo é aplicada pelo runtime do SDK nos seus próprios sinks. Expor convida o ' +
       'consumidor a redigir por conta, que é onde se esquece um caminho.',
   },
   './internal/persistence': {
     verdict: 'out',
-    razao: 'Marcado `internal/` pelo próprio SDK — re-exportar contradiz a intenção da origem.',
+    reason: 'Marcado `internal/` pelo próprio SDK — re-exportar contradiz a intenção da origem.',
   },
   './internal/security': {
     verdict: 'out',
-    razao: 'Idem `internal/persistence`.',
+    reason: 'Idem `internal/persistence`.',
   },
   './client': {
     verdict: 'out',
-    razao:
+    reason:
       'Cliente HTTP do modo cloud; a camada cobre o modo local. Entra se/quando cloud for suportado aqui.',
   },
   './filesystem': {
     verdict: 'out',
-    razao:
+    reason:
       'As operações de arquivo que o consumidor precisa chegam como TOOLS (`@theokit/agents/tools`), ' +
       'que já carregam o guard de escopo. A primitiva crua contornaria esse guard.',
   },
@@ -290,94 +290,97 @@ const SUBPATHS_DO_SDK = Object.keys(
   (require_('@theokit/sdk/package.json') as { exports: Record<string, unknown> }).exports,
 ).filter((k) => k !== './package.json')
 
-describe('M78 T2.1 — política de cobertura de subpath', () => {
-  it('test_cada_subpath_do_sdk_tem_veredito', () => {
-    const semDecisao = SUBPATHS_DO_SDK.filter((s) => DECISOES[s] === undefined)
+describe('M78 T2.1 — subpath coverage policy', () => {
+  it('test_every_sdk_subpath_has_a_verdict', () => {
+    const withoutDecision = SUBPATHS_DO_SDK.filter((s) => DECISIONS[s] === undefined)
 
     expect(
-      semDecisao,
-      `Subpath(s) do SDK sem veredito: ${semDecisao.join(', ')}.\n` +
+      withoutDecision,
+      `Subpath(s) do SDK sem veredito: ${withoutDecision.join(', ')}.\n` +
         'Isto é intencional: um subpath novo no SDK quebra este teste UMA vez, e o conserto é ' +
         'escrever a decisão em DECISOES — inclusive `out` com razão. Sem isto, "ninguém decidiu" ' +
         'fica indistinguível de "decidimos que fica fora", que é como a cobertura chegou a 9 de 28.',
     ).toEqual([])
   })
 
-  it('test_a_lista_nao_referencia_subpath_INEXISTENTE', () => {
+  it('test_the_list_does_not_reference_a_NONEXISTENT_subpath', () => {
     // O inverso: uma decisão órfã (subpath removido do SDK) também precisa aparecer, senão a lista
     // acumula entradas mortas e passa a mentir sobre o que foi decidido.
-    const orfas = Object.keys(DECISOES).filter((s) => !SUBPATHS_DO_SDK.includes(s))
+    const orfas = Object.keys(DECISIONS).filter((s) => !SUBPATHS_DO_SDK.includes(s))
     expect(orfas, `Decisão para subpath que o SDK não publica mais: ${orfas.join(', ')}`).toEqual(
       [],
     )
   })
 
-  it('test_in_via_barril_declara_simbolos', () => {
+  it('test_in_via_the_barrel_declares_symbols', () => {
     // Um `in` sem símbolo é um veredito que nada verifica — documenta cobertura sem prová-la. Só é
     // aceitável quando a camada tem subpath PRÓPRIO para o domínio (aí o subpath é a cobertura).
-    const naoVerificados = Object.entries(DECISOES)
+    const unverified = Object.entries(DECISIONS)
       .filter(
         ([, d]) => d.verdict === 'in' && d.simbolos.length === 0 && d.via === '../../src/index.js',
       )
       .map(([s]) => s)
     expect(
-      naoVerificados,
-      `\`in\` via barril sem símbolo declarado: ${naoVerificados.join(', ')}. ` +
+      unverified,
+      `\`in\` via barril sem símbolo declarado: ${unverified.join(', ')}. ` +
         'Um veredito que nada verifica é pior que nenhum — ele afirma cobertura que ninguém checou.',
     ).toEqual([])
   })
 
-  it('test_cada_veredito_OUT_tem_razao_nao_vazia', () => {
+  it('test_every_OUT_verdict_has_a_non_empty_reason', () => {
     // CONTRAPROVA da política. Sem isto, `out` sem razão viraria a allowlist silenciosa que o
     // formato existe para impedir — e ninguém revisitaria a decisão.
-    const semRazao = Object.entries(DECISOES)
-      .filter(([, d]) => d.verdict === 'out' && (d as Fora).razao.trim().length < 20)
+    const withoutReason = Object.entries(DECISIONS)
+      .filter(([, d]) => d.verdict === 'out' && (d as Fora).reason.trim().length < 20)
       .map(([s]) => s)
-    expect(semRazao, `Veredito \`out\` sem razão escrita: ${semRazao.join(', ')}`).toEqual([])
+    expect(
+      withoutReason,
+      `Veredito \`out\` sem razão escrita: ${withoutReason.join(', ')}`,
+    ).toEqual([])
   })
 
-  const entradas = Object.entries(DECISOES).filter(
-    (e): e is [string, Dentro] => e[1].verdict === 'in' && e[1].simbolos.length > 0,
+  const entradas = Object.entries(DECISIONS).filter(
+    (e): e is [string, Inside] => e[1].verdict === 'in' && e[1].simbolos.length > 0,
   )
 
   it.each(entradas)('test_os_simbolos_de_%s_ATRAVESSAM_a_camada', async (subpath, decisao) => {
     // O `in` é VERIFICADO, não confiado. Uma decisão que diz "in" para um subpath que não atravessa
     // é pior que nenhuma decisão: ela documenta uma cobertura que não existe.
-    const camada = (await import(decisao.via)) as Record<string, unknown>
+    const layer = (await import(decisao.via)) as Record<string, unknown>
     for (const nome of decisao.simbolos) {
       expect(
-        camada[nome],
+        layer[nome],
         `\`${nome}\` (de ${subpath}) não atravessa a camada por ${decisao.via}`,
       ).toBeDefined()
     }
   })
 
-  const totais = Object.entries(DECISOES).filter(
-    (e): e is [string, Dentro] => e[1].verdict === 'in' && e[1].cobertura === 'total',
+  const totals = Object.entries(DECISIONS).filter(
+    (e): e is [string, Inside] => e[1].verdict === 'in' && e[1].cobertura === 'total',
   )
 
-  it.each(totais)('test_%s_atravessa_por_INTEIRO_e_nao_por_amostra', async (subpath, decisao) => {
+  it.each(totals)('test_%s_atravessa_por_INTEIRO_e_nao_por_amostra', async (subpath, decisao) => {
     // O teste que existe por causa de um defeito real: a primeira versão só amostrava símbolos, e
     // `RateLimitError` ficou de fora do re-export sem nada acusar — o refresh OAuth precisava dela
     // para reconhecer um 429. Amostrar prova que ALGO atravessa, não que o DOMÍNIO atravessa.
-    const camada = (await import(decisao.via)) as Record<string, unknown>
+    const layer = (await import(decisao.via)) as Record<string, unknown>
     const sdk = (await import(`@theokit/sdk${subpath.slice(1)}`)) as Record<string, unknown>
 
-    const faltando = Object.keys(sdk).filter(
-      (nome) => camada[nome] === undefined && decisao.lacunas?.[nome] === undefined,
+    const missing = Object.keys(sdk).filter(
+      (nome) => layer[nome] === undefined && decisao.lacunas?.[nome] === undefined,
     )
     expect(
-      faltando,
-      `Exports de ${subpath} que não atravessam: ${faltando.join(', ')}. ` +
+      missing,
+      `Exports de ${subpath} que não atravessam: ${missing.join(', ')}. ` +
         'Ou re-exporte, ou registre em `lacunas` com a razão — uma hierarquia pela metade faz o ' +
         'consumidor recriar a classe que falta, que é o defeito que este milestone fecha.',
     ).toEqual([])
   })
 
-  it.each(totais)('test_as_lacunas_de_%s_tem_razao_escrita', (_subpath, decisao) => {
+  it.each(totals)('test_as_lacunas_de_%s_tem_razao_escrita', (_subpath, decisao) => {
     // CONTRAPROVA: sem isto, `lacunas` viraria a allowlist silenciosa que a política proíbe.
-    for (const [nome, razao] of Object.entries(decisao.lacunas ?? {})) {
-      expect(razao.trim().length, `lacuna \`${nome}\` sem razão escrita`).toBeGreaterThan(30)
+    for (const [nome, reason] of Object.entries(decisao.lacunas ?? {})) {
+      expect(reason.trim().length, `lacuna \`${nome}\` sem razão escrita`).toBeGreaterThan(30)
     }
   })
 
@@ -386,10 +389,10 @@ describe('M78 T2.1 — política de cobertura de subpath', () => {
     async (subpath, decisao) => {
       // `toBe`, não `toBeDefined` — a lição do M73. Um wrapper passaria no teste anterior e quebraria
       // `instanceof` aqui, em silêncio, sem nenhum teste de comportamento ficar vermelho.
-      const camada = (await import(decisao.via)) as Record<string, unknown>
+      const layer = (await import(decisao.via)) as Record<string, unknown>
       const sdk = (await import(`@theokit/sdk${subpath.slice(1)}`)) as Record<string, unknown>
       for (const nome of decisao.simbolos) {
-        expect(camada[nome], `\`${nome}\` atravessa como CÓPIA, não como a classe do SDK`).toBe(
+        expect(layer[nome], `\`${nome}\` atravessa como CÓPIA, não como a classe do SDK`).toBe(
           sdk[nome],
         )
       }

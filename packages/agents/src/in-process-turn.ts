@@ -97,8 +97,8 @@ export class InProcessApprovalRequiredError extends Error {
  * `interactive` carries its own resolver; the two automatic postures answer without a human, in the
  * direction they name. An explicit `awaitApproval` still wins — it is the more specific answer.
  */
-function resolvedorDaPostura(
-  postura: ApprovalPosture | undefined,
+function postureResolver(
+  posturePolicy: ApprovalPosture | undefined,
 ):
   | ((
       approvalId: string,
@@ -106,14 +106,14 @@ function resolvedorDaPostura(
       toolName: string,
     ) => Promise<boolean | HitlDecision>)
   | undefined {
-  if (postura === undefined) return undefined
-  switch (postura.kind) {
+  if (posturePolicy === undefined) return undefined
+  switch (posturePolicy.kind) {
     case 'interactive':
-      return postura.awaitApproval
+      return posturePolicy.awaitApproval
     case 'auto-approve':
-      return () => Promise.resolve({ approved: true, reason: postura.reason })
+      return () => Promise.resolve({ approved: true, reason: posturePolicy.reason })
     case 'auto-reject':
-      return () => Promise.resolve({ approved: false, reason: postura.reason })
+      return () => Promise.resolve({ approved: false, reason: posturePolicy.reason })
     case 'owned-by-surface':
       return undefined
   }
@@ -147,13 +147,13 @@ export function streamAgentTurnInProcess(
   // stream path (M2), unchanged. The SDK calls (approvalId, opts, toolName); route to the caller.
   // An explicit `awaitApproval` wins over the posture: it is the more specific answer to the same
   // question, and honouring it keeps every pre-M96 call site byte-identical.
-  const resolverDeAprovacao = resolve
+  const approvalResolver = resolve
     ? (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) =>
         resolve({ approvalId, toolName, opts })
-    : resolvedorDaPostura(input.approvals)
+    : postureResolver(input.approvals)
   const hitl =
-    gated && gated.size > 0 && resolverDeAprovacao
-      ? { gated, awaitApproval: resolverDeAprovacao }
+    gated && gated.size > 0 && approvalResolver
+      ? { gated, awaitApproval: approvalResolver }
       : undefined
 
   const sessionId = input.sessionId ?? crypto.randomUUID()

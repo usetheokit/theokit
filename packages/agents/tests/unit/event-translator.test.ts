@@ -418,14 +418,14 @@ describe('translateInteractionUpdate — real-time InteractionUpdate shapes (#44
 // (`request` = aprovação pendente, `task` = marco, `ShellOutputDelta` = saída de shell ao vivo).
 // O segundo caso é o que a regra de falhar-alto proíbe: um sinal de aprovação sumindo sem rastro
 // é indistinguível de "não havia sinal".
-describe('eventos desconhecidos avisam em vez de sumir (#141)', () => {
-  let avisos: string[]
+describe('unknown events warn instead of vanishing (#141)', () => {
+  let warnings: string[]
   let spy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    avisos = []
+    warnings = []
     spy = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
-      avisos.push(args.map(String).join(' '))
+      warnings.push(args.map(String).join(' '))
     })
   })
   afterEach(() => {
@@ -445,28 +445,28 @@ describe('eventos desconhecidos avisam em vez de sumir (#141)', () => {
    */
   const TYPE_THE_SDK_WILL_NEVER_EMIT = 'carrier-pigeon'
 
-  it('um tipo de SDKMessage que o tradutor não conhece produz um aviso nomeando o tipo', () => {
+  it('an SDKMessage type the translator does not know produces a warning naming the type', () => {
     const out = translateSdkEvent(
       { type: TYPE_THE_SDK_WILL_NEVER_EMIT, agent_id: 'a', run_id: 'r' } as never,
       'r',
     )
 
     expect(out).toEqual([])
-    expect(avisos.join('\n')).toContain(TYPE_THE_SDK_WILL_NEVER_EMIT)
-    expect(avisos.join('\n')).toContain('#141')
+    expect(warnings.join('\n')).toContain(TYPE_THE_SDK_WILL_NEVER_EMIT)
+    expect(warnings.join('\n')).toContain('#141')
   })
 
-  it('avisa UMA vez por tipo — um stream emite milhares de eventos por turno', () => {
+  it('warns ONCE per type — a stream emits thousands of events per turn', () => {
     for (let i = 0; i < 5; i++) {
       translateSdkEvent({ type: 'homing-albatross', agent_id: 'a', run_id: 'r' } as never, 'r')
     }
 
-    expect(avisos.filter((a) => a.includes('"homing-albatross"'))).toHaveLength(1)
+    expect(warnings.filter((a) => a.includes('"homing-albatross"'))).toHaveLength(1)
   })
 
-  it('tipo ignorado DE PROPÓSITO não avisa — o silêncio ali é decisão, não descuido', () => {
+  it('a type ignored ON PURPOSE does not warn — the silence there is a decision, not an oversight', () => {
     translateSdkEvent({ type: 'user', agent_id: 'a', run_id: 'r' } as never, 'r')
 
-    expect(avisos).toEqual([])
+    expect(warnings).toEqual([])
   })
 })

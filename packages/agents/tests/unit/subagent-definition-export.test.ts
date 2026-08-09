@@ -39,7 +39,7 @@ import { AgentBuilder, discoverSubagents } from '../../src/index.js'
 import type { AgentDefinition, SubagentDefinition } from '../../src/index.js'
 
 /** A versão do SDK publicada na Fase 1 — a primeira que tem `settingSources` (D11). */
-const VERSAO_DA_FASE_1 = '4.36.0'
+const PHASE_1_VERSION = '4.36.0'
 
 /**
  * Compares plain `X.Y.Z` versions. Not a semver library, and does not need to be: both sides here
@@ -52,29 +52,29 @@ function compareVersions(a: string, b: string): number {
   return 0
 }
 
-const RAIZ_DO_PACOTE = join(import.meta.dirname, '..', '..')
+const PACKAGE_ROOT = join(import.meta.dirname, '..', '..')
 
 const cwd = mkdtempSync(join(tmpdir(), 'm96-subagent-definition-'))
 afterAll(() => rmSync(cwd, { recursive: true, force: true }))
 
-const dirAgentes = join(cwd, '.theokit', 'agents')
-mkdirSync(dirAgentes, { recursive: true })
+const agentsDir = join(cwd, '.theokit', 'agents')
+mkdirSync(agentsDir, { recursive: true })
 writeFileSync(
-  join(dirAgentes, 'analista.md'),
+  join(agentsDir, 'analista.md'),
   '---\nname: analista\ndescription: analisa o repo\n---\n\nVocê analisa.\n',
 )
 
-describe('M96 U2 — SubagentDefinition ao lado do carregador', () => {
-  it('test_SubagentDefinition_e_exportado_pelo_indice_publico', async () => {
+describe('M96 U2 — SubagentDefinition alongside the loader', () => {
+  it('test_SubagentDefinition_is_exported_from_the_public_index', async () => {
     // O oráculo é a ATRIBUIÇÃO tipada: o `tsc` do repo cobre `packages/*/tests/**/*.ts`, então uma
     // anotação que não casa é erro de compilação, não comentário. A asserção de runtime existe para
     // que o arquivo não seja um `.d.ts` disfarçado.
-    const definicoes: Record<string, SubagentDefinition> = await discoverSubagents(cwd)
-    expect(Object.keys(definicoes)).toEqual(['analista'])
-    expect(definicoes.analista?.description).toBe('analisa o repo')
+    const definitions: Record<string, SubagentDefinition> = await discoverSubagents(cwd)
+    expect(Object.keys(definitions)).toEqual(['analista'])
+    expect(definitions.analista?.description).toBe('analisa o repo')
   })
 
-  it('test_o_AgentDefinition_brandado_continua_sendo_o_do_builder', () => {
+  it('test_the_branded_AgentDefinition_is_still_the_builders', () => {
     // A CONTRAPROVA da colisão. Sem ela, alguém "resolve" o problema re-exportando o tipo do SDK sob
     // o nome ocupado e quebra todo consumidor do builder em silêncio.
     const doBuilder = AgentBuilder.create()
@@ -85,19 +85,19 @@ describe('M96 U2 — SubagentDefinition ao lado do carregador', () => {
     expect(brandado).toBeDefined()
 
     // @ts-expect-error — um objeto de dados SEM a marca não é o `AgentDefinition` do builder.
-    const semMarca: AgentDefinition = { description: 'analisa', prompt: 'Você analisa.' }
-    expect(semMarca).toBeDefined()
+    const unbranded: AgentDefinition = { description: 'analisa', prompt: 'Você analisa.' }
+    expect(unbranded).toBeDefined()
   })
 
-  it('test_discoverSubagents_reexportado_carrega_o_parametro_novo', () => {
+  it('test_the_re_exported_discoverSubagents_carries_the_new_parameter', () => {
     // Medido ATRAVÉS do índice da camada, e não do SDK: é esta asserção que prova o repasse do U3
     // pela cadeia `SDK → Theokit → AgentBuilder`. `options?` é opcional sem default, então conta
     // para `Function.length` — 2 é a aridade da assinatura nova; 1 era a da antiga.
     expect(discoverSubagents.length).toBe(2)
   })
 
-  it('test_o_PISO_da_faixa_de_sdk_e_a_versao_que_tem_settingSources', () => {
-    const manifesto = JSON.parse(readFileSync(join(RAIZ_DO_PACOTE, 'package.json'), 'utf8')) as {
+  it('test_the_FLOOR_of_the_sdk_range_is_the_version_that_has_settingSources', () => {
+    const manifesto = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as {
       dependencies: Record<string, string>
     }
     const faixa = manifesto.dependencies['@theokit/sdk']
@@ -112,25 +112,25 @@ describe('M96 U2 — SubagentDefinition ao lado do carregador', () => {
     // A floor BELOW the settingSources version is the defect; a floor above it is the mechanism.
     const floor = faixa!.replace(/^[\^~]/, '')
     expect(
-      compareVersions(floor, VERSAO_DA_FASE_1),
-      `the floor ${floor} is below ${VERSAO_DA_FASE_1}, the first version with settingSources — a ` +
+      compareVersions(floor, PHASE_1_VERSION),
+      `the floor ${floor} is below ${PHASE_1_VERSION}, the first version with settingSources — a ` +
         'fresh install could resolve an SDK that lacks it',
     ).toBeGreaterThanOrEqual(0)
   })
 
-  it('test_o_sdk_instalado_de_fato_aceita_settingSources', async () => {
+  it('test_the_installed_sdk_actually_accepts_settingSources', async () => {
     // A segunda metade do oráculo: comportamental, independente do manifesto. Uma lista VAZIA lê
     // NADA — o diretório nunca é aberto —, então o `{}` só é possível se o parâmetro existir e for
     // honrado. Contra a versão anterior do SDK, a opção seria ignorada e viria `{ analista }`.
-    const nenhuma = await discoverSubagents(cwd, { settingSources: [] })
-    expect(nenhuma).toEqual({})
+    const none = await discoverSubagents(cwd, { settingSources: [] })
+    expect(none).toEqual({})
 
     // O par invertido, que impede o teste acima de "provar" a leitura por nunca ler nada.
-    const doProjeto = await discoverSubagents(cwd, { settingSources: ['project'] })
-    expect(Object.keys(doProjeto)).toEqual(['analista'])
+    const ofTheProject = await discoverSubagents(cwd, { settingSources: ['project'] })
+    expect(Object.keys(ofTheProject)).toEqual(['analista'])
   })
 
-  it('test_NEGATIVO_o_alias_nao_resolve_para_o_tipo_brandado', () => {
+  it('test_NEGATIVE_the_alias_does_not_resolve_to_the_branded_type', () => {
     // A lente que impede o alias de virar sinônimo do nome ocupado: o valor do builder não tem
     // `description`/`prompt`, que a definição de subagent EXIGE.
     const doBuilder = AgentBuilder.create()

@@ -27,8 +27,8 @@ import { Agent } from '../../src/index.js'
   const r = await Agent.list({ runtime: 'local' })
   // The narrowed result has no `nextCursor`: the runtime never sets one, so a caller branching on
   // it branches on a value that cannot arrive.
-  type TemCursor = 'nextCursor' extends keyof typeof r ? true : false
-  expectTypeOf<TemCursor>().toEqualTypeOf<false>()
+  type HasCursor = 'nextCursor' extends keyof typeof r ? true : false
+  expectTypeOf<HasCursor>().toEqualTypeOf<false>()
   expectTypeOf(r.items).toBeArray()
 }
 
