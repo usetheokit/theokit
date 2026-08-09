@@ -1,24 +1,25 @@
 /**
- * M79 DoD 4 — `AgentDefinition` é um CONTRATO DE DADO PURO, atravessável entre cópias do pacote.
+ * M79 DoD 4 — `AgentDefinition` is a PURE DATA CONTRACT, crossable between copies of the package.
  *
- * ## O que este teste protege, e por que ele existe
+ * ## What this test protects, and why it exists
  *
- * Durante três majors o agent-builder rodou com DUAS cópias de `@theokit/agents` no mesmo processo:
- * a autoria em 4.x e o transporte in-process em 0.44.x, porque o CLI publicado fixava a linha antiga.
- * Elas interoperavam — e a razão de terem conseguido é a única coisa que este arquivo trava:
+ * For three majors agent-builder ran with TWO copies of `@theokit/agents` in the same process: the
+ * authoring one on 4.x and the in-process transport on 0.44.x, because the published CLI pinned the
+ * old line. They interoperated — and the reason they managed to is the only thing this file pins:
  *
- *   `AgentDefinition` é **dado**, não instância. Ninguém faz `instanceof` nele.
+ *   `AgentDefinition` is **data**, not an instance. Nobody does `instanceof` on it.
  *
- * Se em algum momento a definição virasse uma `class` (ou o brand virasse um `unique symbol` local),
- * as duas cópias deixariam de se reconhecer — e a falha seria silenciosa no ponto errado: o objeto
- * chegaria "quase certo" ao transporte e só quebraria fundo, sem apontar a causa.
+ * If at some point the definition became a `class` (or the brand became a local `unique symbol`), the
+ * two copies would stop recognizing each other — and the failure would be silent at the wrong point:
+ * the object would arrive "almost right" at the transport and only break deep down, pointing at
+ * nothing.
  *
- * ## O M79 fechou o skew — e isso NÃO torna o contrato dispensável
+ * ## M79 closed the skew — and that does NOT make the contract dispensable
  *
- * Com o CLI publicado na linha 4.x há **uma** cópia hoje. Mas o contrato é o que permitiu sobreviver
- * ao skew, e é o que permitirá sobreviver ao próximo: qualquer consumidor que fixe uma faixa
- * diferente recria a condição. Um invariante só testado enquanto dói é um invariante que ninguém
- * percebe quebrar no intervalo.
+ * With the CLI published on the 4.x line there is **one** copy today. But the contract is what made
+ * surviving the skew possible, and is what will make surviving the next one possible: any consumer
+ * pinning a different range recreates the condition. An invariant tested only while it hurts is an
+ * invariant nobody notices breaking in between.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -26,15 +27,16 @@ import { AGENT_BRAND, defineAgent, isAgentDefinition } from '../../src/bridge/de
 
 describe('M79 — AgentDefinition crosses copies of the package', () => {
   it('test_the_brand_comes_from_the_GLOBAL_symbol_REGISTRY', () => {
-    // `Symbol.for` resolve no registro global do runtime — a MESMA identidade de símbolo em duas
-    // cópias do pacote carregadas no mesmo processo. Um `Symbol()` local (ou um `unique symbol` sem
-    // `for`) daria dois símbolos distintos, e cada cópia rejeitaria a definição da outra.
+    // `Symbol.for` resolves in the runtime's global registry — the SAME symbol identity across two
+    // copies of the package loaded in the same process. A local `Symbol()` (or a `unique symbol`
+    // without `for`) would give two distinct symbols, and each copy would reject the other's definition.
     expect(AGENT_BRAND).toBe(Symbol.for('theokit.agent.definition'))
   })
 
   it('test_a_definition_built_by_ANOTHER_copy_is_recognized', () => {
-    // Simula a outra cópia: um objeto puro carimbado com o símbolo do registro global, SEM passar
-    // por `defineAgent` desta cópia. É exatamente o que o transporte in-process recebia.
+    // Simulates the other copy: a plain object stamped with the symbol from the global registry,
+    // WITHOUT going through this copy's `defineAgent`. It is exactly what the in-process transport
+    // used to receive.
     const fromAnotherCopy = {
       model: 'x',
       system: 'oi',
@@ -42,20 +44,20 @@ describe('M79 — AgentDefinition crosses copies of the package', () => {
     }
     expect(
       isAgentDefinition(fromAnotherCopy),
-      'a definição de outra cópia deixou de ser reconhecida — a interop cross-version quebrou',
+      'a definition from another copy stopped being recognized — cross-version interop broke',
     ).toBe(true)
   })
 
   it('test_the_definition_is_NOT_a_class_instance', () => {
-    // O invariante central. Se isto virar uma classe, `instanceof` passa a ser tentador no consumo —
-    // e `instanceof` é exatamente o que NÃO atravessa duas cópias do mesmo pacote.
+    // The central invariant. If this becomes a class, `instanceof` becomes tempting at the point of
+    // use — and `instanceof` is exactly what does NOT cross two copies of the same package.
     const def = defineAgent({ model: 'x', system: 'oi' })
     expect(Object.getPrototypeOf(def)).toBe(Object.prototype)
   })
 
   it('test_COUNTERPROOF_an_object_WITHOUT_the_brand_is_rejected', () => {
-    // Sem esta, `isAgentDefinition` poderia devolver `true` para qualquer coisa e os testes acima
-    // passariam. O reconhecimento tem de ser específico, não permissivo.
+    // Without this, `isAgentDefinition` could return `true` for anything and the tests above would
+    // pass. The recognition has to be specific, not permissive.
     expect(isAgentDefinition({ model: 'x', system: 'oi' })).toBe(false)
     expect(isAgentDefinition({ [Symbol('theokit.agent.definition')]: true })).toBe(false)
   })

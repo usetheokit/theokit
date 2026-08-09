@@ -229,7 +229,7 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
   it('test_stream_emits_events_in_chronological_arrival_order', async () => {
     const out = await drainUpdates(
       [
-        td('Vou'),
+        td('I will'),
         tcStarted('c1', 'write_file', { path: 'a.txt' }),
         tcCompleted('c1', 'write_file', { ok: true }),
         td('Pronto'),
@@ -238,7 +238,7 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     )
     const content = out.filter((e) => e.type !== 'done' && e.type !== 'run_started')
     expect(content).toEqual([
-      { type: 'text_delta', content: 'Vou' },
+      { type: 'text_delta', content: 'I will' },
       { type: 'tool_call', callId: 'c1', toolName: 'write_file', input: { path: 'a.txt' } },
       {
         type: 'tool_result',
@@ -303,23 +303,23 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     expect(errs[0]).toMatchObject({ type: 'error', message: 'run failed' })
   })
 
-  // #142 — INVARIANTE: o stream sempre acaba num frame terminal (`done` OU `error`).
+  // #142 — INVARIANT: the stream always ends on a terminal frame (`done` OR `error`).
   //
-  // HONESTIDADE SOBRE O QUE ESTE TESTE PROVA. A issue descreve o risco de o stream acabar sem
-  // frame terminal quando `sawError` suprime o `done`. Tentei construir esse caso — conteúdo
-  // chegando DEPOIS do erro — e não consegui: um `status: ERROR` encerra o stream, então `error`
-  // já era o último frame nos caminhos que este harness cobre. Este teste passa antes e depois
-  // da correção.
+  // HONESTY ABOUT WHAT THIS TEST PROVES. The issue describes the risk of the stream ending with no
+  // terminal frame when `sawError` suppresses the `done`. I tried to construct that case — content
+  // arriving AFTER the error — and could not: a `status: ERROR` closes the stream, so `error` was
+  // already the last frame on the paths this harness covers. This test passes before and after the
+  // fix.
   //
-  // Ele fica porque é o POST-CONDITION que faltava estar escrito. A correção deixou de depender
-  // de "acontece de o erro ser o último" e passou a garanti-lo; o teste trava a garantia para que
-  // um caminho futuro que emita depois do erro não a quebre em silêncio.
+  // It stays because it is the POST-CONDITION that was missing in writing. The fix stopped depending
+  // on "the error happens to be last" and started guaranteeing it; the test pins the guarantee so a
+  // future path that emits after the error cannot break it silently.
   it('test_stream_always_ends_on_a_terminal_frame (#142)', async () => {
     const withError = await drainUpdates(
       [],
       [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'ERROR', message: 'run failed' }],
     )
-    expect(withError.filter((e) => e.type === 'done')).toHaveLength(0) // H1 preservado
+    expect(withError.filter((e) => e.type === 'done')).toHaveLength(0) // H1 preserved
     expect(withError.at(-1)?.type).toBe('error')
 
     const withoutError = await drainUpdates(
@@ -399,17 +399,17 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     expect(out.filter((e) => e.type === 'tool_result')).toHaveLength(1)
   })
 
-  // #138 — o teste acima usa `c1` NOS DOIS caminhos e por isso nunca exercitou o defeito:
-  // com os ids iguais, qualquer implementação de dedup casa. No mundo real os dois caminhos
-  // falam namespaces DIFERENTES — `onDelta` traz o `callId` do SDK, `run.stream()` traz o
-  // `ToolUseBlock.id`, que é o `modelCallId` do provider. A dedup registrava um e consultava o
-  // outro, então a mesma chamada renderizava DUAS vezes (o duplo card que o #47 perseguia).
+  // #138 — the test above uses `c1` on BOTH paths and therefore never exercised the defect: with
+  // equal ids, any dedup implementation matches. In the real world the two paths speak DIFFERENT
+  // namespaces — `onDelta` brings the SDK's `callId`, `run.stream()` brings the `ToolUseBlock.id`,
+  // which is the provider's `modelCallId`. The dedup registered one and looked up the other, so the
+  // same call rendered TWICE (the duplicate card #47 was chasing).
   it('test_tool_events_deduped_across_MISMATCHED_id_namespaces (#138)', async () => {
     const out = await drainUpdates(
       // onDelta: callId do SDK = 'c1', modelCallId = 'm-c1'
       [tcStarted('c1', 'glob', { p: '*' }), tcCompleted('c1', 'glob', { files: ['a'] })],
       [
-        // run.stream(): identifica a MESMA chamada pelo id do MODELO
+        // run.stream(): identifies the SAME call by the MODEL's id
         {
           type: 'tool_call',
           agent_id: 'a',
@@ -435,10 +435,10 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
     expect(out.filter((e) => e.type === 'tool_result')).toHaveLength(1)
   })
 
-  // #138 — o `tc-${Date.now()}` que preenchia um `call_id` ausente NUNCA estava no conjunto de
-  // dedup, então derrotava a dedup por construção. Pior: parecia um id de verdade para quem lê.
-  // Duas chamadas sem id devem seguir aparecendo (fail-loud > supressão silenciosa), mas o id
-  // não pode fingir identidade que não existe.
+  // #138 — the `tc-${Date.now()}` that filled in a missing `call_id` was NEVER in the dedup set, so
+  // it defeated dedup by construction. Worse: it looked like a real id to a reader. Two calls with no
+  // id must keep appearing (fail-loud > silent suppression), but the id must not fake an identity
+  // that does not exist.
   it('test_missing_call_id_does_not_fabricate_a_timestamp_id (#138)', async () => {
     const out = await drainUpdates(
       [],
