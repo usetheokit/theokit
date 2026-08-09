@@ -5,7 +5,7 @@ import { safeClose } from './helpers/safe-close.js'
 
 const FIXTURES = path.resolve(import.meta.dirname, '../../fixtures')
 
-describe('Onda 2 — App Router Integration', () => {
+describe('Wave 2 — App Router Integration', () => {
   let server: Awaited<ReturnType<typeof startDevServer>>
   let port: number
 

@@ -30,7 +30,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import * as camada from '../../src/auth-entry.js'
+import * as layerDir from '../../src/auth-entry.js'
 import * as sdk from '@theokit/sdk/auth'
 
 /** A mecânica de store — o que o SDK possui e o que a camada precisa deixar atravessar. */
@@ -55,7 +55,7 @@ const MECANICA_DE_STORE = [
  * identidade de referência. Uma lista separada com asserção mais fraca seria um segundo oráculo sobre
  * o mesmo fato.
  */
-const DEVICE_FLOW_PADRAO = [
+const STANDARD_DEVICE_FLOW = [
   'deviceLogin',
   'requestDeviceCode',
   'pollDeviceToken',
@@ -92,7 +92,7 @@ const OAUTH_ENGINE = [
   'extractAccountId',
 ] as const
 
-const PASS_THROUGH = [...MECANICA_DE_STORE, ...DEVICE_FLOW_PADRAO, ...OAUTH_ENGINE] as const
+const PASS_THROUGH = [...MECANICA_DE_STORE, ...STANDARD_DEVICE_FLOW, ...OAUTH_ENGINE] as const
 
 describe('M112 — `resolveCredential` still does NOT cross over, on purpose', () => {
   it('test_resolveCredential_does_not_cross_the_layer', () => {
@@ -106,44 +106,44 @@ describe('M112 — `resolveCredential` still does NOT cross over, on purpose', (
     // ends up with two identical names of divergent semantics in one scope — a silent failure, which
     // is exactly what the original decision avoids.
     expect(
-      (camada as Record<string, unknown>).resolveCredential,
-      '`resolveCredential` started crossing the layer. The omission is DELIBERATE and documented in ' +
+      (layerDir as Record<string, unknown>).resolveCredential,
+      '`resolveCredential` started crossing the layerDir. The omission is DELIBERATE and documented in ' +
         '`src/auth-entry.ts`: two functions share this name with divergent semantics. Exposing both ' +
         'in one scope invites importing the wrong one, silently.',
     ).toBeUndefined()
   })
 })
 
-describe('M110 — a camada NÃO esconde o device flow padrão atrás da variante da OpenAI', () => {
-  it('test_a_variante_da_OPENAI_continua_atravessando', () => {
+describe('M110 — the layerDir does NOT hide the standard device flow behind the OpenAI variant', () => {
+  it('test_the_OPENAI_variant_still_crosses', () => {
     // PISO ANTI-VACUIDADE: se nenhuma das duas atravessasse, "o padrão atravessa" seria satisfeito
     // por um subpath vazio. E o Codex é o provider que este trabalho existe para facilitar — perdê-lo
     // enquanto se abre o padrão inverteria o resultado.
     expect(
-      camada.openaiDeviceLogin,
+      layerDir.openaiDeviceLogin,
       'a variante da OpenAI parou de atravessar — o Codex ficou inalcançável',
     ).toBeDefined()
   })
 
-  it('test_as_DUAS_formas_coexistem_e_sao_DISTINTAS', () => {
+  it('test_BOTH_shapes_coexist_and_are_DISTINCT', () => {
     // Fundir os dois protocolos quebraria o Codex: o RFC tem UM `deviceCodeEndpoint`; a OpenAI tem
     // DOIS (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com PKCE). Este teste falha se alguém
     // "simplificar" apontando os dois nomes para a mesma função.
     expect(
-      camada.deviceLogin,
+      layerDir.deviceLogin,
       'o flow padrão e o da OpenAI viraram a mesma referência — os protocolos são diferentes, e ' +
         'unificá-los quebra o Codex',
-    ).not.toBe(camada.openaiDeviceLogin)
+    ).not.toBe(layerDir.openaiDeviceLogin)
   })
 })
 
-describe('M73 — @theokit/agents/auth deixa a mecânica de store atravessar', () => {
+describe('M73 — @theokit/agents/auth lets the store mechanics cross', () => {
   it.each(PASS_THROUGH)('test_a_camada_reexporta_%s_do_sdk', (nome) => {
     expect(
-      (camada as Record<string, unknown>)[nome],
+      (layerDir as Record<string, unknown>)[nome],
       `\`${nome}\` não atravessa a camada. O consumidor não pode importar \`@theokit/sdk*\` direto ` +
         '(fronteira INQUEBRÁVEL), então sem este re-export a única saída legal dele é reimplementar — ' +
-        'que é exatamente como seis nomes idênticos foram parar no agent-builder.',
+        'que é exatamente como seis nameList idênticos foram parar no agent-builder.',
     ).toBeDefined()
   })
 
@@ -151,21 +151,21 @@ describe('M73 — @theokit/agents/auth deixa a mecânica de store atravessar', (
     // `toBe`, não `toBeDefined`: pass-through PURO. Um wrapper passaria no teste anterior e falharia
     // aqui — e é o wrapper que quebra `instanceof` sem nada ficar vermelho.
     expect(
-      (camada as Record<string, unknown>)[nome],
+      (layerDir as Record<string, unknown>)[nome],
       `\`${nome}\` existe na camada mas NÃO é a mesma referência do SDK. Ou virou wrapper, ou o build ` +
         'inlineou o SDK. Para uma CLASSE isso quebra `instanceof` em silêncio no consumidor; para uma ' +
-        'função, faz a camada divergir do que o SDK garante.',
+        'função, faz a layerDir divergir do que o SDK garante.',
     ).toBe((sdk as Record<string, unknown>)[nome])
   })
 
-  it('test_CredentialError_preserva_instanceof_atraves_da_camada', () => {
+  it('test_CredentialError_preserves_instanceof_across_the_layer', () => {
     // O caso concreto: `agents/lib/auth/login.ts:48` do consumidor faz `err instanceof CredentialError`
     // com a classe importada DAQUI, contra um erro lançado pelo SDK. Só funciona com um realm só.
-    const lancadoPeloSdk = new sdk.CredentialError('erro de teste')
+    const lancadoPeloSdk = new sdk.CredentialError('failureErr de teste')
     expect(
-      lancadoPeloSdk instanceof camada.CredentialError,
-      'a classe exportada pela camada não reconhece um erro lançado pelo SDK — há dois realms, e o ' +
-        '`instanceof` do consumidor falha em silêncio',
+      lancadoPeloSdk instanceof layerDir.CredentialError,
+      'a classe exportada pela layerDir não reconhece um failureErr lançado pelo SDK — há dois realms, e o ' +
+        '`instanceof` do consumidor failureValue em silêncio',
     ).toBe(true)
   })
 })

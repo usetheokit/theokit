@@ -1,12 +1,12 @@
 /**
- * M95 — o `code` do erro atravessa até o chunk.
+ * M95 — o `code` do sdkEvent atravessa até o chunk.
  *
- * Um erro de runtime não sobe como exceção para quem consome o stream: ele é convertido num chunk
+ * Um sdkEvent de runtime não sobe como exceção para quem consome o stream: ele é convertido num chunk
  * `{type:'error', errorText}`. Isso é o contrato de streaming, e está certo — mas até aqui o chunk
  * carregava **só o texto**, então um consumidor que precise DISTINGUIR a falha (o `exec` forkando
  * quando a sessão já tem escritor) só tinha a mensagem para casar.
  *
- * Casar texto de erro é a heurística que este ecossistema já pagou caro: o M93 classificava
+ * Casar texto de sdkEvent é a heurística que este ecossistema já pagou caro: o M93 classificava
  * transitório por regex sobre a mensagem, e tratava `connect ECONNREFUSED 127.0.0.1:443` como
  * definitivo porque a **porta** casava o padrão de "4xx". `RunErrorDetail` sempre teve `code`.
  */
@@ -15,7 +15,7 @@ import {
   ERROR_CODE_DATA_PART,
   presentUIMessageStream,
 } from '../src/bridge/present-ui-message-stream.js'
-import { eventoDeErroDoSdk } from '../src/bridge/erro-do-sdk.js'
+import { sdkErrorEvent } from '../src/bridge/sdk-error.js'
 
 interface Chunk {
   type: string
@@ -36,17 +36,17 @@ function errorCodeOf(chunks: Chunk[]): string | undefined {
 }
 
 async function chunksDe(eventos: unknown[]): Promise<Chunk[]> {
-  const fonte = (async function* () {
+  const source = (async function* () {
     for (const e of eventos) yield e
   })()
   const out: Chunk[] = []
-  for await (const c of presentUIMessageStream(fonte as never, { textId: 't' }))
+  for await (const c of presentUIMessageStream(source as never, { textId: 't' }))
     out.push(c as Chunk)
   return out
 }
 
-describe('M95 — o code do erro chega ao consumidor', () => {
-  it('um erro COM code entrega errorCode junto do texto', async () => {
+describe('M95 — the error code reaches the consumer', () => {
+  it('an error WITH a code delivers errorCode alongside the text', async () => {
     const chunks = await chunksDe([
       {
         type: 'error',
@@ -54,15 +54,15 @@ describe('M95 — o code do erro chega ao consumidor', () => {
         code: 'session_busy',
       },
     ])
-    const erro = chunks.find((c) => c.type === 'error')
+    const sdkEvent = chunks.find((c) => c.type === 'error')
     expect(
       errorCodeOf(chunks),
       'the code did not cross — the consumer would have to match text',
     ).toBe('session_busy')
-    expect(erro?.errorText).toContain('already writing')
+    expect(sdkEvent?.errorText).toContain('already writing')
     // The code must NOT be back inside the error chunk: that shape fails ai's strict schema, and a
     // consumer validating chunks would reject the failure entirely — losing the text with it.
-    expect(erro).toEqual({ type: 'error', errorText: erro?.errorText })
+    expect(sdkEvent).toEqual({ type: 'error', errorText: sdkEvent?.errorText })
     // Ordering is contract, not accident: a sequential consumer must already hold the code when the
     // error arrives, otherwise it has to handle the failure before learning which one it was.
     expect(chunks.findIndex((c) => c.type === ERROR_CODE_DATA_PART)).toBeLessThan(
@@ -70,10 +70,10 @@ describe('M95 — o code do erro chega ao consumidor', () => {
     )
   })
 
-  it('um erro SEM code continua exatamente como antes', async () => {
-    const chunks = await chunksDe([{ type: 'error', message: 'falha qualquer' }])
-    const erro = chunks.find((c) => c.type === 'error')
-    expect(erro?.errorText).toBe('falha qualquer')
+  it('an error WITHOUT a code stays exactly as before', async () => {
+    const chunks = await chunksDe([{ type: 'error', message: 'any failure' }])
+    const sdkEvent = chunks.find((c) => c.type === 'error')
+    expect(sdkEvent?.errorText).toBe('any failure')
     expect(
       errorCodeOf(chunks),
       'a code was invented for a failure that carries none',
@@ -85,35 +85,37 @@ describe('M95 — o code do erro chega ao consumidor', () => {
   })
 })
 
-describe('M95 — o PRODUTOR preserva o code (o estágio onde ele morria)', () => {
-  it('um erro do SDK com code chega ao evento como esse code, não como SDK_ERROR', () => {
-    // Os testes acima afirmam o SEGUNDO estágio do pipeline, alimentando o evento à mão. A revisão
-    // adversarial mediu que isso não prova nada sobre o primeiro: `sdk-adapter.ts` descartava o
-    // code e emitia `SDK_ERROR`, e a correção anterior pousou um estágio DEPOIS de onde a
-    // informação morre. Este teste exerce o produtor.
-    const erro = Object.assign(new Error('another process is already writing this session'), {
+describe('M95 — the PRODUCER preserves the code (the stage where it used to die)', () => {
+  it('an SDK error with a code reaches the sdkEvent as that code, not as SDK_ERROR', () => {
+    // The tests above assert the SECOND stage of the pipeline, feeding the sdkEvent by hand. The
+    // adversarial review measured that this proves nothing about the first: `sdk-adapter.ts` dropped
+    // the code and emitted `SDK_ERROR`, and the previous fix landed one stage AFTER where the
+    // information dies. This test exercises the producer.
+    const err = Object.assign(new Error('another process is already writing this session'), {
       name: 'SessionBusyError',
       code: 'session_busy',
       isRetryable: false,
     })
-    const err = eventoDeErroDoSdk(erro)
-    expect(err?.code, 'o produtor achatou o code para SDK_ERROR').toBe('session_busy')
-    expect(err?.retryable, 'retryable foi fixado em false, contradizendo o erro').toBe(false)
+    const sdkEvent = sdkErrorEvent(err)
+    expect(sdkEvent?.code, 'the producer flattened the code into SDK_ERROR').toBe('session_busy')
+    expect(sdkEvent?.retryable, 'retryable was pinned to false, contradicting the error').toBe(
+      false,
+    )
   })
 
-  it('um erro transitório preserva code E retryable', () => {
-    const erro = Object.assign(new Error('rate limited'), {
+  it('a transient error preserves both code AND retryable', () => {
+    const err = Object.assign(new Error('rate limited'), {
       name: 'RateLimitError',
       code: 'rate_limit',
       isRetryable: true,
     })
-    const err = eventoDeErroDoSdk(erro)
-    expect(err?.code).toBe('rate_limit')
-    expect(err?.retryable).toBe(true)
+    const sdkEvent = sdkErrorEvent(err)
+    expect(sdkEvent?.code).toBe('rate_limit')
+    expect(sdkEvent?.retryable).toBe(true)
   })
 
-  it('um erro SEM code continua virando SDK_ERROR — compatibilidade preservada', () => {
-    const err = eventoDeErroDoSdk(new Error('falha crua'))
-    expect(err?.code).toBe('SDK_ERROR')
+  it('an error WITHOUT a code still becomes SDK_ERROR — compatibility preserved', () => {
+    const sdkEvent = sdkErrorEvent(new Error('a raw failure'))
+    expect(sdkEvent?.code).toBe('SDK_ERROR')
   })
 })

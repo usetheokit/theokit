@@ -243,7 +243,7 @@ describe('TheoKit Task Manager — Example App', () => {
     expect(data.app).toBe('TheoKit Task Manager')
   })
 
-  it('GET /tasks → lista de tasks do TaskService injetado', async () => {
+  it('GET /tasks → the task list from the injected TaskService', async () => {
     const res = await fetch(`http://localhost:${port}/tasks`)
     expect(res.status).toBe(200)
     expect(res.headers.get('x-app')).toBe('theokit-example')
@@ -252,19 +252,19 @@ describe('TheoKit Task Manager — Example App', () => {
     expect(tasks[0].title).toBe('Learn TheoKit')
   })
 
-  it('GET /tasks/search?q=agent → busca por texto', async () => {
+  it('GET /tasks/search?q=agent → text search', async () => {
     const res = await fetch(`http://localhost:${port}/tasks/search?q=agent`)
     const tasks = (await res.json()) as Array<{ title: string }>
     expect(tasks.length).toBe(1)
     expect(tasks[0].title).toContain('AI agent')
   })
 
-  it('GET /tasks/1 → task por ID', async () => {
+  it('GET /tasks/1 → task by ID', async () => {
     const res = await fetch(`http://localhost:${port}/tasks/1`)
     expect(await res.json()).toMatchObject({ id: 1, title: 'Learn TheoKit', done: false })
   })
 
-  it('POST /tasks → cria task com Zod validation (201)', async () => {
+  it('POST /tasks → creates a task with Zod validation (201)', async () => {
     const res = await fetch(`http://localhost:${port}/tasks`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -290,7 +290,7 @@ describe('TheoKit Task Manager — Example App', () => {
     expect(data.error.code).toBe('VALIDATION_ERROR')
   })
 
-  it('POST /tasks/1/complete → marca task como done', async () => {
+  it('POST /tasks/1/complete → marks the task done', async () => {
     const res = await fetch(`http://localhost:${port}/tasks/1/complete`, { method: 'POST' })
     expect(res.status).toBe(201)
     expect(await res.json()).toMatchObject({ id: 1, done: true })

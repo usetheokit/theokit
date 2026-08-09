@@ -12,7 +12,7 @@
  * Precedente de ferramenta de uso único no corpus: a atribuição por `git blame` do M72, cujo
  * `adr-governance.md § 6` diz explicitamente "do not reuse this procedure as a standing tool".
  *
- *   npx tsx scripts/gerar-reexports.mts [--json]
+ *   npx tsx scripts/generate-reexports.mts [--json]
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -115,7 +115,7 @@ export function renderizarBloco(especificador: string, s: Superficie): string {
   return partes.join('\n')
 }
 
-// Rodado como CLI (`npx tsx scripts/gerar-reexports.mts [--json]`), nunca importado por código de
+// Rodado como CLI (`npx tsx scripts/generate-reexports.mts [--json]`), nunca importado por código de
 // produção — é ferramenta de autoria. As funções acima são exportadas para que o teste de superfície
 // use a MESMA enumeração, em vez de reimplementá-la (a duplicação que o M78 chamou de "duas listas
 // que precisam ficar em sincronia").

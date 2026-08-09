@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentBuilder } from '../../src/index.js'
-import { projetar, resolverProjecao } from '../../src/bridge/definicao-ou-thunk.js'
+import { project, resolveProjection } from '../../src/bridge/definition-or-thunk.js'
 
 /**
  * M91 T1.1 — `toAgentFactory` aceita um THUNK de definição.
@@ -22,78 +22,79 @@ import { projetar, resolverProjecao } from '../../src/bridge/definicao-ou-thunk.
  * preservado) versus uma vez por sessão (forma thunk, o que ela compra). `resolverProjecao` é o seam
  * que decide isso, e é onde o teste morde.
  */
-describe('M91 — resolverProjecao decide entre forma objeto e thunk', () => {
-  const definicao = (): ReturnType<typeof AgentBuilder.create>['build'] extends () => infer D ? D : never =>
-    AgentBuilder.create().model('openai/gpt-4o-mini').system('oi').build() as never
+describe('M91 — resolveProjection decides between the object shape and the thunk', () => {
+  const agentDef = (): ReturnType<typeof AgentBuilder.create>['build'] extends () => infer D
+    ? D
+    : never => AgentBuilder.create().model('openai/gpt-4o-mini').system('oi').build() as never
 
-  it('forma OBJETO projeta UMA vez, independente de quantas sessoes', async () => {
-    const def = definicao()
-    const espiao = vi.fn(() => def)
+  it('the OBJECT shape projects ONCE, regardless of how many sessions', async () => {
+    const def = agentDef()
+    const spy = vi.fn(() => def)
     // `resolverProjecao` recebe o objeto direto; o espião conta chamadas ao thunk, que aqui não existe.
-    const projetarPorSessao = resolverProjecao(def as never, {})
-    const a = await projetarPorSessao('s1')
-    const b = await projetarPorSessao('s2')
-    expect(espiao).not.toHaveBeenCalled()
+    const projectPerSession = resolveProjection(def as never, {})
+    const a = await projectPerSession('s1')
+    const b = await projectPerSession('s2')
+    expect(spy).not.toHaveBeenCalled()
     // Mesma referência: a projeção é reaproveitada, não recalculada.
     expect(b).toBe(a)
   })
 
-  it('forma THUNK projeta POR SESSAO — e o ponto do milestone', async () => {
-    const def = definicao()
-    const chamadas: string[] = []
-    const projetarPorSessao = resolverProjecao((id: string) => {
-      chamadas.push(id)
+  it('the THUNK shape projects PER SESSION — the point of the milestone', async () => {
+    const def = agentDef()
+    const calls: string[] = []
+    const projectPerSession = resolveProjection((id: string) => {
+      calls.push(id)
       return def as never
     }, {})
-    await projetarPorSessao('s1')
-    await projetarPorSessao('s2')
-    expect(chamadas).toEqual(['s1', 's2'])
+    await projectPerSession('s1')
+    await projectPerSession('s2')
+    expect(calls).toEqual(['s1', 's2'])
   })
 
-  it('o thunk recebe o sessionId real, nao um placeholder', async () => {
-    const def = definicao()
-    const vistos: string[] = []
-    const projetarPorSessao = resolverProjecao((id: string) => {
-      vistos.push(id)
+  it('the thunk receives the real sessionId, not a placeholder', async () => {
+    const def = agentDef()
+    const seen: string[] = []
+    const projectPerSession = resolveProjection((id: string) => {
+      seen.push(id)
       return def as never
     }, {})
-    await projetarPorSessao('sessao-x')
-    expect(vistos).toEqual(['sessao-x'])
+    await projectPerSession('sessao-x')
+    expect(seen).toEqual(['sessao-x'])
   })
 
-  it('thunk ASSINCRONO e aguardado antes de projetar', async () => {
-    const def = definicao()
-    const projetarPorSessao = resolverProjecao(async () => {
+  it('an ASYNC thunk is awaited before projecting', async () => {
+    const def = agentDef()
+    const projectPerSession = resolveProjection(async () => {
       await Promise.resolve()
       return def as never
     }, {})
-    const p = await projetarPorSessao('s1')
+    const p = await projectPerSession('s1')
     expect(p.model).toBe('openai/gpt-4o-mini')
   })
 
-  it('CONTRAPROVA — duas projecoes do thunk sao instancias distintas', async () => {
-    const def = definicao()
-    const projetarPorSessao = resolverProjecao(() => def as never, {})
-    const a = await projetarPorSessao('s1')
-    const b = await projetarPorSessao('s2')
+  it('COUNTERPROOF — two projections of the thunk are distinct instances', async () => {
+    const def = agentDef()
+    const projectPerSession = resolveProjection(() => def as never, {})
+    const a = await projectPerSession('s1')
+    const b = await projectPerSession('s2')
     expect(b).not.toBe(a)
   })
 
-  it('overrides.model vence o modelo da definicao, nas duas formas', async () => {
-    const def = definicao()
-    const eager = await resolverProjecao(def as never, { model: 'anthropic/claude' })('s1')
-    const lazy = await resolverProjecao(() => def as never, { model: 'anthropic/claude' })('s1')
+  it('overrides.model beats the model of the definition, in both shapes', async () => {
+    const def = agentDef()
+    const eager = await resolveProjection(def as never, { model: 'anthropic/claude' })('s1')
+    const lazy = await resolveProjection(() => def as never, { model: 'anthropic/claude' })('s1')
     expect(eager.model).toBe('anthropic/claude')
     expect(lazy.model).toBe('anthropic/claude')
   })
 
-  it('projetar aplica o default quando nem definicao nem override tem modelo', () => {
+  it('projecting applies the default when neither definition nor override has a model', () => {
     // Construído como DADO, não pelo builder: `build()` recusa em tempo de compilação quando falta
     // modelo (o parâmetro vira `MissingModelError`), então o estado é inalcançável pela API fluente.
     // O default de `projetar` existe para definições que chegam por outro caminho — `defineAgent`, um
     // módulo de agente em disco — e `AgentDefinition` é dado puro desde o M79, então isto é legítimo.
     const semModelo = { name: 'sem-modelo', system: 'oi', tools: [] }
-    const p = projetar(semModelo as never, {})
+    const p = project(semModelo as never, {})
     expect(p.model).toBe('openai/gpt-4o-mini')
   })
 })

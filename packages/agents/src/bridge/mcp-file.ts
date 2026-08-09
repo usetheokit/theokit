@@ -10,36 +10,37 @@
  * error naming the path rather than silently disabling MCP. An ABSENT file is not an error — it
  * yields an empty map, because MCP is opt-in.
  *
- * **M112 — o escopo `stdio only` acabou, e a degradação passou a ser por ENTRADA.**
+ * **M112 — the `stdio only` scope is over, and degradation is now PER ENTRY.**
  *
- * A versão anterior deste docblock dizia: *"os transportes remotos (HTTP/SSE) estão deliberadamente
- * fora … alargar depois é **aditivo**"*. A razão era boa e o critério de saída estava escrito: ser
- * substituta **exata** dos carregadores escritos à mão. Essa migração terminou no M107; o prazo venceu.
+ * The previous version of this docblock said: *"remote transports (HTTP/SSE) are deliberately out …
+ * widening later is **additive**"*. The reason was good and the exit criterion was written down: be
+ * an **exact** substitute for the hand-written loaders. That migration finished in M107; the deadline
+ * has passed.
  *
- * **O que este módulo NÃO faz, e é o achado que encolheu o M112:** ele não constrói transporte. O SDK
+ * **What this module does NOT do, and the finding that shrank M112:** it does not build transports. The SDK
  * já entrega `McpServerConfig = McpStdioServerConfig | McpHttpServerConfig`, com `type`/`url`/
  * `headers` (*"Passed through. `Authorization` works here."*), `auth` (OAuth 2.1 PKCE) e
  * `requestTimeoutMs` (`AbortSignal.timeout`, erro tipado, default 30 s). Este arquivo declarava um
  * `McpServerConfig` mais **estreito** e recusava o que o SDK aceita — dois donos do mesmo fato. O
  * M112 para de estreitar; nenhuma dependência nova entrou.
  *
- * **A degradação é por entrada, não por arquivo — e isso NÃO é engolir erro.** Antes, uma entrada que
- * o parser não entendia derrubava o mapa inteiro: um `.mcp.json` com um stdio perfeito e um `type:
- * http` produzia `McpFileError`, e o stdio era perdido junto. Fail-closed no **raio errado** — recusar
- * *uma entrada* é correto; recusar *o arquivo* transforma "esse servidor não é suportado" em "você não
- * tem MCP nenhum". O erro segue tipado, segue nomeando a entrada, e segue visível pelo canal `onWarn`.
- * O arquivo **impartível** (JSON quebrado, `mcpServers` que não é objeto) continua lançando, porque
- * ali não há entradas para separar.
+ * **Degradation is per entry, not per file — and that is NOT swallowing an error.** Before, one entry
+ * the parser did not understand took down the whole map: a `.mcp.json` with a perfect stdio server
+ * and one `type: http` produced `McpFileError`, and the stdio server was lost with it. Fail-closed at
+ * the **wrong radius** — refusing *one entry* is correct; refusing *the file* turns "that server is
+ * not supported" into "you have no MCP at all". The error is still typed, still names the entry, and
+ * is still visible through the `onWarn` channel. An **unparseable** file (broken JSON, an
+ * `mcpServers` that is not an object) still throws, because there are no entries to separate there.
  *
- * Os dois peers TS decidem assim, por idiomas diferentes: o `gemini-cli` roda `Promise.all` sobre
- * promises que **nunca rejeitam** (o `catch` fecha o cliente, emite diagnóstico nomeando o servidor e
- * marca `DISCONNECTED` sem relançar); o `opencode` devolve `Effect.succeed({ status: 'failed' })`.
- * Nenhum deixa um servidor derrubar os outros.
+ * Both TS peers decide it this way, through different idioms: `gemini-cli` runs `Promise.all` over
+ * promises that **never reject** (the `catch` closes the client, emits a diagnostic naming the server
+ * and marks `DISCONNECTED` without rethrowing); `opencode` returns `Effect.succeed({ status:
+ * 'failed' })`. Neither lets one server take down the others.
  *
- * **Segredo:** o valor de `headers` nunca entra num aviso. Os peers **divergem** aqui — `gemini-cli`
- * redige em 18 sítios, `opencode` em zero —, e um peer não é precedente para segurança. Decide o
- * precedente interno: `AuthProvider` declara que nunca expõe material de token, e o `.mcp.json` é
- * arquivo de **projeto**, que pode ser commitado por engano.
+ * **Secrets:** the value of `headers` never enters a warning. The peers **diverge** here —
+ * `gemini-cli` redacts in 18 places, `opencode` in zero — and a peer is not precedent for security.
+ * The internal precedent decides: `AuthProvider` states that it never exposes token material, and
+ * `.mcp.json` is a **project** file, which can be committed by accident.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -111,13 +112,13 @@ export function loadMcpJson(cwd: string, opts: LoadMcpJsonOptions = {}): McpServ
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path, already existence-checked one line above
     text = readFileSync(path, 'utf8')
   } catch (err) {
-    throw new McpFileError(`failed to read ${path}: ${descrever(err)}`)
+    throw new McpFileError(`failed to read ${path}: ${describeIt(err)}`)
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch (err) {
-    throw new McpFileError(`${path} is not valid JSON: ${descrever(err)}`)
+    throw new McpFileError(`${path} is not valid JSON: ${describeIt(err)}`)
   }
   return parseMcpJson(parsed, path, warningChannel(opts))
 }
@@ -134,12 +135,13 @@ function parseMcpJson(raw: unknown, source: string, onWarn: (a: string) => void)
   }
   const out: McpServersMap = {}
   for (const [name, entryRaw] of Object.entries(serversRaw as Record<string, unknown>)) {
-    // O RAIO DA FALHA É A ENTRADA. Uma entrada que não valida é omitida e NOMEADA; as vizinhas sobem.
-    const motivo = validarEntrada(name, entryRaw)
-    if (motivo !== undefined) {
-      // A mensagem nunca carrega valor de `headers` — `validarEntrada` só devolve o motivo, e o motivo
+    // THE FAILURE RADIUS IS THE ENTRY. An entry that does not validate is omitted and NAMED; its
+    // neighbours still come through.
+    const reason = validateEntry(name, entryRaw)
+    if (reason !== undefined) {
+      // The message never carries a `headers` value — `validateEntry` returns only the reason, and it
       // é construído a partir da FORMA, nunca do conteúdo.
-      onWarn(`${source}: server "${name}" ignorado — ${motivo}`)
+      onWarn(`${source}: server "${name}" ignored — ${reason}`)
       continue
     }
     out[name] = buildEntry(entryRaw as Record<string, unknown>)
@@ -148,65 +150,66 @@ function parseMcpJson(raw: unknown, source: string, onWarn: (a: string) => void)
 }
 
 /**
- * Valida UMA entrada contra a união do SDK. Devolve o **motivo** da recusa, ou `undefined` quando a
- * entrada é válida.
+ * Validates ONE entry against the SDK union. Returns the **reason** for the refusal, or `undefined`
+ * when the entry is valid.
  *
- * Não lança: quem decide o raio é o chamador, e o raio é a entrada. E devolve **motivo**, não a
- * entrada — assim nenhum valor do arquivo (em particular `headers`) pode escapar para a mensagem.
+ * Does not throw: the caller decides the radius, and the radius is the entry. And it returns a
+ * **reason**, not the entry — so no value from the file (`headers` in particular) can escape into the
+ * message.
  */
-function validarEntrada(name: string, entryRaw: unknown): string | undefined {
+function validateEntry(name: string, entryRaw: unknown): string | undefined {
   if (typeof entryRaw !== 'object' || entryRaw === null || Array.isArray(entryRaw)) {
-    return 'a entrada deve ser um objeto.'
+    return 'the entry must be an object.'
   }
   const entry = entryRaw as Record<string, unknown>
-  const temUrl = entry.url !== undefined
-  const temCommand = entry.command !== undefined
+  const hasUrl = entry.url !== undefined
+  const hasCommand = entry.command !== undefined
 
-  // A união do SDK é DISCRIMINADA: uma entrada que satisfaz os dois ramos não é nenhum dos dois, e
-  // adivinhar qual seria escolher pelo usuário em silêncio.
-  if (temUrl && temCommand)
-    return 'declara "command" e "url" ao mesmo tempo — escolha um transporte.'
-  if (!temUrl && !temCommand) return 'requer "command" (stdio) ou "url" (http/sse).'
+  // The SDK union is DISCRIMINATED: an entry satisfying both branches is neither, and guessing which
+  // one would be choosing for the user in silence.
+  if (hasUrl && hasCommand) return 'declares both "command" and "url" — pick one transport.'
+  if (!hasUrl && !hasCommand) return 'requires "command" (stdio) or "url" (http/sse).'
 
-  return temUrl ? validarRemoto(entry) : validarStdio(entry)
+  return hasUrl ? validateRemote(entry) : validateStdio(entry)
 }
 
-/** O ramo stdio — o que este módulo já validava antes do M112, intacto. */
-function validarStdio(entry: Record<string, unknown>): string | undefined {
+/** The stdio branch — what this module already validated before M112, untouched. */
+function validateStdio(entry: Record<string, unknown>): string | undefined {
   if (typeof entry.command !== 'string' || entry.command.length === 0) {
-    return 'campo "command" deve ser uma string não vazia.'
+    return 'field "command" must be a non-empty string.'
   }
   if (entry.args !== undefined && !isStringArray(entry.args))
-    return 'campo "args" deve ser array de strings.'
+    return 'field "args" must be an array of strings.'
   if (entry.env !== undefined && !isStringRecord(entry.env))
-    return 'campo "env" deve ser um mapa de strings.'
+    return 'field "env" must be a map of strings.'
   if (entry.cwd !== undefined && typeof entry.cwd !== 'string')
-    return 'campo "cwd" deve ser string.'
+    return 'field "cwd" must be a string.'
   return undefined
 }
 
 /**
- * O ramo remote. A forma é a do SDK (`McpHttpServerConfig`); este módulo **valida e repassa**, nunca
- * normaliza — decidir o default de `type` aqui seria um segundo oráculo sobre o mesmo fato.
+ * The remote branch. The shape is the SDK's (`McpHttpServerConfig`); this module **validates and
+ * forwards**, never normalizes — deciding the default for `type` here would be a second oracle over
+ * the same fact.
  */
-function validarRemoto(entry: Record<string, unknown>): string | undefined {
+function validateRemote(entry: Record<string, unknown>): string | undefined {
   if (typeof entry.url !== 'string' || entry.url.length === 0) {
-    return 'campo "url" deve ser uma string não vazia.'
+    return 'field "url" must be a non-empty string.'
   }
   try {
     new URL(entry.url)
   } catch {
-    return 'campo "url" não é uma URL válida.'
+    return 'field "url" is not a valid URL.'
   }
   if (entry.type !== undefined && entry.type !== 'http' && entry.type !== 'sse') {
-    return 'campo "type" deve ser "http" ou "sse".'
+    return 'field "type" must be "http" or "sse".'
   }
   if (entry.headers !== undefined && !isStringRecord(entry.headers)) {
-    // A mensagem fala da FORMA. Nunca do conteúdo — este é o campo que carrega `Authorization`.
-    return 'campo "headers" deve ser um mapa de strings.'
+    // The message speaks of the SHAPE. Never of the content — this is the field that carries `Authorization`.
+    return 'field "headers" must be a map of strings.'
   }
   if (entry.requestTimeoutMs !== undefined && typeof entry.requestTimeoutMs !== 'number') {
-    return 'campo "requestTimeoutMs" deve ser número.'
+    return 'field "requestTimeoutMs" must be a number.'
   }
   return undefined
 }
@@ -260,7 +263,7 @@ function buildEntry(entry: Record<string, unknown>): McpServerConfig {
 }
 
 /** Render an unknown thrown value for a diagnostic message without losing it. */
-function descrever(err: unknown): string {
+function describeIt(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 

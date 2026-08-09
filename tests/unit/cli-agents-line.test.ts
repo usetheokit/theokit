@@ -25,21 +25,21 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-const raizDoPacote = new URL('../../packages/theo', import.meta.url).pathname
+const packageRoot = new URL('../../packages/theo', import.meta.url).pathname
 
-function arquivosTs(dir: string, acc: string[] = []): string[] {
-  for (const entrada of readdirSync(dir)) {
-    if (entrada === 'node_modules' || entrada === 'dist') continue
-    const caminho = join(dir, entrada)
-    if (statSync(caminho).isDirectory()) arquivosTs(caminho, acc)
-    else if (caminho.endsWith('.ts') && !caminho.endsWith('.test.ts')) acc.push(caminho)
+function tsFiles(dir: string, acc: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry === 'dist') continue
+    const filePath = join(dir, entry)
+    if (statSync(filePath).isDirectory()) tsFiles(filePath, acc)
+    else if (filePath.endsWith('.ts') && !filePath.endsWith('.test.ts')) acc.push(filePath)
   }
   return acc
 }
 
-describe('M79 T2.1 — o CLI na linha 4.x', () => {
-  it('test_o_CLI_declara_agents_pelo_workspace_e_nao_por_pin_velho', () => {
-    const pkg = JSON.parse(readFileSync(join(raizDoPacote, 'package.json'), 'utf-8')) as {
+describe('M79 T2.1 — the CLI on the 4.x line', () => {
+  it('test_the_CLI_declares_agents_via_the_workspace_and_not_via_an_old_pin', () => {
+    const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf-8')) as {
       dependencies: Record<string, string>
     }
     const decl = pkg.dependencies['@theokit/agents']
@@ -51,31 +51,31 @@ describe('M79 T2.1 — o CLI na linha 4.x', () => {
     )
   })
 
-  it('test_o_CLI_NAO_usa_a_free_function_agent_removida_no_M57', () => {
+  it('test_the_CLI_does_NOT_use_the_free_function_agent_removed_in_M57', () => {
     // O gate de veracidade. A afirmação "o CLI usa `agent()`" sustentou a dívida por vários
     // milestones sem nada verificá-la. Agora ela tem oráculo.
-    const usos: string[] = []
-    for (const arquivo of arquivosTs(join(raizDoPacote, 'src'))) {
-      const fonte = readFileSync(arquivo, 'utf-8')
+    const useSites: string[] = []
+    for (const file of tsFiles(join(packageRoot, 'src'))) {
+      const source = readFileSync(file, 'utf-8')
       // Import nomeado da free function a partir do barril — a forma que a removida tinha.
-      if (/import\s*\{[^}]*\bagent\b[^}]*\}\s*from\s*['"]@theokit\/agents['"]/.test(fonte)) {
-        usos.push(arquivo)
+      if (/import\s*\{[^}]*\bagent\b[^}]*\}\s*from\s*['"]@theokit\/agents['"]/.test(source)) {
+        useSites.push(file)
       }
     }
 
     expect(
-      usos,
-      `Arquivos importando a free function \`agent()\`: ${usos.join(', ')}. ` +
+      useSites,
+      `Arquivos importando a free function \`agent()\`: ${useSites.join(', ')}. ` +
         'Ela foi removida no M57; usá-la prenderia o CLI à linha 0.44.x e recriaria as duas cópias.',
     ).toEqual([])
   })
 
-  it('test_CONTRAPROVA_o_CLI_de_fato_IMPORTA_do_barril_de_agents', () => {
+  it('test_COUNTERPROOF_the_CLI_actually_IMPORTS_from_the_agents_barrel', () => {
     // Sem esta, apagar qualquer uso de `@theokit/agents` do CLI passaria no teste acima — e o "não usa a
     // free function" seria verdade por vacuidade, não por correção.
-    const importadores = arquivosTs(join(raizDoPacote, 'src')).filter((a) =>
+    const importers = tsFiles(join(packageRoot, 'src')).filter((a) =>
       /from\s*['"]@theokit\/agents['"]/.test(readFileSync(a, 'utf-8')),
     )
-    expect(importadores.length, 'o CLI precisa continuar consumindo o barril').toBeGreaterThan(0)
+    expect(importers.length, 'o CLI precisa continuar consumindo o barril').toBeGreaterThan(0)
   })
 })

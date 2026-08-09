@@ -35,8 +35,8 @@ function fakeViteServer(): { httpServer: { on: ReturnType<typeof vi.fn> } } {
   return { httpServer: { on: vi.fn() } }
 }
 
-describe('setupWsUpgrade honra o serverDir configurado (#95)', () => {
-  it('anexa o handler de upgrade quando as rotas ws vivem no serverDir configurado', async () => {
+describe('setupWsUpgrade honours the configured serverDir (#95)', () => {
+  it('attaches the upgrade handler when the ws routes live in the configured serverDir', async () => {
     const { serverDir } = projectWithBackendIn('core')
     const server = fakeViteServer()
 
@@ -47,7 +47,7 @@ describe('setupWsUpgrade honra o serverDir configurado (#95)', () => {
     )
   })
 
-  it('não anexa nada quando o serverDir não tem rotas ws — a saída antecipada continua valendo', () => {
+  it('attaches nothing when the serverDir has no ws routes — the early return still holds', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'theokit-95-vazio-'))
     const server = fakeViteServer()
 
@@ -56,7 +56,7 @@ describe('setupWsUpgrade honra o serverDir configurado (#95)', () => {
     expect(server.httpServer.on).not.toHaveBeenCalled()
   })
 
-  it('o layout canônico `server/` segue funcionando — a correção amplia, não substitui', async () => {
+  it('the canonical `server/` layout keeps working — the fix widens, it does not replace', async () => {
     const { serverDir } = projectWithBackendIn('server')
     const server = fakeViteServer()
 

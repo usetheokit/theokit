@@ -27,7 +27,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Piso: menos que isto significa que a varredura quebrou, não que o SDK encolheu. */
 const PISO_DE_SIMBOLOS = 20
@@ -36,7 +36,7 @@ const PISO_DE_SIMBOLOS = 20
  * A decisão escrita por símbolo. Toda entrada precisa de razão — a coluna existe para que a próxima
  * pessoa saiba se um símbolo é contrato público ou detalhe que vazou.
  */
-const DECISOES = {
+const DECISIONS = {
   // --- contrato do backend (pré-M75, do SDK original) ---
   SandboxBackend: 'contrato — a classe abstrata que todo backend implementa',
   LocalSandbox: 'contrato — execução local sem confinamento',
@@ -98,13 +98,13 @@ const DECISOES = {
  *
  * Em CI a ordem também funciona: o job clona `theokit-sdk` como irmão antes de instalar.
  */
-const lerEntrada = () => {
+const readEntry = () => {
   for (const p of [
     '../theokit-sdk/packages/sdk/src/sandbox/index.ts',
     'node_modules/@theokit/sdk/dist/sandbox/index.d.ts',
   ]) {
     try {
-      return { texto: readFileSync(join(RAIZ, p), 'utf8'), origem: p }
+      return { text: readFileSync(join(ROOT, p), 'utf8'), origem: p }
     } catch {
       // tenta o próximo — o repo pode estar instalado ou em workspace
     }
@@ -115,11 +115,11 @@ const lerEntrada = () => {
   process.exit(2)
 }
 
-const { texto, origem } = lerEntrada()
+const { text, origem } = readEntry()
 
 /** Nomes exportados pelo barrel — cobre `export { a, b }` e `export type { T }`. */
 const simbolos = new Set()
-for (const bloco of texto.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
+for (const bloco of text.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
   for (const bruto of bloco[1].split(',')) {
     // O nome PÚBLICO é o que vem DEPOIS do `as` — é ele que o consumidor importa. A primeira
     // versão pegava `[0]` (o nome de origem), e por isso um símbolo exportado sob alias escapava
@@ -139,10 +139,10 @@ for (const bloco of texto.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
   }
 }
 
-const falhas = []
+const failures = []
 
 if (simbolos.size < PISO_DE_SIMBOLOS) {
-  falhas.push(
+  failures.push(
     `PISO DE NÃO-VACUIDADE: a varredura achou ${simbolos.size} símbolos em ${origem}, abaixo do piso ` +
       `de ${PISO_DE_SIMBOLOS}. "Nenhuma divergência" sobre uma lista vazia é verdadeiro por ausência ` +
       `de leitura, não por paridade. Conserte a varredura antes de confiar no resultado.`,
@@ -150,26 +150,26 @@ if (simbolos.size < PISO_DE_SIMBOLOS) {
 }
 
 for (const nome of simbolos) {
-  if (!(nome in DECISOES)) {
-    falhas.push(
+  if (!(nome in DECISIONS)) {
+    failures.push(
       `SEM DECISÃO: "${nome}" é exportado por ${origem} e atravessa @theokit/agents/sandbox, mas não ` +
         `tem entrada em DECISOES. Acrescente uma linha dizendo POR QUE ele é público.`,
     )
   }
 }
 
-for (const nome of Object.keys(DECISOES)) {
+for (const nome of Object.keys(DECISIONS)) {
   if (!simbolos.has(nome)) {
-    falhas.push(
+    failures.push(
       `DECISÃO ÓRFÃ: "${nome}" tem decisão escrita mas NÃO é mais exportado pelo SDK. Ou o símbolo ` +
         `foi removido (e a camada quebrou em silêncio), ou a decisão está obsoleta.`,
     )
   }
 }
 
-if (falhas.length > 0) {
-  console.error(`\ncheck-sandbox-parity: ${falhas.length} problema(s)\n`)
-  for (const f of falhas) console.error(`  - ${f}\n`)
+if (failures.length > 0) {
+  console.error(`\ncheck-sandbox-parity: ${failures.length} problem(s)\n`)
+  for (const f of failures) console.error(`  - ${f}\n`)
   process.exit(1)
 }
 

@@ -31,17 +31,17 @@ describe('loadMcpJson — disco', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  const escrever = (conteudo: string): void => {
+  const write = (conteudo: string): void => {
     writeFileSync(join(dir, '.mcp.json'), conteudo)
   }
 
-  it('test_arquivo_ausente_devolve_mapa_vazio', () => {
+  it('test_a_missing_file_returns_an_empty_map', () => {
     // MCP é opt-in: a AUSÊNCIA do arquivo não é erro. É o único caminho que devolve `{}` sem ler.
     expect(loadMcpJson(dir)).toEqual({})
   })
 
-  it('test_arquivo_valido_devolve_o_mapa_parseado', () => {
-    escrever(
+  it('test_a_valid_file_returns_the_parsed_map', () => {
+    write(
       JSON.stringify({
         mcpServers: {
           echo: { command: 'node', args: ['s.mjs'], env: { TOKEN: 'x' }, cwd: '/w' },
@@ -55,38 +55,38 @@ describe('loadMcpJson — disco', () => {
     })
   })
 
-  it('test_json_invalido_lanca_erro_tipado_citando_o_caminho', () => {
-    escrever('{ not json')
+  it('test_invalid_json_throws_a_typed_error_citing_the_path', () => {
+    write('{ not json')
     expect(() => loadMcpJson(dir)).toThrow(McpFileError)
     // O caminho na mensagem é o que torna o erro diagnosticável sem debugger (error-handling.md § 2).
     expect(() => loadMcpJson(dir)).toThrow(join(dir, '.mcp.json'))
   })
 
-  it('test_arquivo_vazio_e_json_invalido_nao_mapa_vazio', () => {
+  it('test_an_empty_file_is_invalid_json_not_an_empty_map', () => {
     // Edge case deliberado: "ausente" e "presente e vazio" NÃO são a mesma coisa. O segundo é um
     // arquivo que alguém escreveu errado, e engoli-lo como `{}` desliga MCP em silêncio.
-    escrever('')
+    write('')
     expect(() => loadMcpJson(dir)).toThrow(McpFileError)
   })
 
-  it('test_caminho_que_e_diretorio_propaga_erro_tipado', () => {
+  it('test_a_path_that_is_a_directory_propagates_a_typed_error', () => {
     // Caso negativo: um DIRETÓRIO chamado `.mcp.json` existe, logo não cai no ramo "ausente"; a
     // falha de leitura (EISDIR) tem de subir TIPADA, nunca ser confundida com "sem MCP".
     mkdirSync(join(dir, '.mcp.json'))
     expect(() => loadMcpJson(dir)).toThrow(McpFileError)
   })
 
-  it('test_raiz_sem_a_chave_de_servidores_devolve_mapa_vazio', () => {
+  it('test_a_root_without_the_servers_key_returns_an_empty_map', () => {
     // Equivalência com o carregador que este símbolo apaga (`mcp-config.test.ts:37-39`): um objeto
     // JSON válido SEM a chave é um projeto sem MCP declarado, não um arquivo malformado.
-    escrever(JSON.stringify({}))
+    write(JSON.stringify({}))
     expect(loadMcpJson(dir)).toEqual({})
   })
 
-  it('test_raiz_que_nao_e_objeto_lanca_erro_tipado', () => {
-    escrever(JSON.stringify([]))
+  it('test_a_root_that_is_not_an_object_throws_a_typed_error', () => {
+    write(JSON.stringify([]))
     expect(() => loadMcpJson(dir)).toThrow(/root must be a JSON object/)
-    escrever(JSON.stringify('nope'))
+    write(JSON.stringify('nope'))
     expect(() => loadMcpJson(dir)).toThrow(McpFileError)
   })
 
@@ -102,69 +102,69 @@ describe('loadMcpJson — disco', () => {
   //   defeito de ENTRADA  → omitida, NOMEADA no aviso, vizinhas sobem
   //   defeito de ARQUIVO  → continua lançando (não há entradas para separar)
   //
-  // A cobertura da forma nova vive em `mcp-file-remoto.test.ts`.
+  // A cobertura da forma nova vive em `mcp-file-remote.test.ts`.
 
-  it('test_M112_servidor_sem_comando_e_OMITIDO_e_nomeado_em_vez_de_derrubar_o_arquivo', () => {
-    const avisos: string[] = []
-    escrever(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: { args: ['x'] } } }))
-    const mapa = loadMcpJson(dir, { onWarn: (m) => avisos.push(m) })
-    expect(Object.keys(mapa), 'a entrada boa foi perdida junto com a ruim').toEqual(['bom'])
-    expect(avisos.join(' '), 'a omissão foi silenciosa — isso seria fail-OPEN').toContain('"a"')
+  it('test_M112_a_server_with_no_command_is_OMITTED_and_named_instead_of_killing_the_file', () => {
+    const warnings: string[] = []
+    write(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: { args: ['x'] } } }))
+    const map = loadMcpJson(dir, { onWarn: (m) => warnings.push(m) })
+    expect(Object.keys(map), 'a entrada boa foi perdida junto com a ruim').toEqual(['bom'])
+    expect(warnings.join(' '), 'a omissão foi silenciosa — isso seria fail-OPEN').toContain('"a"')
   })
 
-  it('test_M112_args_env_cwd_com_tipo_errado_OMITEM_a_entrada_e_nomeiam', () => {
+  it('test_M112_args_env_cwd_with_the_wrong_type_OMIT_the_entry_and_name_it', () => {
     for (const ruim of [
       { command: 'c', args: [1] },
       { command: 'c', env: { K: 2 } },
       { command: 'c', cwd: 3 },
     ]) {
-      const avisos: string[] = []
-      escrever(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: ruim } }))
-      expect(Object.keys(loadMcpJson(dir, { onWarn: (m) => avisos.push(m) }))).toEqual(['bom'])
-      expect(avisos.join(' ')).toContain('"a"')
+      const warnings: string[] = []
+      write(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: ruim } }))
+      expect(Object.keys(loadMcpJson(dir, { onWarn: (m) => warnings.push(m) }))).toEqual(['bom'])
+      expect(warnings.join(' ')).toContain('"a"')
     }
   })
 
-  it('test_M112_o_defeito_de_ARQUIVO_continua_lancando_o_de_ENTRADA_nao', () => {
+  it('test_M112_a_FILE_level_defect_still_throws_an_ENTRY_level_one_does_not', () => {
     // A metade que NÃO mudou, e que é o que separa "raio certo" de fail-open.
-    escrever(JSON.stringify({ mcpServers: [] }))
+    write(JSON.stringify({ mcpServers: [] }))
     expect(() => loadMcpJson(dir)).toThrow(/must be an object keyed by server name/)
 
     // …e a metade que mudou: `a: 5` é uma ENTRADA malformada, não um arquivo malformado.
-    const avisos: string[] = []
-    escrever(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: 5 } }))
-    expect(Object.keys(loadMcpJson(dir, { onWarn: (m) => avisos.push(m) }))).toEqual(['bom'])
-    expect(avisos.join(' ')).toContain('"a"')
+    const warnings: string[] = []
+    write(JSON.stringify({ mcpServers: { bom: { command: 'echo' }, a: 5 } }))
+    expect(Object.keys(loadMcpJson(dir, { onWarn: (m) => warnings.push(m) }))).toEqual(['bom'])
+    expect(warnings.join(' ')).toContain('"a"')
   })
 
-  it('test_o_erro_desce_da_hierarquia_da_camada', () => {
+  it('test_the_error_descends_from_the_layers_hierarchy', () => {
     // A razão de o erro NÃO estender `Error` nu: `isTransientError` exige `TheokitAgentError`, e
     // uma hierarquia paralela torna o predicado que separa recuperável de irrecuperável inútil.
-    escrever('{ not json')
-    let capturado: unknown
+    write('{ not json')
+    let captured: unknown
     try {
       loadMcpJson(dir)
     } catch (err) {
-      capturado = err
+      captured = err
     }
-    expect(capturado).toBeInstanceOf(McpFileError)
-    expect(capturado).toBeInstanceOf(TheokitAgentError)
-    expect(capturado).toBeInstanceOf(Error)
-    expect((capturado as McpFileError).isRetryable).toBe(false)
+    expect(captured).toBeInstanceOf(McpFileError)
+    expect(captured).toBeInstanceOf(TheokitAgentError)
+    expect(captured).toBeInstanceOf(Error)
+    expect((captured as McpFileError).isRetryable).toBe(false)
   })
 
-  it('test_o_mesmo_simbolo_resolve_pela_raiz_do_barril', () => {
+  it('test_the_same_symbol_resolves_through_the_barrel_root', () => {
     expect(loadMcpJsonDaRaiz).toBe(loadMcpJson)
   })
 })
 
-describe('loadMcpJson — pureza de import', () => {
+describe('loadMcpJson — import purity', () => {
   afterEach(() => {
     vi.doUnmock('node:fs')
     vi.resetModules()
   })
 
-  it('test_importar_o_modulo_nao_le_disco', async () => {
+  it('test_importing_the_module_does_not_read_disk', async () => {
     // Ler o arquivo é opt-in e NUNCA acontece no import — o consumidor tem um teste de pureza de
     // import que afirma zero chamadas do carregador ao carregar o módulo de chat, e uma primitiva
     // com efeito colateral de módulo o quebraria a partir daqui.

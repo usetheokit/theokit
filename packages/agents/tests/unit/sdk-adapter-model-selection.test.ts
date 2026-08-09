@@ -57,8 +57,8 @@ describe('buildModelSelection (M1 reasoning-effort mapping)', () => {
  * (`.find((p) => p.id === 'thinking')?.value`). Writing through the layer while reading by hand is a
  * second oracle over one fact, and second oracles diverge.
  */
-describe('reasoningEffortOf (M107 — o inverso de buildModelSelection)', () => {
-  it('test_ida_e_volta_preserva_o_esforco', () => {
+describe('reasoningEffortOf (M107 — the inverse of buildModelSelection)', () => {
+  it('test_a_round_trip_preserves_the_effort', () => {
     // A asserção mais forte da task: é ela que prova que os dois lados não divergiram.
     const niveis: ReasoningEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'ultra']
     for (const nivel of niveis) {
@@ -66,7 +66,7 @@ describe('reasoningEffortOf (M107 — o inverso de buildModelSelection)', () => 
     }
   })
 
-  it('test_ida_e_volta_preserva_o_esforco_com_params_preexistentes', () => {
+  it('test_a_round_trip_preserves_the_effort_with_pre_existing_params', () => {
     // `buildModelSelection` COMPÕE com os params que já vieram; a leitura tem de achar o esforço
     // mesmo quando ele não é o primeiro da lista.
     //
@@ -76,36 +76,36 @@ describe('reasoningEffortOf (M107 — o inverso de buildModelSelection)', () => 
     // suíte inteira verde. Descartar `temperature` num turno é uma mudança silenciosa de
     // comportamento do provedor, que é exatamente a classe de defeito que o M95 corrigiu.
     const base: ModelSelection = { id: 'm', params: [{ id: 'temperature', value: '0.2' }] }
-    const composto = buildModelSelection(base, 'high')
-    expect(reasoningEffortOf(composto)).toBe('high')
-    expect(composto.params).toEqual([
+    const composed = buildModelSelection(base, 'high')
+    expect(reasoningEffortOf(composed)).toBe('high')
+    expect(composed.params).toEqual([
       { id: 'temperature', value: '0.2' },
       { id: 'thinking', value: 'high' },
     ])
   })
 
-  it('test_selecao_sem_params_devolve_indefinido', () => {
+  it('test_a_selection_with_no_params_returns_undefined', () => {
     // Ausência de esforço é DECLARADA, não excepcional — devolve indefinido, nunca lança.
     expect(reasoningEffortOf({ id: 'm' })).toBeUndefined()
     expect(reasoningEffortOf(buildModelSelection('m'))).toBeUndefined()
   })
 
-  it('test_selecao_com_params_sem_a_chave_devolve_indefinido', () => {
+  it('test_a_selection_with_params_but_no_key_returns_undefined', () => {
     expect(
       reasoningEffortOf({ id: 'm', params: [{ id: 'temperature', value: '0.2' }] }),
     ).toBeUndefined()
   })
 
-  it('test_selecao_com_params_vazio_devolve_indefinido', () => {
+  it('test_a_selection_with_empty_params_returns_undefined', () => {
     expect(reasoningEffortOf({ id: 'm', params: [] })).toBeUndefined()
   })
 
-  it('test_modelo_como_string_devolve_indefinido', () => {
+  it('test_a_model_given_as_a_string_returns_undefined', () => {
     // O atalho de id em string não carrega params — não há onde um esforço estar.
     expect(reasoningEffortOf('m')).toBeUndefined()
   })
 
-  it('test_valor_nao_reconhecido_e_devolvido_cru_sem_lancar', () => {
+  it('test_an_unrecognized_value_is_returned_raw_without_throwing', () => {
     // Caso negativo: a validação continua sendo do consumidor (`parseEffort` no agent-builder).
     // Sequestrá-la aqui alargaria a responsabilidade da camada sem ninguém ter pedido.
     expect(reasoningEffortOf({ id: 'm', params: [{ id: 'thinking', value: 'banana' }] })).toBe(
@@ -114,7 +114,7 @@ describe('reasoningEffortOf (M107 — o inverso de buildModelSelection)', () => 
     expect(reasoningEffortOf({ id: 'm', params: [{ id: 'thinking', value: '' }] })).toBe('')
   })
 
-  it('test_o_mesmo_simbolo_resolve_pela_raiz_do_barril', () => {
+  it('test_the_same_symbol_resolves_through_the_barrel_root', () => {
     expect(reasoningEffortOfDaRaiz).toBe(reasoningEffortOf)
   })
 })

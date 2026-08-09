@@ -20,8 +20,8 @@ async function collect(chunks: readonly unknown[]): Promise<WireMessage[]> {
   return out
 }
 
-describe('readMessageStream — reconstrução', () => {
-  it('test_snapshot_por_passo', () => {
+describe('readMessageStream — reconstruction', () => {
+  it('test_a_snapshot_per_step', () => {
     // N deltas produce N snapshots, not one at the end — that is what lets `useAgent` render while
     // the turn is still streaming.
     return expect(
@@ -36,7 +36,7 @@ describe('readMessageStream — reconstrução', () => {
     ).resolves.toHaveLength(4) // text-start + 3 deltas
   })
 
-  it('test_chunk_apos_finish_continua_na_mesma_mensagem', async () => {
+  it('test_a_chunk_after_finish_stays_in_the_same_message', async () => {
     // EC-3 flagged the crash (a late chunk met a null message and threw TypeError). The first fix
     // DISCARDED such chunks — which stopped the crash and got the semantics backwards: the oracle
     // keeps appending to the same message after `finish` ('a' + 'B' → 'aB'), and the resumable path
@@ -52,7 +52,7 @@ describe('readMessageStream — reconstrução', () => {
     expect(out.at(-1)?.parts[0]).toMatchObject({ text: 'oi tardio' })
   })
 
-  it('test_conteudo_sem_start_abre_a_mensagem_implicitamente', async () => {
+  it('test_content_without_start_opens_the_message_implicitly', async () => {
     // The in-process transport pushes `data-message` chunks with no `start`. Requiring one produced
     // zero output for that whole path.
     const out = await collect([
@@ -62,7 +62,7 @@ describe('readMessageStream — reconstrução', () => {
     expect(out.at(-1)?.parts[0]).toMatchObject({ text: 'sem start' })
   })
 
-  it('test_error_sem_start_rejeita_sem_crashar', async () => {
+  it('test_an_error_without_start_rejects_without_crashing', async () => {
     // EC-12: an auth failure lands before any content. The reader must reject with the provider's
     // message, not trip over a null message.
     await expect(collect([{ type: 'error', errorText: 'sem credencial' }])).rejects.toThrow(
@@ -70,7 +70,7 @@ describe('readMessageStream — reconstrução', () => {
     )
   })
 
-  it('test_chunk_error_rejeita_o_stream', async () => {
+  it('test_an_error_chunk_rejects_the_stream', async () => {
     // theokit#136 — the whole reason this reader exists rather than `ai`'s default: an error chunk
     // must REJECT. `ai` swallows it unless the caller passes onError + terminateOnError.
     await expect(
@@ -78,13 +78,13 @@ describe('readMessageStream — reconstrução', () => {
     ).rejects.toBeInstanceOf(WireStreamError)
   })
 
-  it('test_error_sem_texto_ainda_rejeita_com_mensagem_generica', async () => {
+  it('test_an_error_with_no_text_still_rejects_with_a_generic_message', async () => {
     await expect(collect([{ type: 'start' }, { type: 'error' }])).rejects.toThrow(
       'agent stream failed without a message',
     )
   })
 
-  it('test_start_duplicado_nao_perde_a_mensagem_anterior', async () => {
+  it('test_a_duplicate_start_does_not_lose_the_previous_message', async () => {
     // EC-11: the second `start` must close the message in flight, not silently drop it.
     const out = await collect([
       { type: 'start' },
@@ -100,7 +100,7 @@ describe('readMessageStream — reconstrução', () => {
     expect(texts).toContain('segunda')
   })
 
-  it('test_stream_sem_finish_nao_trava', async () => {
+  it('test_a_stream_without_finish_does_not_hang', async () => {
     const out = await collect([
       { type: 'start' },
       { type: 'text-start', id: 't' },
@@ -109,11 +109,11 @@ describe('readMessageStream — reconstrução', () => {
     expect(out.at(-1)?.parts[0]).toMatchObject({ text: 'parcial', state: 'streaming' })
   })
 
-  it('test_finish_sem_start_nao_quebra', async () => {
+  it('test_finish_without_start_does_not_break', async () => {
     await expect(collect([{ type: 'finish' }])).resolves.toEqual([])
   })
 
-  it('test_delta_com_id_desconhecido_e_ignorado', async () => {
+  it('test_a_delta_with_an_unknown_id_is_ignored', async () => {
     const out = await collect([
       { type: 'start' },
       { type: 'text-delta', id: 'nunca-aberto', delta: 'x' },
@@ -124,7 +124,7 @@ describe('readMessageStream — reconstrução', () => {
     expect(out.at(-1)?.parts[0]).toMatchObject({ text: 'ok' })
   })
 
-  it('test_sinais_de_transporte_nao_entram_no_transcript', async () => {
+  it('test_transport_signals_do_not_enter_the_transcript', async () => {
     // `tool-approval-request` and `data-*` are framework signals consumed elsewhere; putting them
     // in the transcript would render protocol plumbing as if it were assistant content.
     const out = await collect([
@@ -139,7 +139,7 @@ describe('readMessageStream — reconstrução', () => {
 })
 
 describe('readMessageStream — cancellation propagation', () => {
-  it('test_abandonar_o_for_await_cancela_a_montante', async () => {
+  it('test_abandoning_the_for_await_cancels_upstream', async () => {
     let cancelled = false
     const stream = new ReadableStream<WireChunk>({
       start(controller) {

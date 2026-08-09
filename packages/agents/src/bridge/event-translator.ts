@@ -164,11 +164,11 @@ function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
  * que não está avisa UMA vez por tipo — o suficiente para aparecer num diagnóstico, sem inundar
  * um stream que emite milhares de eventos por turno.
  */
-const jaAvisados = new Set<string>()
+const alreadyWarned = new Set<string>()
 
-function avisarSeDesconhecido(tipo: string, ignoradosDeProposito: ReadonlySet<string>): void {
-  if (ignoradosDeProposito.has(tipo) || jaAvisados.has(tipo)) return
-  jaAvisados.add(tipo)
+function warnIfUnknown(tipo: string, ignoradosDeProposito: ReadonlySet<string>): void {
+  if (ignoradosDeProposito.has(tipo) || alreadyWarned.has(tipo)) return
+  alreadyWarned.add(tipo)
   console.warn(
     `[theokit] agents.bridge: evento "${tipo}" do SDK não é traduzido e foi descartado. ` +
       `Se ele carrega informação que a UI precisa, o tradutor precisa de um caso para ele (#141).`,
@@ -176,10 +176,10 @@ function avisarSeDesconhecido(tipo: string, ignoradosDeProposito: ReadonlySet<st
 }
 
 /** Tipos de `SDKMessage` que decidimos NÃO expor — o silêncio aqui é escolha, não descuido. */
-const SDK_MESSAGE_IGNORADOS: ReadonlySet<string> = new Set(['user'])
+const SDK_MESSAGE_IGNORED: ReadonlySet<string> = new Set(['user'])
 
 /** Tipos de `InteractionUpdate` de alta frequência que a UI não consome. */
-const INTERACTION_UPDATE_IGNORADOS: ReadonlySet<string> = new Set([
+const INTERACTION_UPDATE_IGNORED: ReadonlySet<string> = new Set([
   'thinking-completed',
   'token-delta',
   'step-started',
@@ -225,7 +225,7 @@ export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
     }
     default:
       // `msg.type` is already `string` on `SdkMessage`; the wrapper was a no-op the lint rejects.
-      avisarSeDesconhecido(msg.type, SDK_MESSAGE_IGNORADOS)
+      warnIfUnknown(msg.type, SDK_MESSAGE_IGNORED)
       return []
   }
 }
@@ -286,7 +286,7 @@ export function translateInteractionUpdate(update: InteractionUpdate): StreamEve
       return [{ type: 'shell_output', event: update.event }]
     default:
       // Same as above: the union's discriminant is already `string`.
-      avisarSeDesconhecido(update.type, INTERACTION_UPDATE_IGNORADOS)
+      warnIfUnknown(update.type, INTERACTION_UPDATE_IGNORED)
       return []
   }
 }

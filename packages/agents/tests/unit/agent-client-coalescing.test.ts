@@ -29,7 +29,7 @@ import { AgentClient } from '../../src/client/agent-client.js'
  * o corpo inteiro de `#agendarEmit` por `return` deixava **580/580 testes verdes**. O gate não
  * conseguia falhar; era o pior tipo de gate.
  */
-const transporteComDeltas = (n: number): unknown => ({
+const transportWithDeltas = (n: number): unknown => ({
   sendMessages: () =>
     Promise.resolve(
       new ReadableStream({
@@ -51,7 +51,7 @@ const transporteComDeltas = (n: number): unknown => ({
 })
 
 describe('M92 — coalescing opt-in do AgentClient', () => {
-  const contarEmits = (c: AgentClient): { n: () => number } => {
+  const countEmits = (c: AgentClient): { n: () => number } => {
     let n = 0
     c.subscribe(() => {
       n += 1
@@ -60,7 +60,7 @@ describe('M92 — coalescing opt-in do AgentClient', () => {
   }
 
   /** Deixa o stream drenar; sem fake timers, para o coalescing usar o relógio real. */
-  const drenar = async (c: AgentClient): Promise<void> => {
+  const drain = async (c: AgentClient): Promise<void> => {
     await vi.waitFor(
       () => {
         if (c.getSnapshot().status === 'streaming') throw new Error('ainda streaming')
@@ -69,39 +69,39 @@ describe('M92 — coalescing opt-in do AgentClient', () => {
     )
   }
 
-  it('SEM coalescing, cada delta emite — o comportamento pre-M92', async () => {
-    const c = new AgentClient(transporteComDeltas(30) as never)
-    const contador = contarEmits(c)
+  it('WITHOUT coalescing, every delta emits — the pre-M92 behaviour', async () => {
+    const c = new AgentClient(transportWithDeltas(30) as never)
+    const counter = countEmits(c)
     c.send('oi' as never)
-    await drenar(c)
+    await drain(c)
     // 30 deltas + as transições de status. O piso é o que importa: um emit POR delta.
-    expect(contador.n()).toBeGreaterThanOrEqual(30)
+    expect(counter.n()).toBeGreaterThanOrEqual(30)
   })
 
-  it('COM coalescing, MUITO menos emits para os mesmos deltas — o ponto do milestone', async () => {
-    const c = new AgentClient(transporteComDeltas(30) as never, undefined, { emitIntervalMs: 16 })
-    const contador = contarEmits(c)
+  it('WITH coalescing, FAR fewer emits for the same deltas — the point of the milestone', async () => {
+    const c = new AgentClient(transportWithDeltas(30) as never, undefined, { emitIntervalMs: 16 })
+    const counter = countEmits(c)
     c.send('oi' as never)
-    await drenar(c)
+    await drain(c)
     // Os 30 deltas caem na mesma janela de 16 ms; sobram as transições de status, que fazem flush.
-    expect(contador.n()).toBeLessThan(30)
+    expect(counter.n()).toBeLessThan(30)
   })
 
-  it('o ESTADO FINAL sobrevive ao coalescing — nenhum token se perde', async () => {
-    const c = new AgentClient(transporteComDeltas(30) as never, undefined, { emitIntervalMs: 16 })
+  it('the FINAL STATE survives coalescing — no token is lost', async () => {
+    const c = new AgentClient(transportWithDeltas(30) as never, undefined, { emitIntervalMs: 16 })
     c.send('oi' as never)
-    await drenar(c)
+    await drain(c)
     // O último delta carrega 30 caracteres. Se o flush síncrono não rodasse, o snapshot pararia num
     // prefixo — que é exatamente o risco nº 1 do plano: estado final preso num timer é estado perdido.
-    const parte = c.getSnapshot().messages.at(-1)?.parts.at(-1) as
+    const part = c.getSnapshot().messages.at(-1)?.parts.at(-1) as
       | { data?: { parts?: { text?: string }[] } }
       | undefined
-    expect(parte?.data?.parts?.[0]?.text).toHaveLength(30)
+    expect(part?.data?.parts?.[0]?.text).toHaveLength(30)
   })
 
-  it('CONTRAPROVA — a reducao de emits e material, nao marginal', async () => {
-    const sem = new AgentClient(transporteComDeltas(30) as never)
-    const com = new AgentClient(transporteComDeltas(30) as never, undefined, { emitIntervalMs: 16 })
+  it('COUNTERPROOF — the reduction in emits is material, not marginal', async () => {
+    const sem = new AgentClient(transportWithDeltas(30) as never)
+    const com = new AgentClient(transportWithDeltas(30) as never, undefined, { emitIntervalMs: 16 })
     let nSem = 0
     let nCom = 0
     sem.subscribe(() => {
@@ -112,42 +112,42 @@ describe('M92 — coalescing opt-in do AgentClient', () => {
     })
     sem.send('oi' as never)
     com.send('oi' as never)
-    await drenar(sem)
-    await drenar(com)
+    await drain(sem)
+    await drain(com)
     // Medido no probe: 32 contra 2 para 30 deltas. O piso de 5× é folgado o bastante para não piscar
     // sob contenção de CPU e apertado o bastante para reprovar se o coalescing sumir.
     expect(nSem / nCom).toBeGreaterThan(5)
   })
 
-  it('o status final e done nas duas configuracoes', async () => {
-    const sem = new AgentClient(transporteComDeltas(10) as never)
-    const com = new AgentClient(transporteComDeltas(10) as never, undefined, { emitIntervalMs: 16 })
+  it('the final status is done under both configurations', async () => {
+    const sem = new AgentClient(transportWithDeltas(10) as never)
+    const com = new AgentClient(transportWithDeltas(10) as never, undefined, { emitIntervalMs: 16 })
     sem.send('a' as never)
     com.send('a' as never)
-    await drenar(sem)
-    await drenar(com)
+    await drain(sem)
+    await drain(com)
     expect(sem.getSnapshot().status).toBe(com.getSnapshot().status)
   })
 
-  it('o snapshot mantem referencia estavel entre emits', () => {
-    const c = new AgentClient(transporteComDeltas(0) as never, undefined, { emitIntervalMs: 16 })
+  it('the snapshot keeps a stable reference between emits', () => {
+    const c = new AgentClient(transportWithDeltas(0) as never, undefined, { emitIntervalMs: 16 })
     const a = c.getSnapshot()
     const b = c.getSnapshot()
     expect(b).toBe(a)
   })
 
-  it('FLUSH — reset() e transicao de status e emite NA HORA, sem esperar a janela', () => {
-    const c = new AgentClient(transporteComDeltas(0) as never, undefined, { emitIntervalMs: 16 })
-    const contador = contarEmits(c)
+  it('FLUSH — reset() and a status transition emit RIGHT AWAY, without waiting for the window', () => {
+    const c = new AgentClient(transportWithDeltas(0) as never, undefined, { emitIntervalMs: 16 })
+    const counter = countEmits(c)
     c.reset()
-    expect(contador.n()).toBe(1)
+    expect(counter.n()).toBe(1)
   })
 
-  it('emitIntervalMs = 0 e tratado como DESLIGADO, nao como janela de zero', () => {
-    const c = new AgentClient(transporteComDeltas(0) as never, undefined, { emitIntervalMs: 0 })
-    const contador = contarEmits(c)
+  it('emitIntervalMs = 0 is treated as OFF, not as a zero-length window', () => {
+    const c = new AgentClient(transportWithDeltas(0) as never, undefined, { emitIntervalMs: 0 })
+    const counter = countEmits(c)
     c.reset()
-    expect(contador.n()).toBe(1)
+    expect(counter.n()).toBe(1)
   })
 })
 
@@ -157,7 +157,7 @@ describe('M92 — coalescing opt-in do AgentClient', () => {
  * Comparar para decidir se mudou custaria o mesmo O(C) que isto evita; memoizar por comprimento erraria
  * em `reset()`, onde comprimento igual com conteúdo diferente é possível e o bug seria invisível.
  */
-describe('M92 — o prefixo commitado é materializado uma vez por escrita', () => {
+describe('M92 — the committed prefix is materialized once per write', () => {
   /**
    * Constrói um cliente com histórico REAL commitado.
    *
@@ -182,15 +182,15 @@ describe('M92 — o prefixo commitado é materializado uma vez por escrita', () 
    * A única forma de `#committed` crescer é a real: um turno que **chega a `done`** e um `send()`
    * seguinte. O transporte falso devolve um stream que fecha na hora, para o turno terminar limpo.
    */
-  const streamVazio = (): ReadableStream =>
+  const emptyStream = (): ReadableStream =>
     new ReadableStream({
       start(controller) {
         controller.close()
       },
     })
 
-  const clienteComHistorico = async (): Promise<AgentClient> => {
-    const c = new AgentClient({ sendMessages: () => Promise.resolve(streamVazio()) } as never)
+  const clientWithHistory = async (): Promise<AgentClient> => {
+    const c = new AgentClient({ sendMessages: () => Promise.resolve(emptyStream()) } as never)
     c.send('primeiro' as never)
     // Deixa o stream drenar e o status virar `done`.
     await vi.waitFor(() => {
@@ -201,23 +201,23 @@ describe('M92 — o prefixo commitado é materializado uma vez por escrita', () 
     return c
   }
 
-  it('depois de DOIS turnos, o prefixo commitado nao esta vazio', async () => {
-    const c = await clienteComHistorico()
-    const tamanho = c.getSnapshot().thread.length
-    expect(tamanho).toBeGreaterThan(1)
+  it('after TWO turns, the committed prefix is not empty', async () => {
+    const c = await clientWithHistory()
+    const size = c.getSnapshot().thread.length
+    expect(size).toBeGreaterThan(1)
   })
 
-  it('reset() INVALIDA o prefixo — com historico REAL, o unico jeito de o teste poder falhar', async () => {
-    const c = await clienteComHistorico()
+  it('reset() INVALIDATES the prefix — with REAL history, the only way this test can fail', async () => {
+    const c = await clientWithHistory()
     const antes = c.getSnapshot().thread.length
     expect(antes).toBeGreaterThan(1)
     c.reset()
     expect(c.getSnapshot().thread).toEqual([])
   })
 
-  it('o thread emitido e prefixo + turno em voo, nesta ordem', async () => {
-    const c = await clienteComHistorico()
-    const papeis = c.getSnapshot().thread.map((m) => m.role)
-    expect(papeis[0]).toBe('user')
+  it('the emitted thread is prefix + in-flight turn, in that order', async () => {
+    const c = await clientWithHistory()
+    const roles = c.getSnapshot().thread.map((m) => m.role)
+    expect(roles[0]).toBe('user')
   })
 })

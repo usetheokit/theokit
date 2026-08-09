@@ -43,7 +43,7 @@ const PISO_DE_SIMBOLOS = { auth: 15 }
  * A decisão, por símbolo do SDK. `'coberto'` = a camada repassa. `{ fora }` = deliberadamente não, com
  * a razão escrita — a razão é o que separa uma decisão de uma omissão.
  */
-const DECISOES = {
+const DECISIONS = {
   auth: {
     // — a mecânica de store: pass-through puro (M73). `reexportado` é VERIFICADO contra o entry.
     authFilePath: 'reexportado',
@@ -85,15 +85,15 @@ const DECISOES = {
   },
 }
 
-const problemas = []
+const problems = []
 
-for (const [subpath, decisoes] of Object.entries(DECISOES)) {
+for (const [subpath, decisoes] of Object.entries(DECISIONS)) {
   const dts = join(ROOT, 'node_modules/@theokit/sdk/dist', subpath, 'index.d.ts')
-  let fonte
+  let source
   try {
-    fonte = readFileSync(dts, 'utf8')
+    source = readFileSync(dts, 'utf8')
   } catch (err) {
-    problemas.push(
+    problems.push(
       `NÃO CONSEGUI LER a superfície de \`@theokit/sdk/${subpath}\` (${dts}): ${err.message}\n` +
         '  Isto NÃO é aprovação: sem ler os exports do SDK o gate não tem como comparar nada.',
     )
@@ -104,7 +104,7 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
   // decisão — silenciosamente, que é exatamente o defeito que este gate existe para impedir. O piso de
   // não-vacuidade não protege disso: com o bloco `export { … }` intacto a contagem segue acima do piso
   // e só o símbolo novo some.
-  const nomesDeBloco = [...fonte.matchAll(/export\s*\{([^}]*)\}/g)]
+  const blockNames = [...source.matchAll(/export\s*\{([^}]*)\}/g)]
     .flatMap((m) => m[1].split(','))
     // `a as b` re-exporta sob o nome `b` — é ELE que o consumidor enxerga.
     .map((t) =>
@@ -114,24 +114,22 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
         .pop()
         .trim(),
     )
-  const nomesDeclarados = [
-    ...fonte.matchAll(/export\s+declare\s+(?:function|class|const|let|var)\s+(\w+)/g),
+  const declaredNames = [
+    ...source.matchAll(/export\s+declare\s+(?:function|class|const|let|var)\s+(\w+)/g),
   ].map((m) => m[1])
-  const tiposDeclarados = [...fonte.matchAll(/export\s+(?:type|interface)\s+(\w+)/g)].map(
+  const declaredTypes = [...source.matchAll(/export\s+(?:type|interface)\s+(\w+)/g)].map(
     (m) => m[1],
   )
   const exports = [
     ...new Set(
-      [...nomesDeBloco, ...nomesDeclarados, ...tiposDeclarados].filter((n) =>
-        /^[A-Za-z_]\w*$/.test(n),
-      ),
+      [...blockNames, ...declaredNames, ...declaredTypes].filter((n) => /^[A-Za-z_]\w*$/.test(n)),
     ),
   ]
 
   // O que o entry da camada REALMENTE re-exporta. Sem isto, `reexportado` é uma afirmação que o gate
   // nunca conferiu: remover um símbolo de `auth-entry.ts` deixava tudo verde (review F-02).
   const entry = readFileSync(join(ROOT, `packages/agents/src/${subpath}-entry.ts`), 'utf8')
-  const reexportados = new Set(
+  const reExported = new Set(
     [...entry.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}\s*from/g)]
       .flatMap((m) => m[1].split(','))
       .map((t) =>
@@ -148,7 +146,7 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
   // "0 símbolos sem decisão" fica trivialmente verdadeiro e o gate certifica sem ter olhado nada.
   const piso = PISO_DE_SIMBOLOS[subpath] ?? 1
   if (exports.length < piso) {
-    problemas.push(
+    problems.push(
       `A enumeração de \`@theokit/sdk/${subpath}\` achou ${exports.length} símbolos (piso ${piso}).\n` +
         '  A leitura dos exports provavelmente quebrou — e um gate que não acha nada passa por VACUIDADE,\n' +
         '  não por paridade. Conserte a enumeração antes de confiar neste resultado.',
@@ -159,7 +157,7 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
   for (const nome of exports) {
     const d = decisoes[nome]
     if (d === undefined) {
-      problemas.push(
+      problems.push(
         `\`${nome}\` é exportado por \`@theokit/sdk/${subpath}\` e NÃO tem decisão registrada.\n` +
           `  A camada nunca deve REDUZIR a superfície do SDK: um símbolo que ela não repassa fica\n` +
           '  inalcançável para quem não pode importar o SDK direto — e a saída dele passa a ser\n' +
@@ -169,8 +167,8 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
       )
       continue
     }
-    if (d === 'reexportado' && !reexportados.has(nome)) {
-      problemas.push(
+    if (d === 'reexportado' && !reExported.has(nome)) {
+      problems.push(
         `\`${nome}\` está declarado como \`'reexportado'\` mas \`src/${subpath}-entry.ts\` NÃO o re-exporta.\n` +
           '  A decisão dizia que ele atravessa, e ele não atravessa — a lista virou afirmação não conferida.\n' +
           `  Ou acrescente o símbolo ao re-export, ou mude a decisão para \`'via-AuthProvider'\` / \`{ fora }\`.`,
@@ -178,7 +176,7 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
       continue
     }
     if (typeof d === 'object' && !String(d.fora ?? '').trim()) {
-      problemas.push(
+      problems.push(
         `\`${nome}\` está marcado como fora de escopo SEM razão escrita.\n` +
           '  Allowlist sem razão vira lista morta que ninguém revisa — escreva por que ele não atravessa.',
       )
@@ -187,7 +185,7 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
 
   for (const nome of Object.keys(decisoes)) {
     if (!exports.includes(nome)) {
-      problemas.push(
+      problems.push(
         `\`${nome}\` tem decisão registrada mas o SDK NÃO o exporta mais.\n` +
           '  Entrada morta engana quem lê a lista — remova.',
       )
@@ -195,9 +193,9 @@ for (const [subpath, decisoes] of Object.entries(DECISOES)) {
   }
 }
 
-if (problemas.length > 0) {
+if (problems.length > 0) {
   console.error('\n✗ paridade de superfície SDK → camada\n')
-  for (const p of problemas) console.error(`  • ${p}\n`)
+  for (const p of problems) console.error(`  • ${p}\n`)
   process.exit(1)
 }
 

@@ -12,23 +12,23 @@
 import { describe, expect, it } from 'vitest'
 import { buildModelSelection } from '../src/bridge/model-selection.js'
 
-describe('M95 — ModelSelection atravessa buildModelSelection', () => {
-  it('um id cru continua byte-idêntico ao comportamento anterior', () => {
+describe('M95 — ModelSelection crosses buildModelSelection', () => {
+  it('a raw id stays byte-identical to the previous behaviour', () => {
     expect(buildModelSelection('openrouter/x')).toEqual({ id: 'openrouter/x' })
   })
 
-  it('uma ModelSelection NÃO é aninhada dentro de `id`', () => {
+  it('a ModelSelection is NOT nested inside `id`', () => {
     const r = buildModelSelection({ id: 'openrouter/x', contextWindow: 400_000 })
     expect(typeof r.id, 'o id virou objeto — é isto que quebra cada turno').toBe('string')
     expect(r.id).toBe('openrouter/x')
   })
 
-  it('o contextWindow declarado SOBREVIVE à conversão', () => {
+  it('the declared contextWindow SURVIVES the conversion', () => {
     const r = buildModelSelection({ id: 'openrouter/x', contextWindow: 400_000 })
     expect(r.contextWindow).toBe(400_000)
   })
 
-  it('o effort compõe com os params que já vieram, em vez de descartá-los', () => {
+  it('effort composes with the params that already arrived, instead of discarding them', () => {
     const r = buildModelSelection(
       { id: 'openrouter/x', params: [{ id: 'temperature', value: '0.2' }] },
       'high',
@@ -39,7 +39,7 @@ describe('M95 — ModelSelection atravessa buildModelSelection', () => {
     ])
   })
 
-  it('effort sobre id cru continua como era', () => {
+  it('effort over a raw id stays as it was', () => {
     expect(buildModelSelection('openrouter/x', 'high')).toEqual({
       id: 'openrouter/x',
       params: [{ id: 'thinking', value: 'high' }],

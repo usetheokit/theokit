@@ -100,7 +100,7 @@ describe('tool name minting validates at the mint point (M55)', () => {
   describe('rules mirrored from the SDK', () => {
     it('rejects an empty composed name', () => {
       expect(() => toolRuntimeName('', '')).toThrow(ConfigurationError)
-      expect(() => toolRuntimeName('', '')).toThrow(/vazio/)
+      expect(() => toolRuntimeName('', '')).toThrow(/emptyOne/)
     })
 
     it('rejects a name outside the charset, naming the OFFENDING composed name', () => {
@@ -152,7 +152,7 @@ describe('tool name minting validates at the mint point (M55)', () => {
       // `ops` + `''` mints "ops_", which passes the charset and the SDK ACCEPTS it — a nonsense
       // tool reaches the LLM. The SDK cannot know a part was empty; we can.
       expect(() => toolRuntimeName('ops', '')).toThrow(ConfigurationError)
-      expect(() => toolRuntimeName('ops', '')).toThrow(/vazio/)
+      expect(() => toolRuntimeName('ops', '')).toThrow(/emptyOne/)
     })
 
     it('says the COMPOSITION overflowed when length is the only rule broken', () => {

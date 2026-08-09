@@ -315,18 +315,18 @@ describe('createSdkAgentStream × chronological ordering (#44)', () => {
   // de "acontece de o erro ser o último" e passou a garanti-lo; o teste trava a garantia para que
   // um caminho futuro que emita depois do erro não a quebre em silêncio.
   it('test_stream_always_ends_on_a_terminal_frame (#142)', async () => {
-    const comErro = await drainUpdates(
+    const withError = await drainUpdates(
       [],
       [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'ERROR', message: 'run failed' }],
     )
-    expect(comErro.filter((e) => e.type === 'done')).toHaveLength(0) // H1 preservado
-    expect(comErro.at(-1)?.type).toBe('error')
+    expect(withError.filter((e) => e.type === 'done')).toHaveLength(0) // H1 preservado
+    expect(withError.at(-1)?.type).toBe('error')
 
-    const semErro = await drainUpdates(
+    const withoutError = await drainUpdates(
       [td('oi')],
       [{ type: 'status', agent_id: 'a', run_id: 'r', status: 'FINISHED' }],
     )
-    expect(semErro.at(-1)?.type).toBe('done')
+    expect(withoutError.at(-1)?.type).toBe('done')
   })
 
   it('test_run_stream_throw_mid_iteration_emits_content_then_error', async () => {

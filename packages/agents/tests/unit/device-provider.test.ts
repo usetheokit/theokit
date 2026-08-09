@@ -34,7 +34,7 @@ import {
  *   que fecha o caso: no `opencode`, browser e headless do Codex carregam o **mesmo** `type: "oauth"`
  *   (3 `oauth` + 1 `api` no arquivo), logo o `type` classifica **espécie de credencial**, não
  *   protocolo. Um `kind` com despacho interno seria o `switch` que o milestone existe para remover.
- *   Cada método aponta para a **sua** função; `test_as_duas_formas_NAO_sao_a_mesma_funcao` reprova a
+ *   Cada método aponta para a **sua** função; `test_the_two_shapes_are_NOT_the_same_function` reprova a
  *   fusão.
  * - **Confirmado — Facade.** `codex/codex-rs/login/src/device_code_auth.rs:234` tem
  *   `run_device_code_login`, que retorna `()` — nada sai para o chamador persistir — e mantém as duas
@@ -49,7 +49,7 @@ import {
  * sabe autorizar, detectado só em runtime, no meio do login do usuário. É exatamente a alternativa que
  * o blueprint do M110 já havia rejeitado por escrito. A união a barra no compilador.
  */
-describe('M111 — provider com métodos rotulados', () => {
+describe('M111 — a provider with labelled methods', () => {
   let home: string
 
   const store = (): CredentialStoreConfig => ({
@@ -66,7 +66,7 @@ describe('M111 — provider com métodos rotulados', () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  it('test_piso_a_camada_publica_os_simbolos_do_M111', () => {
+  it('test_floor_the_layer_publishes_the_M111_symbols', () => {
     // PISO ANTI-VACUIDADE: sem ele, um import que resolvesse para `undefined` faria as asserções
     // abaixo falharem por motivo errado, e um teste que falha por motivo errado não distingue
     // "a camada não expõe" de "o provider está mal montado".
@@ -74,7 +74,7 @@ describe('M111 — provider com métodos rotulados', () => {
     expect(CODEX_PROVIDER, '`CODEX_PROVIDER` não atravessa a camada').toBeDefined()
   })
 
-  it('test_CODEX_PROVIDER_e_congelado_e_traz_a_identidade_publica', () => {
+  it('test_CODEX_PROVIDER_is_frozen_and_carries_the_public_identity', () => {
     // Congelado porque é identidade pública COMPARTILHADA: um consumidor que a mutasse mudaria o
     // login de todos os outros no mesmo processo.
     expect(Object.isFrozen(CODEX_PROVIDER), 'o provider não está congelado').toBe(true)
@@ -88,7 +88,7 @@ describe('M111 — provider com métodos rotulados', () => {
     expect(CODEX_PROVIDER.oauth.provider).toBe('openai')
   })
 
-  it('test_os_metodos_sao_ROTULADOS_e_cobrem_oauth_e_chave', () => {
+  it('test_the_methods_are_LABELLED_and_cover_oauth_and_api_key', () => {
     // O rótulo é o que fecha o pedido que abriu o milestone: transforma escolha de protocolo em
     // escolha de frase legível. Os três peers convergem em métodos rotulados.
     const labels = CODEX_PROVIDER.methods.map((m) => m.label)
@@ -105,7 +105,7 @@ describe('M111 — provider com métodos rotulados', () => {
     ).toBe(true)
   })
 
-  it('test_todo_metodo_oauth_TEM_authorize_e_o_de_chave_NAO', () => {
+  it('test_every_oauth_method_HAS_authorize_and_the_api_key_one_does_NOT', () => {
     // A metade de runtime da união discriminada. O compilador barra `{label, type:'oauth'}`; esta
     // asserção barra o mesmo defeito chegando por JS sem tipos.
     for (const m of CODEX_PROVIDER.methods) {
@@ -117,7 +117,7 @@ describe('M111 — provider com métodos rotulados', () => {
     }
   })
 
-  it('test_as_duas_formas_NAO_sao_a_mesma_funcao', () => {
+  it('test_the_two_shapes_are_NOT_the_same_function', () => {
     // Fundir quebraria o Codex: o RFC 8628 tem UM `deviceCodeEndpoint`; a variante da OpenAI tem DOIS
     // (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com PKCE). Reprova se alguém "simplificar".
     expect(typeof deviceLogin).toBe('function')
@@ -128,7 +128,7 @@ describe('M111 — provider com métodos rotulados', () => {
     ).not.toBe(openaiDeviceLogin as unknown)
   })
 
-  it('test_loginWithDevice_persiste_e_devolve_CAMINHO_nunca_token', async () => {
+  it('test_loginWithDevice_persists_and_returns_a_PATH_never_a_token', async () => {
     // O Facade: uma chamada. O teste NÃO chama `persist` — se a credencial não estiver no disco ao
     // fim, o Facade não é Facade.
     const metodo: AuthMethod = {
@@ -163,7 +163,7 @@ describe('M111 — provider com métodos rotulados', () => {
     expect(readFileSync(r.path, 'utf8'), 'o token não chegou ao store').toContain('TOKEN-DE-ACESSO')
   })
 
-  it('test_deps_omitido_usa_defaults', async () => {
+  it('test_omitting_deps_uses_the_defaults', async () => {
     // ADR-5: `deps` opcional. Os três peers não exigem deps no caminho feliz; a injeção fica para o
     // teste. Esta chamada não passa o 5º argumento.
     const metodo: AuthMethod = {
@@ -181,11 +181,11 @@ describe('M111 — provider com métodos rotulados', () => {
     ).resolves.toBeDefined()
   })
 
-  it('test_NEGATIVO_metodo_de_OUTRO_provider_falha_tipado_e_nao_grava', async () => {
+  it('test_NEGATIVE_a_method_from_ANOTHER_provider_fails_typed_and_writes_nothing', async () => {
     // A assinatura aceita `provider` e `method` independentemente; nada estrutural impede passar um
     // método que o provider não declara. Validar na fronteira — e provar que o store fica intacto,
     // porque falhar DEPOIS de gravar é pior que falhar.
-    const alheio: AuthMethod = {
+    const foreign: AuthMethod = {
       label: 'de outro provider',
       type: 'oauth',
       authorize: async () => ({ access: 'X', refresh: 'Y', expires: 1 }),
@@ -196,7 +196,7 @@ describe('M111 — provider com métodos rotulados', () => {
       methods: [{ label: 'o único que ele tem', type: 'api' }],
     }
     const s = store()
-    await expect(loginWithDevice(provider, alheio, s, { onPrompt: () => {} })).rejects.toThrow(
+    await expect(loginWithDevice(provider, foreign, s, { onPrompt: () => {} })).rejects.toThrow(
       /não pertence|does not belong/i,
     )
     expect(existsSync(join(home, '.m111', 'auth.json')), 'gravou credencial apesar de falhar').toBe(
@@ -204,38 +204,38 @@ describe('M111 — provider com métodos rotulados', () => {
     )
   })
 
-  it('test_NEGATIVO_metodo_de_CHAVE_recusado_pelo_facade_de_device', async () => {
+  it('test_NEGATIVE_an_API_KEY_method_is_refused_by_the_device_facade', async () => {
     // O compilador já barra pelo lado tipado (união discriminada); esta é a guarda para quem chega
     // por JS sem tipos. Um método `type:'api'` não tem `authorize` — chamar o Facade com ele deve
     // falhar CLARO, não com `authorize is not a function`.
-    const chave = { label: 'Manually enter API Key', type: 'api' as const }
+    const credKey = { label: 'Manually enter API Key', type: 'api' as const }
     const provider: DeviceAuthProvider = {
       name: 's',
       oauth: CODEX_PROVIDER.oauth,
-      methods: [chave],
+      methods: [credKey],
     }
     await expect(
-      loginWithDevice(provider, chave as unknown as AuthMethod, store(), { onPrompt: () => {} }),
-    ).rejects.toThrow(/chave|api key|não é um método de device|not a device method/i)
+      loginWithDevice(provider, credKey as unknown as AuthMethod, store(), { onPrompt: () => {} }),
+    ).rejects.toThrow(/credKey|api key|não é um método de device|not a device method/i)
   })
 
-  it('test_NEGATIVO_provider_SEM_metodos_falha_claro_em_vez_de_lista_vazia', async () => {
+  it('test_NEGATIVE_a_provider_with_NO_methods_fails_clearly_instead_of_returning_an_empty_list', async () => {
     // Um provider sem métodos renderiza uma escolha em branco, que o usuário lê como travamento.
-    const vazio: DeviceAuthProvider = { name: 'vazio', oauth: CODEX_PROVIDER.oauth, methods: [] }
-    const qualquer: AuthMethod = {
+    const empty: DeviceAuthProvider = { name: 'vazio', oauth: CODEX_PROVIDER.oauth, methods: [] }
+    const anything: AuthMethod = {
       label: 'x',
       type: 'oauth',
       authorize: async () => ({ access: 'A', refresh: 'R', expires: 1 }),
     }
-    await expect(loginWithDevice(vazio, qualquer, store(), { onPrompt: () => {} })).rejects.toThrow(
+    await expect(loginWithDevice(empty, anything, store(), { onPrompt: () => {} })).rejects.toThrow(
       /nenhum método|no methods/i,
     )
   })
 
-  it('test_NEGATIVO_falha_do_authorize_sobe_e_nada_e_gravado', async () => {
+  it('test_NEGATIVE_an_authorize_failure_propagates_and_nothing_is_written', async () => {
     // Falhar DEPOIS de gravar deixaria credencial parcial no disco, e a próxima execução leria um
     // estado que nunca foi válido.
-    const quebrado: AuthMethod = {
+    const broken: AuthMethod = {
       label: 'quebrado',
       type: 'oauth',
       authorize: () => Promise.reject(new Error('device endpoint returned HTTP 401')),
@@ -243,17 +243,17 @@ describe('M111 — provider com métodos rotulados', () => {
     const provider: DeviceAuthProvider = {
       name: 's',
       oauth: CODEX_PROVIDER.oauth,
-      methods: [quebrado],
+      methods: [broken],
     }
     await expect(
-      loginWithDevice(provider, quebrado, store(), { onPrompt: () => {} }),
+      loginWithDevice(provider, broken, store(), { onPrompt: () => {} }),
     ).rejects.toThrow(/401/)
     expect(existsSync(join(home, '.m111', 'auth.json')), 'gravou credencial apesar do erro').toBe(
       false,
     )
   })
 
-  it('test_o_override_de_clientId_por_ambiente_FUNCIONA_e_so_no_load', async () => {
+  it('test_the_environment_clientId_override_WORKS_and_only_at_load', async () => {
     // MEDIUM-4 do review: `CODEX_CLIENT_ID_ENV_VAR` era API pública exportada, documentada em cinco
     // linhas, com ZERO teste — remover o `process.env[…] ??` mantinha tudo verde. Um knob sem oráculo
     // é indistinguível de um knob que não funciona.
@@ -266,11 +266,11 @@ describe('M111 — provider com métodos rotulados', () => {
     process.env[CODEX_CLIENT_ID_ENV_VAR] = 'app_DE_OUTRO_TENANT'
     try {
       vi.resetModules()
-      const recarregado = (await import('../../src/auth/device-provider.js')) as {
+      const reloaded = (await import('../../src/auth/device-provider.js')) as {
         CODEX_PROVIDER: { oauth: { clientId: string } }
       }
       expect(
-        recarregado.CODEX_PROVIDER.oauth.clientId,
+        reloaded.CODEX_PROVIDER.oauth.clientId,
         'o override por ambiente não teve efeito — o knob é decorativo',
       ).toBe('app_DE_OUTRO_TENANT')
     } finally {

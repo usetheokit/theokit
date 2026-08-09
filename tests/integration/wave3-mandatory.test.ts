@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const FIXTURES = path.resolve(import.meta.dirname, '../../fixtures')
 
-describe('Onda 3 — Backend Routes', () => {
+describe('Wave 3 — Backend Routes', () => {
   let server: Awaited<ReturnType<typeof startDevServer>>
   let port: number
 

@@ -75,7 +75,7 @@ afterAll(async () => {
   if (existsSync(distDir)) rmSync(distDir, { recursive: true, force: true })
 }, 15000)
 
-describe('Onda 6 — Build + Production', () => {
+describe('Wave 6 — Build + Production', () => {
   it('build generates .theokit/client/index.html', () => {
     expect(existsSync(join(clientDir, 'index.html'))).toBe(true)
   })

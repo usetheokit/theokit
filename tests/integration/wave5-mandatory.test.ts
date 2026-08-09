@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const FIXTURES = path.resolve(import.meta.dirname, '../../fixtures')
 
-describe('Onda 5 — Middleware + Context', () => {
+describe('Wave 5 — Middleware + Context', () => {
   let server: Awaited<ReturnType<typeof startDevServer>>
   let port: number
 
