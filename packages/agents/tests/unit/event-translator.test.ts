@@ -411,13 +411,13 @@ describe('translateInteractionUpdate — real-time InteractionUpdate shapes (#44
   })
 })
 
-// #141 — silêncio deliberado vs silêncio por ignorância.
+// #141 — deliberate silence vs silence out of ignorance.
 //
-// Os dois `default` do tradutor devolviam `[]` com um comentário de "ignorado", misturando tipos
-// que decidimos não expor (ruído de alta frequência) com tipos que simplesmente não conhecíamos
-// (`request` = aprovação pendente, `task` = marco, `ShellOutputDelta` = saída de shell ao vivo).
-// O segundo caso é o que a regra de falhar-alto proíbe: um sinal de aprovação sumindo sem rastro
-// é indistinguível de "não havia sinal".
+// Both `default` branches of the translator returned `[]` with an "ignored" comment, conflating
+// types we decided not to expose (high-frequency noise) with types we simply did not know about
+// (`request` = a pending approval, `task` = a milestone, `ShellOutputDelta` = live shell output).
+// The second case is what the fail-loud rule forbids: an approval signal vanishing without a trace
+// is indistinguishable from "there was no signal".
 describe('unknown events warn instead of vanishing (#141)', () => {
   let warnings: string[]
   let spy: ReturnType<typeof vi.spyOn>

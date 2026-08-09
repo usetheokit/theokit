@@ -45,11 +45,11 @@ describe('readMessageStream — reconstruction', () => {
     const out = await collect([
       { type: 'start' },
       { type: 'text-start', id: 't' },
-      { type: 'text-delta', id: 't', delta: 'oi' },
+      { type: 'text-delta', id: 't', delta: 'hi' },
       { type: 'finish' },
-      { type: 'text-delta', id: 't', delta: ' tardio' },
+      { type: 'text-delta', id: 't', delta: ' late' },
     ])
-    expect(out.at(-1)?.parts[0]).toMatchObject({ text: 'oi tardio' })
+    expect(out.at(-1)?.parts[0]).toMatchObject({ text: 'hi late' })
   })
 
   it('test_content_without_start_opens_the_message_implicitly', async () => {
@@ -65,8 +65,8 @@ describe('readMessageStream — reconstruction', () => {
   it('test_an_error_without_start_rejects_without_crashing', async () => {
     // EC-12: an auth failure lands before any content. The reader must reject with the provider's
     // message, not trip over a null message.
-    await expect(collect([{ type: 'error', errorText: 'sem credencial' }])).rejects.toThrow(
-      'sem credencial',
+    await expect(collect([{ type: 'error', errorText: 'no credential' }])).rejects.toThrow(
+      'no credential',
     )
   })
 
@@ -104,9 +104,9 @@ describe('readMessageStream — reconstruction', () => {
     const out = await collect([
       { type: 'start' },
       { type: 'text-start', id: 't' },
-      { type: 'text-delta', id: 't', delta: 'parcial' },
+      { type: 'text-delta', id: 't', delta: 'partial' },
     ])
-    expect(out.at(-1)?.parts[0]).toMatchObject({ text: 'parcial', state: 'streaming' })
+    expect(out.at(-1)?.parts[0]).toMatchObject({ text: 'partial', state: 'streaming' })
   })
 
   it('test_finish_without_start_does_not_break', async () => {
@@ -116,7 +116,7 @@ describe('readMessageStream — reconstruction', () => {
   it('test_a_delta_with_an_unknown_id_is_ignored', async () => {
     const out = await collect([
       { type: 'start' },
-      { type: 'text-delta', id: 'nunca-aberto', delta: 'x' },
+      { type: 'text-delta', id: 'never-opened', delta: 'x' },
       { type: 'text-start', id: 't' },
       { type: 'text-delta', id: 't', delta: 'ok' },
     ])
@@ -132,7 +132,7 @@ describe('readMessageStream — reconstruction', () => {
       { type: 'tool-approval-request', approvalId: 'a1', toolCallId: 'c1' },
       { type: 'data-checkpoint', data: { handle: 'h' }, transient: true },
       { type: 'text-start', id: 't' },
-      { type: 'text-delta', id: 't', delta: 'oi' },
+      { type: 'text-delta', id: 't', delta: 'hi' },
     ])
     expect(out.at(-1)?.parts).toHaveLength(1)
   })

@@ -32,7 +32,7 @@ import {
 } from '../src/index.js'
 
 // ╔═══════════════════════════════════════════════════════════╗
-// ║  1. SERVICES — lógica de negócio injetável via DI         ║
+// ║  1. SERVICES — business logic, injectable through DI      ║
 // ╚═══════════════════════════════════════════════════════════╝
 
 class TaskService {
@@ -81,11 +81,11 @@ class TaskService {
 }
 
 // ╔═══════════════════════════════════════════════════════════╗
-// ║  2. DTOs — validação com Zod (Pattern D2: static schema)  ║
+// ║  2. DTOs — Zod validation (Pattern D2: static schema)     ║
 // ╚═══════════════════════════════════════════════════════════╝
 
 const zCreateTask = z.object({
-  title: z.string().min(3, 'Título mínimo 3 caracteres'),
+  title: z.string().min(3, 'Title must be at least 3 characters'),
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
 })
 class CreateTaskDto {
@@ -93,7 +93,7 @@ class CreateTaskDto {
 }
 
 // ╔═══════════════════════════════════════════════════════════╗
-// ║  3. GUARDS — autenticação via header                      ║
+// ║  3. GUARDS — header-based authentication                  ║
 // ╚═══════════════════════════════════════════════════════════╝
 
 class AuthGuard {
@@ -111,7 +111,7 @@ class AuthGuard {
 class TasksController {
   private taskService: TaskService
 
-  // Constructor Injection — DI resolve TaskService automaticamente
+  // Constructor injection — DI resolves TaskService automatically
   constructor(taskService: TaskService) {
     this.taskService = taskService
   }
@@ -171,7 +171,7 @@ class HealthController {
 
 // ╔═══════════════════════════════════════════════════════════╗
 // ║  5. WIRING — parameter decorators (vitest/esbuild shim)   ║
-// ║  Em produção com tsc, isso é automático.                  ║
+// ║  In production with tsc, this is automatic.               ║
 // ╚═══════════════════════════════════════════════════════════╝
 
 function wireParam(ctrl: Function, method: string, idx: number, src: string, key?: string) {
@@ -190,7 +190,7 @@ Reflect.defineMetadata('design:paramtypes', [TaskService], TasksController)
 Reflect.defineMetadata('design:paramtypes', [CreateTaskDto], TasksController.prototype, 'create')
 
 // ╔═══════════════════════════════════════════════════════════╗
-// ║  6. DI CONTAINER — simula @theokit/di Container           ║
+// ║  6. DI CONTAINER — simulates the @theokit/di Container    ║
 // ╚═══════════════════════════════════════════════════════════╝
 
 class Container implements DiContainer {
@@ -214,7 +214,7 @@ class Container implements DiContainer {
 }
 
 // ╔═══════════════════════════════════════════════════════════╗
-// ║  7. TESTS — prova tudo end-to-end                         ║
+// ║  7. TESTS — proves the whole thing end-to-end             ║
 // ╚═══════════════════════════════════════════════════════════╝
 
 describe('TheoKit Task Manager — Example App', () => {
