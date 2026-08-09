@@ -71,7 +71,7 @@ describe('M92 — the in-process transport evicts approvals from an aborted turn
     const p = aprovar()
     abortar()
     await expect(p).rejects.toThrow(/ap-1/)
-    await expect(p).rejects.toThrow(/abortado/)
+    await expect(p).rejects.toThrow(/aborted/)
   })
 
   it('a DECIDED approval stays distinct from an aborted one', async () => {

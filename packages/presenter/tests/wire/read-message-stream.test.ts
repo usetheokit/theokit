@@ -89,15 +89,15 @@ describe('readMessageStream — reconstruction', () => {
     const out = await collect([
       { type: 'start' },
       { type: 'text-start', id: 't1' },
-      { type: 'text-delta', id: 't1', delta: 'primeira' },
+      { type: 'text-delta', id: 't1', delta: 'first' },
       { type: 'start' },
       { type: 'text-start', id: 't2' },
-      { type: 'text-delta', id: 't2', delta: 'segunda' },
+      { type: 'text-delta', id: 't2', delta: 'second' },
       { type: 'finish' },
     ])
     const texts = out.map((m) => (m.parts[0] as { text?: string } | undefined)?.text)
-    expect(texts).toContain('primeira')
-    expect(texts).toContain('segunda')
+    expect(texts).toContain('first')
+    expect(texts).toContain('second')
   })
 
   it('test_a_stream_without_finish_does_not_hang', async () => {

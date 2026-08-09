@@ -14,8 +14,8 @@ const t = (name: string) => ({ name })
 describe('M91 — Toolset', () => {
   it('get on an UNKNOWN name throws with the name in the error', () => {
     const ts = Toolset.from([t('read_file')])
-    const callIt = () => ts.get('nao_existe')
-    expect(callIt).toThrow(/nao_existe/)
+    const callIt = () => ts.get('does_not_exist')
+    expect(callIt).toThrow(/does_not_exist/)
   })
 
   it('a DUPLICATE name at construction fails loud — not on the first resolve', () => {
