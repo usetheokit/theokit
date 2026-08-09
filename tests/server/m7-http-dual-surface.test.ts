@@ -1,7 +1,7 @@
 /**
  * M7 — Integration Validation (Phase 4).
  *
- * Composes the full Tema F chain through the public `theokit/boot` surface: a
+ * Composes the full Theme F chain through the public `theokit/boot` surface: a
  * single in-process fetch handle (no socket) serves the reserved health/ready
  * routes (M7-2) and a typed 404 envelope (M7-1) for unknown paths, with a
  * readiness probe flipping 200 -> 503. The "eat your own cooking" gate for M7.

@@ -23,7 +23,7 @@
  *      (depth-1 and depth-2 chains).
  *   4. Cause-chain preservation is REQUIRED for diagnostics.
  *
- * The original plan AC#1 ("retorna ≤6 classes after migration") is
+ * The original plan AC#1 ("returns ≤6 classes after migration") is
  * documented as REINTERPRETED — see CHANGELOG entry T4.1 for the full
  * reconciliation rationale.
  */

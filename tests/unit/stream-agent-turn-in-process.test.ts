@@ -25,10 +25,10 @@ const hoisted = vi.hoisted(() => ({
   skillsResolved: [] as unknown[],
 }))
 
-// M84 — o transporte MUDOU DE PACOTE: era `theokit/server/agent` e agora vive dentro de
-// `@theokit/agents`. Mockar o PACOTE deixou de interceptar qualquer coisa, porque de dentro dele os
-// imports são internos. Os mocks passam a mirar os módulos de origem — que é onde as funções sempre
-// estiveram; o pacote era só o caminho por onde elas chegavam.
+// M84 — the transport CHANGED PACKAGE: it was `theokit/server/agent` and now lives inside
+// `@theokit/agents`. Mocking the PACKAGE stopped intercepting anything, because from inside it the
+// imports are internal. The mocks now target the source modules — which is where the functions always
+// were; the package was only the path they arrived through.
 vi.mock('../../packages/agents/src/bridge/agent-endpoint.js', () => ({
   compileAgentModule: (mod: { __compiled: unknown }) => mod.__compiled,
   streamAgentUIMessages: (compiled: unknown, apiKey: string, input: unknown) => {
