@@ -1,11 +1,11 @@
 /**
  * T2.1 — Unit tests for scripts/sync-template-versions.mjs (BDD).
  *
- * Covers edge cases EC-2 (walk recursivo 2 níveis para services/), EC-3
- * (workspace:* ignorado), EC-4 (dep ausente ignorada), e idempotência.
+ * Covers edge cases EC-2 (a 2-level recursive walk for services/), EC-3
+ * (workspace:* ignored), EC-4 (a missing dep ignored), and idempotence.
  *
- * Strategy: importa a função exportada `syncTemplates` em sandbox tmp
- * com truth injetada (não depende de lockfile real).
+ * Strategy: imports the exported `syncTemplates` function in a tmp sandbox
+ * with injected truth (it does not depend on a real lockfile).
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

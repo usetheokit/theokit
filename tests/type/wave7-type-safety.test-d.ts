@@ -4,7 +4,7 @@ import { defineAction } from '../../packages/theo/src/server/define/define-actio
 import { z } from 'zod'
 
 describe('Wave 7 — Type Safety End-to-End', () => {
-  // Teste 1 — Input inválido falha em compile-time
+  // Test 1 — invalid input fails at compile time
   it('route: wrong body type is compile error', () => {
     defineRoute({
       body: z.object({ name: z.string() }),
@@ -27,7 +27,7 @@ describe('Wave 7 — Type Safety End-to-End', () => {
     })
   })
 
-  // Teste 2 — Output: handler return type is unknown (by design)
+  // Test 2 — Output: handler return type is unknown (by design)
   it('handler return type is inferred from implementation', () => {
     const route = defineRoute({
       handler: () => ({ id: '1', name: 'test' }),
@@ -38,7 +38,7 @@ describe('Wave 7 — Type Safety End-to-End', () => {
     >()
   })
 
-  // Teste 3 — Params inferidos
+  // Test 3 — params are inferred
   it('params inferred from Zod schema', () => {
     defineRoute({
       params: z.object({ id: z.string(), slug: z.string() }),
@@ -50,7 +50,7 @@ describe('Wave 7 — Type Safety End-to-End', () => {
     })
   })
 
-  // Teste 4 — Query inferida via Zod
+  // Test 4 — the query is inferred through Zod
   it('query inferred from Zod schema', () => {
     defineRoute({
       query: z.object({ page: z.number(), search: z.string().optional() }),

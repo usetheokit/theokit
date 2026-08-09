@@ -62,7 +62,7 @@ describe('Plugin scope encapsulation (T1.1 RED → T3.1 GREEN)', () => {
   it('plugin A decoration is isolated from plugin B (sibling scope)', async () => {
     const runner = new PluginRunner()
     await runner.register(pluginA)
-    // Today this throws DuplicateDecorationError (EC-7 atual). Post-T3.1
+    // Today this throws DuplicateDecorationError (EC-7 as it is today). Post-T3.1
     // it succeeds because plugin B gets its OWN child scope.
     await runner.register(pluginB)
 
@@ -223,7 +223,7 @@ describe('Plugin scope encapsulation — BDD scenarios (T1.1)', () => {
     expect(runner.has('plugin-throws')).toBe(false)
   })
 
-  // Note: EC-7 atual (DuplicateDecorationError when two plugins decorate
+  // Note: EC-7 as it is today (DuplicateDecorationError when two plugins decorate
   // the same key) intentionally NOT preserved as a test in this file.
   // That contract changes in T3.1 — see `tests/unit/plugin-runner.test.ts`
   // `throws DuplicateDecorationError when two plugins decorate the same key`

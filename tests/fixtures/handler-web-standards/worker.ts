@@ -24,7 +24,7 @@
  *     -H 'content-type: application/json' \
  *     -d '{"name":"world"}'             # → 200 { "greeting": "hello, world" }
  *
- * Acceptance Criterion T5a.1 #3 (CF Workers smoke test passa real
+ * Acceptance Criterion T5a.1 #3 (CF Workers smoke test passes with real
  * wrangler dev) is satisfied by THIS worker bundling and responding 200
  * under wrangler dev's Miniflare local backend.
  */

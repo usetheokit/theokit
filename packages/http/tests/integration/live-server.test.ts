@@ -1,10 +1,10 @@
 /**
  * Live Server — TypeScript com @ syntax REAL
  *
- * Sobe um server HTTP e MANTÉM VIVO até SIGINT (Ctrl+C).
- * Roda via: pnpm --filter @theokit/http exec vitest run tests/integration/live-server.test.ts
+ * Brings up an HTTP server and KEEPS IT ALIVE until SIGINT (Ctrl+C).
+ * Run with: pnpm --filter @theokit/http exec vitest run tests/integration/live-server.test.ts
  *
- * Depois abre outro terminal e faz:
+ * Then open another terminal and run:
  *   curl localhost:3333/users
  *   curl -X POST localhost:3333/users -H "Content-Type: application/json" -d '{"name":"Maria","email":"maria@test.com"}'
  *   curl localhost:3333/users/stats -H "x-api-key: secret"
@@ -83,7 +83,7 @@ class ProductService {
 
 const zCreateUser = z.object({
   name: z.string().min(2, 'Nome mínimo 2 chars'),
-  email: z.email({ message: 'Email inválido' }),
+  email: z.email({ message: 'Invalid email' }),
   role: z.enum(['admin', 'user']).default('user'),
 })
 class CreateUserDto {

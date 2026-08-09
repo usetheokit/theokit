@@ -164,7 +164,7 @@ describe('Registry + Preset (M52 T0.3)', () => {
     expect(draft.model).toBe('openai/gpt-5.4')
     expect(draft.skills).toEqual({ enabled: ['code-review'], autoInject: true })
     expect(draft.tools).toHaveLength(1)
-    expect(order).toEqual(['model', 'skills', 'tools']) // ordem determinística
+    expect(order).toEqual(['model', 'skills', 'tools']) // deterministic order
   })
 })
 

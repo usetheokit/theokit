@@ -35,7 +35,7 @@ describe('parseWireStream — framing SSE', () => {
 
   it('test_invalid_json_is_discarded_without_breaking', async () => {
     const chunks = await collect(
-      parseWireStream(byteStream('data: {quebrado\n\n', frame({ type: 'finish' }))),
+      parseWireStream(byteStream('data: {broken\n\n', frame({ type: 'finish' }))),
     )
     expect(chunks).toEqual([{ type: 'finish' }])
   })
@@ -86,7 +86,7 @@ describe('parseWireStream — framing SSE', () => {
 
   it('test_an_unknown_variant_is_discarded_with_a_warning', async () => {
     const chunks = await collect(
-      parseWireStream(byteStream(frame({ type: 'inexistente' }), frame({ type: 'finish' }))),
+      parseWireStream(byteStream(frame({ type: 'nonexistent' }), frame({ type: 'finish' }))),
     )
     expect(chunks).toEqual([{ type: 'finish' }])
   })
@@ -116,9 +116,9 @@ describe('parseWireStream — the error channel is exempt from the leniency (EC-
 
   it('test_an_error_with_text_preserves_the_message', async () => {
     const chunks = await collect(
-      parseWireStream(byteStream(frame({ type: 'error', errorText: 'sem credencial' }))),
+      parseWireStream(byteStream(frame({ type: 'error', errorText: 'no credential' }))),
     )
-    expect(chunks).toEqual([{ type: 'error', errorText: 'sem credencial' }])
+    expect(chunks).toEqual([{ type: 'error', errorText: 'no credential' }])
   })
 
   it('test_content_preceding_the_error_is_not_lost', async () => {

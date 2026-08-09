@@ -140,8 +140,9 @@ describe('loadMcpJson — disco', () => {
   })
 
   it('test_the_error_descends_from_the_layers_hierarchy', () => {
-    // A razão de o erro NÃO estender `Error` nu: `isTransientError` exige `TheokitAgentError`, e
-    // uma hierarquia paralela torna o predicado que separa recuperável de irrecuperável inútil.
+    // The reason the error does NOT extend a bare `Error`: `isTransientError` requires
+    // `TheokitAgentError`, and a parallel hierarchy makes the predicate that separates recoverable
+    // from unrecoverable useless.
     write('{ not json')
     let captured: unknown
     try {
@@ -167,9 +168,9 @@ describe('loadMcpJson — import purity', () => {
   })
 
   it('test_importing_the_module_does_not_read_disk', async () => {
-    // Ler o arquivo é opt-in e NUNCA acontece no import — o consumidor tem um teste de pureza de
-    // import que afirma zero chamadas do carregador ao carregar o módulo de chat, e uma primitiva
-    // com efeito colateral de módulo o quebraria a partir daqui.
+    // Reading the file is opt-in and NEVER happens at import — the consumer has an import-purity test
+    // asserting zero loader calls when the chat module is loaded, and a primitive with a module-level
+    // side effect would break it from here.
     const real = await vi.importActual<typeof NodeFs>('node:fs')
     const readFileSync = vi.fn(real.readFileSync)
     const existsSync = vi.fn(real.existsSync)
