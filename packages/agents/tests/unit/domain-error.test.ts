@@ -1,31 +1,32 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  // Provar que o alias é a MESMA classe exige importá-lo — é o único uso legítimo do nome deprecado
-  // no repositório, e é este teste que garante que ele continua sendo alias e não vira cópia (M73).
+  // Proving the alias is the SAME class requires importing it — it is the only legitimate use of the
+  // deprecated name in the repository, and this test is what guarantees it stays an alias and does
+  // not become a copy (M73).
   BudgetExceededError as AliasDeprecado,
   DelegationBudgetExceededError,
 } from '../../src/bridge/delegation-types.js'
 import * as barril from '../../src/index.js'
 
 /**
- * M91 T5.1 — o erro de delegação para de sombrear o do SDK.
+ * M91 T5.1 — the delegation error stops shadowing the SDK's.
  *
- * ## O defeito
+ * ## The defect
  *
- * `BudgetExceededError` existia nos dois lados e NÃO era a mesma coisa: no SDK é orçamento de JANELA
- * de contexto (`budgetName`/`window`/`spentUsd`/`mode`); aqui é orçamento de DELEGAÇÃO
- * (`agentName`/`actualCost`/`budgetLimit`). Como o consumidor tem regra inquebrável de nunca importar
- * `@theokit/sdk` direto, ele **nunca alcançava a do SDK** — e um `instanceof` contra o barril casava
- * com o domínio errado **em silêncio**.
+ * `BudgetExceededError` existed on both sides and was NOT the same thing: in the SDK it is a context
+ * WINDOW budget (`budgetName`/`window`/`spentUsd`/`mode`); here it is a DELEGATION budget
+ * (`agentName`/`actualCost`/`budgetLimit`). Since the consumer holds an unbreakable rule never to
+ * import `@theokit/sdk` directly, it **never reached the SDK's** — and an `instanceof` against the
+ * barrel matched the wrong domain **silently**.
  *
- * É o modo de falha que o M73 documentou: quando duas classes competem pelo mesmo nome, nenhum teste
- * de comportamento fica vermelho. Só identidade referencial pega.
+ * It is the failure mode M73 documented: when two classes compete for the same name, no behavioural
+ * test goes red. Only referential identity catches it.
  *
- * ## Por que `toBe` e não `toBeDefined`
+ * ## Why `toBe` and not `toBeDefined`
  *
- * Herdado de `auth-parity.test.ts` (M73): se o build inlinear a fonte, o alias vira uma **cópia** da
- * classe, `instanceof` passa a falhar em silêncio e um `toBeDefined` não vê nada.
+ * Inherited from `auth-parity.test.ts` (M73): if the build inlines the source, the alias becomes a
+ * **copy** of the class, `instanceof` starts failing silently and a `toBeDefined` sees nothing.
  */
 describe('M91 — the delegation error no longer shadows the one from the SDK', () => {
   it('the deprecated alias is the SAME class, not a copy', () => {
@@ -34,13 +35,13 @@ describe('M91 — the delegation error no longer shadows the one from the SDK', 
   })
 
   it('instanceof holds in BOTH directions through the alias', () => {
-    const err = new DelegationBudgetExceededError('agente', 1.5, 1)
+    const err = new DelegationBudgetExceededError('an-agent', 1.5, 1)
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(err).toBeInstanceOf(AliasDeprecado)
   })
 
   it('the instance name is the NEW name', () => {
-    const err = new DelegationBudgetExceededError('agente', 1.5, 1)
+    const err = new DelegationBudgetExceededError('an-agent', 1.5, 1)
     expect(err.name).toBe('DelegationBudgetExceededError')
   })
 
@@ -49,16 +50,16 @@ describe('M91 — the delegation error no longer shadows the one from the SDK', 
   })
 
   /**
-   * NÃO-QUEBRA — o achado que a revisão do M91 pegou depois de eu já ter publicado.
+   * NON-BREAKING — the finding M91's review caught after I had already published.
    *
-   * A primeira tentativa (`4.26.0`) **reaproveitou** o nome: o barril passou a exportar a classe do
-   * SDK sob `BudgetExceededError`. Um consumidor em `^4.25` com
-   * `catch (e) { if (e instanceof BudgetExceededError) … }` viu o ramo de delegação **parar de casar,
-   * em silêncio** — o modo de falha que este milestone existe para matar, em espelho, publicado como
-   * MINOR. Este teste é o que impede a repetição.
+   * The first attempt (`4.26.0`) **reused** the name: the barrel started exporting the SDK class as
+   * `BudgetExceededError`. A consumer on `^4.25` with
+   * `catch (e) { if (e instanceof BudgetExceededError) … }` saw the delegation branch **stop matching,
+   * silently** — the failure mode this milestone exists to kill, mirrored, shipped as a MINOR. This
+   * test is what prevents the repeat.
    */
   it('NON-BREAKING — the barrel keeps BudgetExceededError = the DELEGATION class', () => {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- é o alias que este teste protege
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- this is the alias the test protects
     expect(barril.BudgetExceededError).toBe(DelegationBudgetExceededError)
   })
 
@@ -67,7 +68,7 @@ describe('M91 — the delegation error no longer shadows the one from the SDK', 
   })
 
   it('COUNTERPROOF — window and delegation are DIFFERENT classes', () => {
-    // O invariante que o milestone comprou: as duas alcançáveis, cada uma com seu nome.
+    // The invariant the milestone bought: both reachable, each under its own name.
     expect(barril.WindowBudgetExceededError).not.toBe(barril.DelegationBudgetExceededError)
   })
 

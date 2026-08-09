@@ -1,23 +1,23 @@
 /**
- * M79 T2.1 — o CLI está na linha 4.x de `@theokit/agents`, e a razão que dizia o contrário morreu.
+ * M79 T2.1 — the CLI is on the 4.x line of `@theokit/agents`, and the reason saying otherwise died.
  *
- * ## A premissa que este teste enterra
+ * ## The premise this test buries
  *
- * O dedup guard do agent-builder (`agents/lib/hooks/hooks-wiring.test.ts:123-124`) afirmava que a
- * segunda cópia de `@theokit/agents` era *"unavoidable"* porque este CLI estava
+ * agent-builder's dedup guard (`agents/lib/hooks/hooks-wiring.test.ts:123-124`) claimed the second
+ * copy of `@theokit/agents` was *"unavoidable"* because this CLI was
  * *"still pinned to `@theokit/agents@0.44.x` — **it uses the `agent()` free function M57 removed**"*.
  *
- * Isso deixou de ser verdade em algum momento entre o M57 e hoje, e ninguém percebeu: o comentário
- * ficou, e com ele uma dívida arquitetural inteira — duas majors do mesmo pacote num processo, mais
- * uma allowlist de oito entradas para cercá-la. O próprio ROADMAP herdou a premissa, escrevendo que
- * "subir o CLI é mudança de major com consumidores fora deste repositório".
+ * That stopped being true at some point between M57 and today, and nobody noticed: the comment
+ * stayed, and with it a whole architectural debt — two majors of the same package in one process,
+ * plus an eight-entry allowlist to fence it in. The ROADMAP itself inherited the premise, writing
+ * that "bumping the CLI is a major change with consumers outside this repository".
  *
- * `rules/adr-governance.md § 5` enumera exatamente esta classe como **não mecanizada**: *"um
- * comentário cuja prosa não descreve mais o código"*. Aqui ele não descrevia errado apenas a si — ele
- * sustentava a razão de não consertar.
+ * `rules/adr-governance.md § 5` enumerates exactly this class as **not mechanized**: *"a comment
+ * whose prose no longer describes the code"*. Here it did not merely describe itself wrongly — it
+ * sustained the reason not to fix.
  *
- * Este teste é o oráculo que faltava: se alguém reintroduzir a free function, ele falha, e a
- * afirmação volta a ser verdadeira **com prova** em vez de por inércia.
+ * This test is the oracle that was missing: if somebody reintroduces the free function, it fails, and
+ * the claim becomes true again **with proof** rather than by inertia.
  */
 import { readFileSync } from 'node:fs'
 import { readdirSync, statSync } from 'node:fs'
@@ -44,20 +44,21 @@ describe('M79 T2.1 — the CLI on the 4.x line', () => {
     }
     const decl = pkg.dependencies['@theokit/agents']
 
-    // `workspace:^` resolve para a versão do monorepo (4.x). Um pin literal `^0.44.x` reintroduziria
-    // o skew de quatro majors que este milestone eliminou.
-    expect(decl, '`@theokit/agents` precisa vir do workspace, não de um pin publicado antigo').toBe(
-      'workspace:^',
-    )
+    // `workspace:^` resolves to the monorepo version (4.x). A literal `^0.44.x` pin would reintroduce
+    // the four-major skew this milestone eliminated.
+    expect(
+      decl,
+      '`@theokit/agents` must come from the workspace, not from an old published pin',
+    ).toBe('workspace:^')
   })
 
   it('test_the_CLI_does_NOT_use_the_free_function_agent_removed_in_M57', () => {
-    // O gate de veracidade. A afirmação "o CLI usa `agent()`" sustentou a dívida por vários
-    // milestones sem nada verificá-la. Agora ela tem oráculo.
+    // The truthfulness gate. The claim "the CLI uses `agent()`" sustained the debt for several
+    // milestones with nothing verifying it. Now it has an oracle.
     const useSites: string[] = []
     for (const file of tsFiles(join(packageRoot, 'src'))) {
       const source = readFileSync(file, 'utf-8')
-      // Import nomeado da free function a partir do barril — a forma que a removida tinha.
+      // A named import of the free function from the barrel — the shape the removed one had.
       if (/import\s*\{[^}]*\bagent\b[^}]*\}\s*from\s*['"]@theokit\/agents['"]/.test(source)) {
         useSites.push(file)
       }
@@ -65,17 +66,17 @@ describe('M79 T2.1 — the CLI on the 4.x line', () => {
 
     expect(
       useSites,
-      `Arquivos importando a free function \`agent()\`: ${useSites.join(', ')}. ` +
-        'Ela foi removida no M57; usá-la prenderia o CLI à linha 0.44.x e recriaria as duas cópias.',
+      `Files importing the free function \`agent()\`: ${useSites.join(', ')}. ` +
+        'It was removed in M57; using it would pin the CLI to the 0.44.x line and recreate the two copies.',
     ).toEqual([])
   })
 
   it('test_COUNTERPROOF_the_CLI_actually_IMPORTS_from_the_agents_barrel', () => {
-    // Sem esta, apagar qualquer uso de `@theokit/agents` do CLI passaria no teste acima — e o "não usa a
-    // free function" seria verdade por vacuidade, não por correção.
+    // Without this, deleting every use of `@theokit/agents` from the CLI would pass the test above —
+    // and "it does not use the free function" would be true by vacuity, not by correctness.
     const importers = tsFiles(join(packageRoot, 'src')).filter((a) =>
       /from\s*['"]@theokit\/agents['"]/.test(readFileSync(a, 'utf-8')),
     )
-    expect(importers.length, 'o CLI precisa continuar consumindo o barril').toBeGreaterThan(0)
+    expect(importers.length, 'the CLI must keep consuming the barrel').toBeGreaterThan(0)
   })
 })
