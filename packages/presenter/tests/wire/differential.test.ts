@@ -74,24 +74,24 @@ async function viaMirror(text: string): Promise<unknown[]> {
  * that agreement is itself worth asserting.
  */
 const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
-  { name: 'start + finish (turno vazio)', frames: [{ type: 'start' }, { type: 'finish' }] },
+  { name: 'start + finish (an empty turn)', frames: [{ type: 'start' }, { type: 'finish' }] },
   {
-    name: 'text run completo',
+    name: 'a complete text run',
     frames: [
       { type: 'start' },
       { type: 'text-start', id: 't1' },
       { type: 'text-delta', id: 't1', delta: 'oi' },
-      { type: 'text-delta', id: 't1', delta: ' mundo' },
+      { type: 'text-delta', id: 't1', delta: ' world' },
       { type: 'text-end', id: 't1' },
       { type: 'finish' },
     ],
   },
   {
-    name: 'reasoning run completo',
+    name: 'a complete reasoning run',
     frames: [
       { type: 'start' },
       { type: 'reasoning-start', id: 'r1' },
-      { type: 'reasoning-delta', id: 'r1', delta: 'pensando' },
+      { type: 'reasoning-delta', id: 'r1', delta: 'thinking' },
       { type: 'reasoning-end', id: 'r1' },
       { type: 'finish' },
     ],
@@ -112,7 +112,7 @@ const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
     ],
   },
   {
-    name: 'tool run com erro',
+    name: 'a tool run with an error',
     frames: [
       { type: 'start' },
       {
@@ -127,11 +127,11 @@ const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
     ],
   },
   {
-    name: 'texto + ferramenta intercalados',
+    name: 'text + tool interleaved',
     frames: [
       { type: 'start' },
       { type: 'text-start', id: 't1' },
-      { type: 'text-delta', id: 't1', delta: 'vou rodar' },
+      { type: 'text-delta', id: 't1', delta: 'I will run' },
       { type: 'text-end', id: 't1' },
       {
         type: 'tool-input-available',
@@ -163,7 +163,7 @@ const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
     ],
   },
   {
-    name: 'start com messageId explícito',
+    name: 'start with an explicit messageId',
     frames: [
       { type: 'start', messageId: 'm-42' },
       { type: 'text-start', id: 't1' },
@@ -199,13 +199,13 @@ describe('differential — the mirror reproduces the oracle', () => {
       'tool-input-available',
       'tool-output-available',
       'tool-output-error',
-      // A família `data-*` entrou nesta lista DEPOIS de escapar: a primeira versão do reader a
-      // descartava inteira e o diferencial não acusou, porque a asserção de cobertura tinha sido
-      // escrita a partir da mesma suposição errada. Quem pegou foi um teste de consumidor.
+      // The `data-*` family entered this list AFTER escaping: the reader's first version discarded it
+      // wholesale and the differential did not flag it, because the coverage assertion had been
+      // written from the same wrong assumption. What caught it was a consumer's test.
       'data-message',
       'data-checkpoint',
     ]) {
-      expect(covered, `variante ${t} sem caso diferencial`).toContain(t)
+      expect(covered, `variant ${t} has no differential case`).toContain(t)
     }
   })
 })

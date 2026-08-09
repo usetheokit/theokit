@@ -1,13 +1,13 @@
 /**
- * Regressão do BLOCKER que a revisão adversarial do M94 encontrou.
+ * A regression test for the BLOCKER M94's adversarial review found.
  *
- * O M94 alargou `AgentBuilder.model()` para aceitar `ModelSelection` — e parou aí. O caminho de
- * runtime por onde cada turno passa, `buildModelSelection`, seguia assumindo `string` e
- * produzia `{ id: { id: 'openrouter/x', contextWindow: 400000 } }`: um objeto onde o SDK espera um
- * id, e o primeiro `modelId.indexOf('/')` adiante quebrava o turno inteiro.
+ * M94 widened `AgentBuilder.model()` to accept a `ModelSelection` — and stopped there. The runtime
+ * path every turn goes through, `buildModelSelection`, kept assuming `string` and produced
+ * `{ id: { id: 'openrouter/x', contextWindow: 400000 } }`: an object where the SDK expects an id, and
+ * the first `modelId.indexOf('/')` downstream broke the whole turn.
  *
- * Alargar o tipo sem alargar o runtime é a MESMA divergência fachada↔implementação que o M94 veio
- * corrigir, invertida. O tipo passou a permitir o que o runtime não sabia receber.
+ * Widening the type without widening the runtime is the SAME facade↔implementation divergence M94
+ * came to fix, inverted. The type started allowing what the runtime did not know how to receive.
  */
 import { describe, expect, it } from 'vitest'
 import { buildModelSelection } from '../src/bridge/model-selection.js'
@@ -19,7 +19,7 @@ describe('M95 — ModelSelection crosses buildModelSelection', () => {
 
   it('a ModelSelection is NOT nested inside `id`', () => {
     const r = buildModelSelection({ id: 'openrouter/x', contextWindow: 400_000 })
-    expect(typeof r.id, 'o id virou objeto — é isto que quebra cada turno').toBe('string')
+    expect(typeof r.id, 'the id became an object — this is what breaks every turn').toBe('string')
     expect(r.id).toBe('openrouter/x')
   })
 

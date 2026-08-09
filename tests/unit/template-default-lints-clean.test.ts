@@ -1,14 +1,14 @@
 /**
- * theokit#93 — o template `default` tem de passar no PRÓPRIO `npm run lint` no minuto zero.
+ * theokit#93 — the `default` template must pass its OWN `npm run lint` at minute zero.
  *
- * Um app recém-scaffoldado reprovava com `@typescript-eslint/no-empty-object-type` em
- * `types/jobs.d.ts`, cuja `interface JobRegistry {}` é vazia DE PROPÓSITO — é a augmentação de
- * módulo que o usuário preenche conforme cria jobs. A primeira lição que o TheoKit dava era que o
- * gate dele mente.
+ * A freshly scaffolded app failed with `@typescript-eslint/no-empty-object-type` on
+ * `types/jobs.d.ts`, whose `interface JobRegistry {}` is empty ON PURPOSE — it is the module
+ * augmentation the user fills in as they create jobs. The first lesson TheoKit taught was that its
+ * gate lies.
  *
- * O teste RODA O ESLINT de verdade, com a config do próprio template. Uma asserção estrutural
- * ("a config contém tal override") passaria a mentir no dia em que o `tseslint.configs.recommended`
- * ligasse outra regra — que é exatamente como este defeito nasceu.
+ * The test RUNS ESLINT for real, with the template's own config. A structural assertion ("the config
+ * contains such-and-such override") would start lying the day `tseslint.configs.recommended` turned
+ * on another rule — which is exactly how this defect was born.
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
 
 const TEMPLATE_ROOT = resolve(__dirname, '../../packages/create-theokit/templates/default')
 
-/** Só os arquivos de declaração — onde vivem as augmentações e onde o defeito estava. */
+/** Only the declaration files — where the augmentations live and where the defect was. */
 function declarationFiles(): string[] {
   const found: string[] = []
   const walk = (dir: string) => {
@@ -47,7 +47,7 @@ async function lint(files: string[]): Promise<ESLint.LintResult[]> {
 describe('the default template passes its own lint (#93)', () => {
   it('no `.d.ts` in the template produces a lint error', async () => {
     const files = declarationFiles()
-    // Se o template deixar de ter arquivos de declaração, este teste vira vácuo silencioso.
+    // If the template stops having declaration files, this test becomes a silent vacuum.
     expect(files.length).toBeGreaterThan(0)
 
     const results = await lint(files)
@@ -64,9 +64,9 @@ describe('the default template passes its own lint (#93)', () => {
   }, 60_000)
 
   it('the `JobRegistry` augmentation stays empty — that is its point', () => {
-    // Se alguém "corrigir" o lint preenchendo a interface, o app scaffoldado passa a declarar um job
-    // que não existe, e `ctx.queue.enqueue` mente sobre o que é enfileirável. O verde deste arquivo
-    // tem de vir da CONFIG, não de mutilar a augmentação.
+    // If somebody "fixes" the lint by filling in the interface, the scaffolded app starts declaring a
+    // job that does not exist, and `ctx.queue.enqueue` lies about what is enqueueable. This file's
+    // green must come from the CONFIG, not from mutilating the augmentation.
     const jobs = readFileSync(resolve(TEMPLATE_ROOT, 'types/jobs.d.ts'), 'utf-8')
     expect(jobs).toMatch(/interface JobRegistry \{[\s/*][^}]*\}/)
     expect(jobs).not.toMatch(/interface JobRegistry \{\s*'[^']+':/)
