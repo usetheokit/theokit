@@ -29,7 +29,7 @@ describe('Wave 4 — Server Actions', () => {
     await server?.close()
   }, 15000)
 
-  // Teste 1 — Action com input válido (T1.3 sub-C: body is devalue-encoded)
+  // Test 1 — an action with valid input (T1.3 sub-C: body is devalue-encoded)
   it('POST with valid input returns 200 with handler result', async () => {
     const res = await fetch(baseUrl, {
       method: 'POST',
@@ -42,7 +42,7 @@ describe('Wave 4 — Server Actions', () => {
     expect(data).toEqual({ id: '1', name: 'Paulo', email: 'paulo@example.com' })
   })
 
-  // Teste 2 — Input inválido (T0.1 ActionInputError: 422 + flat envelope w/ fields)
+  // Test 2 — invalid input (T0.1 ActionInputError: 422 + flat envelope w/ fields)
   it('POST with invalid input returns 422 VALIDATION_ERROR with field map', async () => {
     const res = await fetch(baseUrl, {
       method: 'POST',
@@ -64,7 +64,7 @@ describe('Wave 4 — Server Actions', () => {
     expect(Object.keys(data.fields).sort((a, b) => a.localeCompare(b))).toEqual(['email', 'name'])
   })
 
-  // Teste 3 — CSRF: sem X-Theo-Action header → 403
+  // Test 3 — CSRF: no X-Theo-Action header → 403
   it('POST without X-Theo-Action header returns 403', async () => {
     const res = await fetch(baseUrl, {
       method: 'POST',
@@ -74,7 +74,7 @@ describe('Wave 4 — Server Actions', () => {
     expect(res.status).toBe(403)
   })
 
-  // Teste 4 — Action inexistente → 404
+  // Test 4 — a nonexistent action → 404
   it('POST to nonexistent action returns 404', async () => {
     const res = await fetch(`http://localhost:${port}/api/__actions/nonexistent/foo`, {
       method: 'POST',
@@ -84,7 +84,7 @@ describe('Wave 4 — Server Actions', () => {
     expect(res.status).toBe(404)
   })
 
-  // Teste 5 — GET → 405
+  // Test 5 — GET → 405
   it('GET on action endpoint returns 405', async () => {
     const res = await fetch(baseUrl, {
       headers: { 'X-Theo-Action': '1' },
@@ -92,7 +92,7 @@ describe('Wave 4 — Server Actions', () => {
     expect(res.status).toBe(405)
   })
 
-  // Extra: URL malformada (sem exportName)
+  // Extra: a malformed URL (no exportName)
   it('POST with malformed URL returns 400', async () => {
     const res = await fetch(`http://localhost:${port}/api/__actions/create-user`, {
       method: 'POST',

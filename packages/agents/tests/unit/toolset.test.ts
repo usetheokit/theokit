@@ -5,11 +5,11 @@ import { Toolset, ToolsetError } from '../../src/capability/toolset.js'
 const t = (name: string) => ({ name })
 
 /**
- * M91 T4.1 — a política de resolução de tools vira primitiva da camada.
+ * M91 T4.1 — the tool resolution policy becomes a primitive of the layer.
  *
- * O agent-builder tinha de escrevê-la: `agents/tools/registry.ts`, 170 LoC, com a política que importa
- * (falhar alto em desconhecido **e** duplicado) fora do framework. O próximo consumidor teria de
- * redescobri-la — e a chance de redescobrir "falha alto nos dois casos" é baixa.
+ * agent-builder had to write it: `agents/tools/registry.ts`, 170 LoC, with the policy that matters
+ * (failing loud on an unknown name **and** on a duplicate) outside the framework. The next consumer
+ * would have to rediscover it — and the odds of rediscovering "fail loud in both cases" are low.
  */
 describe('M91 — Toolset', () => {
   it('get on an UNKNOWN name throws with the name in the error', () => {
@@ -55,7 +55,7 @@ describe('M91 — Toolset', () => {
     const ts = Toolset.from([t('a')])
     try {
       ts.get('b')
-      expect.unreachable('deveria ter lançado')
+      expect.unreachable('should have thrown')
     } catch (err) {
       expect((err as ToolsetError).code).toBe('unknown_tool')
     }
