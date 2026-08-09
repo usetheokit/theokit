@@ -2,7 +2,7 @@
  * `TheoError` — envelope-emitting `Error` subclass per plan
  * g5-error-envelope-cross-layer v1.0 § Phase 1 / T1.2.
  *
- * Mirrors trpc's TRPCError ergonomic pattern (referencia:
+ * Mirrors trpc's TRPCError ergonomic pattern (reference:
  * trpc/packages/server/src/unstable-core-do-not-import/error/TRPCError.ts:65-87)
  * adapted for theokit's hybrid envelope model (blueprint Form 4).
  *

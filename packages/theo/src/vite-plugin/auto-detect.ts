@@ -28,9 +28,9 @@ import type { DetectResult } from './auto-detect-types.js'
 
 /**
  * D13 invariant (ADR 0021): @theokit/ui is ESM-only by design.
- * NÃO usar `createRequire(...).resolve()` — `ERR_PACKAGE_PATH_NOT_EXPORTED`
- * em runtime para packages que declaram `type:"module"` sem `require` condition.
- * Tudo filesystem walk direto.
+ * Do NOT use `createRequire(...).resolve()` — `ERR_PACKAGE_PATH_NOT_EXPORTED`
+ * at runtime for packages declaring `type:"module"` with no `require` condition.
+ * Everything is a direct filesystem walk.
  */
 
 function isDeclared(name: string, projectRoot: string): boolean {
@@ -50,7 +50,7 @@ function isDeclared(name: string, projectRoot: string): boolean {
 }
 
 /**
- * D13: filesystem walk pra encontrar package.json (substitui require.resolve).
+ * D13: a filesystem walk to find package.json (replaces require.resolve).
  * Walks node_modules up to 10 levels (handles pnpm hoist + workspace symlinks).
  */
 function resolvePackageJson(name: string, cwd: string): { path: string; version?: string } | null {
@@ -61,7 +61,7 @@ function resolvePackageJson(name: string, cwd: string): { path: string; version?
       try {
         const raw = readFileSync(pkgJsonPath, 'utf-8')
         const pkg = JSON.parse(raw) as { name?: string; version?: string }
-        // Validate package name matches (defesa contra colisão path)
+        // Validate the package name matches (defence against a path collision)
         if (pkg.name === name) {
           return { path: pkgJsonPath, version: pkg.version }
         }
@@ -77,8 +77,8 @@ function resolvePackageJson(name: string, cwd: string): { path: string; version?
 }
 
 /**
- * D13: fallback probe via filesystem (substitui require.resolve).
- * Tenta common entry paths em node_modules. Retorna path do entry achado.
+ * D13: a fallback probe via the filesystem (replaces require.resolve).
+ * Tries common entry paths under node_modules. Returns the path of the entry it found.
  */
 function fallbackProbe(name: string, cwd: string): { resolvedEntry: string } | null {
   const candidates = ['index.mjs', 'dist/index.mjs', 'dist/index.js', 'index.js']

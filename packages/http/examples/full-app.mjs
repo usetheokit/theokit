@@ -2,16 +2,16 @@
 /**
  * @theokit/http-decorators — Full App Demo
  *
- * Simula uma app TheoKit completa com:
+ * Simulates a complete TheoKit app with:
  *   ✅ Controllers com @Controller/@Get/@Post/@Delete
- *   ✅ DTOs com validação Zod (Pattern D2 — static schema)
- *   ✅ Guards com @UseGuards (autenticação por API key)
+ *   ✅ DTOs with Zod validation (Pattern D2 — static schema)
+ *   ✅ Guards with @UseGuards (API-key authentication)
  *   ✅ DI container com constructor injection (@Injectable + Container)
  *   ✅ Múltiplos controllers (Users + Products + Health)
- *   ✅ CRUD completo (Create, Read, Update, Delete)
+ *   ✅ Full CRUD (Create, Read, Update, Delete)
  *   ✅ Parâmetros tipados (@Param, @Query, @Body)
- *   ✅ Status codes customizados (@HttpCode)
- *   ✅ Headers customizados (@Header)
+ *   ✅ Custom status codes (@HttpCode)
+ *   ✅ Custom headers (@Header)
  *
  * Run:  node packages/http-decorators/examples/full-app.mjs
  * Test: curl http://localhost:4000/api/health
@@ -32,7 +32,7 @@ import {
 } from '../dist/index.js'
 
 // ═══════════════════════════════════════════════════════
-// CAMADA 1 — Services (@Injectable — lógica de negócio)
+// LAYER 1 — Services (@Injectable — business logic)
 // ═══════════════════════════════════════════════════════
 
 class UserService {
@@ -94,7 +94,7 @@ class ProductService {
 }
 
 // ═══════════════════════════════════════════════════════
-// CAMADA 2 — Guards (autenticação/autorização)
+// LAYER 2 — Guards (authentication/authorization)
 // ═══════════════════════════════════════════════════════
 
 class ApiKeyGuard {
@@ -112,12 +112,12 @@ class AdminGuard {
 }
 
 // ═══════════════════════════════════════════════════════
-// CAMADA 3 — DTOs (validação com Zod — Pattern D2)
+// LAYER 3 — DTOs (Zod validation — Pattern D2)
 // ═══════════════════════════════════════════════════════
 
 const zCreateUser = z.object({
-  name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
-  email: z.string().email('Email inválido'),
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Invalid email'),
   role: z.enum(['admin', 'user']).default('user'),
 })
 class CreateUserDto {
@@ -126,18 +126,18 @@ class CreateUserDto {
 
 const zCreateProduct = z.object({
   name: z.string().min(1, 'Nome obrigatório'),
-  price: z.number().min(0, 'Preço não pode ser negativo'),
-  stock: z.number().int().min(0, 'Estoque não pode ser negativo'),
+  price: z.number().min(0, 'Price cannot be negative'),
+  stock: z.number().int().min(0, 'Stock cannot be negative'),
 })
 class CreateProductDto {
   static schema = zCreateProduct
 }
 
 // ═══════════════════════════════════════════════════════
-// CAMADA 4 — Controllers (HTTP endpoints)
+// LAYER 4 — Controllers (HTTP endpoints)
 // ═══════════════════════════════════════════════════════
 
-// --- DI Container (simula @theokit/di) ---
+// --- DI Container (simulates @theokit/di) ---
 const userService = new UserService()
 const productService = new ProductService()
 
