@@ -1,24 +1,24 @@
 /**
- * M79 T1.1 — a direção de dependência: implementação é `dependencies`, não `peer`.
+ * M79 T1.1 — dependency direction: an implementation is a `dependency`, not a `peer`.
  *
- * ## O que estava invertido
+ * ## What was inverted
  *
- * `@theokit/agents` tinha **zero `dependencies`** e seis `peerDependencies`, entre elas os três
- * `@theokit/sdk*`. Declarar como peer significa "o host fornece" — e o host, aqui, é o agent-builder,
- * que tem como regra INQUEBRÁVEL **nunca importar `@theokit/sdk*`** (gate
+ * `@theokit/agents` had **zero `dependencies`** and six `peerDependencies`, among them the three
+ * `@theokit/sdk*`. Declaring something a peer means "the host provides it" — and the host, here, is
+ * agent-builder, which holds an UNBREAKABLE rule to **never import `@theokit/sdk*`** (gate
  * `agents/gates/m63-boundary.test.ts`).
  *
- * A consequência era literal: o `package.json` do consumidor declarava, e o npm instalava no topo,
- * exatamente os três pacotes que ele está proibido de usar. Um pacote que o consumidor não pode nem
- * importar não é "substituível pelo host" por definição.
+ * The consequence was literal: the consumer's `package.json` declared, and npm installed at the top
+ * level, exactly the three packages it is forbidden to use. A package the consumer cannot even import
+ * is not "substitutable by the host" by definition.
  *
- * ## O que continua peer, e por quê
+ * ## What remains a peer, and why
  *
- * `zod` precisa ser a **mesma instância** que o consumidor usa para criar schemas — duas cópias de
- * zod produzem validadores que não se reconhecem. `ai` é genuinamente trocável (é o SDK de modelo).
- * `@theokit/http` só é usado por quem serve HTTP. Esses três são peer legítimo.
+ * `zod` has to be the **same instance** the consumer uses to create schemas — two copies of zod
+ * produce validators that do not recognize each other. `ai` is genuinely swappable (it is the model
+ * SDK). `@theokit/http` is only used by whoever serves HTTP. Those three are legitimate peers.
  *
- * O critério é o que a própria DoD enuncia: peer permanece para o **genuinamente substituível**.
+ * The criterion is what the DoD itself states: peer remains for the **genuinely substitutable**.
  */
 import { readFileSync } from 'node:fs'
 
@@ -32,57 +32,61 @@ const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.ur
 const deps = pkg.dependencies ?? {}
 const peers = pkg.peerDependencies ?? {}
 
-/** Implementação: o consumidor não pode importar, logo não pode fornecer. */
+/** Implementation: the consumer cannot import it, therefore cannot provide it. */
 const IMPLEMENTATION = [
   '@theokit/sdk',
   '@theokit/sdk-tools',
   '@theokit/sdk-pty',
-  // O wire (`@theokit/presenter/wire`) é implementação desta camada desde o plano
-  // `remover-dependencia-ai`: o consumidor não escolhe qual parser de frame usamos, então não pode
-  // fornecê-lo. Externalizado no tsup para que exista UMA instância do schema em runtime.
+  // The wire (`@theokit/presenter/wire`) has been this layer's implementation since the
+  // `remove-ai-dependency` plan: the consumer does not choose which frame parser we use, so it cannot
+  // provide it. Externalized in tsup so that ONE instance of the schema exists at runtime.
   '@theokit/presenter',
 ] as const
 /**
- * Genuinamente substituível pelo host.
+ * Genuinely substitutable by the host.
  *
- * `ai` SAIU desta lista: ele deixou de ser peer porque deixou de ser dependência publicada. O wire
- * é nosso, e o pacote permanece apenas como devDependency — o oráculo do teste diferencial. Um
- * consumidor não precisa mais fornecê-lo, então exigir que fosse peer passou a afirmar o contrário
- * do contrato.
+ * `ai` LEFT this list: it stopped being a peer because it stopped being a published dependency. The
+ * wire is ours, and the package remains only as a devDependency — the differential test's oracle. A
+ * consumer no longer needs to provide it, so requiring it to be a peer started asserting the opposite
+ * of the contract.
  */
 const REPLACEABLE = ['zod', '@theokit/http'] as const
 
 describe('M79 T1.1 — dependency direction', () => {
-  it.each(IMPLEMENTATION)('test_%s_e_dependency_e_nao_peer', (nome) => {
+  it.each(IMPLEMENTATION)('test_%s_e_dependency_e_nao_peer', (name) => {
     expect(
-      deps[nome],
-      `\`${nome}\` é implementação desta camada: o consumidor é PROIBIDO de importá-lo pela ` +
-        'fronteira INQUEBRÁVEL, então não pode fornecê-lo. Declarar peer obriga o manifesto dele a ' +
-        'listar exatamente o que ele não pode usar.',
+      deps[name],
+      `\`${name}\` is this layer's implementation: the consumer is FORBIDDEN from importing it by the ` +
+        'UNBREAKABLE boundary, so it cannot provide it. Declaring it a peer forces its manifest to ' +
+        'list exactly what it cannot use.',
     ).toBeDefined()
-    expect(peers[nome]).toBeUndefined()
+    expect(peers[name]).toBeUndefined()
   })
 
-  it.each(REPLACEABLE)('test_CONTRAPROVA_%s_continua_peer', (nome) => {
-    // Sem esta, mover os SEIS passaria nos testes acima e quebraria o caso do `zod`: duas cópias
-    // produzem validadores que não se reconhecem, e o consumidor cria schemas com a dele.
+  it.each(REPLACEABLE)('test_COUNTERPROOF_%s_remains_a_peer', (name) => {
+    // Without this, moving ALL SIX would pass the tests above and break the `zod` case: two copies
+    // produce validators that do not recognize each other, and the consumer creates schemas with its own.
     expect(
-      peers[nome],
-      `\`${nome}\` é genuinamente substituível pelo host — tem de seguir peer`,
+      peers[name],
+      `\`${name}\` is genuinely substitutable by the host — it must stay a peer`,
     ).toBeDefined()
-    expect(deps[nome]).toBeUndefined()
+    expect(deps[name]).toBeUndefined()
   })
 
   it('test_no_package_sits_in_BOTH_places', () => {
-    // Um pacote em `dependencies` E `peerDependencies` é ambiguidade de resolução: o npm satisfaz o
-    // peer com a própria dep e o aviso some, escondendo qual das duas declarações governa.
+    // A package in both `dependencies` AND `peerDependencies` is a resolution ambiguity: npm satisfies
+    // the peer with the dependency itself and the warning disappears, hiding which of the two
+    // declarations governs.
     const inBoth = Object.keys(deps).filter((n) => peers[n] !== undefined)
-    expect(inBoth, `Declarado em dependencies E peerDependencies: ${inBoth.join(', ')}`).toEqual([])
+    expect(
+      inBoth,
+      `Declared in both dependencies AND peerDependencies: ${inBoth.join(', ')}`,
+    ).toEqual([])
   })
 
   it('test_the_layer_no_longer_has_ZERO_dependencies', () => {
-    // O estado anterior — zero deps, tudo peer — era a inversão em forma pura: a camada não assumia
-    // NADA do que precisa para funcionar.
+    // The previous state — zero deps, everything a peer — was the inversion in pure form: the layer
+    // owned NOTHING of what it needs to work.
     expect(Object.keys(deps).length).toBeGreaterThan(0)
   })
 })
