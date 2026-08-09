@@ -174,16 +174,16 @@ const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
   },
 ]
 
-describe('diferencial — o espelho reproduz o oráculo', () => {
+describe('differential — the mirror reproduces the oracle', () => {
   for (const { name, frames } of CASES) {
-    it(`test_diferencial_${name.replace(/[^a-z0-9]+/gi, '_')}`, async () => {
+    it(`test_differential_${name.replace(/[^a-z0-9]+/gi, '_')}`, async () => {
       const text = sse(frames)
       const [oracle, mirror] = await Promise.all([viaOracle(text), viaMirror(text)])
       expect(wireVisible(mirror)).toEqual(wireVisible(oracle))
     })
   }
 
-  it('test_diferencial_cobre_toda_variante_de_transcript', () => {
+  it('test_differential_covers_every_transcript_variant', () => {
     // Anti-truncation floor: the case list must exercise every transcript-bearing variant. A case
     // set that silently shrank would let the oracle pass while covering nothing.
     const covered = new Set(CASES.flatMap((c) => c.frames.map((f) => (f as { type: string }).type)))

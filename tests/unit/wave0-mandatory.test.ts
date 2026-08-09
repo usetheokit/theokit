@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURES = path.resolve(__dirname, '../../fixtures')
 
-describe('Onda 0 Mandatory Tests', () => {
+describe('Wave 0 Mandatory Tests', () => {
   // Teste 1 — Valid project structure recognized
   it('should recognize a valid project structure', () => {
     expect(() => validateProjectStructure(path.join(FIXTURES, 'basic-valid-app'))).not.toThrow()

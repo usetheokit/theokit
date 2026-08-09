@@ -106,7 +106,7 @@ export default tseslint.config(
   // Ninguém tinha visto porque `npm run lint` não terminava (#119); o primeiro veredito do lint por
   // grupo foi este. Sem `files`, o bloco vale para tudo, que é o que a decisão sempre quis dizer.
   //
-  // O sinal que a regra dava não foi abandonado: `tests/lint/marcador-de-tarefa.test.ts` casa a
+  // O sinal que a regra dava não foi abandonado: `tests/lint/task-marker.test.ts` casa a
   // forma que um marcador de verdade tem — MAIÚSCULA + dois-pontos, dentro de comentário — e
   // ignora a palavra solta. Gate, não convenção.
   {
@@ -393,7 +393,7 @@ export default tseslint.config(
     files: [
       '**/*.config.{ts,mts,cts,js,mjs,cjs}',
       'scripts/**/*.{ts,js,mjs}',
-      // M90 — só `packages/*/scripts/**`, e só por causa de `gerar-reexports.mts`. A primeira versão
+      // M90 — só `packages/*/scripts/**`, e só por causa de `generate-reexports.mts`. A primeira versão
       // ampliou `scripts/**` para `.mts` também, e a revisão mediu o excesso: relaxava
       // `no-explicit-any`/`no-unsafe-*` em `scripts/preflight-native-bindings.d.mts` e
       // `scripts/sync-template-versions.d.mts`, que não pediram nada.

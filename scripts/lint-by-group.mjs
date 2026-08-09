@@ -48,97 +48,97 @@ import process from 'node:process'
 
 import { ESLint } from 'eslint'
 
-const EXTENSOES = ['*.ts', '*.tsx', '*.mts', '*.cts', '*.js', '*.mjs', '*.cjs']
+const EXTENSIONS = ['*.ts', '*.tsx', '*.mts', '*.cts', '*.js', '*.mjs', '*.cjs']
 
 /** Todo arquivo versionado que o ESLint realmente lintaria — o índice do git é a fonte. */
-async function arquivosLintaveis() {
+async function lintableFiles() {
   // `git` pelo PATH é o contrato deste script: ele roda como `npm run lint`, no repositório, com o
   // mesmo `git` que o desenvolvedor usa. Caminho absoluto quebraria em macOS/nix e não fecha ameaça
   // nenhuma — quem controla o PATH de um lint local já controla o `node` que o executa.
   // eslint-disable-next-line sonarjs/no-os-command-from-path -- ver acima
-  const saida = spawnSync('git', ['ls-files', ...EXTENSOES], {
+  const saida = spawnSync('git', ['ls-files', ...EXTENSIONS], {
     encoding: 'utf8',
     maxBuffer: 1 << 28,
   })
   if (saida.status !== 0) throw new Error(`git ls-files falhou: ${saida.stderr}`)
   const eslint = new ESLint()
   const todos = saida.stdout.trim().split('\n').filter(Boolean)
-  const lintaveis = []
-  for (const f of todos) if (!(await eslint.isPathIgnored(f))) lintaveis.push(f)
-  return lintaveis
+  const lintable = []
+  for (const f of todos) if (!(await eslint.isPathIgnored(f))) lintable.push(f)
+  return lintable
 }
 
 /**
  * O grupo de um arquivo: `packages/<nome>` para pacote, o primeiro segmento para o resto, e `.` para
  * arquivo de raiz (`eslint.config.js`, `vitest.config.ts`, …).
  */
-function grupoDe(arquivo) {
-  const partes = arquivo.split('/')
-  if (partes.length === 1) return '.'
-  if (partes[0] === 'packages' && partes.length > 2) return `packages/${partes[1]}`
-  return partes[0]
+function groupOf(file) {
+  const parts = file.split('/')
+  if (parts.length === 1) return '.'
+  if (parts[0] === 'packages' && parts.length > 2) return `packages/${parts[1]}`
+  return parts[0]
 }
 
 function lintar(grupo, argsExtras) {
   // Arquivo de raiz vira lista explícita: `eslint .` seria justamente o processo único que este
   // script existe para não rodar.
-  const alvo = grupo === '.' ? gruposDeRaiz : [grupo]
-  const inicio = Date.now()
+  const target = grupo === '.' ? rootGroups : [grupo]
+  const start = Date.now()
   // Mesmo racional do `git` acima: é o `npx` do projeto que precisa rodar, e ele vem do PATH que o
   // `npm run` já montou.
   // eslint-disable-next-line sonarjs/no-os-command-from-path -- ver acima
-  const r = spawnSync('npx', ['eslint', ...alvo, ...argsExtras], { stdio: 'inherit' })
-  return { grupo, segundos: (Date.now() - inicio) / 1000, ok: r.status === 0 }
+  const r = spawnSync('npx', ['eslint', ...target, ...argsExtras], { stdio: 'inherit' })
+  return { grupo, segundos: (Date.now() - start) / 1000, ok: r.status === 0 }
 }
 
-let gruposDeRaiz = []
+let rootGroups = []
 
 async function main() {
   const argsExtras = process.argv.slice(2)
   if (!argsExtras.includes('--fix')) argsExtras.push('--max-warnings=0')
 
-  const arquivos = await arquivosLintaveis()
-  if (arquivos.length === 0) {
+  const fileList = await lintableFiles()
+  if (fileList.length === 0) {
     console.error('lint: nenhum arquivo lintável — o filtro está errado, não o repositório')
     process.exit(2)
   }
 
-  const porGrupo = new Map()
-  for (const f of arquivos) {
-    const g = grupoDe(f)
-    if (!porGrupo.has(g)) porGrupo.set(g, [])
-    porGrupo.get(g).push(f)
+  const byGroup = new Map()
+  for (const f of fileList) {
+    const g = groupOf(f)
+    if (!byGroup.has(g)) byGroup.set(g, [])
+    byGroup.get(g).push(f)
   }
-  gruposDeRaiz = porGrupo.get('.') ?? []
+  rootGroups = byGroup.get('.') ?? []
 
   // Piso anti-vacuidade: a cobertura tem de fechar. Não fecha → falha alto.
-  const cobertos = [...porGrupo.values()].reduce((n, v) => n + v.length, 0)
-  if (cobertos !== arquivos.length) {
-    console.error(`lint: cobertura não fecha — ${cobertos} de ${arquivos.length}`)
+  const covered = [...byGroup.values()].reduce((n, v) => n + v.length, 0)
+  if (covered !== fileList.length) {
+    console.error(`lint: coverage does not close — ${covered} of ${fileList.length}`)
     process.exit(2)
   }
 
   // Maior grupo primeiro: se algo vai estourar memória, que estoure em 3 min e não em 8.
-  const grupos = [...porGrupo.entries()].sort((a, b) => b[1].length - a[1].length).map(([g]) => g)
-  console.error(`lint: ${arquivos.length} arquivos em ${grupos.length} grupos, um processo cada`)
+  const groups = [...byGroup.entries()].sort((a, b) => b[1].length - a[1].length).map(([g]) => g)
+  console.error(`lint: ${fileList.length} files in ${groups.length} groups, one process each`)
 
-  const resultados = []
-  for (const g of grupos) resultados.push(lintar(g, argsExtras))
+  const results = []
+  for (const g of groups) results.push(lintar(g, argsExtras))
 
   console.error('\n— resumo —')
-  for (const r of resultados) {
-    const n = porGrupo.get(r.grupo).length
+  for (const r of results) {
+    const n = byGroup.get(r.grupo).length
     console.error(
       `${r.ok ? 'ok  ' : 'FALHA'} ${r.segundos.toFixed(1).padStart(7)}s ${String(n).padStart(5)} arq  ${r.grupo}`,
     )
   }
-  const falhas = resultados.filter((r) => !r.ok)
+  const failures = results.filter((r) => !r.ok)
   console.error(
-    falhas.length === 0
-      ? `lint: verde em ${grupos.length} grupos`
-      : `lint: ${falhas.length} grupo(s) com achado`,
+    failures.length === 0
+      ? `lint: green across ${groups.length} groups`
+      : `lint: ${failures.length} group(s) with findings`,
   )
-  process.exit(falhas.length === 0 ? 0 : 1)
+  process.exit(failures.length === 0 ? 0 : 1)
 }
 
 await main()

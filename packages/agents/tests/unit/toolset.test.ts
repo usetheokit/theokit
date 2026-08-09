@@ -12,46 +12,46 @@ const t = (name: string) => ({ name })
  * redescobri-la — e a chance de redescobrir "falha alto nos dois casos" é baixa.
  */
 describe('M91 — Toolset', () => {
-  it('get em nome DESCONHECIDO lanca com o nome no erro', () => {
+  it('get on an UNKNOWN name throws with the name in the error', () => {
     const ts = Toolset.from([t('read_file')])
-    const chamar = () => ts.get('nao_existe')
-    expect(chamar).toThrow(/nao_existe/)
+    const callIt = () => ts.get('nao_existe')
+    expect(callIt).toThrow(/nao_existe/)
   })
 
-  it('nome DUPLICADO na construcao falha alto — nao no primeiro resolve', () => {
-    const construir = () => Toolset.from([t('read_file'), t('read_file')])
-    expect(construir).toThrow(ToolsetError)
+  it('a DUPLICATE name at construction fails loud — not on the first resolve', () => {
+    const construct = () => Toolset.from([t('read_file'), t('read_file')])
+    expect(construct).toThrow(ToolsetError)
   })
 
-  it('resolve com nome REPETIDO na whitelist falha alto', () => {
+  it('resolve with a REPEATED name in the whitelist fails loud', () => {
     const ts = Toolset.from([t('read_file'), t('grep')])
-    const chamar = () => ts.resolve(['read_file', 'read_file'])
-    expect(chamar).toThrow(/duplicate/)
+    const callIt = () => ts.resolve(['read_file', 'read_file'])
+    expect(callIt).toThrow(/duplicate/)
   })
 
-  it('resolve com nome DESCONHECIDO falha alto — nunca descarta em silencio', () => {
+  it('resolve with an UNKNOWN name fails loud — never discards silently', () => {
     const ts = Toolset.from([t('read_file')])
-    const chamar = () => ts.resolve(['read_file', 'run_shell'])
-    expect(chamar).toThrow(/run_shell/)
+    const callIt = () => ts.resolve(['read_file', 'run_shell'])
+    expect(callIt).toThrow(/run_shell/)
   })
 
-  it('NAO prefixa namespace — o nome e o contrato com o modelo', () => {
-    const nomes = Toolset.from([t('read_file'), t('grep')]).names()
-    expect(nomes).toEqual(['read_file', 'grep'])
+  it('does NOT prefix a namespace — the name is the contract with the model', () => {
+    const nameList = Toolset.from([t('read_file'), t('grep')]).names()
+    expect(nameList).toEqual(['read_file', 'grep'])
   })
 
-  it('a instancia e congelada', () => {
-    const congelada = Object.isFrozen(Toolset.from([t('read_file')]))
-    expect(congelada).toBe(true)
+  it('the instance is frozen', () => {
+    const frozenOne = Object.isFrozen(Toolset.from([t('read_file')]))
+    expect(frozenOne).toBe(true)
   })
 
-  it('resolve preserva a ORDEM da whitelist, nao a de registro', () => {
+  it('resolve preserves the WHITELIST order, not the registration order', () => {
     const ts = Toolset.from([t('a'), t('b'), t('c')])
-    const nomes = ts.resolve(['c', 'a']).map((x) => x.name)
-    expect(nomes).toEqual(['c', 'a'])
+    const nameList = ts.resolve(['c', 'a']).map((x) => x.name)
+    expect(nameList).toEqual(['c', 'a'])
   })
 
-  it('o erro carrega um code estavel, nao so a mensagem', () => {
+  it('the error carries a stable code, not just the message', () => {
     const ts = Toolset.from([t('a')])
     try {
       ts.get('b')

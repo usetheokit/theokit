@@ -1,6 +1,9 @@
 import type { ModelSelection } from '@theokit/sdk'
 
-import { compileAgentDefinition, type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
+import {
+  compileAgentDefinition,
+  type AgentDefinition as TheokitAgentDefinition,
+} from './define-agent.js'
 
 /**
  * Só o que a projeção lê de `RuntimeOverrides`, declarado estruturalmente.
@@ -10,7 +13,7 @@ import { compileAgentDefinition, type AgentDefinition as TheokitAgentDefinition 
  * que mover um tipo público de lugar.
  */
 
-export interface OverridesDeProjecao {
+export interface ProjectionOverrides {
   readonly model?: string | ModelSelection
   readonly reasoningEffort?: unknown
   readonly runContext?: unknown
@@ -24,26 +27,30 @@ export interface OverridesDeProjecao {
  * skills e MCP ficam congelados no load do módulo. Num processo `theokit acp` que uma IDE mantém aberto
  * por horas, isso reintroduz a obsolescência que o M67 removeu ao mover a construção para o entry point.
  */
-export type DefinicaoOuThunk =
+export type DefinitionOrThunk =
   | TheokitAgentDefinition
   | ((sessionId: string) => TheokitAgentDefinition | Promise<TheokitAgentDefinition>)
 
 /** A projeção que a fábrica precisa: compilada + overrides resolvidos. */
-export interface ProjecaoCompilada {
+export interface CompiledProjection {
   compiled: ReturnType<typeof compileAgentDefinition>
   model: string | ModelSelection
   reasoningEffort: ReturnType<typeof compileAgentDefinition>['reasoningEffort']
   runContext: ReturnType<typeof compileAgentDefinition>['runContext']
 }
 
-export function projetar(def: TheokitAgentDefinition, overrides: OverridesDeProjecao): ProjecaoCompilada {
+export function project(
+  def: TheokitAgentDefinition,
+  overrides: ProjectionOverrides,
+): CompiledProjection {
   const compiled = compileAgentDefinition(def)
   return {
     compiled,
     model: overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini',
     reasoningEffort:
-      (overrides.reasoningEffort as ProjecaoCompilada['reasoningEffort']) ?? compiled.reasoningEffort,
-    runContext: (overrides.runContext as ProjecaoCompilada['runContext']) ?? compiled.runContext,
+      (overrides.reasoningEffort as CompiledProjection['reasoningEffort']) ??
+      compiled.reasoningEffort,
+    runContext: (overrides.runContext as CompiledProjection['runContext']) ?? compiled.runContext,
   }
 }
 
@@ -54,13 +61,13 @@ export function projetar(def: TheokitAgentDefinition, overrides: OverridesDeProj
  * comportamento anterior ao M91. Mudar isso passaria o custo por sessão a cada consumidor que não pediu
  * nada (ADR-1). A forma THUNK projeta por sessão, que é o que ela compra.
  */
-export function resolverProjecao(
-  def: DefinicaoOuThunk,
-  overrides: OverridesDeProjecao,
-): (sessionId: string) => Promise<ProjecaoCompilada> {
+export function resolveProjection(
+  def: DefinitionOrThunk,
+  overrides: ProjectionOverrides,
+): (sessionId: string) => Promise<CompiledProjection> {
   if (typeof def === 'function') {
-    return async (sessionId) => projetar(await def(sessionId), overrides)
+    return async (sessionId) => project(await def(sessionId), overrides)
   }
-  const eager = projetar(def, overrides)
+  const eager = project(def, overrides)
   return () => Promise.resolve(eager)
 }

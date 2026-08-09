@@ -3,7 +3,7 @@ import { defineRoute } from '../../packages/theo/src/server/define/define-route.
 import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
 import { z } from 'zod'
 
-describe('Onda 7 — Type Safety End-to-End', () => {
+describe('Wave 7 — Type Safety End-to-End', () => {
   // Teste 1 — Input inválido falha em compile-time
   it('route: wrong body type is compile error', () => {
     defineRoute({

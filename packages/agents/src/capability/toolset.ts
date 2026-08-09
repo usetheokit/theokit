@@ -66,10 +66,10 @@ export class ToolsetError extends TheokitAgentError {
 }
 
 export class Toolset<T extends NamedTool> {
-  readonly #porNome: ReadonlyMap<string, T>
+  readonly #byName: ReadonlyMap<string, T>
 
-  private constructor(porNome: ReadonlyMap<string, T>) {
-    this.#porNome = porNome
+  private constructor(byName: ReadonlyMap<string, T>) {
+    this.#byName = byName
     Object.freeze(this)
   }
 
@@ -79,19 +79,19 @@ export class Toolset<T extends NamedTool> {
    * adiar o erro para o primeiro `resolve` esconde metade dos casos.
    */
   static from<T extends NamedTool>(tools: readonly T[]): Toolset<T> {
-    const porNome = new Map<string, T>()
+    const byName = new Map<string, T>()
     for (const tool of tools) {
-      if (porNome.has(tool.name)) {
+      if (byName.has(tool.name)) {
         throw new ToolsetError(`duplicate tool "${tool.name}" in toolset`, 'duplicate_tool')
       }
-      porNome.set(tool.name, tool)
+      byName.set(tool.name, tool)
     }
-    return new Toolset(porNome)
+    return new Toolset(byName)
   }
 
   /** Uma tool pelo nome. Lança com o nome no erro — nunca devolve `undefined` em silêncio. */
   get(name: string): T {
-    const tool = this.#porNome.get(name)
+    const tool = this.#byName.get(name)
     if (tool === undefined) {
       throw new ToolsetError(`unknown tool "${name}"`, 'unknown_tool')
     }
@@ -104,23 +104,23 @@ export class Toolset<T extends NamedTool> {
    * que declarou.
    */
   resolve(names: readonly string[]): readonly T[] {
-    const vistos = new Set<string>()
+    const seen = new Set<string>()
     return names.map((name) => {
-      if (vistos.has(name)) {
+      if (seen.has(name)) {
         throw new ToolsetError(`duplicate tool "${name}" in a whitelist`, 'duplicate_tool')
       }
-      vistos.add(name)
+      seen.add(name)
       return this.get(name)
     })
   }
 
   /** Os nomes conhecidos, na ordem de registro. */
   names(): readonly string[] {
-    return [...this.#porNome.keys()]
+    return [...this.#byName.keys()]
   }
 
   /** Todas as tools, na ordem de registro. */
   all(): readonly T[] {
-    return [...this.#porNome.values()]
+    return [...this.#byName.values()]
   }
 }

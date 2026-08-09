@@ -27,24 +27,24 @@ import * as barril from '../../src/index.js'
  * Herdado de `auth-parity.test.ts` (M73): se o build inlinear a fonte, o alias vira uma **cópia** da
  * classe, `instanceof` passa a falhar em silêncio e um `toBeDefined` não vê nada.
  */
-describe('M91 — o erro de delegação não sombreia mais o do SDK', () => {
-  it('o alias deprecado e a MESMA classe, nao uma copia', () => {
+describe('M91 — the delegation error no longer shadows the one from the SDK', () => {
+  it('the deprecated alias is the SAME class, not a copy', () => {
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(AliasDeprecado).toBe(DelegationBudgetExceededError)
   })
 
-  it('instanceof vale nos DOIS sentidos pelo alias', () => {
+  it('instanceof holds in BOTH directions through the alias', () => {
     const err = new DelegationBudgetExceededError('agente', 1.5, 1)
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(err).toBeInstanceOf(AliasDeprecado)
   })
 
-  it('o name da instancia e o nome NOVO', () => {
+  it('the instance name is the NEW name', () => {
     const err = new DelegationBudgetExceededError('agente', 1.5, 1)
     expect(err.name).toBe('DelegationBudgetExceededError')
   })
 
-  it('o barril exporta o erro de DELEGACAO com o nome novo', () => {
+  it('the barrel exports the DELEGATION error under the new name', () => {
     expect(barril.DelegationBudgetExceededError).toBe(DelegationBudgetExceededError)
   })
 
@@ -57,31 +57,31 @@ describe('M91 — o erro de delegação não sombreia mais o do SDK', () => {
    * em silêncio** — o modo de falha que este milestone existe para matar, em espelho, publicado como
    * MINOR. Este teste é o que impede a repetição.
    */
-  it('NAO-QUEBRA — o barril mantem BudgetExceededError = classe de DELEGACAO', () => {
+  it('NON-BREAKING — the barrel keeps BudgetExceededError = the DELEGATION class', () => {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- é o alias que este teste protege
     expect(barril.BudgetExceededError).toBe(DelegationBudgetExceededError)
   })
 
-  it('o erro de JANELA do SDK atravessa sob nome PROPRIO, sem reaproveitar o de ninguem', () => {
+  it('the WINDOW error from the SDK crosses under its OWN name, reusing nobody elses', () => {
     expect(barril.WindowBudgetExceededError).toBeDefined()
   })
 
-  it('CONTRAPROVA — janela e delegacao sao classes DIFERENTES', () => {
+  it('COUNTERPROOF — window and delegation are DIFFERENT classes', () => {
     // O invariante que o milestone comprou: as duas alcançáveis, cada uma com seu nome.
     expect(barril.WindowBudgetExceededError).not.toBe(barril.DelegationBudgetExceededError)
   })
 
-  it('a classe de JANELA do SDK constroi com a forma DELA — a prova de que sao dominios distintos', () => {
-    const janela = new barril.WindowBudgetExceededError({
+  it('the WINDOW class from the SDK constructs with ITS OWN shape — the proof they are distinct domains', () => {
+    const windowMs = new barril.WindowBudgetExceededError({
       budgetName: 'ctx',
       window: 'session',
       spentUsd: 5,
       limitUsd: 1,
     } as never)
-    expect(janela).toBeInstanceOf(barril.WindowBudgetExceededError)
+    expect(windowMs).toBeInstanceOf(barril.WindowBudgetExceededError)
   })
 
-  it('a mensagem preserva o formato — o rename nao muda comportamento', () => {
+  it('the message preserves its format — the rename does not change behaviour', () => {
     const err = new DelegationBudgetExceededError('Planner', 1.5, 1)
     expect(err.message).toContain('Planner')
   })

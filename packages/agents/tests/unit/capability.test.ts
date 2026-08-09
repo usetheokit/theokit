@@ -106,7 +106,7 @@ describe('Adversarial-review regressions (M52)', () => {
   it('V5 — the typed error names the offending type but never echoes the value', () => {
     // config files can carry secrets: report the SHAPE, never the content.
     expect(() => new SkillsCapability('sk-secret-value' as never)).toThrow(
-      /esperava array de nomes, recebi string/,
+      /esperava array de nameList, recebi string/,
     )
   })
 })
