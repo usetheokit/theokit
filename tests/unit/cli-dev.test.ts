@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('theo dev command', () => {
   it('should start Vite dev server and respond 200 on /', async () => {
-    server = await startDevServer(path.join(FIXTURES, 'onda1-hello-theo'), { port: 0 })
+    server = await startDevServer(path.join(FIXTURES, 'wave1-hello-theo'), { port: 0 })
     const address = server.httpServer!.address()
     const port = typeof address === 'object' && address ? address.port : 0
     const res = await fetch(`http://localhost:${port}/`)
@@ -22,14 +22,14 @@ describe('theo dev command', () => {
   }, 15000)
 
   it('should auto-assign port when port is 0', async () => {
-    server = await startDevServer(path.join(FIXTURES, 'onda1-hello-theo'), { port: 0 })
+    server = await startDevServer(path.join(FIXTURES, 'wave1-hello-theo'), { port: 0 })
     const address = server.httpServer!.address()
     const port = typeof address === 'object' && address ? address.port : 0
     expect(port).toBeGreaterThan(0)
   }, 15000)
 
   it('should serve HTML content on /', async () => {
-    server = await startDevServer(path.join(FIXTURES, 'onda1-hello-theo'), { port: 0 })
+    server = await startDevServer(path.join(FIXTURES, 'wave1-hello-theo'), { port: 0 })
     const address = server.httpServer!.address()
     const port = typeof address === 'object' && address ? address.port : 0
     const res = await fetch(`http://localhost:${port}/`)

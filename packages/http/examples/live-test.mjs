@@ -2,8 +2,8 @@
 /**
  * @theokit/http-decorators — LIVE TEST
  *
- * Sobe um server HTTP real com CRUD completo + Zod validation + Guards,
- * roda 11 requests automaticamente, e mostra o resultado de cada.
+ * Brings up a real HTTP server with full CRUD + Zod validation + Guards,
+ * runs 11 requests automatically, and shows the result of each.
  *
  * Run: node packages/http-decorators/examples/live-test.mjs
  */
@@ -262,7 +262,13 @@ await test(
   (b) => typeof b.total === 'number' && typeof b.avgAge === 'number',
 )
 
-await test('GET /nao-existe → 404', '/nao-existe', {}, 404, (b) => b.error?.code === 'NOT_FOUND')
+await test(
+  'GET /does-not-exist → 404',
+  '/does-not-exist',
+  {},
+  404,
+  (b) => b.error?.code === 'NOT_FOUND',
+)
 
 console.log('\n  ─────────────────────────────────────────────────')
 console.log(`  Results: ${pass} passed, ${fail} failed, ${pass + fail} total`)

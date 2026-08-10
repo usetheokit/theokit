@@ -10,56 +10,57 @@ import { openaiDeviceLogin } from '@theokit/sdk/auth'
 import { AuthProvider } from './auth-provider.js'
 
 /**
- * M111 — device auth plug-and-play: um provider é um objeto com métodos ROTULADOS, e um login cabe
- * numa chamada.
+ * M111 — device auth plug-and-play: a provider is an object with LABELLED methods, and a login fits
+ * in one call.
  *
- * ## O problema, medido
+ * ## The problem, measured
  *
- * O M110 fez o device flow RFC 8628 atravessar esta camada. Ele não tocou a ergonomia: para
- * autenticar no Codex, o consumidor precisava saber que existem **duas** formas de device flow,
- * copiar um `clientId` e três URLs da OpenAI para dentro do próprio código, montar
- * `{ fetch, sleep, now }`, chamar `deviceLogin` e **lembrar** de chamar `persist` — e esquecer o
- * último custa um round-trip OAuth completo que não guarda nada. O docblock de `AuthProvider`
- * instruía exatamente isso: *"the caller persists them via `AuthProvider.persist`"*.
+ * M110 made the RFC 8628 device flow cross this layer. It did not touch the ergonomics: to
+ * authenticate against Codex, the consumer had to know that **two** device-flow shapes exist, copy a
+ * `clientId` and three OpenAI URLs into its own code, assemble `{ fetch, sleep, now }`, call
+ * `deviceLogin` and **remember** to call `persist` — and forgetting the last one costs a full OAuth
+ * round-trip that stores nothing. The `AuthProvider` docblock instructed exactly that:
+ * *"the caller persists them via `AuthProvider.persist`"*.
  *
- * ## O desenho veio de medição contra três peers, e refutou a proposta original
+ * ## The design came from measuring three peers, and it refuted the original proposal
  *
- * - **`codex`** — `codex-rs/login/src/device_code_auth.rs:234` tem `run_device_code_login`, que
- *   retorna `()`: **nada** sai para o chamador persistir, e as duas metades granulares continuam
- *   públicas. `loginWithDevice` é a cópia dessa forma.
- * - **`opencode`** — cada provider é um objeto com `methods: [{ label, type, authorize }]`, e três
- *   providers escritos por autores diferentes convergem em **3 métodos rotulados** cada. O rótulo é o
- *   que a UI mostra: transforma escolha de protocolo em escolha de frase legível.
- * - **REJEITADO — discriminante `kind`.** Nenhum dos três discrimina protocolo por campo. A medição
- *   que fecha o caso: no `opencode`, browser e headless do Codex carregam o **mesmo** `type: 'oauth'`
- *   — logo o `type` classifica **espécie de credencial**, não protocolo. Um `kind` com despacho
- *   interno seria um `switch`, exatamente o defeito que este milestone remove do consumidor.
- *   Aqui, cada método aponta para a **sua própria** função.
+ * - **`codex`** — `codex-rs/login/src/device_code_auth.rs:234` has `run_device_code_login`, which
+ *   returns `()`: **nothing** comes out for the caller to persist, and the two granular halves stay
+ *   public. `loginWithDevice` copies that shape.
+ * - **`opencode`** — every provider is an object with `methods: [{ label, type, authorize }]`, and
+ *   three providers written by different authors converge on **3 labelled methods** each. The label
+ *   is what the UI shows: it turns a protocol choice into a choice between readable phrases.
+ * - **REJECTED — a `kind` discriminant.** None of the three discriminates protocol by field. The
+ *   measurement that closes the case: in `opencode`, Codex's browser and headless methods carry the
+ *   **same** `type: 'oauth'` — so `type` classifies the **kind of credential**, not the protocol. A
+ *   `kind` with internal dispatch would be a `switch`, exactly the defect this milestone removes
+ *   from the consumer. Here, each method points at **its own** function.
  *
- * ## Por que a identidade pública mora AQUI
+ * ## Why the public identity lives HERE
  *
- * `codex` exporta `CLIENT_ID` do crate que implementa o flow (`login/src/lib.rs:32`) e o CLI o
- * **importa**; o `opencode` o declara dentro do plugin. Os dois chegaram ao mesmo lugar
- * independentemente — e com o mesmo valor que o consumidor tinha copiado. Enquanto morasse no
- * consumidor, todo projeto que quisesse Codex copiaria quatro constantes públicas: é violação de DRY
- * através da fronteira, com dois donos do mesmo fato.
+ * `codex` exports `CLIENT_ID` from the crate that implements the flow (`login/src/lib.rs:32`) and
+ * the CLI **imports** it; `opencode` declares it inside the plugin. The two arrived at the same
+ * place independently — and with the same value the consumer had copied. As long as it lived in the
+ * consumer, every project wanting Codex would copy four public constants: a DRY violation across the
+ * boundary, with two owners of the same fact.
  */
 
 /**
- * Uma forma rotulada de obter credencial dentro de um provider.
+ * A labelled way of obtaining a credential within a provider.
  *
- * UNIÃO DISCRIMINADA, não um campo `authorize?` opcional. Com opcional, `{ label, type: 'oauth' }`
- * seria representável — um método OAuth que não sabe autorizar, detectado só em runtime, no meio do
- * login do usuário. É a alternativa que o M110 já rejeitou por escrito ao recusar "um tipo só com
- * campos opcionais": tornaria representável um config inválido e moveria a detecção do compilador
+ * A DISCRIMINATED UNION, not an optional `authorize?` field. With an optional field,
+ * `{ label, type: 'oauth' }` would be representable — an OAuth method that cannot authorize,
+ * detected only at runtime, in the middle of the user's login. It is the alternative M110 already
+ * rejected in writing when it refused "one type with optional fields": it would make an invalid
+ * config representable and move detection out of the compiler
  * para o runtime.
  */
 export type AuthMethod =
   | {
-      /** O que a interface mostra ao usuário. É a peça que torna o fluxo escolhível sem saber o protocolo. */
+      /** What the interface shows the user. The piece that makes the flow choosable without knowing the protocol. */
       readonly label: string
       readonly type: 'oauth'
-      /** A função DESTE método. Sem discriminante: o método aponta para a sua, não para um `switch`. */
+      /** THIS method's function. No discriminant: the method points at its own, not at a `switch`. */
       readonly authorize: (deps: DeviceDeps, hooks: PromptHooks) => Promise<OAuthTokens>
     }
   | {
@@ -67,27 +68,27 @@ export type AuthMethod =
       readonly type: 'api'
     }
 
-/** O que o consumidor liga à sua UI para mostrar o código que o usuário digita no outro dispositivo. */
+/** What the consumer wires into its UI to show the code the user types on the other device. */
 export interface PromptHooks {
   onPrompt: (p: { userCode: string; verificationUri: string; expiresIn?: number }) => void
 }
 
-/** Um provider de autenticação: identidade pública + as formas rotuladas de autenticar nele. */
+/** An authentication provider: public identity + the labelled ways of authenticating with it. */
 export interface DeviceAuthProvider {
   readonly name: string
   readonly oauth: OAuthProviderConfig
   readonly methods: readonly AuthMethod[]
 }
 
-/** Identificadores PÚBLICOS do Codex CLI da OpenAI (publicados na fonte MIT do OpenCode). Não são segredo. */
+/** PUBLIC identifiers of OpenAI's Codex CLI (published in OpenCode's MIT source). Not secrets. */
 const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const CODEX_ISSUER = 'https://auth.openai.com'
 
 /**
- * Override do `clientId` por ambiente — adotado do `codex`, que exporta `CLIENT_ID` **e**
- * `CLIENT_ID_OVERRIDE_ENV_VAR` (`login/src/lib.rs:32-33`). Dissolve o falso dilema entre constante
- * fixa (inflexível) e parâmetro obrigatório (que devolve a cópia ao consumidor): default no pacote,
- * escape para quem precisa.
+ * Environment override for `clientId` — adopted from `codex`, which exports `CLIENT_ID` **and**
+ * `CLIENT_ID_OVERRIDE_ENV_VAR` (`login/src/lib.rs:32-33`). It dissolves the false dilemma between a
+ * fixed constant (inflexible) and a mandatory parameter (which hands the copy back to the consumer):
+ * a default in the package, an escape for whoever needs one.
  */
 export const CODEX_CLIENT_ID_ENV_VAR = 'THEOKIT_CODEX_CLIENT_ID'
 
@@ -101,8 +102,8 @@ const CODEX_OAUTH: OAuthProviderConfig = {
 }
 
 /**
- * A config do device flow da OpenAI — **dois** endpoints, com PKCE. É a variante NÃO-padrão, e é por
- * isso que ela não se funde com `DeviceOAuthConfig` (RFC 8628, **um** endpoint).
+ * OpenAI's device-flow config — **two** endpoints, with PKCE. It is the NON-standard variant, which
+ * is why it does not merge with `DeviceOAuthConfig` (RFC 8628, **one** endpoint).
  */
 const CODEX_DEVICE: OpenAIDeviceConfig = {
   ...CODEX_OAUTH,
@@ -112,11 +113,11 @@ const CODEX_DEVICE: OpenAIDeviceConfig = {
 }
 
 /**
- * O provider do Codex, montado e **congelado**.
+ * The Codex provider, assembled and **frozen**.
  *
- * Congelado porque é identidade pública COMPARTILHADA no processo: um consumidor que a mutasse
- * mudaria o login de todos os outros. `Object.freeze` é raso, então a lista de métodos é congelada
- * separadamente — sem isso, `CODEX_PROVIDER.methods.push(...)` passaria.
+ * Frozen because it is a public identity SHARED across the process: a consumer that mutated it
+ * would change everyone else's login. `Object.freeze` is shallow, so the method list is frozen
+ * separately — without that, `CODEX_PROVIDER.methods.push(...)` would go through.
  */
 export const CODEX_PROVIDER: DeviceAuthProvider = Object.freeze({
   name: 'openai',
@@ -125,8 +126,8 @@ export const CODEX_PROVIDER: DeviceAuthProvider = Object.freeze({
     Object.freeze({
       label: 'ChatGPT Pro/Plus (headless device code)',
       type: 'oauth' as const,
-      // Aponta para a variante da OpenAI. Um provider RFC 8628 apontaria para `deviceLogin`, e é
-      // assim que as duas formas coexistem sem discriminante.
+      // Points at OpenAI's variant. An RFC 8628 provider would point at `deviceLogin`, and that is
+      // how the two shapes coexist with no discriminant.
       authorize: (deps: DeviceDeps, hooks: PromptHooks): Promise<OAuthTokens> =>
         openaiDeviceLogin(CODEX_DEVICE, deps, hooks),
     }),
@@ -138,18 +139,18 @@ export const CODEX_PROVIDER: DeviceAuthProvider = Object.freeze({
 })
 
 /**
- * Opções do Facade. `deps` e `env` viajam juntos num objeto em vez de dois parâmetros posicionais:
- * ambos são opcionais e raramente usados, e seis posicionais é assinatura que o chamador erra em
- * silêncio (o lint do monorepo cobra 5 como teto — o teto existe por este motivo).
+ * Facade options. `deps` and `env` travel together in one object rather than as two positional
+ * parameters: both are optional and rarely used, and six positionals is a signature callers get
+ * wrong in silence (the monorepo lint enforces 5 as the ceiling — the ceiling exists for this reason).
  */
 export interface LoginWithDeviceOptions {
-  /** Injeção de I/O para teste. Omitido, usa `fetch`/`setTimeout`/`Date.now` reais. */
+  /** I/O injection for tests. Omitted, it uses the real `fetch`/`setTimeout`/`Date.now`. */
   readonly deps?: Partial<DeviceDeps>
-  /** Ambiente lido pelo store para resolver o diretório da credencial. */
+  /** The environment the store reads to resolve the credential directory. */
   readonly env?: Record<string, string | undefined>
 }
 
-/** Defaults das deps de I/O. `deps` é opcional na superfície ergonômica; a injeção fica para o teste. */
+/** Defaults for the I/O deps. `deps` is optional on the ergonomic surface; injection is for tests. */
 function comDefaults(deps?: Partial<DeviceDeps>): DeviceDeps {
   return {
     fetch: deps?.fetch ?? fetch,
@@ -159,17 +160,17 @@ function comDefaults(deps?: Partial<DeviceDeps>): DeviceDeps {
 }
 
 /**
- * Autoriza **e** persiste, numa chamada. Devolve onde a credencial ficou e a conta atribuída —
- * **nunca** material de token.
+ * Authorizes **and** persists, in one call. Returns where the credential landed and the account it
+ * was attributed to — **never** token material.
  *
- * A forma vem de `run_device_code_login` (`codex`), que retorna `()`: se nada sai para o chamador,
- * não há passo que ele possa esquecer. As duas metades continuam públicas em `AuthProvider`
- * (`deviceLogin` / `persist`) para quem precisa da granularidade — mesma escolha que o `codex` faz ao
- * manter `request_device_code` e `complete_device_code_login` públicas ao lado do Facade.
+ * The shape comes from `run_device_code_login` (`codex`), which returns `()`: if nothing comes out
+ * for the caller, there is no step it can forget. The two halves stay public on `AuthProvider`
+ * (`deviceLogin` / `persist`) for whoever needs the granularity — the same choice `codex` makes by
+ * keeping `request_device_code` and `complete_device_code_login` public alongside the facade.
  *
- * Delega verbatim: `method.authorize` roda o flow e `AuthProvider.persist` grava. Copiar a sequência
- * em vez de chamá-la criaria um segundo oráculo sobre o mesmo fato, e dois oráculos divergem no
- * primeiro fix aplicado a um lado só.
+ * It delegates verbatim: `method.authorize` runs the flow and `AuthProvider.persist` writes. Copying
+ * the sequence instead of calling it would create a second oracle over the same fact, and two oracles
+ * diverge on the first fix applied to only one side.
  */
 export async function loginWithDevice(
   provider: DeviceAuthProvider,
@@ -178,25 +179,25 @@ export async function loginWithDevice(
   hooks: PromptHooks,
   opts: LoginWithDeviceOptions = {},
 ): Promise<{ path: string; accountId?: string }> {
-  // VALIDAÇÃO NA FRONTEIRA, antes de qualquer I/O. As três recusas abaixo acontecem sem tocar a rede
-  // e sem tocar o disco: falhar depois de gravar deixaria credencial parcial, e a próxima execução
-  // leria um estado que nunca foi válido.
+  // VALIDATION AT THE BOUNDARY, before any I/O. The three refusals below happen without touching the
+  // network and without touching the disk: failing after writing would leave a partial credential,
+  // and the next run would read a state that was never valid.
   if (provider.methods.length === 0) {
     throw new TypeError(
-      `o provider "${provider.name}" declara nenhum método de autenticação — não há o que escolher`,
+      `provider "${provider.name}" declares no authentication method — there is nothing to choose`,
     )
   }
   if (!provider.methods.includes(method)) {
-    throw new TypeError(`o método "${method.label}" não pertence ao provider "${provider.name}"`)
+    throw new TypeError(`method "${method.label}" does not belong to provider "${provider.name}"`)
   }
   if (method.type !== 'oauth') {
     throw new TypeError(
-      `o método "${method.label}" é de chave (api key), não é um método de device — use o caminho de chave`,
+      `method "${method.label}" is an api-key method, not a device method — use the api-key path`,
     )
   }
 
   const tokens = await method.authorize(comDefaults(opts.deps), hooks)
   const path = new AuthProvider(provider.oauth, store).persist(provider.name, tokens, opts.env)
-  // O retorno NÃO carrega token: o consumidor precisa saber onde ficou e de quem é, não o segredo.
+  // The return carries NO token: the consumer needs to know where it landed and whose it is, not the secret.
   return tokens.accountId === undefined ? { path } : { path, accountId: tokens.accountId }
 }

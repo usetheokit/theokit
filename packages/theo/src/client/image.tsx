@@ -36,9 +36,9 @@ export interface ImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   priority?: boolean
 }
 
-// `Readonly<…>` no parâmetro, e não `readonly` campo a campo (agent-builder#319): props de React
-// NÃO devem ser mutadas, e `ImageProps` estende `React.ImgHTMLAttributes`, cujos campos vêm de fora
-// e não podem ser anotados aqui. O wrapper cobre os herdados junto dos próprios.
+// `Readonly<...>` on the parameter, not `readonly` field by field (agent-builder#319): React props
+// must NOT be mutated, and `ImageProps` extends `React.ImgHTMLAttributes`, whose fields come from
+// outside and cannot be annotated here. The wrapper covers the inherited ones alongside its own.
 export function Image({ priority, loading, decoding, ...props }: Readonly<ImageProps>) {
   return (
     <img

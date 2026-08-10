@@ -189,14 +189,14 @@ describe('ToolboxCapability', () => {
       }
 
       expect(() => compileTools([walk], new Map())).toThrow(ConfigurationError)
-      expect(() => compileTools([walk], new Map())).toThrow(/não foi instanciado/)
+      expect(() => compileTools([walk], new Map())).toThrow(/was not instantiated/)
 
       const noMethod = { ...walk, tools: [{ ...walk.tools[0]!, propertyKey: 'missing' }] }
       expect(() => compileTools([noMethod], new Map([[token, new MixedTools()]]))).toThrow(
         ConfigurationError,
       )
       expect(() => compileTools([noMethod], new Map([[token, new MixedTools()]]))).toThrow(
-        /não é um método/,
+        /is not a method/,
       )
     })
 
@@ -228,6 +228,6 @@ describe('ToolboxCapability', () => {
   it('a toolbox declaring no tools fails fast', () => {
     // eslint-disable-next-line @typescript-eslint/no-extraneous-class -- fixture: a toolbox declaring nothing
     class Empty {}
-    expect(() => new ToolboxCapability(new Empty())).toThrow(/não declara tools/)
+    expect(() => new ToolboxCapability(new Empty())).toThrow(/declares no tools/)
   })
 })

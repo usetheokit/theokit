@@ -114,7 +114,7 @@ function generateActionTemplate(name: string): string {
 
 /**
  * Co-located test template for `theokit generate action <name>` (T5.2 +
- * plan Q4 cenário 1: roundtrip serialize). Skeleton uses vitest BDD shape
+ * plan Q4 scenario 1: roundtrip serialize). Skeleton uses vitest BDD shape
  * per testing.md.
  */
 function generateAgentTemplate(name: string): string {

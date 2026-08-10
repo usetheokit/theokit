@@ -30,16 +30,16 @@ export function buildModelSelection(
   model: string | ModelSelection,
   effort?: ReasoningEffort,
 ): ModelSelection {
-  // M95 (revisão adversarial do M94, BLOCKER) — `model` pode chegar como `ModelSelection`.
+  // M95 (adversarial review of M94, BLOCKER) — `model` can arrive as a `ModelSelection`.
   //
-  // O M94 alargou `AgentBuilder.model()` para aceitar a seleção completa, e parou aí: este site,
-  // por onde cada turno passa, seguia assumindo `string` e produzia `{ id: {id, …} }` — um
-  // objeto onde o runtime espera um id, e o primeiro `modelId.indexOf('/')` adiante quebrava
-  // cada turno com `context_window` configurado.
+  // M94 widened `AgentBuilder.model()` to accept the full selection and stopped there: this site,
+  // which every turn passes through, kept assuming `string` and produced `{ id: {id, …} }` — an
+  // object where the runtime expects an id, and the first `modelId.indexOf('/')` downstream broke
+  // every turn that had `context_window` configured.
   //
-  // Alargar o tipo sem alargar o runtime é a mesma divergência fachada↔implementação que o M94
-  // veio corrigir, só que na direção oposta. Aqui os campos da seleção são preservados, e o
-  // `effort` compõe com os `params` que já vieram em vez de descartá-los.
+  // Widening the type without widening the runtime is the same facade↔implementation divergence M94
+  // came to fix, only in the opposite direction. Here the selection's fields are preserved, and
+  // `effort` composes with the `params` that already arrived instead of discarding them.
   const base: ModelSelection = typeof model === 'string' ? { id: model } : { ...model }
   if (!effort) return base
   return { ...base, params: [...(base.params ?? []), { id: PARAM_THINKING, value: effort }] }
@@ -63,13 +63,14 @@ export function buildModelSelection(
  * the caller's decision, after the caller's own parse.
  */
 export function reasoningEffortOf(model: string | ModelSelection): string | undefined {
-  // Um único `return`: o atalho de id em string simplesmente não tem params onde um esforço possa
-  // estar, e tratá-lo como "lista ausente" evita um segundo ponto de saída com o mesmo significado.
+  // A single `return`: the string-id shortcut simply has no params where an effort could live, and
+  // treating it as "list absent" avoids a second exit point with the same meaning.
   //
-  // Resíduo declarado (M107): esta guarda é de TIPO, não de runtime — nenhum teste pode matá-la,
-  // porque ler `.params` de uma string primitiva já devolve `undefined` (medido). Quem a enforça é
-  // `tsc --noEmit`: sem ela, `model.params` não compila sobre `string | ModelSelection`. Uma mutação
-  // que a remova sobrevive à suíte por EQUIVALÊNCIA, não por falta de cobertura.
+  // Declared residue (M107): this guard is a TYPE guard, not a runtime one — no test can kill it,
+  // because reading `.params` off a primitive string already returns `undefined` (measured). What
+  // enforces it is `tsc --noEmit`: without it, `model.params` does not compile over
+  // `string | ModelSelection`. A mutation removing it survives the suite by EQUIVALENCE, not by a
+  // coverage gap.
   const params = typeof model === 'string' ? undefined : model.params
   return params?.find((p) => p.id === PARAM_THINKING)?.value
 }
