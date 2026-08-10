@@ -31,9 +31,9 @@ describe('T1.1 — storageSchema (ADR-0007 D4)', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      // `z.treeifyError` no lugar de `error.format()`, depreciado em zod 4 (agent-builder#319). A
-      // asserção continua a mesma — o nome do campo ofensor aparece na árvore serializada — e isso
-      // foi medido, não presumido: as duas formas contêm `port` para esta entrada.
+      // `z.treeifyError` in place of `error.format()`, deprecated in zod 4 (agent-builder#319). The
+      // assertion stays the same — the offending field name appears in the serialized tree — and that
+      // was measured, not assumed: both forms contain `port` for this input.
       const flat = JSON.stringify(z.treeifyError(result.error))
       expect(flat).toContain('port')
     }

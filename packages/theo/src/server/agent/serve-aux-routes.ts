@@ -133,7 +133,7 @@ export async function serveAgentAuxRoute(
  * unguessable (e.g. a client-minted UUID). An app that uses a PREDICTABLE
  * sessionId (user id, email, sequential id) MUST add its own auth gate before
  * this endpoint, or any party who can guess the sessionId can read the thread's
- * live conversation stream. Documented in `docs/architecture/multi-surface-architecture.md`.
+ * live conversation stream. Documented in `wiki/architecture/multi-surface-architecture.md`.
  *
  * Returns `null` to fall through (not a thread route, wrong method, unknown agent).
  */

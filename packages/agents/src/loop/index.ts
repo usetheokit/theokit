@@ -12,8 +12,8 @@ export { AgentRunner, AgentRunnerBuilder, type AgentRunnerRunOptions } from './a
 // goal domain's types travel with it so a consumer types the whole surface from `@theokit/agents`.
 export { GoalRunner, type GoalRunnerDeps } from './goal-runner.js'
 export type { GoalEvent, GoalLoopAgent, GoalOptions, GoalResult } from './goal-runner.js'
-// M80 — o vocabulário do judge viaja com o domínio de goal, pela mesma razão da linha acima: o
-// consumidor tipa a superfície inteira a partir de `@theokit/agents`.
+// M80 — the judge's vocabulary travels with the goal domain, for the same reason as the line above:
+// the consumer types the whole surface from `@theokit/agents`.
 export type { JudgeResult, Verdict } from './goal-runner.js'
 export { JudgeCredentialError } from './goal-runner.js'
 // V4-R: the per-round stream factory type — public so a consumer can type an injected `streamFactory`

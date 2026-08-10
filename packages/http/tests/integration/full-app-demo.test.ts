@@ -1,8 +1,8 @@
 /**
  * Full TheoKit App Demo — TypeScript com @syntax real
  *
- * Este teste É o exemplo de como um consumer TheoKit escreve uma app
- * com decorators. Roda via vitest (que suporta experimentalDecorators).
+ * This test IS the example of how a TheoKit consumer writes an app with
+ * decorators. It runs through vitest (which supports experimentalDecorators).
  */
 import 'reflect-metadata'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -29,7 +29,7 @@ import {
 const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ═══════════════════════════════════════════════════════
-// Services (@Injectable — lógica de negócio)
+// Services (@Injectable — business logic)
 // ═══════════════════════════════════════════════════════
 
 class UserService {
@@ -96,7 +96,7 @@ class AuthGuard {
 class UsersController {
   private userService: UserService
 
-  // Constructor injection — DI resolve CatsService automaticamente
+  // Constructor injection — DI resolves CatsService automatically
   constructor(userService: UserService) {
     this.userService = userService
   }
@@ -141,7 +141,7 @@ class HealthController {
 
 // ═══════════════════════════════════════════════════════
 // Wire parameter decorators (vitest/esbuild limitation)
-// Em produção com tsc, isso é automático via emitDecoratorMetadata
+// In production with tsc, this is automatic through emitDecoratorMetadata
 // ═══════════════════════════════════════════════════════
 
 function wireParam(ctrl: Function, method: string, idx: number, src: string, key?: string) {
@@ -159,7 +159,7 @@ Reflect.defineMetadata('design:paramtypes', [UserService], UsersController)
 Reflect.defineMetadata('design:paramtypes', [CreateUserDto], UsersController.prototype, 'create')
 
 // ═══════════════════════════════════════════════════════
-// DI Container (simula @theokit/di Container)
+// DI Container (simulates the @theokit/di Container)
 // ═══════════════════════════════════════════════════════
 
 class SimpleContainer implements DiContainer {
@@ -185,7 +185,7 @@ class SimpleContainer implements DiContainer {
 }
 
 // ═══════════════════════════════════════════════════════
-// Tests — prova o full app end-to-end
+// Tests — proves the full app end-to-end
 // ═══════════════════════════════════════════════════════
 
 describe.skipIf(!isVitest)('Full TheoKit App Demo — @syntax TypeScript real', () => {

@@ -1,8 +1,8 @@
 /**
- * M84 — os símbolos de cliente do agente agora VIVEM em `@theokit/agents/client`. O que resta aqui é
- * PASS-THROUGH: manter uma segunda implementação do mesmo transporte no mesmo processo é exatamente
- * o que o M79 acabou de eliminar. O re-export existe para que quem já importava `theokit/client` não
- * quebre.
+ * M84 — the agent's client symbols now LIVE in `@theokit/agents/client`. What remains here is a
+ * PASS-THROUGH: keeping a second implementation of the same transport in the same process is exactly
+ * what M79 just eliminated. The re-export exists so that anyone already importing `theokit/client` is
+ * not broken.
  */
 export { theoFetch, TheoFetchError } from './theo-fetch.js'
 export type { InferResponse, InferQuery, InferBody, TheoFetchOptions } from './theo-fetch.js'
@@ -88,7 +88,7 @@ export { mountMcpApp, createGuestMessageHandler, MCP_APP_SANDBOX } from './mcp-a
 export type { GuestMessage, McpAppHostOptions, McpAppHandle } from './mcp-app-host.js'
 
 /**
- * The wire types, re-exported (plan `remover-dependencia-ai`, EC-7).
+ * The wire types, re-exported (plan `remove-ai-dependency`, EC-7).
  *
  * A scaffolded app pins `theokit`, not `@theokit/presenter` — so an app that needs to name a
  * message type must reach it through a package it already declares. Pointing app code at

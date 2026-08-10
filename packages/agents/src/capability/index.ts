@@ -8,6 +8,10 @@ export * from './registry.js'
 export * from './agent-capabilities.js'
 export * from './toolbox.js'
 
-// M91 — a primitiva de coleção de tools; a contraparte que faltava às costuras de sandbox e
-// interactive que a camada já publica.
-export { Toolset, ToolsetError, type ToolComNome } from './toolset.js'
+// M91 — the tool-collection primitive; the counterpart missing from the sandbox and interactive
+// seams the layer already publishes.
+export { Toolset, ToolsetError, type NamedTool } from './toolset.js'
+// Re-exported ON PURPOSE. A deprecated alias a consumer cannot import is not a migration path, it
+// is a rename with extra words. Sunset: the next major.
+// eslint-disable-next-line @typescript-eslint/no-deprecated
+export { type ToolComNome } from './toolset.js'

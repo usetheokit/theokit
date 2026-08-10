@@ -2,7 +2,7 @@
  * RED test for Plan T5a.1a — incremental Web Crypto migration (leaf-first).
  *
  * Per `docs/plans/theokit-arch-gaps-implementation-plan.md` v1.2 Phase 5a T5a.1
- * Task #3: "Refactor em ordem de dependência (leaves primeiro)".
+ * Task #3: "Refactor in dependency order (leaves first)".
  *
  * The full T5a.1 scope (42 files across `server/` migrating from node:* to
  * Web Standards) is too large for a single iteration AND has a documented

@@ -39,9 +39,9 @@ export type {
   ApprovalOptions,
   PolicyHandler,
   ReasoningEffort,
-  // M112 — a configuração de servidor MCP atravessa até a RAIZ. Sem isto, os nomes ficam em
-  // `types.ts` e não alcançam `index.d.ts`: o consumidor volta a não conseguir nomear o tipo do
-  // mapa que `loadMcpJson` devolve, que é metade do pedido P2 que este milestone atende.
+  // M112 — the MCP server configuration crosses all the way to the ROOT. Without this the names
+  // stay in `types.ts` and never reach `index.d.ts`: the consumer is back to being unable to name
+  // the type of the map `loadMcpJson` returns, which is half of the P2 request this milestone serves.
   McpAuthConfig,
   McpHttpServerConfig,
   McpOAuthConfig,
@@ -84,20 +84,40 @@ export type { DiagnosticsSink } from '@theokit/sdk'
 // a garbage collector. The result type is narrowed for the same reason: `nextCursor` is never set,
 // so a caller branching on it is branching on a value that cannot arrive.
 //
-// This is a `tipo fechado` control, not a lint: the call does not compile, so a new call site cannot
+// This is a closed-type control, not a lint: the call does not compile, so a new call site cannot
 // be born wrong by omission. Residue (declared, not hidden): it binds TypeScript consumers only — a
 // `.js` caller or an `as any` escapes.
 //
 // EXIT CRITERION: when the SDK runtime actually honours `limit`/`cursor`/`cwd` (tracked as the
 // agent-builder's M107 upstream request), delete this block and restore `Agent` to the plain
 // re-export on the line above.
-type ListOptionsSemPaginacao = ListAgentsOptions & { limit?: never; cursor?: never }
+type ListOptionsWithoutPagination = ListAgentsOptions & { limit?: never; cursor?: never }
 
-type AgentComListaEstreitada = Omit<typeof AgentDoSdk, 'list'> & {
-  list(options?: ListOptionsSemPaginacao): Promise<Omit<ListResult<SDKAgentInfo>, 'nextCursor'>>
+/**
+ * @deprecated Renamed to `ListOptionsWithoutPagination`. This alias exists so a consumer pinned to
+ * the previous minor keeps compiling; it will be removed in the next major.
+ */
+// Redundant on purpose: this is the migration path for a consumer pinned to the previous minor.
+// Sunset: the next major.
+// eslint-disable-next-line sonarjs/redundant-type-aliases
+export type ListOptionsWithoutPaginationAlias = ListOptionsWithoutPagination
+
+type AgentWithNarrowedList = Omit<typeof AgentDoSdk, 'list'> & {
+  list(
+    options?: ListOptionsWithoutPagination,
+  ): Promise<Omit<ListResult<SDKAgentInfo>, 'nextCursor'>>
 }
 
-export const Agent: AgentComListaEstreitada = AgentDoSdk
+/**
+ * @deprecated Renamed to `AgentWithNarrowedList`. This alias exists so a consumer pinned to the
+ * previous minor keeps compiling; it will be removed in the next major.
+ */
+// Redundant on purpose: this is the migration path for a consumer pinned to the previous minor.
+// Sunset: the next major.
+// eslint-disable-next-line sonarjs/redundant-type-aliases
+export type AgentWithNarrowedListAlias = AgentWithNarrowedList
+
+export const Agent: AgentWithNarrowedList = AgentDoSdk
 
 // M63 — closing the layered boundary so the consumer imports ZERO `@theokit/sdk*` directly. Same
 // PASS-THROUGH doctrine as the M58 core above (Rung 9): these are already the target shape.
@@ -121,80 +141,82 @@ export {
 } from '@theokit/sdk/compaction'
 export type { ContextWindowSource, EffectiveContextWindow } from '@theokit/sdk/compaction'
 
-// M78 — a política de cobertura declarada. Antes deste milestone o barril crescia de forma REATIVA
-// (símbolo a símbolo, sob pressão de bug) e cobria 9 dos 28 subpaths do SDK, sem nada avisar quando
-// um subpath novo aparecia. `tests/unit/subpath-coverage.test.ts` agora exige veredito para TODOS os
-// 28 — `in` (verificado) ou `out` (com razão escrita).
+// M78 — the declared coverage policy. Before this milestone the barrel grew REACTIVELY (symbol by
+// symbol, under bug pressure) and covered 9 of the SDK's 28 subpaths, with nothing warning when a
+// new subpath appeared. `tests/unit/subpath-coverage.test.ts` now demands a verdict for ALL 28 —
+// `in` (verified) or `out` (with a written reason).
 //
-// Mesma doutrina de PASS-THROUGH do M58/M63 (Rung 9): estes já são a forma alvo — a hierarquia de
-// erro é OO, `Retry`/`Semaphore` são classes, e as de `/messages` e `/models` são funções puras.
-// Envolver qualquer uma seria cerimônia sem nada dentro.
+// The same PASS-THROUGH doctrine as M58/M63 (Rung 9): these are already the target shape — the
+// error hierarchy is OO, `Retry`/`Semaphore` are classes, and the ones in `/messages` and `/models`
+// are pure functions. Wrapping any of them would be ceremony with nothing inside.
 //
-// `/errors` é o eixo do milestone: o consumidor tem como regra INQUEBRÁVEL erro tipado, e sem acesso
-// a esta hierarquia a única saída legal era criar uma PARALELA — foi o que aconteceu, cinco classes
-// estendendo `Error` nu. E como `isTransientError` exige `TheokitAgentError`, o predicado que separa
-// recuperável de irrecuperável era inútil lá por construção.
-// `export *` e não uma lista curada, de propósito. A primeira versão re-exportava quatro classes
-// escolhidas a dedo e `RateLimitError` — que o refresh OAuth precisa para reconhecer um 429 — ficou
-// de fora sem nada acusar. Uma hierarquia de erro PELA METADE é exatamente o defeito que este
-// milestone fecha: o consumidor voltaria a criar a classe que falta.
+// `/errors` is the axis of the milestone: the consumer holds typed errors as an UNBREAKABLE rule,
+// and without access to this hierarchy the only legal way out was to create a PARALLEL one — which
+// is what happened, five classes extending a bare `Error`. And since `isTransientError` requires
+// `TheokitAgentError`, the predicate separating recoverable from unrecoverable was useless there by
+// construction.
+// `export *` and not a curated list, on purpose. The first version re-exported four hand-picked
+// classes and `RateLimitError` — which the OAuth refresh needs to recognize a 429 — was left out
+// with nothing flagging it. A HALF error hierarchy is exactly the defect this milestone closes:
+// the consumer would go straight back to creating the missing class.
 //
-// O mesmo vale para os outros quatro: são subpaths pequenos e coesos, onde "parte do domínio" não é
-// uma unidade que faça sentido. `tests/unit/subpath-coverage.test.ts` verifica a cobertura TOTAL
-// destes, não uma amostra.
+// The same holds for the other four: they are small, cohesive subpaths where "part of the domain"
+// is not a meaningful unit. `tests/unit/subpath-coverage.test.ts` verifies TOTAL coverage of these,
+// not a sample.
 export * from '@theokit/sdk/errors'
 export * from '@theokit/sdk/retry'
 export * from '@theokit/sdk/concurrency'
 export * from '@theokit/sdk/messages'
 export * from '@theokit/sdk/models'
-// M81 — o loader de subagents em disco. A assimetria oposta (skills com porta pública, subagents
-// sem) é o que fez o consumidor escrever um SEGUNDO parser de `.md` — e depois um teste cuja única
-// função era vigiar a divergência entre os dois. O que atravessa é a config PARSEADA, nunca o
-// formato de arquivo: exportar o formato congelaria um detalhe interno como API pública.
+// M81 — the on-disk subagent loader. The opposite asymmetry (skills with a public door, subagents
+// without) is what made the consumer write a SECOND `.md` parser — and then a test whose only job
+// was to watch the two diverge. What crosses is the PARSED config, never the file format:
+// exporting the format would freeze an internal detail as public API.
 export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagents-loader'
-// M96 U2 — o TIPO que o carregador acima devolve, publicado na linha vizinha (o par literal do peer,
-// `gemini-cli/packages/core/src/index.ts:191-192`). O nome de origem está OCUPADO neste índice —
-// `bridge/index.js` já exporta `AgentDefinition`, o tipo BRANDADO do builder —, então o consumidor
-// que importasse o nome de origem receberia o tipo errado em silêncio, e a única saída restante era
-// redeclarar a forma à mão. O alias resolve a colisão sem tocar no nome ocupado.
+// M96 U2 — the TYPE the loader above returns, published on the neighbouring line (the literal pair
+// from the peer, `gemini-cli/packages/core/src/index.ts:191-192`). The source name is TAKEN in this
+// index — `bridge/index.js` already exports `AgentDefinition`, the builder's BRANDED type — so a
+// consumer importing the source name would silently receive the wrong type, and the only remaining
+// way out was to redeclare the shape by hand. The alias resolves the collision without touching the
+// occupied name.
 export type { AgentDefinition as SubagentDefinition } from '@theokit/sdk/subagents-loader'
 
-// COLISÃO DE NOME RESOLVIDA no M91 — e a PRIMEIRA tentativa estava errada.
+// NAME COLLISION RESOLVED in M91 — and the FIRST attempt was wrong.
 //
-// `@theokit/sdk/errors` e `./bridge/index.js` exportavam ambos `BudgetExceededError`, e NÃO eram a
-// mesma coisa: a do SDK é orçamento por JANELA (`budgetName`, `window`, `spentUsd`, `mode`); a da
-// camada é orçamento por DELEGAÇÃO (`agentName`, `actualCost`, `budgetLimit`). Como o consumidor tem
-// regra inquebrável de nunca importar `@theokit/sdk` direto, ele nunca alcançava a do SDK — e um
-// `instanceof` casava com o domínio errado em silêncio.
+// `@theokit/sdk/errors` and `./bridge/index.js` both exported `BudgetExceededError`, and they were
+// NOT the same thing: the SDK's is a per-WINDOW budget (`budgetName`, `window`, `spentUsd`, `mode`);
+// the layer's is a per-DELEGATION budget (`agentName`, `actualCost`, `budgetLimit`). Since the
+// consumer holds an unbreakable rule never to import `@theokit/sdk` directly, it never reached the
+// SDK's — and an `instanceof` silently matched the wrong domain.
 //
-// ## O que o `4.26.0` fez de errado, medido
+// ## What `4.26.0` got wrong, measured
 //
-// Ele **reaproveitou** o nome: o barril passou a exportar a classe do SDK sob `BudgetExceededError`.
-// Para um consumidor em `^4.25` que fazia `catch (e) { if (e instanceof BudgetExceededError) … }`, o
-// ramo de orçamento de delegação **deixou de casar, em silêncio** — exatamente o modo de falha que
-// este milestone existe para matar, em espelho. E foi publicado como MINOR.
+// It **reused** the name: the barrel started exporting the SDK class as `BudgetExceededError`. For
+// a consumer on `^4.25` doing `catch (e) { if (e instanceof BudgetExceededError) … }`, the
+// delegation-budget branch **stopped matching, silently** — exactly the failure mode this milestone
+// exists to kill, mirrored. And it shipped as a MINOR.
 //
-// ## A correção
+// ## The fix
 //
-// O nome antigo volta a ser a classe de DELEGAÇÃO — é o alias `@deprecated` que o DoD pediu, mesma
-// identidade referencial de sempre, zero quebra para quem está em `^4.25`. A classe do SDK atravessa
-// sob um nome que não colide, o que fecha a lacuna original sem reaproveitar nome de ninguém:
-// "enriquecer nunca reduz" (M73) vale também para não redefinir o que um nome significa.
+// The old name goes back to being the DELEGATION class — the `@deprecated` alias the DoD asked for,
+// the same referential identity as always, zero breakage for anyone on `^4.25`. The SDK class
+// crosses under a name that does not collide, closing the original gap without reusing anybody's
+// name: "enriching never reduces" (M73) also means not redefining what a name means.
 export { DelegationBudgetExceededError } from './bridge/delegation-types.js'
 export {
-  // O alias EXISTE para ser deprecado; re-exportá-lo é o contrato de compatibilidade, não descuido.
+  // The alias EXISTS to be deprecated; re-exporting it is the compatibility contract, not an oversight.
   // eslint-disable-next-line @typescript-eslint/no-deprecated
   BudgetExceededError,
 } from './bridge/delegation-types.js'
 export { BudgetExceededError as WindowBudgetExceededError } from '@theokit/sdk/errors'
 
-// M82 — o tipo público dos handlers de `.hooks()`. Publicado porque a alternativa é o consumidor
-// declarar o seu (foi o que o agent-builder fez, com `ctx: unknown` em quatro de cinco handlers).
+// M82 — the public type of the `.hooks()` handlers. Published because the alternative is the
+// consumer declaring its own (which is what agent-builder did, with `ctx: unknown` in four of five).
 export type { HookHandlers } from './bridge/hook-handlers.js'
 
-// M84 — o transporte in-process veio do pacote CLI, onde era folha. Fica na barra principal (e não
-// num subpath novo) porque "rodar um turn de agente" é exatamente o que a barra principal faz;
-// separá-lo multiplicaria superfície sem separar nada. O CLI passa a re-exportar daqui.
+// M84 — the in-process transport came from the CLI package, where it was a leaf. It lives on the
+// main bar (and not in a new subpath) because "run an agent turn" is exactly what the main bar does;
+// splitting it would multiply surface without separating anything. The CLI now re-exports from here.
 export { streamAgentTurnInProcess, InProcessApprovalRequiredError } from './in-process-turn.js'
 export type {
   StreamAgentTurnInProcessInput,

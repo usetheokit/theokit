@@ -10,7 +10,7 @@ import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capa
 
 /**
  * M53 — the capabilities that replace the waist-bound agent decorators, one per field the decorator
- * pipeline produces today (`docs/agents/decorator-to-capability.md` § A).
+ * pipeline produces today (`wiki/agents/decorator-to-capability.md` § A).
  *
  * M57 reverses ADR 0001 § 4 (which kept the pure-assignment ones as a factory function to avoid
  * "13 near-identical classes"): the authoring surface is now 100% classes, aligned with the SDK's
@@ -112,7 +112,7 @@ export class SubAgentsCapability implements Capability {
     for (const [name, child] of Object.entries(this.children)) {
       if (name in draft.agents && draft.agents[name] !== child) {
         throw new ConfigurationError(
-          `sub-agents: filho "${name}" declarado duas vezes com definições diferentes`,
+          `sub-agents: child "${name}" declared twice with different definitions`,
         )
       }
       draft.agents[name] = child
@@ -173,12 +173,12 @@ export class AgentConfigCapability implements Capability {
     // runtime even though the declared type makes it look redundant to the compiler.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- boundary check: the value may not be an object at runtime
     if (typeof config !== 'object' || config === null) {
-      throw new ConfigurationError('agent-config: esperava um objeto de configuração')
+      throw new ConfigurationError('agent-config: expected a configuration object')
     }
     for (const field of ['maxIterations', 'timeoutMs'] as const) {
       const value = config[field]
       if (value !== undefined && (!Number.isFinite(value) || value <= 0)) {
-        throw new ConfigurationError(`agent-config: \`${field}\` deve ser um número positivo`)
+        throw new ConfigurationError(`agent-config: \`${field}\` must be a positive number`)
       }
     }
   }
