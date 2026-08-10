@@ -136,8 +136,8 @@ export function toolRuntimeName(namespace: string, toolName: string): string {
   // the charset and `Agent.create` ACCEPTS — a nonsense tool reaches the LLM. The SDK cannot know a
   // part was empty; at authoring time we can.
   if (toolName.trim().length === 0) {
-    const where = namespace ? ` no namespace "${namespace}"` : ''
-    throw new ConfigurationError(`tool: nome vazio${where} — declare um nome não vazio para a tool`)
+    const where = namespace ? ` in namespace "${namespace}"` : ''
+    throw new ConfigurationError(`tool: empty name${where} — declare a non-empty name for the tool`)
   }
 
   const name = namespace ? `${namespace}_${toolName}` : toolName
@@ -147,20 +147,20 @@ export function toolRuntimeName(namespace: string, toolName: string): string {
     // "must match /regex/" sends the author looking for an invalid character that is not there.
     if (SDK_TOOL_NAME_CHARSET.test(name)) {
       throw new ConfigurationError(
-        `tool: nome "${name}" tem comprimento ${name.length} — a composição ` +
-          `namespace + "_" + tool excede o máximo de ${SDK_TOOL_NAME_MAX_LENGTH} que o SDK aceita`,
+        `tool: name "${name}" has length ${name.length} — the composition ` +
+          `namespace + "_" + tool exceeds the maximum of ${SDK_TOOL_NAME_MAX_LENGTH} the SDK accepts`,
       )
     }
     throw new ConfigurationError(
-      `tool: nome inválido "${name}" — deve casar ${String(SDK_TOOL_NAME)} ` +
-        '(o SDK rejeita o resto; verifique o namespace e o nome da tool)',
+      `tool: invalid name "${name}" — it must match ${String(SDK_TOOL_NAME)} ` +
+        '(the SDK rejects the rest; check the namespace and the tool name)',
     )
   }
 
   if (SDK_RESERVED_TOOL_NAMES.has(name) || name.startsWith(SDK_RESERVED_TOOL_PREFIX)) {
     throw new ConfigurationError(
-      `tool: nome reservado "${name}" — o SDK reserva ` +
-        `${[...SDK_RESERVED_TOOL_NAMES].join(', ')} e o prefixo "${SDK_RESERVED_TOOL_PREFIX}"`,
+      `tool: reserved name "${name}" — the SDK reserves ` +
+        `${[...SDK_RESERVED_TOOL_NAMES].join(', ')} and the prefix "${SDK_RESERVED_TOOL_PREFIX}"`,
     )
   }
 
@@ -206,7 +206,7 @@ export function compileTools(
       // name validation, and `rules/error-handling.md` § 2 requires explicit typed errors so a
       // caller can distinguish an authoring mistake from an unexpected runtime failure.
       throw new ConfigurationError(
-        `toolbox: ${tb.class.name} não foi instanciado — passe a instância em \`toolboxInstances\``,
+        `toolbox: ${tb.class.name} was not instantiated — pass the instance in \`toolboxInstances\``,
       )
     }
 
@@ -216,7 +216,7 @@ export function compileTools(
       ]
       if (typeof handler !== 'function') {
         throw new ConfigurationError(
-          `toolbox: ${tb.class.name}.${String(tool.propertyKey)} não é um método ` +
+          `toolbox: ${tb.class.name}.${String(tool.propertyKey)} is not a method ` +
             `(tool "${tool.config.name}")`,
         )
       }

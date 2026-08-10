@@ -190,7 +190,7 @@ export async function runConfigureServer(
   }
 
   // T2.3 (architecture-medium-deferrals) — WS upgrade extracted to sibling.
-  // #95 — o mesmo `serverDir` que serve rotas/actions passa a valer para o WebSocket.
+  // #95 — the same `serverDir` that serves routes/actions now applies to the WebSocket.
   setupWsUpgrade(server, ctx.serverDir)
 
   // T2.4 — clear devtools WS reference on shutdown

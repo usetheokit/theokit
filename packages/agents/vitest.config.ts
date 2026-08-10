@@ -6,8 +6,8 @@ export default defineConfig({
     alias: {
       '@theokit/http/runtime/node': resolve(__dirname, '../http/src/runtime-node.ts'),
       '@theokit/http': resolve(__dirname, '../http/src/index.ts'),
-      // O subpath vem ANTES do barril: o alias é prefixo-primeiro, então mapear só
-      // `@theokit/presenter` faria `@theokit/presenter/wire` resolver para o barril e falhar.
+      // The subpath comes BEFORE the barrel: the alias is prefix-first, so mapping only
+      // `@theokit/presenter` would make `@theokit/presenter/wire` resolve to the barrel and fail.
       '@theokit/presenter/wire': resolve(__dirname, '../presenter/src/wire/index.ts'),
       '@theokit/presenter': resolve(__dirname, '../presenter/src/index.ts'),
     },

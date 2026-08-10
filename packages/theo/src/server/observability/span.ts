@@ -64,16 +64,16 @@ export class SpanImpl implements SpanHandle {
 /**
  * Noop span — used by NoopAdapter and post-shutdown fallback (EC-2).
  *
- * Os três corpos vazios são o Null Object, não esquecimento (agent-builder#319): **não fazer nada**
- * é o comportamento contratado. Preenchê-los com um `void 0` ou um log só para calar o lint trocaria
- * uma intenção legível por ruído — e um log aqui rodaria no caminho pós-shutdown, que é justamente
- * onde não deve haver efeito nenhum.
+ * The three empty bodies are the Null Object, not forgetfulness (agent-builder#319): **doing
+ * nothing** is the contracted behaviour. Filling them with a `void 0` or a log just to silence the
+ * lint would trade a readable intention for noise — and a log here would run on the post-shutdown
+ * path, which is precisely where there must be no effect at all.
  */
 export class NoopSpan implements SpanHandle {
-  // eslint-disable-next-line @typescript-eslint/no-empty-function -- Null Object, ver acima
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- Null Object, see above
   setAttribute(): void {}
-  // eslint-disable-next-line @typescript-eslint/no-empty-function -- Null Object, ver acima
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- Null Object, see above
   setStatus(): void {}
-  // eslint-disable-next-line @typescript-eslint/no-empty-function -- Null Object, ver acima
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- Null Object, see above
   end(): void {}
 }

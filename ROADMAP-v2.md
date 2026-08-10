@@ -225,8 +225,8 @@ transporte estava errada) e achou a causa real. #77 resolvido de verdade, sem wo
 | Fonte | O que aporta | Onde |
 |---|---|---|
 | `@theokit/sdk@4.1.0` | o padrão `X.create()` + a remoção das free functions no v3.0 (o precedente do sugar→OO) | `node_modules/@theokit/sdk/dist/index.d.ts` |
-| blueprint desta iniciativa | as 4 decisões (D1 sugar→classe, D2 seletivo por domínio, D3 gate de fronteira, D4 corte) | `knowledge-base/discoveries/blueprints/layered-oo-boundary-blueprint.md` |
-| ADR-0001 | o patterns-budget que o M57 reverte (skills-como-função) | `knowledge-base/adrs/0001-capability-patterns-budget.md` |
+| blueprint desta iniciativa | as 4 decisões (D1 sugar→classe, D2 seletivo por domínio, D3 gate de fronteira, D4 corte) | `wiki/blueprints/layered-oo-boundary.md` |
+| ADR-0001 | o patterns-budget que o M57 reverte (skills-como-função) | `wiki/decisions/0001-capability-patterns-budget.md` |
 
 ---
 

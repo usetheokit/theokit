@@ -1,15 +1,15 @@
 /**
- * EC-4 (edge case review 2026-05-28) — pin a premissa do ADR 0018:
- * pnpm@9.15.0 EMITE warn em mismatch de versão MESMO quando o peerDep
- * está marcado como optional via peerDependenciesMeta.
+ * EC-4 (edge case review 2026-05-28) — pins ADR 0018's premise:
+ * pnpm@9.15.0 DOES emit a warning on a version mismatch EVEN when the
+ * peerDep is marked optional through peerDependenciesMeta.
  *
- * Se este teste falha, ADR 0018 perde uma das justificativas
- * ("ativa pipeline nativo de validação") — decisão deve ser revista.
+ * If this test fails, ADR 0018 loses one of its justifications
+ * ("it activates the native validation pipeline") — the decision must be revisited.
  *
- * Roda em sandbox tmp para não poluir o workspace principal.
+ * Runs in a tmp sandbox so as not to pollute the main workspace.
  *
- * Honestidade: este teste tem SIDE EFFECTS (spawn pnpm install em tmpdir,
- * filesystem write). Marcado como integration por isso.
+ * Honesty: this test has SIDE EFFECTS (it spawns pnpm install in a tmpdir and
+ * writes to the filesystem). Marked as integration for that reason.
  */
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'

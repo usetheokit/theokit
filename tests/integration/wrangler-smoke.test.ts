@@ -1,5 +1,5 @@
 /**
- * T5a.1 AC#3 — CF Workers smoke test passa (real wrangler dev).
+ * T5a.1 AC#3 — CF Workers smoke test passes (real wrangler dev).
  *
  * Drives `wrangler dev` against `tests/fixtures/handler-web-standards/`
  * using Miniflare (the default backend in wrangler v3+; no Cloudflare

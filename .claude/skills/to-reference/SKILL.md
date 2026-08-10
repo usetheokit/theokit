@@ -562,7 +562,7 @@ grep -A 999 "## 2\." "$DOC" | grep -B 1 "^## 3\." | grep -q "\.\.\." && \
 `referencias/` é gitignored — cada dev clona localmente. Tier 1 essencial:
 
 ```bash
-cd /home/paulo/Projetos/usetheo/theokit
+cd /home/paulo/Projetos/theo/theokit-framework/theokit
 mkdir -p referencias && cd referencias
 
 git clone --depth 1 https://github.com/vercel/next.js.git           next.js
