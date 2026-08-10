@@ -52,6 +52,62 @@ function publishablePackages() {
   return out
 }
 
+/**
+ * The npm-publish path, which the tarball check above CANNOT see.
+ *
+ * `pnpm pack` rewrites `workspace:` into a real range while packing, so the tarball this script
+ * inspects is clean by construction — it proves the pnpm toolchain is safe and is structurally
+ * blind to the other one. Measured, not reasoned: planting `"@theokit/presenter": "workspace:*"`
+ * back into a manifest leaves this script reporting every package clean, and
+ * `npm publish --dry-run` succeeds.
+ *
+ * `npm publish` does no such rewrite: it ships the ON-DISK manifest verbatim. So for that path the
+ * disk IS the artifact, and the disk check this script's header rejects — correctly, for pnpm — is
+ * exactly the right one here. The branch is on the publishing tool, not on a single view chosen for
+ * both.
+ *
+ * Wired into `prepublishOnly`, this closes the hole the header describes as "closed by the release
+ * process, not by this script": a developer running `npm publish` by hand is stopped by npm itself.
+ */
+export function workspaceRangesOnDisk(packages) {
+  const offenders = []
+  for (const { name, dir } of packages) {
+    const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'))
+    for (const field of DEP_FIELDS) {
+      for (const [dep, range] of Object.entries(pkg[field] ?? {})) {
+        if (typeof range === 'string' && range.startsWith('workspace:')) {
+          offenders.push(`${name}: ${field}.${dep} = ${range}`)
+        }
+      }
+    }
+  }
+  return offenders
+}
+
+/** True when THIS process was started by npm rather than pnpm — the path that ships the disk manifest. */
+export function publishingWithNpm(userAgent = process.env.npm_config_user_agent ?? '') {
+  return userAgent.startsWith('npm/')
+}
+
+if (publishingWithNpm()) {
+  // Scoped to the package BEING published (npm runs `prepublishOnly` in its directory). Gating a
+  // publish of one package on another's manifest would block correct work and teach people to
+  // bypass this — the outcome it exists to prevent. The others are still covered by the tarball
+  // pass below and by CI.
+  const here = publishablePackages().filter((p) => resolve(p.dir) === resolve(process.cwd()))
+  const offenders = workspaceRangesOnDisk(here.length > 0 ? here : publishablePackages())
+  if (offenders.length > 0) {
+    console.error(
+      'REFUSING to publish with npm: the on-disk manifest carries a workspace: range, and\n' +
+        'npm ships it VERBATIM — unlike pnpm, which rewrites it while packing.\n\n' +
+        offenders.map((o) => `  ${o}`).join('\n') +
+        '\n\nEvery `npm install` of such a version fails with EUNSUPPORTEDPROTOCOL, and a published\n' +
+        'version cannot be fixed — only deprecated. Use `pnpm publish`.',
+    )
+    process.exit(1)
+  }
+}
+
 /** Read `package.json` out of the packed tarball, without unpacking the whole thing. */
 function manifestInTarball(tarball) {
   // build-time CI script; `tar` is the canonical archive reader and the argv is fully controlled
