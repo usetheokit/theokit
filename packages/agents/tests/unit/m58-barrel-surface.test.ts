@@ -46,11 +46,11 @@ type _TypeSurface = [
  * budget of a test that only checks the shape of what was loaded. At module scope, it is paid during
  * collection.
  */
-const barril = await import('../../src/index.js')
+const barrel = await import('../../src/index.js')
 
 describe('M58 — @theokit/agents pass-through barrels for the 5 already-OO/pure SDK domains', () => {
   it('core: Agent / Squad / Tool / Provider reach the main barrel', () => {
-    const m = barril
+    const m = barrel
     for (const name of ['Agent', 'Squad', 'Tool', 'Provider'] as const) {
       expect(m[name], name).toBeTypeOf('function')
     }
@@ -66,7 +66,7 @@ describe('M58 — @theokit/agents pass-through barrels for the 5 already-OO/pure
     // The cost of the gap is measured, not hypothetical: theokit-sdk#165 chased the wrong hypothesis
     // for a 429 because the retry was unobservable, and the SDK fix that made it observable
     // (`8323f1f38`) could not reach a consumer that had no way to install the sink receiving it.
-    expect(barril.setDiagnosticsSink).toBeTypeOf('function')
+    expect(barrel.setDiagnosticsSink).toBeTypeOf('function')
   })
 
   it('sandbox: LocalSandbox reaches @theokit/agents/sandbox', async () => {

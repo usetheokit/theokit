@@ -128,12 +128,12 @@ export class InProcessTransport implements AgentTransport {
    *
    * The closure is the only place a runner's turn can live without another one overwriting it.
    */
-  #criarAwaitApproval(turn: number, sinal: AbortSignal | undefined): InProcessAwaitApproval {
+  #createAwaitApproval(turn: number, signal: AbortSignal | undefined): InProcessAwaitApproval {
     return (req) =>
       new Promise<boolean | ApprovalDecision>((resolve, reject) => {
         // Aborted BEFORE the approval parked: sweeping in `sendMessages` does not reach this case,
         // because at that moment there was nothing to sweep.
-        if (sinal?.aborted === true) {
+        if (signal?.aborted === true) {
           reject(new ApprovalAbortedError(req.approvalId, 'the turn was already aborted'))
           return
         }
@@ -165,7 +165,7 @@ export class InProcessTransport implements AgentTransport {
   }
 
   /** How many approvals are parked. Exists so the test can prove the eviction. */
-  get pendentes(): number {
+  get pending(): number {
     return this.#pending.size
   }
 
@@ -198,7 +198,7 @@ export class InProcessTransport implements AgentTransport {
     const generator = this.#run({
       message: extractLastUserText(messages),
       signal: abortSignal ?? undefined,
-      awaitApproval: this.#criarAwaitApproval(currentTurn, abortSignal ?? undefined),
+      awaitApproval: this.#createAwaitApproval(currentTurn, abortSignal ?? undefined),
       // M43 — forward per-request context (the seam's `metadata`) to the runner.
       context: metadata,
     })

@@ -104,7 +104,7 @@ export class SkillsCapability implements Capability {
         if (typeof value !== 'string' || value.trim().length === 0) {
           throw new ConfigurationError(
             `skills: inline skill without a valid \`${field}\` (${describe(value)}) — ` +
-              'name, description e instructions são obrigatórios',
+              'name, description and instructions are all required',
           )
         }
       }

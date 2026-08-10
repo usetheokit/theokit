@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
-  SUBPATHS_DE_INFRA,
+  INFRA_SUBPATHS,
   enumerateSurface,
-  enumerarSuperficieDaCamada,
+  enumerateLayerSurface,
 } from '../../scripts/generate-reexports.mjs'
 
 const ROOT = join(import.meta.dirname, '..', '..')
@@ -72,8 +72,8 @@ describe('M90 — the infra subpath surface is locked', () => {
    */
   it('test_the_layer_re_exports_EVERYTHING_the_source_exports', async () => {
     const missing: string[] = []
-    for (const [sub, spec] of Object.entries(SUBPATHS_DE_INFRA)) {
-      const layerDir = enumerarSuperficieDaCamada(sub)
+    for (const [sub, spec] of Object.entries(INFRA_SUBPATHS)) {
+      const layerDir = enumerateLayerSurface(sub)
       const sourceText = await enumerateSurface(spec)
       const inTheLayer = new Set([...layerDir.values, ...layerDir.types])
       for (const n of [...sourceText.values, ...sourceText.types]) {
@@ -92,8 +92,8 @@ describe('M90 — the infra subpath surface is locked', () => {
 
   it('test_the_layer_does_not_invent_a_symbol_the_source_lacks', async () => {
     const invented: string[] = []
-    for (const [sub, spec] of Object.entries(SUBPATHS_DE_INFRA)) {
-      const layerDir = enumerarSuperficieDaCamada(sub)
+    for (const [sub, spec] of Object.entries(INFRA_SUBPATHS)) {
+      const layerDir = enumerateLayerSurface(sub)
       const sourceText = await enumerateSurface(spec)
       const inTheSource = new Set([...sourceText.values, ...sourceText.types])
       for (const n of [...layerDir.values, ...layerDir.types]) {
@@ -105,15 +105,15 @@ describe('M90 — the infra subpath surface is locked', () => {
 
   it('test_todays_surface_is_IDENTICAL_to_the_snapshot', () => {
     const divergences: string[] = []
-    for (const sub of Object.keys(SUBPATHS_DE_INFRA)) {
-      const agora = enumerarSuperficieDaCamada(sub)
+    for (const sub of Object.keys(INFRA_SUBPATHS)) {
+      const now = enumerateLayerSurface(sub)
       const expected = SNAPSHOT[sub]
       if (expected === undefined) {
         divergences.push(`${sub}: no entry in the snapshot`)
         continue
       }
       const before = new Set([...expected.values, ...expected.types])
-      const today = new Set([...agora.values, ...agora.types])
+      const today = new Set([...now.values, ...now.types])
       for (const n of before) if (!today.has(n)) divergences.push(`${sub}: GONE ${n}`)
       for (const n of today) if (!before.has(n)) divergences.push(`${sub}: NEW ${n}`)
     }
@@ -127,7 +127,7 @@ describe('M90 — the infra subpath surface is locked', () => {
   })
 
   it('test_no_infra_entry_uses_a_star_export', () => {
-    const withStar = Object.keys(SUBPATHS_DE_INFRA).filter((sub) =>
+    const withStar = Object.keys(INFRA_SUBPATHS).filter((sub) =>
       /^export \* from/m.test(readFileSync(join(ROOT, 'src', `${sub}-entry.ts`), 'utf8')),
     )
     expect(withStar).toEqual([])
@@ -141,14 +141,14 @@ describe('M90 — the infra subpath surface is locked', () => {
    * a test failure, not a silent success (`error-handling.md § 2`).
    */
   it('test_the_EMITTED_dist_exists_and_has_no_star_export — what the consumer sees', () => {
-    const withoutBuild = Object.keys(SUBPATHS_DE_INFRA).filter(
+    const withoutBuild = Object.keys(INFRA_SUBPATHS).filter(
       (sub) => !existsSync(join(ROOT, 'dist', `${sub}.d.ts`)),
     )
     expect(
       withoutBuild,
       'run `npm run build` — without `dist/` this gate measures nothing',
     ).toEqual([])
-    const withStar = Object.keys(SUBPATHS_DE_INFRA).filter((sub) =>
+    const withStar = Object.keys(INFRA_SUBPATHS).filter((sub) =>
       /^export \* from/m.test(readFileSync(join(ROOT, 'dist', `${sub}.d.ts`), 'utf8')),
     )
     expect(withStar).toEqual([])

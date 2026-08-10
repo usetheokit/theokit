@@ -13,7 +13,7 @@
  * Resolution by priority (FIRST match wins):
  *   1. OPENROUTER_API_KEY → baseUrl=openrouter.ai (multi-model gateway)
  *   2. OPENAI_API_KEY     → baseUrl=api.openai.com
- *   3. ANTHROPIC_API_KEY  → direct Anthropic (Messages API, não OpenAI-compat)
+ *   3. ANTHROPIC_API_KEY  → direct Anthropic (Messages API, not OpenAI-compat)
  *
  * Escape hatch: an explicit `options.apiKey` OVERRIDES auto-resolution
  * (the consumer can force a specific provider if it wants to).

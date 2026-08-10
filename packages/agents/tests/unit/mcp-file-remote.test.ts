@@ -119,10 +119,10 @@ describe('M112 — .mcp.json degrades per entry', () => {
       headers: { Authorization: 'Bearer SENTINEL-M112' },
       requestTimeoutMs: 5_000,
     }
-    writeIt({ mcpServers: { remoto: serverEntry } })
+    writeIt({ mcpServers: { remote: serverEntry } })
     const map = load()
     expect(
-      map.remoto,
+      map.remote,
       'the HTTP entry did not cross intact — the layer is still narrowing what the SDK accepts',
     ).toEqual(serverEntry)
     expect(warnings).toEqual([])
@@ -224,7 +224,7 @@ describe('M112 — .mcp.json degrades per entry', () => {
     warnings.length = 0
     writeIt({
       mcpServers: {
-        outro: {
+        another: {
           type: 'http',
           url: 'not-a-url',
           headers: { Authorization: 'Bearer SECRET-XYZ-123' },
@@ -300,7 +300,7 @@ describe('M112 — .mcp.json degrades per entry', () => {
     // created.
     writeIt({
       mcpServers: {
-        s: { command: 'node', campoInventado: { x: 1 } },
+        s: { command: 'node', madeUpField: { x: 1 } },
         r: { type: 'http', url: 'https://ok.invalid/mcp', anotherInvented: 'y' },
       },
     })

@@ -7,9 +7,9 @@
  *   ✅ DTOs with Zod validation (Pattern D2 — static schema)
  *   ✅ Guards with @UseGuards (API-key authentication)
  *   ✅ DI container com constructor injection (@Injectable + Container)
- *   ✅ Múltiplos controllers (Users + Products + Health)
+ *   [x] Multiple controllers (Users + Products + Health)
  *   ✅ Full CRUD (Create, Read, Update, Delete)
- *   ✅ Parâmetros tipados (@Param, @Query, @Body)
+ *   [x] Typed parameters (@Param, @Query, @Body)
  *   ✅ Custom status codes (@HttpCode)
  *   ✅ Custom headers (@Header)
  *
@@ -125,7 +125,7 @@ class CreateUserDto {
 }
 
 const zCreateProduct = z.object({
-  name: z.string().min(1, 'Nome obrigatório'),
+  name: z.string().min(1, 'Name is required'),
   price: z.number().min(0, 'Price cannot be negative'),
   stock: z.number().int().min(0, 'Stock cannot be negative'),
 })

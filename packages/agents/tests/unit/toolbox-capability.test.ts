@@ -196,7 +196,7 @@ describe('ToolboxCapability', () => {
         ConfigurationError,
       )
       expect(() => compileTools([noMethod], new Map([[token, new MixedTools()]]))).toThrow(
-        /não é um método/,
+        /is not a method/,
       )
     })
 

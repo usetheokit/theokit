@@ -46,12 +46,12 @@ export function createRateLimiter(config: RateLimitConfig, opts: { store?: RateL
       return resultFromState(state, config)
     }
 
-    // External stores are NOT supported via this synchronous façade in
+    // External stores are NOT supported via this synchronous facade in
     // 0.3.x. Users plugging Redis adapters today must wire it via a
     // dedicated async middleware path (out-of-scope for T2.1; tracked
     // for the follow-up `@theokit/rate-limit-redis` package).
     throw new Error(
-      'createRateLimiter: async RateLimitStore implementations are not supported by this sync façade. ' +
+      'createRateLimiter: async RateLimitStore implementations are not supported by this sync facade. ' +
         'Use the InMemoryStore default or build a custom middleware around the async store directly.',
     )
   }
@@ -116,7 +116,7 @@ export function createRateLimiterWeb(
       return resultFromState(state, config)
     }
     throw new Error(
-      'createRateLimiterWeb: async RateLimitStore implementations are not supported by this sync façade. ' +
+      'createRateLimiterWeb: async RateLimitStore implementations are not supported by this sync facade. ' +
         'Use the InMemoryStore default or build a custom middleware around the async store directly.',
     )
   }
