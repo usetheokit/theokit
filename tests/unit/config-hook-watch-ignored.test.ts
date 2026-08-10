@@ -37,28 +37,28 @@ describe('runConfigHook — server.watch.ignored (#121)', () => {
 })
 
 /**
- * #121, o degrau que faltava: os ignores têm de CHEGAR ao watcher.
+ * #121, the missing step: the ignores have to REACH the watcher.
  *
- * O teste acima prova que `runConfigHook` produz a lista. Não prova que ela sobrevive —
- * `cli/commands/dev.ts` chama `createServer({ server: { ... } })`, e a config inline tem
- * precedência sobre a do plugin. Hoje ela não declara `watch`, então o merge do Vite preserva o
- * do plugin. No dia em que alguém adicionar um `watch` ali, a correção some **em silêncio**: o
- * único sintoma é a tela voltar a piscar, e o teste acima continua verde.
+ * The test above proves `runConfigHook` produces the list. It does not prove the list survives —
+ * `cli/commands/dev.ts` calls `createServer({ server: { ... } })`, and the inline config takes
+ * precedence over the plugin's. Today it does not declare `watch`, so Vite's merge preserves the
+ * plugin's. The day somebody adds a `watch` there, the fix disappears **silently**: the only symptom
+ * is the screen flickering again, and the test above stays green.
  *
- * A checagem é sobre a FONTE porque é ali que a regressão nasceria. Tentei fazê-la mesclando as
- * duas configs com o `mergeConfig` do próprio Vite — mais fiel — mas `vite` não é resolvível a
- * partir do diretório de testes da raiz neste workspace pnpm, e cravar o caminho profundo
- * (`packages/theo/node_modules/vite`) seria trocar uma fragilidade por outra.
+ * The check is over the SOURCE because that is where the regression would be born. I tried doing it
+ * by merging the two configs with Vite's own `mergeConfig` — more faithful — but `vite` is not
+ * resolvable from the root test directory in this pnpm workspace, and hardcoding the deep path
+ * (`packages/theo/node_modules/vite`) would be trading one fragility for another.
  */
-describe('dev.ts não pode sobrescrever o watch do plugin (#121)', () => {
-  it('a config inline de createServer não declara server.watch', () => {
-    const fonte = readFileSync(
+describe('dev.ts must not overwrite the watch of the plugin (#121)', () => {
+  it('the inline config of createServer does not declare server.watch', () => {
+    const source = readFileSync(
       resolve(__dirname, '../../packages/theo/src/cli/commands/dev.ts'),
       'utf-8',
     )
-    const chamada = fonte.slice(fonte.indexOf('server = await createServer({'))
-    const blocoServer = chamada.slice(chamada.indexOf('server: {'), chamada.indexOf('logLevel:'))
+    const call = source.slice(source.indexOf('server = await createServer({'))
+    const serverBlock = call.slice(call.indexOf('server: {'), call.indexOf('logLevel:'))
 
-    expect(blocoServer).not.toMatch(/\bwatch\s*:/)
+    expect(serverBlock).not.toMatch(/\bwatch\s*:/)
   })
 })

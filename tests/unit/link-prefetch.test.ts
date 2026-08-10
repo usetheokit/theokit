@@ -46,11 +46,11 @@ describe('<Link> component — export and type contract', () => {
 describe('prefetch logic — unit', () => {
   it('Set deduplication prevents duplicate entries', () => {
     const prefetched = new Set<string>()
-    // O `add` repetido É o teste (agent-builder#319): a asserção é que o `Set` deduplica. A regra
-    // `no-element-overwrite` acusa a segunda escrita como engano, o que aqui inverteria o sentido —
-    // remover a linha apagaria exatamente o comportamento sob teste.
+    // The repeated `add` IS the test (agent-builder#319): the assertion is that the `Set` dedupes.
+    // The `no-element-overwrite` rule flags the second write as a mistake, which here would invert
+    // the meaning — removing the line would delete exactly the behaviour under test.
     prefetched.add('/contacts')
-    // eslint-disable-next-line sonarjs/no-element-overwrite -- ver acima
+    // eslint-disable-next-line sonarjs/no-element-overwrite -- see above
     prefetched.add('/contacts')
     prefetched.add('/deals')
     expect(prefetched.size).toBe(2)

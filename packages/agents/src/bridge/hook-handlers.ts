@@ -1,22 +1,22 @@
 /**
  * M82 — the typed shape of `AgentBuilder.create().hooks({...})`.
  *
- * ## Por que este tipo mora aqui
+ * ## Why this type lives here
  *
- * Até o M82 a assinatura era `Readonly<Record<string, unknown>>`: qualquer chave era aceita e cada
- * handler recebia `ctx: unknown`. O consumidor que quisesse tipo tinha de declarar o seu — e foi
- * exatamente o que o agent-builder fez, com um alias local de cinco handlers, quatro deles com
- * `ctx: unknown` porque não havia de onde importar os contextos.
+ * Until M82 the signature was `Readonly<Record<string, unknown>>`: any key was accepted and every
+ * handler received `ctx: unknown`. A consumer that wanted types had to declare its own — and that is
+ * exactly what agent-builder did, with a local alias of five handlers, four of them carrying
+ * `ctx: unknown` because there was nowhere to import the contexts from.
  *
- * É a mesma classe que o M81 fechou com `discoverSubagents`: conhecimento do framework reimplementado
- * no app porque o framework não o publicava. O tipo nasce onde o conhecimento mora.
+ * It is the same class M81 closed with `discoverSubagents`: framework knowledge reimplemented in the
+ * app because the framework did not publish it. The type is born where the knowledge lives.
  *
- * ## Sobre `transform_tool_result`
+ * ## About `transform_tool_result`
  *
- * Este é o ÚNICO canal de estágio-de-tool cujo retorno o SDK aplica — `#runTransform` dobra o valor
- * devolvido; `#runFireAndForget`, usado por `post_tool_call`, descarta. Desde o M82 seu contexto
- * carrega `toolCalls`, de modo que uma política com escopo (por nome de tool) possa AGIR sobre o
- * resultado em vez de apenas observá-lo.
+ * This is the ONLY tool-stage channel whose return value the SDK applies — `#runTransform` folds the
+ * returned value in; `#runFireAndForget`, used by `post_tool_call`, discards it. Since M82 its
+ * context carries `toolCalls`, so a scoped policy (by tool name) can ACT on the result rather than
+ * merely observe it.
  */
 import type {
   PostAssistantReplyContext,
@@ -31,32 +31,32 @@ import type {
 } from '@theokit/sdk'
 
 /**
- * Handlers de ciclo de vida chaveados por `HookName`.
+ * Lifecycle handlers keyed by `HookName`.
  *
- * Cada campo é opcional: um agente registra só os eventos que lhe interessam. `.hooks()` aceita a
- * UNIÃO deste tipo com o shape solto de antes (ADR-4 do M82), então não é preciso index signature
- * implícita para o valor passar no call site — o estreitamento é gradual, não uma quebra.
+ * Every field is optional: an agent registers only the events it cares about. `.hooks()` accepts the
+ * UNION of this type with the earlier loose shape (M82's ADR-4), so no implicit index signature is
+ * needed for the value to pass at the call site — the narrowing is gradual, not a break.
  */
 export interface HookHandlers {
   /**
-   * Roda ANTES da tool. Devolver `{ block: true, message }` VETA a chamada — é o único hook com
-   * poder de veto.
+   * Runs BEFORE the tool. Returning `{ block: true, message }` VETOES the call — the only hook with
+   * veto power.
    */
   pre_tool_call?: (
     ctx: PreToolCallContext,
   ) => Promise<PreToolCallDecision | undefined> | PreToolCallDecision | undefined
   /**
-   * Roda DEPOIS da tool, com `{name, args, result}`. Fire-and-forget: o retorno é **descartado**
-   * pelo SDK. Para AGIR sobre o resultado use {@link transform_tool_result}.
+   * Runs AFTER the tool, with `{name, args, result}`. Fire-and-forget: the return value is
+   * **discarded** by the SDK. To ACT on the result use {@link transform_tool_result}.
    */
   post_tool_call?: (ctx: PostToolCallContext) => Promise<void> | void
   /**
-   * Dobra os resultados de tool do turn antes de eles subirem ao modelo. Desde o M82 o contexto traz
-   * `toolCalls` — plural, porque o seam recebe o LOTE do turn; correlacione por
+   * Folds the turn's tool results before they go up to the model. Since M82 the context brings
+   * `toolCalls` — plural, because the seam receives the turn's BATCH; correlate by
    * `toolUseId === id`.
    */
   transform_tool_result?: <T>(results: T, ctx: ToolResultTransformContext) => Promise<T> | T
-  /** Dobra o texto do modelo antes de ele ser consumido. Sem tool call envolvida. */
+  /** Folds the model's text before it is consumed. No tool call involved. */
   transform_llm_output?: (output: string, ctx: TransformContext) => Promise<string> | string
   on_session_start?: (ctx: SessionLifecycleContext) => Promise<void> | void
   on_session_end?: (ctx: SessionLifecycleContext) => Promise<void> | void

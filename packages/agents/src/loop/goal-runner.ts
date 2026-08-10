@@ -6,10 +6,10 @@ import type { GoalEvent, GoalLoopAgent, GoalOptions, GoalResult } from '@theokit
 // `GoalLoopAgent` it binds, the `GoalOptions` it takes — entirely from `@theokit/agents`, never
 // reaching back to `@theokit/sdk`.
 export type { GoalEvent, GoalLoopAgent, GoalOptions, GoalResult } from '@theokit/sdk'
-// M80 — o vocabulário do judge atravessa junto. Sem `JudgeResult`/`Verdict`, um consumidor que
-// quisesse reagir a `blocked` sem string mágica teria de redeclarar a forma — e a fronteira
-// INQUEBRÁVEL o impede de importar do SDK. `JudgeCredentialError` é o erro que a falha-rápida do M80
-// lança; quem faz `catch` no goal loop precisa distingui-lo de qualquer outra falha.
+// M80 — the judge's vocabulary crosses alongside. Without `JudgeResult`/`Verdict`, a consumer
+// wanting to react to `blocked` without a magic string would have to redeclare the shape — and the
+// UNBREAKABLE boundary stops it importing from the SDK. `JudgeCredentialError` is the error M80's
+// fail-fast throws; whoever catches in the goal loop must tell it from any other failure.
 export type { JudgeResult, Verdict } from '@theokit/sdk'
 export { JudgeCredentialError } from '@theokit/sdk'
 

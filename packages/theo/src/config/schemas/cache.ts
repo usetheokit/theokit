@@ -1,9 +1,9 @@
 import { z } from 'zod'
 
-// `.finite()` foi removido dos 4 schemas numéricos abaixo (agent-builder#319): em zod 4 ele é
-// no-op — `z.number()` já rejeita `Infinity`, `-Infinity` e `NaN` por padrão. Medido antes de
-// remover, contra zod 4.4.3 instalado, e não presumido a partir da mensagem de depreciação:
-// os cinco casos (`Infinity`, `-Infinity`, `NaN`, `1.5`, `0`) dão o MESMO veredito com e sem ele.
+// `.finite()` was removed from the 4 numeric schemas below (agent-builder#319): in zod 4 it is a
+// no-op — `z.number()` already rejects `Infinity`, `-Infinity` and `NaN` by default. Measured before
+// removing, against the installed zod 4.4.3, and not assumed from the deprecation message: all five
+// cases (`Infinity`, `-Infinity`, `NaN`, `1.5`, `0`) give the SAME verdict with and without it.
 
 /**
  * Cache subsystem config (caching-and-revalidation-plan).

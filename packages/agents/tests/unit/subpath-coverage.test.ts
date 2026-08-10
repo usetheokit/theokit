@@ -1,31 +1,32 @@
 /**
- * M78 T2.1 — a política de cobertura: uma lista de DECISÃO, não de inclusão.
+ * M78 T2.1 — the coverage policy: a list of DECISIONS, not of inclusions.
  *
- * ## O problema que este arquivo fecha
+ * ## The problem this file closes
  *
- * O barril da camada cresceu de forma **reativa** — símbolo a símbolo, sob pressão de bug. O
- * resultado medido: o SDK publica 28 subpaths e a camada cobria 9. Nada avisava quando o SDK ganhava
- * um subpath novo, então "ninguém decidiu ainda" era indistinguível de "decidimos que fica fora".
+ * The layer's barrel grew **reactively** — symbol by symbol, under bug pressure. The measured
+ * result: the SDK publishes 28 subpaths and the layer covered 9. Nothing warned when the SDK gained
+ * a new subpath, so "nobody has decided yet" was indistinguishable from "we decided it stays out".
  *
- * ## Por que DECISÃO e não allowlist
+ * ## Why a DECISION and not an allowlist
  *
- * Uma allowlist só do que entra deixa um subpath novo cair em silêncio na categoria "não decidido".
- * Foi exatamente assim que a cobertura chegou a 9 de 28 sem ninguém notar. Aqui, **cada** subpath
- * precisa de veredito: `in` (e o teste verifica que atravessa) ou `out` (com razão escrita).
+ * An allowlist of only what enters lets a new subpath fall silently into the "undecided" category.
+ * That is exactly how coverage reached 9 of 28 without anyone noticing. Here, **every** subpath needs
+ * a verdict: `in` (and the test verifies that it crosses) or `out` (with a written reason).
  *
- * O teste falha quando **falta veredito** — não quando o veredito é `out`. Isso é o que separa
- * política de muro: um subpath novo no SDK quebra o build da camada **uma vez**, e o conserto é
- * escrever uma linha dizendo o que se decidiu, inclusive "fora de escopo porque X".
+ * The test fails when a **verdict is missing** — not when the verdict is `out`. That is what
+ * separates a policy from a wall: a new subpath in the SDK breaks the layer's build **once**, and the
+ * fix is writing one line saying what was decided, including "out of scope because X".
  *
- * Precedente do formato: `rules/code-quality-golden-rule.md § 4` já exige razão obrigatória em toda
- * entrada de allowlist, pelo mesmo motivo — uma exceção sem razão nunca é revisitada.
+ * Precedent for the format: `rules/code-quality-golden-rule.md § 4` already requires a mandatory
+ * reason on every allowlist entry, for the same motive — an exception without a reason is never
+ * revisited.
  *
- * ## Identidade referencial, herdada do M73
+ * ## Referential identity, inherited from M73
  *
- * `auth-parity.test.ts` já explicou por que a asserção é `toBe` e não `toBeDefined`: se o build
- * inlinear o SDK (`noExternal` no tsup), a camada passa a exportar uma **cópia** da classe,
- * `instanceof` vira `false` em silêncio e **nenhum teste de comportamento fica vermelho**. Um
- * `toBeDefined` não pega isso.
+ * `auth-parity.test.ts` already explained why the assertion is `toBe` and not `toBeDefined`: if the
+ * build inlines the SDK (`noExternal` in tsup), the layer starts exporting a **copy** of the class,
+ * `instanceof` silently becomes `false` and **no behavioural test goes red**. A `toBeDefined` does
+ * not catch that.
  */
 import { createRequire } from 'node:module'
 
@@ -33,365 +34,369 @@ import { describe, expect, it } from 'vitest'
 
 const require_ = createRequire(import.meta.url)
 
-/** Um subpath re-exportado pela camada, com os símbolos que precisam atravessar. */
-interface Dentro {
+/** A subpath re-exported by the layer, with the symbols that must cross. */
+interface Inside {
   readonly verdict: 'in'
   /**
-   * `'total'` — cada export do subpath atravessa, e o teste verifica isso enumerando o módulo do SDK.
-   * `'amostra'` — só os `simbolos` listados são verificados.
+   * `'total'` — every export of the subpath crosses, and the test verifies it by enumerating the SDK
+   * module. `'sample'` — only the listed `symbols` are verified.
    *
-   * A distinção nasceu de um defeito real deste milestone: a primeira versão só amostrava, e
-   * `RateLimitError` — que o refresh OAuth precisa para reconhecer um 429 — ficou de fora do
-   * re-export sem nada acusar. Amostrar prova que ALGO atravessa, não que o domínio atravessa.
+   * The distinction was born of a real defect in this milestone: the first version only sampled, and
+   * `RateLimitError` — which the OAuth refresh needs to recognize a 429 — was left out of the
+   * re-export with nothing flagging it. Sampling proves that SOMETHING crosses, not that the domain
+   * crosses.
    */
-  readonly cobertura: 'total' | 'amostra'
-  /** Nomes conhecidamente NÃO cobertos, com a razão. Só válido com `cobertura: 'total'`. */
-  readonly lacunas?: Readonly<Record<string, string>>
+  readonly coverage: 'total' | 'sample'
+  /** Names knowingly NOT covered, with the reason. Only valid with `coverage: 'total'`. */
+  readonly gaps?: Readonly<Record<string, string>>
   /**
-   * Símbolos-chave verificados por identidade referencial.
+   * Key symbols verified by referential identity.
    *
-   * Lista vazia é legítima APENAS quando `via` é um subpath próprio da camada (`/auth`, `/sandbox`,
-   * …): ali a cobertura é o subpath inteiro, e o M73 já tem teste de paridade dedicado
-   * (`auth-parity.test.ts`). Para um `in` via barril, lista vazia seria um veredito NÃO VERIFICADO —
-   * exatamente o defeito que esta política existe para impedir, e o teste
-   * `test_in_via_barril_declara_simbolos` o proíbe.
+   * An empty list is legitimate ONLY when `via` is a subpath owned by the layer (`/auth`, `/sandbox`,
+   * …): there the coverage is the whole subpath, and M73 already has a dedicated parity test
+   * (`auth-parity.test.ts`). For an `in` through the barrel, an empty list would be an UNVERIFIED
+   * verdict — exactly the defect this policy exists to prevent, and the test
+   * `test_in_via_the_barrel_declares_symbols` forbids it.
    */
-  readonly simbolos: readonly string[]
+  readonly symbols: readonly string[]
   /**
-   * De onde a camada os expõe. É o caminho do FONTE (`../../src/…`), não o nome do pacote.
+   * Where the layer exposes them from. It is the SOURCE path (`../../src/…`), not the package name.
    *
-   * A primeira versão usava `'@theokit/agents'`, que resolve para o pacote INSTALADO em
-   * `node_modules` — então o teste media a versão publicada, não a árvore sob teste, e um re-export
-   * recém-escrito continuava vermelho. `auth-parity.test.ts` (M73) já importava do fonte pelo mesmo
-   * motivo; eu não segui o precedente e paguei por isso.
+   * The first version used `'@theokit/agents'`, which resolves to the package INSTALLED in
+   * `node_modules` — so the test measured the published version, not the tree under test, and a
+   * freshly written re-export stayed red. `auth-parity.test.ts` (M73) already imported from source
+   * for the same reason; I did not follow the precedent and paid for it.
    */
   readonly via: string
 }
 
-/** Um subpath deliberadamente fora, com a razão — que é obrigatória. */
+/** A subpath deliberately out, with the reason — which is mandatory. */
 interface Fora {
   readonly verdict: 'out'
-  readonly razao: string
+  readonly reason: string
 }
 
-type Decisao = Dentro | Fora
+type Decision = Inside | Fora
 
 /**
- * A lista de decisão. Cada subpath publicado pelo SDK aparece aqui.
+ * The decision list. Every subpath the SDK publishes appears here.
  *
- * Adicionar um subpath ao SDK e não a esta lista quebra `test_cada_subpath_do_sdk_tem_veredito` —
- * de propósito.
+ * Adding a subpath to the SDK and not to this list breaks `test_every_sdk_subpath_has_a_verdict` —
+ * deliberately.
  */
-const DECISOES: Record<string, Decisao> = {
+const DECISIONS: Record<string, Decision> = {
   '.': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'amostra',
-    // M80 — `JudgeCredentialError` entra na amostra do barril: é o erro que a falha-rápida do judge
-    // lança, e um consumidor atrás da fronteira precisa dele para distinguir credencial-do-judge de
-    // qualquer outra falha do goal loop.
-    simbolos: ['Agent', 'Squad', 'Tool', 'Provider', 'JudgeCredentialError'],
+    coverage: 'sample',
+    // M80 — `JudgeCredentialError` enters the barrel's sample: it is the error the judge's fail-fast
+    // throws, and a consumer behind the boundary needs it to tell a judge-credential failure from any
+    // other goal-loop failure.
+    symbols: ['Agent', 'Squad', 'Tool', 'Provider', 'JudgeCredentialError'],
   },
   './errors': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'total',
-    simbolos: ['TheokitAgentError', 'AuthenticationError', 'isTransientError', 'RateLimitError'],
-    // M91 — a `lacuna` de `BudgetExceededError` SAIU: a classe da camada foi renomeada para
-    // `DelegationBudgetExceededError` (com alias `@deprecated` por uma major), e o barril passou a
-    // exportar as DUAS. A razão escrita aqui dizia que renomear era breaking e estava fora do escopo
-    // do M78 — o M91 pagou a conta, e a lacuna some junto com o conflito que a criou.
+    coverage: 'total',
+    symbols: ['TheokitAgentError', 'AuthenticationError', 'isTransientError', 'RateLimitError'],
+    // M91 — the `BudgetExceededError` `gap` is GONE: the layer's class was renamed to
+    // `DelegationBudgetExceededError` (with a `@deprecated` alias for one major), and the barrel now
+    // exports BOTH. The reason written here said renaming was breaking and out of M78's scope — M91
+    // paid the bill, and the gap goes away with the conflict that created it.
   },
   './retry': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'total',
-    simbolos: ['Retry'],
+    coverage: 'total',
+    symbols: ['Retry'],
   },
   './concurrency': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'total',
-    simbolos: ['Semaphore', 'mapWithConcurrency'],
+    coverage: 'total',
+    symbols: ['Semaphore', 'mapWithConcurrency'],
   },
   './messages': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'total',
-    simbolos: ['assistantText', 'extractToolUses', 'costAmountUsd'],
+    coverage: 'total',
+    symbols: ['assistantText', 'extractToolUses', 'costAmountUsd'],
   },
   './models': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'total',
-    simbolos: ['parseModelId'],
+    coverage: 'total',
+    symbols: ['parseModelId'],
   },
   './compaction': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'amostra',
-    simbolos: ['resolveEffectiveContextWindow', 'CONTEXT_WINDOW_MARGIN'],
+    coverage: 'sample',
+    symbols: ['resolveEffectiveContextWindow', 'CONTEXT_WINDOW_MARGIN'],
   },
   './path-safety': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'amostra',
-    simbolos: ['isForbiddenPath', 'safePathJoin', 'assertNoSymlinkEscape'],
+    coverage: 'sample',
+    symbols: ['isForbiddenPath', 'safePathJoin', 'assertNoSymlinkEscape'],
   },
   './subagents-loader': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'amostra',
-    // M81 — o loader de subagents em disco. Atravessa porque a assimetria oposta (skills com porta
-    // pública, subagents sem) é o que fez o consumidor escrever um SEGUNDO parser de `.md`, junto
-    // com um teste cuja única função era vigiar a divergência entre os dois.
-    simbolos: ['discoverSubagents', 'loadSubagentDefinition'],
+    coverage: 'sample',
+    // M81 — the on-disk subagent loader. It crosses because the opposite asymmetry (skills with a
+    // public door, subagents without) is what made the consumer write a SECOND `.md` parser, along
+    // with a test whose only job was to watch the two diverge.
+    symbols: ['discoverSubagents', 'loadSubagentDefinition'],
   },
   './a2a': {
     verdict: 'in',
     via: '../../src/index.js',
-    cobertura: 'amostra',
-    simbolos: ['SubAgent'],
+    coverage: 'sample',
+    symbols: ['SubAgent'],
   },
-  './auth': { verdict: 'in', via: '../../src/auth-entry.js', cobertura: 'amostra', simbolos: [] },
+  './auth': { verdict: 'in', via: '../../src/auth-entry.js', coverage: 'sample', symbols: [] },
   './sandbox': {
     verdict: 'in',
     via: '../../src/sandbox-entry.js',
-    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
-    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
-    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
-    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
-    cobertura: 'total',
-    simbolos: [],
+    // M90 — this was `'sample'` with an EMPTY list, which is no sample at all. This file's own
+    // comment says sampling "proves that SOMETHING crosses, not that the domain crosses"; a sample of
+    // size zero does not prove even that. It became `'total'` when the entry stopped being an
+    // `export *`: now every export of the source is enumerated, so total coverage passes with no `gaps`.
+    coverage: 'total',
+    symbols: [],
   },
   './persistence': {
     verdict: 'in',
     via: '../../src/persistence-entry.js',
-    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
-    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
-    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
-    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
-    cobertura: 'total',
-    simbolos: [],
+    // M90 — this was `'sample'` with an EMPTY list, which is no sample at all. This file's own
+    // comment says sampling "proves that SOMETHING crosses, not that the domain crosses"; a sample of
+    // size zero does not prove even that. It became `'total'` when the entry stopped being an
+    // `export *`: now every export of the source is enumerated, so total coverage passes with no `gaps`.
+    coverage: 'total',
+    symbols: [],
   },
   './interactive': {
     verdict: 'in',
     via: '../../src/interactive-entry.js',
-    // M90 — era `'amostra'` com lista VAZIA, que é amostra nenhuma. O comentário deste arquivo já diz
-    // que amostrar "prova que ALGO atravessa, não que o domínio atravessa"; uma amostra de tamanho
-    // zero não prova nem isso. Virou `'total'` quando o entry deixou de ser `export *`: agora cada
-    // export da fonte é enumerado, então a cobertura total passa sem `lacunas`.
-    cobertura: 'total',
-    simbolos: [],
+    // M90 — this was `'sample'` with an EMPTY list, which is no sample at all. This file's own
+    // comment says sampling "proves that SOMETHING crosses, not that the domain crosses"; a sample of
+    // size zero does not prove even that. It became `'total'` when the entry stopped being an
+    // `export *`: now every export of the source is enumerated, so total coverage passes with no `gaps`.
+    coverage: 'total',
+    symbols: [],
   },
 
-  // --- FORA, com razão. Nenhuma destas é silenciosa. ---
+  // --- OUT, with a reason. None of these is silent. ---
   './internal/memory-adapters': {
     verdict: 'out',
-    razao:
-      'Subpath SEMVER-EXEMPT, publicado pelo `@theokit/sdk@4.39.0` (theokit#160) com um único ' +
-      'propósito: deixar o `@theokit/sdk-memory` reusar o runtime de embeddings do SDK em vez de ' +
-      'manter a cópia de 342 linhas que causou a lacuna de adapters do theokit#128. Atravessar a ' +
-      'camada com ele colocaria na superfície pública um caminho que o SDK declara livre para ' +
-      'quebrar em minor — o oposto do contrato que esta lista existe para proteger.',
+    reason:
+      'A SEMVER-EXEMPT subpath, published by `@theokit/sdk@4.39.0` (theokit#160) with a single ' +
+      'purpose: letting `@theokit/sdk-memory` reuse the SDK embedding runtime instead of keeping the ' +
+      '342-line copy that caused the adapter gap in theokit#128. Crossing the layer with it would put ' +
+      'a path the SDK declares free to break in a minor onto the public surface — the opposite of the ' +
+      'contract this list exists to protect.',
   },
   './cron': {
     verdict: 'out',
-    razao:
-      'Agendamento é responsabilidade do host (systemd/CI/cloud scheduler), não do agente. Nenhum ' +
-      'consumidor pediu, e expor cria a expectativa de que a camada gerencia o ciclo de vida.',
+    reason:
+      "Scheduling is the host's responsibility (systemd/CI/cloud scheduler), not the agent's. No " +
+      'consumer asked for it, and exposing it creates the expectation that the layer manages the ' +
+      'lifecycle.',
   },
   './skills': {
     verdict: 'out',
-    razao:
-      'A camada tem seu próprio `skills-resolver.ts`, que é a superfície OO desse domínio. Expor a ' +
-      'primitiva do SDK ao lado criaria duas portas para a mesma coisa.',
+    reason:
+      'The layer has its own `skills-resolver.ts`, which is the OO surface of that domain. Exposing ' +
+      'the SDK primitive alongside it would create two doors to the same thing.',
   },
   './project': {
     verdict: 'out',
-    razao:
-      'Descoberta de raiz de projeto — o consumidor resolve o cwd por conta própria. Sem demanda.',
+    reason: 'Project-root discovery — the consumer resolves the cwd on its own. No demand.',
   },
   './subagents': {
     verdict: 'out',
-    razao:
-      'A delegação chega por `SubAgent` (via `/a2a`, já `in`). Este subpath é a mecânica de carga de ' +
-      'arquivo, que é detalhe interno do runtime.',
+    reason:
+      'Delegation arrives through `SubAgent` (via `/a2a`, already `in`). This subpath is the file ' +
+      'loading mechanics, which is an internal runtime detail.',
   },
   './task-store': {
     verdict: 'out',
-    razao:
-      'Persistência de tarefa é interna ao runtime; o consumidor observa por `Run`, não pelo store.',
+    reason:
+      'Task persistence is internal to the runtime; the consumer observes through `Run`, not the store.',
   },
   './workflow': {
     verdict: 'out',
-    razao:
-      'Orquestração de workflow é um domínio que a camada ainda não modelou. Entra quando houver demanda real.',
+    reason:
+      'Workflow orchestration is a domain the layer has not modelled yet. It enters when there is real demand.',
   },
   './eval': {
     verdict: 'out',
-    razao: 'Ferramental de avaliação é de desenvolvimento, não de runtime do agente.',
+    reason: 'Evaluation tooling is development-time, not agent runtime.',
   },
   './server/auth': {
     verdict: 'out',
-    razao:
-      'Superfície de servidor HTTP; a camada é de agente. `@theokit/http` é o pacote desse domínio.',
+    reason:
+      'An HTTP server surface; this layer is about agents. `@theokit/http` is the package for that domain.',
   },
   './server/errors-envelope': {
     verdict: 'out',
-    razao: 'Mesma razão de `/server/auth` — envelope de erro de transporte HTTP, não de agente.',
+    reason: 'Same reason as `/server/auth` — an HTTP transport error envelope, not an agent one.',
   },
   './subscription': {
     verdict: 'out',
-    razao: 'Billing/quota é do produto, não do framework de agente.',
+    reason: 'Billing/quota belongs to the product, not to the agent framework.',
   },
   './sanitize': {
     verdict: 'out',
-    razao:
-      'Redação de segredo é aplicada pelo runtime do SDK nos seus próprios sinks. Expor convida o ' +
-      'consumidor a redigir por conta, que é onde se esquece um caminho.',
+    reason:
+      'Secret redaction is applied by the SDK runtime on its own sinks. Exposing it invites the ' +
+      'consumer to redact by hand, which is where a path gets forgotten.',
   },
   './internal/persistence': {
     verdict: 'out',
-    razao: 'Marcado `internal/` pelo próprio SDK — re-exportar contradiz a intenção da origem.',
+    reason: "Marked `internal/` by the SDK itself — re-exporting contradicts the source's intent.",
   },
   './internal/security': {
     verdict: 'out',
-    razao: 'Idem `internal/persistence`.',
+    reason: 'Idem `internal/persistence`.',
   },
   './client': {
     verdict: 'out',
-    razao:
-      'Cliente HTTP do modo cloud; a camada cobre o modo local. Entra se/quando cloud for suportado aqui.',
+    reason:
+      'The cloud-mode HTTP client; this layer covers local mode. It enters if/when cloud is supported here.',
   },
   './filesystem': {
     verdict: 'out',
-    razao:
-      'As operações de arquivo que o consumidor precisa chegam como TOOLS (`@theokit/agents/tools`), ' +
-      'que já carregam o guard de escopo. A primitiva crua contornaria esse guard.',
+    reason:
+      'The file operations the consumer needs arrive as TOOLS (`@theokit/agents/tools`), which already ' +
+      'carry the scope guard. The raw primitive would bypass that guard.',
   },
 }
 
 /**
- * M90 — por que `/tools` e `/pty` NÃO entram neste mapa.
+ * M90 — why `/tools` and `/pty` are NOT in this map.
  *
- * A revisão do M90 apontou, corretamente, que eles ficavam sem oráculo — 98 dos 173 símbolos (57%), e
- * foi por ali que `TruncationMode` sumiu da superfície publicada do `4.25.0`. A correção **não** foi
- * estendê-los aqui: este mapa enumera os subpaths de `@theokit/sdk`, e `/tools` e `/pty` vêm de
- * pacotes IRMÃOS (`@theokit/sdk-tools`, `@theokit/sdk-pty`). Trazê-los exigiria uma segunda fonte de
- * verdade ao lado desta, e duas listas que precisam ficar em sincronia é o defeito que o review F-10
- * deste próprio arquivo registrou (a cópia que perdeu `bench` enquanto o comentário jurava "mesmo
- * escopo").
+ * M90's review pointed out, correctly, that they were left without an oracle — 98 of 173 symbols
+ * (57%), and it was through there that `TruncationMode` disappeared from the published surface of
+ * `4.25.0`. The fix was **not** to extend them here: this map enumerates `@theokit/sdk` subpaths, and
+ * `/tools` and `/pty` come from SIBLING packages (`@theokit/sdk-tools`, `@theokit/sdk-pty`). Bringing
+ * them in would require a second source of truth alongside this one, and two lists that must stay in
+ * sync is the defect this very file's F-10 review recorded (the copy that lost `bench` while the
+ * comment swore "same scope").
  *
- * Quem cobre os cinco é `subpath-surface.test.ts`, com um oráculo MAIS forte que `cobertura: 'total'`:
- * compara o que a camada emite (`dist/*.d.ts`) contra o que a fonte exporta, nas duas direções.
+ * What covers the five is `subpath-surface.test.ts`, with an oracle STRONGER than `coverage: 'total'`:
+ * it compares what the layer emits (`dist/*.d.ts`) against what the source exports, in both directions.
  */
 const SUBPATHS_DO_SDK = Object.keys(
   (require_('@theokit/sdk/package.json') as { exports: Record<string, unknown> }).exports,
 ).filter((k) => k !== './package.json')
 
-describe('M78 T2.1 — política de cobertura de subpath', () => {
-  it('test_cada_subpath_do_sdk_tem_veredito', () => {
-    const semDecisao = SUBPATHS_DO_SDK.filter((s) => DECISOES[s] === undefined)
+describe('M78 T2.1 — subpath coverage policy', () => {
+  it('test_every_sdk_subpath_has_a_verdict', () => {
+    const withoutDecision = SUBPATHS_DO_SDK.filter((s) => DECISIONS[s] === undefined)
 
     expect(
-      semDecisao,
-      `Subpath(s) do SDK sem veredito: ${semDecisao.join(', ')}.\n` +
-        'Isto é intencional: um subpath novo no SDK quebra este teste UMA vez, e o conserto é ' +
-        'escrever a decisão em DECISOES — inclusive `out` com razão. Sem isto, "ninguém decidiu" ' +
-        'fica indistinguível de "decidimos que fica fora", que é como a cobertura chegou a 9 de 28.',
+      withoutDecision,
+      `SDK subpath(s) with no verdict: ${withoutDecision.join(', ')}.\n` +
+        'This is intentional: a new subpath in the SDK breaks this test ONCE, and the fix is writing ' +
+        'the decision into DECISIONS — including `out` with a reason. Without it, "nobody decided" ' +
+        'stays indistinguishable from "we decided it stays out", which is how coverage reached 9 of 28.',
     ).toEqual([])
   })
 
-  it('test_a_lista_nao_referencia_subpath_INEXISTENTE', () => {
-    // O inverso: uma decisão órfã (subpath removido do SDK) também precisa aparecer, senão a lista
-    // acumula entradas mortas e passa a mentir sobre o que foi decidido.
-    const orfas = Object.keys(DECISOES).filter((s) => !SUBPATHS_DO_SDK.includes(s))
-    expect(orfas, `Decisão para subpath que o SDK não publica mais: ${orfas.join(', ')}`).toEqual(
-      [],
-    )
+  it('test_the_list_does_not_reference_a_NONEXISTENT_subpath', () => {
+    // The inverse: an orphan decision (a subpath removed from the SDK) must show up too, otherwise
+    // the list accumulates dead entries and starts lying about what was decided.
+    const orphans = Object.keys(DECISIONS).filter((s) => !SUBPATHS_DO_SDK.includes(s))
+    expect(
+      orphans,
+      `Decision for a subpath the SDK no longer publishes: ${orphans.join(', ')}`,
+    ).toEqual([])
   })
 
-  it('test_in_via_barril_declara_simbolos', () => {
-    // Um `in` sem símbolo é um veredito que nada verifica — documenta cobertura sem prová-la. Só é
-    // aceitável quando a camada tem subpath PRÓPRIO para o domínio (aí o subpath é a cobertura).
-    const naoVerificados = Object.entries(DECISOES)
+  it('test_in_via_the_barrel_declares_symbols', () => {
+    // An `in` with no symbol is a verdict that verifies nothing — it documents coverage without
+    // proving it. It is only acceptable when the layer has its OWN subpath for the domain (there the
+    // subpath is the coverage).
+    const unverified = Object.entries(DECISIONS)
       .filter(
-        ([, d]) => d.verdict === 'in' && d.simbolos.length === 0 && d.via === '../../src/index.js',
+        ([, d]) => d.verdict === 'in' && d.symbols.length === 0 && d.via === '../../src/index.js',
       )
       .map(([s]) => s)
     expect(
-      naoVerificados,
-      `\`in\` via barril sem símbolo declarado: ${naoVerificados.join(', ')}. ` +
-        'Um veredito que nada verifica é pior que nenhum — ele afirma cobertura que ninguém checou.',
+      unverified,
+      `\`in\` through the barrel with no declared symbol: ${unverified.join(', ')}. ` +
+        'A verdict that verifies nothing is worse than none — it asserts coverage nobody checked.',
     ).toEqual([])
   })
 
-  it('test_cada_veredito_OUT_tem_razao_nao_vazia', () => {
-    // CONTRAPROVA da política. Sem isto, `out` sem razão viraria a allowlist silenciosa que o
-    // formato existe para impedir — e ninguém revisitaria a decisão.
-    const semRazao = Object.entries(DECISOES)
-      .filter(([, d]) => d.verdict === 'out' && (d as Fora).razao.trim().length < 20)
+  it('test_every_OUT_verdict_has_a_non_empty_reason', () => {
+    // COUNTERPROOF for the policy. Without this, an `out` with no reason would become the silent
+    // allowlist the format exists to prevent — and nobody would revisit the decision.
+    const withoutReason = Object.entries(DECISIONS)
+      .filter(([, d]) => d.verdict === 'out' && (d as Fora).reason.trim().length < 20)
       .map(([s]) => s)
-    expect(semRazao, `Veredito \`out\` sem razão escrita: ${semRazao.join(', ')}`).toEqual([])
+    expect(
+      withoutReason,
+      `\`out\` verdict with no written reason: ${withoutReason.join(', ')}`,
+    ).toEqual([])
   })
 
-  const entradas = Object.entries(DECISOES).filter(
-    (e): e is [string, Dentro] => e[1].verdict === 'in' && e[1].simbolos.length > 0,
+  const entries = Object.entries(DECISIONS).filter(
+    (e): e is [string, Inside] => e[1].verdict === 'in' && e[1].symbols.length > 0,
   )
 
-  it.each(entradas)('test_os_simbolos_de_%s_ATRAVESSAM_a_camada', async (subpath, decisao) => {
-    // O `in` é VERIFICADO, não confiado. Uma decisão que diz "in" para um subpath que não atravessa
-    // é pior que nenhuma decisão: ela documenta uma cobertura que não existe.
-    const camada = (await import(decisao.via)) as Record<string, unknown>
-    for (const nome of decisao.simbolos) {
+  it.each(entries)('test_the_symbols_of_%s_CROSS_the_layer', async (subpath, decision) => {
+    // The `in` is VERIFIED, not trusted. A decision saying "in" for a subpath that does not cross is
+    // worse than no decision: it documents coverage that does not exist.
+    const layer = (await import(decision.via)) as Record<string, unknown>
+    for (const name of decision.symbols) {
       expect(
-        camada[nome],
-        `\`${nome}\` (de ${subpath}) não atravessa a camada por ${decisao.via}`,
+        layer[name],
+        `\`${name}\` (from ${subpath}) does not cross the layer through ${decision.via}`,
       ).toBeDefined()
     }
   })
 
-  const totais = Object.entries(DECISOES).filter(
-    (e): e is [string, Dentro] => e[1].verdict === 'in' && e[1].cobertura === 'total',
+  const totals = Object.entries(DECISIONS).filter(
+    (e): e is [string, Inside] => e[1].verdict === 'in' && e[1].coverage === 'total',
   )
 
-  it.each(totais)('test_%s_atravessa_por_INTEIRO_e_nao_por_amostra', async (subpath, decisao) => {
-    // O teste que existe por causa de um defeito real: a primeira versão só amostrava símbolos, e
-    // `RateLimitError` ficou de fora do re-export sem nada acusar — o refresh OAuth precisava dela
-    // para reconhecer um 429. Amostrar prova que ALGO atravessa, não que o DOMÍNIO atravessa.
-    const camada = (await import(decisao.via)) as Record<string, unknown>
+  it.each(totals)('test_%s_crosses_ENTIRELY_and_not_by_sample', async (subpath, decision) => {
+    // The test that exists because of a real defect: the first version only sampled symbols, and
+    // `RateLimitError` was left out of the re-export with nothing flagging it — the OAuth refresh
+    // needed it to recognize a 429. Sampling proves SOMETHING crosses, not that the DOMAIN crosses.
+    const layer = (await import(decision.via)) as Record<string, unknown>
     const sdk = (await import(`@theokit/sdk${subpath.slice(1)}`)) as Record<string, unknown>
 
-    const faltando = Object.keys(sdk).filter(
-      (nome) => camada[nome] === undefined && decisao.lacunas?.[nome] === undefined,
+    const missing = Object.keys(sdk).filter(
+      (name) => layer[name] === undefined && decision.gaps?.[name] === undefined,
     )
     expect(
-      faltando,
-      `Exports de ${subpath} que não atravessam: ${faltando.join(', ')}. ` +
-        'Ou re-exporte, ou registre em `lacunas` com a razão — uma hierarquia pela metade faz o ' +
-        'consumidor recriar a classe que falta, que é o defeito que este milestone fecha.',
+      missing,
+      `Exports of ${subpath} that do not cross: ${missing.join(', ')}. ` +
+        'Either re-export them, or record them in `gaps` with the reason — a half hierarchy makes the ' +
+        'consumer recreate the missing class, which is the defect this milestone closes.',
     ).toEqual([])
   })
 
-  it.each(totais)('test_as_lacunas_de_%s_tem_razao_escrita', (_subpath, decisao) => {
-    // CONTRAPROVA: sem isto, `lacunas` viraria a allowlist silenciosa que a política proíbe.
-    for (const [nome, razao] of Object.entries(decisao.lacunas ?? {})) {
-      expect(razao.trim().length, `lacuna \`${nome}\` sem razão escrita`).toBeGreaterThan(30)
+  it.each(totals)('test_the_gaps_of_%s_have_a_written_reason', (_subpath, decision) => {
+    // COUNTERPROOF: without this, `gaps` would become the silent allowlist the policy forbids.
+    for (const [name, reason] of Object.entries(decision.gaps ?? {})) {
+      expect(reason.trim().length, `gap \`${name}\` with no written reason`).toBeGreaterThan(30)
     }
   })
 
-  it.each(entradas)(
-    'test_os_simbolos_de_%s_sao_a_MESMA_referencia_do_sdk',
-    async (subpath, decisao) => {
-      // `toBe`, não `toBeDefined` — a lição do M73. Um wrapper passaria no teste anterior e quebraria
-      // `instanceof` aqui, em silêncio, sem nenhum teste de comportamento ficar vermelho.
-      const camada = (await import(decisao.via)) as Record<string, unknown>
+  it.each(entries)(
+    'test_the_symbols_of_%s_are_the_SAME_reference_as_the_sdk',
+    async (subpath, decision) => {
+      // `toBe`, not `toBeDefined` — M73's lesson. A wrapper would pass the previous test and break
+      // `instanceof` here, silently, with no behavioural test going red.
+      const layer = (await import(decision.via)) as Record<string, unknown>
       const sdk = (await import(`@theokit/sdk${subpath.slice(1)}`)) as Record<string, unknown>
-      for (const nome of decisao.simbolos) {
-        expect(camada[nome], `\`${nome}\` atravessa como CÓPIA, não como a classe do SDK`).toBe(
-          sdk[nome],
-        )
+      for (const name of decision.symbols) {
+        expect(layer[name], `\`${name}\` crosses as a COPY, not as the SDK class`).toBe(sdk[name])
       }
     },
   )

@@ -10,11 +10,11 @@ import { safeClose } from './helpers/safe-close.js'
 
 const FIXTURES = path.resolve(import.meta.dirname, '../../fixtures')
 
-describe('Onda 1 Mandatory Tests — Scaffold', () => {
+describe('Wave 1 Mandatory Tests — Scaffold', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = join(tmpdir(), `theo-onda1-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    tempDir = join(tmpdir(), `theo-wave1-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     mkdirSync(tempDir, { recursive: true })
   })
 
@@ -34,12 +34,12 @@ describe('Onda 1 Mandatory Tests — Scaffold', () => {
   })
 })
 
-describe('Onda 1 Mandatory Tests — Dev Server', () => {
+describe('Wave 1 Mandatory Tests — Dev Server', () => {
   let server: Awaited<ReturnType<typeof startDevServer>>
   let port: number
 
   beforeAll(async () => {
-    server = await startDevServer(path.join(FIXTURES, 'onda1-hello-theo'), { port: 0 })
+    server = await startDevServer(path.join(FIXTURES, 'wave1-hello-theo'), { port: 0 })
     const address = server.httpServer!.address()
     port = typeof address === 'object' && address ? address.port : 0
   }, 60000)

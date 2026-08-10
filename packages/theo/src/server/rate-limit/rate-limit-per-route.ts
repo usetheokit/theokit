@@ -148,7 +148,7 @@ export function createRouteRateLimiter(config: RouteRateLimitConfig | RateLimitC
   if (!(store instanceof InMemoryStore)) {
     throw new Error(
       'createRouteRateLimiter: async RateLimitStore implementations require a dedicated async middleware path. ' +
-        'Use the InMemoryStore default for the sync façade.',
+        'Use the InMemoryStore default for the sync facade.',
     )
   }
   const inMemoryStore = store
@@ -286,7 +286,7 @@ export function createRouteRateLimiterWeb(config: RouteRateLimitConfig | RateLim
   if (!(store instanceof InMemoryStore)) {
     throw new Error(
       'createRouteRateLimiterWeb: async RateLimitStore implementations require a dedicated async middleware path. ' +
-        'Use the InMemoryStore default for the Web façade.',
+        'Use the InMemoryStore default for the Web facade.',
     )
   }
   const inMemoryStore = store

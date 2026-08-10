@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const FIXTURES = path.resolve(import.meta.dirname, '../../fixtures')
 
-describe('Onda 8 — Observability + Error Model', () => {
+describe('Wave 8 — Observability + Error Model', () => {
   let server: Awaited<ReturnType<typeof startDevServer>>
   let port: number
 
@@ -18,7 +18,7 @@ describe('Onda 8 — Observability + Error Model', () => {
     await server?.close()
   }, 15000)
 
-  // Teste 1 — Erro de validação tem estrutura previsível
+  // Test 1 — a validation error has a predictable structure
   it('error response has predictable structure with requestId', async () => {
     const res = await fetch(`http://localhost:${port}/api/nonexistent`)
     expect(res.status).toBe(404)
@@ -28,7 +28,7 @@ describe('Onda 8 — Observability + Error Model', () => {
     expect(data.error.requestId).toBeDefined()
   })
 
-  // Teste 2 — Erro inesperado não vaza stack trace
+  // Test 2 — an unexpected error does not leak a stack trace
   it('500 error does not leak stack trace details', async () => {
     const res = await fetch(`http://localhost:${port}/api/crash`)
     expect(res.status).toBe(500)
@@ -39,7 +39,7 @@ describe('Onda 8 — Observability + Error Model', () => {
     // We just verify the structure is correct.
   })
 
-  // Teste 3 — Toda resposta API tem x-request-id
+  // Test 3 — every API response has an x-request-id
   it('every API response has x-request-id header', async () => {
     const res = await fetch(`http://localhost:${port}/api/health`)
     expect(res.status).toBe(200)
@@ -50,7 +50,7 @@ describe('Onda 8 — Observability + Error Model', () => {
     expect(requestId).toMatch(/^[0-9a-f-]{36}$/)
   })
 
-  // Teste 4 — requestId no header matches requestId no error body
+  // Test 4 — the header requestId matches the error body requestId
   it('requestId in header matches requestId in error body', async () => {
     const res = await fetch(`http://localhost:${port}/api/nonexistent`)
     const headerId = res.headers.get('x-request-id')
@@ -58,7 +58,7 @@ describe('Onda 8 — Observability + Error Model', () => {
     expect(data.error.requestId).toBe(headerId)
   })
 
-  // Teste 5 — 500 error also has requestId
+  // Test 5 — 500 error also has requestId
   it('500 error has x-request-id header', async () => {
     const res = await fetch(`http://localhost:${port}/api/crash`)
     const requestId = res.headers.get('x-request-id')

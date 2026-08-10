@@ -1,16 +1,17 @@
 /**
- * M82 T2.1 — `HookHandlers` é público e `.hooks()` o aceita.
+ * M82 T2.1 — `HookHandlers` is public and `.hooks()` accepts it.
  *
- * ## O que estes testes seguram
+ * ## What these tests hold
  *
- * `.hooks()` recebia `Readonly<Record<string, unknown>>`: qualquer chave passava e cada handler
- * chegava com `ctx: unknown`. Quem quisesse tipo declarava o seu — e o agent-builder declarou, com
- * um alias local de cinco handlers, quatro deles com `ctx: unknown` porque não havia contexto para
- * importar. É a mesma classe do M81 (`loadRole`): conhecimento do framework reimplementado no app.
+ * `.hooks()` received `Readonly<Record<string, unknown>>`: any key passed and every handler arrived
+ * with `ctx: unknown`. Anyone wanting types declared their own — and agent-builder did, with a local
+ * alias of five handlers, four of them carrying `ctx: unknown` because there was no context to
+ * import. It is the same class as M81 (`loadRole`): framework knowledge reimplemented in the app.
  *
- * O teste de tipo aqui é uma asserção de COMPILAÇÃO — se `ctx` voltar a ser `unknown`, os acessos a
- * `ctx.name` / `ctx.toolCalls` param de compilar e o `tsc` do pacote falha. `vitest` transpila sem
- * typecheck, então este arquivo só prova o contrato quando o `tsc` roda junto (ele roda no
+ * The type test here is a COMPILE-time assertion — if `ctx` goes back to being `unknown`, the
+ * accesses to `ctx.name` / `ctx.toolCalls` stop compiling and the package's `tsc` fails. `vitest`
+ * transpiles without typechecking, so this file only proves the contract when `tsc` runs alongside
+ * (it runs in
  * pre-push e no CI).
  */
 import { describe, expect, it } from 'vitest'
@@ -18,45 +19,45 @@ import { describe, expect, it } from 'vitest'
 import { AgentBuilder } from '../../src/index.js'
 import type { HookHandlers } from '../../src/bridge/hook-handlers.js'
 
-describe('M82 — HookHandlers público', () => {
-  it('test_HookHandlers_tipa_o_ctx_de_cada_handler', async () => {
-    const nomes: string[] = []
+describe('M82 — public HookHandlers', () => {
+  it('test_HookHandlers_types_the_ctx_of_every_handler', async () => {
+    const names: string[] = []
     const handlers: HookHandlers = {
-      // `ctx.name` só compila porque o contexto é `PreToolCallContext`, não `unknown`.
+      // `ctx.name` only compiles because the context is `PreToolCallContext`, not `unknown`.
       pre_tool_call: (ctx) => {
-        nomes.push(ctx.name)
+        names.push(ctx.name)
         return undefined
       },
-      // O ganho central do M82: o seam de transform enxerga as tool calls do turn.
+      // M82's central gain: the transform seam sees the turn's tool calls.
       transform_tool_result: (results, ctx) => {
-        for (const c of ctx.toolCalls) nomes.push(c.name)
+        for (const c of ctx.toolCalls) names.push(c.name)
         return results
       },
       post_tool_call: (ctx) => {
-        nomes.push(ctx.result.stdout)
+        names.push(ctx.result.stdout)
       },
     }
 
     const def = AgentBuilder.create().model('x').hooks(handlers).build()
     expect(def.hooks).toBe(handlers)
 
-    // A coleção existe para ser LIDA: rodar os handlers prova que os campos tipados são chamáveis,
-    // não só declaráveis. Sem esta parte o teste seria uma asserção de compilação disfarçada.
+    // The collection exists to be READ: running the handlers proves the typed fields are callable, not
+    // merely declarable. Without this part the test would be a compile assertion in disguise.
     await handlers.pre_tool_call?.({ agentId: 'a', runId: 'r', name: 'alpha', args: {} })
     await handlers.transform_tool_result?.([], {
       agentId: 'a',
       runId: 'r',
       toolCalls: [{ id: 'c1', name: 'beta', args: {} }],
     })
-    expect(nomes).toEqual(['alpha', 'beta'])
+    expect(names).toEqual(['alpha', 'beta'])
   })
 
-  it('test_CONTRAPROVA_hooks_ainda_aceita_o_shape_solto', () => {
-    // ADR-4: estreitar de uma vez quebraria consumidor com handler não conforme. A união mantém o
-    // caminho antigo vivo — sem esta contraprova, trocar a assinatura por `HookHandlers` puro
-    // passaria no teste acima e quebraria quem hoje passa um mapa solto.
-    const solto: Readonly<Record<string, unknown>> = { on_session_start: () => undefined }
-    const def = AgentBuilder.create().model('x').hooks(solto).build()
-    expect(def.hooks).toBe(solto)
+  it('test_COUNTERPROOF_hooks_still_accepts_the_loose_shape', () => {
+    // ADR-4: narrowing in one go would break a consumer with a non-conforming handler. The union keeps
+    // the old path alive — without this counterproof, swapping the signature for a plain `HookHandlers`
+    // would pass the test above and break whoever passes a loose map today.
+    const loose: Readonly<Record<string, unknown>> = { on_session_start: () => undefined }
+    const def = AgentBuilder.create().model('x').hooks(loose).build()
+    expect(def.hooks).toBe(loose)
   })
 })

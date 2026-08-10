@@ -1,39 +1,40 @@
 /**
- * M73 — "enriquecer nunca reduz": a camada re-exporta a mecânica de store do SDK.
+ * M73 — "enriching never reduces": the layer re-exports the SDK's store mechanics.
  *
- * ## Por que este arquivo existe
+ * ## Why this file exists
  *
- * `@theokit/sdk/auth` exporta 19 símbolos; `@theokit/agents/auth` exportava **1 valor e 6 tipos** —
- * `AuthProvider` mais os tipos do domínio. **Zero funções atravessavam.**
+ * `@theokit/sdk/auth` exports 19 symbols; `@theokit/agents/auth` exported **1 value and 6 types** —
+ * `AuthProvider` plus the domain types. **Zero functions crossed.**
  *
- * Isso não é um detalhe de conveniência. O consumidor (`agent-builder`) tem como regra INQUEBRÁVEL
- * nunca importar `@theokit/sdk*` direto: toda superfície do SDK precisa chegar por esta camada. Sem o
- * re-export, **reimplementar era a única saída legal** — e foi o que aconteceu: seis nomes idênticos
+ * This is not a convenience detail. The consumer (`agent-builder`) holds an UNBREAKABLE rule never
+ * to import `@theokit/sdk*` directly: every SDK surface must arrive through this layer. Without the
+ * re-export, **reimplementing was the only legal way out** — and that is what happened: six identical
+ * names
  * (`credentialHome`, `authFilePath`, `CredentialError`, `readStoredOAuth`, `resolveCredential`,
- * `writeCredential`) reescritos lá, ~120 linhas de mecânica de store duplicada.
+ * `writeCredential`) rewritten over there, ~120 lines of duplicated store mechanics.
  *
- * O defeito não era indisciplina do consumidor. Era uma lacuna aqui que só deixava uma porta aberta.
+ * The defect was not the consumer's indiscipline. It was a gap here that left only one door open.
  *
- * ## Por que pass-through PURO, e não um wrapper
+ * ## Why a PURE pass-through, and not a wrapper
  *
- * A camada existe para ENRIQUECER (parsimony Rung 9): ela acrescenta OO onde há estado ou orquestração
- * a segurar — é o que `AuthProvider` faz com o par `config`+`store`. A mecânica de store é função pura
- * de I/O: envolvê-la só acrescentaria uma camada de indireção sem nada dentro.
+ * The layer exists to ENRICH (parsimony Rung 9): it adds OO where there is state or orchestration to
+ * hold — which is what `AuthProvider` does with the `config`+`store` pair. The store mechanics are
+ * pure I/O functions: wrapping them would only add a layer of indirection with nothing inside.
  *
- * ## O que este teste protege que ninguém veria quebrar
+ * ## What this test protects that nobody would see break
  *
- * `instanceof`. O consumidor faz `err instanceof CredentialError` no caminho de login. Enquanto a
- * classe for **a mesma referência** do SDK, isso funciona. Se um dia o build inlinear o SDK
- * (`noExternal` no tsup), a camada passa a exportar uma **cópia** da classe: `instanceof` vira `false`
- * silenciosamente, o erro tipado deixa de ser reconhecido, e **nenhum teste de comportamento fica
- * vermelho**. Por isso a asserção é de identidade referencial (`toBe`), não de forma.
+ * `instanceof`. The consumer writes `err instanceof CredentialError` on the login path. While the
+ * class is **the same reference** as the SDK's, that works. If the build ever inlines the SDK
+ * (`noExternal` in tsup), the layer starts exporting a **copy** of the class: `instanceof` silently
+ * becomes `false`, the typed error stops being recognized, and **no behavioural test goes red**. That
+ * is why the assertion is one of referential identity (`toBe`), not of shape.
  */
 import { describe, expect, it } from 'vitest'
 
-import * as camada from '../../src/auth-entry.js'
+import * as layerDir from '../../src/auth-entry.js'
 import * as sdk from '@theokit/sdk/auth'
 
-/** A mecânica de store — o que o SDK possui e o que a camada precisa deixar atravessar. */
+/** The store mechanics — what the SDK owns and what the layer must let cross. */
 const MECANICA_DE_STORE = [
   'credentialHome',
   'authFilePath',
@@ -44,26 +45,26 @@ const MECANICA_DE_STORE = [
 ] as const
 
 /**
- * M110 — o device flow **RFC 8628**, pelo MESMO argumento do M73, sobre símbolos que ele não cobriu.
+ * M110 — the **RFC 8628** device flow, on the SAME argument as M73, over symbols it did not cover.
  *
- * Medido antes de re-exportar: o SDK implementa o padrão e este subpath re-exportava **apenas** a
- * variante da OpenAI. Um consumidor que precisasse do RFC tinha duas saídas — violar a fronteira
- * INQUEBRÁVEL, ou reimplementar o protocolo. A segunda é legal, e é exatamente a classe de defeito
- * que o M73 documenta ter custado ~120 linhas duplicadas noutro subsistema.
+ * Measured before re-exporting: the SDK implements the standard and this subpath re-exported **only**
+ * OpenAI's variant. A consumer needing the RFC had two ways out — break the UNBREAKABLE boundary, or
+ * reimplement the protocol. The second is legal, and it is exactly the class of defect M73 documents
+ * as having cost ~120 duplicated lines in another subsystem.
  *
- * Estes entram na MESMA bateria de `toBe` de propósito: pass-through puro tem um só oráculo, e é a
- * identidade de referência. Uma lista separada com asserção mais fraca seria um segundo oráculo sobre
- * o mesmo fato.
+ * These join the SAME `toBe` battery on purpose: a pure pass-through has one oracle, and it is
+ * referential identity. A separate list with a weaker assertion would be a second oracle over the
+ * same fact.
  */
-const DEVICE_FLOW_PADRAO = [
+const STANDARD_DEVICE_FLOW = [
   'deviceLogin',
   'requestDeviceCode',
   'pollDeviceToken',
-  // `openaiDeviceLogin` entra AQUI, e a review do M110 mediu por que isso importa: envolvê-lo num
-  // wrapper passava a bateria inteira (21/21, EXIT=0). Ele era checado só por `toBeDefined` e por
-  // `not.toBe(deviceLogin)` — nenhum dos dois vê um wrapper.
+  // `openaiDeviceLogin` belongs HERE, and M110's review measured why that matters: wrapping it passed
+  // the whole battery (21/21, EXIT=0). It was checked only by `toBeDefined` and by
+  // `not.toBe(deviceLogin)` — neither of which sees a wrapper.
   //
-  // Era o símbolo que o milestone existe para tornar alcançável, e o único sem a trava forte.
+  // It was the symbol the milestone exists to make reachable, and the only one without the strong pin.
   'openaiDeviceLogin',
 ] as const
 
@@ -92,7 +93,7 @@ const OAUTH_ENGINE = [
   'extractAccountId',
 ] as const
 
-const PASS_THROUGH = [...MECANICA_DE_STORE, ...DEVICE_FLOW_PADRAO, ...OAUTH_ENGINE] as const
+const PASS_THROUGH = [...MECANICA_DE_STORE, ...STANDARD_DEVICE_FLOW, ...OAUTH_ENGINE] as const
 
 describe('M112 — `resolveCredential` still does NOT cross over, on purpose', () => {
   it('test_resolveCredential_does_not_cross_the_layer', () => {
@@ -106,66 +107,67 @@ describe('M112 — `resolveCredential` still does NOT cross over, on purpose', (
     // ends up with two identical names of divergent semantics in one scope — a silent failure, which
     // is exactly what the original decision avoids.
     expect(
-      (camada as Record<string, unknown>).resolveCredential,
-      '`resolveCredential` started crossing the layer. The omission is DELIBERATE and documented in ' +
+      (layerDir as Record<string, unknown>).resolveCredential,
+      '`resolveCredential` started crossing the layerDir. The omission is DELIBERATE and documented in ' +
         '`src/auth-entry.ts`: two functions share this name with divergent semantics. Exposing both ' +
         'in one scope invites importing the wrong one, silently.',
     ).toBeUndefined()
   })
 })
 
-describe('M110 — a camada NÃO esconde o device flow padrão atrás da variante da OpenAI', () => {
-  it('test_a_variante_da_OPENAI_continua_atravessando', () => {
-    // PISO ANTI-VACUIDADE: se nenhuma das duas atravessasse, "o padrão atravessa" seria satisfeito
-    // por um subpath vazio. E o Codex é o provider que este trabalho existe para facilitar — perdê-lo
-    // enquanto se abre o padrão inverteria o resultado.
+describe('M110 — the layerDir does NOT hide the standard device flow behind the OpenAI variant', () => {
+  it('test_the_OPENAI_variant_still_crosses', () => {
+    // ANTI-VACUITY FLOOR: if neither crossed, "the standard crosses" would be satisfied by an empty
+    // subpath. And Codex is the provider this work exists to make easier — losing it while opening the
+    // standard would invert the result.
     expect(
-      camada.openaiDeviceLogin,
-      'a variante da OpenAI parou de atravessar — o Codex ficou inalcançável',
+      layerDir.openaiDeviceLogin,
+      "OpenAI's variant stopped crossing — Codex became unreachable",
     ).toBeDefined()
   })
 
-  it('test_as_DUAS_formas_coexistem_e_sao_DISTINTAS', () => {
-    // Fundir os dois protocolos quebraria o Codex: o RFC tem UM `deviceCodeEndpoint`; a OpenAI tem
-    // DOIS (`deviceUsercodeEndpoint` → `devicePollEndpoint`, com PKCE). Este teste falha se alguém
-    // "simplificar" apontando os dois nomes para a mesma função.
+  it('test_BOTH_shapes_coexist_and_are_DISTINCT', () => {
+    // Merging the two protocols would break Codex: the RFC has ONE `deviceCodeEndpoint`; OpenAI has
+    // TWO (`deviceUsercodeEndpoint` → `devicePollEndpoint`, with PKCE). This test fails if somebody
+    // "simplifies" by pointing both names at the same function.
     expect(
-      camada.deviceLogin,
-      'o flow padrão e o da OpenAI viraram a mesma referência — os protocolos são diferentes, e ' +
-        'unificá-los quebra o Codex',
-    ).not.toBe(camada.openaiDeviceLogin)
+      layerDir.deviceLogin,
+      "the standard flow and OpenAI's became the same reference — the protocols differ, and " +
+        'unifying them breaks Codex',
+    ).not.toBe(layerDir.openaiDeviceLogin)
   })
 })
 
-describe('M73 — @theokit/agents/auth deixa a mecânica de store atravessar', () => {
-  it.each(PASS_THROUGH)('test_a_camada_reexporta_%s_do_sdk', (nome) => {
+describe('M73 — @theokit/agents/auth lets the store mechanics cross', () => {
+  it.each(PASS_THROUGH)('test_the_layer_re_exports_%s_from_the_sdk', (name) => {
     expect(
-      (camada as Record<string, unknown>)[nome],
-      `\`${nome}\` não atravessa a camada. O consumidor não pode importar \`@theokit/sdk*\` direto ` +
-        '(fronteira INQUEBRÁVEL), então sem este re-export a única saída legal dele é reimplementar — ' +
-        'que é exatamente como seis nomes idênticos foram parar no agent-builder.',
+      (layerDir as Record<string, unknown>)[name],
+      `\`${name}\` does not cross the layer. The consumer cannot import \`@theokit/sdk*\` directly ` +
+        '(an UNBREAKABLE boundary), so without this re-export its only legal way out is to ' +
+        'reimplement — which is exactly how six identical names ended up in agent-builder.',
     ).toBeDefined()
   })
 
-  it.each(PASS_THROUGH)('test_%s_e_a_MESMA_referencia_do_sdk', (nome) => {
-    // `toBe`, não `toBeDefined`: pass-through PURO. Um wrapper passaria no teste anterior e falharia
-    // aqui — e é o wrapper que quebra `instanceof` sem nada ficar vermelho.
+  it.each(PASS_THROUGH)('test_%s_is_the_SAME_reference_as_the_sdk', (name) => {
+    // `toBe`, not `toBeDefined`: a PURE pass-through. A wrapper would pass the previous test and fail
+    // here — and it is the wrapper that breaks `instanceof` with nothing going red.
     expect(
-      (camada as Record<string, unknown>)[nome],
-      `\`${nome}\` existe na camada mas NÃO é a mesma referência do SDK. Ou virou wrapper, ou o build ` +
-        'inlineou o SDK. Para uma CLASSE isso quebra `instanceof` em silêncio no consumidor; para uma ' +
-        'função, faz a camada divergir do que o SDK garante.',
-    ).toBe((sdk as Record<string, unknown>)[nome])
+      (layerDir as Record<string, unknown>)[name],
+      `\`${name}\` exists in the layer but is NOT the same reference as the SDK's. Either it became a ` +
+        'wrapper, or the build inlined the SDK. For a CLASS that silently breaks `instanceof` in the ' +
+        'consumer; for a function, it makes the layer diverge from what the SDK guarantees.',
+    ).toBe((sdk as Record<string, unknown>)[name])
   })
 
-  it('test_CredentialError_preserva_instanceof_atraves_da_camada', () => {
-    // O caso concreto: `agents/lib/auth/login.ts:48` do consumidor faz `err instanceof CredentialError`
-    // com a classe importada DAQUI, contra um erro lançado pelo SDK. Só funciona com um realm só.
-    const lancadoPeloSdk = new sdk.CredentialError('erro de teste')
+  it('test_CredentialError_preserves_instanceof_across_the_layer', () => {
+    // The concrete case: the consumer's `agents/lib/auth/login.ts:48` does
+    // `err instanceof CredentialError` with the class imported FROM HERE, against an error thrown by
+    // the SDK. It only works with a single realm.
+    const thrownBySdk = new sdk.CredentialError('a test error')
     expect(
-      lancadoPeloSdk instanceof camada.CredentialError,
-      'a classe exportada pela camada não reconhece um erro lançado pelo SDK — há dois realms, e o ' +
-        '`instanceof` do consumidor falha em silêncio',
+      thrownBySdk instanceof layerDir.CredentialError,
+      'the class the layer exports does not recognize an error thrown by the SDK — there are two ' +
+        "realms, and the consumer's `instanceof` fails silently",
     ).toBe(true)
   })
 })
