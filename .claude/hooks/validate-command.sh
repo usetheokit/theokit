@@ -38,10 +38,40 @@ fi
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
+# --- PERF: cheap triage before the expensive guards ---
+# This hook runs on EVERY Bash tool call, and it was spending ~50 forks per run
+# (27 `echo | grep`, 5 `sed`, jq, `git branch`) even for a command like `ls`.
+# Each guard below can only fire when a specific literal is present in the
+# command, so a native glob test — zero forks — decides upfront whether that
+# guard's regexes are worth running at all.
+#
+# The tests are deliberately BROADER than the guards they gate: any command
+# containing "git" reaches every git guard exactly as before, so a bypass would
+# require smuggling `git` past a substring match on the raw command. Narrowing
+# these further (e.g. requiring "git ") would trade the property that makes this
+# safe — over-matching costs a few milliseconds, under-matching costs a hole.
+HAS_GIT=no;  case "$COMMAND" in *git*) HAS_GIT=yes ;; esac
+HAS_RM=no;   case "$COMMAND" in *rm*)  HAS_RM=yes ;; esac
+HAS_ZONE=no; case "$COMMAND" in *knowledge-base/*) HAS_ZONE=yes ;; esac
+HAS_PKG=no;  case "$COMMAND" in *pip*|*poetry*|*uv*|*npm*|*pnpm*|*yarn*|*cargo*|*go*) HAS_PKG=yes ;; esac
+
 # F3: strip leading git global options so `git <globals> <subcommand>` can never
 # bypass the subcommand guards. Globals normalized: -C DIR, -c K=V,
 # --git-dir=..., --work-tree=..., -p, --paginate. Applied repeatedly (a git
 # invocation may carry several) and to every git occurrence in a compound.
+# Split a command into independently-judged segments. `$2 = with-pipe` also splits
+# on `|`; omit it when the pipe itself is part of what is being detected (a pipe
+# can be the export vector: `cat <file> | tee <dest>`).
+# Defined at top level on purpose: the force-push guard and the study-zone export
+# guard both call it, and those live under different short-circuits. Nesting it
+# inside the git branch made `cat knowledge-base/tools/x | tee /out` fail open
+# with "split_segments: command not found" — the export guard silently skipped.
+split_segments() {
+  local sep='(\|\||&&|;)'
+  [ "${2:-}" = "with-pipe" ] && sep='(\|\||&&|;|\|)'
+  printf '%s' "$1" | sed -E "s/$sep/\n/g"
+}
+
 strip_git_globals() {
   local cmd="$1" prev=""
   while [ "$cmd" != "$prev" ]; do
@@ -52,9 +82,16 @@ strip_git_globals() {
 }
 
 # CMD is the normalized command used for all git subcommand matching.
-CMD=$(strip_git_globals "$COMMAND")
+# The normalization only ever rewrites `git ...`, so skipping it on a command
+# with no `git` leaves CMD identical to COMMAND while saving the sed loop.
+if [ "$HAS_GIT" = yes ]; then
+  CMD=$(strip_git_globals "$COMMAND")
+else
+  CMD="$COMMAND"
+fi
 
 # --- Inquebrável git rules (CLAUDE.md §4) ---
+if [ "$HAS_GIT" = yes ]; then
 if echo "$CMD" | grep -qE 'git[[:space:]]+checkout([[:space:]]|$)'; then
   echo "BLOCKED: 'git checkout' is forbidden by Inquebrável Rule 4. Use 'git switch' or 'git restore' instead." >&2
   exit 2
@@ -75,15 +112,6 @@ fi
 # judged on its own, so a force token only counts inside the segment that pushes.
 # Every push in a compound is inspected — checking only the first or last would
 # lose `git push --force a && git push b`.
-# Split a command into independently-judged segments. `$2 = with-pipe` also splits
-# on `|`; omit it when the pipe itself is part of what is being detected (a pipe
-# can be the export vector: `cat <file> | tee <dest>`).
-split_segments() {
-  local sep='(\|\||&&|;)'
-  [ "${2:-}" = "with-pipe" ] && sep='(\|\||&&|;|\|)'
-  printf '%s' "$1" | sed -E "s/$sep/\n/g"
-}
-
 FORCE_TOKEN_RE='(--force([[:space:]]|$)|(^|[[:space:]])-[a-z]*f([[:space:]]|$)|[[:space:]]\+[^[:space:]-][^[:space:]]*)'
 force_push_detected() {
   local seg
@@ -178,6 +206,7 @@ if [ "$BRANCH" = "develop" ] || [ "$INLINE_DEVELOP" = "yes" ]; then
     fi
   fi
 fi
+fi  # end HAS_GIT — every guard above matches on a literal `git`
 
 # --- rm -rf on dangerous system paths ---
 # F1: detect recursive intent in ANY flag order/spelling (-rf, -fr, -Rf, -f -r,
@@ -194,7 +223,8 @@ fi
 RM_RECURSIVE_RE='(^|[[:space:]])(-[a-zA-Z]*[rR][a-zA-Z]*([[:space:]]|$)|--recursive([[:space:]]|=|$))'
 RM_INVOCATION_RE='(^|[[:space:]]|;|&&|\|\||\||\()[[:space:]]*rm([[:space:]])'
 DANGEROUS_PATH_RE='(/([[:space:]]|$)|(^|[[:space:]])/\*|~/?([[:space:]]|$)|\$HOME/?([[:space:]]|$)|/home([[:space:]]|$)|/home/([[:space:]]|$)|/home/[^/[:space:]]+/?([[:space:]]|$)|(/etc|/usr|/var|/bin|/lib|/opt|/boot|/root)([[:space:]]|/|$))'
-if echo "$CMD" | grep -qE "$RM_INVOCATION_RE" \
+if [ "$HAS_RM" = yes ] \
+   && echo "$CMD" | grep -qE "$RM_INVOCATION_RE" \
    && echo "$CMD" | grep -qE "$RM_RECURSIVE_RE" \
    && echo "$CMD" | grep -qE "$DANGEROUS_PATH_RE"; then
   echo "BLOCKED: 'rm -r' on a system/home-root path. Scope recursive deletions to project-relative paths, deep project subdirectories, or /tmp/." >&2
@@ -204,7 +234,9 @@ fi
 # --- knowledge-base/references/ and knowledge-base/tools/ are read-only study material ---
 # Escape hatch: a `.references-bootstrap` marker file at project root unblocks WRITE ops
 # to references/ AND tools/. Use ONLY for initial population; delete it right after.
-if [ ! -f "$PROJECT_DIR/.references-bootstrap" ]; then
+# Both guards below require the literal `knowledge-base/` in the command, so the
+# glob test skips the segment loop (one grep per segment) for everything else.
+if [ "$HAS_ZONE" = yes ] && [ ! -f "$PROJECT_DIR/.references-bootstrap" ]; then
   if echo "$COMMAND" | grep -qE '(^|[[:space:]]|;|&&|\|\||\||\()[[:space:]]*((rm|mv|cp|sed[[:space:]]+-i|tee)[[:space:]]+[^;&|]*(\./)?(\.claude/)?knowledge-base/(references|tools)/|>{1,2}[[:space:]]+(\./)?(\.claude/)?knowledge-base/(references|tools)/)'; then
     echo "BLOCKED: 'knowledge-base/references/' and 'knowledge-base/tools/' are read-only study material. Capture findings in 'knowledge-base/discoveries/blueprints/'. For initial bootstrap, create '.references-bootstrap' at project root AND cite the source in CHANGELOG.md; remove the marker when done." >&2
     exit 2
@@ -238,7 +270,7 @@ fi
 # in a public history. Matches the full zone path only, so ordinary words like
 # "cross-references" are untouched. `-F <file>` is read too, since that is how a
 # long message is normally supplied.
-if echo "$CMD" | grep -qE 'git[[:space:]]+commit([[:space:]]|$)'; then
+if [ "$HAS_GIT" = yes ] && echo "$CMD" | grep -qE 'git[[:space:]]+commit([[:space:]]|$)'; then
   COMMIT_TEXT="$COMMAND"
   MSG_FILE=$(printf '%s' "$COMMAND" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p')
   if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
@@ -252,13 +284,15 @@ $(cat "$MSG_FILE" 2>/dev/null || true)"
 fi
 
 # --- No Co-Authored-By trailers in commit messages (user policy) ---
-if echo "$CMD" | grep -qE 'git[[:space:]]+commit' && echo "$COMMAND" | grep -qiE 'co-authored-by'; then
+if [ "$HAS_GIT" = yes ] && echo "$CMD" | grep -qE 'git[[:space:]]+commit' && echo "$COMMAND" | grep -qiE 'co-authored-by'; then
   echo "BLOCKED: 'Co-Authored-By:' trailers are forbidden on this project's commits (user policy). Remove the trailer from the commit message body." >&2
   exit 2
 fi
 
 # --- No dependency install inside read-only references/ ---
-if echo "$COMMAND" | grep -qE '(pip|poetry|uv|npm|pnpm|yarn|cargo|go[[:space:]]+(get|mod))[[:space:]]+(install|add|tidy|download)' && pwd | grep -qE '(\.claude/)?knowledge-base/references/'; then
+if [ "$HAS_PKG" = yes ] \
+   && echo "$COMMAND" | grep -qE '(pip|poetry|uv|npm|pnpm|yarn|cargo|go[[:space:]]+(get|mod))[[:space:]]+(install|add|tidy|download)' \
+   && case "$PWD" in *knowledge-base/references/*) true ;; *) false ;; esac; then
   echo "BLOCKED: never install dependencies inside knowledge-base/references/. Those are read-only clones." >&2
   exit 2
 fi
