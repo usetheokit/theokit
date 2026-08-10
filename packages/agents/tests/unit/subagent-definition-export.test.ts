@@ -98,11 +98,11 @@ describe('M96 U2 — SubagentDefinition alongside the loader', () => {
   })
 
   it('test_the_FLOOR_of_the_sdk_range_is_the_version_that_has_settingSources', () => {
-    const manifesto = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as {
+    const manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as {
       dependencies: Record<string, string>
     }
-    const faixa = manifesto.dependencies['@theokit/sdk']
-    expect(faixa).toBeDefined()
+    const range = manifest.dependencies['@theokit/sdk']
+    expect(range).toBeDefined()
     // FLOOR, never membership (D11): `^4.35.0` "includes" 4.36.0 and still permits installing the
     // version without `settingSources`.
     //
@@ -111,7 +111,7 @@ describe('M96 U2 — SubagentDefinition alongside the loader', () => {
     // raise: M107 review HIGH-2 moved the floor to 4.37.0 because 4.36.0 silently ignores the `cwd`
     // that `Agent.list` advertises, and this test went red for guarding the opposite of its purpose.
     // A floor BELOW the settingSources version is the defect; a floor above it is the mechanism.
-    const floor = faixa!.replace(/^[\^~]/, '')
+    const floor = range!.replace(/^[\^~]/, '')
     expect(
       compareVersions(floor, PHASE_1_VERSION),
       `the floor ${floor} is below ${PHASE_1_VERSION}, the first version with settingSources — a ` +

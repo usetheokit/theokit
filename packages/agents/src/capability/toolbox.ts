@@ -89,7 +89,7 @@ export class ToolboxCapability implements Capability {
       // decides to call the tool, which is the worst moment to discover a typo.
       if (typeof (instance as Record<string, unknown>)[tool.method] !== 'function') {
         throw new ConfigurationError(
-          `toolbox: ${instance.constructor.name}.${tool.method} não é um método (tool "${tool.name}")`,
+          `toolbox: ${instance.constructor.name}.${tool.method} is not a method (tool "${tool.name}")`,
         )
       }
     }

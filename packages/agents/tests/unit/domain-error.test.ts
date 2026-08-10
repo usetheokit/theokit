@@ -7,7 +7,7 @@ import {
   BudgetExceededError as AliasDeprecado,
   DelegationBudgetExceededError,
 } from '../../src/bridge/delegation-types.js'
-import * as barril from '../../src/index.js'
+import * as barrel from '../../src/index.js'
 
 /**
  * M91 T5.1 — the delegation error stops shadowing the SDK's.
@@ -46,7 +46,7 @@ describe('M91 — the delegation error no longer shadows the one from the SDK', 
   })
 
   it('the barrel exports the DELEGATION error under the new name', () => {
-    expect(barril.DelegationBudgetExceededError).toBe(DelegationBudgetExceededError)
+    expect(barrel.DelegationBudgetExceededError).toBe(DelegationBudgetExceededError)
   })
 
   /**
@@ -60,26 +60,26 @@ describe('M91 — the delegation error no longer shadows the one from the SDK', 
    */
   it('NON-BREAKING — the barrel keeps BudgetExceededError = the DELEGATION class', () => {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- this is the alias the test protects
-    expect(barril.BudgetExceededError).toBe(DelegationBudgetExceededError)
+    expect(barrel.BudgetExceededError).toBe(DelegationBudgetExceededError)
   })
 
   it('the WINDOW error from the SDK crosses under its OWN name, reusing nobody elses', () => {
-    expect(barril.WindowBudgetExceededError).toBeDefined()
+    expect(barrel.WindowBudgetExceededError).toBeDefined()
   })
 
   it('COUNTERPROOF — window and delegation are DIFFERENT classes', () => {
     // The invariant the milestone bought: both reachable, each under its own name.
-    expect(barril.WindowBudgetExceededError).not.toBe(barril.DelegationBudgetExceededError)
+    expect(barrel.WindowBudgetExceededError).not.toBe(barrel.DelegationBudgetExceededError)
   })
 
   it('the WINDOW class from the SDK constructs with ITS OWN shape — the proof they are distinct domains', () => {
-    const windowMs = new barril.WindowBudgetExceededError({
+    const windowMs = new barrel.WindowBudgetExceededError({
       budgetName: 'ctx',
       window: 'session',
       spentUsd: 5,
       limitUsd: 1,
     } as never)
-    expect(windowMs).toBeInstanceOf(barril.WindowBudgetExceededError)
+    expect(windowMs).toBeInstanceOf(barrel.WindowBudgetExceededError)
   })
 
   it('the message preserves its format — the rename does not change behaviour', () => {
