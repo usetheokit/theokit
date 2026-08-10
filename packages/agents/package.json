@@ -58,6 +58,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs",
     "build": "tsup",
     "test:live": "vitest run --config vitest.live.config.ts",
     "test": "vitest run",
