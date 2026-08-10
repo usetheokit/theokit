@@ -264,7 +264,7 @@ describe('M111 — a provider with labelled methods', () => {
     // and that is exactly the limitation the consumer needs to know: setting the variable after the
     // import has no effect at all.
     const { CODEX_CLIENT_ID_ENV_VAR } = await import('../../src/auth-entry.js')
-    const anterior = process.env[CODEX_CLIENT_ID_ENV_VAR]
+    const previous = process.env[CODEX_CLIENT_ID_ENV_VAR]
     process.env[CODEX_CLIENT_ID_ENV_VAR] = 'app_FROM_ANOTHER_TENANT'
     try {
       vi.resetModules()
@@ -280,7 +280,7 @@ describe('M111 — a provider with labelled methods', () => {
       // monorepo rule forbids the dynamic `delete`, and an empty string is indistinguishable from
       // absent for the
       // the `??` that reads the knob.
-      process.env[CODEX_CLIENT_ID_ENV_VAR] = anterior ?? ''
+      process.env[CODEX_CLIENT_ID_ENV_VAR] = previous ?? ''
       vi.resetModules()
     }
   })

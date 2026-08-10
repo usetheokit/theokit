@@ -211,8 +211,8 @@ describe('M92 — the committed prefix is materialized once per write', () => {
 
   it('reset() INVALIDATES the prefix — with REAL history, the only way this test can fail', async () => {
     const c = await clientWithHistory()
-    const antes = c.getSnapshot().thread.length
-    expect(antes).toBeGreaterThan(1)
+    const before = c.getSnapshot().thread.length
+    expect(before).toBeGreaterThan(1)
     c.reset()
     expect(c.getSnapshot().thread).toEqual([])
   })

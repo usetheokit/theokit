@@ -146,7 +146,7 @@ describe('M74 T1.3 — retry distinguishes transient from terminal', () => {
     expect(f.message).toMatch(/log in again/)
   })
 
-  it('test_rede_e_5xx_sao_transitorios', () => {
+  it('test_network_errors_and_5xx_are_transient', () => {
     for (const e of ['ETIMEDOUT', 'ECONNRESET', 'server responded 503', 'network error']) {
       expect(classifyRefreshFailure(new Error(e)).transient, `${e} should be transient`).toBe(true)
     }

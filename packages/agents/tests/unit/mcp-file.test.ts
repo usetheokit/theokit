@@ -31,8 +31,8 @@ describe('loadMcpJson — disco', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  const write = (conteudo: string): void => {
-    writeFileSync(join(dir, '.mcp.json'), conteudo)
+  const write = (contents: string): void => {
+    writeFileSync(join(dir, '.mcp.json'), contents)
   }
 
   it('test_a_missing_file_returns_an_empty_map', () => {
