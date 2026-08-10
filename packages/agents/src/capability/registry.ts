@@ -9,9 +9,7 @@ import type { Capability, CompiledAgentOptionsDraft } from './capability.js'
 export class UnknownCapabilityError extends Error {
   override readonly name = 'UnknownCapabilityError'
   constructor(requested: string, known: readonly string[]) {
-    super(
-      `capability "${requested}" não registrada. Conhecidas: ${known.join(', ') || '(nenhuma)'}.`,
-    )
+    super(`capability "${requested}" is not registered. Known: ${known.join(', ') || '(none)'}.`)
   }
 }
 

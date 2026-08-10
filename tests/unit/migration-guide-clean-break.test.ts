@@ -7,7 +7,7 @@ import { resolve } from 'node:path'
  * (client `useAgentStream` → `useAgent`, server `defineAgentEndpoint` → `defineAgent`)
  * plus a removed-exports table, so an app can move to 0.14.0 without guesswork.
  */
-const GUIDE = resolve(__dirname, '../../docs/migration/0.13-to-0.14-agent-surface.md')
+const GUIDE = resolve(__dirname, '../../wiki/migration/0.13-to-0.14-agent-surface.md')
 
 function read(): string {
   return readFileSync(GUIDE, 'utf-8')

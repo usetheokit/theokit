@@ -6,7 +6,7 @@
  * `loadEnv()` — auto-loads `.env` files into `process.env` for server code.
  *
  * Implements the Next.js `loadEnvConfig` algorithm
- * (`referencias/next.js/packages/next-env/index.ts:114-180`) with TheoKit
+ * (`references/next.js/packages/next-env/index.ts:114-180`) with TheoKit
  * adaptations:
  *
  * - EC-1: 1MB file-size cap (anti-OOM, anti-supply-chain).

@@ -82,7 +82,7 @@ describe('M54 — AgentRunnerBuilder.loopStrategy() seam', () => {
             maxIterations: value,
             shouldContinue: () => true,
           }),
-        ).toThrow(/maxIterations|inteiro|≥ 1|finito/)
+        ).toThrow(/maxIterations|integer|≥ 1|finite/)
       })
     }
 

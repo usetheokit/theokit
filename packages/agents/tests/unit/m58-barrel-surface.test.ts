@@ -34,22 +34,23 @@ type _TypeSurface = [
 ]
 
 /**
- * M79 — o barril é importado no ESCOPO DO MÓDULO, não dentro do teste.
+ * M79 — the barrel is imported at MODULE SCOPE, not inside the test.
  *
- * Ele custa ~1,5 s para carregar (o M78 o engordou com `export *` de cinco subpaths do SDK), e um
- * `await import()` dentro do corpo do teste paga esse custo DENTRO do orçamento de 5 s do vitest.
- * Sozinho passava; na suíte completa, sob contenção, estourava — e a mensagem era "Test timed out",
- * que não diz nada sobre a causa ser carga de módulo.
+ * It costs ~1.5 s to load (M78 fattened it with `export *` from five SDK subpaths), and an
+ * `await import()` inside the test body pays that cost INSIDE vitest's 5 s budget. On its own it
+ * passed; in the full suite, under contention, it blew — and the message was "Test timed out", which
+ * says nothing about the cause being module loading.
  *
- * O gatilho foi o M79 mover os `@theokit/sdk*` de peer para dependency, o que muda o caminho de
- * resolução do pnpm. Mas o defeito é anterior: custo de carga de módulo não pertence ao orçamento de
- * um teste que só verifica o formato do que foi carregado. No escopo do módulo, ele é pago na coleta.
+ * The trigger was M79 moving the `@theokit/sdk*` packages from peer to dependency, which changes
+ * pnpm's resolution path. But the defect predates it: module-loading cost does not belong in the
+ * budget of a test that only checks the shape of what was loaded. At module scope, it is paid during
+ * collection.
  */
-const barril = await import('../../src/index.js')
+const barrel = await import('../../src/index.js')
 
 describe('M58 — @theokit/agents pass-through barrels for the 5 already-OO/pure SDK domains', () => {
   it('core: Agent / Squad / Tool / Provider reach the main barrel', () => {
-    const m = barril
+    const m = barrel
     for (const name of ['Agent', 'Squad', 'Tool', 'Provider'] as const) {
       expect(m[name], name).toBeTypeOf('function')
     }
@@ -65,7 +66,7 @@ describe('M58 — @theokit/agents pass-through barrels for the 5 already-OO/pure
     // The cost of the gap is measured, not hypothetical: theokit-sdk#165 chased the wrong hypothesis
     // for a 429 because the retry was unobservable, and the SDK fix that made it observable
     // (`8323f1f38`) could not reach a consumer that had no way to install the sink receiving it.
-    expect(barril.setDiagnosticsSink).toBeTypeOf('function')
+    expect(barrel.setDiagnosticsSink).toBeTypeOf('function')
   })
 
   it('sandbox: LocalSandbox reaches @theokit/agents/sandbox', async () => {

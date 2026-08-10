@@ -22,15 +22,17 @@ function formatCost(usd: number): string {
 }
 
 /**
- * A seção de stream ao vivo, extraída de `AgentsTab` em agent-builder#319.
+ * The live-stream section, extracted from `AgentsTab` in agent-builder#319.
  *
- * O motivo é o teto de `max-lines-per-function` (144 > 120), mas a costura não foi escolhida pelo
- * lint: este bloco já era o único pedaço do componente com **estado próprio** (`agentStreamEvents`)
- * e ação própria (`RESET_AGENT_STREAM`), e só renderiza quando há eventos. Cortar aqui separa duas
- * coisas que a tab mostra lado a lado mas que nunca dependeram uma da outra.
+ * The reason is the `max-lines-per-function` ceiling (144 > 120), but the seam was not chosen by the
+ * lint: this block was already the only piece of the component with **state of its own**
+ * (`agentStreamEvents`) and an action of its own (`RESET_AGENT_STREAM`), and it only renders when
+ * there are events. Cutting here separates two things the tab shows side by side but that never
+ * depended on each other.
  *
- * Recebe as classes por prop em vez de recriá-las: `styles.css` memoiza por conteúdo, então
- * duplicá-las funcionaria — e produziria duas fontes da mesma aparência, que é como elas divergem.
+ * It receives the classes by prop instead of recreating them: `styles.css` memoizes by content, so
+ * duplicating them would work — and would produce two sources for the same appearance, which is how
+ * they diverge.
  */
 function LiveStreamSection({
   headerClass,

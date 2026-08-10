@@ -184,18 +184,18 @@ describe('createAgentClient (M44)', () => {
   it('test_client_core_entry_imports_no_react', () => {
     // Recursively resolve the import closure of the React-free entry and assert none imports React.
     //
-    // M84 — a clausura passou a CRUZAR PACOTE: a cadeia de cliente mudou para `@theokit/agents`, e o
-    // walk parava na fronteira porque só seguia `./x.js`. A garantia é sobre o BUNDLE, e o bundle
-    // cruza o pacote — então o walk cruza também. Sem isto o teste passaria por VACUIDADE (clausura
-    // vazia ⇒ nenhum React encontrado); quem pegou foi a checagem de sanidade no fim, que existe
-    // exatamente para isso.
-    const CAMADA = resolve(__dirname, '../../packages/agents/src')
-    const resolverEspecificador = (spec: string, abs: string): string | undefined => {
+    // M84 — the closure now CROSSES PACKAGES: the client chain moved to `@theokit/agents`, and the
+    // walk stopped at the boundary because it only followed `./x.js`. The guarantee is about the
+    // BUNDLE, and the bundle crosses the package — so the walk crosses too. Without this the test
+    // would pass by VACUITY (an empty closure ⇒ no React found); what caught it was the sanity check
+    // at the end, which exists for exactly that.
+    const LAYER = resolve(__dirname, '../../packages/agents/src')
+    const resolveSpecifier = (spec: string, abs: string): string | undefined => {
       if (spec.startsWith('.') && spec.endsWith('.js')) {
         return resolve(dirname(abs), spec.replace(/\.js$/, '.ts'))
       }
-      if (spec === '@theokit/agents/client') return resolve(CAMADA, 'client-entry.ts')
-      if (spec === '@theokit/agents/client/react') return resolve(CAMADA, 'client-react-entry.ts')
+      if (spec === '@theokit/agents/client') return resolve(LAYER, 'client-entry.ts')
+      if (spec === '@theokit/agents/client/react') return resolve(LAYER, 'client-react-entry.ts')
       return undefined
     }
     const seen = new Set<string>()
@@ -210,8 +210,8 @@ describe('createAgentClient (M44)', () => {
         // A React import in the closure defeats the React-free guarantee (ADR-0053 D3) — catch the bare
         // `react` AND any subpath (`react/jsx-runtime`, …), all of which pull React into a bundle.
         expect(spec === 'react' || spec.startsWith('react/')).toBe(false)
-        const alvo = resolverEspecificador(spec, abs)
-        if (alvo !== undefined) walk(alvo)
+        const target = resolveSpecifier(spec, abs)
+        if (target !== undefined) walk(target)
       }
     }
     walk(resolve(CLIENT_DIR, 'core.ts'))

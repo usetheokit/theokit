@@ -30,7 +30,7 @@ interface E2EProject {
 }
 
 const PROJECTS: E2EProject[] = [
-  { name: 'hello-theo', port: 3456, fixtureDir: 'onda1-hello-theo', spec: 'hello-theo.spec.ts' },
+  { name: 'hello-theo', port: 3456, fixtureDir: 'wave1-hello-theo', spec: 'hello-theo.spec.ts' },
   {
     name: 'app-router-layouts',
     port: 3457,

@@ -84,11 +84,11 @@ export function parseWireStream(
         raw = JSON.parse(payload)
       } catch {
         // A frame we cannot even read is dropped — it cannot be an instruction we must honour.
-        warn(`wire: frame com JSON inválido descartado (${payload.slice(0, 60)})`)
+        warn(`wire: frame with invalid JSON discarded (${payload.slice(0, 60)})`)
         continue
       }
 
-      // The error channel is exempt from leniency (plan D2 § exceção). `type` is inspected BEFORE
+      // The error channel is exempt from leniency (plan D2 § exception). `type` is inspected BEFORE
       // schema validation, so a MALFORMED error frame is still recognised as an error instead of
       // falling into the discard path — otherwise a real 401/429 becomes silence (theokit#136
       // through a side door).
@@ -113,7 +113,7 @@ export function parseWireStream(
         emitted += 1
       } else {
         warn(
-          `wire: variante desconhecida ou inválida descartada (${String((raw as { type?: unknown }).type)})`,
+          `wire: unknown or invalid variant discarded (${String((raw as { type?: unknown }).type)})`,
         )
       }
     }
@@ -139,7 +139,7 @@ export function parseWireStream(
         buffer += normalizeEol(value)
         if (buffer.length > maxFrameBytes) {
           throw new WireFrameTooLargeError(
-            `wire: frame excedeu ${maxFrameBytes} bytes sem terminador; abortando em vez de acumular`,
+            `wire: frame exceeded ${maxFrameBytes} bytes with no terminator; aborting instead of accumulating`,
           )
         }
         if (drain(controller) > 0) return

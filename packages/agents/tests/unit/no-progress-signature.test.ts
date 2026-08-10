@@ -2,7 +2,7 @@
  * theokit#53 regression: the no_progress detector must fire on repeated IDENTICAL tool calls
  * regardless of the assistant's narration. Before the fix, `roundSignature` folded the assistant
  * text into the fingerprint, so a model that re-ran the same tool while rephrasing its prose
- * ("Vou criar… e executá-lo." → "… Agora vou executar…") produced a different signature each round
+ * ("I will create… and run it." → "… Now I will run…") produced a different signature each round
  * and evaded `NO_PROGRESS_THRESHOLD`. Prior art: opencode's `doom_loop` keys purely on
  * tool name + JSON.stringify(input) (knowledge-base/discoveries/blueprints/no-progress-signature-stuck-loop-blueprint.md).
  */

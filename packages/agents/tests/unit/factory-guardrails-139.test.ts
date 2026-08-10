@@ -2,7 +2,7 @@
  * theokit#139 — the served agent must not run unguarded.
  *
  * The report names two bypasses in `toAgentFactory`, the path that serves an agent over ACP. The
- * HITL half was closed by M96: `approvals` became a MANDATORY `ApprovalPosture` and `aplicarPostura`
+ * HITL half was closed by M96: `approvals` became a MANDATORY `ApprovalPosture` and `applyPosture`
  * installs the plugin, so the gate no longer depends on which surface constructs the agent.
  *
  * The guardrail half was still open. `compileAgentDefinition` produces `compiled.guardrails` from

@@ -5,7 +5,7 @@
  * Pure function — no Vite imports, just data shaping. The Vite plugin
  * (services-dev.ts) calls this and merges the result into `vite.config.server.proxy`.
  *
- * Pattern follows Vite proxy reference (referencias/vite/packages/vite/src/node/server/middlewares/proxy.ts):
+ * Pattern follows Vite proxy reference (references/vite/packages/vite/src/node/server/middlewares/proxy.ts):
  *  - Each path prefix becomes its own entry
  *  - `changeOrigin: true` set by default (matches Vite's string-shortcut behavior)
  *  - User-set entries take precedence on prefix collision (we never clobber)

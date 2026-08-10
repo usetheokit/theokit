@@ -71,10 +71,29 @@ export async function* readMessageStream(
       continue
     }
 
-    // `finish` emits nothing AND does not close the message — both measured against the oracle. A
-    // chunk arriving after it keeps appending to the same message (`'a'` + `'B'` → `'aB'`), which
-    // is what the resumable path (`Last-Event-ID` reconnect) depends on.
-    if (chunk.type === 'finish') continue
+    // `finish` does not close the message — measured against the oracle. A chunk arriving after it
+    // keeps appending to the same message (`'a'` + `'B'` → `'aB'`), which is what the resumable
+    // path (`Last-Event-ID` reconnect) depends on.
+    //
+    // It emits nothing EXCEPT when it carries `messageMetadata`. Dropping the whole chunk is what
+    // the `remove-ai-dependency` migration did, and it silently removed a documented behaviour:
+    // `@theokit/agents` attaches per-turn usage there so a surface can show real tokens for the
+    // turn it just streamed, and the reconstructed message stopped carrying it. Measured in a
+    // consumer (TheoCode B-090): an assistant message in a live thread had keys
+    // `["id","role","parts"]` and no `metadata`, so the TUI's token readout never rendered.
+    //
+    // The snapshot is REQUIRED, not cosmetic: `finish` is usually the last chunk, and this loop
+    // emits nothing after the stream ends — attaching without yielding would leave the field
+    // unreachable. Metadata-free finishes still emit nothing, so every differential case that
+    // measured "finish emits nothing" is unaffected.
+    if (chunk.type === 'finish') {
+      const metadata = (chunk as { messageMetadata?: unknown }).messageMetadata
+      if (metadata === undefined) continue
+      state ??= open(undefined)
+      ;(state.message as { metadata?: unknown }).metadata = metadata
+      yield snapshot(state.message)
+      continue
+    }
 
     // A content chunk with no `start` before it opens the message implicitly. The oracle does this,
     // and TheoKit code relies on it: the in-process transport pushes `data-message` chunks with no
