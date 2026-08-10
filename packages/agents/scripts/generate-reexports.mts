@@ -21,8 +21,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import ts from 'typescript'
 
-const AQUI = dirname(fileURLToPath(import.meta.url))
-const RAIZ = join(AQUI, '..')
+const HERE = dirname(fileURLToPath(import.meta.url))
+const ROOT = join(HERE, '..')
 
 /**
  * The five infra subpaths: entry name → source specifier.
@@ -76,7 +76,7 @@ export async function enumerateSurface(specifier: string): Promise<Surface> {
   const host = ts.createCompilerHost({})
   const res = ts.resolveModuleName(
     specifier,
-    join(RAIZ, 'src', 'index.ts'),
+    join(ROOT, 'src', 'index.ts'),
     { moduleResolution: ts.ModuleResolutionKind.Bundler },
     host,
   )
@@ -110,7 +110,7 @@ export async function enumerateSurface(specifier: string): Promise<Surface> {
 
 /** The block ready to paste into the `*-entry.ts`. */
 export function renderBlock(specifier: string, s: Surface): string {
-  const list = (nomes: readonly string[]) => nomes.map((n) => `  ${n},`).join('\n')
+  const list = (names: readonly string[]) => names.map((n) => `  ${n},`).join('\n')
   const parts: string[] = []
   if (s.values.length > 0) parts.push(`export {\n${list(s.values)}\n} from '${specifier}'`)
   if (s.types.length > 0) parts.push(`export type {\n${list(s.types)}\n} from '${specifier}'`)
@@ -127,9 +127,9 @@ export function renderBlock(specifier: string, s: Surface): string {
 // `process.argv[1]` is typed `string` (no `noUncheckedIndexedAccess`), so checking for `undefined`
 // is dead code the lint rejects — in Node it is only absent under `-e`, where there is no file to
 // compare against.
-const invocadoComoCli = pathToFileURL(process.argv[1]).href === import.meta.url
+const invokedAsCli = pathToFileURL(process.argv[1]).href === import.meta.url
 
-if (invocadoComoCli) {
+if (invokedAsCli) {
   const measurements: [sub: string, spec: string, surface: Surface][] = []
   for (const [sub, spec] of Object.entries(INFRA_SUBPATHS)) {
     measurements.push([sub, spec, await enumerateSurface(spec)])
@@ -162,8 +162,8 @@ if (invocadoComoCli) {
  * sees — what the plan's ADR-3 promised and the first implementation did not deliver.
  */
 export function enumerateLayerSurface(sub: string): Surface {
-  const dts = join(RAIZ, 'dist', `${sub}.d.ts`)
-  const fonte = readFileSync(dts, 'utf8')
+  const dts = join(ROOT, 'dist', `${sub}.d.ts`)
+  const source = readFileSync(dts, 'utf8')
   const values: string[] = []
   const types: string[] = []
   // `export { a, b } from '…'` and `export type { c } from '…'`, on one or several lines.
@@ -172,13 +172,13 @@ export function enumerateLayerSurface(sub: string): Surface {
   // in the first version, and rightly — `\s+` adjacent to `\s*` opens quadratic backtracking over a
   // file that is uncontrolled input (the `.d.ts` comes from the bundler). A single space is enough
   // for the emitted format.
-  for (const m of fonte.matchAll(/export (type )?\{([^}]*)\} ?from/g)) {
+  for (const m of source.matchAll(/export (type )?\{([^}]*)\} ?from/g)) {
     // `m[1]`/`m[2]` are typed `string` (no `noUncheckedIndexedAccess`), so checking for `undefined`
     // is dead code the lint rejects. Group 1 is optional in the regex and arrives as `''` when absent.
-    const alvo = m[1] === '' ? values : types
-    for (const bruto of m[2].split(',')) {
-      const nome = bruto.trim().split(' as ')[0].trim()
-      if (nome !== '') alvo.push(nome)
+    const target = m[1] === '' ? values : types
+    for (const raw of m[2].split(',')) {
+      const name = raw.trim().split(' as ')[0].trim()
+      if (name !== '') target.push(name)
     }
   }
   const alfabetica = (a: string, b: string): number => a.localeCompare(b)
