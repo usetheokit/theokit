@@ -39,13 +39,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApprovalPosture } from '../../src/bridge/approval-posture.js'
 
 const captured = vi.hoisted(() => ({
-  opcoes: undefined as Record<string, unknown> | undefined,
+  options: undefined as Record<string, unknown> | undefined,
 }))
 
 vi.mock('@theokit/sdk', () => ({
   Agent: {
     getOrCreate: async (id: string, opts: Record<string, unknown>) => {
-      captured.opcoes = opts
+      captured.options = opts
       return {
         agentId: id,
         send: async () => ({ wait: async () => ({}) }),
@@ -72,7 +72,7 @@ beforeEach(() => {
     await writeFile(sentinel, 'executed')
     return 'ok'
   })
-  captured.opcoes = undefined
+  captured.options = undefined
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -93,7 +93,7 @@ function gatedDefinition() {
 }
 
 function installedPluginNames(): string[] {
-  const plugins = captured.opcoes?.plugins
+  const plugins = captured.options?.plugins
   if (!Array.isArray(plugins)) return []
   return plugins.map((p) => String((p as { name?: unknown }).name))
 }
@@ -114,7 +114,7 @@ async function dispatchToolAsTheSdkWould(
   nome: string,
 ): Promise<{ blocked: boolean; message?: string }> {
   const handlers: PreToolCallHandler[] = []
-  for (const plugin of (captured.opcoes?.plugins as readonly unknown[] | undefined) ?? []) {
+  for (const plugin of (captured.options?.plugins as readonly unknown[] | undefined) ?? []) {
     ;(
       plugin as { register: (ctx: { on: (h: string, fn: PreToolCallHandler) => void }) => void }
     ).register({
@@ -175,7 +175,7 @@ describe('M96 U1 — toAgentFactory requires the approval posture', () => {
     // The INVERSE assertion D4 requires: fail when the request is NOT emitted. Without it, an
     // implementation that installs the plugin and never fires it would stay green in everything above.
     const order: string[] = []
-    const emit = vi.fn((_evento: { type: string; toolName: string }) => {
+    const emit = vi.fn((_event: { type: string; toolName: string }) => {
       order.push('emit')
     })
     executor.mockImplementation(async () => {

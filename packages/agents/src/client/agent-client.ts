@@ -99,7 +99,7 @@ export class AgentClient<TInput = unknown> {
    * milestone is in the coalescing below, because what hangs off each emit (deriving the timeline)
    * costs **3.274 ms per call** at the same thread size (M86).
    */
-  #prefixo: UIMessage[] = []
+  #committedPrefix: UIMessage[] = []
 
   /** Opt-in coalescing: `0` (the default) emits per delta, as always. */
   readonly #emitIntervalMs: number
@@ -148,8 +148,8 @@ export class AgentClient<TInput = unknown> {
     // engine uses memcpy for dense arrays. It is still O(C) — there is no way to return a new array
     // without copying — but with a smaller constant, and it is honest to say the win here is in the
     // constant, not in the order.
-    const cauda = this.#currentUser ? [this.#currentUser, ...this.#messages] : this.#messages
-    const thread = this.#prefixo.concat(cauda)
+    const tail = this.#currentUser ? [this.#currentUser, ...this.#messages] : this.#messages
+    const thread = this.#committedPrefix.concat(tail)
     this.#snapshot = { messages: this.#messages, thread, status: this.#status, error: this.#error }
     for (const listener of this.#listeners) listener()
   }
@@ -165,7 +165,7 @@ export class AgentClient<TInput = unknown> {
    * because a final state trapped in a 16 ms timer is a final state lost if the process exits first —
    * and `exec` exits right after the turn.
    */
-  #agendarEmit(): void {
+  #scheduleEmit(): void {
     if (this.#emitIntervalMs <= 0) {
       this.#emit()
       return
@@ -210,7 +210,7 @@ export class AgentClient<TInput = unknown> {
         this.#upsert(stamped)
         // The ONLY per-token-delta point — every other `#emit` in this file is a status transition,
         // and those never wait on a timer (ADR-2).
-        this.#agendarEmit()
+        this.#scheduleEmit()
       })
       if (aborted()) return
       this.#status = 'done'
@@ -230,7 +230,7 @@ export class AgentClient<TInput = unknown> {
     if (this.#status === 'done' && this.#currentUser) {
       this.#committed = [...this.#committed, this.#currentUser, ...this.#messages]
       // Invalidation ON WRITE (ADR-3): this is one of only two points that touch `#committed`.
-      this.#prefixo = this.#committed
+      this.#committedPrefix = this.#committed
     }
     this.abort()
     const controller = new AbortController()
@@ -307,7 +307,7 @@ export class AgentClient<TInput = unknown> {
     this.#committed = []
     // The other write point. Without this, `reset()` would serve the stale prefix — and equal length
     // with different content is exactly the case a size-based memoization would not catch.
-    this.#prefixo = this.#committed
+    this.#committedPrefix = this.#committed
     this.#currentUser = undefined
     this.#error = undefined
     this.#status = 'idle'

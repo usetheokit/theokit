@@ -108,7 +108,7 @@ describe('M111 — a provider with labelled methods', () => {
     // assertion bars the same defect arriving through untyped JS.
     for (const m of CODEX_PROVIDER.methods) {
       if (m.type === 'oauth') {
-        expect(typeof m.authorize, `método oauth "${m.label}" sem authorize`).toBe('function')
+        expect(typeof m.authorize, `oauth method "${m.label}" has no authorize`).toBe('function')
       } else {
         expect('authorize' in m, `api method "${m.label}" must not carry authorize`).toBe(false)
       }
@@ -130,7 +130,7 @@ describe('M111 — a provider with labelled methods', () => {
     // The facade: one call. The test does NOT call `persist` — if the credential is not on disk at
     // the end, the facade is not a facade.
     const metodo: AuthMethod = {
-      label: 'sintético',
+      label: 'synthetic',
       type: 'oauth',
       authorize: async () => ({
         access: 'ACCESS-TOKEN',
@@ -168,7 +168,7 @@ describe('M111 — a provider with labelled methods', () => {
     // ADR-5: `deps` is optional. None of the three peers requires deps on the happy path; injection
     // is for tests. This call does not pass the 5th argument.
     const metodo: AuthMethod = {
-      label: 'sintético',
+      label: 'synthetic',
       type: 'oauth',
       authorize: async () => ({ access: 'A', refresh: 'R', expires: 1 }),
     }
@@ -279,7 +279,7 @@ describe('M111 — a provider with labelled methods', () => {
       // `vi.stubEnv` / restoration by assignment instead of a `delete` with a computed key: the
       // monorepo rule forbids the dynamic `delete`, and an empty string is indistinguishable from
       // absent for the
-      // `??` que lê o knob.
+      // the `??` that reads the knob.
       process.env[CODEX_CLIENT_ID_ENV_VAR] = anterior ?? ''
       vi.resetModules()
     }

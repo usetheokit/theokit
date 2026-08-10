@@ -9,7 +9,7 @@ import type { ModelSelection } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
 import { buildModelSelection, reasoningEffortOf } from '../../src/bridge/model-selection.js'
-import { reasoningEffortOf as reasoningEffortOfDaRaiz } from '../../src/index.js'
+import { reasoningEffortOf as reasoningEffortOfFromBarrel } from '../../src/index.js'
 import type { ReasoningEffort } from '../../src/types.js'
 
 describe('buildModelSelection (M1 reasoning-effort mapping)', () => {
@@ -115,6 +115,6 @@ describe('reasoningEffortOf (M107 — the inverse of buildModelSelection)', () =
   })
 
   it('test_the_same_symbol_resolves_through_the_barrel_root', () => {
-    expect(reasoningEffortOfDaRaiz).toBe(reasoningEffortOf)
+    expect(reasoningEffortOfFromBarrel).toBe(reasoningEffortOf)
   })
 })

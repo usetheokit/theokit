@@ -166,8 +166,8 @@ function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
  */
 const alreadyWarned = new Set<string>()
 
-function warnIfUnknown(type: string, ignoradosDeProposito: ReadonlySet<string>): void {
-  if (ignoradosDeProposito.has(type) || alreadyWarned.has(type)) return
+function warnIfUnknown(type: string, deliberatelyIgnored: ReadonlySet<string>): void {
+  if (deliberatelyIgnored.has(type) || alreadyWarned.has(type)) return
   alreadyWarned.add(type)
   console.warn(
     `[theokit] agents.bridge: SDK event "${type}" is not translated and was discarded. ` +

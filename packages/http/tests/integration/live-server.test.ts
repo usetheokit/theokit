@@ -82,7 +82,7 @@ class ProductService {
 // ── DTOs ───────────────────────────────────────────────
 
 const zCreateUser = z.object({
-  name: z.string().min(2, 'Nome mínimo 2 chars'),
+  name: z.string().min(2, 'Name must be at least 2 chars'),
   email: z.email({ message: 'Invalid email' }),
   role: z.enum(['admin', 'user']).default('user'),
 })

@@ -35,9 +35,9 @@ function errorCodeOf(chunks: Chunk[]): string | undefined {
   return chunks.find((c) => c.type === ERROR_CODE_DATA_PART)?.data?.code
 }
 
-async function chunksDe(eventos: unknown[]): Promise<Chunk[]> {
+async function chunksOf(events: unknown[]): Promise<Chunk[]> {
   const source = (async function* () {
-    for (const e of eventos) yield e
+    for (const e of events) yield e
   })()
   const out: Chunk[] = []
   for await (const c of presentUIMessageStream(source as never, { textId: 't' }))
@@ -47,7 +47,7 @@ async function chunksDe(eventos: unknown[]): Promise<Chunk[]> {
 
 describe('M95 — the error code reaches the consumer', () => {
   it('an error WITH a code delivers errorCode alongside the text', async () => {
-    const chunks = await chunksDe([
+    const chunks = await chunksOf([
       {
         type: 'error',
         message: 'another process is already writing this session',
@@ -71,7 +71,7 @@ describe('M95 — the error code reaches the consumer', () => {
   })
 
   it('an error WITHOUT a code stays exactly as before', async () => {
-    const chunks = await chunksDe([{ type: 'error', message: 'any failure' }])
+    const chunks = await chunksOf([{ type: 'error', message: 'any failure' }])
     const sdkEvent = chunks.find((c) => c.type === 'error')
     expect(sdkEvent?.errorText).toBe('any failure')
     expect(

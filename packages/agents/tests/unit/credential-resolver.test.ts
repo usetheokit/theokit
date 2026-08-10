@@ -139,7 +139,7 @@ describe('M74 T1.2 — reentrancy resolves via the promise, not via the lock', (
   })
 })
 
-describe('M74 T1.3 — o retry distingue transitório de terminal', () => {
+describe('M74 T1.3 — retry distinguishes transient from terminal', () => {
   it('test_invalid_grant_e_terminal', () => {
     const f = classifyRefreshFailure(new Error('server responded 400: {"error":"invalid_grant"}'))
     expect(f.transient, 'invalid_grant is not transient — the token was revoked').toBe(false)
