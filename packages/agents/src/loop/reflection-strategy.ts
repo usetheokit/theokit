@@ -8,7 +8,7 @@
  * into the next round's prompt plus a `continue` hint. The hard round ceiling
  * lives in `LoopStrategy.shouldContinue` (maxIterations), NOT here.
  *
- * referencia: knowledge-base/references/mastra agentic-loop/index.ts (onIterationComplete → { feedback, continue }).
+ * reference: knowledge-base/references/mastra agentic-loop/index.ts (onIterationComplete → { feedback, continue }).
  */
 import { z } from 'zod'
 

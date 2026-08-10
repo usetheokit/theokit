@@ -1,178 +1,179 @@
 #!/usr/bin/env node
 /**
- * M75 T4.2 — gate de paridade do subsistema de sandbox.
+ * M75 T4.2 — parity gate for the sandbox subsystem.
  *
- * ## O problema que ele resolve
+ * ## The problem it solves
  *
- * `@theokit/agents/sandbox` é um pass-through (`export * from '@theokit/sdk/sandbox'`), então tudo
- * que o SDK exporta atravessa automaticamente. Isso é ótimo até o dia em que o SDK **remove** ou
- * **renomeia** um símbolo: o consumidor quebra em runtime, e nada no meio do caminho avisou.
+ * `@theokit/agents/sandbox` is a pass-through (`export * from '@theokit/sdk/sandbox'`), so
+ * everything the SDK exports crosses automatically. That is excellent until the day the SDK
+ * **removes** or **renames** a symbol: the consumer breaks at runtime, and nothing along the way
+ * warned.
  *
- * Este gate exige uma DECISÃO ESCRITA por símbolo público do subsistema. Símbolo novo sem decisão
- * falha; símbolo que sumiu do SDK mas continua declarado aqui também falha.
+ * This gate demands a WRITTEN DECISION per public symbol of the subsystem. A new symbol with no
+ * decision fails; a symbol that vanished from the SDK but is still declared here fails too.
  *
- * ## Por que ele nasce com job de CI próprio
+ * ## Why it is born with its own CI job
  *
- * O precedente é o M73: `check-auth-parity.mjs` foi escrito, ficou correto, e rodava em **zero**
- * jobs — vivia só dentro de `check:all`, que nenhum workflow invocava. O review classificou como
- * BLOCKER. Um gate que não roda não é um gate; é documentação com sintaxe de código.
+ * The precedent is M73: `check-auth-parity.mjs` was written, was correct, and ran in **zero** jobs
+ * — it lived only inside `check:all`, which no workflow invoked. The review classified it as a
+ * BLOCKER. A gate that does not run is not a gate; it is documentation with code syntax.
  *
- * ## Piso de não-vacuidade
+ * ## Anti-vacuity floor
  *
- * Se a varredura devolver menos símbolos que o piso, o gate FALHA em vez de reportar "tudo certo".
- * "Zero símbolos, zero divergências" é verdadeiro por ausência de leitura, e é a forma mais comum de
- * um gate certificar coisa nenhuma — aconteceu seis vezes nesta série de milestones.
+ * If the scan returns fewer symbols than the floor, the gate FAILS instead of reporting "all good".
+ * "Zero symbols, zero divergences" is true by absence of reading, and is the most common way a gate
+ * certifies nothing at all — it happened six times across this series of milestones.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Piso: menos que isto significa que a varredura quebrou, não que o SDK encolheu. */
-const PISO_DE_SIMBOLOS = 20
+/** Floor: fewer than this means the scan broke, not that the SDK shrank. */
+const SYMBOL_FLOOR = 20
 
 /**
- * A decisão escrita por símbolo. Toda entrada precisa de razão — a coluna existe para que a próxima
- * pessoa saiba se um símbolo é contrato público ou detalhe que vazou.
+ * The written decision per symbol. Every entry needs a reason — the column exists so the next person
+ * knows whether a symbol is public contract or a leaked detail.
  */
-const DECISOES = {
-  // --- contrato do backend (pré-M75, do SDK original) ---
-  SandboxBackend: 'contrato — a classe abstrata que todo backend implementa',
-  LocalSandbox: 'contrato — execução local sem confinamento',
-  resolveSandbox: 'contrato — resolve um SandboxProvider para um backend',
-  SandboxSecurityError: 'contrato — erro tipado de violação de política',
-  SandboxNotAvailableError: 'contrato — erro tipado de backend indisponível',
-  provisionRepo: 'utilitário — clona um repo dentro do sandbox',
-  RepoProvisionError: 'erro tipado de provisionRepo',
-  ProvisionRepoOptions: 'tipo — opções de provisionRepo',
-  ExecuteResult: 'tipo — o retorno de execute(); contrato entre backend e chamador',
-  SandboxConfig: 'tipo — workDir/timeout/maxOutput/env que todo backend aceita',
-  SandboxProvider: 'tipo — backend OU factory; é o que permite resolver por contexto',
+const DECISIONS = {
+  // --- backend contract (pre-M75, from the original SDK) ---
+  SandboxBackend: 'contract — the abstract class every backend implements',
+  LocalSandbox: 'contract — local execution with no confinement',
+  resolveSandbox: 'contract — resolves a SandboxProvider into a backend',
+  SandboxSecurityError: 'contract — typed error for a policy violation',
+  SandboxNotAvailableError: 'contract — typed error for an unavailable backend',
+  provisionRepo: 'utility — clones a repo inside the sandbox',
+  RepoProvisionError: 'typed error from provisionRepo',
+  ProvisionRepoOptions: 'type — options for provisionRepo',
+  ExecuteResult: 'type — the return of execute(); the contract between backend and caller',
+  SandboxConfig: 'type — workDir/timeout/maxOutput/env that every backend accepts',
+  SandboxProvider: 'type — backend OR factory; what allows resolving by context',
 
-  // --- confinamento de kernel, promovido no M75 ---
+  // --- kernel confinement, promoted in M75 ---
   LinuxSandbox: 'M75 — o backend com enforcement de kernel (bwrap + seccomp)',
   createSandboxBackend:
-    'M75 — a factory honesta: confina quando dá, degrada com aviso quando não dá, NUNCA finge',
-  wrapCommandForSandbox: 'M75 — API pública por DoD: quem compõe o wrap fora do backend',
+    'M75 — the honest factory: confines when it can, degrades with a warning when it cannot, NEVER pretends',
+  wrapCommandForSandbox: 'M75 — public API per the DoD: what composes the wrap outside the backend',
   interactiveWrapCommand:
-    'M75 — a composição para o PTY; sem ela todo consumidor reescreve detect→warn→wrap',
-  resolveSandboxPosture: "M75 — API pública por DoD: a UI responde 'estou confinado agora?'",
-  allowlistedEnv: 'M75 — o env re-injetado após --clearenv (modelo env_clear do Codex)',
-  buildBwrapArgv: 'M75 — construção pura do argv; testável sem host',
-  buildSeccompFilter: 'M75 — o programa cBPF como Buffer, JS puro',
-  detectBwrap: 'M75 — detecção com probes injetáveis',
-  detectBwrapMemoized: 'M75 — detecção memoizada, com revalidação de positivo obsoleto (M71)',
-  realProbes: 'M75 — as sondagens reais; exportado para testes decidirem se rodam',
-  realProbeCount: 'M75 — contador de sondagens; é o oráculo de gates de performance',
-  resetBwrapMemo: 'M75 — reset do memo, para isolamento entre testes',
-  resetSandboxWarnLatch: 'M75 — reset do latch de aviso do caminho não-interativo',
-  resetInteractiveWarnLatch: 'M75 — reset do latch de aviso do caminho interativo',
+    'M75 — the composition for the PTY; without it every consumer rewrites detect→warn→wrap',
+  resolveSandboxPosture: "M75 — public API per the DoD: the UI answers 'am I confined right now?'",
+  allowlistedEnv: 'M75 — the env re-injected after --clearenv (Codex env_clear model)',
+  buildBwrapArgv: 'M75 — pure argv construction; testable without a host',
+  buildSeccompFilter: 'M75 — the cBPF program as a Buffer, pure JS',
+  detectBwrap: 'M75 — detection with injectable probes',
+  detectBwrapMemoized: 'M75 — memoized detection, with revalidation of a stale positive (M71)',
+  realProbes: 'M75 — the real probes; exported so tests can decide whether to run',
+  realProbeCount: 'M75 — probe counter; the oracle for performance gates',
+  resetBwrapMemo: 'M75 — memo reset, for isolation between tests',
+  resetSandboxWarnLatch: 'M75 — reset of the warning latch on the non-interactive path',
+  resetInteractiveWarnLatch: 'M75 — reset of the warning latch on the interactive path',
   seccompPathForArch:
-    'M75 — ARCH GUARD: recusa instalar seccomp fora de x86_64 e avisa. Veio de achado HIGH de review; sumir daqui é regressão de segurança',
-  restrictedSeccompPath: 'M75 — o caminho do programa escrito uma vez por processo',
+    'M75 — ARCH GUARD: refuses to install seccomp outside x86_64 and warns. Came from a HIGH review finding; its disappearance from here is a security regression',
+  restrictedSeccompPath: 'M75 — the path of the program written once per process',
 
-  // --- tipos do subsistema promovido (M75). Cada um é público porque um chamador precisa
-  //     NOMEÁ-LO: sem o tipo exportado, quem injeta um probe ou lê a postura só consegue `any`.
+  // --- types of the promoted subsystem (M75). Each is public because a caller needs to NAME it:
+  //     without the exported type, whoever injects a probe or reads the posture only gets `any`.
   SandboxMode:
-    "M75 — os três modos canônicos do Codex. Vocabulário do SANDBOX, não da config do consumidor: 'danger-full-access' significa 'não embrulhe'",
-  BwrapArgvOptions: 'M75 — tipo — as opções de buildBwrapArgv (cwd/network/env/gitDirExists)',
+    "M75 — Codex's three canonical modes. SANDBOX vocabulary, not the consumer's config: 'danger-full-access' means 'do not wrap'",
+  BwrapArgvOptions: 'M75 — type — the options of buildBwrapArgv (cwd/network/env/gitDirExists)',
   BwrapDetection:
-    'M75 — tipo — o resultado discriminado da detecção: { ok:true, bin } | { ok:false, reason }. O `reason` é o que torna o downgrade HONESTO em vez de silencioso',
-  BwrapProbes: 'M75 — tipo — as três sondagens injetáveis; é o que permite testar sem host',
-  SeccompOptions: 'M75 — tipo — { networkRestricted }: o seccomp só é instalado com rede restrita',
-  CreateSandboxBackendOptions: 'M75 — tipo — as opções da factory, com detect/warn injetáveis',
-  InteractiveWrapOptions: 'M75 — tipo — as opções da composição do PTY',
+    'M75 — type — the discriminated detection result: { ok:true, bin } | { ok:false, reason }. The `reason` is what makes the downgrade HONEST rather than silent',
+  BwrapProbes: 'M75 — type — the three injectable probes; what allows testing without a host',
+  SeccompOptions:
+    'M75 — type — { networkRestricted }: seccomp is only installed with a restricted network',
+  CreateSandboxBackendOptions: 'M75 — type — the factory options, with injectable detect/warn',
+  InteractiveWrapOptions: 'M75 — type — the options of the PTY composition',
   SandboxPosture:
-    "M75 — tipo — { mode, enforced, detail }: o que a UI mostra. `detail` carrega o MOTIVO, sem o qual 'não confinado' deixa o usuário sem ação",
+    "M75 — type — { mode, enforced, detail }: what the UI shows. `detail` carries the REASON, without which 'not confined' leaves the user with no action",
 }
 
 /**
- * ORDEM DELIBERADA: a FONTE DE AUTORIA primeiro, o pacote instalado depois.
+ * DELIBERATE ORDER: the AUTHORING SOURCE first, the installed package second.
  *
- * O `node_modules/@theokit/sdk` deste repo é um link de workspace que pode apontar para uma árvore
- * defasada — na primeira execução deste gate ele resolvia para a **4.19.2** enquanto a autoria já
- * estava em 4.21.1, e o gate reportou 18 "decisões órfãs" que não eram órfãs coisa nenhuma. Ler o
- * link primeiro faria o gate medir a cópia velha e acusar o autor de remover símbolos que ele
- * acabara de adicionar.
+ * This repo's `node_modules/@theokit/sdk` is a workspace link that can point at a stale tree — on
+ * this gate's first run it resolved to **4.19.2** while authoring was already at 4.21.1, and the
+ * gate reported 18 "orphan decisions" that were nothing of the sort. Reading the link first would
+ * make the gate measure the old copy and accuse the author of removing symbols they had just added.
  *
- * Em CI a ordem também funciona: o job clona `theokit-sdk` como irmão antes de instalar.
+ * The order works in CI too: the job clones `theokit-sdk` as a sibling before installing.
  */
-const lerEntrada = () => {
+const readEntry = () => {
   for (const p of [
     '../theokit-sdk/packages/sdk/src/sandbox/index.ts',
     'node_modules/@theokit/sdk/dist/sandbox/index.d.ts',
   ]) {
     try {
-      return { texto: readFileSync(join(RAIZ, p), 'utf8'), origem: p }
+      return { text: readFileSync(join(ROOT, p), 'utf8'), source: p }
     } catch {
-      // tenta o próximo — o repo pode estar instalado ou em workspace
+      // try the next one — the repo may be installed or in a workspace
     }
   }
   console.error(
-    'FALHA: não encontrei a entrada de sandbox do SDK. O gate NÃO pode reportar sucesso sem ler nada.',
+    'FAILURE: could not find the SDK sandbox entry. The gate must NOT report success without reading anything.',
   )
   process.exit(2)
 }
 
-const { texto, origem } = lerEntrada()
+const { text, source } = readEntry()
 
-/** Nomes exportados pelo barrel — cobre `export { a, b }` e `export type { T }`. */
-const simbolos = new Set()
-for (const bloco of texto.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
-  for (const bruto of bloco[1].split(',')) {
-    // O nome PÚBLICO é o que vem DEPOIS do `as` — é ele que o consumidor importa. A primeira
-    // versão pegava `[0]` (o nome de origem), e por isso um símbolo exportado sob alias escapava
-    // do gate inteiro. Descoberto por mutação: acrescentar
-    // `export { LinuxSandbox as SimboloNovoSemDecisao }` NÃO fazia o gate falhar.
+/** Names exported by the barrel — covers `export { a, b }` and `export type { T }`. */
+const symbols = new Set()
+for (const block of text.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
+  for (const raw of block[1].split(',')) {
+    // The PUBLIC name is the one AFTER the `as` — that is what the consumer imports. The first
+    // version took `[0]` (the source name), so a symbol exported under an alias escaped the gate
+    // entirely. Found by mutation: adding
+    // `export { LinuxSandbox as NewSymbolWithNoDecision }` did NOT make the gate fail.
     //
-    // Tokenizar em vez de `split(/\s+as\s+/)`: aquele padrão tem dois quantificadores gulosos em
-    // volta de um literal e o linter o marca como super-linear (ReDoS). A forma é `[Nome]` ou
-    // `[Origem, "as", Público]`, então o último token já é a resposta — sem backtracking.
-    const tokens = bruto
+    // Tokenize instead of `split(/\s+as\s+/)`: that pattern has two greedy quantifiers around a
+    // literal and the linter marks it as super-linear (ReDoS). The shape is `[Name]` or
+    // `[Source, "as", Public]`, so the last token is already the answer — with no backtracking.
+    const tokens = raw
       .replace(/\btype\b/, '')
       .trim()
       .split(/\s+/)
       .filter(Boolean)
-    const nome = tokens.at(-1) ?? ''
-    if (nome && /^[A-Za-z_$][\w$]*$/.test(nome)) simbolos.add(nome)
+    const name = tokens.at(-1) ?? ''
+    if (name && /^[A-Za-z_$][\w$]*$/.test(name)) symbols.add(name)
   }
 }
 
-const falhas = []
+const failures = []
 
-if (simbolos.size < PISO_DE_SIMBOLOS) {
-  falhas.push(
-    `PISO DE NÃO-VACUIDADE: a varredura achou ${simbolos.size} símbolos em ${origem}, abaixo do piso ` +
-      `de ${PISO_DE_SIMBOLOS}. "Nenhuma divergência" sobre uma lista vazia é verdadeiro por ausência ` +
-      `de leitura, não por paridade. Conserte a varredura antes de confiar no resultado.`,
+if (symbols.size < SYMBOL_FLOOR) {
+  failures.push(
+    `ANTI-VACUITY FLOOR: the scan found ${symbols.size} symbols in ${source}, below the floor of ` +
+      `${SYMBOL_FLOOR}. "No divergences" over an empty list is true by absence of reading, not by ` +
+      `parity. Fix the scan before trusting the result.`,
   )
 }
 
-for (const nome of simbolos) {
-  if (!(nome in DECISOES)) {
-    falhas.push(
-      `SEM DECISÃO: "${nome}" é exportado por ${origem} e atravessa @theokit/agents/sandbox, mas não ` +
-        `tem entrada em DECISOES. Acrescente uma linha dizendo POR QUE ele é público.`,
+for (const name of symbols) {
+  if (!(name in DECISIONS)) {
+    failures.push(
+      `NO DECISION: "${name}" is exported by ${source} and crosses @theokit/agents/sandbox, but has no ` +
+        `entry in DECISIONS. Add a line saying WHY it is public.`,
     )
   }
 }
 
-for (const nome of Object.keys(DECISOES)) {
-  if (!simbolos.has(nome)) {
-    falhas.push(
-      `DECISÃO ÓRFÃ: "${nome}" tem decisão escrita mas NÃO é mais exportado pelo SDK. Ou o símbolo ` +
-        `foi removido (e a camada quebrou em silêncio), ou a decisão está obsoleta.`,
+for (const name of Object.keys(DECISIONS)) {
+  if (!symbols.has(name)) {
+    failures.push(
+      `ORPHAN DECISION: "${name}" has a written decision but is NO LONGER exported by the SDK. Either ` +
+        `the symbol was removed (and the layer broke silently), or the decision is stale.`,
     )
   }
 }
 
-if (falhas.length > 0) {
-  console.error(`\ncheck-sandbox-parity: ${falhas.length} problema(s)\n`)
-  for (const f of falhas) console.error(`  - ${f}\n`)
+if (failures.length > 0) {
+  console.error(`\ncheck-sandbox-parity: ${failures.length} problem(s)\n`)
+  for (const f of failures) console.error(`  - ${f}\n`)
   process.exit(1)
 }
 
 console.log(
-  `check-sandbox-parity: OK — ${simbolos.size} símbolos, todos com decisão escrita (fonte: ${origem}).`,
+  `check-sandbox-parity: OK — ${symbols.size} symbols, all with a written decision (source: ${source}).`,
 )

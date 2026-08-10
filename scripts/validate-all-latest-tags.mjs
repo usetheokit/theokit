@@ -13,10 +13,10 @@
  *   1 — drift detected (latest < floor for at least one package)
  *   2 — network failure (npm registry unreachable) — workflow retries on this
  *
- * Background: sessão 2026-05-28 detectou drift 3x manualmente
- * (theokit@latest=alpha.8 enquanto alpha.13 publicado, create-theokit idem,
- * @usetheo/ui@latest=0.1.0 enquanto 0.12.0 disponível).
- * Substitui scripts/validate-ui-latest-tag.mjs (cobre 1 pkg apenas).
+ * Background: the 2026-05-28 session detected drift 3 times by hand
+ * (theokit@latest=alpha.8 while alpha.13 was published, create-theokit likewise,
+ * @usetheo/ui@latest=0.1.0 while 0.12.0 was available).
+ * Replaces scripts/validate-ui-latest-tag.mjs (which covered only 1 pkg).
  *
  * EC-2 (v1.1) — workflow caller distingue exit 1 (hard drift) vs exit 2
  * (retryable network).

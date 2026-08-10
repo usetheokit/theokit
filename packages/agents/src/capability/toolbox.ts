@@ -75,13 +75,13 @@ export class ToolboxCapability implements Capability {
     // real at runtime even though the declared type makes it look redundant to the compiler.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- may not be an object at runtime
     if (typeof instance !== 'object' || instance === null) {
-      throw new ConfigurationError('toolbox: esperava uma instância de toolbox')
+      throw new ConfigurationError('toolbox: expected a toolbox instance')
     }
     const declared =
       options.tools ?? (instance.constructor as { tools?: readonly ToolDeclaration[] }).tools
     if (declared === undefined || declared.length === 0) {
       throw new ConfigurationError(
-        `toolbox: ${instance.constructor.name} não declara tools — use \`static tools = [...]\` ou a opção \`tools\``,
+        `toolbox: ${instance.constructor.name} declares no tools — use \`static tools = [...]\` or the \`tools\` option`,
       )
     }
     for (const tool of declared) {
@@ -89,7 +89,7 @@ export class ToolboxCapability implements Capability {
       // decides to call the tool, which is the worst moment to discover a typo.
       if (typeof (instance as Record<string, unknown>)[tool.method] !== 'function') {
         throw new ConfigurationError(
-          `toolbox: ${instance.constructor.name}.${tool.method} não é um método (tool "${tool.name}")`,
+          `toolbox: ${instance.constructor.name}.${tool.method} is not a method (tool "${tool.name}")`,
         )
       }
     }

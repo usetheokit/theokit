@@ -1,33 +1,33 @@
 /**
- * M96 U1 (Fase 3) — a postura de aprovação vira parâmetro OBRIGATÓRIO de `toAgentFactory`.
+ * M96 U1 (Phase 3) — the approval posture becomes a MANDATORY parameter of `toAgentFactory`.
  *
- * ## O defeito
+ * ## The defect
  *
- * `toAgentFactory` compilava a definição — inclusive o mapa `compiled.hitl` que `.approvals({…})`
- * produz — e **descartava** o mapa. O descarte era admitido por escrito no próprio JSDoc
- * (*"Tools still execute; they are simply not HITL-gated here"*), enquanto o bridge irmão
- * (`streamAgentTurnInProcess`) RECUSA para a mesma definição. As superfícies sem humano usavam a
- * permissiva. Quatro tools executaram sem política consultada por três releases.
+ * `toAgentFactory` compiled the definition — including the `compiled.hitl` map that `.approvals({…})`
+ * produces — and **discarded** the map. The discard was admitted in writing in the JSDoc itself
+ * (*"Tools still execute; they are simply not HITL-gated here"*), while the sibling bridge
+ * (`streamAgentTurnInProcess`) REFUSES for the same definition. The human-less surfaces used the
+ * permissive path. Four tools executed with no policy consulted, for three releases.
  *
- * O defeito é de TIPO, não de comportamento: a postura "sem HITL" não era representável como valor,
- * então era expressa como AUSÊNCIA — e ausência não tem `match` exaustivo, não aparece em log e não
- * reprova teste. As quatro variantes de `ApprovalPosture` tornam a permissiva um valor NOMEADO; o que
- * deixa de existir é a omissão.
+ * The defect is one of TYPE, not of behaviour: the "no HITL" posture was not representable as a
+ * value, so it was expressed as ABSENCE — and an absence has no exhaustive `match`, appears in no log
+ * and fails no test. The four variants of `ApprovalPosture` make the permissive one a NAMED value;
+ * what stops existing is the omission.
  *
- * ## Por que o oráculo é o efeito colateral ausente (ADR D4)
+ * ## Why the oracle is the absent side effect (ADR D4)
  *
- * Um `rejects.toThrow` passa alegremente num sistema que devolve o erro DEPOIS de executar — que é a
- * forma exata deste defeito. O oráculo que pega é o do codex
+ * A `rejects.toThrow` passes happily on a system that returns the error AFTER executing — which is
+ * the exact shape of this defect. The oracle that catches it is codex's
  * (`codex-rs/core/tests/suite/approvals.rs:1499-1504`): `Expectation::FileNotCreated`, o **disco**, e
- * não a string do erro. Aqui: um arquivo sentinela que o handler da tool cria, mais um executor espião.
+ * not the error string. Here: a sentinel file the tool's handler creates, plus a spy executor.
  *
- * ## Por que o despachante deste arquivo não é vacuidade
+ * ## Why this file's dispatcher is not vacuous
  *
- * Ele espelha o contrato de veto do SDK que `tests/integration/hitl-harness.test.ts` já documenta —
+ * It mirrors the SDK's veto contract that `tests/integration/hitl-harness.test.ts` already documents —
  * *"a `pre_tool_call` block makes the loop inject a denial tool result and CONTINUE"*. O que impede
- * que ele "prove" a não-execução por nunca executar nada é o par invertido:
- * `test_sob_auto_approve_a_tool_executa_e_NENHUM_pedido_e_emitido` roda o MESMO despachante e vê o
- * sentinela nascer. Um despachante quebrado reprova ali antes de mentir aqui.
+ * that it "proves" non-execution by never executing anything is the inverted pair:
+ * `test_under_auto_approve_the_tool_runs_and_NO_request_is_emitted` runs the SAME dispatcher and sees
+ * the sentinel appear. A broken dispatcher fails there before it can lie here.
  */
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
@@ -38,14 +38,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApprovalPosture } from '../../src/bridge/approval-posture.js'
 
-const capturado = vi.hoisted(() => ({
-  opcoes: undefined as Record<string, unknown> | undefined,
+const captured = vi.hoisted(() => ({
+  options: undefined as Record<string, unknown> | undefined,
 }))
 
 vi.mock('@theokit/sdk', () => ({
   Agent: {
     getOrCreate: async (id: string, opts: Record<string, unknown>) => {
-      capturado.opcoes = opts
+      captured.options = opts
       return {
         agentId: id,
         send: async () => ({ wait: async () => ({}) }),
@@ -62,43 +62,43 @@ const { streamAgentTurnInProcess, InProcessApprovalRequiredError } =
   await import('../../src/in-process-turn.js')
 
 let dir: string
-let sentinela: string
+let sentinel: string
 let executor: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'm96-postura-'))
-  sentinela = join(dir, 'a-tool-executou')
+  dir = mkdtempSync(join(tmpdir(), 'm96-posture-'))
+  sentinel = join(dir, 'a-tool-executed')
   executor = vi.fn(async () => {
-    await writeFile(sentinela, 'executou')
+    await writeFile(sentinel, 'executed')
     return 'ok'
   })
-  capturado.opcoes = undefined
+  captured.options = undefined
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-/** Uma definição com UMA tool gateada, cujo handler grava o sentinela no disco. */
-function definicaoGateada() {
+/** A definition with ONE gated tool, whose handler writes the sentinel to disk. */
+function gatedDefinition() {
   return defineAgent({
     model: 'test',
     tools: [
       {
         name: 'run_shell',
-        description: 'roda um comando',
+        description: 'runs a command',
         inputSchema: { type: 'object', properties: {} },
         handler: executor as never,
       },
     ],
-    approvals: { run_shell: { question: 'Rodar run_shell?' } },
+    approvals: { run_shell: { question: 'Run run_shell?' } },
   })
 }
 
-function nomesDosPluginsInstalados(): string[] {
-  const plugins = capturado.opcoes?.plugins
+function installedPluginNames(): string[] {
+  const plugins = captured.options?.plugins
   if (!Array.isArray(plugins)) return []
   return plugins.map((p) => String((p as { name?: unknown }).name))
 }
 
-type ManipuladorPreToolCall = (ctx: {
+type PreToolCallHandler = (ctx: {
   name: string
   args: Record<string, unknown>
   agentId: string
@@ -106,254 +106,252 @@ type ManipuladorPreToolCall = (ctx: {
 }) => unknown
 
 /**
- * Espelha o despacho de tool do SDK: roda TODOS os `pre_tool_call` registrados e só então chama o
- * executor. Um veto (`{ block: true }`) impede o executor de ser alcançado — é literalmente o
- * contrato que `hitl-harness.test.ts` já reproduz.
+ * Mirrors the SDK's tool dispatch: runs ALL registered `pre_tool_call` hooks and only then calls the
+ * executor. A veto (`{ block: true }`) stops the executor from being reached — it is literally the
+ * contract `hitl-harness.test.ts` already reproduces.
  */
-async function despacharToolComoOSdkFaria(
+async function dispatchToolAsTheSdkWould(
   nome: string,
-): Promise<{ bloqueada: boolean; message?: string }> {
-  const manipuladores: ManipuladorPreToolCall[] = []
-  for (const plugin of (capturado.opcoes?.plugins as readonly unknown[] | undefined) ?? []) {
+): Promise<{ blocked: boolean; message?: string }> {
+  const handlers: PreToolCallHandler[] = []
+  for (const plugin of (captured.options?.plugins as readonly unknown[] | undefined) ?? []) {
     ;(
-      plugin as { register: (ctx: { on: (h: string, fn: ManipuladorPreToolCall) => void }) => void }
+      plugin as { register: (ctx: { on: (h: string, fn: PreToolCallHandler) => void }) => void }
     ).register({
       on: (hook, fn) => {
-        if (hook === 'pre_tool_call') manipuladores.push(fn)
+        if (hook === 'pre_tool_call') handlers.push(fn)
       },
     })
   }
-  for (const manipular of manipuladores) {
+  for (const manipular of handlers) {
     const veto = (await manipular({ name: nome, args: {}, agentId: 'a', runId: 'r' })) as
       | { block?: boolean; message?: string }
       | undefined
-    if (veto?.block === true) return { bloqueada: true, message: veto.message }
+    if (veto?.block === true) return { blocked: true, message: veto.message }
   }
   await executor()
-  return { bloqueada: false }
+  return { blocked: false }
 }
 
-async function materializar(postura: ApprovalPosture): Promise<void> {
-  await toAgentFactory(definicaoGateada() as never, { apiKey: 'k', approvals: postura })('s1')
+async function materialize(posturePolicy: ApprovalPosture): Promise<void> {
+  await toAgentFactory(gatedDefinition() as never, { apiKey: 'k', approvals: posturePolicy })('s1')
 }
 
-describe('M96 U1 — toAgentFactory exige a postura de aprovação', () => {
-  it('test_NEGATIVO_sob_auto_reject_uma_tool_gateada_NAO_EXECUTA', async () => {
-    await materializar({ kind: 'auto-reject', reason: 'superfície não-atendida' })
+describe('M96 U1 — toAgentFactory requires the approval posture', () => {
+  it('test_NEGATIVE_under_auto_reject_a_gated_tool_DOES_NOT_RUN', async () => {
+    await materialize({ kind: 'auto-reject', reason: 'an unattended surface' })
 
-    const resultado = await despacharToolComoOSdkFaria('run_shell')
+    const outcome = await dispatchToolAsTheSdkWould('run_shell')
 
-    expect(resultado.bloqueada, 'a tool gateada tem de ser vetada').toBe(true)
-    // D4 — as DUAS metades do oráculo. A mensagem do erro sozinha passaria num sistema que devolve
-    // o erro depois de executar, que é a forma exata do defeito que este milestone fecha.
+    expect(outcome.blocked, 'the gated tool must be vetoed').toBe(true)
+    // D4 — BOTH halves of the oracle. The error message alone would pass on a system that returns the
+    // error after executing, which is the exact shape of the defect this milestone closes.
     expect(
-      existsSync(sentinela),
-      'o efeito colateral ausente: o disco não pode ter sido tocado',
+      existsSync(sentinel),
+      'the absent side effect: the disk must not have been touched',
     ).toBe(false)
-    expect(executor, 'o executor não pode ter sido alcançado').toHaveBeenCalledTimes(0)
-    expect(resultado.message).toContain('superfície não-atendida')
+    expect(executor, 'the executor must not have been reached').toHaveBeenCalledTimes(0)
+    expect(outcome.message).toContain('an unattended surface')
   })
 
-  it('test_sob_auto_approve_a_tool_executa_e_NENHUM_pedido_e_emitido', async () => {
-    // O inverso do inverso, no molde de `wait_for_completion_without_approval` do codex: a postura
-    // permissiva continua sendo uma POSTURA, e emitir pedido nela é defeito. É também o teste que
-    // prova que o despachante acima EXECUTA quando ninguém bloqueia — sem ele, o caso negativo
-    // seria indistinguível de um harness quebrado.
-    await materializar({ kind: 'auto-approve', reason: 'sandbox confina a execução' })
+  it('test_under_auto_approve_the_tool_runs_and_NO_request_is_emitted', async () => {
+    // The inverse of the inverse, in the mould of codex's `wait_for_completion_without_approval`: the
+    // permissive posture is still a POSTURE, and emitting a request under it is a defect. It is also
+    // the test that proves the dispatcher above EXECUTES when nobody blocks — without it, the negative
+    // case would be indistinguishable from a broken harness.
+    await materialize({ kind: 'auto-approve', reason: 'the sandbox confines the execution' })
 
-    const resultado = await despacharToolComoOSdkFaria('run_shell')
+    const outcome = await dispatchToolAsTheSdkWould('run_shell')
 
-    expect(resultado.bloqueada).toBe(false)
-    expect(existsSync(sentinela)).toBe(true)
+    expect(outcome.blocked).toBe(false)
+    expect(existsSync(sentinel)).toBe(true)
     expect(executor).toHaveBeenCalledTimes(1)
-    expect(nomesDosPluginsInstalados(), 'auto-approve não emite pedido nenhum').not.toContain(
+    expect(installedPluginNames(), 'auto-approve emits no request at all').not.toContain(
       'theokit-hitl',
     )
   })
 
-  it('test_sob_interactive_o_pedido_de_aprovacao_E_EMITIDO_antes_da_execucao', async () => {
-    // A asserção INVERSA que D4 exige: reprovar quando o pedido NÃO é emitido. Sem ela, uma
-    // implementação que instala o plugin e nunca o dispara ficaria verde em tudo acima.
-    const ordem: string[] = []
-    const emit = vi.fn((_evento: { type: string; toolName: string }) => {
-      ordem.push('emit')
+  it('test_under_interactive_the_approval_request_IS_EMITTED_before_execution', async () => {
+    // The INVERSE assertion D4 requires: fail when the request is NOT emitted. Without it, an
+    // implementation that installs the plugin and never fires it would stay green in everything above.
+    const order: string[] = []
+    const emit = vi.fn((_event: { type: string; toolName: string }) => {
+      order.push('emit')
     })
     executor.mockImplementation(async () => {
-      ordem.push('executor')
-      await writeFile(sentinela, 'executou')
+      order.push('executor')
+      await writeFile(sentinel, 'executed')
       return 'ok'
     })
 
-    await materializar({
+    await materialize({
       kind: 'interactive',
       emit,
       awaitApproval: async () => true,
     })
-    await despacharToolComoOSdkFaria('run_shell')
+    await dispatchToolAsTheSdkWould('run_shell')
 
-    expect(emit, 'o pedido tem de ser emitido').toHaveBeenCalledTimes(1)
+    expect(emit, 'the request must be emitted').toHaveBeenCalledTimes(1)
     expect(emit.mock.calls[0]?.[0]).toMatchObject({
       type: 'approval_required',
       toolName: 'run_shell',
     })
-    expect(ordem, 'emitir DEPOIS de executar seria o mesmo defeito com outro nome').toEqual([
+    expect(order, 'emitting AFTER executing would be the same defect under another name').toEqual([
       'emit',
       'executor',
     ])
   })
 
-  it('test_auto_reject_usa_o_plugin_de_hooks_e_NAO_exige_emit', async () => {
-    // A contraprova do mapeamento de D9. Sem ela, alguém "simplifica" exigindo `emit` nas quatro
-    // variantes e três superfícies passam a carregar um seam que nenhuma delas usa.
-    await materializar({ kind: 'auto-reject', reason: 'sonda nunca executa tool' })
+  it('test_auto_reject_uses_the_hooks_plugin_and_does_NOT_require_emit', async () => {
+    // The counterproof for D9's mapping. Without it, somebody "simplifies" by requiring `emit` on all
+    // four variants and three surfaces end up carrying a seam none of them uses.
+    await materialize({ kind: 'auto-reject', reason: 'a probe never runs a tool' })
 
-    const nomes = nomesDosPluginsInstalados()
-    expect(nomes).toContain('theokit-tool-hooks')
-    expect(nomes).not.toContain('theokit-hitl')
+    const names = installedPluginNames()
+    expect(names).toContain('theokit-tool-hooks')
+    expect(names).not.toContain('theokit-hitl')
   })
 
-  it('test_owned_by_surface_nao_instala_o_plugin_e_carrega_a_razao', async () => {
-    // D3 — a variante NOMEIA o comportamento do ACP em vez de apagá-lo. Instalar o gate da camada
-    // ali produziria DOIS pedidos para a mesma tool; apagar a distinção devolveria o bridge ao
-    // estado de hoje. Nomear tem três consequências que a omissão não tem: aparece no `match`,
-    // aparece em LOG (asserido aqui) e pode ser contada por um gate (no consumidor).
+  it('test_owned_by_surface_does_not_install_the_plugin_and_carries_the_reason', async () => {
+    // D3 — the variant NAMES the ACP behaviour instead of erasing it. Installing the layer's gate
+    // there would produce TWO requests for the same tool; erasing the distinction would return the
+    // bridge to today's state. Naming has three consequences omission does not: it shows up in the
+    // `match`, it shows up in LOGS (asserted here) and it can be counted by a gate (in the consumer).
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
-    const antes = process.env.THEOKIT_DEBUG
+    const before = process.env.THEOKIT_DEBUG
     process.env.THEOKIT_DEBUG = '1'
     try {
-      await materializar({ kind: 'owned-by-surface', reason: 'ACP client owns the prompt' })
+      await materialize({ kind: 'owned-by-surface', reason: 'ACP client owns the prompt' })
     } finally {
-      if (antes === undefined) delete process.env.THEOKIT_DEBUG
-      else process.env.THEOKIT_DEBUG = antes
+      if (before === undefined) delete process.env.THEOKIT_DEBUG
+      else process.env.THEOKIT_DEBUG = before
     }
 
-    expect(nomesDosPluginsInstalados()).toEqual([])
-    const registrado = debug.mock.calls.map((c) => JSON.stringify(c)).join('\n')
-    expect(registrado, 'a razão do bypass tem de ficar legível em runtime').toContain(
+    expect(installedPluginNames()).toEqual([])
+    const registered = debug.mock.calls.map((c) => JSON.stringify(c)).join('\n')
+    expect(registered, 'the bypass reason must stay readable at runtime').toContain(
       'ACP client owns the prompt',
     )
     debug.mockRestore()
   })
 
-  it('test_uma_tool_NAO_gateada_passa_sob_qualquer_postura', async () => {
-    // Caso de borda: `auto-reject` é a postura das tools GATEADAS, não um bloqueio universal.
-    // Sem esta asserção, a variante mais segura quebraria todo agente que tem uma tool livre.
-    await materializar({ kind: 'auto-reject', reason: 'sem humano' })
+  it('test_an_UNGATED_tool_passes_under_any_posture', async () => {
+    // Edge case: `auto-reject` is the posture of GATED tools, not a universal block. Without this
+    // assertion, the safest variant would break every agent that has one free tool.
+    await materialize({ kind: 'auto-reject', reason: 'no human' })
 
-    const resultado = await despacharToolComoOSdkFaria('read_file')
+    const outcome = await dispatchToolAsTheSdkWould('read_file')
 
-    expect(resultado.bloqueada).toBe(false)
+    expect(outcome.blocked).toBe(false)
     expect(executor).toHaveBeenCalledTimes(1)
   })
 
-  it('test_o_abort_durante_a_espera_de_aprovacao_NAO_EXECUTA_a_tool', async () => {
-    // A única seção deste milestone em que dois fluxos correm juntos: a espera do resolvedor e o
-    // encerramento do turn. Um teste de cancelamento que só verifica a rejeição da promessa passaria
-    // num sistema que executa a tool e aborta depois — daí o oráculo de D4 também aqui.
+  it('test_an_abort_while_waiting_for_approval_DOES_NOT_RUN_the_tool', async () => {
+    // The only section of this milestone where two flows run together: waiting on the resolver and
+    // ending the turn. A cancellation test that only checks the promise rejection would pass on a
+    // system that runs the tool and aborts afterwards — hence D4's oracle here too.
     //
-    // LIMITE HONESTO: a propagação do `AbortSignal` é do SDK, não desta camada. O que este teste
-    // fixa é a propriedade que É desta camada — enquanto a aprovação não resolve, a pausa SEGURA a
-    // tool. O espião de `emit` prova que a pausa aconteceu de fato (e não que o caminho nunca foi
-    // alcançado), que é a distinção que o seam de D9 torna escrevível.
+    // HONEST LIMIT: `AbortSignal` propagation belongs to the SDK, not to this layer. What this test
+    // pins is the property that IS this layer's — while the approval does not settle, the pause HOLDS
+    // the tool. The `emit` spy proves the pause actually happened (rather than the path never being
+    // reached), which is the distinction D9's seam makes writable.
     const emit = vi.fn()
-    const controle = new AbortController()
-    await materializar({
+    const control = new AbortController()
+    await materialize({
       kind: 'interactive',
       emit,
-      awaitApproval: () => new Promise(() => {}), // nunca resolve
+      awaitApproval: () => new Promise(() => {}), // never settles
     })
 
-    const despacho = despacharToolComoOSdkFaria('run_shell')
-    const corrida = await Promise.race([
-      despacho.then(() => 'despachou'),
+    const dispatch = dispatchToolAsTheSdkWould('run_shell')
+    const race = await Promise.race([
+      dispatch.then(() => 'dispatched'),
       new Promise<string>((r) => {
-        controle.abort()
-        setTimeout(() => r('abortou'), 20)
+        control.abort()
+        setTimeout(() => r('aborted'), 20)
       }),
     ])
 
-    expect(corrida, 'o despacho não pode completar enquanto a aprovação está pendente').toBe(
-      'abortou',
-    )
-    expect(emit, 'a pausa tem de ter acontecido de fato').toHaveBeenCalledTimes(1)
-    expect(existsSync(sentinela)).toBe(false)
+    expect(race, 'the dispatch must not complete while the approval is pending').toBe('aborted')
+    expect(emit, 'the pause must actually have happened').toHaveBeenCalledTimes(1)
+    expect(existsSync(sentinel)).toBe(false)
     expect(executor).toHaveBeenCalledTimes(0)
   })
 
-  it('test_o_JSDoc_de_toAgentFactory_nao_declara_mais_o_descarte', async () => {
-    // No molde de `agents/m67-docs-truthfulness.test.ts`: uma prosa que descreve um comportamento
-    // apagado é a classe de defeito que `adr-governance.md § 5` enumera. Aqui a prosa descrevia um
-    // comportamento REAL, e é ela que documentava o buraco.
+  it('test_the_toAgentFactory_JSDoc_no_longer_declares_the_discard', async () => {
+    // In the mould of `agents/m67-docs-truthfulness.test.ts`: prose describing a behaviour that has
+    // been erased is the class of defect `adr-governance.md § 5` enumerates. Here the prose described
+    // a REAL behaviour, and it was the prose that documented the hole.
     const { readFile } = await import('node:fs/promises')
-    const fonte = await readFile(
+    const source = await readFile(
       new URL('../../src/bridge/sdk-adapter.ts', import.meta.url),
       'utf8',
     )
-    expect(fonte).not.toContain('not HITL-gated here')
+    expect(source).not.toContain('not HITL-gated here')
   })
 })
 
-describe('M96 D2 — streamAgentTurnInProcess recebe a postura de forma ADITIVA', () => {
-  it('test_streamAgentTurnInProcess_sem_approvals_CONTINUA_recusando', () => {
-    // A contraprova do D2: o bridge in-process JÁ era fail-closed — é o lado correto da divergência
-    // que o M96 existe para fechar. Um aditivo que afrouxasse o único bridge correto seria a
-    // regressão mais cara deste plano.
-    expect(() => streamAgentTurnInProcess(definicaoGateada(), 'k', { message: 'oi' })).toThrow(
+describe('M96 D2 — streamAgentTurnInProcess receives the posture ADDITIVELY', () => {
+  it('test_streamAgentTurnInProcess_without_approvals_STILL_refuses', () => {
+    // D2's counterproof: the in-process bridge was ALREADY fail-closed — it is the correct side of
+    // the divergence M96 exists to close. An additive change that loosened the one correct bridge
+    // would be this plan's most expensive regression.
+    expect(() => streamAgentTurnInProcess(gatedDefinition(), 'k', { message: 'oi' })).toThrow(
       InProcessApprovalRequiredError,
     )
   })
 
-  it('test_streamAgentTurnInProcess_sob_auto_approve_executa_sem_resolvedor', () => {
-    // A metade que o aditivo entrega: a postura permissiva passa a ser EXPRIMÍVEL também ali, em vez
-    // de inexprimível de um lado e nomeável do outro.
+  it('test_streamAgentTurnInProcess_under_auto_approve_runs_with_no_resolver', () => {
+    // The half the additive change delivers: the permissive posture becomes EXPRESSIBLE there too,
+    // rather than inexpressible on one side and nameable on the other.
     expect(() =>
-      streamAgentTurnInProcess(definicaoGateada(), 'k', {
+      streamAgentTurnInProcess(gatedDefinition(), 'k', {
         message: 'oi',
-        approvals: { kind: 'auto-approve', reason: 'sandbox confina' },
+        approvals: { kind: 'auto-approve', reason: 'the sandbox confines' },
       }),
     ).not.toThrow()
   })
 
-  it('test_NEGATIVO_in_process_sob_owned_by_surface_tambem_dispensa_o_resolvedor', () => {
+  it('test_NEGATIVE_in_process_under_owned_by_surface_also_needs_no_resolver', () => {
     expect(() =>
-      streamAgentTurnInProcess(definicaoGateada(), 'k', {
+      streamAgentTurnInProcess(gatedDefinition(), 'k', {
         message: 'oi',
-        approvals: { kind: 'owned-by-surface', reason: 'a superfície pergunta' },
+        approvals: { kind: 'owned-by-surface', reason: 'the surface asks' },
       }),
     ).not.toThrow()
   })
 })
 
-describe('M96 D1 — a omissão deixa de ter forma válida (gate de COMPILAÇÃO)', () => {
-  // Estes casos são executados por `pnpm typecheck` (o tsconfig da raiz inclui
-  // `packages/*/tests/**/*.ts`): um `@ts-expect-error` que NÃO encontra erro é, ele próprio, um erro
-  // de compilação. É o que converte a disciplina em gate em vez de convenção.
-  it('test_NEGATIVO_omitir_approvals_reprova_na_compilacao', () => {
-    const chamar = () =>
-      // @ts-expect-error — `approvals` é obrigatório: a omissão é o defeito que o M96 fecha.
-      toAgentFactory(definicaoGateada() as never, { apiKey: 'k' })
-    expect(chamar).toBeTypeOf('function')
+describe('M96 D1 — omission stops having a valid shape (a COMPILE-time gate)', () => {
+  // These cases are executed by `pnpm typecheck` (the root tsconfig includes
+  // `packages/*/tests/**/*.ts`): a `@ts-expect-error` that finds NO error is itself a compile error.
+  // That is what converts the discipline into a gate rather than a convention.
+  it('test_NEGATIVE_omitting_approvals_fails_to_compile', () => {
+    const callIt = () =>
+      // @ts-expect-error — `approvals` is mandatory: the omission is the defect M96 closes.
+      toAgentFactory(gatedDefinition() as never, { apiKey: 'k' })
+    expect(callIt).toBeTypeOf('function')
   })
 
-  it('test_NEGATIVO_interactive_sem_emit_reprova_na_compilacao', () => {
-    // D9 — sem o seam, `interactive` não é instalável, e um default no-op devolveria o descarte
-    // silencioso pela porta dos fundos.
-    // @ts-expect-error — `emit` é obrigatório na variante que emite pedido.
-    const postura: ApprovalPosture = { kind: 'interactive', awaitApproval: async () => true }
-    expect(postura.kind).toBe('interactive')
+  it('test_NEGATIVE_interactive_without_emit_fails_to_compile', () => {
+    // D9 — without the seam, `interactive` is not installable, and a no-op default would bring the
+    // silent discard back through the back door.
+    // @ts-expect-error — `emit` is mandatory on the variant that emits a request.
+    const posturePolicy: ApprovalPosture = { kind: 'interactive', awaitApproval: async () => true }
+    expect(posturePolicy.kind).toBe('interactive')
   })
 
-  it('test_NEGATIVO_owned_by_surface_sem_razao_reprova_na_compilacao', () => {
-    // Um bypass sem justificativa escrita não deve ter forma válida.
-    // @ts-expect-error — `reason` é obrigatório na variante de bypass.
-    const postura: ApprovalPosture = { kind: 'owned-by-surface' }
-    expect(postura.kind).toBe('owned-by-surface')
+  it('test_NEGATIVE_owned_by_surface_without_a_reason_fails_to_compile', () => {
+    // A bypass with no written justification must not have a valid shape.
+    // @ts-expect-error — `reason` is mandatory on the bypass variant.
+    const posturePolicy: ApprovalPosture = { kind: 'owned-by-surface' }
+    expect(posturePolicy.kind).toBe('owned-by-surface')
   })
 
-  it('test_NEGATIVO_uma_variante_inventada_reprova_na_compilacao', () => {
-    // A união é FECHADA: o `match` exaustivo é o que faz a postura aparecer em log e em gate.
-    // @ts-expect-error — `silent-discard` não é uma postura; era o estado de hoje, sem nome.
-    const postura: ApprovalPosture = { kind: 'silent-discard', reason: 'x' }
-    expect(postura).toBeDefined()
+  it('test_NEGATIVE_an_invented_variant_fails_to_compile', () => {
+    // The union is CLOSED: the exhaustive `match` is what makes the posture appear in logs and gates.
+    // @ts-expect-error — `silent-discard` is not a posture; it was today's state, unnamed.
+    const posturePolicy: ApprovalPosture = { kind: 'silent-discard', reason: 'x' }
+    expect(posturePolicy).toBeDefined()
   })
 })

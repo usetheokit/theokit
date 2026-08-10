@@ -12,14 +12,14 @@ export default tseslint.config(
     },
   },
   {
-    // Arquivos de declaração carregam as augmentações de módulo do TheoKit — `JobRegistry` em
-    // `types/jobs.d.ts` nasce VAZIA de propósito, para o app preencher conforme cria jobs. Sem esta
-    // exceção, um app recém-scaffoldado reprova no próprio `npm run lint` no minuto zero (#93), e a
-    // primeira lição que o TheoKit dá é que o gate dele mente.
+    // Declaration files carry TheoKit's module augmentations — `JobRegistry` in `types/jobs.d.ts`
+    // is born EMPTY on purpose, for the app to fill in as it creates jobs. Without this exception, a
+    // freshly scaffolded app fails its own `npm run lint` at minute zero (#93), and the first lesson
+    // TheoKit teaches is that its gate lies.
     //
-    // `allowInterfaces: 'always'` em vez de desligar a regra: interface vazia é a forma canônica de
-    // declaration merging, mas `type X = {}` continua sendo acusado — e esse ainda é um erro de
-    // verdade, porque `{}` aceita qualquer valor não-nulo, inclusive `0` e `""`.
+    // `allowInterfaces: 'always'` rather than disabling the rule: an empty interface is the canonical
+    // form of declaration merging, but `type X = {}` is still flagged — and that one is a real error,
+    // because `{}` accepts any non-null value, including `0` and `""`.
     files: ['**/*.d.ts'],
     rules: {
       '@typescript-eslint/no-empty-object-type': ['error', { allowInterfaces: 'always' }],

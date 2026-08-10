@@ -117,9 +117,9 @@ export default defineConfig({
       'theokit/client': path.resolve(__dirname, 'packages/theo/src/client/index.ts'),
       'theokit/server': path.resolve(__dirname, 'packages/theo/src/server/index.ts'),
       theokit: path.resolve(__dirname, 'packages/theo/src/index.ts'),
-      // M84 — o subpath ANTES da barra: um alias de string casa por prefixo, então
-      // `@theokit/agents` sozinho transformaria `@theokit/agents/client` em
-      // `…/src/index.ts/client`. Mesmo motivo pelo qual `theokit/client` vem antes de `theokit`.
+      // M84 — the subpath BEFORE the bar: a string alias matches by prefix, so `@theokit/agents`
+      // alone would turn `@theokit/agents/client` into `…/src/index.ts/client`. The same reason
+      // `theokit/client` comes before `theokit`.
       '@theokit/agents/client/react': path.resolve(
         __dirname,
         'packages/agents/src/client-react-entry.ts',

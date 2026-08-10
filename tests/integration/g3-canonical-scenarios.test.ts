@@ -9,7 +9,7 @@
  * Scenarios covered:
  *   1. devalue roundtrip preserves Date / Set / URL (ADR D1)
  *   2. validation error → 422 + flat envelope with auto-derived `fields`
- *      (already covered by onda4-mandatory — kept here for traceability)
+ *      (already covered by wave4-mandatory — kept here for traceability)
  *   3. accept:'form' coerces FormData via formDataToObject (Astro pattern)
  *   4. csrf:false bypasses multi-header enforcement
  *   5. handler throws ActionError → status mapped + flat envelope

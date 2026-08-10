@@ -16,9 +16,9 @@
  *  - Pure (1) is unit-testable without Vite or a filesystem (see G1-P2 tests).
  *  - EC-2: kebab-case segments → camelCase; unsafe chars → bracket-access.
  *  - EC-3: collision between HTTP method name and sub-segment name → method
- *    wins; sub-segment ganha suffix `_` + warning comment.
- *  - EC-6: write é `writeFileSync(tmp) + renameSync(tmp, final)` (POSIX atomic).
- *  - EC-8: imports normalizam `\\` → `/`.
+ *    wins; a sub-segment gets a `_` suffix + a warning comment.
+ *  - EC-6: the write is `writeFileSync(tmp) + renameSync(tmp, final)` (POSIX atomic).
+ *  - EC-8: imports normalize `\\` → `/`.
  */
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs'

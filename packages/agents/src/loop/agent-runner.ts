@@ -8,7 +8,7 @@
  * `runReflectiveLoopStream` (the SAME loop `delegate()` drains — DRY, ADR 0031).
  * V4-D-stream: `stream()` yields events live (SSE-first); `run()` drains it to a result.
  *
- * referencia: knowledge-base/references/spring-ai DefaultChatClientBuilder.java (build() returns standalone).
+ * reference: knowledge-base/references/spring-ai DefaultChatClientBuilder.java (build() returns standalone).
  */
 import type {
   AgentDefinition,
@@ -44,22 +44,23 @@ import {
 import { type RoundStreamFactory, runReflectiveLoopStream } from './run-reflective-loop.js'
 
 /**
- * Resolve a credencial no início do stream, em vez de exigir o valor pronto antes da chamada.
+ * Resolves the credential at the start of the stream, instead of demanding the value ready before the call.
  *
- * M74 — o ponto de injeção da credencial JÁ era por run; o que travava era o tipo. Com `string`, quem
- * chama precisa ter o valor em mãos antes, então o *momento* é por run mas o *valor* é congelado
- * antes — e um bearer OAuth com validade curta atravessa a run inteira sem ser reconsultado. Foi a
- * causa estrutural de um turno silencioso em produção.
+ * M74 — the credential injection point was ALREADY per run; what blocked it was the type. With a
+ * `string`, the caller must hold the value beforehand, so the *moment* is per run but the *value* is
+ * frozen earlier — and a short-lived OAuth bearer crosses the whole run without being re-fetched. It
+ * was the structural cause of a silent turn in production.
  */
 export type CredentialResolver = () => string | Promise<string>
 
 /** Options for {@link AgentRunner.run}. */
 export interface AgentRunnerRunOptions {
   /**
-   * LLM API key, ou um resolvedor chamado quando o stream começa.
+   * The LLM API key, or a resolver called when the stream starts.
    *
-   * `string` continua válido e é o caminho de quem tem chave de API — ela não expira, e exigir um
-   * resolvedor ali seria cerimônia sem ganho. O resolvedor existe para credencial que EXPIRA.
+   * `string` remains valid and is the path for anyone holding an API key — it does not expire, and
+   * demanding a resolver there would be ceremony with no gain. The resolver exists for credentials
+   * that EXPIRE.
    */
   readonly apiKey: string | CredentialResolver
   /** Session id override (default: a fresh isolated id). */

@@ -3,147 +3,148 @@ import { describe, expect, it } from 'vitest'
 import { ApprovalAbortedError, InProcessTransport } from '../../src/client/in-process-transport.js'
 
 /**
- * M92 T3.1 — a aprovação estacionada num turno abortado para de pendurar a chamada de tool.
+ * M92 T3.1 — an approval parked in an aborted turn stops hanging the tool call.
  *
- * ## O defeito
+ * ## The defect
  *
- * `#pending` guardava só o `resolve`, e nada apagava a entrada quando o turno abortava. A promessa
- * ficava pendente **para sempre** e a chamada de tool do SDK pendurava com ela.
+ * `#pending` kept only the `resolve`, and nothing erased the entry when the turn aborted. The promise
+ * stayed pending **forever** and the SDK's tool call hung with it.
  *
- * Uma promessa que nunca resolve **nem** rejeita é a forma mais silenciosa de engolir um erro: não há
- * `catch` que a veja, não há stack trace, não há timeout. `error-handling.md § 2` proíbe engolir; este
- * caso era pior que um `catch {}`, porque um `catch {}` ao menos deixa rastro no código.
+ * A promise that neither resolves **nor** rejects is the quietest way to swallow an error: there is
+ * no `catch` that sees it, no stack trace, no timeout. `error-handling.md § 2` forbids swallowing;
+ * this case was worse than a `catch {}`, because a `catch {}` at least leaves a trace in the code.
  *
- * ## Por que REJEITAR e não `resolve(false)`
+ * ## Why REJECT and not `resolve(false)`
  *
- * `false` é indistinguível de *"o usuário negou"*. Negar é decisão; abortar é interrupção. O SDK
- * precisa das duas para desenrolar a chamada corretamente, e um consumidor que registra decisões
- * gravaria uma negação que nunca houve.
+ * `false` is indistinguishable from *"the user denied"*. Denying is a decision; aborting is an
+ * interruption. The SDK needs both to unwind the call correctly, and a consumer that records decisions
+ * would record a denial that never happened.
  */
-describe('M92 — o transporte in-process evicta aprovação de turno abortado', () => {
-  const montar = (): {
-    transporte: InProcessTransport
-    aprovar: () => Promise<unknown>
-    abortar: () => void
+describe('M92 — the in-process transport evicts approvals from an aborted turn', () => {
+  const build = (): {
+    transport: InProcessTransport
+    approveIt: () => Promise<unknown>
+    abortIt: () => void
   } => {
-    let estacionar: (() => Promise<unknown>) | undefined
+    let park: (() => Promise<unknown>) | undefined
     const controller = new AbortController()
-    const transporte = new InProcessTransport({
+    const transport = new InProcessTransport({
       run: (opts: { awaitApproval: (r: { approvalId: string }) => Promise<unknown> }) => {
-        estacionar = () => opts.awaitApproval({ approvalId: 'ap-1' })
+        park = () => opts.awaitApproval({ approvalId: 'ap-1' })
         return (async function* () {
           await new Promise(() => undefined)
           yield undefined as never
         })()
       },
     } as never)
-    void transporte.sendMessages({
+    void transport.sendMessages({
       messages: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: 'oi' }] }],
       abortSignal: controller.signal,
     } as never)
     return {
-      transporte,
-      aprovar: () => estacionar!(),
-      abortar: () => {
+      transport,
+      approveIt: () => park!(),
+      abortIt: () => {
         controller.abort()
       },
     }
   }
 
-  it('abort REJEITA a aprovacao estacionada com erro TIPADO', async () => {
-    const { aprovar, abortar } = montar()
-    const p = aprovar()
-    abortar()
+  it('abort REJECTS the parked approval with a TYPED error', async () => {
+    const { approveIt, abortIt } = build()
+    const p = approveIt()
+    abortIt()
     await expect(p).rejects.toBeInstanceOf(ApprovalAbortedError)
   })
 
-  it('a entrada e EVICTADA — nao fica vazando no Map', async () => {
-    const { transporte, aprovar, abortar } = montar()
-    const p = aprovar()
-    expect(transporte.pendentes).toBe(1)
-    abortar()
+  it('the entry is EVICTED — it does not leak in the Map', async () => {
+    const { transport, approveIt, abortIt } = build()
+    const p = approveIt()
+    expect(transport.pending).toBe(1)
+    abortIt()
     await expect(p).rejects.toThrow()
-    expect(transporte.pendentes).toBe(0)
+    expect(transport.pending).toBe(0)
   })
 
-  it('o erro nomeia a aprovacao e o motivo — diagnostic, nao so o tipo', async () => {
-    const { aprovar, abortar } = montar()
-    const p = aprovar()
-    abortar()
+  it('the error names the approval and the reason — diagnostic, not just the type', async () => {
+    const { approveIt, abortIt } = build()
+    const p = approveIt()
+    abortIt()
     await expect(p).rejects.toThrow(/ap-1/)
-    await expect(p).rejects.toThrow(/abortado/)
+    await expect(p).rejects.toThrow(/aborted/)
   })
 
-  it('aprovacao DECIDIDA continua distinta de abortada', async () => {
-    const { transporte, aprovar } = montar()
-    const p = aprovar()
-    await transporte.approve('ap-1', 'approve' as never)
+  it('a DECIDED approval stays distinct from an aborted one', async () => {
+    const { transport, approveIt } = build()
+    const p = approveIt()
+    await transport.approve('ap-1', 'approve' as never)
     await expect(p).resolves.toBe('approve')
   })
 
-  it('um send() NOVO varre o turno anterior', async () => {
-    const { transporte, aprovar } = montar()
-    const p = aprovar()
-    expect(transporte.pendentes).toBe(1)
-    void transporte.sendMessages({
-      messages: [{ id: 'u2', role: 'user', parts: [{ type: 'text', text: 'de novo' }] }],
+  it('a NEW send() sweeps the previous turn', async () => {
+    const { transport, approveIt } = build()
+    const p = approveIt()
+    expect(transport.pending).toBe(1)
+    void transport.sendMessages({
+      messages: [{ id: 'u2', role: 'user', parts: [{ type: 'text', text: 'again' }] }],
     } as never)
     await expect(p).rejects.toBeInstanceOf(ApprovalAbortedError)
-    expect(transporte.pendentes).toBe(0)
+    expect(transport.pending).toBe(0)
   })
 })
 
 /**
- * M92 — os três furos que a revisão adversarial mediu, cada um com o cenário que o expõe.
+ * M92 — the three holes the adversarial review measured, each with the scenario that exposes it.
  *
- * Nenhum é hipotético: o revisor rodou os três e reportou o estado observado.
+ * None is hypothetical: the reviewer ran all three and reported the observed state.
  */
-describe('M92 — furos da primeira versão da eviction', () => {
-  const montarCom = (opts: { jaAbortado?: boolean } = {}) => {
-    let estacionar: ((id?: string) => Promise<unknown>) | undefined
+describe('M92 — holes in the first version of the eviction', () => {
+  const buildWith = (opts: { alreadyAborted?: boolean } = {}) => {
+    let park: ((id?: string) => Promise<unknown>) | undefined
     const controller = new AbortController()
-    if (opts.jaAbortado === true) controller.abort()
-    const transporte = new InProcessTransport({
+    if (opts.alreadyAborted === true) controller.abort()
+    const transport = new InProcessTransport({
       run: (o: { awaitApproval: (r: { approvalId: string }) => Promise<unknown> }) => {
-        estacionar = (id = 'ap-1') => o.awaitApproval({ approvalId: id })
+        park = (id = 'ap-1') => o.awaitApproval({ approvalId: id })
         return (async function* () {
           await new Promise(() => undefined)
           yield undefined as never
         })()
       },
     } as never)
-    void transporte.sendMessages({
+    void transport.sendMessages({
       messages: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: 'oi' }] }],
       abortSignal: controller.signal,
     } as never)
     return {
-      transporte,
-      estacionar: (id?: string) => estacionar!(id),
-      abortar: () => {
+      transport,
+      park: (id?: string) => park!(id),
+      abortIt: () => {
         controller.abort()
       },
     }
   }
 
-  it('SINAL JA ABORTADO — a aprovacao nao fica pendurada', async () => {
-    // `addEventListener('abort')` NÃO dispara num sinal que já abortou. Sem a checagem, a promessa
-    // ficava pendente para sempre — o travamento que o milestone existe para fechar, ainda alcançável.
-    const { transporte, estacionar } = montarCom({ jaAbortado: true })
-    const p = estacionar()
+  it('AN ALREADY ABORTED SIGNAL — the approval is not left hanging', async () => {
+    // `addEventListener('abort')` does NOT fire on a signal that has already aborted. Without the
+    // check, the promise stayed pending forever — the hang the milestone exists to close, still
+    // reachable.
+    const { transport, park } = buildWith({ alreadyAborted: true })
+    const p = park()
     await expect(p).rejects.toBeInstanceOf(ApprovalAbortedError)
-    expect(transporte.pendentes).toBe(0)
+    expect(transport.pending).toBe(0)
   })
 
-  it('o turno e capturado no SEND — runner ANTIGO estacionando depois de um send novo', async () => {
-    // O cenário que distingue, e que a primeira versão deste teste NÃO exercitava: guardar o
-    // `awaitApproval` do runner do turno 1 e usá-lo **depois** do `send` do turno 2.
+  it('the turn is captured at SEND — an OLD runner parking after a new send', async () => {
+    // The distinguishing scenario, which this test's first version did NOT exercise: keep turn 1's
+    // runner `awaitApproval` and use it **after** turn 2's `send`.
     //
-    // Lendo `#turno` no momento da aprovação, essa entrada era etiquetada turno 2 — e o abort do turno
-    // 1 não a varria. A revisão do M92 mediu `pendentes=1` nesse estado. Capturando no `send`, ela
-    // nasce etiquetada turno 1 e o abort correspondente a alcança.
+    // Reading `#turn` at approval time, that entry was labelled turn 2 — and turn 1's abort did not
+    // sweep it. M92's review measured `pending=1` in that state. Captured at `send`, it is born
+    // labelled turn 1 and the corresponding abort reaches it.
     const runners: ((id: string) => Promise<unknown>)[] = []
     const c1 = new AbortController()
-    const transporte = new InProcessTransport({
+    const transport = new InProcessTransport({
       run: (o: { awaitApproval: (r: { approvalId: string }) => Promise<unknown> }) => {
         runners.push((id) => o.awaitApproval({ approvalId: id }))
         return (async function* () {
@@ -152,29 +153,29 @@ describe('M92 — furos da primeira versão da eviction', () => {
         })()
       },
     } as never)
-    void transporte.sendMessages({
+    void transport.sendMessages({
       messages: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: 'um' }] }],
       abortSignal: c1.signal,
     } as never)
-    // Turno 2 começa ANTES de o runner do turno 1 estacionar.
-    void transporte.sendMessages({
-      messages: [{ id: 'u2', role: 'user', parts: [{ type: 'text', text: 'dois' }] }],
+    // Turn 2 starts BEFORE turn 1's runner parks.
+    void transport.sendMessages({
+      messages: [{ id: 'u2', role: 'user', parts: [{ type: 'text', text: 'two' }] }],
     } as never)
-    const doTurno1 = runners[0]!('ap-do-turno-1')
-    expect(transporte.pendentes).toBe(1)
-    // O abort do turno 1 tem de alcançá-la. Se a etiqueta fosse do turno 2, isto penduraria.
+    const ofTurn1 = runners[0]!('ap-of-turn-1')
+    expect(transport.pending).toBe(1)
+    // Turn 1's abort has to reach it. If the label were turn 2's, this would hang.
     c1.abort()
-    await expect(doTurno1).rejects.toBeInstanceOf(ApprovalAbortedError)
+    await expect(ofTurn1).rejects.toBeInstanceOf(ApprovalAbortedError)
   })
 
-  it('a rejeicao NAO derruba o processo quando ninguem trata — ha handler', async () => {
-    // Node ≥ 15 sai em `unhandledRejection`. Antes do M92 a promessa pendurava; depois, se ninguém a
-    // aguardasse, ela poderia MATAR o processo — trocar um travamento por um crash não é conserto.
-    const { transporte, estacionar, abortar } = montarCom()
-    const abandonada = estacionar('ap-abandonada')
-    abandonada.catch(() => undefined) // é o que um runner que desiste faria
-    abortar()
+  it('the rejection does NOT take down the process when nobody handles it — a handler exists', async () => {
+    // Node ≥ 15 exits on `unhandledRejection`. Before M92 the promise hung; afterwards, if nobody
+    // awaited it, it could KILL the process — trading a hang for a crash is not a fix.
+    const { transport, park, abortIt } = buildWith()
+    const abandoned = park('ap-abandoned')
+    abandoned.catch(() => undefined) // what a runner that gives up would do
+    abortIt()
     await new Promise((r) => setTimeout(r, 10))
-    expect(transporte.pendentes).toBe(0)
+    expect(transport.pending).toBe(0)
   })
 })

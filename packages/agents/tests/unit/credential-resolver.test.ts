@@ -1,237 +1,233 @@
 /**
- * M74 — a credencial deixa de ser um valor congelado e passa a poder ser um resolvedor.
+ * M74 — the credential stops being a frozen value and may now be a resolver.
  *
- * ## Por que isto importa
+ * ## Why this matters
  *
- * `AgentRunnerRunOptions.apiKey` **já era por run** — são as opções de `AgentRunner.run`, não da
- * construção. O que travava era o **tipo**: `string`. O chamador precisava ter a credencial pronta
- * antes de chamar, então o *momento* era por run mas o *valor* era obtido antes e congelado.
+ * `AgentRunnerRunOptions.apiKey` **was already per run** — these are `AgentRunner.run`'s options,
+ * not the constructor's. What blocked it was the **type**: `string`. The caller had to hold the
+ * credential ready before calling, so the *moment* was per run but the *value* was obtained earlier
+ * and frozen.
  *
- * Isso produziu o mesmo defeito em três superfícies do consumidor, medidas: uma sessão de IDE que
- * resolve num top-level `await` e vive horas; um goal loop que resolve uma vez para até 20 turnos; e
- * uma delegação de time que resolve por invocação mas passa o valor adiante. Um bearer OAuth com
- * validade curta atravessa tudo isso sem ser reconsultado — a causa estrutural do issue #77.
+ * That produced the same defect in three of the consumer's surfaces, measured: an IDE session that
+ * resolves in a top-level `await` and lives for hours; a goal loop that resolves once for up to 20
+ * turns; and a team delegation that resolves per invocation but passes the value along. A
+ * short-lived OAuth bearer crosses all of that without being re-fetched — the structural cause of
+ * issue #77.
  *
- * ## A mudança é aditiva
+ * ## The change is additive
  *
- * `string` continua válido e continua sendo o caminho de quem tem uma chave de API — que não expira e
- * não precisa de resolvedor. O tipo apenas **admite** a função, e ela é resolvida onde o stream de
- * fato começa (dentro do async iterator), não na construção.
+ * `string` remains valid and remains the path for anyone holding an API key — which does not expire
+ * and needs no resolver. The type merely **admits** the function, and it is resolved where the stream
+ * actually starts (inside the async iterator), not at construction.
  */
 import { describe, expect, it } from 'vitest'
 
-import { classificarFalhaDeRefresh, esperaComJitter } from '../../src/auth/auth-provider.js'
+import { classifyRefreshFailure, waitWithJitter } from '../../src/auth/auth-provider.js'
 import { AgentRunner, type AgentRunnerRunOptions } from '../../src/loop/agent-runner.js'
 
-describe('M74 — o seam de credencial aceita resolvedor', () => {
-  it('test_string_continua_valida', () => {
-    // Retrocompatibilidade: quem passa uma chave de API não muda nada. Uma chave não expira; obrigar
-    // um resolvedor ali seria cerimônia sem ganho.
-    // Tipado contra o CONTRATO REAL — não contra um tipo local. É `tsc` que prova isto; o vitest
-    // transpila sem checar tipos, então um teste que declarasse o tipo aqui passaria sem a mudança.
-    const opts: Pick<AgentRunnerRunOptions, 'apiKey'> = { apiKey: 'sk-fixa' }
+describe('M74 — the credential seam accepts a resolver', () => {
+  it('test_a_string_is_still_valid', () => {
+    // Backward compatibility: anyone passing an API key changes nothing. A key does not expire;
+    // demanding a resolver there would be ceremony with no gain.
+    // Typed against the REAL CONTRACT — not against a local type. `tsc` is what proves this; vitest
+    // transpiles without checking types, so a test declaring the type here would pass without the
+    // change.
+    const opts: Pick<AgentRunnerRunOptions, 'apiKey'> = { apiKey: 'sk-fixed' }
     expect(typeof opts.apiKey).toBe('string')
   })
 
-  it('test_o_tipo_admite_um_resolvedor', () => {
-    // O contrato mínimo é uma função — não a classe `AuthProvider`. Acoplar o tipo público à classe
-    // da camada obrigaria cada consumidor a conhecê-la; uma função qualquer `AuthProvider` satisfaz
-    // numa linha.
-    const opts: Pick<AgentRunnerRunOptions, 'apiKey'> = { apiKey: () => 'sk-resolvida' }
+  it('test_the_type_admits_a_resolver', () => {
+    // The minimum contract is a function — not the `AuthProvider` class. Coupling the public type to
+    // the layer's class would force every consumer to know it; any function, `AuthProvider` included,
+    // satisfies it in one line.
+    const opts: Pick<AgentRunnerRunOptions, 'apiKey'> = { apiKey: () => 'sk-resolved' }
     expect(typeof opts.apiKey).toBe('function')
   })
 
-  it('test_cada_run_resolve_de_novo', async () => {
-    // O invariante que dá nome ao milestone: DUAS runs, DUAS resoluções. Se o valor fosse capturado
-    // na construção, a segunda run reusaria o da primeira — que é exatamente o bug em produção.
+  it('test_every_run_resolves_afresh', async () => {
+    // The invariant that names the milestone: TWO runs, TWO resolutions. If the value were captured
+    // at construction, the second run would reuse the first one's — which is exactly the bug in
+    // production.
     let n = 0
-    const resolvedor = (): string => `sk-turno-${String(++n)}`
-    const a = resolvedor()
-    const b = resolvedor()
-    expect([a, b], 'o resolvedor devolveu o mesmo valor duas vezes').toEqual([
-      'sk-turno-1',
-      'sk-turno-2',
-    ])
+    const credResolver = (): string => `sk-turn-${String(++n)}`
+    const a = credResolver()
+    const b = credResolver()
+    expect([a, b], 'the resolver returned the same value twice').toEqual(['sk-turn-1', 'sk-turn-2'])
     expect(n).toBe(2)
   })
 
-  it('test_o_runner_existe_e_expoe_run', () => {
-    // Âncora de não-vacuidade: se `AgentRunner` deixar de existir ou de expor `run`, os testes acima
-    // continuariam verdes (são sobre tipos e sobre uma função local) e provariam nada.
+  it('test_the_runner_exists_and_exposes_run', () => {
+    // Anti-vacuity anchor: if `AgentRunner` stopped existing or stopped exposing `run`, the tests
+    // above would stay green (they are about types and about a local function) and would prove nothing.
     expect(typeof AgentRunner).toBe('function')
     expect(typeof AgentRunner.prototype.run).toBe('function')
   })
 
-  it('test_resolvedor_assincrono_e_aguardado', async () => {
-    // O caso real: `ensureFresh` é assíncrono (pode POSTar o refresh). O seam precisa aguardá-lo, e
-    // não passar a Promise adiante como se fosse a chave.
-    const resolvedor = async (): Promise<string> => Promise.resolve('sk-async')
-    const valor = await resolvedor()
+  it('test_an_async_resolver_is_awaited', async () => {
+    // The real case: `ensureFresh` is asynchronous (it may POST the refresh). The seam has to await
+    // it, and not pass the Promise along as if it were the key.
+    const credResolver = async (): Promise<string> => Promise.resolve('sk-async')
+    const valor = await credResolver()
     expect(valor).toBe('sk-async')
     expect(valor).not.toContain('[object Promise]')
   })
 })
 
 /**
- * M74 T1.2 — o refresh não pode travar quando chamado de dentro de si mesmo.
+ * M74 T1.2 — the refresh must not hang when called from inside itself.
  *
- * Este teste existe por causa de um defeito que só aparece quando as DUAS mudanças do milestone se
- * encontram, e que nenhuma delas pegaria sozinha:
+ * This test exists because of a defect that only appears when the milestone's TWO changes meet, and
+ * that neither of them would catch alone:
  *
- *  - a T1.1 faz a credencial ser resolvida no início do stream (por run, não antes);
- *  - a T1.2 põe o refresh sob `withFileLock` (para dois processos não se invalidarem).
+ *  - T1.1 makes the credential resolve at the start of the stream (per run, not earlier);
+ *  - T1.2 puts the refresh under `withFileLock` (so two processes do not invalidate each other).
  *
- * Juntas: se o resolvedor for `() => authProvider.ensureFresh(...)` — que é o uso pretendido — e uma
- * run começar de dentro de um contexto que já segura o lock (run aninhada, ou um time disparando
- * membros enquanto o pai refresca), o MESMO processo tenta adquirir o lock duas vezes.
- * `proper-lockfile` não é reentrante: a segunda aquisição espera até o timeout, e o sintoma é
- * "a run travou" — sem erro, sem log, sem nada para depurar.
+ * Together: if the resolver is `() => authProvider.ensureFresh(...)` — which is the intended usage —
+ * and a run starts from inside a context that already holds the lock (a nested run, or a team firing
+ * off members while the parent refreshes), the SAME process tries to acquire the lock twice.
+ * `proper-lockfile` is not reentrant: the second acquisition waits until the timeout, and the symptom
+ * is "the run hung" — no error, no log, nothing to debug.
  *
- * A defesa é single-flight ANTES do lock: a segunda chamada recebe a promise em voo da primeira, e a
- * reentrância resolve por composição em vez de disputar o arquivo.
+ * The defence is single-flight BEFORE the lock: the second call receives the first one's in-flight
+ * promise, and reentrancy resolves by composition instead of contending for the file.
  */
-describe('M74 T1.2 — reentrância resolve pela promise, não pelo lock', () => {
-  it('test_single_flight_devolve_a_mesma_promise_em_voo', async () => {
-    // Modela o invariante: duas chamadas concorrentes para o MESMO caminho de store compartilham uma
-    // execução. Se cada uma disparasse a sua, a segunda esperaria o lock da primeira — o deadlock.
-    const emVoo = new Map<string, Promise<string>>()
-    let execucoes = 0
-    const refrescar = (caminho: string): Promise<string> => {
-      const jaEmVoo = emVoo.get(caminho)
-      if (jaEmVoo !== undefined) return jaEmVoo
+describe('M74 T1.2 — reentrancy resolves via the promise, not via the lock', () => {
+  it('test_single_flight_returns_the_same_in_flight_promise', async () => {
+    // Models the invariant: two concurrent calls for the SAME store path share one execution. If each
+    // fired its own, the second would wait on the first one's lock — the deadlock.
+    const inFlight = new Map<string, Promise<string>>()
+    let runCount = 0
+    const refreshIt = (filePath: string): Promise<string> => {
+      const alreadyInFlight = inFlight.get(filePath)
+      if (alreadyInFlight !== undefined) return alreadyInFlight
       const p = (async () => {
-        execucoes++
+        runCount++
         await new Promise((r) => setTimeout(r, 20))
         return 'sk-nova'
       })()
-      emVoo.set(caminho, p)
-      return p.finally(() => emVoo.delete(caminho))
+      inFlight.set(filePath, p)
+      return p.finally(() => inFlight.delete(filePath))
     }
 
-    const [a, b] = await Promise.all([refrescar('/tmp/auth.json'), refrescar('/tmp/auth.json')])
+    const [a, b] = await Promise.all([refreshIt('/tmp/auth.json'), refreshIt('/tmp/auth.json')])
 
     expect(
-      execucoes,
-      'o refresh rodou duas vezes — a segunda teria disputado o lock com a primeira',
+      runCount,
+      'the refresh ran twice — the second would have contended for the lock with the first',
     ).toBe(1)
     expect(a).toBe(b)
   })
 
-  it('test_caminhos_diferentes_nao_compartilham_voo', async () => {
-    // A chave é o ARQUIVO, não a instância: dois stores distintos são disputas distintas e não devem
-    // se serializar um pelo outro.
-    const emVoo = new Map<string, Promise<string>>()
-    let execucoes = 0
-    const refrescar = (caminho: string): Promise<string> => {
-      const jaEmVoo = emVoo.get(caminho)
-      if (jaEmVoo !== undefined) return jaEmVoo
+  it('test_different_paths_do_not_share_a_flight', async () => {
+    // The key is the FILE, not the instance: two distinct stores are distinct contentions and must
+    // not serialize on each other.
+    const inFlight = new Map<string, Promise<string>>()
+    let runCount = 0
+    const refreshIt = (filePath: string): Promise<string> => {
+      const alreadyInFlight = inFlight.get(filePath)
+      if (alreadyInFlight !== undefined) return alreadyInFlight
       const p = (async () => {
-        execucoes++
-        return `sk-${caminho}`
+        runCount++
+        return `sk-${filePath}`
       })()
-      emVoo.set(caminho, p)
-      return p.finally(() => emVoo.delete(caminho))
+      inFlight.set(filePath, p)
+      return p.finally(() => inFlight.delete(filePath))
     }
 
-    await Promise.all([refrescar('/tmp/a.json'), refrescar('/tmp/b.json')])
-    expect(execucoes).toBe(2)
+    await Promise.all([refreshIt('/tmp/a.json'), refreshIt('/tmp/b.json')])
+    expect(runCount).toBe(2)
   })
 })
 
-describe('M74 T1.3 — o retry distingue transitório de terminal', () => {
+describe('M74 T1.3 — retry distinguishes transient from terminal', () => {
   it('test_invalid_grant_e_terminal', () => {
-    const f = classificarFalhaDeRefresh(
-      new Error('server responded 400: {"error":"invalid_grant"}'),
-    )
-    expect(f.transitorio, 'invalid_grant não é transitório — o token foi revogado').toBe(false)
-    expect(f.message).toMatch(/refaça o login/)
+    const f = classifyRefreshFailure(new Error('server responded 400: {"error":"invalid_grant"}'))
+    expect(f.transient, 'invalid_grant is not transient — the token was revoked').toBe(false)
+    expect(f.message).toMatch(/log in again/)
   })
 
-  it('test_rede_e_5xx_sao_transitorios', () => {
+  it('test_network_errors_and_5xx_are_transient', () => {
     for (const e of ['ETIMEDOUT', 'ECONNRESET', 'server responded 503', 'network error']) {
-      expect(
-        classificarFalhaDeRefresh(new Error(e)).transitorio,
-        `${e} deveria ser transitório`,
-      ).toBe(true)
+      expect(classifyRefreshFailure(new Error(e)).transient, `${e} should be transient`).toBe(true)
     }
   })
 
-  it('test_a_falha_nao_ecoa_material_de_token', () => {
-    // O erro do provider pode conter o corpo da resposta. A classificação lê o texto mas NUNCA o
-    // repassa: a mensagem carrega a classe e o motivo, não o que veio da rede.
-    const f = classificarFalhaDeRefresh(new Error('invalid_grant refresh_token=RT-SEGREDO-123'))
-    expect(f.message).not.toContain('RT-SEGREDO-123')
+  it('test_the_failure_does_not_echo_token_material', () => {
+    // The provider's error may contain the response body. The classification reads the text but NEVER
+    // forwards it: the message carries the class and the reason, not what came off the network.
+    const f = classifyRefreshFailure(new Error('invalid_grant refresh_token=RT-SECRET-123'))
+    expect(f.message).not.toContain('RT-SECRET-123')
   })
 
-  it('test_o_backoff_cresce_e_tem_jitter', () => {
-    // Cresce exponencialmente...
-    expect(esperaComJitter(0, 200, () => 0.5)).toBeLessThan(esperaComJitter(2, 200, () => 0.5))
-    // ...e dois processos com a mesma tentativa NÃO esperam o mesmo tempo, senão retentam em uníssono
-    // e reproduzem a colisão que o backoff existe para dispersar.
-    expect(esperaComJitter(1, 200, () => 0)).not.toBe(esperaComJitter(1, 200, () => 0.99))
+  it('test_the_backoff_grows_and_has_jitter', () => {
+    // Grows exponentially…
+    expect(waitWithJitter(0, 200, () => 0.5)).toBeLessThan(waitWithJitter(2, 200, () => 0.5))
+    // …and two processes on the same attempt do NOT wait the same time, otherwise they retry in
+    // unison and reproduce the collision the backoff exists to disperse.
+    expect(waitWithJitter(1, 200, () => 0)).not.toBe(waitWithJitter(1, 200, () => 0.99))
   })
 })
 
 /**
- * M74 review (M74-02) — o teste do CONTADOR, que faltava.
+ * M74 review (M74-02) — the COUNTER test, which was missing.
  *
- * A T1.3 tinha `classificarFalhaDeRefresh` e `esperaComJitter` testados como funções puras, e os dois
- * passavam. Mas o laço que os USA foi apagado por um lint-fix que reescreveu o bloco inteiro, e nenhum
- * teste percebeu: o review mediu `tentativas de POST = 1` contra as 3 que a DoD exige.
+ * T1.3 had `classifyRefreshFailure` and `waitWithJitter` tested as pure functions, and both passed.
+ * But the loop that USES them was deleted by a lint-fix that rewrote the whole block, and no test
+ * noticed: the review measured `POST attempts = 1` against the 3 the DoD requires.
  *
- * Testar o classificador isolado prova que ele classifica. Não prova que ele está LIGADO.
+ * Testing the classifier in isolation proves that it classifies. It does not prove that it is WIRED IN.
  */
-describe('M74 review — o retry está ligado ao caminho de produção', () => {
-  it('test_transitorio_tenta_de_novo_ate_o_limite', async () => {
-    let tentativas = 0
-    const chamar = async (): Promise<string> => {
+describe('M74 review — the retry is wired into the production path', () => {
+  it('test_a_transient_failure_retries_up_to_the_limit', async () => {
+    let attempts = 0
+    const callIt = async (): Promise<string> => {
       const MAX = 3
       for (let t = 0; ; t++) {
         try {
-          tentativas++
+          attempts++
           throw new Error('ETIMEDOUT')
         } catch (err) {
-          const f = classificarFalhaDeRefresh(err)
-          if (!f.transitorio || t >= MAX - 1) throw f
+          const f = classifyRefreshFailure(err)
+          if (!f.transient || t >= MAX - 1) throw f
           await new Promise((r) => setTimeout(r, 1))
         }
       }
     }
-    await expect(chamar()).rejects.toThrow(/transitória/)
-    expect(tentativas, 'o transitório deveria tentar 3 vezes').toBe(3)
+    await expect(callIt()).rejects.toThrow(/transient failure/)
+    expect(attempts, 'the transient case should retry 3 times').toBe(3)
   })
 
-  it('test_invalid_grant_para_na_primeira', async () => {
-    let tentativas = 0
-    const chamar = async (): Promise<string> => {
+  it('test_invalid_grant_stops_on_the_first_attempt', async () => {
+    let attempts = 0
+    const callIt = async (): Promise<string> => {
       const MAX = 3
       for (let t = 0; ; t++) {
         try {
-          tentativas++
+          attempts++
           throw new Error('{"error":"invalid_grant"}')
         } catch (err) {
-          const f = classificarFalhaDeRefresh(err)
-          if (!f.transitorio || t >= MAX - 1) throw f
+          const f = classifyRefreshFailure(err)
+          if (!f.transient || t >= MAX - 1) throw f
           await new Promise((r) => setTimeout(r, 1))
         }
       }
     }
-    await expect(chamar()).rejects.toThrow(/refaça o login/)
-    expect(tentativas, 'invalid_grant não pode ser repetido').toBe(1)
+    await expect(callIt()).rejects.toThrow(/log in again/)
+    expect(attempts, 'invalid_grant must not be retried').toBe(1)
   })
 
-  it('test_o_laco_de_retry_existe_no_fonte_de_producao', async () => {
-    // GATE ESTRUTURAL, e a razão dele é o defeito acima: os dois testes anteriores modelam o laço.
-    // Se o laço REAL sumir de novo, eles continuam verdes. Este lê o fonte de produção.
+  it('test_the_retry_loop_exists_in_the_production_source', async () => {
+    // A STRUCTURAL GATE, and its reason is the defect above: the two previous tests model the loop.
+    // If the REAL loop disappears again, they stay green. This one reads the production source.
     const { readFileSync } = await import('node:fs')
-    const fonte = readFileSync(new URL('../../src/auth/auth-provider.ts', import.meta.url), 'utf8')
-    const corpo = fonte.slice(fonte.indexOf('private refrescarSobLock'))
+    const source = readFileSync(new URL('../../src/auth/auth-provider.ts', import.meta.url), 'utf8')
+    const body = source.slice(source.indexOf('private refreshUnderLock'))
     expect(
-      corpo.length,
-      'não achei `refrescarSobLock` — o gate passaria por vacuidade',
+      body.length,
+      'could not find `refreshUnderLock` — the gate would pass by vacuity',
     ).toBeGreaterThan(200)
-    expect(corpo, 'o laço de retry sumiu do caminho de produção').toMatch(/for \(let tentativa/)
-    expect(corpo, 'o classificador não está ligado ao laço').toContain('classificarFalhaDeRefresh')
-    expect(corpo, 'o backoff não está ligado ao laço').toContain('esperaComJitter')
+    expect(body, 'the retry loop disappeared from the production path').toMatch(/for \(let attempt/)
+    expect(body, 'the classifier is not wired into the loop').toContain('classifyRefreshFailure')
+    expect(body, 'the backoff is not wired into the loop').toContain('waitWithJitter')
   })
 })
