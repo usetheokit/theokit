@@ -218,13 +218,13 @@ describe('M96 U1 — toAgentFactory requires the approval posture', () => {
     // bridge to today's state. Naming has three consequences omission does not: it shows up in the
     // `match`, it shows up in LOGS (asserted here) and it can be counted by a gate (in the consumer).
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
-    const antes = process.env.THEOKIT_DEBUG
+    const before = process.env.THEOKIT_DEBUG
     process.env.THEOKIT_DEBUG = '1'
     try {
       await materialize({ kind: 'owned-by-surface', reason: 'ACP client owns the prompt' })
     } finally {
-      if (antes === undefined) delete process.env.THEOKIT_DEBUG
-      else process.env.THEOKIT_DEBUG = antes
+      if (before === undefined) delete process.env.THEOKIT_DEBUG
+      else process.env.THEOKIT_DEBUG = before
     }
 
     expect(installedPluginNames()).toEqual([])

@@ -53,7 +53,7 @@ const IMPLEMENTATION = [
 const REPLACEABLE = ['zod', '@theokit/http'] as const
 
 describe('M79 T1.1 — dependency direction', () => {
-  it.each(IMPLEMENTATION)('test_%s_e_dependency_e_nao_peer', (name) => {
+  it.each(IMPLEMENTATION)('test_%s_is_a_dependency_and_not_a_peer', (name) => {
     expect(
       deps[name],
       `\`${name}\` is this layer's implementation: the consumer is FORBIDDEN from importing it by the ` +

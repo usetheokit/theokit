@@ -145,7 +145,7 @@ const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
     ],
   },
   {
-    name: 'data part nao transient entra no transcript',
+    name: 'a non-transient data part enters the transcript',
     frames: [
       { type: 'start' },
       { type: 'data-message', data: { id: 'a1', role: 'assistant' } },
@@ -153,7 +153,7 @@ const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
     ],
   },
   {
-    name: 'data part transient NAO entra no transcript',
+    name: 'a transient data part does NOT enter the transcript',
     frames: [
       { type: 'start' },
       { type: 'data-checkpoint', data: { resumeToken: 's1' }, transient: true },

@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
  *
  * `sonarjs/todo-tag` matches **TODO in any case**, and `todo` is a common Portuguese word (it means
  * "every"). It broke the layer's build **three times in M95**, always on legitimate prose — *"por
- * onde todo turno passa"*, *"para todo erro"*. The measurement that closed the decision: **real**
+ * where every turn passes"*, *"for every error"*. The measurement that closed the decision: **real**
  * markers in the layer's source → **0**. Zero true positives against three false ones is a permanent
  * cost with no benefit, so the rule was disabled (`eslint.config.js`).
  *
@@ -52,12 +52,12 @@ function trackedFiles(): string[] {
   // absolute path would break outside Linux and closes no threat at all in a test that already runs
   // with the privileges of whoever invoked it.
   // eslint-disable-next-line sonarjs/no-os-command-from-path -- see above
-  const saida = execFileSync('git', ['ls-files', ...EXTENSIONS], {
+  const output = execFileSync('git', ['ls-files', ...EXTENSIONS], {
     encoding: 'utf8',
     maxBuffer: 1 << 28,
   })
   return (
-    saida
+    output
       .trim()
       .split('\n')
       .filter((f) => f.length > 0)
@@ -79,15 +79,15 @@ interface Finding {
 function markers(fileList: readonly string[]): Finding[] {
   const findings: Finding[] = []
   for (const file of fileList) {
-    let conteudo: string
+    let contents: string
     try {
-      conteudo = readFileSync(file, 'utf8')
+      contents = readFileSync(file, 'utf8')
     } catch {
       // A file in the index that vanished from disk is not a marker — it is a rename in flight.
       continue
     }
-    if (!conteudo.includes('TODO:') && !/(FIXME|XXX|HACK):/.test(conteudo)) continue
-    const lines = conteudo.split('\n')
+    if (!contents.includes('TODO:') && !/(FIXME|XXX|HACK):/.test(contents)) continue
+    const lines = contents.split('\n')
     for (const [i, lineText] of lines.entries()) {
       if (MARKER.test(lineText)) findings.push({ file, lineText: i + 1, text: lineText.trim() })
     }
