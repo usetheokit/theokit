@@ -155,3 +155,68 @@ describe('readMessageStream — cancellation propagation', () => {
     expect(cancelled).toBe(true)
   })
 })
+
+/**
+ * The `finish` chunk's `messageMetadata` reaches the reconstructed message.
+ *
+ * `remove-ai-dependency` replaced the ai-sdk reader with this one, stating "the FRAME FORMAT is
+ * unchanged". The format was; the reconstruction was not. `finish` was dropped whole, and with it
+ * a documented behaviour: `@theokit/agents` attaches per-turn usage there so a surface can show
+ * real tokens for the turn it just streamed.
+ *
+ * Nothing tested the field across the swap, so it went silently. Measured in a consumer months
+ * later (TheoCode B-090): an assistant message in a live thread had keys `["id","role","parts"]`
+ * and no `metadata`, and the TUI's token readout never rendered at all.
+ */
+describe('finish carries messageMetadata onto the message', () => {
+  const usage = { usage: { inputTokens: 12, outputTokens: 3, totalTokens: 15 }, durationMs: 940 }
+
+  it('lands_the_metadata_on_the_final_snapshot', async () => {
+    const out = await collect([
+      { type: 'start', messageId: 'm1' },
+      { type: 'text-start', id: 't' },
+      { type: 'text-delta', id: 't', delta: 'hi' },
+      { type: 'text-end', id: 't' },
+      { type: 'finish', messageMetadata: usage },
+    ])
+    expect(out.at(-1)?.metadata).toEqual(usage)
+  })
+
+  it('emits_a_snapshot_because_finish_is_usually_last', async () => {
+    // The reason attaching alone is not enough: nothing is emitted after the stream ends, so a
+    // silent attach would leave the field unreachable by every consumer.
+    const withMeta = await collect([
+      { type: 'text-delta', id: 't', delta: 'hi' },
+      { type: 'finish', messageMetadata: usage },
+    ])
+    const withoutMeta = await collect([
+      { type: 'text-delta', id: 't', delta: 'hi' },
+      { type: 'finish' },
+    ])
+    expect(withMeta.length).toBe(withoutMeta.length + 1)
+  })
+
+  it('a_metadata_free_finish_still_emits_nothing', async () => {
+    // The measured behaviour every differential case rests on. Widening it unconditionally would
+    // change snapshot counts for every existing consumer.
+    const out = await collect([
+      { type: 'start', messageId: 'm1' },
+      { type: 'text-delta', id: 't', delta: 'hi' },
+      { type: 'finish' },
+    ])
+    expect(out.at(-1)?.metadata).toBeUndefined()
+  })
+
+  it('finish_still_does_not_close_the_message', async () => {
+    // The resumable path depends on it: a chunk after `finish` keeps appending to the same message.
+    const out = await collect([
+      { type: 'text-start', id: 't' },
+      { type: 'text-delta', id: 't', delta: 'a' },
+      { type: 'finish', messageMetadata: usage },
+      { type: 'text-delta', id: 't', delta: 'B' },
+    ])
+    const last = out.at(-1)
+    expect(JSON.stringify(last?.parts)).toContain('aB')
+    expect(last?.metadata).toEqual(usage)
+  })
+})
