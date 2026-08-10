@@ -32,6 +32,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -85,11 +86,21 @@ export function workspaceRangesOnDisk(packages) {
 }
 
 /** True when THIS process was started by npm rather than pnpm — the path that ships the disk manifest. */
+/**
+ * theokit#200 — true only when this file was RUN, not imported.
+ *
+ * The guard's body used to execute on import, so a test that wanted to exercise one helper ran the
+ * whole gate and exited the process. That is why the helper below had no test while it carried the
+ * bug that blocked a release: the file was untestable by construction.
+ */
+const isMain =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
+
 export function publishingWithNpm(userAgent = process.env.npm_config_user_agent ?? '') {
   return userAgent.startsWith('npm/')
 }
 
-if (publishingWithNpm()) {
+if (isMain && publishingWithNpm()) {
   // Scoped to the package BEING published (npm runs `prepublishOnly` in its directory). Gating a
   // publish of one package on another's manifest would block correct work and teach people to
   // bypass this — the outcome it exists to prevent. The others are still covered by the tarball
@@ -109,6 +120,33 @@ if (publishingWithNpm()) {
 }
 
 /** Read `package.json` out of the packed tarball, without unpacking the whole thing. */
+/**
+ * theokit#200 — which file `pnpm pack` just wrote, decided by looking at the DIRECTORY.
+ *
+ * This used to read the last non-empty line of `pnpm pack` stdout. Locally that line is the
+ * filename, so it worked for months. In CI the reporter emits a JSON block whose last line is `}`,
+ * so the guard looked for `<dir>/}`, `tar` could not open it, and the catch below reported "could
+ * not pack" — which this script deliberately treats as an UNKNOWN rather than as clean. Every
+ * package therefore failed and the release aborted claiming 6 uninstallable manifests. Nothing was
+ * wrong with any manifest: the fault was in the oracle.
+ *
+ * `pnpm pack --pack-destination <dir>` writes exactly one tarball per invocation, so the directory
+ * is the fact. stdout is a reporter's rendering of that fact, and a rendering is free to change
+ * between versions — which is exactly what happened. This has no format to break.
+ *
+ * It THROWS on zero or many rather than guessing: a guard that invents a filename reports a
+ * manifest defect that does not exist, which is the failure being fixed.
+ */
+export function newTarball(before, after) {
+  const seen = new Set(before)
+  const fresh = after.filter((f) => f.endsWith('.tgz') && !seen.has(f))
+  if (fresh.length === 0) throw new Error('no tarball appeared in the pack destination')
+  if (fresh.length > 1) {
+    throw new Error(`expected exactly one new tarball, found ${fresh.length}: ${fresh.join(', ')}`)
+  }
+  return fresh[0]
+}
+
 function manifestInTarball(tarball) {
   // build-time CI script; `tar` is the canonical archive reader and the argv is fully controlled
   // (no shell, no user input) — same exemption the sibling verify-published script takes for `npm`.
@@ -137,58 +175,62 @@ function workspaceLeaks(manifest) {
   return leaks
 }
 
-const packages = publishablePackages()
-// Anti-vacuity floor: with zero packages every loop below passes and the gate reports green while
-// measuring nothing — the failure mode this whole file exists to prevent, one level up.
-if (packages.length === 0) {
-  console.error('FAIL: no publishable package found under packages/ — this gate measured nothing.')
-  process.exit(1)
-}
-
-const work = mkdtempSync(join(tmpdir(), 'pack-no-workspace-'))
-let failed = 0
-try {
-  for (const { name, dir } of packages) {
-    let manifest
-    try {
-      // `pnpm` is this repo's package manager and the only tool that resolves `workspace:` at pack
-      // time — which is precisely what this gate needs to observe.
-      // eslint-disable-next-line sonarjs/no-os-command-from-path -- see above
-      const out = execFileSync('pnpm', ['pack', '--pack-destination', work], {
-        cwd: dir,
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-      const tarball = out.trim().split('\n').filter(Boolean).pop()
-      manifest = manifestInTarball(tarball.startsWith('/') ? tarball : join(work, tarball))
-    } catch (err) {
-      // Never swallow: a pack that cannot run is an UNKNOWN, and an unknown must not read as clean.
-      console.error(`FAIL ${name}: could not pack — ${err.message}`)
-      failed += 1
-      continue
-    }
-    const leaks = workspaceLeaks(manifest)
-    if (leaks.length > 0) {
-      console.error(`FAIL ${name}: the tarball still carries the workspace protocol:`)
-      for (const leak of leaks) console.error(`        ${leak}`)
-      failed += 1
-    } else {
-      console.log(`ok   ${name}`)
-    }
+if (isMain) {
+  const packages = publishablePackages()
+  // Anti-vacuity floor: with zero packages every loop below passes and the gate reports green while
+  // measuring nothing — the failure mode this whole file exists to prevent, one level up.
+  if (packages.length === 0) {
+    console.error(
+      'FAIL: no publishable package found under packages/ — this gate measured nothing.',
+    )
+    process.exit(1)
   }
-} finally {
-  rmSync(work, { recursive: true, force: true })
-}
 
-if (failed > 0) {
-  console.error(
-    `\n${failed} package(s) would publish an uninstallable manifest.\n` +
-      'Every `npm install` of such a version fails with EUNSUPPORTEDPROTOCOL, and a published\n' +
-      'version cannot be fixed — only deprecated (theokit#153, theokit 0.19.0-0.30.0).\n' +
-      'Publish with `pnpm publish`, never `npm publish`, for a workspace package.',
+  const work = mkdtempSync(join(tmpdir(), 'pack-no-workspace-'))
+  let failed = 0
+  try {
+    for (const { name, dir } of packages) {
+      let manifest
+      try {
+        const before = readdirSync(work)
+        // `pnpm` is this repo's package manager and the only tool that resolves `workspace:` at pack
+        // time — which is precisely what this gate needs to observe.
+        // eslint-disable-next-line sonarjs/no-os-command-from-path -- see above
+        execFileSync('pnpm', ['pack', '--pack-destination', work], {
+          cwd: dir,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        manifest = manifestInTarball(join(work, newTarball(before, readdirSync(work))))
+      } catch (err) {
+        // Never swallow: a pack that cannot run is an UNKNOWN, and an unknown must not read as clean.
+        console.error(`FAIL ${name}: could not pack — ${err.message}`)
+        failed += 1
+        continue
+      }
+      const leaks = workspaceLeaks(manifest)
+      if (leaks.length > 0) {
+        console.error(`FAIL ${name}: the tarball still carries the workspace protocol:`)
+        for (const leak of leaks) console.error(`        ${leak}`)
+        failed += 1
+      } else {
+        console.log(`ok   ${name}`)
+      }
+    }
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
+
+  if (failed > 0) {
+    console.error(
+      `\n${failed} package(s) would publish an uninstallable manifest.\n` +
+        'Every `npm install` of such a version fails with EUNSUPPORTEDPROTOCOL, and a published\n' +
+        'version cannot be fixed — only deprecated (theokit#153, theokit 0.19.0-0.30.0).\n' +
+        'Publish with `pnpm publish`, never `npm publish`, for a workspace package.',
+    )
+    process.exit(1)
+  }
+  console.log(
+    `\n${packages.length} package(s) pack clean — no workspace protocol reaches the registry.`,
   )
-  process.exit(1)
 }
-console.log(
-  `\n${packages.length} package(s) pack clean — no workspace protocol reaches the registry.`,
-)
