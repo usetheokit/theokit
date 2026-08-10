@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+- **The publish guard no longer blocks a release with a false accusation (#200).** `check-pack-no-workspace` decided which tarball `pnpm pack` had written by reading the last line of its stdout. Locally that line is the filename; in CI the reporter prints a JSON block whose last line is `}`, so the guard looked for a file called `}`, `tar` could not open it, and the failure was reported — correctly, by its own design — as an UNKNOWN rather than as clean. Every package then failed and the release aborted claiming 6 uninstallable manifests. Nothing was wrong with any manifest: the fault was in the oracle. It now diffs the pack destination, which has no output format to break, and throws on zero or many instead of guessing a name.
+
+### Fixed
 - **The in-process turn forwards `onRunEvent` (#189).** The SDK's typed `RunEvent` sink has been threaded on the HTTP path since #132, but the in-process entry point — the one an embedded terminal uses — declared no field for it, so the sink had no way in and every run event was unobservable there. `streamAgentUIMessages` accepted it at the far end the whole time; the hop in between simply did not pass it. Nothing failed while it was missing, because a sink nobody can install emits nothing to compare against — which is exactly what let it survive. Additive: absent, the key is omitted and the SDK call is byte-identical to before.
 
 ### Changed
