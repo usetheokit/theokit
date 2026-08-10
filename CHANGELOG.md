@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **The in-process turn forwards `onRunEvent` (#189).** The SDK's typed `RunEvent` sink has been threaded on the HTTP path since #132, but the in-process entry point — the one an embedded terminal uses — declared no field for it, so the sink had no way in and every run event was unobservable there. `streamAgentUIMessages` accepted it at the far end the whole time; the hop in between simply did not pass it. Nothing failed while it was missing, because a sink nobody can install emits nothing to compare against — which is exactly what let it survive. Additive: absent, the key is omitted and the SDK call is byte-identical to before.
+
 ### Changed
 - `@theokit/agents` public type names are English: `ToolComNome` -> `NamedTool`, `ListOptionsSemPaginacao` -> `ListOptionsWithoutPagination`, `AgentComListaEstreitada` -> `AgentWithNarrowedList`. The old names remain as deprecated aliases and will be removed in the next major. Reported from a consumer (TheoCode B-053): it enforces English-only in its own source, and that rule cannot hold at the boundary — writing `const o: ListOptionsSemPaginacao = …` reintroduces Portuguese into an English file through a name the consumer does not own.
 

@@ -67,6 +67,21 @@ export interface StreamAgentTurnInProcessInput {
   source?: string
   /** Abort signal forwarded to the SDK stream (client disconnect / window close). */
   signal?: AbortSignal
+  /**
+   * theokit#189 — observe the SDK's typed `RunEvent`s for this turn.
+   *
+   * `agent-endpoint.ts` already threaded this sink on the HTTP path (theokit#132); this entry point
+   * — the one an EMBEDDED surface uses — declared no field for it, so the sink had no way in and
+   * every `RunEvent` was unobservable in-process. `streamAgentUIMessages` accepted it at the far end
+   * the whole time; the hop in between simply did not pass it.
+   *
+   * Nothing failed while it was missing, because a sink nobody can install emits nothing to compare
+   * against. That is what made it survive: the absence had no observable consequence to test.
+   *
+   * Absent ⇒ the key is omitted from the SDK call entirely, so the stream is byte-identical to
+   * before.
+   */
+  onRunEvent?: Parameters<typeof streamAgentUIMessages>[2]['onRunEvent']
 }
 
 /** Injectable stream fn (defaults to the real SDK bridge) — lets tests drive a deterministic stream. */
@@ -174,6 +189,7 @@ export function streamAgentTurnInProcess(
       sessionId,
       hitl,
       signal: input.signal,
+      ...(input.onRunEvent !== undefined ? { onRunEvent: input.onRunEvent } : {}),
     })
   })()
 }
