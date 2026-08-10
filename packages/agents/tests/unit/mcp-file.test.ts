@@ -20,7 +20,7 @@ import { TheokitAgentError } from '@theokit/sdk/errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { loadMcpJson, McpFileError } from '../../src/bridge/mcp-file.js'
-import { loadMcpJson as loadMcpJsonDaRaiz } from '../../src/index.js'
+import { loadMcpJson as loadMcpJsonFromBarrel } from '../../src/index.js'
 
 describe('loadMcpJson — disco', () => {
   let dir: string
@@ -115,13 +115,13 @@ describe('loadMcpJson — disco', () => {
   })
 
   it('test_M112_args_env_cwd_with_the_wrong_type_OMIT_the_entry_and_name_it', () => {
-    for (const ruim of [
+    for (const bad of [
       { command: 'c', args: [1] },
       { command: 'c', env: { K: 2 } },
       { command: 'c', cwd: 3 },
     ]) {
       const warnings: string[] = []
-      write(JSON.stringify({ mcpServers: { good: { command: 'echo' }, a: ruim } }))
+      write(JSON.stringify({ mcpServers: { good: { command: 'echo' }, a: bad } }))
       expect(Object.keys(loadMcpJson(dir, { onWarn: (m) => warnings.push(m) }))).toEqual(['good'])
       expect(warnings.join(' ')).toContain('"a"')
     }
@@ -157,7 +157,7 @@ describe('loadMcpJson — disco', () => {
   })
 
   it('test_the_same_symbol_resolves_through_the_barrel_root', () => {
-    expect(loadMcpJsonDaRaiz).toBe(loadMcpJson)
+    expect(loadMcpJsonFromBarrel).toBe(loadMcpJson)
   })
 })
 

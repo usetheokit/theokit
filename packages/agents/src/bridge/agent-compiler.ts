@@ -216,7 +216,7 @@ export function compileTools(
       ]
       if (typeof handler !== 'function') {
         throw new ConfigurationError(
-          `toolbox: ${tb.class.name}.${String(tool.propertyKey)} não é um método ` +
+          `toolbox: ${tb.class.name}.${String(tool.propertyKey)} is not a method ` +
             `(tool "${tool.config.name}")`,
         )
       }

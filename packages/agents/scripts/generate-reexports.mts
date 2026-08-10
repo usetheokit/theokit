@@ -33,7 +33,7 @@ const RAIZ = join(AQUI, '..')
  * lost the real change inside the noise — friction that pushes towards "I'll regenerate later", which
  * is exactly the omission failure mode that left this gate red on `develop`.
  */
-export const SUBPATHS_DE_INFRA: Readonly<Record<string, string>> = {
+export const INFRA_SUBPATHS: Readonly<Record<string, string>> = {
   interactive: '@theokit/sdk/interactive',
   persistence: '@theokit/sdk/persistence',
   pty: '@theokit/sdk-pty',
@@ -130,16 +130,17 @@ export function renderBlock(specifier: string, s: Surface): string {
 const invocadoComoCli = pathToFileURL(process.argv[1]).href === import.meta.url
 
 if (invocadoComoCli) {
-  const medidas: [sub: string, spec: string, superficie: Surface][] = []
-  for (const [sub, spec] of Object.entries(SUBPATHS_DE_INFRA)) {
-    medidas.push([sub, spec, await enumerateSurface(spec)])
+  const measurements: [sub: string, spec: string, surface: Surface][] = []
+  for (const [sub, spec] of Object.entries(INFRA_SUBPATHS)) {
+    measurements.push([sub, spec, await enumerateSurface(spec)])
   }
   if (process.argv.includes('--json')) {
     process.stdout.write(
-      JSON.stringify(Object.fromEntries(medidas.map(([sub, , s]) => [sub, s])), null, 2) + '\n',
+      JSON.stringify(Object.fromEntries(measurements.map(([sub, , s]) => [sub, s])), null, 2) +
+        '\n',
     )
   } else {
-    for (const [sub, spec, s] of medidas) {
+    for (const [sub, spec, s] of measurements) {
       process.stdout.write(
         `\n// \u2550\u2550 ${sub}-entry.ts \u2550\u2550\n${renderBlock(spec, s)}\n`,
       )
@@ -160,7 +161,7 @@ if (invocadoComoCli) {
  * It reads the **emitted** `.d.ts`, not `src/*-entry.ts`, because that is the artifact the consumer
  * sees — what the plan's ADR-3 promised and the first implementation did not deliver.
  */
-export function enumerarSuperficieDaCamada(sub: string): Surface {
+export function enumerateLayerSurface(sub: string): Surface {
   const dts = join(RAIZ, 'dist', `${sub}.d.ts`)
   const fonte = readFileSync(dts, 'utf8')
   const values: string[] = []

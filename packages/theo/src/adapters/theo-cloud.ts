@@ -9,7 +9,7 @@
  *
  * K8s manifest emission lives ENTIRELY inside TheoCloud (proprietary Go code)
  * upon receiving the upload. Rationale: OSS framework MUST emit formats
- * consumed by public/open systems OR neutral exchange formats; NÃO formats
+ * consumed by public/open systems OR neutral exchange formats; NOT formats
  * consumed by proprietary closed systems. Exposing K8s shape here would leak
  * TheoCloud-internal infrastructure choices into the OSS surface.
  */

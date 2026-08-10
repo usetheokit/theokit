@@ -56,7 +56,7 @@ interface Inside {
    * …): there the coverage is the whole subpath, and M73 already has a dedicated parity test
    * (`auth-parity.test.ts`). For an `in` through the barrel, an empty list would be an UNVERIFIED
    * verdict — exactly the defect this policy exists to prevent, and the test
-   * `test_in_via_the_barrel_declares_symbols` o proíbe.
+   * `test_in_via_the_barrel_declares_symbols` forbids it.
    */
   readonly symbols: readonly string[]
   /**
@@ -82,7 +82,7 @@ type Decision = Inside | Fora
  * The decision list. Every subpath the SDK publishes appears here.
  *
  * Adding a subpath to the SDK and not to this list breaks `test_every_sdk_subpath_has_a_verdict` —
- * de propósito.
+ * deliberately.
  */
 const DECISIONS: Record<string, Decision> = {
   '.': {
