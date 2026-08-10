@@ -7,17 +7,17 @@ import { join, resolve, relative } from 'node:path'
  * stdlib-cross-module import typos.
  *
  * Sente bugs como `import { tmpdir } from 'node:path'` (tmpdir mora em
- * `node:os`, NÃO `node:path`). Tal typo NÃO falha runtime imediato; só
- * TypeChecker pega — e mesmo assim alguns paths de import (alias `as`)
- * mascaram o erro até o membro ser usado de verdade.
+ * `node:os`, NOT `node:path`). Such a typo does NOT fail at runtime immediately;
+ * only the TypeChecker catches it — and even then some import paths (an `as` alias)
+ * mask the error until the member is actually used.
  *
- * Pattern D85 (theokit lint-grep-not-ast): regex match léxico simples ao
- * invés de AST overkill. False positive impossível porque âncora `^import`
- * + escopo restrito a 2 stdlib modules.
+ * Pattern D85 (theokit lint-grep-not-ast): a simple lexical regex match instead
+ * of AST overkill. A false positive is impossible because of the `^import` anchor
+ * plus a scope restricted to 2 stdlib modules.
  *
- * Bug original capturado: `theokit/tests/integration/pnpm-11-compat.test.ts:4`
- * fazia `import { join, tmpdir as osTmpdir } from 'node:path'`. RED gate
- * pina a regressão antes do fix; GREEN após T2.1.
+ * The original bug captured: `theokit/tests/integration/pnpm-11-compat.test.ts:4`
+ * did `import { join, tmpdir as osTmpdir } from 'node:path'`. The RED gate pins
+ * the regression before the fix; GREEN after T2.1.
  */
 
 const ROOT = resolve(__dirname, '../..')

@@ -4,11 +4,11 @@
  * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * History:
- *   - Phase 0 (RED, 2026-06-04 madrugada): asserted the BROKEN behavior of the
+ *   - Phase 0 (RED, 2026-06-04, early hours): asserted the BROKEN behavior of the
  *     scanner — `auth.[provider].login.ts` succeeded but produced
  *     `paramNames: ['provider.login']` (single param with literal dot) and
  *     `routePath: '/api/auth.:provider.login'` (literal dot in URL pattern).
- *   - Phase 1 T1.1 (GREEN, 2026-06-04 madrugada): scanner now REJECTS dotted
+ *   - Phase 1 T1.1 (GREEN, 2026-06-04, early hours): scanner now REJECTS dotted
  *     basenames with `RouterConventionError`. This file asserts the new
  *     contract; the original BROKEN assertions are preserved in commit
  *     history (`git log --follow tests/unit/server-route-scan-dotted-regression.test.ts`).

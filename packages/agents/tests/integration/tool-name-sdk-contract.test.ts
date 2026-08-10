@@ -100,7 +100,7 @@ describe('tool name minting validates at the mint point (M55)', () => {
   describe('rules mirrored from the SDK', () => {
     it('rejects an empty composed name', () => {
       expect(() => toolRuntimeName('', '')).toThrow(ConfigurationError)
-      expect(() => toolRuntimeName('', '')).toThrow(/vazio/)
+      expect(() => toolRuntimeName('', '')).toThrow(/empty name/)
     })
 
     it('rejects a name outside the charset, naming the OFFENDING composed name', () => {
@@ -112,7 +112,7 @@ describe('tool name minting validates at the mint point (M55)', () => {
     it('rejects a reserved name', () => {
       for (const reserved of ['shell', 'memory_search', 'memory_get']) {
         expect(() => toolRuntimeName('', reserved)).toThrow(ConfigurationError)
-        expect(() => toolRuntimeName('', reserved)).toThrow(/reservad/)
+        expect(() => toolRuntimeName('', reserved)).toThrow(/reserved name/)
       }
     })
 
@@ -152,7 +152,7 @@ describe('tool name minting validates at the mint point (M55)', () => {
       // `ops` + `''` mints "ops_", which passes the charset and the SDK ACCEPTS it — a nonsense
       // tool reaches the LLM. The SDK cannot know a part was empty; we can.
       expect(() => toolRuntimeName('ops', '')).toThrow(ConfigurationError)
-      expect(() => toolRuntimeName('ops', '')).toThrow(/vazio/)
+      expect(() => toolRuntimeName('ops', '')).toThrow(/empty name/)
     })
 
     it('says the COMPOSITION overflowed when length is the only rule broken', () => {
@@ -160,7 +160,7 @@ describe('tool name minting validates at the mint point (M55)', () => {
       expect(() => toolRuntimeName(namespace, 'deploy')).toThrow(ConfigurationError)
       // A generic charset message would send the author hunting for an invalid character that
       // does not exist. The message must name the length.
-      expect(() => toolRuntimeName(namespace, 'deploy')).toThrow(/67|comprimento|64/)
+      expect(() => toolRuntimeName(namespace, 'deploy')).toThrow(/67|length|64/)
     })
   })
 

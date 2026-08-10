@@ -41,7 +41,7 @@ function apiKey(): string {
   throw new Error('no provider key present in the environment')
 }
 
-/** Chave com valor `undefined` ≡ chave ausente para `Agent.create`; normaliza os dois lados. */
+/** A key with an `undefined` value ≡ an absent key for `Agent.create`; normalizes both sides. */
 function dropUndefined(o: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined))
 }
@@ -90,9 +90,9 @@ async function main(): Promise<void> {
     defineAgent({ model: MODEL, skills: ['code-review'] }),
   ) as unknown as Record<string, unknown>
   const waist = waistOf(draft as unknown as Record<string, unknown>)
-  // O contrato é EQUIVALÊNCIA SEMÂNTICA, não ordem de chaves: nada no pacote serializa ou
-  // hasheia as opções compiladas (`Object.keys` só aparece sobre valores aninhados —
-  // sdk-adapter-create-options.ts:76,91), então a ordem de chave de topo não é observável.
+  // The contract is SEMANTIC EQUIVALENCE, not key order: nothing in the package serializes or hashes
+  // the compiled options (`Object.keys` only appears over nested values —
+  // sdk-adapter-create-options.ts:76,91), so top-level key order is not observable.
   const identical = isDeepStrictEqual(dropUndefined(waist), dropUndefined(reference))
   const sameOrder = JSON.stringify(waist) === JSON.stringify(reference)
   console.error(`[live] waist deep-equal to defineAgent path: ${identical ? 'YES' : 'NO'}`)

@@ -1,23 +1,23 @@
 /**
- * T1.2 — Contract test cross-repo executando contra @theokit/ui REAL.
+ * T1.2 — A cross-repo contract test running against the REAL @theokit/ui.
  *
- * O contrato (ADR 0018) é: @theokit/ui/vite-plugin expõe um default-export
- * factory que retorna Plugin | Plugin[] (com `name: string`). Subpath exports
- * /preset, /styles.css, /fonts.css devem resolver.
+ * The contract (ADR 0018) is: @theokit/ui/vite-plugin exposes a default-export
+ * factory returning Plugin | Plugin[] (with `name: string`). The subpath exports
+ * /preset, /styles.css and /fonts.css must resolve.
  *
- * Por que rodar contra fixture (não contra packages/theo): @theokit/ui NÃO
- * é peerDep instalada em packages/theo — é dep opt-in dos consumers/fixtures.
- * A fixture `theoui-autoinject` tem UI instalado e é o canary canônico para
+ * Why run against a fixture (and not against packages/theo): @theokit/ui is NOT
+ * an installed peerDep of packages/theo — it is an opt-in dep of consumers/fixtures.
+ * The `theoui-autoinject` fixture has UI installed and is the canonical canary for
  * o contract test consumer-side (ADR 0020 D5: UI fica fora do workspace
- * default; SDK fica dentro).
+ * the default; the SDK stays inside).
  *
  * 6 it():
  *  1. default export é factory
- *  2. factory() retorna Plugin|Plugin[] válido
+ *  2. factory() returns a valid Plugin|Plugin[]
  *  3. factory({ tailwind: false }) não throw
- *  4. ./preset existe como .css
- *  5. ./styles.css + ./fonts.css existem
- *  6. EC-7 — versão resolvida satisfaz range peerDep do theokit (hoist guard)
+ *  4. ./preset exists as .css
+ *  5. ./styles.css + ./fonts.css exist
+ *  6. EC-7 — the resolved version satisfies theokit's peerDep range (hoist guard)
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -25,13 +25,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { describe, it, expect } from 'vitest'
 
-// Localiza a fixture canônica com @theokit/ui instalado.
+// Locates the canonical fixture with @theokit/ui installed.
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const FIXTURE_DIR = join(TEST_DIR, '..', '..', 'fixtures', 'theoui-autoinject')
 const UI_PKG_DIR = join(FIXTURE_DIR, 'node_modules', '@theokit', 'ui')
 const UI_DIST = (relative: string) => join(UI_PKG_DIR, 'dist', relative)
 
-// Reexporta os helpers internos do integrate-ui.ts (test-only side-doors EC-N CT-N).
+// Re-exports the internal helpers of integrate-ui.ts (test-only side doors EC-N CT-N).
 function isValidPlugin(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
   if (!('name' in value)) return false
@@ -47,21 +47,21 @@ function normalizePluginReturn(value: unknown): unknown[] | null {
 }
 
 /**
- * Caret-prerelease semver-satisfies (inline, evita adicionar semver dep).
+ * Caret-prerelease semver-satisfies (inline, avoids adding a semver dep).
  *
- * Regra usada: `^X.Y.Z-pre` aceita `X.Y.Z-pre.*` com mesmo tuple X.Y.Z e pre tag.
- * Implementação pragmática para o caso de uso (`^0.12.0-next.0` × `0.12.0-next.N`).
+ * The rule used: `^X.Y.Z-pre` accepts `X.Y.Z-pre.*` with the same X.Y.Z tuple and pre tag.
+ * A pragmatic implementation for the use case (`^0.12.0-next.0` × `0.12.0-next.N`).
  *
- * Casos cobertos:
+ * Cases covered:
  *  - ^0.12.0-next.0 + 0.12.0-next.0  → true
  *  - ^0.12.0-next.0 + 0.12.0-next.5  → true
  *  - ^0.12.0-next.0 + 0.11.0-next.0  → false
  *  - ^0.12.0-next.0 + 0.13.0-next.0  → false
- *  - ^0.12.0-next.0 + 0.12.0-beta.0  → false (tag diferente)
- *  - ^0.12.0 + 0.12.1                → true (sem pre, mesmo minor)
+ *  - ^0.12.0-next.0 + 0.12.0-beta.0  → false (different tag)
+ *  - ^0.12.0 + 0.12.1                → true (no pre, same minor)
  *
- * Limitação: cobre apenas o subset de semver usado no monorepo (sem rangeSets,
- * sem versões com build metadata). Suficiente para EC-7 hoist guard.
+ * Limitation: it covers only the semver subset used in this monorepo (no rangeSets,
+ * no versions with build metadata). Enough for the EC-7 hoist guard.
  */
 function satisfiesCaretPrerelease(version: string, range: string): boolean {
   // The peer range is a `||`-joined series of caret pins (e.g.
@@ -111,7 +111,7 @@ describe('Contract: @theokit/ui/vite-plugin (real dist, fixture-resolved)', () =
     expect(existsSync(UI_DIST('vite-plugin.js'))).toBe(true)
   })
 
-  // CT-1: shape check — default export é função (entry point do contrato)
+  // CT-1: shape check — the default export is a function (the contract's entry point)
   it('CT-1 — default export of dist/vite-plugin.js is a factory function', async () => {
     // Given the contract from ADR 0018,
     // When we dynamic-import the dist entry,
@@ -120,7 +120,7 @@ describe('Contract: @theokit/ui/vite-plugin (real dist, fixture-resolved)', () =
     expect(typeof mod.default).toBe('function')
   })
 
-  // CT-2: factory() retorna shape válido
+  // CT-2: factory() returns a valid shape
   it('CT-2 — factory() returns a valid Vite Plugin or Plugin[] with name: string', async () => {
     // Given the factory is called with no args,
     // When we normalize the return value,
@@ -146,7 +146,7 @@ describe('Contract: @theokit/ui/vite-plugin (real dist, fixture-resolved)', () =
     ).not.toThrow()
   })
 
-  // CT-4: ./preset existe como .css
+  // CT-4: ./preset exists as .css
   it('CT-4 — dist/preset.css subpath export exists and is .css', () => {
     // Given the consumer can `import preset from '@theokit/ui/preset'`,
     // When the dist is shipped,
@@ -164,7 +164,7 @@ describe('Contract: @theokit/ui/vite-plugin (real dist, fixture-resolved)', () =
     expect(existsSync(UI_DIST('fonts.css'))).toBe(true)
   })
 
-  // EC-7: hoist guard — versão resolvida na fixture satisfaz peerDep declarado
+  // EC-7: hoist guard — the version resolved in the fixture satisfies the declared peerDep
   it('EC-7 — fixture-resolved version satisfies theokit peerDep range', () => {
     // Given pnpm hoist can produce divergent versions in a monorepo,
     // When we read the peerDep range declared by theokit/packages/theo

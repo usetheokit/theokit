@@ -3,7 +3,7 @@ import { z } from 'zod'
 /**
  * The wire chunk union — TheoKit's own declaration of the `UIMessageStream` frame set.
  *
- * ## Why this exists (plan `remover-dependencia-ai`, D1 + D6)
+ * ## Why this exists (plan `remove-ai-dependency`, D1 + D6)
  *
  * The frame FORMAT is unchanged — a TheoKit server and an ai-sdk client still understand each
  * other. What changed is ownership: the union and its validation live here instead of arriving

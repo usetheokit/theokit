@@ -1,12 +1,12 @@
 {
   "interactive": {
-    "valores": [
+    "values": [
       "InteractiveBackend",
       "InteractiveUnavailableError",
       "NoSuchSessionError",
       "resolveInteractive"
     ],
-    "tipos": [
+    "types": [
       "InteractiveProvider",
       "StartInteractiveOptions",
       "StartInteractiveResult",
@@ -15,7 +15,7 @@
     ]
   },
   "persistence": {
-    "valores": [
+    "values": [
       "acquireSessionWriter",
       "appendJsonl",
       "applyWalWithFallback",
@@ -40,7 +40,7 @@
       "withCwdMutex",
       "withFileLock"
     ],
-    "tipos": [
+    "types": [
       "AtomicWriteJsonOptions",
       "FileLockOptions",
       "ForkTranscriptOptions",
@@ -54,19 +54,19 @@
     ]
   },
   "pty": {
-    "valores": [
+    "values": [
       "clampYield",
       "MaxSessionsError",
       "PtyInteractiveBackend",
       "YIELD_MAX_MS",
       "YIELD_MIN_MS"
     ],
-    "tipos": [
+    "types": [
       "PtyInteractiveBackendOptions"
     ]
   },
   "sandbox": {
-    "valores": [
+    "values": [
       "allowlistedEnv",
       "buildBwrapArgv",
       "buildSeccompFilter",
@@ -92,7 +92,7 @@
       "seccompPathForArch",
       "wrapCommandForSandbox"
     ],
-    "tipos": [
+    "types": [
       "BwrapArgvOptions",
       "BwrapDetection",
       "BwrapProbes",
@@ -108,7 +108,7 @@
     ]
   },
   "tools": {
-    "valores": [
+    "values": [
       "buildEnvContext",
       "buildRepoMap",
       "CatastrophicCommandError",
@@ -163,7 +163,7 @@
       "withShellExitGuidance",
       "withToolResultGuidance"
     ],
-    "tipos": [
+    "types": [
       "CommandPolicy",
       "ContextMatchReason",
       "CreateApplyPatchToolOptions",

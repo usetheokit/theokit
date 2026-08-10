@@ -25,7 +25,7 @@ export { handleChannelWebhook, parseChannelPath, isChannelPath } from './channel
 export type { ChannelMessage, ChannelWebhookConfig } from './channel-webhook.js'
 
 // In-process agent-turn seam (M35, Model A): drive an agent turn in one process with inline HITL.
-// M84 — o transporte VIVE em `@theokit/agents`. Pass-through, não cópia (ADR-2).
+// M84 — the transport LIVES in `@theokit/agents`. A pass-through, not a copy (ADR-2).
 export { streamAgentTurnInProcess, InProcessApprovalRequiredError } from '@theokit/agents'
 export type {
   StreamAgentTurnInProcessInput,

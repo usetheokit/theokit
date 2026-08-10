@@ -23,7 +23,7 @@ async function collect(stream: ReadableStream<WireChunk>): Promise<WireChunk[]> 
 const frame = (o: unknown): string => `data: ${JSON.stringify(o)}\n\n`
 
 describe('parseWireStream — framing SSE', () => {
-  it('test_sentinela_done_nao_derruba_o_stream', async () => {
+  it('test_the_done_sentinel_does_not_break_the_stream', async () => {
     // EC-1, the blocker of plan v1.0: `ui-message-stream-response.ts:27` ends EVERY stream with
     // `data: [DONE]\n\n`, and `JSON.parse('[DONE]')` throws. An unguarded parse would fail on the
     // last frame of every single response — not a rare edge, the common path.
@@ -33,14 +33,14 @@ describe('parseWireStream — framing SSE', () => {
     expect(chunks).toEqual([{ type: 'start' }])
   })
 
-  it('test_json_invalido_e_descartado_sem_derrubar', async () => {
+  it('test_invalid_json_is_discarded_without_breaking', async () => {
     const chunks = await collect(
-      parseWireStream(byteStream('data: {quebrado\n\n', frame({ type: 'finish' }))),
+      parseWireStream(byteStream('data: {broken\n\n', frame({ type: 'finish' }))),
     )
     expect(chunks).toEqual([{ type: 'finish' }])
   })
 
-  it('test_crlf_produz_os_mesmos_chunks_que_lf', async () => {
+  it('test_crlf_produces_the_same_chunks_as_lf', async () => {
     // EC-2: SSE admits CRLF (WHATWG HTML §9.2). A reverse proxy can rewrite the terminator; without
     // normalising, the buffer never closes an event and the result is TOTAL SILENCE — no error, no
     // render, the worst failure mode available.
@@ -51,32 +51,32 @@ describe('parseWireStream — framing SSE', () => {
     )
   })
 
-  it('test_cr_isolado_tambem_e_terminador', async () => {
+  it('test_a_lone_cr_is_also_a_terminator', async () => {
     const cr = (frame({ type: 'start' }) + frame({ type: 'finish' })).replace(/\n/g, '\r')
     expect(await collect(parseWireStream(byteStream(cr)))).toHaveLength(2)
   })
 
-  it('test_frame_partido_entre_chunks_e_remontado', async () => {
+  it('test_a_frame_split_across_chunks_is_reassembled', async () => {
     const whole = frame({ type: 'text-delta', id: 't', delta: 'oi' })
     const at = Math.floor(whole.length / 2)
     const chunks = await collect(parseWireStream(byteStream(whole.slice(0, at), whole.slice(at))))
     expect(chunks).toEqual([{ type: 'text-delta', id: 't', delta: 'oi' }])
   })
 
-  it('test_comentario_sse_e_ignorado', async () => {
+  it('test_an_sse_comment_is_ignored', async () => {
     const chunks = await collect(
       parseWireStream(byteStream(':heartbeat\n\n', frame({ type: 'start' }))),
     )
     expect(chunks).toEqual([{ type: 'start' }])
   })
 
-  it('test_data_com_e_sem_espaco_sao_equivalentes', async () => {
+  it('test_data_with_and_without_a_space_are_equivalent', async () => {
     const withSpace = await collect(parseWireStream(byteStream('data: {"type":"start"}\n\n')))
     const without = await collect(parseWireStream(byteStream('data:{"type":"start"}\n\n')))
     expect(without).toEqual(withSpace)
   })
 
-  it('test_multiplas_linhas_data_sao_concatenadas_com_newline', async () => {
+  it('test_multiple_data_lines_are_joined_with_a_newline', async () => {
     // EC-9: SSE concatenates consecutive `data:` lines with \n before the payload is read.
     const chunks = await collect(
       parseWireStream(byteStream('data: {"type":"text-delta","id":"t",\ndata: "delta":"oi"}\n\n')),
@@ -84,14 +84,14 @@ describe('parseWireStream — framing SSE', () => {
     expect(chunks).toEqual([{ type: 'text-delta', id: 't', delta: 'oi' }])
   })
 
-  it('test_variante_desconhecida_e_descartada_com_aviso', async () => {
+  it('test_an_unknown_variant_is_discarded_with_a_warning', async () => {
     const chunks = await collect(
-      parseWireStream(byteStream(frame({ type: 'inexistente' }), frame({ type: 'finish' }))),
+      parseWireStream(byteStream(frame({ type: 'nonexistent' }), frame({ type: 'finish' }))),
     )
     expect(chunks).toEqual([{ type: 'finish' }])
   })
 
-  it('test_frame_sem_terminador_nao_cresce_sem_limite', async () => {
+  it('test_a_frame_with_no_terminator_does_not_grow_without_bound', async () => {
     // EC-10: a frame that never terminates must fail with a TYPED error, not consume memory.
     const huge = `data: ${'x'.repeat(200)}`
     const many = Array.from({ length: 60 }, () => huge)
@@ -100,13 +100,13 @@ describe('parseWireStream — framing SSE', () => {
     ).rejects.toBeInstanceOf(WireFrameTooLargeError)
   })
 
-  it('test_stream_vazio_produz_zero_chunks', async () => {
+  it('test_an_empty_stream_produces_zero_chunks', async () => {
     expect(await collect(parseWireStream(byteStream()))).toEqual([])
   })
 })
 
-describe('parseWireStream — o canal de erro é isento da leniência (EC-8)', () => {
-  it('test_error_malformado_e_emitido_e_nao_descartado', async () => {
+describe('parseWireStream — the error channel is exempt from the leniency (EC-8)', () => {
+  it('test_a_malformed_error_is_emitted_and_not_discarded', async () => {
     // EC-8: `{type:'error'}` with no errorText fails the strict shape. If leniency applied, a real
     // 401/429 would be DISCARDED and the turn would settle as `done` — theokit#136 reintroduced
     // through the side door this plan opened. `type` is therefore read BEFORE validation.
@@ -114,14 +114,14 @@ describe('parseWireStream — o canal de erro é isento da leniência (EC-8)', (
     expect(chunks).toEqual([{ type: 'error' }])
   })
 
-  it('test_error_com_texto_preserva_a_mensagem', async () => {
+  it('test_an_error_with_text_preserves_the_message', async () => {
     const chunks = await collect(
-      parseWireStream(byteStream(frame({ type: 'error', errorText: 'sem credencial' }))),
+      parseWireStream(byteStream(frame({ type: 'error', errorText: 'no credential' }))),
     )
-    expect(chunks).toEqual([{ type: 'error', errorText: 'sem credencial' }])
+    expect(chunks).toEqual([{ type: 'error', errorText: 'no credential' }])
   })
 
-  it('test_conteudo_anterior_ao_erro_nao_se_perde', async () => {
+  it('test_content_preceding_the_error_is_not_lost', async () => {
     // The parser ENQUEUES the error rather than throwing. Throwing would error the stream, and an
     // errored stream discards its queue — the partial turn the user had already seen would vanish
     // on the way to the error. Measured by `tests/unit/consume-chunk-stream.test.ts`, which asserts
@@ -140,7 +140,7 @@ describe('parseWireStream — o canal de erro é isento da leniência (EC-8)', (
 })
 
 describe('parseWireStream — cancellation propagation', () => {
-  it('test_cancelar_a_saida_fecha_o_stream_de_entrada', async () => {
+  it('test_cancelling_the_output_closes_the_input_stream', async () => {
     let cancelled = false
     const input = new ReadableStream<Uint8Array>({
       start(controller) {

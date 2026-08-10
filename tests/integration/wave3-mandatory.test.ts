@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const FIXTURES = path.resolve(import.meta.dirname, '../../fixtures')
 
-describe('Onda 3 — Backend Routes', () => {
+describe('Wave 3 — Backend Routes', () => {
   let server: Awaited<ReturnType<typeof startDevServer>>
   let port: number
 
@@ -18,7 +18,7 @@ describe('Onda 3 — Backend Routes', () => {
     await server?.close()
   }, 15000)
 
-  // Teste 1 — GET simples
+  // Test 1 — a simple GET
   it('GET /api/health returns { ok: true } with 200', async () => {
     const res = await fetch(`http://localhost:${port}/api/health`)
     expect(res.status).toBe(200)
@@ -27,7 +27,7 @@ describe('Onda 3 — Backend Routes', () => {
     expect(data).toEqual({ ok: true })
   })
 
-  // Teste 2 — POST com body válido
+  // Test 2 — POST with a valid body
   it('POST /api/users with valid body returns 201', async () => {
     const res = await fetch(`http://localhost:${port}/api/users`, {
       method: 'POST',
@@ -41,7 +41,7 @@ describe('Onda 3 — Backend Routes', () => {
     expect(data.email).toBe('paulo@example.com')
   })
 
-  // Teste 3 — POST com body inválido
+  // Test 3 — POST with an invalid body
   it('POST /api/users with invalid body returns 400 structured error', async () => {
     const res = await fetch(`http://localhost:${port}/api/users`, {
       method: 'POST',
@@ -55,7 +55,7 @@ describe('Onda 3 — Backend Routes', () => {
     expect(data.error.issues.length).toBeGreaterThan(0)
   })
 
-  // Teste 4 — Params
+  // Test 4 — Params
   it('GET /api/users/123 returns params.id === "123"', async () => {
     const res = await fetch(`http://localhost:${port}/api/users/123`)
     expect(res.status).toBe(200)
@@ -63,7 +63,7 @@ describe('Onda 3 — Backend Routes', () => {
     expect(data.id).toBe('123')
   })
 
-  // Teste 5 — Query
+  // Test 5 — Query
   it('GET /api/users?search=paulo returns query.search === "paulo"', async () => {
     const res = await fetch(`http://localhost:${port}/api/users?search=paulo`)
     expect(res.status).toBe(200)

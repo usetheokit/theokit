@@ -23,7 +23,7 @@ describe('M103 — Agent.list narrowing', () => {
   })
 
   it('keeps every other static reachable and identical (MF-3)', () => {
-    for (const membro of [
+    for (const member of [
       'create',
       'getOrCreate',
       'get',
@@ -35,8 +35,8 @@ describe('M103 — Agent.list narrowing', () => {
       'listRuns',
       'getRun',
     ] as const) {
-      expect(Agent[membro], `Agent.${membro} disappeared from the narrowed re-export`).toBe(
-        AgentDoSdk[membro],
+      expect(Agent[member], `Agent.${member} disappeared from the narrowed re-export`).toBe(
+        AgentDoSdk[member],
       )
     }
   })

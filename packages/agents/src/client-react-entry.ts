@@ -1,13 +1,13 @@
 /**
- * M84 — `@theokit/agents/client/react`: o hook, separado do resto da cadeia.
+ * M84 — `@theokit/agents/client/react`: the hook, separated from the rest of the chain.
  *
- * A separação não é estética. `@theokit/agents/client` é **livre de React por contrato** para que um
- * consumidor Node — um transporte in-process num processo sem UI — não arraste React no grafo só por
- * importar um transporte. Juntar os dois numa entrada só fez exatamente isso, e o gate herdado do CLI
- * (`test_client_core_entry_imports_no_react`) reprovou na primeira execução.
+ * The separation is not cosmetic. `@theokit/agents/client` is **React-free by contract** so that a
+ * Node consumer — an in-process transport in a process with no UI — does not drag React into its
+ * graph merely by importing a transport. Putting the two in a single entry did exactly that, and the
+ * gate inherited from the CLI (`test_client_core_entry_imports_no_react`) failed on the first run.
  *
- * `react` é peer **opcional** do pacote: quem nunca importa esta entrada não precisa tê-lo instalado;
- * quem importa já tem, porque um hook só roda dentro de um componente.
+ * `react` is an **optional** peer of the package: anyone who never imports this entry does not need
+ * it installed; anyone who does already has it, because a hook only runs inside a component.
  */
 export { useAgent } from './client/use-agent.js'
 export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from './client/use-agent.js'

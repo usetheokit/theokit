@@ -1,7 +1,7 @@
 /**
  * Config schemas barrel.
  *
- * Per plan T2.3 (M2 mecânico): the previously-monolithic
+ * Per plan T2.3 (M2, mechanical): the previously-monolithic
  * `packages/theo/src/config/schema.ts` (504 LOC, 14 schemas) was split
  * into per-concern files here. `config/schema.ts` retains the role of
  * composer (assembles `theoConfigSchema` from these primitives).

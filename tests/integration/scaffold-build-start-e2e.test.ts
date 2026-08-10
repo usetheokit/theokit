@@ -1,5 +1,5 @@
 /**
- * T7.4 Sub-fase D — scaffold → build → start E2E.
+ * T7.4 Sub-phase D — scaffold → build → start E2E.
  *
  * What this validates:
  *   1. Programmatic scaffold via `packages/create-theo` produces a runnable app
@@ -39,7 +39,7 @@ afterAll(() => {
   rmSync(projectDir, { recursive: true, force: true })
 })
 
-describe('T7.4 Sub-fase D — scaffold → build → start E2E', () => {
+describe('T7.4 Sub-phase D — scaffold → build → start E2E', () => {
   it('scaffold creates the canonical project structure', () => {
     expect(existsSync(join(projectDir, 'app/page.tsx'))).toBe(true)
     expect(existsSync(join(projectDir, 'theo.config.ts'))).toBe(true)
