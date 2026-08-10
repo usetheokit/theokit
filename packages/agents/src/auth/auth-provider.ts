@@ -118,7 +118,7 @@ export class AuthProvider {
 
     const filePath: string = authFilePath(this.store, env)
 
-    // SINGLE-FLIGHT in-process, ANTES do lock (M74, EC-2 do edge-case review).
+    // SINGLE-FLIGHT in-process, BEFORE the lock (M74, EC-2 of the edge-case review).
     //
     // `withFileLock` (proper-lockfile) is NOT reentrant: if a run starts inside a context that
     // already holds the lock — a nested run, or a team firing off members while the parent refreshes —
