@@ -60,9 +60,9 @@ describe('buildModelSelection (M1 reasoning-effort mapping)', () => {
 describe('reasoningEffortOf (M107 — the inverse of buildModelSelection)', () => {
   it('test_a_round_trip_preserves_the_effort', () => {
     // The task's strongest assertion: it is what proves the two sides did not diverge.
-    const niveis: ReasoningEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'ultra']
-    for (const nivel of niveis) {
-      expect(reasoningEffortOf(buildModelSelection('m', nivel))).toBe(nivel)
+    const levels: ReasoningEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'ultra']
+    for (const level of levels) {
+      expect(reasoningEffortOf(buildModelSelection('m', level))).toBe(level)
     }
   })
 

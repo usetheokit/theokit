@@ -120,8 +120,8 @@ const { text, source } = readEntry()
 
 /** Names exported by the barrel — covers `export { a, b }` and `export type { T }`. */
 const symbols = new Set()
-for (const bloco of text.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
-  for (const bruto of bloco[1].split(',')) {
+for (const block of text.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
+  for (const raw of block[1].split(',')) {
     // The PUBLIC name is the one AFTER the `as` — that is what the consumer imports. The first
     // version took `[0]` (the source name), so a symbol exported under an alias escaped the gate
     // entirely. Found by mutation: adding
@@ -130,7 +130,7 @@ for (const bloco of text.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
     // Tokenize instead of `split(/\s+as\s+/)`: that pattern has two greedy quantifiers around a
     // literal and the linter marks it as super-linear (ReDoS). The shape is `[Name]` or
     // `[Source, "as", Public]`, so the last token is already the answer — with no backtracking.
-    const tokens = bruto
+    const tokens = raw
       .replace(/\btype\b/, '')
       .trim()
       .split(/\s+/)
