@@ -59,18 +59,18 @@ export {
   createSdkAgentStream,
   toAgentFactory,
   type SdkAgentHandle,
-  // M91 — os tipos que tornam `send` honesto atravessam junto: sem eles o consumidor não consegue
-  // nomear o retorno, e volta a escrever o adaptador que o milestone existe para apagar.
+  // M91 — the types that make `send` honest cross alongside it: without them the consumer cannot
+  // name the return, and goes back to writing the adapter this milestone exists to delete.
   type SdkSendOptions,
   type SdkTurnHandle,
 } from './sdk-adapter.js'
-// M96 — a postura de aprovação atravessa a fronteira: sem ela nomeável, o consumidor não consegue
-// declarar o que `toAgentFactory` agora exige. `AgentDefinition` (nome já ocupado logo abaixo, pelo
-// tipo brandado do builder) é intocado — a postura tem nome próprio.
+// M96 — the approval posture crosses the boundary: without it being nameable, the consumer cannot
+// declare what `toAgentFactory` now requires. `AgentDefinition` (a name already taken just below, by
+// the builder's branded type) is untouched — the posture has a name of its own.
 export type { ApprovalPosture } from './approval-posture.js'
-export type { DefinicaoOuThunk } from './definicao-ou-thunk.js'
-// M107 — a leitura atravessa junto com a escrita. Enquanto só a escrita era pública, o consumidor
-// remontava a chave do param à mão para ler, o que é um segundo oráculo sobre o mesmo fato.
+export type { DefinitionOrThunk } from './definition-or-thunk.js'
+// M107 — the read crosses alongside the write. While only the write was public, the consumer
+// reassembled the param key by hand to read it, which is a second oracle over the same fact.
 export { buildModelSelection, reasoningEffortOf } from './model-selection.js'
 export {
   createThinkTagExtractor,
@@ -105,8 +105,8 @@ export {
 export {
   delegate,
   DelegationBudgetExceededError,
-  // O alias EXISTE para ser deprecado; re-exportá-lo é o contrato de compatibilidade do M91, não um
-  // uso descuidado. Sai numa major.
+  // The alias EXISTS to be deprecated; re-exporting it is M91's compatibility contract, not careless
+  // usage. It goes in a major.
   // eslint-disable-next-line @typescript-eslint/no-deprecated
   BudgetExceededError,
   DelegationError,
@@ -152,7 +152,7 @@ export {
   type McpRegistryConfig,
   type McpApprovalSpec,
 } from './mcp-resolver.js'
-// M107 — o vizinho que TOCA disco. `mcp-resolver` decide quais servidores uma requisição recebe;
-// este lê `<cwd>/.mcp.json`. A camada expunha os casos raros e não o comum, então cada consumidor
-// escrevia o carregador à mão.
+// M107 — the neighbour that TOUCHES disk. `mcp-resolver` decides which servers a request receives;
+// this one reads `<cwd>/.mcp.json`. The layer exposed the rare cases and not the common one, so every
+// consumer wrote the loader by hand.
 export { loadMcpJson, McpFileError } from './mcp-file.js'

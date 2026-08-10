@@ -1,8 +1,8 @@
 /**
  * Provider Resolver tests — Strategy + Registry pattern (FAANG-grade).
  *
- * Cobertura BDD obrigatória:
- *   - Happy path: cada env var resolve no provider correto
+ * Mandatory BDD coverage:
+ *   - Happy path: each env var resolves to the correct provider
  *   - Priority order: OPENROUTER > OPENAI > ANTHROPIC
  *   - Error path: zero env vars → actionable error message
  *   - Registry: registerProvider() idempotent + listProviders() snapshot
@@ -104,7 +104,7 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
     })
 
     it('should treat empty-string env var as absent', () => {
-      // Given: KEY presente mas vazia,
+      // Given: the KEY is present but empty,
       process.env.OPENROUTER_API_KEY = ''
       process.env.OPENAI_API_KEY = 'sk-test'
       // When: resolve,

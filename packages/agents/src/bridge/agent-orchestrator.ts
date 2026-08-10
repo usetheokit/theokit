@@ -34,7 +34,7 @@ import { createSdkAgentStream } from './sdk-adapter.js'
 // to delegation-types.js to break the orchestrator↔loop import cycle (G1).
 export {
   DelegationBudgetExceededError,
-  /** @deprecated M91 — use `DelegationBudgetExceededError`; é a MESMA classe, alias por uma major. */
+  /** @deprecated M91 — use `DelegationBudgetExceededError`; it is the SAME class, aliased for one major. */
   BudgetExceededError,
   type DelegationResult,
   DelegationError,

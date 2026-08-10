@@ -1,15 +1,15 @@
 /**
  * SDK Adapter — bridges @theokit/agents decorators → @theokit/sdk runtime.
  *
- * Per rule sdk-runtime.md (INQUEBRÁVEL): @theokit/sdk is the ONLY agent runtime.
+ * Per rule sdk-runtime.md (UNBREAKABLE): @theokit/sdk is the ONLY agent runtime.
  * This adapter replaces llm-runner.ts (which called OpenRouter API directly).
  *
  * Flow: @Agent decorator → compileAgent() → createSdkAgentStream() → SDK Agent.create() → Run.stream()
  */
-// M96 — a rationale abaixo, e o `prettier-ignore`, existem por orcamento de lint: este arquivo esta
-// no teto de `max-lines` (500 linhas de codigo) e a quebra que o prettier faria neste import custa
-// +11 linhas, o bastante para estourar o gate. O `prettier-ignore` precisa ser o ULTIMO comentario
-// antes do no. Quando `sdk-adapter.ts` for dividido, a diretiva sai junto.
+// M96 — the rationale below, and the `prettier-ignore`, exist for lint budget: this file sits at the
+// `max-lines` ceiling (500 lines of code) and the break prettier would make in this import costs
+// +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
+// When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
 import type { AgentDefinition, BudgetTracker, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 
@@ -19,13 +19,13 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
-import { aplicarPostura, type ApprovalPosture } from './approval-posture.js'
+import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
-import { type DefinicaoOuThunk, resolverProjecao } from './definicao-ou-thunk.js'
-import { eventoDeErroDoSdk } from './erro-do-sdk.js'
+import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
 import { buildModelSelection } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
+import { sdkErrorEvent } from './sdk-error.js'
 import { createToolSeen, type SdkTimelineEvent, translateTimelineEvent } from './sdk-timeline.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
 import { stripToolDialectStream } from './tool-dialect-stripper.js'
@@ -350,7 +350,7 @@ function buildSdkTools(
  * Returns a function that, given a message + sessionId, yields TheoKit
  * AgentStreamEvent via the SDK's Agent.create() + Run.stream() pipeline.
  */
-/** M74 — resolve a credencial quando o stream/sessão COMEÇA; com `string`, o valor vinha congelado. */
+/** M74 — resolves the credential when the stream/session STARTS; with a `string` the value arrived frozen. */
 const resolverApiKey = async (k: string | (() => string | Promise<string>)): Promise<string> =>
   typeof k === 'function' ? await k() : k
 
@@ -441,7 +441,7 @@ export function createSdkAgentStream(
           t0,
         })
       } catch (err) {
-        yield eventoDeErroDoSdk(err)
+        yield sdkErrorEvent(err)
       }
     },
   })
@@ -560,25 +560,25 @@ async function* streamSdkAgent(
     })) {
       yield event
     }
-    // #142 — o stream SEMPRE termina num frame terminal.
+    // #142 — the stream ALWAYS ends on a terminal frame.
     //
-    // O `done` do SDK e suprimido no merge, na promessa de que este bloco emite o frame final.
-    // Antes, essa promessa quebrava quando `sawError`: nada era emitido, e o stream simplesmente
-    // acabava. So seria correto se `error` fosse sempre o ULTIMO evento — e nao e: o merge marca
-    // `sawError` e SEGUE emitindo. Uma UI que vira a flag de "turno concluido" num frame terminal
-    // ficava presa.
+    // The SDK's `done` is suppressed in the merge, on the promise that this block emits the final
+    // frame. Before, that promise broke when `sawError`: nothing was emitted, and the stream simply
+    // ended. It would only be correct if `error` were always the LAST event — and it is not: the merge
+    // marks `sawError` and KEEPS emitting. A UI that flips its "turn finished" flag on a terminal
+    // frame got stuck.
     //
-    // O `done` continua SUPRIMIDO quando houve erro (contrato H1, travado por
-    // `test_run_stream_error_status_emits_error_and_suppresses_done`) — `done` segue significando
-    // "terminou bem". O que muda e a garantia: quando houve erro e o ultimo evento nao foi o
-    // `error`, um `error` terminal fecha o stream. Assim vale sempre "o ultimo frame e `done` OU
-    // `error`", que e o post-condition que faltava.
+    // `done` is still SUPPRESSED when there was an error (contract H1, pinned by
+    // `test_run_stream_error_status_emits_error_and_suppresses_done`) — `done` keeps meaning
+    // "finished well". What changes is the guarantee: when there was an error and the last event was
+    // not the `error`, a terminal `error` closes the stream. So "the last frame is `done` OR `error`"
+    // always holds, which is the post-condition that was missing.
     if (state.sawError) {
       if (state.lastEventType !== 'error') {
         yield {
           type: 'error',
           code: 'RUN_FAILED',
-          message: 'O turno terminou com erro; veja o evento `error` anterior.',
+          message: 'The turn ended with an error; see the earlier `error` event.',
           retryable: false,
         }
       }
@@ -596,17 +596,18 @@ async function* streamSdkAgent(
  * hands back without re-exporting the full `@theokit/sdk` `Agent` type.
  */
 /**
- * O mínimo que um turno devolve. Estrutural de propósito (ADR-2 do M91).
+ * The minimum a turn returns. Structural on purpose (M91's ADR-2).
  *
- * Re-exportar o tipo do SDK amarraria a assinatura pública desta camada à dele — o oposto do que a
- * fronteira existe para fazer, e a mesma razão pela qual `SdkAgentHandle` já era um alias em vez de um
+ * Re-exporting the SDK's type would tie this layer's public signature to theirs — the opposite of
+ * what the boundary exists to do, and the same reason `SdkAgentHandle` was already an alias rather
+ * than a
  * re-export.
  */
 export interface SdkTurnHandle {
   wait: () => Promise<{ result?: string; usage?: { totalTokens?: number } }>
 }
 
-/** Opções por turno. Aberto por ora — o SDK aceita mais do que a camada precisa declarar. */
+/** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
 export type SdkSendOptions = Record<string, unknown>
 
 export interface SdkAgentHandle {
@@ -614,17 +615,17 @@ export interface SdkAgentHandle {
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.
    *
-   * O `unknown` de retorno custava ao consumidor um módulo inteiro: `agents/lib/goal/runner-facade.ts`,
-   * 38 linhas cujo único trabalho era re-estreitar este retorno para o contrato `send → wait` que o
-   * loop de goal exige. O docstring daquele módulo registra que, antes dele, o chamador escrevia
-   * `as never` — e que **foi sob essa capa que a superfície goal divergiu do agente real por vários
-   * milestones**. A camada sempre soube a forma; ela só não a declarava.
+   * The `unknown` return cost the consumer a whole module: `agents/lib/goal/runner-facade.ts`, 38
+   * lines whose only job was to re-narrow this return into the `send → wait` contract the goal loop
+   * requires. That module's docstring records that, before it, the caller wrote `as never` — and that
+   * **it was under that cover that the goal surface diverged from the real agent for several
+   * milestones**. The layer always knew the shape; it simply did not declare it.
    *
-   * A forma é **assíncrona**: `SDKAgent.send` devolve `Promise<Run>`, e o `GoalLoopAgent` do SDK
-   * declara `send(prompt): Promise<{ wait(): Promise<…> }>`. A primeira tentativa deste milestone
-   * tipou como síncrona e o `tsc` do consumidor não teria pego — o `as never` do facade absorvia a
-   * diferença. É literalmente a divergência que o docstring do facade descrevia, reencontrada ao
-   * tentar removê-lo.
+   * The shape is **asynchronous**: `SDKAgent.send` returns `Promise<Run>`, and the SDK's
+   * `GoalLoopAgent` declares `send(prompt): Promise<{ wait(): Promise<…> }>`. This milestone's first
+   * attempt typed it as synchronous and the consumer's `tsc` would not have caught it — the facade's
+   * `as never` absorbed the difference. It is literally the divergence the facade's docstring
+   * described, met again while trying to remove it.
    */
   send: (msg: string, opts?: SdkSendOptions) => Promise<SdkTurnHandle>
   dispose: () => Promise<void>
@@ -639,14 +640,14 @@ export interface SdkAgentHandle {
  * model / `assembleM8CreateOptions`), so the served agent has identical tools, model, system prompt,
  * skills, and `mcpServers`. Keyed per `sessionId` via `Agent.getOrCreate` (matches the run path).
  *
- * M96 — a superfície DECLARA sua {@link ApprovalPosture} e o factory instala o plugin que a variante
- * exige. Antes, o mapa `compiled.hitl` era compilado e DESCARTADO aqui. Rationale em
+ * M96 — the surface DECLARES its {@link ApprovalPosture} and the factory installs the plugin the
+ * variant requires. Before, the `compiled.hitl` map was compiled and DISCARDED here. Rationale in
  * `./approval-posture.ts`.
  */
 export function toAgentFactory(
-  def: DefinicaoOuThunk,
-  // M74 — o seam que as superfícies do consumidor usam de fato (ACP, loop autônomo, delegação).
-  // M96 — `approvals` é OBRIGATÓRIO: a ausência era o defeito, e um campo opcional o reintroduziria.
+  def: DefinitionOrThunk,
+  // M74 — the seam the consumer's surfaces actually use (ACP, autonomous loop, delegation).
+  // M96 — `approvals` is MANDATORY: absence was the defect, and an optional field would reintroduce it.
   opts: {
     apiKey: string | (() => string | Promise<string>)
     approvals: ApprovalPosture
@@ -654,10 +655,10 @@ export function toAgentFactory(
   },
 ): (sessionId: string) => Promise<SdkAgentHandle> {
   const overrides = opts.overrides ?? {}
-  const projetarPorSessao = resolverProjecao(def, overrides)
+  const projectPerSession = resolveProjection(def, overrides)
   return async (sessionId: string): Promise<SdkAgentHandle> => {
-    // Forma OBJETO: devolve a projeção já pronta. Forma THUNK: projeta agora, para esta sessão.
-    const { compiled, model, reasoningEffort, runContext } = await projetarPorSessao(sessionId)
+    // OBJECT shape: returns the projection already built. THUNK shape: projects now, for this session.
+    const { compiled, model, reasoningEffort, runContext } = await projectPerSession(sessionId)
     const rt = await loadSdkRuntime()
     if (!rt) {
       throw new Error(
@@ -680,7 +681,7 @@ export function toAgentFactory(
     if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
     if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
     const extra = buildExtraCreateOptions(overrides, compiled)
-    aplicarPostura(extra, m8, opts.approvals, compiled.hitl)
+    applyPosture(extra, m8, opts.approvals, compiled.hitl)
     const agent = await rt.Agent.getOrCreate(sessionId, {
       apiKey: await resolverApiKey(opts.apiKey),
       model: buildModelSelection(model, reasoningEffort),

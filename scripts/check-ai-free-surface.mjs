@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The gate behind the `remover-dependencia-ai` goal: installing `theokit` must pull ZERO ai-sdk.
+ * The gate behind the `remove-ai-dependency` goal: installing `theokit` must pull ZERO ai-sdk.
  *
  * Two assertions per publishable package:
  *   1. `ai` appears in neither `dependencies` nor `peerDependencies`.
@@ -63,21 +63,21 @@ export function checkAiFreeSurface(root = process.cwd()) {
     const name = manifest.name
     for (const block of ['dependencies', 'peerDependencies']) {
       if (manifest[block]?.ai !== undefined) {
-        problems.push(`${name}: declara \`ai\` em ${block} (${manifest[block].ai})`)
+        problems.push(`${name}: declares \`ai\` in ${block} (${manifest[block].ai})`)
       }
     }
 
     const files = jsFiles(join(dir, 'dist'))
     if (files.length === 0) {
       problems.push(
-        `${name}: sem \`dist/*.js\` — rode o build. Sem o artefato este gate não mede nada, ` +
-          'e um gate que não mede não deve reportar sucesso.',
+        `${name}: no \`dist/*.js\` — run the build. Without the artifact this gate measures nothing, ` +
+          'and a gate that measures nothing must not report success.',
       )
       continue
     }
     for (const f of files) {
       if (RUNTIME_AI.test(readFileSync(f, 'utf8'))) {
-        problems.push(`${name}: ${f.replace(root + '/', '')} referencia \`ai\` em runtime`)
+        problems.push(`${name}: ${f.replace(root + '/', '')} references \`ai\` at runtime`)
       }
     }
   }
@@ -87,10 +87,10 @@ export function checkAiFreeSurface(root = process.cwd()) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const problems = checkAiFreeSurface()
   if (problems.length > 0) {
-    console.error(`\ncheck-ai-free-surface: ${problems.length} problema(s)\n`)
+    console.error(`\ncheck-ai-free-surface: ${problems.length} problem(s)\n`)
     for (const p of problems) console.error(`  - ${p}`)
     console.error('')
     process.exit(1)
   }
-  console.log('check-ai-free-surface: OK — nenhum pacote publicável carrega `ai`.')
+  console.log('check-ai-free-surface: OK — no publishable package carries `ai`.')
 }

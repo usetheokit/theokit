@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const FIXTURES = path.resolve(import.meta.dirname, '../../fixtures')
 
-describe('Onda 5 — Middleware + Context', () => {
+describe('Wave 5 — Middleware + Context', () => {
   let server: Awaited<ReturnType<typeof startDevServer>>
   let port: number
 
@@ -18,7 +18,7 @@ describe('Onda 5 — Middleware + Context', () => {
     await server?.close()
   }, 15000)
 
-  // Teste 1 — Context disponível em route
+  // Test 1 — context available in a route
   it('ctx.requestId exists in route handler', async () => {
     const res = await fetch(`http://localhost:${port}/api/ctx-test`)
     expect(res.status).toBe(200)
@@ -28,7 +28,7 @@ describe('Onda 5 — Middleware + Context', () => {
     expect(data.requestId.length).toBeGreaterThan(0)
   })
 
-  // Teste 2 — Context disponível em action (T1.3 sub-C: body is devalue-encoded)
+  // Test 2 — context available in an action (T1.3 sub-C: body is devalue-encoded)
   it('ctx.requestId exists in action handler', async () => {
     const res = await fetch(`http://localhost:${port}/api/__actions/ctx-test/testAction`, {
       method: 'POST',
@@ -45,21 +45,21 @@ describe('Onda 5 — Middleware + Context', () => {
     expect(data.value).toBe('hello')
   })
 
-  // Teste 3 — Middleware adds response header
+  // Test 3 — Middleware adds response header
   it('middleware adds X-Custom-Header to response', async () => {
     const res = await fetch(`http://localhost:${port}/api/health`)
     expect(res.status).toBe(200)
     expect(res.headers.get('x-custom-header')).toBe('theo')
   })
 
-  // Teste 4 — Middleware ran before context
+  // Test 4 — Middleware ran before context
   it('middleware ran before context (middlewareRan flag)', async () => {
     const res = await fetch(`http://localhost:${port}/api/ctx-test`)
     const data = await res.json()
     expect(data.middlewareRan).toBe(true)
   })
 
-  // Teste 5 — Execution order: middleware → context → handler
+  // Test 5 — Execution order: middleware → context → handler
   it('order: middleware → context → handler all executed', async () => {
     const res = await fetch(`http://localhost:${port}/api/order-test`)
     const data = await res.json()

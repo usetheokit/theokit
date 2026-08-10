@@ -1,16 +1,16 @@
 /**
  * T1.4 + EC-S4 regression gate (plan: dogfood-fixes-and-coverage-expansion).
  *
- * Validates: `<Page />` from template-default scaffold HIDRATA com
- * `<main>`, `<header>`, `<textarea>` visíveis após mount client-side.
+ * Validates: `<Page />` from the template-default scaffold HYDRATES with
+ * `<main>`, `<header>` and `<textarea>` visible after the client-side mount.
  *
- * Required CI check — substitui dependência exclusiva de Chrome DevTools MCP
- * (que não roda em CI ambient) por Playwright headless deterministico.
+ * A required CI check — replaces the exclusive dependency on Chrome DevTools MCP
+ * (which does not run in ambient CI) with deterministic headless Playwright.
  *
- * Reusa `fixtures/template-default` (workspace local; rápido). Versão npm-published
- * é spec separado opt-in (`workflow_dispatch`).
+ * Reuses `fixtures/template-default` (local workspace; fast). The npm-published version
+ * is a separate opt-in spec (`workflow_dispatch`).
  *
- * Acceptance signal: zero hydration errors no console + DOM contém header/main/textarea.
+ * Acceptance signal: zero hydration errors in the console + the DOM contains header/main/textarea.
  */
 import { test, expect } from '@playwright/test'
 
@@ -22,15 +22,15 @@ test.describe('Scaffold page hydration (EC-S4 regression gate)', () => {
     await page.goto('/', { waitUntil: 'networkidle' })
 
     // When: hydration completes (client React mounts AgentComposer + Timeline),
-    // Then: interactive elements DEVEM aparecer.
-    // Timeout 30s — Vite optimize-deps cold start pode levar 15s+ em CI.
+    // Then: the interactive elements MUST appear.
+    // 30s timeout — a Vite optimize-deps cold start can take 15s+ in CI.
     await expect(
       page.locator('textarea'),
       'textarea (AgentComposer input) must hydrate',
     ).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('header'), '<header> must be in DOM').toBeVisible()
     await expect(page.locator('main'), '<main> must be in DOM').toBeVisible()
-    // footer não existe no layout atual — composer fica direto em <main>. Removido check.
+    // there is no footer in the current layout — the composer sits directly in <main>. Check removed.
   })
 
   test('Page brand "Theo Agent" appears in DOM (not empty shell)', async ({ page }) => {
@@ -39,7 +39,8 @@ test.describe('Scaffold page hydration (EC-S4 regression gate)', () => {
     // Wait for hydration completion via textarea visibility (chat composer mount).
     await expect(page.locator('textarea')).toBeVisible({ timeout: 30_000 })
     // When: brand renders no DOM,
-    // Then: "Theo Agent" presente no body innerText (independente de visibility do Tooltip-wrapped element).
+    // Then: "Theo Agent" is present in the body innerText (regardless of the Tooltip-wrapped
+    // element's visibility).
     const innerText = await page.evaluate(() => document.body.innerText)
     expect(innerText).toContain('Theo Agent')
   })
@@ -73,7 +74,7 @@ test.describe('Scaffold page hydration (EC-S4 regression gate)', () => {
     await expect(page.locator('textarea')).toBeVisible({ timeout: 30_000 })
 
     // When: query DOM extent,
-    // Then: body deve ter ≥1 interactive element (não só toaster region como em EC-S4).
+    // Then: the body must have ≥1 interactive element (not only the toaster region, as in EC-S4).
     const interactiveCount = await page.evaluate(() => {
       return document.querySelectorAll('textarea, button, input, select, a[href]').length
     })

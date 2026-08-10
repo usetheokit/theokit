@@ -8,7 +8,7 @@ type UIMessageChunk = WireChunk
  * Read a TheoKit agent endpoint's `UIMessageStream` SSE `Response` into reconstructed assistant
  * messages.
  *
- * ## What changed, and why (plan `remover-dependencia-ai`)
+ * ## What changed, and why (plan `remove-ai-dependency`)
  *
  * This file used to be the ONLY runtime use of `ai` in the whole published surface — two
  * `await import('ai')` calls, measured in `@theokit/agents@7.0.0/dist/chunk-FCGL2PEC.js`. It now

@@ -6,10 +6,11 @@
  * upgrade handler to `server.httpServer`. Lazy-imports the `ws` package so
  * non-WS apps don't pay the cost.
  *
- * **#95:** recebe o `serverDir` JA RESOLVIDO, em vez de derivar `resolve(projectRoot, 'server')`.
- * O #95 foi corrigido no route-serving, no typed-client, nas actions e no HMR, e este ponto ficou
- * para tras — num projeto com `serverDir: 'core'` as rotas HTTP passavam a ser encontradas e as de
- * WebSocket nao. Uma correcao parcial e pior que a falha inteira: faz a opcao parecer que funciona.
+ * **#95:** it receives the ALREADY RESOLVED `serverDir`, instead of deriving
+ * `resolve(projectRoot, 'server')`. #95 was fixed in route-serving, in the typed client, in actions
+ * and in HMR, and this point was left behind — in a project with `serverDir: 'core'` the HTTP routes
+ * started being found and the WebSocket ones did not. A partial fix is worse than the whole failure:
+ * it makes the option look like it works.
  *
  * **EC-1 (architecture-medium-deferrals plan v1.1 MUST FIX):** must tolerate
  * `server.httpServer === null` (Vite middleware mode — embed in Express/etc).
@@ -25,9 +26,9 @@ import type { Duplex } from 'node:stream'
 
 import type { ViteDevServer } from 'vite'
 
-// Import direto do scanner, nao do barrel `internal-api.js`: o barrel arrasta o grafo inteiro do
-// servidor (csrf, actions, controllers) para dentro do plugin de dev, que precisa de UMA funcao.
-// Alem do custo, era o que impedia esta unidade de ser exercitada isoladamente.
+// A direct import of the scanner, not of the `internal-api.js` barrel: the barrel drags the entire
+// server graph (csrf, actions, controllers) into the dev plugin, which needs ONE function. Beyond the
+// cost, it was what stopped this unit from being exercised in isolation.
 import { scanWebSocketRoutes } from '../server/scan/ws-scan.js'
 
 interface WsHandler {
