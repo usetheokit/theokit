@@ -1,15 +1,19 @@
 import { render } from 'ink'
+import { loadProjectEnv } from '@theokit/sdk'
 
 import { App } from './App.js'
 
-// Load .env if present (Node native — no dependency). Provider key: OPENROUTER_API_KEY or ANTHROPIC_API_KEY.
-if (typeof process.loadEnvFile === 'function') {
-  try {
-    process.loadEnvFile()
-  } catch {
-    // no .env on disk — rely on the ambient environment
-  }
-}
+// Load a project `.env` if present, WITHOUT letting it move the credential store.
+//
+// A repository's `.env` is untrusted input: it arrives with the clone, before any trust prompt, and
+// locating the credential store is one of the first things a build does. An unguarded loader lets a
+// cloned repo set `THEOKIT_AUTH_HOME=/tmp/attacker-store` and redirect where credentials are read
+// and written — silently, because nothing fails when it works.
+//
+// `loadProjectEnv` applies everything else and refuses the keys that decide WHERE the framework
+// looks (`SOVEREIGN_ENV_KEYS`). Those stay the operator's, set in the shell, never in a file that
+// ships with a repository.
+loadProjectEnv()
 
 // `exitOnCtrlC: false` so the App owns Ctrl+C — a single press cancels a running turn, a double press
 // quits (the Claude Code affordance). Without this, Ink would hard-exit on the first Ctrl+C.
