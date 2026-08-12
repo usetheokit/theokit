@@ -492,7 +492,7 @@ substitutos tem. Mas isso é decisão de compra, não de CI — e até que seja 
 
 ---
 
-## B-M67-17 — `bundle-budget.test.ts` falha só em CI: causa capturada, correção pendente de evidência
+## ~~B-M67-17~~ — CORRIGIDO — `bundle-budget.test.ts` falhava só em CI: era resolução de bin, não o build
 
 **Encontrado em:** medição do #212 depois das cinco correções de gate, 2026-08-12 · **Estado:**
 instrumentado; causa ainda desconhecida — de propósito, não por desistência.
@@ -532,9 +532,23 @@ fallback da mensagem nomeava. A fixture **é** membro do workspace (`pnpm-worksp
 não. O prefixo `RECURSIVE_EXEC` sugere que o `pnpm exec` entrou em modo recursivo em vez de resolver
 o bin local.
 
-**Próximo passo, agora dirigido por evidência e não por palpite:** confirmar no runner se o
-`.bin/theokit` da fixture existe depois do `pnpm install --frozen-lockfile`, e — se existir —
-invocá-lo por caminho direto em vez de `pnpm exec`, que é o que introduziu a resolução recursiva.
-Continua sem correção **de propósito**: a diferença entre as duas máquinas ainda não está provada, e
-só o runner pode prová-la.
+**Hipóteses eliminadas antes de mexer**, cada uma barata:
+
+| Hipótese | Verificação | Resultado |
+|---|---|---|
+| lockfile fora de sincronia derruba o install inteiro | `pnpm install --frozen-lockfile` local | **em dia** — "Already up to date" |
+| versão diferente de pnpm entre local e CI | `packageManager` vs `pnpm --version` | **idêntica** — 9.15.0 nos dois |
+| o shim não existe na fixture | `ls node_modules/.bin/theokit` | **existe**, criado pelo install |
+
+Sobrou o que o próprio erro nomeia: a **resolução**. `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL` é do modo
+recursivo do `pnpm exec` — ele foi procurar o bin em vez de achá-lo onde estava.
+
+**Correção:** invocar a CLI pelo **caminho resolvido** (`packages/theo/dist/cli/index.js`, o mesmo
+que o campo `bin` do pacote aponta), com `node`, em vez de pedir ao gerenciador de pacotes que a
+encontre. O `pnpm exec` — e o `npx` equivalente no `check-bundle-budget.sh`, corrigido junto — é uma
+indireção cujo único trabalho é localizar um binário cujo caminho este repositório já conhece.
+Removê-la elimina o modo de falha **por construção**, não por palpite.
+
+A única possibilidade restante (a CLI não estar buildada) virou uma pré-condição explícita com
+mensagem acionável, em vez de um `Command not found` que não diz o que fazer.
 
