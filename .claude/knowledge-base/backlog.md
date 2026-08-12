@@ -108,10 +108,20 @@ fazê-la de passagem. O experimento de medição está preservado em
 `git -C ../theokit-studio stash list` → `stash@{0}` (só o `package.json`; a árvore de lá está limpa e
 na baseline verde).
 
-**Próximo passo:** abrir o milestone de migração no `theokit-studio` (com esta medição como ponto de
-partida), migrar os 15, e só então republicar. Enquanto isso, o peer opcional deste repo continua
-declarando `^0.1.0`, que é a versão que de fato existe e funciona contra o agents 0.39 — obsoleta,
-porém coerente.
+**Próximo passo — e por que ele não é deste repositório.** A migração é um milestone do
+`theokit-studio`: ciclo, CHANGELOG e release próprios, 15 testes a corrigir através de sete majors,
+com um endpoint que já devolve `422` onde esperava `200`. Fazê-la de passagem, no meio de um ciclo de
+outro repo, seria exatamente o "caminho curto" que o processo proíbe — e o pior lugar para isso é uma
+migração cujo contrato mudou de verdade.
+
+**Estado desta entrada:** medida, documentada, e **parada de propósito**. Uma tentativa de reabrir o
+experimento nesta sessão foi bloqueada, citando esta mesma decisão — o que é o comportamento correto.
+Ela sai do backlog quando virar milestone lá, não antes.
+
+**Consequência que este repo herda enquanto isso:** o `@theokit/studio@0.1.0` arrasta
+`@theokit/agents@1.0.0` e `@theokit/http@1.0.0` publicados para a árvore de produção daqui. É a
+origem de uma das três violações de licença do #213, e aquela **não tem conserto por republish** —
+tarballs npm são imutáveis. A linha só some quando o studio parar de puxar a cópia antiga.
 
 ---
 
