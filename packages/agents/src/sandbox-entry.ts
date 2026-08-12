@@ -41,6 +41,10 @@ export {
   SandboxSecurityError,
   seccompPathForArch,
   wrapCommandForSandbox,
+  // M67 — surfaced by the 4.49 floor bump. It states which roots a posture actually permits writing
+  // to; a consumer deriving that by hand re-derives the confinement policy, which is how an
+  // unconfined write becomes representable by accident.
+  writableRootsFor,
 } from '@theokit/sdk/sandbox'
 
 export type {

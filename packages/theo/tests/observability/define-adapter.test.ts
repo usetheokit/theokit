@@ -26,9 +26,13 @@ describe('T30.6 — defineObservabilityAdapter() + E2E', () => {
     const adapter = defineObservabilityAdapter({
       name: 'test',
       startSpan: () => ({ setAttribute() {}, setStatus() {}, end() {} }),
-      counter: () => { counterCalled = true },
+      counter: () => {
+        counterCalled = true
+      },
       histogram: () => {},
-      log: (_level, msg) => { logMessage = msg },
+      log: (_level, msg) => {
+        logMessage = msg
+      },
       flush: async () => {},
       shutdown: async () => {},
     })
@@ -50,7 +54,9 @@ describe('T30.6 — defineObservabilityAdapter() + E2E', () => {
         return {
           setAttribute() {},
           setStatus() {},
-          end() { events.push('end') },
+          end() {
+            events.push('end')
+          },
         }
       },
       counter: (name) => events.push(`counter:${name}`),
@@ -84,7 +90,9 @@ describe('T30.6 — defineObservabilityAdapter() + E2E', () => {
         return {
           setAttribute: (k) => events.push(`attr:${k}`),
           setStatus: (s) => events.push(`status:${s}`),
-          end() { events.push('end') },
+          end() {
+            events.push('end')
+          },
         }
       },
       counter: (name) => events.push(`counter:${name}`),

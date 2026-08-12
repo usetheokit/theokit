@@ -1,5 +1,34 @@
 # @theokit/agents
 
+## 7.6.0
+
+### Minor Changes
+
+- M67 — the config/trust/wiring family crosses the layered boundary, and the `@theokit/sdk` floor
+  rises to `^4.49.0` to make that possible.
+
+  **Installation-contract change.** `theokit` and `@theokit/presenter` publish `@theokit/sdk` as a
+  `peerDependency`; raising the floor means a consumer pinned below 4.49.0 will now fail peer
+  resolution. Sized as a minor because the API is additive — nothing removed or renamed — but the
+  peer floor is a real break at install time and is named here rather than left to be discovered.
+
+  Six values (`foldLayers`, `verifyLayerOrdering`, `applySecurityFloor`, `resolveTrustPosture`,
+  `auditEnvReachability`, `recordWiring`) and two types (`WiredEntity`, `ToolResultContentBlock`)
+  now cross. Four more arrived with the floor: `classifySessionArtifact` + `SessionArtifact`,
+  `atomicWriteTempTarget`, `writableRootsFor`, `assertSecureModes`. Plus the five root-bar typed
+  error classes the `/errors` subpath never reached: `LayerOrderError`, `ToolError`,
+  `GenerateObjectError`, `StreamObjectError`, `UngatedCapabilityError`.
+
+  M68 (in progress) additionally crosses the trust vocabulary — `TrustLevel`, `TrustSource`,
+  `TrustPosture`, `TrustPostureInput`.
+
+  **Why 7.6.0 and not 7.5.0.** The first attempt at this release computed 7.5.0, which was already
+  published on 2026-08-10 with different content. `workspace` had never received the back-merge from
+  `main` after that release, so two already-consumed changeset files were still sitting there and
+  changesets recomputed them on top of a stale base. Publishing would have put a different artifact
+  under a version that already exists.
+
+
 ## 7.5.0
 
 ### Minor Changes

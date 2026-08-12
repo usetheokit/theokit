@@ -15,7 +15,8 @@ const SEPARATOR = '/'
 
 /** Derive a deterministic conversation id from a (resource, thread) pair. Fails fast on empty input. */
 export function deriveConversationId(resource: string, thread: string): string {
-  if (!resource) throw new Error('[@theokit/agents] deriveConversationId: resource must be non-empty')
+  if (!resource)
+    throw new Error('[@theokit/agents] deriveConversationId: resource must be non-empty')
   if (!thread) throw new Error('[@theokit/agents] deriveConversationId: thread must be non-empty')
   return `${encodeURIComponent(resource)}${SEPARATOR}${encodeURIComponent(thread)}`
 }

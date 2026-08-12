@@ -7,3 +7,4 @@
 * [ADR 0004: opening the LoopStrategy seam](0004-loop-strategy-seam.md) - Making the agent runner's stop criterion injectable, and moving the termination ceiling into the runner.
 * [ADR 0005: the authoring surface is 100% classes](0005-sugar-to-oo.md) - Converting the free factory functions into classes, and the ADR 0001 premise that reversal overturns.
 * [ADR 0006: unifying ConfigurationError on the SDK class](0006-configuration-error-unification.md) - Why two ConfigurationError classes silently lost a throw path, and how the re-export fixed instanceof across the boundary.
+* [ADR 0007: lifecycle belongs to the product, the fold does not](0007-lifecycle-belongs-to-the-product-the-fold-does-not.md) - Why the presenter does not grow a Codex event set, and what IS framework-shaped in the gap.
