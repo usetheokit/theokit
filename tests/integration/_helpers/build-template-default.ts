@@ -95,7 +95,11 @@ export const buildTemplateDefaultOnce = (): void => {
     })
   } catch (cause) {
     const { stdout, stderr } = cause as { stdout?: Buffer | string; stderr?: Buffer | string }
-    const output = [String(stdout ?? ''), String(stderr ?? '')].join('\n').trim()
+    // `execSync` puts `undefined` on the stream it did not capture, and `String(undefined)` is the
+    // literal text "undefined" — which then appears in the report as if the build had said it.
+    const asText = (stream: Buffer | string | undefined): string =>
+      stream === undefined ? '' : String(stream)
+    const output = [asText(stdout), asText(stderr)].join('\n').trim()
     throw new Error(
       `\`pnpm exec theokit build\` failed in ${FIXTURE}.\n\n` +
         (output.length > 0

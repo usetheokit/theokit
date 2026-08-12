@@ -492,7 +492,7 @@ substitutos tem. Mas isso é decisão de compra, não de CI — e até que seja 
 
 ---
 
-## B-M67-17 — `bundle-budget.test.ts` falha só em CI, e a evidência era descartada
+## B-M67-17 — `bundle-budget.test.ts` falha só em CI: causa capturada, correção pendente de evidência
 
 **Encontrado em:** medição do #212 depois das cinco correções de gate, 2026-08-12 · **Estado:**
 instrumentado; causa ainda desconhecida — de propósito, não por desistência.
@@ -515,8 +515,26 @@ limpo no caminho feliz e não pensou no caminho infeliz.
 pista quando não há saída nenhuma (o `theokit` bin vem do link de workspace, então `packages/theo`
 precisa estar buildado).
 
-**O que NÃO foi feito, e por quê:** adivinhar a causa. Ela não reproduz nesta máquina, e a diferença
-entre local e CI pode ser bin resolution, ordem de build ou o `THEOKIT_SKIP_NATIVE_PREFLIGHT`.
-Inventar uma correção plausível para um defeito que não se reproduz é o oposto de consertar — o
-próximo run de CI agora diz o que aconteceu, e aí a correção é dirigida por evidência.
+**O que NÃO foi feito, e por quê:** adivinhar a causa. Ela não reproduz nesta máquina, e inventar
+uma correção plausível para um defeito que não se reproduz é o oposto de consertar.
+
+**A instrumentação funcionou, e a causa apareceu no run seguinte:**
+
+```
+Error: `pnpm exec theokit build` failed in /home/runner/work/theokit/theokit/fixtures/template-default.
+The build said:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "theokit" not found
+```
+
+O bin `theokit` não resolve dentro da fixture no runner — exatamente a hipótese que o próprio
+fallback da mensagem nomeava. A fixture **é** membro do workspace (`pnpm-workspace.yaml`) e declara
+`theokit: workspace:*`, então localmente o `node_modules/.bin/theokit` existe e o build passa; no CI
+não. O prefixo `RECURSIVE_EXEC` sugere que o `pnpm exec` entrou em modo recursivo em vez de resolver
+o bin local.
+
+**Próximo passo, agora dirigido por evidência e não por palpite:** confirmar no runner se o
+`.bin/theokit` da fixture existe depois do `pnpm install --frozen-lockfile`, e — se existir —
+invocá-lo por caminho direto em vez de `pnpm exec`, que é o que introduziu a resolução recursiva.
+Continua sem correção **de propósito**: a diferença entre as duas máquinas ainda não está provada, e
+só o runner pode prová-la.
 
