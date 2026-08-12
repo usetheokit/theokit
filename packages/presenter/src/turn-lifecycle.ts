@@ -110,6 +110,11 @@ export function foldTurnLifecycle<E>(
         // emitted here plus a failed close is the double-report this fold exists to prevent.
         failure ??= chunk.message
         return []
+      default:
+        // A chunk shape this fold does not model is not an error — the content stream carries more
+        // than a lifecycle needs. What WOULD be an error is falling off the end of the switch: the
+        // function would return `undefined` and the caller would spread it.
+        return []
     }
   }
 
