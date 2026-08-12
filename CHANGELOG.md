@@ -40,6 +40,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
+### Added
+- **Um preflight que recusa um release que a credencial não consegue terminar (backlog B-M67-08).** O release do M67 rodou inteiro — build, versão, tag, GitHub release — e morreu no último passo com `E404 … PUT`. Nada foi publicado, enquanto o `main` ficou com tag e CHANGELOG afirmando três versões novas.
+
+  **A causa era a forma da credencial, não a autoridade dela.** O token vinha como variável de ambiente `npm_config_//registry.npmjs.org/:_authToken=…`: o npm honra essa forma em **leituras** — `whoami` e `owner ls` funcionavam — e não a aplica no caminho de **escrita**. O `PUT` saía anônimo, e o registry responde escrita não autenticada com **404 em vez de 403**, para não vazar se o pacote existe. É o mesmo status para "você não pode" e "você não é ninguém", e foi exatamente o que tornou o diagnóstico errado tão fácil.
+
+  O gate verifica o que de fato falhou: se a credencial está no caminho de escrita. Ele **não** tenta inferir autoridade — a primeira versão tentava, via `npm access list packages <nome>`, um endpoint de org enquanto `usetheodev` é usuário, e devolvia 403 para qualquer token. Um gate cujo oráculo não distingue a falha que ele filtra produz vereditos confiantes e errados.
+
 ### Fixed
 - **Um guarda afirmava sobre um arquivo que o `.gitignore` exclui (backlog B-M67-18).** `cli-env-wiring.test.ts` verificava que a fixture `zero-config-env` tem um `.env` com `OPENROUTER_API_KEY` — mas esse `.env` é gitignored, e corretamente: um repositório que começa a commitar `.env` perde o hábito que mantém os reais fora. O guarda passava nesta máquina, onde uma execução anterior deixara o arquivo, e falhava em **todo checkout limpo**. Um guarda que depende de estado não rastreado não verifica o repositório, verifica a máquina.
 
