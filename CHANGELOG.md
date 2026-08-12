@@ -41,6 +41,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
 ### Fixed
+- **O build da fixture passa a invocar a CLI pelo caminho resolvido, em vez de pedir ao gerenciador de pacotes que a encontre (backlog B-M67-17).** `pnpm exec theokit build` falhou em CI por três runs seguidos com `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "theokit" not found`, enquanto passava localmente **com o mesmo pnpm** (9.15.0, fixado por `packageManager`) e o mesmo lockfile — verificado, inclusive que o `--frozen-lockfile` está em dia. O shim existe na fixture nos dois lados, então a diferença nunca foi o artefato: era a **resolução**, e o erro a nomeia.
+
+  `pnpm exec` (e o `npx` equivalente no `check-bundle-budget.sh`) é uma indireção cujo único trabalho é localizar um binário cujo caminho este repositório já conhece. Removê-la elimina o modo de falha **por construção**, não por palpite. A única possibilidade que resta — a CLI não estar buildada — virou uma frase acionável em vez de um `Command not found`.
+
+### Fixed
 - **O helper que builda a fixture parou de descartar a explicação do build (backlog B-M67-17).** `buildTemplateDefaultOnce()` roda `pnpm exec theokit build` com `stdio: 'pipe'` e não capturava nada no erro, então uma falha chegava ao log como `Error: Command failed: pnpm exec theokit build` e mais nada. O teste falha em CI e passa localmente, e por três runs consecutivos a única informação disponível era que tinha falhado.
 
   É o mesmo defeito de oráculo do `check-bundle-budget.sh` e do `pnpm-11-compat`: o gate joga fora a evidência e reporta o sintoma. Passa a re-lançar com `stdout`/`stderr` anexados. A causa continua desconhecida **de propósito** — ela não reproduz aqui, e inventar uma correção plausível para um defeito que não se reproduz é o oposto de consertar.

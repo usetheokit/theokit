@@ -9,7 +9,7 @@
  * `existsSync` and `readFileSync` because two `pnpm exec theokit build`
  * processes were deleting `.theokit/` simultaneously.
  */
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -23,6 +23,12 @@ import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const ROOT = resolve(__dirname, '../../..')
+
+/**
+ * The framework CLI's real entry, from `packages/theo`'s own `bin` field. Resolved once here so the
+ * build never depends on a shim that a package manager has to find for it.
+ */
+const CLI_ENTRY = resolve(ROOT, 'packages/theo/dist/cli/index.js')
 const FIXTURE = resolve(ROOT, 'fixtures/template-default')
 const ASSETS = resolve(FIXTURE, '.theokit/client/assets')
 const LOCK_DIR = resolve(tmpdir(), 'theokit-test-locks')
@@ -78,8 +84,28 @@ export const buildTemplateDefaultOnce = (): void => {
     // whose failure carries no evidence is a test that gets re-run and then ignored.
     //
     // The catch below re-throws with the captured output attached. Backlog B-M67-17.
-    // eslint-disable-next-line sonarjs/no-os-command-from-path -- developer-local test running the framework's own CLI
-    execSync('pnpm exec theokit build', {
+    // Invoked by RESOLVED PATH, not through `pnpm exec`.
+    //
+    // `pnpm exec theokit build` failed on CI for three consecutive runs with
+    // `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "theokit" not found`, while passing locally on the
+    // same pnpm (9.15.0, pinned by `packageManager`) with the same lockfile. The bin shim exists in
+    // the fixture either way, so the difference was never the artifact — it was the RESOLUTION, and
+    // the error names it: `pnpm exec` went recursive instead of finding the local bin.
+    //
+    // `pnpm exec` is an indirection whose only job is to locate a binary we already know the path
+    // of. Removing it removes the failure mode by construction rather than by guess, and the
+    // precondition below turns the remaining possibility — the CLI simply not built yet — into a
+    // sentence instead of a `Command not found`. Backlog B-M67-17.
+    if (!existsSync(CLI_ENTRY)) {
+      throw new Error(
+        `the theokit CLI is not built at ${CLI_ENTRY}. Run \`pnpm --filter theokit build\` (or ` +
+          `\`pnpm --filter "./packages/*" build\`) before the tests that build the fixture.`,
+      )
+    }
+    // `execFileSync` with an argv array: no shell, so the absolute path cannot be re-split on a
+    // space and there is no interpolation to get wrong. `process.execPath` is the running Node
+    // binary — not a PATH lookup, so the rule about PATH does not apply here at all.
+    execFileSync(process.execPath, [CLI_ENTRY, 'build'], {
       cwd: FIXTURE,
       stdio: 'pipe',
       env: {
@@ -101,11 +127,10 @@ export const buildTemplateDefaultOnce = (): void => {
       stream === undefined ? '' : String(stream)
     const output = [asText(stdout), asText(stderr)].join('\n').trim()
     throw new Error(
-      `\`pnpm exec theokit build\` failed in ${FIXTURE}.\n\n` +
+      `the theokit CLI build failed in ${FIXTURE}.\n\n` +
         (output.length > 0
           ? `The build said:\n${output.slice(-4000)}`
-          : 'The build produced no output at all — check that the `theokit` bin resolves in the ' +
-            'fixture (it comes from the workspace link, so `packages/theo` must be built first).'),
+          : 'The build produced no output at all.'),
       { cause },
     )
   } finally {
