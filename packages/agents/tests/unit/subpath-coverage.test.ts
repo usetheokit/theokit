@@ -30,7 +30,7 @@
  */
 import { createRequire } from 'node:module'
 
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 const require_ = createRequire(import.meta.url)
 
@@ -357,10 +357,50 @@ describe('M78 T2.1 — subpath coverage policy', () => {
     (e): e is [string, Inside] => e[1].verdict === 'in' && e[1].symbols.length > 0,
   )
 
-  it.each(entries)('test_the_symbols_of_%s_CROSS_the_layer', async (subpath, decision) => {
+  /**
+   * Módulos resolvidos UMA vez, antes dos casos.
+   *
+   * Cada `it.each` fazia o seu próprio `await import(...)`, e o primeiro a rodar pagava o
+   * carregamento do grafo inteiro do barrel — medido em mais de 80 s de `collect` nesta máquina —
+   * correndo contra o timeout de 5 s do vitest. O teste passava ou falhava conforme a ordem e a carga
+   * da máquina, que é a definição de flaky (`.claude/rules/testing.md` § 3: teste flaky é bug,
+   * corrigir ou remover, não conviver).
+   *
+   * Elevar o timeout esconderia o sintoma. O custo é de import, não de asserção — pagá-lo uma vez no
+   * `beforeAll` remove a corrida em vez de aumentar a pista. Backlog B-M67-04.
+   */
+  const loaded = new Map<string, Record<string, unknown>>()
+
+  beforeAll(async () => {
+    const specifiers = new Set<string>()
+    for (const [, decision] of Object.entries(DECISIONS)) {
+      if (decision.verdict === 'in') specifiers.add(decision.via)
+    }
+    for (const [subpath, decision] of Object.entries(DECISIONS)) {
+      if (decision.verdict === 'in' && decision.coverage === 'total') {
+        specifiers.add(`@theokit/sdk${subpath.slice(1)}`)
+      }
+    }
+    await Promise.all(
+      [...specifiers].map(async (specifier) => {
+        loaded.set(specifier, (await import(specifier)) as Record<string, unknown>)
+      }),
+    )
+  })
+
+  /** Lê do cache. Falha alto se o `beforeAll` não cobriu o especificador — nunca importa tarde. */
+  const moduleOf = (specifier: string): Record<string, unknown> => {
+    const mod = loaded.get(specifier)
+    if (mod === undefined) {
+      throw new Error(`\`${specifier}\` was not pre-loaded; the beforeAll specifier set is stale`)
+    }
+    return mod
+  }
+
+  it.each(entries)('test_the_symbols_of_%s_CROSS_the_layer', (subpath, decision) => {
     // The `in` is VERIFIED, not trusted. A decision saying "in" for a subpath that does not cross is
     // worse than no decision: it documents coverage that does not exist.
-    const layer = (await import(decision.via)) as Record<string, unknown>
+    const layer = moduleOf(decision.via)
     for (const name of decision.symbols) {
       expect(
         layer[name],
@@ -373,12 +413,12 @@ describe('M78 T2.1 — subpath coverage policy', () => {
     (e): e is [string, Inside] => e[1].verdict === 'in' && e[1].coverage === 'total',
   )
 
-  it.each(totals)('test_%s_crosses_ENTIRELY_and_not_by_sample', async (subpath, decision) => {
+  it.each(totals)('test_%s_crosses_ENTIRELY_and_not_by_sample', (subpath, decision) => {
     // The test that exists because of a real defect: the first version only sampled symbols, and
     // `RateLimitError` was left out of the re-export with nothing flagging it — the OAuth refresh
     // needed it to recognize a 429. Sampling proves SOMETHING crosses, not that the DOMAIN crosses.
-    const layer = (await import(decision.via)) as Record<string, unknown>
-    const sdk = (await import(`@theokit/sdk${subpath.slice(1)}`)) as Record<string, unknown>
+    const layer = moduleOf(decision.via)
+    const sdk = moduleOf(`@theokit/sdk${subpath.slice(1)}`)
 
     const missing = Object.keys(sdk).filter(
       (name) => layer[name] === undefined && decision.gaps?.[name] === undefined,
