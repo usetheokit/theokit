@@ -120,60 +120,82 @@ const { text, source } = readEntry()
 
 /** Names exported by the barrel — covers `export { a, b }` and `export type { T }`. */
 const symbols = new Set()
-for (const block of text.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
-  for (const raw of block[1].split(',')) {
-    // The PUBLIC name is the one AFTER the `as` — that is what the consumer imports. The first
-    // version took `[0]` (the source name), so a symbol exported under an alias escaped the gate
-    // entirely. Found by mutation: adding
-    // `export { LinuxSandbox as NewSymbolWithNoDecision }` did NOT make the gate fail.
-    //
-    // Tokenize instead of `split(/\s+as\s+/)`: that pattern has two greedy quantifiers around a
-    // literal and the linter marks it as super-linear (ReDoS). The shape is `[Name]` or
-    // `[Source, "as", Public]`, so the last token is already the answer — with no backtracking.
-    const tokens = raw
-      .replace(/\btype\b/, '')
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-    const name = tokens.at(-1) ?? ''
-    if (name && /^[A-Za-z_$][\w$]*$/.test(name)) symbols.add(name)
+
+// B-102 — importable without executing. The body below runs the whole gate; at the top level it ran
+// on import, which makes any test of one helper run the gate and exit the process. `import.meta.url`
+// appears elsewhere in this file for PATH RESOLUTION, which is why a grep for it reported this
+// script as guarded when it was not — the property is what happens on import, not what it mentions.
+/**
+ * The public names this export block introduces.
+ *
+ * Extracted from `main` when wrapping the body in a guard (B-102) pushed its cognitive complexity
+ * to 17 against a limit of 15. The nesting is the argument for the split, not the number: this loop
+ * answers one question — which names cross the boundary — and the rest of `main` answers another.
+ */
+function collectExportedSymbols() {
+  for (const block of text.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
+    for (const raw of block[1].split(',')) {
+      // The PUBLIC name is the one AFTER the `as` — that is what the consumer imports. The first
+      // version took `[0]` (the source name), so a symbol exported under an alias escaped the gate
+      // entirely. Found by mutation: adding
+      // `export { LinuxSandbox as NewSymbolWithNoDecision }` did NOT make the gate fail.
+      //
+      // Tokenize instead of `split(/\s+as\s+/)`: that pattern has two greedy quantifiers around a
+      // literal and the linter marks it as super-linear (ReDoS). The shape is `[Name]` or
+      // `[Source, "as", Public]`, so the last token is already the answer — with no backtracking.
+      const tokens = raw
+        .replace(/\btype\b/, '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+      const name = tokens.at(-1) ?? ''
+      if (name && /^[A-Za-z_$][\w$]*$/.test(name)) symbols.add(name)
+    }
   }
 }
 
-const failures = []
+export function main() {
+  collectExportedSymbols()
 
-if (symbols.size < SYMBOL_FLOOR) {
-  failures.push(
-    `ANTI-VACUITY FLOOR: the scan found ${symbols.size} symbols in ${source}, below the floor of ` +
-      `${SYMBOL_FLOOR}. "No divergences" over an empty list is true by absence of reading, not by ` +
-      `parity. Fix the scan before trusting the result.`,
+  const failures = []
+
+  if (symbols.size < SYMBOL_FLOOR) {
+    failures.push(
+      `ANTI-VACUITY FLOOR: the scan found ${symbols.size} symbols in ${source}, below the floor of ` +
+        `${SYMBOL_FLOOR}. "No divergences" over an empty list is true by absence of reading, not by ` +
+        `parity. Fix the scan before trusting the result.`,
+    )
+  }
+
+  for (const name of symbols) {
+    if (!(name in DECISIONS)) {
+      failures.push(
+        `NO DECISION: "${name}" is exported by ${source} and crosses @theokit/agents/sandbox, but has no ` +
+          `entry in DECISIONS. Add a line saying WHY it is public.`,
+      )
+    }
+  }
+
+  for (const name of Object.keys(DECISIONS)) {
+    if (!symbols.has(name)) {
+      failures.push(
+        `ORPHAN DECISION: "${name}" has a written decision but is NO LONGER exported by the SDK. Either ` +
+          `the symbol was removed (and the layer broke silently), or the decision is stale.`,
+      )
+    }
+  }
+
+  if (failures.length > 0) {
+    console.error(`\ncheck-sandbox-parity: ${failures.length} problem(s)\n`)
+    for (const f of failures) console.error(`  - ${f}\n`)
+    process.exit(1)
+  }
+
+  console.log(
+    `check-sandbox-parity: OK — ${symbols.size} symbols, all with a written decision (source: ${source}).`,
   )
 }
 
-for (const name of symbols) {
-  if (!(name in DECISIONS)) {
-    failures.push(
-      `NO DECISION: "${name}" is exported by ${source} and crosses @theokit/agents/sandbox, but has no ` +
-        `entry in DECISIONS. Add a line saying WHY it is public.`,
-    )
-  }
+if (process.argv[1]?.endsWith('check-sandbox-parity.mjs')) {
+  main()
 }
-
-for (const name of Object.keys(DECISIONS)) {
-  if (!symbols.has(name)) {
-    failures.push(
-      `ORPHAN DECISION: "${name}" has a written decision but is NO LONGER exported by the SDK. Either ` +
-        `the symbol was removed (and the layer broke silently), or the decision is stale.`,
-    )
-  }
-}
-
-if (failures.length > 0) {
-  console.error(`\ncheck-sandbox-parity: ${failures.length} problem(s)\n`)
-  for (const f of failures) console.error(`  - ${f}\n`)
-  process.exit(1)
-}
-
-console.log(
-  `check-sandbox-parity: OK — ${symbols.size} symbols, all with a written decision (source: ${source}).`,
-)

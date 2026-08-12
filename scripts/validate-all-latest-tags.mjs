@@ -18,7 +18,7 @@
  * @usetheo/ui@latest=0.1.0 while 0.12.0 was available).
  * Replaces scripts/validate-ui-latest-tag.mjs (which covered only 1 pkg).
  *
- * EC-2 (v1.1) — workflow caller distingue exit 1 (hard drift) vs exit 2
+ * EC-2 (v1.1) — workflow caller distinguishes exit 1 (hard drift) vs exit 2
  * (retryable network).
  */
 import { execFileSync } from 'node:child_process'
@@ -122,34 +122,44 @@ function validatePackage(pkg) {
   }
 }
 
-const results = PACKAGES.map(validatePackage)
-let networkErrors = 0
-let driftErrors = 0
-function iconFor(status) {
-  if (status === 'ok') return '✓'
-  if (status === 'skip') return '⚠'
-  return '✗'
-}
-for (const r of results) {
-  const icon = iconFor(r.status)
-  console.log(`${icon} ${r.pkg}: ${r.message}`)
-  if (r.status === 'drift') driftErrors++
-  if (r.status === 'network-error') networkErrors++
+// B-102 — the body below runs the whole gate, INCLUDING network calls to the registry. Left at the
+// top level it executed on import, so any test of one helper fetched every dist-tag and then exited
+// the process: untestable by construction. That is how `theokit#200` shipped a guard that accused
+// six packages falsely — the helper that read the wrong stdout line could not be tested alone.
+export function main() {
+  const results = PACKAGES.map(validatePackage)
+  let networkErrors = 0
+  let driftErrors = 0
+  function iconFor(status) {
+    if (status === 'ok') return '✓'
+    if (status === 'skip') return '⚠'
+    return '✗'
+  }
+  for (const r of results) {
+    const icon = iconFor(r.status)
+    console.log(`${icon} ${r.pkg}: ${r.message}`)
+    if (r.status === 'drift') driftErrors++
+    if (r.status === 'network-error') networkErrors++
+  }
+
+  if (driftErrors > 0) {
+    console.error('')
+    console.error(`✗ Dist-tag drift detected in ${driftErrors} package(s).`)
+    console.error('  Fix: npm dist-tag add <pkg>@<version> latest')
+    process.exit(1)
+  }
+
+  if (networkErrors > 0) {
+    console.error('')
+    console.error(`✗ Network failure on ${networkErrors} package(s). Retry recommended.`)
+    process.exit(2)
+  }
+
+  console.log('')
+  console.log('All dist-tags consistent.')
+  process.exit(0)
 }
 
-if (driftErrors > 0) {
-  console.error('')
-  console.error(`✗ Dist-tag drift detected in ${driftErrors} package(s).`)
-  console.error('  Fix: npm dist-tag add <pkg>@<version> latest')
-  process.exit(1)
+if (process.argv[1]?.endsWith('validate-all-latest-tags.mjs')) {
+  main()
 }
-
-if (networkErrors > 0) {
-  console.error('')
-  console.error(`✗ Network failure on ${networkErrors} package(s). Retry recommended.`)
-  process.exit(2)
-}
-
-console.log('')
-console.log('All dist-tags consistent.')
-process.exit(0)
