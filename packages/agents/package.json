@@ -70,20 +70,12 @@
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@theokit/sdk-pty": {
-      "optional": true
-    },
-    "@theokit/sdk-tools": {
-      "optional": true
-    },
     "react": {
       "optional": true
     }
   },
   "devDependencies": {
     "@theokit/http": "workspace:*",
-    "@theokit/sdk-pty": "^0.2.0",
-    "@theokit/sdk-tools": "^0.24.1",
     "ai": "7.0.14",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
