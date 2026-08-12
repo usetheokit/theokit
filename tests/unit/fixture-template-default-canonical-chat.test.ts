@@ -95,11 +95,45 @@ describe('fixtures/template-default canonical agents/chat.ts (M3)', () => {
 })
 
 describe('fixtures/template-default package.json — @theokit/sdk dep', () => {
-  it('includes @theokit/sdk in dependencies (npm registry ^2.x)', () => {
+  it('declares @theokit/sdk in dependencies', () => {
     expect(existsSync(PKG_PATH)).toBe(true)
     const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf-8')) as {
       dependencies?: Record<string, string>
     }
-    expect(pkg.dependencies?.['@theokit/sdk']).toMatch(/^\^2\./)
+    expect(pkg.dependencies?.['@theokit/sdk']).toBeTruthy()
+  })
+
+  /**
+   * M67 — the fixture must track the CANONICAL TEMPLATE, not a frozen literal.
+   *
+   * This assertion used to be `toMatch(/^\^2\./)`. It froze the fixture on the SDK 2.x line, and the
+   * template it exists to mirror moved on: `package.json.tmpl` pins `^4.50.0` today. Both sides had
+   * rotted, in opposite directions — the sibling guard in `create-theo-default-template.test.ts`
+   * (demanding `^2.13`–`^2.99` of the template) was ALREADY red for the same reason.
+   *
+   * Moving the literal from `^2.` to `^4.` would only push the rot one notch forward and guarantee
+   * the same red at the next bump. The property the guard always meant to express is COHERENCE: a
+   * fixture whose job is to mirror the template's output cannot pin a different major than the
+   * template. That is what it now checks, and it needs no edit when the template legitimately moves.
+   */
+  it('pins the same @theokit/sdk major as the canonical template', () => {
+    const fixture = JSON.parse(readFileSync(PKG_PATH, 'utf-8')) as {
+      dependencies?: Record<string, string>
+    }
+    const templateSrc = readFileSync(
+      resolve(ROOT, 'packages/create-theokit/templates/default/package.json.tmpl'),
+      'utf-8',
+    )
+    // Defensive grep — JSON.parse would fail on the `{{name}}` placeholder.
+    const templateRange = /"@theokit\/sdk":\s*"([^"]+)"/.exec(templateSrc)?.[1]
+    const fixtureRange = fixture.dependencies?.['@theokit/sdk']
+
+    const majorOf = (range: string): string => /(\d+)\./.exec(range)?.[1] ?? ''
+
+    expect(templateRange, 'the canonical template must declare @theokit/sdk').toBeTruthy()
+    expect(
+      majorOf(fixtureRange!),
+      `fixture pins ${fixtureRange}, template pins ${templateRange} — the fixture mirrors the template`,
+    ).toBe(majorOf(templateRange!))
   })
 })

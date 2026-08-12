@@ -50,13 +50,19 @@ describe('M90 — the infra subpath surface is locked', () => {
    * `4.39.0`), `transcriptRoot`, `TranscriptBlock` and `TranscriptMessage` from `/persistence`
    * (theokit#161 A), 177 since then — the rename does not change the count, only the name.
    *
+   * **181 since M67.** The `@theokit/sdk` floor moved from `^4.40.0` to `^4.49.0` (ADR 0060) and the
+   * source grew by four: `/persistence` gained `atomicWriteTempTarget`, `classifySessionArtifact` and
+   * its return type `SessionArtifact`; `/sandbox` gained `writableRootsFor`. All four now cross.
+   * `classifySessionArtifact` is worth naming — the roadmap's M72 was about to re-implement it under
+   * another name, and crossing it here is what makes that unnecessary.
+   *
    * Not redundant with the identity gate below: that one compares the snapshot against the LAYER, so
    * a regeneration that produced an empty file from a broken layer would pass on both sides. This one
    * fails a snapshot that shrank, whatever the cause.
    */
-  it('test_snapshot_holds_the_177_measured_symbols', () => {
+  it('test_snapshot_holds_the_181_measured_symbols', () => {
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(177)
+    expect(total).toBe(181)
   })
 
   /**

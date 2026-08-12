@@ -26,7 +26,7 @@ describe('createMockAgentStream', () => {
       responses: [{ type: 'text', content: 'Hello world' }],
     })
     const events = await collect(factory('hi', 's1'))
-    const deltas = events.filter(e => e.type === 'text_delta')
+    const deltas = events.filter((e) => e.type === 'text_delta')
     expect(deltas).toHaveLength(2)
     expect(deltas[0].content).toBe('Hello ')
     expect(deltas[1].content).toBe('world ')
@@ -37,8 +37,8 @@ describe('createMockAgentStream', () => {
       responses: [{ type: 'tool_call', name: 'tasks.list', input: {}, output: '[]' }],
     })
     const events = await collect(factory('hi', 's1'))
-    const calls = events.filter(e => e.type === 'tool_call')
-    const results = events.filter(e => e.type === 'tool_result')
+    const calls = events.filter((e) => e.type === 'tool_call')
+    const results = events.filter((e) => e.type === 'tool_result')
     expect(calls).toHaveLength(1)
     expect(calls[0].toolName).toBe('tasks.list')
     expect(results).toHaveLength(1)
@@ -53,8 +53,8 @@ describe('createMockAgentStream', () => {
       ],
     })
     const events = await collect(factory('hi', 's1'))
-    const errors = events.filter(e => e.type === 'error')
-    const dones = events.filter(e => e.type === 'done')
+    const errors = events.filter((e) => e.type === 'error')
+    const dones = events.filter((e) => e.type === 'done')
     expect(errors).toHaveLength(1)
     expect(errors[0].message).toBe('rate limited')
     expect(dones).toHaveLength(0) // stopped before done
@@ -77,7 +77,7 @@ describe('createMockAgentStream', () => {
       cost: 0.005,
     })
     const events = await collect(factory('hi', 's1'))
-    const done = events.find(e => e.type === 'done')!
+    const done = events.find((e) => e.type === 'done')!
     expect(done.cost).toBe(0.005)
   })
 
@@ -90,7 +90,7 @@ describe('createMockAgentStream', () => {
       ],
     })
     const events = await collect(factory('list tasks', 's1'))
-    const types = events.map(e => e.type)
+    const types = events.map((e) => e.type)
     expect(types).toContain('run_started')
     expect(types).toContain('text_delta')
     expect(types).toContain('tool_call')

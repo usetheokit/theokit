@@ -5,9 +5,11 @@
  * composes the documented `systemPrompt` seam (`string | SystemPromptResolver`):
  * the resolver prepends `buildEnvContext` + `buildRepoMap` (`@theokit/sdk-tools`)
  * and the nearest `THEO.md` (`@theokit/sdk/project#readProjectInstructions`) to
- * the agent's base prompt (ADR D3). The SDK primitives are dynamically imported
- * so `@theokit/sdk-tools` stays an OPTIONAL peer — only loaded when a `@ProjectContext`
- * agent actually sends.
+ * the agent's base prompt (ADR D3). The SDK primitives are dynamically imported so they stay out of
+ * the eager module graph — only loaded when a `@ProjectContext` agent actually sends. (The original
+ * reason given here was "so `@theokit/sdk-tools` stays an OPTIONAL peer"; it is a hard dependency of
+ * this package, and `tools-entry.ts` re-exports it statically. The laziness is still worth keeping,
+ * for the reason above.)
  *
  * Knobs with no primitive mapping (`indexStrategy`, `relevanceStrategy`,
  * `maxFilesInContext`, `includeExtensions`, `rootMarkers`) are reported via

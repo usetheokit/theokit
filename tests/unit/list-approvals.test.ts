@@ -18,8 +18,18 @@ import {
 describe('ApprovalRegistry.list', () => {
   it('lists pending approvals with their metadata and omits settled ones', () => {
     const reg = createInProcessApprovalRegistry()
-    void reg.register('a1', { timeoutMs: 60_000, onTimeout: 'abort', toolName: 'deploy', question: 'Deploy?' })
-    void reg.register('a2', { timeoutMs: 60_000, onTimeout: 'abort', toolName: 'delete', question: 'Delete?' })
+    void reg.register('a1', {
+      timeoutMs: 60_000,
+      onTimeout: 'abort',
+      toolName: 'deploy',
+      question: 'Deploy?',
+    })
+    void reg.register('a2', {
+      timeoutMs: 60_000,
+      onTimeout: 'abort',
+      toolName: 'delete',
+      question: 'Delete?',
+    })
 
     reg.resolve('a1', true) // settle one
 
