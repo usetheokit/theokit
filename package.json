@@ -33,7 +33,7 @@
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm sync:templates && node scripts/verify-version-not-published.mjs",
-    "release": "pnpm build && changeset publish",
+    "release": "node scripts/verify-publish-credential.mjs && pnpm build && changeset publish",
     "prepare": "git config core.hooksPath .githooks || true",
     "check:secrets": "bash scripts/prevent-secrets.sh",
     "sync:templates": "node scripts/sync-template-versions.mjs --write",
@@ -45,7 +45,8 @@
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "check:ai-free": "node scripts/check-ai-free-surface.mjs",
     "check:wire-parity": "node scripts/check-wire-parity.mjs",
-    "verify:version-collision": "node scripts/verify-version-not-published.mjs"
+    "verify:version-collision": "node scripts/verify-version-not-published.mjs",
+    "verify:publish-credential": "node scripts/verify-publish-credential.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",

@@ -270,7 +270,7 @@ intervenção manual; só o (2) deixaria o dano possível sempre que o back-merg
 
 ---
 
-## B-M67-08 — A janela entre `changeset version` e `changeset publish` deixa todo scaffold ininstalável
+## ~~B-M67-08~~ — RESOLVIDO — A janela entre `changeset version` e `changeset publish`
 
 **Encontrado em:** limpeza do B-M67-01, 2026-08-12 · **Severidade: média** — não afeta usuário
 publicado; afeta todo run de CI/local durante a janela de release.
@@ -294,10 +294,28 @@ vermelho de teste**, e ele some no minuto em que o publish sair.
 `expected false to be true` sem diagnóstico. Passa a nomear os pins não publicados e a dizer que a
 causa é a janela de publish. O vermelho continua — ele é honesto — mas agora se lê.
 
-**Correção de processo, pendente:** publicar dentro da mesma execução que versiona (é o que o
-`changeset publish` faz quando o release não é interrompido), ou marcar a janela explicitamente para
-que a suíte saiba distingui-la. A primeira é preferível: a segunda ensina a suíte a tolerar um estado
-que não deveria durar.
+**Fechado em 2026-08-12 com o publish de `theokit@0.47.0`, `@theokit/agents@7.6.0` e
+`@theokit/presenter@0.7.0`.** O `pnpm-11-compat` passou a verde na mesma execução — verificado.
+
+**A causa do bloqueio era minha, não do token, e vale registrar em detalhe porque é uma armadilha
+que morde de novo.** Eu passava a credencial como variável de ambiente
+`npm_config_//registry.npmjs.org/:_authToken=…`. O npm honra essa forma em **leituras** — `whoami` e
+`owner ls @theokit/agents` funcionavam, e foi por isso que eu concluí "autenticado" — e **não** a
+aplica no caminho de **escrita**. O `PUT` saía anônimo, e o registry responde escrita não autenticada
+com **404 em vez de 403**, para não vazar se o pacote existe.
+
+Esse 404 é o que tornou o diagnóstico errado tão fácil: **o npm devolve o mesmo status para "você não
+pode" e para "você não é ninguém"**. Declarei três tokens diferentes como read-only; os três
+publicavam. O usuário apontou o erro, e ele estava certo.
+
+Publicando pela forma canônica — `_authToken` num npmrc, que é a resolução que a escrita usa — os
+três pacotes subiram na primeira tentativa.
+
+**Gate resultante (`scripts/verify-publish-credential.mjs`):** verifica se a credencial está no
+caminho de **escrita**, não se ela autentica. A primeira versão que escrevi checava autoridade via
+`npm access list packages <nome>` — endpoint de **org**, enquanto `usetheodev` é **usuário**, então
+devolvia 403 para qualquer token. Um gate cujo oráculo não distingue a falha que ele filtra é pior
+que gate nenhum: produz vereditos confiantes e errados, e este mandou três tokens para o lixo.
 
 ---
 
