@@ -392,3 +392,36 @@ morrer no `pnpm --filter theokit build` e passou a morrer no `Push schema — te
 ele ensina o time a ignorar vermelho, e foi esse hábito que deixou dois releases seguidos merjarem com
 12 checks vermelhos (issue #210).
 
+---
+
+## ~~B-M67-13~~ — RESOLVIDO — O gate de licenças chamava um script deletado, e nunca verificou nada
+
+**Encontrado em:** varredura dos gates com artefato ausente, 2026-08-12 · **Filado:** parte do
+[`#210`](https://github.com/usetheodev/theokit/issues/210); o achado de compliance virou
+[`#213`](https://github.com/usetheodev/theokit/issues/213)
+
+`scripts/check-licenses.mjs` foi deletado **dentro de `efe63edf`** ("Release v0.4.0"), um commit
+grande o bastante para a perda passar despercebida. O `package.json` e o job de CI continuaram
+chamando, então `License compliance` falhava com `MODULE_NOT_FOUND` desde então — um controle de
+compliance vermelho por tanto tempo que ninguém lia, e que **nunca verificou uma única licença**.
+
+A varredura que o encontrou foi sistemática, não por acaso: script que cruza todo `scripts:` do
+`package.json` e todo `run:`/`--config` dos workflows contra o disco. **Uma** referência quebrada em
+todo o repo, e era esta.
+
+**Restaurado com a política original verbatim** (era bem fundamentada — pnpm-native, decomposição de
+expressão SPDX, MPL-2.0 admitido com a razão escrita). O que mudou: a **decisão** virou função pura
+sobre um conjunto injetado (`findLicenseViolations`), testável sem registry, rede ou processo `pnpm`.
+A forma anterior embrulhava `execSync` na mesma lógica e só dava para exercitar ponta-a-ponta — por
+isso um defeito no tratamento de SPDX teria sido invisível. 16 testes.
+
+**O que ele achou assim que voltou a rodar:** quatro pacotes de produção sem licença declarada. Um
+era terceiro (`khroma@2.1.0`, que traz o arquivo `license` MIT e só esquece o campo). **Os outros
+três eram nossos** — ver #213. Resultado final: `OK — 567 pacotes`.
+
+**Um teste meu pegou a minha própria implementação sendo permissiva demais.** A primeira versão da
+exceção aceitava a sobreposição mesmo quando o pacote **declarava** uma licença copyleft. A exceção
+existe para metadado **ausente**, nunca para contradizer o que o manifest diz — se um pacote declara
+`GPL-3.0`, não há nada faltando e não há o que sobrepor. Tratar os dois casos igual transformaria a
+válvula em bypass, que é exatamente o modo de falha que uma allowlist deveria evitar.
+
