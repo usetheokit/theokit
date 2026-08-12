@@ -361,3 +361,115 @@ Risco real é menor que o de produção, mas não é zero: são ferramentas que 
 confiável (YAML de config, ASTs, globs) durante lint e build. A decisão a tomar é **qual escopo o
 gate mede**, e registrá-la — não sair corrigindo 16 advisories de terceiros.
 
+---
+
+## ~~B-M67-12~~ — RESOLVIDO — Um job de CI impossível de passar, testando templates que um ADR removeu
+
+**Encontrado em:** medição do efeito do fix de build no PR #212, 2026-08-12 · **Severidade: média** —
+vermelho garantido a cada run, e gastando um serviço de banco para isso.
+
+O job `e2e-postgres-templates` provisionava um Postgres, empurrava dois schemas e rodava specs
+Playwright para as fixtures `template-postgres` e `template-saas`. O **ADR 0023** (2026-06-17,
+*default-only template set*) removeu esses templates **de propósito** — e o job sobreviveu a eles.
+
+Verificado item por item: **nenhum** artefato que ele citava ainda existia.
+
+| Artefato citado pelo job | Existe? |
+|---|---|
+| `fixtures/template-postgres/` | não |
+| `fixtures/template-saas/` | não |
+| `playwright.postgres-templates.config.ts` | não (só o `playwright.config.ts`) |
+| `docs/plans/playwright-postgres-templates-ci-plan.md` | não (a árvore `docs/` virou `wiki/`) |
+
+O `tsconfig.json` também ainda listava o config inexistente no `include` — inofensivo para o `tsc`,
+mas o mesmo apodrecimento.
+
+**Como ele apareceu.** A correção de build-before-lint fez a falha **mudar de lugar**: o job parou de
+morrer no `pnpm --filter theokit build` e passou a morrer no `Push schema — template-postgres`, com
+`drizzle.config.ts file does not exist`. A primeira falha escondia a segunda — e a segunda é a real.
+
+**Removido**, com a explicação no lugar onde ele vivia. Um gate impossível é pior que gate nenhum:
+ele ensina o time a ignorar vermelho, e foi esse hábito que deixou dois releases seguidos merjarem com
+12 checks vermelhos (issue #210).
+
+---
+
+## ~~B-M67-13~~ — RESOLVIDO — O gate de licenças chamava um script deletado, e nunca verificou nada
+
+**Encontrado em:** varredura dos gates com artefato ausente, 2026-08-12 · **Filado:** parte do
+[`#210`](https://github.com/usetheodev/theokit/issues/210); o achado de compliance virou
+[`#213`](https://github.com/usetheodev/theokit/issues/213)
+
+`scripts/check-licenses.mjs` foi deletado **dentro de `efe63edf`** ("Release v0.4.0"), um commit
+grande o bastante para a perda passar despercebida. O `package.json` e o job de CI continuaram
+chamando, então `License compliance` falhava com `MODULE_NOT_FOUND` desde então — um controle de
+compliance vermelho por tanto tempo que ninguém lia, e que **nunca verificou uma única licença**.
+
+A varredura que o encontrou foi sistemática, não por acaso: script que cruza todo `scripts:` do
+`package.json` e todo `run:`/`--config` dos workflows contra o disco. **Uma** referência quebrada em
+todo o repo, e era esta.
+
+**Restaurado com a política original verbatim** (era bem fundamentada — pnpm-native, decomposição de
+expressão SPDX, MPL-2.0 admitido com a razão escrita). O que mudou: a **decisão** virou função pura
+sobre um conjunto injetado (`findLicenseViolations`), testável sem registry, rede ou processo `pnpm`.
+A forma anterior embrulhava `execSync` na mesma lógica e só dava para exercitar ponta-a-ponta — por
+isso um defeito no tratamento de SPDX teria sido invisível. 16 testes.
+
+**O que ele achou assim que voltou a rodar:** quatro pacotes de produção sem licença declarada. Um
+era terceiro (`khroma@2.1.0`, que traz o arquivo `license` MIT e só esquece o campo). **Os outros
+três eram nossos** — ver #213. Resultado final: `OK — 567 pacotes`.
+
+**Um teste meu pegou a minha própria implementação sendo permissiva demais.** A primeira versão da
+exceção aceitava a sobreposição mesmo quando o pacote **declarava** uma licença copyleft. A exceção
+existe para metadado **ausente**, nunca para contradizer o que o manifest diz — se um pacote declara
+`GPL-3.0`, não há nada faltando e não há o que sobrepor. Tratar os dois casos igual transformaria a
+válvula em bypass, que é exatamente o modo de falha que uma allowlist deveria evitar.
+
+---
+
+## ~~B-M67-14~~ — RESOLVIDO — O `Bundle budget` nunca mediu um bundle
+
+**Encontrado em:** investigação dos vermelhos restantes do #210, 2026-08-12
+
+O default do `BUNDLE_FIXTURE` era a **raiz do monorepo**, que não é uma app TheoKit. O
+`npx theokit build` não tinha o que buildar, o `|| true` engolia a falha, e o gate saía 2 com
+*"build output not found"* — um orçamento sob o qual ninguém nunca esteve.
+
+**A lacuna que deixou isso sobreviver:** os 7 testes do script passavam `BUNDLE_FIXTURE`
+explicitamente. Nenhum exercitava o **default**, que era justamente a única coisa que o CI usa. Um
+teste novo fixa a propriedade — o diretório que o script escolhe sozinho tem de ser uma app real.
+
+O script também guardava mal a evidência: descartava a saída do build e depois reportava "output not
+found", que é o sintoma e não a causa. Agora imprime o log do build quando os assets faltam.
+
+Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
+
+**Padrão, terceira ocorrência no mesmo dia.** `postgres-integration` (dependência não declarada),
+`License compliance` (script deletado), `Bundle budget` (fixture inexistente): três gates que
+reportavam vermelho havia meses sem nunca terem exercido a verificação que anunciavam. O sintoma
+comum não é descuido pontual — é que **um gate vermelho por default deixa de ser lido**, e a partir
+daí a causa dele para de importar para todo mundo.
+
+---
+
+## ~~B-M67-15~~ — RESOLVIDO — `Dependency review`: impossível de passar **e** redundante
+
+**Encontrado em:** investigação dos vermelhos do #210, 2026-08-12
+
+`actions/dependency-review-action` precisa do dependency graph do GitHub, que em repositório
+**privado** exige licença de Advanced Security. Medido: `security_and_analysis: null`. Todo run
+terminava em *"Dependency review is not supported on this repository"* — um gate que não passava por
+construção, independentemente do diff.
+
+**O que decidiu a remoção não foi ser impossível, foi ser redundante.** As duas verificações dele já
+têm equivalente funcionando aqui:
+
+| Verificação do job removido | Equivalente que já existe |
+|---|---|
+| `fail-on-severity: high` | job `Dependency audit (npm audit, high+)` (`pnpm check:audit`) — **verde** |
+| `allow-licenses: MIT, Apache-2.0, …` | job `License compliance` (`scripts/check-licenses.mjs`) — restaurado em B-M67-13, com allowlist **superset** da que o job declarava |
+
+Licenciar GHAS continua sendo opção real, e traria a visão de diff transitivo que nenhum dos dois
+substitutos tem. Mas isso é decisão de compra, não de CI — e até que seja tomada, um gate impossível
+é pior que gate nenhum: ensina o time a ler vermelho como ruído.
+

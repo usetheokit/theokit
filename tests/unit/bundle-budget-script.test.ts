@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { readFileSync, mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { gzipSync } from 'node:zlib'
@@ -179,5 +179,28 @@ describe('check-bundle-budget.sh — dogfood check wiring', () => {
   it('Given scripts/dogfood-smoke.sh, Then references the bundle budget check', () => {
     const dogfood = readFileSync(resolve(__dirname, '../../scripts/dogfood-smoke.sh'), 'utf-8')
     expect(dogfood).toMatch(/bundle.budget|check-bundle-budget/i)
+  })
+})
+
+describe('the default fixture — the property nobody was asserting (B-M67-14)', () => {
+  it('test_the_default_BUNDLE_FIXTURE_is_a_buildable_theokit_app', () => {
+    // The gate ran for months measuring nothing: the script's default was the monorepo ROOT, which
+    // is not a TheoKit app. `theokit build` had nothing to build, the `|| true` swallowed the
+    // failure, and the gate exited 2 with "build output not found" — a budget nobody was ever under.
+    //
+    // Every test above passes `BUNDLE_FIXTURE` explicitly, so none of them ever exercised the
+    // default. This one does: the directory the script picks on its own must be a real app.
+    const scriptDir = resolve(__dirname, '../../scripts')
+    const declared = readFileSync(resolve(scriptDir, 'check-bundle-budget.sh'), 'utf-8')
+    const match = /BUNDLE_FIXTURE:-\$\(cd "\$\(dirname "\$0"\)\/([^"]+)" && pwd\)/.exec(declared)
+    expect(match, 'the script must derive its default from a path relative to itself').toBeTruthy()
+
+    const defaultFixture = resolve(scriptDir, match![1])
+    expect(existsSync(join(defaultFixture, 'package.json')), defaultFixture).toBe(true)
+    expect(existsSync(join(defaultFixture, 'app')), `${defaultFixture}/app`).toBe(true)
+    expect(
+      existsSync(join(defaultFixture, 'theo.config.ts')),
+      `${defaultFixture}/theo.config.ts`,
+    ).toBe(true)
   })
 })
