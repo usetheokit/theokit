@@ -44,13 +44,16 @@ function scanSrc(pattern: RegExp): string[] {
 
 describe('M3 clean break — proprietary agent surface removed from src', () => {
   it('"AgentEvent" and "useAgentStream" are absent from packages src (DoD gate)', () => {
-    const hits = scanSrc(/AgentEvent|useAgentStream/)
+    // Delimitado por `\b`: sem isso, `messagesToAgentEvents` — um símbolo DIFERENTE, do caminho
+    // ai-free do TUI — casava por conter a substring, e o gate acusava a reintrodução de uma
+    // superfície que ninguém reintroduziu. Backlog B-M67-01, item 11.
+    const hits = scanSrc(/\bAgentEvent\b|\buseAgentStream\b/)
     expect(hits, `expected 0 matches, found:\n${hits.join('\n')}`).toEqual([])
   })
 
   it('the other removed proprietary symbols are also gone from src', () => {
     const hits = scanSrc(
-      /defineAgentEndpoint|streamAgentRun|createConversationHistory|consumeAgentStream|useAgentToolCards|foldAgentToolCards/,
+      /\b(?:defineAgentEndpoint|streamAgentRun|createConversationHistory|consumeAgentStream|useAgentToolCards|foldAgentToolCards)\b/,
     )
     expect(hits, `expected 0 matches, found:\n${hits.join('\n')}`).toEqual([])
   })
