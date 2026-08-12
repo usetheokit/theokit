@@ -55,9 +55,11 @@ describe('typed-client → TheoFetchError propagation', () => {
   })
 
   it('401 unauthorized propagates with `code` populated', async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(
-      new TheoFetchError(401, { error: { code: 'UNAUTHORIZED', message: 'session expired' } }),
-    )
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValue(
+        new TheoFetchError(401, { error: { code: 'UNAUTHORIZED', message: 'session expired' } }),
+      )
     const client = createAppClient<AppClient>({ fetchImpl: fetchImpl as any })
     await expect(client.posts.get()).rejects.toMatchObject({
       status: 401,

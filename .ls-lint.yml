@@ -39,3 +39,12 @@ ignore:
   - my-test-bare
   - scripts
   - packages/theo/src/devtools/dev-overlay # vendored from external — preserve original case
+  # As zonas de estudo read-only do ciclo (`.claude/rules/reference-provenance.md`) e as worktrees
+  # efêmeras. O `ls` acima só declara `packages/theo/src`, mas o walker desce a árvore inteira antes
+  # de filtrar — com o zone populado (medido: 74.502 arquivos de terceiros), o run passou de ~2,6 s
+  # para 112 s e derrubou `test_check_naming_passes_today` por timeout de 30 s. O teste ficou flaky
+  # conforme a zona estivesse populada ou não, que é a pior forma: verde quando ninguém está
+  # pesquisando, vermelho quando alguém está. Backlog B-M67-01, item 15.
+  - .claude/knowledge-base/references
+  - .claude/knowledge-base/tools
+  - .claude/worktrees

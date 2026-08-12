@@ -53,7 +53,12 @@ describe('AcpClient', () => {
     const onPermission = vi.fn(() => ({ granted: true }))
     client.onRequest('session/request_permission', onPermission)
 
-    push({ jsonrpc: '2.0', id: 99, method: 'session/request_permission', params: { tool: 'write_file' } })
+    push({
+      jsonrpc: '2.0',
+      id: 99,
+      method: 'session/request_permission',
+      params: { tool: 'write_file' },
+    })
 
     // Give the microtask queue a tick for the async dispatch to flush.
     await Promise.resolve()

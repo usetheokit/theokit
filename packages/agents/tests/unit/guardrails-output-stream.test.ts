@@ -7,7 +7,11 @@
 import { describe, expect, it } from 'vitest'
 
 import { moderateOutputStream } from '../../src/guardrails/stream.js'
-import { GuardrailViolationError, outputModeration, type Guardrail } from '../../src/guardrails/index.js'
+import {
+  GuardrailViolationError,
+  outputModeration,
+  type Guardrail,
+} from '../../src/guardrails/index.js'
 
 interface Ev {
   type: string
@@ -39,7 +43,9 @@ describe('moderateOutputStream', () => {
       { type: 'text_delta', content: 'world' },
       { type: 'done' },
     ]
-    const { events: out, ret } = await collect(moderateOutputStream(source(events), guards, extractText))
+    const { events: out, ret } = await collect(
+      moderateOutputStream(source(events), guards, extractText),
+    )
     expect(out).toEqual(events)
     expect(ret).toBe('RESULT')
   })
@@ -58,7 +64,9 @@ describe('moderateOutputStream', () => {
   it('is a transparent pass-through (streaming preserved) when no output guard is present', async () => {
     const inputOnly: Guardrail = { name: 'in', checkInput: () => ({ action: 'allow' }) }
     const events = [{ type: 'text_delta', content: 'x' }, { type: 'done' }]
-    const { events: out } = await collect(moderateOutputStream(source(events), [inputOnly], extractText))
+    const { events: out } = await collect(
+      moderateOutputStream(source(events), [inputOnly], extractText),
+    )
     expect(out).toEqual(events)
   })
 })

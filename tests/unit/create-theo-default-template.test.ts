@@ -71,16 +71,41 @@ describe('create-theokit default template — agents/chat.ts parity with fixture
 })
 
 describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)', () => {
-  it('package.json.tmpl pins @theokit/sdk at the 2.13+ compaction floor (M6, EC-7)', () => {
+  it('package.json.tmpl pins @theokit/sdk at or above the floor the framework declares (M6 EC-7)', () => {
+    // Defensive grep — JSON.parse would fail on the {{name}} placeholder.
+    //
+    // The guard was born in M6 freezing `^2.13`: `@theokit/agents@0.30.x` required the
+    // `@theokit/sdk/compaction` subpath, first shipped in 2.13.0, and an `npx create-theokit` under
+    // the old `^1` pin broke with ERR_PACKAGE_PATH_NOT_EXPORTED. The floor has moved since (ADR 0060
+    // took it to `^4.49.0`, the lowest version where the config/trust/wiring family exists) and the
+    // literal went red by default — exact sibling of the fixture guard M67 fixed, and of the
+    // `@theokit/ui` peer guards (backlog B-M67-01).
+    //
+    // The property it always meant to express is **coherence**: the floor the template pins may not
+    // sit BELOW the floor the framework declares as a peer, or a lockfile resolving the template's
+    // floor does not satisfy the peer and the freshly created scaffold does not install. That needs
+    // no edit when the line legitimately advances.
     const src = readFileSync(TEMPLATE_PKG, 'utf-8')
-    // Defensive grep — JSON.parse would fail on {{name}} placeholder.
-    // M6 bumped this pin from ^1.x to ^2.13.0: @theokit/agents@0.30.x requires the
-    // `@theokit/sdk` `./compaction` subpath export, first shipped in 2.13.0. A fresh
-    // `npx create-theokit` → `pnpm install` failed with ERR_PACKAGE_PATH_NOT_EXPORTED
-    // under the old ^1 pin. This guard locks the FLOOR that carries the export — any
-    // `^2.<minor>` with minor >= 13 satisfies it (the template legitimately tracks a
-    // higher minor over time; the regex allows 2.13 through 2.99).
-    expect(src).toMatch(/"@theokit\/sdk":\s*"\^2\.(1[3-9]|[2-9]\d)\./)
+    const templatePin = /"@theokit\/sdk":\s*"(\^\d+\.\d+\.\d+)"/.exec(src)?.[1]
+    expect(templatePin, 'the template must pin @theokit/sdk as a caret').toBeTruthy()
+
+    const frameworkPeer = (
+      JSON.parse(readFileSync(resolve(ROOT, 'packages/theo/package.json'), 'utf-8')) as {
+        peerDependencies: Record<string, string>
+      }
+    ).peerDependencies['@theokit/sdk']
+    const asTuple = (pin: string): [number, number, number] => {
+      const m = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(pin)
+      expect(m, `not a caret pin: ${pin}`).toBeTruthy()
+      return [Number(m![1]), Number(m![2]), Number(m![3])]
+    }
+    const [tMaj, tMin, tPat] = asTuple(templatePin!)
+    const [pMaj, pMin, pPat] = asTuple(frameworkPeer)
+    expect(
+      tMaj === pMaj && (tMin > pMin || (tMin === pMin && tPat >= pPat)),
+      `the template pins "${templatePin}", below the peer the framework declares ("${frameworkPeer}") — ` +
+        `a lockfile at the template's floor does not satisfy the peer`,
+    ).toBe(true)
   })
 
   it('package.json.tmpl still preserves {{name}} placeholder (sanity)', () => {

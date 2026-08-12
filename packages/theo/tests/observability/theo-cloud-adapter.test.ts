@@ -44,7 +44,10 @@ describe('T30.3 — theo-cloud adapter', () => {
     const adapter = new TheoCloudObservabilityAdapter({
       ingestUrl: 'https://ingest.test/v1/traces',
       token: 'test-key-fixture',
-      _mockFetch: async () => { fetchCalled = true; return new Response('ok') },
+      _mockFetch: async () => {
+        fetchCalled = true
+        return new Response('ok')
+      },
     })
 
     await adapter.flush()
@@ -56,7 +59,9 @@ describe('T30.3 — theo-cloud adapter', () => {
     const adapter = new TheoCloudObservabilityAdapter({
       ingestUrl: 'https://ingest.test/v1/traces',
       token: 'test-key-fixture',
-      _mockFetch: async () => { throw new Error('network down') },
+      _mockFetch: async () => {
+        throw new Error('network down')
+      },
     })
 
     const span = adapter.startSpan('test')
@@ -95,7 +100,10 @@ describe('T30.3 — theo-cloud adapter', () => {
     const adapter = new TheoCloudObservabilityAdapter({
       ingestUrl: 'https://ingest.test/v1/traces',
       token: 'test-key-fixture',
-      _mockFetch: async () => { flushed = true; return new Response('ok') },
+      _mockFetch: async () => {
+        flushed = true
+        return new Response('ok')
+      },
     })
 
     const span = adapter.startSpan('test')

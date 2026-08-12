@@ -25,7 +25,11 @@ const DEFAULTS: Omit<ProjectOptions, 'projectName'> = {
   agentsMd: true,
 }
 
-async function ask(rl: ReturnType<typeof createInterface>, question: string, defaultVal: boolean): Promise<boolean> {
+async function ask(
+  rl: ReturnType<typeof createInterface>,
+  question: string,
+  defaultVal: boolean,
+): Promise<boolean> {
   return new Promise((resolve) => {
     const suffix = defaultVal ? '(Y/n)' : '(y/N)'
     rl.question(`  ${question} ${suffix} `, (answer) => {
@@ -36,7 +40,12 @@ async function ask(rl: ReturnType<typeof createInterface>, question: string, def
   })
 }
 
-async function askChoice(rl: ReturnType<typeof createInterface>, question: string, choices: string[], defaultIdx = 0): Promise<number> {
+async function askChoice(
+  rl: ReturnType<typeof createInterface>,
+  question: string,
+  choices: string[],
+  defaultIdx = 0,
+): Promise<number> {
   return new Promise((resolve) => {
     console.log(`  ${question}`)
     for (let i = 0; i < choices.length; i++) {
@@ -55,10 +64,15 @@ export async function runPrompts(projectName: string): Promise<ProjectOptions> {
 
   try {
     console.log('')
-    const mode = await askChoice(rl, 'Would you like to use the recommended TheoKit defaults?', [
-      'Yes, use recommended defaults — TypeScript, ESLint, Tailwind CSS, AGENTS.md',
-      'No, customize settings',
-    ], 0)
+    const mode = await askChoice(
+      rl,
+      'Would you like to use the recommended TheoKit defaults?',
+      [
+        'Yes, use recommended defaults — TypeScript, ESLint, Tailwind CSS, AGENTS.md',
+        'No, customize settings',
+      ],
+      0,
+    )
 
     if (mode === 0) {
       return { projectName, ...DEFAULTS }

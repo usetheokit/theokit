@@ -50,7 +50,9 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
     description: config.description,
     inputSchema: {
       type: 'object',
-      properties: { message: { type: 'string', description: 'The message to send to the remote agent.' } },
+      properties: {
+        message: { type: 'string', description: 'The message to send to the remote agent.' },
+      },
       required: ['message'],
     },
     handler: async (input: Record<string, unknown>): Promise<string> => {
