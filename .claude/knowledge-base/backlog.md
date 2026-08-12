@@ -9,9 +9,13 @@ iterações disso e "pré-existente" deixou de ser classificação e virou descu
 Este arquivo **nunca rotaciona**. Uma entrada sai daqui de três formas: corrigida (com o commit),
 promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
-> **Nota sobre tracker.** O remote é `usetheodev/theokit`, mas o `gh` desta máquina não resolve o host
-> (`github-usetheo` é um alias de SSH). Enquanto o `gh` não estiver autenticado contra ele, este
-> arquivo é o tracker. Quando estiver, cada entrada vira issue e a linha ganha `#NNN`.
+> **Nota sobre tracker (corrigida 2026-08-12).** A versão anterior desta nota dizia que o `gh` não
+> resolvia o host e que por isso este arquivo era o tracker. Está errada: o `gh` está autenticado
+> como `usetheodev` e funciona com `--repo owner/name` explícito — o que falhava era a inferência a
+> partir do remote, que usa o alias de SSH `github-usetheo`. Achados com repro e evidência **devem**
+> virar issue (regra global § Issues). Este arquivo continua sendo o registro durável e o índice;
+> cada entrada filada ganha o link. Ressalva medida: o `gh` é um snap e não lê arquivos sob
+> `/tmp/claude-*` — passar o corpo por `--body-file -` com stdin.
 
 ---
 
@@ -130,20 +134,41 @@ tarde. Resultado medido: o arquivo saiu de 80 s+ para **1,16 s**, 40 testes verd
 
 ---
 
-## B-M67-05 — O SDK declara dois valores na barra root que não emite
+## ~~B-M67-05~~ — FILADO UPSTREAM — [`theokit-sdk#279`](https://github.com/usetheodev/theokit-sdk/issues/279)
 
-**Encontrado em:** `/review` do M67, 2026-08-12
+**Encontrado em:** `/review` do M67, 2026-08-12 · **Causa-raiz traçada e filada:** 2026-08-12
 
-`@theokit/sdk@4.51.1` declara `isValidTaskId` (`declare function`) e `TASK_RESERVED_PREFIXES`
-(`declare const`) na barra root do `.d.ts`, mas `grep -c isValidTaskId dist/index.js` devolve **0**.
-São valores por declaração e `undefined` em runtime.
+`@theokit/sdk@4.51.1` declara `isValidTaskId` e `TASK_RESERVED_PREFIXES` como **valores** no
+`.d.ts` da barra root, e o `dist/index.js` não emite nenhum dos dois. Um consumidor que escreve
+`import { isValidTaskId } from '@theokit/sdk'` **compila limpo** e recebe `TypeError` na chamada. É a
+pior forma que um bug de empacotamento pode ter: o sistema de tipos — a coisa em que o consumidor
+confia para saber o que existe — afirma ativamente a resposta errada.
 
-Consequência: um re-export futuro deles **compila** e explode no import. O gate ROOT-BAR do M67 é cego
-a este caso — ele enumera `Object.keys` do namespace, que só vê o que é emitido (ADR 0061 declara a
-lacuna de tipos; esta é diferente).
+**Causa-raiz (traçada, não adivinhada).** A cadeia é type-only na fonte e o bundler de `.d.ts` perde
+isso:
 
-Ação: issue upstream no `theokit-sdk` (bug de empacotamento). Nada a fazer neste repo além de não
-re-exportá-los.
+| # | Arquivo | Linha | O que diz |
+|---|---|---|---|
+| 1 | `packages/sdk/src/types/task.ts` | 152 | `export function isValidTaskId(...)` — um **valor** |
+| 2 | `packages/sdk/src/types/index.ts` | 21 | `export type * from "./task.js"` — **type-only** |
+| 3 | `packages/sdk/src/index.ts` | 336 | `export type * from "./types/index.js"` — **type-only** |
+
+O runtime está correto e coerente com a fonte. O `rollup-plugin-dts` achata os dois saltos e
+re-emite os nomes na lista de export da raiz **sem** o modificador `type`. O `tsup.config.ts` do SDK
+já carrega vários comentários sobre esse bundler tropeçando no grafo do pacote (ciclos, entradas
+roteadas por `tsc`); esta parece ser mais uma instância da mesma lacuna de fidelidade.
+
+**Consequência para este repo:** nenhuma ação além de não re-exportá-los. O gate ROOT-BAR do M67 é
+cego a este caso **por construção** — ele enumera `Object.keys` do namespace, e só enxerga o que é
+emitido (o ADR 0061 declara a lacuna de tipos; esta é diferente). A sugestão levada ao issue é o
+complemento: afirmar que todo nome **não-`type`** na lista de export do `.d.ts` está em
+`Object.keys(await import('@theokit/sdk'))`.
+
+**Correção da nota sobre o tracker.** A nota no topo deste arquivo dizia que o `gh` desta máquina não
+resolve o host. Está errada: o `gh` está autenticado como `usetheodev` e funciona quando recebe
+`--repo owner/name` explícito — o que falhava era a inferência a partir do remote, que usa o alias de
+SSH `github-usetheo`. Issues **podem** ser filadas. Uma ressalva medida: o `gh` é um snap e não lê
+arquivos sob `/tmp/claude-*` (confinamento); usar `--body-file -` com redirecionamento de stdin.
 
 ---
 
