@@ -21,7 +21,7 @@
     "knip": "knip",
     "knip:strict": "knip --strict",
     "check:licenses": "node scripts/check-licenses.mjs",
-    "check:audit": "pnpm audit --prod --audit-level=high",
+    "check:audit": "node scripts/audit-scopes.mjs",
     "check:bundle": "bash scripts/check-bundle-budget.sh",
     "check:deps": "dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs",
     "check:naming": "ls-lint",
