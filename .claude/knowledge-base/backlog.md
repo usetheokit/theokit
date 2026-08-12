@@ -552,3 +552,30 @@ Removê-la elimina o modo de falha **por construção**, não por palpite.
 A única possibilidade restante (a CLI não estar buildada) virou uma pré-condição explícita com
 mensagem acionável, em vez de um `Command not found` que não diz o que fazer.
 
+---
+
+## ~~B-M67-18~~ — RESOLVIDO — Um guarda afirmava sobre arquivo que o `.gitignore` exclui
+
+**Encontrado em:** medição do CI depois de fechar o B-M67-17, 2026-08-12
+
+`tests/unit/cli-env-wiring.test.ts` afirmava que a fixture `zero-config-env` tem um `.env` com
+`OPENROUTER_API_KEY`. Esse `.env` é **gitignored** (`.gitignore:24`) — e corretamente, porque um
+repositório que começa a commitar `.env` perde o hábito que mantém os reais fora.
+
+Consequência: o guarda passava **nesta máquina**, onde uma execução anterior deixara o arquivo em
+disco, e falhava em **todo checkout limpo**, CI incluído. Um guarda que depende de estado não
+rastreado não está verificando o repositório — está verificando a máquina.
+
+**O `.gitignore` já dizia qual era a forma pretendida:** a linha 26 carrega a negação
+`!.env.example`. O template simplesmente nunca tinha sido escrito. Criado, com valores obviamente
+falsos, e o guarda passa a afirmar sobre ele.
+
+Um segundo teste foi junto: o template é o único arquivo desta fixture que é commitado, portanto o
+único lugar onde uma credencial real poderia aterrissar em silêncio. Agora todo valor dele precisa
+parecer falso.
+
+**Quarta instância do mesmo padrão em um dia** — depois de `postgres-integration` (dependência não
+declarada), `License compliance` (script deletado) e `Bundle budget` (fixture inexistente). Todos
+verdes localmente por acidente de estado local, vermelhos em CI por meses, e nenhum deles verificando
+o que anunciava.
+
