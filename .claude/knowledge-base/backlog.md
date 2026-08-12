@@ -281,8 +281,14 @@ publicado; afeta todo run de CI/local durante a janela de release.
 depois. Entre os dois passos, o template pina `theokit@0.47.0` e `@theokit/agents@7.6.0` — E404 no
 registry — e todo `npx create-theokit` seguido de install falha.
 
-Hoje a janela está aberta porque o release do M67 não completou (ver B-M67-07). Ela reabre a cada
-release.
+Hoje a janela está aberta porque o release do M67 não completou (ver B-M67-07 e o issue #209: os
+tokens npm fornecidos são read-only, então o `changeset publish` recusa com `E404` no `PUT`). Ela
+reabre a cada release.
+
+**Estado em 2026-08-12, depois de fechar todas as causas internas de CI:** este é o **único teste
+vermelho do repositório**, e sozinho ele derruba três checks — `Unit + Type tests (20)`, `(22)` e
+`Coverage gate`, que rodam a mesma suíte. Ou seja: **um bloqueio externo é hoje a totalidade do
+vermelho de teste**, e ele some no minuto em que o publish sair.
 
 **O que foi feito agora:** o teste engolia o stderr do install (`catch {}`) e falhava com um
 `expected false to be true` sem diagnóstico. Passa a nomear os pins não publicados e a dizer que a
