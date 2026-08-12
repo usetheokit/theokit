@@ -44,7 +44,6 @@ To scaffold a real standalone app instead, use `npm create theokit` (the
 | middleware-context | Fixture app exercising the `middleware-context` scenario | — |
 | multipart-upload | Fixture app exercising the `multipart-upload` scenario | — |
 | observability | Fixture app exercising the `observability` scenario | — |
-| onda1-hello-theo | Fixture app exercising the `onda1-hello-theo` scenario | — |
 | plugin-example | Fixture app exercising the `plugin-example` scenario | — |
 | production-build | Fixture app exercising the `production-build` scenario | — |
 | rate-limit | Fixture app exercising the `rate-limit` scenario | — |
@@ -64,6 +63,7 @@ To scaffold a real standalone app instead, use `npm create theokit` (the
 | typed-client | Fixture app exercising the `typed-client` scenario | — |
 | upgrade-readiness-clean | Fixture app exercising the `upgrade-readiness-clean` scenario | — |
 | upgrade-readiness-dirty | Fixture app exercising the `upgrade-readiness-dirty` scenario | — |
+| wave1-hello-theo | Fixture app exercising the `wave1-hello-theo` scenario | — |
 | webhook-github | GitHub webhook signature verification | — |
 | webhook-slack | Slack webhook signature verification | — |
 | webhook-stripe | Stripe webhook signature verification | — |

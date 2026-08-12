@@ -67,6 +67,11 @@ function trackedFiles(): string[] {
       .filter((f) => !f.includes('/templates/') && !f.includes('/dist/'))
       // This very file writes the markers into the prose that explains them.
       .filter((f) => !f.endsWith('tests/lint/task-marker.test.ts'))
+      // And so does its sibling: `no-ptbr.test.ts` exempts THIS file in its own list, and explains
+      // why in a comment that necessarily spells the marker out (*"an English `TODO:` marker"*). The
+      // exemption is reciprocal because the reason is: a gate whose prose explains what it looks for
+      // cannot be the thing it looks for. Backlog B-M67-01, item 14.
+      .filter((f) => !f.endsWith('tests/lint/no-ptbr.test.ts'))
   )
 }
 

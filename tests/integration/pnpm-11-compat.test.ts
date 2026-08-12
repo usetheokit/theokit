@@ -29,6 +29,46 @@ const TEMPLATES = ['default'] as const
 // never enforce the CURRENT template; the local CLI is what we control + ship.
 const LOCAL_CLI = join(import.meta.dirname, '../../packages/create-theokit/dist/cli.js')
 
+/**
+ * The scaffolded app pins the WORKSPACE versions of `theokit` / `@theokit/agents`, written by
+ * `pnpm sync:templates` at `changeset version` time — before `changeset publish` runs. Between those
+ * two steps every fresh scaffold is uninstallable, and this test is red for a reason that has nothing
+ * to do with pnpm 11 or the `onlyBuiltDependencies` hint it exists to guard.
+ *
+ * That window is real and the red is honest, so the test does not skip it. It just says so, instead
+ * of leaving the reader with `expected false to be true`. Backlog B-M67-08.
+ */
+function unpublishedPinNote(appDir: string): string {
+  let deps: Record<string, string>
+  try {
+    deps = (
+      JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf-8')) as {
+        dependencies?: Record<string, string>
+      }
+    ).dependencies!
+  } catch {
+    return ''
+  }
+  const missing: string[] = []
+  for (const [name, range] of Object.entries(deps ?? {})) {
+    if (!name.startsWith('theokit') && !name.startsWith('@theokit/')) continue
+    const version = /^\^?(\d+\.\d+\.\d+)$/.exec(range)?.[1]
+    if (version === undefined) continue
+    try {
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test probes the registry
+      execFileSync('npm', ['view', `${name}@${version}`, 'version'], { stdio: 'pipe' })
+    } catch {
+      missing.push(`${name}@${version}`)
+    }
+  }
+  if (missing.length === 0) return ''
+  return (
+    `The template pins ${missing.join(', ')}, which the registry does not have yet — this is the ` +
+    `window between \`changeset version\` and \`changeset publish\`, not a pnpm-11 defect. ` +
+    `Publish the pending release and re-run.\n`
+  )
+}
+
 function hasCorepack(): boolean {
   try {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test probes runner PATH for corepack; sandbox-safe
@@ -152,6 +192,7 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
         // Step 3: install via pnpm 11 (env-scoped). pnpm 11 exits non-zero on
         // ERR_PNPM_IGNORED_BUILDS even when install completed. Check by file
         // presence, not exit code.
+        let installStderr = ''
         try {
           // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test invokes pnpm via PATH
           execFileSync('pnpm', ['install', '--prefer-offline'], {
@@ -160,10 +201,19 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
             env: PNPM_ENV,
             timeout: 120_000,
           })
-        } catch {
-          // ignore non-zero exit — verify install completeness below
+        } catch (cause) {
+          // A non-zero exit is EXPECTED here: pnpm 11 exits non-zero on ERR_PNPM_IGNORED_BUILDS even
+          // when the install completed, and distinguishing that from a real failure is what the file
+          // check below is for. What is NOT acceptable is discarding the output: the previous version
+          // swallowed it, so a genuinely broken install surfaced as a bare `expected false to be
+          // true` with nothing pointing at the cause.
+          installStderr = String((cause as { stderr?: Buffer }).stderr ?? cause)
         }
-        expect(existsSync(join(appDir, 'node_modules/theokit'))).toBe(true)
+        expect(
+          existsSync(join(appDir, 'node_modules/theokit')),
+          `pnpm install did not produce node_modules/theokit.\n` +
+            `${unpublishedPinNote(appDir)}pnpm stderr:\n${installStderr.slice(-2000)}`,
+        ).toBe(true)
 
         // Step 4: boot dev via theokit binary direct (bypass pnpm wrapper's
         // deps-status-check that re-trips ERR_PNPM_IGNORED_BUILDS)
