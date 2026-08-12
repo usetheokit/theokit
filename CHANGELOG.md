@@ -26,6 +26,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **O gate de cobertura passa a exigir veredito para a barra root do SDK** (`packages/agents/tests/unit/root-bar-coverage.test.ts`). A omissão sobreviveu a **nove minors consecutivas** porque o gate existente enumera os 31 *subpaths* e estes símbolos vivem no entry `.`, que nenhum gate cobria — o instrumento tinha escopo mais estreito que a propriedade que afirmava. Os 84 valores da barra root agora têm decisão escrita: 28 `in` verificados por identidade referencial, 56 `out` com motivo. (ADR 0061)
 - **Três primitivas de sessão e uma de sandbox passam a atravessar**, trazidas pelo piso novo: `classifySessionArtifact` + `SessionArtifact` e `atomicWriteTempTarget` (`/persistence`), `writableRootsFor` (`/sandbox`), `assertSecureModes` (`/auth`). `classifySessionArtifact` merece nota: o roadmap previa **escrevê-la** sob outro nome, e ela já existia no SDK — a descoberta veio do ciclo DISCOVER e evitou uma reimplementação.
 
+### Fixed
+- **Dois jobs de CI falhavam porque nada era buildado antes deles.** O `Lint + Format` rodava `pnpm install` e ia direto ao `pnpm lint`. As regras type-aware do ESLint resolvem `@theokit/agents` pelo campo `types` do pacote, que aponta para `dist/` — num checkout novo esse diretório não existe, **todo tipo que cruza a fronteira do pacote vira `error`**, e as regras reportam `acts as 'any'` apontando para código de aplicação que não tem defeito nenhum. O `Playwright Postgres templates` buildava só `theokit`, cujo passo de dts importa `@theokit/agents`: `TS2307 Cannot find module`.
+
+  Passava localmente porque o `dist/` sobra de um build anterior — ou seja, **o gate local vinha dando falsa segurança** por todo o tempo em que esses jobs estiveram vermelhos. Causalidade provada, não inferida: removendo `packages/agents/dist` localmente aparecem exatamente os erros do CI, e restaurando o diretório o lint volta a sair 0.
+
+### Fixed
+- **O `Postgres Jobs CI` voltou a rodar — e as 6 asserções de `SKIP LOCKED` executaram pela primeira vez (backlog B-M67-09, #207).** O workflow estava vermelho desde pelo menos 2026-08-10, em `main` **e** `develop`, 8 runs consecutivos. A causa era `Cannot find package 'pg'`: os seis testes ficavam `skipped` e o job saía 1. O teste de race-safety do dequeue concorrente — o único lugar onde a semântica do `SKIP LOCKED` é verificada contra um Postgres real, já que o `pg-mem` local cobre forma de SQL e não concorrência — **nunca chegou a executar**.
+
+  `pg` não era declarado em nenhum manifest do workspace. O comentário no topo do teste afirmava que o import dinâmico *"keeps the test loadable even when pg isn't installed … resolved from `packages/theo` node_modules in CI"*; as duas metades eram falsas — o `beforeAll` explode assim que a suíte roda (e ela roda, porque o único guarda era `skipIf(!POSTGRES_URL)` e o CI seta a variável), e o `packages/theo` também não declarava `pg`.
+
+  Além de declarar a dependência, o guarda passa a dizer a verdade: com `POSTGRES_URL` setada, um `pg` ausente é **falha**, não skip. Pular deixaria o job **verde sem uma única asserção ter rodado** — pior do que o vermelho que substitui, porque um gate verde é um gate que ninguém relê. A falha agora é uma só e nomeia a causa numa frase, em vez de um `ERR_MODULE_NOT_FOUND` derrubando o arquivo.
+
+  Verificado contra um Postgres real (`postgres:15-alpine` em container, derrubado na mesma execução): **7 verdes**. Que elas passassem não era garantido — nunca tinham rodado.
+
+### Fixed
+- **O workflow de back-merge passa a fazer o merge em vez de abrir um PR.** A primeira versão abria um PR `main → workspace`, pelo raciocínio de que um merge pode conflitar e um workflow que resolve conflito sem supervisão reescreve o trabalho de alguém sem pedir. O raciocínio continua valendo; o mecanismo não: o repositório tem *"Allow GitHub Actions to create and approve pull requests"* desligado (`can_approve_pull_request_reviews: false`), e a primeira execução falhou com `GitHub Actions is not permitted to create or approve pull requests`. Um workflow vermelho por default não protege nada — treina o time a ignorar vermelho.
+
+  A preocupação com conflito passa a ser honrada pelo próprio merge: o job mergeia **só** quando o git consegue sem conflito, e nunca resolve um. Conflito falha o job alto, que é vermelho legítimo — algo genuinamente precisa de um humano — e não vermelho-por-default. Voltar à forma de PR é mudança de uma linha, no dia em que aquela configuração for ligada.
+
 ### Added
 - **Duas metades de um gate de release que quase deixou passar um artefato sob versão já publicada (backlog B-M67-07).** No M67, o `pnpm version-packages` computou `@theokit/agents@7.5.0` — uma versão que o npm tinha havia dois dias, com outro conteúdo. A causa foi base velha: o commit de release aterrissou em `main`, o `workspace` nunca recebeu o back-merge, então os changesets já consumidos continuavam no disco e o bump foi recomputado.
 
