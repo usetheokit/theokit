@@ -8,8 +8,14 @@
 #
 # Env:
 #   BUNDLE_BUDGET_KB   budget in KB (default 350)
-#   BUNDLE_FIXTURE     project dir to scan (default: repo root)
+#   BUNDLE_FIXTURE     project dir to scan (default: fixtures/template-default)
 #   BUNDLE_SKIP_BUILD  set to 1 to skip `theokit build` (scan existing output)
+#
+# The default used to be the REPO ROOT, which is a monorepo and not a TheoKit app: `theokit build`
+# had nothing to build, the `|| true` swallowed the failure, and the gate exited 2 with "build output
+# not found". It therefore never measured a bundle — a budget nobody was ever under or over.
+# `fixtures/template-default` is what the gate always meant to measure; the test's own docblock says
+# so ("runs `theokit build` against fixtures/template-default"). Backlog B-M67-14.
 #
 # Exit: 0 = under budget (prints "[bundle-budget] OK ..."),
 #       1 = over budget (prints "[bundle-budget] FAIL ..." to stderr),
@@ -17,15 +23,24 @@
 set -euo pipefail
 
 BUDGET_KB="${BUNDLE_BUDGET_KB:-350}"
-ROOT="${BUNDLE_FIXTURE:-$(cd "$(dirname "$0")/.." && pwd)}"
+ROOT="${BUNDLE_FIXTURE:-$(cd "$(dirname "$0")/../fixtures/template-default" && pwd)}"
 ASSETS="$ROOT/.theokit/client/assets"
 
+build_log=""
 if [ "${BUNDLE_SKIP_BUILD:-0}" != "1" ]; then
-  (cd "$ROOT" && npx theokit build >/dev/null 2>&1) || true
+  # The build is allowed to fail here: `BUNDLE_SKIP_BUILD=1` is a legitimate mode where the caller
+  # already produced the output. But the log is KEPT, so that when the assets turn out to be missing
+  # the message can say WHY instead of only that they are absent — the previous shape discarded the
+  # only evidence and reported a symptom.
+  build_log="$( (cd "$ROOT" && npx theokit build) 2>&1 )" || true
 fi
 
 if [ ! -d "$ASSETS" ]; then
   echo "[bundle-budget] build output not found at $ASSETS" >&2
+  if [ -n "$build_log" ]; then
+    echo "[bundle-budget] the build that should have produced it said:" >&2
+    echo "$build_log" | tail -20 >&2
+  fi
   exit 2
 fi
 
