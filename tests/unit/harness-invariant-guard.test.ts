@@ -11,7 +11,7 @@
  * A regression here means someone started growing a second runtime inside the harness — exactly
  * what ADR 0038 forbids. Fail loud.
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -19,11 +19,18 @@ import { describe, expect, it } from 'vitest'
 // The root vitest runs from the repo root.
 const ROOT = process.cwd()
 
-/** The files that make the shipped decorators functional — the "harness". */
+/**
+ * The files that make the shipped decorators functional — the "harness".
+ *
+ * `ui-message-stream-translator.ts` era um deles até o M49 (`bb1f4a51`) deletar o tradutor inline e
+ * substituí-lo por `present-ui-message-stream.ts`. A lista não foi repontada, e desde então o guarda
+ * inteiro morria com `ENOENT` — os OUTROS cinco arquivos deixaram de ser verificados junto, porque um
+ * teste que estoura não reporta o que teria passado. Backlog B-M67-01, itens 9-10.
+ */
 const HARNESS_FILES = [
   'packages/agents/src/bridge/hitl-plugin.ts',
   'packages/agents/src/bridge/agent-endpoint.ts',
-  'packages/agents/src/bridge/ui-message-stream-translator.ts',
+  'packages/agents/src/bridge/present-ui-message-stream.ts',
   'packages/theo/src/server/agent/mount-agent.ts',
   'packages/theo/src/server/agent/approve-agent.ts',
   'packages/theo/src/server/agent/approval-registry.ts',
@@ -38,6 +45,18 @@ function read(rel: string): string {
 }
 
 describe('harness invariant guard — no parallel runtime (M4 / ADR 0038)', () => {
+  it('test_every_harness_file_still_exists', () => {
+    // Sem esta asserção, um arquivo renomeado derruba o guarda com `ENOENT` — que se lê como "o teste
+    // quebrou", não como "a lista está velha". Foi assim que o M49 deixou os cinco arquivos restantes
+    // sem verificação por vários milestones. Aqui a falha diz o que fazer.
+    for (const file of HARNESS_FILES) {
+      expect(
+        existsSync(join(ROOT, file)),
+        `${file} não existe — o harness foi renomeado e HARNESS_FILES está velha`,
+      ).toBe(true)
+    }
+  })
+
   it('test_harness_calls_no_llm_provider_api', () => {
     for (const file of HARNESS_FILES) {
       expect(LLM_API_HOSTS.test(read(file)), `${file} must not reference an LLM provider API`).toBe(
