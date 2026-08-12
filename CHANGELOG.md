@@ -40,6 +40,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
+### Changed
+- **O gate de auditoria de dependências passa a declarar os dois escopos, em vez de medir um só em silêncio (backlog B-M67-11).** `check:audit` rodava `pnpm audit --prod --audit-level=high` e mais nada. A escolha é defensável — um CVE `high` numa dep de produção viaja para todo consumidor do framework, um no `eslint` não — mas nunca tinha sido **declarada**, então o número do lado dev simplesmente não era medido. Medido pela primeira vez: `--prod` dá 6 advisories e **zero high**; a árvore completa dá 23 com **16 high**, todas de complexidade algorítmica / DoS dentro de ferramenta de build.
+
+  A assimetria agora é explícita: produção **bloqueia**, dev é **reportado** com número e motivo num `::warning::` que o GitHub renderiza no PR. Dev não bloqueia porque as 16 chegam transitivamente e dependem de release upstream — bloquear deixaria o gate permanentemente vermelho, que é a falha que este ciclo passou o dia desfazendo. Não bloquear nunca pode significar não saber.
+
 ### Removed
 - **`drizzle-kit`, `drizzle-orm` e `postgres` das devDependencies da raiz.** Estavam ali para o job `e2e-postgres-templates`, removido acima; com ele fora, os três ficaram sem consumidor. As referências que sobram no código são **template strings** — `import { eq } from 'drizzle-orm'` que o `generate-resource` **emite** para a app do usuário, e um `assertBinExists(cwd, 'drizzle-kit')` que checa o `cwd` **do consumidor**, não o nosso. Nenhum `import` real no repositório. As entradas correspondentes em `knip.ignoreDependencies` saíram junto, porque um ignore de algo que já não existe é ruído que sobrevive a quem o entendia.
 

@@ -108,10 +108,20 @@ fazê-la de passagem. O experimento de medição está preservado em
 `git -C ../theokit-studio stash list` → `stash@{0}` (só o `package.json`; a árvore de lá está limpa e
 na baseline verde).
 
-**Próximo passo:** abrir o milestone de migração no `theokit-studio` (com esta medição como ponto de
-partida), migrar os 15, e só então republicar. Enquanto isso, o peer opcional deste repo continua
-declarando `^0.1.0`, que é a versão que de fato existe e funciona contra o agents 0.39 — obsoleta,
-porém coerente.
+**Próximo passo — e por que ele não é deste repositório.** A migração é um milestone do
+`theokit-studio`: ciclo, CHANGELOG e release próprios, 15 testes a corrigir através de sete majors,
+com um endpoint que já devolve `422` onde esperava `200`. Fazê-la de passagem, no meio de um ciclo de
+outro repo, seria exatamente o "caminho curto" que o processo proíbe — e o pior lugar para isso é uma
+migração cujo contrato mudou de verdade.
+
+**Estado desta entrada:** medida, documentada, e **parada de propósito**. Uma tentativa de reabrir o
+experimento nesta sessão foi bloqueada, citando esta mesma decisão — o que é o comportamento correto.
+Ela sai do backlog quando virar milestone lá, não antes.
+
+**Consequência que este repo herda enquanto isso:** o `@theokit/studio@0.1.0` arrasta
+`@theokit/agents@1.0.0` e `@theokit/http@1.0.0` publicados para a árvore de produção daqui. É a
+origem de uma das três violações de licença do #213, e aquela **não tem conserto por republish** —
+tarballs npm são imutáveis. A linha só some quando o studio parar de puxar a cópia antiga.
 
 ---
 
@@ -336,30 +346,37 @@ checks entrega a maior parte do valor sem isso.
 
 ---
 
-## B-M67-11 — O `pnpm audit` do projeto só mede `--prod`, e há 16 advisories `high` no toolchain
+## ~~B-M67-11~~ — RESOLVIDO — O `pnpm audit` só media `--prod`, e a escolha nunca tinha sido feita
 
-**Encontrado em:** ao verificar se o `pg` recém-adicionado trouxe CVE, 2026-08-12 · **Severidade:
-baixa/média** — não é exposição de produção; é uma lacuna de medição.
+**Encontrado em:** ao verificar se o `pg` recém-adicionado trouxe CVE, 2026-08-12
 
 Medido lado a lado no mesmo commit:
 
 | Escopo | Resultado |
 |---|---|
 | `pnpm audit --prod --audit-level=high` | 6 (2 low, 4 moderate) — **zero high** |
-| `pnpm audit --audit-level=high` | 25 (2 low, 7 moderate, **16 high**) |
+| `pnpm audit --audit-level=high` | 23 (2 low, 5 moderate, **16 high**) |
 
-As 16 são todas de `devDependencies` e nenhuma veio do `pg` (rastreadas: `eslint`,
-`@apidevtools/swagger-parser`, `@changesets/cli`, `drizzle-kit`, `drizzle-orm`, `unstorage`,
-`pg-mem`). São CVEs de complexidade algorítmica / DoS — `brace-expansion`, `fast-uri`, `immutable`,
-`js-yaml`, `shell-quote`.
+As 16 são todas de `devDependencies` e nenhuma veio do `pg` — `brace-expansion` ×6, `js-yaml` ×4,
+`fast-uri` ×3, `immutable` ×2, `shell-quote` ×1, todas de complexidade algorítmica / DoS dentro de
+ferramenta de build.
 
-O número que o CHANGELOG cita (`4 high → zero`) está **correto como declarado**: ele diz `--prod`. O
-problema não é a afirmação, é o escopo nunca ter sido escolhido explicitamente — um projeto que só
-audita produção não sabe o que roda no seu próprio build.
+O número que o CHANGELOG cita (`4 high → zero`) estava **correto como declarado**: ele diz `--prod`.
+O problema nunca foi a afirmação — era o escopo jamais ter sido **escolhido**. Um projeto que só
+audita produção não sabe o que roda no próprio build, e "não sabe" tinha virado "assume zero".
 
-Risco real é menor que o de produção, mas não é zero: são ferramentas que consomem entrada não
-confiável (YAML de config, ASTs, globs) durante lint e build. A decisão a tomar é **qual escopo o
-gate mede**, e registrá-la — não sair corrigindo 16 advisories de terceiros.
+**Resolução: assimetria explícita.** Produção **bloqueia** (dep de produção viaja para todo consumidor
+do framework); dev é **reportado** com o número e o motivo, via `::warning::` que o GitHub renderiza
+no PR.
+
+Por que dev não bloqueia, e por que isso não é preguiça: as 16 chegam transitivamente e não têm
+correção daqui — dependem de release upstream. Bloquear deixaria o gate **permanentemente vermelho**,
+que é exatamente a falha que este ciclo inteiro passou o dia desfazendo. Um gate que ninguém consegue
+satisfazer é um gate que ninguém lê, e o próximo achado real chega indistinguível do ruído.
+
+A decisão virou função pura com os dois escopos injetados (`decideAuditOutcome`), com 10 testes —
+incluindo o caso que garante que um achado de produção **não é contado duas vezes** como dev, já que
+o `pnpm audit` sem `--prod` cobre as duas árvores.
 
 ---
 
