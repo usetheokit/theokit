@@ -50,6 +50,12 @@ const DECISIONS = {
   ExecuteResult: 'type — the return of execute(); the contract between backend and caller',
   SandboxConfig: 'type — workDir/timeout/maxOutput/env that every backend accepts',
   SandboxProvider: 'type — backend OR factory; what allows resolving by context',
+  // Answers "what may this mode write to?" WITHOUT spawning anything, which a consumer needs at
+  // AGENT CONSTRUCTION — a file-write tool is scoped before any process exists. Without it,
+  // consumers keep a second encoding of the three-mode vocabulary and it drifts from the argv
+  // builder with nothing to catch the drift. `[]` is "nothing writable" and `null` is
+  // "unrestricted", which is not the same as `['/']`.
+  writableRootsFor: 'contract — the writable roots of a mode, answerable before any process exists',
 
   // --- kernel confinement, promoted in M75 ---
   LinuxSandbox: 'M75 — o backend com enforcement de kernel (bwrap + seccomp)',
