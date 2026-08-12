@@ -34,7 +34,7 @@ import { findControllerFiles } from '../../../server/http/controller-dispatch.js
  */
 
 /** The build artifact `theokit start` reads to find compiled controllers. */
-export interface ControllerBuildManifest {
+interface ControllerBuildManifest {
   version: 1
   /** Emitted module paths, relative to `distDir`, in scan order. */
   modules: string[]

@@ -143,7 +143,7 @@ export const CODEX_PROVIDER: DeviceAuthProvider = Object.freeze({
  * parameters: both are optional and rarely used, and six positionals is a signature callers get
  * wrong in silence (the monorepo lint enforces 5 as the ceiling — the ceiling exists for this reason).
  */
-export interface LoginWithDeviceOptions {
+interface LoginWithDeviceOptions {
   /** I/O injection for tests. Omitted, it uses the real `fetch`/`setTimeout`/`Date.now`. */
   readonly deps?: Partial<DeviceDeps>
   /** The environment the store reads to resolve the credential directory. */
