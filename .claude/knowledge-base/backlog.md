@@ -140,3 +140,39 @@ falha do mesmo jeito.
 de cima já usava. `pnpm lint` → exit 0. Corrigido dentro do M67, e não adiado, porque era o único item
 deste backlog que **bloqueava o DoD do próprio milestone** — os outros cinco não bloqueiam nada e
 seguem a regra de "pré-existente vira entrada, não conserto oportunista".
+
+---
+
+## B-M67-07 — O estado de release do `main` não volta para `workspace`, e o changesets recalcula sobre base velha
+
+**Encontrado em:** M67 (RELEASE), 2026-08-12 · **Severidade: alta** — quase publicou artefato
+diferente sob versão já existente.
+
+O `pnpm version-packages` do M67 computou `@theokit/agents@7.5.0`. Essa versão **já estava publicada
+no npm desde 2026-08-10**, com outro conteúdo.
+
+**Causa-raiz, medida.** O commit `7ef84c56` ("Version Packages", bot, via PR #200) aterrissou em
+`main` e consumiu dois changesets: `in-process-run-event-sink.md` e
+`toolset-error-joins-the-hierarchy.md`. O `workspace` nunca recebeu o back-merge, então:
+
+- os dois arquivos de changeset **continuavam lá**, já consumidos em outro lugar;
+- o `package.json` do agents continuava em `7.4.2`, enquanto `main` e o npm estavam em `7.5.0`;
+- o `changeset version` somou os dois changesets velhos ao meu e produziu `7.4.2 → 7.5.0`.
+
+Publicar teria colocado o M67 sob um número que já existe. O npm recusaria — mas o CHANGELOG e a tag
+locais já estariam mentindo, e o modo de falha não é detectado por nenhum gate deste repo.
+
+**Sintoma correlato:** `@theokit/presenter` está em `0.5.1` no `main` e `0.6.0` no npm. O commit
+`10688cce` ("chore(release): @theokit/presenter 0.6.0") vive no `workspace` e nunca chegou ao `main`.
+Ou seja, **o problema é bidirecional** — releases publicados cujo commit de versão não está em `main`,
+e versões de `main` que não voltam para `workspace`.
+
+**Correção aplicada no M67:** back-merge de `origin/main` em `workspace`, CHANGELOG do agents
+restaurado ao estado do `main`, e a versão corrigida para `7.6.0` com uma seção de CHANGELOG contendo
+**apenas** o M67 — os dois changesets antigos pertencem à 7.5.0 já publicada.
+
+**Correção de processo, ainda pendente:**
+1. Back-merge automático de `main` → `develop` → `workspace` após todo release (é o passo que falta).
+2. Um gate que recuse publicar uma versão que já existe no registry. `scripts/verify-published-no-workspace.mjs`
+   cobre o protocolo `workspace:`, não colisão de versão. O comando é uma linha:
+   `npm view <pkg>@<version> version` deve falhar antes de `changeset publish`.
