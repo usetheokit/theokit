@@ -490,3 +490,33 @@ Licenciar GHAS continua sendo opção real, e traria a visão de diff transitivo
 substitutos tem. Mas isso é decisão de compra, não de CI — e até que seja tomada, um gate impossível
 é pior que gate nenhum: ensina o time a ler vermelho como ruído.
 
+---
+
+## B-M67-17 — `bundle-budget.test.ts` falha só em CI, e a evidência era descartada
+
+**Encontrado em:** medição do #212 depois das cinco correções de gate, 2026-08-12 · **Estado:**
+instrumentado; causa ainda desconhecida — de propósito, não por desistência.
+
+O `beforeAll` chama `buildTemplateDefaultOnce()`, que roda `pnpm exec theokit build` dentro de
+`fixtures/template-default`. Em CI falha; **localmente passa** (2 verdes, medido). Confirmado
+**pré-existente**: falhava nos três runs anteriores (`f9a4ce9d`, `58160edd`, `de09e62a`), antes de
+qualquer mudança minha.
+
+**O que impedia o diagnóstico.** O helper usava `stdio: 'pipe'` e não capturava nada no erro, então
+a falha chegava ao log como `Error: Command failed: pnpm exec theokit build` — e mais nada. Três runs
+consecutivos em que a única informação disponível era que tinha falhado.
+
+É o **mesmo defeito de oráculo** do `check-bundle-budget.sh` (B-M67-14) e do `pnpm-11-compat`
+(B-M67-08): o gate descarta a explicação e reporta o sintoma. Três instâncias do mesmo padrão em um
+dia sugere que é hábito, não coincidência — em cada uma, alguém escolheu `pipe` para manter o log
+limpo no caminho feliz e não pensou no caminho infeliz.
+
+**O que foi feito:** o helper passa a re-lançar com `stdout`/`stderr` do build anexados, e com uma
+pista quando não há saída nenhuma (o `theokit` bin vem do link de workspace, então `packages/theo`
+precisa estar buildado).
+
+**O que NÃO foi feito, e por quê:** adivinhar a causa. Ela não reproduz nesta máquina, e a diferença
+entre local e CI pode ser bin resolution, ordem de build ou o `THEOKIT_SKIP_NATIVE_PREFLIGHT`.
+Inventar uma correção plausível para um defeito que não se reproduz é o oposto de consertar — o
+próximo run de CI agora diz o que aconteceu, e aí a correção é dirigida por evidência.
+
