@@ -66,8 +66,6 @@
     "react-dom",
     "react-router",
     "ws",
-    "drizzle-orm",
-    "postgres",
     "expect-type",
     "lint-staged",
     "pg",
