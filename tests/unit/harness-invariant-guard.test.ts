@@ -22,10 +22,11 @@ const ROOT = process.cwd()
 /**
  * The files that make the shipped decorators functional — the "harness".
  *
- * `ui-message-stream-translator.ts` era um deles até o M49 (`bb1f4a51`) deletar o tradutor inline e
- * substituí-lo por `present-ui-message-stream.ts`. A lista não foi repontada, e desde então o guarda
- * inteiro morria com `ENOENT` — os OUTROS cinco arquivos deixaram de ser verificados junto, porque um
- * teste que estoura não reporta o que teria passado. Backlog B-M67-01, itens 9-10.
+ * `ui-message-stream-translator.ts` was one of them until M49 (`bb1f4a51`) deleted the inline
+ * translator and replaced it with `present-ui-message-stream.ts`. The list was never repointed, and
+ * since then the whole guard died with `ENOENT` — the OTHER five files stopped being checked along
+ * with it, because a test that blows up does not report what would have passed. Backlog B-M67-01,
+ * items 9-10.
  */
 const HARNESS_FILES = [
   'packages/agents/src/bridge/hitl-plugin.ts',
@@ -46,13 +47,13 @@ function read(rel: string): string {
 
 describe('harness invariant guard — no parallel runtime (M4 / ADR 0038)', () => {
   it('test_every_harness_file_still_exists', () => {
-    // Sem esta asserção, um arquivo renomeado derruba o guarda com `ENOENT` — que se lê como "o teste
-    // quebrou", não como "a lista está velha". Foi assim que o M49 deixou os cinco arquivos restantes
-    // sem verificação por vários milestones. Aqui a falha diz o que fazer.
+    // Without this assertion a renamed file takes the guard down with `ENOENT` — which reads as "the
+    // test broke", not as "the list is stale". That is how M49 left the remaining five files
+    // unchecked for several milestones. Here the failure says what to do.
     for (const file of HARNESS_FILES) {
       expect(
         existsSync(join(ROOT, file)),
-        `${file} não existe — o harness foi renomeado e HARNESS_FILES está velha`,
+        `${file} does not exist — the harness was renamed and HARNESS_FILES is stale`,
       ).toBe(true)
     }
   })

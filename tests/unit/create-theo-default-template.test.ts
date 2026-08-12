@@ -74,17 +74,17 @@ describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)',
   it('package.json.tmpl pins @theokit/sdk at or above the floor the framework declares (M6 EC-7)', () => {
     // Defensive grep — JSON.parse would fail on the {{name}} placeholder.
     //
-    // O guarda nasceu no M6 congelando `^2.13`: `@theokit/agents@0.30.x` exigia o subpath
-    // `@theokit/sdk/compaction`, publicado pela primeira vez em 2.13.0, e um `npx create-theokit`
-    // sob o pin `^1` antigo quebrava com ERR_PACKAGE_PATH_NOT_EXPORTED. O piso mudou desde então
-    // (ADR 0060 o levou a `^4.49.0`, a menor versão em que a família config/trust/wiring existe) e
-    // o literal ficou vermelho por default — irmão exato do guarda da fixture que o M67 consertou,
-    // e dos guardas do peer `@theokit/ui` (backlog B-M67-01).
+    // The guard was born in M6 freezing `^2.13`: `@theokit/agents@0.30.x` required the
+    // `@theokit/sdk/compaction` subpath, first shipped in 2.13.0, and an `npx create-theokit` under
+    // the old `^1` pin broke with ERR_PACKAGE_PATH_NOT_EXPORTED. The floor has moved since (ADR 0060
+    // took it to `^4.49.0`, the lowest version where the config/trust/wiring family exists) and the
+    // literal went red by default — exact sibling of the fixture guard M67 fixed, and of the
+    // `@theokit/ui` peer guards (backlog B-M67-01).
     //
-    // A propriedade que ele sempre quis expressar é **coerência**: o piso que o template pina não
-    // pode ficar ABAIXO do piso que o framework declara como peer, senão um lockfile que resolva o
-    // piso do template não satisfaz o peer e o scaffold recém-criado não instala. Isso não precisa
-    // de edição quando a linha legitimamente avança.
+    // The property it always meant to express is **coherence**: the floor the template pins may not
+    // sit BELOW the floor the framework declares as a peer, or a lockfile resolving the template's
+    // floor does not satisfy the peer and the freshly created scaffold does not install. That needs
+    // no edit when the line legitimately advances.
     const src = readFileSync(TEMPLATE_PKG, 'utf-8')
     const templatePin = /"@theokit\/sdk":\s*"(\^\d+\.\d+\.\d+)"/.exec(src)?.[1]
     expect(templatePin, 'the template must pin @theokit/sdk as a caret').toBeTruthy()
@@ -103,8 +103,8 @@ describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)',
     const [pMaj, pMin, pPat] = asTuple(frameworkPeer)
     expect(
       tMaj === pMaj && (tMin > pMin || (tMin === pMin && tPat >= pPat)),
-      `o template pina "${templatePin}", abaixo do peer que o framework declara ("${frameworkPeer}") — ` +
-        `um lockfile no piso do template não satisfaz o peer`,
+      `the template pins "${templatePin}", below the peer the framework declares ("${frameworkPeer}") — ` +
+        `a lockfile at the template's floor does not satisfy the peer`,
     ).toBe(true)
   })
 

@@ -9,18 +9,18 @@ import { TheokitAgentError, resolveTrustPosture } from '../../src/index.js'
 import type { TrustPosture } from '../../src/index.js'
 
 /**
- * M68 T3 — a recusa em runtime.
+ * M68 T3 — the runtime refusal.
  *
- * O controle de tipo (`tests/type/setting-sources-gate.test-d.ts`) impede que a chamada errada NASÇA,
- * mas liga consumidores TypeScript apenas — um `.js` ou um `as any` escapam. É a residualidade
- * declarada no narrowing de `Agent.list` (M103), e estes testes são o que a cobre.
+ * Type control (`tests/type/setting-sources-gate.test-d.ts`) stops the wrong call from being BORN,
+ * but binds TypeScript consumers only — a `.js` caller or an `as any` escapes. That is the residue
+ * declared in the `Agent.list` narrowing (M103), and these tests are what covers it.
  *
- * As duas lentes de `.claude/rules/testing.md` § 4.1 estão aqui de propósito. A negativa é o coração
- * do milestone; a positiva existe porque uma guarda que proibisse TUDO passaria numa suíte feita só de
- * casos negativos, e seria breaking change disfarçado de segurança.
+ * Both lenses of `.claude/rules/testing.md` § 4.1 are here on purpose. The negative one is the heart
+ * of the milestone; the positive one exists because a guard that forbade EVERYTHING would pass a
+ * suite made only of negative cases, and would be a breaking change disguised as security.
  */
 
-/** Constrói a posture pelo caminho real do SDK, não por objeto literal — a proveniência importa. */
+/** Build the posture through the SDK's real path, not an object literal — provenance matters. */
 function postureFrom(opts: {
   isTrusted: boolean
   envOverride?: boolean
@@ -32,10 +32,10 @@ function postureFrom(opts: {
   })
 }
 
-describe('M68 T3 — o caminho seguro continua trivial', () => {
+describe('M68 T3 — the safe path stays trivial', () => {
   it('test_user_source_needs_no_posture', () => {
-    // Se recusar exigisse cerimônia do caminho seguro, a fricção empurraria o consumidor a desligar o
-    // gate — o resultado oposto ao pretendido.
+    // If refusing demanded ceremony from the safe path, the friction would push the consumer to turn
+    // the gate off — the opposite of the intent.
     expect(resolveSettingSources({ user: true })).toEqual(['user'])
   })
 
@@ -44,13 +44,14 @@ describe('M68 T3 — o caminho seguro continua trivial', () => {
   })
 
   it('test_an_absent_selection_enables_nothing', () => {
-    // Omitir é não habilitar, nunca "habilitar sem gate" — a mesma assimetria que o SDK documenta em
-    // `TrustPostureInput.envOverride`: `undefined` é "o operador não ligou", não "desligou".
+    // Omitting is not enabling, never "enabling without a gate" — the same asymmetry the SDK
+    // documents in `TrustPostureInput.envOverride`: `undefined` is "the operator did not turn it
+    // on", not "turned it off".
     expect(resolveSettingSources(undefined)).toEqual([])
   })
 })
 
-describe('M68 T3 — a recusa', () => {
+describe('M68 T3 — the refusal', () => {
   it('test_project_source_is_refused_when_the_posture_is_untrusted', () => {
     const untrusted = postureFrom({ isTrusted: false })
     expect(() => resolveSettingSources({ project: { trustedBy: untrusted } })).toThrowError(
@@ -59,8 +60,8 @@ describe('M68 T3 — a recusa', () => {
   })
 
   it('test_the_refusal_is_a_typed_error_of_the_sdk_hierarchy', () => {
-    // Um erro estendendo `Error` puro seria invisível a `isTransientError`, que só enxerga esta
-    // hierarquia — foi o defeito que o M67 corrigiu em cinco classes.
+    // An error extending plain `Error` would be invisible to `isTransientError`, which only sees
+    // this hierarchy — the defect M67 fixed in five classes.
     const untrusted = postureFrom({ isTrusted: false })
     try {
       resolveSettingSources({ project: { trustedBy: untrusted } })
@@ -72,8 +73,8 @@ describe('M68 T3 — a recusa', () => {
   })
 
   it('test_the_refusal_names_the_capability_and_the_trust_source', () => {
-    // "negado" não é acionável; "negado, e a decisão veio de `default`" é. A proveniência vem de
-    // graça da `TrustPosture` — é metade do motivo de ela ser a evidência exigida (ADR 0063).
+    // "denied" is not actionable; "denied, and the decision came from `default`" is. The provenance
+    // comes for free from the `TrustPosture` — half the reason it is the required evidence (ADR 0063).
     const untrusted = postureFrom({ isTrusted: false })
     try {
       resolveSettingSources({ project: { trustedBy: untrusted } })
@@ -88,14 +89,14 @@ describe('M68 T3 — a recusa', () => {
   })
 
   it('test_the_refusal_does_not_silently_downgrade_to_user_only', () => {
-    // Rebaixar seria "ignorar com esperteza": o consumidor pediu A, recebeu B, e a diferença só
-    // aparece quando um hook que ele esperava não roda (ADR 0064, alternativa 3).
+    // Downgrading would be "cleverly ignoring": the consumer asked for A, got B, and the difference
+    // only shows when a hook it expected does not run (ADR 0064, alternative 3).
     const untrusted = postureFrom({ isTrusted: false })
     expect(() => resolveSettingSources({ user: true, project: { trustedBy: untrusted } })).toThrow()
   })
 })
 
-describe('M68 T3 — a concessão', () => {
+describe('M68 T3 — the grant', () => {
   it('test_project_source_is_wired_when_the_posture_is_trusted_by_the_store', () => {
     const trusted = postureFrom({ isTrusted: true })
     expect(trusted.source).toBe('store')
@@ -117,8 +118,9 @@ describe('M68 T3 — a concessão', () => {
   })
 
   it('test_an_env_override_of_false_does_not_grant', () => {
-    // O SDK é explícito: `false` e `undefined` ambos significam "o operador não ligou", NUNCA
-    // "desligou" — uma variável não-setada não pode sobrepor um store confiado. O gate herda isso.
+    // The SDK is explicit: `false` and `undefined` both mean "the operator did not turn it on",
+    // NEVER "turned it off" — an unset variable cannot override a trusted store. The gate inherits
+    // that.
     const untrusted = postureFrom({ isTrusted: false, envOverride: false })
     expect(untrusted.level).toBe('untrusted')
     expect(() => resolveSettingSources({ project: { trustedBy: untrusted } })).toThrow(

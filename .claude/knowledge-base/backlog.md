@@ -15,32 +15,41 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
-## B-M67-01 — 15 testes vermelhos na suíte da raiz, todos anteriores ao M67
+## ~~B-M67-01~~ — RESOLVIDO — 15 testes vermelhos na suíte da raiz, todos anteriores ao M67
 
-**Encontrado em:** M67 (T2), 2026-08-12 · **Evidência:**
-`.claude/knowledge-base/implementations/m67-layered-boundary-passthrough/t2-measurement.md` e
-`t7-root-suite-after.log`
+**Encontrado em:** M67 (T2), 2026-08-12 · **Resolvido em:** 2026-08-12 (`eb74a709`, `6449e5ad`,
+`c004551f`, e o commit de tradução) · **Evidência:**
+`.claude/knowledge-base/implementations/m67-layered-boundary-passthrough/t2-measurement.md`
 
-Medição: antes do M67 a suíte da raiz tinha **16** testes vermelhos; depois, **15**. A diferença é um
-guarda que o M67 quebrou e consertou no mesmo ciclo. Cada um dos 15 foi atribuído individualmente —
-não por amostragem — e nenhum é causado pelo milestone. A verificação de atribuição foi refeita de
-forma independente pelo `/review` do M67, que confirmou os 15.
+Medição: antes do M67 a suíte da raiz tinha **16** vermelhos; depois, **15**. Cada um foi atribuído
+individualmente — não por amostragem — e nenhum era causado pelo milestone. A verificação foi refeita
+de forma independente pelo `/review` do M67.
 
-O que **não** foi feito, e é a razão desta entrada existir: consertá-los. Ficam aqui com dono.
+Todos os 15 foram corrigidos. Medição final: **4168 verdes**, 1 vermelho remanescente
+(`pnpm-11-compat`, promovido a B-M67-08 abaixo — causa externa, não é um destes 15).
 
-| # | Teste | Arquivo | Diagnóstico | Ação proposta |
-|---|---|---|---|---|
-| 1–3 | `test_ui_peer_accepts_0_18`, `..._0_19`, `..._still_accepts_0_14` | `tests/unit/ui-peer-range.test.ts` | O peer `@theokit/ui` foi estreitado para `^1.1.0`, perdendo as alternativas OR. O docblock do teste diz que ele existe para pegar um estreitamento **de volta** para `^0.14.0`; o estreitamento veio na direção oposta e ele ficou vermelho por default | Decidir: o suporte a 0.14.x/0.18.x foi descontinuado (atualizar o teste com a justificativa) ou o peer regrediu (voltar a ser OR) |
-| 4 | `should declare a caret OR-range for @theokit/ui …` | `tests/unit/package-json-peerdep-usetheo-ui.test.ts` | mesma causa | mesma decisão |
-| 5 | `package.json.tmpl pins @theokit/sdk at the 2.13+ compaction floor` | `tests/unit/create-theo-default-template.test.ts:83` | O guarda exige `^2.13`–`^2.99`; o template já pina `^4.50.0`. **Irmão exato** do guarda da fixture que o M67 consertou, com a mesma correção disponível (afirmar coerência em vez de congelar literal) | Aplicar o mesmo padrão do M67: comparar contra a fonte de verdade, não contra um literal |
-| 6 | `test_sdk_tools_peer_is_closed_caret` | `tests/integration/sdk-peer-ranges.test.ts:21` | Espera `@theokit/sdk-tools` em `peerDependencies` de `packages/agents`; o pacote o declara em `dependencies` | Decidir onde a dependência deve viver e alinhar guarda e manifest |
-| 7 | `yields an IDENTICAL handler-dispatch sequence through both paths` | `tests/integration/agent-turn-in-process-parity.test.ts:20` | `vi.mock('@theokit/agents')` substitui o barrel inteiro e o mock não satisfaz o loader (`AgentDefinitionError`) | Atualizar o mock à forma que o loader exige, ou trocar o mock por um duplo tipado |
-| 8 | `test_surfaces_error_chunk_then_terminates` | `tests/unit/consume-ui-message-stream.test.ts:70` | O teste espera terminação limpa em chunk de erro; `packages/presenter/src/wire/read-message-stream.ts:46` **lança** `WireStreamError`. Contradição real entre implementação e expectativa | **Relevante ao M70**, que é dono do seam do presenter. Decidir qual dos dois está certo |
-| 9–10 | `test_harness_calls_no_llm_provider_api`, `test_harness_issues_no_fetch_of_its_own` | `tests/unit/harness-invariant-guard.test.ts` | `ENOENT` em `packages/agents/src/bridge/ui-message-stream-translator.ts` — o teste procura um arquivo que não existe | Repontar para o arquivo atual, ou remover o guarda se o invariante mudou de lugar |
-| 11 | `"AgentEvent" e "useAgentStream" ausentes de packages src` | `tests/unit/clean-break-grep-gate.test.ts:48` | Hits em `packages/create-theokit/src/scaffold-surface.ts:63` — dentro de um **comentário** | Ajustar o grep para ignorar comentários, ou reescrever o comentário |
-| 12–13 | `has no orphan rows`, `lists every subdirectory as a table row` | `tests/unit/fixtures-index.test.ts` | Linha de índice `onda1-hello-theo` sem diretório correspondente | Remover a linha órfã ou restaurar a fixture |
-| 14 | `test_no_forgotten_task_marker_in_the_layers_source` | `tests/lint/task-marker.test.ts` | Marcador de dívida em `tests/lint/no-ptbr.test.ts:94` — **falso positivo auto-referencial** (o teste que proíbe marcadores contém um) | Excluir o próprio arquivo do escopo do grep |
-| 15 | `test_check_naming_passes_today` | `tests/unit/architecture-guards-ci.test.ts` | **Timeout de 30 s**, não asserção — o `ls-lint` levou 112 s numa medição. Passou em outra execução | Elevar o timeout com justificativa, ou tornar o `ls-lint` incremental |
+Um padrão apareceu em **oito** dos quinze e vale mais do que a lista: o guarda congelava um
+**literal** de uma era anterior, o produto avançou por decisão consciente, e o guarda passou a exigir
+o passado. Vermelho por default não protege nada — treina o time a ignorar vermelho. A correção
+recorrente é a mesma que o M67 aplicou ao guarda da fixture: afirmar **coerência com a fonte de
+verdade**, não um literal, para que a propriedade não precise de edição quando a linha avança.
+
+| # | Teste | Causa | Correção |
+|---|---|---|---|
+| 1–4 | `ui-peer-range` × 3 + `package-json-peerdep-usetheo-ui` | Literais `0.14.x`/`0.18.x`/`0.19.0`/`^1.0.0`; o `f09fbbac` estreitou o peer para `^1.1.0` e derrubou as cláusulas 0.x de propósito | Coerência com o pin do template. Expôs defeito real: template `^1.0.0` vs peer `^1.1.0` (ERESOLVE sob lockfile no piso) e uma helper de caret que aceitava `1.0.0` em `^1.1.0` — verde pelo motivo errado |
+| 5 | `create-theo-default-template` piso do SDK | Literal `^2.13`–`^2.99`; o piso foi a `^4.49.0` (ADR 0060) | Coerência com o peer que o framework declara. Expôs template pinando `^4.0.1`, abaixo do peer |
+| 6 | `sdk-peer-ranges` | Literal `peerDependencies['@theokit/sdk-tools'] === '^0.11.0'`; o pacote virou `dependency` e a linha andou 15 minors | Propriedade em vez de literal. Expôs `peerDependenciesMeta` órfã e `sdk-pty` em dois buckets com ranges diferentes |
+| 7 | `agent-turn-in-process-parity` | `vi.mock('@theokit/agents')` não interceptava: o SUT importa de `./bridge/agent-endpoint.js` | Mock repontado ao módulo real + piso anti-vacuidade contando as chamadas do duplo |
+| 8 | `consume-ui-message-stream` | Afirmava terminação limpa em chunk de erro; o theokit#136 decidiu lançar e a implementação seguiu | Teste alinhado ao contrato vigente (recusa tipada), preservando o que ele sempre protegeu: o parcial anterior ao erro chega ao consumidor |
+| 9–10 | `harness-invariant-guard` | Lia `ui-message-stream-translator.ts`, deletado no M49 (`bb1f4a51`). O `ENOENT` derrubava o arquivo inteiro, deixando os **outros cinco** sem verificação | Repontado + asserção de existência que falha dizendo "a lista está velha" |
+| 11 | `clean-break-grep-gate` | `messagesToAgentEvents` casava com `AgentEvent` por substring | Delimitado por `\b` |
+| 12–13 | `fixtures-index` | Índice dizia `onda1-hello-theo`; o diretório é `wave1-hello-theo` | Linha corrigida |
+| 14 | `task-marker` | `no-ptbr.test.ts` explica num comentário que isenta o `task-marker`, e a explicação **é** um marcador | Isenção recíproca |
+| 15 | `architecture-guards-ci` | `ls-lint` levava 112 s contra timeout de 30 s — o walker desce a árvore antes de filtrar, e as zonas de estudo tinham 74.502 arquivos | Zonas no `ignore`: **2,59 s → 0,05 s** |
+
+**Nota de conformidade.** Os comentários escritos nestas correções — e os do M68 — nasceram em
+português e violavam o gate `tests/lint/no-ptbr.test.ts`, que exige inglês em `packages/` e `tests/`.
+Traduzidos no mesmo ciclo. O gate pegou; a regra é anterior a mim e eu a quebrei.
 
 **Correção de rastreabilidade.** O log do T2 do M67 afirmava que estes 15 estavam "registrados como
 tasks abertas". Estavam apenas na lista de tarefas da sessão, que não é um artefato do repositório —
@@ -181,3 +190,28 @@ restaurado ao estado do `main`, e a versão corrigida para `7.6.0` com uma seç�
 2. Um gate que recuse publicar uma versão que já existe no registry. `scripts/verify-published-no-workspace.mjs`
    cobre o protocolo `workspace:`, não colisão de versão. O comando é uma linha:
    `npm view <pkg>@<version> version` deve falhar antes de `changeset publish`.
+
+---
+
+## B-M67-08 — A janela entre `changeset version` e `changeset publish` deixa todo scaffold ininstalável
+
+**Encontrado em:** limpeza do B-M67-01, 2026-08-12 · **Severidade: média** — não afeta usuário
+publicado; afeta todo run de CI/local durante a janela de release.
+
+`tests/integration/pnpm-11-compat.test.ts` está vermelho. A causa não é o pnpm 11 nem a dica
+`onlyBuiltDependencies` que ele existe para guardar: `pnpm sync:templates` escreve as versões do
+**workspace** no `package.json.tmpl` no momento do `changeset version`, e o `changeset publish` roda
+depois. Entre os dois passos, o template pina `theokit@0.47.0` e `@theokit/agents@7.6.0` — E404 no
+registry — e todo `npx create-theokit` seguido de install falha.
+
+Hoje a janela está aberta porque o release do M67 não completou (ver B-M67-07). Ela reabre a cada
+release.
+
+**O que foi feito agora:** o teste engolia o stderr do install (`catch {}`) e falhava com um
+`expected false to be true` sem diagnóstico. Passa a nomear os pins não publicados e a dizer que a
+causa é a janela de publish. O vermelho continua — ele é honesto — mas agora se lê.
+
+**Correção de processo, pendente:** publicar dentro da mesma execução que versiona (é o que o
+`changeset publish` faz quando o release não é interrompido), ou marcar a janela explicitamente para
+que a suíte saiba distingui-la. A primeira é preferível: a segunda ensina a suíte a tolerar um estado
+que não deveria durar.

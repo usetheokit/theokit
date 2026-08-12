@@ -5,27 +5,27 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
- * O peer opcional `@theokit/ui` de `theokit` tem de aceitar TODA a linha que o template canônico pina.
+ * `theokit`'s optional `@theokit/ui` peer must accept the WHOLE line the canonical template pins.
  *
- * ## O defeito real que este guarda existe para pegar
+ * ## The real defect this guard exists to catch
  *
- * V3-2 nasceu de um ERESOLVE: o peer estava em `^0.14.0` e o consumidor adotou `@theokit/ui@0.18.1`.
- * npm é estrito com conflito de peer opcional (pnpm é leniente, e foi por isso que o dogfood em pnpm
- * não pegou), então um `npx create-theokit` recém-scaffoldado falhava o `npm install`.
+ * V3-2 was born from an ERESOLVE: the peer was `^0.14.0` and the consumer adopted `@theokit/ui@0.18.1`.
+ * npm is strict about optional-peer conflicts (pnpm is lenient, which is why the pnpm dogfood did not
+ * catch it), so a freshly scaffolded `npx create-theokit` failed `npm install`.
  *
- * ## Por que ele estava vermelho, e o que mudou
+ * ## Why it was red, and what changed
  *
- * A primeira versão fixava LITERAIS: `0.14.x`, `0.18.x`, `0.19.0`, `1.0.0`. O commit `f09fbbac`
- * (2026-07-16) estreitou o peer para `^1.1.0` e **derrubou de propósito** as cláusulas 0.x — a linha
- * foi descontinuada no pivot AI-exclusive. As asserções de literal passaram a exigir compatibilidade
- * com uma linha que o time removeu conscientemente, e o guarda ficou vermelho por default. Um guarda
- * permanentemente vermelho não protege nada: ele treina o time a ignorar vermelho.
+ * The first version froze LITERALS: `0.14.x`, `0.18.x`, `0.19.0`, `1.0.0`. Commit `f09fbbac`
+ * (2026-07-16) narrowed the peer to `^1.1.0` and **deliberately dropped** the 0.x clauses — that line
+ * was discontinued at the AI-exclusive pivot. The literal assertions then demanded compatibility with
+ * a line the team removed on purpose, and the guard went red by default. A permanently red guard
+ * protects nothing: it trains the team to ignore red.
  *
- * Mover os literais de `0.x` para `1.x` só empurraria o apodrecimento uma casa. A propriedade que o
- * guarda sempre quis expressar é **coerência**: o piso do peer não pode ficar ACIMA do piso que o
- * template pina, senão um lockfile que resolva o piso do template dá ERESOLVE no primeiro install.
- * É isso que ele verifica agora, e não precisa de edição quando a linha legitimamente avança.
- * Mesmo padrão aplicado ao guarda da fixture no M67. Backlog B-M67-01, itens 1-4.
+ * Moving the literals from `0.x` to `1.x` would only push the rot one step down the road. The
+ * property the guard always meant to express is **coherence**: the peer's floor may not sit ABOVE the
+ * floor the template pins, or a lockfile resolving the template's floor gives ERESOLVE on the first
+ * install. That is what it checks now, and it needs no edit when the line legitimately advances.
+ * Same pattern applied to the fixture guard in M67. Backlog B-M67-01, items 1-4.
  */
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -37,19 +37,20 @@ const templateTmpl = readFileSync(
   'utf-8',
 )
 
-/** `^X.Y.Z` → `[X, Y, Z]`. Retorna `undefined` para qualquer outra forma. */
+/** `^X.Y.Z` → `[X, Y, Z]`. Returns `undefined` for any other shape. */
 function caretParts(pin: string): [number, number, number] | undefined {
   const m = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(pin.trim())
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : undefined
 }
 
 /**
- * Semântica de caret do npm, sem depender de `semver` (escada de parcimônia, degrau 4 — a checagem
- * cabe em uma comparação lexicográfica de tupla).
+ * npm's caret semantics, without pulling in `semver` (parsimony ladder, rung 4 — the check fits in a
+ * lexicographic tuple comparison).
  *
- * `^X.Y.Z` com X > 0 é `>=X.Y.Z <(X+1).0.0`. Para `^0.Y.Z` o caret fixa o MINOR: `>=0.Y.Z <0.(Y+1).0`.
- * A versão anterior desta função aproximava por "compartilha o major", o que fazia `^1.1.0` aceitar
- * `1.0.0` — verde pelo motivo errado, exatamente o que o guarda existe para não deixar acontecer.
+ * `^X.Y.Z` with X > 0 is `>=X.Y.Z <(X+1).0.0`. For `^0.Y.Z` the caret pins the MINOR:
+ * `>=0.Y.Z <0.(Y+1).0`. The previous version of this function approximated it as "shares a major",
+ * which made `^1.1.0` "accept" `1.0.0` — green for the wrong reason, exactly what this guard exists
+ * to prevent.
  */
 function caretAccepts(pin: string, version: [number, number, number]): boolean {
   const base = caretParts(pin)
@@ -58,12 +59,12 @@ function caretAccepts(pin: string, version: [number, number, number]): boolean {
   const [vMaj, vMin, vPat] = version
   if (bMaj !== vMaj) return false
   if (bMaj === 0 && bMin !== vMin) return false
-  // Dentro da janela do caret, a versão ainda precisa ser >= o piso.
+  // Inside the caret window, the version must still be >= the floor.
   if (vMin !== bMin) return vMin > bMin
   return vPat >= bPat
 }
 
-/** Uma versão satisfaz um range `^A || ^B` quando satisfaz ao menos uma cláusula. */
+/** A version satisfies a `^A || ^B` range when it satisfies at least one clause. */
 function rangeAccepts(range: string, version: [number, number, number]): boolean {
   return range.split('||').some((part) => caretAccepts(part, version))
 }
@@ -77,44 +78,44 @@ describe('@theokit/ui peer range (V3-2)', () => {
   })
 
   it('test_the_default_template_pins_a_single_caret', () => {
-    // Se o template pinasse um range aberto (`*`, `>=1`), a asserção de coerência abaixo não teria
-    // piso para comparar — e o scaffold poderia resolver qualquer coisa.
-    expect(templatePin, 'o template canônico deve declarar @theokit/ui').toBeTruthy()
-    expect(caretParts(templatePin!), `pin do template não é um caret: ${templatePin}`).toBeTruthy()
+    // If the template pinned an open range (`*`, `>=1`), the coherence assertion below would have no
+    // floor to compare against — and the scaffold could resolve anything.
+    expect(templatePin, 'the canonical template must declare @theokit/ui').toBeTruthy()
+    expect(caretParts(templatePin!), `template pin is not a caret: ${templatePin}`).toBeTruthy()
   })
 
   it('test_ui_peer_accepts_the_whole_line_the_template_pins', () => {
-    // A propriedade que importa: um `npx create-theokit` recém-scaffoldado tem de instalar — inclusive
-    // com um lockfile que resolva o PISO do range do template, não só o `latest` do dia.
+    // The property that matters: a freshly scaffolded `npx create-theokit` must install — including
+    // with a lockfile that resolves the FLOOR of the template's range, not just the day's `latest`.
     const floor = caretParts(templatePin!)!
     expect(
       rangeAccepts(range!, floor),
-      `o peer "${range}" recusa ${floor.join('.')}, o piso que o template pina ("${templatePin}") — ` +
-        `um lockfile nesse piso quebraria o install com ERESOLVE`,
+      `the peer "${range}" refuses ${floor.join('.')}, the floor the template pins ("${templatePin}") — ` +
+        `a lockfile at that floor would break the install with ERESOLVE`,
     ).toBe(true)
   })
 
   it('test_the_next_major_is_not_accepted_implicitly', () => {
-    // O range é uma série de carets OR-joined, uma por linha VALIDADA (ADR 0018) — nunca um range
-    // aberto. Um major novo entra por decisão explícita, não por herança.
+    // The range is a series of OR-joined carets, one per VALIDATED line (ADR 0018) — never an open
+    // range. A new major enters by explicit decision, not by inheritance.
     const floor = caretParts(templatePin!)!
     expect(rangeAccepts(range!, [floor[0] + 1, 0, 0])).toBe(false)
   })
 
   it('test_caretAccepts_rejects_the_shapes_that_are_not_carets', () => {
-    // Lente negativa: a helper é o oráculo dos testes acima. Se ela aceitasse qualquer coisa, eles
-    // ficariam verdes sem provar nada — foi assim que a aproximação anterior passou despercebida.
+    // Negative lens: the helper is the oracle of the tests above. If it accepted anything, they would
+    // go green without proving a thing — which is how the previous approximation went unnoticed.
     for (const notACaret of ['1.1.0', '~1.1.0', '>=1.1.0', '*', '^1.1', '^1', '']) {
-      expect(caretAccepts(notACaret, [1, 1, 0]), `deveria rejeitar "${notACaret}"`).toBe(false)
+      expect(caretAccepts(notACaret, [1, 1, 0]), `should reject "${notACaret}"`).toBe(false)
     }
   })
 
   it('test_caretAccepts_honours_the_floor_within_the_window', () => {
-    expect(caretAccepts('^1.1.0', [1, 0, 0])).toBe(false) // abaixo do piso
-    expect(caretAccepts('^1.1.0', [1, 1, 0])).toBe(true) // exatamente o piso
-    expect(caretAccepts('^1.1.0', [1, 3, 2])).toBe(true) // dentro da janela
-    expect(caretAccepts('^1.1.0', [2, 0, 0])).toBe(false) // major seguinte
-    expect(caretAccepts('^0.14.0', [0, 14, 9])).toBe(true) // 0.x: caret fixa o minor
+    expect(caretAccepts('^1.1.0', [1, 0, 0])).toBe(false) // below the floor
+    expect(caretAccepts('^1.1.0', [1, 1, 0])).toBe(true) // exactly the floor
+    expect(caretAccepts('^1.1.0', [1, 3, 2])).toBe(true) // inside the window
+    expect(caretAccepts('^1.1.0', [2, 0, 0])).toBe(false) // next major
+    expect(caretAccepts('^0.14.0', [0, 14, 9])).toBe(true) // 0.x: the caret pins the minor
     expect(caretAccepts('^0.14.0', [0, 15, 0])).toBe(false)
   })
 })
