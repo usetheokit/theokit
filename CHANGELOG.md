@@ -41,6 +41,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
 ### Removed
+- **O job de CI `Dependency review`, impossível de passar e redundante (backlog B-M67-15).** A `actions/dependency-review-action` precisa do dependency graph do GitHub, que em repositório privado exige licença de Advanced Security — medido, `security_and_analysis: null`. Todo run terminava em *"Dependency review is not supported on this repository"*, independentemente do diff.
+
+  O que decidiu a remoção não foi ser impossível, foi ser **redundante**: `fail-on-severity: high` já é o job `Dependency audit (npm audit, high+)`, e `allow-licenses` já é o `License compliance` restaurado, cuja allowlist é superset da que o job declarava. Licenciar GHAS continua uma opção real — traria a visão de diff transitivo que nenhum dos dois substitutos tem — mas é decisão de compra, não de CI.
+
+### Removed
 - **O job de CI `e2e-postgres-templates`, que era impossível de passar (backlog B-M67-12).** Ele provisionava um Postgres, empurrava dois schemas e rodava specs Playwright para as fixtures `template-postgres` e `template-saas`. O **ADR 0023** (*default-only template set*) removeu esses templates de propósito, e o job sobreviveu a eles: verificado um a um, **nenhum** artefato que ele citava ainda existia — nem as duas fixtures, nem o `playwright.postgres-templates.config.ts`, nem o plano em `docs/plans/`. O `tsconfig.json` ainda listava o config inexistente no `include`, pelo mesmo apodrecimento.
 
   Ele apareceu porque a correção de build-before-lint fez a falha **mudar de lugar**: o job parou de morrer no build e passou a morrer no `Push schema` com `drizzle.config.ts file does not exist`. A primeira falha escondia a segunda.
