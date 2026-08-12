@@ -66,10 +66,10 @@
     "react-dom",
     "react-router",
     "ws",
-    "drizzle-orm",
-    "postgres",
     "expect-type",
-    "lint-staged"
+    "lint-staged",
+    "pg",
+    "@types/pg"
   ],
   "rules": {
     "files": "error",
@@ -78,5 +78,6 @@
     "exports": "error",
     "types": "error",
     "duplicates": "warn"
-  }
+  },
+  "tags": ["-@knipignore"]
 }

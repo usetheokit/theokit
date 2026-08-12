@@ -13,7 +13,7 @@ import {
  * cost less than relocating a public type.
  */
 
-export interface ProjectionOverrides {
+interface ProjectionOverrides {
   readonly model?: string | ModelSelection
   readonly reasoningEffort?: unknown
   readonly runContext?: unknown
@@ -32,7 +32,7 @@ export type DefinitionOrThunk =
   | ((sessionId: string) => TheokitAgentDefinition | Promise<TheokitAgentDefinition>)
 
 /** The projection the factory needs: compiled + resolved overrides. */
-export interface CompiledProjection {
+interface CompiledProjection {
   compiled: ReturnType<typeof compileAgentDefinition>
   model: string | ModelSelection
   reasoningEffort: ReturnType<typeof compileAgentDefinition>['reasoningEffort']
