@@ -74,18 +74,40 @@ Bump de `vitest`/`vite` resolve os três últimos de uma vez; o `react-router` �
 
 ---
 
-## B-M67-03 — `@theokit/studio@0.1.0` declara peers obsoletos
+## B-M67-03 — `@theokit/studio` está sete majors atrás, e alinhar os peers é uma migração, não um bump
 
-**Encontrado em:** M67 (T1), 2026-08-12
+**Encontrado em:** M67 (T1), 2026-08-12 · **Medido em:** 2026-08-12 · **Severidade: média** —
+não quebra install (peer opcional, pnpm apenas avisa); quebra a promessa do peer.
 
-Peer opcional de `theokit` (`packages/theo/package.json:136,162`). Declara
-`@theokit/agents@^0.39.0` (o workspace tem **7.4.2** — sete majors de defasagem, e **já** não batia
-antes do M67) e `@theokit/sdk@^3.8.0` (que era satisfeito pela cópia 3.8.0 arrastada pelo presenter; o
-M67 removeu essa cópia e o mismatch ficou visível). Install continua funcionando — é peer opcional e o
-pnpm apenas avisa.
+Peer opcional de `theokit` (`packages/theo/package.json:136,162`). O `@theokit/studio@0.1.0`
+publicado declara `@theokit/agents@^0.39.0` (o workspace tem **7.6.0**) e `@theokit/sdk@^3.8.0` (o
+workspace tem 4.51.1).
 
-Ação: republicar o `@theokit/studio` com peers alinhados, ou remover o peer se o acoplamento não
-existe mais.
+**O acoplamento é real** — não dá para simplesmente remover o peer. `packages/theo/src/vite-plugin/
+integrate-studio.ts:47` importa `@theokit/studio/plugin` dinamicamente, e do outro lado
+`packages/studio/plugin/run-endpoint.ts` e `reflection-api.ts` importam `compileAgentModule` /
+`streamAgentUIMessages` de `@theokit/agents/bridge` e `discoverSkills` de `@theokit/sdk/skills`.
+
+**Medição feita, e ela muda a natureza da entrada.** Alinhar os ranges no sibling
+(`../theokit-studio`, branch `workspace`) para `@theokit/agents@^7.5.0` + `@theokit/sdk@^4.49.0` e
+rodar a suíte de lá: **de 192 verdes para 177 verdes e 15 vermelhos**, 4 arquivos. Um deles devolve
+`422` onde esperava `200` no endpoint de run — o contrato mudou de verdade entre 0.39 e 7.x.
+
+Ou seja: os peers não estavam apenas desatualizados no manifest. O código do studio **nunca foi
+migrado** através de sete majors, e o peer obsoleto era o que escondia isso — enquanto ninguém o
+satisfazia, ninguém descobria. Republicar com os peers corrigidos publicaria um pacote que não
+funciona.
+
+**O que NÃO foi feito, e por quê.** A migração é um milestone do repositório `theokit-studio`, com
+ciclo, CHANGELOG e release próprios — não cabe como item de backlog deste repo, e não seria honesto
+fazê-la de passagem. O experimento de medição está preservado em
+`git -C ../theokit-studio stash list` → `stash@{0}` (só o `package.json`; a árvore de lá está limpa e
+na baseline verde).
+
+**Próximo passo:** abrir o milestone de migração no `theokit-studio` (com esta medição como ponto de
+partida), migrar os 15, e só então republicar. Enquanto isso, o peer opcional deste repo continua
+declarando `^0.1.0`, que é a versão que de fato existe e funciona contra o agents 0.39 — obsoleta,
+porém coerente.
 
 ---
 
