@@ -425,3 +425,28 @@ existe para metadado **ausente**, nunca para contradizer o que o manifest diz �
 `GPL-3.0`, não há nada faltando e não há o que sobrepor. Tratar os dois casos igual transformaria a
 válvula em bypass, que é exatamente o modo de falha que uma allowlist deveria evitar.
 
+---
+
+## ~~B-M67-14~~ — RESOLVIDO — O `Bundle budget` nunca mediu um bundle
+
+**Encontrado em:** investigação dos vermelhos restantes do #210, 2026-08-12
+
+O default do `BUNDLE_FIXTURE` era a **raiz do monorepo**, que não é uma app TheoKit. O
+`npx theokit build` não tinha o que buildar, o `|| true` engolia a falha, e o gate saía 2 com
+*"build output not found"* — um orçamento sob o qual ninguém nunca esteve.
+
+**A lacuna que deixou isso sobreviver:** os 7 testes do script passavam `BUNDLE_FIXTURE`
+explicitamente. Nenhum exercitava o **default**, que era justamente a única coisa que o CI usa. Um
+teste novo fixa a propriedade — o diretório que o script escolhe sozinho tem de ser uma app real.
+
+O script também guardava mal a evidência: descartava a saída do build e depois reportava "output not
+found", que é o sintoma e não a causa. Agora imprime o log do build quando os assets faltam.
+
+Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
+
+**Padrão, terceira ocorrência no mesmo dia.** `postgres-integration` (dependência não declarada),
+`License compliance` (script deletado), `Bundle budget` (fixture inexistente): três gates que
+reportavam vermelho havia meses sem nunca terem exercido a verificação que anunciavam. O sintoma
+comum não é descuido pontual — é que **um gate vermelho por default deixa de ser lido**, e a partir
+daí a causa dele para de importar para todo mundo.
+

@@ -33,6 +33,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   `packages/agents` passa a declarar `Apache-2.0` na fonte. Os demais precisam de republish nos repos irmãos, e o `@theokit/agents@1.0.0` **não tem conserto** — tarballs npm são imutáveis, e aquela cópia só sai da árvore quando o `@theokit/studio` parar de puxá-la.
 
+### Fixed
+- **O `Bundle budget` nunca mediu um bundle (backlog B-M67-14).** O default do `BUNDLE_FIXTURE` era a **raiz do monorepo**, que não é uma app TheoKit: o `npx theokit build` não tinha o que buildar, o `|| true` engolia a falha, e o gate saía 2 com *"build output not found"* — um orçamento sob o qual ninguém nunca esteve, nem por cima nem por baixo. O docblock do próprio teste já dizia a intenção correta (*"runs `theokit build` against fixtures/template-default"*); só o código discordava.
+
+  Todos os testes existentes passavam `BUNDLE_FIXTURE` explicitamente, então nenhum jamais exercitou o default — a lacuna que deixou isso sobreviver. Um teste novo fixa a propriedade: o diretório que o script escolhe sozinho tem de ser uma app de verdade (`package.json` + `app/` + `theo.config.ts`).
+
+  O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
+
 ### Removed
 - **O job de CI `e2e-postgres-templates`, que era impossível de passar (backlog B-M67-12).** Ele provisionava um Postgres, empurrava dois schemas e rodava specs Playwright para as fixtures `template-postgres` e `template-saas`. O **ADR 0023** (*default-only template set*) removeu esses templates de propósito, e o job sobreviveu a eles: verificado um a um, **nenhum** artefato que ele citava ainda existia — nem as duas fixtures, nem o `playwright.postgres-templates.config.ts`, nem o plano em `docs/plans/`. O `tsconfig.json` ainda listava o config inexistente no `include`, pelo mesmo apodrecimento.
 
