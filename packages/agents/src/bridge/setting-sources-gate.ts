@@ -2,82 +2,86 @@ import type { SettingSource, TrustPosture } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /**
- * M68 — o gate de confiança do `settingSources`.
+ * M68 — the trust gate for `settingSources`.
  *
- * ## O defeito que este módulo fecha
+ * ## The defect this module closes
  *
- * `settingSources` habilita a descoberta de config em disco. `'user'` lê `~/.theokit/` — a máquina do
- * operador, que não é controlada por terceiro. `'project'` lê `<cwd>/.theokit/`, **incluindo
- * `hooks.json`, que executa shell**.
+ * `settingSources` enables on-disk config discovery. `'user'` reads `~/.theokit/` — the operator's
+ * own machine, which no third party controls. `'project'` reads `<cwd>/.theokit/`, **including
+ * `hooks.json`, which executes shell**.
  *
- * A API anterior aceitava `readonly SettingSource[]`, e a JSDoc justificava o risco assim: *"é opt-in
- * porque `.theokit/` é o repo do próprio app (consentimento informado)"*. A premissa vale para um app
- * web cujo `cwd` é o próprio deploy. **Não vale** para a classe de produto que o framework endereça —
- * um agente cujo `cwd` é um repositório que o usuário acabou de clonar. Ali `.theokit/` é conteúdo
- * controlado pelo atacante, e habilitar `'project'` é execução remota de código no primeiro `build()`.
+ * The previous API took `readonly SettingSource[]`, and its JSDoc justified the risk this way:
+ * *"it is opt-in because `.theokit/` is the app's own repo (informed consent)"*. That premise holds
+ * for a web app whose `cwd` is its own deploy. It does **not** hold for the class of product this
+ * framework addresses — an agent whose `cwd` is a repository the user just cloned. There `.theokit/`
+ * is attacker-controlled content, and enabling `'project'` is remote code execution on the first
+ * `build()`.
  *
- * Documentar não impediu. O consumidor medido (TheoCode) não confiou na API: gateou por fora, com uma
- * `posture.allows` própria (`chat.ts:386`, comentário B-008). Ele **já tinha** a decisão certa e não
- * conseguia passá-la adiante, porque a API só aceitava strings. O gate existia do lado dele e
- * evaporava na fronteira.
+ * Documenting it did not prevent it. The measured consumer (TheoCode) did not trust the API: it
+ * gated from the outside, with a `posture.allows` of its own (`chat.ts:386`, comment B-008). It
+ * already **had** the right decision and could not pass it through, because the API only accepted
+ * strings. The gate existed on its side and evaporated at the boundary.
  *
- * ## A evidência é a do SDK, não uma inventada aqui
+ * ## The evidence is the SDK's, not one invented here
  *
- * `TrustPosture` é a primitiva de confiança do próprio `@theokit/sdk`, e a doc de `recordWiring` diz
- * que *"uma posture é a única coisa neste pacote que retém uma capacidade"*. Criar um tipo próprio
- * faria duas gramáticas de confiança conviverem e divergirem (ADR 0063).
+ * `TrustPosture` is `@theokit/sdk`'s own trust primitive, and `recordWiring`'s doc says *"a posture
+ * is the only thing in this package that retains a capability"*. A bespoke type would make two trust
+ * grammars coexist and drift apart (ADR 0063).
  */
 
 /**
- * O vocabulário de capacidades do framework — deliberadamente de um nome só (ADR 0065).
+ * The framework's capability vocabulary — deliberately a single name (ADR 0065).
  *
- * `allows` é all-or-nothing no SDK: todo `K` declarado recebe o mesmo booleano. Um vocabulário mais
- * fino (`hooks`, `skills`, `subagents`, `mcp`) prometeria ao consumidor gatear um sem gatear o outro,
- * e a primitiva não entrega isso. Uma API que sugere uma distinção que o runtime não faz ensina
- * errado, e o erro só aparece quando alguém depende da distinção.
+ * `allows` is all-or-nothing in the SDK: every declared `K` gets the same boolean. A finer
+ * vocabulary (`hooks`, `skills`, `subagents`, `mcp`) would promise the consumer it can gate one
+ * without gating the other, and the primitive does not deliver that. An API that suggests a
+ * distinction the runtime does not make teaches the wrong thing, and the error only surfaces when
+ * somebody depends on the distinction.
  */
 export type SettingSourceCapability = 'projectSettings'
 
-/** A autorização para ler config do diretório de trabalho. Exige a posture, nunca uma afirmação. */
+/** Authorization to read config from the working directory. Requires the posture, never a claim. */
 export interface ProjectSettingsGrant {
   /**
-   * Tipicamente a saída de `resolveTrustPosture` — o que lhe dá `source` (`'env' | 'store' |
-   * 'default'`) e, portanto, uma recusa que diz DE ONDE veio a decisão em vez de apenas negar.
+   * Typically the output of `resolveTrustPosture` — which is what gives it `source` (`'env' |
+   * 'store' | 'default'`) and therefore a refusal that says WHERE the decision came from instead of
+   * merely denying.
    */
   readonly trustedBy: TrustPosture<SettingSourceCapability>
 }
 
 /**
- * Quais raízes de config em disco o agente pode ler.
+ * Which on-disk config roots the agent may read.
  *
- * A assimetria é o desenho: `user` é um booleano porque `~/.theokit/` é do operador; `project` exige
- * evidência porque `<cwd>/.theokit/` pode não ser dele. Omitir uma raiz é não habilitá-la — nunca
- * "habilitar sem gate". A assimetria é herdada do próprio SDK, cuja `TrustPostureInput.envOverride`
- * documenta que `false` e `undefined` ambos significam "o operador não ligou", não "desligou".
+ * The asymmetry is the design: `user` is a boolean because `~/.theokit/` belongs to the operator;
+ * `project` requires evidence because `<cwd>/.theokit/` may not. Omitting a root is not enabling it
+ * — never "enabling without a gate". The asymmetry is inherited from the SDK itself, whose
+ * `TrustPostureInput.envOverride` documents that `false` and `undefined` both mean "the operator did
+ * not turn it on", not "turned it off".
  */
 export interface SettingSourcesSelection {
-  /** `~/.theokit/` — a máquina do operador. Sem gate: não é controlada por terceiro. */
+  /** `~/.theokit/` — the operator's machine. No gate: no third party controls it. */
   readonly user?: boolean
-  /** `<cwd>/.theokit/` — controlado por quem escreveu o repositório aberto. Exige evidência. */
+  /** `<cwd>/.theokit/` — controlled by whoever wrote the open repository. Requires evidence. */
   readonly project?: ProjectSettingsGrant
 }
 
 /**
- * Recusa de leitura do diretório de trabalho por falta de confiança.
+ * Refusal to read the working directory for lack of trust.
  *
- * Descende de `TheokitAgentError` porque o repo mantém erros tipados como regra inquebrável — e
- * porque `isTransientError` só enxerga essa hierarquia. Uma classe estendendo `Error` puro seria
- * invisível ao predicado que separa recuperável de irrecuperável (foi o defeito que o M67 corrigiu em
- * cinco classes).
+ * Descends from `TheokitAgentError` because typed errors are an unbreakable rule here — and because
+ * `isTransientError` only sees this hierarchy. A class extending plain `Error` would be invisible to
+ * the predicate that separates recoverable from unrecoverable (the defect M67 fixed in five
+ * classes).
  */
 export class UntrustedSettingSourceError extends TheokitAgentError {
   override readonly name = 'UntrustedSettingSourceError'
 
   constructor(
     message: string,
-    /** De onde veio a decisão de confiança: `'env' | 'store' | 'default'`. */
+    /** Where the trust decision came from: `'env' | 'store' | 'default'`. */
     readonly trustSource: string,
-    /** A capacidade recusada. */
+    /** The refused capability. */
     readonly capability: SettingSourceCapability,
   ) {
     super(message)
@@ -85,15 +89,15 @@ export class UntrustedSettingSourceError extends TheokitAgentError {
 }
 
 /**
- * Traduz a seleção declarada para os `SettingSource` que o SDK aceita, recusando o que a posture não
- * autoriza.
+ * Translate the declared selection into the `SettingSource`s the SDK accepts, refusing what the
+ * posture does not authorize.
  *
- * Recusa em vez de ignorar (ADR 0064). Ignorar deixaria o produto rodando acreditando que os hooks do
- * repositório estão ativos — modo de falha silencioso e do lado errado. O SDK já escolheu esse lado
- * para o mesmo problema: `recordWiring` lança `UngatedCapabilityError` quando alguém registra uma
- * capacidade que a posture não gateia.
+ * Refuses rather than ignores (ADR 0064). Ignoring would leave the product running in the belief
+ * that the repository's hooks are active — a silent failure mode, on the wrong side. The SDK already
+ * picked that side for the same problem: `recordWiring` throws `UngatedCapabilityError` when
+ * somebody registers a capability the posture does not gate.
  *
- * @throws {UntrustedSettingSourceError} quando `project` é pedido e a posture não o concede.
+ * @throws {UntrustedSettingSourceError} when `project` is requested and the posture does not grant it.
  */
 export function resolveSettingSources(
   selection: SettingSourcesSelection | undefined,

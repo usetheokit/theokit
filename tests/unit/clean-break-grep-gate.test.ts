@@ -44,9 +44,9 @@ function scanSrc(pattern: RegExp): string[] {
 
 describe('M3 clean break — proprietary agent surface removed from src', () => {
   it('"AgentEvent" and "useAgentStream" are absent from packages src (DoD gate)', () => {
-    // Delimitado por `\b`: sem isso, `messagesToAgentEvents` — um símbolo DIFERENTE, do caminho
-    // ai-free do TUI — casava por conter a substring, e o gate acusava a reintrodução de uma
-    // superfície que ninguém reintroduziu. Backlog B-M67-01, item 11.
+    // Delimited by `\b`: without it, `messagesToAgentEvents` — a DIFFERENT symbol, from the TUI's
+    // ai-free path — matched by containing the substring, and the gate accused a re-introduction
+    // nobody made. Backlog B-M67-01, item 11.
     const hits = scanSrc(/\bAgentEvent\b|\buseAgentStream\b/)
     expect(hits, `expected 0 matches, found:\n${hits.join('\n')}`).toEqual([])
   })

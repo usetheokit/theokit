@@ -1,53 +1,54 @@
 /**
- * M68 T2 — habilitar o source do repositório com um literal de string não compila.
+ * M68 T2 — enabling the repository source with a string literal does not compile.
  *
- * Asserções de COMPILAÇÃO. Cada `@ts-expect-error` abaixo **precisa** errar; o teste quebra quando
- * uma delas para de errar, que é o dia em que o caminho inseguro voltou a nascer.
+ * COMPILE-time assertions. Every `@ts-expect-error` below **must** error; the test breaks the day one
+ * of them stops erroring, which is the day the unsafe path was born again.
  *
- * ## O que este arquivo protege
+ * ## What this file protects
  *
- * `settingSources` habilita a descoberta de config em disco. `'user'` lê `~/.theokit/` — a máquina do
- * operador, que não é controlada por terceiro. `'project'` lê `<cwd>/.theokit/`, **incluindo
- * `hooks.json`, que executa shell**. Para um agente cujo `cwd` é um repositório que o usuário acabou
- * de clonar, `<cwd>/.theokit/` é conteúdo do atacante.
+ * `settingSources` enables on-disk config discovery. `'user'` reads `~/.theokit/` — the operator's
+ * own machine, which no third party controls. `'project'` reads `<cwd>/.theokit/`, **including
+ * `hooks.json`, which executes shell**. For an agent whose `cwd` is a repository the user just
+ * cloned, `<cwd>/.theokit/` is attacker content.
  *
- * A JSDoc anterior documentava esse risco e o justificava com "`.theokit/` é o repo do próprio app".
- * Documentar não impediu: o consumidor medido (TheoCode) não confiou na API e gateou por fora, com
- * uma `posture.allows` própria. O gate existia do lado dele e evaporava na fronteira.
+ * The previous JSDoc documented that risk and justified it with "`.theokit/` is the app's own repo".
+ * Documenting did not prevent it: the measured consumer (TheoCode) did not trust the API and gated
+ * from the outside, with a `posture.allows` of its own. The gate existed on its side and evaporated
+ * at the boundary.
  *
- * Controle de tipo fechado, não lint: a chamada errada não nasce. Residuo declarado, no molde do
- * narrowing de `Agent.list` (M103) — liga consumidores TypeScript apenas; um `.js` ou um `as any`
- * escapam, e é a recusa em runtime (T3) que os cobre.
+ * Closed type control, not lint: the wrong call is not born. Residue declared, in the mould of the
+ * `Agent.list` narrowing (M103) — it binds TypeScript consumers only; a `.js` caller or an `as any`
+ * escapes, and the runtime refusal (T3) is what covers them.
  */
 import type { SettingSourcesSelection, TrustPosture } from '../../src/index.js'
 
 declare const trusted: TrustPosture<'projectSettings'>
 
-  // ── 1. O caminho seguro continua trivial ──────────────────────────────────────────────────────
-  // Se recusar exigisse cerimônia do caminho seguro, a fricção empurraria o consumidor a desligar o
-  // gate — que é o resultado oposto ao pretendido.
+  // ── 1. The safe path stays trivial ────────────────────────────────────────────────────────────
+  // If refusing demanded ceremony from the safe path, the friction would push the consumer to turn
+  // the gate off — the opposite of the intent.
 ;({ user: true }) satisfies SettingSourcesSelection
 ;({}) satisfies SettingSourcesSelection
 
-// ── 2. O source do repositório exige a evidência ──────────────────────────────────────────────
+// ── 2. The repository source requires the evidence ────────────────────────────────────────────
 ;({ project: { trustedBy: trusted } }) satisfies SettingSourcesSelection
 ;({ user: true, project: { trustedBy: trusted } }) satisfies SettingSourcesSelection
 
-// ── 3. As formas que precisam NÃO compilar ────────────────────────────────────────────────────
+// ── 3. The shapes that must NOT compile ───────────────────────────────────────────────────────
 {
-  // @ts-expect-error — a forma antiga: um array de literais. É o call site que este milestone mata.
+  // @ts-expect-error — the old shape: an array of literals. It is the call site this milestone kills.
   ;['project', 'user'] satisfies SettingSourcesSelection
 }
 {
-  // @ts-expect-error — um booleano no lugar da evidência. Ligar o source perigoso não é uma opinião.
+  // @ts-expect-error — a boolean in place of the evidence. Turning on the dangerous source is not an opinion.
   ;({ project: true }) satisfies SettingSourcesSelection
 }
 {
-  // @ts-expect-error — `trustedBy` ausente: o objeto existe, a evidência não.
+  // @ts-expect-error — `trustedBy` absent: the object exists, the evidence does not.
   ;({ project: {} }) satisfies SettingSourcesSelection
 }
 {
-  // @ts-expect-error — uma string no lugar da posture. Alegar confiança não é prová-la; era
-  // exatamente a forma de `auto-approve` que o M77 vai corrigir pelo mesmo motivo.
-  ;({ project: { trustedBy: 'eu confio' } }) satisfies SettingSourcesSelection
+  // @ts-expect-error — a string in place of the posture. Claiming trust is not proving it; it was
+  // exactly the shape of `auto-approve` that M77 will fix for the same reason.
+  ;({ project: { trustedBy: 'trust me' } }) satisfies SettingSourcesSelection
 }

@@ -8,6 +8,11 @@
  */
 import { describe, expect, it } from 'vitest'
 
+// By the package specifier, not the `src` path: that is how the SUT imports it
+// (`consume-ui-message-stream.ts:1`), and a second copy of the class would make `instanceof` fail
+// against an error that is, in every other respect, the same.
+import { WireStreamError } from '@theokit/presenter/wire'
+
 import { consumeUIMessageStream } from '../../packages/agents/src/client/consume-ui-message-stream.js'
 
 /** Build a fake SSE Response on the UIMessageStream wire from a list of chunks. */
@@ -67,9 +72,20 @@ describe('consumeUIMessageStream (M2)', () => {
     expect(lastMetadata).toEqual(meta)
   })
 
-  it('test_surfaces_error_chunk_then_terminates', async () => {
-    // An agent run that fails mid-stream emits an `error` chunk + `finish` (M1 translator).
-    // The reader must still terminate cleanly (no throw) and expose the failed turn.
+  it('test_surfaces_error_chunk_then_raises_a_typed_refusal', async () => {
+    // A run that fails mid-stream emits an `error` chunk + `finish`.
+    //
+    // This test asserted the opposite: *"the reader must still terminate cleanly (no throw)"*.
+    // theokit#136 decided the other way and the implementation followed — `read-message-stream.ts`
+    // calls `raiseStreamError`, and the comment in the code is explicit: *"thrown, never swallowed"*.
+    // Terminating cleanly would leave the consumer with a truncated turn and no signal that it
+    // failed: the silent failure mode `.claude/rules/error-handling.md` forbids. The test went red at
+    // that commit, freezing a contract the product had already abandoned — and red by default
+    // protects nothing. Backlog B-M67-01, item 8.
+    //
+    // What it always meant to protect is still here, and it is what the refusal must preserve: the
+    // partial text produced BEFORE the error already reached the consumer. Failing loud cannot mean
+    // swallowing what was already true.
     const response = sseResponse([
       { type: 'start' },
       { type: 'text-start', id: 't0' },
@@ -79,15 +95,26 @@ describe('consumeUIMessageStream (M2)', () => {
     ])
     let calls = 0
     let lastText = ''
-    await consumeUIMessageStream(response, (message) => {
-      calls += 1
-      lastText = message.parts
-        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map((p) => p.text)
-        .join('')
-    })
-    // Reconstruction ran (no throw) and the partial text before the error is preserved.
-    expect(calls).toBeGreaterThan(0)
+    await expect(
+      consumeUIMessageStream(response, (message) => {
+        calls += 1
+        lastText = message.parts
+          .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+          .map((p) => p.text)
+          .join('')
+      }),
+    ).rejects.toThrow(WireStreamError)
+
+    // The refusal carries the message the server reported — "it failed" is not actionable; "it
+    // failed, and the server said `boom`" is.
+    await expect(
+      consumeUIMessageStream(
+        sseResponse([{ type: 'start' }, { type: 'error', errorText: 'boom' }]),
+        () => {},
+      ),
+    ).rejects.toThrow(/boom/)
+
+    expect(calls, 'the partial before the error must have reached the consumer').toBeGreaterThan(0)
     expect(lastText).toBe('partial')
   })
 

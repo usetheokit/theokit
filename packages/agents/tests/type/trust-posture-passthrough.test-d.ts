@@ -1,19 +1,19 @@
 /**
- * M68 T1 — o vocabulário de confiança do SDK atravessa o barrel.
+ * M68 T1 — the SDK's trust vocabulary crosses the barrel.
  *
- * Asserções de COMPILAÇÃO: `npx tsc --noEmit -p packages/agents/tsconfig.test.json` falha se algum
- * destes nomes deixar de ser nomeável a partir de `@theokit/agents`, ou deixar de ser o tipo do SDK.
+ * COMPILE-time assertions: `npx tsc --noEmit -p packages/agents/tsconfig.test.json` fails if any of
+ * these names stops being nameable from `@theokit/agents`, or stops being the SDK's own type.
  *
- * ## Por que estes quatro, e por que agora
+ * ## Why these four, and why now
  *
- * O M68 passa a exigir uma `TrustPosture` para habilitar o source `project` de `settingSources` — o
- * que liga hooks executores de shell vindos do diretório de trabalho. Uma API que exige um valor cujo
- * TIPO o consumidor não consegue nomear é inutilizável: ele teria de redeclarar a forma à mão, e uma
- * segunda declaração de um contrato de segurança diverge da primeira em silêncio.
+ * M68 requires a `TrustPosture` to enable the `project` source of `settingSources` — which turns on
+ * shell-executing hooks coming from the working directory. An API that requires a value whose TYPE
+ * the consumer cannot name is unusable: they would have to redeclare the shape by hand, and a second
+ * declaration of a security contract drifts from the first in silence.
  *
- * O ADR 0061 (M67) declarou honestamente que o gate ROOT-BAR cobre valores e não tipos, porque
- * `Object.keys` sobre o namespace não enxerga `export type`. Estes quatro fecham essa lacuna onde ela
- * importa — não por completude, mas porque o M68 depende deles.
+ * ADR 0061 (M67) honestly declared that the ROOT-BAR gate covers values and not types, because
+ * `Object.keys` over the namespace does not see `export type`. These four close that gap where it
+ * matters — not for completeness, but because M68 depends on them.
  */
 import { expectTypeOf } from 'vitest'
 
@@ -25,23 +25,24 @@ import type {
   TrustSource as SdkTrustSource,
 } from '@theokit/sdk'
 
-// ── 1. Nomeáveis a partir do barrel ───────────────────────────────────────────────────────────
+// ── 1. Nameable from the barrel ───────────────────────────────────────────────────────────────
 expectTypeOf<TrustLevel>().not.toBeNever()
 expectTypeOf<TrustSource>().not.toBeNever()
 expectTypeOf<TrustPosture<'project'>>().not.toBeNever()
 expectTypeOf<TrustPostureInput<'project'>>().not.toBeNever()
 
-// ── 2. São os tipos do SDK, não uma redeclaração ──────────────────────────────────────────────
-// Pass-through, nunca wrapper (Rung 9). Uma cópia estruturalmente igual divergiria de upstream em
-// silêncio, que é o defeito que a fronteira em camadas existe para fechar.
+// ── 2. They ARE the SDK's types, not a redeclaration ──────────────────────────────────────────
+// Pass-through, never wrapper (Rung 9). A structurally equal copy would drift from upstream in
+// silence, which is the defect the layered boundary exists to close.
 expectTypeOf<TrustLevel>().toEqualTypeOf<SdkTrustLevel>()
 expectTypeOf<TrustSource>().toEqualTypeOf<SdkTrustSource>()
 expectTypeOf<TrustPosture<'project'>>().toEqualTypeOf<SdkTrustPosture<'project'>>()
 expectTypeOf<TrustPostureInput<'project'>>().toEqualTypeOf<SdkTrustPostureInput<'project'>>()
 
-// ── 3. As duas propriedades de que o gate do M68 depende ──────────────────────────────────────
-// `level` distingue confiado de não-confiado; `source` diz DE ONDE veio a decisão, e é o que torna a
-// mensagem de recusa acionável ("negado, e a decisão veio de `default`") em vez de apenas negativa.
+// ── 3. The two properties the M68 gate depends on ─────────────────────────────────────────────
+// `level` separates trusted from untrusted; `source` says WHERE the decision came from, and is what
+// makes the refusal message actionable ("denied, and the decision came from `default`") rather than
+// merely negative.
 expectTypeOf<TrustPosture<'project'>>().toHaveProperty('level').toEqualTypeOf<SdkTrustLevel>()
 expectTypeOf<TrustPosture<'project'>>().toHaveProperty('source').toEqualTypeOf<SdkTrustSource>()
 expectTypeOf<TrustPosture<'project'>>()

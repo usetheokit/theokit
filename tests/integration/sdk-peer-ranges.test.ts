@@ -5,18 +5,18 @@
  * and the `@theokit/sdk-tools` peer was left open (`>=0.11.0`). A closed range is the install-time
  * half of the seam guarantee (the boot check + contract test are the runtime half).
  *
- * ## Reescrito (backlog B-M67-01, item 6)
+ * ## Rewritten (backlog B-M67-01, item 6)
  *
- * `test_sdk_tools_peer_is_closed_caret` exigia `peerDependencies['@theokit/sdk-tools'] === '^0.11.0'`.
- * Duas coisas mudaram desde então e nenhuma foi refletida aqui: o pacote saiu de peer opcional para
- * **dependency** (o subpath `@theokit/agents/tools` faz `export *` estático dele — um peer opcional
- * ausente quebraria o import), e a linha andou 15 minors. O guarda ficou vermelho por default, e um
- * guarda permanentemente vermelho treina o time a ignorar vermelho.
+ * `test_sdk_tools_peer_is_closed_caret` demanded `peerDependencies['@theokit/sdk-tools'] === '^0.11.0'`.
+ * Two things changed since, and neither was reflected here: the package moved from optional peer to
+ * **dependency** (the `@theokit/agents/tools` subpath does a static `export *` from it — a missing
+ * optional peer would break the import), and the line moved 15 minors. The guard went red by default,
+ * and a permanently red guard trains the team to ignore red.
  *
- * A propriedade que ele sempre quis expressar não é o literal: é que **nenhum range da família SDK
- * fica aberto** e que o manifest não mente sobre onde a dependência vive. Esta versão afirma isso, e
- * acrescenta a lente que faltava — `peerDependenciesMeta` sem `peerDependencies` correspondente é
- * metadata inerte, uma declaração de opcionalidade que o npm nunca lê.
+ * The property it always meant to express is not the literal: it is that **no SDK-family range is
+ * left open**, and that the manifest does not lie about where the dependency lives. This version
+ * asserts that, and adds the lens that was missing — a `peerDependenciesMeta` entry with no matching
+ * `peerDependencies` entry is inert metadata, a claim of optionality npm never reads.
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -27,7 +27,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const readPkg = (rel: string): Record<string, unknown> =>
   JSON.parse(readFileSync(join(ROOT, rel), 'utf8')) as Record<string, unknown>
 
-/** Um range é fechado quando tem teto: caret/til, ou um `<`/`<=` explícito. */
+/** A range is closed when it has a ceiling: caret/tilde, or an explicit `<`/`<=`. */
 function isClosed(range: string): boolean {
   if (/^[\^~]/.test(range)) return true
   return /<=?\s*\d/.test(range)
@@ -38,8 +38,8 @@ const BUCKETS = ['dependencies', 'peerDependencies'] as const
 
 describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () => {
   it('test_no_open_sdk_family_range_remains', () => {
-    // Um `>=0.11.0` sem teto deixa o consumidor herdar uma major nova sem revisão — foi o defeito
-    // original do M48, e ele vale para `dependencies` tanto quanto para `peerDependencies`.
+    // A ceiling-less `>=0.11.0` lets the consumer inherit a new major without review — the original
+    // M48 defect, and it applies to `dependencies` just as much as to `peerDependencies`.
     for (const manifest of MANIFESTS) {
       const pkg = readPkg(manifest)
       for (const bucket of BUCKETS) {
@@ -55,9 +55,9 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
   })
 
   it('test_the_sdk_family_lives_in_exactly_one_bucket_per_manifest', () => {
-    // Declarar o mesmo pacote em `dependencies` e `devDependencies` com ranges DIFERENTES é o modo
-    // de falha que o ADR 0062 documentou no presenter: a suíte roda contra uma versão e o consumidor
-    // instala outra, e a divergência só aparece em produção.
+    // Declaring the same package in `dependencies` and `devDependencies` with DIFFERENT ranges is the
+    // failure mode ADR 0062 documented on the presenter: the suite runs against one version and the
+    // consumer installs another, and the divergence only surfaces in production.
     for (const manifest of MANIFESTS) {
       const pkg = readPkg(manifest)
       const seen = new Map<string, { bucket: string; range: string }>()
@@ -78,8 +78,8 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
   })
 
   it('test_every_peer_meta_entry_has_a_matching_peer', () => {
-    // `peerDependenciesMeta` só qualifica um peer existente. Uma entrada órfã não torna nada
-    // opcional — ela apenas afirma, no manifest publicado, um contrato que o npm nunca lê.
+    // `peerDependenciesMeta` only qualifies an existing peer. An orphan entry makes nothing optional
+    // — it merely asserts, in the published manifest, a contract npm never reads.
     for (const manifest of MANIFESTS) {
       const pkg = readPkg(manifest)
       const peers = (pkg.peerDependencies ?? {}) as Record<string, string>
@@ -103,13 +103,13 @@ describe('SDK-family peer/version ranges are closed + aligned (M48 T3.1)', () =>
   })
 
   it('test_isClosed_rejects_the_open_shapes', () => {
-    // Lente negativa sobre o oráculo: se `isClosed` aceitasse tudo, os dois primeiros testes
-    // ficariam verdes sem provar nada.
+    // Negative lens over the oracle: if `isClosed` accepted everything, the first two tests would go
+    // green without proving a thing.
     for (const open of ['>=0.11.0', '>0.11.0', '*', 'latest', '']) {
-      expect(isClosed(open), `deveria recusar "${open}"`).toBe(false)
+      expect(isClosed(open), `should reject "${open}"`).toBe(false)
     }
     for (const closed of ['^0.26.1', '~1.2.3', '>=0.2.0 <1.0.0', '>=1 <=2']) {
-      expect(isClosed(closed), `deveria aceitar "${closed}"`).toBe(true)
+      expect(isClosed(closed), `should accept "${closed}"`).toBe(true)
     }
   })
 })
