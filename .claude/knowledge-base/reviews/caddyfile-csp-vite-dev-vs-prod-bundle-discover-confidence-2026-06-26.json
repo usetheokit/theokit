@@ -15,9 +15,7 @@
   ],
   "weight_normalization_factor": 1.0,
   "weighted_avg": 96.5,
-  "hard_caps_triggered": [
-    "soft_floor_citation_density_low"
-  ],
+  "hard_caps_triggered": ["soft_floor_citation_density_low"],
   "final_score_after_caps": 89.0,
   "verdict": "SHIPPABLE_WITH_CAVEATS",
   "calibration": {
@@ -36,16 +34,11 @@
       "detractors": []
     },
     "reference_citations": {
-      "contributors": [
-        "15 verified .claude/knowledge-base/references/ citation(s)"
-      ],
+      "contributors": ["15 verified .claude/knowledge-base/references/ citation(s)"],
       "detractors": []
     },
     "blueprint_completeness": {
-      "contributors": [
-        "10/10 mandatory sections present",
-        "3 ADR(s) found in ADRs section"
-      ],
+      "contributors": ["10/10 mandatory sections present", "3 ADR(s) found in ADRs section"],
       "detractors": []
     },
     "structural_risk": {
@@ -100,9 +93,7 @@
       "blocked_paths": [],
       "word_count": 4512,
       "citation_density_per_200w": 0.66,
-      "contributors": [
-        "15 verified .claude/knowledge-base/references/ citation(s)"
-      ],
+      "contributors": ["15 verified .claude/knowledge-base/references/ citation(s)"],
       "detractors": []
     },
     "blueprint_completeness": {
@@ -122,10 +113,7 @@
       ],
       "missing_mandatory": [],
       "adr_count": 3,
-      "contributors": [
-        "10/10 mandatory sections present",
-        "3 ADR(s) found in ADRs section"
-      ],
+      "contributors": ["10/10 mandatory sections present", "3 ADR(s) found in ADRs section"],
       "detractors": []
     },
     "structural_risk": {

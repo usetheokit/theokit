@@ -46,7 +46,10 @@ function trimTrailingSlash(url: string): string {
 }
 
 /** Build an A2A agent card from a manifest entry. */
-export function buildAgentCard(entry: AgentManifestEntry, options: BuildAgentCardOptions): AgentCard {
+export function buildAgentCard(
+  entry: AgentManifestEntry,
+  options: BuildAgentCardOptions,
+): AgentCard {
   const base = trimTrailingSlash(options.baseUrl)
   return {
     name: entry.name,
