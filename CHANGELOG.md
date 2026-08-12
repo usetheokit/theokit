@@ -41,6 +41,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
 ### Fixed
+- **Um guarda afirmava sobre um arquivo que o `.gitignore` exclui (backlog B-M67-18).** `cli-env-wiring.test.ts` verificava que a fixture `zero-config-env` tem um `.env` com `OPENROUTER_API_KEY` — mas esse `.env` é gitignored, e corretamente: um repositório que começa a commitar `.env` perde o hábito que mantém os reais fora. O guarda passava nesta máquina, onde uma execução anterior deixara o arquivo, e falhava em **todo checkout limpo**. Um guarda que depende de estado não rastreado não verifica o repositório, verifica a máquina.
+
+  O `.gitignore` já dizia qual era a forma pretendida — a linha 26 carrega a negação `!.env.example`; o template só nunca tinha sido escrito. Criado, e o guarda passa a afirmar sobre ele. Um segundo teste garante que os valores do template continuem obviamente falsos, já que ele é o único arquivo commitado desta fixture e portanto o único lugar onde uma credencial real poderia aterrissar em silêncio.
+
+### Fixed
 - **O build da fixture passa a invocar a CLI pelo caminho resolvido, em vez de pedir ao gerenciador de pacotes que a encontre (backlog B-M67-17).** `pnpm exec theokit build` falhou em CI por três runs seguidos com `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "theokit" not found`, enquanto passava localmente **com o mesmo pnpm** (9.15.0, fixado por `packageManager`) e o mesmo lockfile — verificado, inclusive que o `--frozen-lockfile` está em dia. O shim existe na fixture nos dois lados, então a diferença nunca foi o artefato: era a **resolução**, e o erro a nomeia.
 
   `pnpm exec` (e o `npx` equivalente no `check-bundle-budget.sh`) é uma indireção cujo único trabalho é localizar um binário cujo caminho este repositório já conhece. Removê-la elimina o modo de falha **por construção**, não por palpite. A única possibilidade que resta — a CLI não estar buildada — virou uma frase acionável em vez de um `Command not found`.
