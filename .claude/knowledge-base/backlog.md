@@ -282,3 +282,51 @@ causa é a janela de publish. O vermelho continua — ele é honesto — mas ago
 `changeset publish` faz quando o release não é interrompido), ou marcar a janela explicitamente para
 que a suíte saiba distingui-la. A primeira é preferível: a segunda ensina a suíte a tolerar um estado
 que não deveria durar.
+
+---
+
+## B-M67-09 — `Postgres Jobs CI` vermelho há dias: `pg` não declarado, os 6 testes nunca rodaram
+
+**Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
+[`#207`](https://github.com/usetheodev/theokit/issues/207) · **Severidade: alta** — a garantia que o
+workflow anuncia nunca foi coletada.
+
+Vermelho desde pelo menos 2026-08-10, em `develop` **e** em `main`, 8 runs consecutivos observados.
+`Cannot find package 'pg'` (`ERR_MODULE_NOT_FOUND`): os **6 testes ficam `skipped`** e o job sai 1. O
+teste de race-safety do `SKIP LOCKED` — o único lugar onde a semântica de dequeue concorrente do
+`PostgresJobBackend` é verificada contra um Postgres real — nunca chegou a executar.
+
+`pg` não é declarado em nenhum `package.json` do workspace. O comentário no topo do teste afirma que
+o import dinâmico "keeps the test loadable even when pg isn't installed … resolved from
+`packages/theo` node_modules in CI" — as duas metades são falsas: o `beforeAll` explode assim que a
+suíte roda (e ela roda, porque o único guarda é `skipIf(!POSTGRES_URL)` e em CI a variável está
+setada), e o `packages/theo` também não declara `pg`.
+
+**Fix proposto (no issue):** declarar `pg` + `@types/pg` como devDeps da raiz, e fazer o `skipIf`
+considerar as duas pré-condições — com piso anti-vacuidade: se `POSTGRES_URL` está setada, um `pg`
+ausente é **falha**, não skip, senão o job fica verde sem ter rodado nada, que é pior do que o
+vermelho de hoje. Depois do fix, o teste falhar de verdade é resultado possível: as 6 asserções nunca
+executaram.
+
+---
+
+## B-M67-10 — `main` e `develop` sem branch protection: o PR obrigatório é convenção, não restrição
+
+**Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
+[`#208`](https://github.com/usetheodev/theokit/issues/208) · **Severidade: alta**
+
+`gh api repos/usetheodev/theokit/branches/{main,develop}/protection` → **404 Branch not protected**
+nas duas.
+
+O `CLAUDE.md` § 4 já descreve exatamente esta situação: o hook local garante a **origem** do trabalho;
+a branch protection é o que torna o **PR obrigatório**. Um repo sem ela tem a primeira garantia e não
+a segunda. Concretamente: um `git push origin main` direto funciona hoje.
+
+Agrava-se com o B-M67-09: sem required status checks, um vermelho crônico não impede merge nenhum —
+o gate não bloqueia, ninguém conserta, e o gate deixa de significar algo.
+
+**Não apliquei nada.** Configuração de repositório é decisão do dono, não de quem encontrou. A
+proposta está no issue, com a ressalva de custo: 1 aprovação obrigatória em repo de mantenedor único
+cria um gate que só pode ser contornado; `required_approving_review_count: 0` + required status
+checks entrega a maior parte do valor sem isso.
+
