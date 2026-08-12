@@ -361,3 +361,34 @@ Risco real é menor que o de produção, mas não é zero: são ferramentas que 
 confiável (YAML de config, ASTs, globs) durante lint e build. A decisão a tomar é **qual escopo o
 gate mede**, e registrá-la — não sair corrigindo 16 advisories de terceiros.
 
+---
+
+## ~~B-M67-12~~ — RESOLVIDO — Um job de CI impossível de passar, testando templates que um ADR removeu
+
+**Encontrado em:** medição do efeito do fix de build no PR #212, 2026-08-12 · **Severidade: média** —
+vermelho garantido a cada run, e gastando um serviço de banco para isso.
+
+O job `e2e-postgres-templates` provisionava um Postgres, empurrava dois schemas e rodava specs
+Playwright para as fixtures `template-postgres` e `template-saas`. O **ADR 0023** (2026-06-17,
+*default-only template set*) removeu esses templates **de propósito** — e o job sobreviveu a eles.
+
+Verificado item por item: **nenhum** artefato que ele citava ainda existia.
+
+| Artefato citado pelo job | Existe? |
+|---|---|
+| `fixtures/template-postgres/` | não |
+| `fixtures/template-saas/` | não |
+| `playwright.postgres-templates.config.ts` | não (só o `playwright.config.ts`) |
+| `docs/plans/playwright-postgres-templates-ci-plan.md` | não (a árvore `docs/` virou `wiki/`) |
+
+O `tsconfig.json` também ainda listava o config inexistente no `include` — inofensivo para o `tsc`,
+mas o mesmo apodrecimento.
+
+**Como ele apareceu.** A correção de build-before-lint fez a falha **mudar de lugar**: o job parou de
+morrer no `pnpm --filter theokit build` e passou a morrer no `Push schema — template-postgres`, com
+`drizzle.config.ts file does not exist`. A primeira falha escondia a segunda — e a segunda é a real.
+
+**Removido**, com a explicação no lugar onde ele vivia. Um gate impossível é pior que gate nenhum:
+ele ensina o time a ignorar vermelho, e foi esse hábito que deixou dois releases seguidos merjarem com
+12 checks vermelhos (issue #210).
+
