@@ -2,8 +2,11 @@
 // (`createReadFileTool`, `createShellTool`, … + `withName`/`withDescription`). These are stateless
 // third-party factories — enriching them would be reinventing the SDK-tools' own sugar (blueprint Q5),
 // so this is a pure re-export (parsimony Rung 9). The consumer imports its built-in tools from the
-// Theokit layer, not from `@theokit/sdk-tools` directly. `@theokit/sdk-tools` is an OPTIONAL peer —
-// only consumers of this subpath need it installed.
+// Theokit layer, not from `@theokit/sdk-tools` directly. `@theokit/sdk-tools` is a hard DEPENDENCY of
+// this package, not an optional peer: this file re-exports it statically, so a missing copy would
+// break the subpath at import time rather than degrade. (The manifest said "optional peer" in
+// `peerDependenciesMeta` long after the move — orphan metadata the npm client never reads. Removed,
+// and guarded, in backlog B-M67-01 item 6.)
 
 // M90 — the list is NAMED, not `export *`.
 //
