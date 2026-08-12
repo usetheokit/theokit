@@ -95,7 +95,7 @@
   },
   "dependencies": {
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "^4.40.0",
+    "@theokit/sdk": "^4.49.0",
     "@theokit/sdk-pty": ">=0.2.0 <1.0.0",
     "@theokit/sdk-tools": "^0.26.1"
   }

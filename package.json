@@ -54,7 +54,7 @@
     "@ls-lint/ls-lint": "^2.3.1",
     "@playwright/test": "^1.61.0",
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "^4.40.0",
+    "@theokit/sdk": "^4.49.0",
     "@theokit/sdk-pty": "0.3.0",
     "@theokit/sdk-tools": "0.26.0",
     "@types/cross-spawn": "^6.0.6",
