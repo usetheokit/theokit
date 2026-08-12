@@ -138,14 +138,25 @@ class TypescriptDetector(BaseDetector):
                 # Node builtins
                 if module.startswith("node:"):
                     continue
+                # Bundler virtual modules. Vite/Rollup resolve `virtual:*` through a plugin at
+                # build time; nothing under the prefix is ever published, so a registry probe
+                # can only answer "not found" or "ambiguous". Same reason `node:` is skipped
+                # above: it is not a registry name. ADRs 0033/0034/0035 each dismissed
+                # `virtual:integration:banner` and each named this line as the durable fix.
+                if module.startswith("virtual:"):
+                    continue
                 top = module.split("/")[0] if not module.startswith("@") else "/".join(module.split("/")[:2])
                 if top in _TS_NODE_BUILTINS:
                     continue
                 # Patch 2026-05-30 — Self-reference (the workspace IS the package being imported)
                 if self._is_self_reference(module, self_name):
                     continue
-                # Package name for npm lookup
-                pkg = module if module.startswith("@") else module.split("/")[0]
+                # Package name for npm lookup. Reuse `top` — it already encodes the only
+                # correct answer for both shapes (`name` and `@scope/name`). Deriving it a
+                # second time here is what let `@scope/name/subpath` be sent to the registry
+                # verbatim; npm answers a subpath URL with 405, which reads as "ambiguous"
+                # and produced a spurious SOFT_FLOOR on every scoped subpath import.
+                pkg = top
                 exists = _registry.package_exists_on_npm(pkg)
                 if exists is True:
                     continue
