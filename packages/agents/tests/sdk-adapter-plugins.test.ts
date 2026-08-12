@@ -8,7 +8,7 @@ import { assembleM8CreateOptions } from '../src/bridge/sdk-adapter-create-option
  * hook was silently dropped whenever HITL was active — a PreToolUse veto that never ran.
  */
 describe('assembleM8CreateOptions — compiled.plugins', () => {
-  it('projects the agent\'s code plugins into Agent.create options', () => {
+  it("projects the agent's code plugins into Agent.create options", () => {
     const plugin = { name: 'p1', version: '1.0.0', kind: 'general', register: () => {} }
     const { options } = assembleM8CreateOptions({ plugins: [plugin] } as never)
     expect(options.plugins).toEqual([plugin])

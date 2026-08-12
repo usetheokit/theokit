@@ -25,7 +25,9 @@ function scriptedTransport(onSend?: (msg: Record<string, unknown>) => void): Acp
         onSend?.(msg)
         if (msg.method === 'session/prompt') {
           const p = msg.params as { message: string }
-          sink?.(encodeAcpMessage({ jsonrpc: '2.0', id: msg.id, result: { text: `echo:${p.message}` } }))
+          sink?.(
+            encodeAcpMessage({ jsonrpc: '2.0', id: msg.id, result: { text: `echo:${p.message}` } }),
+          )
         }
       }
     },
@@ -52,7 +54,12 @@ describe('createACPTool', () => {
   it('requires onPermissionRequest (security by default — no default-allow)', () => {
     expect(() =>
       // @ts-expect-error — omitting onPermissionRequest is a compile + runtime error
-      createACPTool({ command: 'noop', name: 'x', description: 'd', transportFactory: () => scriptedTransport() }),
+      createACPTool({
+        command: 'noop',
+        name: 'x',
+        description: 'd',
+        transportFactory: () => scriptedTransport(),
+      }),
     ).toThrow(/onPermissionRequest/)
   })
 
@@ -62,8 +69,8 @@ describe('createACPTool', () => {
     const transport: AcpTransport = {
       send: () => {},
       subscribe: (cb) => {
-      sink = cb
-    },
+        sink = cb
+      },
     }
     const tool = createACPTool({
       command: 'noop',
@@ -75,7 +82,14 @@ describe('createACPTool', () => {
     // Trigger a handler run so the client is wired, then simulate an agent permission request.
     Promise.resolve(tool.handler({ message: 'hi' })).catch(() => {})
     await Promise.resolve()
-    sink?.(encodeAcpMessage({ jsonrpc: '2.0', id: 7, method: 'session/request_permission', params: { tool: 'rm' } }))
+    sink?.(
+      encodeAcpMessage({
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'session/request_permission',
+        params: { tool: 'rm' },
+      }),
+    )
     await Promise.resolve()
     await Promise.resolve()
     expect(onPermissionRequest).toHaveBeenCalledWith({ tool: 'rm' })
@@ -87,7 +101,7 @@ describe('NodeAcpTransport (real subprocess smoke)', () => {
     const echo = [
       "process.stdin.on('data',b=>{",
       "for(const l of b.toString().split('\\n')){",
-      "if(!l.trim())continue;const m=JSON.parse(l);",
+      'if(!l.trim())continue;const m=JSON.parse(l);',
       "if(m.method==='session/prompt')process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result:{text:'ok:'+m.params.message}})+'\\n');",
       '}})',
     ].join('')
@@ -96,7 +110,14 @@ describe('NodeAcpTransport (real subprocess smoke)', () => {
     transport.subscribe((c) => {
       received.push(c)
     })
-    transport.send(encodeAcpMessage({ jsonrpc: '2.0', id: 1, method: 'session/prompt', params: { message: 'hey' } }))
+    transport.send(
+      encodeAcpMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'session/prompt',
+        params: { message: 'hey' },
+      }),
+    )
     await new Promise((r) => setTimeout(r, 300))
     transport.close()
     expect(received.join('')).toContain('ok:hey')

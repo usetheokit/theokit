@@ -34,7 +34,8 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
     },
 }))
 
-const { delegate, DelegationBudgetExceededError } = await import('../../src/bridge/agent-orchestrator.js')
+const { delegate, DelegationBudgetExceededError } =
+  await import('../../src/bridge/agent-orchestrator.js')
 const { applyCapabilities } = await import('../../src/capability/capability.js')
 const { ModelCapability } = await import('../../src/capability/capabilities.js')
 

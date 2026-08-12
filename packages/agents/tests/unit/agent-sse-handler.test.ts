@@ -57,9 +57,7 @@ describe('SSE handler (Web Standard Response)', () => {
 
   it('test_sse_large_event', async () => {
     const largeContent = 'x'.repeat(2_000_000)
-    const events: StreamEvent[] = [
-      { type: 'assistant', content: largeContent },
-    ]
+    const events: StreamEvent[] = [{ type: 'assistant', content: largeContent }]
 
     const response = streamAgentResponse(mockStream(events))
     const output = await readBody(response)
