@@ -224,3 +224,64 @@ export type {
   InProcessApprovalRequest,
   InProcessAwaitApproval,
 } from './in-process-turn.js'
+
+// M67 — the config/trust/wiring family. Same PASS-THROUGH doctrine as M58/M63/M77 (Rung 9): these
+// are pure functions and derivations, and wrapping them would be ceremony with nothing inside.
+//
+// ## Why they were missing, and why that is not the story it looks like
+//
+// M63 declared this boundary closed. It was not — and the cause was NOT a forgotten line here. Seven
+// of these eight symbols DID NOT EXIST in the `@theokit/sdk` this package depended on. Measured by
+// downloading every published tarball and grepping `dist/`: 4.40.0 → 0/7, 4.45.0 → 1/7, 4.46.0 → 3/7,
+// 4.47.0 → 4/7, 4.48.0 → 6/7, 4.49.0 → 7/7. The floor moved to `^4.49.0` (ADR 0060) so that this
+// block could be written at all.
+//
+// ## The evidence that they were wanted
+//
+// The consumer holds "never import `@theokit/sdk` directly" as an unbreakable rule, and broke it SIX
+// times in production to reach exactly this family: `config/layers.ts:10` (foldLayers,
+// verifyLayerOrdering), `config/config.ts:1` (auditEnvReachability), `config/trust-posture.ts:8-11`
+// (resolveTrustPosture), `config/security-floor.ts:22` (applySecurityFloor),
+// `wired-capabilities.ts:22` (recordWiring, WiredEntity), `tools/view-image.ts:15`
+// (ToolResultContentBlock). A team breaking its own rule rather than reimplementing is the strongest
+// signal available that the door, not the appetite, was what was missing.
+//
+// ## Named list, never `export *`
+//
+// `export *` is used above for five small cohesive subpaths (`/errors`, `/retry`, …) where "part of
+// the domain" is not a meaningful unit. This is NOT a subpath: it is a slice of the SDK's root bar,
+// and starring it would drag the SDK's entire surface into this barrel and erase the boundary M63
+// drew. `tests/unit/subpath-coverage.test.ts` now demands a verdict for every root-bar VALUE, so the
+// next addition upstream breaks the build ONCE instead of disappearing for nine minors (ADR 0061).
+export {
+  applySecurityFloor,
+  auditEnvReachability,
+  foldLayers,
+  recordWiring,
+  resolveTrustPosture,
+  verifyLayerOrdering,
+} from '@theokit/sdk'
+export type { ToolResultContentBlock, WiredEntity } from '@theokit/sdk'
+
+// M67 (review fix) — the typed errors of the root bar. `export * from '@theokit/sdk/errors'` above
+// covers the `/errors` SUBPATH; these five are `@public` and live only on the root bar, so that line
+// never reached them. Verified against the SDK's own `.d.ts`: each carries `@public`, and
+// `grep -c <name> dist/errors.d.ts` returns 0.
+//
+// `LayerOrderError` is the one that made the omission indefensible: the SDK documents it as
+// `@throws` of `verifyLayerOrdering` — a function THIS block re-exports two lines above. A consumer
+// could call our `verifyLayerOrdering` and be unable to `catch` its declared error by type without
+// importing `@theokit/sdk` directly: the precise rule-break this milestone exists to remove,
+// reintroduced by the milestone itself.
+//
+// The reasoning is not new — `index.ts` states it above for `/errors`: "a HALF error hierarchy is
+// exactly the defect this milestone closes". The first version of the root-bar verdict table filed
+// all five under "internal helper with no consumer-facing contract", which the `.d.ts` contradicts
+// word for word. Caught by the `/review` gate; the table now says `in` and the export makes it true.
+export {
+  GenerateObjectError,
+  LayerOrderError,
+  StreamObjectError,
+  ToolError,
+  UngatedCapabilityError,
+} from '@theokit/sdk'
