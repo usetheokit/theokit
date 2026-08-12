@@ -204,7 +204,7 @@ seguem a regra de "pré-existente vira entrada, não conserto oportunista".
 
 ---
 
-## B-M67-07 — O estado de release do `main` não volta para `workspace`, e o changesets recalcula sobre base velha
+## ~~B-M67-07~~ — RESOLVIDO — O estado de release do `main` não voltava para `workspace`, e o changesets recalcula sobre base velha
 
 **Encontrado em:** M67 (RELEASE), 2026-08-12 · **Severidade: alta** — quase publicou artefato
 diferente sob versão já existente.
@@ -232,11 +232,31 @@ e versões de `main` que não voltam para `workspace`.
 restaurado ao estado do `main`, e a versão corrigida para `7.6.0` com uma seção de CHANGELOG contendo
 **apenas** o M67 — os dois changesets antigos pertencem à 7.5.0 já publicada.
 
-**Correção de processo, ainda pendente:**
-1. Back-merge automático de `main` → `develop` → `workspace` após todo release (é o passo que falta).
-2. Um gate que recuse publicar uma versão que já existe no registry. `scripts/verify-published-no-workspace.mjs`
-   cobre o protocolo `workspace:`, não colisão de versão. O comando é uma linha:
-   `npm view <pkg>@<version> version` deve falhar antes de `changeset publish`.
+**Correção de processo — APLICADA 2026-08-12.** As duas metades, porque uma sozinha não fecha:
+
+1. **`scripts/verify-version-not-published.mjs`**, ligado ao `pnpm version-packages` (roda depois do
+   `changeset version` + `sync:templates`, antes de qualquer tag ou publish). Recusa alto quando o
+   registry já tem a versão recém-computada. Escopo: **só** os pacotes cuja `version` difere do
+   `HEAD` — a primeira forma varria o workspace inteiro e acusou três pacotes intocados, que estão na
+   versão que publicaram por último; um gate que acusa pacote intocado é um gate que ninguém mantém.
+   A lógica de decisão é pura, com o lookup do registry injetado (DIP), e testada em
+   `tests/unit/verify-version-not-published.test.ts` — incluindo o caso literal do M67. Prova viva:
+   com o `@theokit/agents` posto em `7.5.0` o gate sai com código 1 e nomeia o pacote (restaurado na
+   mesma invocação).
+
+   Por que **antes** do publish e não confiando no npm: o `changeset publish` **pula** uma versão que
+   encontra no registry. O release reporta sucesso publicando nada, e o CHANGELOG e a tag locais
+   ficam afirmando um número cujo conteúdo não é o que foi ao ar. O erro silencioso é o perigo, não a
+   recusa do npm.
+
+2. **`.github/workflows/release-backmerge.yml`** — em todo push para `main`, abre um PR
+   `main → workspace` quando o `workspace` está atrás. Alvo `workspace` e não `develop` porque o
+   `git-safety.md` § 1 é explícito: `develop` integra, nunca origina, e avança só pelo PR de promoção
+   `workspace → develop`. PR e não push direto porque um merge pode conflitar, e um workflow que
+   resolve conflito sem supervisão reescreve o trabalho de alguém sem pedir.
+
+O gate (1) impede o dano; o back-merge (2) impede a situação. Só o (1) deixaria todo release exigindo
+intervenção manual; só o (2) deixaria o dano possível sempre que o back-merge falhasse.
 
 ---
 

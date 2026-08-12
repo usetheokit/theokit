@@ -26,6 +26,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **O gate de cobertura passa a exigir veredito para a barra root do SDK** (`packages/agents/tests/unit/root-bar-coverage.test.ts`). A omissão sobreviveu a **nove minors consecutivas** porque o gate existente enumera os 31 *subpaths* e estes símbolos vivem no entry `.`, que nenhum gate cobria — o instrumento tinha escopo mais estreito que a propriedade que afirmava. Os 84 valores da barra root agora têm decisão escrita: 28 `in` verificados por identidade referencial, 56 `out` com motivo. (ADR 0061)
 - **Três primitivas de sessão e uma de sandbox passam a atravessar**, trazidas pelo piso novo: `classifySessionArtifact` + `SessionArtifact` e `atomicWriteTempTarget` (`/persistence`), `writableRootsFor` (`/sandbox`), `assertSecureModes` (`/auth`). `classifySessionArtifact` merece nota: o roadmap previa **escrevê-la** sob outro nome, e ela já existia no SDK — a descoberta veio do ciclo DISCOVER e evitou uma reimplementação.
 
+### Added
+- **Duas metades de um gate de release que quase deixou passar um artefato sob versão já publicada (backlog B-M67-07).** No M67, o `pnpm version-packages` computou `@theokit/agents@7.5.0` — uma versão que o npm tinha havia dois dias, com outro conteúdo. A causa foi base velha: o commit de release aterrissou em `main`, o `workspace` nunca recebeu o back-merge, então os changesets já consumidos continuavam no disco e o bump foi recomputado.
+
+  `scripts/verify-version-not-published.mjs` roda dentro do `pnpm version-packages`, depois de as versões serem escritas e antes de qualquer tag ou publish, e recusa alto quando o registry já tem a versão computada. Ele verifica **só** os pacotes cuja `version` difere do `HEAD`: varrer o workspace inteiro acusa pacotes intocados, que naturalmente estão na versão que publicaram por último. A decisão é pura, com o lookup do registry injetado, e testada contra o caso literal do M67.
+
+  Por que não confiar no npm para recusar: o `changeset publish` **pula** uma versão que encontra no registry. O release reporta sucesso publicando nada, e o CHANGELOG e a tag locais ficam afirmando um número cujo conteúdo não é o que foi ao ar. O modo silencioso é o perigo.
+
+  `.github/workflows/release-backmerge.yml` fecha a outra metade: a cada push em `main`, abre um PR `main → workspace` quando o `workspace` está atrás. Alvo `workspace` e não `develop` porque `develop` integra e nunca origina (`git-safety.md` § 1); PR e não push porque um merge pode conflitar, e um workflow que resolve conflito sem supervisão reescreve trabalho alheio sem pedir.
+
 ### Fixed
 - **Os dois últimos vermelhos do B-M67-01, que tinham decisão de produto por trás (itens 7 e 8).** O teste de paridade in-process↔HTTP mockava `'@theokit/agents'` — a barra pública — enquanto o SUT importa de `./bridge/agent-endpoint.js`, um caminho relativo: o duplo nunca interceptava nada e o `compileAgentModule` real recusava o módulo sintético. Repontado, com um piso anti-vacuidade que conta as chamadas do duplo — sem ele, o próximo refactor do caminho volta a exercitar o código real em silêncio.
 
