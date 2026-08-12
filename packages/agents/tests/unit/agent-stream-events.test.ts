@@ -118,15 +118,34 @@ describe('AgentStreamEvent type guards', () => {
       { type: 'run_started', runId: 'r', agentName: 'a' },
       { type: 'text_delta', content: '' },
       { type: 'tool_call', callId: 'c', toolName: 't', input: {} },
-      { type: 'tool_result', callId: 'c', toolName: 't', output: '', durationMs: 0, isError: false },
+      {
+        type: 'tool_result',
+        callId: 'c',
+        toolName: 't',
+        output: '',
+        durationMs: 0,
+        isError: false,
+      },
       { type: 'thinking', content: '' },
       { type: 'iteration', step: 1, totalSteps: null },
-      { type: 'approval_required', callId: 'c', toolName: 't', question: 'q', callbackUrl: 'u', timeoutMs: 0 },
+      {
+        type: 'approval_required',
+        callId: 'c',
+        toolName: 't',
+        question: 'q',
+        callbackUrl: 'u',
+        timeoutMs: 0,
+      },
       { type: 'error', code: 'E', message: 'm', retryable: false },
-      { type: 'done', result: '', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, durationMs: 0 },
+      {
+        type: 'done',
+        result: '',
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        durationMs: 0,
+      },
     ]
     expect(events).toHaveLength(9)
-    const types = new Set(events.map(e => e.type))
+    const types = new Set(events.map((e) => e.type))
     expect(types.size).toBe(9)
   })
 })

@@ -23,8 +23,11 @@ describe('T30.4 — Adapter registry', () => {
     const custom = {
       name: 'custom',
       startSpan: () => ({ setAttribute() {}, setStatus() {}, end() {} }),
-      counter() {}, histogram() {}, log() {},
-      flush: async () => {}, shutdown: async () => {},
+      counter() {},
+      histogram() {},
+      log() {},
+      flush: async () => {},
+      shutdown: async () => {},
     }
     const adapter = resolveAdapter({
       env: { NODE_ENV: 'development' },
@@ -37,8 +40,11 @@ describe('T30.4 — Adapter registry', () => {
     const custom = {
       name: 'custom-override',
       startSpan: () => ({ setAttribute() {}, setStatus() {}, end() {} }),
-      counter() {}, histogram() {}, log() {},
-      flush: async () => {}, shutdown: async () => {},
+      counter() {},
+      histogram() {},
+      log() {},
+      flush: async () => {},
+      shutdown: async () => {},
     }
     const adapter = resolveAdapter({
       env: { THEO_CLOUD_INGEST_URL: 'https://ingest.test', THEO_CLOUD_API_KEY: 'tck_x' },
