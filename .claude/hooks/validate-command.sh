@@ -236,7 +236,25 @@ fi
 # to references/ AND tools/. Use ONLY for initial population; delete it right after.
 # Both guards below require the literal `knowledge-base/` in the command, so the
 # glob test skips the segment loop (one grep per segment) for everything else.
-if [ "$HAS_ZONE" = yes ] && [ ! -f "$PROJECT_DIR/.references-bootstrap" ]; then
+# `git rm --cached` is the ONE exception, and it is not a loophole — it is the rule.
+#
+# The pattern below lists `rm` among the write verbs, so `git rm --cached <zone path>` matched it.
+# But that command writes nothing to disk: it removes a path from the git INDEX, which is exactly
+# what § 1 of `reference-provenance.md` demands ("never versioned"). The guard was refusing the only
+# operation that ENFORCES the rule it exists to serve, and ten zone paths sat tracked as submodule
+# gitlinks because of it — making every `git submodule` walk in CI exit 128.
+#
+# Deliberately narrow: a LONE invocation only. `git rm --cached x && rm -rf <zone>` stays blocked,
+# because otherwise the harmless half would carry a real deletion past the guard. `git rm` WITHOUT
+# `--cached` also stays blocked — that one does delete from the working tree.
+# Covered by `tests/lint/validate-command-zone-guard.test.ts`.
+GIT_RM_CACHED_ONLY=no
+if echo "$COMMAND" | grep -qE '^[[:space:]]*git[[:space:]]+rm[[:space:]]+(--cached|[^;&|]*[[:space:]]--cached)([[:space:]]|$)' \
+   && ! echo "$COMMAND" | grep -qE '[;&|]'; then
+  GIT_RM_CACHED_ONLY=yes
+fi
+
+if [ "$HAS_ZONE" = yes ] && [ ! -f "$PROJECT_DIR/.references-bootstrap" ] && [ "$GIT_RM_CACHED_ONLY" = no ]; then
   if echo "$COMMAND" | grep -qE '(^|[[:space:]]|;|&&|\|\||\||\()[[:space:]]*((rm|mv|cp|sed[[:space:]]+-i|tee)[[:space:]]+[^;&|]*(\./)?(\.claude/)?knowledge-base/(references|tools)/|>{1,2}[[:space:]]+(\./)?(\.claude/)?knowledge-base/(references|tools)/)'; then
     echo "BLOCKED: 'knowledge-base/references/' and 'knowledge-base/tools/' are read-only study material. Capture findings in 'knowledge-base/discoveries/blueprints/'. For initial bootstrap, create '.references-bootstrap' at project root AND cite the source in CHANGELOG.md; remove the marker when done." >&2
     exit 2
