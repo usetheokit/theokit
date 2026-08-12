@@ -27,6 +27,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Três primitivas de sessão e uma de sandbox passam a atravessar**, trazidas pelo piso novo: `classifySessionArtifact` + `SessionArtifact` e `atomicWriteTempTarget` (`/persistence`), `writableRootsFor` (`/sandbox`), `assertSecureModes` (`/auth`). `classifySessionArtifact` merece nota: o roadmap previa **escrevê-la** sob outro nome, e ela já existia no SDK — a descoberta veio do ciclo DISCOVER e evitou uma reimplementação.
 
 ### Fixed
+- **O gate `License compliance` chamava um script que não existia — e nunca verificou uma única licença (backlog B-M67-13).** `scripts/check-licenses.mjs` foi deletado dentro de `efe63edf` ("Release v0.4.0"), um commit grande o bastante para a perda passar despercebida; o `package.json` e o job de CI continuaram chamando, e o resultado era `MODULE_NOT_FOUND` a cada run. Restaurado com a política original verbatim, e com a **decisão** extraída como função pura sobre um conjunto injetado — a forma anterior embrulhava `execSync` na mesma lógica e só dava para exercitar ponta-a-ponta, então um defeito no tratamento de expressões SPDX teria sido invisível.
+
+  Assim que voltou a rodar, encontrou **quatro pacotes de produção sem licença declarada**. Um é de terceiro (`khroma@2.1.0`, que traz o arquivo `license` MIT e só esquece o campo do manifest); **os outros três são nossos** — `@theokit/agents@1.0.0`, `@theokit/sdk-pty@0.3.0` e `@theokit/studio@0.1.0`, todos publicados sem `license` enquanto os repos de origem são Apache-2.0. Um pacote npm sem esse campo é all rights reserved para quem instala: a concessão viaja no artefato, não no GitHub.
+
+  `packages/agents` passa a declarar `Apache-2.0` na fonte. Os demais precisam de republish nos repos irmãos, e o `@theokit/agents@1.0.0` **não tem conserto** — tarballs npm são imutáveis, e aquela cópia só sai da árvore quando o `@theokit/studio` parar de puxá-la.
+
+### Fixed
+- **O `Bundle budget` nunca mediu um bundle (backlog B-M67-14).** O default do `BUNDLE_FIXTURE` era a **raiz do monorepo**, que não é uma app TheoKit: o `npx theokit build` não tinha o que buildar, o `|| true` engolia a falha, e o gate saía 2 com *"build output not found"* — um orçamento sob o qual ninguém nunca esteve, nem por cima nem por baixo. O docblock do próprio teste já dizia a intenção correta (*"runs `theokit build` against fixtures/template-default"*); só o código discordava.
+
+  Todos os testes existentes passavam `BUNDLE_FIXTURE` explicitamente, então nenhum jamais exercitou o default — a lacuna que deixou isso sobreviver. Um teste novo fixa a propriedade: o diretório que o script escolhe sozinho tem de ser uma app de verdade (`package.json` + `app/` + `theo.config.ts`).
+
+  O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
+
+### Removed
+- **O job de CI `Dependency review`, impossível de passar e redundante (backlog B-M67-15).** A `actions/dependency-review-action` precisa do dependency graph do GitHub, que em repositório privado exige licença de Advanced Security — medido, `security_and_analysis: null`. Todo run terminava em *"Dependency review is not supported on this repository"*, independentemente do diff.
+
+  O que decidiu a remoção não foi ser impossível, foi ser **redundante**: `fail-on-severity: high` já é o job `Dependency audit (npm audit, high+)`, e `allow-licenses` já é o `License compliance` restaurado, cuja allowlist é superset da que o job declarava. Licenciar GHAS continua uma opção real — traria a visão de diff transitivo que nenhum dos dois substitutos tem — mas é decisão de compra, não de CI.
+
+### Removed
+- **O job de CI `e2e-postgres-templates`, que era impossível de passar (backlog B-M67-12).** Ele provisionava um Postgres, empurrava dois schemas e rodava specs Playwright para as fixtures `template-postgres` e `template-saas`. O **ADR 0023** (*default-only template set*) removeu esses templates de propósito, e o job sobreviveu a eles: verificado um a um, **nenhum** artefato que ele citava ainda existia — nem as duas fixtures, nem o `playwright.postgres-templates.config.ts`, nem o plano em `docs/plans/`. O `tsconfig.json` ainda listava o config inexistente no `include`, pelo mesmo apodrecimento.
+
+  Ele apareceu porque a correção de build-before-lint fez a falha **mudar de lugar**: o job parou de morrer no build e passou a morrer no `Push schema` com `drizzle.config.ts file does not exist`. A primeira falha escondia a segunda.
+
+  Um gate impossível é pior que gate nenhum — ele ensina o time a ignorar vermelho, e foi esse hábito que deixou dois releases seguidos merjarem com 12 checks vermelhos.
+
+### Fixed
+- **O `Dead code (Knip)` passou de cinco seções vermelhas para exit 0 — e o que sobrou eram dois falsos positivos que valia documentar, não silenciar.** Dos 14 achados, **três classes eram reais**: `@theokit/sdk-pty` e `@theokit/sdk-tools` declarados na raiz sem um único import fora de `packages/` (só menções em prosa de comentário), `ai` em `packages/theo` sem nenhum consumidor, e **oito tipos exportados que só aparecem no próprio arquivo** — `export` em tipo que ninguém importa é um crachá de API pública sobre algo interno. Verificado antes de mexer: nenhum dos oito está na lista de export dos `.d.ts` publicados, então remover o `export` não tira nada da superfície.
+
+  Os dois restantes ficam, com a razão escrita no local do código. `scanWebSocketRoutes` é consumido por **código gerado**: os adapters de Bun, Cloudflare e Deno emitem `import { scanWebSocketRoutes } from 'theokit/server'` dentro de template strings, e nenhum analisador estático enxerga uma importação que só passa a existir quando o build escreve o arquivo. Removê-lo mataria o WebSocket desses três deploys **em runtime**, sem teste nem typecheck acusando. `BudgetExceededError` é o alias deprecado mantido por uma major de propósito.
+
+  `pg` e `@types/pg` foram para `ignoreDependencies` pelo mesmo motivo de forma: o único consumidor é um teste, e a config do Knip ignora `**/tests/**` por desenho.
+
+### Fixed
 - **Dois jobs de CI falhavam porque nada era buildado antes deles.** O `Lint + Format` rodava `pnpm install` e ia direto ao `pnpm lint`. As regras type-aware do ESLint resolvem `@theokit/agents` pelo campo `types` do pacote, que aponta para `dist/` — num checkout novo esse diretório não existe, **todo tipo que cruza a fronteira do pacote vira `error`**, e as regras reportam `acts as 'any'` apontando para código de aplicação que não tem defeito nenhum. O `Playwright Postgres templates` buildava só `theokit`, cujo passo de dts importa `@theokit/agents`: `TS2307 Cannot find module`.
 
   Passava localmente porque o `dist/` sobra de um build anterior — ou seja, **o gate local vinha dando falsa segurança** por todo o tempo em que esses jobs estiveram vermelhos. Causalidade provada, não inferida: removendo `packages/agents/dist` localmente aparecem exatamente os erros do CI, e restaurando o diretório o lint volta a sair 0.

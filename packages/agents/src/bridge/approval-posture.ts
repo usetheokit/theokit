@@ -30,7 +30,7 @@ import { createHitlPlugin, type HitlDecision } from './hitl-plugin.js'
 import { createToolHooksPlugin } from './tool-hooks-plugin.js'
 
 /** The map of gated tools that `compileAgentDefinition` produces (`compiled.hitl`). */
-export type GatedTools = ReadonlyMap<string, HumanInTheLoopOptions>
+type GatedTools = ReadonlyMap<string, HumanInTheLoopOptions>
 
 /**
  * What this surface does when a gated tool asks for approval. Four variants, none of them

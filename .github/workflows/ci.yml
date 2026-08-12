@@ -217,17 +217,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:audit
 
-  dependency-review:
-    name: Dependency review (GitHub)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-      - name: 'Dependency Review'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          allow-licenses: MIT, Apache-2.0, ISC, BSD-2-Clause, BSD-3-Clause, 0BSD, CC0-1.0, CC-BY-3.0, CC-BY-4.0, Unlicense, Python-2.0, BlueOak-1.0.0
+  # The `dependency-review` job lived here and was REMOVED (backlog B-M67-15).
+  #
+  # `actions/dependency-review-action` needs GitHub's dependency graph, which on a PRIVATE repository
+  # requires an Advanced Security licence. This repo is private with `security_and_analysis: null`, so
+  # every run ended with "Dependency review is not supported on this repository" — a gate that could
+  # not pass, by construction, no matter what the diff contained.
+  #
+  # Removing it costs nothing, because BOTH of its checks already have working equivalents here:
+  #
+  #   * `fail-on-severity: high`  ->  the `Dependency audit (npm audit, high+)` job (`pnpm check:audit`)
+  #   * `allow-licenses: …`       ->  the `License compliance` job (`scripts/check-licenses.mjs`),
+  #                                   whose allowlist is a superset of the list this job declared
+  #
+  # Licensing GHAS is a real option and would bring back the transitive-diff view neither of the two
+  # replacements has. That is a purchasing decision, not a CI one — and until it is made, an
+  # impossible gate is worse than no gate: it teaches the team to read red as noise.
 
   license-check:
     name: License compliance
@@ -270,115 +275,17 @@ jobs:
       - run: pnpm --filter "./packages/*" build
       - run: pnpm check:bundle
 
-  e2e-postgres-templates:
-    # Wave 2 prereq R0.5.2 — provisions Postgres + envs so the env-gated
-    # template-postgres + template-saas Playwright specs run instead of skip.
-    # See docs/plans/playwright-postgres-templates-ci-plan.md v1.1.
-    # NOT gated on typecheck-build: neither fixture's routes import
-    # @theokit/sdk (the dep at the root of typecheck-build's pre-existing
-    # failures on CI without the sibling repo). The job is self-contained.
-    name: Playwright Postgres templates (postgres + saas)
-    runs-on: ubuntu-latest
-    env:
-      # Test-only — never used in production. Documented in plan ADR D4.
-      # gitleaks:allow (suffix `_dummy` marks it as non-secret).
-      THEO_SESSION_SECRET: playwright_test_secret_32chars_min_dummy
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      # Build every workspace package, not only `theokit`. The fixtures spawning
-      # `theokit dev` import the `theokit` package, which resolves to
-      # `packages/theo/dist/` — but `theokit`'s own dts step imports
-      # `@theokit/agents`, whose types come from ITS `dist/`. Filtering to a single
-      # package left that unbuilt, and the build died on
-      # `TS2307: Cannot find module '@theokit/agents'`.
-      #
-      # Still not the recursive `pnpm build`: that one walks `examples/*` and fails
-      # because the `theokit` bin is not on PATH yet, which is what the previous
-      # comment here was really about.
-      - run: pnpm --filter "./packages/*" build
-      - run: npx playwright install --with-deps chromium
-      - name: Provision postgres + saas databases
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h localhost -U postgres -c 'CREATE DATABASE theokit_postgres_test;'
-          psql -h localhost -U postgres -c 'CREATE DATABASE theokit_saas_test;'
-      # EC-1/EC-2/EC-3 — drizzle-kit invoked from REPO ROOT with --config (not
-      # via --filter, because the template-postgres/saas fixtures are workspace
-      # members but their drizzle.config.ts uses paths relative to the config
-      # file). --force suppresses interactive prompts on destructive schema
-      # changes (acceptable for throw-away test DB; NEVER for production).
-      # URL composed via shell vars so scripts/prevent-secrets.sh regex
-      # (`(?i)(postgres|postgresql)://[^\s]+`) doesn't false-positive on the
-      # ephemeral CI service container's default postgres/postgres creds.
-      - name: Push schema — template-postgres
-        env:
-          PG_USER: postgres
-          PG_PASS: postgres
-          PG_HOST: localhost
-          PG_PORT: '5432'
-          PG_DB: theokit_postgres_test
-        run: |
-          SCHEME='post'; SCHEME="${SCHEME}gres"
-          DATABASE_URL="${SCHEME}://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
-            pnpm exec drizzle-kit push --force --config fixtures/template-postgres/drizzle.config.ts
-      - name: Push schema — template-saas
-        env:
-          PG_USER: postgres
-          PG_PASS: postgres
-          PG_HOST: localhost
-          PG_PORT: '5432'
-          PG_DB: theokit_saas_test
-        run: |
-          SCHEME='post'; SCHEME="${SCHEME}gres"
-          DATABASE_URL="${SCHEME}://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
-            pnpm exec drizzle-kit push --force --config fixtures/template-saas/drizzle.config.ts
-      - name: Run template-postgres spec
-        env:
-          PG_USER: postgres
-          PG_PASS: postgres
-          PG_HOST: localhost
-          PG_PORT: '5432'
-          PG_DB: theokit_postgres_test
-        run: |
-          SCHEME='post'; SCHEME="${SCHEME}gres"
-          DATABASE_URL="${SCHEME}://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
-            npx playwright test \
-              --config playwright.postgres-templates.config.ts \
-              --project=template-postgres --reporter=line
-      - name: Run template-saas spec
-        env:
-          PG_USER: postgres
-          PG_PASS: postgres
-          PG_HOST: localhost
-          PG_PORT: '5432'
-          PG_DB: theokit_saas_test
-        run: |
-          SCHEME='post'; SCHEME="${SCHEME}gres"
-          DATABASE_URL="${SCHEME}://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
-            npx playwright test \
-              --config playwright.postgres-templates.config.ts \
-              --project=template-saas --reporter=line
+  # O job `e2e-postgres-templates` vivia aqui e foi REMOVIDO (backlog B-M67-12).
+  #
+  # Ele provisionava um Postgres, empurrava dois schemas e rodava specs Playwright para as fixtures
+  # `template-postgres` e `template-saas`. O ADR 0023 (2026-06-17, default-only template set) removeu
+  # esses templates de propósito — e o job sobreviveu a eles. TODOS os artefatos que ele citava já não
+  # existiam: as duas fixtures, o `playwright.postgres-templates.config.ts` e o plano em `docs/plans/`.
+  #
+  # Ou seja: um gate IMPOSSÍVEL de passar por construção, vermelho a cada run, gastando um serviço de
+  # banco para testar algo que o time decidiu não ter. Um gate assim é pior que gate nenhum — ele
+  # ensina o time a ignorar vermelho, e foi exatamente esse hábito que deixou dois releases seguidos
+  # merjarem com 12 checks vermelhos (#210).
 
   secret-scan:
     name: Secret scan
