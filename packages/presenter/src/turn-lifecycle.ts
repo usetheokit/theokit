@@ -129,7 +129,8 @@ export function foldTurnLifecycle<E>(
       events.push(vocabulary.itemCompleted({ id: 'message', kind: message }))
     }
 
-    const reason = failure ?? (outcome.status === 'error' ? (outcome.error ?? 'turn failed') : undefined)
+    const reason =
+      failure ?? (outcome.status === 'error' ? (outcome.error ?? 'turn failed') : undefined)
     events.push(
       reason === undefined
         ? vocabulary.turnCompleted(outcome.usage)
