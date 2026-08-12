@@ -94,6 +94,15 @@ essas primitivas vivem na **barra root**, que nenhum gate enumera. Custo de corr
 - [ ] `tests/unit/subpath-coverage.test.ts` ganha uma tabela de veredito **ROOT-BAR** com a mesma disciplina in (verificado) / out (com motivo > 20 chars) já aplicada aos subpaths — de modo que a próxima omissão de barra root falhe o teste.
 - [ ] `pnpm test` / `typecheck` / `lint --max-warnings=0` / `knip` verdes; entrada no CHANGELOG.
 
+> **Correção medida (2026-08-12, DISCOVER do M67).** O parágrafo acima dizia "custo de correção:
+> re-export puro". **Estava errado.** Sete dos oito símbolos **não existiam** no `@theokit/sdk@4.40.0`
+> que consumíamos; o re-export era inexpressável. Medido por download e `grep` no `dist/` de cada
+> tarball publicado: 4.40.0 → 0/7, 4.45.0 → 1/7, 4.46.0 → 3/7, 4.47.0 → 4/7, 4.48.0 → 6/7,
+> **4.49.0 → 7/7**. O milestone passou a ter duas metades — elevar o piso da dependência, e só então
+> re-exportar — e absorveu o trabalho que os gates de paridade geraram ao reagir aos símbolos novos.
+> A fronteira não estava mal desenhada: para nós era **intransponível**. Ver ADR 0060 e
+> `.claude/knowledge-base/discoveries/blueprints/m67-layered-boundary-passthrough-blueprint.md`.
+
 **Efeito no TheoCode:** deleta os **6 sites de import direto de `@theokit/sdk`** (`config/layers.ts:10`,
 `config/config.ts:1`, `config/trust-posture.ts:8-11`, `config/security-floor.ts:22`,
 `wired-capabilities.ts:22`, `tools/view-image.ts:15`) e remove `@theokit/sdk` do
