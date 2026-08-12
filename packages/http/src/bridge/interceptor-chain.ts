@@ -16,10 +16,7 @@ import { resolveOrNew, type DiContainer } from './di-resolve.js'
  * `next()` wraps ONLY the handler call — body parsing happens before.
  */
 export interface Interceptor {
-  intercept(
-    request: Request,
-    next: () => Promise<unknown>,
-  ): Promise<unknown>
+  intercept(request: Request, next: () => Promise<unknown>): Promise<unknown>
 }
 
 /**

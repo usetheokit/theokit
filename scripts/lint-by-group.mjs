@@ -142,4 +142,9 @@ async function main() {
   process.exit(failures.length === 0 ? 0 : 1)
 }
 
-await main()
+// B-102 — importable without executing, so its helpers can be tested. Running the body on import
+// makes any test of one helper run the whole gate and exit the process: untestable by construction,
+// which is how `theokit#200` shipped a guard that accused six packages falsely.
+if (process.argv[1]?.endsWith('lint-by-group.mjs')) {
+  await main()
+}

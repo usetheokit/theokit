@@ -20,7 +20,9 @@
       "appendJsonl",
       "applyWalWithFallback",
       "atomicWriteJson",
+      "atomicWriteTempTarget",
       "atomicWriteText",
+      "classifySessionArtifact",
       "encodeProjectDir",
       "forkTranscript",
       "isCorruptionError",
@@ -47,6 +49,7 @@
       "OpenSqliteResilientOptions",
       "ReadJsonlTailOptions",
       "ResilientSqliteDb",
+      "SessionArtifact",
       "SessionWriterLease",
       "TranscriptBlock",
       "TranscriptMessage",
@@ -90,7 +93,8 @@
       "SandboxNotAvailableError",
       "SandboxSecurityError",
       "seccompPathForArch",
-      "wrapCommandForSandbox"
+      "wrapCommandForSandbox",
+      "writableRootsFor"
     ],
     "types": [
       "BwrapArgvOptions",

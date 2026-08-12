@@ -49,6 +49,10 @@ const PISO_DE_SIMBOLOS = { auth: 15 }
 const DECISIONS = {
   auth: {
     // — the store mechanics: a pure pass-through (M73). `re-exported` is VERIFIED against the entry.
+    // M67 — `assertSecureModes` arrived with the `^4.49.0` floor (ADR 0060). It encodes a security
+    // rule over auth modes; withholding it would leave restating that rule as the consumer's only
+    // legal way out, and a second copy of a security rule diverges silently from the first.
+    assertSecureModes: 're-exported',
     authFilePath: 're-exported',
     CredentialError: 're-exported',
     credentialHome: 're-exported',
