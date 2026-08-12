@@ -285,3 +285,15 @@ export {
   ToolError,
   UngatedCapabilityError,
 } from '@theokit/sdk'
+
+// M68 — o vocabulário de confiança. O source `project` de `settingSources` passa a exigir uma
+// `TrustPosture` como evidência (ADR 0063), e uma API que exige um valor cujo TIPO o consumidor não
+// consegue nomear é inutilizável: ele redeclararia a forma à mão, e uma segunda declaração de um
+// contrato de segurança diverge da primeira em silêncio.
+//
+// Pass-through puro, como o resto da família M67 — `resolveTrustPosture` (o valor) já atravessa no
+// bloco acima. Estes são os tipos que ela produz e consome.
+//
+// Fecha, para estes quatro, a lacuna de cobertura de tipos que o ADR 0061 declarou honestamente: o
+// gate ROOT-BAR enumera `Object.keys` do namespace e por construção não enxerga `export type`.
+export type { TrustLevel, TrustPosture, TrustPostureInput, TrustSource } from '@theokit/sdk'

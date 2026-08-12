@@ -1,0 +1,87 @@
+name: Release back-merge
+
+# B-M67-07 — carry the release state on `main` back to `workspace`.
+#
+# ## The failure this closes
+#
+# `release.yml` merges the "Version Packages" PR into `main` and publishes from there. `workspace`
+# never learned. The next release computed its versions from a base that still had the consumed
+# changeset files on disk and the pre-release numbers in each `package.json`, and produced a bump
+# that had already shipped — measured in M67 on `@theokit/agents@7.5.0`.
+#
+# The drift is bidirectional and both directions were observed: versions on `main` that never came
+# back, and a `chore(release)` commit living on `workspace` that never reached `main`.
+#
+# ## Why it targets `workspace` and not `develop`
+#
+# `.claude/rules/git-safety.md` § 1 is explicit: `develop` integrates work, it never originates it,
+# and it advances only through the `workspace → develop` promotion PR. A back-merge landing directly
+# on `develop` would break that rule. `workspace` is where work is born, so the release state lands
+# there and reaches `develop` through the ordinary promotion — the same path as everything else.
+#
+# ## Why a PR and not a push
+#
+# A merge can conflict, and a workflow that resolves conflicts unattended is a workflow that
+# rewrites somebody's work without being asked. Opening a PR keeps the human in the loop exactly
+# where judgement is needed, and costs one click when the merge is clean.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backmerge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open the back-merge PR when workspace is behind main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch origin main workspace
+
+          # Nothing to carry: `workspace` already contains every commit on `main`.
+          if [ -z "$(git rev-list origin/workspace..origin/main)" ]; then
+            echo "workspace already contains main — nothing to back-merge"
+            exit 0
+          fi
+
+          # One open PR at a time. A second one would race the first on the same branch pair.
+          if [ -n "$(gh pr list --base workspace --head main --state open --json number --jq '.[].number')" ]; then
+            echo "a back-merge PR is already open"
+            exit 0
+          fi
+
+          behind="$(git rev-list --count origin/workspace..origin/main)"
+          gh pr create \
+            --base workspace \
+            --head main \
+            --title "chore(release): back-merge main into workspace" \
+            --body "$(printf '%s\n' \
+              "\`workspace\` is ${behind} commit(s) behind \`main\`." \
+              "" \
+              "Without this merge the next release computes its versions from a stale base: the" \
+              "changeset files consumed by the release on \`main\` are still on disk here, and each" \
+              "\`package.json\` still carries its pre-release number. \`changeset version\` then adds" \
+              "those changesets a second time and recomputes a bump that already shipped — measured" \
+              "in M67 on \`@theokit/agents@7.5.0\`, which npm had had for two days with different" \
+              "content." \
+              "" \
+              "The install-time half of the same guard is \`scripts/verify-version-not-published.mjs\`," \
+              "wired into \`pnpm version-packages\`: it refuses a computed version the registry already" \
+              "has. This PR is the half that stops the situation from arising." \
+              "" \
+              "Targets \`workspace\`, not \`develop\`, because \`develop\` integrates work and never" \
+              "originates it (\`.claude/rules/git-safety.md\` § 1). The release state reaches" \
+              "\`develop\` through the ordinary promotion PR." \
+              "" \
+              "Opened by \`.github/workflows/release-backmerge.yml\` (backlog B-M67-07).")"
