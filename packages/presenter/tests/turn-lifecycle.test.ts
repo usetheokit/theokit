@@ -45,9 +45,7 @@ describe('foldTurnLifecycle — a turn opens once', () => {
 describe('foldTurnLifecycle — a turn closes exactly once', () => {
   it('test_a_clean_stream_closes_as_completed', () => {
     const turn = fold()
-    expect(turn.finish({ status: 'ok', usage: { tokens: 7 } })).toEqual([
-      'turn:done:{"tokens":7}',
-    ])
+    expect(turn.finish({ status: 'ok', usage: { tokens: 7 } })).toEqual(['turn:done:{"tokens":7}'])
   })
 
   it('test_an_error_in_the_stream_closes_as_failed_not_completed', () => {
