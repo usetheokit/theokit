@@ -38,8 +38,8 @@ export function streamAgentResponse(eventStream: AsyncIterable<StreamEvent>): Re
           safeEnqueue(encoder.encode(frame))
         }
       } catch (err) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated by safeEnqueue catch
         if (!closed) {
-          // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- mutated by safeEnqueue catch
           const errorEvent = {
             type: 'error',
             error: { message: err instanceof Error ? err.message : 'Internal agent error' },
