@@ -39,6 +39,12 @@ export {
   // detect. Renamed from its Portuguese original in `@theokit/sdk@4.39.0`.
   sessionHasWriter,
   transcriptPath,
+  // M67 — landed upstream in 4.41.0 and reached us with the floor bump. `classifySessionArtifact`
+  // answers "what is this file in a project directory" — the exact question a transcript collector
+  // must answer before deleting anything, and the one the roadmap's M72 was about to re-implement.
+  // Crossing it here is what makes that re-implementation unnecessary (parsimony ladder, rung 2).
+  atomicWriteTempTarget,
+  classifySessionArtifact,
   // M94 — the root of the transcript state. The consumer duplicated it across THREE files, and all
   // three copies ignored `THEOKIT_HOME` along with the original.
   transcriptRoot,
@@ -48,6 +54,10 @@ export {
 
 export type {
   AtomicWriteJsonOptions,
+  // M67 — the return type of `classifySessionArtifact`. Without it the consumer can call the
+  // function and cannot NAME what it returns, so it redeclares the union by hand — a half surface,
+  // which is the exact defect the M78 `coverage: 'total'` rule exists to prevent.
+  SessionArtifact,
   FileLockOptions,
   ForkTranscriptOptions,
   OpenSqliteResilientOptions,

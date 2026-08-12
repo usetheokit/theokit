@@ -197,6 +197,16 @@ const DECISIONS: Record<string, Decision> = {
       'a path the SDK declares free to break in a minor onto the public surface — the opposite of the ' +
       'contract this list exists to protect.',
   },
+  './context': {
+    verdict: 'out',
+    reason:
+      'Landed in SDK 4.42.0 as "a sanctioned public barrel for context assembly" and reached us with ' +
+      'the M67 floor bump — it is NEW here, not long-ignored. The decision to cross it belongs to ' +
+      'M74 (instruction tree), which is the milestone that will actually consume it and can judge it ' +
+      'against what the barrel contains rather than against its name. Crossing it now would publish ' +
+      'a surface nobody in this repo calls, which G7 forbids and which would freeze a shape before ' +
+      'the consumer exists.',
+  },
   './cron': {
     verdict: 'out',
     reason:
