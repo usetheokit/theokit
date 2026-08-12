@@ -7,7 +7,10 @@
  * `maxSteps` ceiling per plan ADR D1. Zod config (ADR D3).
  */
 import { describe, expect, it } from 'vitest'
-import { DelegationBudgetExceededError, DelegationError } from '../../src/bridge/agent-orchestrator.js'
+import {
+  DelegationBudgetExceededError,
+  DelegationError,
+} from '../../src/bridge/agent-orchestrator.js'
 import * as loopBarrel from '../../src/loop/index.js'
 import { type LoopOutcome, resolveLoopStrategy } from '../../src/loop/loop-strategy.js'
 import {

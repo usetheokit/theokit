@@ -15,13 +15,20 @@ import { createA2ATool } from '../../src/a2a/a2a-client.js'
 function jsonFetch(payload: unknown, capture?: (url: string, init: RequestInit) => void) {
   return vi.fn(async (url: string, init: RequestInit) => {
     capture?.(url, init)
-    return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } })
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
   })
 }
 
 describe('createA2ATool', () => {
   it('returns a CustomTool with the given name/description and a message input', () => {
-    const tool = createA2ATool({ url: 'https://x/agents/a', name: 'ask_remote', description: 'Ask remote' })
+    const tool = createA2ATool({
+      url: 'https://x/agents/a',
+      name: 'ask_remote',
+      description: 'Ask remote',
+    })
     expect(tool.name).toBe('ask_remote')
     expect(tool.description).toBe('Ask remote')
     expect(tool.inputSchema).toMatchObject({ type: 'object' })
@@ -34,7 +41,12 @@ describe('createA2ATool', () => {
       seenUrl = url
       seenBody = JSON.parse(init.body as string)
     })
-    const tool = createA2ATool({ url: 'https://x/agents/a', name: 'ask', description: 'd', fetchImpl })
+    const tool = createA2ATool({
+      url: 'https://x/agents/a',
+      name: 'ask',
+      description: 'd',
+      fetchImpl,
+    })
 
     const out = await tool.handler({ message: 'hello' })
 
@@ -62,7 +74,12 @@ describe('createA2ATool', () => {
 
   it('throws a typed error when the remote returns a non-2xx status', async () => {
     const fetchImpl = vi.fn(async () => new Response('nope', { status: 502 }))
-    const tool = createA2ATool({ url: 'https://x/agents/a', name: 'ask', description: 'd', fetchImpl })
+    const tool = createA2ATool({
+      url: 'https://x/agents/a',
+      name: 'ask',
+      description: 'd',
+      fetchImpl,
+    })
 
     await expect(tool.handler({ message: 'hi' })).rejects.toThrow(/A2A|502/i)
   })

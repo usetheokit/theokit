@@ -38,15 +38,11 @@
       "detractors": []
     },
     "reference_citations": {
-      "contributors": [
-        "1 verified .claude/knowledge-base/references/ citation(s)"
-      ],
+      "contributors": ["1 verified .claude/knowledge-base/references/ citation(s)"],
       "detractors": []
     },
     "blueprint_completeness": {
-      "contributors": [
-        "9/10 mandatory sections present"
-      ],
+      "contributors": ["9/10 mandatory sections present"],
       "detractors": [
         "Missing section: Cross-cutting Comparison",
         "No ADRs found under '## ADRs' section"
@@ -54,10 +50,7 @@
     },
     "structural_risk": {
       "contributors": [],
-      "detractors": [
-        "vague_pronouns: 3 hits",
-        "subjective_adjectives: 1 hits"
-      ]
+      "detractors": ["vague_pronouns: 3 hits", "subjective_adjectives: 1 hits"]
     }
   },
   "sub_reports": {
@@ -103,9 +96,7 @@
       "blocked_paths": [],
       "word_count": 5149,
       "citation_density_per_200w": 0.04,
-      "contributors": [
-        "1 verified .claude/knowledge-base/references/ citation(s)"
-      ],
+      "contributors": ["1 verified .claude/knowledge-base/references/ citation(s)"],
       "detractors": []
     },
     "blueprint_completeness": {
@@ -122,13 +113,9 @@
         "ADRs",
         "Recommendations"
       ],
-      "missing_mandatory": [
-        "Cross-cutting Comparison"
-      ],
+      "missing_mandatory": ["Cross-cutting Comparison"],
       "adr_count": 0,
-      "contributors": [
-        "9/10 mandatory sections present"
-      ],
+      "contributors": ["9/10 mandatory sections present"],
       "detractors": [
         "Missing section: Cross-cutting Comparison",
         "No ADRs found under '## ADRs' section"
