@@ -23,7 +23,12 @@ export { AuthProvider } from './auth/auth-provider.js'
 // vs refuses), and the SDK itself declares that env precedence, prefix inference and the declared
 // provider are the consumer's app policy (`internal/auth/credential-store.ts`). Exposing both in the
 // same scope would be an invitation to import the wrong one, failing silently.
+// M67 — `assertSecureModes` arrived with the `^4.49.0` floor (ADR 0060). It encodes a security rule
+// over auth modes, and the doctrine above forbids withholding exactly this kind of symbol: the
+// consumer's only legal way out would be to restate the rule, and a second copy of a security rule
+// diverges from the first in silence.
 export {
+  assertSecureModes,
   authFilePath,
   CredentialError,
   credentialHome,

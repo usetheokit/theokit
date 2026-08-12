@@ -138,6 +138,55 @@ def test_typescript_symbol_fab_skips_relative_imports(tmp_path: Path) -> None:
     assert [f for f in findings if f.severity == "HARD"] == []
 
 
+def test_typescript_symbol_fab_skips_virtual_module_specifiers(tmp_path: Path) -> None:
+    """Regression — `virtual:` specifiers are bundler modules, never npm packages.
+
+    Vite (and Rollup) resolve `virtual:*` through a plugin at build time; nothing under
+    that prefix is ever published, so probing the registry for it can only ever return
+    "not found" or "ambiguous". The repo carries the proof that this was never handled:
+    `virtual:integration:banner` has been dismissed by ADR 0033, ADR 0034 and ADR 0035 —
+    three cycles writing the same dismissal, each naming this exact fix as the durable one
+    and deferring it. The prefix belongs next to `node:`, which is skipped for the same
+    reason: it is not a registry name.
+    """
+    src = tmp_path / "x.ts"
+    src.write_text("import banner from 'virtual:integration:banner';\n")
+    det = TypescriptDetector()
+    with patch(
+        "scripts._registry.package_exists_on_npm",
+        side_effect=AssertionError("should NOT probe the registry for a virtual: module"),
+    ) as mock:
+        findings = det.detect_symbol_fabrication([src])
+    assert mock.call_count == 0
+    assert findings == []
+
+
+def test_typescript_symbol_fab_queries_the_package_not_the_subpath(tmp_path: Path) -> None:
+    """Regression — a scoped import WITH a subpath must be looked up by PACKAGE name.
+
+    `pkg` used to be the whole specifier whenever it started with `@`, so
+    `@scope/name/subpath` was sent to the registry verbatim. npm answers a subpath URL
+    with HTTP 405, which `package_exists_on_npm` maps to `None` (ambiguous) — so every
+    scoped subpath import produced a spurious `symbol_fab_unverifiable_typescript`
+    SOFT_FLOOR. Measured on this repo: `packages/agents/src/index.ts` alone has 8 such
+    imports (`@theokit/sdk/errors`, `/retry`, `/models`, …), and the noise was enough to
+    cap `/plan-confidence` at 70 for a plan with no import problem at all.
+
+    The correct package name was already computed one line above, as `top`.
+    """
+    src = tmp_path / "x.ts"
+    src.write_text("import { RateLimitError } from '@theokit/sdk/errors';\n")
+    det = TypescriptDetector()
+    with patch("scripts._registry.package_exists_on_npm", return_value=True) as mock:
+        findings = det.detect_symbol_fabrication([src])
+    assert mock.call_args_list, "the registry must be consulted for a scoped import"
+    queried = mock.call_args_list[0].args[0]
+    assert queried == "@theokit/sdk", (
+        f"looked up {queried!r}; a subpath is not a package name and npm answers 405 for it"
+    )
+    assert findings == [], "a resolvable package must produce no finding"
+
+
 # --------------------------------------------------------------------------
 # Rust (T2.4)
 # --------------------------------------------------------------------------
