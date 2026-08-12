@@ -358,16 +358,16 @@ describe('M78 T2.1 — subpath coverage policy', () => {
   )
 
   /**
-   * Módulos resolvidos UMA vez, antes dos casos.
+   * Modules resolved ONCE, before the cases.
    *
-   * Cada `it.each` fazia o seu próprio `await import(...)`, e o primeiro a rodar pagava o
-   * carregamento do grafo inteiro do barrel — medido em mais de 80 s de `collect` nesta máquina —
-   * correndo contra o timeout de 5 s do vitest. O teste passava ou falhava conforme a ordem e a carga
-   * da máquina, que é a definição de flaky (`.claude/rules/testing.md` § 3: teste flaky é bug,
-   * corrigir ou remover, não conviver).
+   * Each `it.each` case used to run its own `await import(...)`, and whichever ran first paid for
+   * loading the barrel's entire graph — measured at over 80 s of `collect` on this machine — racing
+   * vitest's 5 s timeout. The test passed or failed depending on ordering and machine load, which is
+   * the definition of flaky (`.claude/rules/testing.md` § 3: a flaky test is a bug — fix it or delete
+   * it, never live with it).
    *
-   * Elevar o timeout esconderia o sintoma. O custo é de import, não de asserção — pagá-lo uma vez no
-   * `beforeAll` remove a corrida em vez de aumentar a pista. Backlog B-M67-04.
+   * Raising the timeout would hide the symptom. The cost is import, not assertion — paying it once in
+   * `beforeAll` removes the race instead of lengthening the track. Backlog B-M67-04.
    */
   const loaded = new Map<string, Record<string, unknown>>()
 
@@ -388,7 +388,7 @@ describe('M78 T2.1 — subpath coverage policy', () => {
     )
   })
 
-  /** Lê do cache. Falha alto se o `beforeAll` não cobriu o especificador — nunca importa tarde. */
+  /** Reads from the cache. Fails loud if `beforeAll` missed the specifier — never imports late. */
   const moduleOf = (specifier: string): Record<string, unknown> => {
     const mod = loaded.get(specifier)
     if (mod === undefined) {

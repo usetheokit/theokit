@@ -15,14 +15,25 @@ interface Chunk {
   [k: string]: unknown
 }
 
-const hoisted = vi.hoisted(() => ({ chunks: [] as Chunk[] }))
+const hoisted = vi.hoisted(() => ({ chunks: [] as Chunk[], stubCalls: 0 }))
 
-vi.mock('@theokit/agents', () => ({
+/**
+ * The double must replace the module the SUT ACTUALLY imports.
+ *
+ * The previous version mocked `'@theokit/agents'` — the public barrel. `in-process-turn.ts` imports
+ * `compileAgentModule` and `streamAgentUIMessages` from `./bridge/agent-endpoint.js`, a relative
+ * path, so the mock never intercepted anything: the real `compileAgentModule` ran against the
+ * synthetic `{ __compiled: … }` module and refused with `AgentDefinitionError`. Backlog B-M67-01,
+ * item 7.
+ */
+vi.mock('../../packages/agents/src/bridge/agent-endpoint.js', () => ({
   compileAgentModule: (mod: { __compiled: unknown }) => mod.__compiled,
-  streamAgentUIMessages: () =>
-    (async function* () {
+  streamAgentUIMessages: () => {
+    hoisted.stubCalls += 1
+    return (async function* () {
       for (const c of hoisted.chunks) yield c
-    })(),
+    })()
+  },
 }))
 
 const { streamAgentTurnInProcess } = await import('../../packages/agents/src/in-process-turn.js')
@@ -85,6 +96,12 @@ describe('agent turn parity — in-process vs HTTP (M35)', () => {
     ]
     const inProcess = await drainInProcess()
     const http = await drainHttpStyle(serializeAsSse(hoisted.chunks))
+
+    // Anti-vacuity floor: if the SUT's relative path moves again, `vi.mock` stops matching and the
+    // double stops being used. Without this assertion that either blows up with a message that does
+    // not point at the cause (which is what happened) or — worse — passes while exercising the real
+    // path.
+    expect(hoisted.stubCalls, 'the streamAgentUIMessages double was not used').toBe(1)
 
     expect(inProcess).toEqual(http)
     expect(inProcess).toEqual([
