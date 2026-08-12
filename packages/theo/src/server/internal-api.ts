@@ -48,16 +48,16 @@ export { scanServerRoutes } from './scan/scan.js'
 export { generateManifest } from './scan/manifest.js'
 export type { ManifestRoute, TheoManifest } from './scan/manifest.js'
 /**
- * Consumido por CÓDIGO GERADO, não por um import que exista neste repositório.
+ * Consumed by GENERATED CODE, not by any import that exists in this repository.
  *
- * Os adapters de Bun, Cloudflare e Deno **emitem** `import { scanWebSocketRoutes } from
- * 'theokit/server'` dentro de template strings (`adapters/bun.ts:55`, `adapters/cloudflare.ts:42`,
- * `adapters/deno-deploy.ts:32`). Nenhum analisador estático enxerga uma importação que só passa a
- * existir quando o build escreve o arquivo — e o Knip, corretamente do ponto de vista dele, reporta
- * este re-export como não usado.
+ * The Bun, Cloudflare and Deno adapters **emit** `import { scanWebSocketRoutes } from
+ * 'theokit/server'` inside template strings (`adapters/bun.ts:55`, `adapters/cloudflare.ts:42`,
+ * `adapters/deno-deploy.ts:32`). No static analyzer sees an import that only comes into existence
+ * when the build writes the file — and Knip, correctly from where it stands, reports this re-export
+ * as unused.
  *
- * Remover mataria o WebSocket de todo deploy nesses três runtimes, **em runtime**, sem que teste ou
- * typecheck algum acusasse. A tag abaixo diz isso ao Knip; este comentário diz ao próximo humano.
+ * Removing it would kill WebSocket support on all three deploy targets **at runtime**, with no test
+ * and no typecheck saying a word. The tag below tells Knip; this comment tells the next human.
  *
  * @knipignore
  */
