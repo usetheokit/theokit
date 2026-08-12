@@ -32,7 +32,7 @@
     "try:dev": "cd my-test && npx tsx ../packages/theo/src/cli/index.ts dev",
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
     "changeset": "changeset",
-    "version-packages": "changeset version && pnpm sync:templates",
+    "version-packages": "changeset version && pnpm sync:templates && node scripts/verify-version-not-published.mjs",
     "release": "pnpm build && changeset publish",
     "prepare": "git config core.hooksPath .githooks || true",
     "check:secrets": "bash scripts/prevent-secrets.sh",
@@ -44,7 +44,8 @@
     "check:sandbox-parity": "node scripts/check-sandbox-parity.mjs",
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "check:ai-free": "node scripts/check-ai-free-surface.mjs",
-    "check:wire-parity": "node scripts/check-wire-parity.mjs"
+    "check:wire-parity": "node scripts/check-wire-parity.mjs",
+    "verify:version-collision": "node scripts/verify-version-not-published.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
@@ -91,7 +92,7 @@
     "publint": "^0.3.21",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router": "^7.18.0",
+    "react-router": "^7.18.2",
     "reflect-metadata": "^0.2.2",
     "tsup": "^8.5.1",
     "tsx": "^4.22.4",
@@ -106,7 +107,10 @@
   "pnpm": {
     "overrides": {
       "zod": "^4.0.0",
-      "eslint-plugin-sonarjs>minimatch": "^10.2.3"
+      "eslint-plugin-sonarjs>minimatch": "^10.2.3",
+      "react-router@>=7.12.0 <7.18.2": ">=7.18.2",
+      "postcss@<8.5.18": ">=8.5.18",
+      "nanoid@<3.3.17": ">=3.3.17"
     }
   },
   "engines": {

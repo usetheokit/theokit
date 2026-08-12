@@ -156,3 +156,6 @@ export {
 // this one reads `<cwd>/.mcp.json`. The layer exposed the rare cases and not the common one, so every
 // consumer wrote the loader by hand.
 export { loadMcpJson, McpFileError } from './mcp-file.js'
+
+// M68 — o gate de confiança do `settingSources` (ADR 0063/0064/0065).
+export * from './setting-sources-gate.js'
