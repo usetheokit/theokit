@@ -285,7 +285,7 @@ que não deveria durar.
 
 ---
 
-## B-M67-09 — `Postgres Jobs CI` vermelho há dias: `pg` não declarado, os 6 testes nunca rodaram
+## ~~B-M67-09~~ — RESOLVIDO — `Postgres Jobs CI` vermelho há dias: `pg` não declarado, os 6 testes nunca rodaram
 
 **Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
 [`#207`](https://github.com/usetheodev/theokit/issues/207) · **Severidade: alta** — a garantia que o
@@ -302,11 +302,15 @@ o import dinâmico "keeps the test loadable even when pg isn't installed … res
 suíte roda (e ela roda, porque o único guarda é `skipIf(!POSTGRES_URL)` e em CI a variável está
 setada), e o `packages/theo` também não declara `pg`.
 
-**Fix proposto (no issue):** declarar `pg` + `@types/pg` como devDeps da raiz, e fazer o `skipIf`
-considerar as duas pré-condições — com piso anti-vacuidade: se `POSTGRES_URL` está setada, um `pg`
-ausente é **falha**, não skip, senão o job fica verde sem ter rodado nada, que é pior do que o
-vermelho de hoje. Depois do fix, o teste falhar de verdade é resultado possível: as 6 asserções nunca
-executaram.
+**Fix aplicado.** `pg@^8.23.0` + `@types/pg` como devDeps da raiz (MIT; escada de parcimônia — nada
+na árvore provia o driver), e o guarda passa a considerar as duas pré-condições, com piso
+anti-vacuidade: com `POSTGRES_URL` setada, um `pg` ausente é **falha**, não skip. Pular deixaria o job
+verde sem uma única asserção ter rodado — pior do que o vermelho, porque um gate verde é um gate que
+ninguém relê. A falha é uma só e nomeia a causa.
+
+**Verificado contra Postgres real**, não por inspeção: `postgres:15-alpine` em container local,
+derrubado na mesma execução → **7 verdes** (as 6 originais + o piso). Que elas passassem não era
+garantido: nunca tinham rodado.
 
 ---
 
@@ -329,4 +333,31 @@ o gate não bloqueia, ninguém conserta, e o gate deixa de significar algo.
 proposta está no issue, com a ressalva de custo: 1 aprovação obrigatória em repo de mantenedor único
 cria um gate que só pode ser contornado; `required_approving_review_count: 0` + required status
 checks entrega a maior parte do valor sem isso.
+
+---
+
+## B-M67-11 — O `pnpm audit` do projeto só mede `--prod`, e há 16 advisories `high` no toolchain
+
+**Encontrado em:** ao verificar se o `pg` recém-adicionado trouxe CVE, 2026-08-12 · **Severidade:
+baixa/média** — não é exposição de produção; é uma lacuna de medição.
+
+Medido lado a lado no mesmo commit:
+
+| Escopo | Resultado |
+|---|---|
+| `pnpm audit --prod --audit-level=high` | 6 (2 low, 4 moderate) — **zero high** |
+| `pnpm audit --audit-level=high` | 25 (2 low, 7 moderate, **16 high**) |
+
+As 16 são todas de `devDependencies` e nenhuma veio do `pg` (rastreadas: `eslint`,
+`@apidevtools/swagger-parser`, `@changesets/cli`, `drizzle-kit`, `drizzle-orm`, `unstorage`,
+`pg-mem`). São CVEs de complexidade algorítmica / DoS — `brace-expansion`, `fast-uri`, `immutable`,
+`js-yaml`, `shell-quote`.
+
+O número que o CHANGELOG cita (`4 high → zero`) está **correto como declarado**: ele diz `--prod`. O
+problema não é a afirmação, é o escopo nunca ter sido escolhido explicitamente — um projeto que só
+audita produção não sabe o que roda no seu próprio build.
+
+Risco real é menor que o de produção, mas não é zero: são ferramentas que consomem entrada não
+confiável (YAML de config, ASTs, globs) durante lint e build. A decisão a tomar é **qual escopo o
+gate mede**, e registrá-la — não sair corrigindo 16 advisories de terceiros.
 
