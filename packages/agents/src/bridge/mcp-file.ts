@@ -60,7 +60,7 @@ import type { McpServerConfig, McpServersMap } from '../types.js'
  * With no subscriber it did not: the entry was dropped in total silence, and the user saw "the tool
  * disappeared" and nothing else.
  */
-export interface LoadMcpJsonOptions {
+interface LoadMcpJsonOptions {
   onWarn?: (warning: string) => void
 }
 

@@ -26,6 +26,90 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **O gate de cobertura passa a exigir veredito para a barra root do SDK** (`packages/agents/tests/unit/root-bar-coverage.test.ts`). A omissão sobreviveu a **nove minors consecutivas** porque o gate existente enumera os 31 *subpaths* e estes símbolos vivem no entry `.`, que nenhum gate cobria — o instrumento tinha escopo mais estreito que a propriedade que afirmava. Os 84 valores da barra root agora têm decisão escrita: 28 `in` verificados por identidade referencial, 56 `out` com motivo. (ADR 0061)
 - **Três primitivas de sessão e uma de sandbox passam a atravessar**, trazidas pelo piso novo: `classifySessionArtifact` + `SessionArtifact` e `atomicWriteTempTarget` (`/persistence`), `writableRootsFor` (`/sandbox`), `assertSecureModes` (`/auth`). `classifySessionArtifact` merece nota: o roadmap previa **escrevê-la** sob outro nome, e ela já existia no SDK — a descoberta veio do ciclo DISCOVER e evitou uma reimplementação.
 
+### Fixed
+- **O gate `License compliance` chamava um script que não existia — e nunca verificou uma única licença (backlog B-M67-13).** `scripts/check-licenses.mjs` foi deletado dentro de `efe63edf` ("Release v0.4.0"), um commit grande o bastante para a perda passar despercebida; o `package.json` e o job de CI continuaram chamando, e o resultado era `MODULE_NOT_FOUND` a cada run. Restaurado com a política original verbatim, e com a **decisão** extraída como função pura sobre um conjunto injetado — a forma anterior embrulhava `execSync` na mesma lógica e só dava para exercitar ponta-a-ponta, então um defeito no tratamento de expressões SPDX teria sido invisível.
+
+  Assim que voltou a rodar, encontrou **quatro pacotes de produção sem licença declarada**. Um é de terceiro (`khroma@2.1.0`, que traz o arquivo `license` MIT e só esquece o campo do manifest); **os outros três são nossos** — `@theokit/agents@1.0.0`, `@theokit/sdk-pty@0.3.0` e `@theokit/studio@0.1.0`, todos publicados sem `license` enquanto os repos de origem são Apache-2.0. Um pacote npm sem esse campo é all rights reserved para quem instala: a concessão viaja no artefato, não no GitHub.
+
+  `packages/agents` passa a declarar `Apache-2.0` na fonte. Os demais precisam de republish nos repos irmãos, e o `@theokit/agents@1.0.0` **não tem conserto** — tarballs npm são imutáveis, e aquela cópia só sai da árvore quando o `@theokit/studio` parar de puxá-la.
+
+### Fixed
+- **O `Bundle budget` nunca mediu um bundle (backlog B-M67-14).** O default do `BUNDLE_FIXTURE` era a **raiz do monorepo**, que não é uma app TheoKit: o `npx theokit build` não tinha o que buildar, o `|| true` engolia a falha, e o gate saía 2 com *"build output not found"* — um orçamento sob o qual ninguém nunca esteve, nem por cima nem por baixo. O docblock do próprio teste já dizia a intenção correta (*"runs `theokit build` against fixtures/template-default"*); só o código discordava.
+
+  Todos os testes existentes passavam `BUNDLE_FIXTURE` explicitamente, então nenhum jamais exercitou o default — a lacuna que deixou isso sobreviver. Um teste novo fixa a propriedade: o diretório que o script escolhe sozinho tem de ser uma app de verdade (`package.json` + `app/` + `theo.config.ts`).
+
+  O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
+
+### Added
+- **Um preflight que recusa um release que a credencial não consegue terminar (backlog B-M67-08).** O release do M67 rodou inteiro — build, versão, tag, GitHub release — e morreu no último passo com `E404 … PUT`. Nada foi publicado, enquanto o `main` ficou com tag e CHANGELOG afirmando três versões novas.
+
+  **A causa era a forma da credencial, não a autoridade dela.** O token vinha como variável de ambiente `npm_config_//registry.npmjs.org/:_authToken=…`: o npm honra essa forma em **leituras** — `whoami` e `owner ls` funcionavam — e não a aplica no caminho de **escrita**. O `PUT` saía anônimo, e o registry responde escrita não autenticada com **404 em vez de 403**, para não vazar se o pacote existe. É o mesmo status para "você não pode" e "você não é ninguém", e foi exatamente o que tornou o diagnóstico errado tão fácil.
+
+  O gate verifica o que de fato falhou: se a credencial está no caminho de escrita. Ele **não** tenta inferir autoridade — a primeira versão tentava, via `npm access list packages <nome>`, um endpoint de org enquanto `usetheodev` é usuário, e devolvia 403 para qualquer token. Um gate cujo oráculo não distingue a falha que ele filtra produz vereditos confiantes e errados.
+
+### Fixed
+- **Um guarda afirmava sobre um arquivo que o `.gitignore` exclui (backlog B-M67-18).** `cli-env-wiring.test.ts` verificava que a fixture `zero-config-env` tem um `.env` com `OPENROUTER_API_KEY` — mas esse `.env` é gitignored, e corretamente: um repositório que começa a commitar `.env` perde o hábito que mantém os reais fora. O guarda passava nesta máquina, onde uma execução anterior deixara o arquivo, e falhava em **todo checkout limpo**. Um guarda que depende de estado não rastreado não verifica o repositório, verifica a máquina.
+
+  O `.gitignore` já dizia qual era a forma pretendida — a linha 26 carrega a negação `!.env.example`; o template só nunca tinha sido escrito. Criado, e o guarda passa a afirmar sobre ele. Um segundo teste garante que os valores do template continuem obviamente falsos, já que ele é o único arquivo commitado desta fixture e portanto o único lugar onde uma credencial real poderia aterrissar em silêncio.
+
+### Fixed
+- **O build da fixture passa a invocar a CLI pelo caminho resolvido, em vez de pedir ao gerenciador de pacotes que a encontre (backlog B-M67-17).** `pnpm exec theokit build` falhou em CI por três runs seguidos com `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "theokit" not found`, enquanto passava localmente **com o mesmo pnpm** (9.15.0, fixado por `packageManager`) e o mesmo lockfile — verificado, inclusive que o `--frozen-lockfile` está em dia. O shim existe na fixture nos dois lados, então a diferença nunca foi o artefato: era a **resolução**, e o erro a nomeia.
+
+  `pnpm exec` (e o `npx` equivalente no `check-bundle-budget.sh`) é uma indireção cujo único trabalho é localizar um binário cujo caminho este repositório já conhece. Removê-la elimina o modo de falha **por construção**, não por palpite. A única possibilidade que resta — a CLI não estar buildada — virou uma frase acionável em vez de um `Command not found`.
+
+### Fixed
+- **O helper que builda a fixture parou de descartar a explicação do build (backlog B-M67-17).** `buildTemplateDefaultOnce()` roda `pnpm exec theokit build` com `stdio: 'pipe'` e não capturava nada no erro, então uma falha chegava ao log como `Error: Command failed: pnpm exec theokit build` e mais nada. O teste falha em CI e passa localmente, e por três runs consecutivos a única informação disponível era que tinha falhado.
+
+  É o mesmo defeito de oráculo do `check-bundle-budget.sh` e do `pnpm-11-compat`: o gate joga fora a evidência e reporta o sintoma. Passa a re-lançar com `stdout`/`stderr` anexados. A causa continua desconhecida **de propósito** — ela não reproduz aqui, e inventar uma correção plausível para um defeito que não se reproduz é o oposto de consertar.
+
+### Changed
+- **O gate de auditoria de dependências passa a declarar os dois escopos, em vez de medir um só em silêncio (backlog B-M67-11).** `check:audit` rodava `pnpm audit --prod --audit-level=high` e mais nada. A escolha é defensável — um CVE `high` numa dep de produção viaja para todo consumidor do framework, um no `eslint` não — mas nunca tinha sido **declarada**, então o número do lado dev simplesmente não era medido. Medido pela primeira vez: `--prod` dá 6 advisories e **zero high**; a árvore completa dá 23 com **16 high**, todas de complexidade algorítmica / DoS dentro de ferramenta de build.
+
+  A assimetria agora é explícita: produção **bloqueia**, dev é **reportado** com número e motivo num `::warning::` que o GitHub renderiza no PR. Dev não bloqueia porque as 16 chegam transitivamente e dependem de release upstream — bloquear deixaria o gate permanentemente vermelho, que é a falha que este ciclo passou o dia desfazendo. Não bloquear nunca pode significar não saber.
+
+### Removed
+- **`drizzle-kit`, `drizzle-orm` e `postgres` das devDependencies da raiz.** Estavam ali para o job `e2e-postgres-templates`, removido acima; com ele fora, os três ficaram sem consumidor. As referências que sobram no código são **template strings** — `import { eq } from 'drizzle-orm'` que o `generate-resource` **emite** para a app do usuário, e um `assertBinExists(cwd, 'drizzle-kit')` que checa o `cwd` **do consumidor**, não o nosso. Nenhum `import` real no repositório. As entradas correspondentes em `knip.ignoreDependencies` saíram junto, porque um ignore de algo que já não existe é ruído que sobrevive a quem o entendia.
+
+  Foi o Knip quem apontou, e só depois da remoção do job — o tipo de consequência de segunda ordem que só aparece quando os gates estão verdes o suficiente para serem lidos.
+
+### Removed
+- **O job de CI `Dependency review`, impossível de passar e redundante (backlog B-M67-15).** A `actions/dependency-review-action` precisa do dependency graph do GitHub, que em repositório privado exige licença de Advanced Security — medido, `security_and_analysis: null`. Todo run terminava em *"Dependency review is not supported on this repository"*, independentemente do diff.
+
+  O que decidiu a remoção não foi ser impossível, foi ser **redundante**: `fail-on-severity: high` já é o job `Dependency audit (npm audit, high+)`, e `allow-licenses` já é o `License compliance` restaurado, cuja allowlist é superset da que o job declarava. Licenciar GHAS continua uma opção real — traria a visão de diff transitivo que nenhum dos dois substitutos tem — mas é decisão de compra, não de CI.
+
+### Removed
+- **O job de CI `e2e-postgres-templates`, que era impossível de passar (backlog B-M67-12).** Ele provisionava um Postgres, empurrava dois schemas e rodava specs Playwright para as fixtures `template-postgres` e `template-saas`. O **ADR 0023** (*default-only template set*) removeu esses templates de propósito, e o job sobreviveu a eles: verificado um a um, **nenhum** artefato que ele citava ainda existia — nem as duas fixtures, nem o `playwright.postgres-templates.config.ts`, nem o plano em `docs/plans/`. O `tsconfig.json` ainda listava o config inexistente no `include`, pelo mesmo apodrecimento.
+
+  Ele apareceu porque a correção de build-before-lint fez a falha **mudar de lugar**: o job parou de morrer no build e passou a morrer no `Push schema` com `drizzle.config.ts file does not exist`. A primeira falha escondia a segunda.
+
+  Um gate impossível é pior que gate nenhum — ele ensina o time a ignorar vermelho, e foi esse hábito que deixou dois releases seguidos merjarem com 12 checks vermelhos.
+
+### Fixed
+- **O `Dead code (Knip)` passou de cinco seções vermelhas para exit 0 — e o que sobrou eram dois falsos positivos que valia documentar, não silenciar.** Dos 14 achados, **três classes eram reais**: `@theokit/sdk-pty` e `@theokit/sdk-tools` declarados na raiz sem um único import fora de `packages/` (só menções em prosa de comentário), `ai` em `packages/theo` sem nenhum consumidor, e **oito tipos exportados que só aparecem no próprio arquivo** — `export` em tipo que ninguém importa é um crachá de API pública sobre algo interno. Verificado antes de mexer: nenhum dos oito está na lista de export dos `.d.ts` publicados, então remover o `export` não tira nada da superfície.
+
+  Os dois restantes ficam, com a razão escrita no local do código. `scanWebSocketRoutes` é consumido por **código gerado**: os adapters de Bun, Cloudflare e Deno emitem `import { scanWebSocketRoutes } from 'theokit/server'` dentro de template strings, e nenhum analisador estático enxerga uma importação que só passa a existir quando o build escreve o arquivo. Removê-lo mataria o WebSocket desses três deploys **em runtime**, sem teste nem typecheck acusando. `BudgetExceededError` é o alias deprecado mantido por uma major de propósito.
+
+  `pg` e `@types/pg` foram para `ignoreDependencies` pelo mesmo motivo de forma: o único consumidor é um teste, e a config do Knip ignora `**/tests/**` por desenho.
+
+### Fixed
+- **Dois jobs de CI falhavam porque nada era buildado antes deles.** O `Lint + Format` rodava `pnpm install` e ia direto ao `pnpm lint`. As regras type-aware do ESLint resolvem `@theokit/agents` pelo campo `types` do pacote, que aponta para `dist/` — num checkout novo esse diretório não existe, **todo tipo que cruza a fronteira do pacote vira `error`**, e as regras reportam `acts as 'any'` apontando para código de aplicação que não tem defeito nenhum. O `Playwright Postgres templates` buildava só `theokit`, cujo passo de dts importa `@theokit/agents`: `TS2307 Cannot find module`.
+
+  Passava localmente porque o `dist/` sobra de um build anterior — ou seja, **o gate local vinha dando falsa segurança** por todo o tempo em que esses jobs estiveram vermelhos. Causalidade provada, não inferida: removendo `packages/agents/dist` localmente aparecem exatamente os erros do CI, e restaurando o diretório o lint volta a sair 0.
+
+### Fixed
+- **O `Postgres Jobs CI` voltou a rodar — e as 6 asserções de `SKIP LOCKED` executaram pela primeira vez (backlog B-M67-09, #207).** O workflow estava vermelho desde pelo menos 2026-08-10, em `main` **e** `develop`, 8 runs consecutivos. A causa era `Cannot find package 'pg'`: os seis testes ficavam `skipped` e o job saía 1. O teste de race-safety do dequeue concorrente — o único lugar onde a semântica do `SKIP LOCKED` é verificada contra um Postgres real, já que o `pg-mem` local cobre forma de SQL e não concorrência — **nunca chegou a executar**.
+
+  `pg` não era declarado em nenhum manifest do workspace. O comentário no topo do teste afirmava que o import dinâmico *"keeps the test loadable even when pg isn't installed … resolved from `packages/theo` node_modules in CI"*; as duas metades eram falsas — o `beforeAll` explode assim que a suíte roda (e ela roda, porque o único guarda era `skipIf(!POSTGRES_URL)` e o CI seta a variável), e o `packages/theo` também não declarava `pg`.
+
+  Além de declarar a dependência, o guarda passa a dizer a verdade: com `POSTGRES_URL` setada, um `pg` ausente é **falha**, não skip. Pular deixaria o job **verde sem uma única asserção ter rodado** — pior do que o vermelho que substitui, porque um gate verde é um gate que ninguém relê. A falha agora é uma só e nomeia a causa numa frase, em vez de um `ERR_MODULE_NOT_FOUND` derrubando o arquivo.
+
+  Verificado contra um Postgres real (`postgres:15-alpine` em container, derrubado na mesma execução): **7 verdes**. Que elas passassem não era garantido — nunca tinham rodado.
+
+### Fixed
+- **O workflow de back-merge passa a fazer o merge em vez de abrir um PR.** A primeira versão abria um PR `main → workspace`, pelo raciocínio de que um merge pode conflitar e um workflow que resolve conflito sem supervisão reescreve o trabalho de alguém sem pedir. O raciocínio continua valendo; o mecanismo não: o repositório tem *"Allow GitHub Actions to create and approve pull requests"* desligado (`can_approve_pull_request_reviews: false`), e a primeira execução falhou com `GitHub Actions is not permitted to create or approve pull requests`. Um workflow vermelho por default não protege nada — treina o time a ignorar vermelho.
+
+  A preocupação com conflito passa a ser honrada pelo próprio merge: o job mergeia **só** quando o git consegue sem conflito, e nunca resolve um. Conflito falha o job alto, que é vermelho legítimo — algo genuinamente precisa de um humano — e não vermelho-por-default. Voltar à forma de PR é mudança de uma linha, no dia em que aquela configuração for ligada.
+
 ### Added
 - **Duas metades de um gate de release que quase deixou passar um artefato sob versão já publicada (backlog B-M67-07).** No M67, o `pnpm version-packages` computou `@theokit/agents@7.5.0` — uma versão que o npm tinha havia dois dias, com outro conteúdo. A causa foi base velha: o commit de release aterrissou em `main`, o `workspace` nunca recebeu o back-merge, então os changesets já consumidos continuavam no disco e o bump foi recomputado.
 

@@ -59,6 +59,18 @@ jobs:
       #
       # Same posture as the sibling `theokit-sdk`, where token-auth is validated in production.
       - run: pnpm install --frozen-lockfile
+      # Refuse a release the credential cannot finish (backlog B-M67-08).
+      #
+      # The M67 release ran end to end — build, version, tag, GitHub release — and died on the last
+      # step with `E404 ... PUT`. Nothing was published, while `main` kept a tag and a CHANGELOG
+      # claiming three new versions. `npm whoami` succeeds for a read-only token, so a preflight that
+      # only checks authentication would have green-lit it; this one checks AUTHORITY.
+      #
+      # Runs before the build so the refusal costs seconds instead of a full release.
+      - name: Publish credential preflight
+        run: node scripts/verify-publish-credential.mjs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - run: pnpm build
       - name: Create Release Pull Request or Publish
         uses: changesets/action@v1
