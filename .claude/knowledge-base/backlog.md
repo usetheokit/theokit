@@ -108,10 +108,20 @@ fazê-la de passagem. O experimento de medição está preservado em
 `git -C ../theokit-studio stash list` → `stash@{0}` (só o `package.json`; a árvore de lá está limpa e
 na baseline verde).
 
-**Próximo passo:** abrir o milestone de migração no `theokit-studio` (com esta medição como ponto de
-partida), migrar os 15, e só então republicar. Enquanto isso, o peer opcional deste repo continua
-declarando `^0.1.0`, que é a versão que de fato existe e funciona contra o agents 0.39 — obsoleta,
-porém coerente.
+**Próximo passo — e por que ele não é deste repositório.** A migração é um milestone do
+`theokit-studio`: ciclo, CHANGELOG e release próprios, 15 testes a corrigir através de sete majors,
+com um endpoint que já devolve `422` onde esperava `200`. Fazê-la de passagem, no meio de um ciclo de
+outro repo, seria exatamente o "caminho curto" que o processo proíbe — e o pior lugar para isso é uma
+migração cujo contrato mudou de verdade.
+
+**Estado desta entrada:** medida, documentada, e **parada de propósito**. Uma tentativa de reabrir o
+experimento nesta sessão foi bloqueada, citando esta mesma decisão — o que é o comportamento correto.
+Ela sai do backlog quando virar milestone lá, não antes.
+
+**Consequência que este repo herda enquanto isso:** o `@theokit/studio@0.1.0` arrasta
+`@theokit/agents@1.0.0` e `@theokit/http@1.0.0` publicados para a árvore de produção daqui. É a
+origem de uma das três violações de licença do #213, e aquela **não tem conserto por republish** —
+tarballs npm são imutáveis. A linha só some quando o studio parar de puxar a cópia antiga.
 
 ---
 
@@ -260,7 +270,7 @@ intervenção manual; só o (2) deixaria o dano possível sempre que o back-merg
 
 ---
 
-## B-M67-08 — A janela entre `changeset version` e `changeset publish` deixa todo scaffold ininstalável
+## ~~B-M67-08~~ — RESOLVIDO — A janela entre `changeset version` e `changeset publish`
 
 **Encontrado em:** limpeza do B-M67-01, 2026-08-12 · **Severidade: média** — não afeta usuário
 publicado; afeta todo run de CI/local durante a janela de release.
@@ -271,14 +281,325 @@ publicado; afeta todo run de CI/local durante a janela de release.
 depois. Entre os dois passos, o template pina `theokit@0.47.0` e `@theokit/agents@7.6.0` — E404 no
 registry — e todo `npx create-theokit` seguido de install falha.
 
-Hoje a janela está aberta porque o release do M67 não completou (ver B-M67-07). Ela reabre a cada
-release.
+Hoje a janela está aberta porque o release do M67 não completou (ver B-M67-07 e o issue #209: os
+tokens npm fornecidos são read-only, então o `changeset publish` recusa com `E404` no `PUT`). Ela
+reabre a cada release.
+
+**Estado em 2026-08-12, depois de fechar todas as causas internas de CI:** este é o **único teste
+vermelho do repositório**, e sozinho ele derruba três checks — `Unit + Type tests (20)`, `(22)` e
+`Coverage gate`, que rodam a mesma suíte. Ou seja: **um bloqueio externo é hoje a totalidade do
+vermelho de teste**, e ele some no minuto em que o publish sair.
 
 **O que foi feito agora:** o teste engolia o stderr do install (`catch {}`) e falhava com um
 `expected false to be true` sem diagnóstico. Passa a nomear os pins não publicados e a dizer que a
 causa é a janela de publish. O vermelho continua — ele é honesto — mas agora se lê.
 
-**Correção de processo, pendente:** publicar dentro da mesma execução que versiona (é o que o
-`changeset publish` faz quando o release não é interrompido), ou marcar a janela explicitamente para
-que a suíte saiba distingui-la. A primeira é preferível: a segunda ensina a suíte a tolerar um estado
-que não deveria durar.
+**Fechado em 2026-08-12 com o publish de `theokit@0.47.0`, `@theokit/agents@7.6.0` e
+`@theokit/presenter@0.7.0`.** O `pnpm-11-compat` passou a verde na mesma execução — verificado.
+
+**A causa do bloqueio era minha, não do token, e vale registrar em detalhe porque é uma armadilha
+que morde de novo.** Eu passava a credencial como variável de ambiente
+`npm_config_//registry.npmjs.org/:_authToken=…`. O npm honra essa forma em **leituras** — `whoami` e
+`owner ls @theokit/agents` funcionavam, e foi por isso que eu concluí "autenticado" — e **não** a
+aplica no caminho de **escrita**. O `PUT` saía anônimo, e o registry responde escrita não autenticada
+com **404 em vez de 403**, para não vazar se o pacote existe.
+
+Esse 404 é o que tornou o diagnóstico errado tão fácil: **o npm devolve o mesmo status para "você não
+pode" e para "você não é ninguém"**. Declarei três tokens diferentes como read-only; os três
+publicavam. O usuário apontou o erro, e ele estava certo.
+
+Publicando pela forma canônica — `_authToken` num npmrc, que é a resolução que a escrita usa — os
+três pacotes subiram na primeira tentativa.
+
+**Gate resultante (`scripts/verify-publish-credential.mjs`):** verifica se a credencial está no
+caminho de **escrita**, não se ela autentica. A primeira versão que escrevi checava autoridade via
+`npm access list packages <nome>` — endpoint de **org**, enquanto `usetheodev` é **usuário**, então
+devolvia 403 para qualquer token. Um gate cujo oráculo não distingue a falha que ele filtra é pior
+que gate nenhum: produz vereditos confiantes e errados, e este mandou três tokens para o lixo.
+
+---
+
+## ~~B-M67-09~~ — RESOLVIDO — `Postgres Jobs CI` vermelho há dias: `pg` não declarado, os 6 testes nunca rodaram
+
+**Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
+[`#207`](https://github.com/usetheodev/theokit/issues/207) · **Severidade: alta** — a garantia que o
+workflow anuncia nunca foi coletada.
+
+Vermelho desde pelo menos 2026-08-10, em `develop` **e** em `main`, 8 runs consecutivos observados.
+`Cannot find package 'pg'` (`ERR_MODULE_NOT_FOUND`): os **6 testes ficam `skipped`** e o job sai 1. O
+teste de race-safety do `SKIP LOCKED` — o único lugar onde a semântica de dequeue concorrente do
+`PostgresJobBackend` é verificada contra um Postgres real — nunca chegou a executar.
+
+`pg` não é declarado em nenhum `package.json` do workspace. O comentário no topo do teste afirma que
+o import dinâmico "keeps the test loadable even when pg isn't installed … resolved from
+`packages/theo` node_modules in CI" — as duas metades são falsas: o `beforeAll` explode assim que a
+suíte roda (e ela roda, porque o único guarda é `skipIf(!POSTGRES_URL)` e em CI a variável está
+setada), e o `packages/theo` também não declara `pg`.
+
+**Fix aplicado.** `pg@^8.23.0` + `@types/pg` como devDeps da raiz (MIT; escada de parcimônia — nada
+na árvore provia o driver), e o guarda passa a considerar as duas pré-condições, com piso
+anti-vacuidade: com `POSTGRES_URL` setada, um `pg` ausente é **falha**, não skip. Pular deixaria o job
+verde sem uma única asserção ter rodado — pior do que o vermelho, porque um gate verde é um gate que
+ninguém relê. A falha é uma só e nomeia a causa.
+
+**Verificado contra Postgres real**, não por inspeção: `postgres:15-alpine` em container local,
+derrubado na mesma execução → **7 verdes** (as 6 originais + o piso). Que elas passassem não era
+garantido: nunca tinham rodado.
+
+---
+
+## B-M67-10 — `main` e `develop` sem branch protection: o PR obrigatório é convenção, não restrição
+
+**Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
+[`#208`](https://github.com/usetheodev/theokit/issues/208) · **Severidade: alta**
+
+`gh api repos/usetheodev/theokit/branches/{main,develop}/protection` → **404 Branch not protected**
+nas duas.
+
+O `CLAUDE.md` § 4 já descreve exatamente esta situação: o hook local garante a **origem** do trabalho;
+a branch protection é o que torna o **PR obrigatório**. Um repo sem ela tem a primeira garantia e não
+a segunda. Concretamente: um `git push origin main` direto funciona hoje.
+
+Agrava-se com o B-M67-09: sem required status checks, um vermelho crônico não impede merge nenhum —
+o gate não bloqueia, ninguém conserta, e o gate deixa de significar algo.
+
+**Não apliquei nada.** Configuração de repositório é decisão do dono, não de quem encontrou. A
+proposta está no issue, com a ressalva de custo: 1 aprovação obrigatória em repo de mantenedor único
+cria um gate que só pode ser contornado; `required_approving_review_count: 0` + required status
+checks entrega a maior parte do valor sem isso.
+
+---
+
+## ~~B-M67-11~~ — RESOLVIDO — O `pnpm audit` só media `--prod`, e a escolha nunca tinha sido feita
+
+**Encontrado em:** ao verificar se o `pg` recém-adicionado trouxe CVE, 2026-08-12
+
+Medido lado a lado no mesmo commit:
+
+| Escopo | Resultado |
+|---|---|
+| `pnpm audit --prod --audit-level=high` | 6 (2 low, 4 moderate) — **zero high** |
+| `pnpm audit --audit-level=high` | 23 (2 low, 5 moderate, **16 high**) |
+
+As 16 são todas de `devDependencies` e nenhuma veio do `pg` — `brace-expansion` ×6, `js-yaml` ×4,
+`fast-uri` ×3, `immutable` ×2, `shell-quote` ×1, todas de complexidade algorítmica / DoS dentro de
+ferramenta de build.
+
+O número que o CHANGELOG cita (`4 high → zero`) estava **correto como declarado**: ele diz `--prod`.
+O problema nunca foi a afirmação — era o escopo jamais ter sido **escolhido**. Um projeto que só
+audita produção não sabe o que roda no próprio build, e "não sabe" tinha virado "assume zero".
+
+**Resolução: assimetria explícita.** Produção **bloqueia** (dep de produção viaja para todo consumidor
+do framework); dev é **reportado** com o número e o motivo, via `::warning::` que o GitHub renderiza
+no PR.
+
+Por que dev não bloqueia, e por que isso não é preguiça: as 16 chegam transitivamente e não têm
+correção daqui — dependem de release upstream. Bloquear deixaria o gate **permanentemente vermelho**,
+que é exatamente a falha que este ciclo inteiro passou o dia desfazendo. Um gate que ninguém consegue
+satisfazer é um gate que ninguém lê, e o próximo achado real chega indistinguível do ruído.
+
+A decisão virou função pura com os dois escopos injetados (`decideAuditOutcome`), com 10 testes —
+incluindo o caso que garante que um achado de produção **não é contado duas vezes** como dev, já que
+o `pnpm audit` sem `--prod` cobre as duas árvores.
+
+---
+
+## ~~B-M67-12~~ — RESOLVIDO — Um job de CI impossível de passar, testando templates que um ADR removeu
+
+**Encontrado em:** medição do efeito do fix de build no PR #212, 2026-08-12 · **Severidade: média** —
+vermelho garantido a cada run, e gastando um serviço de banco para isso.
+
+O job `e2e-postgres-templates` provisionava um Postgres, empurrava dois schemas e rodava specs
+Playwright para as fixtures `template-postgres` e `template-saas`. O **ADR 0023** (2026-06-17,
+*default-only template set*) removeu esses templates **de propósito** — e o job sobreviveu a eles.
+
+Verificado item por item: **nenhum** artefato que ele citava ainda existia.
+
+| Artefato citado pelo job | Existe? |
+|---|---|
+| `fixtures/template-postgres/` | não |
+| `fixtures/template-saas/` | não |
+| `playwright.postgres-templates.config.ts` | não (só o `playwright.config.ts`) |
+| `docs/plans/playwright-postgres-templates-ci-plan.md` | não (a árvore `docs/` virou `wiki/`) |
+
+O `tsconfig.json` também ainda listava o config inexistente no `include` — inofensivo para o `tsc`,
+mas o mesmo apodrecimento.
+
+**Como ele apareceu.** A correção de build-before-lint fez a falha **mudar de lugar**: o job parou de
+morrer no `pnpm --filter theokit build` e passou a morrer no `Push schema — template-postgres`, com
+`drizzle.config.ts file does not exist`. A primeira falha escondia a segunda — e a segunda é a real.
+
+**Removido**, com a explicação no lugar onde ele vivia. Um gate impossível é pior que gate nenhum:
+ele ensina o time a ignorar vermelho, e foi esse hábito que deixou dois releases seguidos merjarem com
+12 checks vermelhos (issue #210).
+
+---
+
+## ~~B-M67-13~~ — RESOLVIDO — O gate de licenças chamava um script deletado, e nunca verificou nada
+
+**Encontrado em:** varredura dos gates com artefato ausente, 2026-08-12 · **Filado:** parte do
+[`#210`](https://github.com/usetheodev/theokit/issues/210); o achado de compliance virou
+[`#213`](https://github.com/usetheodev/theokit/issues/213)
+
+`scripts/check-licenses.mjs` foi deletado **dentro de `efe63edf`** ("Release v0.4.0"), um commit
+grande o bastante para a perda passar despercebida. O `package.json` e o job de CI continuaram
+chamando, então `License compliance` falhava com `MODULE_NOT_FOUND` desde então — um controle de
+compliance vermelho por tanto tempo que ninguém lia, e que **nunca verificou uma única licença**.
+
+A varredura que o encontrou foi sistemática, não por acaso: script que cruza todo `scripts:` do
+`package.json` e todo `run:`/`--config` dos workflows contra o disco. **Uma** referência quebrada em
+todo o repo, e era esta.
+
+**Restaurado com a política original verbatim** (era bem fundamentada — pnpm-native, decomposição de
+expressão SPDX, MPL-2.0 admitido com a razão escrita). O que mudou: a **decisão** virou função pura
+sobre um conjunto injetado (`findLicenseViolations`), testável sem registry, rede ou processo `pnpm`.
+A forma anterior embrulhava `execSync` na mesma lógica e só dava para exercitar ponta-a-ponta — por
+isso um defeito no tratamento de SPDX teria sido invisível. 16 testes.
+
+**O que ele achou assim que voltou a rodar:** quatro pacotes de produção sem licença declarada. Um
+era terceiro (`khroma@2.1.0`, que traz o arquivo `license` MIT e só esquece o campo). **Os outros
+três eram nossos** — ver #213. Resultado final: `OK — 567 pacotes`.
+
+**Um teste meu pegou a minha própria implementação sendo permissiva demais.** A primeira versão da
+exceção aceitava a sobreposição mesmo quando o pacote **declarava** uma licença copyleft. A exceção
+existe para metadado **ausente**, nunca para contradizer o que o manifest diz — se um pacote declara
+`GPL-3.0`, não há nada faltando e não há o que sobrepor. Tratar os dois casos igual transformaria a
+válvula em bypass, que é exatamente o modo de falha que uma allowlist deveria evitar.
+
+---
+
+## ~~B-M67-14~~ — RESOLVIDO — O `Bundle budget` nunca mediu um bundle
+
+**Encontrado em:** investigação dos vermelhos restantes do #210, 2026-08-12
+
+O default do `BUNDLE_FIXTURE` era a **raiz do monorepo**, que não é uma app TheoKit. O
+`npx theokit build` não tinha o que buildar, o `|| true` engolia a falha, e o gate saía 2 com
+*"build output not found"* — um orçamento sob o qual ninguém nunca esteve.
+
+**A lacuna que deixou isso sobreviver:** os 7 testes do script passavam `BUNDLE_FIXTURE`
+explicitamente. Nenhum exercitava o **default**, que era justamente a única coisa que o CI usa. Um
+teste novo fixa a propriedade — o diretório que o script escolhe sozinho tem de ser uma app real.
+
+O script também guardava mal a evidência: descartava a saída do build e depois reportava "output not
+found", que é o sintoma e não a causa. Agora imprime o log do build quando os assets faltam.
+
+Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
+
+**Padrão, terceira ocorrência no mesmo dia.** `postgres-integration` (dependência não declarada),
+`License compliance` (script deletado), `Bundle budget` (fixture inexistente): três gates que
+reportavam vermelho havia meses sem nunca terem exercido a verificação que anunciavam. O sintoma
+comum não é descuido pontual — é que **um gate vermelho por default deixa de ser lido**, e a partir
+daí a causa dele para de importar para todo mundo.
+
+---
+
+## ~~B-M67-15~~ — RESOLVIDO — `Dependency review`: impossível de passar **e** redundante
+
+**Encontrado em:** investigação dos vermelhos do #210, 2026-08-12
+
+`actions/dependency-review-action` precisa do dependency graph do GitHub, que em repositório
+**privado** exige licença de Advanced Security. Medido: `security_and_analysis: null`. Todo run
+terminava em *"Dependency review is not supported on this repository"* — um gate que não passava por
+construção, independentemente do diff.
+
+**O que decidiu a remoção não foi ser impossível, foi ser redundante.** As duas verificações dele já
+têm equivalente funcionando aqui:
+
+| Verificação do job removido | Equivalente que já existe |
+|---|---|
+| `fail-on-severity: high` | job `Dependency audit (npm audit, high+)` (`pnpm check:audit`) — **verde** |
+| `allow-licenses: MIT, Apache-2.0, …` | job `License compliance` (`scripts/check-licenses.mjs`) — restaurado em B-M67-13, com allowlist **superset** da que o job declarava |
+
+Licenciar GHAS continua sendo opção real, e traria a visão de diff transitivo que nenhum dos dois
+substitutos tem. Mas isso é decisão de compra, não de CI — e até que seja tomada, um gate impossível
+é pior que gate nenhum: ensina o time a ler vermelho como ruído.
+
+---
+
+## ~~B-M67-17~~ — CORRIGIDO — `bundle-budget.test.ts` falhava só em CI: era resolução de bin, não o build
+
+**Encontrado em:** medição do #212 depois das cinco correções de gate, 2026-08-12 · **Estado:**
+instrumentado; causa ainda desconhecida — de propósito, não por desistência.
+
+O `beforeAll` chama `buildTemplateDefaultOnce()`, que roda `pnpm exec theokit build` dentro de
+`fixtures/template-default`. Em CI falha; **localmente passa** (2 verdes, medido). Confirmado
+**pré-existente**: falhava nos três runs anteriores (`f9a4ce9d`, `58160edd`, `de09e62a`), antes de
+qualquer mudança minha.
+
+**O que impedia o diagnóstico.** O helper usava `stdio: 'pipe'` e não capturava nada no erro, então
+a falha chegava ao log como `Error: Command failed: pnpm exec theokit build` — e mais nada. Três runs
+consecutivos em que a única informação disponível era que tinha falhado.
+
+É o **mesmo defeito de oráculo** do `check-bundle-budget.sh` (B-M67-14) e do `pnpm-11-compat`
+(B-M67-08): o gate descarta a explicação e reporta o sintoma. Três instâncias do mesmo padrão em um
+dia sugere que é hábito, não coincidência — em cada uma, alguém escolheu `pipe` para manter o log
+limpo no caminho feliz e não pensou no caminho infeliz.
+
+**O que foi feito:** o helper passa a re-lançar com `stdout`/`stderr` do build anexados, e com uma
+pista quando não há saída nenhuma (o `theokit` bin vem do link de workspace, então `packages/theo`
+precisa estar buildado).
+
+**O que NÃO foi feito, e por quê:** adivinhar a causa. Ela não reproduz nesta máquina, e inventar
+uma correção plausível para um defeito que não se reproduz é o oposto de consertar.
+
+**A instrumentação funcionou, e a causa apareceu no run seguinte:**
+
+```
+Error: `pnpm exec theokit build` failed in /home/runner/work/theokit/theokit/fixtures/template-default.
+The build said:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "theokit" not found
+```
+
+O bin `theokit` não resolve dentro da fixture no runner — exatamente a hipótese que o próprio
+fallback da mensagem nomeava. A fixture **é** membro do workspace (`pnpm-workspace.yaml`) e declara
+`theokit: workspace:*`, então localmente o `node_modules/.bin/theokit` existe e o build passa; no CI
+não. O prefixo `RECURSIVE_EXEC` sugere que o `pnpm exec` entrou em modo recursivo em vez de resolver
+o bin local.
+
+**Hipóteses eliminadas antes de mexer**, cada uma barata:
+
+| Hipótese | Verificação | Resultado |
+|---|---|---|
+| lockfile fora de sincronia derruba o install inteiro | `pnpm install --frozen-lockfile` local | **em dia** — "Already up to date" |
+| versão diferente de pnpm entre local e CI | `packageManager` vs `pnpm --version` | **idêntica** — 9.15.0 nos dois |
+| o shim não existe na fixture | `ls node_modules/.bin/theokit` | **existe**, criado pelo install |
+
+Sobrou o que o próprio erro nomeia: a **resolução**. `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL` é do modo
+recursivo do `pnpm exec` — ele foi procurar o bin em vez de achá-lo onde estava.
+
+**Correção:** invocar a CLI pelo **caminho resolvido** (`packages/theo/dist/cli/index.js`, o mesmo
+que o campo `bin` do pacote aponta), com `node`, em vez de pedir ao gerenciador de pacotes que a
+encontre. O `pnpm exec` — e o `npx` equivalente no `check-bundle-budget.sh`, corrigido junto — é uma
+indireção cujo único trabalho é localizar um binário cujo caminho este repositório já conhece.
+Removê-la elimina o modo de falha **por construção**, não por palpite.
+
+A única possibilidade restante (a CLI não estar buildada) virou uma pré-condição explícita com
+mensagem acionável, em vez de um `Command not found` que não diz o que fazer.
+
+---
+
+## ~~B-M67-18~~ — RESOLVIDO — Um guarda afirmava sobre arquivo que o `.gitignore` exclui
+
+**Encontrado em:** medição do CI depois de fechar o B-M67-17, 2026-08-12
+
+`tests/unit/cli-env-wiring.test.ts` afirmava que a fixture `zero-config-env` tem um `.env` com
+`OPENROUTER_API_KEY`. Esse `.env` é **gitignored** (`.gitignore:24`) — e corretamente, porque um
+repositório que começa a commitar `.env` perde o hábito que mantém os reais fora.
+
+Consequência: o guarda passava **nesta máquina**, onde uma execução anterior deixara o arquivo em
+disco, e falhava em **todo checkout limpo**, CI incluído. Um guarda que depende de estado não
+rastreado não está verificando o repositório — está verificando a máquina.
+
+**O `.gitignore` já dizia qual era a forma pretendida:** a linha 26 carrega a negação
+`!.env.example`. O template simplesmente nunca tinha sido escrito. Criado, com valores obviamente
+falsos, e o guarda passa a afirmar sobre ele.
+
+Um segundo teste foi junto: o template é o único arquivo desta fixture que é commitado, portanto o
+único lugar onde uma credencial real poderia aterrissar em silêncio. Agora todo valor dele precisa
+parecer falso.
+
+**Quarta instância do mesmo padrão em um dia** — depois de `postgres-integration` (dependência não
+declarada), `License compliance` (script deletado) e `Bundle budget` (fixture inexistente). Todos
+verdes localmente por acidente de estado local, vermelhos em CI por meses, e nenhum deles verificando
+o que anunciava.
+

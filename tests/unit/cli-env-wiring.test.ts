@@ -74,9 +74,30 @@ describe('T1.2 — CLI commands wire loadEnv before loadConfig', () => {
 describe('T1.2 — fixture zero-config-env is well-formed', () => {
   const FIXTURE = resolve(process.cwd(), 'tests/fixtures/zero-config-env')
 
-  it('has .env with OPENROUTER_API_KEY', () => {
-    const envSrc = read(resolve(FIXTURE, '.env'))
+  it('has a committed .env.example with OPENROUTER_API_KEY', () => {
+    // Asserts the TEMPLATE, not the working `.env`.
+    //
+    // The fixture's `.env` is gitignored (`.gitignore:24`), and rightly so: a repository that starts
+    // committing `.env` files loses the habit that keeps the real ones out. But this guard used to
+    // read that ignored file, so it passed here — where an earlier run had left it on disk — and
+    // failed on every fresh checkout, CI included. A guard that depends on untracked state is not
+    // checking the repository; it is checking the machine.
+    //
+    // `.gitignore:26` already carried the `!.env.example` negation, so the intended shape was always
+    // this one — the template just had never been written. Backlog B-M67-18.
+    const envSrc = read(resolve(FIXTURE, '.env.example'))
     expect(envSrc).toMatch(/^OPENROUTER_API_KEY=/m)
+  })
+
+  it('the committed template carries no real-looking credential', () => {
+    // The template is committed, so it is the one place in this fixture where a real key could
+    // silently land. Fixture values must stay obviously fake.
+    const envSrc = read(resolve(FIXTURE, '.env.example'))
+    for (const [, value] of envSrc.matchAll(/^[A-Z_]+=(.*)$/gm)) {
+      expect(/dummy|fixture|example|test/i.test(value), `suspicious fixture value: ${value}`).toBe(
+        true,
+      )
+    }
   })
 
   it('has a route that echoes process.env', () => {
