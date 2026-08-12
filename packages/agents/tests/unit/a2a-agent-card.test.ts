@@ -21,8 +21,20 @@ const entry: AgentManifestEntry = {
   guards: [],
   interceptors: [],
   tools: [
-    { name: 'search_docs', description: 'Search the knowledge base', approval: false, trace: true, audit: false },
-    { name: 'create_ticket', description: 'Open a support ticket', approval: true, trace: true, audit: true },
+    {
+      name: 'search_docs',
+      description: 'Search the knowledge base',
+      approval: false,
+      trace: true,
+      audit: false,
+    },
+    {
+      name: 'create_ticket',
+      description: 'Open a support ticket',
+      approval: true,
+      trace: true,
+      audit: true,
+    },
   ],
   subAgents: [],
 }

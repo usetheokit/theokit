@@ -35,9 +35,11 @@ interface Pending {
 type ServerRequestHandler = (params: unknown) => unknown
 
 function isResponse(m: Record<string, unknown>): m is JsonRpcResponse & Record<string, unknown> {
-  return typeof m.id === 'number' && (('result' in m) || ('error' in m)) && !('method' in m)
+  return typeof m.id === 'number' && ('result' in m || 'error' in m) && !('method' in m)
 }
-function isServerRequest(m: Record<string, unknown>): m is JsonRpcServerRequest & Record<string, unknown> {
+function isServerRequest(
+  m: Record<string, unknown>,
+): m is JsonRpcServerRequest & Record<string, unknown> {
   return typeof m.method === 'string' && typeof m.id === 'number'
 }
 
@@ -87,7 +89,11 @@ export class AcpClient {
     const handler = this.handlers.get(req.method)
     if (!handler) {
       this.transport.send(
-        encodeAcpMessage({ jsonrpc: '2.0', id: req.id, error: { code: -32601, message: `No handler: ${req.method}` } }),
+        encodeAcpMessage({
+          jsonrpc: '2.0',
+          id: req.id,
+          error: { code: -32601, message: `No handler: ${req.method}` },
+        }),
       )
       return
     }

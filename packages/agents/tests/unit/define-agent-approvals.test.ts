@@ -25,7 +25,9 @@ describe('M14 — defineAgent({ approvals })', () => {
     const def = defineAgent({
       model: 'test',
       tools: [echoTool],
-      approvals: { deploy: { question: 'Confirm deploy to prod?', timeout: 60_000, onTimeout: 'abort' } },
+      approvals: {
+        deploy: { question: 'Confirm deploy to prod?', timeout: 60_000, onTimeout: 'abort' },
+      },
     })
     const compiled = compileAgentDefinition(def)
     expect(compiled.hitl).toBeInstanceOf(Map)

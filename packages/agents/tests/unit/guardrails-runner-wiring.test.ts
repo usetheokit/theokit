@@ -65,7 +65,9 @@ describe('M9 — guardrails wired into AgentRunner.stream (input boundary)', () 
     const { factory, seen } = recordingFactory()
     const runner = makeRunner([piiDetector({ redact: true })])
 
-    await drain(runner.stream('my cpf is 123.456.789-09 ok', { streamFactory: factory, apiKey: 'test-key' }))
+    await drain(
+      runner.stream('my cpf is 123.456.789-09 ok', { streamFactory: factory, apiKey: 'test-key' }),
+    )
 
     expect(seen).toHaveLength(1)
     expect(seen[0]).not.toContain('123.456.789-09')
