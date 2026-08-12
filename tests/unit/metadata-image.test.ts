@@ -79,7 +79,8 @@ describe('<Image> component', () => {
 
   it('ImageProps accepts srcSet and sizes', () => {
     const props: ImageProps = {
-      src: '/x.jpg', alt: 'x',
+      src: '/x.jpg',
+      alt: 'x',
       srcSet: '/x-400.jpg 400w, /x-800.jpg 800w',
       sizes: '(max-width: 768px) 100vw, 800px',
     }

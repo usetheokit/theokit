@@ -18,15 +18,17 @@ const encoder = new TextEncoder()
  * Create a Web Standard Response that streams SSE events.
  * Each event becomes: `event: {type}\ndata: {json}\n\n`
  */
-export function streamAgentResponse(
-  eventStream: AsyncIterable<StreamEvent>,
-): Response {
+export function streamAgentResponse(eventStream: AsyncIterable<StreamEvent>): Response {
   const stream = new ReadableStream({
     async start(controller) {
       let closed = false
       const safeEnqueue = (chunk: Uint8Array) => {
         if (closed) return
-        try { controller.enqueue(chunk) } catch { closed = true }
+        try {
+          controller.enqueue(chunk)
+        } catch {
+          closed = true
+        }
       }
       try {
         for await (const event of eventStream) {
@@ -36,7 +38,8 @@ export function streamAgentResponse(
           safeEnqueue(encoder.encode(frame))
         }
       } catch (err) {
-        if (!closed) { // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- mutated by safeEnqueue catch
+        if (!closed) {
+          // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- mutated by safeEnqueue catch
           const errorEvent = {
             type: 'error',
             error: { message: err instanceof Error ? err.message : 'Internal agent error' },
@@ -55,7 +58,7 @@ export function streamAgentResponse(
     headers: {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
-      'connection': 'keep-alive',
+      connection: 'keep-alive',
     },
   })
 }
