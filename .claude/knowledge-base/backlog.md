@@ -450,3 +450,26 @@ reportavam vermelho havia meses sem nunca terem exercido a verificação que anu
 comum não é descuido pontual — é que **um gate vermelho por default deixa de ser lido**, e a partir
 daí a causa dele para de importar para todo mundo.
 
+---
+
+## ~~B-M67-15~~ — RESOLVIDO — `Dependency review`: impossível de passar **e** redundante
+
+**Encontrado em:** investigação dos vermelhos do #210, 2026-08-12
+
+`actions/dependency-review-action` precisa do dependency graph do GitHub, que em repositório
+**privado** exige licença de Advanced Security. Medido: `security_and_analysis: null`. Todo run
+terminava em *"Dependency review is not supported on this repository"* — um gate que não passava por
+construção, independentemente do diff.
+
+**O que decidiu a remoção não foi ser impossível, foi ser redundante.** As duas verificações dele já
+têm equivalente funcionando aqui:
+
+| Verificação do job removido | Equivalente que já existe |
+|---|---|
+| `fail-on-severity: high` | job `Dependency audit (npm audit, high+)` (`pnpm check:audit`) — **verde** |
+| `allow-licenses: MIT, Apache-2.0, …` | job `License compliance` (`scripts/check-licenses.mjs`) — restaurado em B-M67-13, com allowlist **superset** da que o job declarava |
+
+Licenciar GHAS continua sendo opção real, e traria a visão de diff transitivo que nenhum dos dois
+substitutos tem. Mas isso é decisão de compra, não de CI — e até que seja tomada, um gate impossível
+é pior que gate nenhum: ensina o time a ler vermelho como ruído.
+

@@ -217,17 +217,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:audit
 
-  dependency-review:
-    name: Dependency review (GitHub)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-      - name: 'Dependency Review'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          allow-licenses: MIT, Apache-2.0, ISC, BSD-2-Clause, BSD-3-Clause, 0BSD, CC0-1.0, CC-BY-3.0, CC-BY-4.0, Unlicense, Python-2.0, BlueOak-1.0.0
+  # The `dependency-review` job lived here and was REMOVED (backlog B-M67-15).
+  #
+  # `actions/dependency-review-action` needs GitHub's dependency graph, which on a PRIVATE repository
+  # requires an Advanced Security licence. This repo is private with `security_and_analysis: null`, so
+  # every run ended with "Dependency review is not supported on this repository" — a gate that could
+  # not pass, by construction, no matter what the diff contained.
+  #
+  # Removing it costs nothing, because BOTH of its checks already have working equivalents here:
+  #
+  #   * `fail-on-severity: high`  ->  the `Dependency audit (npm audit, high+)` job (`pnpm check:audit`)
+  #   * `allow-licenses: …`       ->  the `License compliance` job (`scripts/check-licenses.mjs`),
+  #                                   whose allowlist is a superset of the list this job declared
+  #
+  # Licensing GHAS is a real option and would bring back the transitive-diff view neither of the two
+  # replacements has. That is a purchasing decision, not a CI one — and until it is made, an
+  # impossible gate is worse than no gate: it teaches the team to read red as noise.
 
   license-check:
     name: License compliance
