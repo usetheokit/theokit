@@ -15,7 +15,7 @@ import type { RuntimeAdapter } from './types.js'
 export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
   const proto = nodeReq.headers['x-forwarded-proto'] ?? 'http'
   const host = nodeReq.headers.host ?? 'localhost'
-  const url = `${proto}://${host}${nodeReq.url ?? "/"}` // eslint-disable-line @typescript-eslint/restrict-template-expressions -- proto/host are string|string[]
+  const url = `${proto}://${host}${nodeReq.url ?? '/'}` // eslint-disable-line @typescript-eslint/restrict-template-expressions -- proto/host are string|string[]
   const method = nodeReq.method ?? 'GET'
 
   const headers = new Headers()
@@ -31,7 +31,7 @@ export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
 
   // EC-1: Streaming body via Readable.toWeb() — no full buffering
   const hasBody = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
-  const body = hasBody ? Readable.toWeb(nodeReq) as ReadableStream : undefined
+  const body = hasBody ? (Readable.toWeb(nodeReq) as ReadableStream) : undefined
 
   return new Request(url, {
     method,
@@ -43,7 +43,10 @@ export function nodeIncomingToRequest(nodeReq: IncomingMessage): Request {
 }
 
 /** Write Web Standard Response to Node.js ServerResponse. */
-export async function writeResponseToNode(response: Response, nodeRes: ServerResponse): Promise<void> {
+export async function writeResponseToNode(
+  response: Response,
+  nodeRes: ServerResponse,
+): Promise<void> {
   nodeRes.writeHead(response.status, Object.fromEntries(response.headers.entries()))
 
   if (!response.body) {
@@ -72,18 +75,23 @@ export function createNodeAdapter(): RuntimeAdapter {
     createServer(handler) {
       const server = createServer((nodeReq, nodeRes) => {
         void (async () => {
-        try {
-          const request = nodeIncomingToRequest(nodeReq)
-          const response = await handler(request)
-          await writeResponseToNode(response, nodeRes)
-        } catch (err) {
-          if (!nodeRes.destroyed) {
-            nodeRes.writeHead(500, { 'content-type': 'application/json' })
-            nodeRes.end(JSON.stringify({
-              error: { code: 'INTERNAL_SERVER_ERROR', message: err instanceof Error ? err.message : 'Unknown error' },
-            }))
+          try {
+            const request = nodeIncomingToRequest(nodeReq)
+            const response = await handler(request)
+            await writeResponseToNode(response, nodeRes)
+          } catch (err) {
+            if (!nodeRes.destroyed) {
+              nodeRes.writeHead(500, { 'content-type': 'application/json' })
+              nodeRes.end(
+                JSON.stringify({
+                  error: {
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: err instanceof Error ? err.message : 'Unknown error',
+                  },
+                }),
+              )
+            }
           }
-        }
         })()
       })
 

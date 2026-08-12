@@ -14,7 +14,9 @@ import { deriveConversationId, parseConversationId } from '../../src/conversatio
 
 describe('deriveConversationId', () => {
   it('is deterministic for the same (resource, thread)', () => {
-    expect(deriveConversationId('user-1', 'thread-a')).toBe(deriveConversationId('user-1', 'thread-a'))
+    expect(deriveConversationId('user-1', 'thread-a')).toBe(
+      deriveConversationId('user-1', 'thread-a'),
+    )
   })
 
   it('isolates different resources and different threads', () => {

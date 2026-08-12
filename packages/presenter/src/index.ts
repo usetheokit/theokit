@@ -13,3 +13,12 @@ export * from './source/from-sdk.js'
 export * from './presenters/ui-message-stream.js'
 export * from './presenters/terminal.js'
 export * from './presenters/json.js'
+
+export {
+  foldTurnLifecycle,
+  type ContentChunk,
+  type LifecycleItem,
+  type LifecycleVocabulary,
+  type TurnLifecycle,
+  type TurnOutcome,
+} from './turn-lifecycle.js'

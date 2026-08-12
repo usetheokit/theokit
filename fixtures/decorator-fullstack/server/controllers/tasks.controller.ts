@@ -1,6 +1,17 @@
 import 'reflect-metadata'
 import { z } from 'zod'
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, HttpCode } from '@theokit/http'
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+} from '@theokit/http'
 import { taskStore } from '../store.js'
 
 const zCreateTask = z.object({
@@ -11,13 +22,19 @@ const zCreateTask = z.object({
 @Controller('api/v2/tasks')
 export class TasksController {
   @Get()
-  list() { return taskStore.list() }
+  list() {
+    return taskStore.list()
+  }
 
   @Get('search')
-  search(@Query('q') q: string) { return taskStore.search(q ?? '') }
+  search(@Query('q') q: string) {
+    return taskStore.search(q ?? '')
+  }
 
   @Get(':id')
-  findById(@Param('id') id: string) { return taskStore.get(Number(id)) }
+  findById(@Param('id') id: string) {
+    return taskStore.get(Number(id))
+  }
 
   @Post()
   create(@Body(zCreateTask) body: z.infer<typeof zCreateTask>) {
@@ -36,5 +53,7 @@ export class TasksController {
 
   @Delete(':id')
   @HttpCode(204)
-  remove(@Param('id') id: string) { taskStore.remove(Number(id)) }
+  remove(@Param('id') id: string) {
+    taskStore.remove(Number(id))
+  }
 }

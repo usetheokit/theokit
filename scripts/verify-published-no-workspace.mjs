@@ -72,37 +72,47 @@ function findLeaks(published) {
 const only = process.argv[2]
 const targets = publishablePackages().filter((p) => only === undefined || p.name === only)
 
-if (targets.length === 0) {
-  console.error(only ? `No publishable package named ${only}` : 'No publishable packages found')
-  process.exit(1)
+// B-102 — importable without executing. The body below runs the whole gate; at the top level it ran
+// on import, which makes any test of one helper run the gate and exit the process. `import.meta.url`
+// appears elsewhere in this file for PATH RESOLUTION, which is why a grep for it reported this
+// script as guarded when it was not — the property is what happens on import, not what it mentions.
+export function main() {
+  if (targets.length === 0) {
+    console.error(only ? `No publishable package named ${only}` : 'No publishable packages found')
+    process.exit(1)
+  }
+
+  let failed = false
+  for (const { name, version } of targets) {
+    const published = fetchPublishedDeps(name, version)
+    if (published === null) {
+      console.log(`- ${name}@${version}: not on registry (skipped)`)
+      continue
+    }
+    const leaks = findLeaks(published)
+    if (leaks.length > 0) {
+      failed = true
+      console.error(
+        `✗ ${name}@${version} leaked workspace: protocol into published deps (issue #115):`,
+      )
+      for (const leak of leaks) console.error(`    ${leak}`)
+      console.error(
+        `  → republish with 'pnpm publish' (it resolves workspace: at pack time), then deprecate this version.`,
+      )
+    } else {
+      console.log(`✓ ${name}@${version}: no workspace: leak`)
+    }
+  }
+
+  if (failed) {
+    console.error(
+      '\nworkspace: leak detected — see issue #115. NEVER use `npm publish` for a workspace package; use `pnpm publish`.',
+    )
+    process.exit(1)
+  }
+  console.log('\nAll published packages are free of the workspace: protocol.')
 }
 
-let failed = false
-for (const { name, version } of targets) {
-  const published = fetchPublishedDeps(name, version)
-  if (published === null) {
-    console.log(`- ${name}@${version}: not on registry (skipped)`)
-    continue
-  }
-  const leaks = findLeaks(published)
-  if (leaks.length > 0) {
-    failed = true
-    console.error(
-      `✗ ${name}@${version} leaked workspace: protocol into published deps (issue #115):`,
-    )
-    for (const leak of leaks) console.error(`    ${leak}`)
-    console.error(
-      `  → republish with 'pnpm publish' (it resolves workspace: at pack time), then deprecate this version.`,
-    )
-  } else {
-    console.log(`✓ ${name}@${version}: no workspace: leak`)
-  }
+if (process.argv[1]?.endsWith('verify-published-no-workspace.mjs')) {
+  main()
 }
-
-if (failed) {
-  console.error(
-    '\nworkspace: leak detected — see issue #115. NEVER use `npm publish` for a workspace package; use `pnpm publish`.',
-  )
-  process.exit(1)
-}
-console.log('\nAll published packages are free of the workspace: protocol.')

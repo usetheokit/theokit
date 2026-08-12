@@ -36,7 +36,11 @@ import 'reflect-metadata'
 
 import { resolveOrNew, type DiContainer } from './bridge/di-resolve.js'
 import { runExceptionFilters } from './bridge/exception-filter-chain.js'
-import { createExecutionContext, type CanActivate, type ExecutionContext } from './bridge/execution-context.js'
+import {
+  createExecutionContext,
+  type CanActivate,
+  type ExecutionContext,
+} from './bridge/execution-context.js'
 import { runInterceptors } from './bridge/interceptor-chain.js'
 import {
   MiddlewareConsumerImpl,
@@ -113,20 +117,27 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
   return {
     name: '@theokit/http',
     register(app: {
-      addHook: (
-        name: string,
-        fn: (ctx: Record<string, unknown>) => Promise<void>,
-      ) => void
+      addHook: (name: string, fn: (ctx: Record<string, unknown>) => Promise<void>) => void
     }) {
       app.addHook('onRequest', async (pluginCtx) => {
         if (initPromise && !initialized) await initPromise
 
         // Convert Node types → Web Standard at the boundary
         const _nodeHttp = await import('node:http')
-        const request = nodeIncomingToRequest(pluginCtx.request as InstanceType<typeof _nodeHttp.IncomingMessage>)
-        const response = await handleDecoratorRoute(routes, request, opts.container, middlewareEntries)
+        const request = nodeIncomingToRequest(
+          pluginCtx.request as InstanceType<typeof _nodeHttp.IncomingMessage>,
+        )
+        const response = await handleDecoratorRoute(
+          routes,
+          request,
+          opts.container,
+          middlewareEntries,
+        )
         if (response) {
-          await writeResponseToNode(response, pluginCtx.response as InstanceType<typeof _nodeHttp.ServerResponse>)
+          await writeResponseToNode(
+            response,
+            pluginCtx.response as InstanceType<typeof _nodeHttp.ServerResponse>,
+          )
         }
         // null = not our route, fall through to TheoKit scanner
       })
@@ -204,7 +215,10 @@ async function handleDecoratorRoute(
     })
 
     if (walk.redirect) {
-      return new Response(null, { status: walk.redirect.status, headers: { location: walk.redirect.url } })
+      return new Response(null, {
+        status: walk.redirect.status,
+        headers: { location: walk.redirect.url },
+      })
     }
 
     const handlerFn = (instance as Record<string | symbol, Function>)[walk.propertyKey]
@@ -242,7 +256,9 @@ async function resolveBody(method: string, request: Request, walk: WalkResult): 
   try {
     const text = await request.text()
     body = text ? JSON.parse(text) : undefined
-  } catch { body = undefined }
+  } catch {
+    body = undefined
+  }
   if (walk.bodySchema && body !== undefined) {
     const result = walk.bodySchema.safeParse(body)
     if (!result.success) {
@@ -268,7 +284,10 @@ function buildResponse(result: unknown, walk: WalkResult, method: string): Respo
 }
 
 function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
 }
 
 function findMatch(
@@ -324,7 +343,9 @@ function buildArgs(paramEntries: ParamEntry[], ctx: ArgContext): unknown[] {
         args[p.index] = p.key ? ctx.query[p.key] : ctx.query
         break
       case 'headers':
-        args[p.index] = p.key ? ctx.request.headers.get(p.key.toLowerCase()) : Object.fromEntries(ctx.request.headers.entries())
+        args[p.index] = p.key
+          ? ctx.request.headers.get(p.key.toLowerCase())
+          : Object.fromEntries(ctx.request.headers.entries())
         break
       case 'ip':
         args[p.index] = ctx.request.headers.get('x-forwarded-for') ?? '127.0.0.1'
