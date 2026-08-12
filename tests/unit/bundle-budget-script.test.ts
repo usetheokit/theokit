@@ -184,17 +184,16 @@ describe('check-bundle-budget.sh — dogfood check wiring', () => {
 
 describe('the default fixture — the property nobody was asserting (B-M67-14)', () => {
   it('test_the_default_BUNDLE_FIXTURE_is_a_buildable_theokit_app', () => {
-    // O gate rodou por meses sem medir nada: o default do script era a RAIZ do monorepo, que não é
-    // uma app TheoKit. O `theokit build` não tinha o que buildar, o `|| true` engolia a falha, e o
-    // gate saía 2 com "build output not found" — um orçamento sob o qual ninguém nunca esteve.
+    // The gate ran for months measuring nothing: the script's default was the monorepo ROOT, which
+    // is not a TheoKit app. `theokit build` had nothing to build, the `|| true` swallowed the
+    // failure, and the gate exited 2 with "build output not found" — a budget nobody was ever under.
     //
-    // Todos os testes acima passam `BUNDLE_FIXTURE` explicitamente, então nenhum deles jamais
-    // exercitou o default. Este exercita: o diretório que o script escolhe sozinho tem de ser uma
-    // app de verdade.
+    // Every test above passes `BUNDLE_FIXTURE` explicitly, so none of them ever exercised the
+    // default. This one does: the directory the script picks on its own must be a real app.
     const scriptDir = resolve(__dirname, '../../scripts')
     const declared = readFileSync(resolve(scriptDir, 'check-bundle-budget.sh'), 'utf-8')
     const match = /BUNDLE_FIXTURE:-\$\(cd "\$\(dirname "\$0"\)\/([^"]+)" && pwd\)/.exec(declared)
-    expect(match, 'o script deve derivar o default de um caminho relativo a si mesmo').toBeTruthy()
+    expect(match, 'the script must derive its default from a path relative to itself').toBeTruthy()
 
     const defaultFixture = resolve(scriptDir, match![1])
     expect(existsSync(join(defaultFixture, 'package.json')), defaultFixture).toBe(true)
