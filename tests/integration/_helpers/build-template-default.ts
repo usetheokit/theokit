@@ -69,6 +69,15 @@ export const buildTemplateDefaultOnce = (): void => {
     // Lock released but no build present — fall through to build ourselves
   }
   try {
+    // `stdio: 'pipe'` keeps the build quiet on the happy path, which is right — but the previous
+    // shape then let the failure surface as a bare `Command failed: pnpm exec theokit build`, with
+    // the compiler's own explanation discarded.
+    //
+    // That is not a cosmetic loss. This build fails in CI and succeeds locally, and for three
+    // consecutive runs the only thing anyone could learn from the log was that it failed. A test
+    // whose failure carries no evidence is a test that gets re-run and then ignored.
+    //
+    // The catch below re-throws with the captured output attached. Backlog B-M67-17.
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- developer-local test running the framework's own CLI
     execSync('pnpm exec theokit build', {
       cwd: FIXTURE,
@@ -84,6 +93,17 @@ export const buildTemplateDefaultOnce = (): void => {
       },
       timeout: 180_000,
     })
+  } catch (cause) {
+    const { stdout, stderr } = cause as { stdout?: Buffer | string; stderr?: Buffer | string }
+    const output = [String(stdout ?? ''), String(stderr ?? '')].join('\n').trim()
+    throw new Error(
+      `\`pnpm exec theokit build\` failed in ${FIXTURE}.\n\n` +
+        (output.length > 0
+          ? `The build said:\n${output.slice(-4000)}`
+          : 'The build produced no output at all — check that the `theokit` bin resolves in the ' +
+            'fixture (it comes from the workspace link, so `packages/theo` must be built first).'),
+      { cause },
+    )
   } finally {
     if (lockFd !== null) closeSync(lockFd)
     try {
