@@ -167,7 +167,6 @@
     "@theokit/sdk": "^4.49.0",
     "@types/busboy": "^1.5.4",
     "@types/picomatch": "^4.0.3",
-    "ai": "7.0.14",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
     "unstorage": "^1.17.5"

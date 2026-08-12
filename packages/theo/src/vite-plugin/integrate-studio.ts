@@ -25,7 +25,7 @@ import type { Plugin } from 'vite'
  * on a production build is a security surface, not a papercut, and this is the layer that knows
  * which mode it is in.
  */
-export interface StudioModule {
+interface StudioModule {
   theokitStudio?: () => Plugin
 }
 
@@ -37,7 +37,7 @@ export interface StudioModule {
  * "package present" and "package malformed" branches has no other route. Mirrors `loadSwc` in
  * `@theokit/http`'s swc loader, which is injectable for the same reason.
  */
-export type StudioImporter = () => Promise<StudioModule>
+type StudioImporter = () => Promise<StudioModule>
 
 export async function integrateStudio(
   // The specifier is resolved at RUNTIME, not by `tsc`: `@theokit/studio` is an optional peer, so
