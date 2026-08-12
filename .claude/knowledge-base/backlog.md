@@ -48,7 +48,7 @@ apontado pelo `/review`. Esta entrada é o registro durável que a afirmação p
 
 ---
 
-## B-M67-02 — 4 advisories `high` pré-existentes na árvore de dependências
+## ~~B-M67-02~~ — RESOLVIDO em `a330a3df` — 4 advisories `high` na árvore
 
 **Encontrado em:** M67 (`/deps-audit`), 2026-08-12 · **Evidência:**
 `.claude/knowledge-base/audits/m67-layered-boundary-passthrough-deps-audit-2026-08-12.md`
@@ -80,7 +80,7 @@ existe mais.
 
 ---
 
-## B-M67-04 — Teste flaky em `subpath-coverage`
+## ~~B-M67-04~~ — RESOLVIDO — Teste flaky em `subpath-coverage`
 
 **Encontrado em:** M67, 2026-08-12
 
@@ -88,9 +88,14 @@ existe mais.
 por timeout de 5000 ms numa execução e passou nas seguintes **sem mudança de código entre elas**. Pela
 `.claude/rules/testing.md § 3`, teste flaky é bug — corrigir ou remover, não conviver.
 
-Causa provável: a fase de `collect` do vitest chegou a 81 s nesta máquina, e 5000 ms é apertado para um
-teste que enumera o barrel inteiro. Fix candidato: mover a enumeração para um `beforeAll`
-compartilhado, ou elevar o timeout deste teste com justificativa escrita.
+**Causa confirmada e corrigida.** Cada caso do `it.each` fazia o seu próprio `await import(...)`, e o
+primeiro a rodar pagava o carregamento do grafo inteiro do barrel — medido em mais de 80 s de
+`collect` — contra o timeout de 5 s. Passava ou falhava conforme ordem e carga da máquina.
+
+Elevar o timeout esconderia o sintoma: o custo é de **import**, não de asserção. Os módulos passaram a
+ser resolvidos uma vez num `beforeAll` (com `Promise.all` sobre o conjunto de especificadores) e os
+casos leem de um cache, síncronos. Um especificador fora do conjunto falha alto em vez de importar
+tarde. Resultado medido: o arquivo saiu de 80 s+ para **1,16 s**, 40 testes verdes.
 
 ---
 
