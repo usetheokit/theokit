@@ -282,3 +282,82 @@ causa é a janela de publish. O vermelho continua — ele é honesto — mas ago
 `changeset publish` faz quando o release não é interrompido), ou marcar a janela explicitamente para
 que a suíte saiba distingui-la. A primeira é preferível: a segunda ensina a suíte a tolerar um estado
 que não deveria durar.
+
+---
+
+## ~~B-M67-09~~ — RESOLVIDO — `Postgres Jobs CI` vermelho há dias: `pg` não declarado, os 6 testes nunca rodaram
+
+**Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
+[`#207`](https://github.com/usetheodev/theokit/issues/207) · **Severidade: alta** — a garantia que o
+workflow anuncia nunca foi coletada.
+
+Vermelho desde pelo menos 2026-08-10, em `develop` **e** em `main`, 8 runs consecutivos observados.
+`Cannot find package 'pg'` (`ERR_MODULE_NOT_FOUND`): os **6 testes ficam `skipped`** e o job sai 1. O
+teste de race-safety do `SKIP LOCKED` — o único lugar onde a semântica de dequeue concorrente do
+`PostgresJobBackend` é verificada contra um Postgres real — nunca chegou a executar.
+
+`pg` não é declarado em nenhum `package.json` do workspace. O comentário no topo do teste afirma que
+o import dinâmico "keeps the test loadable even when pg isn't installed … resolved from
+`packages/theo` node_modules in CI" — as duas metades são falsas: o `beforeAll` explode assim que a
+suíte roda (e ela roda, porque o único guarda é `skipIf(!POSTGRES_URL)` e em CI a variável está
+setada), e o `packages/theo` também não declara `pg`.
+
+**Fix aplicado.** `pg@^8.23.0` + `@types/pg` como devDeps da raiz (MIT; escada de parcimônia — nada
+na árvore provia o driver), e o guarda passa a considerar as duas pré-condições, com piso
+anti-vacuidade: com `POSTGRES_URL` setada, um `pg` ausente é **falha**, não skip. Pular deixaria o job
+verde sem uma única asserção ter rodado — pior do que o vermelho, porque um gate verde é um gate que
+ninguém relê. A falha é uma só e nomeia a causa.
+
+**Verificado contra Postgres real**, não por inspeção: `postgres:15-alpine` em container local,
+derrubado na mesma execução → **7 verdes** (as 6 originais + o piso). Que elas passassem não era
+garantido: nunca tinham rodado.
+
+---
+
+## B-M67-10 — `main` e `develop` sem branch protection: o PR obrigatório é convenção, não restrição
+
+**Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
+[`#208`](https://github.com/usetheodev/theokit/issues/208) · **Severidade: alta**
+
+`gh api repos/usetheodev/theokit/branches/{main,develop}/protection` → **404 Branch not protected**
+nas duas.
+
+O `CLAUDE.md` § 4 já descreve exatamente esta situação: o hook local garante a **origem** do trabalho;
+a branch protection é o que torna o **PR obrigatório**. Um repo sem ela tem a primeira garantia e não
+a segunda. Concretamente: um `git push origin main` direto funciona hoje.
+
+Agrava-se com o B-M67-09: sem required status checks, um vermelho crônico não impede merge nenhum —
+o gate não bloqueia, ninguém conserta, e o gate deixa de significar algo.
+
+**Não apliquei nada.** Configuração de repositório é decisão do dono, não de quem encontrou. A
+proposta está no issue, com a ressalva de custo: 1 aprovação obrigatória em repo de mantenedor único
+cria um gate que só pode ser contornado; `required_approving_review_count: 0` + required status
+checks entrega a maior parte do valor sem isso.
+
+---
+
+## B-M67-11 — O `pnpm audit` do projeto só mede `--prod`, e há 16 advisories `high` no toolchain
+
+**Encontrado em:** ao verificar se o `pg` recém-adicionado trouxe CVE, 2026-08-12 · **Severidade:
+baixa/média** — não é exposição de produção; é uma lacuna de medição.
+
+Medido lado a lado no mesmo commit:
+
+| Escopo | Resultado |
+|---|---|
+| `pnpm audit --prod --audit-level=high` | 6 (2 low, 4 moderate) — **zero high** |
+| `pnpm audit --audit-level=high` | 25 (2 low, 7 moderate, **16 high**) |
+
+As 16 são todas de `devDependencies` e nenhuma veio do `pg` (rastreadas: `eslint`,
+`@apidevtools/swagger-parser`, `@changesets/cli`, `drizzle-kit`, `drizzle-orm`, `unstorage`,
+`pg-mem`). São CVEs de complexidade algorítmica / DoS — `brace-expansion`, `fast-uri`, `immutable`,
+`js-yaml`, `shell-quote`.
+
+O número que o CHANGELOG cita (`4 high → zero`) está **correto como declarado**: ele diz `--prod`. O
+problema não é a afirmação, é o escopo nunca ter sido escolhido explicitamente — um projeto que só
+audita produção não sabe o que roda no seu próprio build.
+
+Risco real é menor que o de produção, mas não é zero: são ferramentas que consomem entrada não
+confiável (YAML de config, ASTs, globs) durante lint e build. A decisão a tomar é **qual escopo o
+gate mede**, e registrá-la — não sair corrigindo 16 advisories de terceiros.
+
