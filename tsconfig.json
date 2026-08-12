@@ -34,8 +34,7 @@
     "scripts/**/*.ts",
     "scripts/**/*.mjs",
     "vitest.config.ts",
-    "playwright.config.ts",
-    "playwright.postgres-templates.config.ts"
+    "playwright.config.ts"
   ],
   "exclude": ["node_modules", "dist", "fixtures", "referencias", "examples", "my-test"]
 }

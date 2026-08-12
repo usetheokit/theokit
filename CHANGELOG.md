@@ -26,6 +26,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **O gate de cobertura passa a exigir veredito para a barra root do SDK** (`packages/agents/tests/unit/root-bar-coverage.test.ts`). A omissão sobreviveu a **nove minors consecutivas** porque o gate existente enumera os 31 *subpaths* e estes símbolos vivem no entry `.`, que nenhum gate cobria — o instrumento tinha escopo mais estreito que a propriedade que afirmava. Os 84 valores da barra root agora têm decisão escrita: 28 `in` verificados por identidade referencial, 56 `out` com motivo. (ADR 0061)
 - **Três primitivas de sessão e uma de sandbox passam a atravessar**, trazidas pelo piso novo: `classifySessionArtifact` + `SessionArtifact` e `atomicWriteTempTarget` (`/persistence`), `writableRootsFor` (`/sandbox`), `assertSecureModes` (`/auth`). `classifySessionArtifact` merece nota: o roadmap previa **escrevê-la** sob outro nome, e ela já existia no SDK — a descoberta veio do ciclo DISCOVER e evitou uma reimplementação.
 
+### Removed
+- **O job de CI `e2e-postgres-templates`, que era impossível de passar (backlog B-M67-12).** Ele provisionava um Postgres, empurrava dois schemas e rodava specs Playwright para as fixtures `template-postgres` e `template-saas`. O **ADR 0023** (*default-only template set*) removeu esses templates de propósito, e o job sobreviveu a eles: verificado um a um, **nenhum** artefato que ele citava ainda existia — nem as duas fixtures, nem o `playwright.postgres-templates.config.ts`, nem o plano em `docs/plans/`. O `tsconfig.json` ainda listava o config inexistente no `include`, pelo mesmo apodrecimento.
+
+  Ele apareceu porque a correção de build-before-lint fez a falha **mudar de lugar**: o job parou de morrer no build e passou a morrer no `Push schema` com `drizzle.config.ts file does not exist`. A primeira falha escondia a segunda.
+
+  Um gate impossível é pior que gate nenhum — ele ensina o time a ignorar vermelho, e foi esse hábito que deixou dois releases seguidos merjarem com 12 checks vermelhos.
+
 ### Fixed
 - **O `Dead code (Knip)` passou de cinco seções vermelhas para exit 0 — e o que sobrou eram dois falsos positivos que valia documentar, não silenciar.** Dos 14 achados, **três classes eram reais**: `@theokit/sdk-pty` e `@theokit/sdk-tools` declarados na raiz sem um único import fora de `packages/` (só menções em prosa de comentário), `ai` em `packages/theo` sem nenhum consumidor, e **oito tipos exportados que só aparecem no próprio arquivo** — `export` em tipo que ninguém importa é um crachá de API pública sobre algo interno. Verificado antes de mexer: nenhum dos oito está na lista de export dos `.d.ts` publicados, então remover o `export` não tira nada da superfície.
 
