@@ -40,6 +40,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
+### Fixed
+- **O helper que builda a fixture parou de descartar a explicação do build (backlog B-M67-17).** `buildTemplateDefaultOnce()` roda `pnpm exec theokit build` com `stdio: 'pipe'` e não capturava nada no erro, então uma falha chegava ao log como `Error: Command failed: pnpm exec theokit build` e mais nada. O teste falha em CI e passa localmente, e por três runs consecutivos a única informação disponível era que tinha falhado.
+
+  É o mesmo defeito de oráculo do `check-bundle-budget.sh` e do `pnpm-11-compat`: o gate joga fora a evidência e reporta o sintoma. Passa a re-lançar com `stdout`/`stderr` anexados. A causa continua desconhecida **de propósito** — ela não reproduz aqui, e inventar uma correção plausível para um defeito que não se reproduz é o oposto de consertar.
+
 ### Changed
 - **O gate de auditoria de dependências passa a declarar os dois escopos, em vez de medir um só em silêncio (backlog B-M67-11).** `check:audit` rodava `pnpm audit --prod --audit-level=high` e mais nada. A escolha é defensável — um CVE `high` numa dep de produção viaja para todo consumidor do framework, um no `eslint` não — mas nunca tinha sido **declarada**, então o número do lado dev simplesmente não era medido. Medido pela primeira vez: `--prod` dá 6 advisories e **zero high**; a árvore completa dá 23 com **16 high**, todas de complexidade algorítmica / DoS dentro de ferramenta de build.
 
