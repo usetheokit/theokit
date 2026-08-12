@@ -111,7 +111,7 @@ re-exportá-los.
 
 ---
 
-## B-M67-06 — `pnpm lint` está vermelho no repo, por um `eslint-disable-line` mal colocado
+## ~~B-M67-06~~ — RESOLVIDO em `fc2e3289` — `pnpm lint` vermelho por `eslint-disable-line` mal colocado
 
 **Encontrado em:** M67 (verificação pré-commit), 2026-08-12
 
@@ -136,5 +136,7 @@ para os arquivos do M67 (`eslint <13 arquivos> --max-warnings=0` → exit 0) e *
 O M67 não pode ser released enquanto isto não for resolvido, mesmo o defeito sendo anterior — CI
 falha do mesmo jeito.
 
-**Fix:** trocar por `eslint-disable-next-line` na linha 40 (e o mesmo no bloco de cima, linha 35, que
-usa a forma inline correta e serve de modelo). Duas linhas.
+**Fix aplicado (`fc2e3289`):** `eslint-disable-next-line` acima do `if`, seguindo a forma que o bloco
+de cima já usava. `pnpm lint` → exit 0. Corrigido dentro do M67, e não adiado, porque era o único item
+deste backlog que **bloqueava o DoD do próprio milestone** — os outros cinco não bloqueiam nada e
+seguem a regra de "pré-existente vira entrada, não conserto oportunista".
