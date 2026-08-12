@@ -20,9 +20,16 @@ export interface AuditOutcome {
   readonly warnings: string[]
 }
 
+/** One advisory as `pnpm audit --json` reports it. Only `severity` is read; the rest is context. */
+export interface AuditAdvisory {
+  readonly severity?: string
+  readonly module_name?: string
+  readonly title?: string
+}
+
 /** Count advisories by severity in a `pnpm audit --json` payload. A clean tree counts zero. */
 export function summarizeBySeverity(report: {
-  advisories?: Record<string, { severity?: string }>
+  advisories?: Record<string, AuditAdvisory>
 }): SeverityCounts
 
 /** Decide the gate from both scopes. Pure — counts are injected (DIP). */
