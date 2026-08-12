@@ -41,6 +41,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
 ### Removed
+- **`drizzle-kit`, `drizzle-orm` e `postgres` das devDependencies da raiz.** Estavam ali para o job `e2e-postgres-templates`, removido acima; com ele fora, os três ficaram sem consumidor. As referências que sobram no código são **template strings** — `import { eq } from 'drizzle-orm'` que o `generate-resource` **emite** para a app do usuário, e um `assertBinExists(cwd, 'drizzle-kit')` que checa o `cwd` **do consumidor**, não o nosso. Nenhum `import` real no repositório. As entradas correspondentes em `knip.ignoreDependencies` saíram junto, porque um ignore de algo que já não existe é ruído que sobrevive a quem o entendia.
+
+  Foi o Knip quem apontou, e só depois da remoção do job — o tipo de consequência de segunda ordem que só aparece quando os gates estão verdes o suficiente para serem lidos.
+
+### Removed
 - **O job de CI `Dependency review`, impossível de passar e redundante (backlog B-M67-15).** A `actions/dependency-review-action` precisa do dependency graph do GitHub, que em repositório privado exige licença de Advanced Security — medido, `security_and_analysis: null`. Todo run terminava em *"Dependency review is not supported on this repository"*, independentemente do diff.
 
   O que decidiu a remoção não foi ser impossível, foi ser **redundante**: `fail-on-severity: high` já é o job `Dependency audit (npm audit, high+)`, e `allow-licenses` já é o `License compliance` restaurado, cuja allowlist é superset da que o job declarava. Licenciar GHAS continua uma opção real — traria a visão de diff transitivo que nenhum dos dois substitutos tem — mas é decisão de compra, não de CI.
