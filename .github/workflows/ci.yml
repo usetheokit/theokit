@@ -26,6 +26,17 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # The type-aware ESLint rules resolve `@theokit/agents` through its package
+      # `types` field, which points at `dist/`. On a fresh checkout that directory
+      # does not exist, every type crossing the package boundary resolves to an
+      # `error` type, and the rules report it as `acts as 'any'` — a red job whose
+      # message points at application code that is not wrong.
+      #
+      # It passed locally because `dist/` was left over from an earlier build, so
+      # the local lint gate had been giving false assurance for as long as this job
+      # had been red. Proven by removing `packages/agents/dist` locally: the exact
+      # CI errors appear, and restoring it returns exit 0.
+      - run: pnpm --filter "./packages/*" build
       - name: ESLint (strict — zero warnings)
         run: pnpm lint
       - name: Prettier (format check)
@@ -294,12 +305,17 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      # Build ONLY packages/theo (tsup) — fixtures spawning theokit dev
-      # import the `theokit` package which resolves to `packages/theo/dist/`.
-      # tsup is lenient on type errors so this succeeds even when full
-      # `pnpm build` (recursive across examples/*) fails because the
-      # `theokit` bin isn't on PATH yet.
-      - run: pnpm --filter theokit build
+      # Build every workspace package, not only `theokit`. The fixtures spawning
+      # `theokit dev` import the `theokit` package, which resolves to
+      # `packages/theo/dist/` — but `theokit`'s own dts step imports
+      # `@theokit/agents`, whose types come from ITS `dist/`. Filtering to a single
+      # package left that unbuilt, and the build died on
+      # `TS2307: Cannot find module '@theokit/agents'`.
+      #
+      # Still not the recursive `pnpm build`: that one walks `examples/*` and fails
+      # because the `theokit` bin is not on PATH yet, which is what the previous
+      # comment here was really about.
+      - run: pnpm --filter "./packages/*" build
       - run: npx playwright install --with-deps chromium
       - name: Provision postgres + saas databases
         env:
