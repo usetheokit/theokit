@@ -21,7 +21,10 @@ describe('resolveEnabledSkills', () => {
     const selection: SkillsSelection = (ctx) =>
       ctx.role === 'admin' ? ['admin-tools', 'search'] : ['search']
 
-    expect(await resolveEnabledSkills(selection, { role: 'admin' })).toEqual(['admin-tools', 'search'])
+    expect(await resolveEnabledSkills(selection, { role: 'admin' })).toEqual([
+      'admin-tools',
+      'search',
+    ])
     expect(await resolveEnabledSkills(selection, { role: 'guest' })).toEqual(['search'])
   })
 

@@ -1,1 +1,6 @@
-export { createMockAgentStream, type MockAgentStreamOptions, type MockResponse, type MockStreamEvent } from './mock-stream.js'
+export {
+  createMockAgentStream,
+  type MockAgentStreamOptions,
+  type MockResponse,
+  type MockStreamEvent,
+} from './mock-stream.js'
