@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { diagnoseCredential } from '../../scripts/verify-publish-credential.mjs'
+import { diagnoseCredential, npmrcCandidates } from '../../scripts/verify-publish-credential.mjs'
 
 /**
  * Is the npm credential on the WRITE path? — asked before the release, not after.
@@ -70,5 +70,36 @@ describe('diagnoseCredential — the three states a release must tell apart', ()
     expect(d.reason).toMatch(/whoami/i)
     expect(d.reason).toMatch(/does not authenticate|expired|revoked/i)
     expect(d.reason).not.toMatch(/anonymous/i)
+  })
+})
+
+describe('npmrcCandidates — where the publish request actually looks', () => {
+  it('test_NPM_CONFIG_USERCONFIG_comes_first', () => {
+    // The one that matters in CI: `actions/setup-node` writes its generated npmrc to a temp path and
+    // points this variable at it. The first version of this probe looked only at `cwd` and `$HOME`,
+    // so it reported "no npmrc" on a runner that had one — and refused a release whose credential
+    // was perfectly fine. Third time on this same problem that a probe of mine was the wrong oracle,
+    // which is why the path list is a tested function now instead of a detail inside a filesystem
+    // call.
+    const paths = npmrcCandidates(
+      { NPM_CONFIG_USERCONFIG: '/runner/_temp/.npmrc' },
+      '/repo',
+      '/home/u',
+    )
+    expect(paths[0]).toBe('/runner/_temp/.npmrc')
+  })
+
+  it('test_project_and_home_are_still_consulted', () => {
+    const paths = npmrcCandidates({}, '/repo', '/home/u')
+    expect(paths).toEqual(['/repo/.npmrc', '/home/u/.npmrc'])
+  })
+
+  it('test_an_empty_USERCONFIG_is_ignored_rather_than_probed_as_a_path', () => {
+    // An unset variable often arrives as the empty string; treating it as a path would check `.` and
+    // could report a false positive from an unrelated file.
+    expect(npmrcCandidates({ NPM_CONFIG_USERCONFIG: '' }, '/repo', '/home/u')).toEqual([
+      '/repo/.npmrc',
+      '/home/u/.npmrc',
+    ])
   })
 })
