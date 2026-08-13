@@ -778,9 +778,16 @@ escolhido: o limiar nunca esteve errado, a medição estava.
 
 - O run ficou ~35% mais longo (5 715 testes). Ele estoura o limite de 590 s por comando desta
   sessão — não é falha, é duração.
-- Numa das execuções, o `r3a-emitted-bundle-node-free.test.ts` falhou lendo `packages/theo/dist`.
+- Numa execução local, o `r3a-emitted-bundle-node-free.test.ts` falhou lendo `packages/theo/dist`.
   Passa isolado, e havia um `pnpm lint` meu rodando concorrente naquele momento, tocando os mesmos
-  artefatos. **Não consegui reproduzir limpo**, então registro como suspeita, não como causa: se o CI
-  mostrar intermitência, o candidato é a paralelização entre projetos com testes que leem artefatos
-  de build.
+  artefatos.
+
+  **Encerrado com evidência, não com suposição.** O CI rodou a suíte unificada em `main` e saiu
+  **verde, com zero jobs falhando** — a mesma paralelização entre projetos, num ambiente onde nada
+  meu competia pelos artefatos. Isso não prova que a corrida é impossível; prova que a falha local
+  tinha uma explicação mais simples e disponível: eu mesmo, mexendo no `dist` enquanto os testes o
+  liam.
+
+  Fica registrado para quem vier: se aparecer intermitência neste arquivo, o primeiro candidato é
+  algo reconstruindo `packages/theo/dist` durante o run, não o teste.
 
