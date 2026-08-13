@@ -42,6 +42,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Árvore de instruções, escada de composição e pressão de contexto (M74).** `compileProjectContext` parecia adjacente e não substituía: lê um arquivo fixo pelo SDK, sem budget de profundidade ou de arquivos, sem frontmatter, sem guarda de ciclo, sem política de truncamento e sem canal de aviso. Um produto que queira instruções com escopo de projeto escrevia ~720 LOC de mecanismo — nada disso sobre o domínio dele.
+
+  `loadInstructionTree` traz tetos explícitos (`maxDepth` / `maxFiles` / `maxChars`) e reporta `truncated`, para que o chamador saiba que está vendo uma árvore parcial. Ciclos são quebrados por **inode**, não por caminho: um loop de symlink produz infinitos caminhos distintos para o mesmo arquivo, e um `seen` indexado por caminho nunca termina.
+
+  **A checagem de containment é controle de segurança, não detalhe.** Um symlink dentro de um repositório recém-clonado pode apontar para `~/.ssh/config`; segui-lo injeta esse conteúdo no system prompt do modelo. Isso é prompt-injection com o filesystem como vetor, e todo consumidor que escreve esse loader à mão reintroduz o buraco. Compõe `assertNoSymlinkEscape` do SDK — com contraprova de que um symlink **interno** continua sendo seguido, porque um guarda que recusa tudo é um guarda que as pessoas desligam.
+
+  Frontmatter que **abre e não fecha** pula aquele arquivo e avisa; a árvore continua carregando. Falhar tudo faria um arquivo ruim desabilitar em silêncio todas as instruções do usuário — a falha mais barulhenta produzindo o resultado mais silencioso.
+
+  `composeInstructions` corta do **fim** da lista que o chamador ordenou: o framework entrega o mecanismo de corte, o produto entrega a preferência. Nenhum nome de fonte aparece no framework, e há teste que renomeia tudo para provar. A base nunca é descartada — é a identidade do agente — e a última fonte sobrevivente é **aparada** antes de ser descartada inteira, porque metade do que o usuário escreveu vale mais que nada.
+
+  `contextPressure` finalmente junta o numerador (usage) e o denominador (`resolveEffectiveContextWindow`) que o framework já embarcava separados. Janela desconhecida devolve `'ok'` em vez de dividir: ausência de evidência não é evidência, e `Infinity`/`NaN` chegando numa UI como porcentagem é pior que não dizer nada.
+
+### Removed
+- **Os quatro knobs inertes de `ContextWindowOptions` (M74).** `compactionStrategy`, `preserveSystemPrompt`, `preserveLastN` e `preserveToolResults` não tinham mapeamento nativo no SDK e eram reportados como `metadata-only` — honesto, e ainda assim superfície que ensina errado: um knob que o chamador seta e que nunca faz nada lê como feature.
+
+  Implementá-los foi considerado e recusado **por medição**: `resolveCompactionStrategy` existe neste pacote, mas fala outro vocabulário (uma estratégia nomeada, `token-budget`, parametrizada por `keepTokens`). Mapear quatro nomes de estratégia inventados nele não seria implementar os knobs — seria inventar semântica e publicá-la sob nomes que prometem outra coisa. A superfície funcional de compaction é `AgentRunner.compaction` / `resolveCompactionStrategy`. Zero call sites passavam os knobs, medido em `packages`, `tests`, `fixtures` e `examples`.
+
+### Fixed
+- **`LayeredConfig` e `TrustStore` (M73) estavam inalcançáveis — foram exportados agora.** Ambos foram mergeados alcançáveis apenas por caminho relativo a partir dos próprios testes, então nenhum consumidor conseguia importá-los. Um módulo que o consumidor não consegue importar não é feature entregue; é arquivo. Pego pelo `no-orphans` do `dependency-cruiser` dois milestones depois, junto com dois órfãos do próprio M74.
+
 - **`LayeredConfig` e `TrustStore` — configuração em camadas e confiança por diretório (M73).** O módulo de config resolvia "carregue o arquivo de config do meu framework": não publicava engine de camadas, não deixava a do SDK passar, e não dizia nada sobre confiança de diretório. A evidência de que era lacuna e não decisão de escopo: um repositório cujo README proíbe importar `@theokit/sdk` direto **quebrou a própria regra seis vezes**, e todas as seis alcançam primitivas de config/trust/wiring. Um time que quebra a própria regra em vez de reimplementar é o sinal mais forte de que faltava a porta, não a vontade.
 
   **O vocabulário é política; a máquina não.** Quais chaves existem, quais capacidades concedem, TOML ou TS — isso fica com o produto. A máquina de cadeia, o merge de profile, o relatório de precedência e o piso são idênticos em todo produto de agente. O risco nomeado do milestone era generalizar cedo e engessar o vocabulário de outro produto; a mitigação é estrutural e testada: **a cadeia de camadas é parâmetro, nunca constante**, e nenhum nome de camada de consumidor entra no framework.

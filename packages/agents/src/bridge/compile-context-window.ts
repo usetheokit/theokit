@@ -24,15 +24,29 @@ export type ContextCompactionStrategy =
 export interface ContextWindowOptions {
   /** Maximum tokens before compaction triggers. */
   maxTokens?: number
-  /** How to compact when maxTokens is exceeded. */
-  compactionStrategy?: ContextCompactionStrategy
-  /** Always preserve the system prompt during compaction (default: true). */
-  preserveSystemPrompt?: boolean
-  /** Number of recent messages to always keep intact (default: 10). */
-  preserveLastN?: number
-  /** Keep all tool results even during compaction (default: true). */
-  preserveToolResults?: boolean
 }
+
+/**
+ * M74 — the four strategy knobs were REMOVED, not implemented.
+ *
+ * `compactionStrategy`, `preserveSystemPrompt`, `preserveLastN` and `preserveToolResults` had no
+ * native SDK mapping and were reported as `metadata-only` — honest, and still surface that teaches
+ * the wrong thing: a knob a caller can set and that never does anything reads as a feature.
+ *
+ * Implementing them was considered and rejected on measurement, not on principle.
+ * `resolveCompactionStrategy` DOES exist in this package (`loop/compaction-strategy.ts`, delegating
+ * to the SDK's `compactTranscript`) — but it speaks a different vocabulary: one named strategy
+ * (`token-budget`) parameterised by `keepTokens`. Mapping four invented strategy names onto it would
+ * not be implementing the knobs; it would be inventing semantics and shipping them under names that
+ * promise something else. That is worse than the honest warning it replaces.
+ *
+ * The working surface for compaction is `AgentRunner.compaction` / `resolveCompactionStrategy`,
+ * where the app supplies its own summarizer and decides WHEN to compact — per ADR D1, because the
+ * SDK owns per-turn context.
+ *
+ * Nothing passed these knobs: measured across `packages`, `tests`, `fixtures` and `examples`, zero
+ * call sites.
+ */
 
 /** `@ContextWindow` knobs with no native SDK `AgentOptions` mapping. */
 const STRATEGY_KNOBS = [
