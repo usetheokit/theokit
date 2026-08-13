@@ -286,7 +286,7 @@ idênticos em todo produto de agente.
 
 ---
 
-### M74 — [ ] Árvore de instruções: `loadInstructionTree` + `composeInstructions` + `contextPressure`
+### M74 — [x] Árvore de instruções: `loadInstructionTree` + `composeInstructions` + `contextPressure`
 
 **Objective:** `compileProjectContext` parece adjacente mas não substitui: lê um `THEO.md` fixo pelo SDK,
 sem budget de profundidade/arquivos, sem frontmatter, sem guarda de ciclo, sem política de truncamento e

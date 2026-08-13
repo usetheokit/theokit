@@ -25,6 +25,40 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
+## B-M74-01 — O guarda de arquitetura está vermelho, e o vermelho é anterior ao M74
+
+**Encontrado em:** M74, 2026-08-13 · **Severidade: média** — não quebra produto; deixa um gate de
+arquitetura permanentemente vermelho, que é como um gate para de significar algo.
+
+`tests/unit/architecture-guards-ci.test.ts` falha em 3 dos 14 casos. Medido contra o `HEAD` com o
+trabalho do M74 fora da árvore (`git stash`): **os mesmos 3 já falhavam**. Não é regressão do
+milestone.
+
+A causa é `no-orphans` do `dependency-cruiser` sobre três arquivos de `packages/http/src/`:
+
+- `server-inserted-html.ts`
+- `css-resource.ts`
+- `action-encryption.ts`
+
+**Medido:** nenhum arquivo do workspace os importa, não estão no barrel (`src/index.ts`) e não são
+entry do `tsup.config.ts`. São inalcançáveis por qualquer consumidor — código morto, não superfície
+pública sem uso.
+
+Os `tsup.config.ts` que aparecem na mesma lista são falso-positivo do detector (config de build é
+carregada pela ferramenta, não importada) e não fazem parte deste item.
+
+**O que este item NÃO é:** deletar os três. Isso é decisão sobre código de outra pessoa, com risco de
+um consumidor externo alcançá-los por caminho profundo, e não cabe carona num milestone de contexto.
+Cabe medir o alcance real (incluindo consumidores publicados) e então deletar ou re-wirar.
+
+**Nota de honestidade sobre o M74:** o mesmo guarda pegou DOIS órfãos meus — `context-pressure.ts` e
+`compose-instructions.ts`, escritos e nunca exportados. E, ao investigar, apareceu que o **M73 também
+não exportou** `LayeredConfig` nem `TrustStore`: eles foram mergeados alcançáveis apenas por caminho
+relativo a partir dos próprios testes. Um módulo que o consumidor não consegue importar não é feature
+entregue — é arquivo. Os quatro foram exportados pelo barrel do `server` no PR do M74.
+
+---
+
 ## ~~B-M72-01~~ — RESOLVIDO — O helper de build decidia por chamada, e a janela expirava no meio da suíte
 
 **Encontrado em:** M69/M70/M72 — três ocorrências medidas · **Resolvido em:** 2026-08-13
