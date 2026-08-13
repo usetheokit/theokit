@@ -17,6 +17,12 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 > cada entrada filada ganha o link. Ressalva medida: o `gh` é um snap e não lê arquivos sob
 > `/tmp/claude-*` — passar o corpo por `--body-file -` com stdin.
 
+> **Nota de numeração.** Não existe `B-M67-16`, e nunca existiu — verificado com
+> `git log -S "B-M67-16"`, que não retorna nada. É um número pulado na criação, não uma entrada
+> removida. Registrado porque um buraco numa sequência é indistinguível de uma exclusão silenciosa
+> para quem chega depois, e este arquivo existe justamente para que nada saia dele sem motivo
+> escrito.
+
 ---
 
 ## ~~B-M67-01~~ — RESOLVIDO — 15 testes vermelhos na suíte da raiz, todos anteriores ao M67
