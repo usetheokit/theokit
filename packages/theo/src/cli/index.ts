@@ -83,6 +83,30 @@ cli
   })
 
 cli
+  .command('agent sessions gc', 'Collect old transcripts for this project (dry run unless --apply)')
+  .option('--apply', 'Actually delete. Without it the command prints the plan and changes nothing.')
+  .option('--keep-last <n>', 'Newest N sessions always survive (floor 1)', { default: 10 })
+  .option('--max-age-days <n>', 'Only sessions older than this may go (floor 1)', { default: 30 })
+  .action(async (options: { apply?: boolean; keepLast?: number; maxAgeDays?: number }) => {
+    try {
+      const { sessionsGcCommand } = await import('./commands/sessions-gc.js')
+      const { lines, failed } = sessionsGcCommand({
+        apply: options.apply,
+        keepLast: Number(options.keepLast),
+        maxAgeDays: Number(options.maxAgeDays),
+      })
+      for (const line of lines) console.log(line)
+      // A partial failure exits non-zero: the collector is fail-open per candidate, and an operator
+      // scripting this needs `$?` to reflect that something did not go.
+      if (failed > 0) process.exit(1)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
+
+cli
   .command('mcp <agent>', 'Serve an agent as an MCP server over stdio (for desktop MCP clients)')
   .action(async (agent: string) => {
     try {
