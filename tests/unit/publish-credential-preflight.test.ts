@@ -63,7 +63,12 @@ describe('diagnoseCredential — the three states a release must tell apart', ()
     // gate itself made.
     const d = diagnoseCredential(ANONYMOUS)
     expect(d.publishable).toBe(false)
-    expect(d.reason).toMatch(/no npm credential/i)
+    // And it does not claim the credential is ABSENT: a configured-but-invalid token looks
+    // identical to a missing one from `whoami`, and saying "not configured" would send an operator
+    // whose secret exists looking for the wrong problem. Measured in CI: `NPM_TOKEN` is set and
+    // `whoami` still fails.
+    expect(d.reason).toMatch(/whoami/i)
+    expect(d.reason).toMatch(/does not authenticate|expired|revoked/i)
     expect(d.reason).not.toMatch(/anonymous/i)
   })
 })
