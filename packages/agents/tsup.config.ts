@@ -17,6 +17,9 @@ export default defineConfig({
     // M84 — the client chain came from the CLI; its own subpath because `use-agent` imports React.
     client: 'src/client-entry.ts',
     'client-react': 'src/client-react-entry.ts',
+    // M71 — the session LIFECYCLE vocabulary. Its own subpath because it is composition over the
+    // persistence primitives, not another pass-through of them.
+    session: 'src/session/index.ts',
   },
   format: ['esm'],
   dts: true,
