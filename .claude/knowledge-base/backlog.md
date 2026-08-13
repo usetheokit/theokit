@@ -25,6 +25,37 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
+## ~~B-M76-01~~ — RESOLVIDO — O M75 mergeou com o teto de bundle estourado, e eu não medi
+
+**Encontrado em:** M76, 2026-08-13 · **Resolvido em:** 2026-08-13 · **Severidade: média** — não
+quebra runtime; deixa um gate vermelho em `main` e infla o pacote para todo consumidor.
+
+O motor de hooks do M75 entrou no **barrel principal** do `@theokit/agents`, levando o bundle de
+34,1K para **42,9K** contra um teto de 35K. Medido com `git stash`: já estava assim **no `HEAD`**,
+antes do M76.
+
+### O erro de processo, que é o que vale registrar
+
+Eu li a **contagem de testes** (`5888 verdes`) e o **código de saída** — e não o gate de bundle, que
+mora num arquivo de teste do `packages/agents` e não aparece na saída agregada da raiz quando outros
+arquivos falham antes.
+
+Isso é exatamente a lição que o **B-M74-01** tinha acabado de me dar, um milestone antes, sobre o
+`@theokit/http`: uma capacidade que a maioria dos apps nunca toca não deve ser paga por todo app que
+importa o pacote. Eu escrevi essa frase no CHANGELOG do M74 e não a apliquei no M75.
+
+### A correção
+
+`@theokit/agents/hooks` como subpath, mesmo padrão de `/session`, `/persistence` e dos três módulos
+do `@theokit/http`. Bundle principal volta a **34,7K**, dentro do teto, e o motor continua
+alcançável por quem o quer.
+
+**Ressalva honesta:** o teto continua apertado (34,7K contra 35K). O próximo símbolo que entrar no
+barrel principal estoura de novo. Isso não é problema deste item — é a informação de que o próximo
+milestone que adicionar superfície ao barrel precisa medir **antes**, não depois.
+
+---
+
 ## ~~B-M74-01~~ — RESOLVIDO — Três módulos com teste e sem porta, e uma camada que eu inventei fora da DAG
 
 **Encontrado em:** M74, 2026-08-13 · **Resolvido em:** 2026-08-13

@@ -168,6 +168,21 @@ export type {
 export { TrustStore, TrustStorePermissionsError } from '../config/trust-store.js'
 export type { TrustRecord } from '../config/trust-store.js'
 
+// M76 — the `.theokit/commands/` loader.
+//
+// The framework owns the `.theokit/` convention and already loads `skills/`, `agents/` and
+// `hooks.json`. `commands/` had no loader, so a consumer wrote markdown-with-frontmatter scanning
+// against the framework's own directory — reimplementing the reading of a convention the framework
+// defines. A convention with a hole in it is worse than no convention.
+export { loadCustomCommands } from '../config/custom-commands.js'
+export type {
+  CustomCommand,
+  CustomCommandsResult,
+  LoadCustomCommandsInput,
+} from '../config/custom-commands.js'
+export { frontmatterValue, splitFrontmatter } from '../config/frontmatter.js'
+export type { ParsedFrontmatter } from '../config/frontmatter.js'
+
 // M74 — the instruction tree, the composition ladder, and context pressure.
 //
 // Under `config/`, not a new `context/` directory. The first cut created one, and
