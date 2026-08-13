@@ -11,12 +11,11 @@
  */
 import type { ContextSettings } from '@theokit/sdk'
 
-/** How to compact the transcript when `maxTokens` is exceeded. */
-export type ContextCompactionStrategy =
-  | 'truncate-oldest'
-  | 'summarize-oldest'
-  | 'sliding-window'
-  | 'priority-based'
+// `ContextCompactionStrategy` used to live here, enumerating exactly the four strategy knobs
+// (`truncate-oldest` | `summarize-oldest` | `sliding-window` | `priority-based`). M74 REMOVED those
+// knobs rather than implementing them, and the type outlived them: a published name for four values
+// no code could ever produce. Deleted in M76 when knip named it — leftover vocabulary from a deletion
+// is worse than none, because a reader finds it and believes the capability exists.
 
 /**
  * M53 — declared here, with its conversion, instead of on the decorator being deleted.

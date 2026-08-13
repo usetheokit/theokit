@@ -25,6 +25,32 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
+## B-M76-02 — ABERTO — CodeQL roda, varre 1645 arquivos e nao consegue reportar
+
+**Encontrado em:** M76, 2026-08-13 · **Severidade: media** — nao ha defeito de codigo; ha um gate de
+seguranca permanentemente vermelho, que e pior que gate nenhum porque ensina o time a ignorar vermelho.
+
+O job `Analyze (javascript-typescript)` falha em **todo** run. A causa nao e achado nenhum: o CodeQL
+executa por completo (`CodeQL scanned 1645 out of 1645 TypeScript files`), gera o SARIF, e morre no
+upload:
+
+```
+##[error]Please verify that the necessary features are enabled:
+Code scanning is not enabled for this repository.
+```
+
+**Causa raiz:** `usetheodev/theokit` e privado, e code scanning em repo privado exige GitHub Advanced
+Security — um item de plano/faturamento, nao de codigo.
+
+**Por que nao decidi sozinho.** As tres saidas sao (a) habilitar GHAS, que gasta dinheiro do dono;
+(b) trocar para `upload: false` e passar a gatear sobre o SARIF local, o que muda o que o gate
+promete; (c) remover o workflow. Todas sao decisoes do dono do repositorio, e nenhuma delas e
+"consertar um bug". Deixar o vermelho visivel e registrado e mais honesto que escolher por ele.
+
+**Nao bloqueia merge:** o check nao esta na lista de required — o PR fica `UNSTABLE`, nao `BLOCKED`.
+
+---
+
 ## ~~B-M76-01~~ — RESOLVIDO — O M75 mergeou com o teto de bundle estourado, e eu não medi
 
 **Encontrado em:** M76, 2026-08-13 · **Resolvido em:** 2026-08-13 · **Severidade: média** — não
