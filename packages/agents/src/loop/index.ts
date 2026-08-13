@@ -12,6 +12,9 @@ export { AgentRunner, AgentRunnerBuilder, type AgentRunnerRunOptions } from './a
 // goal domain's types travel with it so a consumer types the whole surface from `@theokit/agents`.
 export { GoalRunner, type GoalRunnerDeps } from './goal-runner.js'
 export type { GoalEvent, GoalLoopAgent, GoalOptions, GoalResult } from './goal-runner.js'
+// M69 — the one place that knows every GoalEvent variant, so consumers stop writing the
+// unknown-event branch each. See the module docblock for why a helper and not an open union.
+export { formatGoalEvent } from './format-goal-event.js'
 // M80 — the judge's vocabulary travels with the goal domain, for the same reason as the line above:
 // the consumer types the whole surface from `@theokit/agents`.
 export type { JudgeResult, Verdict } from './goal-runner.js'
