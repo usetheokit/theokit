@@ -59,9 +59,9 @@ describe('renderAgentStreamToTerminal (M5)', () => {
 
     const text = out.get()
     expect(text).toContain('Deploying')
-    expect(text).toContain('▸ ops.deploy(')
+    expect(text).toContain('\u23fa ops.deploy(')
     expect(text).toContain('"env":"prod"')
-    expect(text).toContain('✓ deployed')
+    expect(text).toContain('\u23bf deployed')
     expect(text).toContain('checkpoint saved')
   })
 
@@ -96,7 +96,7 @@ describe('renderAgentStreamToTerminal (M5)', () => {
       stdout: out.stream,
       onApproval: vi.fn(),
     })
-    expect(out.get()).toContain('✗ kaboom')
+    expect(out.get()).toContain('\u2716 kaboom')
     // The error signal is returned so the CLI can exit non-zero (fail-loud, not silent exit 0).
     expect(result).toEqual({ sawError: true })
   })
@@ -140,7 +140,7 @@ describe('renderAgentStreamToTerminal (M5)', () => {
       stdout: out.stream,
       onApproval: vi.fn(),
     })
-    expect(out.get()).toContain('✗ tool failed')
+    expect(out.get()).toContain('\u23bf tool failed')
   })
 })
 
