@@ -10,6 +10,9 @@
 export * from './agent-output-event.js'
 export * from './presenter.js'
 export * from './source/from-sdk.js'
+// M70 — the door from the WIRE into the canonical event. Without it the surface that actually
+// receives the stream (every transport-driven consumer) could not reach any presenter.
+export * from './source/from-wire-chunk.js'
 export * from './presenters/ui-message-stream.js'
 export * from './presenters/terminal.js'
 export * from './presenters/json.js'
