@@ -42,6 +42,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Retenção de transcript: `planTranscriptGC` / `runTranscriptGC` e `theokit agent sessions gc` (M72).** O framework embarcava tudo que **cria** estado de disco ilimitado — `transcriptPath`, `appendJsonl`, `forkTranscript` — e nada que o limitasse. Um produto construído sobre ele ou crescia transcripts para sempre ou escrevia o próprio coletor; o que escreveu gastou 857 linhas.
+
+  O SDK desenha a linha explicitamente no docblock de `classifySessionArtifact`: *"This is deliberately NOT a garbage collector. Retention is policy — and policy belongs to the application."* Este módulo é essa política, no framework, para que a aplicação não precise inventá-la.
+
+  **Os quatro invariantes, cada um com teste** — são condição de merge, não recomendação, porque isto apaga histórico de conversa:
+
+  1. **Violação de piso é recusada, nunca normalizada.** Clampar é o comportamento tentador e o perigoso: quem pediu uma política recebe outra, calado, e nunca descobre qual.
+  2. **Sem mtime ⇒ nunca coletar.** Um arquivo cuja idade não se lê não pode ser demonstrado velho; tratá-lo como coletável é usar ausência de evidência como evidência, num caminho que deleta.
+  3. **Lease de escrita ativo protege o transcript**, diga o que disser a política.
+  4. **A fase de apply re-checa.** Um plano é um retrato, e entre o retrato e o delete alguém pode retomar a sessão. Um coletor que confia no próprio plano apaga a sessão a que o usuário acabou de voltar.
+
+  `--apply` **nunca** é default: sem ele o comando imprime o plano e não toca em nada. Cada sessão mantida vem com o **motivo** — "pulei 4 sessões" não deixa ninguém agir; "mantida porque tem lease de escrita ativo" diz se há algo a parar. Erros acumulam **por candidato** (fail-open) e `ENOENT` conta como sucesso: ausente é o estado desejado, e reportá-lo como falha faria a segunda run de um GC interrompido parecer quebrada.
+
+  **Item 3 do DoD não foi implementado — ele já existia.** `classifyTranscriptArtifact` seria uma segunda definição de `classifySessionArtifact`, que o M67 já atravessou e que cobre transcript / writer-lock / lock-directory / temp. O próprio texto do DoD pede "uma definição, não uma por consumidor", e escrevê-la aqui seria exatamente a violação da Regra 9 que ele alerta.
+
 - **`@theokit/agents/session` — o vocabulário de ciclo de vida de sessão (M71).** O store já estava totalmente suprido (29 pass-throughs em `/persistence`: caminhos, escrita atômica, locks, classificação de artefato). O que não tinha casa era o vocabulário **acima** dele: listar, deletar com proteção de sessão viva, forkar, voltar antes de um turno, e o ponteiro de sessão retomável.
 
   `listSessions`, `deleteSession`, `protectedTranscripts`, `forkBeforeUserTurn`, `loadOrCreateSessionId` / `persistSessionId`, e o índice reverso de `encodeProjectDir`.
