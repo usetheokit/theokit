@@ -55,9 +55,17 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
     options.plugins = compiled.plugins
     applied.push('plugins')
   }
-  const settingSources = resolveSettingSources(compiled)
-  if (settingSources) {
-    options.local = { ...options.local, settingSources }
+  // M68 — already resolved. `CompiledAgentOptions.settingSources` can only hold roots some posture
+  // authorized, because every authoring path runs the selection through `resolveSettingSources`
+  // (the gate) at compile time. This is a projection, not a decision.
+  //
+  // Two things died here, and both were the defect. A LOCAL function named `resolveSettingSources`
+  // — same name as the gate, consulting no posture — is what this line used to call, so a grep for
+  // the gate landed on a homonym and the gate looked wired. And that homonym injected `['project']`
+  // whenever the agent declared inline skills, "for back-compat": declaring a skill is a statement
+  // about prompts, and it was silently enabling shell execution from the working directory.
+  if (compiled.settingSources !== undefined && compiled.settingSources.length > 0) {
+    options.local = { ...options.local, settingSources: [...compiled.settingSources] }
     applied.push('settingSources')
   }
   if (compiled.context) {
@@ -100,19 +108,6 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   }
 
   return { options, applied }
-}
-
-/**
- * theokit-file-based-config — resolve the SDK `local.settingSources`:
- *  - an explicit, NON-EMPTY `.settingSources([...])` wins (EC-5), empty `[]` ⇒ unset (EC-3);
- *  - else an agent that declares inline skills falls back to `['project']` (back-compat);
- *  - else `undefined` (inline config only — no disk discovery).
- */
-function resolveSettingSources(compiled: CompiledAgentOptions): string[] | undefined {
-  const explicit = compiled.settingSources
-  if (explicit && explicit.length > 0) return [...explicit]
-  if (compiled.skills) return ['project']
-  return undefined
 }
 
 /**

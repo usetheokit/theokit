@@ -10,7 +10,7 @@
  * NEVER calls an LLM. It imports only `zod` (types) + the compiler shape — no `theokit`
  * core, preserving the agents → (nothing) dependency direction (G1).
  */
-import type { CustomTool, InlineSkill, MemorySettings, SettingSource } from '@theokit/sdk'
+import type { CustomTool, InlineSkill, MemorySettings } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { Guardrail } from '../guardrails/index.js'
@@ -21,6 +21,7 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { HookHandlers } from './hook-handlers.js'
+import { resolveSettingSources, type SettingSourcesSelection } from './setting-sources-gate.js'
 
 /**
  * Brand tag for a `defineAgent` value. `Symbol.for` (global registry, not `Symbol()`) so
@@ -76,12 +77,21 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
   /**
    * theokit-file-based-config — opt into `.theokit/` file-based config (skills, subagents, hooks,
    * MCP, context, cron). The SDK discovers config from these roots under the app's `cwd`:
-   * `"project"` = `<cwd>/.theokit/`, `"user"` = `~/.theokit/`. Absent ⇒ inline (code) config only.
-   * SECURITY: enabling `"project"` enables shell-executing hooks from `.theokit/hooks.json` — this
-   * is opt-in because `.theokit/` is the app's own repo (informed consent). The SDK owns discovery
-   * + execution (G2 / ADR-0040); theokit only wires this into `Agent.create({ local.settingSources })`.
+   * `project` = `<cwd>/.theokit/`, `user` = `~/.theokit/`. Absent ⇒ inline (code) config only.
+   *
+   * SECURITY (M68): `project` reads `.theokit/hooks.json`, which **executes shell**, so it requires
+   * a `TrustPosture` rather than a string. This field used to take `readonly SettingSource[]`, and
+   * its own JSDoc justified the risk as *"opt-in because `.theokit/` is the app's own repo (informed
+   * consent)"*. That premise holds for a web app whose `cwd` is its own deploy; it does not hold for
+   * an agent whose `cwd` is a repository the user just cloned, where `.theokit/` is
+   * attacker-controlled content.
+   *
+   * `user` stays a plain boolean — `~/.theokit/` is the operator's own machine. Omitting a root is
+   * not enabling it. The SDK owns discovery + execution (G2 / ADR-0040); theokit resolves the
+   * selection through `resolveSettingSources` and wires the result into
+   * `Agent.create({ local.settingSources })`.
    */
-  settingSources?: readonly SettingSource[]
+  settingSources?: SettingSourcesSelection
   /**
    * M49 — durable memory (the SDK's `.theokit/memory/` subsystem: `Remember:` capture, MEMORY.md
    * store, auto-injected `<memory>` block, `memory_search`/`memory_get` tools). The shape is the
@@ -212,9 +222,13 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
     ...compileSkillsSelection(def.skills),
-    // theokit-file-based-config — the declared `.theokit/` sources flow to the run path, which
-    // projects them into `Agent.create({ local.settingSources })`; absent ⇒ inline config only.
-    ...(def.settingSources !== undefined ? { settingSources: def.settingSources } : {}),
+    // theokit-file-based-config + M68 — the selection is resolved HERE, at the earliest point every
+    // authoring path converges on, so `CompiledAgentOptions.settingSources` can only ever hold
+    // roots that some posture authorized. Refusing at compile time rather than at run assembly is
+    // `error-handling.md` § 3: validate at the entry, fail before the value travels.
+    ...(def.settingSources !== undefined
+      ? { settingSources: resolveSettingSources(def.settingSources) }
+      : {}),
     // M49 — memory flows to the projection layer; `assembleM8CreateOptions` forwards it to Agent.create.
     ...(def.memory !== undefined ? { memory: def.memory } : {}),
     // Hooks are converted here — the layer EVERY path converges on — rather than on the builder, so

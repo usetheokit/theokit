@@ -31,6 +31,8 @@ import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
 import { streamAgentUIMessages } from '../../src/bridge/agent-endpoint.js'
 import { AgentBuilder } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
+import type { SettingSourceCapability } from '../../src/bridge/setting-sources-gate.js'
+import type { TrustPosture } from '../../src/index.js'
 
 async function drain(compiled: CompiledAgentOptions) {
   const factory = createSdkAgentStream(compiled, [], 'test-key', { model: 'openai/gpt-4o-mini' })
@@ -40,6 +42,29 @@ async function drain(compiled: CompiledAgentOptions) {
   return createSpy.mock.calls.at(-1)?.[0] as Record<string, unknown>
 }
 
+/**
+ * A posture that grants `projectSettings`.
+ *
+ * M68 — `.settingSources()` takes a selection with evidence, not a string array: `project` reads
+ * `<cwd>/.theokit/`, including shell-executing `hooks.json`. These tests exercise the `project`
+ * source, so they have to state the trust decision the same way a caller would.
+ *
+ * A LITERAL here, unlike the gate's own tests which build it through `resolveTrustPosture`: this
+ * file mocks `@theokit/sdk`, so the real resolver is unreachable by construction. The provenance
+ * that makes a posture meaningful is proven in `setting-sources-gate.test.ts`, against the real
+ * SDK; what this fixture supplies is a granted decision, because the subject here is cwd threading,
+ * not trust.
+ */
+const PROJECT_GRANTED = {
+  project: {
+    trustedBy: {
+      level: 'trusted',
+      source: 'default',
+      allows: { projectSettings: true },
+    } as TrustPosture<SettingSourceCapability>,
+  },
+}
+
 describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)', () => {
   beforeEach(() => createSpy.mockClear())
   afterEach(() => vi.restoreAllMocks())
@@ -47,8 +72,20 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
   it('test_adapter_passes_skills_to_create', async () => {
     const opts = await drain(applyCapabilities([new SkillsOptionsCapability({ include: ['x'] })]))
     expect(opts.skills).toEqual({ enabled: ['x'], autoInject: true })
-    // EC-1: skills need a settings source for the SDK to discover SKILL.md files.
-    expect((opts.local as { settingSources?: string[] }).settingSources).toContain('project')
+    // EC-1 used to read "skills need a settings source for the SDK to discover SKILL.md files", and
+    // asserted `settingSources` CONTAINED 'project'. The concern was real; the remedy was too broad.
+    //
+    // `project` is one root, not a menu: it enables SKILL.md discovery AND `hooks.json`, which
+    // executes shell. The SDK's own capability grant is all-or-nothing (ADR 0065), so there is no
+    // way to buy the first without the second. Turning it on because an agent declared skills meant
+    // every such agent silently ran whatever the working directory's hooks said.
+    //
+    // Since M68 the tradeoff is the caller's to make, explicitly: declare `project` with a posture
+    // to discover skills from disk, and accept the hooks that come with it. Skills declared in code
+    // — this case — need no disk at all.
+    expect(
+      (opts.local as { settingSources?: string[] } | undefined)?.settingSources ?? [],
+    ).not.toContain('project')
   })
 
   it('test_adapter_passes_context_to_create', async () => {
@@ -104,7 +141,7 @@ describe('M8 adapter wiring — compiled decorators reach Agent.create() (T4.1)'
     const fakeRoot = '/fake/app/root'
     expect(fakeRoot).not.toBe(process.cwd())
     const compiled = compileAgentDefinition(
-      AgentBuilder.create().model('m').settingSources(['project']).build(),
+      AgentBuilder.create().model('m').settingSources(PROJECT_GRANTED).build(),
     )
     const gen = streamAgentUIMessages(compiled, 'test-key', {
       message: 'hi',
