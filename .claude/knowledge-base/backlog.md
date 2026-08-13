@@ -666,7 +666,7 @@ sozinha.
 
 ---
 
-## B-M67-20 — O `Coverage gate` mede um denominador que o run nunca alcança
+## ~~B-M67-20~~ — RESOLVIDO — O `Coverage gate` media um denominador que o run nunca alcançava
 
 **Encontrado em:** 2026-08-13, depois de o último vermelho de teste cair · **Severidade: média** —
 não é defeito de gate; é o gate finalmente **medindo**.
@@ -725,14 +725,62 @@ raiz usa `^4.1.9`. Rodar cobertura na suíte de um pacote quebra com
 `TypeError: Cannot read properties of undefined (reading 'reportsDirectory')` — o provider 4.x contra
 o runner 3.x. Qualquer unificação de medição esbarra nisso primeiro.
 
-**Próximo passo, agora com o alvo certo.** Não é escrever testes: é fazer a medição cobrir o que de
-fato é testado. Duas opções, e a escolha é de projeto:
+**Passo 1 FEITO: o descompasso de versão, que era o bloqueio da opção correta.**
 
-1. **Unificar o run** (vitest `projects`), medindo numerador e denominador na mesma execução. É a
-   correta, e exige resolver antes o descompasso de versão.
-2. **Estreitar o `coverage.include`** ao que a suíte da raiz exercita. Torna o número honesto de
-   imediato, mas deixa 216 arquivos de teste sem medição — troca uma mentira por um silêncio.
+Eu havia classificado a escolha como "decisão de projeto". Estava errado — a opção correta (unificar
+o run) estava bloqueada por um obstáculo **técnico** que eu podia remover, e chamar isso de decisão
+era adiar trabalho meu.
 
-Escrever testes para subir de 62% antes disso seria mover um número que mede a coisa errada — e teria
-me custado um milestone inteiro para descobrir depois.
+`packages/{presenter,agents,http}` subiram de `vitest@^3.2.6` para `^4.1.9`. Medido pacote a pacote,
+do menor para o maior, antes de comprometer:
+
+| Pacote | Antes | Depois |
+|---|---|---|
+| presenter | 95 verdes | **95 verdes, zero mudanças** |
+| agents | 954 verdes | **955 verdes**, após 1 correção |
+| http | 406 verdes | **411 verdes**, após 1 correção |
+
+**Custo real da migração: dois defeitos, e os dois eram reais — o vitest 3 os mascarava.**
+
+1. `scripts-are-importable.test.ts` estourava 5 s importando `lint-by-group.mjs` (que puxa o eslint):
+   9,5 s medidos. Mesma classe do flake do `subpath-coverage` — o custo é de **import**, não de
+   asserção, e o timeout deve guardar a asserção. Orçamento próprio de 30 s, com a razão escrita.
+2. `swc-loader.test.ts` quebrava com `Cannot find package '@theokit/http'`. A causa:
+   **`fixtures/decorator-fullstack` não tinha `package.json`** — estava no `pnpm-workspace.yaml`, mas
+   o pnpm ignora diretório sem manifest, então nada linkava o que o fixture consome. O vitest 3
+   escondia pelo resolver do Vite; o 4 usa o runner nativo para um `.mjs` emitido. Mesma classe do
+   `pg` não declarado: **um consumidor que não declara sua dependência só funciona onde outra coisa
+   por acaso a fornece.** (B-M67-21)
+
+Mais um ajuste de tipo: o vitest 4 tipa `vi.fn()` como `Mock<Procedure | Constructable>`, que não é
+chamável sem assinatura explícita.
+
+Estado: **4236 testes verdes na raiz, zero falhando, typecheck limpo.**
+
+**Passo 2 FEITO: o numerador alcançou o denominador.** `vitest.config.ts` passa a declarar
+`projects`, agregando a suíte da raiz e as dos três pacotes numa execução só.
+
+| | Antes | Depois |
+|---|---|---|
+| Testes executados | 4 236 | **5 697** |
+| Linhas | 62,73% | **84,96%** |
+| Ramos | 54,41% | **76,08%** |
+| Funções | 58,45% | **82,17%** |
+| Gate | vermelho | **exit 0** |
+
+**Nenhum teste novo foi escrito.** Os 1 461 que faltavam já existiam — só não rodavam no run que
+media a cobertura. E o número real está **acima** dos limiares de 80%/75% que o projeto tinha
+escolhido: o limiar nunca esteve errado, a medição estava.
+
+`agents/src/auth`, o "0%" que quase me fez escrever testes redundantes, aparece agora em **62,96%**.
+
+**Residual honesto, para vigiar no CI:**
+
+- O run ficou ~35% mais longo (5 715 testes). Ele estoura o limite de 590 s por comando desta
+  sessão — não é falha, é duração.
+- Numa das execuções, o `r3a-emitted-bundle-node-free.test.ts` falhou lendo `packages/theo/dist`.
+  Passa isolado, e havia um `pnpm lint` meu rodando concorrente naquele momento, tocando os mesmos
+  artefatos. **Não consegui reproduzir limpo**, então registro como suspeita, não como causa: se o CI
+  mostrar intermitência, o candidato é a paralelização entre projetos com testes que leem artefatos
+  de build.
 
