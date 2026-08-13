@@ -133,7 +133,7 @@
   },
   "peerDependencies": {
     "@theokit/sdk": "^4.49.0",
-    "@theokit/studio": "^0.1.0",
+    "@theokit/studio": "^0.2.0",
     "@theokit/ui": "^1.1.0",
     "db0": "^0.3.0",
     "react": "^19.0.0",
