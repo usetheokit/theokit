@@ -106,8 +106,8 @@ function fetchProtection(branch) {
 
 function applyProtection(branch, desired) {
   const body = JSON.stringify(desired)
-  // eslint-disable-next-line sonarjs/no-os-command-from-path -- the repo's own gh CLI
   execFileSync(
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- the repo's own gh CLI, already authenticated
     'gh',
     ['api', '-X', 'PUT', `repos/${REPO}/branches/${branch}/protection`, '--input', '-'],
     {
