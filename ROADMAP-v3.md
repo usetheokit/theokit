@@ -174,7 +174,7 @@ documentada em `chat.ts:390-396`; `goal/goal.ts` perde o branch de evento descon
 
 ---
 
-### M70 — [ ] `fromWireChunk` — tornar o `@theokit/presenter` alcançável a partir do wire
+### M70 — [x] `fromWireChunk` — tornar o `@theokit/presenter` alcançável a partir do wire
 
 **Objective:** O presenter normaliza saída de agente num `AgentOutputEvent` canônico e entrega três
 presenters mais um registry. Mas seus **únicos** tradutores de origem consomem mensagens cruas do

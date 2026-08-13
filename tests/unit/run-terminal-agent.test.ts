@@ -80,7 +80,7 @@ describe('runAgentInTerminal (M5)', () => {
     // Prompted for the gated tool, approved → registry resolved true → the tool output rendered after.
     expect(promptApproval).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'ops.deploy' }))
     expect(registry.resolve).toHaveBeenCalledWith('c1', true)
-    expect(out.get()).toContain('✓ deployed')
+    expect(out.get()).toContain('\u23bf deployed')
     // The stream received the HITL wiring (gated map threaded through).
     expect((hoisted.lastStreamInput as { hitl?: unknown }).hitl).toBeDefined()
   })
