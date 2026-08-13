@@ -632,3 +632,28 @@ declarada), `License compliance` (script deletado) e `Bundle budget` (fixture in
 verdes localmente por acidente de estado local, vermelhos em CI por meses, e nenhum deles verificando
 o que anunciava.
 
+---
+
+## ~~B-M67-19~~ — RESOLVIDO — A matriz de CI testava um Node que o produto recusa
+
+**Encontrado em:** medição do `main` depois do preflight ficar verde, 2026-08-13
+
+O job `Unit + Type tests` rodava em `[20, 22]`. Todo manifest do repositório declara
+`engines.node: ">=22.12.0"`, e a CLI não apenas avisa — ela **recusa**:
+
+```
+[theokit preflight] theokit requires node >= 22.12.0 (you are running v20.20.2)
+```
+
+Ou seja: a perna Node-20 exercitava uma configuração que o produto **explicitamente não suporta**, e
+todo teste que invoca a CLI falhava lá por desenho.
+
+**Por que só apareceu agora.** Esses testes morriam mais cedo, no `pnpm exec theokit` que não
+resolvia o bin (B-M67-17). Corrigir a resolução deixou a CLI de fato executar, e a camada seguinte —
+o piso de engine — ficou visível. É a terceira vez neste ciclo que uma correção faz a falha **mudar
+de lugar** e revelar a real; o padrão vale mais que qualquer um dos três casos.
+
+**Removida.** Uma perna vermelha que nunca pode ficar verde é a forma que este ciclo passou o dia
+desmontando. Restaurar uma segunda versão exige antes **decidir suportá-la**: baixar o piso em
+`engines`, senão a perna é teatro.
+
