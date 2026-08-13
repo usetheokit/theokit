@@ -41,6 +41,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `pnpm update` sozinho não resolvia — as versões vulneráveis chegavam por pins transitivos.
 
 ### Added
+
+- **O `AgentBuilder` ganha `.tools([...])` e `.when(cond, fn)` (M69).** A cadeia só expunha `.tool()` singular, então um conjunto de tools **computado em runtime** — o caso normal, já que quais tools o agente tem depende de sandbox mode, perfil de superfície e trust — não podia ser expresso nela. O contorno medido era um fold por fora:
+
+  ```ts
+  allTools.reduce((acc, tool) => acc.tool(tool), chain)
+  ```
+
+  Ele funciona e **perde o type-state**: a união de nomes acumulada colapsa, e `InferAgentToolNames` deixa de ver os literais de que o cliente gerado é feito. A escotilha existia e custava exatamente a garantia pela qual o builder existe. (Detalhe medido ao escrever o teste de equivalência: o fold nem compila sem anotar o acumulador à mão — ele não era só verboso, precisava ser ajudado a passar pela inferência que estava destruindo.)
+
+  `.tools([...])` acumula a união dos nomes e **anexa**, nunca substitui; lista vazia é no-op tipado (`never` some da união em vez de alargá-la para `string`). O mesmo guard de run-context do `.tool()` singular vale para a lista inteira — uma API em lote que aceita calada o que a unitária recusa seria o caminho documentado para burlar a checagem.
+
+  `.when(condition, fn)` cobre a outra metade: `.use(preset)` compõe uma sub-cadeia inteira mas não permite **pular um elo no meio**. A condição é um `boolean` já computado, nunca um predicado com acesso a contexto — um predicado convidaria lógica de negócio para dentro da cadeia de autoria. Em `false` o branch **não é invocado** e nada do que veio antes é perdido.
 - **O gate de confiança do `settingSources` — escrito e testado, mas ainda NÃO ligado (M68, em curso).** `packages/agents/src/bridge/setting-sources-gate.ts` publica `SettingSourcesSelection`, `ProjectSettingsGrant`, `SettingSourceCapability`, `UntrustedSettingSourceError` e `resolveSettingSources()`. A assimetria é o desenho: `user` (que lê `~/.theokit/`, a máquina do operador) é um booleano; `project` (que lê `<cwd>/.theokit/`, **incluindo `hooks.json`, que executa shell**) exige uma `TrustPosture` como evidência. Omitir uma raiz é não habilitá-la, nunca "habilitar sem gate" — a mesma assimetria que o SDK documenta em `TrustPostureInput.envOverride`. Pedir `project` sem a posture **lança** em vez de ignorar (ADR 0064): ignorar deixaria o produto rodando acreditando que os hooks do repositório estão ativos, que é falha silenciosa do lado errado. **Ressalva importante: a `SettingSourcesCapability` ainda é pass-through cru**, então o gate existe e não está no caminho de construção — o M68 ainda não protege nada. Ligá-lo é a task T4. (ADR 0063/0064/0065)
 - **O vocabulário de confiança do SDK atravessa `@theokit/agents` (M68, em curso).** `TrustLevel`, `TrustSource`, `TrustPosture` e `TrustPostureInput`. Eles são o pré-requisito do gate que o M68 está construindo: o source `project` de `settingSources` — que liga hooks executores de shell vindos do diretório de trabalho — passará a exigir uma `TrustPosture` como evidência, em vez de aceitar um literal de string. Uma API que exige um valor cujo **tipo** o consumidor não consegue nomear é inutilizável: ele redeclararia a forma à mão, e uma segunda declaração de um contrato de segurança diverge da primeira em silêncio. Fecha, para estes quatro, a lacuna de cobertura de tipos que o ADR 0061 declarou honestamente — o gate ROOT-BAR enumera `Object.keys` do namespace e por construção não enxerga `export type`. (ADR 0063)
 
