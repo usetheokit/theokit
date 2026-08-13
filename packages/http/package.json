@@ -22,6 +22,18 @@
     "./runtime/node": {
       "import": "./dist/runtime-node.js",
       "types": "./dist/runtime-node.d.ts"
+    },
+    "./action-encryption": {
+      "import": "./dist/action-encryption.js",
+      "types": "./dist/action-encryption.d.ts"
+    },
+    "./server-inserted-html": {
+      "import": "./dist/server-inserted-html.js",
+      "types": "./dist/server-inserted-html.d.ts"
+    },
+    "./css-resource": {
+      "import": "./dist/css-resource.js",
+      "types": "./dist/css-resource.d.ts"
     }
   },
   "files": [

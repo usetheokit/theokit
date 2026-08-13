@@ -1,7 +1,18 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/theokit-plugin.ts', 'src/app.ts', 'src/runtime-node.ts'],
+  entry: [
+    'src/index.ts',
+    'src/theokit-plugin.ts',
+    'src/app.ts',
+    'src/runtime-node.ts',
+    // B-M74-01 — subpaths rather than barrel members: reachable by anyone who wants them, paid for
+    // only by them. See `src/index.ts` for what they were before (written, tested, importable by
+    // nobody) and why the 30K main-bundle budget is what kept them out of the barrel.
+    'src/action-encryption.ts',
+    'src/server-inserted-html.ts',
+    'src/css-resource.ts',
+  ],
   format: ['esm'],
   dts: true,
   sourcemap: true,
