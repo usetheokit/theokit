@@ -25,6 +25,35 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
+## B-M72-01 — Dois testes leem `packages/theo/dist/` enquanto algo o reconstrói durante a suíte
+
+**Encontrado em:** M69/M70/M72 — **três ocorrências medidas**, 2026-08-13 · **Severidade: média** —
+não é defeito de produto; é um gate que fica vermelho por corrida e treina o time a re-rodar.
+
+Dois arquivos leem a saída de build do `packages/theo` e falham de forma intermitente numa run
+completa de `pnpm test`, passando sempre isolados:
+
+- `tests/unit/r3a-emitted-bundle-node-free.test.ts` — lê `packages/theo/dist/server/*.js`
+- `tests/smoke/import-validation.test.ts` — lê `packages/theo/dist/cli/index.js`
+
+**Medido nas três vezes:** `pnpm build` completou (exit 0) ANTES do `pnpm test` começar — são
+sequenciais no mesmo comando — e ainda assim uma das duas falhou, uma vez com o arquivo
+literalmente **ausente** (`ENOENT` em `dist/cli/index.js`). Isolado, cada um passa.
+
+**Hipótese, não conclusão:** o `tsup` limpa o diretório antes de escrever (`clean`), então qualquer
+rebuild do `packages/theo` durante a suíte faz o `dist` sumir por um instante. O que dispara esse
+rebuild ainda **não** está identificado — candidatos são os testes que invocam `theokit build` sobre
+fixtures (o turbo pode reconstruir dependências) e a agregação por `projects` do vitest.
+
+**O que NÃO fazer:** re-rodar até passar. Foi o que fiz nas três vezes, e é como um flake vira
+paisagem. `testing.md` § 3 é explícito: teste intermitente é bug, conserta ou remove.
+
+**Próximo passo:** instrumentar — rodar a suíte com um watcher em `packages/theo/dist` para
+identificar quem apaga o diretório, e então ou isolar esses dois testes numa fase pós-build, ou
+fazê-los ler de um snapshot copiado no setup em vez do `dist` vivo.
+
+---
+
 ## ~~B-M67-01~~ — RESOLVIDO — 15 testes vermelhos na suíte da raiz, todos anteriores ao M67
 
 **Encontrado em:** M67 (T2), 2026-08-12 · **Resolvido em:** 2026-08-12 (`eb74a709`, `6449e5ad`,
