@@ -259,7 +259,7 @@ filesystem 192, pointer 43), o maior bloco único da iniciativa.
 
 ---
 
-### M73 — [ ] Configuração em camadas + primitiva de confiança por diretório
+### M73 — [x] Configuração em camadas + primitiva de confiança por diretório
 
 **Objective:** O módulo de config do TheoKit resolve "carregue o arquivo de config do meu framework".
 Não publica engine de camadas, não deixa a engine do SDK passar, e não tem nada sobre confiança de
