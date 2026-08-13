@@ -54,7 +54,7 @@ describe('M68 T3 — the safe path stays trivial', () => {
 describe('M68 T3 — the refusal', () => {
   it('test_project_source_is_refused_when_the_posture_is_untrusted', () => {
     const untrusted = postureFrom({ isTrusted: false })
-    expect(() => resolveSettingSources({ project: { trustedBy: untrusted } })).toThrowError(
+    expect(() => resolveSettingSources({ project: { trustedBy: untrusted } })).toThrow(
       UntrustedSettingSourceError,
     )
   })
