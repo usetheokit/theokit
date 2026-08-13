@@ -60,6 +60,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Implementá-los foi considerado e recusado **por medição**: `resolveCompactionStrategy` existe neste pacote, mas fala outro vocabulário (uma estratégia nomeada, `token-budget`, parametrizada por `keepTokens`). Mapear quatro nomes de estratégia inventados nele não seria implementar os knobs — seria inventar semântica e publicá-la sob nomes que prometem outra coisa. A superfície funcional de compaction é `AgentRunner.compaction` / `resolveCompactionStrategy`. Zero call sites passavam os knobs, medido em `packages`, `tests`, `fixtures` e `examples`.
 
 ### Fixed
+
+- **Três módulos do `@theokit/http` tinham teste e não tinham porta (backlog B-M74-01).** `action-encryption`, `server-inserted-html` e `css-resource` estavam fora do barrel e fora do build: cada um com seu teste unitário — o código **rodava** — e alcançável apenas por caminho relativo a partir desse teste. Nenhum consumidor conseguia importá-los, e nada em `packages/theo` tinha reimplementado o equivalente, então a capacidade não existia para ninguém.
+
+  **Uma suíte verde prova que o código funciona, nunca que ele é alcançável.** De dentro de um arquivo de teste as duas perguntas parecem a mesma e não são — a mesma forma do defeito que o M74 encontrou no M73 um milestone antes.
+
+  Publicados como **subpaths** (`@theokit/http/action-encryption`, `/server-inserted-html`, `/css-resource`), não como membros do barrel: colocá-los ali levou o bundle principal de 28,9K para 31,1K contra um teto de 30K. Esse teto é decisão, não obstáculo — três capacidades que a maioria dos apps nunca toca não devem ser pagas por todo app que importa o pacote. O subpath torna cada uma alcançável **e** opt-in, que é o que o padrão já faz para `runtime/node` e `theokit-plugin`.
+
+  Deletar não era a alternativa: `action-encryption` é o AES-GCM que sela argumentos de server action. Apagar cripto testada porque ninguém a ligou é destruir trabalho para satisfazer um linter.
+
+- **`packages/theo/src/context/` era uma camada fora da DAG (backlog B-M74-01).** Os três módulos do M74 nasceram num diretório novo, e a G1 é explícita: `server/` só pode depender de `core / cache / config / devtools / services`. O `dependency-cruiser` recusou — e a regra estava certa, o layout errado. São configuração de agente, que é exatamente o que `config/` guarda; movidos para lá. Alargar a DAG para admitir um diretório inventado cinco minutos antes seria editar o guarda para caber o erro.
+
+  O guarda de arquitetura passa nos 14 casos pela primeira vez.
 - **`LayeredConfig` e `TrustStore` (M73) estavam inalcançáveis — foram exportados agora.** Ambos foram mergeados alcançáveis apenas por caminho relativo a partir dos próprios testes, então nenhum consumidor conseguia importá-los. Um módulo que o consumidor não consegue importar não é feature entregue; é arquivo. Pego pelo `no-orphans` do `dependency-cruiser` dois milestones depois, junto com dois órfãos do próprio M74.
 
 - **`LayeredConfig` e `TrustStore` — configuração em camadas e confiança por diretório (M73).** O módulo de config resolvia "carregue o arquivo de config do meu framework": não publicava engine de camadas, não deixava a do SDK passar, e não dizia nada sobre confiança de diretório. A evidência de que era lacuna e não decisão de escopo: um repositório cujo README proíbe importar `@theokit/sdk` direto **quebrou a própria regra seis vezes**, e todas as seis alcançam primitivas de config/trust/wiring. Um time que quebra a própria regra em vez de reimplementar é o sinal mais forte de que faltava a porta, não a vontade.
