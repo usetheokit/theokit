@@ -333,32 +333,12 @@ export type {
 } from '@theokit/presenter'
 export type { WireChunk, WireDataPart } from '@theokit/presenter/wire'
 
-// M75 — the hook engine: from a line in a config file to a bounded, trusted subprocess.
+// M75 — the hook engine lives at `@theokit/agents/hooks`, NOT in this barrel.
 //
-// The seam (`HookHandlers`) was already published; everything between it and a running command was
-// the consumer's — 828 lines importing a single symbol. This adds the parts each of them would
-// otherwise relearn the bad way: the output cap, the drain-vs-exit race, the process-group kill, the
-// chain budget, the nonce fence, and the fail-closed / fail-open asymmetry.
+// It was here first, and that pushed the main bundle from 34.1K to 42.9K against a 35K budget. The
+// budget is a decision, not an obstacle: an engine for running subprocesses should not be paid for
+// by every app that imports this package to define an agent.
 //
-// Denial is the default. `approved` is a REQUIRED argument on `buildHookHandlers` because an
-// optional gate is a gate somebody forgets, and forgetting this one runs a stranger's shell command.
-export {
-  DEFAULT_CONTINUATION_BUDGET,
-  DEFAULT_HOOK_TIMEOUT_MS,
-  HOOK_EVENTS,
-  HookSpecError,
-  buildHookHandlers,
-  fenceHookOutput,
-  hookSpecSchema,
-  parseHookSpecs,
-} from './hooks/hook-spec.js'
-export type { BuildHookHandlersOptions, HookEvent, HookSpec } from './hooks/hook-spec.js'
-export { hookFingerprint } from './hooks/hook-fingerprint.js'
-export type { HookIdentity } from './hooks/hook-fingerprint.js'
-export {
-  CHAIN_BUDGET_MULTIPLIER,
-  DRAIN_BUDGET_MS,
-  MAX_OUTPUT_BYTES,
-  runHookCommand,
-} from './hooks/hook-runner.js'
-export type { HookRunInput, HookRunResult } from './hooks/hook-runner.js'
+// Measured after the fact, which is the part worth recording — M75 merged with the ceiling already
+// blown because I read the test COUNT and not the bundle gate. The same lesson B-M74-01 had just
+// taught, one milestone earlier, about `@theokit/http`.

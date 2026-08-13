@@ -150,6 +150,10 @@ export default defineConfig({
       // M72 — same prefix trap as `/client` above: without this line `@theokit/agents/session`
       // resolves to `…/src/index.ts/session`.
       '@theokit/agents/session': path.resolve(__dirname, 'packages/agents/src/session/index.ts'),
+      // M75 — the hook engine subpath. Every new `@theokit/agents/*` entry needs a line here, ABOVE
+      // the bare specifier: a string alias matches by prefix, so without it this resolves to the
+      // nonsense path `…/src/index.ts/hooks` instead of erroring.
+      '@theokit/agents/hooks': path.resolve(__dirname, 'packages/agents/src/hooks/index.ts'),
       // M73 — `/persistence`, needed the moment framework code composed the atomic-write and
       // file-lock primitives.
       '@theokit/agents/persistence': path.resolve(
