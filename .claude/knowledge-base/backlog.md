@@ -417,6 +417,18 @@ continua: o admin ainda mergeia PR (zero aprovações, nenhum contexto exigido),
 ainda pode desligar a política em Settings. O que ele não faz mais é `git push origin main` — o que
 `git-safety.md` § 1 proíbe em prosa e, até hoje, **só** em prosa.
 
+**Limite honesto do que foi medido.** O que está verificado é a *configuração* (`enforce_admins=true`
+nas duas, objeto de proteção presente, comparador `✓`), não o *comportamento* sob um push real.
+Tentei `git push --dry-run origin workspace:main` como sonda e ela respondeu que passaria — o que não
+é evidência de falha: `--dry-run` não chega ao hook de pre-receive do servidor, que é onde a proteção
+age. Ou seja, a sonda não consegue distinguir o caso que ela deveria rastrear, e usá-la como verde
+teria reproduzido exatamente o defeito que este item acabou de corrigir.
+
+Não existe teste empírico seguro aqui: o único que provaria o bloqueio é um push direto de verdade, e
+o modo de falha dele **é** a coisa proibida. Um teste cujo fracasso comete a violação não é teste. A
+confirmação comportamental vem de graça no próximo push que tentar — e fica registrada aqui como
+pendente, em vez de assumida.
+
 ---
 
 ## ~~B-M67-11~~ — RESOLVIDO — O `pnpm audit` só media `--prod`, e a escolha nunca tinha sido feita
