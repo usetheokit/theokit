@@ -25,37 +25,54 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
-## B-M74-01 — O guarda de arquitetura está vermelho, e o vermelho é anterior ao M74
+## ~~B-M74-01~~ — RESOLVIDO — Três módulos com teste e sem porta, e uma camada que eu inventei fora da DAG
 
-**Encontrado em:** M74, 2026-08-13 · **Severidade: média** — não quebra produto; deixa um gate de
-arquitetura permanentemente vermelho, que é como um gate para de significar algo.
+**Encontrado em:** M74, 2026-08-13 · **Resolvido em:** 2026-08-13
 
-`tests/unit/architecture-guards-ci.test.ts` falha em 3 dos 14 casos. Medido contra o `HEAD` com o
-trabalho do M74 fora da árvore (`git stash`): **os mesmos 3 já falhavam**. Não é regressão do
-milestone.
+`tests/unit/architecture-guards-ci.test.ts` falhava em 3 de 14 casos. Medido com `git stash`: os
+mesmos 3 já falhavam no `HEAD` — não era regressão do milestone.
 
-A causa é `no-orphans` do `dependency-cruiser` sobre três arquivos de `packages/http/src/`:
+### A primeira leitura estava errada
 
-- `server-inserted-html.ts`
-- `css-resource.ts`
-- `action-encryption.ts`
+Registrei os três arquivos de `packages/http/src/` como "código morto". **Eles têm teste** — cada um
+tem seu `*.test.ts` importando por caminho relativo. O código roda; o que faltava era a porta:
+nenhum está no barrel (`src/index.ts`) nem é entry do `tsup`. Ninguém fora dos próprios arquivos
+conseguia alcançá-los, e nada em `packages/theo` tinha reimplementado o equivalente — a capacidade
+simplesmente não existia para consumidor nenhum.
 
-**Medido:** nenhum arquivo do workspace os importa, não estão no barrel (`src/index.ts`) e não são
-entry do `tsup.config.ts`. São inalcançáveis por qualquer consumidor — código morto, não superfície
-pública sem uso.
+**Mesma forma do defeito do M73, encontrado um milestone antes**, e é isso que faz valer registrar:
+uma suíte verde prova que o código **funciona**, nunca que ele é **alcançável**. De dentro de um
+arquivo de teste as duas perguntas parecem a mesma e não são.
 
-Os `tsup.config.ts` que aparecem na mesma lista são falso-positivo do detector (config de build é
-carregada pela ferramenta, não importada) e não fazem parte deste item.
+Exportados, não deletados: são capacidades funcionando e testadas — `action-encryption` em
+particular é o AES-GCM que sela argumentos de server action. Deletar cripto testada porque ninguém
+a ligou é destruir trabalho para satisfazer um linter. Os tipos `ServerInsertedHTML` e `CssResource`
+eram locais e foram exportados junto: um chamador que pode chamar a função e não consegue **nomear**
+o tipo redeclara à mão, e uma segunda declaração de um contrato diverge da primeira em silêncio.
 
-**O que este item NÃO é:** deletar os três. Isso é decisão sobre código de outra pessoa, com risco de
-um consumidor externo alcançá-los por caminho profundo, e não cabe carona num milestone de contexto.
-Cabe medir o alcance real (incluindo consumidores publicados) e então deletar ou re-wirar.
+### O que os exports revelaram
 
-**Nota de honestidade sobre o M74:** o mesmo guarda pegou DOIS órfãos meus — `context-pressure.ts` e
-`compose-instructions.ts`, escritos e nunca exportados. E, ao investigar, apareceu que o **M73 também
-não exportou** `LayeredConfig` nem `TrustStore`: eles foram mergeados alcançáveis apenas por caminho
-relativo a partir dos próprios testes. Um módulo que o consumidor não consegue importar não é feature
-entregue — é arquivo. Os quatro foram exportados pelo barrel do `server` no PR do M74.
+Com os três alcançáveis, o total de violações **subiu** de 2 para 14 — com **3 erros** que antes
+estavam escondidos atrás de módulos inalcançáveis. E os três erros eram **meus**, do M74:
+
+```
+error server-may-only-depend-on-core-cache-config-devtools-services:
+  packages/theo/src/server/index.ts → packages/theo/src/context/instruction-tree.ts
+```
+
+Eu tinha criado `packages/theo/src/context/` como camada nova. A G1 é explícita: `server/` só pode
+depender de `core / cache / config / devtools / services`. A regra estava certa e o layout errado —
+os três módulos **são** configuração de agente, que é exatamente o que `config/` guarda. Movidos
+para lá.
+
+Alargar a DAG para admitir um diretório inventado cinco minutos antes seria editar o guarda para
+caber o erro.
+
+### Medido
+
+`dependency-cruise`: **0 erros** (as 11 `info` restantes são os `tsup.config.ts`, falso-positivo do
+detector — config de build é carregada pela ferramenta, não importada). O guarda de arquitetura
+passa nos 14 casos pela primeira vez.
 
 ---
 
