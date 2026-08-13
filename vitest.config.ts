@@ -150,6 +150,19 @@ export default defineConfig({
       // M72 — same prefix trap as `/client` above: without this line `@theokit/agents/session`
       // resolves to `…/src/index.ts/session`.
       '@theokit/agents/session': path.resolve(__dirname, 'packages/agents/src/session/index.ts'),
+      // M73 — `/persistence`, needed the moment framework code composed the atomic-write and
+      // file-lock primitives.
+      '@theokit/agents/persistence': path.resolve(
+        __dirname,
+        'packages/agents/src/persistence-entry.ts',
+      ),
+      // The bare specifier MUST stay last: a string alias matches by prefix.
+      //
+      // Recorded because the comment above has warned about this since M84 and it still caught two
+      // more subpaths — `/session` (M72) and `/persistence` (M73). The failure is silent by
+      // construction: an unaliased subpath resolves to a nonsense path (`…/src/index.ts/persistence`)
+      // instead of erroring, so it surfaces as "cannot find package" far from the cause. Every new
+      // `@theokit/agents/*` entry point needs a line HERE, above this one.
       '@theokit/agents': path.resolve(__dirname, 'packages/agents/src/index.ts'),
     },
   },
