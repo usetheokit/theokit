@@ -20,6 +20,8 @@ export default defineConfig({
     // M71 — the session LIFECYCLE vocabulary. Its own subpath because it is composition over the
     // persistence primitives, not another pass-through of them.
     session: 'src/session/index.ts',
+    // M75 — the hook engine as a subpath: reachable by anyone who wants it, paid for only by them.
+    hooks: 'src/hooks/index.ts',
   },
   format: ['esm'],
   dts: true,

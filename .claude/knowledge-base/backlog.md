@@ -25,6 +25,63 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
+## B-M76-02 — ABERTO — CodeQL roda, varre 1645 arquivos e nao consegue reportar
+
+**Encontrado em:** M76, 2026-08-13 · **Severidade: media** — nao ha defeito de codigo; ha um gate de
+seguranca permanentemente vermelho, que e pior que gate nenhum porque ensina o time a ignorar vermelho.
+
+O job `Analyze (javascript-typescript)` falha em **todo** run. A causa nao e achado nenhum: o CodeQL
+executa por completo (`CodeQL scanned 1645 out of 1645 TypeScript files`), gera o SARIF, e morre no
+upload:
+
+```
+##[error]Please verify that the necessary features are enabled:
+Code scanning is not enabled for this repository.
+```
+
+**Causa raiz:** `usetheodev/theokit` e privado, e code scanning em repo privado exige GitHub Advanced
+Security — um item de plano/faturamento, nao de codigo.
+
+**Por que nao decidi sozinho.** As tres saidas sao (a) habilitar GHAS, que gasta dinheiro do dono;
+(b) trocar para `upload: false` e passar a gatear sobre o SARIF local, o que muda o que o gate
+promete; (c) remover o workflow. Todas sao decisoes do dono do repositorio, e nenhuma delas e
+"consertar um bug". Deixar o vermelho visivel e registrado e mais honesto que escolher por ele.
+
+**Nao bloqueia merge:** o check nao esta na lista de required — o PR fica `UNSTABLE`, nao `BLOCKED`.
+
+---
+
+## ~~B-M76-01~~ — RESOLVIDO — O M75 mergeou com o teto de bundle estourado, e eu não medi
+
+**Encontrado em:** M76, 2026-08-13 · **Resolvido em:** 2026-08-13 · **Severidade: média** — não
+quebra runtime; deixa um gate vermelho em `main` e infla o pacote para todo consumidor.
+
+O motor de hooks do M75 entrou no **barrel principal** do `@theokit/agents`, levando o bundle de
+34,1K para **42,9K** contra um teto de 35K. Medido com `git stash`: já estava assim **no `HEAD`**,
+antes do M76.
+
+### O erro de processo, que é o que vale registrar
+
+Eu li a **contagem de testes** (`5888 verdes`) e o **código de saída** — e não o gate de bundle, que
+mora num arquivo de teste do `packages/agents` e não aparece na saída agregada da raiz quando outros
+arquivos falham antes.
+
+Isso é exatamente a lição que o **B-M74-01** tinha acabado de me dar, um milestone antes, sobre o
+`@theokit/http`: uma capacidade que a maioria dos apps nunca toca não deve ser paga por todo app que
+importa o pacote. Eu escrevi essa frase no CHANGELOG do M74 e não a apliquei no M75.
+
+### A correção
+
+`@theokit/agents/hooks` como subpath, mesmo padrão de `/session`, `/persistence` e dos três módulos
+do `@theokit/http`. Bundle principal volta a **34,7K**, dentro do teto, e o motor continua
+alcançável por quem o quer.
+
+**Ressalva honesta:** o teto continua apertado (34,7K contra 35K). O próximo símbolo que entrar no
+barrel principal estoura de novo. Isso não é problema deste item — é a informação de que o próximo
+milestone que adicionar superfície ao barrel precisa medir **antes**, não depois.
+
+---
+
 ## ~~B-M74-01~~ — RESOLVIDO — Três módulos com teste e sem porta, e uma camada que eu inventei fora da DAG
 
 **Encontrado em:** M74, 2026-08-13 · **Resolvido em:** 2026-08-13
