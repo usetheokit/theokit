@@ -35,6 +35,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **`@theokit/http` deixa de depender de `@theokit/agents` — a direção que a regra G1 sempre declarou (backlog B-M67-21).** `TheoApp` alcançava a camada de agentes com um `import()` dinâmico, o que punha o pacote de agentes no manifest do http e invertia a direção que `system-design-guardrails.md` § G1 fixa em uma linha: *"`@theokit/http` does NOT import `@theokit/agents` (agents depends on http, not the reverse)"*. Nada verificava essa metade da regra — a outra metade tem guarda desde o M79 — então a violação viveu em `src/app.ts` através de todas as revisões que já rodaram lá.
+
+  O custo era concreto: o peer forçava o pnpm a auto-instalar a cópia **publicada** de `@theokit/agents` ao lado do irmão do workspace, que por sua vez trazia `@theokit/http` e `@theokit/presenter` publicados. Três cópias de pacotes que este repositório constrói, na própria árvore de produção.
+
+  **"Dinâmico" e "opcional" nunca foram escapatória.** Eles mudam *quando* o módulo é necessário, nunca *se* o pacote depende dele: o manifest declarava o peer, e é sobre o manifest que o gerenciador age.
+
+  A correção inverte em vez de satisfazer. `TheoAppOptions.agentRuntime` declara a fatia da camada de agentes que o `TheoApp` precisa, e o chamador a fornece — DIP com wiring na raiz de composição. Quem passa `agents` sem `agentRuntime` recebe `HttpDecoratorsConfigError` nomeando a opção e mostrando a linha de wiring; a alternativa seria montar zero rotas e reportar boot bem-sucedido.
+
+  Medido: as três cópias publicadas saem da árvore de produção, e `KNOWN_DUPLICATES` encolhe para vazio — o guarda pediu isso sozinho, na direção "desapareceu" que o docblock dele prometia.
+
+  **Mudança de contrato para quem monta agentes via `TheoApp` diretamente:** `agents: [...]` agora exige `agentRuntime: { generateAgentRoutes, createSdkAgentStream }`. Apps que usam o framework `theokit` não são afetados.
+
 - **O peer opcional `@theokit/studio` passa a `^0.2.0`.** O `0.2.0` é o primeiro release do studio que declara peers alcançáveis: ele exigia `@theokit/agents@^0.39.0` e `@theokit/sdk@^3.8.0` — sete majors e uma major atrás do que este repositório publica — então **nenhuma instalação conseguia satisfazê-lo**, e o `pnpm install` daqui avisava `unmet peer` a cada run. Depois do bump os avisos desaparecem.
 
   O studio também passou a declarar `license: Apache-2.0` e a embarcar o texto no tarball (usetheodev/theokit-studio#13), fechando a segunda das três violações que o [#213](https://github.com/usetheodev/theokit/issues/213) mediu.
