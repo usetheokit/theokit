@@ -42,6 +42,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`loadCustomCommands` — o buraco na convenção `.theokit/` (M76).** Isto era pior que uma feature ausente: o framework **é dono** da convenção `.theokit/` e já carrega `skills/`, `agents/` e `hooks.json` de lá. `commands/` — o único diretório que toda superfície de agente voltada a produto quer — não tinha loader nenhum. O consumidor escreveu varredura de markdown com frontmatter **contra o diretório do próprio framework**: reimplementando a leitura de uma convenção que o framework define.
+
+  Uma convenção com buraco é pior que nenhuma convenção. Ela ensina o leitor que `.theokit/` é do framework, e então o obriga a escrever o loader dele mesmo para um subdiretório — e esse loader inevitavelmente discorda do nosso sobre frontmatter, precedência e confiança.
+
+  **Precedência é projeto sobre usuário**, explícita e testada: um repositório que traz um comando `review` quer dizer o `review` **dele**, e deixar o genérico do operador ganhar tornaria a configuração do próprio repositório a afirmação mais fraca. O override é **reportado** — quem tem um comando que parou de funcionar precisa saber que foi sobrescrito, não concluir que quebrou.
+
+  **Comando de projeto exige diretório confiável** — a mesma decisão do M68. Um comando é um prompt que roda em nome do usuário, e para um agente apontado a um repositório recém-clonado o diretório de trabalho é conteúdo que o usuário não leu. Comandos de usuário sob `~/.theokit/commands/` não têm gate: é a máquina do operador.
+
+  **O loader avisa; não decide.** Quando um comando customizado sombreia um builtin, o nome volta em `shadowedBuiltins` e o comando **continua sendo devolvido** — quem resolve é o roteador do produto, a única camada que sabe o que os builtins dela fazem. Um loader que descartasse silenciosamente tomaria essa decisão de forma invisível, em nome de um produto que ele não enxerga.
+
+  Documentado na **mesma página** que descreve `skills/` e `agents/`, com a tabela das três convenções e o gate de confiança de cada uma — que era o ponto do milestone.
+
+### Changed
+- **O split de frontmatter virou peça compartilhada (M76).** O loader de instruções (M74) e o de comandos precisam da **mesma** resposta para a mesma pergunta — onde a metadata termina e o conteúdo começa, e o que fazer quando a cerca não fecha. Isso é um pedaço de conhecimento (`G12`), não duas funções parecidas. O que **não** é compartilhado é quais chaves cada um lê: `paths:` importa para instruções e `description:` para comandos, e fundir as duas construiria um vocabulário que nenhum dos dois pediu.
+
 - **Motor de hooks: spec, runner, fingerprint e budgets (M75).** O framework publicava um seam bem tipado (`HookHandlers`, 8 eventos, `pre_tool_call` como único veto) e parava ali. Todo o caminho entre *"o usuário escreveu um comando num arquivo de config"* e *"esse comando roda, limitado, confiável, e a saída dele volta com segurança para o modelo"* era do consumidor — **828 LOC importando um único símbolo** do framework.
 
   **Negação é o default, e não é formalidade.** Este módulo faz o framework executar **comando arbitrário do usuário**. Duas portas ficam na frente, ambas fail-closed: `trusted` (a decisão de diretório do M68/M73) e `approved` (o conjunto de fingerprints). O `approved` é argumento **obrigatório**, não opcional com default permissivo — uma porta opcional é uma porta que alguém esquece, e esquecer esta roda o shell de um estranho.
@@ -55,6 +70,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   **A assimetria testada nas duas direções:** `pre_tool_call` é **fail-closed** (um guarda que não conseguiu rodar não aprovou nada), `post_tool_call` é **fail-open** (a tool já rodou; falhar o turno por um notificador quebrado descarta trabalho que o usuário já pagou).
 
 ### Fixed
+
+- **O motor de hooks do M75 estourava o teto de bundle e mergeou assim (backlog B-M76-01).** Ele entrou no barrel principal do `@theokit/agents`, levando o bundle de 34,1K para **42,9K** contra um teto de 35K. Medido com `git stash`: já estava assim **no `HEAD`**, antes do M76.
+
+  O erro de processo é o que vale registrar: eu li a **contagem de testes** e o **código de saída**, não o gate de bundle — que vive num arquivo de teste do `packages/agents` e não aparece na saída agregada da raiz quando outro arquivo falha antes. Exatamente a lição que o B-M74-01 tinha acabado de dar sobre o `@theokit/http`, um milestone antes: uma capacidade que a maioria dos apps nunca toca não deve ser paga por todo app que importa o pacote. Escrevi essa frase no CHANGELOG do M74 e não a apliquei no M75.
+
+  Corrigido movendo para o subpath `@theokit/agents/hooks`, mesmo padrão de `/session` e `/persistence`. Bundle volta a **34,7K**. Ressalva honesta: o teto segue apertado, e o próximo símbolo que entrar no barrel estoura de novo.
 - **`EPIPE` não-tratado no stdin do hook derrubava o processo (M75).** Um hook que sai sem ler o stdin — `exit 1`, ou qualquer comando que decide cedo — fecha o pipe enquanto ainda escrevemos nele. O Node levanta isso como `EPIPE` assíncrono no stream, e um não-tratado **derruba o processo inteiro**.
 
   Ele se escondeu atrás de **5887 testes verdes**: toda asserção passava e a suíte ainda saía 1, porque o crash acontece depois que o teste que o causou já resolveu. É o modo de falha em que *"os testes passam"* e *"o sistema funciona"* se separam — e só apareceu porque o código de saída foi lido, não a contagem de verdes.
