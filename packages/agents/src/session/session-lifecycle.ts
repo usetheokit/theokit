@@ -1,0 +1,279 @@
+/* eslint-disable security/detect-non-literal-fs-filename --
+ * Session lifecycle over the transcript root. Every path here is built from `transcriptRoot()` plus
+ * a session id or an `encodeProjectDir` hash — never from HTTP input. The variable filename IS the
+ * feature: a module whose job is listing and deleting sessions cannot address them by literal.
+ */
+import { readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { TheokitAgentError } from '@theokit/sdk/errors'
+import {
+  classifySessionArtifact,
+  forkTranscript,
+  loadJsonl,
+  sessionHasWriter,
+  transcriptPath,
+  transcriptRoot,
+} from '@theokit/sdk/persistence'
+
+import { projectDirFor } from './project-index.js'
+import { sessionPointerPath } from './session-pointer.js'
+
+/**
+ * M71 — the session LIFECYCLE vocabulary: list, delete, protect, fork.
+ *
+ * ## Why this module exists, and what it deliberately is not
+ *
+ * The store is fully supplied — 29 pass-throughs under `/persistence` cover paths, atomic writes,
+ * locks and artifact classification. What had no home was the vocabulary ABOVE them: listing,
+ * deleting with a live-session guard, forking, going back before a turn.
+ *
+ * The named risk was that absorbing lifecycle reads as owning the store (G2). The separation is
+ * real and this module is where it is drawn: **owning the vocabulary is not owning the store.**
+ * Nothing here writes a transcript. Every file operation is either a delete of something the caller
+ * named, or a delegation to an SDK primitive. The knowledge added is which files are protected and
+ * what "delete a session" means — decisions, not storage.
+ *
+ * ## The asymmetry that made the gap a trap
+ *
+ * `Agent.delete` clears the REGISTRY ENTRY and never touches the transcript on disk. A consumer had
+ * to discover that by measuring. {@link deleteSession} is the answer: it returns
+ * `{ registryRemoved, transcriptRemoved }` so the two are impossible to confuse, and a caller that
+ * wanted both and got one can see it.
+ */
+
+/** Raised when a lifecycle operation is refused because the session is live. */
+export class SessionInUseError extends TheokitAgentError {
+  override readonly name = 'SessionInUseError'
+
+  constructor(
+    readonly sessionId: string,
+    /** Why it is protected — a writer lease, the resumable pointer, or being the most recent. */
+    readonly reason: string,
+  ) {
+    super(
+      `session "${sessionId}" is protected (${reason}). Deleting it would discard state something ` +
+        `is still using. Stop the run, or pass { force: true } to delete anyway.`,
+    )
+  }
+}
+
+/** One session as the lifecycle vocabulary sees it. */
+export interface SessionSummary {
+  readonly id: string
+  /** Absolute path of the transcript file. */
+  readonly transcript: string
+  /** Last modification, for recency ordering. */
+  readonly modifiedAt: Date
+}
+
+/**
+ * Sessions with a transcript under `cwd`'s project directory, most recent first.
+ *
+ * Uses `classifySessionArtifact` rather than matching file names here: the SDK owns what a file in a
+ * project directory IS, and a second matcher would answer differently the day the layout changes —
+ * silently, on a path whose purpose is deleting things.
+ */
+export function listSessions(cwd: string, root: string = transcriptRoot()): SessionSummary[] {
+  const dir = projectDirFor(cwd, root)
+  let entries: string[]
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return [] // no project directory yet — no sessions, not an error
+  }
+
+  const found: SessionSummary[] = []
+  for (const entry of entries) {
+    const path = join(dir, entry)
+    let isDirectory: boolean
+    let modifiedAt: Date
+    try {
+      const stats = statSync(path)
+      isDirectory = stats.isDirectory()
+      modifiedAt = stats.mtime
+    } catch {
+      continue // vanished between readdir and stat — a concurrent delete, not our problem
+    }
+
+    // `classifySessionArtifact` answers WHAT the entry is; it deliberately does not answer WHICH
+    // session, because the id is in the name and the SDK does not parse names for callers. So the
+    // classification is the SDK's and only the trailing `.jsonl` strip is ours — a much smaller
+    // thing to get wrong than re-deriving the four artifact kinds, which is what the consumer that
+    // motivated this module had done.
+    // The cast is the upstream `.d.ts` gap, named rather than hidden: `@theokit/sdk`'s
+    // `atomic-write.d.ts` re-exports four symbols and declares only one, so several persistence
+    // functions arrive typed as unresolved. They exist and work at runtime (measured). Filed
+    // separately; typing the call site keeps this module honest in the meantime.
+    const kind = (classifySessionArtifact as (n: string, d: boolean) => string | undefined)(
+      entry,
+      isDirectory,
+    )
+    if (kind !== 'transcript') continue
+    found.push({ id: entry.replace(/\.jsonl$/, ''), transcript: path, modifiedAt })
+  }
+  return found.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime())
+}
+
+/**
+ * Transcripts that must NOT be collected: the resumable pointer's target, the most recent session,
+ * and anything holding a writer lease.
+ *
+ * Three reasons, deliberately not collapsed into a boolean. A caller reporting "skipped 4 sessions"
+ * is far less useful than one reporting why each was skipped, and retention policy is exactly where
+ * an operator asks that question.
+ */
+export function protectedTranscripts(
+  cwd: string,
+  root: string = transcriptRoot(),
+): Map<string, string> {
+  const protectedBy = new Map<string, string>()
+  const sessions = listSessions(cwd, root)
+
+  const pointer = readPointer(cwd, root)
+  if (pointer !== undefined) protectedBy.set(pointer, 'resumable session pointer')
+
+  // The most recent survives even without a pointer: it is what `--continue` would find, and a GC
+  // that leaves a project with nothing to continue has destroyed the feature it was protecting.
+  if (sessions.length > 0 && !protectedBy.has(sessions[0].id)) {
+    protectedBy.set(sessions[0].id, 'most recent session')
+  }
+
+  for (const session of sessions) {
+    // Third instance of the same upstream `.d.ts` gap (see `listSessions`). The predicate is real
+    // and the negative test proves it fires — a live lease does refuse the delete.
+    const hasWriter = (sessionHasWriter as (p: string) => boolean)(session.transcript)
+    if (hasWriter) protectedBy.set(session.id, 'active writer lease')
+  }
+  return protectedBy
+}
+
+/** The pointer's target id, or `undefined`. Local because only protection reads it. */
+function readPointer(cwd: string, root: string): string | undefined {
+  try {
+    const id = readFileSync(sessionPointerPath(cwd, root), 'utf8').trim()
+    return id.length > 0 ? id : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** What `deleteSession` did, per store. */
+export interface DeleteSessionResult {
+  /** Whether a registry entry was removed. */
+  readonly registryRemoved: boolean
+  /** Whether the transcript file was removed. */
+  readonly transcriptRemoved: boolean
+}
+
+export interface DeleteSessionOptions {
+  readonly cwd: string
+  readonly root?: string
+  /** Delete even when protected. The refusal is the default because the damage is unrecoverable. */
+  readonly force?: boolean
+  /** Remove the registry entry too. Injected (DIP) — the registry is the runtime's, not ours. */
+  readonly removeFromRegistry?: (sessionId: string) => boolean
+}
+
+/**
+ * Delete a session, refusing by default when it is protected.
+ *
+ * The two stores are reported separately because they genuinely are separate — `Agent.delete`
+ * touches only the registry, and a caller that assumed otherwise would leave the transcript behind
+ * believing it gone. Returning one boolean would rebuild that confusion inside this function.
+ *
+ * @throws {SessionInUseError} when the session is protected and `force` is not set.
+ */
+export function deleteSession(
+  sessionId: string,
+  options: DeleteSessionOptions,
+): DeleteSessionResult {
+  const root = options.root ?? transcriptRoot()
+  if (options.force !== true) {
+    const reason = protectedTranscripts(options.cwd, root).get(sessionId)
+    if (reason !== undefined) throw new SessionInUseError(sessionId, reason)
+  }
+
+  let transcriptRemoved = false
+  try {
+    rmSync(transcriptPath(root, options.cwd, sessionId))
+    transcriptRemoved = true
+  } catch {
+    // Absent is the desired end state, so a missing file is not a failure — it is just `false`.
+  }
+
+  return {
+    registryRemoved: options.removeFromRegistry?.(sessionId) ?? false,
+    transcriptRemoved,
+  }
+}
+
+/**
+ * Fork `srcId` into `newId`, keeping everything BEFORE the `nth` user turn.
+ *
+ * Delegates the copy to the SDK's `forkTranscript` — the truncation rule is the SDK's knowledge and
+ * re-deriving it here would give two answers to "where does a turn begin".
+ *
+ * `nth` is 1-based, matching how a person counts turns out loud. A 0-based index here would be a
+ * silent off-by-one on a destructive-feeling operation.
+ */
+export function forkBeforeUserTurn(
+  srcId: string,
+  newId: string,
+  nth: number,
+  options: { readonly cwd: string; readonly root?: string },
+): { readonly transcript: string; readonly recordIndex: number } {
+  if (!Number.isInteger(nth) || nth < 1) {
+    throw new TheokitAgentError(
+      `forkBeforeUserTurn: \`nth\` counts user turns from 1, received ${String(nth)}.`,
+    )
+  }
+  const root = options.root ?? transcriptRoot()
+  const src = transcriptPath(root, options.cwd, srcId)
+  const dst = transcriptPath(root, options.cwd, newId)
+
+  const recordIndex = recordIndexOfUserTurn(src, nth)
+  if (recordIndex === undefined) {
+    throw new TheokitAgentError(
+      `forkBeforeUserTurn: session "${srcId}" has fewer than ${String(nth)} user turns.`,
+    )
+  }
+
+  // `liveSessionPaths` is the SDK's own guard against writing over a session in use, and it takes
+  // the paths from the caller because only the caller knows which are live. This module computes
+  // exactly that set, so passing it is not extra safety — it is the guard finally being fed.
+  forkTranscript(src, dst, {
+    beforeRecordIndex: recordIndex,
+    liveSessionPaths: [...protectedTranscripts(options.cwd, root).keys()].map((id) =>
+      transcriptPath(root, options.cwd, id),
+    ),
+  })
+  return { transcript: dst, recordIndex }
+}
+
+/**
+ * The record index at which the `nth` user turn begins, or `undefined` when there are fewer.
+ *
+ * This translation is the work the milestone's signature hides: `forkTranscript` takes a RECORD
+ * index, and "before the nth user turn" is a different unit. One user turn spans many records (the
+ * message, the assistant reply, every tool call and result), so the two only coincide in a
+ * conversation with no tools.
+ *
+ * Counting here rather than exposing `beforeRecordIndex` to callers is the point of the vocabulary:
+ * a person going back in a conversation counts turns, not records, and making them count records
+ * would push the SDK's storage shape into every call site.
+ */
+function recordIndexOfUserTurn(src: string, nth: number): number | undefined {
+  // `loadJsonl`, not `readTranscript`: the latter is declared on the SDK's internal transcript
+  // module and is NOT on the `/persistence` surface. Reaching past the published entry to get it
+  // would be the boundary violation this whole layer exists to remove — the same one the M67
+  // measurement found a consumer committing six times.
+  const records = loadJsonl<{ role?: string }>(src) as readonly { role?: string }[]
+  let seen = 0
+  for (const [index, record] of records.entries()) {
+    if (record.role !== 'user') continue
+    seen += 1
+    if (seen === nth) return index
+  }
+  return undefined
+}

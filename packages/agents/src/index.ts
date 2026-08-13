@@ -102,6 +102,22 @@ type ListOptionsWithoutPagination = ListAgentsOptions & { limit?: never; cursor?
 // eslint-disable-next-line sonarjs/redundant-type-aliases
 export type ListOptionsWithoutPaginationAlias = ListOptionsWithoutPagination
 
+/**
+ * M71 — `Agent.delete` clears the REGISTRY ENTRY and never touches the transcript on disk.
+ *
+ * That asymmetry is not visible from the name, and the consumer that hit it had to discover it by
+ * measuring: it called `delete`, believed the session was gone, and found the `.jsonl` still there.
+ * A method whose name promises removal and delivers half of it is the kind of thing this layer is
+ * supposed to say out loud — the same reason the `list` narrowing above carries its own note.
+ *
+ * The whole answer is `deleteSession` in `@theokit/agents/session`, which returns
+ * `{ registryRemoved, transcriptRemoved }` precisely so the two stores are impossible to confuse,
+ * and refuses by default when the session is protected. Reach for that unless you specifically want
+ * the registry alone.
+ *
+ * Kept reachable rather than removed: narrowing it away would break a consumer that legitimately
+ * wants only the registry entry gone, and this layer's rule is that enriching never reduces.
+ */
 type AgentWithNarrowedList = Omit<typeof AgentDoSdk, 'list'> & {
   list(
     options?: ListOptionsWithoutPagination,
