@@ -43,7 +43,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 - **A suíte inteira ficou verde: 4237 testes passando, zero falhando.** O último vermelho era o guarda `ci-workflow.test.ts`, que fixava a matriz de Node como literal `[20, 22]` e portanto **segurava** a perna que o produto recusa em runtime — nono caso, nesta sessão, de um guarda que congelou o literal em vez da propriedade e passou a impedir em vez de proteger. Passa a afirmar coerência com `engines.node`.
 
-  Com isso, o `Coverage gate` passou a falhar **pela razão que ele anuncia**, pela primeira vez: 62,73% de linhas contra limiar de 80%. Não é defeito de gate — é o gate finalmente medindo, depois de meses morrendo junto com os testes vermelhos. Registrado como B-M67-20; baixar o limiar para caber no número atual seria tornar o gate verde sem cobrir uma linha a mais.
+  Com isso, o `Coverage gate` passou a reportar um número pela primeira vez — e o número está errado. O `vitest.config.ts` da raiz roda **apenas** `tests/**` mas conta cobertura de **todos** os `packages/*/src/**`: os **216 arquivos de teste** que vivem sob `packages/*/tests/**` nunca executam nesse run, enquanto os fontes que eles cobrem entram no denominador. `agents/src/auth` aparece em 0% embora tenha quatro suítes de teste que passam.
+
+  Registrado como B-M67-20 **com a causa corrigida antes de qualquer teste ser escrito**: subir de 62% sem consertar a medição seria mover um número que mede a coisa errada. Achado colateral: `packages/{agents,http,presenter}` usam `vitest@^3.2.6` contra `^4.1.9` na raiz, e o provider 4.x quebra no runner 3.x — qualquer unificação esbarra nisso primeiro.
 
 ### Removed
 - **A perna Node 20 da matriz de testes (backlog B-M67-19).** Todo manifest declara `engines.node: ">=22.12.0"`, e a CLI não apenas avisa — ela **recusa**: `[theokit preflight] theokit requires node >= 22.12.0 (you are running v20.20.2)`. A perna exercitava uma configuração que o produto explicitamente não suporta, e todo teste que invoca a CLI falhava lá por desenho.
