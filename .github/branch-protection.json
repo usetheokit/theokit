@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "The branch-protection policy this repository intends, as a versioned artifact (backlog B-M67-10).",
+    "",
+    "Until now it lived only in the prose of issue #208, which means it could not be reviewed in a",
+    "diff, could not be diffed against reality, and would have been re-derived from memory by whoever",
+    "applied it. CLAUDE.md is explicit that two layers guarantee different things: the local hook",
+    "guarantees work is BORN on `workspace`; branch protection is what makes the PR MANDATORY. This",
+    "repo has the first and not the second — `git push origin main` works today.",
+    "",
+    "Apply with `pnpm protect:branches --apply`; compare with `pnpm protect:branches` (read-only).",
+    "",
+    "required_status_checks starts EMPTY on purpose. Requiring a check that cannot pass converts a",
+    "missing gate into a jammed one, and this repository spent a whole cycle removing gates that were",
+    "impossible by construction. Add contexts here as they turn green and stay green — the honest",
+    "order is: fix the check, watch it hold, then require it."
+  ],
+  "branches": {
+    "main": {
+      "required_status_checks": { "strict": false, "contexts": [] },
+      "enforce_admins": false,
+      "required_pull_request_reviews": {
+        "$comment": "Zero approvals: a solo-maintainer repo cannot satisfy a 1-approval gate, and a gate that can only be bypassed teaches bypassing. The PR itself is the guarantee being bought here.",
+        "dismiss_stale_reviews": false,
+        "require_code_owner_reviews": false,
+        "required_approving_review_count": 0
+      },
+      "restrictions": null,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "required_linear_history": false
+    },
+    "develop": {
+      "required_status_checks": { "strict": false, "contexts": [] },
+      "enforce_admins": false,
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": false,
+        "require_code_owner_reviews": false,
+        "required_approving_review_count": 0
+      },
+      "restrictions": null,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "required_linear_history": false
+    }
+  },
+  "$unprotected": {
+    "workspace": "Deliberately NOT protected: it is where work is born, and direct commits there are the normal flow (git-safety.md § 1). Protecting it would break the very branch the rules require everyone to use."
+  }
+}
