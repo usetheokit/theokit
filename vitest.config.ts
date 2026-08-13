@@ -6,6 +6,25 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['tests/**/*.test.ts', 'tests/**/*.test-d.ts'],
+    // B-M67-20 passo 2 — o run passa a EXECUTAR as suítes dos pacotes, não só a da raiz.
+    //
+    // A cobertura conta `packages/*/src/**` (ver `coverage.include` abaixo) enquanto o `include`
+    // acima roda só `tests/**`. Eram 216 arquivos de teste — agents 133, http 55, create-theokit 11,
+    // presenter 10, theo 7 — fora do numerador, com os fontes que eles cobrem no denominador. Por
+    // isso `agents/src/auth` aparecia em 0% embora tenha quatro suítes que passam.
+    //
+    // Cada projeto traz o próprio config (aliases, ambiente, setup); listá-los aqui os agrega numa
+    // execução só, e a cobertura soma. Foi o que a subida para vitest 4 destravou: até então os
+    // pacotes rodavam 3.2.6 e o provider 4.x quebrava neles.
+    projects: [
+      {
+        extends: true,
+        test: { name: 'root', include: ['tests/**/*.test.ts', 'tests/**/*.test-d.ts'] },
+      },
+      './packages/agents/vitest.config.ts',
+      './packages/http/vitest.config.ts',
+      './packages/presenter/vitest.config.ts',
+    ],
     // dogfood-regressions-fix-plan v1.1 T1.2 — native bindings preflight.
     // globalSetup runs ONCE per suite (before any worker), making this the
     // most efficient hook for the better-sqlite3 ABI mismatch guard.
