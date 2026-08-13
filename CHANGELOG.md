@@ -42,6 +42,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`fromWireChunk` — o `@theokit/presenter` passa a ser alcançável a partir do wire (M70).** O presenter normaliza saída de agente num `AgentOutputEvent` canônico e entrega três presenters mais um registry. Mas seus **únicos** tradutores de origem consumiam mensagens cruas do `@theokit/sdk`, enquanto todo consumidor embarcado dirige um transport, que produz `WireChunk` — já traduzido. Não existia porta `WireChunk → AgentOutputEvent`, então a superfície que de fato recebe o stream nunca entrava no evento canônico.
+
+  Isso não era idiossincrasia de consumidor: era estrutural, e a prova estava **aqui dentro**. O nosso próprio `server/agent/render-terminal.ts` fazia o switch em chunks de wire na mão e nunca tocava no `TerminalPresenter`. Ele agora é `WireChunk → fromWireChunk → TerminalPresenter`, e os três presenters passam a ter consumidor de produção.
+
+  **Achado que a assinatura teve de admitir:** o wire não carrega o nome da tool no resultado. `tool-output-available` tem `toolCallId` e `output` e nada mais — o nome só aparece no `tool-input-available` anterior, que é por que todo consumidor que renderiza resultados mantém um mapa `callId → nome`, inclusive o que esta função substituiu. Por isso o segundo argumento existe: enfiar esse estado é honesto, inventar o nome não seria. Sem o mapa o resultado ainda mapeia e diz que o nome é desconhecido — descartá-lo perderia um resultado real.
+
+  O risco declarado do milestone era mapeamento inverso perdendo informação; a mitigação é o teste que enumera cada membro de `WIRE_CHUNK_TYPES` e falha em variante não mapeada — mais uma asserção anterior a ele, de que a própria lista de amostras não ficou velha.
+
+### Changed
+- **A saída do terminal de agente mudou de glifos (M70).** Consequência de `render-terminal.ts` passar a usar o `TerminalPresenter` compartilhado em vez do switch próprio: `▸ tool(...)` vira `⏺ tool(...)`, `✓ resultado` vira `⎿ resultado`, `✗ erro` vira `✖ erro`. Scripts que casam nos glifos antigos precisam ser ajustados. O aviso de checkpoint continua igual e continua fora do presenter — é sinal de framework, não saída de agente, a mesma linha que o mapeamento direto traçou para HITL.
+
 - **`declareAgentShape(name, members)` publica a forma composta do agente (M69).** A camada de capability só devolvia `applyCapabilities` → um `FinalizedDraft`: `Partial<CompiledAgentOptions>` mais um array `provenance` **mutável**. Isso é a superfície de trabalho do compilador — exatamente certa para capabilities, que a enriquecem no lugar — e era a única coisa que a camada entregava de volta.
 
   Quem queria a resposta pequena ("quais tools este agente tem, em qual modelo, e quem declarou?") tinha de depender da forma inteira das opções compiladas e receber um array em que podia dar push. Os três sites de construção — `AgentBuilder`, `Agent.create` e roles vindos de disco — precisam da mesma resposta, e nenhum deveria receber o draft para obtê-la.

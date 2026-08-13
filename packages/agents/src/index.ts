@@ -297,3 +297,22 @@ export {
 // Fecha, para estes quatro, a lacuna de cobertura de tipos que o ADR 0061 declarou honestamente: o
 // gate ROOT-BAR enumera `Object.keys` do namespace e por construção não enxerga `export type`.
 export type { TrustLevel, TrustPosture, TrustPostureInput, TrustSource } from '@theokit/sdk'
+
+// M70 — the turn-lifecycle fold and the wire vocabulary, re-exported so a consumer reaches them
+// through the layer it already depends on.
+//
+// The gap this closes is the same one `fromWireChunk` closed on the other side: an embedded
+// consumer drives a transport, holds `WireChunk`s, and had to add `@theokit/presenter` to its own
+// manifest just to name the type of the value it was already holding. A dependency declared only to
+// reach a type is a dependency the consumer cannot explain — and `theokit/client` already
+// establishes the pattern of re-exporting the wire vocabulary rather than making every consumer
+// find it.
+export { foldTurnLifecycle } from '@theokit/presenter'
+export type {
+  ContentChunk,
+  LifecycleItem,
+  LifecycleVocabulary,
+  TurnLifecycle,
+  TurnOutcome,
+} from '@theokit/presenter'
+export type { WireChunk, WireDataPart } from '@theokit/presenter/wire'
