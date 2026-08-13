@@ -11,7 +11,10 @@
  */
 
 /** Interface for managing server-inserted HTML chunks. */
-interface ServerInsertedHTML {
+// B-M74-01 — exported because the public function's signature mentions it: a caller that can
+// call `ServerInsertedHTML`-shaped API and cannot NAME the type redeclares it by hand, and a second
+// declaration of one contract diverges from the first in silence.
+export interface ServerInsertedHTML {
   /** Add an HTML chunk with a dedup key. Adding the same id replaces content. */
   add(id: string, html: string): void
   /** Return all pending (unflushed) chunks and mark them as flushed. */
