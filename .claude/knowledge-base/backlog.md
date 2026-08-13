@@ -666,7 +666,7 @@ sozinha.
 
 ---
 
-## B-M67-20 — O `Coverage gate` falha pela razão que ele anuncia, pela primeira vez
+## B-M67-20 — O `Coverage gate` mede um denominador que o run nunca alcança
 
 **Encontrado em:** 2026-08-13, depois de o último vermelho de teste cair · **Severidade: média** —
 não é defeito de gate; é o gate finalmente **medindo**.
@@ -697,7 +697,42 @@ mentira só porque agora incomoda.
 (218-428), `capabilities.ts`, `a2a-client.ts`, `auth-provider.ts`, `bun.ts`, `cache-signal.ts` — todos
 zerados. São arquivos grandes e sem teste algum, não lacunas de ramo.
 
-**Próximo passo:** é um milestone de teste próprio, dirigido por risco — `auth` primeiro, porque é
-onde 0% de cobertura tem o pior custo. Não cabe como remendo no fim de um ciclo de infraestrutura, e
-fingir o contrário produziria testes escritos para mover um número.
+**CORREÇÃO (mesma sessão, antes de escrever um único teste).** Fui verificar `agents/src/auth`, o
+pior caso da lista, e os testes **existem**: `auth-provider.test.ts`, `device-provider.test.ts`,
+`auth-parity.test.ts`, `credential-resolver.test.ts`. Eles passam. A cobertura os reporta em 0% assim
+mesmo.
+
+A causa é de **medição**, e está nas duas linhas do `vitest.config.ts` da raiz:
+
+| Linha | O que diz | Efeito |
+|---|---|---|
+| 8 | `include: ['tests/**/*.test.ts', …]` | o run executa **apenas** a suíte da raiz |
+| 71 | `coverage.include: ['packages/*/src/**']` | a cobertura conta **todos** os fontes dos pacotes |
+
+São incompatíveis. **216 arquivos de teste** vivem sob `packages/*/tests/**` — agents 133, http 55,
+create-theokit 11, presenter 10, theo 7 — e **nenhum** executa nesse run, enquanto os fontes que eles
+cobrem entram no denominador.
+
+Ou seja: **62,73% não é a cobertura do código**. É o que a suíte da raiz sozinha alcança de um
+denominador que inclui o que ela nunca roda. O número está errado nos dois sentidos — subestima o que
+está testado e não diz nada sobre o que não está.
+
+**Ainda é um gate funcionando melhor do que os oito que fechei** (ele mede algo e reporta), mas o que
+ele mede não é o que o nome promete.
+
+**Achado colateral, medido:** `packages/{agents,http,presenter}` declaram `vitest@^3.2.6` enquanto a
+raiz usa `^4.1.9`. Rodar cobertura na suíte de um pacote quebra com
+`TypeError: Cannot read properties of undefined (reading 'reportsDirectory')` — o provider 4.x contra
+o runner 3.x. Qualquer unificação de medição esbarra nisso primeiro.
+
+**Próximo passo, agora com o alvo certo.** Não é escrever testes: é fazer a medição cobrir o que de
+fato é testado. Duas opções, e a escolha é de projeto:
+
+1. **Unificar o run** (vitest `projects`), medindo numerador e denominador na mesma execução. É a
+   correta, e exige resolver antes o descompasso de versão.
+2. **Estreitar o `coverage.include`** ao que a suíte da raiz exercita. Torna o número honesto de
+   imediato, mas deixa 216 arquivos de teste sem medição — troca uma mentira por um silêncio.
+
+Escrever testes para subir de 62% antes disso seria mover um número que mede a coisa errada — e teria
+me custado um milestone inteiro para descobrir depois.
 
