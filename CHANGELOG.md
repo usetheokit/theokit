@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Security
+- **`main` e `develop` passam a exigir pull request de verdade — e a primeira aplicação da política não vinculava ninguém (backlog B-M67-10, [#208](https://github.com/usetheodev/theokit/issues/208)).** As duas branches respondiam `404 Branch not protected`: o `git push origin main` direto funcionava. O `CLAUDE.md` § 4 já descrevia a situação — o hook local garante a **origem** do trabalho, a branch protection é o que torna o **PR obrigatório**; o repo tinha a primeira garantia e não a segunda.
+
+  O achado que vale mais que o item veio da própria aplicação. Ela passou, as duas branches voltaram protegidas, e o comparador imprimiu `✓ matches the spec` — com `enforce_admins: false`. Num repositório de mantenedor solo o mantenedor **é** o administrador, então a isenção cobria todo humano capaz de dar push: o gate comprado para tornar o PR obrigatório o tornava obrigatório para ninguém. E `diffProtection` não lia esse campo, que é por que o `✓` apareceu. Um `✓` errado é pior que um gate ausente — convida todo mundo a parar de olhar.
+
+  Corrigido por TDD, com as duas falhas em RED antes de qualquer edição. O comparador então acusou ao vivo a isenção que antes aprovava, e só depois a política foi reaplicada. Estado medido: `enforce_admins=true` nas duas. O admin ainda mergeia PR (zero aprovações exigidas), ainda empurra tag e ainda pode desligar a política em Settings; o que ele não faz mais é `git push origin main`.
+
+  `required_status_checks.contexts` fica **vazio** de propósito: exigir um check que não passa converte um gate ausente num gate travado. `workspace` fica deliberadamente desprotegida — é onde o trabalho nasce.
+
 - **Os quatro advisories `high` da árvore de dependências foram fechados (backlog B-M67-02).** O mais grave era `react-router` `>=7.12.0 <7.18.2` — **bypass de CSRF em modo RSC, exploração remota**, e dependência de aplicação, não de toolchain. Os outros três: `postcss <=8.5.17` (path traversal no auto-loading de source map) e `nanoid` em duas faixas (`<3.3.16` e `<3.3.17`, loop infinito), ambos entrando por `vitest → vite`. `pnpm audit --prod --audit-level=high` sai de 4 high para **zero**; o total cai de 11 para 6 (2 low, 4 moderate).
 
   Corrigidos por `pnpm.overrides` com **range vulnerável explícito** (`react-router@>=7.12.0 <7.18.2` → `>=7.18.2`), e não por um override chapado. A diferença importa: um override chapado amarraria também versões que nada têm a ver com o CVE, e o dia em que a faixa vulnerável sair da árvore o override vira ruído que ninguém sabe se pode remover. Com o range, ele se torna inerte sozinho.
