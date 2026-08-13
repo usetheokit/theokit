@@ -2,7 +2,19 @@
  * M5 (theokit-ai-first) — the terminal render surface for the M4 agent harness.
  *
  * Consumes the M4 `UIMessageChunk` stream (`streamAgentUIMessages`) and writes it to the terminal:
- * streaming text, a dim reasoning line, `▸ tool(input)` / result cards, a checkpoint notice, errors.
+ * streaming text, a dim reasoning line, tool call / result rows, a checkpoint notice, errors.
+ *
+ * ## M70 — this file used to be the evidence of the gap it now closes
+ *
+ * It switched on wire chunks BY HAND and never touched `TerminalPresenter`, even though that
+ * presenter exists for exactly this. Not a consumer's idiosyncrasy — a structural one: the
+ * presenter's only source translators consumed raw SDK messages, and this surface receives
+ * `WireChunk`, already translated. There was no door between them, so our own terminal renderer
+ * re-implemented the mapping and the shared presenter had no production consumer at all.
+ *
+ * The pipeline is now `WireChunk → fromWireChunk → TerminalPresenter`. The presenter returns DATA
+ * (`TerminalRow[]`) carrying a semantic `kind`, and this file decides the styling — which is the
+ * split the presenter was designed for (format there, render here).
  * On a HITL `tool-approval-request` it delegates to the injected `onApproval` (the entry wires that to
  * a readline prompt + the approval registry). This is the ONLY new code M5 adds — no runtime, no LLM
  * call, no tool dispatch (ADR 0039 D2). I/O is INJECTED (`stdout`, prompt streams) so the whole
@@ -11,6 +23,8 @@
 import { createInterface } from 'node:readline'
 import type { Readable, Writable } from 'node:stream'
 
+import { TerminalPresenter, fromWireChunk } from '@theokit/presenter'
+import type { TerminalRow } from '@theokit/presenter'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 /** ANSI helpers — applied only on a TTY so a captured (non-TTY) sink stays plain-text for tests. */
@@ -34,41 +48,29 @@ interface TerminalRenderOptions {
   onApproval: (req: { approvalId: string; toolName: string }) => Promise<void>
 }
 
-/** Render an `unknown` tool output/input for display (string as-is; other JSON-ish values stringified). */
-function display(value: unknown): string {
-  return typeof value === 'string' ? value : JSON.stringify(value ?? {})
+/** Semantic row kind → the ANSI colour this surface paints it with. */
+const ROW_COLOR: Record<TerminalRow['kind'], keyof typeof ANSI | undefined> = {
+  text: undefined,
+  reasoning: 'dim',
+  tool: 'cyan',
+  'tool-result': 'green',
+  'tool-error': 'red',
+  error: 'red',
+  status: 'dim',
+  finish: 'dim',
 }
 
 /**
- * Map a single (non-approval) `UIMessageChunk` to its terminal line(s), or `''` for chunks that render
- * nothing (`start`/`text-start`/`reasoning-start`/…). Pure — the async loop owns approval + I/O.
- * Narrows the `ai` discriminated union directly on `chunk.type` (no cast; G3).
+ * Paint one presented row for this terminal.
+ *
+ * The presenter decided WHAT the line says and what kind it is; this decides how it looks here. A
+ * `text` row is written raw so streaming deltas concatenate into a paragraph — every other kind is
+ * a discrete line and gets its own newline.
  */
-function renderChunkLine(chunk: UIMessageChunk, tty: boolean | undefined): string {
-  switch (chunk.type) {
-    case 'text-delta':
-      return chunk.delta
-    case 'text-end':
-    case 'finish':
-      return '\n'
-    case 'reasoning-delta':
-      return paint(chunk.delta, 'dim', tty)
-    case 'reasoning-end':
-      return '\n'
-    case 'tool-input-available':
-      return paint(`\n▸ ${chunk.toolName}(${display(chunk.input)})\n`, 'cyan', tty)
-    case 'tool-output-available':
-      return paint(`  ✓ ${display(chunk.output)}\n`, 'green', tty)
-    case 'tool-output-error':
-      return paint(`  ✗ ${chunk.errorText}\n`, 'red', tty)
-    case 'error':
-      return paint(`\n✗ ${chunk.errorText}\n`, 'red', tty)
-    default:
-      // ai-sdk `data-*` transient parts (e.g. the M4 `data-checkpoint` resume handle).
-      return chunk.type === 'data-checkpoint'
-        ? paint('\n⎇ checkpoint saved — resume with the same session id\n', 'dim', tty)
-        : ''
-  }
+function paintRow(row: TerminalRow, tty: boolean | undefined): string {
+  const color = ROW_COLOR[row.kind]
+  const body = color === undefined ? row.text : paint(row.text, color, tty)
+  return row.kind === 'text' ? body : `\n${body}\n`
 }
 
 /**
@@ -85,8 +87,11 @@ export async function renderAgentStreamToTerminal(
   const write = (s: string): void => {
     if (s) opts.stdout.write(s)
   }
-  // toolCallId → toolName, so the approval prompt (whose chunk carries only ids) can name the tool.
+  // toolCallId → toolName. Needed twice, for the same reason: the wire drops the name after the
+  // call. The approval prompt's chunk carries only ids, and `tool-output-available` carries only
+  // `toolCallId` — which is why `fromWireChunk` takes this map rather than inventing a name.
   const toolNames = new Map<string, string>()
+  const presenter = new TerminalPresenter({ maxPreview: 88 })
   let sawError = false
 
   for await (const chunk of chunks) {
@@ -99,7 +104,19 @@ export async function renderAgentStreamToTerminal(
       toolNames.set(chunk.toolCallId, chunk.toolName)
     }
     if (chunk.type === 'error') sawError = true
-    write(renderChunkLine(chunk, tty))
+
+    // The checkpoint notice stays here, deliberately. It is a FRAMEWORK signal carried as a
+    // `data-*` part, not agent output, so it never enters the canonical event — the same line the
+    // forward mapping drew for HITL. Routing it through the presenter would mean widening the
+    // canonical event to carry framework concerns.
+    if (chunk.type === 'data-checkpoint') {
+      write(paint('\n\u2387 checkpoint saved — resume with the same session id\n', 'dim', tty))
+      continue
+    }
+
+    for (const event of fromWireChunk(chunk, toolNames)) {
+      for (const row of presenter.present(event)) write(paintRow(row, tty))
+    }
   }
   return { sawError }
 }
