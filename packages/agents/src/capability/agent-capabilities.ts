@@ -4,6 +4,10 @@ import {
   type ContextWindowOptions,
 } from '../bridge/compile-context-window.js'
 import { compileSkills, type SkillsOptions } from '../bridge/compile-skills.js'
+import {
+  resolveSettingSources,
+  type SettingSourcesSelection,
+} from '../bridge/setting-sources-gate.js'
 import { ConfigurationError } from '../errors.js'
 
 import { type Capability, type CompiledAgentOptionsDraft, setOnce } from './capability.js'
@@ -132,10 +136,23 @@ export class SkillsOptionsCapability implements Capability {
   }
 }
 
-/** Functional-path fields that had no decorator source — closing the gap list, not adding surface. */
-export class SettingSourcesCapability extends FieldCapability<'settingSources'> {
+/**
+ * `.settingSources({ user, project })` → the resolved SDK roots.
+ *
+ * NOT a `FieldCapability` (M68). A raw pass-through here would let a bare `'project'` string reach
+ * `CompiledAgentOptions` — and `project` reads `<cwd>/.theokit/`, **including `hooks.json`, which
+ * executes shell**. Resolving through the gate is what makes the compiled value unable to express a
+ * root that no posture authorized.
+ *
+ * The refusal happens at `apply()` — build time — rather than at run assembly, per
+ * `error-handling.md` § 3: validate at the entry, fail before the value travels.
+ */
+export class SettingSourcesCapability implements Capability {
   readonly name = 'setting-sources'
-  protected readonly field = 'settingSources' as const
+  constructor(private readonly selection: SettingSourcesSelection) {}
+  apply(draft: CompiledAgentOptionsDraft): void {
+    setOnce(draft, 'settingSources', resolveSettingSources(this.selection), this.name)
+  }
 }
 export class PluginsCapability extends FieldCapability<'plugins'> {
   readonly name = 'plugins'

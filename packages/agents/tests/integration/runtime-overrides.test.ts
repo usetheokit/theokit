@@ -18,7 +18,10 @@ import type {
   ProviderRoutingSettings,
   AgentDefinition,
   BudgetTracker,
+  TrustPosture,
 } from '@theokit/sdk'
+
+import type { SettingSourceCapability } from '../../src/bridge/setting-sources-gate.js'
 
 const h = vi.hoisted(() => ({
   captured: null as Record<string, unknown> | null,
@@ -96,6 +99,7 @@ vi.mock('@theokit/sdk', () => ({
 const { AgentRunner } = await import('../../src/index.js')
 const { applyCapabilities } = await import('../../src/capability/capability.js')
 const { ModelCapability, SkillsCapability } = await import('../../src/capability/capabilities.js')
+const { SettingSourcesCapability } = await import('../../src/capability/agent-capabilities.js')
 const { MainLoopCapability } = await import('../../src/capability/agent-capabilities.js')
 
 const simpleAgent = applyCapabilities([new ModelCapability('compiled-model')])
@@ -105,11 +109,34 @@ const reactAgent = applyCapabilities([
   new MainLoopCapability({ maxIterations: 8 }),
 ])
 
+/**
+ * An agent that declares BOTH skills and an authorized `project` source.
+ *
+ * It used to declare only skills, and got `settingSources: ['project']` for free: the adapter
+ * injected that root whenever an agent had skills. M68 removed the escalation — `project` reads
+ * shell-executing hooks from the working directory, and declaring a skill is a statement about
+ * prompts, not consent to run them.
+ *
+ * The subject of the test below is unchanged (a `cwd` override must MERGE with existing
+ * `settingSources`, never clobber). Only the fixture is: the sources it merges against are now
+ * declared, with the evidence that authorizes them, instead of appearing by side effect. The
+ * posture is a literal because this file mocks `@theokit/sdk`; provenance is proven in
+ * `setting-sources-gate.test.ts` against the real resolver.
+ */
 const skilledAgent = {
   name: 'SkilledAgent',
   compiled: applyCapabilities([
     new ModelCapability('compiled-model'),
     new SkillsCapability(['code-review']),
+    new SettingSourcesCapability({
+      project: {
+        trustedBy: {
+          level: 'trusted',
+          source: 'default',
+          allows: { projectSettings: true },
+        } as TrustPosture<SettingSourceCapability>,
+      },
+    }),
   ]),
   strategy: 'simple-chat' as const,
 }
