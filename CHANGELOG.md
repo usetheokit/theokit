@@ -41,6 +41,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `pnpm update` sozinho não resolvia — as versões vulneráveis chegavam por pins transitivos.
 
 ### Added
+
+- **`declareAgentShape(name, members)` publica a forma composta do agente (M69).** A camada de capability só devolvia `applyCapabilities` → um `FinalizedDraft`: `Partial<CompiledAgentOptions>` mais um array `provenance` **mutável**. Isso é a superfície de trabalho do compilador — exatamente certa para capabilities, que a enriquecem no lugar — e era a única coisa que a camada entregava de volta.
+
+  Quem queria a resposta pequena ("quais tools este agente tem, em qual modelo, e quem declarou?") tinha de depender da forma inteira das opções compiladas e receber um array em que podia dar push. Os três sites de construção — `AgentBuilder`, `Agent.create` e roles vindos de disco — precisam da mesma resposta, e nenhum deveria receber o draft para obtê-la.
+
+  `{ name, tools, model, reasoningEffort, provenance }`, **congelado** (inclusive os arrays). `provenance` é o que torna a forma auditável em vez de apenas descritiva: duas capabilities podem tocar `tools`, e sem ela o leitor não sabe qual ir editar. É uma projeção de `applyCapabilities`, nunca uma segunda implementação — então herda a disciplina set-once e uma redeclaração conflitante continua falhando rápido.
+
+- **`formatGoalEvent(event)` — um lugar que conhece todas as variantes de `GoalEvent` (M69).** A união tem cinco variantes e é fechada, então todo consumidor que renderiza uma run escrevia o mesmo branch default para um evento que não sabia nomear. O TypeScript tornava esse switch exaustivo *contra os tipos instalados*, que é justamente o problema: no dia em que o SDK acrescenta uma sexta variante numa minor, cada switch fica silenciosamente não-exaustivo em runtime e continua compilando.
+
+  Exaustivo-seguro tem duas metades, e o helper tem as duas: uma asserção `never` em tempo de compilação, que quebra o build **aqui** — no único arquivo que afirma conhecer todas — quando uma variante entra; e um fallback de runtime, para o caso de um evento vindo de uma minor à frente dos tipos instalados. Um caminho de renderização que lança nesse evento transforma uma minor do SDK numa UI quebrada; e uma linha que finge entendê-lo é pior, porque ninguém percebe.
+
+  O milestone permitia marcar a união publicada como **aberta** em vez disso. Recusado: uma união aberta torna o branch default **obrigatório**, que é o oposto do efeito pretendido — o consumidor deixar de escrevê-lo.
+
+- **O `AgentBuilder` ganha `.tools([...])` e `.when(cond, fn)` (M69).** A cadeia só expunha `.tool()` singular, então um conjunto de tools **computado em runtime** — o caso normal, já que quais tools o agente tem depende de sandbox mode, perfil de superfície e trust — não podia ser expresso nela. O contorno medido era um fold por fora:
+
+  ```ts
+  allTools.reduce((acc, tool) => acc.tool(tool), chain)
+  ```
+
+  Ele funciona e **perde o type-state**: a união de nomes acumulada colapsa, e `InferAgentToolNames` deixa de ver os literais de que o cliente gerado é feito. A escotilha existia e custava exatamente a garantia pela qual o builder existe. (Detalhe medido ao escrever o teste de equivalência: o fold nem compila sem anotar o acumulador à mão — ele não era só verboso, precisava ser ajudado a passar pela inferência que estava destruindo.)
+
+  `.tools([...])` acumula a união dos nomes e **anexa**, nunca substitui; lista vazia é no-op tipado (`never` some da união em vez de alargá-la para `string`). O mesmo guard de run-context do `.tool()` singular vale para a lista inteira — uma API em lote que aceita calada o que a unitária recusa seria o caminho documentado para burlar a checagem.
+
+  `.when(condition, fn)` cobre a outra metade: `.use(preset)` compõe uma sub-cadeia inteira mas não permite **pular um elo no meio**. A condição é um `boolean` já computado, nunca um predicado com acesso a contexto — um predicado convidaria lógica de negócio para dentro da cadeia de autoria. Em `false` o branch **não é invocado** e nada do que veio antes é perdido.
 - **O gate de confiança do `settingSources` — escrito e testado, mas ainda NÃO ligado (M68, em curso).** `packages/agents/src/bridge/setting-sources-gate.ts` publica `SettingSourcesSelection`, `ProjectSettingsGrant`, `SettingSourceCapability`, `UntrustedSettingSourceError` e `resolveSettingSources()`. A assimetria é o desenho: `user` (que lê `~/.theokit/`, a máquina do operador) é um booleano; `project` (que lê `<cwd>/.theokit/`, **incluindo `hooks.json`, que executa shell**) exige uma `TrustPosture` como evidência. Omitir uma raiz é não habilitá-la, nunca "habilitar sem gate" — a mesma assimetria que o SDK documenta em `TrustPostureInput.envOverride`. Pedir `project` sem a posture **lança** em vez de ignorar (ADR 0064): ignorar deixaria o produto rodando acreditando que os hooks do repositório estão ativos, que é falha silenciosa do lado errado. **Ressalva importante: a `SettingSourcesCapability` ainda é pass-through cru**, então o gate existe e não está no caminho de construção — o M68 ainda não protege nada. Ligá-lo é a task T4. (ADR 0063/0064/0065)
 - **O vocabulário de confiança do SDK atravessa `@theokit/agents` (M68, em curso).** `TrustLevel`, `TrustSource`, `TrustPosture` e `TrustPostureInput`. Eles são o pré-requisito do gate que o M68 está construindo: o source `project` de `settingSources` — que liga hooks executores de shell vindos do diretório de trabalho — passará a exigir uma `TrustPosture` como evidência, em vez de aceitar um literal de string. Uma API que exige um valor cujo **tipo** o consumidor não consegue nomear é inutilizável: ele redeclararia a forma à mão, e uma segunda declaração de um contrato de segurança diverge da primeira em silêncio. Fecha, para estes quatro, a lacuna de cobertura de tipos que o ADR 0061 declarou honestamente — o gate ROOT-BAR enumera `Object.keys` do namespace e por construção não enxerga `export type`. (ADR 0063)
 

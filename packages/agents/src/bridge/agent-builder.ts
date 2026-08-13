@@ -65,6 +65,40 @@ export interface ContextualTool<
 }
 
 /**
+ * The union of literal tool names in a tuple of {@link ContextualTool}s.
+ *
+ * Written as a distributed conditional rather than `TList[number]['name']` so an EMPTY list yields
+ * `never` (which unions away, leaving `TTools` untouched) instead of `string` (which would widen the
+ * accumulated union and silently destroy the type-state for the rest of the chain).
+ */
+export type ToolNamesOf<TList> = TList extends readonly (infer TElement)[]
+  ? TElement extends ContextualTool<infer TName>
+    ? TName
+    : never
+  : never
+
+/**
+ * The combined run-context every tool in the tuple requires.
+ *
+ * The singular `.tool()` guards one `TRequired` against the agent's `TContext`; a list has to guard
+ * ALL of them, so this intersects them. Without it, `.tools([...])` would be a hole in the exact
+ * check `.tool()` performs — a batch API that quietly accepts what the single-item API rejects is
+ * worse than no batch API.
+ *
+ * Intersection, not union: satisfying every element means the agent's context must have what each
+ * one needs. `unknown` (a plain tool) intersects away, so a list of plain tools stays unconstrained.
+ */
+export type ToolContextOf<TList> = (
+  TList extends readonly (infer TElement)[]
+    ? TElement extends ContextualTool<string, infer TRequired>
+      ? (required: TRequired) => void
+      : never
+    : never
+) extends (required: infer TIntersection) => void
+  ? TIntersection
+  : never
+
+/**
  * Static factory for {@link ContextualTool}. M57: OO surface (`ContextualTool.of(...)`) aligned with
  * the SDK's `X.create()` shape — was the free `contextualTool(...)` function. `ContextualTool` is a
  * TYPE (the interface above) and a VALUE (this const) at once, the same dual-space pattern the SDK
@@ -124,6 +158,46 @@ export interface AgentBuilder<
     tool: ContextualTool<TName, TRequired>,
     ...guard: TContext extends TRequired ? [] : [error: ToolContextError<TRequired>]
   ): AgentBuilder<TInput, TModel, TContext, TTools | TName>
+  /**
+   * M69 — add MANY tools at once, accumulating the union of their names.
+   *
+   * The chain only had the singular `.tool()`, so a tool set computed at runtime — the normal case,
+   * since which tools an agent gets depends on sandbox mode, surface profile and trust — could not
+   * be expressed in the chain. The measured workaround was a fold outside it:
+   *
+   *     allTools.reduce((acc, tool) => acc.tool(tool), chain)
+   *
+   * That works and loses the type-state: the accumulated name union collapses, so
+   * `InferAgentToolNames` stops seeing the literal names the generated client is built from. The
+   * escape hatch cost exactly the guarantee the builder exists for.
+   *
+   * An empty list is a typed no-op — `never` unions away, so `TTools` is untouched rather than
+   * widened.
+   */
+  tools<const TList extends readonly ContextualTool[]>(
+    list: TList,
+    ...guard: TContext extends ToolContextOf<TList>
+      ? []
+      : [error: ToolContextError<ToolContextOf<TList>>]
+  ): AgentBuilder<TInput, TModel, TContext, TTools | ToolNamesOf<TList>>
+  /**
+   * M69 — apply a sub-chain only when `condition` holds, preserving the type-state either way.
+   *
+   * `.use(preset)` composes a whole sub-chain but cannot skip a link in the MIDDLE of one, which is
+   * what a conditional element needs.
+   *
+   * The condition is a plain `boolean`, already computed — never a predicate with access to
+   * context. A predicate would make this a door for business logic inside the authoring chain (the
+   * milestone's named risk); a boolean keeps the decision where the caller made it.
+   *
+   * The returned type is the same on both branches, because the condition is a runtime value and a
+   * type cannot depend on it: the union is what the branch COULD add. That is what lets `.when` sit
+   * mid-chain without collapsing what came before.
+   */
+  when<TResult extends AgentBuilder<TInput, TModel, TContext, string>>(
+    condition: boolean,
+    apply: (builder: AgentBuilder<TInput, TModel, TContext, TTools>) => TResult,
+  ): TResult
   /** M9 — add one input/output guardrail (appends). Runs at the framework boundary before the SDK. */
   guardrail(g: Guardrail): AgentBuilder<TInput, TModel, TContext, TTools>
   /** M9 — set the full guardrail list (replaces any previously added). */
@@ -235,6 +309,15 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
       makeBuilder({ ...config, reasoningEffort: effort }),
     context: (value: Record<string, unknown>) => makeBuilder({ ...config, context: value }),
     tool: (tool: CustomTool) => makeBuilder({ ...config, tools: [...(config.tools ?? []), tool] }),
+    tools: (list: readonly CustomTool[]) =>
+      makeBuilder({ ...config, tools: [...(config.tools ?? []), ...list] }),
+    // `when` is deliberately not a conditional-typed return: the branch runs or it does not, and
+    // either way the caller gets a builder carrying the same accumulated state. Returning `builder`
+    // unchanged on `false` is what makes it a true no-op rather than a reset.
+    when: (condition: boolean, apply: (b: unknown) => unknown) => {
+      const builder = makeBuilder(config)
+      return condition ? apply(builder) : builder
+    },
     guardrail: (g: Guardrail) =>
       makeBuilder({ ...config, guardrails: [...(config.guardrails ?? []), g] }),
     guardrails: (gs: readonly Guardrail[]) => makeBuilder({ ...config, guardrails: gs }),
