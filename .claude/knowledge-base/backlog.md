@@ -666,7 +666,7 @@ sozinha.
 
 ---
 
-## B-M67-20 — O `Coverage gate` mede um denominador que o run nunca alcança
+## ~~B-M67-20~~ — RESOLVIDO — O `Coverage gate` media um denominador que o run nunca alcançava
 
 **Encontrado em:** 2026-08-13, depois de o último vermelho de teste cair · **Severidade: média** —
 não é defeito de gate; é o gate finalmente **medindo**.
@@ -757,7 +757,30 @@ chamável sem assinatura explícita.
 
 Estado: **4236 testes verdes na raiz, zero falhando, typecheck limpo.**
 
-**Passo 2, o que resta:** ligar as suítes dos pacotes ao run de cobertura (vitest `projects`), agora
-que todos falam a mesma versão. Aí sim o numerador alcança o denominador, e o número passa a
-significar o que o nome promete.
+**Passo 2 FEITO: o numerador alcançou o denominador.** `vitest.config.ts` passa a declarar
+`projects`, agregando a suíte da raiz e as dos três pacotes numa execução só.
+
+| | Antes | Depois |
+|---|---|---|
+| Testes executados | 4 236 | **5 697** |
+| Linhas | 62,73% | **84,96%** |
+| Ramos | 54,41% | **76,08%** |
+| Funções | 58,45% | **82,17%** |
+| Gate | vermelho | **exit 0** |
+
+**Nenhum teste novo foi escrito.** Os 1 461 que faltavam já existiam — só não rodavam no run que
+media a cobertura. E o número real está **acima** dos limiares de 80%/75% que o projeto tinha
+escolhido: o limiar nunca esteve errado, a medição estava.
+
+`agents/src/auth`, o "0%" que quase me fez escrever testes redundantes, aparece agora em **62,96%**.
+
+**Residual honesto, para vigiar no CI:**
+
+- O run ficou ~35% mais longo (5 715 testes). Ele estoura o limite de 590 s por comando desta
+  sessão — não é falha, é duração.
+- Numa das execuções, o `r3a-emitted-bundle-node-free.test.ts` falhou lendo `packages/theo/dist`.
+  Passa isolado, e havia um `pnpm lint` meu rodando concorrente naquele momento, tocando os mesmos
+  artefatos. **Não consegui reproduzir limpo**, então registro como suspeita, não como causa: se o CI
+  mostrar intermitência, o candidato é a paralelização entre projetos com testes que leem artefatos
+  de build.
 
