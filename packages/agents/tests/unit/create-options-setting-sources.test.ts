@@ -4,8 +4,22 @@ import type { CompiledAgentOptions } from '../../src/bridge/agent-compiler.js'
 import { assembleM8CreateOptions } from '../../src/bridge/sdk-adapter-create-options.js'
 
 /**
- * theokit-file-based-config T2.1 — `settingSources` projects into `Agent.create({ local })`
- * DECOUPLED from inline skills (EC-3 empty = unset, EC-5 explicit wins, back-compat preserved).
+ * theokit-file-based-config T2.1 — `settingSources` projects into `Agent.create({ local })`.
+ *
+ * ## M68 changed what this file asserts, and the reason is worth reading
+ *
+ * One of these cases used to be named `test_skills_only_still_gets_project_settingSources —
+ * back-compat`, and it passed. It asserted that an agent which declared inline skills — and asked
+ * for nothing else — got `settingSources: ['project']`.
+ *
+ * `project` is the root that reads `<cwd>/.theokit/`, **including `hooks.json`, which executes
+ * shell**. So the escalation was not an oversight that slipped through review: it was a documented,
+ * tested, deliberate behaviour, and the test was what kept it alive. Declaring a skill is a
+ * statement about prompts; it was silently buying shell execution from the working directory.
+ *
+ * Since M68 the projection is exactly that — a projection. The decision moved to compile time,
+ * where every authoring path resolves its selection through the trust gate, so
+ * `CompiledAgentOptions.settingSources` cannot hold a root no posture authorized.
  */
 const base: CompiledAgentOptions = { model: 'm', tools: [], agents: {}, stream: true }
 
@@ -15,9 +29,15 @@ describe('T2.1 — assembleM8CreateOptions projects settingSources into local', 
     expect(options.local).toEqual({ settingSources: ['project'] })
   })
 
-  it('test_skills_only_still_gets_project_settingSources — back-compat', () => {
+  it('test_skills_alone_does_NOT_buy_the_project_source_anymore', () => {
+    // The inverted assertion. This is the security fix, stated as the behaviour change it is: an
+    // agent that declares skills and nothing else now reads no disk at all.
     const { options } = assembleM8CreateOptions({ ...base, skills: { enabled: ['x'] } })
-    expect(options.local).toEqual({ settingSources: ['project'] })
+    expect(
+      options.local?.settingSources ?? [],
+      'declaring skills re-enabled the `project` source, which reads shell-executing hooks from ' +
+        'the working directory',
+    ).not.toContain('project')
   })
 
   it('test_no_settingSources_no_skills_leaves_local_absent', () => {
