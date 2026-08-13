@@ -15,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   `required_status_checks.contexts` fica **vazio** de propósito: exigir um check que não passa converte um gate ausente num gate travado. `workspace` fica deliberadamente desprotegida — é onde o trabalho nasce.
 
+- **A cópia publicada e sem licença do `@theokit/agents@1.0.0` saiu da árvore de produção (backlog B-M67-03, [#213](https://github.com/usetheodev/theokit/issues/213)).** Ela era, segundo o próprio #213, a única das violações de licença **sem conserto por republish** — tarballs npm são imutáveis. Um pacote npm sem campo `license` é all rights reserved para quem instala. O gate de licenças sai de 4 violações para **zero em 562 pacotes**.
+
+  Saiu porque a causa foi finalmente traçada, e não era a que estava escrita. O registro anterior culpava o `@theokit/studio@0.1.0` por arrastá-la; ele não arrasta, e nunca arrastou — o studio publicado declara `@theokit/agents` só como *peer*, e esse peer resolve para o workspace. A atribuição tinha sido inferida por co-ocorrência e nunca verificada.
+
+  A causa real é uma aresta **dentro deste repositório**: `packages/http` declara `@theokit/agents: ">=0.47.0"` como peerDependency, nada no workspace o satisfaz, e o pnpm auto-instala a cópia publicada ao lado do irmão de mesmo nome. O lockfile ainda pinava `1.0.0` num range aberto — resíduo de antes do 7.x existir. A re-resolução levou o pin para 7.6.0 e a cópia antiga saiu junto.
+
+  O conserto de raiz (fazer o workspace satisfazer o peer) está **medido e não passa**: funciona, tira as três duplicatas da árvore, e quebra o build com `TS5055`, porque `packages/agents` já devDepende de `@theokit/http` e o link de volta fecha um ciclo de tipos. Fica registrado como B-M67-21 em vez de contrabandeado aqui.
+
 - **Os quatro advisories `high` da árvore de dependências foram fechados (backlog B-M67-02).** O mais grave era `react-router` `>=7.12.0 <7.18.2` — **bypass de CSRF em modo RSC, exploração remota**, e dependência de aplicação, não de toolchain. Os outros três: `postcss <=8.5.17` (path traversal no auto-loading de source map) e `nanoid` em duas faixas (`<3.3.16` e `<3.3.17`, loop infinito), ambos entrando por `vitest → vite`. `pnpm audit --prod --audit-level=high` sai de 4 high para **zero**; o total cai de 11 para 6 (2 low, 4 moderate).
 
   Corrigidos por `pnpm.overrides` com **range vulnerável explícito** (`react-router@>=7.12.0 <7.18.2` → `>=7.18.2`), e não por um override chapado. A diferença importa: um override chapado amarraria também versões que nada têm a ver com o CVE, e o dia em que a faixa vulnerável sair da árvore o override vira ruído que ninguém sabe se pode remover. Com o range, ele se torna inerte sozinho.
