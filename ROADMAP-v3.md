@@ -342,7 +342,7 @@ assimetria fail-closed no Pre / fail-open no Post.
 
 ---
 
-### M76 — [ ] Loader de comandos customizados para `.theokit/commands/`
+### M76 — [x] Loader de comandos customizados para `.theokit/commands/`
 
 **Objective:** Isto é pior que ausente: o framework **é dono** da convenção `.theokit/` e carrega
 `skills/`, `agents/` e `hooks.json` de lá — mas `commands/`, o único diretório que toda superfície de

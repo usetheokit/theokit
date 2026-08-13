@@ -103,6 +103,61 @@ Discovery behavior:
 
 ---
 
+## The `.theokit/` convention, and where commands fit
+
+The framework owns `.theokit/` and loads three things from it. Until M76 it loaded only two, which
+made the convention a promise with a hole in it — a reader learned that `.theokit/` was the
+framework's, then had to write their own loader for the one subdirectory that had none.
+
+| Directory | What it holds | Trust gate |
+|---|---|---|
+| `.theokit/skills/<name>/SKILL.md` | Reusable instruction sets (this page) | `settingSources` includes `project` |
+| `.theokit/agents/` | Agent definitions | `settingSources` includes `project` |
+| `.theokit/commands/*.md` | Named prompts a user invokes | `projectTrusted` |
+
+### Custom commands
+
+A command is a markdown file whose name is the invocation name. Optional frontmatter carries a
+`description:`; everything after it is the prompt.
+
+```markdown
+---
+description: Review the working diff for regressions
+---
+Read the staged diff and report anything that would break a consumer.
+```
+
+```ts
+import { loadCustomCommands } from 'theokit/server'
+
+const { commands, shadowedBuiltins } = loadCustomCommands({
+  projectDir: process.cwd(),
+  homeDir: os.homedir(),
+  projectTrusted: trustStore.postureFor(process.cwd(), ['projectSettings']).allows.projectSettings,
+  builtinNames: ['help', 'clear'],
+  onWarn: (message) => console.warn(message),
+})
+```
+
+**Precedence is project over user.** A repository that ships a `review` command means *its* review;
+letting the operator's generic one take precedence would make the repository's own configuration the
+weaker statement. The override is reported, so a user whose command stopped working learns it was
+overridden rather than concluding it broke.
+
+**A project command requires a trusted directory** — the same decision `settingSources` makes for
+skills and hooks. A command is a prompt that runs on the user's behalf, and for an agent pointed at
+a repository someone just cloned, the working directory is content the user has not read. User-level
+commands under `~/.theokit/commands/` need no gate: that is the operator's own machine.
+
+**The loader warns; it does not decide.** When a custom command shadows one of your builtins, the
+name comes back in `shadowedBuiltins` and the command is still returned. Which one wins is your
+router's call — it is the only layer that knows what its builtins do.
+
+**Failure is per file.** A command whose frontmatter opens and never closes is skipped with a
+warning; the rest load. One malformed file must not disable every command the user wrote.
+
+---
+
 ## What the model sees
 
 After discovery, the SDK injects the skill list into the system prompt as a `<skills>` block:
