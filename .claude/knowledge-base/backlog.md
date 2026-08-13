@@ -657,3 +657,10 @@ de lugar** e revelar a real; o padrão vale mais que qualquer um dos três casos
 desmontando. Restaurar uma segunda versão exige antes **decidir suportá-la**: baixar o piso em
 `engines`, senão a perna é teatro.
 
+**E havia um guarda segurando a decisão velha.** `tests/smoke/ci-workflow.test.ts` afirmava o literal
+`[20, 22]` — nono caso do mesmo padrão nesta sessão: congelar o literal em vez da propriedade faz o
+guarda sobreviver à decisão que ele registrava. Reescrito para afirmar **coerência**: nenhuma entrada
+da matriz pode ficar abaixo do piso que o próprio pacote declara em `engines.node`. Adicionar Node 24
+não exige edição nenhuma ali; baixar o piso legitimamente deixa uma versão mais velha voltar
+sozinha.
+
