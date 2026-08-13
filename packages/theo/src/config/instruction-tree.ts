@@ -9,6 +9,8 @@ import { join, relative, resolve } from 'node:path'
 
 import { assertNoSymlinkEscape } from '@theokit/agents'
 
+import { splitFrontmatter } from './frontmatter.js'
+
 /**
  * M74 — load a tree of project instruction files, with explicit ceilings.
  *
@@ -215,9 +217,6 @@ function filesBeforeDirectories(dir: string, entries: readonly string[]): WalkEn
   ]
 }
 
-/** Delimiter of a YAML-ish frontmatter block. */
-const FENCE = '---'
-
 /**
  * Read one file, splitting frontmatter from body.
  *
@@ -225,6 +224,10 @@ const FENCE = '---'
  * malformed in a way that makes its scoping unknowable, and guessing whether the rest is body or
  * metadata would feed either the wrong text or the wrong scope to the model. The rest of the tree
  * loads normally: failure is per file.
+ *
+ * The fence split itself lives in `frontmatter.ts` — the M76 command loader needs the same answer to
+ * the same question, and that is one piece of knowledge, not two similar-looking functions (G12).
+ * What stays here is which KEY this loader reads.
  */
 function parseInstructionFile(
   path: string,
@@ -239,21 +242,16 @@ function parseInstructionFile(
   }
 
   const rel = relative(cwd, path)
-  const lines = raw.split('\n')
-  if (lines[0]?.trim() !== FENCE) {
-    return { path: rel, content: raw, scopes: [] }
-  }
-
-  const closing = lines.indexOf(FENCE, 1)
-  if (closing === -1) {
+  const parsed = splitFrontmatter(raw)
+  if (parsed === undefined) {
     warn(`instruction frontmatter never closes, file skipped: ${rel}`)
     return undefined
   }
 
   return {
     path: rel,
-    content: lines.slice(closing + 1).join('\n'),
-    scopes: parsePathsScope(lines.slice(1, closing)),
+    content: parsed.body,
+    scopes: parsePathsScope(parsed.frontmatter),
   }
 }
 
