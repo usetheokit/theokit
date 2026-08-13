@@ -41,6 +41,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
 ### Fixed
+- **A cobertura passou a medir o que o nome promete: 62,73% → 84,96%, sem escrever um único teste (backlog B-M67-20).** O `vitest.config.ts` da raiz rodava **apenas** `tests/**` e contava cobertura de **todos** os `packages/*/src/**`: os **216 arquivos de teste** sob `packages/*/tests/**` nunca entravam no numerador enquanto os fontes que eles cobrem ficavam no denominador. `agents/src/auth` aparecia em 0% embora tenha quatro suítes que passam — e eu estive a um passo de escrever testes redundantes para ele.
+
+  O run agora declara `projects` e agrega as quatro suítes: **5 697 testes** contra 4 236, e o gate sai **exit 0**. O limiar de 80% nunca esteve errado; a medição estava.
+
+  Isso exigiu subir `packages/{presenter,agents,http}` de `vitest@^3.2.6` para `^4.1.9` — medido pacote a pacote antes de comprometer. A migração custou dois defeitos, e **os dois eram reais**: um teste que estourava 5 s importando o eslint (o custo é de import, não de asserção), e o fixture `decorator-fullstack` que **não tinha `package.json`** apesar de estar no `pnpm-workspace.yaml`, de modo que nada linkava o `@theokit/http` que ele consome. O vitest 3 escondia ambos.
+
+### Fixed
 - **A suíte inteira ficou verde: 4237 testes passando, zero falhando.** O último vermelho era o guarda `ci-workflow.test.ts`, que fixava a matriz de Node como literal `[20, 22]` e portanto **segurava** a perna que o produto recusa em runtime — nono caso, nesta sessão, de um guarda que congelou o literal em vez da propriedade e passou a impedir em vez de proteger. Passa a afirmar coerência com `engines.node`.
 
   Com isso, o `Coverage gate` passou a reportar um número pela primeira vez — e o número está errado. O `vitest.config.ts` da raiz roda **apenas** `tests/**` mas conta cobertura de **todos** os `packages/*/src/**`: os **216 arquivos de teste** que vivem sob `packages/*/tests/**` nunca executam nesse run, enquanto os fontes que eles cobrem entram no denominador. `agents/src/auth` aparece em 0% embora tenha quatro suítes de teste que passam.
