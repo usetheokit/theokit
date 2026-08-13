@@ -30,11 +30,35 @@ describe('CI Workflow', () => {
     expect(workflow.on.pull_request.branches).toContain('main')
   })
 
-  it('should have test job with Node matrix [20, 22]', () => {
+  it('tests only Node versions the product actually supports', () => {
+    // This used to assert the literal `[20, 22]`. Node 20 was then removed (backlog B-M67-19),
+    // because every manifest declares `engines.node: ">=22.12.0"` and the CLI does not merely warn —
+    // it REFUSES: `[theokit preflight] theokit requires node >= 22.12.0`. The leg was exercising a
+    // configuration the product does not support, so every test that shells out to the CLI failed
+    // there by design.
+    //
+    // Freezing the literal is what made the guard outlive the decision. It now asserts the property:
+    // no matrix entry may sit below the floor the package itself declares. Adding Node 24 needs no
+    // edit here; lowering the floor legitimately would let an older version back in on its own.
     const workflow = loadWorkflow('ci.yml')
-    const matrix = workflow.jobs.test.strategy.matrix['node-version']
-    expect(matrix).toContain(20)
-    expect(matrix).toContain(22)
+    const matrix = workflow.jobs.test.strategy.matrix['node-version'] as number[]
+    expect(matrix.length, 'the matrix must test at least one version').toBeGreaterThan(0)
+
+    const engines = (
+      JSON.parse(readFileSync(resolve(__dirname, '../../packages/theo/package.json'), 'utf-8')) as {
+        engines: { node: string }
+      }
+    ).engines.node
+    const floorMajor = Number(/(\d+)/.exec(engines)?.[1])
+    expect(floorMajor, `engines.node not recognised: ${engines}`).toBeGreaterThan(0)
+
+    for (const version of matrix) {
+      expect(
+        version,
+        `the matrix tests Node ${version}, below the floor \`${engines}\` that the CLI enforces at ` +
+          `runtime — every test that invokes it fails there by design`,
+      ).toBeGreaterThanOrEqual(floorMajor)
+    }
   })
 
   it('should use pnpm/action-setup', () => {
