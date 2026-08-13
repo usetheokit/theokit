@@ -167,7 +167,7 @@ describe('M67 T1 — the range parser refuses what it does not understand', () =
     ['latest', 'a dist-tag, not a range'],
     ['workspace:*', 'a workspace protocol range'],
   ])('test_lowerBoundOf_throws_on_%s', (range) => {
-    expect(() => lowerBoundOf(range)).toThrowError(/unsupported range shape/)
+    expect(() => lowerBoundOf(range)).toThrow(/unsupported range shape/)
   })
 
   it('test_lowerBoundOf_accepts_every_shape_this_repo_actually_writes', () => {
