@@ -31,9 +31,24 @@ describe('B-102 — build scripts do not execute on import', () => {
     expect(everyScript.length).toBeGreaterThan(5)
   })
 
-  it.each(everyScript)('test_%s_is_importable_without_running', async (name) => {
-    // A script that runs on import either throws here, hangs, or exits the worker — all three are
-    // failures, and none of them can be faked by a guard that merely LOOKS right.
-    await expect(import(join(SCRIPTS, name))).resolves.toBeDefined()
-  })
+  // The timeout guards the ASSERTION, not the module graph.
+  //
+  // These scripts import real toolchains — `lint-by-group.mjs` pulls in eslint — and the first load
+  // of such a graph measured 9.5 s here, against the 5 s default. The property under test is "does
+  // importing it DO anything", which takes microseconds once the module is resolved; failing on the
+  // resolution cost reports a defect that does not exist and, worse, makes the case pass or fail with
+  // machine load. Same shape as the `subpath-coverage` flake fixed earlier in this cycle: the cost
+  // is import, not assertion.
+  //
+  // Raising it rather than preloading in a `beforeAll`, because each case imports a DIFFERENT script:
+  // a shared preload would pay the same total cost while hiding which script was slow.
+  it.each(everyScript)(
+    'test_%s_is_importable_without_running',
+    async (name) => {
+      // A script that runs on import either throws here, hangs, or exits the worker — all three are
+      // failures, and none of them can be faked by a guard that merely LOOKS right.
+      await expect(import(join(SCRIPTS, name))).resolves.toBeDefined()
+    },
+    30_000,
+  )
 })
