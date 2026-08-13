@@ -664,3 +664,40 @@ da matriz pode ficar abaixo do piso que o próprio pacote declara em `engines.no
 não exige edição nenhuma ali; baixar o piso legitimamente deixa uma versão mais velha voltar
 sozinha.
 
+---
+
+## B-M67-20 — O `Coverage gate` falha pela razão que ele anuncia, pela primeira vez
+
+**Encontrado em:** 2026-08-13, depois de o último vermelho de teste cair · **Severidade: média** —
+não é defeito de gate; é o gate finalmente **medindo**.
+
+Medição limpa, com a suíte inteira verde (**4237 testes passando, zero falhando**):
+
+```
+All files          |   61.26 |    54.41 |    58.45 |   62.73 |
+ERROR: Coverage for lines      (62.73%) does not meet global threshold (80%)
+ERROR: Coverage for functions  (58.45%) does not meet global threshold (80%)
+ERROR: Coverage for statements (61.26%) does not meet global threshold (80%)
+ERROR: Coverage for branches   (54.41%) does not meet global threshold (75%)
+```
+
+**Por que isto é diferente de tudo que este ciclo fechou.** Os outros oito gates reportavam vermelho
+sem nunca terem exercido a verificação que anunciavam — dependência não declarada, script deletado,
+fixture inexistente, templates apagados por um ADR, Node que o produto recusa. Este está funcionando:
+ele mede cobertura, a cobertura está abaixo do limiar, e ele diz isso.
+
+Até hoje era impossível saber, porque ele morria junto com os testes vermelhos.
+
+**O que NÃO fazer, e o motivo.** Baixar o limiar para 62% tornaria o gate verde sem que uma única
+linha a mais fosse coberta — exatamente o padrão que este ciclo passou o dia desfazendo, só que pela
+mão de quem deveria estar consertando. O limiar de 80% foi uma decisão do projeto; ele não vira
+mentira só porque agora incomoda.
+
+**Amostra do que arrasta:** `agents/src/auth` inteiro em 0%, `app.ts` (110-679), `agent-runner.ts`
+(218-428), `capabilities.ts`, `a2a-client.ts`, `auth-provider.ts`, `bun.ts`, `cache-signal.ts` — todos
+zerados. São arquivos grandes e sem teste algum, não lacunas de ramo.
+
+**Próximo passo:** é um milestone de teste próprio, dirigido por risco — `auth` primeiro, porque é
+onde 0% de cobertura tem o pior custo. Não cabe como remendo no fim de um ciclo de infraestrutura, e
+fingir o contrário produziria testes escritos para mover um número.
+
