@@ -233,7 +233,7 @@ alvo de deleção ≈ 500 LOC.
 
 ---
 
-### M72 — [ ] Retenção e GC de transcript (plan/apply) + `theokit agent sessions gc`
+### M72 — [x] Retenção e GC de transcript (plan/apply) + `theokit agent sessions gc`
 
 **Objective:** O TheoKit embarca o código que **cria** estado de disco ilimitado (`transcriptPath`,
 `appendJsonl`, `forkTranscript`) e **nenhum** código que o limita. A única máquina de retenção no target
