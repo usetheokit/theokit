@@ -63,7 +63,12 @@ const { streamAgentTurnInProcess, InProcessApprovalRequiredError } =
 
 let dir: string
 let sentinel: string
-let executor: ReturnType<typeof vi.fn>
+// Vitest 4 types `vi.fn()` as `Mock<Procedure | Constructable>`, which is not callable without an
+// explicit signature — `ReturnType<typeof vi.fn>` used to be enough and no longer is. Declaring the
+// shape the spy actually has is the fix, not a cast: it is an async thunk resolving to the tool's
+// result string, which is what both the default implementation and the `mockImplementation` below
+// return.
+let executor: ReturnType<typeof vi.fn<() => Promise<string>>>
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'm96-posture-'))
