@@ -159,33 +159,84 @@ B-M67-21 em vez de ser contrabandeado sob um guarda de duplicatas.
 
 ---
 
-## B-M67-21 — `packages/agents` e `packages/http` dependem um do outro, e o preço é uma cópia publicada de nós mesmos na árvore
+## ~~B-M67-21~~ — RESOLVIDO — O ciclo `agents ↔ http`, e a regra que ninguém checava
 
-**Encontrado em:** 2026-08-13, ao tracear a causa real do B-M67-03 · **Severidade: média** — não
-quebra install nem build hoje; mantém duas versões de um mesmo contrato na árvore de produção.
+**Encontrado em:** 2026-08-13, ao tracear a causa real do B-M67-03 · **Resolvido em:** 2026-08-13
 
-`packages/http` declara `@theokit/agents: ">=0.47.0"` como peerDependency. Nada no workspace o
-satisfaz, então o pnpm auto-instala a cópia **publicada** ao lado do irmão de mesmo nome. Essa cópia
-traz `@theokit/http@1.0.0` e `@theokit/presenter@0.7.0` publicados atrás dela.
+`packages/http` declarava `@theokit/agents: ">=0.47.0"` como peerDependency. Nada no workspace o
+satisfazia, então o pnpm auto-instalava a cópia **publicada** ao lado do irmão de mesmo nome — e essa
+cópia trazia `@theokit/http@1.0.0` e `@theokit/presenter@0.7.0` publicados atrás dela. Três cópias
+publicadas de pacotes que este repositório constrói, na própria árvore de produção. É o defeito do
+ADR 0062 generalizado: duas versões de um contrato na mesma árvore, onde os testes exercitam uma e o
+consumidor pode alcançar a outra.
 
-É o defeito do ADR 0062 generalizado: duas versões de um contrato na mesma árvore, onde os testes
-exercitam uma e o consumidor pode alcançar a outra.
+### A tentativa óbvia, e por que ela estava errada
 
-**O conserto óbvio está medido e não passa.** `"@theokit/agents": "workspace:*"` nos devDeps de
-`packages/http` faz o lockfile linkar `../agents` e tira as três duplicatas da árvore — e quebra o
-build:
+`"@theokit/agents": "workspace:*"` nos devDeps de `packages/http` funciona — o lockfile passa a
+linkar `../agents` e as três duplicatas saem — e **quebra o build**:
 
 ```
 packages/http build: error TS5055: Cannot write file 'dist/app.d.ts' because it would overwrite input file.
 ```
 
-Porque `packages/agents` já devDepende de `@theokit/http` (`packages/agents/package.json:79`). O link
-de volta fecha um ciclo, o `dist/app.d.ts` do http entra como *entrada* do build que o escreve, e o
-dts pass morre.
+Porque `packages/agents` já devDepende de `@theokit/http`, o link de volta fecha um ciclo de tipos, e
+o `dist/app.d.ts` do http vira *entrada* do build que o escreve.
 
-**O trabalho real** é decidir a direção da dependência entre os dois pacotes — hoje ela é mútua, o
-que é o problema, não o sintoma. Enquanto isso, `tests/unit/own-package-duplicates.test.ts` mede e
-guarda a consequência nas duas direções.
+A lição está no diagnóstico, não no erro: eu estava tentando **satisfazer** o peer. O peer é que não
+deveria existir.
+
+### A regra já dizia, e nada verificava
+
+`system-design-guardrails.md` § G1, em uma linha: *"`@theokit/http` does NOT import `@theokit/agents`
+(agents depends on http, not the reverse)"*. O `packages/agents/tests/unit/dependency-direction.test.ts`
+guarda a **outra** metade da mesma regra, sobre o manifest do próprio agents. A metade que restringe o
+`http` não tinha oráculo nenhum — por isso a violação viveu em `src/app.ts` através de todas as
+revisões que já rodaram lá.
+
+E o time **já tinha batido nesse ciclo**: o docblock de `theoapp-agent-entry-mounting.test.ts`
+registra que declarar agents como devDep de http "criou um ciclo de build" e que a saída foi **mover o
+teste** para o lado de agents. Contornou-se o sintoma; a causa — o `import()` dinâmico dentro de
+`TheoApp` — ficou.
+
+### A correção: inverter, não satisfazer
+
+`TheoAppOptions.agentRuntime` declara a fatia da camada de agentes que o `TheoApp` precisa
+(`generateAgentRoutes`, e opcionalmente `createSdkAgentStream`); o chamador a fornece. É DIP
+(`architecture.md` § 2) com wiring na raiz de composição (§ 1). O `import()` dinâmico saiu, o peer
+saiu do manifest, e o único call site que exercitava o ramo — em `packages/agents`, o lado que
+legitimamente tem a direção — passa a entregar o runtime.
+
+**"Dinâmico" e "opcional" nunca foram escapatória.** Eles mudam *quando* o módulo é necessário, nunca
+*se* o pacote depende dele: o manifest declarava o peer, e é sobre o manifest que o pnpm age.
+
+Falha tipada quando `agents` vem sem `agentRuntime` (Regra 8): `HttpDecoratorsConfigError` com a
+mensagem nomeando a opção e mostrando a linha de wiring. A alternativa seria montar zero rotas e
+reportar boot bem-sucedido — 404 em toda requisição de agente, sem ninguém dizer por quê.
+
+### Guardas novos
+
+- `packages/http/tests/unit/dependency-direction.test.ts` — a metade da G1 que faltava. Verifica as
+  **quatro** seções do manifest (o peer era o que o pnpm auto-instalava; o devDep foi o que fechou o
+  ciclo de tipos) e varre `src/` por imports estáticos **e** dinâmicos.
+- `packages/http/tests/unit/agent-runtime-required.test.ts` — o caso negativo (`testing.md` § 4.1):
+  erro **tipado**, mensagem que nomeia a correção, e as duas contraprovas de que app sem agentes e com
+  `agents: []` continuam bootando.
+
+**O detector errou na primeira execução, e o erro vale registro.** A primeira versão era regex sobre
+o texto cru e acusou `src/app.ts` — porque a mensagem de erro nova *cita* a linha de import como
+documentação. Uma string não é um import. O regex não distinguia código de prosa sobre código, que é
+a mesma classe de defeito que o guarda existe para pegar. Trocado por `ts.preProcessFile`, o scanner
+do próprio TypeScript (rung 4 da escada — o compilador já é dependência), que ignora strings e
+comentários por construção. As duas contraprovas ficaram no arquivo.
+
+### Medido
+
+Árvore de produção antes: `@theokit/agents`, `@theokit/http`, `@theokit/presenter` publicados.
+Depois: **nenhum dos três**. `KNOWN_DUPLICATES` em `own-package-duplicates.test.ts` encolheu para
+vazio — o guarda pediu isso sozinho, na direção "desapareceu" que o docblock dele prometia.
+
+`pnpm build` exit 0 · `tsc --noEmit` exit 0 · eslint 0 · licenças OK (554 pacotes) · **5712 verdes**,
+0 vermelhos.
 
 ---
 
