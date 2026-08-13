@@ -1,0 +1,23 @@
+{
+  "name": "@fixture/decorator-fullstack",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "$comment": [
+    "This fixture had NO manifest until 2026-08-13 (backlog B-M67-21), although",
+    "`pnpm-workspace.yaml` listed it as a member — pnpm silently ignores a directory without one.",
+    "",
+    "So nothing linked `@theokit/http` here, and the SWC loader writes a `.__decorated__.mjs` next to",
+    "the controller and imports it: that file's `import '@theokit/http'` had nothing to resolve",
+    "against. Vitest 3 hid it, because Vite's resolver answered from the repo's aliases; vitest 4 uses",
+    "Node's own runner for an emitted `.mjs`, and the import failed with `Cannot find package`.",
+    "",
+    "Declaring what the fixture consumes is the fix. The same class as the undeclared `pg` in the",
+    "Postgres integration test: a consumer that does not declare its dependency works only where",
+    "something else happens to provide it."
+  ],
+  "dependencies": {
+    "@theokit/http": "workspace:*",
+    "zod": "^4.0.0"
+  }
+}
