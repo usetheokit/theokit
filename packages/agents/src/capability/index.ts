@@ -6,6 +6,9 @@ export * from './capability.js'
 export * from './capabilities.js'
 export * from './registry.js'
 export * from './agent-capabilities.js'
+// M69 — the composed shape as a published value; see \`agent-shape.ts\` for why the internal draft
+// could not serve the three construction sites.
+export * from './agent-shape.js'
 export * from './toolbox.js'
 
 // M91 — the tool-collection primitive; the counterpart missing from the sandbox and interactive
