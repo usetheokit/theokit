@@ -24,3 +24,17 @@ export {
   recordProjectDir,
   resolveProjectDir,
 } from './project-index.js'
+
+// M72 — retention policy over the lifecycle vocabulary above. The SDK is explicit that retention is
+// the application's to decide; this is the framework deciding it once so each app does not.
+export {
+  GCFloorError,
+  planTranscriptGC,
+  runTranscriptGC,
+  type GCCandidate,
+  type GCError,
+  type GCKept,
+  type RunTranscriptGCResult,
+  type TranscriptGCOptions,
+  type TranscriptGCPlan,
+} from './gc/transcript-gc.js'
