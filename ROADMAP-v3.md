@@ -202,7 +202,7 @@ o **nosso** `render-terminal.ts:92` faz o switch na mão e nunca toca no `Termin
 
 ---
 
-### M71 — [ ] Módulo de ciclo de vida de sessão (`@theokit/agents/session`)
+### M71 — [x] Módulo de ciclo de vida de sessão (`@theokit/agents/session`)
 
 **Objective:** O store está totalmente suprido (29 pass-throughs em `/persistence`). O **vocabulário de
 ciclo de vida acima dele** não tem casa: listar, deletar com proteção de sessão viva, forkar,
