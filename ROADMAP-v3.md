@@ -117,7 +117,7 @@ reimplementar — é o sinal mais forte de que as primitivas são desejadas e a 
 
 ---
 
-### M68 — [ ] `settingSources(['project'])`: exigir evidência de confiança antes de carregar hook do repositório
+### M68 — [x] `settingSources(['project'])`: exigir evidência de confiança antes de carregar hook do repositório
 
 **Objective:** A JSDoc de `packages/agents/src/bridge/define-agent.ts:79-81` justifica o risco: "habilitar
 `project` habilita hooks que executam shell a partir de `.theokit/hooks.json` — é opt-in porque
@@ -148,7 +148,7 @@ compensação e passa a ser a forma suportada — o TheoCode passa a `trustedBy`
 
 ---
 
-### M69 — [ ] Ergonomia do `AgentBuilder`: `.tools()`, `.when()` e `AgentShape` publicado
+### M69 — [x] Ergonomia do `AgentBuilder`: `.tools()`, `.when()` e `AgentShape` publicado
 
 **Objective:** O builder expõe só `.tool(tool, ...guard)` singular — sem `.tools([...])`, sem
 `.when(cond, fn)`. `.use(preset)` compõe uma sub-cadeia inteira mas não permite pular um elo no meio.
