@@ -147,6 +147,9 @@ export default defineConfig({
       // M2 — resolve the workspace agent runtime to its SOURCE under vitest, so theo
       // production code (mount-agent.ts) and root tests share ONE module instance and
       // never hit a stale dist (mirrors the `theokit → src` aliases above).
+      // M72 — same prefix trap as `/client` above: without this line `@theokit/agents/session`
+      // resolves to `…/src/index.ts/session`.
+      '@theokit/agents/session': path.resolve(__dirname, 'packages/agents/src/session/index.ts'),
       '@theokit/agents': path.resolve(__dirname, 'packages/agents/src/index.ts'),
     },
   },
