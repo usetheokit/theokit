@@ -60,6 +60,30 @@ describe('the spec says what the rules say', () => {
     }
   })
 
+  it('test_administrators_are_NOT_exempt', () => {
+    // Measured the day the policy was first applied: both branches came back protected, the
+    // comparator printed `✓ matches the spec` — and `enforce_admins` was `false`. In a repository
+    // with one maintainer, that maintainer IS the administrator, so the exemption applied to
+    // literally every human who could push. The gate was bought to make the PR mandatory and made it
+    // mandatory for nobody.
+    //
+    // This is the same defect shape the rest of this cycle kept finding: a gate whose oracle does not
+    // measure what its name promises. It is worse than an absent gate, because `✓` invites everyone
+    // to stop looking.
+    //
+    // The escape hatch is not lost: an admin can still merge PRs (zero approvals, no required
+    // contexts), still push tags, and can still turn the policy off in Settings. What they can no
+    // longer do is `git push origin main` — which is exactly what `git-safety.md` § 1 forbids in
+    // prose and, until now, only in prose.
+    for (const branch of ['main', 'develop'] as const) {
+      expect(
+        SPEC.branches[branch].enforce_admins,
+        `${branch}: with enforce_admins false the sole maintainer bypasses the PR requirement, so ` +
+          'the policy protects nothing.',
+      ).toBe(true)
+    }
+  })
+
   it('test_zero_approvals_because_one_would_be_unsatisfiable', () => {
     // A solo-maintainer repo cannot satisfy a 1-approval gate; a gate that can only be bypassed
     // teaches bypassing, which is the habit this whole policy exists to remove.
@@ -84,6 +108,7 @@ describe('diffProtection — comparing the spec against what the server reports'
   it('test_a_matching_configuration_reports_no_difference', () => {
     const live = {
       required_pull_request_reviews: { required_approving_review_count: 0 },
+      enforce_admins: { enabled: true },
       allow_force_pushes: { enabled: false },
       allow_deletions: { enabled: false },
       required_status_checks: { contexts: [] },
@@ -113,6 +138,23 @@ describe('diffProtection — comparing the spec against what the server reports'
     const diff = diffProtection('main', desired, live)
     expect(diff.matches).toBe(false)
     expect(diff.differences.join(' ')).toMatch(/force.push/i)
+  })
+
+  it('test_an_admin_exemption_left_on_the_server_is_reported', () => {
+    // The second half of the same defect. The comparator did not read `enforce_admins` at all, so it
+    // reported `✓ matches the spec` against a live policy that exempted administrators. A field the
+    // comparator ignores is a field that can drift silently forever — and this one decides whether
+    // the policy binds the only person it governs.
+    const live = {
+      required_pull_request_reviews: { required_approving_review_count: 0 },
+      enforce_admins: { enabled: false },
+      allow_force_pushes: { enabled: false },
+      allow_deletions: { enabled: false },
+      required_status_checks: { contexts: [] },
+    }
+    const diff = diffProtection('main', desired, live)
+    expect(diff.matches).toBe(false)
+    expect(diff.differences.join(' ')).toMatch(/administrator/i)
   })
 
   it('test_an_extra_required_context_on_the_server_is_reported_as_drift', () => {
