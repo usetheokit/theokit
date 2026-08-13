@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { TheoApp } from '@theokit/http'
 
+import { generateAgentRoutes } from '../../src/bridge/agent-route-generator.js'
+
 /**
  * M53 — lives in `@theokit/agents` (not `@theokit/http`) on purpose: `agents` already depends on
  * `http`, so testing the bridge here keeps the dependency graph ACYCLIC. Declaring `agents` as a
@@ -11,6 +13,18 @@ import { TheoApp } from '@theokit/http'
  * suite was commented out), which is how a bug that made every HTTP agent run the fallback model
  * survived. This mounts an agent the new way — a prepared entry, no decorated class — and asserts
  * both that the route is served and that the compiled options actually reach the stream factory.
+ *
+ * ## Why `agentRuntime` is passed explicitly now (B-M67-21)
+ *
+ * The paragraph above described the cycle and then routed AROUND it — moving the test was a
+ * workaround, and the cause stayed in `TheoApp`, which reached into `@theokit/agents` with a
+ * dynamic `import()`. That kept the agent package on `@theokit/http`'s manifest, which made pnpm
+ * auto-install the **published** copy beside the workspace sibling: three published copies of our
+ * own packages in the production tree, measured 2026-08-13.
+ *
+ * The direction is now inverted where it belongs. This layer hands the HTTP layer the runtime it
+ * needs, which is exactly what `system-design-guardrails.md` § G1 always said — "agents depends on
+ * http, not the reverse".
  */
 describe('TheoApp — mounting a capability-authored agent entry', () => {
   let app: TheoApp
@@ -28,6 +42,9 @@ describe('TheoApp — mounting a capability-authored agent entry', () => {
         },
       ],
       llmModel: 'openai/gpt-5.4',
+      // The inversion, at the only call site that ever exercised this branch: the agent layer
+      // supplies the route generator instead of the HTTP layer importing it.
+      agentRuntime: { generateAgentRoutes },
       agentStreamFactory: (compiled, _tools, _apiKey, overrides) => {
         seen.push({ compiled, overrides })
         return () => ({
