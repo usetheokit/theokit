@@ -46,7 +46,8 @@
     "check:ai-free": "node scripts/check-ai-free-surface.mjs",
     "check:wire-parity": "node scripts/check-wire-parity.mjs",
     "verify:version-collision": "node scripts/verify-version-not-published.mjs",
-    "verify:publish-credential": "node scripts/verify-publish-credential.mjs"
+    "verify:publish-credential": "node scripts/verify-publish-credential.mjs",
+    "protect:branches": "node scripts/protect-branches.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
