@@ -42,6 +42,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`@theokit/agents/session` — o vocabulário de ciclo de vida de sessão (M71).** O store já estava totalmente suprido (29 pass-throughs em `/persistence`: caminhos, escrita atômica, locks, classificação de artefato). O que não tinha casa era o vocabulário **acima** dele: listar, deletar com proteção de sessão viva, forkar, voltar antes de um turno, e o ponteiro de sessão retomável.
+
+  `listSessions`, `deleteSession`, `protectedTranscripts`, `forkBeforeUserTurn`, `loadOrCreateSessionId` / `persistSessionId`, e o índice reverso de `encodeProjectDir`.
+
+  **A assimetria que tornava a lacuna uma armadilha:** `Agent.delete` limpa a **entrada do registry** e nunca toca no arquivo em disco — o consumidor teve de descobrir medindo. `deleteSession` devolve `{ registryRemoved, transcriptRemoved }` justamente para que os dois sejam impossíveis de confundir, e recusa por padrão quando a sessão está protegida, com erro tipado que **nomeia o motivo** (ponteiro retomável, mais recente, ou lease de escrita ativo). Três motivos distintos, deliberadamente não colapsados num booleano: "pulei 4 sessões" é bem menos útil que por que cada uma foi pulada. `Agent.delete` continua alcançável e ganhou a nota que faltava no re-export estreitado.
+
+  **O índice reverso:** `encodeProjectDir` era via de mão única, e a pergunta "o projeto por trás de `projects/<hash>/` ainda existe?" — que qualquer retenção precisa responder antes de deletar — não tinha resposta. Custava 188 LOC de DFS no consumidor: uma busca no lugar de um lookup, que fica mais lenta quanto mais projetos a máquina tem. Agora há um sidecar, e `resolveProjectDir` devolve `undefined` com significado declarado: **"não conhecido aqui"**, nunca "não existe" — quem tratasse os dois como iguais deletaria projetos vivos.
+
+  **O ponteiro nunca rejeita**, e isso é exceção deliberada e estreita ao fail-fast: perder o ponteiro custa um `--continue`, falhar a run custa a run. A falha é **retornada** (`{ persisted: false }`), não engolida.
+
+  `forkBeforeUserTurn` traduz turno→índice de registro, que é trabalho que o SDK não faz: `forkTranscript` aceita `beforeRecordIndex`, e um turno de usuário abrange muitos registros (mensagem, resposta, cada tool call e resultado). Os dois só coincidem numa conversa sem tools.
+
 - **`fromWireChunk` — o `@theokit/presenter` passa a ser alcançável a partir do wire (M70).** O presenter normaliza saída de agente num `AgentOutputEvent` canônico e entrega três presenters mais um registry. Mas seus **únicos** tradutores de origem consumiam mensagens cruas do `@theokit/sdk`, enquanto todo consumidor embarcado dirige um transport, que produz `WireChunk` — já traduzido. Não existia porta `WireChunk → AgentOutputEvent`, então a superfície que de fato recebe o stream nunca entrava no evento canônico.
 
   Isso não era idiossincrasia de consumidor: era estrutural, e a prova estava **aqui dentro**. O nosso próprio `server/agent/render-terminal.ts` fazia o switch em chunks de wire na mão e nunca tocava no `TerminalPresenter`. Ele agora é `WireChunk → fromWireChunk → TerminalPresenter`, e os três presenters passam a ter consumidor de produção.
