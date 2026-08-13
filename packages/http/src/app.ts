@@ -1,6 +1,7 @@
 /* eslint-disable security/detect-non-literal-regexp, complexity, sonarjs/cognitive-complexity, max-depth, max-lines, max-lines-per-function */
 import 'reflect-metadata'
 
+import { HttpDecoratorsConfigError } from './bridge/errors.js'
 import { createExecutionContext, type CanActivate } from './bridge/execution-context.js'
 import { createNodeAdapter } from './bridge/runtime/node.js'
 import type { ServerHandle } from './bridge/runtime/types.js'
@@ -30,7 +31,12 @@ export interface AgentAppEntry {
   readonly name: string
   /** Mount point; routes are generated under it (`<route>/chat`, `<route>/runs/:id`). */
   readonly route: string
-  /** `CompiledAgentOptions` from `@theokit/agents` (typed `unknown` — optional peer dependency). */
+  /**
+   * `CompiledAgentOptions`, produced by the agent layer and opaque here.
+   *
+   * Typed `unknown` on purpose: naming the type would import it, and this package does not depend
+   * on `@theokit/agents` (G1 — agents depends on http, never the reverse).
+   */
   readonly compiled: unknown
   /** Guards to run before the agent routes (same shape the controller pipeline uses). */
   readonly guards?: Function[]
@@ -38,6 +44,57 @@ export interface AgentAppEntry {
   readonly methodName?: string
   /** Optional owning class, kept only for guard resolution parity with controllers. */
   readonly agentClass?: Function
+}
+
+/** One route produced by the agent runtime, in the shape this app mounts. */
+export interface AgentRuntimeRoute {
+  readonly method: string
+  /** Express-style path; `:param` segments become capture groups when mounted. */
+  readonly path: string
+  readonly handler: (request: Request) => Promise<Response>
+}
+
+/**
+ * The slice of the agent layer this app needs — declared HERE, supplied by the caller.
+ *
+ * This interface is the inversion. `autoWireAgents` used to reach into `@theokit/agents` with a
+ * dynamic `import()`, which put the agent layer on this package's manifest and inverted the
+ * direction `system-design-guardrails.md` § G1 fixes ("`@theokit/http` does NOT import
+ * `@theokit/agents` — agents depends on http, not the reverse").
+ *
+ * "Dynamic" and "optional" were never an escape hatch: they change WHEN the module is needed, never
+ * WHETHER this package depends on it. The manifest still had to declare the peer, pnpm still
+ * auto-installed the **published** copy next to the workspace sibling, and the resulting type cycle
+ * made the build unfixable by manifest edit (`TS5055` on `dist/app.d.ts`).
+ *
+ * Declaring the contract here and letting the caller satisfy it is DIP (`architecture.md` § 2): the
+ * consumer defines the interface, the outer layer implements it, and the wiring happens at the
+ * composition root (§ 1) — which for this monorepo is `theokit`, the one package that legitimately
+ * depends on both.
+ */
+export interface AgentRuntime {
+  /** Build the HTTP routes for one compiled agent. `@theokit/agents` exports this by name. */
+  generateAgentRoutes(input: {
+    walkResult: { route: string }
+    compiledOptions: unknown
+    createRun: (
+      message: string,
+      sessionId: string,
+    ) => AsyncIterable<{ type: string; [k: string]: unknown }>
+  }): AgentRuntimeRoute[]
+
+  /**
+   * Default stream factory, used when the app has an API key and no `agentStreamFactory` override.
+   *
+   * Optional because an app that always passes `agentStreamFactory` never needs it — requiring it
+   * would force such callers to supply a function they can prove is unreachable.
+   */
+  createSdkAgentStream?(
+    compiled: unknown,
+    tools: unknown[],
+    apiKey: string,
+    overrides?: { model?: string },
+  ): (message: string, sessionId: string) => AsyncIterable<unknown>
 }
 
 export interface TheoAppOptions {
@@ -58,6 +115,13 @@ export interface TheoAppOptions {
   llmApiKey?: string
   /** LLM model override (default: from @Agent({ model }) metadata). */
   llmModel?: string
+  /**
+   * The agent layer, supplied by the caller. REQUIRED whenever `agents` is non-empty.
+   *
+   * Wire it with the two named exports of `@theokit/agents`:
+   * `agentRuntime: { generateAgentRoutes, createSdkAgentStream }`.
+   */
+  agentRuntime?: AgentRuntime
   /** Agent stream factory override (for testing or custom SDK wiring). */
   agentStreamFactory?: (
     /** The COMPILED agent options — not the metadata walk (which carries no `model`). */
@@ -247,7 +311,7 @@ export class TheoApp {
     // The framework handles EVERYTHING — walk, compile, mount, stream.
     // Consumer writes: agents: [MyAgent] — and that's it.
     if (opts.agents?.length) {
-      await app.autoWireAgents(opts.agents, registry, opts)
+      app.autoWireAgents(opts.agents, registry, opts)
     }
 
     return app
@@ -286,23 +350,35 @@ export class TheoApp {
     methodName: string | symbol
   }[] = []
 
-  private async autoWireAgents(
+  /**
+   * Synchronous since B-M67-21: the only `await` here was the dynamic `import('@theokit/agents')`
+   * that the inversion removed, and `AgentRuntime.generateAgentRoutes` returns routes directly.
+   *
+   * The call site dropped its `await` with it. Keeping one "in case a runtime resolves
+   * asynchronously later" would be a promise about a shape nothing has (YAGNI) — and the linter
+   * says so plainly: awaiting a non-thenable is noise that reads like a real suspension point.
+   */
+  private autoWireAgents(
     entries: AgentAppEntry[],
     _registry: Map<Function, object>,
     opts: TheoAppOptions,
   ) {
-    // `@theokit/agents` is an OPTIONAL peer, so it is imported dynamically. A plain `import()` is
-    // enough — the package is already marked external in tsup.config.ts, so nothing is bundled — and
-    // unlike the previous `new Function('return import(…)')` trick it is resolvable by the test
-    // runner. That trick is exactly why this whole branch had no test and shipped a real bug.
-    let generateAgentRoutes: Function, createSdkAgentStreamFn: Function
-    try {
-      const mod = (await import('@theokit/agents')) as unknown as Record<string, Function>
-      generateAgentRoutes = mod.generateAgentRoutes
-      createSdkAgentStreamFn = mod.createSdkAgentStream
-    } catch {
-      throw new Error(
-        '[TheoApp] @theokit/agents is required when agents[] is provided. Install: npm install @theokit/agents',
+    // The agent layer arrives as an argument, never as an import. This branch used to do
+    // `await import('@theokit/agents')`, which put the agent package on this manifest and inverted
+    // the direction G1 fixes — see the `AgentRuntime` docblock for what that cost.
+    //
+    // Fail fast and name the fix (Rule 8): a missing runtime here means the app was configured to
+    // serve agents and given nothing to serve them with. Continuing would mount zero routes and
+    // report success, which is the silent failure the typed error exists to prevent.
+    const runtime = opts.agentRuntime
+    if (runtime === undefined) {
+      throw new HttpDecoratorsConfigError(
+        '[TheoApp] `agents` was provided without `agentRuntime`, so there is nothing to build the ' +
+          'agent routes with. Pass the agent layer explicitly:\n\n' +
+          "  import { generateAgentRoutes, createSdkAgentStream } from '@theokit/agents'\n" +
+          '  await TheoApp.create({ agents, agentRuntime: { generateAgentRoutes, createSdkAgentStream } })\n\n' +
+          '`@theokit/http` does not import `@theokit/agents` (G1: agents depends on http, not the ' +
+          'reverse), so the caller supplies it.',
       )
     }
 
@@ -315,11 +391,14 @@ export class TheoApp {
         createRun = opts.agentStreamFactory(entry.compiled, compiled.tools, apiKey, {
           model: opts.llmModel,
         })
-      } else if (apiKey) {
-        createRun = createSdkAgentStreamFn(entry.compiled, compiled.tools, apiKey, {
+      } else if (apiKey && runtime.createSdkAgentStream !== undefined) {
+        createRun = runtime.createSdkAgentStream(entry.compiled, compiled.tools, apiKey, {
           model: opts.llmModel,
-        }) as (m: string, s: string) => AsyncIterable<unknown>
+        })
       } else {
+        // Reached when there is no key, or when the runtime deliberately omitted the default
+        // factory. The fallback stream answers every request with the message naming the fix, so
+        // the app still boots and the gap is visible at the first call rather than at mount.
         createRun = this.createFallbackStream(entry.name, apiKey)
       }
 
@@ -329,7 +408,7 @@ export class TheoApp {
       // eslint-disable-next-line @typescript-eslint/no-empty-function -- identity token, never called
       const agentIdentity = entry.agentClass ?? function agent() {}
 
-      const routes = generateAgentRoutes({
+      const routes = runtime.generateAgentRoutes({
         walkResult: { route: entry.route },
         compiledOptions: entry.compiled,
         createRun: createRun as (
