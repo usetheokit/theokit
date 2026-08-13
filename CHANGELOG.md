@@ -40,6 +40,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
+### Fixed
+- **A suíte inteira ficou verde: 4237 testes passando, zero falhando.** O último vermelho era o guarda `ci-workflow.test.ts`, que fixava a matriz de Node como literal `[20, 22]` e portanto **segurava** a perna que o produto recusa em runtime — nono caso, nesta sessão, de um guarda que congelou o literal em vez da propriedade e passou a impedir em vez de proteger. Passa a afirmar coerência com `engines.node`.
+
+  Com isso, o `Coverage gate` passou a falhar **pela razão que ele anuncia**, pela primeira vez: 62,73% de linhas contra limiar de 80%. Não é defeito de gate — é o gate finalmente medindo, depois de meses morrendo junto com os testes vermelhos. Registrado como B-M67-20; baixar o limiar para caber no número atual seria tornar o gate verde sem cobrir uma linha a mais.
+
 ### Removed
 - **A perna Node 20 da matriz de testes (backlog B-M67-19).** Todo manifest declara `engines.node: ">=22.12.0"`, e a CLI não apenas avisa — ela **recusa**: `[theokit preflight] theokit requires node >= 22.12.0 (you are running v20.20.2)`. A perna exercitava uma configuração que o produto explicitamente não suporta, e todo teste que invoca a CLI falhava lá por desenho.
 
