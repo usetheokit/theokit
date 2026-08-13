@@ -9,28 +9,47 @@ import { describe, expect, it } from 'vitest'
  *
  * ## The condition this measures
  *
- * `@theokit/studio@0.1.0` is an optional peer of `theokit`, and it depends on the **published**
- * `@theokit/agents@1.0.0` and `@theokit/http@1.0.0`. So the production tree carries ancient copies of
- * packages this repository builds — `@theokit/agents` is at 7.6.0 here, seven majors ahead of the one
- * being installed alongside it.
+ * The production tree carries published copies of packages this repository builds. That is the same
+ * defect ADR 0062 recorded for the SDK ("the workspace in fact loaded two copies, 4.40.0 and
+ * 3.8.0"), generalised: two versions of one contract in one tree, where the tests exercise one and
+ * the consumer may reach the other.
  *
- * That is the same defect ADR 0062 recorded for the SDK ("the workspace in fact loaded two copies,
- * 4.40.0 and 3.8.0"), generalised: two versions of one contract in one tree, where the tests exercise
- * one and the consumer may reach the other.
+ * ## The cause — corrected 2026-08-13, because the first attribution was wrong
  *
- * It is also the origin of one of the three licence violations in #213 — and the only one that
- * **cannot be fixed by republishing**, because npm tarballs are immutable. `@theokit/agents@1.0.0`
- * leaves this tree when the studio stops pulling it, not before.
+ * This docblock used to blame `@theokit/studio@0.1.0` for dragging in `@theokit/agents@1.0.0`. It
+ * does not, and never did: the published studio declares `@theokit/agents` only as a **peer**, and
+ * that peer resolves to the workspace 7.6.0. The attribution was inferred from co-occurrence and
+ * never traced, which is how a plausible cause survives in a file everyone trusts.
+ *
+ * Traced through `pnpm-lock.yaml`, the real chain is a single edge inside this repository:
+ *
+ *   `packages/http` declares `@theokit/agents: ">=0.47.0"` as a peerDependency, and nothing in the
+ *   workspace satisfies it — so pnpm auto-installs it FROM THE REGISTRY, next to the sibling of the
+ *   same name sitting one directory away. That published copy then brings its own published
+ *   `@theokit/http` and `@theokit/presenter` with it.
+ *
+ * So all three entries below descend from one unsatisfied peer, not from a sibling repository.
+ *
+ * ## Why the obvious fix is not applied here
+ *
+ * The canonical repair is `"@theokit/agents": "workspace:*"` in `packages/http`'s devDependencies.
+ * Measured: it works — the lockfile links `../agents` and every duplicate leaves the tree — and it
+ * **breaks the build**, because `packages/agents` already devDepends on `@theokit/http`, so the link
+ * closes a type cycle and tsup's dts pass fails with `TS5055: Cannot write file 'dist/app.d.ts'
+ * because it would overwrite input file`.
+ *
+ * Breaking that cycle is an architectural change to two packages, not a manifest edit, so it is
+ * recorded as its own item rather than smuggled in under a duplicate guard.
  *
  * ## Why this reports a KNOWN set instead of demanding zero
  *
- * Demanding zero would be red by default: the fix is the studio migration (backlog B-M67-03), seven
- * majors of work in a different repository. A gate nobody can satisfy is one nobody reads — the
- * failure this codebase spent a full cycle undoing.
+ * Demanding zero would be red by default until that cycle is broken. A gate nobody can satisfy is
+ * one nobody reads — the failure this codebase spent a full cycle undoing.
  *
  * So the known duplicates are declared, with their cause, and the assertion is about **change**: a
- * new one fails, and the day the studio migrates, this test fails too and asks to be narrowed. Both
- * directions are information.
+ * new one fails, and one that disappears fails too, asking to be narrowed. Both directions are
+ * information — and both fired during the 2026-08-13 measurement, which is how the wrong
+ * attribution above was finally caught.
  */
 
 const ROOT = resolve(__dirname, '../..')
@@ -44,17 +63,29 @@ const KNOWN_DUPLICATES: ReadonlyMap<string, { version: string; because: string }
   [
     '@theokit/agents',
     {
-      version: '1.0.0',
+      version: '7.6.0',
       because:
-        'dragged in by `@theokit/studio@0.1.0`, which is seven majors behind (backlog B-M67-03). ' +
-        'Also the origin of the one licence violation in #213 that cannot be republished away.',
+        'auto-installed from the registry to satisfy the unsatisfied peerDependency ' +
+        '`@theokit/agents: ">=0.47.0"` in `packages/http`. The workspace sibling one directory away ' +
+        'would satisfy it, but wiring that link closes a type cycle with `packages/agents` and ' +
+        'breaks the dts build (TS5055) — see the docblock.',
     },
   ],
   [
     '@theokit/http',
     {
       version: '1.0.0',
-      because: 'same chain — a dependency of the published `@theokit/agents@1.0.0` above.',
+      because: 'brought along by the published `@theokit/agents` above, as its own peer.',
+    },
+  ],
+  [
+    '@theokit/presenter',
+    {
+      version: '0.7.0',
+      because:
+        'same chain — a peer of the published `@theokit/agents@7.6.0`. It surfaced on 2026-08-13 ' +
+        'when a reinstall re-resolved that open range from a stale 1.0.0 pin to 7.6.0, and this ' +
+        'guard caught it in the "has grown" direction.',
     },
   ],
 ])
