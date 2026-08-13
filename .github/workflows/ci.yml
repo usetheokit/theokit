@@ -80,7 +80,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22]
+        # Node 20 was dropped (backlog B-M67-19).
+        #
+        # Every manifest here declares `engines.node: ">=22.12.0"`, and the CLI does not merely warn —
+        # it REFUSES: `[theokit preflight] theokit requires node >= 22.12.0 (you are running
+        # v20.20.2)`. So the Node-20 leg was exercising a configuration the product explicitly does
+        # not support, and every test that shells out to the CLI failed there by design.
+        #
+        # It surfaced only now because those tests used to die earlier, on `pnpm exec theokit` not
+        # resolving the bin at all (B-M67-17). Fixing the resolution let the CLI actually run, and the
+        # next layer — the engine floor — became visible. A red leg that can never be green is the
+        # shape this cycle spent its time removing.
+        #
+        # Restoring a second version means first deciding to support it: lower the floor in `engines`,
+        # or the leg is theatre.
+        node-version: [22]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
