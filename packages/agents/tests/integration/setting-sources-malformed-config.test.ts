@@ -21,11 +21,36 @@ vi.mock('@theokit/sdk', () => ({
 import { createSdkAgentStream } from '../../src/bridge/sdk-adapter.js'
 import { AgentBuilder } from '../../src/bridge/agent-builder.js'
 import { compileAgentDefinition } from '../../src/bridge/define-agent.js'
+import type { SettingSourceCapability } from '../../src/bridge/setting-sources-gate.js'
+import type { TrustPosture } from '../../src/index.js'
+
+/**
+ * A posture that grants `projectSettings`.
+ *
+ * M68 — `.settingSources()` takes a selection with evidence, not a string array: `project` reads
+ * `<cwd>/.theokit/`, including shell-executing `hooks.json`. These tests exercise the `project`
+ * source, so they have to state the trust decision the same way a caller would.
+ *
+ * A LITERAL here, unlike the gate's own tests which build it through `resolveTrustPosture`: this
+ * file mocks `@theokit/sdk`, so the real resolver is unreachable by construction. The provenance
+ * that makes a posture meaningful is proven in `setting-sources-gate.test.ts`, against the real
+ * SDK; what this fixture supplies is a granted decision, because the subject here is cwd threading,
+ * not trust.
+ */
+const PROJECT_GRANTED = {
+  project: {
+    trustedBy: {
+      level: 'trusted',
+      source: 'default',
+      allows: { projectSettings: true },
+    } as TrustPosture<SettingSourceCapability>,
+  },
+}
 
 describe('EC-4 — malformed .theokit/ config surfaces a typed error, never swallowed', () => {
   it('test_malformed_theokit_file_surfaces_configuration_error', async () => {
     const compiled = compileAgentDefinition(
-      AgentBuilder.create().model('m').settingSources(['project']).build(),
+      AgentBuilder.create().model('m').settingSources(PROJECT_GRANTED).build(),
     )
     const events: Array<{ type: string; message?: string }> = []
     for await (const e of createSdkAgentStream(compiled, [], 'test-key', { cwd: '/app/root' })(
