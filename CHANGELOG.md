@@ -40,6 +40,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
+### Removed
+- **A perna Node 20 da matriz de testes (backlog B-M67-19).** Todo manifest declara `engines.node: ">=22.12.0"`, e a CLI não apenas avisa — ela **recusa**: `[theokit preflight] theokit requires node >= 22.12.0 (you are running v20.20.2)`. A perna exercitava uma configuração que o produto explicitamente não suporta, e todo teste que invoca a CLI falhava lá por desenho.
+
+  Só apareceu agora porque esses testes morriam antes, no `pnpm exec theokit` que não resolvia o bin. Corrigir a resolução deixou a CLI executar, e o piso de engine ficou visível — a terceira vez neste ciclo que uma correção faz a falha **mudar de lugar** e revelar a real. Restaurar uma segunda versão exige antes decidir suportá-la.
+
 ### Added
 - **A política de branch protection virou artefato versionado e verificável (backlog B-M67-10).** `CLAUDE.md` § 4 e `git-safety.md` § 1 dizem a mesma coisa duas vezes: o hook local garante que o trabalho **nasce** em `workspace`; a branch protection é o que torna o **PR obrigatório**. Este repositório tem a primeira garantia e não a segunda — um `git push origin main` funciona hoje. A política pretendida vivia só na prosa de um issue, e prosa não se compara com a realidade.
 
