@@ -356,7 +356,7 @@ garantido: nunca tinham rodado.
 
 ---
 
-## B-M67-10 — Branch protection: a política virou artefato versionado; falta **aplicá-la**
+## ~~B-M67-10~~ — Branch protection: aplicada, e a primeira aplicação não protegia ninguém
 
 **Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
 [`#208`](https://github.com/usetheodev/theokit/issues/208) · **Severidade: alta**
@@ -393,9 +393,41 @@ removendo gates impossíveis por construção. Contextos entram conforme os chec
 `workspace` fica deliberadamente fora: é onde o trabalho nasce, e protegê-la quebraria a branch que
 as regras mandam todo mundo usar.
 
-**Falta:** rodar `pnpm protect:branches --apply`. É um comando, e é do dono — três tentativas minhas
-foram bloqueadas por não estar nomeado explicitamente, o que é o comportamento correto para uma
-mudança de segurança.
+**Aplicada em 2026-08-13**, com autorização explícita. E a aplicação revelou um segundo defeito, que
+é o achado que vale mais do que o item:
+
+**A primeira aplicação não vinculava ninguém.** Passou, as duas branches voltaram protegidas, e o
+comparador imprimiu `✓ main: matches the spec` / `✓ develop: matches the spec`. Só que a spec trazia
+`enforce_admins: false` — e num repositório de mantenedor solo o mantenedor **é** o administrador.
+A isenção cobria literalmente todo humano capaz de dar push. O gate comprado para tornar o PR
+obrigatório o tornava obrigatório para ninguém.
+
+Pior: `diffProtection` **não lia esse campo**. Por isso o `✓`. É exatamente a forma de defeito que
+este ciclo perseguiu do começo ao fim — um gate cujo oráculo não mede o que o nome promete — e desta
+vez ela estava dentro do gate que eu mesmo tinha acabado de escrever. Um `✓` errado é pior que um
+gate ausente, porque convida todo mundo a parar de olhar.
+
+Corrigido por TDD (RED com as duas falhas antes de qualquer edição): `enforce_admins: true` na spec,
+comparação do campo no `diffProtection`, e dois casos novos — um sobre a spec, um sobre a deriva ao
+vivo. O comparador então **acusou** a isenção que ele antes aprovava, e só depois disso a política
+foi reaplicada.
+
+Estado ao vivo, medido: `enforce_admins=true` nas duas, comparador `✓` nas duas. A saída de escape
+continua: o admin ainda mergeia PR (zero aprovações, nenhum contexto exigido), ainda empurra tag, e
+ainda pode desligar a política em Settings. O que ele não faz mais é `git push origin main` — o que
+`git-safety.md` § 1 proíbe em prosa e, até hoje, **só** em prosa.
+
+**Limite honesto do que foi medido.** O que está verificado é a *configuração* (`enforce_admins=true`
+nas duas, objeto de proteção presente, comparador `✓`), não o *comportamento* sob um push real.
+Tentei `git push --dry-run origin workspace:main` como sonda e ela respondeu que passaria — o que não
+é evidência de falha: `--dry-run` não chega ao hook de pre-receive do servidor, que é onde a proteção
+age. Ou seja, a sonda não consegue distinguir o caso que ela deveria rastrear, e usá-la como verde
+teria reproduzido exatamente o defeito que este item acabou de corrigir.
+
+Não existe teste empírico seguro aqui: o único que provaria o bloqueio é um push direto de verdade, e
+o modo de falha dele **é** a coisa proibida. Um teste cujo fracasso comete a violação não é teste. A
+confirmação comportamental vem de graça no próximo push que tentar — e fica registrada aqui como
+pendente, em vez de assumida.
 
 ---
 
