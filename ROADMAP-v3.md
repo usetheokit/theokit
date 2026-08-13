@@ -314,7 +314,7 @@ consumidor continua sem nada. Pressão de contexto não tem contraparte alguma: 
 
 ---
 
-### M75 — [ ] Motor de hooks: spec, runner, trust por fingerprint, budgets
+### M75 — [x] Motor de hooks: spec, runner, trust por fingerprint, budgets
 
 **Objective:** O TheoKit publica um seam bem tipado (`HookHandlers`, 8 eventos, `pre_tool_call` como
 único veto) e para. Todo o caminho entre "o usuário escreveu um comando num arquivo de config" e "esse
