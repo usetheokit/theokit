@@ -79,7 +79,7 @@ grep -rn "from '@theokit/sdk" packages/*/src --include='*.ts' | grep -v node_mod
 
 ---
 
-### M67 — [ ] Fechar a fronteira em camadas: pass-through da família config/trust/wiring
+### M67 — [x] Fechar a fronteira em camadas: pass-through da família config/trust/wiring
 
 **Objective:** `packages/agents/src/index.ts:53-58` declara a doutrina — "o consumidor importa as
 primitivas core do SDK a partir de `@theokit/agents`, nunca de `@theokit/sdk`" — e o M63 chamou isso de
