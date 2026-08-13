@@ -51,6 +51,10 @@
     "./client/react": {
       "types": "./dist/client-react.d.ts",
       "import": "./dist/client-react.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "import": "./dist/session.js"
     }
   },
   "files": [
