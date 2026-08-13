@@ -118,10 +118,18 @@ migração cujo contrato mudou de verdade.
 experimento nesta sessão foi bloqueada, citando esta mesma decisão — o que é o comportamento correto.
 Ela sai do backlog quando virar milestone lá, não antes.
 
-**Consequência que este repo herda enquanto isso:** o `@theokit/studio@0.1.0` arrasta
-`@theokit/agents@1.0.0` e `@theokit/http@1.0.0` publicados para a árvore de produção daqui. É a
-origem de uma das três violações de licença do #213, e aquela **não tem conserto por republish** —
-tarballs npm são imutáveis. A linha só some quando o studio parar de puxar a cópia antiga.
+**Consequência que este repo herda enquanto isso — agora medida e guardada.** O
+`@theokit/studio@0.1.0` arrasta `@theokit/agents@1.0.0` e `@theokit/http@1.0.0` publicados para a
+árvore de produção daqui: duas versões de um mesmo contrato na mesma árvore, onde os testes exercitam
+uma e o consumidor pode alcançar a outra. É a generalização do defeito que o ADR 0062 registrou para
+o SDK ("o workspace de fato carregava duas cópias, 4.40.0 e 3.8.0"), e a origem da única violação de
+licença do #213 que **não tem conserto por republish** — tarballs npm são imutáveis.
+
+`tests/unit/own-package-duplicates.test.ts` passa a medir isso. Ele **não exige zero**: exigir zero
+seria vermelho por default, já que a correção é a migração do studio, sete majors em outro
+repositório. Ele afirma sobre **mudança** — uma duplicata nova falha, e quando o studio migrar o
+teste também falha, pedindo que a lista encolha. As duas direções são informação, e nenhuma isenção
+sobrevive ao motivo dela.
 
 ---
 
@@ -348,7 +356,7 @@ garantido: nunca tinham rodado.
 
 ---
 
-## B-M67-10 — `main` e `develop` sem branch protection: o PR obrigatório é convenção, não restrição
+## B-M67-10 — Branch protection: a política virou artefato versionado; falta **aplicá-la**
 
 **Encontrado em:** verificação dos gates antes do PR de release #206, 2026-08-12 · **Filado:**
 [`#208`](https://github.com/usetheodev/theokit/issues/208) · **Severidade: alta**
@@ -363,10 +371,31 @@ a segunda. Concretamente: um `git push origin main` direto funciona hoje.
 Agrava-se com o B-M67-09: sem required status checks, um vermelho crônico não impede merge nenhum —
 o gate não bloqueia, ninguém conserta, e o gate deixa de significar algo.
 
-**Não apliquei nada.** Configuração de repositório é decisão do dono, não de quem encontrou. A
-proposta está no issue, com a ressalva de custo: 1 aprovação obrigatória em repo de mantenedor único
-cria um gate que só pode ser contornado; `required_approving_review_count: 0` + required status
-checks entrega a maior parte do valor sem isso.
+**Lado deste repositório: FEITO.** A política deixou de viver só na prosa do issue — prosa não se
+compara com a realidade, então "o repo bate com o que decidimos?" não tinha resposta sem abrir uma
+tela de configuração.
+
+- `.github/branch-protection.json` — a política, versionada ao lado dos workflows que ela protege.
+- `scripts/protect-branches.mjs` — compara a spec com a API e **só escreve com `--apply`**. Aplicar
+  proteção de branch é mudança administrativa num repositório compartilhado; nunca pode ser efeito
+  colateral de rodar uma ferramenta.
+- `tests/unit/branch-protection-spec.test.ts` — 11 casos sobre a spec e sobre o comparador, incluindo
+  deriva nas **duas** direções (um check exigido no servidor que ninguém pôs na spec é uma regra que
+  ninguém revisou).
+
+Medido agora: `✗ main is not protected at all` / `✗ develop is not protected at all`, saída 1.
+
+**`required_status_checks.contexts` começa VAZIO de propósito.** Exigir um check que não passa
+converte um gate **ausente** num gate **travado**, e este repositório passou um ciclo inteiro
+removendo gates impossíveis por construção. Contextos entram conforme os checks ficam verdes e
+*continuam* verdes — a ordem honesta é consertar, observar segurar, e só então exigir.
+
+`workspace` fica deliberadamente fora: é onde o trabalho nasce, e protegê-la quebraria a branch que
+as regras mandam todo mundo usar.
+
+**Falta:** rodar `pnpm protect:branches --apply`. É um comando, e é do dono — três tentativas minhas
+foram bloqueadas por não estar nomeado explicitamente, o que é o comportamento correto para uma
+mudança de segurança.
 
 ---
 

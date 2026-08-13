@@ -60,8 +60,11 @@ export function diagnoseCredential({ whoami, hasWritePathCredential }) {
     return {
       publishable: false,
       reason:
-        'no npm credential is configured (npm whoami failed). Set NODE_AUTH_TOKEN with ' +
-        '`actions/setup-node`, or run `npm login`.',
+        '`npm whoami` failed: either no credential is configured, or the one that is does not ' +
+        'authenticate (expired, revoked, or the wrong registry). Both look identical from here, so ' +
+        'check in this order — is `NODE_AUTH_TOKEN` set for this step, does an npmrc name the ' +
+        'registry, and is the token still valid on npmjs.com? A stored secret existing is not the ' +
+        'same as it working, which is exactly how a release reaches its last step before finding out.',
     }
   }
   if (!hasWritePathCredential) {

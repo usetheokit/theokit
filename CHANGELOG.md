@@ -41,6 +41,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   O script também parou de descartar a evidência: ele guarda a saída do build e a imprime quando os assets não aparecem, em vez de reportar só o sintoma. Primeira medição real: **223 KB gzipped contra orçamento de 350 KB**.
 
 ### Added
+- **A política de branch protection virou artefato versionado e verificável (backlog B-M67-10).** `CLAUDE.md` § 4 e `git-safety.md` § 1 dizem a mesma coisa duas vezes: o hook local garante que o trabalho **nasce** em `workspace`; a branch protection é o que torna o **PR obrigatório**. Este repositório tem a primeira garantia e não a segunda — um `git push origin main` funciona hoje. A política pretendida vivia só na prosa de um issue, e prosa não se compara com a realidade.
+
+  `.github/branch-protection.json` guarda a spec; `pnpm protect:branches` compara com a API e **só escreve com `--apply`** — aplicar proteção é mudança administrativa num repositório compartilhado, nunca efeito colateral de rodar uma ferramenta. 11 testes cobrem a spec e o comparador, incluindo deriva nas **duas** direções: um check exigido no servidor que ninguém pôs na spec é uma regra que ninguém revisou.
+
+  `required_status_checks.contexts` começa **vazio de propósito**: exigir um check que não passa converte um gate ausente num gate travado, e este ciclo passou o dia removendo gates impossíveis por construção. `workspace` fica fora — protegê-la quebraria a branch que as regras mandam usar.
+
+- **Uma guarda para cópias publicadas dos nossos próprios pacotes na árvore de produção (backlog B-M67-03).** O `@theokit/studio@0.1.0` arrasta `@theokit/agents@1.0.0` e `@theokit/http@1.0.0` — duas versões do mesmo contrato na mesma árvore, onde os testes exercitam uma e o consumidor pode alcançar a outra. É a generalização do defeito que o ADR 0062 registrou para o SDK, e a origem da única violação de licença do #213 sem conserto por republish.
+
+  A guarda **não exige zero** — exigir zero seria vermelho por default, já que a correção é a migração do studio, sete majors em outro repositório. Ela afirma sobre **mudança**: uma duplicata nova falha, e quando o studio migrar o teste também falha, pedindo que a lista encolha. Nenhuma isenção sobrevive ao motivo dela.
+
+### Added
 - **Um preflight que recusa um release que a credencial não consegue terminar (backlog B-M67-08).** O release do M67 rodou inteiro — build, versão, tag, GitHub release — e morreu no último passo com `E404 … PUT`. Nada foi publicado, enquanto o `main` ficou com tag e CHANGELOG afirmando três versões novas.
 
   **A causa era a forma da credencial, não a autoridade dela.** O token vinha como variável de ambiente `npm_config_//registry.npmjs.org/:_authToken=…`: o npm honra essa forma em **leituras** — `whoami` e `owner ls` funcionavam — e não a aplica no caminho de **escrita**. O `PUT` saía anônimo, e o registry responde escrita não autenticada com **404 em vez de 403**, para não vazar se o pacote existe. É o mesmo status para "você não pode" e "você não é ninguém", e foi exatamente o que tornou o diagnóstico errado tão fácil.
