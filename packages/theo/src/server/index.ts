@@ -152,6 +152,44 @@ export type {
 
 // Config helpers — auto-load .env for standalone server scripts (Telegram bots,
 // queue consumers, cron jobs) that bypass the CLI.
+// M73 — the layering engine and the per-directory trust store.
+//
+// Exported HERE and not merely written: both shipped in the M73 PR reachable only by relative path
+// from their own tests, which the `no-orphans` guard caught two milestones later. A module a
+// consumer cannot import is not a delivered feature — it is a file.
+export { LayeredConfig, LayerOutOfOrderError } from '../config/layered-config.js'
+export type {
+  ConfigLayer,
+  LayeredConfigInput,
+  LayeredConfigResult,
+  PrecedenceReport,
+  ProvenancePerKey,
+} from '../config/layered-config.js'
+export { TrustStore, TrustStorePermissionsError } from '../config/trust-store.js'
+export type { TrustRecord } from '../config/trust-store.js'
+
+// M74 — the instruction tree, the composition ladder, and context pressure.
+export { loadInstructionTree } from '../context/instruction-tree.js'
+export type {
+  InstructionBlock,
+  InstructionTree,
+  InstructionTreeBudget,
+  LoadInstructionTreeInput,
+} from '../context/instruction-tree.js'
+export { composeInstructions } from '../context/compose-instructions.js'
+export type {
+  ComposeInstructionsOptions,
+  ComposedInstructions,
+  InstructionSource,
+} from '../context/compose-instructions.js'
+export {
+  DEFAULT_CONTEXT_PRESSURE_THRESHOLDS,
+  ContextPressureThresholdError,
+  contextPressure,
+  effectiveContextWindow,
+} from '../context/context-pressure.js'
+export type { ContextPressure, ContextPressureThresholds } from '../context/context-pressure.js'
+
 export { loadEnv, _resetEnvCache } from '../config/load-env.js'
 export type { LoadEnvOptions, LoadEnvResult } from '../config/load-env-types.js'
 
