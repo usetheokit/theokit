@@ -30,65 +30,37 @@ import { describe, expect, it } from 'vitest'
  *
  * So all three entries below descend from one unsatisfied peer, not from a sibling repository.
  *
- * ## Why the obvious fix is not applied here
+ * ## How it was fixed (B-M67-21, 2026-08-13)
  *
- * The canonical repair is `"@theokit/agents": "workspace:*"` in `packages/http`'s devDependencies.
- * Measured: it works — the lockfile links `../agents` and every duplicate leaves the tree — and it
- * **breaks the build**, because `packages/agents` already devDepends on `@theokit/http`, so the link
- * closes a type cycle and tsup's dts pass fails with `TS5055: Cannot write file 'dist/app.d.ts'
- * because it would overwrite input file`.
+ * The first attempt was the obvious one — `"@theokit/agents": "workspace:*"` in `packages/http`'s
+ * devDependencies — and it **broke the build**: `packages/agents` already devDepends on
+ * `@theokit/http`, so the link closed a TYPE cycle and tsup's dts pass died with `TS5055: Cannot
+ * write file 'dist/app.d.ts' because it would overwrite input file`. Satisfying the peer was the
+ * wrong move; the peer should never have existed.
  *
- * Breaking that cycle is an architectural change to two packages, not a manifest edit, so it is
- * recorded as its own item rather than smuggled in under a duplicate guard.
+ * `system-design-guardrails.md` § G1 had said so all along — "`@theokit/http` does NOT import
+ * `@theokit/agents` (agents depends on http, not the reverse)" — and nothing checked it. So the
+ * direction was inverted instead: `TheoAppOptions.agentRuntime` declares the slice of the agent
+ * layer that `TheoApp` needs, the caller supplies it (DIP, `architecture.md` § 2), the dynamic
+ * `import()` is gone, and the peer is off the manifest. `packages/http/tests/unit/
+ * dependency-direction.test.ts` now guards the half of G1 that had no oracle.
  *
- * ## Why this reports a KNOWN set instead of demanding zero
+ * ## Why this now demands zero
  *
- * Demanding zero would be red by default until that cycle is broken. A gate nobody can satisfy is
- * one nobody reads — the failure this codebase spent a full cycle undoing.
+ * It used to assert about CHANGE against a declared allowlist, because demanding zero would have
+ * been red by default — and a gate nobody can satisfy is one nobody reads, the failure this
+ * codebase spent a full cycle undoing. With the cause removed, zero is satisfiable, so zero is what
+ * it says.
  *
- * So the known duplicates are declared, with their cause, and the assertion is about **change**: a
- * new one fails, and one that disappears fails too, asking to be narrowed. Both directions are
- * information — and both fired during the 2026-08-13 measurement, which is how the wrong
- * attribution above was finally caught.
+ * The allowlist went with the condition it described. Both of its directions had already earned
+ * their keep on the way out: the "has grown" direction caught `@theokit/presenter` appearing after
+ * a reinstall — which is how the wrong attribution above was finally noticed — and the
+ * "disappeared" direction fired the moment the fix landed, asking to be narrowed. Keeping the
+ * mechanism empty afterwards would be machinery for a hypothetical exemption (YAGNI), and it made
+ * three of five assertions vacuous. The next real exemption arrives with its own reason.
  */
 
 const ROOT = resolve(__dirname, '../..')
-
-/**
- * Duplicates that exist today, each with the reason it is tolerated.
- *
- * Keyed by package name; the value is the published version found in the tree.
- */
-const KNOWN_DUPLICATES: ReadonlyMap<string, { version: string; because: string }> = new Map([
-  [
-    '@theokit/agents',
-    {
-      version: '7.6.0',
-      because:
-        'auto-installed from the registry to satisfy the unsatisfied peerDependency ' +
-        '`@theokit/agents: ">=0.47.0"` in `packages/http`. The workspace sibling one directory away ' +
-        'would satisfy it, but wiring that link closes a type cycle with `packages/agents` and ' +
-        'breaks the dts build (TS5055) — see the docblock.',
-    },
-  ],
-  [
-    '@theokit/http',
-    {
-      version: '1.0.0',
-      because: 'brought along by the published `@theokit/agents` above, as its own peer.',
-    },
-  ],
-  [
-    '@theokit/presenter',
-    {
-      version: '0.7.0',
-      because:
-        'same chain — a peer of the published `@theokit/agents@7.6.0`. It surfaced on 2026-08-13 ' +
-        'when a reinstall re-resolved that open range from a stale 1.0.0 pin to 7.6.0, and this ' +
-        'guard caught it in the "has grown" direction.',
-    },
-  ],
-])
 
 /** The package names this repository builds. */
 function workspacePackageNames(): Set<string> {
@@ -137,39 +109,28 @@ function publishedCopiesOfOwnPackages(): Map<string, string[]> {
 }
 
 describe('own packages are not installed alongside themselves', () => {
-  it('test_the_set_of_duplicated_own_packages_has_not_grown', () => {
-    // The assertion is about CHANGE. A new entry means some dependency started dragging another
-    // published copy of a package we build — the condition nobody would otherwise notice, because
-    // nothing today reports it.
-    const found = publishedCopiesOfOwnPackages()
-    const unexpected = [...found.keys()].filter((name) => !KNOWN_DUPLICATES.has(name))
+  it('test_no_published_copy_of_a_package_we_build_is_in_the_production_tree', () => {
+    // Zero, flatly. This assertion was impossible to satisfy until B-M67-21 removed the cause, so
+    // it used to be phrased against a declared allowlist — the assertion was about CHANGE, because
+    // demanding zero would have been red by default and a gate nobody can satisfy is one nobody
+    // reads.
+    //
+    // The allowlist is gone with the condition it described. Keeping an empty exemption map would
+    // be machinery for a hypothetical future exemption (YAGNI) — and, measured by the linter, it
+    // made three of the five assertions here vacuous. The day a real exemption is needed, it
+    // arrives with its own reason attached; that is a better trade than carrying the mechanism
+    // empty and pretending it still guards something.
+    const found = [...publishedCopiesOfOwnPackages().entries()].map(
+      ([name, versions]) => `${name}@${versions.join(',')}`,
+    )
     expect(
-      unexpected,
-      'a published copy of a package this repo builds appeared in the production tree. Two versions ' +
-        'of one contract in one tree is the defect ADR 0062 recorded for the SDK — the tests exercise ' +
-        'one and the consumer may reach the other.',
+      found,
+      'a published copy of a package this repo builds is in the production tree. Two versions of ' +
+        'one contract in one tree is the defect ADR 0062 recorded for the SDK — the tests exercise ' +
+        'one and the consumer may reach the other. Trace it with `pnpm why <name> --prod`: the last ' +
+        'one arrived through an unsatisfied peerDependency that pnpm auto-installed from the ' +
+        'registry (B-M67-21).',
     ).toEqual([])
-  })
-
-  it('test_a_known_duplicate_that_disappears_asks_to_be_removed_from_the_list', () => {
-    // The other direction. When the studio migrates, this fails and forces the list to shrink —
-    // otherwise the exemption outlives the reason for it, which is how allowlists rot.
-    const found = publishedCopiesOfOwnPackages()
-    const goneButStillDeclared = [...KNOWN_DUPLICATES.keys()].filter((name) => !found.has(name))
-    expect(
-      goneButStillDeclared,
-      'these are no longer in the tree — delete them from KNOWN_DUPLICATES so the list keeps ' +
-        'meaning what it says.',
-    ).toEqual([])
-  })
-
-  it('test_every_known_duplicate_records_why_it_is_tolerated', () => {
-    // An exemption without a reason is an assertion, and the next reader cannot tell a decision from
-    // an oversight.
-    for (const [name, entry] of KNOWN_DUPLICATES) {
-      expect(entry.because.length, `${name} must record why`).toBeGreaterThan(30)
-      expect(entry.version, `${name} must pin the version observed`).toMatch(/^\d+\.\d+\.\d+$/)
-    }
   })
 
   it('test_the_workspace_names_were_actually_discovered', () => {
