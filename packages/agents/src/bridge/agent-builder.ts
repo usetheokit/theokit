@@ -15,7 +15,7 @@
  *
  * PURE metadata (sdk-runtime.md / G2): the builder describes an agent, it NEVER calls an LLM.
  */
-import type { CustomTool, MemorySettings, ModelSelection, SettingSource } from '@theokit/sdk'
+import type { CustomTool, MemorySettings, ModelSelection } from '@theokit/sdk'
 import type { z } from 'zod'
 
 import type { Guardrail } from '../guardrails/index.js'
@@ -26,6 +26,7 @@ import type { ReasoningEffort } from '../types.js'
 
 import { defineAgent, type AgentDefinition, type DefineAgentConfig } from './define-agent.js'
 import type { HookHandlers } from './hook-handlers.js'
+import type { SettingSourcesSelection } from './setting-sources-gate.js'
 
 /**
  * A required-but-unset builder field. Branded (a literal intersected with a unique brand) so no
@@ -149,11 +150,16 @@ export interface AgentBuilder<
   skills(selection: SkillsSelection): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * theokit-file-based-config — opt into `.theokit/` file-based config (skills, subagents, hooks,
-   * MCP, context, cron), discovered by the SDK from the app root (`"project"` = `<cwd>/.theokit/`,
-   * `"user"` = `~/.theokit/`). Unset ⇒ inline (code) config only. SECURITY: `"project"` enables
-   * shell-executing hooks from `.theokit/hooks.json` — opt-in because `.theokit/` is your own repo.
+   * MCP, context, cron), discovered by the SDK from the app root (`project` = `<cwd>/.theokit/`,
+   * `user` = `~/.theokit/`). Unset ⇒ inline (code) config only.
+   *
+   * SECURITY (M68): takes a {@link SettingSourcesSelection}, not a string array. `project` reads
+   * `.theokit/hooks.json`, which **executes shell**, so it requires a `TrustPosture` as evidence;
+   * `user` is a plain boolean because `~/.theokit/` is the operator's own machine. The previous
+   * signature called `project` "opt-in because `.theokit/` is your own repo" — true for a web app
+   * whose `cwd` is its own deploy, false for an agent pointed at a repository someone else wrote.
    */
-  settingSources(sources: readonly SettingSource[]): AgentBuilder<TInput, TModel, TContext, TTools>
+  settingSources(selection: SettingSourcesSelection): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
    * M49 — enable the SDK's durable memory for this agent (`.theokit/memory/` in the run cwd:
    * `Remember:` capture with secret redaction, auto-injected recall, memory tools). Takes the SDK's
@@ -237,8 +243,8 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     approvals: (map: Record<string, HumanInTheLoopOptions>) =>
       makeBuilder({ ...config, approvals: map }),
     skills: (selection: SkillsSelection) => makeBuilder({ ...config, skills: selection }),
-    settingSources: (sources: readonly SettingSource[]) =>
-      makeBuilder({ ...config, settingSources: sources }),
+    settingSources: (selection: SettingSourcesSelection) =>
+      makeBuilder({ ...config, settingSources: selection }),
     memory: (settings: MemorySettings) => makeBuilder({ ...config, memory: settings }),
     hooks: (map: HookHandlers | Readonly<Record<string, unknown>>) =>
       makeBuilder({ ...config, hooks: map }),
