@@ -6,7 +6,10 @@
  */
 
 /** Describes a CSS resource — either external (href) or inline (content). */
-interface CssResource {
+// B-M74-01 — exported because the public function's signature mentions it: a caller that can
+// call `CssResource`-shaped API and cannot NAME the type redeclares it by hand, and a second
+// declaration of one contract diverges from the first in silence.
+export interface CssResource {
   /** External CSS URL. */
   href?: string
   /** Inline CSS content. */
