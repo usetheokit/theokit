@@ -66,6 +66,17 @@ export function diffProtection(branch, desired, live) {
     )
   }
 
+  // Checked before force-push and deletions because it governs whether ANY of them bind: an exempt
+  // administrator is not restricted by the rest of the policy. The first application of this spec
+  // set it to `false` and this comparator did not read the field, so it printed `✓ matches the spec`
+  // over a policy that bound nobody in a single-maintainer repository.
+  if (desired.enforce_admins === true && live.enforce_admins?.enabled !== true) {
+    differences.push(
+      `\`${branch}\`: administrators are exempt, so the policy does not bind the one person who ` +
+        'can push here',
+    )
+  }
+
   if (desired.allow_force_pushes === false && live.allow_force_pushes?.enabled === true) {
     differences.push(`\`${branch}\`: force-push is still allowed`)
   }
