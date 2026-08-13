@@ -25,32 +25,51 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
-## B-M72-01 — Dois testes leem `packages/theo/dist/` enquanto algo o reconstrói durante a suíte
+## ~~B-M72-01~~ — RESOLVIDO — O helper de build decidia por chamada, e a janela expirava no meio da suíte
 
-**Encontrado em:** M69/M70/M72 — **três ocorrências medidas**, 2026-08-13 · **Severidade: média** —
-não é defeito de produto; é um gate que fica vermelho por corrida e treina o time a re-rodar.
+**Encontrado em:** M69/M70/M72 — três ocorrências medidas · **Resolvido em:** 2026-08-13
 
-Dois arquivos leem a saída de build do `packages/theo` e falham de forma intermitente numa run
-completa de `pnpm test`, passando sempre isolados:
+`tests/unit/r3a-emitted-bundle-node-free.test.ts` e `tests/smoke/import-validation.test.ts` liam
+`packages/theo/dist/` e falhavam de forma intermitente na suíte completa, sempre verdes isolados —
+uma vez com `dist/cli/index.js` simplesmente **ausente**.
 
-- `tests/unit/r3a-emitted-bundle-node-free.test.ts` — lê `packages/theo/dist/server/*.js`
-- `tests/smoke/import-validation.test.ts` — lê `packages/theo/dist/cli/index.js`
+### A causa, capturada e não inferida
 
-**Medido nas três vezes:** `pnpm build` completou (exit 0) ANTES do `pnpm test` começar — são
-sequenciais no mesmo comando — e ainda assim uma das duas falhou, uma vez com o arquivo
-literalmente **ausente** (`ENOENT` em `dist/cli/index.js`). Isolado, cada um passa.
+Um watcher no diretório mais um snapshot de `ps` no instante do sumiço:
 
-**Hipótese, não conclusão:** o `tsup` limpa o diretório antes de escrever (`clean`), então qualquer
-rebuild do `packages/theo` durante a suíte faz o `dist` sumir por um instante. O que dispara esse
-rebuild ainda **não** está identificado — candidatos são os testes que invocam `theokit build` sobre
-fixtures (o turbo pode reconstruir dependências) e a agregação por `projects` do vitest.
+```
+node pnpm --filter theokit build
+  sh -c tsup
+    node tsup/dist/cli-default.js
+```
 
-**O que NÃO fazer:** re-rodar até passar. Foi o que fiz nas três vezes, e é como um flake vira
-paisagem. `testing.md` § 3 é explícito: teste intermitente é bug, conserta ou remove.
+`tests/integration/_helpers/build-theokit-package.ts` roda esse build, e o `tsup` **limpa** o
+diretório de saída antes de escrever. Todo leitor em voo via um `dist/` faltando ou parcial.
 
-**Próximo passo:** instrumentar — rodar a suíte com um watcher em `packages/theo/dist` para
-identificar quem apaga o diretório, e então ou isolar esses dois testes numa fase pós-build, ou
-fazê-los ler de um snapshot copiado no setup em vez do `dist` vivo.
+### Por que o mutex que já existia não bastava
+
+O docblock do helper **já nomeava esta corrida** — *"running `pnpm --filter theokit build` from each
+one races, wiping dist/ mid-read"* — e o mutex foi escrito para ela. Ele serializa **escritores entre
+si**, e essa nunca foi a falha.
+
+`hasFreshBuild()` era avaliado **por chamada**, contra uma janela de 10 minutos, e uma run completa
+leva mais ou menos isso. Então dois chamadores da **mesma** run recebiam respostas diferentes: um
+cedo via um dist fresco, passava e ia ler; um tardio — passada a janela — decidia que estava velho e
+reconstruía debaixo dele.
+
+**Os quatro leitores estavam dentro do protocolo o tempo todo.** Um guarda cujo escopo é mais estreito
+que a propriedade que ele aparenta proteger — a mesma forma de defeito que este ciclo encontrou de
+ponta a ponta, desta vez na infraestrutura de teste.
+
+### A correção
+
+A decisão passa a ser **uma por processo**, memoizada. Todo chamador de uma run concorda, e a janela
+volta a governar só o que ela devia governar: um processo novo. `tests/unit/build-helper-decides-once.test.ts`
+prova a propriedade por mtime — um rebuild necessariamente a move — com contraprova de que é o memo
+que curto-circuita, e não um filesystem rápido.
+
+**Verificado com o mesmo instrumento que pegou o culpado:** watcher rodando durante a suíte inteira,
+**zero desaparecimentos** onde antes havia um por run.
 
 ---
 
