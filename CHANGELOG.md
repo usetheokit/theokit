@@ -71,6 +71,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Dois tipos exportados sem nenhum consumidor, ambos meus (knip, gate `Dead code`).** `ContextCompactionStrategy` enumerava exatamente os quatro knobs de estratégia que o M74 **removeu** em vez de implementar — vocabulário publicado para quatro valores que nenhum código podia produzir, e sobra de deleção é pior que ausência porque um leitor a encontra e acredita que a capacidade existe. `SessionsGcOptions` (M72) só era consumido pela própria assinatura no mesmo arquivo: publicá-lo é prometer estabilidade de nome para um público que não existe (G7). O primeiro foi deletado; o segundo deixou de ser exportado.
+
 - **O motor de hooks do M75 estourava o teto de bundle e mergeou assim (backlog B-M76-01).** Ele entrou no barrel principal do `@theokit/agents`, levando o bundle de 34,1K para **42,9K** contra um teto de 35K. Medido com `git stash`: já estava assim **no `HEAD`**, antes do M76.
 
   O erro de processo é o que vale registrar: eu li a **contagem de testes** e o **código de saída**, não o gate de bundle — que vive num arquivo de teste do `packages/agents` e não aparece na saída agregada da raiz quando outro arquivo falha antes. Exatamente a lição que o B-M74-01 tinha acabado de dar sobre o `@theokit/http`, um milestone antes: uma capacidade que a maioria dos apps nunca toca não deve ser paga por todo app que importa o pacote. Escrevi essa frase no CHANGELOG do M74 e não a apliquei no M75.

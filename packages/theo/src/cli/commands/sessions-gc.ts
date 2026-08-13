@@ -15,7 +15,14 @@ import type { TranscriptGCPlan } from '@theokit/agents/session'
  * on.
  */
 
-export interface SessionsGcOptions {
+/**
+ * Not exported: its only consumer is the signature below, in this same file.
+ *
+ * Publishing it would put a name in the package surface that nobody imports — the G7 shape knip
+ * caught in M76. When a caller needs to hold these options in a typed variable, exporting it then is
+ * one line; exporting it now is a promise to keep a name stable for an audience that does not exist.
+ */
+interface SessionsGcOptions {
   /** Actually delete. Absent ⇒ dry run. */
   readonly apply?: boolean
   /** Newest N sessions always survive (floor 1). */
