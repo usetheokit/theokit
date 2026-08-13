@@ -332,3 +332,33 @@ export type {
   TurnOutcome,
 } from '@theokit/presenter'
 export type { WireChunk, WireDataPart } from '@theokit/presenter/wire'
+
+// M75 — the hook engine: from a line in a config file to a bounded, trusted subprocess.
+//
+// The seam (`HookHandlers`) was already published; everything between it and a running command was
+// the consumer's — 828 lines importing a single symbol. This adds the parts each of them would
+// otherwise relearn the bad way: the output cap, the drain-vs-exit race, the process-group kill, the
+// chain budget, the nonce fence, and the fail-closed / fail-open asymmetry.
+//
+// Denial is the default. `approved` is a REQUIRED argument on `buildHookHandlers` because an
+// optional gate is a gate somebody forgets, and forgetting this one runs a stranger's shell command.
+export {
+  DEFAULT_CONTINUATION_BUDGET,
+  DEFAULT_HOOK_TIMEOUT_MS,
+  HOOK_EVENTS,
+  HookSpecError,
+  buildHookHandlers,
+  fenceHookOutput,
+  hookSpecSchema,
+  parseHookSpecs,
+} from './hooks/hook-spec.js'
+export type { BuildHookHandlersOptions, HookEvent, HookSpec } from './hooks/hook-spec.js'
+export { hookFingerprint } from './hooks/hook-fingerprint.js'
+export type { HookIdentity } from './hooks/hook-fingerprint.js'
+export {
+  CHAIN_BUDGET_MULTIPLIER,
+  DRAIN_BUDGET_MS,
+  MAX_OUTPUT_BYTES,
+  runHookCommand,
+} from './hooks/hook-runner.js'
+export type { HookRunInput, HookRunResult } from './hooks/hook-runner.js'
