@@ -78,58 +78,108 @@ Bump de `vitest`/`vite` resolve os três últimos de uma vez; o `react-router` �
 
 ---
 
-## B-M67-03 — `@theokit/studio` está sete majors atrás, e alinhar os peers é uma migração, não um bump
+## ~~B-M67-03~~ — O studio migrou; e a duplicata que eu atribuí a ele nunca veio dele
 
-**Encontrado em:** M67 (T1), 2026-08-12 · **Medido em:** 2026-08-12 · **Severidade: média** —
-não quebra install (peer opcional, pnpm apenas avisa); quebra a promessa do peer.
+**Encontrado em:** M67 (T1), 2026-08-12 · **Medido em:** 2026-08-12 · **Resolvido em:** 2026-08-13
 
 Peer opcional de `theokit` (`packages/theo/package.json:136,162`). O `@theokit/studio@0.1.0`
-publicado declara `@theokit/agents@^0.39.0` (o workspace tem **7.6.0**) e `@theokit/sdk@^3.8.0` (o
+publicado declarava `@theokit/agents@^0.39.0` (o workspace tem **7.6.0**) e `@theokit/sdk@^3.8.0` (o
 workspace tem 4.51.1).
 
-**O acoplamento é real** — não dá para simplesmente remover o peer. `packages/theo/src/vite-plugin/
-integrate-studio.ts:47` importa `@theokit/studio/plugin` dinamicamente, e do outro lado
-`packages/studio/plugin/run-endpoint.ts` e `reflection-api.ts` importam `compileAgentModule` /
-`streamAgentUIMessages` de `@theokit/agents/bridge` e `discoverSkills` de `@theokit/sdk/skills`.
+**O acoplamento é real** — não dava para simplesmente remover o peer.
+`packages/theo/src/vite-plugin/integrate-studio.ts:47` importa `@theokit/studio/plugin`
+dinamicamente, e do outro lado `packages/studio/plugin/run-endpoint.ts` e `reflection-api.ts`
+importam `compileAgentModule` / `streamAgentUIMessages` de `@theokit/agents/bridge`.
 
-**Medição feita, e ela muda a natureza da entrada.** Alinhar os ranges no sibling
-(`../theokit-studio`, branch `workspace`) para `@theokit/agents@^7.5.0` + `@theokit/sdk@^4.49.0` e
-rodar a suíte de lá: **de 192 verdes para 177 verdes e 15 vermelhos**, 4 arquivos. Um deles devolve
-`422` onde esperava `200` no endpoint de run — o contrato mudou de verdade entre 0.39 e 7.x.
+### A migração
 
-Ou seja: os peers não estavam apenas desatualizados no manifest. O código do studio **nunca foi
-migrado** através de sete majors, e o peer obsoleto era o que escondia isso — enquanto ninguém o
-satisfazia, ninguém descobria. Republicar com os peers corrigidos publicaria um pacote que não
-funciona.
+Alinhados os peers e devDeps do sibling para `@theokit/agents@^7.6.0` + `@theokit/sdk@^4.49.0`:
+**192 verdes → 177 verdes e 15 vermelhos**, em 4 arquivos. Diagnosticados, um a um: todos os 15
+descendem de **uma** renomeação de API, e ela está nas *fixtures de teste*, não no produto.
 
-**O que NÃO foi feito, e por quê.** A migração é um milestone do repositório `theokit-studio`, com
-ciclo, CHANGELOG e release próprios — não cabe como item de backlog deste repo, e não seria honesto
-fazê-la de passagem. O experimento de medição está preservado em
-`git -C ../theokit-studio stash list` → `stash@{0}` (só o `package.json`; a árvore de lá está limpa e
-na baseline verde).
+`agent()` deixou de ser exportado do bridge entre 0.39 e 7.x; o sucessor é `AgentBuilder.create()`,
+com a mesma cadeia (`.model` / `.system` / `.tool` / `.skills` / `.build`). Três fixtures importavam
+`agent`, lançavam no import, e o `compileAgentModule` degradava por item exatamente como foi
+projetado — inclusive devolvendo `422` no endpoint de run. Ou seja: o `422` **não era contrato
+quebrado, era o contrato funcionando**, alimentado por uma fixture morta.
 
-**Próximo passo — e por que ele não é deste repositório.** A migração é um milestone do
-`theokit-studio`: ciclo, CHANGELOG e release próprios, 15 testes a corrigir através de sete majors,
-com um endpoint que já devolve `422` onde esperava `200`. Fazê-la de passagem, no meio de um ciclo de
-outro repo, seria exatamente o "caminho curto" que o processo proíbe — e o pior lugar para isso é uma
-migração cujo contrato mudou de verdade.
+Três linhas depois: **192 verdes**, `tsc --noEmit` limpo.
 
-**Estado desta entrada:** medida, documentada, e **parada de propósito**. Uma tentativa de reabrir o
-experimento nesta sessão foi bloqueada, citando esta mesma decisão — o que é o comportamento correto.
-Ela sai do backlog quando virar milestone lá, não antes.
+**A correção do meu próprio registro.** A entrada anterior dizia "o código do studio nunca foi
+migrado através de sete majors" e "o contrato mudou de verdade". Eu tinha **contado** os 15
+vermelhos sem **diagnosticar** nenhum, e inferi um tamanho a partir do número. A superfície de
+produção que o studio consome — `compileAgentModule`, `streamAgentUIMessages` — atravessou as sete
+majors intacta.
 
-**Consequência que este repo herda enquanto isso — agora medida e guardada.** O
-`@theokit/studio@0.1.0` arrasta `@theokit/agents@1.0.0` e `@theokit/http@1.0.0` publicados para a
-árvore de produção daqui: duas versões de um mesmo contrato na mesma árvore, onde os testes exercitam
-uma e o consumidor pode alcançar a outra. É a generalização do defeito que o ADR 0062 registrou para
-o SDK ("o workspace de fato carregava duas cópias, 4.40.0 e 3.8.0"), e a origem da única violação de
-licença do #213 que **não tem conserto por republish** — tarballs npm são imutáveis.
+Um verde que aparece depois de três linhas, num item classificado como "sete majors", merece
+desconfiança: é a forma clássica de verde pelo motivo errado. Por isso a migração vem acompanhada de
+`tests/version-floor.test.ts` no sibling, que não pergunta versão — pergunta aos módulos carregados
+o que eles expõem (`AgentBuilder` presente, `agent` ausente, e a família config/trust/wiring do SDK
+4.49). Ele levou **quatro** tentativas, e cada tentativa errada foi o mesmo defeito: uma sonda
+incapaz de detectar a condição que rastreia (`package.json` fora do `exports`; resolução CJS contra
+um subpath ESM-only; `import.meta.resolve` que o transform SSR do Vite não fornece).
 
-`tests/unit/own-package-duplicates.test.ts` passa a medir isso. Ele **não exige zero**: exigir zero
-seria vermelho por default, já que a correção é a migração do studio, sete majors em outro
-repositório. Ele afirma sobre **mudança** — uma duplicata nova falha, e quando o studio migrar o
-teste também falha, pedindo que a lista encolha. As duas direções são informação, e nenhuma isenção
-sobrevive ao motivo dela.
+### A duplicata: atribuição refeita do zero
+
+A entrada anterior afirmava que o `@theokit/studio@0.1.0` arrastava `@theokit/agents@1.0.0` e
+`@theokit/http@1.0.0` para a árvore daqui. **Ele não arrasta, e nunca arrastou.** O studio publicado
+declara `@theokit/agents` só como *peer*, e esse peer resolve para o workspace 7.6.0. Eu inferi a
+causa por co-ocorrência e nunca a tracei — que é exatamente como uma causa plausível sobrevive dentro
+de um arquivo em que todo mundo confia.
+
+Traçada no `pnpm-lock.yaml`, a causa real é **uma aresta dentro deste repositório**:
+
+> `packages/http` declara `@theokit/agents: ">=0.47.0"` como peerDependency, e nada no workspace o
+> satisfaz — então o pnpm **auto-instala do registry**, ao lado do irmão de mesmo nome que está um
+> diretório adiante. Essa cópia publicada traz os próprios `@theokit/http` e `@theokit/presenter`
+> publicados junto.
+
+O lockfile ainda pinava `1.0.0` num range aberto — resíduo de antes do 7.x existir. A reinstalação
+re-resolveu para 7.6.0, o que **removeu do produto** o `@theokit/agents@1.0.0`: a cópia sem `license`
+declarada que o #213 registrou como a única sem conserto por republish (tarballs npm são imutáveis).
+O gate de licenças sai de 4 violações para **zero em 562 pacotes**.
+
+O guarda `tests/unit/own-package-duplicates.test.ts` disparou nas **duas** direções durante a
+medição — pediu para encolher quando as duplicatas sumiram, e acusou `@theokit/presenter` quando ele
+apareceu. Foi assim que a atribuição errada acabou pega. O docblock e a lista foram reescritos com a
+cadeia traçada.
+
+**O que fica aberto, como item próprio:** o conserto canônico (`"@theokit/agents": "workspace:*"` nos
+devDeps de `packages/http`) foi **medido**: funciona, o lockfile passa a linkar `../agents` e as três
+duplicatas saem da árvore — e **quebra o build**, porque `packages/agents` já devDepende de
+`@theokit/http`, então o link fecha um ciclo de tipos e o dts do tsup falha com `TS5055`. Quebrar
+esse ciclo é mudança arquitetural em dois pacotes, não edição de manifest. Registrado abaixo como
+B-M67-21 em vez de ser contrabandeado sob um guarda de duplicatas.
+
+---
+
+## B-M67-21 — `packages/agents` e `packages/http` dependem um do outro, e o preço é uma cópia publicada de nós mesmos na árvore
+
+**Encontrado em:** 2026-08-13, ao tracear a causa real do B-M67-03 · **Severidade: média** — não
+quebra install nem build hoje; mantém duas versões de um mesmo contrato na árvore de produção.
+
+`packages/http` declara `@theokit/agents: ">=0.47.0"` como peerDependency. Nada no workspace o
+satisfaz, então o pnpm auto-instala a cópia **publicada** ao lado do irmão de mesmo nome. Essa cópia
+traz `@theokit/http@1.0.0` e `@theokit/presenter@0.7.0` publicados atrás dela.
+
+É o defeito do ADR 0062 generalizado: duas versões de um contrato na mesma árvore, onde os testes
+exercitam uma e o consumidor pode alcançar a outra.
+
+**O conserto óbvio está medido e não passa.** `"@theokit/agents": "workspace:*"` nos devDeps de
+`packages/http` faz o lockfile linkar `../agents` e tira as três duplicatas da árvore — e quebra o
+build:
+
+```
+packages/http build: error TS5055: Cannot write file 'dist/app.d.ts' because it would overwrite input file.
+```
+
+Porque `packages/agents` já devDepende de `@theokit/http` (`packages/agents/package.json:79`). O link
+de volta fecha um ciclo, o `dist/app.d.ts` do http entra como *entrada* do build que o escreve, e o
+dts pass morre.
+
+**O trabalho real** é decidir a direção da dependência entre os dois pacotes — hoje ela é mútua, o
+que é o problema, não o sintoma. Enquanto isso, `tests/unit/own-package-duplicates.test.ts` mede e
+guarda a consequência nas duas direções.
 
 ---
 
