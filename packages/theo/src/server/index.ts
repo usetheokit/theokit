@@ -169,26 +169,33 @@ export { TrustStore, TrustStorePermissionsError } from '../config/trust-store.js
 export type { TrustRecord } from '../config/trust-store.js'
 
 // M74 — the instruction tree, the composition ladder, and context pressure.
-export { loadInstructionTree } from '../context/instruction-tree.js'
+//
+// Under `config/`, not a new `context/` directory. The first cut created one, and
+// `dependency-cruiser` refused it: `server/` may only depend on core / cache / config / devtools /
+// services (G1), and a fresh top-level layer is outside that DAG. The rule was right and the layout
+// was wrong — these three ARE agent configuration, which is exactly what `config/` holds. Widening
+// the DAG to admit a directory invented five minutes earlier would have been editing the guard to
+// match the mistake.
+export { loadInstructionTree } from '../config/instruction-tree.js'
 export type {
   InstructionBlock,
   InstructionTree,
   InstructionTreeBudget,
   LoadInstructionTreeInput,
-} from '../context/instruction-tree.js'
-export { composeInstructions } from '../context/compose-instructions.js'
+} from '../config/instruction-tree.js'
+export { composeInstructions } from '../config/compose-instructions.js'
 export type {
   ComposeInstructionsOptions,
   ComposedInstructions,
   InstructionSource,
-} from '../context/compose-instructions.js'
+} from '../config/compose-instructions.js'
 export {
   DEFAULT_CONTEXT_PRESSURE_THRESHOLDS,
   ContextPressureThresholdError,
   contextPressure,
   effectiveContextWindow,
-} from '../context/context-pressure.js'
-export type { ContextPressure, ContextPressureThresholds } from '../context/context-pressure.js'
+} from '../config/context-pressure.js'
+export type { ContextPressure, ContextPressureThresholds } from '../config/context-pressure.js'
 
 export { loadEnv, _resetEnvCache } from '../config/load-env.js'
 export type { LoadEnvOptions, LoadEnvResult } from '../config/load-env-types.js'
