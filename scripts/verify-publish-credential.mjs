@@ -36,7 +36,7 @@
  * `npm` runs from PATH deliberately: a release script asks the same npm the release uses.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -100,11 +100,32 @@ function probeWhoami() {
 }
 
 /**
- * Is an `_authToken` configured through an npmrc, rather than only an ad-hoc env var?
+ * Every npmrc the publish request could read, in npm's own precedence order.
  *
- * `npm config get` resolves the full npmrc chain (user, project, `NPM_CONFIG_USERCONFIG`), which is
- * the same resolution the publish request uses.
+ * `NPM_CONFIG_USERCONFIG` comes FIRST and is the one that matters in CI: `actions/setup-node` writes
+ * its generated npmrc to a temp path and points that variable at it. A check that only looked at
+ * `cwd` and `$HOME` therefore reported "no npmrc" on a runner that had one — which is exactly what
+ * this gate did on its first real run, refusing a release whose credential was fine.
+ *
+ * That is the third time on this same problem that a probe of mine was the wrong oracle. Hence the
+ * extraction: the path list is now a pure function with a test, instead of a detail buried in a
+ * filesystem call.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {string} cwd
+ * @param {string} home
+ * @returns {string[]}
  */
+export function npmrcCandidates(env, cwd, home) {
+  const candidates = []
+  if (env.NPM_CONFIG_USERCONFIG !== undefined && env.NPM_CONFIG_USERCONFIG.length > 0) {
+    candidates.push(env.NPM_CONFIG_USERCONFIG)
+  }
+  candidates.push(join(cwd, '.npmrc'), join(home, '.npmrc'))
+  return candidates
+}
+
+/** Is an `_authToken` configured through an npmrc, rather than only an ad-hoc env var? */
 function probeWritePathCredential() {
   try {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- see § PATH note above
@@ -116,9 +137,10 @@ function probeWritePathCredential() {
   } catch {
     /* fall through to the file check */
   }
-  // `npm config get` masks some values; a project or home npmrc naming the registry counts too.
-  for (const rc of [join(process.cwd(), '.npmrc'), join(homedir(), '.npmrc')]) {
-    if (existsSync(rc)) return true
+  // `npm config get` masks some values, and `setup-node` writes a `${NODE_AUTH_TOKEN}` placeholder
+  // that it may not expand for a read. An npmrc naming the registry counts.
+  for (const rc of npmrcCandidates(process.env, process.cwd(), homedir())) {
+    if (existsSync(rc) && readFileSync(rc, 'utf8').includes('registry.npmjs.org')) return true
   }
   return false
 }

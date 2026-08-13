@@ -18,3 +18,13 @@ export interface CredentialDiagnosis {
 
 /** Turn the probes into a verdict. Pure — probes injected (DIP). */
 export function diagnoseCredential(probes: CredentialProbes): CredentialDiagnosis
+
+/**
+ * Every npmrc the publish request could read, in npm's precedence order.
+ * `NPM_CONFIG_USERCONFIG` comes first — it is where `actions/setup-node` writes in CI.
+ */
+export function npmrcCandidates(
+  env: Record<string, string | undefined>,
+  cwd: string,
+  home: string,
+): string[]
