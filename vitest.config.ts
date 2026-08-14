@@ -203,6 +203,10 @@ export default defineConfig({
       // the bare specifier: a string alias matches by prefix, so without it this resolves to the
       // nonsense path `…/src/index.ts/hooks` instead of erroring.
       '@theokit/agents/tool-scope': path.resolve(__dirname, 'packages/agents/src/tools/index.ts'),
+      '@theokit/agents/mcp-health': path.resolve(
+        __dirname,
+        'packages/agents/src/mcp-health-entry.ts',
+      ),
       '@theokit/agents/ask': path.resolve(__dirname, 'packages/agents/src/ask/index.ts'),
       '@theokit/agents/hooks': path.resolve(__dirname, 'packages/agents/src/hooks/index.ts'),
       // M73 — `/persistence`, needed the moment framework code composed the atomic-write and
