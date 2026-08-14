@@ -228,3 +228,40 @@ relatório contou arquivos, o framework absorveu mecanismos". Isso vale para o M
 Mas para **hooks e session a massa É o mecanismo**, e ela segue duplicada: ~940 LOC que a tese
 prevê e que simplesmente não foram migradas. Generalizei cedo demais a partir de um caso, e a
 medição de adoção acima é o que corrige a afirmação.
+
+
+---
+
+## Levas 5 e 6 — e o que a adoção revelou sobre hooks
+
+| Leva | Área | Resultado |
+|---|---|---|
+| 4 | `mcp-health` (M82) | sink tipado contra `RunEvent`; `source: 'run'\|'config'`; **`onWarn` do `loadMcpJson` ganhou consumidor pela primeira vez** |
+| 5 | `session` (M71) | `protectedSessions` ganhou a **terceira categoria** — o writer lease — que o arquivo documentava como inalcançável |
+| 6 | `hook-runner` (M75) | 164 → **83 linhas**; ~150 de subprocess saíram |
+
+**A leva 5 é o caso mais limpo da tese inteira.** O arquivo carregava um comentário explicando por que
+a terceira categoria não dava: *"`listAgents` é async e os dois chamadores são caminhos de escrita
+síncronos"*. `protectedTranscripts` resolve pelo **writer lease**, sincronamente — a restrição não se
+aplica a ele. O framework não substituiu o que o produto tinha; entregou o que o produto tinha
+desistido de ter.
+
+## Hooks: três incompatibilidades, não uma
+
+A primeira medição registrou o fingerprint. Tentar a migração revelou mais duas, e as três juntas são
+o motivo de ~600 LOC continuarem locais:
+
+| # | Incompatibilidade | Estado |
+|---|---|---|
+| 1 | **Fingerprint** — JSON ordenado + `sha256:` contra U+001E + hex cru | ✅ **resolvido** — `@theokit/agents@8.2.0` aceita `fingerprint` injetável; o default segue nosso, o store do consumidor fica intocado |
+| 2 | **Vocabulário de evento** — `PreToolUse`/`PostToolUse`/`Stop`/`SessionStart` contra oito snake_case, sem mapeamento 1:1 | ❌ o schema é `.strict()`: adotar o parser **rejeitaria todo `.theokit/hooks.json` em disco**, com erro no boot |
+| 3 | **`onVeto`** — o sinal que a superfície usa para dizer que um PreToolUse vetou | ❌ o framework não tem equivalente |
+
+A (2) é a mais séria e é **de formato de configuração, não de código**. Os nomes do consumidor são os
+do Claude Code, escolhidos por paridade deliberada; os nossos são próprios. Reconciliar exige decidir
+qual vocabulário é o público — e isso é decisão de produto, com um caminho de migração para arquivos
+de usuário, não um refactor.
+
+**A lição que as três deixam:** o gap de adoção não era preguiça de migração. Era o framework e o
+produto tendo feito escolhas diferentes em pontos que ninguém tinha comparado — e cada uma só
+apareceu quando alguém tentou de fato encaixar os dois.
