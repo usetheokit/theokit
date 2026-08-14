@@ -120,3 +120,19 @@ export type {
 // boundary.
 export { CODEX_CLIENT_ID_ENV_VAR, CODEX_PROVIDER, loginWithDevice } from './auth/device-provider.js'
 export type { AuthMethod, DeviceAuthProvider, PromptHooks } from './auth/device-provider.js'
+
+// M79 — the framework's OWN `resolveCredential`, and the reason it may carry that name here.
+//
+// The paragraphs above withhold the SDK's symbol because two divergent functions share the name.
+// This one is a THIRD, and it is safe precisely because it is the only one reachable from this
+// subpath and the only one whose signature says which providers it is talking about: the descriptor
+// list is a parameter. WHICH providers exist stays app policy; the precedence chain, the
+// prefix<->provider consistency check and the provenance record are mechanism, and withholding
+// mechanism is what made a consumer write a 70-line dotenv parser to answer "shell or .env?".
+export { ProviderPrefixMismatchError, resolveCredential } from './auth/resolve-credential.js'
+export type {
+  CredentialResolution,
+  ProviderDescriptor as CredentialProviderDescriptor,
+  ResolveCredentialInput,
+  SourceOrigin,
+} from './auth/resolve-credential.js'
