@@ -34,6 +34,8 @@ import { describe, expect, it } from 'vitest'
 import * as layerDir from '../../src/auth-entry.js'
 import * as sdk from '@theokit/sdk/auth'
 
+import { resolveCredential as frameworkResolveCredential } from '../../src/auth/resolve-credential.js'
+
 /** The store mechanics — what the SDK owns and what the layer must let cross. */
 const MECANICA_DE_STORE = [
   'credentialHome',
@@ -95,23 +97,50 @@ const OAUTH_ENGINE = [
 
 const PASS_THROUGH = [...MECANICA_DE_STORE, ...STANDARD_DEVICE_FLOW, ...OAUTH_ENGINE] as const
 
-describe('M112 — `resolveCredential` still does NOT cross over, on purpose', () => {
-  it('test_resolveCredential_does_not_cross_the_layer', () => {
-    // The deliberate exception `auth-entry.ts` has documented since M73: the SDK and the consumer
-    // have DIFFERENT functions under that name (sync vs async, throws vs `undefined`, reads env vs
-    // does not, infers provider vs refuses), and the SDK itself declares that env precedence, prefix
-    // inference and the declared provider are the consumer's **app policy**.
+describe("M79 — `resolveCredential` crosses, and it is OURS, not the SDK's", () => {
+  it('test_the_exported_resolveCredential_is_the_FRAMEWORK_one', () => {
+    // ## What changed, and what did not
     //
-    // This test exists because M112 opens the neighbouring subsystem: without an explicit lock, the
-    // next milestone that "completes the auth pass-through" adds it out of symmetry, and the consumer
-    // ends up with two identical names of divergent semantics in one scope — a silent failure, which
-    // is exactly what the original decision avoids.
+    // Until M79 this asserted that NOTHING named `resolveCredential` crossed. The reason was sound
+    // and still is: the SDK and the agent-builder ship different functions under that name — sync vs
+    // async, throws vs `undefined`, reads env vs does not, infers the provider vs refuses — and two
+    // of them in one scope is a silent import of the wrong one.
+    //
+    // M79 publishes a THIRD, deliberately: the precedence chain, the prefix/provider consistency
+    // check and the provenance record are mechanism, and withholding mechanism is what made a
+    // consumer write a 70-line dotenv parser to answer "shell or .env?".
+    //
+    // So the assertion narrows to the invariant that actually protects the consumer. Not "no symbol
+    // by this name" — which would now forbid the milestone — but "the one reachable here is the
+    // framework's, and the SDK's did not come along behind it".
+    const exported = (layerDir as Record<string, unknown>).resolveCredential
     expect(
-      (layerDir as Record<string, unknown>).resolveCredential,
-      '`resolveCredential` started crossing the layerDir. The omission is DELIBERATE and documented in ' +
-        '`src/auth-entry.ts`: two functions share this name with divergent semantics. Exposing both ' +
-        'in one scope invites importing the wrong one, silently.',
-    ).toBeUndefined()
+      exported,
+      '`resolveCredential` must be reachable from `@theokit/agents/auth` (M79)',
+    ).toBeTypeOf('function')
+    expect(exported, "the exported symbol must be the framework's own, not the SDK re-export").toBe(
+      frameworkResolveCredential,
+    )
+  })
+
+  it('test_the_SDK_symbol_is_NOT_what_you_get', () => {
+    // The half that keeps the original lock alive. If a later milestone "completes the pass-through"
+    // out of symmetry and re-exports the SDK's function, this turns red — which is the whole point:
+    // the two are interchangeable by NAME and not by behaviour.
+    const exported = (layerDir as Record<string, unknown>).resolveCredential
+    expect(exported).not.toBe((sdk as Record<string, unknown>).resolveCredential)
+  })
+
+  it('test_the_framework_signature_is_the_distinguishable_one', () => {
+    // What makes a third function under a shared name safe at a call site: ours is the only one that
+    // takes the provider descriptors as an argument. A reader seeing `resolveCredential({ providers })`
+    // knows which it is without checking the import.
+    expect(() =>
+      frameworkResolveCredential({
+        env: { OPENAI_API_KEY: 'sk-x' },
+        providers: [{ name: 'openai', envKey: 'OPENAI_API_KEY', priority: 1 }],
+      }),
+    ).not.toThrow()
   })
 })
 
