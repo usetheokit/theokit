@@ -40,6 +40,10 @@ export class ConcurrentQuestionError extends TheokitAgentError {
       `thread "${threadId}" already has a question awaiting an answer. A surface renders one ` +
         `question at a time, and a second one in flight cannot be attributed to an answer. ` +
         `Answer or abandon the first.`,
+      // Stable, because `name` is a display string and this is what a caller switches on — and what
+      // survives a minifier. The sibling errors in this package (`DELEGATION_TIMEOUT`) carry one;
+      // these three shipped without, and a consumer migrating off its own copy found it undefined.
+      { code: 'question_already_pending' },
     )
   }
 }
@@ -52,6 +56,7 @@ export class ConcurrentListenerError extends TheokitAgentError {
       `thread "${threadId}" already has a question listener. Two listeners render the prompt ` +
         `twice and race to answer it. Dispose the first (call the function \`setListener\` ` +
         `returned) before attaching another.`,
+      { code: 'listener_already_attached' },
     )
   }
 }
@@ -63,7 +68,9 @@ export class ConcurrentListenerError extends TheokitAgentError {
 export class QuestionAbandonedError extends TheokitAgentError {
   override readonly name = 'QuestionAbandonedError'
   constructor(threadId: string, why: string) {
-    super(`question on thread "${threadId}" was abandoned: ${why}`)
+    super(`question on thread "${threadId}" was abandoned: ${why}`, {
+      code: 'question_abandoned',
+    })
   }
 }
 
