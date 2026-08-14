@@ -18,6 +18,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`FRESH_WINDOW_MS` passa a ser exportado.** O literal `10 * 60 * 1000` estava duplicado entre a
   implementacao e um teste irmao — que foi como um terceiro teste acabou verde contra uma janela que
   ele inventou. O numero tem uma casa so.
+- **A guarda da G1 media o que o nome não prometia.** `g1-dependency-dag-boundary` afirmava a direção
+  `http ↛ agents` lendo apenas os `import` de `src` — e ficou verde sobre um manifesto que declarava a
+  aresta proibida em voz alta. O manifesto é a aresta que um gerenciador de pacotes enxerga, e é a que
+  chega ao consumidor. A guarda agora lê os dois.
+
+## [@theokit/agents 8.1.0 · @theokit/http 1.1.0] - 2026-08-14
+
+### Fixed
+
 - **`@theokit/agents` 8.1.0 — os erros do canal de pergunta nao tinham `code`.** `ConcurrentQuestionError`,
   `ConcurrentListenerError` e `QuestionAbandonedError` eram tipados e diziam o que fazer, mas sem
   codigo estavel. `name` e string de exibicao; `code` e o que um `switch` consome e o que sobrevive a
@@ -26,19 +35,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **De novo um gate cujo oraculo nao media o que o nome promete.** O teste chamava-se
   `test_every_error_is_a_TheokitAgentError_with_a_stable_code` e verificava `name` e a mensagem —
   nunca o `code`. Agora verifica os tres.
-
-### Fixed
-
 - **`@theokit/http` 1.1.0 — a `peerDependency` invertida que nunca deveria ter sido publicada.**
   `@theokit/http@1.0.0` declarava `peerDependencies: { "@theokit/agents": ">=0.47.0" }`, invertendo a
   direção travada pela G1 (`agents` depende de `http`, nunca o contrário). O efeito era instalar uma
   cópia antiga de `@theokit/agents` na árvore de todo consumidor, ao lado da que ele pediu — foi assim
   que apareceu, migrando um consumidor real. A correção existia no fonte desde a quebra do ciclo, mas
   `1.0.0` foi publicado antes dela e a versão não subiu: o registry seguiu servindo o manifesto velho.
-- **A guarda da G1 media o que o nome não prometia.** `g1-dependency-dag-boundary` afirmava a direção
-  `http ↛ agents` lendo apenas os `import` de `src` — e ficou verde sobre um manifesto que declarava a
-  aresta proibida em voz alta. O manifesto é a aresta que um gerenciador de pacotes enxerga, e é a que
-  chega ao consumidor. A guarda agora lê os dois.
 
 ## [@theokit/agents 8.0.0 · theokit 0.48.0] - 2026-08-14
 
