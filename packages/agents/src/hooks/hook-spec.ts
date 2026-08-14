@@ -142,6 +142,30 @@ export interface BuildHookHandlersOptions {
   readonly env?: Readonly<Record<string, string>>
   /** Where a refused, failed or truncated hook is reported. */
   readonly onWarn?: (message: string) => void
+  /**
+   * How a spec is reduced to the key `approved` is checked against. Defaults to
+   * {@link hookFingerprint}.
+   *
+   * ## Why this is injectable, and why it is not a loosening
+   *
+   * A real migration found the gap. A consumer arrived with an approval store already on disk,
+   * keyed by ITS scheme — a JSON projection with sorted keys and a `sha256:` prefix — while ours
+   * joins the fields with U+001E and emits bare hex. Both are sound; they are different, so the same
+   * hook hashes to two values.
+   *
+   * With the function hardcoded, that consumer's `approved` set matched nothing and every hook was
+   * refused. Not a crash — a warning per hook and silence afterwards, which is the worst shape a
+   * security regression can take.
+   *
+   * The alternative was a data migration over approval records, and a half-finished one re-prompts
+   * an operator for hooks they already approved. Re-prompting for everything is how a user learns to
+   * approve reflexively, which is precisely what this gate exists to prevent.
+   *
+   * What does NOT change: `approved` is still required, an empty set still refuses everything, and
+   * the default is still ours. Injecting a function decides how a hook is NAMED, never whether the
+   * gate applies.
+   */
+  readonly fingerprint?: (identity: HookIdentity) => string
 }
 
 const IGNORE_WARNING = (): void => undefined
@@ -166,8 +190,9 @@ export function buildHookHandlers(
     return {}
   }
 
+  const fingerprintOf = options.fingerprint ?? hookFingerprint
   const runnable = specs.filter((spec) => {
-    const approved = options.approved.has(hookFingerprint(identityOf(spec)))
+    const approved = options.approved.has(fingerprintOf(identityOf(spec)))
     if (!approved) {
       warn(
         `hook not approved and will not run: "${spec.command}" on ${spec.event}. Approve it by ` +
