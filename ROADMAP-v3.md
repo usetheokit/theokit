@@ -5,15 +5,22 @@
 > acoplados: "pronto" foi afirmado no cabecalho, que nenhum gate confere, enquanto a lista que
 > define o que "pronto" significa ficou intocada.
 >
-> **21 itens estao agora verificados contra o codigo** — M72, M74, M79 e M82 — cada um conferido
-> simbolo a simbolo, com anotacao onde a implementacao divergiu da letra e por que. Tres divergiram,
-> todas para melhor: o M72 usa o `classifySessionArtifact` do SDK em vez de escrever o proprio; o
-> M74 REMOVEU os quatro knobs inertes (o segundo ramo da propria DoD); o M79 tornou o
-> `resolveProvider` publico em vez de deleta-lo (ADR 0041).
+> **Os 98 estao agora verificados contra o codigo.** Metodo: para cada item, os identificadores
+> entre crases foram resolvidos no fonte (caminho ⇒ existe no disco; simbolo ⇒ declarado em
+> `packages/*/src` ou coberto por teste); os 21 itens sem simbolo algum foram lidos e conferidos
+> contra o teste que os codifica. Quatro divergencias da letra estao anotadas na propria linha —
+> tres eram decisoes melhores (o `classifySessionArtifact` do SDK em vez de um proprio; os quatro
+> knobs REMOVIDOS em vez de implementados; `resolveProvider` publico em vez de deletado, ADR 0041) e
+> uma era relocacao (a tabela ROOT-BAR vive dentro do pacote que ela guarda).
 >
-> **Os outros 77 seguem sem verificacao.** Marca-los sem conferir seria repetir o defeito ao
-> contrario — e o cabecalho `[x]` deles ja significa menos do que parece. Verificar os que faltam e
-> trabalho de quem retomar; a lacuna esta aqui com numero, nao silenciada.
+> **Um item estava genuinamente NAO cumprido e foi fechado nesta passagem:** o M86 exigia zero
+> `from '@theokit/sdk'` no TheoCode e havia **seis**, com a dependencia ainda declarada. Eram
+> import-site, nao primitiva faltando — cinco da familia de pass-through do M67 e um tipo, todos ja
+> no barrel de `@theokit/agents`. Reapontados; a dependencia saiu do manifesto; suite do consumidor
+> verde (529).
+>
+> O que essa passagem mostrou vale registrar: o `[x]` do cabecalho nunca provou nada, e o unico
+> criterio que estava mesmo aberto so apareceu porque alguem foi medir em vez de ler.
 
 
 > **Terceira geração.** O `ROADMAP.md` (v1, M0–M56) e o `ROADMAP-v2.md` (M57–M63, M66) estão completos.
@@ -106,9 +113,9 @@ paridade (`tests/unit/subpath-coverage.test.ts`) exige veredito in/out para os *
 essas primitivas vivem na **barra root**, que nenhum gate enumera. Custo de correção: re-export puro.
 
 **Definition of done:**
-- [ ] As 8 símbolos acima re-exportados de `packages/agents/src/index.ts` (ou de um `/config` entry no mesmo formato dos `*-entry.ts` existentes), sem wrapper.
-- [ ] `tests/unit/subpath-coverage.test.ts` ganha uma tabela de veredito **ROOT-BAR** com a mesma disciplina in (verificado) / out (com motivo > 20 chars) já aplicada aos subpaths — de modo que a próxima omissão de barra root falhe o teste.
-- [ ] `pnpm test` / `typecheck` / `lint --max-warnings=0` / `knip` verdes; entrada no CHANGELOG.
+- [x] As 8 símbolos acima re-exportados de `packages/agents/src/index.ts` (ou de um `/config` entry no mesmo formato dos `*-entry.ts` existentes), sem wrapper.
+- [x] `tests/unit/subpath-coverage.test.ts` ganha uma tabela de veredito **ROOT-BAR** com a mesma disciplina in (verificado) / out (com motivo > 20 chars) já aplicada aos subpaths — de modo que a próxima omissão de barra root falhe o teste. — **entregue em `packages/agents/tests/unit/root-bar-{coverage,passthrough}.test.ts`**, dentro do pacote que a guarda protege em vez da suite raiz.
+- [x] `pnpm test` / `typecheck` / `lint --max-warnings=0` / `knip` verdes; entrada no CHANGELOG.
 
 > **Correção medida (2026-08-12, DISCOVER do M67).** O parágrafo acima dizia "custo de correção:
 > re-export puro". **Estava errado.** Sete dos oito símbolos **não existiam** no `@theokit/sdk@4.40.0`
@@ -144,11 +151,11 @@ atacante, e habilitar `project` é execução remota de código no primeiro `bui
 oferece trust posture, aprovação por hook nem store de fingerprint para mediar isso.
 
 **Definition of done:**
-- [ ] A assinatura torna o risco irrepresentável: `settingSources({ user: true, project: { trustedBy: TrustDecision } })` — habilitar o source do repositório exige um **valor**, não um literal de string.
-- [ ] `TrustDecision` é um tipo do framework com pelo menos `{ scope: 'directory', decidedAt, decidedBy }`; não existe construtor implícito ("assumeTrusted()" sem argumento é proibido).
-- [ ] A JSDoc passa a declarar a pré-condição real: "seguro apenas quando `cwd` é código que você controla; para um agente operando sobre repositórios fornecidos pelo usuário, isto exige uma decisão de confiança explícita".
-- [ ] Teste negativo: um `.theokit/hooks.json` presente + `project` sem `trustedBy` → nenhum hook instalado, e o motivo aparece no canal de aviso (não silenciosamente).
-- [ ] Entrada no CHANGELOG marcando o **breaking** (major de `@theokit/agents`), com o codemod ou a linha de migração.
+- [x] A assinatura torna o risco irrepresentável: `settingSources({ user: true, project: { trustedBy: TrustDecision } })` — habilitar o source do repositório exige um **valor**, não um literal de string.
+- [x] `TrustDecision` é um tipo do framework com pelo menos `{ scope: 'directory', decidedAt, decidedBy }`; não existe construtor implícito ("assumeTrusted()" sem argumento é proibido).
+- [x] A JSDoc passa a declarar a pré-condição real: "seguro apenas quando `cwd` é código que você controla; para um agente operando sobre repositórios fornecidos pelo usuário, isto exige uma decisão de confiança explícita".
+- [x] Teste negativo: um `.theokit/hooks.json` presente + `project` sem `trustedBy` → nenhum hook instalado, e o motivo aparece no canal de aviso (não silenciosamente).
+- [x] Entrada no CHANGELOG marcando o **breaking** (major de `@theokit/agents`), com o codemod ou a linha de migração.
 
 **Efeito no TheoCode:** o gate manual em `chat.ts:386`
 (`projectSourceAllowed(posture.allows) ? ['project','user'] : ['user']`, comentário B-008) deixa de ser
@@ -174,10 +181,10 @@ expresso na cadeia**. Além disso, `applyCapabilities` devolve um draft interno,
 sites de construção (`AgentBuilder`, `Agent.create`, roles vindos de disco) consigam consumir.
 
 **Definition of done:**
-- [ ] `tools(list: readonly ContextualTool[])` acumulando a união de nomes, e `when(condition, fn)` preservando o type-state, ambos na interface do `AgentBuilder`.
-- [ ] `declareAgentShape(name, members)` publicado na camada de capability, devolvendo `{ tools, model, reasoningEffort, provenance }` — consumível pelos três sites de construção.
-- [ ] Um helper de formatação de `GoalEvent` exaustivo-seguro, **ou** a união marcada como aberta no tipo publicado, de modo que o consumidor não precise escrever o branch default de evento desconhecido.
-- [ ] Testes de type-state: `.tools([a,b]).tool(c)` produz a mesma união que `.tool(a).tool(b).tool(c)`; `when(false, …)` é no-op tipado.
+- [x] `tools(list: readonly ContextualTool[])` acumulando a união de nomes, e `when(condition, fn)` preservando o type-state, ambos na interface do `AgentBuilder`.
+- [x] `declareAgentShape(name, members)` publicado na camada de capability, devolvendo `{ tools, model, reasoningEffort, provenance }` — consumível pelos três sites de construção.
+- [x] Um helper de formatação de `GoalEvent` exaustivo-seguro, **ou** a união marcada como aberta no tipo publicado, de modo que o consumidor não precise escrever o branch default de evento desconhecido.
+- [x] Testes de type-state: `.tools([a,b]).tool(c)` produz a mesma união que `.tool(a).tool(b).tool(c)`; `when(false, …)` é no-op tipado.
 
 **Efeito no TheoCode:** deleta `composition/agent-spec.ts` (112 LOC) inteiro, o fold
 `allTools.reduce((acc, tool) => acc.tool(tool), chain)` (`chat.ts:142`) e a montagem fora da cadeia
@@ -201,11 +208,11 @@ realmente recebe o stream nunca entra no evento canônico. É a explicação mec
 o **nosso** `render-terminal.ts:92` faz o switch na mão e nunca toca no `TerminalPresenter`.
 
 **Definition of done:**
-- [ ] `fromWireChunk(chunk: WireChunk): AgentOutputEvent[]` em `packages/presenter/src/source/`, exportado do índice — o inverso do mapeamento já escrito em `bridge/present-ui-message-stream.ts:19-37`.
-- [ ] `packages/theo/src/server/agent/render-terminal.ts` reescrito como `WireChunk → fromWireChunk → TerminalPresenter`; o switch manual sai.
-- [ ] `TerminalPresenter`, `JsonPresenter` e `PresenterRegistry` passam a ter consumidor de produção (knip/G7 verde sem allowlist).
-- [ ] `foldTurnLifecycle` + tipos de lifecycle re-exportados de `@theokit/agents`, e os tipos de wire de `client-entry.ts` — do jeito que `theokit/client` já faz e documenta.
-- [ ] `packages/presenter/package.json`: devDependency de `@theokit/sdk` alinhada ao range do peer (`^4.40.0`), acabando com a divergência declarado-vs-testado.
+- [x] `fromWireChunk(chunk: WireChunk): AgentOutputEvent[]` em `packages/presenter/src/source/`, exportado do índice — o inverso do mapeamento já escrito em `bridge/present-ui-message-stream.ts:19-37`.
+- [x] `packages/theo/src/server/agent/render-terminal.ts` reescrito como `WireChunk → fromWireChunk → TerminalPresenter`; o switch manual sai.
+- [x] `TerminalPresenter`, `JsonPresenter` e `PresenterRegistry` passam a ter consumidor de produção (knip/G7 verde sem allowlist).
+- [x] `foldTurnLifecycle` + tipos de lifecycle re-exportados de `@theokit/agents`, e os tipos de wire de `client-entry.ts` — do jeito que `theokit/client` já faz e documenta.
+- [x] `packages/presenter/package.json`: devDependency de `@theokit/sdk` alinhada ao range do peer (`^4.40.0`), acabando com a divergência declarado-vs-testado.
 
 **Efeito no TheoCode:** `ChunkLike` + `toContentChunk` (`cli/runtime/events.ts:17-27,130-150`) viram
 `toContentChunk(fromWireChunk(chunk))`; o `packages/cli/package.json` deixa de precisar declarar
@@ -230,11 +237,11 @@ exportada como via de mão única sem decodificador, forçando um DFS no filesys
 projeto ainda existe?".
 
 **Definition of done:**
-- [ ] `listSessions`, `deleteSession(id, opts)` devolvendo `{ registryRemoved, transcriptRemoved }`, `protectedTranscripts(cwd)` (ponteiro + mais recente + writer lease) e `forkBeforeUserTurn(srcId, newId, nth)` publicados em `packages/agents/src/session/`.
-- [ ] Primitiva de ponteiro de sessão (`loadOrCreateSessionId` / `persistSessionId`) atômica e que **nunca rejeita** — a garantia hoje deixada a cada chamador de `atomicWriteText`.
-- [ ] Uma das duas: índice reverso para `encodeProjectDir` (sidecar `projects/<hash>/cwd` escrito na criação do transcript) **ou** um oráculo `classifyProject(name)` — a lacuna que custa 188 LOC de DFS ao consumidor.
-- [ ] `Agent.delete` documentado no re-export estreitado (`index.ts:120`) com a mesma profundidade da nota já existente sobre `list`, **ou** tornado inalcançável pelo `deleteSession` acima.
-- [ ] Teste negativo: deletar sessão com writer lease ativo falha com erro tipado, não silenciosamente.
+- [x] `listSessions`, `deleteSession(id, opts)` devolvendo `{ registryRemoved, transcriptRemoved }`, `protectedTranscripts(cwd)` (ponteiro + mais recente + writer lease) e `forkBeforeUserTurn(srcId, newId, nth)` publicados em `packages/agents/src/session/`.
+- [x] Primitiva de ponteiro de sessão (`loadOrCreateSessionId` / `persistSessionId`) atômica e que **nunca rejeita** — a garantia hoje deixada a cada chamador de `atomicWriteText`.
+- [x] Uma das duas: índice reverso para `encodeProjectDir` (sidecar `projects/<hash>/cwd` escrito na criação do transcript) **ou** um oráculo `classifyProject(name)` — a lacuna que custa 188 LOC de DFS ao consumidor.
+- [x] `Agent.delete` documentado no re-export estreitado (`index.ts:120`) com a mesma profundidade da nota já existente sobre `list`, **ou** tornado inalcançável pelo `deleteSession` acima.
+- [x] Teste negativo: deletar sessão com writer lease ativo falha com erro tipado, não silenciosamente.
 
 **Efeito no TheoCode:** `session/session-ops.ts` (174), `session/backtrack.ts` (175),
 `session/liveness-oracle.ts` (188) e `tui/persistence/session-store.ts` (~80) reduzem a adaptadores —
@@ -286,11 +293,11 @@ a máquina de cadeia, o merge de profile, o relatório de precedência, o floor 
 idênticos em todo produto de agente.
 
 **Definition of done:**
-- [ ] `LayeredConfig` em `packages/theo/src/config/`: recebe cadeia de camadas declarada + chaves acumulativas + schema Zod, devolve `{ value, provenancePerKey, precedenceReport }`.
-- [ ] O relatório expõe divergência **medida vs declarada** de precedência (a checagem que o consumidor escreveu como `measuredPrecedenceChain`).
-- [ ] Primitiva de confiança por diretório: `resolveTrustPosture` re-exportado (M67) + store em disco atômico sobre `atomicWriteJson`/`withFileLock` já exportados, com permissão do arquivo checada na leitura.
-- [ ] `TrustDecision` do M68 passa a ser produzido/consumido por esse store — o carimbo vira decisão persistida e auditável.
-- [ ] Teste: ordenação de camadas verificada em tempo de carga falha alto quando o módulo é importado fora de ordem.
+- [x] `LayeredConfig` em `packages/theo/src/config/`: recebe cadeia de camadas declarada + chaves acumulativas + schema Zod, devolve `{ value, provenancePerKey, precedenceReport }`.
+- [x] O relatório expõe divergência **medida vs declarada** de precedência (a checagem que o consumidor escreveu como `measuredPrecedenceChain`).
+- [x] Primitiva de confiança por diretório: `resolveTrustPosture` re-exportado (M67) + store em disco atômico sobre `atomicWriteJson`/`withFileLock` já exportados, com permissão do arquivo checada na leitura.
+- [x] `TrustDecision` do M68 passa a ser produzido/consumido por esse store — o carimbo vira decisão persistida e auditável.
+- [x] Teste: ordenação de camadas verificada em tempo de carga falha alto quando o módulo é importado fora de ordem.
 
 **Efeito no TheoCode:** `config/layers.ts` (77) cai para ~40 LOC de declaração; `config/trust-store.ts`
 (145) some; a metade fold/report de `config/config.ts` (365) some. Alvo ≈ 350 LOC.
@@ -341,12 +348,12 @@ process group, os budgets de cadeia e de continuação, a defesa de injeção po
 assimetria fail-closed no Pre / fail-open no Post.
 
 **Definition of done:**
-- [ ] `HookSpec` parseado por zod com **falha alta em evento desconhecido**, e `buildHookHandlers(specs, { trusted, approved })` devolvendo o `HookHandlers` existente. `approved` é **obrigatório** — ausência é negação.
-- [ ] Runner de subprocesso como primitiva separada, com os caps como constantes nomeadas: `MAX_OUTPUT_BYTES` (1 MiB), `DRAIN_BUDGET_MS` (2 s) **liquidando em `close`, não em `exit`**, SIGKILL no **process group**.
-- [ ] `ContinuationBudget` (default 3) e budget de cadeia (4× timeout) publicados com o motor.
-- [ ] Saída do hook cercada por fence com nonce, com escape do fechamento — teste de injeção incluído.
-- [ ] `hookFingerprint` (SHA-256 sobre `{command, event, matcher, timeout_ms}`) + store de aprovados com permissão checada, consultado pelo source `project` do M68.
-- [ ] Split explícito e testado: PreToolUse **fail-closed**, PostToolUse **fail-open**.
+- [x] `HookSpec` parseado por zod com **falha alta em evento desconhecido**, e `buildHookHandlers(specs, { trusted, approved })` devolvendo o `HookHandlers` existente. `approved` é **obrigatório** — ausência é negação.
+- [x] Runner de subprocesso como primitiva separada, com os caps como constantes nomeadas: `MAX_OUTPUT_BYTES` (1 MiB), `DRAIN_BUDGET_MS` (2 s) **liquidando em `close`, não em `exit`**, SIGKILL no **process group**.
+- [x] `ContinuationBudget` (default 3) e budget de cadeia (4× timeout) publicados com o motor.
+- [x] Saída do hook cercada por fence com nonce, com escape do fechamento — teste de injeção incluído.
+- [x] `hookFingerprint` (SHA-256 sobre `{command, event, matcher, timeout_ms}`) + store de aprovados com permissão checada, consultado pelo source `project` do M68.
+- [x] Split explícito e testado: PreToolUse **fail-closed**, PostToolUse **fail-open**.
 
 **Efeito no TheoCode:** alvo de deleção `hooks/**` = **847 LOC**.
 
@@ -366,9 +373,9 @@ agente voltada a produto quer, não tem loader. O consumidor reimplementou varre
 frontmatter **contra o diretório do próprio framework**.
 
 **Definition of done:**
-- [ ] `loadCustomCommands({ projectDir, homeDir, projectTrusted })` lendo `.theokit/commands/*.md` com frontmatter, gate de confiança e aviso de **shadow de builtin** e de duplicata.
-- [ ] Precedência projeto-sobre-usuário explícita e testada; comando de projeto só carrega sob diretório confiável (mesma decisão do M68).
-- [ ] Documentado na mesma página que descreve `.theokit/skills/` e `.theokit/agents/`, para que a convenção deixe de ter um buraco.
+- [x] `loadCustomCommands({ projectDir, homeDir, projectTrusted })` lendo `.theokit/commands/*.md` com frontmatter, gate de confiança e aviso de **shadow de builtin** e de duplicata.
+- [x] Precedência projeto-sobre-usuário explícita e testada; comando de projeto só carrega sob diretório confiável (mesma decisão do M68).
+- [x] Documentado na mesma página que descreve `.theokit/skills/` e `.theokit/agents/`, para que a convenção deixe de ter um buraco.
 
 **Efeito no TheoCode:** `tui/commands/custom-commands.ts` (122 LOC) vira chamada única.
 
@@ -391,11 +398,11 @@ tool; o caso irmão — o agente **pergunta** algo no meio do turno — tem tool
 um callback `askUser`) e não tem canal.
 
 **Definition of done:**
-- [ ] `ApprovalPosture['auto-approve']` passa a exigir evidência: `{ kind: 'auto-approve'; confinedBy: SandboxPosture; reason: string }`, e `applyPosture` **recusa** quando `confinedBy.enforced === false`.
-- [ ] Ledger de pendências como primitiva de cliente (ingest / settle / findNext, poda por índice de mensagem) — 87 LOC de lógica pura, sem política, que hoje existe porque a busca do lado do framework é stateless (o card dispensado volta; uma segunda resposta é enviada para uma aprovação já respondida).
-- [ ] `AskBridge` em `packages/agents/src/ask/`, modelado no `ApprovalRegistry` que já existe: `ask` / `answer` / `abandon` / `setListener` com chave por thread, **recusa de segundo listener**, e erros tipados descendentes de `TheokitAgentError` (`ConcurrentQuestionError`, `ConcurrentListenerError`, `QuestionAbandonedError`).
-- [ ] `createQuestionTool` passa a ter o `AskBridge` como `askUser` default — a tool fica usável sem encanamento.
-- [ ] Teste: `abandon()` rejeita a promessa capturada (o bug que travou o turno por 5 min até o timeout do builtin).
+- [x] `ApprovalPosture['auto-approve']` passa a exigir evidência: `{ kind: 'auto-approve'; confinedBy: SandboxPosture; reason: string }`, e `applyPosture` **recusa** quando `confinedBy.enforced === false`.
+- [x] Ledger de pendências como primitiva de cliente (ingest / settle / findNext, poda por índice de mensagem) — 87 LOC de lógica pura, sem política, que hoje existe porque a busca do lado do framework é stateless (o card dispensado volta; uma segunda resposta é enviada para uma aprovação já respondida).
+- [x] `AskBridge` em `packages/agents/src/ask/`, modelado no `ApprovalRegistry` que já existe: `ask` / `answer` / `abandon` / `setListener` com chave por thread, **recusa de segundo listener**, e erros tipados descendentes de `TheokitAgentError` (`ConcurrentQuestionError`, `ConcurrentListenerError`, `QuestionAbandonedError`).
+- [x] `createQuestionTool` passa a ter o `AskBridge` como `askUser` default — a tool fica usável sem encanamento.
+- [x] Teste: `abandon()` rejeita a promessa capturada (o bug que travou o turno por 5 min até o timeout do builtin).
 
 **Efeito no TheoCode:** `ask/**` (204) + `consent/pending-approvals.ts` (87) + a duplicata de
 `config/approval-policy.ts` (52) somem. Alvo ≈ 340 LOC, mais a eliminação da regra de segurança duplicada.
@@ -416,10 +423,10 @@ redescobre por tool qual root a factory aceita, e o modo de falha é silencioso 
 que "um escopo construído sem sandbox produziu um shell NÃO-CONFINADO sem erro e sem aviso".
 
 **Definition of done:**
-- [ ] `ToolScope` como tipo-valor + `bindToolScope({ projectRoot, writeRoot, sandbox })` devolvendo as factories de `@theokit/sdk-tools` já escopadas, com `sandbox` **obrigatório** no tipo.
-- [ ] `sandboxWritePolicy(mode) → { writes, allowAbsolute }` ao lado de `resolveSandboxPosture`, para que a derivação de writeRoot não seja reinventada por produto.
-- [ ] `createViewImageTool` adicionada ao `@theokit/sdk-tools` e re-exportada — a única tool que o consumidor teve que escrever do zero (89 LOC), e cuja forma `handler` + `toModelOutput` já é a canônica para multimodal.
-- [ ] Teste de tipo: construir um escopo sem `sandbox` **não compila**.
+- [x] `ToolScope` como tipo-valor + `bindToolScope({ projectRoot, writeRoot, sandbox })` devolvendo as factories de `@theokit/sdk-tools` já escopadas, com `sandbox` **obrigatório** no tipo.
+- [x] `sandboxWritePolicy(mode) → { writes, allowAbsolute }` ao lado de `resolveSandboxPosture`, para que a derivação de writeRoot não seja reinventada por produto.
+- [x] `createViewImageTool` adicionada ao `@theokit/sdk-tools` e re-exportada — a única tool que o consumidor teve que escrever do zero (89 LOC), e cuja forma `handler` + `toModelOutput` já é a canônica para multimodal.
+- [x] Teste de tipo: construir um escopo sem `sandbox` **não compila**.
 
 **Efeito no TheoCode:** `tools/tool-scope.ts` + `config/sandbox-policy.ts` (29) e `tools/view-image.ts`
 (89) somem; `tools/registry.ts` volta a ser só o mapa declarativo de 10 entradas que deveria ser.
@@ -474,10 +481,10 @@ hierarquia (`TheoError`) cuja tabela de fronteira não contém **nenhum** erro d
 HTTP 500, indistinguível de falha real de servidor, e middleware de retry reenvia a entrada bloqueada.
 
 **Definition of done:**
-- [ ] As 11 classes reparentadas em `TheokitAgentError` com `code` estável e `isRetryable` explícito, começando pelas que um consumidor pega na fronteira de turno (`GuardrailViolationError`, `CostBudgetExceededError`, `DelegationError`, `DelegationBudgetExceededError`, `InProcessApprovalRequiredError`, `ApprovalAbortedError`, `AgentDefinitionError`).
-- [ ] Gate de CI afirmando que **não existe** `export class *Error extends Error` em `packages/agents/src` — transforma a correção reativa em invariante, do jeito que `check-auth-parity.mjs` fixa as superfícies de pass-through.
-- [ ] `ERROR_NAME_TO_CODE` registra os erros de agente: `GuardrailViolationError → BAD_REQUEST`, `CostBudgetExceededError → TOO_MANY_REQUESTS`, `InProcessApprovalRequiredError → FORBIDDEN`.
-- [ ] `META_EXTRACTOR` para `GuardrailViolationError` expondo `{ guardName, phase }`, para telemetria contar bloqueios por guard sem parsear mensagem.
+- [x] As 11 classes reparentadas em `TheokitAgentError` com `code` estável e `isRetryable` explícito, começando pelas que um consumidor pega na fronteira de turno (`GuardrailViolationError`, `CostBudgetExceededError`, `DelegationError`, `DelegationBudgetExceededError`, `InProcessApprovalRequiredError`, `ApprovalAbortedError`, `AgentDefinitionError`).
+- [x] Gate de CI afirmando que **não existe** `export class *Error extends Error` em `packages/agents/src` — transforma a correção reativa em invariante, do jeito que `check-auth-parity.mjs` fixa as superfícies de pass-through.
+- [x] `ERROR_NAME_TO_CODE` registra os erros de agente: `GuardrailViolationError → BAD_REQUEST`, `CostBudgetExceededError → TOO_MANY_REQUESTS`, `InProcessApprovalRequiredError → FORBIDDEN`.
+- [x] `META_EXTRACTOR` para `GuardrailViolationError` expondo `{ guardName, phase }`, para telemetria contar bloqueios por guard sem parsear mensagem.
 
 **Efeito no TheoCode:** `formatting/turn-error.ts` perde o fallback de regex (`TRANSIENT_SHAPE`) e o
 `translateError` datado de `tools/registry.ts` some.
@@ -503,11 +510,11 @@ inalcançável a partir das primitivas que o consumidor de fato usa: `delegateWi
 coisa de maior valor da camada, tem **zero adoção** num produto que roda um passe explícito de review.
 
 **Definition of done:**
-- [ ] `timeoutMs` em `DelegateOptions` com `DelegationTimeoutError` tipado — cap de relógio não é o mesmo guard que cap de USD.
-- [ ] `withEphemeralAgent(create, fn)` descartando em `finally` com semântica `Promise.allSettled`.
-- [ ] `delegateWithScoring` / `delegateBackground` aceitam uma **porta** `{ run(message): Promise<DelegationResult> }`, de modo que um `SubAgent` ou `Squad` do SDK a satisfaça.
-- [ ] `listSubagentNames(cwd, { settingSources })` exportado do mesmo módulo que `discoverSubagents`, para que o inventário de subagents pare de ser um segundo oráculo sobre `.theokit/agents/*.md`.
-- [ ] Prova de alcance: um teste alimenta o loop de scoring com um `Squad` do SDK, sem passar pelo compilador de capability.
+- [x] `timeoutMs` em `DelegateOptions` com `DelegationTimeoutError` tipado — cap de relógio não é o mesmo guard que cap de USD.
+- [x] `withEphemeralAgent(create, fn)` descartando em `finally` com semântica `Promise.allSettled`.
+- [x] `delegateWithScoring` / `delegateBackground` aceitam uma **porta** `{ run(message): Promise<DelegationResult> }`, de modo que um `SubAgent` ou `Squad` do SDK a satisfaça.
+- [x] `listSubagentNames(cwd, { settingSources })` exportado do mesmo módulo que `discoverSubagents`, para que o inventário de subagents pare de ser um segundo oráculo sobre `.theokit/agents/*.md`.
+- [x] Prova de alcance: um teste alimenta o loop de scoring com um `Squad` do SDK, sem passar pelo compilador de capability.
 
 **Efeito no TheoCode:** `delegation/delegation-cap.ts`, o disposal manual em `delegation/squad.ts` e
 `review/create-agent.ts`, e `tui/commands/subagent-inventory.ts` reduzem a chamadas. Alvo ≈ 150 LOC.
@@ -555,11 +562,11 @@ O que ele absorve é o **mecanismo** que hoje não tem contraparte em lugar nenh
 render, e o watchdog de shutdown.
 
 **Definition of done:**
-- [ ] Primitiva de comando: `defineCommand({ name, description, arg? })` + `routeCommand(input, customNames)` + a forma do interpretador (bundle de capacidades). O **mecanismo** de ordenação/prefixo entra; os ~50 nomes de comando do TheoCode ficam lá.
-- [ ] Coalescing de render + orçamento de quadro promovidos para `@theokit/tui` — incluindo o uso de **relógio monotônico**, cujo bug o consumidor já documentou e todo consumidor reencontraria.
-- [ ] `createShutdown` (registry de cleanup, handler de sinal, watchdog de 3 s, deps injetadas) promovido para `@theokit/agents`, preservando o contrato de exit code: Ctrl-C limpo, falha de cleanup e timeout de watchdog têm que ser distinguíveis.
-- [ ] Decisão registrada sobre parsing de argumento: **ou** um helper `defineCliCommand`, **ou** documentação explícita de que está fora de escopo — para que o próximo consumidor descubra antes de escrever 470 LOC, não depois.
-- [ ] `theokit agent <name>` aceita modo interativo (sem argumento de mensagem obrigatório), senão a primitiva não tem consumidor de produção no repo.
+- [x] Primitiva de comando: `defineCommand({ name, description, arg? })` + `routeCommand(input, customNames)` + a forma do interpretador (bundle de capacidades). O **mecanismo** de ordenação/prefixo entra; os ~50 nomes de comando do TheoCode ficam lá.
+- [x] Coalescing de render + orçamento de quadro promovidos para `@theokit/tui` — incluindo o uso de **relógio monotônico**, cujo bug o consumidor já documentou e todo consumidor reencontraria.
+- [x] `createShutdown` (registry de cleanup, handler de sinal, watchdog de 3 s, deps injetadas) promovido para `@theokit/agents`, preservando o contrato de exit code: Ctrl-C limpo, falha de cleanup e timeout de watchdog têm que ser distinguíveis.
+- [x] Decisão registrada sobre parsing de argumento: **ou** um helper `defineCliCommand`, **ou** documentação explícita de que está fora de escopo — para que o próximo consumidor descubra antes de escrever 470 LOC, não depois. — segundo ramo: ADR [0042](.claude/knowledge-base/adrs/0042-parsing-de-argumento-de-cli-fora-de-escopo.md), parsing de argumento fora de escopo.
+- [x] `theokit agent <name>` aceita modo interativo (sem argumento de mensagem obrigatório), senão a primitiva não tem consumidor de produção no repo.
 
 **Efeito no TheoCode:** `tui/commands/{registry,interpret-command}.ts` reduzem aos nomes;
 `tui/rendering/**` (269) e `shared/shutdown.ts` (67) somem. Alvo ≈ 700 LOC.
@@ -584,12 +591,12 @@ parseia?"; a pergunta de um produto de agente é "o que esta instalação **vai 
 camadas, trust, sandbox, MCP, skills, hooks.
 
 **Definition of done:**
-- [ ] Metade runtime-neutra do custo movida para `@theokit/agents`: `UsageStorageAdapter`, `UsageRecord`/`ToolUsageRecord`, `InMemoryUsageStorage` e um `latestUsage` que funcione sobre uma thread do SDK. O wiring HTTP de `trackAgentRun` fica em `theokit`.
-- [ ] Núcleo de `ObservabilityAdapter`/`SpanHandle` transport-neutro; `createObservabilityPlugin` (instrumentação de `http.request`) permanece em `theokit/server`.
-- [ ] Primitiva de doctor em `@theokit/agents`: o quarteto `Check{name,status,detail}` / `Diagnosis{checks,failed}` / `diagnose` / `renderDiagnosis` — 44 LOC de mecanismo puro — com a **regra dura de nunca imprimir segredo** (presente/ausente/ilegível, nem truncado) e contrato de exit code não-zero. A **lista** de checks continua extensível pelo produto.
-- [ ] Comando `theokit doctor` compondo os checks que o framework conhece (`resolveProvider`, `loadMcpJson`, skills, wiring via `recordWiring`).
-- [ ] `installDiagnosticSink` (roteia para stderr ou arquivo por env var) ao lado do pass-through de `setDiagnosticsSink` — um seam cujo único uso são é esse deveria vir com ele.
-- [ ] **Critério de aceite:** um produto terminal que dependa **só** de `@theokit/agents` consegue registrar e consultar usage sem adicionar `theokit`.
+- [x] Metade runtime-neutra do custo movida para `@theokit/agents`: `UsageStorageAdapter`, `UsageRecord`/`ToolUsageRecord`, `InMemoryUsageStorage` e um `latestUsage` que funcione sobre uma thread do SDK. O wiring HTTP de `trackAgentRun` fica em `theokit`.
+- [x] Núcleo de `ObservabilityAdapter`/`SpanHandle` transport-neutro; `createObservabilityPlugin` (instrumentação de `http.request`) permanece em `theokit/server`.
+- [x] Primitiva de doctor em `@theokit/agents`: o quarteto `Check{name,status,detail}` / `Diagnosis{checks,failed}` / `diagnose` / `renderDiagnosis` — 44 LOC de mecanismo puro — com a **regra dura de nunca imprimir segredo** (presente/ausente/ilegível, nem truncado) e contrato de exit code não-zero. A **lista** de checks continua extensível pelo produto.
+- [x] Comando `theokit doctor` compondo os checks que o framework conhece (`resolveProvider`, `loadMcpJson`, skills, wiring via `recordWiring`).
+- [x] `installDiagnosticSink` (roteia para stderr ou arquivo por env var) ao lado do pass-through de `setDiagnosticsSink` — um seam cujo único uso são é esse deveria vir com ele.
+- [x] **Critério de aceite:** um produto terminal que dependa **só** de `@theokit/agents` consegue registrar e consultar usage sem adicionar `theokit`.
 
 **Efeito no TheoCode:** `doctor.ts` (116) reduz à lista de checks; `shared/diagnostic-sink.ts` (33),
 `formatting/last-usage.ts` (10) e parte de `wiring-panels.ts` somem. Alvo ≈ 200 LOC.
@@ -612,12 +619,12 @@ evidência sobre nada. Adoção medida: **um** chamador no target inteiro (o pr�
 **zero** no único produto real, que registrou a recusa em prosa. Nós também não comemos essa ração.
 
 **Definition of done:**
-- [ ] `createMockWireStream(chunks: WireChunk[])` e `createMockOutputEvents(events: AgentOutputEvent[])` publicados; a forma snake_case ou é deletada ou documenta qual consumidor de produção a lê.
-- [ ] **Critério de aceite mecânico:** um teste no target dirige `renderAgentStreamToTerminal` fim-a-fim a partir de `@theokit/agents/testing` **sem nenhum cast**.
-- [ ] Construtores de chunk tipados (`wireChunk.error('boom')`) validados por `wireChunkSchema`, para que fixture malformada falhe na construção — hoje o consumidor escreve `{ type:'error', errorText:'boom' } as never`.
-- [ ] Helper de asserção na fronteira de compilação (`inspectCompiled(definition)` → nomes de tool, tools gateadas, capabilities) — o próprio consumidor documenta que **isto**, e não o stream, é o de maior raio de impacto num produto de agente.
-- [ ] Gate de paridade de wire publicado como check executável pelo consumidor (hoje ele importa `../packages/presenter/dist/...` e só guarda o espelho do framework).
-- [ ] Custo do barrel endereçado: split ou documentação dos subpaths como import de teste, citando os ~420 ms por arquivo de teste medidos pelo consumidor (que subiu o `testTimeout` para 20.000 ms por causa disso).
+- [x] `createMockWireStream(chunks: WireChunk[])` e `createMockOutputEvents(events: AgentOutputEvent[])` publicados; a forma snake_case ou é deletada ou documenta qual consumidor de produção a lê.
+- [x] **Critério de aceite mecânico:** um teste no target dirige `renderAgentStreamToTerminal` fim-a-fim a partir de `@theokit/agents/testing` **sem nenhum cast**.
+- [x] Construtores de chunk tipados (`wireChunk.error('boom')`) validados por `wireChunkSchema`, para que fixture malformada falhe na construção — hoje o consumidor escreve `{ type:'error', errorText:'boom' } as never`.
+- [x] Helper de asserção na fronteira de compilação (`inspectCompiled(definition)` → nomes de tool, tools gateadas, capabilities) — o próprio consumidor documenta que **isto**, e não o stream, é o de maior raio de impacto num produto de agente.
+- [x] Gate de paridade de wire publicado como check executável pelo consumidor (hoje ele importa `../packages/presenter/dist/...` e só guarda o espelho do framework).
+- [x] Custo do barrel endereçado: split ou documentação dos subpaths como import de teste, citando os ~420 ms por arquivo de teste medidos pelo consumidor (que subiu o `testTimeout` para 20.000 ms por causa disso).
 
 **Efeito no TheoCode:** substitui as 90 ocorrências de `vi.mock`/`vi.fn` sobre o **barrel do framework**
 (que fixam os testes a nomes de export sem nada detectar drift) e os literais com `as never`.
@@ -643,12 +650,12 @@ escrever mecanismo depois de M85, é aqui que isso aparece — porque o TheoCode
 vai conseguir.
 
 **Definition of done:**
-- [ ] Para cada milestone M67–M85, o arquivo correspondente no TheoCode é reduzido a adaptador ou deletado, e o commit cita o milestone e a versão do pacote em que a primitiva aterrissou (a convenção in-file que o repo já pratica).
-- [ ] `grep -rn "from '@theokit/sdk" packages/*/src --include='*.ts' | grep -v node_modules` no TheoCode → **0**, e `@theokit/sdk` sai do `packages/agent/package.json` (norte da v3).
-- [ ] **Ledger de deleção** publicado em `wiki/` do TheoKit: uma linha por primitiva, com LOC removidos no consumidor e o milestone que a entregou. Total ≥ **4.500 LOC**; abaixo disso, a v3 não cumpriu a tese e o gap remanescente é registrado como escopo v4, não silenciado.
-- [ ] Suíte do TheoCode verde **sem editar expectativa** onde a mudança era de mecanismo (a mesma disciplina de zero-behavior do M57): teste repontado, asserção intacta.
-- [ ] Cada primitiva que o TheoCode **não** conseguiu adotar entra com motivo escrito — "o framework não cobre o caso X" — e vira item candidato de v4. Recusar em silêncio é o único resultado proibido aqui.
-- [ ] Um `EmpresaCode` mínimo (scaffold via `create-theokit --surface tui`) roda um turno com aprovação, hook, sessão retomável e GC — sem escrever nenhuma das primitivas de M67–M85.
+- [x] Para cada milestone M67–M85, o arquivo correspondente no TheoCode é reduzido a adaptador ou deletado, e o commit cita o milestone e a versão do pacote em que a primitiva aterrissou (a convenção in-file que o repo já pratica).
+- [x] `grep -rn "from '@theokit/sdk" packages/*/src --include='*.ts' | grep -v node_modules` no TheoCode → **0**, e `@theokit/sdk` sai do `packages/agent/package.json` (norte da v3). — **medido 0** (era 6) e a dependencia saiu de `packages/agent/package.json`. Os seis eram import-site: cinco da familia de pass-through do M67 e um tipo, todos ja no barrel de `@theokit/agents`.
+- [x] **Ledger de deleção** publicado em `wiki/` do TheoKit: uma linha por primitiva, com LOC removidos no consumidor e o milestone que a entregou. Total ≥ **4.500 LOC**; abaixo disso, a v3 não cumpriu a tese e o gap remanescente é registrado como escopo v4, não silenciado.
+- [x] Suíte do TheoCode verde **sem editar expectativa** onde a mudança era de mecanismo (a mesma disciplina de zero-behavior do M57): teste repontado, asserção intacta.
+- [x] Cada primitiva que o TheoCode **não** conseguiu adotar entra com motivo escrito — "o framework não cobre o caso X" — e vira item candidato de v4. Recusar em silêncio é o único resultado proibido aqui.
+- [x] Um `EmpresaCode` mínimo (scaffold via `create-theokit --surface tui`) roda um turno com aprovação, hook, sessão retomável e GC — sem escrever nenhuma das primitivas de M67–M85.
 
 **Dependencies:** M67…M85 (todas). É deliberadamente o último.
 
