@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0
+
+### Minor Changes
+
+- Removida a `peerDependency` em `@theokit/agents`. Ela invertia a direção do grafo (`agents`
+  depende de `http`, nunca o contrário) e sua faixa, `>=0.47.0`, nomeava a linha de versão de outro
+  pacote — nunca foi uma declaração de compatibilidade. Na prática, arrastava uma cópia antiga de
+  `@theokit/agents` para dentro da árvore de instalação de todo consumidor, ao lado da versão que ele
+  realmente pediu.
+
+  A correção já existia no código desde a quebra do ciclo `agents ↔ http`, mas nunca chegou a
+  ninguém: `1.0.0` foi publicado antes dela e a versão não subiu, então o registry continuou servindo
+  o manifesto antigo. Esta é a release que entrega o fix.
+
+  Nada a fazer para migrar. Quem depende de `@theokit/agents` continua declarando essa dependência
+  normalmente — a diferença é que agora só uma cópia é instalada.
+
 ## 1.0.0
 
 ### Major Changes
