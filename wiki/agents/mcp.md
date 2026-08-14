@@ -81,6 +81,56 @@ tools on the agent automatically.
 prevent a third-party MCP server from exfiltrating credentials. Pass explicit `env` values
 to grant specific variables. Set `envPolicy: 'all'` to grant full env inheritance.
 
+> **`envPolicy` cannot be set from `.mcp.json`, and that is deliberate.**
+>
+> `loadMcpJson` reads a version-controlled file through a field **allowlist**, and `envPolicy` is
+> not on it. The reason is what the field does: `envPolicy: 'all'` hands the entire host
+> environment — `ANTHROPIC_API_KEY` included — to a third-party binary.
+>
+> A `.mcp.json` is a file anyone with commit access can edit, and one that a developer clones
+> without reading. Accepting a host-posture decision from it would mean a pull request could
+> exfiltrate every credential on the machine with one added line. So the posture stays in code,
+> where somebody chose it, and the file may only name servers and their explicit `env` values.
+>
+> Everything else the allowlist drops is reported through `onWarn`, so a stripped field is visible
+> rather than silently ignored — and that channel drains into the same place run-time failures do:
+> see **[MCP health](#mcp-health-per-turn-per-server)** below.
+
+---
+
+## MCP health: per-turn, per-server
+
+An MCP server that fails to list its tools degrades the agent GRACEFULLY — the run continues without
+those tools. Degrading gracefully is right; degrading **invisibly** is not: a UI listing configured
+servers would show one as present while every tool it provides had vanished.
+
+The SDK emits `mcp_server_failed` as a `RunEvent`. `createMcpHealthSink` turns that stream into
+state you can render:
+
+```ts
+import { createMcpHealthSink } from '@theokit/agents'
+
+const health = createMcpHealthSink()
+
+// config-time warnings and run-time failures reach ONE place
+const servers = await loadMcpJson(cwd, { onWarn: health.onWarn })
+
+health.startTurn()                       // clears the previous turn's run failures
+await agent.send(message, { onRunEvent: health.sink })
+
+health.current()                         // [{ serverName, message, source }]
+```
+
+| Behaviour | Why it is a correction, not a preference |
+|---|---|
+| `startTurn()` clears **run** failures | Without it, a server that failed once stays red forever, the operator learns to ignore the indicator, and the indicator becomes worse than nothing. |
+| Failures deduplicate by server name | The SDK emits once per failing server per run, but a turn can span retries — a list that grows per attempt reports "three broken servers" for one. |
+| Config warnings **survive** `startTurn()` | They are about the FILE and stay true until it changes. Clearing them per turn would make a misconfigured server flicker. |
+
+The event type is typed, not duck-checked: `RunEvent` crosses from `@theokit/agents` as a type-only
+export, and the `mcp_server_failed` member is derived by discriminant (`McpServerFailedEvent`) so a
+rename upstream turns the build red instead of silently disabling the sink.
+
 ---
 
 ## HTTP/SSE server
