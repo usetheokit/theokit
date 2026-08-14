@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`@theokit/agents/config` — configuracao de agente, trust e arvore de instrucoes ganham porta.**
+  `LayeredConfig`, `TrustStore`, `loadInstructionTree`, `composeInstructions`, `loadCustomCommands`
+  e `contextPressure` so eram alcancaveis por `theokit/server`, um barrel que anuncia a propria
+  remocao na primeira importacao — e num pacote (o framework WEB) que um construtor de agente pode
+  nunca instalar. O unico consumidor real tem quatro pacotes e nenhum depende de `theokit`.
+
+  O custo disso foi medido, nao suposto: por `loadInstructionTree` estar inalcancavel, um produto
+  rio abaixo reescreveu 533 linhas de carregamento de arvore de instrucoes — e ao reescrever
+  reintroduziu a falha de contencao de symlink que o `assertNoSymlinkEscape` existe para fechar.
+
+  `theokit/server` continua re-exportando pelo ciclo minor que prometeu, agora a partir daqui, e o
+  aviso de depreciacao passa a dizer para onde ir. `loadEnv` NAO se mudou de proposito: precisaria
+  de `dotenv` + `dotenv-expand` em todo install de `@theokit/agents`, e carregar `.env` e assunto de
+  app web — a razao esta escrita no proprio `config-entry.ts`.
+
 - **O pacote publicado passa a levar prosa.** `@theokit/agents` entregava `dist/`, `LICENSE` e
   `package.json` — e nada mais. O `files` DECLARAVA `README.md`, que nao existia no disco, entao o
   npm o omitia em silencio; e o `CHANGELOG.md` de 114 kB existia e nao estava declarado. Quem

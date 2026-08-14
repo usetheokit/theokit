@@ -1,5 +1,16 @@
-import { foldLayers, verifyLayerOrdering } from '@theokit/agents'
+// Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
+// `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
+// through `src/index.ts`). The barrel re-exports the same SDK symbols for consumers; inside the
+// package we reach the source.
+import { foldLayers, verifyLayerOrdering } from '@theokit/sdk'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 import type { z } from 'zod'
+// These modules moved from `theokit` into `@theokit/agents`, and this package enforces an
+// invariant the web package does not: no exported error class extends plain `Error`. A class
+// outside the `TheokitAgentError` hierarchy is invisible to `isTransientError` and to any
+// consumer catching `instanceof TheokitAgentError` — the exact defect U-11 measured across ten
+// classes. `tests/unit/error-taxonomy.test.ts` caught all three the moment they crossed the
+// boundary, which is the guard working.
 
 /**
  * M73 — layered configuration, as a parameterised machine.
@@ -106,8 +117,13 @@ export interface LayeredConfigResult<TValue> {
  * about precedence that is wrong, and sorting it for them leaves the belief intact until it produces
  * a surprise somewhere else.
  */
-export class LayerOutOfOrderError extends Error {
+export class LayerOutOfOrderError extends TheokitAgentError {
   override readonly name = 'LayerOutOfOrderError'
+
+  constructor(message: string) {
+    // Not retryable: the caller passed layers in the wrong order, and the same call repeats it.
+    super(message, { code: 'config_layer_out_of_order', isRetryable: false })
+  }
 }
 
 /**

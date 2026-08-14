@@ -6,9 +6,20 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-import { resolveTrustPosture } from '@theokit/agents'
-import type { TrustPosture } from '@theokit/agents'
-import { atomicWriteJson, withFileLock } from '@theokit/agents/persistence'
+// Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
+// `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
+// through `src/index.ts`). The barrel re-exports the same SDK symbols for consumers; inside the
+// package we reach the source.
+import { resolveTrustPosture } from '@theokit/sdk'
+import type { TrustPosture } from '@theokit/sdk'
+import { TheokitAgentError } from '@theokit/sdk/errors'
+import { atomicWriteJson, withFileLock } from '@theokit/sdk/persistence'
+// These modules moved from `theokit` into `@theokit/agents`, and this package enforces an
+// invariant the web package does not: no exported error class extends plain `Error`. A class
+// outside the `TheokitAgentError` hierarchy is invisible to `isTransientError` and to any
+// consumer catching `instanceof TheokitAgentError` — the exact defect U-11 measured across ten
+// classes. `tests/unit/error-taxonomy.test.ts` caught all three the moment they crossed the
+// boundary, which is the guard working.
 
 /**
  * M73 — the per-directory trust store: a trust decision that survives the process.
@@ -49,7 +60,7 @@ interface TrustStoreFile {
 }
 
 /** Raised when the store's file mode would let another user grant themselves trust. */
-export class TrustStorePermissionsError extends Error {
+export class TrustStorePermissionsError extends TheokitAgentError {
   override readonly name = 'TrustStorePermissionsError'
 
   constructor(
@@ -61,6 +72,8 @@ export class TrustStorePermissionsError extends Error {
         `which directories may run shell hooks, so a writable store is a way to grant that to ` +
         `yourself. Refused rather than repaired: tightening it silently would hide that something ` +
         `changed the mode. Fix with \`chmod 600 ${file}\`.`,
+      // Refusing, not repairing: a permission that another user can set is not a transient fault.
+      { code: 'trust_store_insecure_mode', isRetryable: false },
     )
   }
 }
