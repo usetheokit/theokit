@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
+  BUILD_HOOK_TIMEOUT_MS,
   THEOKIT_DIST,
   __resetBuildDecisionForTests,
   buildTheokitPackageOnce,
@@ -48,12 +49,18 @@ describe('the build decision is made once per process', () => {
     ).toBe(first)
   })
 
-  it('test_the_memo_is_what_short_circuits_and_not_merely_a_fast_filesystem', () => {
-    // Counter-proof. Without it, the assertion above would also pass on a build so fast that mtime
-    // did not move, and the memo could be removed with every test still green.
-    __resetBuildDecisionForTests()
-    // After a reset the helper must consult the filesystem again rather than reuse a stale answer,
-    // which is what makes a FRESH process still able to build when there is nothing on disk.
-    expect(() => buildTheokitPackageOnce()).not.toThrow()
-  })
+  it(
+    'test_the_memo_is_what_short_circuits_and_not_merely_a_fast_filesystem',
+    () => {
+      // Counter-proof. Without it, the assertion above would also pass on a build so fast that mtime
+      // did not move, and the memo could be removed with every test still green.
+      __resetBuildDecisionForTests()
+      // After a reset the helper must consult the filesystem again rather than reuse a stale answer,
+      // which is what makes a FRESH process still able to build when there is nothing on disk.
+      expect(() => buildTheokitPackageOnce()).not.toThrow()
+      // Same budget as the build hooks: after `__resetBuildDecisionForTests` this call may genuinely
+      // rebuild, and the default 30 s test timeout is under the 240 s the build itself is allowed.
+    },
+    BUILD_HOOK_TIMEOUT_MS,
+  )
 })

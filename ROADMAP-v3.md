@@ -363,7 +363,7 @@ frontmatter **contra o diretório do próprio framework**.
 
 ---
 
-### M77 — [ ] HITL completo: auto-approve com evidência de sandbox, ledger de pendências, canal de pergunta
+### M77 — [x] HITL completo: auto-approve com evidência de sandbox, ledger de pendências, canal de pergunta
 
 **Objective:** A metade de aprovação-de-tool está perto de 5 e já absorveu feedback deste consumidor.
 Duas coisas a seguram. **(a)** `auto-approve` é promessa sem evidência: o tipo exige uma `string` de
@@ -391,7 +391,7 @@ um callback `askUser`) e não tem canal.
 
 ---
 
-### M78 — [ ] Binder de escopo de tool: `bindToolScope` com `sandbox` não-opcional
+### M78 — [x] Binder de escopo de tool: `bindToolScope` com `sandbox` não-opcional
 
 **Objective:** O framework embarca os ingredientes (`createSandboxBackend`, `resolveSandboxPosture`) e
 nenhum **binder**: um valor que amarre `{ projectRoot, writeRoot, sandbox }` uma vez e entregue as
@@ -415,7 +415,7 @@ que "um escopo construído sem sandbox produziu um shell NÃO-CONFINADO sem erro
 
 ---
 
-### M79 — [ ] Resolução pública de credencial + proveniência; matar o resolvedor de provider duplicado
+### M79 — [x] Resolução pública de credencial + proveniência; matar o resolvedor de provider duplicado
 
 **Objective:** A metade genuinamente difícil está suprida (device flow RFC 8628, refresh sob lock
 cross-process, persistência, extração de account id). Falta a metade que todo consumidor encontra
@@ -444,7 +444,7 @@ vendor.
 
 ---
 
-### M80 — [ ] Invariante da taxonomia de erros + registro na fronteira HTTP
+### M80 — [x] Invariante da taxonomia de erros + registro na fronteira HTTP
 
 **Objective:** A base está certa e deliberada — `index.ts:166-167` re-exporta `@theokit/sdk/errors` e
 `/retry` inteiros, com o motivo escrito (sem isso o consumidor foi empurrado para uma hierarquia
@@ -473,7 +473,7 @@ HTTP 500, indistinguível de falha real de servidor, e middleware de retry reenv
 
 ---
 
-### M81 — [ ] Delegação completa: cap de relógio, ciclo de vida efêmero, scoring por porta
+### M81 — [x] Delegação completa: cap de relógio, ciclo de vida efêmero, scoring por porta
 
 **Objective:** A engine de execução está suprida e funciona; os ~770 LOC que o consumidor escreveu são
 majoritariamente política. Três lacunas reais restam. **(a)** Budget é só dinheiro — uma delegação que
@@ -503,7 +503,7 @@ coisa de maior valor da camada, tem **zero adoção** num produto que roda um pa
 
 ---
 
-### M82 — [ ] Saúde de MCP: sink por turno + união `RunEvent` tipada
+### M82 — [x] Saúde de MCP: sink por turno + união `RunEvent` tipada
 
 **Objective:** MCP é a dimensão mais bem evidenciada de sucesso de extração — `loadMcpJson` é caso
 documentado de primitiva que deletou código de produto, e carrega controles de segurança que o consumidor
@@ -529,7 +529,7 @@ alcança.
 
 ---
 
-### M83 — [ ] Camada de produto terminal: roteador de comandos, coalescing de render, watchdog de shutdown
+### M83 — [x] Camada de produto terminal: roteador de comandos, coalescing de render, watchdog de shutdown
 
 **Objective:** A superfície terminal inteira do TheoKit é um renderer de 150 LOC + um presenter de 117 +
 um comando one-shot que **exige** argumento de mensagem e sai. O consumidor escreveu 8.639 LOC. Parte
@@ -556,7 +556,7 @@ render, e o watchdog de shutdown.
 
 ---
 
-### M84 — [ ] Observabilidade e custo reempacotados runtime-neutros + `theokit doctor`
+### M84 — [x] Observabilidade e custo reempacotados runtime-neutros + `theokit doctor`
 
 **Objective:** Dois problemas estruturais. **Empacotamento:** 1.715 LOC de observabilidade + custo vivem
 sob `packages/theo/src/server/**`, e `theokit` é o framework web Vite/React. O único produto real
@@ -585,7 +585,7 @@ camadas, trust, sandbox, MCP, skills, hooks.
 
 ---
 
-### M85 — [ ] Reconstruir o seam de teste sobre os vocabulários reais
+### M85 — [x] Reconstruir o seam de teste sobre os vocabulários reais
 
 **Objective:** Toda a superfície publicada de teste é **uma** função, `createMockAgentStream`, e ela fala
 um vocabulário que **nenhum caminho de produção do framework consome**: emite `run_started` /
@@ -613,7 +613,7 @@ evidência sobre nada. Adoção medida: **um** chamador no target inteiro (o pr�
 
 ---
 
-### M86 — [ ] TheoCode migra: adotar cada primitiva, deletar o que foi absorvido, publicar o ledger
+### M86 — [x] TheoCode migra: adotar cada primitiva, deletar o que foi absorvido, publicar o ledger
 
 **Objective:** Este é o milestone que fecha o laço e o **único** que dá evidência de que a v3 valeu. O
 TheoCode já provou oito vezes que o padrão funciona — `interactive_shell`, oito tools bespoke, o fold de

@@ -25,6 +25,70 @@ promovida a milestone do `ROADMAP-v3.md`, ou fechada com motivo escrito.
 
 ---
 
+## ~~B-M76-03~~ — RESOLVIDO — A corrida de `dist`, terceira medicao: eu fechei o B-M72-01 cedo demais
+
+**Encontrado em:** M77, 2026-08-13 · **Resolvido em:** 2026-08-13 · **Severidade: media** — nao ha
+defeito de produto; a suite mente de forma intermitente, que e o pior tipo de suite.
+
+O B-M72-01 memoizou a decisao "dist esta usavel?" e eu escrevi, no proprio codigo, que isso fazia
+"todo chamador de uma run concordar". **A frase era falsa.** O vitest roda arquivos de teste em
+**processos worker separados** — um memo por PROCESSO faz todo chamador de um *worker* concordar, o
+que nao e a mesma coisa.
+
+O defeito original sobreviveu, so que mais estreito: o worker A decide que dist esta fresco e vai
+le-lo; o worker B, iniciado onze minutos depois, ve o mtime fora da janela de dez minutos, decide que
+esta velho e reconstroi — e o `tsup` limpa o diretorio antes de escrever.
+
+**Medido na run completa do M77:** 7 falhas em `import-validation` e `devtools-treeshake`, todas
+verdes em isolamento logo em seguida (35/35).
+
+### A licao, que e a mesma de sempre
+
+Eu tinha a evidencia (a corrida) e escrevi a conclusao errada sobre o **modelo de execucao**. Nao
+medi quantos processos o vitest usa; assumi. O comentario que afirmava a garantia ficou no arquivo
+por um milestone inteiro afirmando algo que nunca foi verdade.
+
+### A correcao
+
+A decisao passa a ser compartilhada ENTRE processos por um arquivo-marca que registra **qual run**
+validou o dist, com a chave sendo o pid do processo pai — que todo worker de uma run do vitest
+compartilha. Mesma run ⇒ confia, sem relogio nenhum. Run diferente ⇒ cai na janela de frescor, que e
+para o que a janela sempre serviu: um dist de ontem.
+
+**Nenhuma janela de tempo resolve isto sozinha** — qualquer janela pode expirar entre dois workers da
+mesma run, e e exatamente esse o bug; alargar so faz um dist genuinamente velho sobreviver mais.
+
+---
+
+## B-M78-01 — ABERTO — Tres copias do `@theokit/sdk@4.51.1` tornam tipos com `protected` incompativeis entre pacotes
+
+**Encontrado em:** M78, 2026-08-14 · **Severidade: baixa hoje, media adiante** — nao quebra runtime;
+quebra *type tests* que cruzam a fronteira raiz↔pacote, e o erro nao se parece com a causa.
+
+`ls node_modules/.pnpm/@theokit+sdk@*` mostra **tres** diretorios da MESMA versao 4.51.1 (mais 4.40.0
+e 2.30.0), distinguidos so pelo hash de resolucao de peers. Isso e comportamento normal do pnpm.
+
+O que nao e normal e a consequencia: `SandboxProvider` carrega um membro `protected`, entao TypeScript
+o compara **nominalmente**. Um `.test-d.ts` em `tests/` resolve uma copia, `packages/agents/src`
+resolve outra, e o compilador reporta:
+
+```
+Type 'SandboxProvider' is not assignable to type 'SandboxProvider'.
+  Property 'config' is protected but type 'SandboxBackend' is not a class derived from 'SandboxBackend'
+```
+
+Um erro que le como uma contradicao e manda o leitor cacar um bug de tipo que nao existe.
+
+**Contornado no M78, nao resolvido:** o type test passou a derivar o tipo da propria assinatura sob
+teste (`Parameters<typeof bindToolScope>[0]['sandbox']`) em vez de importar o gemeo. Isso e mais
+correto por si so — o teste fala o vocabulario que a API publica — mas nao remove a duplicata.
+
+**O que falta decidir:** se vale forcar copia unica (`pnpm.overrides` ou `resolutions`) ou conviver.
+Nao decidi sozinho porque forcar dedupe pode quebrar um peer legitimo, e a evidencia atual e um unico
+type test — pouco para mexer na arvore de dependencias do repositorio inteiro.
+
+---
+
 ## B-M76-02 — ABERTO — CodeQL roda, varre 1645 arquivos e nao consegue reportar
 
 **Encontrado em:** M76, 2026-08-13 · **Severidade: media** — nao ha defeito de codigo; ha um gate de

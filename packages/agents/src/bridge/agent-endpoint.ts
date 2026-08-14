@@ -1,3 +1,6 @@
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 /**
  * M2 (theokit-ai-first) — the file-convention runtime bridge.
  *
@@ -12,7 +15,6 @@
  * DI-heavy classes). Neither runs an LLM directly — `@theokit/sdk` stays the sole
  * runtime (G2 / sdk-runtime.md); this module only wires its output onto the wire.
  */
-import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { type CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
@@ -23,13 +25,27 @@ import { presentUIMessageStream } from './present-ui-message-stream.js'
 import { createSdkAgentStream, type RuntimeOverrides } from './sdk-adapter.js'
 
 /** Thrown when an `agents/` file default-exports neither a `defineAgent` value nor an `@Agent` class. */
-export class AgentDefinitionError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text. `code` is
+ * stable across a rename; `isRetryable` is DECLARED, because a default would be a retry policy
+ * nobody chose.
+ */
+export class AgentDefinitionError extends TheokitAgentError {
+  override readonly name = 'AgentDefinitionError'
   constructor(source: string) {
     super(
       `[@theokit/agents] ${source}: an agents/ file must default-export a ` +
         `defineAgent(...) value or an @Agent-decorated class.`,
+
+      {
+        code: 'AGENT_DEFINITION_INVALID',
+        // a malformed module does not become well-formed by being loaded twice.
+        isRetryable: false,
+      },
     )
-    this.name = 'AgentDefinitionError'
   }
 }
 
