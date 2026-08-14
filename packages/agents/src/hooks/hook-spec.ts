@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 
+import type { ToolResultTransformContext } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import { z } from 'zod'
 
@@ -193,7 +194,13 @@ const IGNORE_WARNING = (): void => undefined
  * schema accepts or claim handlers that do not exist. Adding a handler below means adding its event
  * here, and the warning stops firing for it on its own.
  */
-const WIRED_EVENTS = new Set<HookEvent>(['pre_tool_call', 'post_tool_call'])
+const WIRED_EVENTS = new Set<HookEvent>([
+  'pre_tool_call',
+  'post_tool_call',
+  'transform_tool_result',
+  'on_session_start',
+  'post_assistant_reply',
+])
 
 /**
  * Compile specs into the `HookHandlers` the seam already accepts.
@@ -315,6 +322,24 @@ export function buildHookHandlers(
     }
   }
 
+  const transformHooks = runnable.filter((spec) => spec.event === 'transform_tool_result')
+  if (transformHooks.length > 0) {
+    handlers.transform_tool_result = buildTransformHandler(
+      transformHooks,
+      options,
+      warn,
+      chainBudgetMs,
+    )
+  }
+
+  for (const event of OBSERVATIONAL_EVENTS) {
+    const list = runnable.filter((spec) => spec.event === event)
+    if (list.length === 0) continue
+    const fire = buildObservationalHandler(event, list, options, warn, chainBudgetMs)
+    if (event === 'on_session_start') handlers.on_session_start = fire
+    else handlers.post_assistant_reply = fire
+  }
+
   return handlers
 }
 
@@ -369,4 +394,101 @@ export function fenceHookOutput(output: string): string {
   // leaked somehow. Cheap, and the alternative is trusting that it did not.
   const escaped = output.replaceAll(close, close.replace('<', '&lt;'))
   return `${open}\n${escaped}\n${close}`
+}
+
+/** The two observational events this engine wires. Separate so the loop above cannot drift. */
+const OBSERVATIONAL_EVENTS = ['on_session_start', 'post_assistant_reply'] as const
+
+/**
+ * `transform_tool_result` — a hook that reads a tool's RESULT and appends feedback the model sees.
+ *
+ * It is what the `pre`/`post` pair cannot express, and it is the event that gives
+ * `continuationBudget` a job: appended feedback is exactly what lets a hook feed itself, so the
+ * ceiling that was declared and never read becomes the thing that stops the loop.
+ *
+ * Extracted rather than inlined because `buildHookHandlers` crossed its line budget the moment this
+ * landed — and a 170-line builder is where the next reader stops being able to hold the whole thing.
+ */
+function buildTransformHandler(
+  transformHooks: readonly HookSpec[],
+  options: BuildHookHandlersOptions,
+  warn: (message: string) => void,
+  chainBudgetMs: number,
+): NonNullable<HookHandlers['transform_tool_result']> {
+  let remaining = options.continuationBudget ?? DEFAULT_CONTINUATION_BUDGET
+
+  return async <T>(results: T, ctx: ToolResultTransformContext): Promise<T> => {
+    if (remaining <= 0) {
+      warn(
+        `transform_tool_result hooks stopped: the continuation budget is spent. A hook reacting to ` +
+          `its own effect would otherwise loop, paying tokens on every pass.`,
+      )
+      return results
+    }
+    remaining -= 1
+
+    let out = results
+    const started = Date.now()
+    for (const spec of transformHooks) {
+      if (Date.now() - started > chainBudgetMs) {
+        warn('transform_tool_result chain exceeded its time budget; remaining hooks skipped')
+        break
+      }
+      // A transform sees the WHOLE batch of tool calls, not one — so a matcher applies when ANY call
+      // in the batch matches. Requiring all of them would silence a hook whenever an unrelated tool
+      // happened to run in the same turn.
+      if (!ctx.toolCalls.some((call) => matches(spec, call.name))) continue
+      const result = await runHookCommand({
+        command: spec.command,
+        cwd: options.cwd,
+        timeoutMs: spec.timeout_ms,
+        stdin: JSON.stringify({ tools: ctx.toolCalls.map((call) => call.name), result: out }),
+        ...(options.env !== undefined && { env: options.env }),
+      })
+      // FAIL-OPEN, like `post_tool_call` and for the same reason: the tool already ran. Discarding
+      // its result because a notifier broke throws away work the user has already paid for.
+      if (result.exitCode !== 0) {
+        warn(`transform_tool_result hook failed and was ignored: "${spec.command}"`)
+        continue
+      }
+      const feedback = result.stdout.trim()
+      if (feedback.length > 0) out = `${String(out)}\n${fenceHookOutput(feedback)}` as unknown as T
+    }
+    return out
+  }
+}
+
+/**
+ * The observational pair, FAIL-OPEN without exception.
+ *
+ * They fire after the fact and return nothing, so a broken notifier must never be why a completed
+ * turn is discarded.
+ */
+function buildObservationalHandler(
+  event: HookEvent,
+  list: readonly HookSpec[],
+  options: BuildHookHandlersOptions,
+  warn: (message: string) => void,
+  chainBudgetMs: number,
+): () => Promise<void> {
+  return async (): Promise<void> => {
+    const started = Date.now()
+    for (const spec of list) {
+      if (Date.now() - started > chainBudgetMs) {
+        warn(`${event} chain exceeded its time budget; remaining hooks skipped`)
+        return
+      }
+      const result = await runHookCommand({
+        command: spec.command,
+        cwd: options.cwd,
+        timeoutMs: spec.timeout_ms,
+        ...(options.env !== undefined && { env: options.env }),
+      })
+      if (result.exitCode !== 0) {
+        warn(
+          `${event} hook failed and was ignored: "${spec.command}" exited ${String(result.exitCode)}`,
+        )
+      }
+    }
+  }
 }
