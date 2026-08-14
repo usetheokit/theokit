@@ -503,7 +503,7 @@ coisa de maior valor da camada, tem **zero adoção** num produto que roda um pa
 
 ---
 
-### M82 — [ ] Saúde de MCP: sink por turno + união `RunEvent` tipada
+### M82 — [x] Saúde de MCP: sink por turno + união `RunEvent` tipada
 
 **Objective:** MCP é a dimensão mais bem evidenciada de sucesso de extração — `loadMcpJson` é caso
 documentado de primitiva que deletou código de produto, e carrega controles de segurança que o consumidor
