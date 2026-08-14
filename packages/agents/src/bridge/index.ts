@@ -138,10 +138,26 @@ export {
   delegateWithScoring,
   type BackgroundDelegation,
   type DelegateFn,
+  // M81 — the PORT and its union cross too. Exporting `delegateWithScoring` while withholding the
+  // type its parameter accepts is the shape this milestone exists to fix: a consumer holding an SDK
+  // `SubAgent` could reach the function and not the vocabulary to satisfy it. Knip caught that the
+  // types were exported from the module and reachable from nothing.
+  type DelegationPort,
+  type DelegationTarget,
   type Scorer,
   type ScoreVerdict,
   type ScoredDelegation,
 } from './delegation-scoring.js'
+
+// M81 — the ephemeral-agent lifecycle, including the shape a caller's factory returns. Withholding
+// `EphemeralAgent` would leave a typed factory unwritable, which is how the two hand-written
+// acquire/dispose sites came to exist in the first place.
+export {
+  DelegationTimeoutError,
+  withClockCap,
+  withEphemeralAgent,
+  type EphemeralAgent,
+} from './delegation-lifecycle.js'
 
 export {
   resolveMcpServers,
