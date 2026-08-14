@@ -21,7 +21,8 @@ the deletions began. What follows is measured in the migration commits, not esti
 | Migration to 8.0.0 | `41125d1` | — (two breaking call sites adapted) | +49 |
 | `shutdown` + diagnostics mechanism | `b80baa8` | `shared/src/shutdown.ts` (67) + its test (73) | −108 |
 | Doctor quartet | `31fd051` | `diagnose` / `renderDiagnosis` / `Check` / `Diagnosis` | −12 |
-| | | **measured total** | **−108 net (256 removed, 148 added)** |
+| Ask rendezvous + 3 error classes | `34d2c97` | the whole rendezvous + `concurrent-question` / `concurrent-listener` / `question-abandoned` (61) | −4 |
+| | | **measured total** | **−63 net (347 removed, 284 added)** |
 
 Three findings from doing it, each of which the estimate could not have produced:
 
@@ -103,12 +104,24 @@ now covers, while the framework absorbed the MECHANISM inside them. Both deletio
 behaved this way — 140 LOC removed against ~210 booked for M83+M84, and the remainder is adapter,
 not waste.
 
-**4. The honest conclusion is still not available, and is now narrower.** 108 net lines are gone
-against a 4 500 bar. Whether v3 met its thesis depends on the batches not yet run (M77's ask family,
-M78's tool scope, M80's error formatting, M81's delegation cap), each of which needs the consumer
-rework the ask family already showed: the framework's listener is thread-scoped and the product's is
-a process singleton with a polling read, so that one is a TUI change, not an import change. Recording
-that as remaining scope — with the reason — is what this ledger is for.
+**4. The net number is SMALLER than the lines removed, and that is the finding, not a rounding
+error.** 347 lines left; 284 arrived. The arrivals are not padding — they are the adapters, and the
+tests that had to be rewritten because the contract they asserted became the framework's. The ask
+batch is the clearest case: the entire rendezvous was deleted and the net was **−4**, because the
+address translation that replaced it (thread → question id) plus a test suite rewritten to drive the
+module instead of a class cost almost exactly what the mechanism did.
+
+A ledger that reported only "347 deleted" would be true and misleading. The honest claim is: the
+DUPLICATED MECHANISM is gone — four modules of it — and what remains in its place is smaller in
+concept while similar in size.
+
+**5. The conclusion is still not available, and is now narrower.** 63 net lines against a 4 500 bar.
+Whether v3 met its thesis depends on the batches not yet run — M78's tool scope, M79's credential
+resolution (measured above as far smaller than booked), M80's error formatting, M81's delegation cap.
+On the current evidence the 4 500 figure will not be met by a wide margin, and the reason is
+structural rather than a shortfall of effort: the report counted files, the framework absorbed
+mechanisms, and mechanisms are a minority of the lines in the files that hold them. That belongs in
+the v4 scope conversation as a corrected premise, not as a missed target.
 
 ---
 
