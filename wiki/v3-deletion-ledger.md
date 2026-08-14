@@ -174,3 +174,57 @@ gap has a number, a cause, and a next step.
 - The primitives, by milestone: `CHANGELOG.md` `[Unreleased]`
 - Consumer: `usetheo-labs/TheoCode`
 - SDK-side companion: `usetheodev/theokit-sdk#281` (`createViewImageTool`)
+
+
+---
+
+## Adoção medida — o que o consumidor NÃO usa (2026-08-14)
+
+Depois das quatro levas, a pergunta certa deixou de ser "quanto foi deletado" e passou a ser **quanto
+da capacidade publicada é de fato consumida**. Medido: o TheoCode importa **12 dos 19 subpaths** de
+`@theokit/agents`.
+
+| Subpath | Milestone | Situação medida |
+|---|---|---|
+| `/mcp-health` | M82 | ✅ **adotado nesta passagem** — e o `onWarn` do `loadMcpJson` ganhou consumidor pela primeira vez |
+| `/usage` | M84 | ❌ não é duplicata. `last-usage.ts` (10 LOC) é um helper genérico de lista; `/usage` é **armazenamento** de registros. Agrupei por nome de pasta, não por preocupação — erro meu na primeira medição |
+| `/testing` | M85 | ❌ **sem consumidor possível hoje**: o TheoCode não tem nenhum teste em nível de wire. O seam anterior tinha adoção zero e o novo também — não porque seja pior, mas porque o caso de uso não existe naquele produto |
+| `/tool-scope` | M78 | não medido em profundidade |
+| `/session` | M71+M72 | 173 LOC locais, migração não tentada |
+| `/hooks` | M75 | **766 LOC locais — bloqueado por um fato medido, abaixo** |
+
+## Por que a migração de hooks NÃO é drop-in
+
+É o maior bloco único (766 LOC) e o único onde a substituição direta **destruiria estado do
+usuário**. As duas impressões digitais não são equivalentes:
+
+| | Forma canônica | Saída |
+|---|---|---|
+| TheoCode `hook-trust.ts` | `JSON.stringify({command, event, matcher: null, timeout_ms})` com chaves ordenadas | `sha256:<hex>` |
+| Framework `hookFingerprint` | `[command, event, matcher ?? '', String(timeoutMs)].join('\u001e')` | `<hex>` cru |
+
+Ambas são sólidas; são **diferentes**. E `buildHookHandlers` calcula
+`hookFingerprint(identityOf(spec))` internamente, então um `approved` montado com a função do
+TheoCode nunca casa. O efeito não é um crash — é todo hook virar *"not approved and will not run"*
+com um aviso. Perda silenciosa de capacidade sobre um store de aprovações em disco.
+
+Re-perguntar toda aprovação também não é solução: treinar o usuário a aprovar por reflexo é
+exatamente o que um gate de aprovação de hook existe para impedir.
+
+**Duas saídas, ambas trabalho próprio com plano e teste:**
+
+1. **Migração de dados do trust store** — ler o formato antigo, recalcular com a função do framework,
+   reescrever, com marcador de versão e caminho de rollback.
+2. **Fingerprint injetável no framework** — `buildHookHandlers` passa a aceitar a função, e o produto
+   mantém a sua.
+
+A opção 2 é menor e não toca dados do usuário; a 1 alinha os dois lados de vez. A decisão é de
+escopo, e o fato que a força está medido acima em vez de suposto.
+
+## O que isso corrige na conclusão anterior deste ledger
+
+O item 5 acima dizia que a barra de 4 500 LOC não seria batida por razão **estrutural** — "o
+relatório contou arquivos, o framework absorveu mecanismos". Isso vale para o M79, que foi medido.
+Mas para **hooks e session a massa É o mecanismo**, e ela segue duplicada: ~940 LOC que a tese
+prevê e que simplesmente não foram migradas. Generalizei cedo demais a partir de um caso, e a
+medição de adoção acima é o que corrige a afirmação.
