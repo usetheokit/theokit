@@ -1,5 +1,26 @@
 # @theokit/agents
 
+## 8.3.0
+
+### Minor Changes
+
+- `buildHookHandlers` aceita `onVeto` — chamado quando um hook `pre_tool_call` VETA uma chamada,
+  para que uma superficie possa dizer isso ao usuario.
+
+  O sinal precisa sair dali. Um veto bloqueia a chamada e entrega ao modelo uma mensagem para ele se
+  corrigir, e no fio isso e deliberadamente indistinguivel de um resultado de tool comum — o SDK
+  documenta assim. Entao uma superficie nao consegue reconhecer um veto observando o stream; este e o
+  unico ponto que sabe que houve um.
+
+  Sem ele, um consumidor que mostra "um hook bloqueou isto" precisava manter a copia inteira deste
+  builder so para disparar uma notificacao. Era exatamente o caso medido numa migracao real.
+
+  Dispara tambem no veto por ESTOURO DE ORCAMENTO da cadeia. Omitir ali faria a superficie reportar
+  todo bloqueio menos o causado por lentidao — que e o que um operador mais precisa ver nomeado.
+
+  **Opcional, e nao e default de seguranca:** o veto bloqueia de qualquer forma. Isto decide apenas
+  se alguem e informado — uma superficie headless nao tem a quem contar.
+
 ## 8.2.0
 
 ### Minor Changes

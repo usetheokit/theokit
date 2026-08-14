@@ -322,3 +322,113 @@ describe('M75 — a product with its own approval store keeps its own fingerprin
     expect(handlers.pre_tool_call).toBeUndefined()
   })
 })
+
+describe('M75 — a surface can be TOLD that a hook vetoed', () => {
+  /**
+   * A real `PreToolCallContext`, not `{ name, args } as never`.
+   *
+   * The cast form appears once above and it is what let these tests compile while the fixture was
+   * missing `agentId` and `runId` — vitest ran them happily and `tsc` refused, which is the split
+   * this file exists to prevent. Building the whole shape costs two fields and removes the hiding
+   * place.
+   */
+  const toolCall = (name: string) => ({ name, args: {}, agentId: 'a1', runId: 'r1' })
+
+  /**
+   * The second gap the migration found.
+   *
+   * A veto blocks the call and hands the model a message to self-correct with. On the wire that is
+   * deliberately indistinguishable from an ordinary tool result — the SDK documents it — so a
+   * surface cannot recognise a veto by watching the stream. It has to be told from HERE, at the
+   * only point that knows.
+   *
+   * Without the callback, a consumer that shows "a hook blocked this" had to keep its own copy of
+   * the whole handler builder just to fire one notification. That is the shape this option removes.
+   *
+   * Optional, and NOT a security default: the veto blocks either way. This decides only whether
+   * anybody is shown it — a headless surface has nobody to tell.
+   */
+  const blocking = {
+    command: 'exit 1',
+    event: 'pre_tool_call',
+    timeout_ms: 5000,
+  } as const
+
+  const approvedSet = (): ReadonlySet<string> =>
+    new Set([hookFingerprint({ command: 'exit 1', event: 'pre_tool_call', timeoutMs: 5000 })])
+
+  it('test_the_surface_is_told_which_tool_was_blocked_and_why', async () => {
+    const seen: Array<{ tool: string; reason: string }> = []
+    const handlers = buildHookHandlers([blocking], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: approvedSet(),
+      onVeto: (veto) => seen.push(veto),
+    })
+
+    const verdict = await handlers.pre_tool_call?.(toolCall('shell'))
+
+    expect(
+      verdict?.block,
+      'the hook did not veto, so the callback assertion below proves nothing',
+    ).toBe(true)
+    expect(seen).toHaveLength(1)
+    expect(seen[0].tool).toBe('shell')
+    expect(seen[0].reason.length).toBeGreaterThan(0)
+  })
+
+  it('test_a_hook_that_PASSES_fires_no_veto', async () => {
+    // Counter-proof: a callback that fired unconditionally would satisfy the test above while
+    // telling the user every allowed call was blocked.
+    const passing = { command: 'true', event: 'pre_tool_call', timeout_ms: 5000 } as const
+    const seen: Array<{ tool: string; reason: string }> = []
+
+    const handlers = buildHookHandlers([passing], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([
+        hookFingerprint({ command: 'true', event: 'pre_tool_call', timeoutMs: 5000 }),
+      ]),
+      onVeto: (veto) => seen.push(veto),
+    })
+
+    const verdict = await handlers.pre_tool_call?.(toolCall('shell'))
+
+    expect(verdict).toBeUndefined()
+    expect(seen).toEqual([])
+  })
+
+  it('test_omitting_it_still_BLOCKS', async () => {
+    // The security property is not carried by the callback. A headless surface omits it and the
+    // veto is unchanged.
+    const handlers = buildHookHandlers([blocking], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: approvedSet(),
+    })
+
+    expect((await handlers.pre_tool_call?.(toolCall('shell')))?.block).toBe(true)
+  })
+})
+
+/**
+ * A hypothesis the MEASUREMENT killed, recorded because the wrong conclusion was plausible.
+ *
+ * The chain budget is checked BEFORE each hook, and the hook then runs with its own `timeout_ms`.
+ * From that I concluded the chain could overshoot its ceiling by a full hook timeout — the consumer
+ * that motivated this milestone shrinks each hook's timeout by whatever the chain has left, and that
+ * looked like it was fixing a defect of ours.
+ *
+ * Measured: six 400ms hooks against a 2000ms ceiling finish in **2021ms**. The chain stops within
+ * 21ms of the limit. The overshoot exists in principle and is bounded BY CONSTRUCTION: the budget is
+ * `4 x the largest timeout`, so the worst case is 25% of the budget itself — proportional, not
+ * arbitrary.
+ *
+ * I wrote two tests before measuring. The first passed because the chain finished in ~900ms and
+ * never approached the ceiling — vacuous. The second passed because a hook that exceeds its timeout
+ * VETOES and returns immediately, so the chain never accumulates. Neither was evidence about what
+ * its name claimed, and I nearly asserted a fix on the strength of them.
+ *
+ * There is no fix here. What remains is the record that the difference between the two
+ * implementations is real and is NOT a defect of ours.
+ */
