@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **O CodeQL para de ficar vermelho para sempre, e passa a DIZER por que nao roda.**
+
+  O upload do CodeQL exige GitHub Advanced Security num repositorio PRIVADO — o comentario do proprio
+  workflow dizia "free for public repositories", e este repo e privado. Resultado: a analise rodava
+  ~4 minutos em toda PR e falhava no upload, sempre.
+
+  Um check vermelho para sempre e pior que um que nao roda: as pessoas aprendem a passar os olhos
+  por cima do vermelho, e a proxima falha de verdade passa junto. Foi exatamente o que aconteceu
+  nesta sessao — citei "Analyze (javascript-typescript) fail" dezenas de vezes como ruido conhecido.
+
+  A analise agora e GATEADA na visibilidade do repositorio, e um segundo job **sempre roda** para
+  declarar quando ela foi pulada e por que. Remover o workflow seria mais limpo e mentiria por
+  omissao: quem lesse a lista de checks concluiria que nao ha SAST configurado, que e uma afirmacao
+  diferente e pior do que "ha SAST e ele nao consegue reportar aqui".
+
+  Fecha a metade acionavel do B-M76-02. A outra metade — habilitar GHAS ou tornar o repo publico —
+  e decisao de plano, e o job de status diz isso em voz alta a cada execucao.
+
+### Fixed
+
+- **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
+  `transform_tool_result` estreou no `@theokit/agents@8.5.0` e a suite do TheoCode encontrou em
+  minutos o que 6116 testes daqui nao pegaram — porque eu escrevi os dois lados com a mesma
+  suposicao.
+  - Um hook **sem matcher** parava de rodar quando o lote de tool calls estava vazio: a checagem era
+    `.some()`, e `.some()` sobre array vazio e `false`. Um hook que pediu para ver TUDO nao via nada
+    no momento em que nao havia nada com que casar (corrigido em 8.5.2).
+  - Os **argumentos** da tool nao chegavam ao payload — eu mandava so os nomes. O produto ja tinha
+    corrigido esse mesmo defeito na copia dele, com a razao escrita: uma guarda que nao le os
+    argumentos nao consegue decidir sobre eles (8.5.2).
+  - O payload era um **terceiro formato** (`{ tools: [...] }`) num modulo cujos outros dois handlers
+    mandam `{ tool, args, ... }`. Agora roda uma vez por chamada, com `name` como alias de `tool`
+    para nao quebrar scripts de hook que ja estao no disco de usuarios (8.6.0, **commitado e ainda
+    nao publicado**).
+- **`buildHookHandlers` conectava 2 dos 8 eventos que declara, em silencio.** Um operador escrevia
+  `on_session_start`, o parse passava, o fingerprint saia, ele aprovava — e nada disparava. O
+  docblock do proprio modulo proibia isso, escrito sobre um evento com erro de digitacao; o mesmo
+  silencio cobria seis corretamente escritos. Agora avisa (8.4.0) e conecta cinco (8.5.x).
+- **`continuationBudget` estava exportado e lido por nada.** Implementar `transform_tool_result` e o
+  que lhe deu trabalho: feedback anexado e o que permite um hook se realimentar, e o orcamento e o
+  que para o laco.
+
 ### Fixed
 
 - **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
