@@ -71,6 +71,10 @@
     "./mcp-health": {
       "types": "./dist/mcp-health.d.ts",
       "import": "./dist/mcp-health.js"
+    },
+    "./commands": {
+      "types": "./dist/commands.d.ts",
+      "import": "./dist/commands.js"
     }
   },
   "files": [
