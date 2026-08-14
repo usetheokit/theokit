@@ -529,7 +529,7 @@ alcança.
 
 ---
 
-### M83 — [ ] Camada de produto terminal: roteador de comandos, coalescing de render, watchdog de shutdown
+### M83 — [x] Camada de produto terminal: roteador de comandos, coalescing de render, watchdog de shutdown
 
 **Objective:** A superfície terminal inteira do TheoKit é um renderer de 150 LOC + um presenter de 117 +
 um comando one-shot que **exige** argumento de mensagem e sai. O consumidor escreveu 8.639 LOC. Parte
