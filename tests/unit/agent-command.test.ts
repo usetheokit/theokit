@@ -26,12 +26,18 @@ afterEach(() => {
 })
 
 describe('agentCommand (M5)', () => {
-  it('test_missing_message_fails_fast', async () => {
+  it('test_missing_message_fails_fast_when_no_interactive_surface_is_wired', async () => {
+    // M83 re-pointed this, and the BEHAVIOUR it protects is unchanged: no message and no surface
+    // still refuses, fail-fast, for both `undefined` and blank.
+    //
+    // What changed is the message. It used to recite usage ("a message is required"), which reads
+    // as "you typed it wrong" — while the actual reason, once an interactive mode exists, is that
+    // nothing was wired to run a session. The assertion follows the reason rather than the wording.
     await expect(agentCommand('ops', undefined, { projectRoot: root })).rejects.toThrow(
-      /message is required/,
+      /no interactive surface is wired/,
     )
     await expect(agentCommand('ops', '   ', { projectRoot: root })).rejects.toThrow(
-      /message is required/,
+      /no interactive surface is wired/,
     )
   })
 
