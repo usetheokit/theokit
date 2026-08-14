@@ -129,8 +129,18 @@ the v4 scope conversation as a corrected premise, not as a missed target.
 
 | Criterion | Target | Measured today |
 |---|---|---|
-| `grep "from '@theokit/sdk"` in TheoCode `packages/*/src` | **0** | **6** |
-| `@theokit/sdk` out of `packages/agent/package.json` | absent | still `^4.49.0` |
+| `grep "from '@theokit/sdk"` in TheoCode `packages/*/src` | **0** | **0** ✅ |
+| `@theokit/sdk` out of `packages/agent/package.json` | absent | **absent** ✅ |
+
+Both closed on 2026-08-14. The six survivors were import-site, not missing primitives: five are the
+M67 pass-through family and the sixth is `ToolResultContentBlock` — and the ledger's own note that
+the sixth "needs the SDK release carrying `createViewImageTool`" was wrong when measured. All eight
+symbols were already re-exported from `@theokit/agents`'s barrel; re-pointing the imports and
+dropping the dependency took one commit, and the consumer's suite stayed green (529).
+
+That is the M67 thesis holding: a consumer should not have to declare a dependency on the SDK to use
+what the framework already passes through. Until this commit, it did — and the criterion had been
+sitting in a Definition of done that nobody measured.
 
 The six survivors, named so the next pass does not have to rediscover them:
 
