@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { buildTheokitPackageOnce } from './_helpers/build-theokit-package.js'
+import { BUILD_HOOK_TIMEOUT_MS, buildTheokitPackageOnce } from './_helpers/build-theokit-package.js'
 
 const REPO = resolve(__dirname, '../..')
 const DIST = resolve(REPO, 'packages/theo/dist')
@@ -9,7 +9,7 @@ const DIST = resolve(REPO, 'packages/theo/dist')
 describe('theokit package build (T5.1)', { timeout: 300_000 }, () => {
   beforeAll(() => {
     buildTheokitPackageOnce()
-  }, 300_000)
+  }, BUILD_HOOK_TIMEOUT_MS)
 
   it('pnpm --filter theokit build succeeds (artifacts present)', () => {
     // Shared mutex-guarded build already ran in beforeAll; just verify dist/

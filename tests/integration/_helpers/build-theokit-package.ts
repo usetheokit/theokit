@@ -184,6 +184,18 @@ export const buildTheokitPackageOnce = (): void => {
   }
 }
 
+/**
+ * Budget for a `beforeAll` that calls {@link buildTheokitPackageOnce}.
+ *
+ * Vitest's default `hookTimeout` is **10 s**, and this helper may run `pnpm --filter theokit build`
+ * — for which it allows 240 s — or wait on another worker's build lock. A 10 s ceiling over that is
+ * not a timeout, it is a coin flip: it passed for as long as `dist` happened to be warm, and started
+ * failing in CI the moment file parallelism let several workers reach the lock at once.
+ *
+ * Declared here, next to the 240 s the build itself gets, so the two numbers cannot drift apart.
+ */
+export const BUILD_HOOK_TIMEOUT_MS = 300_000
+
 export const THEOKIT_DIST = DIST
 
 /** Reset the per-process decision. Exists so the guard below can exercise both branches. */
