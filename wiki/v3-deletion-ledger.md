@@ -265,3 +265,41 @@ de usuário, não um refactor.
 **A lição que as três deixam:** o gap de adoção não era preguiça de migração. Era o framework e o
 produto tendo feito escolhas diferentes em pontos que ninguém tinha comparado — e cada uma só
 apareceu quando alguém tentou de fato encaixar os dois.
+
+
+---
+
+## Os quatro subpaths nao adotados — veredito medido (2026-08-14)
+
+A medicao anterior listou quatro subpaths sem consumidor e deu um julgamento para cada. **Dois
+estavam errados**, e os dois erros tem a mesma causa: eu julguei pela lembranca do que tinha
+escrito, nao pelo que o consumidor tinha.
+
+| Subpath | Julgamento anterior | Medido |
+|---|---|---|
+| `/tool-scope` | *"nao medido a fundo"* | ✅ **adotado.** Sete repeticoes de `projectRoot: scope.cwd` e uma de `sandbox` viraram um bind |
+| `/testing` | *"sem caso de uso"* | ❌ **errado.** O consumidor tinha oito `as never` — o padrao exato que o M85 cita no proprio docblock |
+| `/usage` | *"nao e duplicata"* | ✅ confirmado — helper de lista contra armazenamento de registros |
+| `/bridge` | *"interno do framework"* | ✅ confirmado |
+
+**Adocao: 16 de 19** (era 12 no inicio da apuracao).
+
+### O que a adocao do `/tool-scope` quase apagou
+
+`apply_patch` e `edit_file` recebiam `projectRoot: scope.writeRoot` — para uma tool de escrita, a
+raiz do projeto E a raiz de escrita. Um `bind` ingenuo aplicaria o `cwd` e **estreitaria o escopo de
+escrita em silencio** quando os dois divergem, que e o caso de `danger-full-access`. Ficaram com
+override explicito e teste comparando os dois modos.
+
+### O defeito que o `/testing` levou a encontrar
+
+Investigar os `as never` do consumidor expos algo maior: **os seis erros de tipo que esta sessao
+inteira chamou de "linha de base pre-existente"** eram seis `processor.finish('ok')` contra uma
+assinatura que aceita `'finished' | 'error'`. Passavam porque a implementacao so pergunta
+`status === 'error'` — comportamento acidentalmente correto sobre uma chamada invalida.
+
+E os oito casts eram desnecessarios. A relacao entre as duas coisas e a licao: **os casts
+anestesiavam o arquivo**. Com `as never` espalhado ninguem le os erros que sobram, e foi assim que
+seis mensagens atravessaram uma sessao sendo citadas por numero e nunca por conteudo.
+
+`tsc` do consumidor: **6 -> 0**.
