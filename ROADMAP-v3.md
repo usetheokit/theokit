@@ -391,7 +391,7 @@ um callback `askUser`) e não tem canal.
 
 ---
 
-### M78 — [ ] Binder de escopo de tool: `bindToolScope` com `sandbox` não-opcional
+### M78 — [x] Binder de escopo de tool: `bindToolScope` com `sandbox` não-opcional
 
 **Objective:** O framework embarca os ingredientes (`createSandboxBackend`, `resolveSandboxPosture`) e
 nenhum **binder**: um valor que amarre `{ projectRoot, writeRoot, sandbox }` uma vez e entregue as
