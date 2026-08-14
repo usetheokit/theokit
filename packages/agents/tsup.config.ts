@@ -3,6 +3,7 @@ import { defineConfig } from 'tsup'
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    ask: 'src/ask/index.ts',
     bridge: 'src/bridge-entry.ts',
     testing: 'src/testing/index.ts',
     // M58 — pass-through subpaths mirroring the SDK's own split.
