@@ -9,7 +9,53 @@
  * SubAgent class or an LLM — and so it NEVER re-implements the delegation runtime.
  */
 import { delegate, type DelegateOptions, type SubAgentSpec } from './agent-orchestrator.js'
+import { withClockCap } from './delegation-lifecycle.js'
 import type { DelegationResult } from './delegation-types.js'
+
+/**
+ * M81 — anything that can run a delegation.
+ *
+ * The reach gap this closes: both wrappers took a `SubAgentSpec` produced by the capability
+ * compiler, so a consumer holding an SDK `SubAgent` or `Squad` could not feed them. That is why the
+ * scoring loop — the layer's highest-value piece — had ZERO adoption in a product that runs an
+ * explicit review pass: it was unreachable from the primitives that product actually holds.
+ *
+ * An SDK `SubAgent` or `Squad` satisfies this by having `run`. So does a test double, which is why
+ * the loop is now testable without a compiler, a class or an LLM.
+ */
+export interface DelegationPort {
+  run(message: string): Promise<DelegationResult>
+}
+
+/** What both wrappers accept: the compiled spec (unchanged) or the port (M81, additive). */
+export type DelegationTarget = SubAgentSpec | DelegationPort
+
+/**
+ * Which of the two a caller handed over.
+ *
+ * Structural, on the presence of `run` — a `SubAgentSpec` is a plain record with `name`/`compiled`
+ * and has no method, so the two cannot be confused. Additive by construction: the existing
+ * spec-shaped call keeps its exact behaviour (Top-risk 1).
+ */
+function isPort(target: DelegationTarget): target is DelegationPort {
+  return typeof (target as Partial<DelegationPort>).run === 'function'
+}
+
+/** Run one round against whichever shape was supplied, under an optional clock cap. */
+async function runOnce(
+  target: DelegationTarget,
+  message: string,
+  delegateFn: DelegateFn,
+  opts: DelegateOptions,
+): Promise<DelegationResult> {
+  const port = isPort(target)
+  const started = port ? target.run(message) : delegateFn(target, message, opts)
+  if (opts.timeoutMs === undefined) return started
+  // The port has no name of its own — it is whatever object the caller held. Naming it "port" in
+  // the timeout message is honest about that: inventing one would put a label in an operator's log
+  // that matches nothing they can grep for.
+  return withClockCap(started, opts.timeoutMs, port ? 'port' : target.name)
+}
 
 /** The delegation primitive both wrappers drive. Defaults to the M12 {@link delegate}. */
 export type DelegateFn = (
@@ -32,13 +78,13 @@ export interface BackgroundDelegation {
  * `delegate` — not a scheduler (Top-risk 1). Rejections are still observable via `wait()`.
  */
 export function delegateBackground(
-  subAgent: SubAgentSpec,
+  subAgent: DelegationTarget,
   message: string,
   opts: DelegateOptions & { delegateFn?: DelegateFn } = {},
 ): BackgroundDelegation {
   const { delegateFn = delegate, ...delegateOpts } = opts
   let isSettled = false
-  const promise = delegateFn(subAgent, message, delegateOpts).finally(() => {
+  const promise = runOnce(subAgent, message, delegateFn, delegateOpts).finally(() => {
     isSettled = true
   })
   // Swallow the unhandled-rejection warning: the rejection surfaces through wait().
@@ -85,7 +131,7 @@ function defaultFeedbackTemplate(message: string, feedback: string): string {
  * the final result (passing, or the last attempt) with the per-round verdict trail.
  */
 export async function delegateWithScoring(
-  subAgent: SubAgentSpec,
+  subAgent: DelegationTarget,
   message: string,
   opts: DelegateOptions & {
     scorer: Scorer
@@ -109,7 +155,7 @@ export async function delegateWithScoring(
   let lastResult: DelegationResult | undefined
 
   for (let round = 1; round <= maxRounds; round++) {
-    const result = await delegateFn(subAgent, currentMessage, delegateOpts)
+    const result = await runOnce(subAgent, currentMessage, delegateFn, delegateOpts)
     lastResult = result
     const verdict = await scorer(result)
     verdicts.push(verdict)
