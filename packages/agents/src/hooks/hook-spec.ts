@@ -437,12 +437,27 @@ function buildTransformHandler(
       // A transform sees the WHOLE batch of tool calls, not one — so a matcher applies when ANY call
       // in the batch matches. Requiring all of them would silence a hook whenever an unrelated tool
       // happened to run in the same turn.
-      if (!ctx.toolCalls.some((call) => matches(spec, call.name))) continue
+      //
+      // An UNSCOPED hook (no matcher) runs regardless, including when the batch is empty. The first
+      // version used `.some()` alone, and `.some()` over an empty array is `false` — so a hook that
+      // asked to see everything saw nothing the moment there was nothing to match against. A
+      // consumer's test caught it: "an unscoped hook still runs on a result with no tool name".
+      if (spec.matcher !== undefined && !ctx.toolCalls.some((call) => matches(spec, call.name))) {
+        continue
+      }
       const result = await runHookCommand({
         command: spec.command,
         cwd: options.cwd,
         timeoutMs: spec.timeout_ms,
-        stdin: JSON.stringify({ tools: ctx.toolCalls.map((call) => call.name), result: out }),
+        // The tool calls WITH their arguments, not just their names.
+        //
+        // The first version sent names only, which re-created a defect the consumer had already
+        // fixed once: a hook could see WHICH tool ran and its result, and never what it was called
+        // with. A guard that cannot read the arguments cannot decide about them.
+        stdin: JSON.stringify({
+          tools: ctx.toolCalls.map((call) => ({ name: call.name, args: call.args })),
+          result: out,
+        }),
         ...(options.env !== undefined && { env: options.env }),
       })
       // FAIL-OPEN, like `post_tool_call` and for the same reason: the tool already ran. Discarding

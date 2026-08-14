@@ -1,5 +1,25 @@
 # @theokit/agents
 
+## 8.5.2
+
+### Patch Changes
+
+- Duas regressoes no `transform_tool_result` que estreou no 8.5.0. As duas eram minhas, e as duas
+  foram encontradas pelos testes que ja existiam num produto — nao por revisao.
+
+  **Um hook SEM matcher parava de rodar quando o lote de tool calls estava vazio.** A checagem era
+  `ctx.toolCalls.some(...)`, e `.some()` sobre array vazio e `false` — entao um hook que pediu para
+  ver TUDO nao via nada no momento em que nao havia nada com que casar. Agora um hook sem matcher
+  roda sempre; com matcher, a regra de casar por qualquer chamada do lote continua.
+
+  **Os ARGUMENTOS da tool nao chegavam ao payload.** Eu mandava so os nomes. O produto que motivou
+  este milestone ja tinha corrigido esse mesmo defeito na copia dele, com a razao escrita: um hook
+  conseguia ver QUAL tool rodou e o resultado dela, e nunca com o que ela foi chamada. Uma guarda que
+  nao le os argumentos nao consegue decidir sobre eles. Agora vao `{ name, args }`.
+
+  Os dois casos entraram como teste aqui, com contra-prova — sem elas, "rodar sempre" satisfaria o
+  primeiro e apagaria o matcher.
+
 ## 8.5.1
 
 ### Patch Changes
