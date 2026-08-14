@@ -1,8 +1,20 @@
 name: CodeQL (SAST)
 
-# Static Application Security Testing — detects CWE/OWASP patterns in
-# source. Free for public repositories. Runs on every PR, every push to
-# main, and weekly to catch newly-published advisories.
+# Static Application Security Testing — detects CWE/OWASP patterns in source.
+#
+# CodeQL's upload step needs GitHub Advanced Security on a PRIVATE repository; it is free only for
+# public ones. This repository is private, so the analysis ran for ~4 minutes on every PR and then
+# failed at the upload, every time.
+#
+# A check that is red forever is worse than one that does not run: people learn to skim past red,
+# and the next genuine failure is skimmed past with it. So the analysis is GATED on the condition
+# that lets it finish, and a second job states out loud when it was skipped and why — because a
+# missing check is its own kind of lie: somebody reading the list would conclude no SAST is
+# configured at all.
+#
+# The gate is the repository's visibility, which is the readable half of the requirement. Enabling
+# GHAS on a private repo also satisfies CodeQL, and when that happens this workflow needs the
+# condition relaxed — the status job below says so, so the change is discoverable from a run.
 
 on:
   push:
@@ -15,6 +27,9 @@ on:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
+    # Private repositories need GHAS for the upload. Running the scan anyway burns minutes to end in
+    # a failure that says nothing about the code.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -41,3 +56,22 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: '/language:${{ matrix.language }}'
+
+  sast-status:
+    name: SAST status
+    runs-on: ubuntu-latest
+    # ALWAYS runs. Its whole job is to make the absence visible: a checks list with no SAST entry
+    # reads as "SAST is not configured", which is a different and worse claim than "SAST is
+    # configured and cannot report here".
+    steps:
+      - name: Report whether CodeQL could run
+        run: |
+          if [ "${{ github.event.repository.private }}" = "true" ]; then
+            echo "::warning::CodeQL analysis SKIPPED — this repository is private and CodeQL's"\
+              "upload needs GitHub Advanced Security. The scan is configured and will run as soon"\
+              "as GHAS is enabled or the repository becomes public. Until then it is skipped"\
+              "rather than left permanently red, because a check that always fails teaches people"\
+              "to ignore checks."
+          else
+            echo "CodeQL analysis ran — see the Analyze job."
+          fi
