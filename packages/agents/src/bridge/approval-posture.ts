@@ -22,6 +22,8 @@
  * the absence of one (`ApprovalReviewer::{Guardian, User}`). `opencode` does the same inside out:
  * an absent rule resolves to `ask`.
  */
+import type { SandboxPosture } from '@theokit/sdk/sandbox'
+
 import { debugLog } from '../debug-log.js'
 import type { HumanInTheLoopOptions } from '../types.js'
 
@@ -55,8 +57,26 @@ export type ApprovalPosture =
       ) => Promise<boolean | HitlDecision>
     }
   | {
-      /** Nobody asks and the tool runs. Legitimate when something else confines the execution. */
+      /** Nobody asks and the tool runs. Legitimate only when something else confines the execution. */
       kind: 'auto-approve'
+      /**
+       * M77 — the EVIDENCE that something else confines the execution. Not optional, and not a
+       * string.
+       *
+       * This is the most consequential decision a coding agent makes — "run commands without
+       * asking" — and until M77 its type asked only for a `reason: string`. A string is
+       * unverifiable at the seam: nothing could tell "confined by bwrap, kernel-enforced" from
+       * "I'm sure it's fine". So the consumer implemented the refusal itself, TWICE
+       * (`shouldAutoApprove` in the TUI, `resolveHeadlessApproval` in the headless path), with the
+       * same rule in both — an absent posture counts as unconfined. A security rule duplicated
+       * across two call sites is a rule that will eventually disagree with itself (G12).
+       *
+       * `SandboxPosture` is the SDK's own honest answer to "am I kernel-enforced right now?", and
+       * it carries `detail` so a refusal can say WHY rather than just "unconfined". Requiring it
+       * makes the unconfined case unrepresentable at the type level; {@link applyPosture} refuses
+       * it at runtime for the caller who casts past the type.
+       */
+      confinedBy: SandboxPosture
       reason: string
     }
   | {
@@ -142,6 +162,24 @@ function posturePlugins(
         }),
       ]
     case 'auto-approve':
+      // M77 — the type already forbids omitting the evidence; this refuses the caller who casts
+      // past it, and it is where the rule the consumer wrote twice now lives ONCE. Fail-closed
+      // (Rule 8): a claim of confinement that the sandbox itself contradicts is not a weaker
+      // claim, it is a false one, and running commands on the strength of it is the outcome the
+      // whole gate exists to prevent.
+      //
+      // The refusal quotes `detail` because "unconfined" sends an operator hunting, while
+      // "bwrap unavailable: no user namespaces" sends them to the fix.
+      if (!posturePolicy.confinedBy.enforced) {
+        throw new Error(
+          `[@theokit/agents] approval posture "auto-approve" claims confinement ` +
+            `("${posturePolicy.reason}"), but the sandbox reports it is NOT enforced: ` +
+            `${posturePolicy.confinedBy.detail} (mode: ${posturePolicy.confinedBy.mode}). ` +
+            `Auto-approving gated tools without enforced confinement runs arbitrary commands with ` +
+            `no human and no sandbox. Use "interactive" (a human decides) or "auto-reject" ` +
+            `(fail-closed) until the sandbox reports enforced.`,
+        )
+      }
       // A hook that always allows is observable, and that is the difference between the NAMED
       // permissive posture and today's discard: every gated tool that runs without a human leaves a
       // trace at runtime.
