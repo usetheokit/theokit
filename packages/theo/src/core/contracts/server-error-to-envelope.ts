@@ -34,6 +34,19 @@ const ERROR_NAME_TO_CODE: ReadonlyMap<string, TheoErrorCode> = new Map<string, T
   // INTERNAL_SERVER_ERROR is appropriate, but we add a HintExt-shaped ext
   // with the migration guidance for the devtools display.
   ['RouterConventionError', 'INTERNAL_SERVER_ERROR'],
+
+  // M80 — the agent errors, which this table contained NONE of.
+  //
+  // The consequence was concrete: a `GuardrailViolationError` — thrown when a prompt-injection or
+  // PII guard BLOCKS — crossed as HTTP 500, indistinguishable from a real server failure. Retry
+  // middleware then re-submitted the very input the guard had just rejected.
+  //
+  // The status codes say what actually happened: the request was refused (400), the caller has
+  // spent its budget (429), or a human must approve before this proceeds (403). None of the three
+  // is "the server broke", and none should be retried by a generic 5xx policy.
+  ['GuardrailViolationError', 'BAD_REQUEST'],
+  ['CostBudgetExceededError', 'TOO_MANY_REQUESTS'],
+  ['InProcessApprovalRequiredError', 'FORBIDDEN'],
 ])
 
 type MetaExtractor = (err: Error) => Record<string, unknown> | null
@@ -63,6 +76,20 @@ const META_EXTRACTORS: ReadonlyMap<string, MetaExtractor> = new Map<string, Meta
         suggestion: e.suggestion,
         migrationUrl: e.migrationUrl,
       }
+    },
+  ],
+  [
+    // M80 — so telemetry can count blocks PER GUARD without parsing the message. A count derived
+    // from message text breaks the first time somebody improves the wording, and the improvement
+    // looks harmless right up until the dashboard goes flat.
+    //
+    // Read from the class's own public fields rather than the SDK's `metadata`: that type is
+    // provider-transport shaped (`provider`, `endpoint`, `statusCode`, `retryAfter`), and an
+    // agent-domain fact does not belong in it.
+    'GuardrailViolationError',
+    (err) => {
+      const e = err as Error & { guardName?: string; phase?: string }
+      return { guardName: e.guardName, phase: e.phase }
     },
   ],
 ])

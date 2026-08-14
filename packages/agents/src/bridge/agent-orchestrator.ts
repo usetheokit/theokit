@@ -41,6 +41,15 @@ export {
 } from './delegation-types.js'
 
 export interface DelegateOptions {
+  /**
+   * M81 — wall-clock cap for the delegation, in milliseconds. Absent ⇒ no clock cap.
+   *
+   * A DIFFERENT guard from `budget`: money is spent by work that progresses, and a delegation that
+   * HANGS burns clock without spending a cent. A consumer wrote its own timeout race with its own
+   * typed error because this was missing. Exceeding it raises `DelegationTimeoutError`, which —
+   * unlike the budget errors — is marked retryable, because a hang is often transient.
+   */
+  readonly timeoutMs?: number
   /** Max USD for this sub-agent call. */
   budget?: number
   /** Parent's remaining budget (for clamping). */

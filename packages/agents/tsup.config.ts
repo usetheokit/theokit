@@ -4,6 +4,10 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     ask: 'src/ask/index.ts',
+    commands: 'src/commands/index.ts',
+    doctor: 'src/doctor/index.ts',
+    usage: 'src/usage/index.ts',
+    'mcp-health': 'src/mcp-health-entry.ts',
     'tool-scope': 'src/tools/index.ts',
     bridge: 'src/bridge-entry.ts',
     testing: 'src/testing/index.ts',
