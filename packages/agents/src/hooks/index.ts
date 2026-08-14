@@ -28,3 +28,10 @@ export {
   runHookCommand,
 } from './hook-runner.js'
 export type { HookRunInput, HookRunResult } from './hook-runner.js'
+
+/**
+ * Hook inheritance for a delegated member — exported HERE because it is a hook-engine concern, not a
+ * delegation detail: it decides which gates a run is subject to. `delegate()` applies it by default;
+ * a caller composing its own sub-agent surface needs the same rule and should not re-derive it.
+ */
+export { inheritHooks, hooksPlugin, type CodePlugin } from '../bridge/delegation-hooks.js'

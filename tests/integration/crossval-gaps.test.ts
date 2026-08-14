@@ -312,8 +312,24 @@ describe('G8 — config and context have a non-deprecated door', () => {
 describe('G3 — a delegated member inherits the parent hook veto', () => {
   it('delegation_composes_parent_hooks', () => {
     expect(exists('packages/agents/tests/unit/delegation-hook-inheritance.test.ts')).toBe(true)
-    const src = read('packages/agents/src/bridge/delegation-lifecycle.ts')
-    expect(src, 'no hook inheritance in the member composition path').toMatch(/hook/i)
+
+    // The composition lives in `agent-orchestrator.ts` (where `delegate()` already merged the
+    // parent's tools and budget) — not in `delegation-lifecycle.ts`, which the plan named before the
+    // path was read. Asserting against the file the work actually landed in, not the one predicted.
+    const orchestrator = read('packages/agents/src/bridge/agent-orchestrator.ts')
+    expect(orchestrator, '`delegate()` does not carry the parent hooks').toContain('parentHooks')
+    expect(orchestrator, 'the inherited gate never reaches the member run').toContain(
+      'withInheritedHooks',
+    )
+  })
+
+  it('inheritance_is_reachable_by_a_consumer', async () => {
+    // G7 (every export has a consumer) AND the point of the gap: a rule a consumer cannot import is
+    // a rule they will re-derive — which is how the sixteen-line version came to exist downstream.
+    const mod = (await import('../../packages/agents/src/hooks/index.js')) as {
+      inheritHooks?: unknown
+    }
+    expect(typeof mod.inheritHooks).toBe('function')
   })
 })
 
