@@ -1,5 +1,21 @@
 # ROADMAP v3 — absorver o que o consumidor ainda reconstrói
 
+> **Estado das Definitions of done (medido 2026-08-14).** Os 20 milestones estao `[x]` no cabecalho
+> e, ate esta medicao, **nenhum** dos 98 itens de DoD estava marcado. Os dois niveis nunca foram
+> acoplados: "pronto" foi afirmado no cabecalho, que nenhum gate confere, enquanto a lista que
+> define o que "pronto" significa ficou intocada.
+>
+> **21 itens estao agora verificados contra o codigo** — M72, M74, M79 e M82 — cada um conferido
+> simbolo a simbolo, com anotacao onde a implementacao divergiu da letra e por que. Tres divergiram,
+> todas para melhor: o M72 usa o `classifySessionArtifact` do SDK em vez de escrever o proprio; o
+> M74 REMOVEU os quatro knobs inertes (o segundo ramo da propria DoD); o M79 tornou o
+> `resolveProvider` publico em vez de deleta-lo (ADR 0041).
+>
+> **Os outros 77 seguem sem verificacao.** Marca-los sem conferir seria repetir o defeito ao
+> contrario — e o cabecalho `[x]` deles ja significa menos do que parece. Verificar os que faltam e
+> trabalho de quem retomar; a lacuna esta aqui com numero, nao silenciada.
+
+
 > **Terceira geração.** O `ROADMAP.md` (v1, M0–M56) e o `ROADMAP-v2.md` (M57–M63, M66) estão completos.
 > Esta iniciativa nasce de uma medição, não de uma intuição: a cross-validation de 2026-08-12 entre o
 > TheoKit e o **TheoCode** — um produto real, em produção, construído sobre `@theokit/agents ^7.5.0`
@@ -241,12 +257,12 @@ alvo de deleção ≈ 500 LOC.
 EmpresaCode ou reconstrói 857 LOC ou cresce transcripts para sempre.
 
 **Definition of done:**
-- [ ] `planTranscriptGC({ cwd, keepLast, maxAgeDays })` → candidatos + mantidos + **motivo** de proteção, e `runTranscriptGC(plan, { apply })` → `{ dryRun, removed, errors }`, em `packages/agents/src/session/gc/`.
-- [ ] Os quatro invariantes portados **verbatim** — não são política: recusa por FLOOR em vez de normalização silenciosa; **sem mtime ⇒ nunca coletar**; guarda de writer lease; backstop TOCTOU na fase apply re-checando ponteiro e lease entre plan e apply.
-- [ ] `classifyTranscriptArtifact(name, isDirectory)` cobrindo transcript / lock-file / lock-directory / tmp — uma definição, não uma por consumidor.
-- [ ] Erro por candidato acumulado (fail-open) e ENOENT tratado como sucesso, ambos com teste.
-- [ ] Comando `theokit agent sessions gc [--apply] [--all-projects]`; sem `--apply` é dry-run e **imprime o plano**.
-- [ ] O sweep de disco inteiro só é exposto depois que M71 entregar a resolução projeto→cwd.
+- [x] `planTranscriptGC({ cwd, keepLast, maxAgeDays })` → candidatos + mantidos + **motivo** de proteção, e `runTranscriptGC(plan, { apply })` → `{ dryRun, removed, errors }`, em `packages/agents/src/session/gc/`.
+- [x] Os quatro invariantes portados **verbatim** — não são política: recusa por FLOOR em vez de normalização silenciosa; **sem mtime ⇒ nunca coletar**; guarda de writer lease; backstop TOCTOU na fase apply re-checando ponteiro e lease entre plan e apply.
+- [x] `classifyTranscriptArtifact(name, isDirectory)` cobrindo transcript / lock-file / lock-directory / tmp — uma definição, não uma por consumidor. — **entregue como `classifySessionArtifact`, e do SDK.** A DoD pedia uma definicao propria; `session-lifecycle.ts` usa a do SDK e so tira o `.jsonl` do nome. Uma definicao, e nem essa e nossa (Regra 9).
+- [x] Erro por candidato acumulado (fail-open) e ENOENT tratado como sucesso, ambos com teste.
+- [x] Comando `theokit agent sessions gc [--apply] [--all-projects]`; sem `--apply` é dry-run e **imprime o plano**.
+- [x] O sweep de disco inteiro só é exposto depois que M71 entregar a resolução projeto→cwd.
 
 **Efeito no TheoCode:** alvo de deleção `session/gc/**` = **857 LOC** (per-session 180, all-sessions 442,
 filesystem 192, pointer 43), o maior bloco único da iniciativa.
@@ -297,12 +313,12 @@ consumidor continua sem nada. Pressão de contexto não tem contraparte alguma: 
 (`resolveEffectiveContextWindow`) e o numerador (usage) e nunca os juntamos.
 
 **Definition of done:**
-- [ ] `loadInstructionTree({ cwd, roots, budget: { maxDepth, maxFiles, maxChars }, onWarn })` → `{ blocks, truncated, count }`, com quebra de ciclo por inode e tetos explícitos.
-- [ ] **Containment por realpath** portado — o bug que ele corrige é vetor de prompt-injection e qualquer consumidor o reintroduz.
-- [ ] Parsing de frontmatter com escopo `paths:` e *skip do arquivo* quando o frontmatter não fecha (falha por arquivo, não por árvore).
-- [ ] `composeInstructions(base, sources[], { maxChars, onWarn })` com a escada de truncamento por fonte; a **ordem** de descarte é mecanismo e entra, os **nomes** das fontes são política e ficam fora.
-- [ ] `contextPressure(usedTokens, effectiveWindow)` → `'ok' | 'warn' | 'critical'` com limiares configuráveis, ao lado de `resolveEffectiveContextWindow`.
-- [ ] Os quatro knobs metadata-only: **implementados** (threading para `resolveCompactionStrategy`) **ou removidos** de `ContextWindowOptions`. Um knob permanentemente inerte é superfície que ensina errado.
+- [x] `loadInstructionTree({ cwd, roots, budget: { maxDepth, maxFiles, maxChars }, onWarn })` → `{ blocks, truncated, count }`, com quebra de ciclo por inode e tetos explícitos.
+- [x] **Containment por realpath** portado — o bug que ele corrige é vetor de prompt-injection e qualquer consumidor o reintroduz.
+- [x] Parsing de frontmatter com escopo `paths:` e *skip do arquivo* quando o frontmatter não fecha (falha por arquivo, não por árvore).
+- [x] `composeInstructions(base, sources[], { maxChars, onWarn })` com a escada de truncamento por fonte; a **ordem** de descarte é mecanismo e entra, os **nomes** das fontes são política e ficam fora.
+- [x] `contextPressure(usedTokens, effectiveWindow)` → `'ok' | 'warn' | 'critical'` com limiares configuráveis, ao lado de `resolveEffectiveContextWindow`.
+- [x] Os quatro knobs metadata-only: **implementados** (threading para `resolveCompactionStrategy`) **ou removidos** de `ContextWindowOptions`. Um knob permanentemente inerte é superfície que ensina errado. — **removidos**, o segundo ramo da propria DoD. Motivo escrito em `compile-context-window.ts`: mapear quatro nomes de estrategia inventados sobre `resolveCompactionStrategy` (que fala `token-budget` + `keepTokens`) seria inventar semantica, nao implementar os knobs.
 
 **Efeito no TheoCode:** `context/rules.ts` + `context/agents-md.ts` + `context/instructions.ts` (602) e
 `formatting/context-pressure.ts` reduzem a declaração de fontes + copy. Alvo ≈ 550 LOC.
@@ -428,11 +444,11 @@ Bônus: `provider-resolver.ts` é o único lugar de `packages/` que acende o gat
 vendor.
 
 **Definition of done:**
-- [ ] `resolveCredential({ env, home, providers })` público em `@theokit/agents/auth`, recebendo a lista de descritores como **parâmetro** (quais providers continua política do app), devolvendo `{ kind, provider, apiKey, source, inferred }`.
-- [ ] `source` é uma união estruturada `SourceOrigin` (`{kind:'env',varName}` | `{kind:'file',path}` | `{kind:'oauth',provider}`), e o leitor de nome de variável de `.env` vai junto — para que proveniência seja formatação, não parsing.
-- [ ] Checagem de consistência prefixo↔provider incluída (o consumidor a tem; o framework não).
-- [ ] Decisão registrada em ADR e executada: **ou** `resolveProvider`/`registerProvider`/`ProviderDescriptor` viram públicos em `theokit/server/agent`, **ou** `provider-resolver.ts` é deletado e CLI/vite-plugin passam a chamar o caminho público. Um segundo resolvedor inalcançável é o que garante que o consumidor escreva o terceiro.
-- [ ] Se a segunda opção: as URLs literais de vendor saem de `packages/`.
+- [x] `resolveCredential({ env, home, providers })` público em `@theokit/agents/auth`, recebendo a lista de descritores como **parâmetro** (quais providers continua política do app), devolvendo `{ kind, provider, apiKey, source, inferred }`.
+- [x] `source` é uma união estruturada `SourceOrigin` (`{kind:'env',varName}` | `{kind:'file',path}` | `{kind:'oauth',provider}`), e o leitor de nome de variável de `.env` vai junto — para que proveniência seja formatação, não parsing.
+- [x] Checagem de consistência prefixo↔provider incluída (o consumidor a tem; o framework não).
+- [x] Decisão registrada em ADR e executada: **ou** `resolveProvider`/`registerProvider`/`ProviderDescriptor` viram públicos em `theokit/server/agent`, **ou** `provider-resolver.ts` é deletado e CLI/vite-plugin passam a chamar o caminho público. Um segundo resolvedor inalcançável é o que garante que o consumidor escreva o terceiro. — ADR [0041](.claude/knowledge-base/adrs/0041-provider-resolver-publico-em-vez-de-deletado.md): publico em vez de deletado. Executado — `vite-plugin/agent-middleware.ts` importa `resolveProvider` do caminho publico.
+- [x] Se a segunda opção: as URLs literais de vendor saem de `packages/`.
 
 **Efeito no TheoCode:** `auth/credentials.ts` (390) cai para a tabela de providers; `auth/credential-provenance.ts`
 (70, um parser de dotenv escrito só para responder "shell ou .env?") some. Alvo ≈ 380 LOC.
@@ -515,10 +531,10 @@ transforma isso em estado por-turno por-servidor — e o sink do consumidor lê 
 alcança.
 
 **Definition of done:**
-- [ ] `createMcpHealthSink()` → `{ sink(e: RunEvent), startTurn(), current(): readonly McpFailure[] }`, com o clear por turno e a deduplicação por nome de servidor portados (as duas são decisões de correção, não gosto — sem elas um servidor recuperado é reportado como quebrado).
-- [ ] A união `RunEvent` (ou ao menos o membro `mcp_server_failed`) exportada de `@theokit/agents`, para o sink ser tipado em vez de duck-checked.
-- [ ] `onWarn` do `loadMcpJson` desaguando no mesmo canal, para "servidor X ignorado" e "servidor X falhou ao listar" chegarem num lugar só.
-- [ ] A disciplina de allowlist replicada no bloco `env` gerado pelo `mcpRegistry`, e a exclusão de `envPolicy` documentada na página do `.mcp.json`.
+- [x] `createMcpHealthSink()` → `{ sink(e: RunEvent), startTurn(), current(): readonly McpFailure[] }`, com o clear por turno e a deduplicação por nome de servidor portados (as duas são decisões de correção, não gosto — sem elas um servidor recuperado é reportado como quebrado).
+- [x] A união `RunEvent` (ou ao menos o membro `mcp_server_failed`) exportada de `@theokit/agents`, para o sink ser tipado em vez de duck-checked.
+- [x] `onWarn` do `loadMcpJson` desaguando no mesmo canal, para "servidor X ignorado" e "servidor X falhou ao listar" chegarem num lugar só.
+- [x] A disciplina de allowlist replicada no bloco `env` gerado pelo `mcpRegistry`, e a exclusão de `envPolicy` documentada na página do `.mcp.json`.
 
 **Efeito no TheoCode:** `agent-session/mcp-failure-{sink,record}.ts` (68 LOC) somem.
 
