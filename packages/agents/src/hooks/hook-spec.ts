@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 
+import { TheokitAgentError } from '@theokit/sdk/errors'
 import { z } from 'zod'
 
 import type { HookHandlers } from '../bridge/hook-handlers.js'
@@ -87,8 +88,21 @@ export const hookSpecSchema = z
 export type HookSpec = z.infer<typeof hookSpecSchema>
 
 /** Raised when a spec cannot be parsed. Typed so a caller distinguishes it from an IO failure. */
-export class HookSpecError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * This one is mine, from M75, and it was in the offending list: `isTransientError` is defined over
+ * `TheokitAgentError`, so a class outside that hierarchy is invisible to it.
+ */
+export class HookSpecError extends TheokitAgentError {
   override readonly name = 'HookSpecError'
+  constructor(message: string) {
+    super(message, {
+      code: 'HOOK_SPEC_INVALID',
+      // A typo in a config file is not a transient condition.
+      isRetryable: false,
+    })
+  }
 }
 
 /**
