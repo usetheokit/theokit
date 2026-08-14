@@ -1,3 +1,5 @@
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 /**
  * M9 (theokit-ai-first) — guardrail contract + typed errors.
  *
@@ -37,24 +39,52 @@ export interface Guardrail {
 export type GuardrailPhase = 'input' | 'output'
 
 /** Thrown (fail-fast) when a guard returns `action: 'block'`. Typed per error-handling.md. */
-export class GuardrailViolationError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text — a regex
+ * over an eight-level `cause` chain, which is what one actually wrote. `code` is stable across a
+ * rename of the class; `isRetryable` is DECLARED rather than defaulted, because a default would be a
+ * retry policy nobody chose.
+ */
+export class GuardrailViolationError extends TheokitAgentError {
+  override readonly name = 'GuardrailViolationError'
   constructor(
     public readonly guardName: string,
     public readonly phase: GuardrailPhase,
     public readonly reason: string,
   ) {
-    super(`Guardrail "${guardName}" blocked ${phase}: ${reason}`)
-    this.name = 'GuardrailViolationError'
+    super(`Guardrail "${guardName}" blocked ${phase}: ${reason}`, {
+      code: 'GUARDRAIL_VIOLATION',
+      // A blocked prompt is a REFUSAL, not a hiccup. Retrying re-submits the very input a
+      // prompt-injection or PII guard just rejected.
+      isRetryable: false,
+    })
   }
 }
 
 /** Thrown when {@link costGuard}'s cumulative token budget is exceeded. */
-export class CostBudgetExceededError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text — a regex
+ * over an eight-level `cause` chain, which is what one actually wrote. `code` is stable across a
+ * rename of the class; `isRetryable` is DECLARED rather than defaulted, because a default would be a
+ * retry policy nobody chose.
+ */
+export class CostBudgetExceededError extends TheokitAgentError {
+  override readonly name = 'CostBudgetExceededError'
   constructor(
     public readonly usedTokens: number,
     public readonly maxTokens: number,
   ) {
-    super(`Cost budget exceeded: ${usedTokens} > ${maxTokens} tokens`)
-    this.name = 'CostBudgetExceededError'
+    super(`Cost budget exceeded: ${usedTokens} > ${maxTokens} tokens`, {
+      code: 'COST_BUDGET_EXCEEDED',
+      // The budget does not refill on retry; retrying spends the next request against the same
+      // exhausted ceiling.
+      isRetryable: false,
+    })
   }
 }
