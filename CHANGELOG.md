@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`PermissionStore` — conceder "sempre permita isto" sem conceder "permita tudo".** Medido por
+  grep nos dois pacotes: `alwaysAllow|allowRule|permissionRule|rememberDecision` retorna ZERO. Nem o
+  framework nem o consumidor tinham isso para tools — `ApprovalDecision` resolve UMA requisicao, e o
+  unico escape de nivel de tool era o `full-auto` global, que remove o portao em vez de estreita-lo.
+  A decima aprovacao da mesma coisa e onde uma pessoa para de ler prompts, entao "sem concessao
+  permanente" e o que produz o comportamento inseguro.
+
+  A CHAVE e a propriedade de seguranca: `(tool, escopo, assinatura)`. Escopo canonicalizado com
+  `realpath` — `/repo/a`, `/repo/a/` e `/repo/./a` sao um diretorio e tres strings, e um symlink e a
+  quarta. Comparar strings nega concessoes que o usuario fez (empurrando-o para o full-auto) E deixa
+  um link tomar emprestada a concessao de outro lugar. Assinatura nunca casa por aproximacao:
+  `npm test` nao autoriza `npm test --force`.
+
 - **`HookApprovalStore` — o gate de fingerprint ganha um produtor.** `buildHookHandlers` recebe
   `approved` como argumento OBRIGATORIO e recusa por padrao, de proposito: um hook e
   `spawn(cmd, { shell: true, detached: true })` a cada tool call. So que nada no framework produzia
