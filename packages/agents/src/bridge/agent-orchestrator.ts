@@ -27,7 +27,9 @@ import { type RoundStreamFactory, runReflectiveLoop } from '../loop/run-reflecti
 import type { MainLoopMeta } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
+import { hooksPlugin, inheritHooks } from './delegation-hooks.js'
 import { type DelegationResult, DelegationError } from './delegation-types.js'
+import type { HookHandlers } from './hook-handlers.js'
 import { createSdkAgentStream } from './sdk-adapter.js'
 
 // Re-export the delegation value types for backward compatibility — they moved
@@ -56,6 +58,21 @@ export interface DelegateOptions {
   parentBudgetRemaining?: number
   /** Parent's tools (for sharing — sub-agent inherits these). */
   parentTools?: CompiledTool[]
+  /**
+   * Parent's hooks. The member inherits them, and inheritance may only TIGHTEN: both
+   * `pre_tool_call` gates run and the first refusal wins, so a member cannot widen what the parent
+   * refused.
+   *
+   * Symmetric with `parentTools` on purpose — `delegate` already carried the parent's tools and its
+   * budget into the member's run and left its AUTHORITY behind, which is how a squad member could
+   * call a tool the supervisor had vetoed. The failure was silent: nothing threw, and the member's
+   * own suite passed because the member never declared the gate.
+   *
+   * To scope a member differently, pass its handlers on `spec.compiled.hooks` — they compose with
+   * these rather than replacing them, because a widening that a call site cannot see is the state
+   * this option exists to remove.
+   */
+  parentHooks?: HookHandlers
   /** LLM API key (inherited from parent). */
   apiKey?: string
   /** Session ID override (default: crypto.randomUUID for isolation). */
@@ -117,6 +134,26 @@ function requireApiKey(opts: DelegateOptions, agentName: string): string {
 }
 
 /** Merge parent tools with sub-agent tools (sub wins on collision). */
+/**
+ * Carry the parent's authority into the member's compiled options.
+ *
+ * Appends to `compiled.plugins` — the CODE-plugin array — and NOT to `DelegateOptions.plugins`,
+ * which is the SDK's `PluginsSettings`: a list of plugin NAMES to enable. A handler map placed
+ * there would type-check nowhere and fire nothing, which is the quiet failure this whole task is
+ * about.
+ *
+ * Returns the options untouched when the parent declared no hooks, so a caller that never had a
+ * gate does not silently acquire one.
+ */
+function withInheritedHooks(
+  compiled: CompiledAgentOptions,
+  parentHooks: HookHandlers | undefined,
+): CompiledAgentOptions {
+  const plugin = hooksPlugin(inheritHooks(parentHooks, undefined))
+  if (plugin === undefined) return compiled
+  return { ...compiled, plugins: [...(compiled.plugins ?? []), plugin] }
+}
+
 function mergeTools(parentTools: CompiledTool[], subTools: CompiledTool[]): CompiledTool[] {
   const subToolNames = new Set(subTools.map((t) => t.name))
   const inherited = parentTools.filter((t) => !subToolNames.has(t.name))
@@ -162,9 +199,20 @@ export async function delegate(
 
   const { compiled } = spec
 
-  // 2. Merge parent tools + clamp budget (D4)
+  // 2. Merge parent tools + clamp budget (D4) + INHERIT the parent's authority.
+  //
+  // Tools and budget were already carried down; hooks were not, so a member could call a tool the
+  // parent's `pre_tool_call` had refused. Inheriting them here — beside the two things that were
+  // always inherited — is what makes "the member runs under the parent's authority" true rather
+  // than merely intended.
   const allTools = mergeTools(opts.parentTools ?? [], compiled.tools)
   const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
+  // The parent's gate travels as a code plugin, because that is the seam the SDK dispatches hooks
+  // through (`compileHooksAndPlugins` in define-agent.ts says so, and `kind: 'general'` is
+  // load-bearing there). The member's OWN hooks are already inside its own plugin by the time
+  // `compiled` reaches us, so this appends the parent's rather than merging two maps we cannot both
+  // see — and `inheritHooks` hardens it to fail closed on the way.
+  const compiledForMember = withInheritedHooks(compiled, opts.parentHooks)
 
   // 3. Build the stream factory (the model call stays in the SDK — ADR 0031) + session.
   // V4-T: forward the per-run config (parity with AgentRunner.stream); model opt wins over the
@@ -172,7 +220,7 @@ export async function delegate(
   // M12 — an injected factory (tests / custom transport) wins; absent ⇒ the SDK adapter.
   const streamFactory =
     opts.streamFactory ??
-    createSdkAgentStream(compiled, allTools, apiKey, {
+    createSdkAgentStream(compiledForMember, allTools, apiKey, {
       model: opts.model ?? compiled.model,
       cwd: opts.cwd,
       plugins: opts.plugins,
