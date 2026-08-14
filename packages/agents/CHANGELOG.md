@@ -1,5 +1,45 @@
 # @theokit/agents
 
+## 8.5.1
+
+### Patch Changes
+
+- Republicacao do 8.5.0 a partir do fonte commitado. Nenhuma mudanca de comportamento — os mesmos 37
+  testes do motor de hooks passam nos dois.
+
+  O 8.5.0 foi publicado a partir de uma arvore de trabalho cujo commit o `lint-staged` recusou
+  (`buildHookHandlers` tinha passado do teto de 120 linhas). Corrigi extraindo dois construtores de
+  handler e commitei — mas o `dist` no registry ficou sendo o de ANTES da extracao.
+
+  Isso e a mesma deriva que o `@theokit/http@1.0.0` teve e que custou uma investigacao inteira: fonte
+  e registry divergirem sob o mesmo numero de versao. Um patch e mais barato que deixar a divergencia
+  de pe.
+
+## 8.5.0
+
+### Minor Changes
+
+- Tres eventos passam a ser CONECTADOS de verdade: `transform_tool_result`, `on_session_start` e
+  `post_assistant_reply`. O motor sai de dois handlers para cinco.
+
+  `transform_tool_result` e o que o par `pre`/`post` nao consegue expressar: um hook que le o
+  RESULTADO de uma tool e anexa feedback que o modelo depois ve. Era o unico evento cujo retorno o
+  SDK consome, e era declarado, aceito pelo schema e nunca construido.
+
+- **`continuationBudget` deixa de ser inerte.** Ele e `DEFAULT_CONTINUATION_BUDGET` estavam
+  exportados e **lidos por nada** — um `grep` achava a declaracao e nenhum uso. Um knob que o
+  chamador pode ajustar e que nunca faz nada le como funcionalidade, que foi o motivo do M74 ter
+  REMOVIDO quatro. Este nao foi removido: implementar `transform_tool_result` e exatamente o que lhe
+  da um trabalho, porque feedback anexado e o que permite um hook se realimentar. O orcamento e o que
+  para o laco.
+
+  Os dois observacionais sao FAIL-OPEN sem excecao: disparam depois do fato, e um notificador
+  quebrado nunca pode ser o motivo de um turno concluido ser descartado.
+
+  Restam tres eventos sem consumidor pedindo (`transform_llm_output`, `on_session_end`,
+  `pre_user_send`). Eles seguem cobertos pelo aviso do 8.4.0 — construi-los seria superficie que
+  ninguem pediu.
+
 ## 8.4.0
 
 ### Minor Changes
