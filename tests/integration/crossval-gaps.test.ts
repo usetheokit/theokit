@@ -161,9 +161,17 @@ describe('G10 — a capability index exists and resolves', () => {
     expect(exists('wiki/capability-index.md'), 'wiki/capability-index.md is missing').toBe(true)
     const index = read('wiki/capability-index.md')
 
-    // Rows are `| capability | `symbol` | version |` — count only data rows carrying a symbol.
-    const rows = index.split('\n').filter((l) => l.startsWith('|') && /`[A-Za-z_][\w.]*`/.test(l))
-    expect(rows.length, 'capability index has fewer than 5 rows').toBeGreaterThanOrEqual(5)
+    // A capability row is `| need | `symbol` | `@theokit/agents/...` | version |`. The subpath cell
+    // is what distinguishes it from the "Honest gaps" table, which cites symbols that deliberately
+    // do NOT exist yet — asserting those resolve would forbid the page from being honest.
+    const rows = index
+      .split('\n')
+      .filter(
+        (l) => l.startsWith('|') && /`[A-Za-z_][\w.]*`/.test(l) && l.includes('@theokit/agents'),
+      )
+    expect(rows.length, 'capability index has fewer than 5 capability rows').toBeGreaterThanOrEqual(
+      5,
+    )
 
     if (!DIST_BUILT) {
       noteSkip('G10', 'packages/agents/dist is unbuilt — symbol resolution not verifiable')
