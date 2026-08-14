@@ -118,6 +118,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Um teste existente fixava a mensagem que o M83 mudou.** `theokit agent` sem mensagem agora entra em modo interativo, e quando nenhuma superfície está wirada a recusa diz **por quê** em vez de recitar usage. O teste que protegia "sem mensagem, recusa fail-fast" ainda protege exatamente isso — foi **repontado**, com a asserção intacta no significado. Eu não o peguei localmente porque rodei as fatias (`packages/agents` + os arquivos que toquei) e não a suíte da raiz; foi o CI que pegou.
+
 - **Quatro tipos exportados e alcançáveis por ninguém — de novo (gate Knip).** `DelegationPort` e `DelegationTarget` (M81), `EphemeralAgent` (M81) e `DoctorDeps` (M84) cruzavam do módulo e de nenhum barrel. No caso do `DelegationPort` isso era a própria falha que o M81 fecha, um nível acima: exportar `delegateWithScoring` **retendo o tipo que o parâmetro dele aceita** deixa um consumidor que segura um `SubAgent` do SDK alcançando a função e não o vocabulário para satisfazê-la. Mesma classe do M67, M73 e M79 — publicado, porém inalcançável.
 - **`theokit doctor` entra no roteador do CLI (M84).** O comando existia e nenhum caminho chegava nele. `process.exitCode` em vez de `process.exit()`: o segundo trunca stdout que ainda está sendo drenado.
 
