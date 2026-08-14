@@ -65,7 +65,10 @@ const DIST = resolve(ROOT, 'packages/theo/dist')
 const INDEX_DTS = resolve(DIST, 'index.d.ts')
 const LOCK_DIR = resolve(tmpdir(), 'theokit-test-locks')
 const LOCK_FILE = resolve(LOCK_DIR, 'packages-theo-build.lock')
-const FRESH_WINDOW_MS = 10 * 60 * 1000
+/** The window a build stays trusted when no marker from this run vouches for it. Exported so a
+ * test asserts against the SAME number the decision uses — a duplicated literal is how a test ends
+ * up green against a window it invented (this one read 24h while the code read 10min). */
+export const FRESH_WINDOW_MS = 10 * 60 * 1000
 
 /** Records which RUN last validated dist. Shared across every worker of that run. */
 export const VALIDATION_MARKER = resolve(LOCK_DIR, 'packages-theo-build.validated.json')
