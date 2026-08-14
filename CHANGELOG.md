@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`HookApprovalStore` — o gate de fingerprint ganha um produtor.** `buildHookHandlers` recebe
+  `approved` como argumento OBRIGATORIO e recusa por padrao, de proposito: um hook e
+  `spawn(cmd, { shell: true, detached: true })` a cada tool call. So que nada no framework produzia
+  esse conjunto, o que deixava ao consumidor duas saidas — aprovar tudo, ou escrever o store. Ele
+  escreveu. E a metade que teve de escrever e a que mexe em modo de diretorio e troca atomica, que e
+  onde um store dessa sensibilidade da errado.
+
+  Tres estados, nao dois: `approved`, `unknown` e **`modified`**. Como o fingerprint cobre o comando,
+  um comando editado gera fingerprint NOVO, indistinguivel de um hook que ninguem nunca viu. Guardar
+  o comando aprovado ao lado do fingerprint e o que permite dizer "isto foi aprovado, e alguem
+  mudou" — a razao de o gate ser chaveado por fingerprint e nao por nome.
+
+  O diretorio e REPARADO antes de ser conferido: `mkdirSync(dir, { mode })` e no-op num diretorio
+  que ja existe, e este e compartilhado com a raiz de transcript do SDK — quem chega primeiro define
+  a permissao. So conferir falharia para sempre numa maquina que o SDK preparou antes.
+
 - **`@theokit/agents/config` — configuracao de agente, trust e arvore de instrucoes ganham porta.**
   `LayeredConfig`, `TrustStore`, `loadInstructionTree`, `composeInstructions`, `loadCustomCommands`
   e `contextPressure` so eram alcancaveis por `theokit/server`, um barrel que anuncia a propria
