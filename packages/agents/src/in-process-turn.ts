@@ -1,3 +1,6 @@
+import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 /**
  * M35 (multi-surface) — the in-process agent-turn seam (Model A).
  *
@@ -19,7 +22,6 @@
  * INFORMATIONAL (render them or ignore them). The authoritative human gate is `awaitApproval`, which
  * the SDK awaits BEFORE the gated tool runs; the chunk is not the gate.
  */
-import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import { compileAgentModule, streamAgentUIMessages } from './bridge/agent-endpoint.js'
 import type { ApprovalPosture } from './bridge/approval-posture.js'
@@ -94,14 +96,28 @@ export interface StreamAgentTurnDeps {
  * the correct posture: silently running a `@HumanInTheLoop`-gated tool with no human gate is exactly
  * the #99 class of bug. Typed so callers can catch it distinctly.
  */
-export class InProcessApprovalRequiredError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text. `code` is
+ * stable across a rename; `isRetryable` is DECLARED, because a default would be a retry policy
+ * nobody chose.
+ */
+export class InProcessApprovalRequiredError extends TheokitAgentError {
+  override readonly name = 'InProcessApprovalRequiredError'
   constructor(toolNames: readonly string[]) {
     super(
       `Agent has HITL-gated tool(s) [${toolNames.join(', ')}] but no \`awaitApproval\` resolver was ` +
         `supplied to streamAgentTurnInProcess. In-process runs must resolve approvals inline — pass ` +
         `awaitApproval, or remove the gate. Refused (fail-closed).`,
+
+      {
+        code: 'HITL_APPROVAL_REQUIRED',
+        // a run refused for lack of an approver is refused the same way on every attempt.
+        isRetryable: false,
+      },
     )
-    this.name = 'InProcessApprovalRequiredError'
   }
 }
 
