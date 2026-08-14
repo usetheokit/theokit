@@ -296,6 +296,94 @@ A gated tool may declare an optional `payloadSchema` (`hitl: { payloadSchema }` 
 `GET /approvals` so the UI knows what to collect. Backward-compatible with `{ approved, reason? }`.
 `theokit@0.17.0` + `@theokit/agents@0.32.0`.
 
+## Auto-approve requires evidence, not a promise (M77)
+
+`auto-approve` is the most consequential decision a coding agent makes — "run commands without
+asking". Until M77 its type asked for a sentence:
+
+```ts
+{ kind: 'auto-approve', reason: 'the sandbox confines it' }   // ← unverifiable
+```
+
+A sentence cannot be checked at the seam: nothing distinguished *"confined by bwrap,
+kernel-enforced"* from *"trust me"*. So every consumer implemented the refusal itself — and the one
+that prompted this milestone implemented it **twice**, in its interactive path and its headless path,
+with the same rule in both. A security rule written at two call sites is a rule that will eventually
+disagree with itself.
+
+The posture now carries the sandbox's own answer:
+
+```ts
+import { resolveSandboxPosture } from '@theokit/agents/sandbox'
+
+const confinedBy = resolveSandboxPosture({ mode: 'workspace-write' })
+
+approvals: {
+  kind: 'auto-approve',
+  confinedBy,                        // SandboxPosture — { mode, enforced, detail }
+  reason: 'sandboxed CI runner',
+}
+```
+
+`applyPosture` **refuses** when `confinedBy.enforced === false`, and the refusal quotes `detail`:
+"unconfined" sends an operator hunting, while `bwrap unavailable: no user namespaces` sends them to
+the fix.
+
+This is a **breaking** change, and that is the point: a surface that cannot prove confinement should
+not be auto-approving. The two postures that carry no confinement claim — `auto-reject` and
+`owned-by-surface` — are untouched.
+
+## Asking the human a question (M77)
+
+Approval answers *"may I run this?"*. Its sibling — the agent asking *"which branch?"* mid-turn —
+had a tool (`createQuestionTool`) and, until M77, **no channel**: the tool takes an `askUser`
+callback and nothing in the framework ever supplied one. A tool that cannot reach a human is a tool
+that times out five minutes later with no diagnosis.
+
+`@theokit/agents/ask` is that channel, modelled on the approval registry above:
+
+```ts
+import { askUserVia, createAskBridge } from '@theokit/agents/ask'
+
+const bridge = createAskBridge()
+
+// the agent side — one line of context
+defineAgent({ context: { askUser: askUserVia(bridge) }, /* … */ })
+
+// the surface side — render the prompt, send the answer back
+const off = bridge.setListener(threadId, (q) => showPrompt(q.id, q.question), {
+  onAbandon: () => clearPrompt(),
+})
+// later: bridge.answer(id, 'workspace')
+// at turn end / on cancel: bridge.abandon(threadId)
+```
+
+| Behaviour | Why |
+|---|---|
+| One question per thread, refused with `ConcurrentQuestionError` | Two prompts at once cannot attribute an answer to either. |
+| One listener per thread, refused with `ConcurrentListenerError` | Two listeners render twice and race; silently replacing makes the first surface go deaf with no signal. |
+| Asking with no listener **rejects** instead of waiting | Waiting means the turn dies at the tool's own timeout, saying nothing about why. |
+| `abandon()` **rejects** the captured promise | This is the bug it was built for: cancelling a run used to drop the question on the floor and hang the turn until the builtin timed out. |
+
+### The pending ledger — for the surface, not the framework
+
+`list()` is stateless: it reports what is pending *now*, and nothing remembers what a surface already
+showed or answered. Two defects fall out — the dismissed card comes back on the next poll, and a
+second click sends a second answer to an already-settled request. Memory belongs to the surface:
+
+```ts
+import { createPendingLedger } from '@theokit/agents/ask'
+
+const ledger = createPendingLedger()
+ledger.ingest(await fetchPending())     // additive; never resurrects a settled id
+const next = ledger.findNext()          // oldest by message index, one at a time
+if (ledger.settle(next.id)) send(next)  // `false` ⇒ already answered, do not send
+ledger.pruneBefore(firstLiveMessageIndex)
+```
+
+It holds no policy: it never decides whether to approve, never talks to the registry, and never
+learns what an approval means. That is why it is a pure function of its own state.
+
 ## Related
 
 - [Using tools](./using-tools.md) — tools are the primitives HITL gates
