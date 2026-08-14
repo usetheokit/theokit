@@ -236,14 +236,35 @@ describe('G1 — forkBeforeUserTurn counts the record shape the SDK writes', () 
   })
 })
 
+/**
+ * G11 — **the gap as registered did not reproduce, and the register says so rather than pretending.**
+ *
+ * The cross-validation recorded `inspectCompiled` as "typed over the wrong type", citing the
+ * consumer's `composition.test.ts:1-19` as documenting a refusal. Re-read at implementation time,
+ * those lines document something else: the consumer declines the framework's **stream** seam
+ * ("for driving a RUN … there is no run to drive"), which is a correct call, not a gap. Exercised
+ * against the real `AgentBuilder`, `inspectCompiled` accepts the builder's output with no cast and
+ * no type error.
+ *
+ * What WAS true and is now closed: the export had **zero tests** in this repository, which violates
+ * G7 ("every export has a consumer") and is how a shape problem would have gone unnoticed if there
+ * had been one. The assertion below pins the contract that actually matters — the seam accepts what
+ * the public authoring path produces — instead of asserting the absence of a type signature.
+ */
 describe('G11 — the testing seam accepts what the composition path returns', () => {
-  it('inspect_compiled_is_not_typed_over_agent_definition_alone', () => {
-    const src = read('packages/agents/src/testing/inspect-compiled.ts')
+  it('inspect_compiled_has_a_regression_suite', () => {
+    expect(exists('packages/agents/tests/unit/inspect-compiled.test.ts')).toBe(true)
+  })
+
+  it('inspect_compiled_accepts_builder_output_without_a_cast', () => {
+    const suite = read('packages/agents/tests/unit/inspect-compiled.test.ts')
     expect(
-      /export function inspectCompiled\(\s*definition: AgentDefinition\s*\)/.test(src),
-      'inspectCompiled is still typed over AgentDefinition only — the consumer documented that its ' +
-        'composition routines do not return that type',
-    ).toBe(false)
+      suite,
+      'the suite must exercise the real AgentBuilder, not a hand-written fixture',
+    ).toContain('AgentBuilder.create()')
+    expect(suite, 'a cast would hide the very defect the gap alleged').not.toMatch(
+      /inspectCompiled\([^)]*as /,
+    )
   })
 })
 
