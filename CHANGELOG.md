@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **O pacote publicado passa a levar prosa.** `@theokit/agents` entregava `dist/`, `LICENSE` e
+  `package.json` — e nada mais. O `files` DECLARAVA `README.md`, que nao existia no disco, entao o
+  npm o omitia em silencio; e o `CHANGELOG.md` de 114 kB existia e nao estava declarado. Quem
+  instalava o pacote nao tinha por onde saber o que ele faz nem o que mudou. Os dois agora vao no
+  tarball, verificado por `npm pack --dry-run`.
+
+- **Indice por capacidade** (`wiki/capability-index.md`). O wiki indexava por topico e por pacote;
+  ninguem procura assim. Procura-se por necessidade — "quero GC de sessao", "quero resolucao de
+  credencial" — e quando a resposta nao esta a uma consulta de distancia, constroi-se outra. A
+  cross-validation de 2026-08-14 mediu cinco capacidades JA publicadas sendo reimplementadas rio
+  abaixo por falta exatamente disso. Cada linha cita um simbolo que resolve no `.d.ts` publicado, e
+  um teste falha se deixar de resolver.
+
 ### Changed
 
 - **O CodeQL para de ficar vermelho para sempre, e passa a DIZER por que nao roda.**
@@ -28,30 +43,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
-  `transform_tool_result` estreou no `@theokit/agents@8.5.0` e a suite do TheoCode encontrou em
-  minutos o que 6116 testes daqui nao pegaram — porque eu escrevi os dois lados com a mesma
-  suposicao.
-  - Um hook **sem matcher** parava de rodar quando o lote de tool calls estava vazio: a checagem era
-    `.some()`, e `.some()` sobre array vazio e `false`. Um hook que pediu para ver TUDO nao via nada
-    no momento em que nao havia nada com que casar (corrigido em 8.5.2).
-  - Os **argumentos** da tool nao chegavam ao payload — eu mandava so os nomes. O produto ja tinha
-    corrigido esse mesmo defeito na copia dele, com a razao escrita: uma guarda que nao le os
-    argumentos nao consegue decidir sobre eles (8.5.2).
-  - O payload era um **terceiro formato** (`{ tools: [...] }`) num modulo cujos outros dois handlers
-    mandam `{ tool, args, ... }`. Agora roda uma vez por chamada, com `name` como alias de `tool`
-    para nao quebrar scripts de hook que ja estao no disco de usuarios (8.6.0, **commitado e ainda
-    nao publicado**).
-- **`buildHookHandlers` conectava 2 dos 8 eventos que declara, em silencio.** Um operador escrevia
-  `on_session_start`, o parse passava, o fingerprint saia, ele aprovava — e nada disparava. O
-  docblock do proprio modulo proibia isso, escrito sobre um evento com erro de digitacao; o mesmo
-  silencio cobria seis corretamente escritos. Agora avisa (8.4.0) e conecta cinco (8.5.x).
-- **`continuationBudget` estava exportado e lido por nada.** Implementar `transform_tool_result` e o
-  que lhe deu trabalho: feedback anexado e o que permite um hook se realimentar, e o orcamento e o
-  que para o laco.
-
-### Fixed
-
 - **Teste flaky meu, achado ao reconstruir o sinal do CI localmente.**
   `build-decision-is-per-run > test_with_NO_marker_a_freshly_built_dist_is_still_accepted` verificava
   que o `dist` tinha menos de **24 horas** e entao exigia aceitacao — enquanto o codigo que ele
@@ -66,6 +57,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `http ↛ agents` lendo apenas os `import` de `src` — e ficou verde sobre um manifesto que declarava a
   aresta proibida em voz alta. O manifesto é a aresta que um gerenciador de pacotes enxerga, e é a que
   chega ao consumidor. A guarda agora lê os dois.
+
+## [@theokit/agents 8.6.0] - 2026-08-14
+
+Fecha a serie 8.2.0–8.6.0 do motor de hooks. O detalhe por versao vive em
+[`packages/agents/CHANGELOG.md`](packages/agents/CHANGELOG.md); a narrativa abaixo atravessa as
+cinco porque o defeito e o conserto sao um so arco.
+
+### Fixed
+
+- **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
+  `transform_tool_result` estreou no `@theokit/agents@8.5.0` e a suite do TheoCode encontrou em
+  minutos o que 6116 testes daqui nao pegaram — porque eu escrevi os dois lados com a mesma
+  suposicao.
+  - Um hook **sem matcher** parava de rodar quando o lote de tool calls estava vazio: a checagem era
+    `.some()`, e `.some()` sobre array vazio e `false`. Um hook que pediu para ver TUDO nao via nada
+    no momento em que nao havia nada com que casar (corrigido em 8.5.2).
+  - Os **argumentos** da tool nao chegavam ao payload — eu mandava so os nomes. O produto ja tinha
+    corrigido esse mesmo defeito na copia dele, com a razao escrita: uma guarda que nao le os
+    argumentos nao consegue decidir sobre eles (8.5.2).
+  - O payload era um **terceiro formato** (`{ tools: [...] }`) num modulo cujos outros dois handlers
+    mandam `{ tool, args, ... }`. Agora roda uma vez por chamada, com `name` como alias de `tool`
+    para nao quebrar scripts de hook que ja estao no disco de usuarios (8.6.0).
+- **`buildHookHandlers` conectava 2 dos 8 eventos que declara, em silencio.** Um operador escrevia
+  `on_session_start`, o parse passava, o fingerprint saia, ele aprovava — e nada disparava. O
+  docblock do proprio modulo proibia isso, escrito sobre um evento com erro de digitacao; o mesmo
+  silencio cobria seis corretamente escritos. Agora avisa (8.4.0) e conecta cinco (8.5.x).
+- **`continuationBudget` estava exportado e lido por nada.** Implementar `transform_tool_result` e o
+  que lhe deu trabalho: feedback anexado e o que permite um hook se realimentar, e o orcamento e o
+  que para o laco.
+
+## [@theokit/agents 8.5.2 · 8.5.1 · 8.5.0] - 2026-08-13
+
+- Tres eventos de hook passam a ser conectados de verdade — `transform_tool_result`,
+  `on_session_start` e `post_assistant_reply`. O motor sai de dois handlers para cinco, e o
+  `continuationBudget` deixa de ser inerte. Detalhe em `packages/agents/CHANGELOG.md § 8.5.0`.
+
+## [@theokit/agents 8.4.0] - 2026-08-12
+
+- Um hook declarado num evento que o motor **nao conecta** agora AVISA, em vez de nao fazer nada em
+  silencio. `HOOK_EVENTS` publica oito nomes e o motor conectava dois.
+  Detalhe em `packages/agents/CHANGELOG.md § 8.4.0`.
+
+## [@theokit/agents 8.3.0] - 2026-08-12
+
+- `buildHookHandlers` aceita `onVeto`, para que uma superficie possa dizer ao usuario que um hook
+  vetou a chamada. Detalhe em `packages/agents/CHANGELOG.md § 8.3.0`.
+
+## [@theokit/agents 8.2.0] - 2026-08-11
+
+- `buildHookHandlers` aceita um `fingerprint` opcional — como um spec vira a chave conferida contra
+  `approved`. A lacuna apareceu numa migracao real: um consumidor com store de aprovacoes ja em
+  disco, chaveado pelo esquema dele, tinha **todo hook recusado** em silencio.
+  Detalhe em `packages/agents/CHANGELOG.md § 8.2.0`.
 
 ## [@theokit/agents 8.1.0 · @theokit/http 1.1.0] - 2026-08-14
 
