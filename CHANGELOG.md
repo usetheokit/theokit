@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`@theokit/http` 1.1.0 — a `peerDependency` invertida que nunca deveria ter sido publicada.**
+  `@theokit/http@1.0.0` declarava `peerDependencies: { "@theokit/agents": ">=0.47.0" }`, invertendo a
+  direção travada pela G1 (`agents` depende de `http`, nunca o contrário). O efeito era instalar uma
+  cópia antiga de `@theokit/agents` na árvore de todo consumidor, ao lado da que ele pediu — foi assim
+  que apareceu, migrando um consumidor real. A correção existia no fonte desde a quebra do ciclo, mas
+  `1.0.0` foi publicado antes dela e a versão não subiu: o registry seguiu servindo o manifesto velho.
+- **A guarda da G1 media o que o nome não prometia.** `g1-dependency-dag-boundary` afirmava a direção
+  `http ↛ agents` lendo apenas os `import` de `src` — e ficou verde sobre um manifesto que declarava a
+  aresta proibida em voz alta. O manifesto é a aresta que um gerenciador de pacotes enxerga, e é a que
+  chega ao consumidor. A guarda agora lê os dois.
+
 ## [@theokit/agents 8.0.0 · theokit 0.48.0] - 2026-08-14
 
 ### Migração — `auto-approve` agora exige evidência (BREAKING)
