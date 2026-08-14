@@ -8,6 +8,12 @@
  * are now individually addressable via `package.json#exports`:
  *
  *   import { defineAuth } from 'theokit/server/auth'
+ *
+ * Agent configuration, trust and the instruction tree moved OUT of this package entirely — they now
+ * live in `@theokit/agents/config`, the package an agent builder already installs. `LayeredConfig`,
+ * `TrustStore`, `loadInstructionTree`, `composeInstructions`, `loadCustomCommands` and
+ * `contextPressure` are re-exported below for the one minor cycle this barrel promised; NEW code
+ * should import them from `@theokit/agents/config`.
  *   import { defineJob }  from 'theokit/server/jobs'
  *   import { defineRoute, defineAction } from 'theokit/server/define'
  *   // ...etc per `packages/theo/package.json` exports field
@@ -159,16 +165,16 @@ export type {
 // Exported HERE and not merely written: both shipped in the M73 PR reachable only by relative path
 // from their own tests, which the `no-orphans` guard caught two milestones later. A module a
 // consumer cannot import is not a delivered feature — it is a file.
-export { LayeredConfig, LayerOutOfOrderError } from '../config/layered-config.js'
+export { LayeredConfig, LayerOutOfOrderError } from '@theokit/agents/config'
 export type {
   ConfigLayer,
   LayeredConfigInput,
   LayeredConfigResult,
   PrecedenceReport,
   ProvenancePerKey,
-} from '../config/layered-config.js'
-export { TrustStore, TrustStorePermissionsError } from '../config/trust-store.js'
-export type { TrustRecord } from '../config/trust-store.js'
+} from '@theokit/agents/config'
+export { TrustStore, TrustStorePermissionsError } from '@theokit/agents/config'
+export type { TrustRecord } from '@theokit/agents/config'
 
 // M76 — the `.theokit/commands/` loader.
 //
@@ -176,14 +182,14 @@ export type { TrustRecord } from '../config/trust-store.js'
 // `hooks.json`. `commands/` had no loader, so a consumer wrote markdown-with-frontmatter scanning
 // against the framework's own directory — reimplementing the reading of a convention the framework
 // defines. A convention with a hole in it is worse than no convention.
-export { loadCustomCommands } from '../config/custom-commands.js'
+export { loadCustomCommands } from '@theokit/agents/config'
 export type {
   CustomCommand,
   CustomCommandsResult,
   LoadCustomCommandsInput,
-} from '../config/custom-commands.js'
-export { frontmatterValue, splitFrontmatter } from '../config/frontmatter.js'
-export type { ParsedFrontmatter } from '../config/frontmatter.js'
+} from '@theokit/agents/config'
+export { frontmatterValue, splitFrontmatter } from '@theokit/agents/config'
+export type { ParsedFrontmatter } from '@theokit/agents/config'
 
 // M74 — the instruction tree, the composition ladder, and context pressure.
 //
@@ -193,26 +199,26 @@ export type { ParsedFrontmatter } from '../config/frontmatter.js'
 // was wrong — these three ARE agent configuration, which is exactly what `config/` holds. Widening
 // the DAG to admit a directory invented five minutes earlier would have been editing the guard to
 // match the mistake.
-export { loadInstructionTree } from '../config/instruction-tree.js'
+export { loadInstructionTree } from '@theokit/agents/config'
 export type {
   InstructionBlock,
   InstructionTree,
   InstructionTreeBudget,
   LoadInstructionTreeInput,
-} from '../config/instruction-tree.js'
-export { composeInstructions } from '../config/compose-instructions.js'
+} from '@theokit/agents/config'
+export { composeInstructions } from '@theokit/agents/config'
 export type {
   ComposeInstructionsOptions,
   ComposedInstructions,
   InstructionSource,
-} from '../config/compose-instructions.js'
+} from '@theokit/agents/config'
 export {
   DEFAULT_CONTEXT_PRESSURE_THRESHOLDS,
   ContextPressureThresholdError,
   contextPressure,
   effectiveContextWindow,
-} from '../config/context-pressure.js'
-export type { ContextPressure, ContextPressureThresholds } from '../config/context-pressure.js'
+} from '@theokit/agents/config'
+export type { ContextPressure, ContextPressureThresholds } from '@theokit/agents/config'
 
 export { loadEnv, _resetEnvCache } from '../config/load-env.js'
 export type { LoadEnvOptions, LoadEnvResult } from '../config/load-env-types.js'
