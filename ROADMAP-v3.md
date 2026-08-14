@@ -585,7 +585,7 @@ camadas, trust, sandbox, MCP, skills, hooks.
 
 ---
 
-### M85 — [ ] Reconstruir o seam de teste sobre os vocabulários reais
+### M85 — [x] Reconstruir o seam de teste sobre os vocabulários reais
 
 **Objective:** Toda a superfície publicada de teste é **uma** função, `createMockAgentStream`, e ela fala
 um vocabulário que **nenhum caminho de produção do framework consome**: emite `run_started` /
