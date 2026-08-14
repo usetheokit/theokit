@@ -1,3 +1,5 @@
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 import type { Capability, CompiledAgentOptionsDraft } from './capability.js'
 
 /**
@@ -6,10 +8,22 @@ import type { Capability, CompiledAgentOptionsDraft } from './capability.js'
  */
 
 /** Fail-fast with the known set — never `undefined` leaking into the pipeline. */
-export class UnknownCapabilityError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text. `code` is
+ * stable across a rename; `isRetryable` is DECLARED, because a default would be a retry policy
+ * nobody chose.
+ */
+export class UnknownCapabilityError extends TheokitAgentError {
   override readonly name = 'UnknownCapabilityError'
   constructor(requested: string, known: readonly string[]) {
-    super(`capability "${requested}" is not registered. Known: ${known.join(', ') || '(none)'}.`)
+    super(`capability "${requested}" is not registered. Known: ${known.join(', ') || '(none)'}.`, {
+      code: 'UNKNOWN_CAPABILITY',
+      // A name that is not in the registry will not be in it on the next attempt either.
+      isRetryable: false,
+    })
   }
 }
 
