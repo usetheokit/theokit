@@ -258,3 +258,67 @@ describe('runHookCommand — the four traps', () => {
     expect(result.exitCode).not.toBe(0)
   }, 15_000)
 })
+
+describe('M75 — a product with its own approval store keeps its own fingerprint', () => {
+  /**
+   * The gap a real migration found, not a hypothetical.
+   *
+   * A consumer arrived with an approval store on disk keyed by ITS fingerprint: a JSON projection
+   * with sorted keys and a "sha256:" prefix. Ours joins the fields with U+001E and emits bare hex.
+   * Both are sound; they are DIFFERENT — so the same hook hashes to two values.
+   *
+   * `buildHookHandlers` computed the fingerprint internally, so an `approved` set built by that
+   * consumer matched nothing. The effect is not a crash: every hook is reported "not approved and
+   * will not run". Silent capability loss over a security store.
+   *
+   * The alternative was making the consumer re-fingerprint its store — a data migration on approval
+   * records, where a half-finished run re-prompts the operator for hooks they already approved. And
+   * re-prompting for everything is how a user learns to approve reflexively, which is the failure
+   * the gate exists to prevent.
+   *
+   * So the FUNCTION becomes injectable. The default stays ours; the store stays theirs.
+   */
+  const spec = { command: 'echo hi', event: 'pre_tool_call', timeout_ms: 1000 } as const
+
+  it('test_a_custom_fingerprint_decides_membership', () => {
+    const mine = (identity: { command: string }): string => `custom:${identity.command}`
+
+    const handlers = buildHookHandlers([spec], {
+      cwd: '/tmp',
+      trusted: true,
+      approved: new Set(['custom:echo hi']),
+      fingerprint: mine,
+    })
+
+    expect(
+      handlers.pre_tool_call,
+      'the hook was refused even though the caller vouched for it under its own scheme',
+    ).toBeTypeOf('function')
+  })
+
+  it('test_a_custom_fingerprint_still_REFUSES_what_is_not_in_the_set', () => {
+    // The counter-proof. Without it, an injected function that made everything match would satisfy
+    // the assertion above while removing the gate entirely — the one outcome worse than the bug.
+    const mine = (identity: { command: string }): string => `custom:${identity.command}`
+
+    const handlers = buildHookHandlers([spec], {
+      cwd: '/tmp',
+      trusted: true,
+      approved: new Set(['custom:something else']),
+      fingerprint: mine,
+    })
+
+    expect(handlers.pre_tool_call).toBeUndefined()
+  })
+
+  it('test_the_DEFAULT_is_still_ours_when_nothing_is_injected', () => {
+    // Omitting the option must not become a permissive default: an unapproved hook stays refused.
+    const handlers = buildHookHandlers([spec], {
+      cwd: '/tmp',
+      trusted: true,
+      approved: new Set(['not-the-right-hash']),
+    })
+
+    expect(handlers.pre_tool_call).toBeUndefined()
+  })
+})

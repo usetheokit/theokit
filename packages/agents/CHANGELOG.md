@@ -1,5 +1,29 @@
 # @theokit/agents
 
+## 8.2.0
+
+### Minor Changes
+
+- `buildHookHandlers` aceita um `fingerprint` opcional — como um spec vira a chave conferida contra
+  `approved`. O default continua sendo o nosso `hookFingerprint`.
+
+  A lacuna apareceu numa migracao real, nao em hipotese. Um consumidor chegou com um store de
+  aprovacoes JA EM DISCO, chaveado pelo esquema dele (projecao JSON com chaves ordenadas e prefixo
+  `sha256:`), enquanto o nosso junta os campos com U+001E e emite hex cru. Os dois sao solidos; sao
+  diferentes — o mesmo hook gera dois valores.
+
+  Com a funcao fixa no codigo, o `approved` daquele consumidor nao casava com nada e **todo hook era
+  recusado**. Nao um crash: um aviso por hook e silencio depois, que e a pior forma que uma regressao
+  de seguranca pode ter.
+
+  A alternativa era migrar os dados do store de aprovacoes — e uma migracao pela metade re-pergunta
+  ao operador por hooks que ele ja aprovou. Re-perguntar tudo e como um usuario aprende a aprovar por
+  reflexo, que e exatamente o que este gate existe para impedir.
+
+  **O que NAO muda:** `approved` continua obrigatorio, um set vazio continua recusando tudo, e o
+  default continua o nosso. Injetar a funcao decide como um hook e NOMEADO, nunca se o gate se
+  aplica — e ha teste para os dois lados.
+
 ## 8.1.0
 
 ### Minor Changes
