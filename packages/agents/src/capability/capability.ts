@@ -1,5 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 import type { CompiledAgentOptions } from '../bridge/agent-compiler.js'
 
 /**
@@ -35,7 +37,15 @@ export interface Capability {
 }
 
 /** Two capabilities set the same scalar field to different values — a composition bug, never last-wins. */
-export class CapabilityConflictError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text. `code` is
+ * stable across a rename; `isRetryable` is DECLARED, because a default would be a retry policy
+ * nobody chose.
+ */
+export class CapabilityConflictError extends TheokitAgentError {
   override readonly name = 'CapabilityConflictError'
   constructor(field: string, previous: unknown, next: unknown, capability: string) {
     super(
@@ -44,6 +54,12 @@ export class CapabilityConflictError extends Error {
       // already does.
       `capability "${capability}": field "${field}" already declared (${shapeOf(previous)}) ` +
         `and redeclared with a different value (${shapeOf(next)}) — declare it once.`,
+
+      {
+        code: 'CAPABILITY_CONFLICT',
+        // two capabilities claiming one name will still both claim it next time.
+        isRetryable: false,
+      },
     )
   }
 }
