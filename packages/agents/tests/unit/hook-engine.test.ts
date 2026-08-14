@@ -432,3 +432,63 @@ describe('M75 — a surface can be TOLD that a hook vetoed', () => {
  * There is no fix here. What remains is the record that the difference between the two
  * implementations is real and is NOT a defect of ours.
  */
+
+describe('M75 — an event that cannot fire says so, instead of failing silently', () => {
+  /**
+   * The defect a consumer migration exposed, in this module, measured rather than reasoned.
+   *
+   * `HOOK_EVENTS` publishes eight names and `hookSpecSchema` accepts all eight — but
+   * `buildHookHandlers` only ever wires two: `pre_tool_call` and `post_tool_call`. Measured across
+   * all eight, six produce NO handler and NO warning.
+   *
+   * So an operator writes `on_session_start` in a hooks file, it parses, it gets fingerprinted, they
+   * approve it — and it never runs, with nothing said. This module's own docblock forbids exactly
+   * that: *"a silent skip means the operator believes a guard is in place when nothing is. That
+   * belief is worse than no hook at all."* It was written about a MISSPELLED event; the same thing
+   * was happening to six correctly spelled ones.
+   *
+   * Wiring the other six is real work. Saying so is one branch, and it converts a silent failure
+   * into a loud one — which is the part that cannot wait.
+   */
+  const unwired = ['transform_tool_result', 'on_session_start', 'post_assistant_reply'] as const
+
+  it.each(unwired)('test_an_approved_%s_hook_warns_that_it_will_not_fire', (event) => {
+    const spec = { command: 'true', event, timeout_ms: 500 } as const
+    const warnings: string[] = []
+
+    const handlers = buildHookHandlers([spec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([hookFingerprint({ command: 'true', event, timeoutMs: 500 })]),
+      onWarn: (m) => warnings.push(m),
+    })
+
+    expect(
+      Object.keys(handlers),
+      'if this event became wired, delete it from the list above',
+    ).toEqual([])
+    expect(
+      warnings.join('\n'),
+      'an approved hook for a declared event produced no handler AND no warning — the operator ' +
+        'believes a guard is in place and nothing is',
+    ).toMatch(new RegExp(event))
+  })
+
+  it('test_a_WIRED_event_does_not_warn', () => {
+    // Counter-proof: warning unconditionally would make the assertions above pass while burying the
+    // real signal under noise on every working hook.
+    const spec = { command: 'true', event: 'pre_tool_call', timeout_ms: 500 } as const
+    const warnings: string[] = []
+
+    buildHookHandlers([spec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([
+        hookFingerprint({ command: 'true', event: 'pre_tool_call', timeoutMs: 500 }),
+      ]),
+      onWarn: (m) => warnings.push(m),
+    })
+
+    expect(warnings).toEqual([])
+  })
+})
