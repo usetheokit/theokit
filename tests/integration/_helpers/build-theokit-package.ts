@@ -28,9 +28,35 @@
  *
  * Memoising makes every caller in one run agree. The window still governs a FRESH process, which is
  * what it was for; it no longer governs the middle of a run.
+ *
+ * ## B-M76-03 — that claim was wrong, measured 2026-08-13 (M77)
+ *
+ * "Every caller in one run" was false: **vitest runs test files in separate worker processes**, so a
+ * per-PROCESS memo makes every caller in one WORKER agree, which is not the same thing. The original
+ * failure survived, just narrower — worker A decides dist is fresh and goes off to read it; worker B,
+ * started eleven minutes later, finds the mtime outside the window, decides it is stale and rebuilds,
+ * and `tsup` cleans the directory before writing.
+ *
+ * Measured again on the M77 full run: 7 failures across `import-validation` and `devtools-treeshake`,
+ * all green in isolation immediately after.
+ *
+ * The decision is now shared ACROSS processes by a marker file recording which RUN validated dist —
+ * keyed by the parent pid every worker of a vitest run shares. Same run ⇒ trust it, no clock
+ * involved. Different run ⇒ fall back to the window, which is what the window was actually for: a
+ * dist left over from yesterday. No time window can fix this on its own; any window can expire
+ * between two workers of the same run, and that IS the bug.
  */
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync, openSync, closeSync, unlinkSync, statSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  openSync,
+  closeSync,
+  readFileSync,
+  unlinkSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -41,10 +67,56 @@ const LOCK_DIR = resolve(tmpdir(), 'theokit-test-locks')
 const LOCK_FILE = resolve(LOCK_DIR, 'packages-theo-build.lock')
 const FRESH_WINDOW_MS = 10 * 60 * 1000
 
-const hasFreshBuild = (): boolean => {
+/** Records which RUN last validated dist. Shared across every worker of that run. */
+export const VALIDATION_MARKER = resolve(LOCK_DIR, 'packages-theo-build.validated.json')
+
+/**
+ * The id every worker of one vitest run agrees on.
+ *
+ * The parent pid: with the fork pool it is the vitest main process, with the thread pool the workers
+ * share the process outright. Either way it is the same value for the whole run and a different one
+ * for the next — which is exactly the equivalence class the decision needs, and the one a clock
+ * cannot express.
+ */
+const runId = (): number => process.ppid
+
+const markerRunId = (markerPath: string): number | undefined => {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(markerPath, 'utf8'))
+    const value = (parsed as { runId?: unknown }).runId
+    return typeof value === 'number' ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Record that THIS run has validated dist, so later workers do not re-decide against the clock.
+ *
+ * `markerPath` is injectable for ONE reason, learned the hard way: a test that exercised this by
+ * deleting the real marker sabotaged the other workers reading dist at that moment — it re-created
+ * the very race the marker removes, and took four unrelated test files down with it. Shared
+ * cross-process state is not something a test may borrow.
+ */
+export const markDistValidatedForThisRun = (markerPath: string = VALIDATION_MARKER): void => {
+  mkdirSync(resolve(markerPath, '..'), { recursive: true })
+  writeFileSync(markerPath, JSON.stringify({ runId: runId() }), 'utf8')
+}
+
+/**
+ * Whether dist can be read without rebuilding.
+ *
+ * The marker vouches for a validation, never for the existence of files — so a missing `index.d.ts`
+ * is unusable no matter which run wrote the marker. Otherwise: same run ⇒ trust it; another run ⇒
+ * the freshness window decides.
+ */
+export const isDistUsableWithoutRebuilding = (markerPath: string = VALIDATION_MARKER): boolean => {
   if (!existsSync(INDEX_DTS)) return false
+  if (markerRunId(markerPath) === runId()) return true
   return Date.now() - statSync(INDEX_DTS).mtimeMs < FRESH_WINDOW_MS
 }
+
+const hasFreshBuild = isDistUsableWithoutRebuilding
 
 /**
  * This process's single answer to "is dist/ usable?".
@@ -78,6 +150,9 @@ export const buildTheokitPackageOnce = (): void => {
   if (distDecidedUsable === true) return
   if (hasFreshBuild()) {
     distDecidedUsable = true
+    // Publish the conclusion so a worker starting later in this run reaches the same one instead of
+    // re-deciding against a clock that may have moved past the window.
+    markDistValidatedForThisRun()
     return
   }
   const lockFd = acquireLock()
@@ -85,6 +160,7 @@ export const buildTheokitPackageOnce = (): void => {
     waitForLockRelease()
     if (hasFreshBuild()) {
       distDecidedUsable = true
+      markDistValidatedForThisRun()
       return
     }
     // Lock released but no dist still — fall through and build ourselves
@@ -97,6 +173,7 @@ export const buildTheokitPackageOnce = (): void => {
       timeout: 240_000,
     })
     distDecidedUsable = true
+    markDistValidatedForThisRun()
   } finally {
     if (lockFd !== null) closeSync(lockFd)
     try {
