@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { doctorCommand } from '../../packages/theo/src/cli/commands/doctor.js'
+import { doctorCommand, type DoctorDeps } from '../../packages/theo/src/cli/commands/doctor.js'
 
 /**
  * M84 — `theokit doctor` composes the checks the framework knows.
@@ -90,12 +90,18 @@ describe('subagents are part of "what will this installation do"', () => {
 describe('a product composes its own checks on top', () => {
   it('test_extra_checks_appear_and_can_fail_the_run', async () => {
     // The list is the product's. Absorbing it would make this a framework for one app.
-    const code = await doctorCommand({
+    //
+    // Typed against `DoctorDeps` on purpose: a product composing checks has to be able to NAME this
+    // shape, and a test that only ever passed an inline literal would leave the type exported and
+    // reachable by nobody — the published-but-unreachable failure this milestone family keeps
+    // closing one instance of.
+    const deps: DoctorDeps = {
       projectRoot,
       env: { OPENAI_API_KEY: 'k' },
       write,
       extraChecks: [{ name: 'my-thing', status: 'fail', detail: 'not wired' }],
-    })
+    }
+    const code = await doctorCommand(deps)
     expect(code).not.toBe(0)
     expect(lines.join('\n')).toContain('my-thing')
   })
