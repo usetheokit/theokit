@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`@theokit/agents` 8.1.0 — os erros do canal de pergunta nao tinham `code`.** `ConcurrentQuestionError`,
+  `ConcurrentListenerError` e `QuestionAbandonedError` eram tipados e diziam o que fazer, mas sem
+  codigo estavel. `name` e string de exibicao; `code` e o que um `switch` consome e o que sobrevive a
+  minificacao. Os erros irmaos do mesmo pacote (`DELEGATION_TIMEOUT`) sempre tiveram um. Apareceu
+  quando um consumidor migrou da propria copia e encontrou `undefined`.
+- **De novo um gate cujo oraculo nao media o que o nome promete.** O teste chamava-se
+  `test_every_error_is_a_TheokitAgentError_with_a_stable_code` e verificava `name` e a mensagem —
+  nunca o `code`. Agora verifica os tres.
+
+### Fixed
+
 - **`@theokit/http` 1.1.0 — a `peerDependency` invertida que nunca deveria ter sido publicada.**
   `@theokit/http@1.0.0` declarava `peerDependencies: { "@theokit/agents": ">=0.47.0" }`, invertendo a
   direção travada pela G1 (`agents` depende de `http`, nunca o contrário). O efeito era instalar uma

@@ -1,5 +1,21 @@
 # @theokit/agents
 
+## 8.1.0
+
+### Minor Changes
+
+- Os tres erros do canal de pergunta (`ConcurrentQuestionError`, `ConcurrentListenerError`,
+  `QuestionAbandonedError`) passam a carregar um `code` estavel:
+  `question_already_pending`, `listener_already_attached`, `question_abandoned`.
+
+  Eles ja eram tipados e ja diziam o que fazer — mas sem `code`. `name` e string de exibicao; `code`
+  e o que um `switch` consome e o que sobrevive a minificacao. Os erros irmaos deste mesmo pacote
+  (`DELEGATION_TIMEOUT`, `DELEGATION_FAILED`) sempre tiveram um; estes tres sairam sem, e apareceu
+  quando um consumidor migrou da propria copia e encontrou `undefined`.
+
+  O teste que deveria ter pego se chamava `test_every_error_is_a_TheokitAgentError_with_a_stable_code`
+  e verificava `name` e a mensagem — nunca o `code`. Agora verifica os tres.
+
 ## 7.6.0
 
 ### Minor Changes
