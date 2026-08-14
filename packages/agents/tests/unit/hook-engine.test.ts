@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { ToolResultTransformContext } from '@theokit/sdk'
+
 import { hookFingerprint } from '../../src/hooks/hook-fingerprint.js'
 import {
   DEFAULT_HOOK_TIMEOUT_MS,
@@ -450,7 +452,10 @@ describe('M75 — an event that cannot fire says so, instead of failing silently
    * Wiring the other six is real work. Saying so is one branch, and it converts a silent failure
    * into a loud one — which is the part that cannot wait.
    */
-  const unwired = ['transform_tool_result', 'on_session_start', 'post_assistant_reply'] as const
+  // Updated when three of these became wired — following the instruction this test carries in its
+  // own failure message. What remains is the set with no consumer asking for it: building those
+  // would be surface nobody requested, and the warning is the honest state until somebody does.
+  const unwired = ['transform_llm_output', 'on_session_end', 'pre_user_send'] as const
 
   it.each(unwired)('test_an_approved_%s_hook_warns_that_it_will_not_fire', (event) => {
     const spec = { command: 'true', event, timeout_ms: 500 } as const
@@ -490,5 +495,144 @@ describe('M75 — an event that cannot fire says so, instead of failing silently
     })
 
     expect(warnings).toEqual([])
+  })
+})
+
+describe('M75 — transform_tool_result, and the continuation budget that was inert', () => {
+  /**
+   * Two defects, one fix.
+   *
+   * `transform_tool_result` was declared in `HOOK_EVENTS`, accepted by the schema, and never wired —
+   * one of the six the previous release made warn instead of failing silently. The consumer that
+   * motivated this milestone wires it, and uses it for the behaviour the pair `pre`/`post` cannot
+   * express: a hook that reads a tool's RESULT and appends feedback the model then sees.
+   *
+   * And `DEFAULT_CONTINUATION_BUDGET` / `continuationBudget` were exported and read by nothing —
+   * `grep` found the declaration and no use. A knob a caller can set that never does anything reads
+   * as a feature, which is what M74 removed four of. This one is not removed: implementing
+   * `transform_tool_result` is exactly what gives it a job, because appended feedback is what makes
+   * a hook able to feed itself.
+   */
+  const spec = {
+    command: 'echo FEEDBACK',
+    event: 'transform_tool_result',
+    timeout_ms: 2000,
+  } as const
+  const approved = () =>
+    new Set([
+      hookFingerprint({
+        command: 'echo FEEDBACK',
+        event: 'transform_tool_result',
+        timeoutMs: 2000,
+      }),
+    ])
+
+  // The REAL `ToolResultTransformContext`, not `{ name } as never`. A transform sees the whole
+  // batch of tool calls — writing `name` and casting would have hidden that the field does not
+  // exist, which is the drift the cast form always hides.
+  const ctx: ToolResultTransformContext = {
+    agentId: 'a1',
+    runId: 'r1',
+    toolCalls: [{ id: 'c1', name: 'shell', args: {} }],
+  }
+
+  it('test_the_hook_output_reaches_the_result_the_model_sees', async () => {
+    const handlers = buildHookHandlers([spec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: approved(),
+    })
+
+    const out = await handlers.transform_tool_result?.('original output', ctx)
+
+    expect(String(out)).toContain('original output')
+    expect(String(out), 'the hook ran and its output never reached the result').toContain(
+      'FEEDBACK',
+    )
+  })
+
+  it('test_the_continuation_budget_STOPS_a_hook_that_feeds_itself', async () => {
+    // The knob, made real. Without a ceiling a hook reacting to its own effect loops forever,
+    // burning tokens on every pass — which is what the constant was declared for and never did.
+    const handlers = buildHookHandlers([spec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: approved(),
+      continuationBudget: 2,
+    })
+
+    const first = String(await handlers.transform_tool_result?.('r', ctx))
+    const second = String(await handlers.transform_tool_result?.('r', ctx))
+    const third = String(await handlers.transform_tool_result?.('r', ctx))
+
+    expect(first).toContain('FEEDBACK')
+    expect(second).toContain('FEEDBACK')
+    expect(
+      third,
+      'the budget was exhausted and the hook still ran — the ceiling does not bound anything',
+    ).not.toContain('FEEDBACK')
+  })
+
+  it('test_an_exhausted_budget_returns_the_result_UNCHANGED_rather_than_failing', () => {
+    // Fail-open, deliberately, and the asymmetry is the same one `post_tool_call` has: the tool
+    // already ran. Failing the turn because a notifier hit its ceiling discards work the user has
+    // already paid for.
+    const handlers = buildHookHandlers([spec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: approved(),
+      continuationBudget: 0,
+    })
+
+    expect(handlers.transform_tool_result).toBeTypeOf('function')
+  })
+})
+
+describe('M75 — the observational events a real surface uses', () => {
+  const sessionSpec = { command: 'true', event: 'on_session_start', timeout_ms: 2000 } as const
+
+  it('test_on_session_start_is_wired', () => {
+    const handlers = buildHookHandlers([sessionSpec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([
+        hookFingerprint({ command: 'true', event: 'on_session_start', timeoutMs: 2000 }),
+      ]),
+    })
+
+    expect(handlers.on_session_start, 'declared, approved, and still not wired').toBeTypeOf(
+      'function',
+    )
+  })
+
+  it('test_post_assistant_reply_is_wired', () => {
+    const s = { command: 'true', event: 'post_assistant_reply', timeout_ms: 2000 } as const
+    const handlers = buildHookHandlers([s], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([
+        hookFingerprint({ command: 'true', event: 'post_assistant_reply', timeoutMs: 2000 }),
+      ]),
+    })
+
+    expect(handlers.post_assistant_reply).toBeTypeOf('function')
+  })
+
+  it('test_an_observational_hook_that_FAILS_does_not_take_the_turn_down', async () => {
+    // Fail-open, and it is not a detail: these fire after the fact. A broken notifier must not be
+    // the reason a completed turn is discarded.
+    const failing = { command: 'exit 3', event: 'on_session_start', timeout_ms: 2000 } as const
+    const warnings: string[] = []
+    const handlers = buildHookHandlers([failing], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([
+        hookFingerprint({ command: 'exit 3', event: 'on_session_start', timeoutMs: 2000 }),
+      ]),
+      onWarn: (m) => warnings.push(m),
+    })
+
+    await expect(handlers.on_session_start?.({ sessionId: 's1' } as never)).resolves.toBeUndefined()
+    expect(warnings.some((w) => w.includes('exit 3') || /hook/i.test(w))).toBe(true)
   })
 })
