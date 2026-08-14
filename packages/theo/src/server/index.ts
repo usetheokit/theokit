@@ -71,8 +71,10 @@ export {
 } from '../core/contracts/action-protocol.js'
 
 // Subdomain sub-barrels (consumers can also import direct: theokit/server/<sub>)
-// (server/agent had only the proprietary surface — removed in the M3 clean break;
-// its survivors mount-agent/provider-resolver/configure-agent-registry are internal.)
+// (server/agent had only the proprietary surface — removed in the M3 clean break.
+// M79 / ADR 0041: `provider-resolver` is no longer among the internal survivors — it is published
+// through `./agent/index.js` below. `mount-agent` and `configure-agent-registry` remain internal.)
+export * from './agent/index.js'
 export * from './auth/index.js'
 export * from './cost/index.js'
 export * from './cron/index.js'

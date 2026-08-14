@@ -20,6 +20,14 @@ interface AgentCommandDeps {
   resolveApiKey?: () => string
   /** Agents dir name (config `agentsDir`); defaults to the loaded config's value ("agents"). Tests inject it. */
   agentsDir?: string
+  /**
+   * M83 — the interactive surface, when one is wired.
+   *
+   * Injected rather than imported: the terminal app lives in `@theokit/tui`, and importing it here
+   * would make every `theokit` install carry an Ink runtime for a command most users pass a message
+   * to. Absent ⇒ a message is still required, and the error now says why rather than reciting usage.
+   */
+  startInteractive?: (agentName: string) => Promise<{ sawError: boolean }>
 }
 
 export async function agentCommand(
@@ -27,8 +35,22 @@ export async function agentCommand(
   message: string | undefined,
   deps: AgentCommandDeps = {},
 ): Promise<{ sawError: boolean }> {
-  if (!message || message.trim().length === 0) {
-    throw new Error('theokit agent: a message is required. Usage: theokit agent <name> "<message>"')
+  // M83 — an absent message means INTERACTIVE, not an error.
+  //
+  // Refusing here is what left the command-routing primitive without a production consumer in this
+  // repo: a router exists to route what a user types over a session, and a command that takes one
+  // message and exits never types twice. The refusal also made the first thing a new user runs —
+  // `theokit agent chat` — fail with usage text, which reads as "this is broken", not as "pass an
+  // argument".
+  //
+  // The interactive loop itself is the surface's job (`@theokit/tui`); what changes here is that the
+  // CLI stops refusing, and reports which mode it entered so the caller is never guessing.
+  const interactive = message === undefined || message.trim().length === 0
+  if (interactive && deps.startInteractive === undefined) {
+    throw new Error(
+      'theokit agent: no message given and no interactive surface is wired. Pass a message ' +
+        '(`theokit agent <name> "<message>"`), or supply `startInteractive` to run a session.',
+    )
   }
   const projectRoot = deps.projectRoot ?? process.cwd()
   // #95 follow-up — resolve the agents dir from config (default "agents") so `agentsDir: "core/agents"`
@@ -41,6 +63,15 @@ export async function agentCommand(
   if (!agent) {
     const names = agents.map((a) => a.name).join(', ') || `(none found in ${agentsDir}/)`
     throw new Error(`theokit agent: '${name}' not found. Available agents: ${names}`)
+  }
+
+  // M83 — hand off to the interactive surface once the agent NAME is resolved, and not before: a
+  // typo'd name must fail the same way in both modes, with the list of what exists.
+  if (interactive) {
+    // Non-null by construction: the guard at the top of this function refuses interactive mode when
+    // no surface is wired, so reaching here means one was.
+    const startInteractive = deps.startInteractive as (n: string) => Promise<{ sawError: boolean }>
+    return await startInteractive(agent.name)
   }
 
   const runAgent = deps.runAgent ?? runAgentInTerminal

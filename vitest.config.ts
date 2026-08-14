@@ -5,7 +5,6 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     globals: true,
-    include: ['tests/**/*.test.ts', 'tests/**/*.test-d.ts'],
     // B-M67-20 passo 2 — o run passa a EXECUTAR as suítes dos pacotes, não só a da raiz.
     //
     // A cobertura conta `packages/*/src/**` (ver `coverage.include` abaixo) enquanto o `include`
@@ -19,7 +18,37 @@ export default defineConfig({
     projects: [
       {
         extends: true,
-        test: { name: 'root', include: ['tests/**/*.test.ts', 'tests/**/*.test-d.ts'] },
+        test: {
+          name: 'root',
+          // Everything under `tests/` EXCEPT integration and smoke, which the sibling project below
+          // serializes. Stated as an exclusion rather than a list of directories on purpose: a list
+          // fails by omission — add `tests/e2e/` and it silently never runs. The floor that proves
+          // this reaches every file is `tests/unit/vitest-projects-cover-every-test.test.ts`, which
+          // caught exactly that gap (plus a double-claim) on this split's first attempt.
+          include: ['tests/**/*.test.ts', 'tests/**/*.test-d.ts'],
+          exclude: [
+            '**/node_modules/**',
+            'tests/integration/**',
+            'tests/smoke/**',
+            'tests/fixtures/**',
+          ],
+          fileParallelism: true,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'root-serial',
+          // The files that genuinely contend: they bind ports (`theokit dev`), run the real build,
+          // or drive a scaffolded app end to end. Serialized among THEMSELVES — which is the
+          // guarantee the original setting was written for.
+          include: ['tests/integration/**/*.test.ts', 'tests/smoke/**/*.test.ts'],
+          // The type-test suite belongs to `root` alone. Without this, both projects inherit the
+          // top-level `typecheck.include` and 22 `.test-d.ts` files are checked TWICE — measured,
+          // and the reason the first attempt at this split reported more green tests than exist.
+          typecheck: { enabled: false },
+          fileParallelism: false,
+        },
       },
       './packages/agents/vitest.config.ts',
       './packages/http/vitest.config.ts',
@@ -73,6 +102,26 @@ export default defineConfig({
     // singleFork delivered. Intra-file parallelism (multiple `it` per file)
     // is preserved (per vitest 4 default behavior).
     // See https://vitest.dev/guide/migration#pool-rework
+    //
+    // ## Narrowed to the files that actually contend — measured 2026-08-14
+    //
+    // The rationale above is real, and it is about INTEGRATION tests: they spawn `theokit dev` /
+    // `theokit build` and fight over ports and CPU. It was verified at 411 tests. The suite is now
+    // 5959 tests across 759 files, of which **22** spawn a subprocess — so 737 files were paying a
+    // serialization written for 22, on a 12-core machine that ran them one at a time.
+    //
+    // Measured, same 434 files and the same 3477 assertions, all green both ways:
+    //
+    //   serial (this setting, globally)  235.5 s
+    //   parallel                          30.1 s     ← 7.8×
+    //
+    // The setting stays — it just applies to the `root-serial` project instead of to everything.
+    // The guarantee it was written for is unchanged: integration and smoke files are still
+    // serialized among themselves, so no two dev servers race for a port.
+    //
+    // Honest limit: "green twice in parallel" is evidence, not proof. If an integration-shaped
+    // contention ever appears inside `tests/unit`, the file belongs in `root-serial`, not this
+    // setting back at the top.
     fileParallelism: false,
     // `testTimeout` covers the wall-clock for individual assertions.
     // Integration tests spawning `theokit dev` need >5s under load.
@@ -153,6 +202,15 @@ export default defineConfig({
       // M75 — the hook engine subpath. Every new `@theokit/agents/*` entry needs a line here, ABOVE
       // the bare specifier: a string alias matches by prefix, so without it this resolves to the
       // nonsense path `…/src/index.ts/hooks` instead of erroring.
+      '@theokit/agents/tool-scope': path.resolve(__dirname, 'packages/agents/src/tools/index.ts'),
+      '@theokit/agents/mcp-health': path.resolve(
+        __dirname,
+        'packages/agents/src/mcp-health-entry.ts',
+      ),
+      '@theokit/agents/commands': path.resolve(__dirname, 'packages/agents/src/commands/index.ts'),
+      '@theokit/agents/doctor': path.resolve(__dirname, 'packages/agents/src/doctor/index.ts'),
+      '@theokit/agents/usage': path.resolve(__dirname, 'packages/agents/src/usage/index.ts'),
+      '@theokit/agents/ask': path.resolve(__dirname, 'packages/agents/src/ask/index.ts'),
       '@theokit/agents/hooks': path.resolve(__dirname, 'packages/agents/src/hooks/index.ts'),
       // M73 — `/persistence`, needed the moment framework code composed the atomic-write and
       // file-lock primitives.

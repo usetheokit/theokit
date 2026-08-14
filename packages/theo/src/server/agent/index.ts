@@ -48,3 +48,23 @@ export type {
   McpResourceDescriptor,
   McpResourceContents,
 } from './mcp-app-resources.js'
+
+/**
+ * M79 / ADR 0041 — the provider resolver becomes REACHABLE.
+ *
+ * It was complete and marked `@public` in its own JSDoc, and exported by nothing: the note in
+ * `../index.ts` listed it among the "internal survivors". A second resolver nobody can reach is
+ * what guarantees a consumer writes the third — which is exactly what happened.
+ *
+ * Deleting it instead was the other option the milestone offered, and it was measured and rejected:
+ * the SDK does not own provider base URLs, so the three vendor endpoints would have had to move into
+ * every app's config, breaking zero-config `theokit dev`. See ADR 0041.
+ */
+export {
+  listProviders,
+  registerProvider,
+  resetProviderRegistry,
+  resolveProvider,
+  tryResolveProvider,
+} from './provider-resolver.js'
+export type { ProviderDescriptor, ResolvedProvider } from './provider-resolver.js'
