@@ -176,7 +176,24 @@ Plan: `.claude/knowledge-base/plans/dogfood-regressions-fix-plan.md` v1.1 — **
 
 ---
 
-## Ecosystem — the five siblings, literally (one being absorbed)
+## Ecosystem — the siblings, literally (one being absorbed)
+
+> **Correction, measured 2026-08-14.** This section said "five siblings" and the group has **11
+> repositories**. The gap is not academic: the only real consumer of `@theokit/agents` already
+> depends on three packages this table never mentioned — `@theokit/tui` 0.52.1, `@theokit/sdk-tools`
+> 0.26.2 and `@theokit/sdk-pty` 0.3.0 — and the cross-validation measured a builder reimplementing
+> capabilities that ship in packages they could not find. A capability that exists and is not
+> discoverable costs a customer exactly what an absent one costs.
+>
+> The full group: `theokit` (this repo) · `theokit-sdk` (15 published packages: sdk, cli, acp,
+> memory-{honcho,mem0,supermemory}, sdk-{budget,cache,handoff,memory,pty,tools}, codemods) ·
+> `theokit-ui` · `usetheo-ui` · `theokit-tui` · `theokit-plugins` (11 plugins) · `theokit-gateways`
+> (11 platform adapters + core) · `theokit-di` (di, di-agent, orm) · `theokit-studio` ·
+> `theokit-skill` · `theokit-example`.
+>
+> The rows below remain the source of truth for the seams TheoKit **wires**; they are not a complete
+> inventory of what exists. For "which symbol delivers capability X", see
+> [`wiki/capability-index.md`](wiki/capability-index.md).
 
 TheoKit lives inside the `theokit-framework/` repo group (`/home/paulo/Projetos/theo/theokit-framework/`), next to five sibling projects. Three of them (`theokit-sdk`, `theokit-ui`, `theokit-plugins`) are direct siblings inside that group; `theo` (TheoCloud) lives in the neighbouring `theo-platform/` group, reached as `../../theo-platform/theo/`. This table is the **source of truth** for what TheoKit actually integrates with. Any README claim, comparison table, or pitch deck that contradicts this is wrong and must be corrected to match the code.
 

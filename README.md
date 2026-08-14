@@ -280,7 +280,7 @@ class BillingTools {}           // → namespace: "billing"
 
 ## How it works
 
-The rest of this README is the technical surface. Vocabulary shifts here on purpose — `defineRoute`, `defineWebSocket`, `theoFetch`, and friends earn their keep below.
+The rest of this README is the technical surface. Vocabulary shifts here on purpose — `route()`, `websocket()`, `theoFetch`, and friends earn their keep below.
 
 ## Project Structure
 
@@ -300,8 +300,8 @@ my-app/
 │   ├── guards/                # Shared guards
 │   ├── interceptors/          # HTTP interceptors
 │   ├── filters/               # Exception filters
-│   ├── routes/                # API routes (defineRoute)
-│   ├── actions/               # Server actions (defineAction)
+│   ├── routes/                # API routes (route() builder)
+│   ├── actions/               # Server actions (action() builder)
 │   ├── ws/                    # WebSocket endpoints
 │   ├── middleware.ts           # Request middleware
 │   ├── context.ts             # Request context factory
@@ -314,23 +314,19 @@ my-app/
 
 ```typescript
 // server/routes/users.ts
-import { defineRoute } from 'theokit/server'
+import { route } from 'theokit/server'
 import { z } from 'zod'
 
-export const GET = defineRoute({
-  query: z.object({ search: z.string().optional() }),
-  handler: ({ query }) => {
-    return { users: [{ name: 'Alice' }] }
-  },
-})
+export const GET = route()
+  .query(z.object({ search: z.string().optional() }))
+  .handler(({ query }) => ({ users: [{ name: 'Alice' }], search: query.search }))
+  .build()
 
-export const POST = defineRoute({
-  body: z.object({ name: z.string(), email: z.string().email() }),
-  status: 201,
-  handler: ({ body }) => {
-    return { id: crypto.randomUUID(), ...body }
-  },
-})
+export const POST = route()
+  .body(z.object({ name: z.string().min(1), email: z.string().email() }))
+  .status(201)
+  .handler(({ body }) => ({ id: crypto.randomUUID(), ...body }))
+  .build()
 ```
 
 ## Typed Client
@@ -348,31 +344,30 @@ const data = await theoFetch<typeof GET>('/api/users', {
 ## Auth
 
 ```typescript
-import { createSessionManager, requireAuth } from 'theokit/server'
+import { createSessionManager, requireAuth, route } from 'theokit/server'
 
 const auth = createSessionManager<{ userId: string }>({
   secret: process.env.SESSION_SECRET!, // min 32 chars
 })
 
-export const GET = defineRoute({
-  handler: ({ ctx }) => {
+export const GET = route()
+  .handler(({ ctx }) => {
     requireAuth(ctx.user) // throws 401 if null, narrows type
     return { userId: ctx.user.userId }
-  },
-})
+  })
+  .build()
 ```
 
 ## WebSocket
 
 ```typescript
 // server/ws/chat.ts → ws://localhost:3000/ws/chat
-import { defineWebSocket } from 'theokit/server'
+import { websocket } from 'theokit/server'
 
-export default defineWebSocket({
-  onMessage(ws, data) {
-    ws.send(`echo: ${data}`)
-  },
-})
+export default websocket()
+  .onOpen((ws) => ws.send('connected'))
+  .onMessage((ws, data) => ws.send(`echo: ${data}`))
+  .build()
 ```
 
 ## CLI
@@ -397,13 +392,14 @@ theokit check                            # Typecheck + scan
 
 ```typescript
 // theo.config.ts
-import { defineConfig } from 'theokit'
+import { config } from 'theokit'
 
-export default defineConfig({
-  port: 3000,
-  ssr: false,
-  rateLimit: { windowMs: 60_000, max: 100 },
-})
+export default config()
+  .port(3000)
+  .ssr(false)
+  // Named setters exist for the common keys; `.set()` carries anything else.
+  .set({ rateLimit: { windowMs: 60_000, max: 100 } })
+  .build()
 ```
 
 ## Built With
