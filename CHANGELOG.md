@@ -18,9 +18,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`FRESH_WINDOW_MS` passa a ser exportado.** O literal `10 * 60 * 1000` estava duplicado entre a
   implementacao e um teste irmao — que foi como um terceiro teste acabou verde contra uma janela que
   ele inventou. O numero tem uma casa so.
-
-### Fixed
-
 - **`@theokit/agents` 8.1.0 — os erros do canal de pergunta nao tinham `code`.** `ConcurrentQuestionError`,
   `ConcurrentListenerError` e `QuestionAbandonedError` eram tipados e diziam o que fazer, mas sem
   codigo estavel. `name` e string de exibicao; `code` e o que um `switch` consome e o que sobrevive a
