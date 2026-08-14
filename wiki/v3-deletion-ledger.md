@@ -1,6 +1,6 @@
 # v3 deletion ledger — what the framework absorbed, measured
 
-**Milestone:** M86 · **Measured:** 2026-08-14 · **Status:** open — migration awaits a release
+**Milestone:** M86 · **Measured:** 2026-08-14 · **Status:** migration STARTED — two batches landed, measured below
 
 This is the artifact M86 exists to produce: one line per primitive, with LOC removed in the consumer
 and the milestone that delivered it. It is the only evidence that v3 was worth doing.
@@ -11,21 +11,39 @@ resultado."* Everything below is measured against the TheoCode tree as it stands
 
 ---
 
-## The blocking fact, stated first
+## The blocker is cleared — what has actually been deleted
 
-**The primitives of M77–M85 are not published.** They are merged to `develop` in this repo;
-`@theokit/agents` on npm is `7.6.0`, which predates all of them, and TheoCode depends on `^7.5.0`.
+The primitives shipped as **`@theokit/agents@8.0.0`** (2026-08-14), TheoCode moved off `^7.5.0`, and
+the deletions began. What follows is measured in the migration commits, not estimated.
 
-So the deletions this ledger anticipates **cannot be executed yet**. The sequence is:
+| Batch | TheoCode commit | Deleted | Net |
+|---|---|---|---:|
+| Migration to 8.0.0 | `41125d1` | — (two breaking call sites adapted) | +49 |
+| `shutdown` + diagnostics mechanism | `b80baa8` | `shared/src/shutdown.ts` (67) + its test (73) | −108 |
+| Doctor quartet | `31fd051` | `diagnose` / `renderDiagnosis` / `Check` / `Diagnosis` | −12 |
+| | | **measured total** | **−108 net (256 removed, 148 added)** |
 
-1. `develop → main` + version bump + `npm publish` (the RELEASE step of the cycle)
-2. TheoCode bumps its dependency
-3. One PR per primitive, each citing the milestone and the version it landed in — the in-file
-   convention the repo already practises
-4. This ledger closes with the deletion SHAs
+Three findings from doing it, each of which the estimate could not have produced:
 
-Recording the blocker rather than an estimate is the point. A ledger of deletions that have not
-happened is a forecast wearing an artifact's name.
+**1. Two files became adapters rather than disappearing, for a reason worth stating.**
+`diagnostic-sink.ts` survives at 29 lines because the framework reads `THEOKIT_DIAGNOSTICS` and this
+product's operators have `THEOCODE_DIAGNOSTICS` in their shells; adopting the framework's key would
+be a breaking change disguised as a refactor, failing silently. `doctor.ts` survives because the
+LIST of checks is the product's — only the quartet was ever shared.
+
+**2. What came back is stronger than what left.** `Diagnosis.failed` is a count with an `exitCode`,
+and `diagnose([])` no longer reports a clean bill of health — the local version returned
+`failed: false` for an empty list, so a product whose check list failed to load announced that an
+installation nobody examined was fine. `createShutdown` names its cleanups (the watchdog says WHICH
+one hung) and distinguishes three outcomes where the local one had two. A clean Ctrl-C now exits
+130, the Unix convention, instead of 0.
+
+**3. A defect in the framework's own publish surfaced only here.** `@theokit/http@1.0.0` declared
+`peerDependencies: { "@theokit/agents": ">=0.47.0" }` — the direction G1 forbids, with a range naming
+another package's version line. It put a second, older copy of `@theokit/agents` in every consumer's
+install tree. The source had been correct since the cycle was broken; the version was never bumped,
+so the registry kept serving the old manifest. Fixed and published as `@theokit/http@1.1.0`, and the
+G1 guard — which asserted the direction by reading `src` imports only — now reads the manifest too.
 
 ---
 
@@ -74,10 +92,23 @@ counted the report's number would be claiming a deletion that happened months ag
 `view-image.ts` is 49 LOC, not the 89 the M78 objective cites. The roadmap anticipated exactly this
 and said the ledger, not the report, is the result.
 
-**3. The honest conclusion is not yet available.** Whether v3 met its thesis cannot be settled until
-the migration runs, because the number that counts is deletion in the migration commit. What can be
-said today: the M77–M85 slice puts ~1 100 LOC in reach, and reaching 4 500 across M67–M85 depends on
-what the earlier milestones removed — which this ledger will only know when each PR lands.
+**3. The estimate is now measurably too high for at least one target, and the reason generalises.**
+M79 was booked at 460 LOC (`auth/credentials.ts` 390 + `auth/credential-provenance.ts` 70). Measured
+against the shipped framework, what actually moves is the RESOLUTION and the `SourceOrigin` type —
+roughly six lines of shape. The rest of those files is OAuth storage, token refresh and `.env`
+parsing, which the framework never absorbed and, per its own scope, should not.
+
+That is the pattern behind the gap: the report counted whole FILES that touch a concern the framework
+now covers, while the framework absorbed the MECHANISM inside them. Both deletions measured so far
+behaved this way — 140 LOC removed against ~210 booked for M83+M84, and the remainder is adapter,
+not waste.
+
+**4. The honest conclusion is still not available, and is now narrower.** 108 net lines are gone
+against a 4 500 bar. Whether v3 met its thesis depends on the batches not yet run (M77's ask family,
+M78's tool scope, M80's error formatting, M81's delegation cap), each of which needs the consumer
+rework the ask family already showed: the framework's listener is thread-scoped and the product's is
+a process singleton with a polling read, so that one is a TUI change, not an import change. Recording
+that as remaining scope — with the reason — is what this ledger is for.
 
 ---
 
