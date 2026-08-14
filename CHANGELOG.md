@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
+  `transform_tool_result` estreou no `@theokit/agents@8.5.0` e a suite do TheoCode encontrou em
+  minutos o que 6116 testes daqui nao pegaram — porque eu escrevi os dois lados com a mesma
+  suposicao.
+  - Um hook **sem matcher** parava de rodar quando o lote de tool calls estava vazio: a checagem era
+    `.some()`, e `.some()` sobre array vazio e `false`. Um hook que pediu para ver TUDO nao via nada
+    no momento em que nao havia nada com que casar (corrigido em 8.5.2).
+  - Os **argumentos** da tool nao chegavam ao payload — eu mandava so os nomes. O produto ja tinha
+    corrigido esse mesmo defeito na copia dele, com a razao escrita: uma guarda que nao le os
+    argumentos nao consegue decidir sobre eles (8.5.2).
+  - O payload era um **terceiro formato** (`{ tools: [...] }`) num modulo cujos outros dois handlers
+    mandam `{ tool, args, ... }`. Agora roda uma vez por chamada, com `name` como alias de `tool`
+    para nao quebrar scripts de hook que ja estao no disco de usuarios (8.6.0, **commitado e ainda
+    nao publicado**).
+- **`buildHookHandlers` conectava 2 dos 8 eventos que declara, em silencio.** Um operador escrevia
+  `on_session_start`, o parse passava, o fingerprint saia, ele aprovava — e nada disparava. O
+  docblock do proprio modulo proibia isso, escrito sobre um evento com erro de digitacao; o mesmo
+  silencio cobria seis corretamente escritos. Agora avisa (8.4.0) e conecta cinco (8.5.x).
+- **`continuationBudget` estava exportado e lido por nada.** Implementar `transform_tool_result` e o
+  que lhe deu trabalho: feedback anexado e o que permite um hook se realimentar, e o orcamento e o
+  que para o laco.
+
+### Fixed
+
 - **Teste flaky meu, achado ao reconstruir o sinal do CI localmente.**
   `build-decision-is-per-run > test_with_NO_marker_a_freshly_built_dist_is_still_accepted` verificava
   que o `dist` tinha menos de **24 horas** e entao exigia aceitacao — enquanto o codigo que ele
