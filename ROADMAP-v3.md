@@ -363,7 +363,7 @@ frontmatter **contra o diretório do próprio framework**.
 
 ---
 
-### M77 — [ ] HITL completo: auto-approve com evidência de sandbox, ledger de pendências, canal de pergunta
+### M77 — [x] HITL completo: auto-approve com evidência de sandbox, ledger de pendências, canal de pergunta
 
 **Objective:** A metade de aprovação-de-tool está perto de 5 e já absorveu feedback deste consumidor.
 Duas coisas a seguram. **(a)** `auto-approve` é promessa sem evidência: o tipo exige uma `string` de
