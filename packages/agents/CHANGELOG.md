@@ -1,5 +1,20 @@
 # @theokit/agents
 
+## 8.5.1
+
+### Patch Changes
+
+- Republicacao do 8.5.0 a partir do fonte commitado. Nenhuma mudanca de comportamento — os mesmos 37
+  testes do motor de hooks passam nos dois.
+
+  O 8.5.0 foi publicado a partir de uma arvore de trabalho cujo commit o `lint-staged` recusou
+  (`buildHookHandlers` tinha passado do teto de 120 linhas). Corrigi extraindo dois construtores de
+  handler e commitei — mas o `dist` no registry ficou sendo o de ANTES da extracao.
+
+  Isso e a mesma deriva que o `@theokit/http@1.0.0` teve e que custou uma investigacao inteira: fonte
+  e registry divergirem sob o mesmo numero de versao. Um patch e mais barato que deixar a divergencia
+  de pe.
+
 ## 8.5.0
 
 ### Minor Changes
