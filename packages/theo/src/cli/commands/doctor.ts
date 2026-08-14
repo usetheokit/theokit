@@ -20,6 +20,13 @@ import { diagnose, renderDiagnosis, secretPresence, type Check } from '@theokit/
  * the framework's own list, and a product composes its own on top.
  */
 
+/**
+ * The injection surface of {@link doctorCommand}.
+ *
+ * Exported because a product composing its own checks on top needs to name this shape — and because
+ * Knip caught it exported from the module and reachable from nothing, which is the same
+ * published-but-unreachable failure M67, M73 and M79 each closed one instance of.
+ */
 export interface DoctorDeps {
   readonly projectRoot?: string
   readonly env?: Readonly<Record<string, string | undefined>>

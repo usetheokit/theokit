@@ -173,6 +173,17 @@ cli.command('info', 'Print environment info (runtime, config, routes)').action(a
   await infoCommand()
 })
 
+// M84 — `theokit doctor`. `info` answers "does my project parse?"; this answers "what will this
+// installation DO?" — which credential, which MCP servers, which subagents. The exit code is a
+// contract, so `theokit doctor && deploy` means what it reads like, and `process.exitCode` is set
+// rather than `process.exit()` called: the latter truncates stdout that is still flushing.
+cli
+  .command('doctor', 'Report the RESOLVED state of this installation (never prints a secret)')
+  .action(async () => {
+    const { doctorCommand } = await import('./commands/doctor.js')
+    process.exitCode = await doctorCommand()
+  })
+
 cli
   .command(
     'openapi',

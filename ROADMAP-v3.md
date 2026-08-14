@@ -613,7 +613,7 @@ evidência sobre nada. Adoção medida: **um** chamador no target inteiro (o pr�
 
 ---
 
-### M86 — [ ] TheoCode migra: adotar cada primitiva, deletar o que foi absorvido, publicar o ledger
+### M86 — [x] TheoCode migra: adotar cada primitiva, deletar o que foi absorvido, publicar o ledger
 
 **Objective:** Este é o milestone que fecha o laço e o **único** que dá evidência de que a v3 valeu. O
 TheoCode já provou oito vezes que o padrão funciona — `interactive_shell`, oito tools bespoke, o fold de
