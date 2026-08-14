@@ -66,6 +66,33 @@ describe('G1 dependency DAG — @theokit/http ↛ @theokit/agents (ADR-0044 D4)'
     expect(offenders).toEqual([])
   })
 
+  it('packages/http/package.json declares NO dependency edge on @theokit/agents', () => {
+    // The oracle gap this test had, found while migrating a consumer.
+    //
+    // The two assertions above read `src`. They passed — and `@theokit/http@1.0.0` shipped to npm
+    // declaring `peerDependencies: { "@theokit/agents": ">=0.47.0" }`. A gate whose name promises a
+    // DAG direction while its oracle only reads import statements will report green over a manifest
+    // that states the forbidden edge out loud. The manifest is the edge a package MANAGER sees, and
+    // it is the one that reaches consumers: that peer is what dragged an old agents copy into every
+    // install tree, which is how it was finally noticed.
+    //
+    // The range itself was the tell — `>=0.47.0` names `theokit`'s version line, not `@theokit/agents`
+    // (major 8 at the time of writing), and is unbounded. It was never a compatibility statement.
+    const manifest = JSON.parse(
+      readFileSync(resolve(__dirname, '../../packages/http/package.json'), 'utf8'),
+    ) as Record<string, Record<string, string> | undefined>
+
+    const edges = ['dependencies', 'peerDependencies', 'optionalDependencies'].flatMap((field) =>
+      Object.keys(manifest[field] ?? {})
+        .filter((name) => name === '@theokit/agents' || name.startsWith('@theokit/agents/'))
+        .map((name) => `${field}.${name}`),
+    )
+
+    // `devDependencies` is deliberately NOT checked: a dev-only edge does not reach a consumer's
+    // install tree and is how http's own tests exercise the optional-peer bridge above.
+    expect(edges).toEqual([])
+  })
+
   it('the documented dynamic optional-peer bridge still exists (guarded, not a static edge)', () => {
     const app = readFileSync(join(HTTP_SRC, 'app.ts'), 'utf8')
     // Sanity: the ONLY agents reference in http is the guarded DYNAMIC import (ADR-0044 exception).
