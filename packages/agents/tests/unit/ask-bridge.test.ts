@@ -164,6 +164,38 @@ describe('the errors are typed, and say what to do', () => {
     const concurrent = await bridge.ask('t1', 'b?').catch((e: unknown) => e)
     expect((concurrent as Error).name).toBe('ConcurrentQuestionError')
     expect((concurrent as Error).message).toMatch(/t1/)
+    // This assertion was MISSING, under this exact test name.
+    //
+    // The test asserted `name` and message text and called it a stable code — and a consumer
+    // migrating off its own copy of these classes found `code` undefined, because nothing here ever
+    // looked. `name` is not a substitute: it is a display string, while `code` is the thing a switch
+    // is written against and the thing that survives minification. The sibling errors in this same
+    // package (`DELEGATION_TIMEOUT`, `DELEGATION_FAILED`) carry one; these three did not.
+    expect(
+      (concurrent as { code?: string }).code,
+      'a typed error with no code is an untyped error with extra steps',
+    ).toBe('question_already_pending')
+  })
+
+  it('test_the_other_two_carry_their_codes_too', async () => {
+    // The two paths the test above cannot reach, asserted so the gap does not reopen one class at a
+    // time.
+    // Typed through `unknown` rather than off the awaited value: `ask` resolves to `string`, so a
+    // cast on the catch leaves the union `string | {…}` and reading `.name` off it is a type error.
+    const noListener: unknown = await createAskBridge()
+      .ask('t9', 'a?')
+      .then(
+        () => undefined,
+        (e: unknown) => e,
+      )
+    expect((noListener as Error).name).toBe('QuestionAbandonedError')
+    expect((noListener as { code?: string }).code).toBe('question_abandoned')
+
+    const bridge = createAskBridge()
+    bridge.setListener('t2', () => undefined)
+    expect(() => bridge.setListener('t2', () => undefined)).toThrow(
+      expect.objectContaining({ code: 'listener_already_attached' }),
+    )
   })
 })
 

@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   __resetBuildDecisionForTests,
+  FRESH_WINDOW_MS,
   isDistUsableWithoutRebuilding,
   markDistValidatedForThisRun,
   VALIDATION_MARKER,
@@ -101,7 +102,7 @@ describe('the marker identifies the RUN, not a moment in time', () => {
     utimesSync(MARKER, old, old)
 
     const dts = resolve(__dirname, '../../packages/theo/dist/index.d.ts')
-    const windowSays = existsSync(dts) && Date.now() - statSync(dts).mtimeMs < 10 * 60 * 1000
+    const windowSays = existsSync(dts) && Date.now() - statSync(dts).mtimeMs < FRESH_WINDOW_MS
     expect(isDistUsableWithoutRebuilding(MARKER)).toBe(windowSays)
   })
 
@@ -116,9 +117,24 @@ describe('the marker identifies the RUN, not a moment in time', () => {
   it('test_with_NO_marker_a_freshly_built_dist_is_still_accepted', () => {
     // A first worker, on a machine where someone just ran `pnpm build` by hand, must not rebuild.
     // The window keeps doing the job it was written for — it just stops governing mid-run.
+    //
+    // The test ESTABLISHES the freshness its name claims instead of hoping for it. The first version
+    // asserted the dist was younger than 24 hours and then expected acceptance — while the code it
+    // exercises uses a 10-MINUTE window. So it passed when the suite ran soon after a build and
+    // failed when it did not, which is how it went red roughly one run in three, always in a
+    // different place in the log. A unit test that reads the wall clock is a bug by contract
+    // (`rules/testing.md` § 6), and this one was mine.
+    //
+    // Stamping the mtime is benign in direction: it can only make dist look fresher, and dist IS
+    // valid here — no sibling asserts the STALE side (the one that could is written against the
+    // same window and adapts).
     const dts = resolve(__dirname, '../../packages/theo/dist/index.d.ts')
     if (!existsSync(dts)) return // nothing built here; the assertion below has no subject
-    expect(Date.now() - statSync(dts).mtimeMs).toBeLessThan(24 * 60 * 60 * 1000)
+
+    const now = new Date()
+    utimesSync(dts, now, now)
+
+    expect(Date.now() - statSync(dts).mtimeMs).toBeLessThan(FRESH_WINDOW_MS)
     expect(isDistUsableWithoutRebuilding(MARKER)).toBe(true)
   })
 
