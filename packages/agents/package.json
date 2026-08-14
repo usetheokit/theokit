@@ -67,6 +67,22 @@
     "./tool-scope": {
       "types": "./dist/tool-scope.d.ts",
       "import": "./dist/tool-scope.js"
+    },
+    "./mcp-health": {
+      "types": "./dist/mcp-health.d.ts",
+      "import": "./dist/mcp-health.js"
+    },
+    "./commands": {
+      "types": "./dist/commands.d.ts",
+      "import": "./dist/commands.js"
+    },
+    "./doctor": {
+      "types": "./dist/doctor.d.ts",
+      "import": "./dist/doctor.js"
+    },
+    "./usage": {
+      "types": "./dist/usage.d.ts",
+      "import": "./dist/usage.js"
     }
   },
   "files": [

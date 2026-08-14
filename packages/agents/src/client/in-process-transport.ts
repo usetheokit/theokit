@@ -2,6 +2,7 @@ import type {
   WireTransport as ChatTransport,
   WireChunk as UIMessageChunk,
 } from '@theokit/presenter/wire'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { extractLastUserText } from './last-user-text.js'
 import type { AgentTransport, ApprovalDecision } from './transport.js'
@@ -82,13 +83,25 @@ function generatorToStream(gen: AsyncGenerator<UIMessageChunk>): ReadableStream<
  * M92 — typed on purpose. Before, the promise simply **never** settled and the SDK tool call hung;
  * `resolve(false)` would be worse still, because it is indistinguishable from "the user denied".
  */
-export class ApprovalAbortedError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text. `code` is
+ * stable across a rename; `isRetryable` is DECLARED, because a default would be a retry policy
+ * nobody chose.
+ */
+export class ApprovalAbortedError extends TheokitAgentError {
+  override readonly name = 'ApprovalAbortedError'
   constructor(
     readonly approvalId: string,
     reason: string,
   ) {
-    super(`Approval '${approvalId}' discarded: ${reason}.`)
-    this.name = 'ApprovalAbortedError'
+    super(`Approval '${approvalId}' discarded: ${reason}.`, {
+      code: 'APPROVAL_ABORTED',
+      // A discarded approval means the human went away. Retrying asks nobody, again.
+      isRetryable: false,
+    })
   }
 }
 
