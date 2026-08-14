@@ -164,7 +164,12 @@ describe('M96 U1 — toAgentFactory requires the approval posture', () => {
     // permissive posture is still a POSTURE, and emitting a request under it is a defect. It is also
     // the test that proves the dispatcher above EXECUTES when nobody blocks — without it, the negative
     // case would be indistinguishable from a broken harness.
-    await materialize({ kind: 'auto-approve', reason: 'the sandbox confines the execution' })
+    await materialize({
+      kind: 'auto-approve',
+      // M77 — the claim now carries the sandbox's own answer, not a sentence about it.
+      confinedBy: { mode: 'workspace-write', enforced: true, detail: 'test double: enforced' },
+      reason: 'the sandbox confines the execution',
+    })
 
     const outcome = await dispatchToolAsTheSdkWould('run_shell')
 
@@ -312,7 +317,11 @@ describe('M96 D2 — streamAgentTurnInProcess receives the posture ADDITIVELY', 
     expect(() =>
       streamAgentTurnInProcess(gatedDefinition(), 'k', {
         message: 'oi',
-        approvals: { kind: 'auto-approve', reason: 'the sandbox confines' },
+        approvals: {
+          kind: 'auto-approve',
+          confinedBy: { mode: 'workspace-write', enforced: true, detail: 'test double: enforced' },
+          reason: 'the sandbox confines',
+        },
       }),
     ).not.toThrow()
   })
