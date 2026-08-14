@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **O CodeQL para de ficar vermelho para sempre, e passa a DIZER por que nao roda.**
+
+  O upload do CodeQL exige GitHub Advanced Security num repositorio PRIVADO — o comentario do proprio
+  workflow dizia "free for public repositories", e este repo e privado. Resultado: a analise rodava
+  ~4 minutos em toda PR e falhava no upload, sempre.
+
+  Um check vermelho para sempre e pior que um que nao roda: as pessoas aprendem a passar os olhos
+  por cima do vermelho, e a proxima falha de verdade passa junto. Foi exatamente o que aconteceu
+  nesta sessao — citei "Analyze (javascript-typescript) fail" dezenas de vezes como ruido conhecido.
+
+  A analise agora e GATEADA na visibilidade do repositorio, e um segundo job **sempre roda** para
+  declarar quando ela foi pulada e por que. Remover o workflow seria mais limpo e mentiria por
+  omissao: quem lesse a lista de checks concluiria que nao ha SAST configurado, que e uma afirmacao
+  diferente e pior do que "ha SAST e ele nao consegue reportar aqui".
+
+  Fecha a metade acionavel do B-M76-02. A outra metade — habilitar GHAS ou tornar o repo publico —
+  e decisao de plano, e o job de status diz isso em voz alta a cada execucao.
+
 ### Fixed
 
 - **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
