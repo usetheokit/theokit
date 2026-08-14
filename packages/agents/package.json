@@ -63,6 +63,10 @@
     "./ask": {
       "types": "./dist/ask.d.ts",
       "import": "./dist/ask.js"
+    },
+    "./tool-scope": {
+      "types": "./dist/tool-scope.d.ts",
+      "import": "./dist/tool-scope.js"
     }
   },
   "files": [
