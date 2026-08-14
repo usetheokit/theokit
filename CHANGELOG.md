@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 8.0.0 · theokit 0.48.0] - 2026-08-14
+
+### Migração — `auto-approve` agora exige evidência (BREAKING)
+
+`ApprovalPosture` da variante `auto-approve` passou a exigir `confinedBy: SandboxPosture`:
+
+```ts
+// antes
+approvals: { kind: 'auto-approve', reason: 'o sandbox confina' }
+
+// agora
+import { resolveSandboxPosture } from '@theokit/agents/sandbox'
+approvals: {
+  kind: 'auto-approve',
+  confinedBy: resolveSandboxPosture({ mode: 'workspace-write' }),
+  reason: 'sandboxed CI runner',
+}
+```
+
+`applyPosture` **recusa** quando `confinedBy.enforced === false`. Isso é o ponto do M77, não um efeito
+colateral: quem não consegue provar confinamento não deveria estar em auto-approve. Se o seu sandbox
+não está enforced, use `interactive` (um humano decide) ou `auto-reject` (fail-closed).
+
+Onze classes de erro passaram a estender `TheokitAgentError` com `code` estável e `isRetryable`
+declarado. Quem fazia `err instanceof Error` continua funcionando; quem casava o `name` por string
+deve passar a ler `code`.
+
+
 ### Security
 
 - **O gate de confiança do `settingSources` entrou no caminho de build — e o que ele encontrou lá era pior do que "não ligado" (M68 T4).** O CHANGELOG anterior dizia, honestamente, que o gate existia e não estava no caminho de construção. O que ele não dizia é que `sdk-adapter-create-options.ts` declarava uma **função local com o mesmo nome** — `resolveSettingSources` — e era essa que o build chamava. Um grep pelo nome encontrava o gate, o export e os testes dele, e aterrissava num homônimo que não consultava posture nenhuma. O gate *parecia* ligado.
