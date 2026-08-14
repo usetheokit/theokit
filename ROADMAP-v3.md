@@ -556,7 +556,7 @@ render, e o watchdog de shutdown.
 
 ---
 
-### M84 — [ ] Observabilidade e custo reempacotados runtime-neutros + `theokit doctor`
+### M84 — [x] Observabilidade e custo reempacotados runtime-neutros + `theokit doctor`
 
 **Objective:** Dois problemas estruturais. **Empacotamento:** 1.715 LOC de observabilidade + custo vivem
 sob `packages/theo/src/server/**`, e `theokit` é o framework web Vite/React. O único produto real
