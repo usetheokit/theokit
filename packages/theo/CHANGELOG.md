@@ -1,5 +1,38 @@
 # theo
 
+## 0.48.0
+
+### Minor Changes
+
+- M79–M86 — o que o framework passou a oferecer para um produto de agente, tudo aditivo aqui.
+
+  **`theokit doctor`.** `theokit info` responde "meu projeto parseia?"; a pergunta de um produto de
+  agente é outra — **o que esta instalação vai fazer?**: qual credencial, quais servidores MCP, quais
+  subagents. A regra dura: uma credencial é reportada como `present`/`absent`/`unreadable` e **nunca**
+  como valor — nem prefixo, nem truncamento, nem comprimento. Um doctor que imprime segredo é o único
+  comando feito para suporte que você não pode colar num pedido de suporte.
+
+  Um `.mcp.json` **ausente** é aviso (a maioria dos projetos não usa MCP, e falhar aí faria uma
+  instalação saudável sair não-zero, e o CI aprenderia a ignorar o comando); um que **existe e não
+  parseia** é falha, porque o operador acredita que ele está em efeito.
+
+  **`theokit agent <name>` sem mensagem entra em modo interativo.** Recusar era o que deixava a
+  primitiva de roteamento de comando sem consumidor de produção, e fazia a primeira coisa que um
+  usuário novo roda falhar com texto de uso — o que lê como "isto está quebrado", não como "passe um
+  argumento". A superfície interativa é injetada: importá-la aqui faria toda instalação carregar um
+  runtime Ink por causa de um comando ao qual a maioria passa mensagem.
+
+  **`resolveProvider` / `registerProvider` / `ProviderDescriptor` deixam de ser inalcançáveis**
+  (ADR 0041). Estavam marcados `@public` no próprio JSDoc e exportados por nada. A alternativa —
+  deletar o registry e tirar as URLs de vendor de `packages/` — foi medida e rejeitada: o SDK não
+  possui as baseUrl dos providers, então os três endpoints migrariam para a config de cada app,
+  quebrando o `theokit dev` zero-config.
+
+  **Os erros de agente entram na tabela de fronteira HTTP.** Um `GuardrailViolationError` — lançado
+  quando um guard de prompt-injection ou PII **bloqueia** — atravessava como HTTP 500,
+  indistinguível de falha real de servidor, e middleware de retry reenviava a entrada bloqueada.
+  Agora: bloqueio ⇒ 400, budget ⇒ 429, aprovação pendente ⇒ 403.
+
 ## 0.47.0
 
 ### Minor Changes
