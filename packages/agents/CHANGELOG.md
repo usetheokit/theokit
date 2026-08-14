@@ -1,5 +1,49 @@
 # @theokit/agents
 
+## 8.6.0
+
+### Minor Changes
+
+- `transform_tool_result` roda UMA VEZ POR TOOL CALL, nao uma por lote, e o payload passa a ser o
+  mesmo formato dos irmaos: `{ tool, name, args, result }`.
+
+  A primeira versao mandava o lote inteiro como `{ tools: [...] }` — um TERCEIRO formato, num modulo
+  cujos outros dois handlers mandam `{ tool, args, ... }`. Um script de hook escrito contra os irmaos
+  nao conseguia ler, e um hook que decide sobre "qual tool, com quais argumentos" quer uma chamada
+  por vez de qualquer forma.
+
+  `name` e alias de `tool`, e e deliberado em vez de redundante: scripts de hook moldados na
+  convencao do Claude Code leem `.name`, e esses scripts estao no disco de usuarios. Mandar so uma
+  chave e quebrar todos eles seria mudanca de formato disfarcada de refactor.
+
+  Um hook SEM matcher continua rodando uma vez mesmo com o lote vazio — e o que "sem matcher"
+  significa, e `.some()` sobre array vazio dizia o contrario.
+
+  **Nota de proveniencia:** o codigo desta mudanca entrou no repositorio junto com o `8.5.2`, porque
+  o comando que faria o bump de versao foi bloqueado e o commit do codigo nao. Durante algumas horas
+  o fonte e o `8.5.2` do registry divergiram sob o mesmo numero — a mesma deriva que o
+  `@theokit/http@1.0.0` teve e que esta sessao passou a caçar. Esta versao e o que fecha.
+
+## 8.5.2
+
+### Patch Changes
+
+- Duas regressoes no `transform_tool_result` que estreou no 8.5.0. As duas eram minhas, e as duas
+  foram encontradas pelos testes que ja existiam num produto — nao por revisao.
+
+  **Um hook SEM matcher parava de rodar quando o lote de tool calls estava vazio.** A checagem era
+  `ctx.toolCalls.some(...)`, e `.some()` sobre array vazio e `false` — entao um hook que pediu para
+  ver TUDO nao via nada no momento em que nao havia nada com que casar. Agora um hook sem matcher
+  roda sempre; com matcher, a regra de casar por qualquer chamada do lote continua.
+
+  **Os ARGUMENTOS da tool nao chegavam ao payload.** Eu mandava so os nomes. O produto que motivou
+  este milestone ja tinha corrigido esse mesmo defeito na copia dele, com a razao escrita: um hook
+  conseguia ver QUAL tool rodou e o resultado dela, e nunca com o que ela foi chamada. Uma guarda que
+  nao le os argumentos nao consegue decidir sobre eles. Agora vao `{ name, args }`.
+
+  Os dois casos entraram como teste aqui, com contra-prova — sem elas, "rodar sempre" satisfaria o
+  primeiro e apagaria o matcher.
+
 ## 8.5.1
 
 ### Patch Changes
