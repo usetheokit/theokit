@@ -434,25 +434,47 @@ function buildTransformHandler(
         warn('transform_tool_result chain exceeded its time budget; remaining hooks skipped')
         break
       }
-      // A transform sees the WHOLE batch of tool calls, not one — so a matcher applies when ANY call
-      // in the batch matches. Requiring all of them would silence a hook whenever an unrelated tool
-      // happened to run in the same turn.
-      if (!ctx.toolCalls.some((call) => matches(spec, call.name))) continue
-      const result = await runHookCommand({
-        command: spec.command,
-        cwd: options.cwd,
-        timeoutMs: spec.timeout_ms,
-        stdin: JSON.stringify({ tools: ctx.toolCalls.map((call) => call.name), result: out }),
-        ...(options.env !== undefined && { env: options.env }),
-      })
-      // FAIL-OPEN, like `post_tool_call` and for the same reason: the tool already ran. Discarding
-      // its result because a notifier broke throws away work the user has already paid for.
-      if (result.exitCode !== 0) {
-        warn(`transform_tool_result hook failed and was ignored: "${spec.command}"`)
-        continue
+      // ONE RUN PER TOOL CALL, not one per batch.
+      //
+      // The first version passed the whole batch as `{ tools: [...] }` — a third payload shape, in a
+      // module whose two other handlers both send `{ tool, args, ... }`. A hook script written
+      // against the siblings could not read it, and a hook deciding about "which tool, with what
+      // arguments" wants one call at a time anyway.
+      //
+      // An UNSCOPED hook still runs once even when the batch is empty: that is what "no matcher"
+      // means, and `.some()` over an empty array said otherwise.
+      const targets =
+        spec.matcher === undefined && ctx.toolCalls.length === 0
+          ? [undefined]
+          : ctx.toolCalls.filter((call) => matches(spec, call.name))
+
+      for (const call of targets) {
+        const result = await runHookCommand({
+          command: spec.command,
+          cwd: options.cwd,
+          timeoutMs: spec.timeout_ms,
+          stdin: JSON.stringify({
+            tool: call?.name,
+            // `name` is an alias for `tool`, and it is deliberate rather than redundant: hook
+            // scripts shaped after Claude Code's conventions read `.name`, and those scripts live on
+            // users' disks. Sending one key and breaking every one of them would be a format change
+            // dressed as a refactor.
+            name: call?.name,
+            args: call?.args ?? {},
+            result: out,
+          }),
+          ...(options.env !== undefined && { env: options.env }),
+        })
+        // FAIL-OPEN, like `post_tool_call` and for the same reason: the tool already ran. Discarding
+        // its result because a notifier broke throws away work the user has already paid for.
+        if (result.exitCode !== 0) {
+          warn(`transform_tool_result hook failed and was ignored: "${spec.command}"`)
+          continue
+        }
+        const feedback = result.stdout.trim()
+        if (feedback.length > 0)
+          out = `${String(out)}\n${fenceHookOutput(feedback)}` as unknown as T
       }
-      const feedback = result.stdout.trim()
-      if (feedback.length > 0) out = `${String(out)}\n${fenceHookOutput(feedback)}` as unknown as T
     }
     return out
   }
