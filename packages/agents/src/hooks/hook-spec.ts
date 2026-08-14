@@ -186,6 +186,16 @@ export interface BuildHookHandlersOptions {
 const IGNORE_WARNING = (): void => undefined
 
 /**
+ * The events {@link buildHookHandlers} actually turns into handlers.
+ *
+ * Deliberately a SEPARATE list from {@link HOOK_EVENTS}, which is the schema's vocabulary. The two
+ * differing is the honest state of this engine; collapsing them would either reject event names the
+ * schema accepts or claim handlers that do not exist. Adding a handler below means adding its event
+ * here, and the warning stops firing for it on its own.
+ */
+const WIRED_EVENTS = new Set<HookEvent>(['pre_tool_call', 'post_tool_call'])
+
+/**
  * Compile specs into the `HookHandlers` the seam already accepts.
  *
  * Returns an EMPTY object when nothing is trusted or approved — an agent with no hooks, which is the
@@ -217,6 +227,23 @@ export function buildHookHandlers(
     return approved
   })
   if (runnable.length === 0) return {}
+
+  // Six of the eight declared events produce no handler here, and until this warning they produced
+  // no signal either: an operator could write `on_session_start`, watch it parse, fingerprint it,
+  // approve it — and never learn it does nothing. The docblock above forbids exactly that, about a
+  // MISSPELLED event; the same silence was covering six correctly spelled ones. Measured, not
+  // reasoned: a probe over all eight found two wired and six mute.
+  //
+  // Wiring the rest is real work. Saying so is one branch, and it is the half that cannot wait.
+  for (const spec of runnable) {
+    if (!WIRED_EVENTS.has(spec.event)) {
+      warn(
+        `hook declared on "${spec.event}" will NOT fire: this engine wires ` +
+          `${[...WIRED_EVENTS].join(' and ')} only. The event is accepted by the schema and the ` +
+          `approval is real — the handler does not exist yet.`,
+      )
+    }
+  }
 
   const handlers: HookHandlers = {}
   const chainBudgetMs =

@@ -1,5 +1,27 @@
 # @theokit/agents
 
+## 8.4.0
+
+### Minor Changes
+
+- Um hook declarado num evento que este motor **nao conecta** agora AVISA, em vez de nao fazer nada
+  em silencio.
+
+  `HOOK_EVENTS` publica oito nomes e `hookSpecSchema` aceita os oito — mas `buildHookHandlers` so
+  conecta dois: `pre_tool_call` e `post_tool_call`. Medido sobre os oito: **seis nao produziam
+  handler nem aviso**.
+
+  O efeito: um operador escreve `on_session_start` no arquivo de hooks, ele passa no parse, ganha
+  fingerprint, e a pessoa aprova — e nunca dispara, sem nada dito. O docblock deste modulo proibe
+  exatamente isso, escrito sobre um evento COM ERRO DE DIGITACAO; o mesmo silencio cobria seis
+  corretamente escritos.
+
+  Conectar os outros seis e trabalho de verdade. Dizer que eles nao existem e um `if`, e e a metade
+  que nao podia esperar.
+
+  Apareceu tentando migrar um consumidor real, que conecta quatro eventos — incluindo um
+  `transform_tool_result` com orcamento de continuacao proprio, que este motor nao tem.
+
 ## 8.3.0
 
 ### Minor Changes
