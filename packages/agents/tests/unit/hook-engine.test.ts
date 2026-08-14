@@ -636,3 +636,98 @@ describe('M75 — the observational events a real surface uses', () => {
     expect(warnings.some((w) => w.includes('exit 3') || /hook/i.test(w))).toBe(true)
   })
 })
+
+describe('M75 — two regressions a consumer migration caught in this engine', () => {
+  /**
+   * Both were mine, both were in the first version of `transform_tool_result`, and both were found
+   * by a product's existing tests rather than by review.
+   */
+  const ctxOf = (calls: readonly { id: string; name: string; args: Record<string, unknown> }[]) =>
+    ({ agentId: 'a1', runId: 'r1', toolCalls: calls }) as ToolResultTransformContext
+
+  it('test_an_UNSCOPED_hook_runs_even_when_the_batch_is_empty', async () => {
+    // `.some()` over an empty array is `false`. So the first version silenced a hook that asked to
+    // see EVERYTHING the moment there was nothing to match against — the opposite of what "no
+    // matcher" means.
+    const spec = {
+      command: 'echo SAW-IT',
+      event: 'transform_tool_result',
+      timeout_ms: 2000,
+    } as const
+    const handlers = buildHookHandlers([spec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([
+        hookFingerprint({
+          command: 'echo SAW-IT',
+          event: 'transform_tool_result',
+          timeoutMs: 2000,
+        }),
+      ]),
+    })
+
+    const out = String(await handlers.transform_tool_result?.('result', ctxOf([])))
+
+    expect(out, 'an unscoped hook was skipped because the batch was empty').toContain('SAW-IT')
+  })
+
+  it('test_a_SCOPED_hook_is_still_skipped_when_nothing_matches', async () => {
+    // The counter-proof. Without it, "always run" would satisfy the test above and delete the
+    // matcher entirely.
+    const spec = {
+      command: 'echo SHOULD-NOT-RUN',
+      event: 'transform_tool_result',
+      matcher: 'write_file',
+      timeout_ms: 2000,
+    } as const
+    const handlers = buildHookHandlers([spec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([
+        hookFingerprint({
+          command: 'echo SHOULD-NOT-RUN',
+          event: 'transform_tool_result',
+          matcher: 'write_file',
+          timeoutMs: 2000,
+        }),
+      ]),
+    })
+
+    const out = String(
+      await handlers.transform_tool_result?.(
+        'result',
+        ctxOf([{ id: 'c1', name: 'read_file', args: {} }]),
+      ),
+    )
+
+    expect(out).not.toContain('SHOULD-NOT-RUN')
+  })
+
+  it('test_the_tool_ARGUMENTS_reach_the_hook_payload', async () => {
+    // The consumer had fixed this once already, in its own copy: a hook could see WHICH tool ran and
+    // its result, and never what it was called with. Sending names only re-created it here. A guard
+    // that cannot read the arguments cannot decide about them.
+    const spec = { command: 'cat', event: 'transform_tool_result', timeout_ms: 3000 } as const
+    const handlers = buildHookHandlers([spec], {
+      cwd: process.cwd(),
+      trusted: true,
+      approved: new Set([
+        hookFingerprint({ command: 'cat', event: 'transform_tool_result', timeoutMs: 3000 }),
+      ]),
+    })
+
+    // `cat` echoes its stdin back, so the payload the hook received IS the appended feedback.
+    const out = String(
+      await handlers.transform_tool_result?.(
+        'r',
+        ctxOf([{ id: 'c1', name: 'run_shell', args: { command: 'ls -la' } }]),
+      ),
+    )
+
+    expect(out, 'the tool name never reached the hook').toContain('run_shell')
+    expect(
+      out,
+      'the ARGUMENTS never reached the hook — the defect B-044 had already fixed once',
+    ).toContain('ls -la')
+  })
+})
