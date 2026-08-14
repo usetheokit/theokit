@@ -166,6 +166,21 @@ export interface BuildHookHandlersOptions {
    * gate applies.
    */
   readonly fingerprint?: (identity: HookIdentity) => string
+  /**
+   * Called when a `pre_tool_call` hook VETOES a call, so a surface can say so.
+   *
+   * The signal has to travel from here. A veto blocks the call and hands the model a message to
+   * self-correct with, and on the wire that is deliberately indistinguishable from an ordinary tool
+   * result — the SDK documents it. So a surface cannot recognise a veto by watching the stream; this
+   * is the only point that knows one happened.
+   *
+   * Without it, a consumer that shows "a hook blocked this" had to keep its own copy of this entire
+   * builder to fire one notification.
+   *
+   * Optional, and NOT a security default: the veto blocks either way. This decides only whether
+   * anybody is shown it — a headless surface has nobody to tell.
+   */
+  readonly onVeto?: (veto: { readonly tool: string; readonly reason: string }) => void
 }
 
 const IGNORE_WARNING = (): void => undefined
@@ -217,7 +232,11 @@ export function buildHookHandlers(
       const started = Date.now()
       for (const spec of preHooks) {
         if (Date.now() - started > chainBudgetMs) {
-          return { block: true, message: 'hook chain exceeded its time budget' }
+          const message = 'hook chain exceeded its time budget'
+          // The budget veto is a veto too. Omitting it here would make a surface report every block
+          // except the one caused by slowness, which is the one an operator most needs named.
+          options.onVeto?.({ tool: ctx.name, reason: message })
+          return { block: true, message }
         }
         if (!matches(spec, ctx.name)) continue
         const result = await runHookCommand({
@@ -228,12 +247,11 @@ export function buildHookHandlers(
           ...(options.env !== undefined && { env: options.env }),
         })
         if (result.exitCode !== 0) {
-          return {
-            block: true,
-            message: fenceHookOutput(
-              result.stdout || result.stderr || `hook exited ${String(result.exitCode)}`,
-            ),
-          }
+          const message = fenceHookOutput(
+            result.stdout || result.stderr || `hook exited ${String(result.exitCode)}`,
+          )
+          options.onVeto?.({ tool: ctx.name, reason: message })
+          return { block: true, message }
         }
       }
       return undefined
