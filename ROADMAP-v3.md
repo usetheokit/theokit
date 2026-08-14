@@ -473,7 +473,7 @@ HTTP 500, indistinguível de falha real de servidor, e middleware de retry reenv
 
 ---
 
-### M81 — [ ] Delegação completa: cap de relógio, ciclo de vida efêmero, scoring por porta
+### M81 — [x] Delegação completa: cap de relógio, ciclo de vida efêmero, scoring por porta
 
 **Objective:** A engine de execução está suprida e funciona; os ~770 LOC que o consumidor escreveu são
 majoritariamente política. Três lacunas reais restam. **(a)** Budget é só dinheiro — uma delegação que
