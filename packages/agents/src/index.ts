@@ -189,6 +189,11 @@ export * from '@theokit/sdk/models'
 // was to watch the two diverge. What crosses is the PARSED config, never the file format:
 // exporting the format would freeze an internal detail as public API.
 export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagents-loader'
+// M81 — the name-shaped answer, exported from the SAME place as the reader it selects over, so the
+// inventory a product builds for an `/agents` command stops being a second oracle over
+// `.theokit/agents/*.md`. Two readers of one convention disagree eventually, and the disagreement
+// surfaces as a command listing an agent the runtime cannot find.
+export { listSubagentNames } from './bridge/subagent-inventory.js'
 // M96 U2 — the TYPE the loader above returns, published on the neighbouring line (the literal pair
 // from the peer, `gemini-cli/packages/core/src/index.ts:191-192`). The source name is TAKEN in this
 // index — `bridge/index.js` already exports `AgentDefinition`, the builder's BRANDED type — so a
