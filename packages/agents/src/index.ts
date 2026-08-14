@@ -189,6 +189,29 @@ export * from '@theokit/sdk/models'
 // was to watch the two diverge. What crosses is the PARSED config, never the file format:
 // exporting the format would freeze an internal detail as public API.
 export { discoverSubagents, loadSubagentDefinition } from '@theokit/sdk/subagents-loader'
+// M81 — the name-shaped answer, exported from the SAME place as the reader it selects over, so the
+// inventory a product builds for an `/agents` command stops being a second oracle over
+// `.theokit/agents/*.md`. Two readers of one convention disagree eventually, and the disagreement
+// surfaces as a command listing an agent the runtime cannot find.
+export { listSubagentNames } from './bridge/subagent-inventory.js'
+
+// M82 — the `RunEvent` union crosses, TYPE-ONLY.
+//
+// Without it a consumer's health sink read `mcp_server_failed` STRUCTURALLY — duck-checking `type`
+// and `serverName` — specifically to avoid pinning an SDK version. A sink doing that is compensating
+// for a typed surface that does not reach it, and the compensation stops working silently the day a
+// field is renamed.
+//
+// Top-risk 1 of the milestone is that exporting it pins the consumer to an SDK version. Two things
+// answer that: it crosses as a TYPE (no runtime value, no bundle cost, nothing to be stale at
+// runtime), and `tests/unit/mcp-health-sink.test.ts` plus the parity suites turn a shape change into
+// a red build here rather than a silent drift downstream.
+export type { RunEvent } from '@theokit/sdk'
+//
+// The SINK itself lives at `@theokit/agents/mcp-health`, not here: it is machinery only a product
+// that RENDERS server status needs, and the main barrel measured 36 797 bytes against a 36 500
+// ceiling with it inside. Same call as the M76 hook engine — the type crosses (types cost zero
+// bytes), the implementation gets a subpath.
 // M96 U2 — the TYPE the loader above returns, published on the neighbouring line (the literal pair
 // from the peer, `gemini-cli/packages/core/src/index.ts:191-192`). The source name is TAKEN in this
 // index — `bridge/index.js` already exports `AgentDefinition`, the builder's BRANDED type — so a

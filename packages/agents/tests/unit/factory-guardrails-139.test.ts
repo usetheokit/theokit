@@ -61,6 +61,10 @@ import type { Guardrail } from '../../src/guardrails/index.js'
 
 const AUTO_APPROVE = {
   kind: 'auto-approve' as const,
+  // M77 — `auto-approve` now requires EVIDENCE of confinement, not a promise. The posture below is
+  // the enforced one because this suite is exercising something else entirely (guardrails); a test
+  // that had to reach for an unenforced posture would be telling us the check is in the wrong place.
+  confinedBy: { mode: 'workspace-write' as const, enforced: true, detail: 'test double: enforced' },
   reason: 'test surface — approvals are exercised by the M96 suite',
 }
 

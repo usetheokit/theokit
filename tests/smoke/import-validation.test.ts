@@ -2,7 +2,10 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { buildTheokitPackageOnce } from '../integration/_helpers/build-theokit-package.js'
+import {
+  BUILD_HOOK_TIMEOUT_MS,
+  buildTheokitPackageOnce,
+} from '../integration/_helpers/build-theokit-package.js'
 
 const theoDistDir = resolve(__dirname, '../../packages/theo/dist')
 // create-theo was absorbed into create-theokit (ADR-0023). The live, published
@@ -20,7 +23,7 @@ describe('Smoke: Package Build Outputs', () => {
         stdio: 'pipe',
       })
     }
-  }, 300_000)
+  }, BUILD_HOOK_TIMEOUT_MS)
 
   describe('theo package dist/', () => {
     it('should have dist/index.js', () => {
@@ -204,7 +207,7 @@ describe('Smoke: publint Validation', () => {
       // eslint-disable-next-line sonarjs/no-os-command-from-path -- developer-local smoke test
       execSync('pnpm build', { cwd: resolve(__dirname, '../..'), stdio: 'pipe' })
     }
-  })
+  }, BUILD_HOOK_TIMEOUT_MS)
 
   // publint spawns `pnpm pack` under the hood — flakes at the default 5s under parallel load.
   it('theo should pass publint', () => {

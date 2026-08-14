@@ -5,14 +5,30 @@ import { resolve } from 'node:path'
 describe('Bundle size regression', () => {
   const distDir = resolve(__dirname, '../../dist')
 
-  it('agents main bundle under 35KB', () => {
+  /**
+   * ## Raised from 35_000 to 36_500 in M80 — measured, not convenient
+   *
+   * Reparenting eleven error classes onto `TheokitAgentError` cost **751 bytes**, measured by
+   * building the barrel with and without the change (34 732 → 35 483). Those bytes are the
+   * `code` and `isRetryable` literals: they ARE the milestone, and removing them would undo the
+   * fix — the classes go back to being invisible to `isTransientError`, and the consumer goes back
+   * to a regex over an eight-level `cause` chain.
+   *
+   * The alternative considered and rejected: move `capability/` out of the main barrel to make room.
+   * It sits there by a decision recorded in M56, and shuffling an unrelated module to fit a ceiling
+   * would be paying for this change with someone else's design.
+   *
+   * The new ceiling is 36 500 — the measured 35 483 plus about a kilobyte of headroom, stated so the
+   * next milestone that adds barrel surface still meets a guard rather than a formality.
+   */
+  it('agents main bundle under 36.5KB', () => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       console.log('  SKIP: dist/index.js not found (run pnpm build first)')
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(35_000)
+    expect(size).toBeLessThan(36_500)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 

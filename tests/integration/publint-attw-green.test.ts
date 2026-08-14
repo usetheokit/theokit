@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { buildTheokitPackageOnce } from './_helpers/build-theokit-package.js'
+import { BUILD_HOOK_TIMEOUT_MS, buildTheokitPackageOnce } from './_helpers/build-theokit-package.js'
 
 const REPO = resolve(__dirname, '../..')
 const THEOKIT_PKG = resolve(REPO, 'packages/theo')
@@ -10,7 +10,7 @@ const THEOKIT_PKG = resolve(REPO, 'packages/theo')
 describe('publint + attw gate (T5.2)', { timeout: 300_000 }, () => {
   beforeAll(() => {
     buildTheokitPackageOnce()
-  }, 300_000)
+  }, BUILD_HOOK_TIMEOUT_MS)
 
   it('publint packages/theo → "All good!"', () => {
     let output: string

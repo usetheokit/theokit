@@ -27,3 +27,14 @@ export type {
   TrackAgentToolsHooks,
   ToolHookEvent,
 } from './track-agent-tools.js'
+
+// M84 — the runtime-neutral half now lives in `@theokit/agents/usage`.
+//
+// 1 715 LOC of observability and cost lived here, and `theokit` is the Vite/React web framework. The
+// only real product on this stack depends on `@theokit/agents` and never on `theokit` — so none of
+// it was reachable from the one place that needed it, and what would have been is HTTP-shaped.
+//
+// Re-exported from this path for one major so nothing breaks (Top-risk 1). What stays here is the
+// HTTP wiring — `trackAgentRun`, spans named `http.request`, keying by `requestId` — because that is
+// what it is about.
+export { InMemoryUsageStorage as NeutralUsageStorage } from '@theokit/agents/usage'

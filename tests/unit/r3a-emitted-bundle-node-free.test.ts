@@ -28,7 +28,10 @@ import { join, resolve } from 'node:path'
 
 import { describe, expect, it, beforeAll } from 'vitest'
 
-import { buildTheokitPackageOnce } from '../integration/_helpers/build-theokit-package.js'
+import {
+  BUILD_HOOK_TIMEOUT_MS,
+  buildTheokitPackageOnce,
+} from '../integration/_helpers/build-theokit-package.js'
 
 const ROOT = process.cwd()
 const DIST_SERVER = resolve(ROOT, 'packages/theo/dist/server')
@@ -65,7 +68,7 @@ const DIST_NODE_ONLY_ALLOWLIST = new Set<string>([
 describe('R3a emitted-bundle runtime-portability (Phase 5a audit Category A proof)', () => {
   beforeAll(() => {
     buildTheokitPackageOnce()
-  })
+  }, BUILD_HOOK_TIMEOUT_MS)
 
   it('dist/server/ exists after tsup build', () => {
     expect(existsSync(DIST_SERVER)).toBe(true)

@@ -2,7 +2,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { beforeAll, describe, expect, it } from 'vitest'
-import { buildTheokitPackageOnce } from '../integration/_helpers/build-theokit-package.js'
+import {
+  BUILD_HOOK_TIMEOUT_MS,
+  buildTheokitPackageOnce,
+} from '../integration/_helpers/build-theokit-package.js'
 
 /**
  * Regression: dist mode of the framework MUST ship `devtools/entry.js`.
@@ -32,7 +35,7 @@ const DIST = resolve(ROOT, 'packages/theo/dist')
 describe('regression: devtools/entry must ship in dist', () => {
   beforeAll(() => {
     buildTheokitPackageOnce()
-  }, 300_000)
+  }, BUILD_HOOK_TIMEOUT_MS)
 
   it('packages/theo/dist/devtools/entry.js exists after build', () => {
     // If this fails, run `pnpm --filter=theokit build` first. If it still

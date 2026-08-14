@@ -1,3 +1,5 @@
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 /**
  * Shared delegation value types + typed errors.
  *
@@ -49,7 +51,16 @@ export interface DelegationResult {
  * `subpath-coverage.test.ts` recorded the collision as a `gap` on `./errors`, with the reason written
  * down and the acknowledgement that renaming was breaking and out of M78's scope. M91 paid the bill.
  */
-export class DelegationBudgetExceededError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text. `code` is
+ * stable across a rename; `isRetryable` is DECLARED, because a default would be a retry policy
+ * nobody chose.
+ */
+export class DelegationBudgetExceededError extends TheokitAgentError {
+  override readonly name = 'DelegationBudgetExceededError'
   constructor(
     public readonly agentName: string,
     public readonly actualCost: number,
@@ -57,8 +68,12 @@ export class DelegationBudgetExceededError extends Error {
   ) {
     super(
       `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > $${budgetLimit.toFixed(4)}`,
+      {
+        code: 'DELEGATION_BUDGET_EXCEEDED',
+        // The budget does not refill on retry.
+        isRetryable: false,
+      },
     )
-    this.name = 'DelegationBudgetExceededError'
   }
 }
 
@@ -71,14 +86,29 @@ export const BudgetExceededError = DelegationBudgetExceededError
 /** @deprecated Use {@link DelegationBudgetExceededError}. */
 export type BudgetExceededError = DelegationBudgetExceededError
 
-export class DelegationError extends Error {
+/**
+ * M80 — extends {@link TheokitAgentError}, not plain `Error`.
+ *
+ * `isTransientError` is defined over `TheokitAgentError`, so a class outside that hierarchy is
+ * INVISIBLE to it and the only recourse left to a consumer is matching on message text. `code` is
+ * stable across a rename; `isRetryable` is DECLARED, because a default would be a retry policy
+ * nobody chose.
+ */
+export class DelegationError extends TheokitAgentError {
+  override readonly name = 'DelegationError'
   constructor(
     public readonly agentName: string,
     public readonly cause: unknown,
   ) {
     super(
       `Delegation to agent "${agentName}" failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+      {
+        code: 'DELEGATION_FAILED',
+        // Not retryable AT THIS LEVEL: whether the underlying cause is transient is the cause's own
+        // answer, and `cause` is carried so a caller can ask it rather than guess from the wrapper.
+        isRetryable: false,
+        cause,
+      },
     )
-    this.name = 'DelegationError'
   }
 }
