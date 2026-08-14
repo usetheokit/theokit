@@ -410,3 +410,25 @@ describe('M75 — a surface can be TOLD that a hook vetoed', () => {
     expect((await handlers.pre_tool_call?.(toolCall('shell')))?.block).toBe(true)
   })
 })
+
+/**
+ * A hypothesis the MEASUREMENT killed, recorded because the wrong conclusion was plausible.
+ *
+ * The chain budget is checked BEFORE each hook, and the hook then runs with its own `timeout_ms`.
+ * From that I concluded the chain could overshoot its ceiling by a full hook timeout — the consumer
+ * that motivated this milestone shrinks each hook's timeout by whatever the chain has left, and that
+ * looked like it was fixing a defect of ours.
+ *
+ * Measured: six 400ms hooks against a 2000ms ceiling finish in **2021ms**. The chain stops within
+ * 21ms of the limit. The overshoot exists in principle and is bounded BY CONSTRUCTION: the budget is
+ * `4 x the largest timeout`, so the worst case is 25% of the budget itself — proportional, not
+ * arbitrary.
+ *
+ * I wrote two tests before measuring. The first passed because the chain finished in ~900ms and
+ * never approached the ceiling — vacuous. The second passed because a hook that exceeds its timeout
+ * VETOES and returns immediately, so the chain never accumulates. Neither was evidence about what
+ * its name claimed, and I nearly asserted a fix on the strength of them.
+ *
+ * There is no fix here. What remains is the record that the difference between the two
+ * implementations is real and is NOT a defect of ours.
+ */
