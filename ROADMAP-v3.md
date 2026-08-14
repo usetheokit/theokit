@@ -391,7 +391,7 @@ um callback `askUser`) e não tem canal.
 
 ---
 
-### M78 — [ ] Binder de escopo de tool: `bindToolScope` com `sandbox` não-opcional
+### M78 — [x] Binder de escopo de tool: `bindToolScope` com `sandbox` não-opcional
 
 **Objective:** O framework embarca os ingredientes (`createSandboxBackend`, `resolveSandboxPosture`) e
 nenhum **binder**: um valor que amarre `{ projectRoot, writeRoot, sandbox }` uma vez e entregue as
@@ -415,7 +415,7 @@ que "um escopo construído sem sandbox produziu um shell NÃO-CONFINADO sem erro
 
 ---
 
-### M79 — [ ] Resolução pública de credencial + proveniência; matar o resolvedor de provider duplicado
+### M79 — [x] Resolução pública de credencial + proveniência; matar o resolvedor de provider duplicado
 
 **Objective:** A metade genuinamente difícil está suprida (device flow RFC 8628, refresh sob lock
 cross-process, persistência, extração de account id). Falta a metade que todo consumidor encontra

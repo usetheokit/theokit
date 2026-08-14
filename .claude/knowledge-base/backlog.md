@@ -60,6 +60,35 @@ mesma run, e e exatamente esse o bug; alargar so faz um dist genuinamente velho 
 
 ---
 
+## B-M78-01 — ABERTO — Tres copias do `@theokit/sdk@4.51.1` tornam tipos com `protected` incompativeis entre pacotes
+
+**Encontrado em:** M78, 2026-08-14 · **Severidade: baixa hoje, media adiante** — nao quebra runtime;
+quebra *type tests* que cruzam a fronteira raiz↔pacote, e o erro nao se parece com a causa.
+
+`ls node_modules/.pnpm/@theokit+sdk@*` mostra **tres** diretorios da MESMA versao 4.51.1 (mais 4.40.0
+e 2.30.0), distinguidos so pelo hash de resolucao de peers. Isso e comportamento normal do pnpm.
+
+O que nao e normal e a consequencia: `SandboxProvider` carrega um membro `protected`, entao TypeScript
+o compara **nominalmente**. Um `.test-d.ts` em `tests/` resolve uma copia, `packages/agents/src`
+resolve outra, e o compilador reporta:
+
+```
+Type 'SandboxProvider' is not assignable to type 'SandboxProvider'.
+  Property 'config' is protected but type 'SandboxBackend' is not a class derived from 'SandboxBackend'
+```
+
+Um erro que le como uma contradicao e manda o leitor cacar um bug de tipo que nao existe.
+
+**Contornado no M78, nao resolvido:** o type test passou a derivar o tipo da propria assinatura sob
+teste (`Parameters<typeof bindToolScope>[0]['sandbox']`) em vez de importar o gemeo. Isso e mais
+correto por si so — o teste fala o vocabulario que a API publica — mas nao remove a duplicata.
+
+**O que falta decidir:** se vale forcar copia unica (`pnpm.overrides` ou `resolutions`) ou conviver.
+Nao decidi sozinho porque forcar dedupe pode quebrar um peer legitimo, e a evidencia atual e um unico
+type test — pouco para mexer na arvore de dependencias do repositorio inteiro.
+
+---
+
 ## B-M76-02 — ABERTO — CodeQL roda, varre 1645 arquivos e nao consegue reportar
 
 **Encontrado em:** M76, 2026-08-13 · **Severidade: media** — nao ha defeito de codigo; ha um gate de
