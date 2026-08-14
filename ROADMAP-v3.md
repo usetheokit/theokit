@@ -444,7 +444,7 @@ vendor.
 
 ---
 
-### M80 — [ ] Invariante da taxonomia de erros + registro na fronteira HTTP
+### M80 — [x] Invariante da taxonomia de erros + registro na fronteira HTTP
 
 **Objective:** A base está certa e deliberada — `index.ts:166-167` re-exporta `@theokit/sdk/errors` e
 `/retry` inteiros, com o motivo escrito (sem isso o consumidor foi empurrado para uma hierarquia
