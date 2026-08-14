@@ -1,5 +1,29 @@
 # @theokit/agents
 
+## 8.6.0
+
+### Minor Changes
+
+- `transform_tool_result` roda UMA VEZ POR TOOL CALL, nao uma por lote, e o payload passa a ser o
+  mesmo formato dos irmaos: `{ tool, name, args, result }`.
+
+  A primeira versao mandava o lote inteiro como `{ tools: [...] }` — um TERCEIRO formato, num modulo
+  cujos outros dois handlers mandam `{ tool, args, ... }`. Um script de hook escrito contra os irmaos
+  nao conseguia ler, e um hook que decide sobre "qual tool, com quais argumentos" quer uma chamada
+  por vez de qualquer forma.
+
+  `name` e alias de `tool`, e e deliberado em vez de redundante: scripts de hook moldados na
+  convencao do Claude Code leem `.name`, e esses scripts estao no disco de usuarios. Mandar so uma
+  chave e quebrar todos eles seria mudanca de formato disfarcada de refactor.
+
+  Um hook SEM matcher continua rodando uma vez mesmo com o lote vazio — e o que "sem matcher"
+  significa, e `.some()` sobre array vazio dizia o contrario.
+
+  **Nota de proveniencia:** o codigo desta mudanca entrou no repositorio junto com o `8.5.2`, porque
+  o comando que faria o bump de versao foi bloqueado e o commit do codigo nao. Durante algumas horas
+  o fonte e o `8.5.2` do registry divergiram sob o mesmo numero — a mesma deriva que o
+  `@theokit/http@1.0.0` teve e que esta sessao passou a caçar. Esta versao e o que fecha.
+
 ## 8.5.2
 
 ### Patch Changes
