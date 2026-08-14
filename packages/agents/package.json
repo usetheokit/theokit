@@ -75,6 +75,14 @@
     "./commands": {
       "types": "./dist/commands.d.ts",
       "import": "./dist/commands.js"
+    },
+    "./doctor": {
+      "types": "./dist/doctor.d.ts",
+      "import": "./dist/doctor.js"
+    },
+    "./usage": {
+      "types": "./dist/usage.d.ts",
+      "import": "./dist/usage.js"
     }
   },
   "files": [
