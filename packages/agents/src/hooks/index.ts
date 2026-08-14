@@ -35,3 +35,21 @@ export type { HookRunInput, HookRunResult } from './hook-runner.js'
  * a caller composing its own sub-agent surface needs the same rule and should not re-derive it.
  */
 export { inheritHooks, hooksPlugin, type CodePlugin } from '../bridge/delegation-hooks.js'
+
+/**
+ * The producer for the `approved` set this module's gate REQUIRES.
+ *
+ * Shipping the gate without it left a consumer two exits — approve everything, or write the store —
+ * and the half they had to write is the half that touches directory modes and atomic replacement.
+ */
+export {
+  HookApprovalStore,
+  type ApprovalState,
+  type HookApprovalStoreOptions,
+} from './approval-store.js'
+export {
+  ensureSecureDir,
+  readSecureJson,
+  writeSecureJson,
+  type SecureStoreRead,
+} from './secure-store.js'
