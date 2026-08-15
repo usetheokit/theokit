@@ -3,8 +3,8 @@
  * store that could only live at one literal path could not serve a per-machine or per-test location.
  * No HTTP input reaches here — the path comes from the framework's own config resolution.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 
 // Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
 // `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
@@ -89,8 +89,41 @@ const FORBIDDEN_WRITE_BITS = 0o022
  * boundary in M67, and a second implementation of an atomic write is how two answers to "is this
  * file complete" come to exist.
  */
+/**
+ * The directory a path actually names.
+ *
+ * The same rule `PermissionStore#canonicalScope` applies, and for the same reason: `/repo/a`,
+ * `/repo/a/` and `/repo/./a` are one directory and three strings, and a symlink is a fourth. Two
+ * stores in this package gate execution; disagreeing about what "the same directory" means is how a
+ * user trusts a project, gets asked again because the path was spelled differently, and learns to
+ * click through the prompt — the outcome the prompt exists to prevent.
+ *
+ * Falls back to `resolve` when the path does not exist, rather than throwing: unlike a permission
+ * scope, a trust decision can legitimately be RECORDED for a directory before it is created (a
+ * clone target, a worktree about to be added). `isTrusted` still denies what it cannot resolve, so
+ * the lenient branch never widens trust — it only lets a decision be written down early.
+ */
+function canonicalDir(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    return resolve(path)
+  }
+}
+
 export class TrustStore {
   constructor(private readonly file: string) {}
+
+  /**
+   * Whether `path` carries a recorded decision to trust it.
+   *
+   * Denies on anything else — never recorded, recorded as refused, or unresolvable. A refusal on
+   * record (`trusted: false`) is a different fact from "never asked", and neither is trust.
+   */
+  isTrusted(path: string): boolean {
+    const key = canonicalDir(path)
+    return this.read().some((r) => canonicalDir(r.path) === key && r.trusted)
+  }
 
   /**
    * Read the store, refusing a file other users can write.
@@ -128,7 +161,11 @@ export class TrustStore {
       this.file,
       async () => {
         const existing = existsSync(this.file) ? this.read() : []
-        const records = [...existing.filter((r) => r.path !== record.path), record]
+        // Compared on the CANONICAL path, not the string as written: otherwise `/repo` and `/repo/`
+        // accumulate as two records for one directory, and which one answers depends on iteration
+        // order rather than on what the user decided.
+        const key = canonicalDir(record.path)
+        const records = [...existing.filter((r) => canonicalDir(r.path) !== key), record]
         await (atomicWriteJson as (f: string, v: unknown) => Promise<void>)(this.file, {
           version: 1,
           records,
