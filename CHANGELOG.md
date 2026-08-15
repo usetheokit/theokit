@@ -8,6 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`HookApprovalStore` ganha escopo por PROJETO (9.0.0, BREAKING) e `approvals(scope)` (9.1.0).** O
+  store chaveava so pelo fingerprint, o que torna uma aprovacao valida na maquina inteira: um hook
+  aprovado num repositorio ficava pre-aprovado ao abrir outro recem-clonado. O consumidor medido
+  chaveia por diretorio exatamente por isso — e nao conseguia adotar o nosso sem ALARGAR a propria
+  postura de seguranca, a unica direcao que uma absorcao nunca pode tomar. `scope` e obrigatorio,
+  pela mesma razao que `approved` e obrigatorio em `buildHookHandlers`.
+
+  `approvals(scope)` devolve os registros, nao so os hashes: uma tela de consentimento precisa dizer
+  QUAL comando foi aprovado e quando.
+
+### Fixed
+
+- **`TrustStore` garante o modo do DIRETORIO (9.0.1).** Chamava `mkdirSync` sem modo e sem reparo, e
+  o argumento `mode` e no-op num diretorio existente — este e compartilhado com a raiz de
+  transcricoes do SDK, entao quem cria primeiro decide. Medido: 0775 por umask, ou 0777. Os dois
+  stores irmaos ja passavam por `ensureSecureDir`; tres stores gateando execucao e so dois impunham
+  a propriedade.
+
+  As tres lacunas foram achadas ao TENTAR a migracao do consumidor, nao ao revisar o desenho.
+
+### Added
+
 - **`expandInstructionImports` fica alcancavel por si so, e ganha dois seams.** A expansao de
   `@file.md` entrou colada ao `loadInstructionTree` e alcancavel so atraves dele — o mesmo defeito
   que este ciclo inteiro persegue, cometido enquanto o consertava. A CAMINHADA e a EXPANSAO sao
