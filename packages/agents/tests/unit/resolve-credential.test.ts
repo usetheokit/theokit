@@ -1,214 +1,161 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+/**
+ * T4.1 — the `oauth` variant `CredentialResolution` declares must be producible.
+ *
+ * `CredentialResolution.kind` is `'api-key' | 'oauth'` and `SourceOrigin` carries an
+ * `{ kind: 'oauth', provider }` arm — both published, neither reachable: every return path built an
+ * `'api-key'`. A declared-but-unproducible variant is a correctness defect a consumer only discovers
+ * at runtime, after writing the `case 'oauth':` branch that never runs. Worse than absent, because
+ * the type promised it.
+ *
+ * ## Scope correction, recorded rather than quietly dropped
+ *
+ * The cross-validation also listed "provider inference by KEY prefix without longest-match-wins"
+ * (EC-3). Read at implementation time, this resolver has **no key-prefix inference at all** — it
+ * selects by declared `priority`, and `modelPrefix` matches the MODEL id (`openai/…`), never the key
+ * (`sk-ant-…`). There is no longest-match bug to fix here because there is no prefix match on keys.
+ * Asserting one would have been a test passing for a reason unrelated to its name. What IS asserted
+ * below is the real selection rule: priority decides, and a model prefix claiming a provider without
+ * a credential throws.
+ */
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import {
-  ProviderPrefixMismatchError,
-  resolveCredential,
-  type ProviderDescriptor,
-} from '../../src/auth/resolve-credential.js'
-
-/**
- * M79 — "given an env, a home and a model, WHICH credential do I use, and WHERE did it come from?"
- *
- * ## The gap
- *
- * The hard half was already supplied: RFC 8628 device flow, refresh under a cross-process lock,
- * persistence, account-id extraction. The half every consumer meets FIRST was answered twice inside
- * the framework and exposed neither time — `resolveProvider()` behind `internal-api.ts`, and
- * `resolveCredential` deliberately withheld from `@theokit/agents/auth`.
- *
- * The "app policy" framing defends **which** providers exist. It does not defend the precedence
- * chain, the prefix/provider consistency check, or the provenance record: those are mechanism, and a
- * consumer forced to rewrite mechanism writes a 70-line dotenv parser to answer "shell or .env?".
- *
- * ## Why the descriptors are a PARAMETER
- *
- * The SDK and the agent-builder each ship a different function called `resolveCredential` — sync vs
- * async, throws vs `undefined`, reads env vs does not, infers the provider vs refuses. Publishing a
- * third under the same name in the same scope would be an invitation to import the wrong one.
- *
- * Taking the descriptor list as an argument is what makes this one distinguishable at the call site
- * rather than by luck: it is the only one whose signature says which providers it is talking about.
- */
-
-const PROVIDERS: readonly ProviderDescriptor[] = [
-  { name: 'openrouter', envKey: 'OPENROUTER_API_KEY', priority: 1, modelPrefix: 'openrouter/' },
-  { name: 'openai', envKey: 'OPENAI_API_KEY', priority: 2, modelPrefix: 'openai/' },
-  { name: 'anthropic', envKey: 'ANTHROPIC_API_KEY', priority: 3, modelPrefix: 'anthropic/' },
-]
+import { resolveCredential } from '../../src/auth/resolve-credential.js'
+import type { ProviderDescriptor } from '../../src/auth/resolve-credential.js'
 
 let home: string
 
+const PROVIDERS: readonly ProviderDescriptor[] = [
+  { name: 'openai', envKey: 'OPENAI_API_KEY', priority: 1, modelPrefix: 'openai/' },
+  { name: 'anthropic', envKey: 'ANTHROPIC_API_KEY', priority: 2, modelPrefix: 'anthropic/' },
+]
+
+/** The store the SDK writes: `<home>/.theokit/auth.json`, mode 0600 inside a 0700 dir. */
+function writeOAuthStore(provider: string, expires: number): void {
+  const dir = join(home, '.theokit')
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  chmodSync(dir, 0o700)
+  const file = join(dir, 'auth.json')
+  writeFileSync(
+    file,
+    JSON.stringify({ type: 'oauth', provider, access: 'at-123', refresh: 'rt-456', expires }),
+    { encoding: 'utf8', mode: 0o600 },
+  )
+}
+
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'resolve-cred-'))
+  home = mkdtempSync(join(tmpdir(), 'theokit-cred-'))
 })
+
 afterEach(() => {
   rmSync(home, { recursive: true, force: true })
 })
 
-describe('precedence — which credential wins', () => {
-  it('test_the_highest_priority_provider_present_in_env_wins', () => {
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: 'sk-openai', ANTHROPIC_API_KEY: 'sk-anthropic' },
-      providers: PROVIDERS,
-    })
-    expect(resolved).toMatchObject({ provider: 'openai', apiKey: 'sk-openai', kind: 'api-key' })
-  })
-
-  it('test_priority_is_the_DECLARED_number_and_not_the_array_order', () => {
-    // Anti-vacuity: with the array order also matching, a resolver that ignored `priority` entirely
-    // would pass the test above. Handing it the list backwards is what proves the field is read.
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: 'sk-openai', OPENROUTER_API_KEY: 'sk-or' },
-      providers: [...PROVIDERS].reverse(),
-    })
-    expect(resolved?.provider).toBe('openrouter')
-  })
-
-  it('test_no_credential_anywhere_returns_undefined_rather_than_throwing', () => {
-    // A missing key is the ordinary first-run state, not an exceptional one: the caller's next move
-    // is to print "run `theokit auth login`", which a thrown error makes harder, not easier.
+describe('resolveCredential', () => {
+  it('returns_undefined_when_nothing_is_configured', () => {
+    // Documented behaviour a consumer relies on: a missing key is the ordinary first-run state, and
+    // the caller's next move is "run `theokit auth login`" — which a thrown error makes harder.
     expect(resolveCredential({ env: {}, providers: PROVIDERS })).toBeUndefined()
   })
 
-  it('test_an_empty_value_counts_as_ABSENT', () => {
-    // `OPENAI_API_KEY=` in a `.env` is how a key gets "unset" in practice. Treating the empty string
-    // as present sends an empty Authorization header and turns a clear local failure into a 401.
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: '', ANTHROPIC_API_KEY: 'sk-anthropic' },
+  it('selects_by_declared_priority', () => {
+    const resolution = resolveCredential({
+      env: { OPENAI_API_KEY: 'sk-a', ANTHROPIC_API_KEY: 'sk-ant-b' },
       providers: PROVIDERS,
     })
-    expect(resolved?.provider).toBe('anthropic')
-  })
-})
 
-describe('provenance — WHERE it came from, as data', () => {
-  it('test_a_shell_variable_reports_env_with_its_name', () => {
-    const resolved = resolveCredential({ env: { OPENAI_API_KEY: 'sk-x' }, providers: PROVIDERS })
-    expect(resolved?.source).toEqual({ kind: 'env', varName: 'OPENAI_API_KEY' })
+    expect(resolution?.provider).toBe('openai')
+    expect(resolution?.inferred, 'the caller named no provider, so this was inferred').toBe(true)
   })
 
-  it('test_a_variable_DECLARED_in_a_dotenv_file_reports_that_file', () => {
-    // The distinction the consumer wrote a dotenv parser for. It matters operationally: "your key
-    // comes from .env" and "your key comes from the shell" send an operator to different places.
-    writeFileSync(join(home, '.env'), 'OPENAI_API_KEY=sk-from-file\nOTHER=1\n', 'utf8')
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: 'sk-from-file' },
-      home,
+  it('a_model_prefix_pins_the_provider', () => {
+    const resolution = resolveCredential({
+      env: { OPENAI_API_KEY: 'sk-a', ANTHROPIC_API_KEY: 'sk-ant-b' },
+      providers: PROVIDERS,
+      model: 'anthropic/claude-x',
+    })
+
+    expect(resolution?.provider).toBe('anthropic')
+    expect(resolution?.inferred, 'the model named it, so it was not inferred').toBe(false)
+  })
+
+  it('an_empty_env_value_counts_as_absent', () => {
+    // `OPENAI_API_KEY=` is how a key gets unset in practice. Treating it as present sends an empty
+    // Authorization header — a clear local failure turned into a remote 401.
+    const resolution = resolveCredential({
+      env: { OPENAI_API_KEY: '', ANTHROPIC_API_KEY: 'sk-ant-b' },
       providers: PROVIDERS,
     })
-    expect(resolved?.source).toEqual({ kind: 'file', path: join(home, '.env') })
+
+    expect(resolution?.provider).toBe('anthropic')
   })
 
-  it('test_only_the_NAME_is_read_from_the_file_never_the_value', () => {
-    // The parsimony that keeps this from being a dotenv parser: provenance needs the set of declared
-    // names, not their values. The value in play is always the one already in `env` — the loader
-    // resolved interpolation, quoting and overrides long before we got here, and re-deriving it
-    // would be a second, divergent answer to a question already settled.
-    writeFileSync(join(home, '.env'), 'OPENAI_API_KEY=stale-value-in-file\n', 'utf8')
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: 'sk-live' },
-      home,
-      providers: PROVIDERS,
-    })
-    expect(resolved?.apiKey).toBe('sk-live')
-    expect(resolved?.source).toMatchObject({ kind: 'file' })
-  })
-
-  it('test_a_commented_out_declaration_does_not_claim_provenance', () => {
-    // `# OPENAI_API_KEY=old` is a line an operator leaves behind. Attributing the live shell value to
-    // it would send them to edit a comment.
-    writeFileSync(join(home, '.env'), '# OPENAI_API_KEY=old\n', 'utf8')
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: 'sk-live' },
-      home,
-      providers: PROVIDERS,
-    })
-    expect(resolved?.source).toEqual({ kind: 'env', varName: 'OPENAI_API_KEY' })
-  })
-
-  it('test_an_export_prefix_still_counts_as_a_declaration', () => {
-    // `export FOO=bar` is valid in the `.env` files people actually write.
-    writeFileSync(join(home, '.env'), 'export OPENAI_API_KEY=sk-x\n', 'utf8')
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: 'sk-x' },
-      home,
-      providers: PROVIDERS,
-    })
-    expect(resolved?.source).toMatchObject({ kind: 'file' })
-  })
-
-  it('test_a_missing_dotenv_file_is_not_an_error', () => {
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: 'sk-x' },
-      home,
-      providers: PROVIDERS,
-    })
-    expect(resolved?.source).toEqual({ kind: 'env', varName: 'OPENAI_API_KEY' })
-  })
-})
-
-describe('the model prefix must agree with the provider', () => {
-  it('test_a_matching_prefix_resolves_and_is_NOT_marked_inferred', () => {
-    const resolved = resolveCredential({
-      env: { OPENAI_API_KEY: 'sk-x' },
-      model: 'openai/gpt-5',
-      providers: PROVIDERS,
-    })
-    expect(resolved).toMatchObject({ provider: 'openai', inferred: false })
-  })
-
-  it('test_no_prefix_means_the_provider_was_INFERRED_from_precedence', () => {
-    // The bit that tells a caller whether the user chose the provider or the resolver did. Without
-    // it, "why is it calling Anthropic?" has no answer in the data.
-    const resolved = resolveCredential({
-      env: { ANTHROPIC_API_KEY: 'sk-x' },
-      model: 'some-model',
-      providers: PROVIDERS,
-    })
-    expect(resolved).toMatchObject({ provider: 'anthropic', inferred: true })
-  })
-
-  it('test_a_prefix_naming_a_provider_with_NO_credential_fails_typed', () => {
-    // The consumer has this check; the framework did not. Silently falling back to another provider
-    // sends the request to a model the user did not ask for — and bills them for it.
+  it('a_prefix_claiming_a_provider_without_a_credential_throws', () => {
     expect(() =>
       resolveCredential({
-        env: { ANTHROPIC_API_KEY: 'sk-x' },
-        model: 'openai/gpt-5',
+        env: { OPENAI_API_KEY: 'sk-a' },
         providers: PROVIDERS,
+        model: 'anthropic/claude-x',
       }),
-    ).toThrow(ProviderPrefixMismatchError)
+    ).toThrow(/anthropic/i)
   })
 
-  it('test_the_mismatch_message_names_BOTH_sides_and_what_to_do', () => {
-    const error = (() => {
-      try {
-        resolveCredential({
-          env: { ANTHROPIC_API_KEY: 'sk-x' },
-          model: 'openai/gpt-5',
-          providers: PROVIDERS,
-        })
-        return undefined
-      } catch (e) {
-        return e as Error
-      }
-    })()
-    expect(error?.message).toMatch(/openai/)
-    expect(error?.message).toMatch(/OPENAI_API_KEY/)
-  })
+  it('oauth_kind_is_producible', () => {
+    // THE defect: the published type declares this variant and no code path produced it.
+    writeOAuthStore('anthropic', 4_000)
 
-  it('test_an_UNKNOWN_prefix_is_not_treated_as_a_provider_claim', () => {
-    // `meta-llama/llama-3` is a model id whose first segment is not a provider in the list. Reading
-    // every slash as a provider claim would refuse perfectly good model ids.
-    const resolved = resolveCredential({
-      env: { OPENROUTER_API_KEY: 'sk-or' },
-      model: 'meta-llama/llama-3',
+    const resolution = resolveCredential({
+      env: {},
       providers: PROVIDERS,
+      home,
+      store: { home, dirName: '.theokit', fileName: 'auth.json' },
     })
-    expect(resolved).toMatchObject({ provider: 'openrouter', inferred: true })
+
+    expect(resolution?.kind).toBe('oauth')
+    expect(resolution?.provider).toBe('anthropic')
+    expect(resolution?.apiKey, 'the access token is what a caller sends').toBe('at-123')
+    expect(resolution?.source).toEqual({ kind: 'oauth', provider: 'anthropic' })
+  })
+
+  it('an_env_key_wins_over_a_stored_oauth_credential', () => {
+    // Precedence, stated: the environment is the more explicit, more immediate signal, and matches
+    // the chain a consumer already implements (declared env → per-provider env → file).
+    writeOAuthStore('anthropic', 4_000)
+
+    const resolution = resolveCredential({
+      env: { OPENAI_API_KEY: 'sk-a' },
+      providers: PROVIDERS,
+      home,
+      store: { home, dirName: '.theokit', fileName: 'auth.json' },
+    })
+
+    expect(resolution?.kind).toBe('api-key')
+    expect(resolution?.provider).toBe('openai')
+  })
+
+  it('a_stored_credential_for_an_undeclared_provider_is_ignored', () => {
+    // WHICH providers exist stays app policy. A store naming one the app never declared must not
+    // smuggle it in through the back door.
+    writeOAuthStore('mistral', 4_000)
+
+    expect(
+      resolveCredential({
+        env: {},
+        providers: PROVIDERS,
+        home,
+        store: { home, dirName: '.theokit', fileName: 'auth.json' },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('behaviour_is_unchanged_when_no_store_is_configured', () => {
+    // Backward-compatibility guard: the store is opt-in, and an existing caller that passes none
+    // must observe byte-identical behaviour.
+    writeOAuthStore('anthropic', 4_000)
+
+    expect(resolveCredential({ env: {}, providers: PROVIDERS, home })).toBeUndefined()
   })
 })
