@@ -104,15 +104,21 @@ export type {
   StoredOAuthCredential,
 } from '@theokit/sdk/auth'
 
-// `providerFromApiKeyPrefix` — "which provider issued this key?", the question a login flow asks
-// before any profile exists — is NOT forwarded yet, and that is a dated fact rather than a
-// decision. It lands in `@theokit/sdk/auth` via theokit-sdk#(pending publish); the installed
-// 4.51.1 does not have it, so forwarding today does not compile (measured: TS2305).
-//
-// Deliberately left to the surface-parity gate rather than tracked by hand: once the SDK publishes
-// the symbol, `./auth` — the one subpath under a HARD gate — sees an SDK export with no written
-// decision here and fails CI. That is the mechanism working, and it is why nobody has to remember
-// this comment.
+/**
+ * "Which provider issued this key?" — the question a login flow asks before any profile exists.
+ *
+ * Forwarded now that it is typed. It was published in `@theokit/sdk@4.52.0` and absent from the
+ * emitted declaration until 4.52.1, so forwarding it earlier did not compile (measured: TS2305).
+ * The surface-parity gate is what surfaced the moment it became forwardable — `./auth` is the one
+ * subpath under a HARD gate, and an SDK export with no written decision here fails CI. Nobody had
+ * to remember.
+ *
+ * Distinct from `resolveCredential`, which answers "what credential should I use?" from the
+ * environment and the store. This answers "whose is this string?" about a key already in hand, and
+ * it is the single owner of the prefix knowledge — `assertKeyMatchesProvider` asks it rather than
+ * restating the table.
+ */
+export { providerFromApiKeyPrefix } from '@theokit/sdk/auth'
 
 // M111 — device auth PLUG-AND-PLAY. M110 made the RFC 8628 flow cross; it did not touch ergonomics.
 //

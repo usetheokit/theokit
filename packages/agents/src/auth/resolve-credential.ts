@@ -6,7 +6,11 @@ import { join } from 'node:path'
 // 2026-08-14 against @theokit/sdk 4.51.1; its runtime shape is `{ home, dirName, fileName,
 // homeEnvVar? }`. Imported as the opaque type it is: this module only forwards it to the SDK, and
 // re-declaring the shape here would be a mirror that drifts. Filed as an upstream type-export defect.
-import { readAuthFile, type CredentialStoreConfig } from '@theokit/sdk/auth'
+import {
+  providerFromApiKeyPrefix,
+  readAuthFile,
+  type CredentialStoreConfig,
+} from '@theokit/sdk/auth'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /**
@@ -265,6 +269,17 @@ function assertKeyMatchesProvider(
   apiKey: string,
   where: string,
 ): void {
+  // The SDK owns the prefix knowledge (`providerFromApiKeyPrefix`, whose ordering is derived from
+  // prefix length). Asking it rather than restating the table is what keeps ONE owner: a second
+  // hand-maintained copy is exactly what produced the longest-prefix bug fixed in 4.52.0.
+  //
+  // `undefined` means the SDK does not recognise the key's shape, which is not a contradiction —
+  // a self-hosted gateway stamps no prefix it knows. Only a POSITIVE disagreement is refused.
+  const inferred = providerFromApiKeyPrefix(apiKey)
+  if (inferred !== undefined && inferred !== descriptor.name) {
+    throw new ProviderKeyMismatchError(descriptor.name, where, descriptor.keyPrefix ?? inferred)
+  }
+  // `keyPrefix` remains the escape hatch for a provider the SDK has never heard of.
   if (descriptor.keyPrefix === undefined) return
   if (apiKey.startsWith(descriptor.keyPrefix)) return
   throw new ProviderKeyMismatchError(descriptor.name, where, descriptor.keyPrefix)

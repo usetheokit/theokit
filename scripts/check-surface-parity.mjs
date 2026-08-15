@@ -123,6 +123,7 @@ const DECISIONS = {
     // rule over auth modes; withholding it would leave restating that rule as the consumer's only
     // legal way out, and a second copy of a security rule diverges silently from the first.
     assertSecureModes: 're-exported',
+    providerFromApiKeyPrefix: 'covered',
     authFilePath: 're-exported',
     CredentialError: 're-exported',
     credentialHome: 're-exported',
