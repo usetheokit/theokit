@@ -164,10 +164,12 @@ describe('createDelegateTool — dispatch', () => {
     const dispatched = portReturning('x')
     const tool = createDelegateTool({ roster: [{ name: 'worker', target: dispatched }] })
 
-    const failure = await tool.handler({ agent: 'nope', task: 't' }).then(
-      () => undefined,
-      (error: unknown) => error,
-    )
+    let failure: unknown
+    try {
+      await tool.handler({ agent: 'nope', task: 't' })
+    } catch (error) {
+      failure = error
+    }
 
     expect(failure).toBeInstanceOf(ZodError)
     expect((failure as ZodError).issues.map((issue) => issue.path.join('.'))).toContain('agent')
@@ -181,10 +183,12 @@ describe('createDelegateTool — dispatch', () => {
     // drop `min(1)` and start sending empty prompts to a paid provider.
     const tool = createDelegateTool({ roster: [{ name: 'worker', target: portReturning('x') }] })
 
-    const failure = await tool.handler({ agent: 'worker', task: '' }).then(
-      () => undefined,
-      (error: unknown) => error,
-    )
+    let failure: unknown
+    try {
+      await tool.handler({ agent: 'worker', task: '' })
+    } catch (error) {
+      failure = error
+    }
 
     expect(failure).toBeInstanceOf(ZodError)
     expect((failure as ZodError).issues.map((issue) => issue.path.join('.'))).toContain('task')
