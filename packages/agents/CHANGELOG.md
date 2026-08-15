@@ -1,5 +1,25 @@
 # @theokit/agents
 
+## 9.1.1
+
+### Patch Changes
+
+- **`readSecureJson` passa a recusar um store que outro usuario local pode ESCREVER.**
+
+  `ensureSecureDir` segurava o diretorio em owner-only e a leitura entao abria o arquivo sem olhar o
+  modo dele. Um `hook-approvals.json` deixado group- ou world-writable — por uma versao antiga, por um
+  umask ruim, por quem tivesse acesso de escrita — era lido como autoritativo. Esse arquivo decide
+  quais linhas de comando chegam ao `spawn(cmd, { shell: true })`.
+
+  Falha FECHADA e reporta, em vez de lancar: um store ilegivel ja significa "nada aprovado", o turno
+  do chamador nao deve terminar por causa disso, e `lastReadError` e como o operador descobre que as
+  aprovacoes dele pararam de valer. Silencio tornaria um store adulterado indistinguivel de um vazio.
+
+  Recusado em vez de reparado: apertar o modo em silencio esconderia que algo o mudou, que e o fato
+  que importa saber.
+
+  Achado por um teste do consumidor (B-019) falhando enquanto ele migrava para este helper.
+
 ## 9.1.0
 
 ### Minor Changes

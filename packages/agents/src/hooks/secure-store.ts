@@ -92,6 +92,26 @@ export function readSecureJson<T>(
     return { value: empty }
   }
 
+  // The FILE's mode, not just the directory's. `ensureSecureDir` held the directory to owner-only
+  // and the read then opened the file without looking — so a store left group- or world-writable by
+  // an older version, a bad umask, or anyone with write access to it was believed. This file decides
+  // which command lines reach `spawn(cmd, { shell: true })`.
+  //
+  // Refused HERE rather than repaired: silently tightening the mode would hide that something
+  // changed it, which is the fact worth knowing.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- same store path, already read above
+  const fileMode = statSync(filePath).mode & 0o777
+  if ((fileMode & FORBIDDEN_WRITE_BITS) !== 0) {
+    return {
+      value: empty,
+      error: new Error(
+        `${filePath} is mode ${fileMode.toString(8)} — group or world writable, so another local ` +
+          `user can decide what it says. It is being treated as empty: every entry in it has ` +
+          `stopped applying. Fix with \`chmod 600 ${filePath}\`.`,
+      ),
+    }
+  }
+
   // A zero-byte file is what a crash mid-write leaves behind, and `JSON.parse('')` throws.
   if (raw.trim().length === 0) return { value: empty }
 
