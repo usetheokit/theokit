@@ -1,6 +1,6 @@
 {
   "name": "@theokit/agents",
-  "version": "9.2.1",
+  "version": "9.3.0",
   "description": "AI agents as first-class citizens of the TheoKit pipeline. The fluent agent()/tool() builders compile to SDK Agent.create() (M31 builder-only authoring API).",
   "license": "Apache-2.0",
   "type": "module",
@@ -125,7 +125,7 @@
   },
   "dependencies": {
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "^4.49.0",
+    "@theokit/sdk": "^4.52.1",
     "@theokit/sdk-pty": ">=0.2.0 <1.0.0",
     "@theokit/sdk-tools": "^0.26.1"
   }
