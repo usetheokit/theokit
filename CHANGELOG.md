@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **O teste de concorrencia do store de permissoes afirmava menos do que a garantia real.** Ele
+  checava `> 0` sobrevivencias, se protegendo de um lost update; medido, as doze sobrevivem, e
+  deterministicamente — `grant()` e sincrono de ponta a ponta, entao doze chamadores "concorrentes"
+  serializam no event loop e nenhum observa o estado meio escrito do outro. Uma assercao fraca num
+  store que decide o que pode executar e uma regressao que passa calada, entao ela agora fixa `12`.
+  O que o teste guarda de verdade e a PRE-CONDICAO dessa garantia: tornar o caminho
+  ler-modificar-escrever assincrono sem trava faz o entrelacamento virar real, e o segundo `rename`
+  descarta a concessao do primeiro — uma permissao que o operador acredita ainda ter.
+
+### Changed
+
 - **`@theokit/agents/hooks` deixa de re-exportar as primitivas de disco do `secure-store`.** Elas nao
   tinham nenhum consumidor pelo barrel (G7) e publicar primitivas de permissao e troca atomica
   convida a escrever um terceiro store a mao em vez de compor `HookApprovalStore` /
