@@ -40,8 +40,25 @@ import { encodeProjectDir, transcriptRoot } from '@theokit/sdk/persistence'
 const CWD_SIDECAR = 'cwd'
 
 /** Absolute path of the project directory for `cwd`, under the transcript root. */
+/**
+ * Where every project's transcripts live under `root`.
+ *
+ * The `projects` segment was written in three places — twice in this file, and once in the closest
+ * consumer, which restated it as `join(transcriptRoot(), 'projects')` to enumerate every project for
+ * a GC sweep. Three owners of one layout fact.
+ *
+ * The failure mode is what makes it worth a function rather than a comment: the consumer guards its
+ * enumeration with `existsSync(root) ? readdir(root) : []`, so a segment that no longer matches does
+ * not throw — it returns an empty list. The sweep then finds nothing, deletes nothing, and reports
+ * success. A wrong path that throws is a bug report; a wrong path that returns nothing is a
+ * collector that quietly stopped collecting.
+ */
+export function projectsRoot(root: string = transcriptRoot()): string {
+  return join(root, 'projects')
+}
+
 export function projectDirFor(cwd: string, root: string = transcriptRoot()): string {
-  return join(root, 'projects', encodeProjectDir(cwd))
+  return join(projectsRoot(root), encodeProjectDir(cwd))
 }
 
 /**
@@ -73,7 +90,7 @@ export function resolveProjectDir(
   root: string = transcriptRoot(),
 ): string | undefined {
   try {
-    const raw = readFileSync(join(root, 'projects', encodedName, CWD_SIDECAR), 'utf8')
+    const raw = readFileSync(join(projectsRoot(root), encodedName, CWD_SIDECAR), 'utf8')
     const cwd = raw.trim()
     return cwd.length > 0 ? cwd : undefined
   } catch {
