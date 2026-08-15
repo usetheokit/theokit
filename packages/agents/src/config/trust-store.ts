@@ -3,8 +3,8 @@
  * store that could only live at one literal path could not serve a per-machine or per-test location.
  * No HTTP input reaches here — the path comes from the framework's own config resolution.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { chmodSync, existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 // Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
 // `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
@@ -14,6 +14,8 @@ import { resolveTrustPosture } from '@theokit/sdk'
 import type { TrustPosture } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import { atomicWriteJson, withFileLock } from '@theokit/sdk/persistence'
+
+import { ensureSecureDir } from '../hooks/secure-store.js'
 // These modules moved from `theokit` into `@theokit/agents`, and this package enforces an
 // invariant the web package does not: no exported error class extends plain `Error`. A class
 // outside the `TheokitAgentError` hierarchy is invisible to `isTransientError` and to any
@@ -152,7 +154,12 @@ export class TrustStore {
    * (usetheodev/theokit-sdk#280).
    */
   async trust(record: TrustRecord): Promise<void> {
-    mkdirSync(dirname(this.file), { recursive: true })
+    // `ensureSecureDir`, not a bare `mkdirSync`: the mode argument is a NO-OP on a directory that
+    // already exists, and this one is shared with the SDK's transcript root — whoever creates it
+    // first sets the permissions. The two sibling stores in this package already went through it;
+    // this one did not, which left the directory holding the file that authorises command execution
+    // at whatever the umask produced. Found by a consumer's test failing during migration.
+    ensureSecureDir(this.file)
     // The casts are the upstream `.d.ts` gap named in usetheodev/theokit-sdk#280: several
     // persistence symbols are re-exported by the barrel and never declared, so they arrive
     // unresolved. They exist and are async (measured). Naming the shape at the call site beats
