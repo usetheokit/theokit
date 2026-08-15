@@ -1,5 +1,59 @@
 # @theokit/agents
 
+## 8.7.0
+
+### Minor Changes
+
+- **`PermissionStore` — conceder "sempre permita isto" sem conceder "permita tudo".** Medido por
+  grep nos dois lados: nada persistia uma concessao permanente para tools. A unica saida era o
+  `full-auto`, que remove o portao em vez de estreita-lo — e a decima aprovacao da mesma coisa e
+  onde a pessoa para de ler o que aprova, o que faz da opcao "segura" a que produz comportamento
+  inseguro. A chave `(tool, scope, signature)` E a propriedade de seguranca: o escopo passa por
+  `realpath` (um symlink nao toma emprestado concessao feita para outro lugar) e a assinatura nunca
+  e casada por aproximacao (`npm test` nao autoriza `npm test --force`).
+
+- **`HookApprovalStore` — o portao de fingerprint ganha um produtor.** `buildHookHandlers` exige
+  `approved` e nega por padrao; o framework entregava o portao e nada que produzisse o conjunto,
+  deixando ao consumidor duas saidas — aprovar tudo, ou escrever o store. Tres estados, nao dois:
+  `modified` (alguem editou um comando DEPOIS de aprovado) e um evento diferente de `unknown`.
+
+- **`@theokit/agents/config` — configuracao de agente, trust e arvore de instrucoes ganham porta
+  propria.** Estavam alcancaveis so por um barrel que anuncia a propria remocao, num pacote que o
+  consumidor nao instala. Foi por isso que um consumidor reescreveu 533 linhas e reintroduziu a
+  falha de contencao de symlink que `assertNoSymlinkEscape` existe para fechar.
+
+- **O pacote publicado passa a levar prosa.** O tarball entregava `dist/`, `LICENSE` e
+  `package.json`. O README estava declarado em `files` e **nao existia em disco** (o npm omite o
+  declarado-e-ausente em silencio); o CHANGELOG existia e nao estava declarado.
+
+- **`resolveCredential` passa a produzir a variante `oauth`.** O tipo publicado declarava
+  `'api-key' | 'oauth'` e todo caminho de retorno construia `'api-key'`. Uma variante declarada e
+  improduzivel e pior que ausente: o consumidor escreve o `case 'oauth':` que nunca roda.
+
+- **A protecao de ponteiro do GC de transcricoes fica injetavel.** Ela derivava a protecao da
+  convencao DESTE framework; para um consumidor cujo ponteiro de sessao viva mora em outro lugar, a
+  guarda era inerte — em silencio, dentro de algo que apaga transcricoes. A injecao so ADICIONA
+  protecao, nunca remove, e um provedor que lanca falha FECHADO.
+
+### Patch Changes
+
+- **Duas escritas simultaneas no store de consentimento podiam disputar o mesmo arquivo
+  temporario.** O nome saia de relogio + pid; medido, doze escritas de um mesmo processo produziam
+  UM nome, e o segundo `rename` de um temp ja renomeado lanca `ENOENT`. Chamadas sincronas numa
+  unica thread serializam e nunca colidem — por isso a suite estava verde —, mas `worker_threads`
+  compartilham pid. O nome agora sai de `randomUUID()` e a unicidade e asserida diretamente.
+
+- **`forkBeforeUserTurn` estava publicado quebrado.** Discriminava por `role`, que no
+  `SessionRecord` do SDK mora aninhado sob `message.role`; o campo de topo e `type`. Toda chamada
+  lancava. Junto, uma guarda para o caso de a sessao de origem e a nova coincidirem.
+
+- **Um observador de hook herdado que falhasse desaparecia sem deixar rastro.** Nao derrubar o turno
+  esta certo; sumir em silencio nao — um notificador que nunca dispara le igual a um que nao tem
+  nada a reportar.
+
+- **Um membro delegado passa a herdar o veto do supervisor.** A ordem e a propriedade de seguranca:
+  a recusa do pai e avaliada primeiro, e o membro so pode ADICIONAR motivo para recusar.
+
 ## 8.6.0
 
 ### Minor Changes
