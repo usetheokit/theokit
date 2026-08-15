@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`projectsRoot(root?)` — um dono só para onde ficam os transcripts de cada projeto.**
+  `join(root, 'projects', …)` estava escrito em três lugares, um deles fora do framework. O modo de
+  falha é silencioso: quem enumera protege a leitura com `existsSync(root) ? readdir(root) : []`,
+  então um segmento que deixa de casar não lança — devolve lista vazia. A varredura acha nada, apaga
+  nada e reporta sucesso.
 - **Uma pasta de regras agora pode ser percorrida pelo framework.** `loadInstructionTree` aceita um
   predicado em `fileNames`, além da lista de nomes exatos. Uma lista só alcança arquivos que quem
   chama consegue nomear de antemão; numa pasta de regras quem escolhe os nomes é o usuário. Sem
