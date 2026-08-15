@@ -85,9 +85,14 @@ function chainObserver<TCtx>(
     for (const observe of [parent, own]) {
       try {
         await observe(ctx)
-      } catch {
-        // Deliberately swallowed, and ONLY here: these events are declared fire-and-forget, so a
-        // broken notifier must not be why the other one did not run. A veto gate never reaches this.
+      } catch (cause) {
+        // Not swallowed — CONTAINED. These events are declared fire-and-forget, so a broken notifier
+        // must not be why the other one did not run, and must not fail the turn. But silence would
+        // make it invisible forever: a notifier that never fires reads exactly like one with nothing
+        // to report. That "declared, wired, never runs" shape is the defect this whole slice hunts,
+        // so it does not get to hide here. A veto gate never reaches this path.
+        const reason = cause instanceof Error ? cause.message : String(cause)
+        console.warn(`[@theokit/agents] an inherited observer threw and was contained: ${reason}`)
       }
     }
   }
@@ -178,6 +183,13 @@ export function hooksPlugin(handlers: HookHandlers): CodePlugin | undefined {
     kind: 'general',
     register(ctx) {
       for (const [hookName, handler] of entries) {
+        // The one `as` in this file, and it does NOT narrow from `unknown` — so it is a documented
+        // exception to `system-design-guardrails.md` G3, not an oversight. `Object.entries` erases
+        // the key↔value correlation that makes the map typed: each handler takes its OWN context
+        // type, while `ctx.on` needs one signature. `never` is the honest bottom here — it asserts
+        // the callee accepts whatever this entry carries, which the map's own type already proved
+        // pairwise. Re-deriving that correlation would need a mapped-type registration API on the
+        // SDK's side, which is not ours to add.
         ctx.on(hookName, handler as (c: never) => unknown)
       }
     },
