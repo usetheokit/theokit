@@ -100,7 +100,19 @@ export type {
   OAuthTokens,
   OpenAIDeviceConfig,
   ResolvedCredential,
+  StoredCredential,
+  StoredOAuthCredential,
 } from '@theokit/sdk/auth'
+
+// `providerFromApiKeyPrefix` — "which provider issued this key?", the question a login flow asks
+// before any profile exists — is NOT forwarded yet, and that is a dated fact rather than a
+// decision. It lands in `@theokit/sdk/auth` via theokit-sdk#(pending publish); the installed
+// 4.51.1 does not have it, so forwarding today does not compile (measured: TS2305).
+//
+// Deliberately left to the surface-parity gate rather than tracked by hand: once the SDK publishes
+// the symbol, `./auth` — the one subpath under a HARD gate — sees an SDK export with no written
+// decision here and fails CI. That is the mechanism working, and it is why nobody has to remember
+// this comment.
 
 // M111 — device auth PLUG-AND-PLAY. M110 made the RFC 8628 flow cross; it did not touch ergonomics.
 //

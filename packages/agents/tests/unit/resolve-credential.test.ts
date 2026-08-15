@@ -12,10 +12,19 @@
  * The cross-validation also listed "provider inference by KEY prefix without longest-match-wins"
  * (EC-3). Read at implementation time, this resolver has **no key-prefix inference at all** — it
  * selects by declared `priority`, and `modelPrefix` matches the MODEL id (`openai/…`), never the key
- * (`sk-ant-…`). There is no longest-match bug to fix here because there is no prefix match on keys.
+ * (`sk-ant-…`). There is no longest-match bug to fix *here* because there is no prefix match on keys.
  * Asserting one would have been a test passing for a reason unrelated to its name. What IS asserted
  * below is the real selection rule: priority decides, and a model prefix claiming a provider without
  * a credential throws.
+ *
+ * **Superseded in part, and recorded rather than left to read as settled.** That note closed the
+ * question for this file, and it was later measured that the capability was simply MISSING from the
+ * stack: the consumer infers a provider from the key prefix at login, the SDK answered exactly that
+ * from an `@internal` module no entry exported, and its lookup depended on the prefix table being
+ * hand-written in longest-first order. `providerFromApiKeyPrefix` is now public in
+ * `@theokit/sdk/auth` with the ordering derived. It is a DIFFERENT question from this resolver's —
+ * "whose is this string?" versus "what credential should I use?" — so it stays a separate symbol,
+ * and the forward through `./auth` is pending the SDK publish (see `auth-entry.ts`).
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -159,3 +168,32 @@ describe('resolveCredential', () => {
     expect(resolveCredential({ env: {}, providers: PROVIDERS, home })).toBeUndefined()
   })
 })
+
+/**
+ * The stored-credential shapes a consumer needs to READ what `writeCredential` wrote.
+ *
+ * Measured against the closest real consumer: it declares its own `StoredOAuthCredential` because
+ * the layer forwarded `writeCredential` and `readStoredOAuth` but not the type of what they carry.
+ * A function you can call whose payload you must re-describe is only half forwarded — and the
+ * hand-written mirror is where the two drift.
+ */
+describe('stored credential types', () => {
+  it('the_shapes_behind_writeCredential_are_reachable', async () => {
+    const mod = (await import('../../src/auth-entry.js')) as Record<string, unknown>
+
+    // Types erase at runtime, so what this case can assert is that the module resolves and still
+    // carries the functions those types describe. The type half is enforced by the import at the
+    // foot of this file — and by a DIFFERENT command than the one running this line, which is worth
+    // stating rather than implying: vitest's own `Type Errors` row does not cover it. Verified by
+    // deleting the forward and re-running:
+    //   npx tsc --noEmit -p packages/agents/tsconfig.test.json   → TS2724 + TS2305
+    // That is the gate CI and the pre-push hook run, so the guarantee holds where it matters.
+    expect(typeof mod.writeCredential).toBe('function')
+    expect(typeof mod.readStoredOAuth).toBe('function')
+  })
+})
+
+// Compile-time half of the assertion above: `tsc --noEmit` fails if either type is dropped.
+import type { StoredCredential, StoredOAuthCredential } from '../../src/auth-entry.js'
+type _StoredOAuthIsReachable = StoredOAuthCredential['provider']
+type _StoredIsReachable = StoredCredential extends never ? never : true
