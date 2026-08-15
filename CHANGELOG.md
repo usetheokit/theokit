@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **A tabela de prefixos passa a ter UM dono.** A coerencia chave↔provider restatava os prefixos;
+  agora ela PERGUNTA ao SDK (`providerFromApiKeyPrefix`, ordenacao derivada do comprimento). A
+  duplicacao so existia porque o simbolo estava exportado em runtime e ausente do `.d.ts` ate o
+  `@theokit/sdk@4.52.1`. `keyPrefix` no descritor vira escape hatch para um provider que o SDK nunca
+  ouviu falar, e so um desacordo POSITIVO e recusado. Quem surfaced o momento de fazer isso foi o
+  gate de paridade — `./auth` e o unico subpath sob gate duro, e ninguem precisou lembrar.
+
 ### Fixed
 
 - **O resolver passa a LER a credencial de chave de API que `writeCredential` escreve.** Ele lia de

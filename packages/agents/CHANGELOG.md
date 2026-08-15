@@ -1,5 +1,25 @@
 # @theokit/agents
 
+## 9.3.0
+
+### Minor Changes
+
+- **A tabela de prefixos passa a ter UM dono, e `providerFromApiKeyPrefix` e encaminhado.**
+
+  A coerencia chave↔provider restatava os prefixos; agora ela PERGUNTA ao SDK
+  (`providerFromApiKeyPrefix`, cuja ordenacao e derivada do comprimento). Uma segunda copia mantida a
+  mao e exatamente o que produziu o bug de longest-prefix corrigido no `@theokit/sdk@4.52.0`, e a
+  duplicacao so existia porque o simbolo estava exportado em runtime e ausente do `.d.ts` ate o
+  4.52.1.
+
+  `keyPrefix` no descritor continua, agora como escape hatch: um provider que o SDK nunca ouviu falar
+  (um gateway self-hosted) ainda declara o proprio prefixo. E so um desacordo POSITIVO e recusado —
+  `undefined` do SDK significa "nao reconheco a forma desta chave", que nao e contradicao.
+
+  O simbolo tambem passa a ser encaminhado por `@theokit/agents/auth`. Quem surfaced o momento em que
+  isso virou possivel foi o gate de paridade: `./auth` e o unico subpath sob gate DURO, e um export do
+  SDK sem decisao escrita derruba o CI. Ninguem precisou lembrar.
+
 ## 9.2.1
 
 ### Patch Changes

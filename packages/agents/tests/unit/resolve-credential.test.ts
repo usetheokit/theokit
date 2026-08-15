@@ -30,6 +30,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { providerFromApiKeyPrefix } from '@theokit/sdk/auth'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -391,29 +392,14 @@ describe('DEFAULT_PROVIDERS', () => {
     expect(new Set(priorities).size).toBe(priorities.length)
   })
 
-  it('the_prefixes_agree_with_the_sdk', async () => {
-    // DRIFT GUARD. The SDK owns the same knowledge in `providerFromApiKeyPrefix`, and a second
-    // hand-maintained copy is exactly what produced the longest-prefix bug fixed in @theokit/sdk
-    // 4.52.0. One table would be better; a table with a test that fails when the two disagree is the
-    // honest second-best, and it is what turns "we hope they match" into CI.
-    //
-    // Imported dynamically and cast: the symbol is exported at runtime and MISSING from the SDK's
-    // `auth/index.d.ts` (measured against 4.52.0) — the same declaration gap this file already
-    // documents for `readStoredOAuth`.
-    const sdkAuth = (await import('@theokit/sdk/auth')) as unknown as {
-      providerFromApiKeyPrefix?: (key: string) => string | undefined
-    }
-    const infer = sdkAuth.providerFromApiKeyPrefix
-    if (infer === undefined) {
-      // Reported, never silently skipped: a guard that vanishes when its counterpart moves is a
-      // guard nobody notices the loss of.
-      console.warn('[drift-guard] @theokit/sdk/auth does not export providerFromApiKeyPrefix')
-      return
-    }
-
+  it('the_prefixes_agree_with_the_sdk', () => {
+    // DRIFT GUARD, now with a typed import. The SDK owns the same knowledge, and a second
+    // hand-maintained copy is what produced the longest-prefix bug fixed in 4.52.0. The coherence
+    // check already ASKS the SDK rather than restating it; this keeps the descriptor table — which
+    // still names a prefix per provider for the escape-hatch path — from drifting away from it.
     for (const p of DEFAULT_PROVIDERS) {
       expect(
-        infer(`${p.keyPrefix ?? ''}example-key`),
+        providerFromApiKeyPrefix(`${p.keyPrefix ?? ''}example-key`),
         `our table says ${p.name} owns "${p.keyPrefix ?? ''}", the SDK disagrees`,
       ).toBe(p.name)
     }
