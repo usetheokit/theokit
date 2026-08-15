@@ -94,6 +94,22 @@ export interface LoadInstructionTreeInput {
    * ask `entry.endsWith('.md')`. The walk was ours; only the question was theirs.
    */
   readonly fileNames?: readonly string[] | ((entry: string) => boolean)
+  /**
+   * The order blocks come back in. Defaults to `'outward-in'`.
+   *
+   * `'outward-in'` reads every file at a level before descending: an instruction TREE means the
+   * outer file states the general rule and the inner one refines it, so the composer needs the
+   * general one first.
+   *
+   * `'lexicographic'` is one alphabetical pass, directories interleaved where their names fall. A
+   * rules FOLDER means the opposite of a tree: the files are peers, and the contract its users
+   * depend on is that the same directory assembles the same prompt on any machine.
+   *
+   * Both are deterministic. Only one is right per shape, and only the caller knows which shape it
+   * is looking at — which is why offering the walk without offering the order left the capability
+   * half-built.
+   */
+  readonly order?: 'outward-in' | 'lexicographic'
 }
 
 export interface InstructionTree {
@@ -161,7 +177,7 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
     // outer file states the general rule and the inner one refines it, so loading the refinement
     // first hands the composer its blocks in the opposite of the order it needs. Two passes make the
     // outward-in order a property of the walk instead of an accident of file names.
-    for (const { entry, path, stats } of filesBeforeDirectories(dir, entries)) {
+    for (const { entry, path, stats } of walkOrder(dir, entries, input.order ?? 'outward-in')) {
       // Inode identity, not path identity — see the function docblock.
       const inode = `${String(stats.dev)}:${String(stats.ino)}`
       if (seenInodes.has(inode)) continue
@@ -228,7 +244,11 @@ interface WalkEntry {
  * An entry that vanishes between `readdir` and `stat` is dropped rather than reported: a concurrent
  * delete is not this loader's problem, and the file is genuinely not there to load.
  */
-function filesBeforeDirectories(dir: string, entries: readonly string[]): WalkEntry[] {
+function walkOrder(
+  dir: string,
+  entries: readonly string[],
+  order: 'outward-in' | 'lexicographic',
+): WalkEntry[] {
   const found: WalkEntry[] = []
   for (const entry of [...entries].sort((a, b) => a.localeCompare(b))) {
     const path = join(dir, entry)
@@ -238,6 +258,10 @@ function filesBeforeDirectories(dir: string, entries: readonly string[]): WalkEn
       continue
     }
   }
+
+  // Alphabetical either way — the difference is only whether directories are held back.
+  if (order === 'lexicographic') return found
+
   return [
     ...found.filter((item) => !item.stats.isDirectory()),
     ...found.filter((item) => item.stats.isDirectory()),
