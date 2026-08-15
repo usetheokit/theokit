@@ -37,8 +37,12 @@ export type DelegationTarget = SubAgentSpec | DelegationPort
  * and has no method, so the two cannot be confused. Additive by construction: the existing
  * spec-shaped call keeps its exact behaviour (Top-risk 1).
  */
-function isPort(target: DelegationTarget): target is DelegationPort {
-  return typeof (target as Partial<DelegationPort>).run === 'function'
+export function isPort(target: DelegationTarget): target is DelegationPort {
+  // `in` narrows the union without an assertion — `SubAgentSpec` has no `run` member, so TypeScript
+  // proves the discrimination instead of being told it. Exported because `createDelegateTool`
+  // classifies the same union, and an unexported copy is how the two answers drift apart in silence
+  // (G12): a future hybrid shape would be taught to one reader and not the other.
+  return 'run' in target
 }
 
 /** Run one round against whichever shape was supplied, under an optional clock cap. */

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **`theokit` passa a exigir `@theokit/sdk@^4.52.1` como peer** (era `^4.49.0`). O piso antigo ja era
+  inalcancavel: `@theokit/agents` depende de `^4.52.1` e `theokit` depende de `agents`, entao nenhuma
+  arvore real instalava 4.49.x. O manifesto anunciava uma combinacao que ninguem testava.
+
 ### Added
 
 - **O agente agora pode pedir ao framework que delegue.** `createDelegateTool` em
@@ -243,6 +249,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `http ↛ agents` lendo apenas os `import` de `src` — e ficou verde sobre um manifesto que declarava a
   aresta proibida em voz alta. O manifesto é a aresta que um gerenciador de pacotes enxerga, e é a que
   chega ao consumidor. A guarda agora lê os dois.
+
+## [@theokit/agents 9.3.0] - 2026-08-15
+
+### Changed
+
+- A checagem de coerencia chave↔provider passou a PERGUNTAR ao SDK qual provider emitiu uma chave, em vez de manter a propria tabela de prefixos. Uma segunda copia dessa tabela diverge da primeira em silencio, e o erro so aparece como um 401 remoto que nao menciona prefixo nenhum.
+
+## [@theokit/agents 9.2.1] - 2026-08-15
+
+### Fixed
+
+- O resolvedor de credencial passou a ler de volta a chave de API que `writeCredential` grava. Ele so consultava a variante OAuth do store, entao um app que gravava a credencial por um caminho e a procurava pelo outro nunca a encontrava.
+
+## [@theokit/agents 9.2.0] - 2026-08-15
+
+### Added
+
+- `resolveAgentCredential` — a montagem de autenticacao pronta. O framework ja entregava as pecas (store em 0600, device flow RFC 8628, refresh); faltava a cadeia que decide de onde a credencial vem e verifica que ela combina com o provider declarado. Sem ela, cada app novo reescrevia a mesma logica.
+
+## [@theokit/agents 9.1.1] - 2026-08-15
+
+### Security
+
+- A leitura do store de aprovacoes passou a recusar um arquivo que outro usuario local possa escrever. O diretorio era mantido owner-only e o arquivo era aberto sem olhar o modo dele — um `hook-approvals.json` deixado group- ou world-writable virava um canal para aprovar hooks em nome de quem roda o agente.
+
+## [@theokit/agents 9.1.0] - 2026-08-15
+
+### Added
+
+- `HookApprovalStore.approvals(scope)` devolve os registros, nao so os hashes. Uma tela de consentimento precisa dizer QUAL comando foi aprovado e quando; com apenas os fingerprints, ela nao tinha como.
+
+## [@theokit/agents 9.0.1] - 2026-08-15
+
+### Security
+
+- O `TrustStore` passou a garantir o modo do DIRETORIO, nao so o do arquivo. `mkdirSync` com `mode` e no-op num diretorio que ja existe, e esse diretorio e compartilhado com a raiz de transcricoes — um diretorio permissivo criado antes ficava permissivo para sempre.
+
+## [@theokit/agents 9.0.0] - 2026-08-15
+
+### Changed
+
+- **BREAKING.** `HookApprovalStore` passou a escopar aprovacoes por PROJETO; `scope` agora e obrigatorio em `approve`, `revoke`, `stateOf` e `approvedFingerprints`. O store chaveava so pelo fingerprint do hook, o que tornava uma aprovacao dada num repositorio valida na maquina inteira. Migracao: passe o diretorio do projeto; aprovacoes antigas nao migram e sao pedidas de novo (fail-closed, de proposito).
 
 ## [@theokit/agents 8.7.0] - 2026-08-14
 
