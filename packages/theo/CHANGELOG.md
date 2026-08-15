@@ -1,5 +1,27 @@
 # theo
 
+## 0.48.2
+
+### Patch Changes
+
+- 9af5256: `theokit` now requires `@theokit/sdk@^4.52.1` as a peer (was `^4.49.0`).
+
+  The old floor was already unreachable: `@theokit/agents` depends on `^4.52.1` and `theokit` depends
+  on `agents`, so no real install tree ever resolved 4.49.x. The manifest advertised a combination
+  nobody tested — the exact divergence the peer-range suite exists to catch.
+
+- Updated dependencies [299a014]
+- Updated dependencies [d6a5928]
+- Updated dependencies [6b15741]
+- Updated dependencies [b8f47a9]
+- Updated dependencies [7825605]
+- Updated dependencies [c70eadb]
+- Updated dependencies [339852d]
+- Updated dependencies [b30fe9f]
+- Updated dependencies [e7c4d28]
+- Updated dependencies [b023cef]
+  - @theokit/agents@9.4.0
+
 ## 0.48.1
 
 ### Patch Changes
