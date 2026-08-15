@@ -264,3 +264,147 @@ describe('contextPressure — the numerator finally meets the denominator', () =
     )
   })
 })
+
+/**
+ * `@file.md` imports — the half of the loader a measured consumer had to write itself.
+ *
+ * `loadInstructionTree` walked directories and loaded whole files, and stopped there. The closest
+ * real consumer needs one more thing from an instruction file: the ability to say `@./style.md` and
+ * have that file's content land in the prompt. Without it, migrating to this loader would have been
+ * a REGRESSION, not an absorption — which is why the capability lands here before the migration
+ * rather than after.
+ *
+ * Three properties carry it, and each has a way of being wrong that is invisible:
+ *
+ *  1. **A reference inside code is not an import.** `@foo.md` inside a fence or backticks is prose
+ *     ABOUT an import. Expanding it rewrites the user's documentation.
+ *  2. **Containment, on the real path.** An import that resolves outside the root is kept literal,
+ *     never read — the same boundary the walk already enforces, applied to a second entry point.
+ *  3. **Depth and cycles are bounded.** `a → b → a` must terminate, and a chain must stop.
+ */
+describe('loadInstructionTree — @file.md imports', () => {
+  let root: string
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'theokit-imports-'))
+  })
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  const load = (onWarn?: (m: string) => void) =>
+    loadInstructionTree({
+      cwd: root,
+      roots: [root],
+      budget: { maxFiles: 20, maxChars: 64_000, maxDepth: 5 },
+      ...(onWarn === undefined ? {} : { onWarn }),
+    })
+
+  it('expands_a_relative_import', () => {
+    writeFileSync(join(root, 'AGENTS.md'), 'top\n\n@./style.md\n', 'utf8')
+    writeFileSync(join(root, 'style.md'), 'two spaces, never tabs', 'utf8')
+
+    const text = load()
+      .blocks.map((b) => b.content)
+      .join('\n')
+
+    expect(text).toContain('two spaces, never tabs')
+    expect(text, 'the reference survived unexpanded').not.toContain('@./style.md')
+  })
+
+  it('a_reference_inside_a_fence_is_not_an_import', () => {
+    // Prose ABOUT the syntax, not a use of it. Expanding it rewrites the user's own documentation —
+    // and the user only finds out by reading a prompt that no longer says what they wrote.
+    writeFileSync(
+      join(root, 'AGENTS.md'),
+      'howto\n\n```\n@./style.md\n```\n\nand inline `@./style.md` too\n',
+      'utf8',
+    )
+    writeFileSync(join(root, 'style.md'), 'SHOULD-NOT-APPEAR', 'utf8')
+
+    const text = load()
+      .blocks.map((b) => b.content)
+      .join('\n')
+
+    expect(text, 'a fenced reference was expanded').not.toContain('SHOULD-NOT-APPEAR')
+    expect(text).toContain('@./style.md')
+  })
+
+  it('an_import_outside_the_root_is_kept_literal_and_warned', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'theokit-outside-'))
+    writeFileSync(join(outside, 'secret.md'), 'SHOULD-NOT-APPEAR', 'utf8')
+    writeFileSync(
+      join(root, 'AGENTS.md'),
+      `see @../${join(outside).split('/').pop()}/secret.md\n`,
+      'utf8',
+    )
+
+    const warnings: string[] = []
+    const text = load((m) => warnings.push(m))
+      .blocks.map((b) => b.content)
+      .join('\n')
+
+    expect(text, 'an import escaped the root').not.toContain('SHOULD-NOT-APPEAR')
+    expect(warnings.join('\n'), 'the refusal was silent').toMatch(/outside|not found/i)
+    rmSync(outside, { recursive: true, force: true })
+  })
+
+  it('a_missing_import_is_kept_literal_and_warned', () => {
+    writeFileSync(join(root, 'AGENTS.md'), 'see @./nope.md\n', 'utf8')
+
+    const warnings: string[] = []
+    const text = load((m) => warnings.push(m))
+      .blocks.map((b) => b.content)
+      .join('\n')
+
+    expect(text).toContain('@./nope.md')
+    expect(warnings.join('\n')).toMatch(/not found/i)
+  })
+
+  it('a_cycle_expands_each_file_once', () => {
+    // `a → b → a`, and the assertion is on the COUNT, not on termination.
+    //
+    // The first version of this case asserted only that A and B appear — and a tamper-test showed it
+    // stayed green with the visited set deleted, because the depth cap terminates the cycle anyway.
+    // It was exercising the cap under the name of the guard. What the visited set actually buys is
+    // that a file is expanded ONCE per branch: without it, the cycle unrolls to the cap and the same
+    // paragraph lands in the prompt four times over.
+    writeFileSync(join(root, 'AGENTS.md'), 'root\n\n@./a.md\n', 'utf8')
+    writeFileSync(join(root, 'a.md'), 'ALPHA\n\n@./b.md\n', 'utf8')
+    writeFileSync(join(root, 'b.md'), 'BETA\n\n@./a.md\n', 'utf8')
+
+    const text = load()
+      .blocks.map((b) => b.content)
+      .join('\n')
+
+    expect(text.match(/ALPHA/g) ?? [], 'a file was expanded more than once').toHaveLength(1)
+    expect(text.match(/BETA/g) ?? []).toHaveLength(1)
+  })
+
+  it('depth_is_bounded_and_the_cap_is_announced', () => {
+    writeFileSync(join(root, 'AGENTS.md'), '@./d1.md\n', 'utf8')
+    for (let i = 1; i <= 8; i++) {
+      writeFileSync(
+        join(root, `d${String(i)}.md`),
+        `L${String(i)}\n\n@./d${String(i + 1)}.md\n`,
+        'utf8',
+      )
+    }
+
+    const warnings: string[] = []
+    const text = load((m) => warnings.push(m))
+      .blocks.map((b) => b.content)
+      .join('\n')
+
+    expect(text).toContain('L1')
+    expect(warnings.join('\n'), 'the depth cap was silent').toMatch(/depth/i)
+  })
+
+  it('a_file_with_no_imports_is_unchanged', () => {
+    // Backward-compatibility guard: expansion is invisible to every existing caller.
+    writeFileSync(join(root, 'AGENTS.md'), 'plain content, no refs\n', 'utf8')
+
+    expect(load().blocks[0]?.content).toContain('plain content, no refs')
+  })
+})
