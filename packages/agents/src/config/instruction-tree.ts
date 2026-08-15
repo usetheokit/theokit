@@ -7,7 +7,11 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
-import { assertNoSymlinkEscape } from '@theokit/agents'
+// Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
+// `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
+// through `src/index.ts`). The barrel re-exports the same SDK symbols for consumers; inside the
+// package we reach the source.
+import { assertNoSymlinkEscape } from '@theokit/sdk/path-safety'
 
 import { splitFrontmatter } from './frontmatter.js'
 

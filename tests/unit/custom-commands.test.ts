@@ -4,8 +4,8 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { loadCustomCommands } from '../../packages/theo/src/config/custom-commands.js'
-import { frontmatterValue, splitFrontmatter } from '../../packages/theo/src/config/frontmatter.js'
+import { loadCustomCommands } from '../../packages/agents/src/config-entry.js'
+import { frontmatterValue, splitFrontmatter } from '../../packages/agents/src/config-entry.js'
 
 /**
  * M76 — the `.theokit/commands/` loader.
