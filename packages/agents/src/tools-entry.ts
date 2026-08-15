@@ -119,3 +119,16 @@ export type {
   WebSearchCallback,
   WebSearchResult,
 } from '@theokit/sdk-tools'
+
+// The 24th factory, and the only one implemented on this side of the seam.
+//
+// The other 23 come from `@theokit/sdk-tools`. This one cannot: it wraps `delegate()`, which is
+// framework-owned, so an SDK-side implementation would have the SDK importing the framework and
+// invert G1's dependency direction. It is re-exported here so a consumer reaching for an
+// agent-facing tool finds one surface and never has to know which package implements what.
+export {
+  createDelegateTool,
+  DelegateToolConfigError,
+  type CreateDelegateToolOptions,
+  type DelegateRosterEntry,
+} from './tools/delegate-tool.js'
