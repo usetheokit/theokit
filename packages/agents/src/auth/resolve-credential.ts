@@ -52,6 +52,15 @@ export interface ProviderDescriptor {
   readonly priority: number
   /** Model-id prefix this provider claims (`openai/`). Absent ⇒ it claims none. */
   readonly modelPrefix?: string
+  /**
+   * Prefix this provider stamps on its API keys (`sk-ant-`, `sk-or-`, `sk-`).
+   *
+   * Enables the coherence check: a key sitting in `ANTHROPIC_API_KEY` that starts with `sk-proj-`
+   * is a paste into the wrong variable, caught here for free instead of as a 401 from the wrong
+   * endpoint whose message says nothing about the mismatch. Absent means "this provider stamps no
+   * recognisable prefix", and nothing is checked — never a silent pass disguised as a check.
+   */
+  readonly keyPrefix?: string
 }
 
 /**
@@ -87,6 +96,51 @@ export class ProviderPrefixMismatchError extends TheokitAgentError {
   }
 }
 
+/** Raised when a key's prefix contradicts the provider it was declared for. */
+export class ProviderKeyMismatchError extends TheokitAgentError {
+  override readonly name = 'ProviderKeyMismatchError'
+
+  constructor(
+    readonly provider: string,
+    readonly where: string,
+    readonly expectedPrefix: string,
+  ) {
+    super(
+      `${where}: the key declared for provider "${provider}" does not start with ` +
+        `"${expectedPrefix}". Either the provider or the key is wrong, and sending it would fail ` +
+        `mid-request against the wrong endpoint.`,
+      { code: 'provider_key_mismatch', isRetryable: false },
+    )
+  }
+}
+
+/** Raised when a pinned provider has no credential, or names one the app never declared. */
+export class DeclaredProviderError extends TheokitAgentError {
+  override readonly name = 'DeclaredProviderError'
+
+  constructor(message: string) {
+    super(message, { code: 'declared_provider_unusable', isRetryable: false })
+  }
+}
+
+/**
+ * Raised by {@link requireCredential} when nothing is configured, carrying WHERE it looked.
+ *
+ * The list is the point. "No credential found" without it is the least useful sentence available,
+ * and it is why the closest measured consumer carried its own `attempts` array.
+ */
+export class CredentialNotFoundError extends TheokitAgentError {
+  override readonly name = 'CredentialNotFoundError'
+
+  constructor(readonly attempts: readonly string[]) {
+    super(
+      `no provider credential found. Tried, in order:\n` +
+        attempts.map((a, i) => `  ${String(i + 1)}. ${a}`).join('\n'),
+      { code: 'credential_not_found', isRetryable: false },
+    )
+  }
+}
+
 export interface ResolveCredentialInput {
   /** The environment as the process sees it — already loaded, already interpolated. */
   readonly env: Readonly<Record<string, string | undefined>>
@@ -108,6 +162,17 @@ export interface ResolveCredentialInput {
    * the precedence a consumer already implements (declared env → per-provider env → file).
    */
   readonly store?: CredentialStoreConfig
+  /**
+   * Name of the variable that PINS a provider (`PROVIDER`, `THEOCODE_PROVIDER`, …).
+   *
+   * When set and present, the pinned provider is the only one considered: if it has no credential,
+   * resolution THROWS rather than falling back. Falling back would send the request — and the bill,
+   * and the data — to a provider the operator did not choose, which is the one outcome a pin exists
+   * to prevent.
+   *
+   * The variable NAME is the app's (products disagree on it); the semantics are not.
+   */
+  readonly declaredProviderEnvVar?: string
 }
 
 /**
@@ -189,8 +254,71 @@ export function credentialSources(input: CredentialSourcesInput): readonly strin
  * not easier. A prefix that names a provider with no credential DOES throw, because that is a
  * contradiction rather than an absence.
  */
+/**
+ * Refuse a key whose prefix contradicts the provider it was found under.
+ *
+ * Checked at every entry point, not only the pinned one: a mis-pasted key is a mis-pasted key
+ * whether the operator named the provider or precedence picked it.
+ */
+function assertKeyMatchesProvider(
+  descriptor: ProviderDescriptor,
+  apiKey: string,
+  where: string,
+): void {
+  if (descriptor.keyPrefix === undefined) return
+  if (apiKey.startsWith(descriptor.keyPrefix)) return
+  throw new ProviderKeyMismatchError(descriptor.name, where, descriptor.keyPrefix)
+}
+
+/**
+ * The provider the operator PINNED, when they pinned one.
+ *
+ * @throws when the variable names a provider the app never declared — a typo must not silently
+ *   disable the pin and fall through to precedence, which is the failure a pin exists to prevent.
+ */
+function pinnedProvider(
+  input: ResolveCredentialInput,
+  byPriority: readonly ProviderDescriptor[],
+): ProviderDescriptor | undefined {
+  if (input.declaredProviderEnvVar === undefined) return undefined
+  const declared = input.env[input.declaredProviderEnvVar]?.trim()
+  if (declared === undefined || declared === '') return undefined
+
+  const descriptor = byPriority.find((d) => d.name === declared)
+  if (descriptor === undefined) {
+    throw new DeclaredProviderError(
+      `${input.declaredProviderEnvVar} is "${declared}" — expected one of ` +
+        `${byPriority.map((d) => d.name).join(', ')}.`,
+    )
+  }
+  return descriptor
+}
+
 export function resolveCredential(input: ResolveCredentialInput): CredentialResolution | undefined {
   const byPriority = [...input.providers].sort((a, b) => a.priority - b.priority)
+
+  // The pin is evaluated FIRST and is absolute: if the named provider has no credential, this
+  // throws rather than falling back. Falling back would send the request — and the bill, and the
+  // data — to a provider the operator did not choose.
+  const pinned = pinnedProvider(input, byPriority)
+  if (pinned !== undefined) {
+    const apiKey = input.env[pinned.envKey]
+    if (apiKey === undefined || apiKey === '') {
+      throw new DeclaredProviderError(
+        `provider "${pinned.name}" is pinned via ${String(input.declaredProviderEnvVar)} but no ` +
+          `key for it was found (looked at ${pinned.envKey}). Refusing to fall back to a different ` +
+          `provider's credential.`,
+      )
+    }
+    assertKeyMatchesProvider(pinned, apiKey, pinned.envKey)
+    return {
+      kind: 'api-key',
+      provider: pinned.name,
+      apiKey,
+      source: originOf(pinned.envKey, input.home),
+      inferred: false,
+    }
+  }
 
   // The descriptor and its key travel TOGETHER from here on. Selecting the descriptor and then
   // re-reading `env` would leave the type unable to see that the value is present — the shape that
@@ -214,6 +342,8 @@ export function resolveCredential(input: ResolveCredentialInput): CredentialReso
     throw new ProviderPrefixMismatchError(claimed.name, claimed.envKey, input.model ?? '')
   }
   if (found === undefined) return storedOAuthResolution(input, byPriority)
+
+  assertKeyMatchesProvider(found.descriptor, found.apiKey, found.descriptor.envKey)
 
   return {
     kind: 'api-key',
@@ -328,4 +458,96 @@ function originOf(varName: string, home: string | undefined): SourceOrigin {
   return declaredNames(dotenv).has(varName)
     ? { kind: 'file', path: dotenv }
     : { kind: 'env', varName }
+}
+
+/**
+ * Like {@link resolveCredential}, but THROWS when nothing is configured — carrying where it looked.
+ *
+ * Two functions rather than a flag: the non-throwing shape is what a first-run path wants ("no key
+ * yet" is the ordinary state, and the next move is `theokit auth login`), and the throwing shape is
+ * what a path that cannot continue wants. A boolean parameter would make the caller's intent
+ * invisible at the call site, and the two intents are genuinely different.
+ *
+ * The attempts list is the reason this exists: "no credential found" without saying WHERE it looked
+ * is the least useful sentence a CLI can print, and it is why the closest measured consumer carried
+ * its own.
+ */
+export function requireCredential(input: ResolveCredentialInput): CredentialResolution {
+  const resolved = resolveCredential(input)
+  if (resolved !== undefined) return resolved
+  throw new CredentialNotFoundError(
+    credentialSources({
+      providers: input.providers,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- `CredentialStoreConfig` does not resolve (see the import note at the top of this file); the value is only forwarded, never inspected
+      ...(input.store === undefined ? {} : { store: input.store }),
+    }),
+  )
+}
+
+/**
+ * The providers a TheoKit agent app starts with — so a new app writes no table at all.
+ *
+ * Measured against the closest real consumer: it opens with three hand-written tables (`PROVIDERS`,
+ * `PREFIXES`, `ENV_KEYS`) saying what every terminal agent app says. That is not its domain; it is
+ * the cost of shipping a resolver whose only input is the argument the app must build.
+ *
+ * ## Why the prefixes live here as well as in the SDK
+ *
+ * `providerFromApiKeyPrefix` owns the same knowledge, and one table would be better. It cannot be
+ * the only one today: the symbol is exported at runtime and absent from the SDK's `auth/index.d.ts`
+ * (measured against 4.52.0), so a typed import does not resolve. Rather than block, the table is
+ * here AND a drift-guard test fails when the two disagree — the same hand-maintained-table hazard
+ * that produced the longest-prefix bug is caught by CI instead of hoped away.
+ *
+ * ## Priorities, and why they are spaced
+ *
+ * Distinct and 10 apart: an app that wants to slot a provider between two defaults can, without
+ * renumbering. Order is `openrouter → anthropic → openai`, matching the consumer's measured chain.
+ */
+
+export const DEFAULT_PROVIDERS: readonly ProviderDescriptor[] = [
+  { name: 'openrouter', envKey: 'OPENROUTER_API_KEY', priority: 10, keyPrefix: 'sk-or-' },
+  { name: 'anthropic', envKey: 'ANTHROPIC_API_KEY', priority: 20, keyPrefix: 'sk-ant-' },
+  { name: 'openai', envKey: 'OPENAI_API_KEY', priority: 30, keyPrefix: 'sk-' },
+]
+
+/** Everything {@link resolveAgentCredential} needs, and nothing an app has to invent. */
+export interface AgentCredentialInput {
+  readonly env: Readonly<Record<string, string | undefined>>
+  readonly home?: string
+  readonly model?: string
+  readonly store?: CredentialStoreConfig
+  /**
+   * Providers to accept. Defaults to {@link DEFAULT_PROVIDERS}.
+   *
+   * Present so an app can NARROW (a product that only talks to Anthropic) or EXTEND (a self-hosted
+   * gateway) — the two real reasons to disagree with the default. Which providers exist stays app
+   * policy; not having to state it to get started is the point.
+   */
+  readonly providers?: readonly ProviderDescriptor[]
+  /** Variable that pins a provider. Defaults to `THEOKIT_PROVIDER`. */
+  readonly declaredProviderEnvVar?: string
+}
+
+/**
+ * The one call a new app makes: given the environment, which credential do I use?
+ *
+ * `resolveCredential` takes the full policy as arguments, which is right for an app that has
+ * opinions and wrong as a starting point — a new app should not have to state a provider table, a
+ * precedence order and a pin variable before it can read a key. This applies the defaults and keeps
+ * every one of them overridable.
+ *
+ * Throws when nothing is configured, carrying WHERE it looked: a new app's first run is exactly the
+ * case that needs the list, and printing the error is the whole handling it needs.
+ */
+export function resolveAgentCredential(input: AgentCredentialInput): CredentialResolution {
+  return requireCredential({
+    env: input.env,
+    providers: input.providers ?? DEFAULT_PROVIDERS,
+    declaredProviderEnvVar: input.declaredProviderEnvVar ?? 'THEOKIT_PROVIDER',
+    ...(input.home === undefined ? {} : { home: input.home }),
+    ...(input.model === undefined ? {} : { model: input.model }),
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- same unresolved `CredentialStoreConfig`; forwarded verbatim to the resolver
+    ...(input.store === undefined ? {} : { store: input.store }),
+  })
 }
