@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`CustomCommand.frontmatter` — o produto lê as próprias chaves.** O carregador conhece uma
+  (`description`); os comandos de um produto declaram mais, e os conjuntos não coincidem. Custo
+  medido de não carregar as linhas: o consumidor mais próximo escreveu um carregador de 122 linhas —
+  mesmos diretórios, mesmo gate de confiança, mesma precedência — porque o resultado não lhe dava de
+  onde ler `model`, `agent` ou `subtask`.
 - **Um `paths:` declarado e ilegível deixa de virar "sem escopo".** `InstructionBlock` ganha
   `scopesUnreadable`. A leitura de frontmatter nunca falha — ela extrai o que consegue — então um
   `paths:` cujo valor não pôde ser lido devolvia `[]`, o mesmo valor de um arquivo que não declarou

@@ -50,6 +50,19 @@ export interface CustomCommand {
   readonly source: 'project' | 'user'
   /** Absolute path, for messages a human can act on. */
   readonly path: string
+  /**
+   * The frontmatter lines, verbatim — read your own keys with {@link frontmatterValue}.
+   *
+   * This loader knows two keys (`description`, and the fence). A product's commands declare more,
+   * and the sets do not agree: the closest consumer reads `model`, `agent`, `subtask` and `hints`,
+   * while Claude Code's custom commands declare `model` and `argument-hint`. Two vocabularies
+   * already, and neither is the framework's to adopt.
+   *
+   * Carrying the lines is what stops that from forcing a second loader. Measured: the consumer
+   * wrote 122 lines — the same directories, the same trust gate, the same precedence — because the
+   * result gave it nowhere to read its own keys from.
+   */
+  readonly frontmatter: readonly string[]
 }
 
 export interface LoadCustomCommandsInput {
@@ -217,5 +230,6 @@ function parseCommandFile(
     body: parsed.body,
     source,
     path,
+    frontmatter: parsed.frontmatter,
   }
 }
