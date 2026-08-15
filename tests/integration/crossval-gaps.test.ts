@@ -18,6 +18,7 @@
  *     nothing — a vacuous pass on the plan's single metric. `ci_refuses_a_mostly_skipped_run`
  *     below turns that into a failure under CI.
  */
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -116,20 +117,34 @@ describe('G9 — the published tarball carries prose', () => {
     expect(manifest.files ?? []).toContain('CHANGELOG.md')
   })
 
-  it('agents_readme_has_substance', () => {
+  it('agents_readme_documents_the_real_surface', () => {
+    // Reviewed and rewritten: the first version of this test asserted "≥ 30 non-blank lines" and
+    // "≥ 10 subpaths named" — two magic numbers that measure length, not truth, and that a stub
+    // padded with prose would satisfy. Both thresholds below are DERIVED from the manifest, and the
+    // first assertion is a correctness property rather than a size one.
     const readme = read('packages/agents/README.md')
-    const nonBlank = readme.split('\n').filter((l) => l.trim().length > 0)
-    expect(nonBlank.length, 'README is a stub').toBeGreaterThanOrEqual(30)
-
     const manifest = JSON.parse(read('packages/agents/package.json')) as {
       exports?: Record<string, unknown>
     }
     const subpaths = Object.keys(manifest.exports ?? {})
-    const mentioned = subpaths.filter((s) => readme.includes(s))
+    expect(subpaths.length, 'the package declares no subpaths').toBeGreaterThan(0)
+
+    // (a) The README must not document a subpath that does not exist. Docs naming a surface the
+    //     package does not publish are worse than no docs: the consumer writes the import and finds
+    //     out at build time. This is the same defect class as the fabricated `.rateLimit()` example
+    //     caught earlier in this slice.
+    const documented = [...readme.matchAll(/@theokit\/agents(\/[a-z-]+)/g)].map((m) => `.${m[1]}`)
+    const fabricated = [...new Set(documented)].filter((s) => !subpaths.includes(s))
+    expect(fabricated, 'the README documents subpaths the package does not publish').toEqual([])
+
+    // (b) Coverage as a ratio of what is actually published, so adding a subpath without
+    //     documenting it moves the number. The gap this closes was undiscoverable capability —
+    //     prose that names half the surface is the floor for calling it discoverable.
+    const named = subpaths.filter((s) => readme.includes(s))
     expect(
-      mentioned.length,
-      `README names only ${mentioned.length} subpaths`,
-    ).toBeGreaterThanOrEqual(10)
+      named.length,
+      `README names ${named.length} of ${subpaths.length} published subpaths`,
+    ).toBeGreaterThanOrEqual(Math.ceil(subpaths.length / 2))
   })
 
   it('changelog_has_heading_for_published_version', () => {
@@ -406,15 +421,38 @@ describe('G7 — the parity gate walks every subpath', () => {
    * and a register that inflates its own findings is not one anybody trusts twice.
    */
   it('gate_enumerates_subpaths_from_the_manifest', () => {
+    // Reviewed and rewritten: this asserted `src.toContain('AGENTS_MANIFEST.exports')` — grepping
+    // the gate's own source. That passes for a gate that reads the manifest and then ignores it, and
+    // it breaks on a rename that changes nothing. So RUN the gate and hold its arithmetic to the
+    // manifest instead: every published subpath must be accounted for as decided, warned, or
+    // skipped. Hard-code a list and the sum stops matching the moment a subpath is added.
     expect(exists('scripts/check-surface-parity.mjs'), 'the gate was not generalized').toBe(true)
-    const src = read('scripts/check-surface-parity.mjs')
 
-    expect(src, 'the gate still walks a hand-kept key set instead of the manifest').toContain(
-      'AGENTS_MANIFEST.exports',
-    )
-    expect(src, 'the SDK counterpart is guessed by folder convention rather than read').toContain(
-      'SDK_MANIFEST.exports',
-    )
+    const published = Object.keys(
+      (JSON.parse(read('packages/agents/package.json')) as { exports?: Record<string, unknown> })
+        .exports ?? {},
+    ).length
+    expect(published, 'the package declares no subpaths').toBeGreaterThan(0)
+
+    const run = spawnSync(process.execPath, [join(REPO_ROOT, 'scripts/check-surface-parity.mjs')], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    })
+    const output = `${run.stdout ?? ''}${run.stderr ?? ''}`
+    expect(run.status, output).toBe(0)
+
+    const tally =
+      /(\d+)\/(\d+) applicable subpath\(s\) decided; (\d+) in warn mode; (\d+) have no SDK counterpart/.exec(
+        output,
+      )
+    expect(tally, `the gate did not report a tally:\n${output}`).not.toBeNull()
+
+    const applicable = Number(tally![2])
+    const withoutCounterpart = Number(tally![4])
+    expect(
+      applicable + withoutCounterpart,
+      `the gate accounted for ${String(applicable + withoutCounterpart)} subpaths, the manifest publishes ${String(published)}`,
+    ).toBe(published)
   })
 
   it('gate_is_wired_into_check_all', () => {
