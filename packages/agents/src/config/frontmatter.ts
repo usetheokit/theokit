@@ -32,10 +32,30 @@ export interface ParsedFrontmatter {
  * keep going" — failure is per file, never per tree.
  */
 export function splitFrontmatter(raw: string): ParsedFrontmatter | undefined {
-  const lines = raw.split('\n')
+  // Split on BOTH line endings, at the boundary, once.
+  //
+  // Splitting on '\n' alone left a trailing '\r' on every line of a CRLF file, and the trap sat one
+  // level below the fence check: `.` does not match '\r' and `$` does not match before it, so the
+  // list-item pattern in `parsePathsScope` failed on `'  - src/**\r'` and every scope came back
+  // empty. Fixing only the fence would have turned "the file is skipped" into "the file is read and
+  // silently unscoped" — a worse outcome, because a rule that applies everywhere looks like it works.
+  //
+  // Normalising the body to '\n' is deliberate: this text becomes prompt, and a carriage return in
+  // a prompt is noise no model asked for.
+  const lines = raw.split(/\r?\n/)
   if (lines[0]?.trim() !== FENCE) return { frontmatter: [], body: raw }
 
-  const closing = lines.indexOf(FENCE, 1)
+  // `.trim()` on BOTH fences, not just the opening one.
+  //
+  // The closing comparison was `indexOf(FENCE, 1)`, an exact match. On CRLF the closing line is
+  // `'---\r'`, which never equals `'---'`, so a perfectly valid file returned `undefined` — the
+  // value that means "frontmatter never closes". Silent and total on a Windows checkout: every
+  // instruction file WITH frontmatter was skipped, and the warning blamed a missing fence that was
+  // sitting right there, sending the reader after a syntax error that did not exist.
+  //
+  // The opening line was already tolerant, which is what made the asymmetry invisible: a file could
+  // open its frontmatter and then never be allowed to close it.
+  const closing = lines.findIndex((line, index) => index > 0 && line.trim() === FENCE)
   if (closing === -1) return undefined
 
   return { frontmatter: lines.slice(1, closing), body: lines.slice(closing + 1).join('\n') }

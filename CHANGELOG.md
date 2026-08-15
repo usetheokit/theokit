@@ -28,6 +28,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Frontmatter volta a ser lido em arquivos CRLF.** A separação era por `'\n'`, então num checkout
+  Windows a linha de fechamento é `'---\r'` e nunca casava a cerca: um arquivo válido virava
+  "frontmatter nunca fecha" e era pulado — em silêncio, com o aviso culpando um `---` que está lá.
+  A armadilha ia um nível abaixo: `.` não casa `\r` e `$` não casa antes dele, então o item de lista
+  do `paths:` falhava e o escopo vinha vazio. Corrigir só a cerca teria trocado "o arquivo é pulado"
+  por "o arquivo é lido e fica sem escopo" — pior, porque regra que vale em todo lugar parece
+  funcionar.
 - **Apagar uma sessão deixou de relatar uma remoção que não aconteceu.** `deleteSession` aceitava um
   `removeFromRegistry` e reportava `registryRemoved: true` quando ele era assíncrono — uma Promise é
   truthy, então o campo afirmava antes de a remoção ocorrer, e uma rejeição virava unhandled. Como o

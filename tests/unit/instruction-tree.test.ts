@@ -622,3 +622,70 @@ describe('expandInstructionImports — the caller owns presentation and prior re
     expect(out, 'a file the caller already read was inlined again').toBe('@./style.md')
   })
 })
+
+describe('frontmatter — CRLF is not a broken file', () => {
+  it('test_a_crlf_file_with_valid_frontmatter_is_read_not_skipped', () => {
+    // `splitFrontmatter` split on '\n' and compared each line to '---'. On CRLF the closing line is
+    // '---\r', which never equals the fence, so `indexOf` failed and the function returned
+    // `undefined` — the value that means "frontmatter never closes".
+    //
+    // The consequence is silent and total: on a Windows checkout every instruction file WITH
+    // frontmatter is skipped, and the warning blames a missing `---` that is sitting right there.
+    // The user hunts for a syntax error that does not exist while their rules quietly do not apply.
+    //
+    // The opening line was already tolerant (`lines[0]?.trim()`); only the closing comparison was
+    // not — so a file could open its frontmatter successfully and never be allowed to close it.
+    write('crlf.md', '---\r\npaths:\r\n  - src/**\r\n---\r\nbody in CRLF')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+    })
+
+    const block = tree.blocks.find((b) => b.path === 'crlf.md')
+    expect(block, 'a valid CRLF file was skipped as if its frontmatter never closed').toBeDefined()
+    expect(block?.content.trim()).toBe('body in CRLF')
+    expect(block?.scopes).toEqual(['src/**'])
+    expect(warnings.some((w) => w.includes('never closes'))).toBe(false)
+  })
+
+  it('test_a_closing_fence_with_trailing_space_still_closes', () => {
+    // The same asymmetry, from the other direction, and the reason the closing comparison trims.
+    //
+    // The OPENING check was already `lines[0]?.trim() === FENCE`, so `'--- '` opens a frontmatter
+    // block. The closing check was an exact match, so `'--- '` could never close the block it was
+    // allowed to open. Normalising line endings does not reach this case — the character is a
+    // space, not a carriage return — so without the trim the file is skipped as never-closing.
+    write('spaced.md', '---\npaths:\n  - src/**\n--- \nbody')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+    })
+
+    const block = tree.blocks.find((b) => b.path === 'spaced.md')
+    expect(block?.content.trim()).toBe('body')
+    expect(block?.scopes).toEqual(['src/**'])
+  })
+
+  it('test_an_actually_unclosed_frontmatter_is_still_refused', () => {
+    // Anti-vacuity: tolerating '\r' must not tolerate a fence that never arrives.
+    write('open.md', '---\r\npaths:\r\n  - src/**\r\nbody with no closing fence')
+
+    loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+    })
+
+    expect(warnings.some((w) => w.includes('never closes'))).toBe(true)
+  })
+})
