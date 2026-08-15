@@ -228,6 +228,15 @@ export function forkBeforeUserTurn(
       `forkBeforeUserTurn: \`nth\` counts user turns from 1, received ${String(nth)}.`,
     )
   }
+  // Both ids resolve against the same root, so a self-fork would write the truncated copy OVER the
+  // source — silent data loss on an operation whose whole point is to preserve the original. The
+  // hazard was unreachable only because this function always threw; the count fix opens it.
+  if (srcId === newId) {
+    throw new TheokitAgentError(
+      `forkBeforeUserTurn: srcId and newId must differ — forking "${srcId}" onto itself would ` +
+        `truncate the source transcript in place.`,
+    )
+  }
   const root = options.root ?? transcriptRoot()
   const src = transcriptPath(root, options.cwd, srcId)
   const dst = transcriptPath(root, options.cwd, newId)
@@ -268,10 +277,15 @@ function recordIndexOfUserTurn(src: string, nth: number): number | undefined {
   // module and is NOT on the `/persistence` surface. Reaching past the published entry to get it
   // would be the boundary violation this whole layer exists to remove — the same one the M67
   // measurement found a consumer committing six times.
-  const records = loadJsonl<{ role?: string }>(src) as readonly { role?: string }[]
+  // `type`, not `role`. The SDK's `SessionRecord` discriminates on a top-level
+  // `type: 'user' | 'assistant' | 'system'`; `role` lives NESTED under `message.role`. Reading
+  // `record.role` here was always `undefined`, so the predicate was never true, `seen` never
+  // advanced, and every call ended in "fewer than N user turns" — a correct signature over an
+  // implementation that could not succeed. Zero tests and zero callers is how it survived.
+  const records = loadJsonl<{ type?: string }>(src) as readonly { type?: string }[]
   let seen = 0
   for (const [index, record] of records.entries()) {
-    if (record.role !== 'user') continue
+    if (record.type !== 'user') continue
     seen += 1
     if (seen === nth) return index
   }

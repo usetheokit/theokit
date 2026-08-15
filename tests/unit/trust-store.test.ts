@@ -4,10 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import {
-  TrustStore,
-  TrustStorePermissionsError,
-} from '../../packages/theo/src/config/trust-store.js'
+import { TrustStore, TrustStorePermissionsError } from '../../packages/agents/src/config-entry.js'
 
 /**
  * M73 — the per-directory trust store, against a real file on disk.

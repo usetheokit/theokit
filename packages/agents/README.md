@@ -1,0 +1,94 @@
+# `@theokit/agents`
+
+The layer between `@theokit/sdk` and an application that hosts an agent.
+
+The SDK is the **runtime** — it calls the model, dispatches tools, stores the conversation, streams
+the response. This package is the **home**: the surfaces an app needs around that runtime — where
+credentials come from, which tools are in scope and under what sandbox, when a human is asked, what
+happens to a session after it ends.
+
+The division is not stylistic. `@theokit/agents` never re-implements a runtime concern; when it
+looks like it does, that is a bug. What it does is **enrich**: adding the object-shaped surface where
+there is state or orchestration to hold, and forwarding the rest unchanged.
+
+> **Enriching never reduces.** A symbol the SDK exposes and this layer does not forward is
+> unreachable to whoever consumes the layer — and the only legal way out for them is to reimplement
+> it. That happened: when `./auth` exported one value against the SDK's nineteen, a downstream
+> product rewrote ~120 lines of credential mechanics. `scripts/check-surface-parity.mjs` in the
+> repository root now requires a written decision per SDK symbol, so the next gap breaks CI instead
+> of quietly costing someone a week.
+
+## Install
+
+```bash
+pnpm add @theokit/agents
+```
+
+Peer dependencies: `zod` (schemas), `react` (only for `./client/react`), `@theokit/http` (only when
+you mount HTTP surfaces).
+
+## Subpath map
+
+Nineteen entry points. Import the one you need — the barrel is not the API.
+
+| Subpath | What lives there |
+|---|---|
+| `.` | The fluent `agent()` / `tool()` builders, the error hierarchy, shared types |
+| `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals |
+| `./testing` | Test seams: compiled-agent inspection, mock streams |
+| `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
+| `./persistence` | Transcript storage primitives forwarded from the SDK |
+| `./interactive` | The interactive-shell backend contract |
+| `./pty` | The node-pty implementation of that contract |
+| `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes` |
+| `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
+| `./client` | Transports for driving an agent from a client |
+| `./client/react` | `useAgent` and the React bindings |
+| `./session` | Session lifecycle, listing, fork/rewind, transcript GC with a retention floor |
+| `./hooks` | The lifecycle-hook engine and its fingerprint gate |
+| `./ask` | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely |
+| `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable |
+| `./mcp-health` | MCP server health probing |
+| `./commands` | Command routing and the shutdown/cleanup contract |
+| `./doctor` | Environment diagnostics |
+| `./usage` | Token and cost accounting |
+
+## The shapes worth knowing before you start
+
+**Tool scope is bound once, not per tool.** `bindToolScope({ projectRoot, writeRoot, sandbox })`
+returns a binder; every factory it binds inherits the scope. `sandbox` is **required** — a scope
+without one would be an unconfined shell, and making it unrepresentable is cheaper than detecting it.
+
+**Human gates come in three layers, and they compose.** You *declare* which tools need approval on
+the builder, the *posture* decides whether auto-approval is even permissible (it carries the sandbox
+posture as evidence, so "auto-approve without confinement" cannot be expressed), and the *resolver*
+settles an individual request. `./ask` is the inverse channel — the agent asking you.
+
+**Sessions are deleted carefully or not at all.** `./session` refuses to collect a transcript that a
+live writer holds, floors both `keepLast` and `maxAgeDays`, and plans before it applies. When your
+app knows about live sessions this package cannot see, inject them — protection is additive and
+never subtractive.
+
+**Credentials answer two questions.** Which credential to use, and where it came from. The second
+matters more than it looks: without provenance, "why is it calling Anthropic?" has no answer in the
+data, and a user cannot tell an explicit choice from a precedence fallback.
+
+## What changed recently
+
+See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
+question without a round trip to the repository.
+
+For "which symbol delivers capability X, and in which version did it land", the repository publishes
+a capability index at `wiki/capability-index.md`.
+
+## Boundaries this package keeps
+
+- It does **not** call an LLM provider, run a tool-dispatch loop, or own the conversation store.
+  Those are the SDK's, and a PR that adds one here is rejected on sight.
+- It does **not** depend on the `theokit` web framework. The dependency runs the other way.
+- Web Standards over Node APIs inside `src/` — `Request`/`Response`, `fetch`, `crypto.randomUUID`.
+  Node APIs live in adapters.
+
+## Licence
+
+See `LICENSE`.
