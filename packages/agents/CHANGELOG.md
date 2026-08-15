@@ -1,5 +1,23 @@
 # @theokit/agents
 
+## 9.0.1
+
+### Patch Changes
+
+- **`TrustStore` passa a garantir o modo do DIRETORIO, nao so o do arquivo.**
+
+  Ela chamava `mkdirSync(dir, { recursive: true })` sem modo e sem reparo. O argumento `mode` e um
+  NO-OP num diretorio que ja existe, e este diretorio e compartilhado com a raiz de transcricoes do
+  SDK — quem cria primeiro define as permissoes. Resultado medido: o diretorio que guarda o arquivo
+  que autoriza execucao de comando ficava em 0775 por umask, ou em 0777 se o SDK o criara assim.
+
+  Os dois stores irmaos deste pacote (`HookApprovalStore`, `PermissionStore`) ja passavam por
+  `ensureSecureDir`, que faz chmod e depois AFIRMA, exatamente por causa desse no-op. Tres stores no
+  mesmo pacote, todos gateando execucao; dois impunham a propriedade e um nao.
+
+  Achado por um teste do consumidor falhando durante a migracao, nao por leitura do nosso codigo — a
+  mesma forma dos outros achados desta serie.
+
 ## 9.0.0
 
 ### Major Changes
