@@ -32,7 +32,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { resolveCredential } from '../../src/auth/resolve-credential.js'
+import { credentialSources, resolveCredential } from '../../src/auth/resolve-credential.js'
 import type { ProviderDescriptor } from '../../src/auth/resolve-credential.js'
 
 let home: string
@@ -197,3 +197,52 @@ describe('stored credential types', () => {
 import type { StoredCredential, StoredOAuthCredential } from '../../src/auth-entry.js'
 type _StoredOAuthIsReachable = StoredOAuthCredential['provider']
 type _StoredIsReachable = StoredCredential extends never ? never : true
+
+/**
+ * Where the resolver LOOKED, for the message it cannot write.
+ *
+ * `resolveCredential` returns `undefined` when nothing is configured, deliberately: a missing key is
+ * the ordinary first-run state, and a thrown error makes the caller's next move harder. That is not
+ * the gap. The gap is that `undefined` says nothing about WHERE it looked, so a product rendering
+ * "no credential found" either says exactly that — the least useful sentence available — or rebuilds
+ * the resolver's own precedence to name the places. The measured consumer built the second, carrying
+ * an `attempts` list on its own error type.
+ *
+ * Reporting is separated from resolving on purpose: the resolver keeps returning `undefined`, and
+ * the caller asks a second, pure question to render its own error.
+ */
+describe('credentialSources', () => {
+  it('names_every_place_the_resolver_would_look', () => {
+    const sources = credentialSources({ providers: PROVIDERS })
+
+    expect(sources).toContain('OPENAI_API_KEY')
+    expect(sources).toContain('ANTHROPIC_API_KEY')
+  })
+
+  it('includes_the_store_when_one_is_configured', () => {
+    const sources = credentialSources({
+      providers: PROVIDERS,
+      store: { home: '/h', dirName: '.theokit', fileName: 'auth.json' },
+    })
+
+    expect(
+      sources.some((s) => s.includes('auth.json')),
+      'a configured store was not named among the places looked',
+    ).toBe(true)
+  })
+
+  it('omits_the_store_when_none_is_configured', () => {
+    // Naming a place that was never consulted sends the user to fix a file the resolver never read.
+    const sources = credentialSources({ providers: PROVIDERS })
+
+    expect(sources.some((s) => s.includes('auth.json'))).toBe(false)
+  })
+
+  it('follows_the_resolution_order', () => {
+    // The list is what a caller prints, so its order has to be the order actually tried — otherwise
+    // it reads as a precedence claim that the resolver does not honour.
+    const sources = credentialSources({ providers: PROVIDERS })
+
+    expect(sources.indexOf('OPENAI_API_KEY')).toBeLessThan(sources.indexOf('ANTHROPIC_API_KEY'))
+  })
+})

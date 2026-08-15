@@ -144,6 +144,43 @@ function declaredNames(path: string): ReadonlySet<string> {
   return names
 }
 
+/** What `credentialSources` needs — the same declarations the resolver consults. */
+export interface CredentialSourcesInput {
+  readonly providers: readonly ProviderDescriptor[]
+  /** Present only when the app configured a persisted store, exactly as for `resolveCredential`. */
+  readonly store?: CredentialStoreConfig
+}
+
+/**
+ * Every place `resolveCredential` would look, in the order it looks.
+ *
+ * `resolveCredential` returns `undefined` when nothing is configured, and that stays — a missing key
+ * is the ordinary first-run state, and a throw makes the caller's next move harder. What `undefined`
+ * cannot say is WHERE it looked, so a product rendering "no credential found" either prints exactly
+ * that — the least useful sentence available — or rebuilds the resolver's precedence to name the
+ * places. The measured consumer built the second, carrying its own `attempts` list.
+ *
+ * Reporting is deliberately a SECOND question rather than a richer return type: changing the
+ * resolver's shape would break every existing caller to serve an error path, and the answer here is
+ * pure — no filesystem, no environment — so a caller can render it before or after a failed resolve.
+ *
+ * The order is the resolution order, because the list is printed: any other order reads as a
+ * precedence claim the resolver does not honour.
+ */
+export function credentialSources(input: CredentialSourcesInput): readonly string[] {
+  const sources = [...input.providers]
+    .sort((a, b) => a.priority - b.priority)
+    .map((descriptor) => descriptor.envKey)
+
+  // Named only when configured. Pointing a user at a file the resolver never consulted sends them to
+  // fix something that was never part of the failure.
+  if (input.store !== undefined) {
+    const config = input.store as unknown as { dirName?: string; fileName?: string }
+    sources.push(join(config.dirName ?? '.theokit', config.fileName ?? 'auth.json'))
+  }
+  return sources
+}
+
 /**
  * Resolve which credential to use, and record where it came from.
  *
