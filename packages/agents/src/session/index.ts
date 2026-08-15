@@ -11,6 +11,7 @@ export {
   listSessions,
   protectedTranscripts,
   SessionInUseError,
+  SessionRegistryRemoverError,
   type DeleteSessionOptions,
   type DeleteSessionResult,
   type SessionSummary,

@@ -106,6 +106,34 @@ describe('deleteSession — the two stores are reported separately', () => {
     expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(false)
   })
 
+  it('test_an_async_registry_remover_is_refused_instead_of_reported_as_done', async () => {
+    // The seam could not be satisfied by any real registry, and failed dishonestly when tried.
+    //
+    // Measured: the SDK's `Agent.delete` returns `Promise<void>` — it is the only agent registry in
+    // the ecosystem, and the sole synchronous `delete(name): boolean` in the SDK's surface belongs to
+    // `Budget`, not to a registry. So EVERY genuine caller has an async remover.
+    //
+    // What the old code did with one: `options.removeFromRegistry?.(id) ?? false` evaluates to a
+    // Promise, which is truthy, so `registryRemoved: true` was reported before the removal had
+    // happened — and a rejection became an unhandled rejection nobody saw. Reporting a delete that
+    // has not occurred is strictly worse than refusing to try.
+    //
+    // TypeScript blocks this at a typed call site, which is why it survived: only JS callers and
+    // `as`-casts reach it, and both get a wrong answer rather than an error.
+    writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('keeper', 0)
+    await persistSessionId(CWD, 'keeper', root)
+
+    const asyncRemover = (() => Promise.resolve(true)) as unknown as (id: string) => boolean
+
+    expect(() =>
+      deleteSession('doomed', { cwd: CWD, root, removeFromRegistry: asyncRemover }),
+    ).toThrow(/synchronous/i)
+
+    // And it refuses BEFORE mutating: the transcript is still there for the caller to retry.
+    expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(true)
+  })
+
   it('test_without_a_registry_remover_only_the_transcript_goes', async () => {
     // And it SAYS so. The registry is the runtime's, injected — a caller that forgot to pass the
     // remover gets `registryRemoved: false`, not a silent half-delete it believes was whole.
