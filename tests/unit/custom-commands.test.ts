@@ -200,3 +200,35 @@ describe('splitFrontmatter — the piece both loaders share', () => {
     expect(frontmatterValue(['a: 1'], 'missing')).toBeUndefined()
   })
 })
+
+describe('CustomCommand — the frontmatter a product reads its own keys from', () => {
+  it('test_the_frontmatter_lines_are_carried_on_the_result', () => {
+    // The loader owns the mechanism; the KEYS are the product's.
+    //
+    // Measured on the closest consumer: it wrote its own 122-line loader — same directories, same
+    // trust gate, same precedence — for one reason, that its commands declare `model:`, `agent:`,
+    // `subtask:` and `hints:` and this result carried none of them. Copying those fields here would
+    // be guessing at one product's vocabulary; Claude Code's custom commands declare `model` and
+    // `argument-hint`, which is already a second vocabulary and not the same one.
+    //
+    // So the result carries the LINES, and `frontmatterValue` — already exported — reads whichever
+    // key the caller cares about. The framework stops needing to know what a product's commands say.
+    const home = mkdtempSync(join(tmpdir(), 'theokit-cmd-fm-'))
+    mkdirSync(join(home, '.theokit', 'commands'), { recursive: true })
+    writeFileSync(
+      join(home, '.theokit', 'commands', 'review.md'),
+      '---\ndescription: review a diff\nmodel: gpt-5\n---\nReview $ARGUMENTS',
+      'utf8',
+    )
+
+    const { commands } = loadCustomCommands({ homeDir: home, projectTrusted: false })
+    const review = commands.find((c) => c.name === 'review')
+
+    expect(review?.description).toBe('review a diff')
+    expect(review?.body.trim()).toBe('Review $ARGUMENTS')
+    // The key this loader does not know about, read by the caller that does.
+    expect(frontmatterValue(review?.frontmatter ?? [], 'model')).toBe('gpt-5')
+
+    rmSync(home, { recursive: true, force: true })
+  })
+})
