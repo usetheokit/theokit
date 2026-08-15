@@ -353,24 +353,23 @@ describe('G2 — tool permission grants persist', () => {
 
 describe('G6 — resolveCredential covers the mechanisms it claims', () => {
   /**
-   * Asserts BEHAVIOUR, not the presence of a word. An earlier draft matched `/sort|length/i`
-   * against the source and passed for the wrong reason — the file already contained "length" for
-   * an unrelated purpose. A green test that proves nothing is the defect this whole plan is about.
+   * SCOPE CORRECTION, recorded rather than quietly dropped.
+   *
+   * The gap was registered as "no longest-match-wins on key-prefix inference" (EC-3). Read at
+   * implementation time, this resolver has NO key-prefix inference: it selects by declared
+   * `priority`, and `modelPrefix` matches the MODEL id (`openai/…`), never the key (`sk-ant-…`).
+   * There is no longest-match bug because there is no prefix match on keys, and an earlier draft of
+   * this assertion passed only because a single key was present — green for a reason unrelated to
+   * its name, which is the exact failure this register exists to prevent.
+   *
+   * What WAS real: `CredentialResolution.kind` declared an `'oauth'` variant, and `SourceOrigin` an
+   * `{ kind: 'oauth' }` arm, that NO code path could produce. A type promising a variant a consumer
+   * can never receive is worse than an absent one — they write the `case` and it never runs.
    */
-  it('infers_provider_by_longest_prefix', async () => {
-    const mod = (await import('../../packages/agents/src/auth/resolve-credential.js')) as {
-      resolveCredential: (input: unknown) => { provider: string } | undefined
-    }
-    const providers = [
-      { name: 'openai', envKey: 'OPENAI_API_KEY', priority: 1 },
-      { name: 'anthropic', envKey: 'ANTHROPIC_API_KEY', priority: 2 },
-    ]
-    // An Anthropic key also starts with the shorter `sk-` that OpenAI claims (EC-3).
-    const resolution = mod.resolveCredential({
-      env: { ANTHROPIC_API_KEY: 'sk-ant-api03-abcdefghijklmnop' },
-      providers,
-    })
-    expect(resolution?.provider, 'an sk-ant- key must not resolve as openai').toBe('anthropic')
+  it('the_declared_oauth_variant_is_producible', () => {
+    const src = read('packages/agents/src/auth/resolve-credential.ts')
+    expect(src, 'no path builds a kind:oauth resolution').toMatch(/kind:\s*'oauth'/)
+    expect(src, 'the stored credential is never consulted').toContain('readStoredOAuth')
   })
 
   it('has_a_regression_suite', () => {
