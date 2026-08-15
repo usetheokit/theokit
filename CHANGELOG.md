@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`credentialSources` — onde o resolver procurou, para a mensagem que ele nao escreve.**
+  `resolveCredential` devolve `undefined` quando nada esta configurado, e isso fica: chave ausente e
+  o estado ordinario de primeira execucao, e lancar torna o proximo passo do chamador mais dificil,
+  nao mais facil. O que `undefined` nao consegue dizer e ONDE procurou — entao um produto que
+  renderiza "nenhuma credencial encontrada" ou imprime exatamente isso, a frase menos util
+  disponivel, ou reconstroi a precedencia do resolver para nomear os lugares. O consumidor medido
+  construiu a segunda, com uma lista `attempts` no proprio tipo de erro.
+
+  Reportar e deliberadamente uma SEGUNDA pergunta, nao um tipo de retorno mais rico: mudar a forma do
+  resolver quebraria todo chamador existente para servir um caminho de erro, e a resposta aqui e pura
+  — sem filesystem, sem environment —, entao da para renderizar antes ou depois de um resolve que
+  falhou. A ordem e a de resolucao, porque a lista e impressa: qualquer outra ordem le como uma
+  afirmacao de precedencia que o resolver nao honra. O store so e nomeado quando configurado —
+  apontar o usuario para um arquivo que o resolver nunca consultou o manda consertar algo que nao
+  fazia parte da falha.
+
 ### Fixed
 
 - **`TrustStore` passa a canonicalizar o diretorio, como o store irmao ja fazia — e ganha
