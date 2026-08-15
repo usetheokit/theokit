@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`TrustStore` passa a canonicalizar o diretorio, como o store irmao ja fazia — e ganha
+  `isTrusted`.** `PermissionStore` resolve o escopo com `realpath` antes de ele virar chave, e
+  documenta por que: `/repo/a`, `/repo/a/` e `/repo/./a` sao um diretorio e tres strings, e um
+  symlink e a quarta. Esta store, decidindo a MESMA classe de questao — o que mora aqui pode rodar? —
+  comparava string crua. Dois stores no mesmo pacote, ambos gateando execucao, discordando sobre o
+  que e "o mesmo diretorio".
+
+  A falha nao e uma mensagem de erro: o usuario confia num projeto, a ferramenta pergunta de novo
+  porque o caminho foi escrito diferente, e ele aprende a clicar "confiar" sem ler — que e
+  exatamente o desfecho que um prompt de confianca existe para evitar. Medido: duas chamadas para o
+  mesmo diretorio produziam dois registros, e qual deles respondia dependia da ordem de iteracao.
+
+  `isTrusted` nega tudo que nao seja uma decisao registrada de confiar: nunca perguntado, registrado
+  como recusa (`trusted: false`), ou irresolvivel. A canonicalizacao cai para `resolve` quando o
+  caminho nao existe, em vez de lancar — diferente de um escopo de permissao, uma decisao de
+  confianca pode legitimamente ser registrada antes do diretorio existir (um clone, um worktree). O
+  ramo leniente nunca alarga confianca, porque `isTrusted` segue negando o que nao consegue resolver.
+
 ### Added
 
 - **`loadInstructionTree` passa a expandir imports `@file.md`.** O loader andava por diretorios e
