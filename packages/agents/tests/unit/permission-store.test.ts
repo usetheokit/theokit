@@ -165,7 +165,19 @@ describe('PermissionStore', () => {
   })
 
   it('concurrent_grants_do_not_tear_the_file', async () => {
-    // Atomic-counter invariant (concurrent test) — N writers; the file must always parse afterwards.
+    // Atomic-counter invariant (concurrent test) — N writers, and ALL N must survive.
+    //
+    // This asserted `> 0` at first, hedging against a lost update. Measured: all twelve survive, and
+    // deterministically, because `grant()` is synchronous end to end — load, modify, write, rename —
+    // so twelve "concurrent" callers serialise on the event loop and none observes another's
+    // half-written state. `> 0` was weaker than the property that actually holds, and a weak
+    // assertion on a store that decides what may execute is a regression that ships quietly.
+    //
+    // What this really guards is that guarantee's PRECONDITION. Make any part of the
+    // read-modify-write path async without adding a lock and the interleaving becomes real: two
+    // callers read the same array, both append, and the second rename discards the first grant — a
+    // permission the operator believes they still have. This assertion turns that change from
+    // silent into red.
     await Promise.all(
       Array.from({ length: 12 }, async (_, i) =>
         storeAt().grant({ tool: 'run_shell', scope: repoA, command: `npm run task-${String(i)}` }),
@@ -173,7 +185,7 @@ describe('PermissionStore', () => {
     )
 
     const fresh = storeAt()
-    expect(fresh.lastReadError).toBeUndefined()
-    expect(fresh.list().length).toBeGreaterThan(0)
+    expect(fresh.lastReadError, 'the store did not parse after concurrent writes').toBeUndefined()
+    expect(fresh.list().length, 'a concurrent grant was lost').toBe(12)
   })
 })
