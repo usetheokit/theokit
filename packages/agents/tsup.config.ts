@@ -18,6 +18,9 @@ export default defineConfig({
     pty: 'src/pty-entry.ts',
     // M60 — enriched auth domain.
     auth: 'src/auth-entry.ts',
+    // Agent configuration, trust and the instruction tree — moved out of `theokit`
+    // (the WEB package) so an agent builder reaches them from the package they install.
+    config: 'src/config-entry.ts',
     // M62 — pass-through of the sdk-tools factories.
     tools: 'src/tools-entry.ts',
     // M84 — the client chain came from the CLI; its own subpath because `use-agent` imports React.

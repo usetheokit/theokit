@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import {
-  LayeredConfig,
-  LayerOutOfOrderError,
-} from '../../packages/theo/src/config/layered-config.js'
+import { LayeredConfig, LayerOutOfOrderError } from '../../packages/agents/src/config-entry.js'
 
 /**
  * M73 — the layering engine, as a parameterised machine rather than one product's constants.

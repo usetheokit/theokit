@@ -136,3 +136,18 @@ export type {
   ResolveCredentialInput,
   SourceOrigin,
 } from './auth/resolve-credential.js'
+
+/**
+ * Persisted tool-permission grants — "always allow this", without "allow everything".
+ *
+ * Measured absent from BOTH this framework and its closest consumer: the only tool-level escape on
+ * offer was the global `full-auto`, which removes the gate instead of narrowing it. The tenth prompt
+ * is where a person stops reading prompts, so "no standing grant" is what produces unsafe behaviour.
+ */
+export {
+  PermissionStore,
+  type Grant,
+  type GrantOptions,
+  type PermissionQuery,
+  type PermissionStoreOptions,
+} from './auth/permission-store.js'

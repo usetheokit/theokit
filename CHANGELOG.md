@@ -28,54 +28,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
-  `transform_tool_result` estreou no `@theokit/agents@8.5.0` e a suite do TheoCode encontrou em
-  minutos o que 6116 testes daqui nao pegaram — porque eu escrevi os dois lados com a mesma
-  suposicao.
-  - Um hook **sem matcher** parava de rodar quando o lote de tool calls estava vazio: a checagem era
-    `.some()`, e `.some()` sobre array vazio e `false`. Um hook que pediu para ver TUDO nao via nada
-    no momento em que nao havia nada com que casar (corrigido em 8.5.2).
-  - Os **argumentos** da tool nao chegavam ao payload — eu mandava so os nomes. O produto ja tinha
-    corrigido esse mesmo defeito na copia dele, com a razao escrita: uma guarda que nao le os
-    argumentos nao consegue decidir sobre eles (8.5.2).
-  - O payload era um **terceiro formato** (`{ tools: [...] }`) num modulo cujos outros dois handlers
-    mandam `{ tool, args, ... }`. Agora roda uma vez por chamada, com `name` como alias de `tool`
-    para nao quebrar scripts de hook que ja estao no disco de usuarios (8.6.0, **commitado e ainda
-    nao publicado**).
-- **`buildHookHandlers` conectava 2 dos 8 eventos que declara, em silencio.** Um operador escrevia
-  `on_session_start`, o parse passava, o fingerprint saia, ele aprovava — e nada disparava. O
-  docblock do proprio modulo proibia isso, escrito sobre um evento com erro de digitacao; o mesmo
-  silencio cobria seis corretamente escritos. Agora avisa (8.4.0) e conecta cinco (8.5.x).
-- **`continuationBudget` estava exportado e lido por nada.** Implementar `transform_tool_result` e o
-  que lhe deu trabalho: feedback anexado e o que permite um hook se realimentar, e o orcamento e o
-  que para o laco.
-
-### Fixed
-
-- **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
-  `transform_tool_result` estreou no `@theokit/agents@8.5.0` e a suite do TheoCode encontrou em
-  minutos o que 6116 testes daqui nao pegaram — porque eu escrevi os dois lados com a mesma
-  suposicao.
-  - Um hook **sem matcher** parava de rodar quando o lote de tool calls estava vazio: a checagem era
-    `.some()`, e `.some()` sobre array vazio e `false`. Um hook que pediu para ver TUDO nao via nada
-    no momento em que nao havia nada com que casar (corrigido em 8.5.2).
-  - Os **argumentos** da tool nao chegavam ao payload — eu mandava so os nomes. O produto ja tinha
-    corrigido esse mesmo defeito na copia dele, com a razao escrita: uma guarda que nao le os
-    argumentos nao consegue decidir sobre eles (8.5.2).
-  - O payload era um **terceiro formato** (`{ tools: [...] }`) num modulo cujos outros dois handlers
-    mandam `{ tool, args, ... }`. Agora roda uma vez por chamada, com `name` como alias de `tool`
-    para nao quebrar scripts de hook que ja estao no disco de usuarios (8.6.0, **commitado e ainda
-    nao publicado**).
-- **`buildHookHandlers` conectava 2 dos 8 eventos que declara, em silencio.** Um operador escrevia
-  `on_session_start`, o parse passava, o fingerprint saia, ele aprovava — e nada disparava. O
-  docblock do proprio modulo proibia isso, escrito sobre um evento com erro de digitacao; o mesmo
-  silencio cobria seis corretamente escritos. Agora avisa (8.4.0) e conecta cinco (8.5.x).
-- **`continuationBudget` estava exportado e lido por nada.** Implementar `transform_tool_result` e o
-  que lhe deu trabalho: feedback anexado e o que permite um hook se realimentar, e o orcamento e o
-  que para o laco.
-
-### Fixed
-
 - **Teste flaky meu, achado ao reconstruir o sinal do CI localmente.**
   `build-decision-is-per-run > test_with_NO_marker_a_freshly_built_dist_is_still_accepted` verificava
   que o `dist` tinha menos de **24 horas** e entao exigia aceitacao — enquanto o codigo que ele
@@ -90,6 +42,187 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `http ↛ agents` lendo apenas os `import` de `src` — e ficou verde sobre um manifesto que declarava a
   aresta proibida em voz alta. O manifesto é a aresta que um gerenciador de pacotes enxerga, e é a que
   chega ao consumidor. A guarda agora lê os dois.
+
+## [@theokit/agents 8.7.0] - 2026-08-14
+
+### Added
+
+- **O gate de paridade de superficie passa a andar por TODOS os subpaths publicados.**
+  `check-auth-parity.mjs` virou `check-surface-parity.mjs` (o nome antigo segue como alias por um
+  release). A lista de subpaths sai do `package.json#exports` do proprio layer, e a contraparte de
+  cada um sai do `exports` do SDK — lidos, nunca mantidos a mao, pela mesma razao que o
+  `check-package-direction.mjs`: uma guarda com lista escrita a mao deriva na primeira vez que
+  alguem adiciona um subpath e esquece a lista.
+
+  Medicao honesta: dos 20 subpaths que o layer publica, **6** tem contraparte homonima no SDK
+  (`.`, `/sandbox`, `/persistence`, `/interactive`, `/auth`, `/client`). Nos outros 14 o layer e
+  dono da superficie, e "encaminha tudo que o SDK exporta ali" nao e pergunta mais fraca: e pergunta
+  indefinida. Eles sao PULADOS COM MOTIVO, nunca em silencio. O numero real e 1 de 6 aplicaveis, nao
+  1 de 19 — inflar o denominador faria a lacuna parecer maior do que e.
+
+  Os 5 aplicaveis ainda sem registro de decisao entram em modo WARN com SUNSET (2026-11-12), passado
+  o qual falham duro. Sem data, o modo warn vira o estado permanente e a correcao degrada para
+  "imprimimos alguma coisa" — a condicao anterior com saida extra. Mesma disciplina das allowlists
+  de code-quality e deps-audit.
+
+- **`PermissionStore` — conceder "sempre permita isto" sem conceder "permita tudo".** Medido por
+  grep nos dois pacotes: `alwaysAllow|allowRule|permissionRule|rememberDecision` retorna ZERO. Nem o
+  framework nem o consumidor tinham isso para tools — `ApprovalDecision` resolve UMA requisicao, e o
+  unico escape de nivel de tool era o `full-auto` global, que remove o portao em vez de estreita-lo.
+  A decima aprovacao da mesma coisa e onde uma pessoa para de ler prompts, entao "sem concessao
+  permanente" e o que produz o comportamento inseguro.
+
+  A CHAVE e a propriedade de seguranca: `(tool, escopo, assinatura)`. Escopo canonicalizado com
+  `realpath` — `/repo/a`, `/repo/a/` e `/repo/./a` sao um diretorio e tres strings, e um symlink e a
+  quarta. Comparar strings nega concessoes que o usuario fez (empurrando-o para o full-auto) E deixa
+  um link tomar emprestada a concessao de outro lugar. Assinatura nunca casa por aproximacao:
+  `npm test` nao autoriza `npm test --force`.
+
+- **`HookApprovalStore` — o gate de fingerprint ganha um produtor.** `buildHookHandlers` recebe
+  `approved` como argumento OBRIGATORIO e recusa por padrao, de proposito: um hook e
+  `spawn(cmd, { shell: true, detached: true })` a cada tool call. So que nada no framework produzia
+  esse conjunto, o que deixava ao consumidor duas saidas — aprovar tudo, ou escrever o store. Ele
+  escreveu. E a metade que teve de escrever e a que mexe em modo de diretorio e troca atomica, que e
+  onde um store dessa sensibilidade da errado.
+
+  Tres estados, nao dois: `approved`, `unknown` e **`modified`**. Como o fingerprint cobre o comando,
+  um comando editado gera fingerprint NOVO, indistinguivel de um hook que ninguem nunca viu. Guardar
+  o comando aprovado ao lado do fingerprint e o que permite dizer "isto foi aprovado, e alguem
+  mudou" — a razao de o gate ser chaveado por fingerprint e nao por nome.
+
+  O diretorio e REPARADO antes de ser conferido: `mkdirSync(dir, { mode })` e no-op num diretorio
+  que ja existe, e este e compartilhado com a raiz de transcript do SDK — quem chega primeiro define
+  a permissao. So conferir falharia para sempre numa maquina que o SDK preparou antes.
+
+- **`@theokit/agents/config` — configuracao de agente, trust e arvore de instrucoes ganham porta.**
+  `LayeredConfig`, `TrustStore`, `loadInstructionTree`, `composeInstructions`, `loadCustomCommands`
+  e `contextPressure` so eram alcancaveis por `theokit/server`, um barrel que anuncia a propria
+  remocao na primeira importacao — e num pacote (o framework WEB) que um construtor de agente pode
+  nunca instalar. O unico consumidor real tem quatro pacotes e nenhum depende de `theokit`.
+
+  O custo disso foi medido, nao suposto: por `loadInstructionTree` estar inalcancavel, um produto
+  rio abaixo reescreveu 533 linhas de carregamento de arvore de instrucoes — e ao reescrever
+  reintroduziu a falha de contencao de symlink que o `assertNoSymlinkEscape` existe para fechar.
+
+  `theokit/server` continua re-exportando pelo ciclo minor que prometeu, agora a partir daqui, e o
+  aviso de depreciacao passa a dizer para onde ir. `loadEnv` NAO se mudou de proposito: precisaria
+  de `dotenv` + `dotenv-expand` em todo install de `@theokit/agents`, e carregar `.env` e assunto de
+  app web — a razao esta escrita no proprio `config-entry.ts`.
+
+- **O pacote publicado passa a levar prosa.** `@theokit/agents` entregava `dist/`, `LICENSE` e
+  `package.json` — e nada mais. O `files` DECLARAVA `README.md`, que nao existia no disco, entao o
+  npm o omitia em silencio; e o `CHANGELOG.md` de 114 kB existia e nao estava declarado. Quem
+  instalava o pacote nao tinha por onde saber o que ele faz nem o que mudou. Os dois agora vao no
+  tarball, verificado por `npm pack --dry-run`.
+
+- **Indice por capacidade** (`wiki/capability-index.md`). O wiki indexava por topico e por pacote;
+  ninguem procura assim. Procura-se por necessidade — "quero GC de sessao", "quero resolucao de
+  credencial" — e quando a resposta nao esta a uma consulta de distancia, constroi-se outra. A
+  cross-validation de 2026-08-14 mediu cinco capacidades JA publicadas sendo reimplementadas rio
+  abaixo por falta exatamente disso. Cada linha cita um simbolo que resolve no `.d.ts` publicado, e
+  um teste falha se deixar de resolver.
+
+### Changed
+
+- **O teste de concorrencia do store de permissoes afirmava menos do que a garantia real.** Ele
+  checava `> 0` sobrevivencias, se protegendo de um lost update; medido, as doze sobrevivem, e
+  deterministicamente — `grant()` e sincrono de ponta a ponta, entao doze chamadores "concorrentes"
+  serializam no event loop e nenhum observa o estado meio escrito do outro. Uma assercao fraca num
+  store que decide o que pode executar e uma regressao que passa calada, entao ela agora fixa `12`.
+  O que o teste guarda de verdade e a PRE-CONDICAO dessa garantia: tornar o caminho
+  ler-modificar-escrever assincrono sem trava faz o entrelacamento virar real, e o segundo `rename`
+  descarta a concessao do primeiro — uma permissao que o operador acredita ainda ter.
+
+- **`@theokit/agents/hooks` deixa de re-exportar as primitivas de disco do `secure-store`.** Elas nao
+  tinham nenhum consumidor pelo barrel (G7) e publicar primitivas de permissao e troca atomica
+  convida a escrever um terceiro store a mao em vez de compor `HookApprovalStore` /
+  `PermissionStore` — o oposto do motivo pelo qual o helper foi extraido. Alargar a superficie depois
+  e aditivo; estreitar depois de publicada, nao — por isso a decisao foi tomada antes do release.
+
+- **Duas assercoes do registro de lacunas mediam tamanho, nao verdade.** A de README exigia "≥ 30
+  linhas nao vazias" e "≥ 10 subpaths citados" — dois numeros magicos que um stub com prosa satisfaz.
+  Agora o piso e derivado do manifesto (metade dos subpaths publicados) e vem acompanhado de uma
+  propriedade de correcao: o README **nao pode documentar subpath que o pacote nao publica**. A do
+  gate de paridade fazia grep no proprio fonte do gate (`toContain('AGENTS_MANIFEST.exports')`), o
+  que passa para um gate que le o manifesto e depois o ignora; agora o gate e **executado** e a
+  aritmetica dele e confrontada com o manifesto.
+
+- **Corrigido um comentario que afirmava um mecanismo falso.** O `chmod` final do `writeSecureJson`
+  se justificava por "o alvo existente pode ter modo mais largo" — medido, e falso: `rename`
+  substitui o inode e o modo antigo nao sobrevive. O que o `mode` de fato nao cobre e um temp que ja
+  existe, caso que o nome unico tornou inalcancavel. A linha fica como defesa em profundidade, agora
+  rotulada honestamente como tal.
+
+### Fixed
+
+- **Duas escritas simultaneas no store de consentimento podiam disputar o mesmo arquivo
+  temporario.** O nome do temp era relogio + pid; medido, **doze escritas de um mesmo processo
+  produziam um unico nome**. Dois escritores passam entao a corrida no mesmo caminho, e o segundo
+  `rename` de um temp ja renomeado lanca `ENOENT`. Chamadas sincronas numa unica thread serializam e
+  nunca colidem — por isso a suite estava verde —, mas `worker_threads` compartilham pid e nao
+  serializam. O nome agora sai de `randomUUID()`, e a unicidade virou uma propriedade asserida
+  diretamente (mil geracoes, mil caminhos distintos) em vez de uma esperada. Encontrado no `/review`
+  por um teste que quebrou o codigo de producao e viu a suite continuar passando.
+
+- **Um observador de hook herdado que falhasse desaparecia sem deixar rastro.** Os eventos
+  fire-and-forget nao podem derrubar o turno nem impedir o outro observador — isso esta certo —, mas
+  o `catch` era mudo, e um notificador que nunca dispara le exatamente igual a um que nao tem nada a
+  reportar. Passa a avisar com o mesmo prefixo dos demais avisos do pacote. E a mesma forma de
+  defeito ("declarado, ligado, nunca executa") que esta fatia inteira existiu para caçar, entao nao
+  ganha excecao dentro dela.
+
+## [@theokit/agents 8.6.0] - 2026-08-14
+
+Fecha a serie 8.2.0–8.6.0 do motor de hooks. O detalhe por versao vive em
+[`packages/agents/CHANGELOG.md`](packages/agents/CHANGELOG.md); a narrativa abaixo atravessa as
+cinco porque o defeito e o conserto sao um so arco.
+
+### Fixed
+
+- **Tres defeitos no motor de hooks, todos meus, todos achados por um consumidor real.**
+  `transform_tool_result` estreou no `@theokit/agents@8.5.0` e a suite do TheoCode encontrou em
+  minutos o que 6116 testes daqui nao pegaram — porque eu escrevi os dois lados com a mesma
+  suposicao.
+  - Um hook **sem matcher** parava de rodar quando o lote de tool calls estava vazio: a checagem era
+    `.some()`, e `.some()` sobre array vazio e `false`. Um hook que pediu para ver TUDO nao via nada
+    no momento em que nao havia nada com que casar (corrigido em 8.5.2).
+  - Os **argumentos** da tool nao chegavam ao payload — eu mandava so os nomes. O produto ja tinha
+    corrigido esse mesmo defeito na copia dele, com a razao escrita: uma guarda que nao le os
+    argumentos nao consegue decidir sobre eles (8.5.2).
+  - O payload era um **terceiro formato** (`{ tools: [...] }`) num modulo cujos outros dois handlers
+    mandam `{ tool, args, ... }`. Agora roda uma vez por chamada, com `name` como alias de `tool`
+    para nao quebrar scripts de hook que ja estao no disco de usuarios (8.6.0).
+- **`buildHookHandlers` conectava 2 dos 8 eventos que declara, em silencio.** Um operador escrevia
+  `on_session_start`, o parse passava, o fingerprint saia, ele aprovava — e nada disparava. O
+  docblock do proprio modulo proibia isso, escrito sobre um evento com erro de digitacao; o mesmo
+  silencio cobria seis corretamente escritos. Agora avisa (8.4.0) e conecta cinco (8.5.x).
+- **`continuationBudget` estava exportado e lido por nada.** Implementar `transform_tool_result` e o
+  que lhe deu trabalho: feedback anexado e o que permite um hook se realimentar, e o orcamento e o
+  que para o laco.
+
+## [@theokit/agents 8.5.2 · 8.5.1 · 8.5.0] - 2026-08-13
+
+- Tres eventos de hook passam a ser conectados de verdade — `transform_tool_result`,
+  `on_session_start` e `post_assistant_reply`. O motor sai de dois handlers para cinco, e o
+  `continuationBudget` deixa de ser inerte. Detalhe em `packages/agents/CHANGELOG.md § 8.5.0`.
+
+## [@theokit/agents 8.4.0] - 2026-08-12
+
+- Um hook declarado num evento que o motor **nao conecta** agora AVISA, em vez de nao fazer nada em
+  silencio. `HOOK_EVENTS` publica oito nomes e o motor conectava dois.
+  Detalhe em `packages/agents/CHANGELOG.md § 8.4.0`.
+
+## [@theokit/agents 8.3.0] - 2026-08-12
+
+- `buildHookHandlers` aceita `onVeto`, para que uma superficie possa dizer ao usuario que um hook
+  vetou a chamada. Detalhe em `packages/agents/CHANGELOG.md § 8.3.0`.
+
+## [@theokit/agents 8.2.0] - 2026-08-11
+
+- `buildHookHandlers` aceita um `fingerprint` opcional — como um spec vira a chave conferida contra
+  `approved`. A lacuna apareceu numa migracao real: um consumidor com store de aprovacoes ja em
+  disco, chaveado pelo esquema dele, tinha **todo hook recusado** em silencio.
+  Detalhe em `packages/agents/CHANGELOG.md § 8.2.0`.
 
 ## [@theokit/agents 8.1.0 · @theokit/http 1.1.0] - 2026-08-14
 
