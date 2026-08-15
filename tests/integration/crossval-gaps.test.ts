@@ -477,11 +477,33 @@ describe('G7 — the parity gate walks every subpath', () => {
 // Phase 6 — sibling repo (version-gated, per plan D7)
 // ---------------------------------------------------------------------------
 
+/**
+ * G12 — closed in the sibling repo, per plan D7.
+ *
+ * `usetheodev/theokit-tui` PR #76, merged 2026-08-15: `FreeTextInput` gained `mask` (U-9) and
+ * `StatusFooter` now forwards `modeLabel` (U-8). Two scope corrections came out of reading the code
+ * instead of executing the plan blind, and both are recorded rather than quietly applied:
+ *
+ *  - The plan asserted the consumer "keeps the secret out of React state". Measured against its
+ *    `SecretInput.tsx`: **false** — it uses `useState`. So the ref was NOT implemented; it would be
+ *    the same heap with a stronger-sounding story. What ships is the property that holds at a
+ *    terminal — the plaintext never reaches the screen.
+ *  - The plan asked to WIDEN `StatusFooterProps.mode`. `ModeIndicator` had already solved this with
+ *    `label` and keeps the union closed on purpose so a typo is still caught. The real gap was the
+ *    composed footer never forwarding it.
+ *
+ * The assertion below still reads the INSTALLED package, so it stays honest about this workspace:
+ * `@theokit/tui` is not a dependency here, so it skips loudly rather than claiming a fact it cannot
+ * see. It turns green on its own once the published version carries the prop.
+ */
 describe('G12 — @theokit/tui exposes a masked input', () => {
   it('free_text_input_supports_a_masked_mode', () => {
     const tuiDts = join(REPO_ROOT, 'node_modules', '@theokit', 'tui', 'dist', 'index.d.ts')
     if (!existsSync(tuiDts)) {
-      noteSkip('G12', '@theokit/tui is not installed in this workspace')
+      noteSkip(
+        'G12',
+        '@theokit/tui is not installed here — closed upstream in theokit-tui#76 (mask + modeLabel), pending publish of 0.53.0',
+      )
       return
     }
     const dts = readFileSync(tuiDts, 'utf8')

@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **G12 fechada no repo irmao — `@theokit/tui` PR #76, mergeado.** `FreeTextInput` ganhou `mask`
+  (U-9) e `StatusFooter` passou a encaminhar `modeLabel` (U-8). Era a ultima das 12 lacunas da
+  validacao cruzada, e vem em PR proprio la, como a decisao D7 do plano determinou.
+
+  Duas premissas do plano cairam ao ler o codigo em vez de executa-lo cego, e as duas ficam
+  registradas em vez de aplicadas em silencio: **(a)** o plano afirmava que o consumidor mantem o
+  segredo fora do state do React — medido contra o `SecretInput.tsx` dele, e falso (usa `useState`),
+  entao o `ref` NAO foi implementado, porque seria o mesmo heap com uma historia mais forte;
+  **(b)** o plano pedia para alargar a uniao de `mode`, mas o `ModeIndicator` ja resolvia isso com
+  `label` e mantem a uniao fechada de proposito para pegar typo — o gap real era o rodape composto
+  nunca encaminhar.
+
+  A assercao G12 daqui segue lendo o `@theokit/tui` INSTALADO, entao continua pulando em voz alta
+  (o pacote nao e dependencia deste workspace) e fica verde sozinha quando o 0.53.0 for publicado.
+
+### Changed
+
 - **O CodeQL para de ficar vermelho para sempre, e passa a DIZER por que nao roda.**
 
   O upload do CodeQL exige GitHub Advanced Security num repositorio PRIVADO — o comentario do proprio
