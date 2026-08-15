@@ -31,8 +31,14 @@ import { readSecureJson, writeSecureJson } from './secure-store.js'
 /** What the store can say about a hook it is asked to judge. */
 export type ApprovalState = 'approved' | 'unknown' | 'modified'
 
-/** One approval, as persisted. The command is kept so `modified` is distinguishable from `unknown`. */
-interface ApprovalRecord {
+/**
+ * One approval, as persisted.
+ *
+ * Exported because a consent screen has to say WHICH command was approved and when. A store that
+ * answers only "these hashes are approved" forces the product to keep its own copy just to render
+ * that sentence — measured against the closest consumer, which did exactly that.
+ */
+export interface ApprovalRecord {
   readonly fingerprint: string
   /**
    * Canonical project directory this approval belongs to.
@@ -104,6 +110,17 @@ export class HookApprovalStore {
     return new Set(
       [...this.#load().values()].filter((r) => r.scope === key).map((r) => r.fingerprint),
     )
+  }
+
+  /**
+   * Every approval recorded for one project, newest first is NOT promised — the order is the file's.
+   *
+   * A copy, not the internal map: a caller that mutated it would change what the next `stateOf`
+   * answers without ever writing to disk.
+   */
+  approvals(scope: string): readonly ApprovalRecord[] {
+    const key = canonicalScope(scope)
+    return [...this.#load().values()].filter((r) => r.scope === key).map((r) => ({ ...r }))
   }
 
   stateOf(identity: HookIdentity, scope: string): ApprovalState {

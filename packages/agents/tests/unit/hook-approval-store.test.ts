@@ -257,3 +257,47 @@ describe('HookApprovalStore — approvals are per project', () => {
     expect(store.stateOf(HOOK, repoB), 'revoking one project revoked another').toBe('approved')
   })
 })
+
+/**
+ * The RECORDS, not just the fingerprints.
+ *
+ * `approvedFingerprints` answers "which hashes are approved here", which is what
+ * `buildHookHandlers` needs and nothing else. A product rendering a consent screen needs to say
+ * WHICH command was approved and when — and the measured consumer keeps its own store precisely
+ * because ours could not tell it that, so it could not adopt this one without losing its screen.
+ */
+describe('HookApprovalStore — the records are readable', () => {
+  let repo: string
+
+  beforeEach(() => {
+    repo = mkdtempSync(join(tmpdir(), 'theokit-records-'))
+  })
+
+  afterEach(() => {
+    rmSync(repo, { recursive: true, force: true })
+  })
+
+  it('approvals_carry_the_command_and_the_event', () => {
+    const store = storeAt()
+    store.approve(HOOK, repo)
+
+    const [record] = store.approvals(repo)
+    expect(record?.command).toBe(HOOK.command)
+    expect(record?.event).toBe(HOOK.event)
+    expect(record?.matcher).toBe(HOOK.matcher)
+    expect(record?.approvedAt, 'the decision has no timestamp').toBeDefined()
+  })
+
+  it('approvals_are_scoped_like_everything_else', () => {
+    const other = mkdtempSync(join(tmpdir(), 'theokit-records-other-'))
+    const store = storeAt()
+    store.approve(HOOK, repo)
+
+    expect(store.approvals(other), 'records leaked across projects').toEqual([])
+    rmSync(other, { recursive: true, force: true })
+  })
+
+  it('an_empty_project_has_no_records', () => {
+    expect(storeAt().approvals(repo)).toEqual([])
+  })
+})
