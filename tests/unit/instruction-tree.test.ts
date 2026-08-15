@@ -122,6 +122,44 @@ describe('loadInstructionTree — walking and loading', () => {
     expect(warnings.some((w) => w.includes('scoped.md'))).toBe(true)
   })
 
+  it('test_a_rules_folder_can_ask_for_lexicographic_order', () => {
+    // Half a capability is its own kind of defect.
+    //
+    // The predicate made a rules FOLDER walkable; the ordering stayed the one an instruction TREE
+    // needs — files at each level before descending, because there the outer file states the rule
+    // and the inner refines it. A rules folder means the opposite: the files are peers, and the
+    // contract users depend on is that the same tree assembles the same prompt on any machine, in
+    // one alphabetical pass. Walking a rules folder in tree order is not what a rules folder means.
+    //
+    // Both orders are deterministic. Only one is right per shape, and only the caller knows which.
+    write('rules/deep/architecture.md', 'inner')
+    write('rules/top.md', 'outer')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['rules'],
+      budget,
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+      order: 'lexicographic',
+    })
+
+    // `deep/` sorts before `top.md`, and a single pass descends when it reaches it.
+    expect(tree.blocks.map((b) => b.content)).toEqual(['inner', 'outer'])
+  })
+
+  it('test_the_tree_order_is_still_the_default', () => {
+    // Additive: an instruction tree that never asks keeps files-before-subdirectories, which is the
+    // order its composer needs. A default that changed under existing callers would be the same
+    // silent contract shift this option exists to let a caller opt into deliberately.
+    write('THEO.md', 'outer')
+    write('nested/AGENTS.md', 'inner')
+
+    const tree = loadInstructionTree({ cwd: root, roots: ['.'], budget, onWarn })
+
+    expect(tree.blocks.map((b) => b.content)).toEqual(['outer', 'inner'])
+  })
+
   it('test_an_exact_name_list_keeps_working_unchanged', () => {
     // The widening is additive. Every existing caller passes an array, and this pins that the array
     // branch is not quietly routed through the predicate with different semantics.
