@@ -482,3 +482,82 @@ describe('resolveAgentCredential — the one call a new app makes', () => {
     )
   })
 })
+
+/**
+ * The file store holds API keys too — and they must be readable.
+ *
+ * `writeCredential` persists an api-key credential as `{ provider, api_key }`, and the resolver read
+ * back only the `oauth` variant. Write without read: the framework could store a key that nothing
+ * in it could then use, which is why the measured consumer keeps its own file reader.
+ *
+ * Found by attempting the migration — the same shape as every other gap in this series.
+ */
+describe('resolveCredential — the api-key variant in the store', () => {
+  const writeApiStore = (provider: string, apiKey: string): void => {
+    const dir = join(home, '.theokit')
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    chmodSync(dir, 0o700)
+    writeFileSync(
+      join(dir, 'auth.json'),
+      JSON.stringify({ type: 'api', provider, api_key: apiKey }),
+      {
+        encoding: 'utf8',
+        mode: 0o600,
+      },
+    )
+  }
+
+  const store = () => ({ home, dirName: '.theokit', fileName: 'auth.json' })
+
+  it('an_api_key_written_to_the_store_is_read_back', () => {
+    writeApiStore('anthropic', 'sk-ant-stored')
+
+    const resolution = resolveCredential({ env: {}, providers: PROVIDERS, home, store: store() })
+
+    expect(resolution?.kind).toBe('api-key')
+    expect(resolution?.provider).toBe('anthropic')
+    expect(resolution?.apiKey).toBe('sk-ant-stored')
+  })
+
+  it('the_source_says_it_came_from_the_file', () => {
+    // Provenance is the point of `SourceOrigin`: "why is it calling Anthropic?" must be answerable
+    // from the data, and "from the store" is a different answer than "from the environment".
+    writeApiStore('anthropic', 'sk-ant-stored')
+
+    const resolution = resolveCredential({ env: {}, providers: PROVIDERS, home, store: store() })
+
+    expect(resolution?.source).toEqual({ kind: 'file', path: expect.stringContaining('auth.json') })
+  })
+
+  it('an_env_key_still_wins_over_the_stored_one', () => {
+    // Precedence unchanged: the environment is the more explicit, more immediate signal.
+    writeApiStore('anthropic', 'sk-ant-stored')
+
+    expect(
+      resolveCredential({
+        env: { OPENAI_API_KEY: 'sk-env' },
+        providers: PROVIDERS,
+        home,
+        store: store(),
+      })?.apiKey,
+    ).toBe('sk-env')
+  })
+
+  it('a_stored_api_key_for_an_undeclared_provider_is_ignored', () => {
+    // Same rule the oauth path already holds: which providers exist is app policy, and the store
+    // must not smuggle one in through the back door.
+    writeApiStore('mistral', 'sk-whatever')
+
+    expect(
+      resolveCredential({ env: {}, providers: PROVIDERS, home, store: store() }),
+    ).toBeUndefined()
+  })
+
+  it('an_empty_stored_key_counts_as_absent', () => {
+    writeApiStore('anthropic', '')
+
+    expect(
+      resolveCredential({ env: {}, providers: PROVIDERS, home, store: store() }),
+    ).toBeUndefined()
+  })
+})

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 // 2026-08-14 against @theokit/sdk 4.51.1; its runtime shape is `{ home, dirName, fileName,
 // homeEnvVar? }`. Imported as the opaque type it is: this module only forwards it to the SDK, and
 // re-declaring the shape here would be a mirror that drifts. Filed as an upstream type-export defect.
-import { readStoredOAuth, type CredentialStoreConfig } from '@theokit/sdk/auth'
+import { readAuthFile, type CredentialStoreConfig } from '@theokit/sdk/auth'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /**
@@ -394,6 +394,12 @@ interface StoredOAuth {
   readonly access: string
 }
 
+/** The store's path, for provenance a human can act on. */
+function filePathOf(input: ResolveCredentialInput): string {
+  const config = input.store as unknown as { dirName?: string; fileName?: string }
+  return join(config.dirName ?? '.theokit', config.fileName ?? 'auth.json')
+}
+
 function storedOAuthResolution(
   input: ResolveCredentialInput,
   providers: readonly ProviderDescriptor[],
@@ -404,7 +410,9 @@ function storedOAuthResolution(
   try {
     // The PROCESS env, not a synthesized one: `credentialHome` consults `config.homeEnvVar` against
     // it, so an operator's `THEOKIT_HOME` override must be the one that wins here too.
-    stored = readStoredOAuth(input.store, input.env) as StoredOAuth | undefined
+    // `readAuthFile`, not `readStoredOAuth`: the latter answers only the oauth variant, and the store
+    // holds api-key credentials too — reading with the narrow reader is why they were invisible.
+    stored = readAuthFile(input.store, input.env) as StoredOAuth | undefined
   } catch (cause) {
     // Reported, not silent. During implementation this catch swallowed a malformed store config for
     // several iterations and the only symptom was `undefined` — the same shape as "nothing is
@@ -417,13 +425,32 @@ function storedOAuthResolution(
     return undefined
   }
   if (stored === undefined) return undefined
+  const found = providers.find((p) => p.name === stored.provider)
+  // A store naming a provider the app never declared is ignored, for both variants: WHICH providers
+  // exist is app policy, and the store must not smuggle one in through the back door.
+  if (found === undefined) return undefined
+
+  // The API-KEY variant. `writeCredential` persists `{ provider, api_key }`, and this path used to
+  // read back only `oauth` — the framework could store a key nothing in it could then use, which is
+  // why the measured consumer kept its own file reader. Write without read is the same defect class
+  // as a capability that exists and cannot be imported.
+  if (stored.type !== 'oauth') {
+    const apiKey = (stored as unknown as { api_key?: unknown }).api_key
+    if (typeof apiKey !== 'string' || apiKey === '') return undefined
+    assertKeyMatchesProvider(found, apiKey, filePathOf(input))
+    return {
+      kind: 'api-key',
+      provider: found.name,
+      apiKey,
+      source: { kind: 'file', path: filePathOf(input) },
+      // The store names the provider explicitly, so nothing was inferred.
+      inferred: false,
+    }
+  }
+
   // Validated at RUNTIME rather than trusted from the type: the declaration above is a narrow local
   // mirror, so the value is what proves itself.
-  if (stored.type !== 'oauth' || typeof stored.access !== 'string' || stored.access === '') {
-    return undefined
-  }
-  const found = providers.find((p) => p.name === stored.provider)
-  if (found === undefined) return undefined
+  if (typeof stored.access !== 'string' || stored.access === '') return undefined
 
   return {
     kind: 'oauth',
