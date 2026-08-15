@@ -20,6 +20,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`readSecureJson` recusa um store que outro usuario local pode ESCREVER (9.1.1).**
+  `ensureSecureDir` segurava o DIRETORIO em owner-only e a leitura entao abria o ARQUIVO sem olhar o
+  modo dele. Um `hook-approvals.json` deixado group- ou world-writable — por uma versao antiga, por
+  um umask ruim, por quem tivesse acesso de escrita — era lido como autoritativo. Esse arquivo decide
+  quais linhas de comando chegam ao `spawn(cmd, { shell: true })`.
+
+  Falha FECHADA e reporta via `lastReadError`, em vez de lancar: um store ilegivel ja significa "nada
+  aprovado", e o turno do chamador nao deve terminar por causa disso. Silencio tornaria um store
+  adulterado indistinguivel de um vazio. Recusado em vez de reparado — apertar o modo em silencio
+  esconderia que algo o mudou, que e o fato que importa saber.
+
 - **`TrustStore` garante o modo do DIRETORIO (9.0.1).** Chamava `mkdirSync` sem modo e sem reparo, e
   o argumento `mode` e no-op num diretorio existente — este e compartilhado com a raiz de
   transcricoes do SDK, entao quem cria primeiro decide. Medido: 0775 por umask, ou 0777. Os dois
