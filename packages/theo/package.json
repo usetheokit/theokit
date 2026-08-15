@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.48.0",
+  "version": "0.48.1",
   "type": "module",
   "sideEffects": false,
   "license": "Apache-2.0",
