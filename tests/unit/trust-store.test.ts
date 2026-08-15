@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -217,5 +217,57 @@ describe('TrustStore — the key is canonical', () => {
     await store.trust({ ...record(dir), trusted: false })
 
     expect(store.isTrusted(dir)).toBe(false)
+  })
+})
+
+/**
+ * The DIRECTORY holding the store is owner-only too, and repaired when it is not.
+ *
+ * `HookApprovalStore` and `PermissionStore` both go through `ensureSecureDir`, which chmods and then
+ * asserts — precisely because `mkdirSync({ mode })` is a no-op on a directory that already exists,
+ * and this one is shared with the SDK's transcript root, so whoever creates it first sets the mode.
+ * `TrustStore` called bare `mkdirSync` and never looked, which left the directory holding the file
+ * that authorises command execution at whatever umask produced (0775 by default).
+ *
+ * Three stores in one package, all gating execution; two enforced this and one did not. Found by a
+ * consumer's own test failing during migration, not by reading our code.
+ */
+describe('TrustStore — the directory is private too', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'theokit-trustdir-'))
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const record = (path: string) => ({
+    path,
+    decidedAt: '2026-08-15T00:00:00.000Z',
+    decidedBy: 'test',
+    trusted: true,
+  })
+
+  it('a_fresh_directory_is_created_owner_only', async () => {
+    const nested = join(dir, '.theokit')
+    await new TrustStore(join(nested, 'store.json')).trust(record(dir))
+
+    expect(statSync(nested).mode & 0o777).toBe(0o700)
+  })
+
+  it('a_preexisting_world_writable_directory_is_repaired', async () => {
+    // The realistic case: the SDK's transcript root created `.theokit` first, without a mode.
+    const nested = join(dir, '.theokit')
+    mkdirSync(nested, { recursive: true })
+    chmodSync(nested, 0o777)
+
+    await new TrustStore(join(nested, 'store.json')).trust(record(dir))
+
+    expect(
+      statSync(nested).mode & 0o777,
+      'a world-writable directory kept holding the file that authorises command execution',
+    ).toBe(0o700)
   })
 })
