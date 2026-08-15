@@ -143,3 +143,79 @@ describe('file permissions — checked on READ, and refused rather than repaired
     expect(new TrustStore(file).read()).toEqual([DECISION])
   })
 })
+
+/**
+ * The directory key must be canonical — the same rule its sibling store already applies.
+ *
+ * `PermissionStore` resolves a scope with `realpath` before it becomes part of a key, and documents
+ * why: `/repo/a`, `/repo/a/` and `/repo/./a` are one directory and three strings, and a symlink is a
+ * fourth. This store, deciding the same class of question — may what lives here run? — compared raw
+ * strings. Two stores in one package, both gating execution, disagreeing about what "the same
+ * directory" means.
+ *
+ * The failure is not an error message. The user trusts a project, the tool asks again because the
+ * path was spelled differently, and they learn to click "trust" without reading — which is the
+ * outcome a trust prompt exists to prevent.
+ */
+describe('TrustStore — the key is canonical', () => {
+  let dir: string
+  let file: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'theokit-trustkey-'))
+    file = join(dir, 'store.json')
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const record = (path: string) => ({
+    path,
+    decidedAt: '2026-08-15T00:00:00.000Z',
+    decidedBy: 'test',
+    trusted: true,
+  })
+
+  it('a_trailing_slash_is_the_same_directory', async () => {
+    const store = new TrustStore(file)
+    await store.trust(record(dir))
+    await store.trust(record(`${dir}/`))
+
+    expect(store.read(), 'one directory produced two records').toHaveLength(1)
+  })
+
+  it('a_dot_segment_is_the_same_directory', async () => {
+    const store = new TrustStore(file)
+    await store.trust(record(dir))
+    await store.trust(record(join(dir, '.')))
+
+    expect(store.read()).toHaveLength(1)
+  })
+
+  it('isTrusted_answers_for_an_equivalent_spelling', async () => {
+    const store = new TrustStore(file)
+    await store.trust(record(dir))
+
+    expect(store.isTrusted(`${dir}/`), 'a trailing slash lost the decision').toBe(true)
+  })
+
+  it('isTrusted_denies_an_unresolvable_path', () => {
+    // Deny, never throw, on a CHECK: a path that is not there is not trusted, and a check is not the
+    // place to end a turn. Matches `PermissionStore.isGranted`.
+    expect(new TrustStore(file).isTrusted(join(dir, 'gone'))).toBe(false)
+  })
+
+  it('isTrusted_denies_what_was_never_recorded', () => {
+    expect(new TrustStore(file).isTrusted(dir)).toBe(false)
+  })
+
+  it('a_revoked_decision_is_not_trusted', async () => {
+    // `trusted: false` is a RECORDED refusal, which is a different fact from "never asked" — and it
+    // must not read as trust just because a record exists.
+    const store = new TrustStore(file)
+    await store.trust({ ...record(dir), trusted: false })
+
+    expect(store.isTrusted(dir)).toBe(false)
+  })
+})
