@@ -1,5 +1,34 @@
 # @theokit/agents
 
+## 9.0.0
+
+### Major Changes
+
+- **`HookApprovalStore` passa a escopar aprovacoes por PROJETO. `scope` e obrigatorio.**
+
+  BREAKING: `approve`, `revoke`, `stateOf` e `approvedFingerprints` recebem o diretorio do projeto.
+
+  O store chaveava so pelo fingerprint, o que torna uma aprovacao valida na maquina inteira: um hook
+  aprovado trabalhando num repositorio ficava pre-aprovado ao abrir outro que a pessoa acabou de
+  clonar. O consumidor medido chaveia por `hooks[canonicalDir(dir)][fingerprint]` exatamente por isso —
+  e nao conseguia adotar este store sem ALARGAR a propria postura de seguranca, que e a unica direcao
+  que uma absorcao nunca pode tomar.
+
+  A lacuna apareceu ao TENTAR a migracao, nao ao revisar o desenho. Ela nao e de formato de dados: e
+  uma propriedade de seguranca que faltava aqui e existia la.
+
+  `scope` e OBRIGATORIO, pela mesma razao que `approved` e obrigatorio em `buildHookHandlers` — um
+  portao de seguranca opcional e um portao que alguem esquece, e esquecer este roda o comando de shell
+  de um estranho porque foi aprovado em outro lugar. Manter a assinatura antiga como sobrecarga
+  deixaria o caminho global disponivel, que e justamente o defeito.
+
+  O escopo e canonicalizado com `realpath`, a mesma regra de `PermissionStore` e `TrustStore`: `/repo`
+  e `/repo/` sao um diretorio e duas strings, e sem isso o operador aprova uma vez e e perguntado de
+  novo no mesmo projeto — que e como se aprende a aprovar sem ler.
+
+  `modified` continua distinguivel de `unknown` DENTRO do projeto. Num projeto que nunca aprovou nada
+  nao ha aprovacao por tras da qual algo possa ter mudado, entao a resposta la e `unknown`.
+
 ## 8.7.0
 
 ### Minor Changes
@@ -248,7 +277,6 @@
   `main` after that release, so two already-consumed changeset files were still sitting there and
   changesets recomputed them on top of a stale base. Publishing would have put a different artifact
   under a version that already exists.
-
 
 ## 7.5.0
 

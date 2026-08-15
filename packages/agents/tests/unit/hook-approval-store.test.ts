@@ -35,6 +35,15 @@ function storeAt(dir = home): HookApprovalStore {
   return new HookApprovalStore({ home: dir })
 }
 
+/**
+ * The project these cases speak about.
+ *
+ * Approvals are per project (see the scoping block at the foot of this file), so every call needs
+ * one. These cases are about the three-state answer rather than about scoping, so they all use the
+ * same project and say so by name.
+ */
+const PROJECT = (): string => home
+
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'theokit-approvals-'))
 })
@@ -45,50 +54,52 @@ afterEach(() => {
 
 describe('HookApprovalStore', () => {
   it('unknown_hook_is_not_approved', () => {
-    expect(storeAt().stateOf(HOOK)).toBe('unknown')
+    expect(storeAt().stateOf(HOOK, PROJECT())).toBe('unknown')
   })
 
   it('approved_hook_is_approved', () => {
     const store = storeAt()
-    store.approve(HOOK)
+    store.approve(HOOK, PROJECT())
 
-    expect(store.stateOf(HOOK)).toBe('approved')
+    expect(store.stateOf(HOOK, PROJECT())).toBe('approved')
     // Round-trips through disk, not just through memory — the point of a store.
-    expect(storeAt().stateOf(HOOK)).toBe('approved')
+    expect(storeAt().stateOf(HOOK, PROJECT())).toBe('approved')
   })
 
   it('changed_command_reports_modified', () => {
     const store = storeAt()
-    store.approve(HOOK)
+    store.approve(HOOK, PROJECT())
 
     // NOT 'unknown': somebody edited a command that had been approved, which is the signal the gate
     // was built to raise. `unknown` would let it read as "never seen".
-    expect(store.stateOf(EDITED)).toBe('modified')
+    expect(store.stateOf(EDITED, PROJECT())).toBe('modified')
   })
 
   it('a_genuinely_new_hook_is_unknown_not_modified', () => {
     const store = storeAt()
-    store.approve(HOOK)
+    store.approve(HOOK, PROJECT())
 
-    expect(store.stateOf({ ...HOOK, event: 'post_tool_call', command: 'echo hi' })).toBe('unknown')
+    expect(store.stateOf({ ...HOOK, event: 'post_tool_call', command: 'echo hi' }, PROJECT())).toBe(
+      'unknown',
+    )
   })
 
   it('approved_fingerprints_feeds_the_gate', () => {
     const store = storeAt()
-    store.approve(HOOK)
+    store.approve(HOOK, PROJECT())
 
     // This set IS the `approved` argument `buildHookHandlers` requires. Without it the gate has a
     // mandatory parameter with no producer — half a capability.
-    expect(store.approvedFingerprints().has(hookFingerprint(HOOK))).toBe(true)
-    expect(store.approvedFingerprints().has(hookFingerprint(EDITED))).toBe(false)
+    expect(store.approvedFingerprints(PROJECT()).has(hookFingerprint(HOOK))).toBe(true)
+    expect(store.approvedFingerprints(PROJECT()).has(hookFingerprint(EDITED))).toBe(false)
   })
 
   it('revoking_returns_the_hook_to_unknown', () => {
     const store = storeAt()
-    store.approve(HOOK)
-    store.revoke(HOOK)
+    store.approve(HOOK, PROJECT())
+    store.revoke(HOOK, PROJECT())
 
-    expect(store.stateOf(HOOK)).toBe('unknown')
+    expect(store.stateOf(HOOK, PROJECT())).toBe('unknown')
   })
 
   it('empty_store_file_reads_as_unknown', () => {
@@ -98,7 +109,7 @@ describe('HookApprovalStore', () => {
     mkdirSync(join(home, '.theokit'), { recursive: true })
     writeFileSync(store.path, '', 'utf8')
 
-    expect(storeAt().stateOf(HOOK)).toBe('unknown')
+    expect(storeAt().stateOf(HOOK, PROJECT())).toBe('unknown')
   })
 
   it('corrupt_store_fails_closed_and_reports', () => {
@@ -107,7 +118,7 @@ describe('HookApprovalStore', () => {
     writeFileSync(store.path, '{ not json', 'utf8')
 
     const fresh = storeAt()
-    expect(fresh.stateOf(HOOK)).toBe('unknown')
+    expect(fresh.stateOf(HOOK, PROJECT())).toBe('unknown')
     // Fail-closed is not enough on its own: a store that silently reads as empty is indistinguishable
     // from one that is empty, and the operator would never learn their approvals stopped applying.
     expect(
@@ -126,18 +137,18 @@ describe('HookApprovalStore', () => {
     chmodSync(join(dir, '.theokit'), 0o777)
 
     const store = new HookApprovalStore({ home: dir })
-    store.approve(HOOK)
+    store.approve(HOOK, PROJECT())
 
     const mode = statSync(join(dir, '.theokit')).mode & 0o777
     expect(mode & 0o022, 'group/other write bits survived').toBe(0)
-    expect(store.stateOf(HOOK)).toBe('approved')
+    expect(store.stateOf(HOOK, PROJECT())).toBe('approved')
 
     rmSync(dir, { recursive: true, force: true })
   })
 
   it('store_file_is_written_owner_only', () => {
     const store = storeAt()
-    store.approve(HOOK)
+    store.approve(HOOK, PROJECT())
 
     expect(statSync(store.path).mode & 0o077, 'the approval file is readable by others').toBe(0)
   })
@@ -151,14 +162,98 @@ describe('HookApprovalStore', () => {
       command: `npm run task-${String(i)}`,
     }))
 
-    await Promise.all(hooks.map(async (h) => storeAt().approve(h)))
+    await Promise.all(hooks.map(async (h) => storeAt().approve(h, PROJECT())))
 
     const fresh = storeAt()
-    const approved = fresh.approvedFingerprints()
+    const approved = fresh.approvedFingerprints(PROJECT())
     expect(fresh.lastReadError).toBeUndefined()
     // At least one must survive and the file must still parse; concurrent last-write-wins on a
     // whole-file store may drop some, and claiming all 12 would be asserting a guarantee this
     // implementation does not make.
     expect(approved.size).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Approvals are scoped to a PROJECT, not to the machine.
+ *
+ * Measured against the closest real consumer: it keys approvals by
+ * `hooks[canonicalDir(projectDir)][fingerprint]`, and that scoping is the security property — a hook
+ * approved while working on one repository must not be pre-approved when the operator opens a
+ * different one they just cloned. This store keyed by fingerprint alone, which makes an approval
+ * machine-wide.
+ *
+ * The gap surfaced by trying the migration, not by reviewing the design: the consumer could not
+ * adopt this store without WIDENING its own posture, which is the one direction an absorption must
+ * never move.
+ *
+ * `scope` is REQUIRED, for the same reason `approved` is required on `buildHookHandlers` — an
+ * optional security gate is a gate somebody forgets, and forgetting this one runs a stranger's shell
+ * command because it was approved somewhere else.
+ */
+describe('HookApprovalStore — approvals are per project', () => {
+  let repoA: string
+  let repoB: string
+
+  beforeEach(() => {
+    repoA = mkdtempSync(join(tmpdir(), 'theokit-repo-a-'))
+    repoB = mkdtempSync(join(tmpdir(), 'theokit-repo-b-'))
+  })
+
+  afterEach(() => {
+    for (const d of [repoA, repoB]) rmSync(d, { recursive: true, force: true })
+  })
+
+  it('an_approval_in_one_project_does_not_apply_to_another', () => {
+    const store = storeAt()
+    store.approve(HOOK, repoA)
+
+    expect(store.stateOf(HOOK, repoA)).toBe('approved')
+    expect(store.stateOf(HOOK, repoB), 'the approval leaked across projects').toBe('unknown')
+  })
+
+  it('the_approved_set_is_per_project', () => {
+    const store = storeAt()
+    store.approve(HOOK, repoA)
+
+    expect(store.approvedFingerprints(repoA).size).toBe(1)
+    expect(store.approvedFingerprints(repoB).size, 'the set leaked across projects').toBe(0)
+  })
+
+  it('the_scope_is_canonical', () => {
+    // Same rule as `PermissionStore` and `TrustStore`: `/repo` and `/repo/` are one directory and
+    // two strings. Without it the operator approves once and is asked again in the same project.
+    const store = storeAt()
+    store.approve(HOOK, repoA)
+
+    expect(store.stateOf(HOOK, `${repoA}/`)).toBe('approved')
+  })
+
+  it('modified_is_still_detected_within_a_project', () => {
+    // The three-state answer must survive scoping: an edited command in the SAME project is
+    // `modified`, which is a different fact from never having been seen.
+    const store = storeAt()
+    store.approve(HOOK, repoA)
+
+    expect(store.stateOf(EDITED, repoA)).toBe('modified')
+  })
+
+  it('an_edited_command_in_another_project_is_unknown_not_modified', () => {
+    // `modified` means "somebody changed this behind YOUR approval". In a project that never
+    // approved anything, there is no approval to have changed behind.
+    const store = storeAt()
+    store.approve(HOOK, repoA)
+
+    expect(store.stateOf(EDITED, repoB)).toBe('unknown')
+  })
+
+  it('revoking_is_scoped_too', () => {
+    const store = storeAt()
+    store.approve(HOOK, repoA)
+    store.approve(HOOK, repoB)
+    store.revoke(HOOK, repoA)
+
+    expect(store.stateOf(HOOK, repoA)).toBe('unknown')
+    expect(store.stateOf(HOOK, repoB), 'revoking one project revoked another').toBe('approved')
   })
 })
