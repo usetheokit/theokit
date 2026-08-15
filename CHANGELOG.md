@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Apagar uma sessão deixou de relatar uma remoção que não aconteceu.** `deleteSession` aceitava um
+  `removeFromRegistry` e reportava `registryRemoved: true` quando ele era assíncrono — uma Promise é
+  truthy, então o campo afirmava antes de a remoção ocorrer, e uma rejeição virava unhandled. Como o
+  único registro de agentes do ecossistema (`Agent.delete`) é assíncrono, todo chamador real caía
+  nisso. Agora a checagem roda **antes** de o transcript ser apagado, então a recusa deixa a sessão
+  intacta para o chamador tentar de novo.
+
 ### Changed
 
 - **`theokit` passa a exigir `@theokit/sdk@^4.52.1` como peer** (era `^4.49.0`). O piso antigo ja era

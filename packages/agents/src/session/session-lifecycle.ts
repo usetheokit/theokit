@@ -43,6 +43,32 @@ import { sessionPointerPath } from './session-pointer.js'
  */
 
 /** Raised when a lifecycle operation is refused because the session is live. */
+/**
+ * `removeFromRegistry` returned a thenable — the delete was refused rather than half-performed.
+ *
+ * The seam is synchronous by contract because `deleteSession` is. A caller whose registry is async
+ * (which, measured, is every real one) awaits its own removal and then calls this with the outcome.
+ */
+export class SessionRegistryRemoverError extends TheokitAgentError {
+  override readonly name = 'SessionRegistryRemoverError'
+  readonly sessionId: string
+
+  constructor(sessionId: string) {
+    super(
+      `refusing to delete session ${sessionId}: removeFromRegistry returned a Promise, and this ` +
+        `function is synchronous — its result would be reported as removed before it happened. ` +
+        `Await your registry removal first, then pass its outcome: ` +
+        `const removed = await Agent.delete(id).then(() => true); deleteSession(id, { removeFromRegistry: () => removed }).`,
+    )
+    this.sessionId = sessionId
+  }
+}
+
+/** Structural, not `instanceof Promise` — a thenable from another realm is still a thenable. */
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return typeof (value as PromiseLike<unknown> | null)?.then === 'function'
+}
+
 export class SessionInUseError extends TheokitAgentError {
   override readonly name = 'SessionInUseError'
 
@@ -194,6 +220,23 @@ export function deleteSession(
     if (reason !== undefined) throw new SessionInUseError(sessionId, reason)
   }
 
+  // The registry removal runs FIRST, and its result is inspected before anything is unlinked.
+  //
+  // `registryRemoved: options.removeFromRegistry?.(id) ?? false` used to sit at the return, and an
+  // async remover made it lie: a Promise is truthy, so the field said the entry was gone before the
+  // removal had happened, and a rejection surfaced as an unhandled rejection. That is not a corner —
+  // the SDK's `Agent.delete` returns `Promise<void>` and is the ONLY agent registry in the ecosystem
+  // (the sole sync `delete(name): boolean` in the SDK belongs to `Budget`). Every real caller has an
+  // async remover, so the seam could not be satisfied honestly by anyone who tried.
+  //
+  // Refusing beats guessing: the transcript is still on disk, so the caller retries after awaiting
+  // its own removal. Deleting the file and reporting a registry state that never happened is the one
+  // outcome that cannot be undone.
+  const registryRemoved = options.removeFromRegistry?.(sessionId) ?? false
+  if (isThenable(registryRemoved)) {
+    throw new SessionRegistryRemoverError(sessionId)
+  }
+
   let transcriptRemoved = false
   try {
     rmSync(transcriptPath(root, options.cwd, sessionId))
@@ -202,10 +245,7 @@ export function deleteSession(
     // Absent is the desired end state, so a missing file is not a failure — it is just `false`.
   }
 
-  return {
-    registryRemoved: options.removeFromRegistry?.(sessionId) ?? false,
-    transcriptRemoved,
-  }
+  return { registryRemoved, transcriptRemoved }
 }
 
 /**
