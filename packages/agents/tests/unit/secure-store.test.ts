@@ -14,7 +14,7 @@
  * Uniqueness is asserted on the generated NAMES rather than by launching writers and hoping they
  * collide. A timing race would pass on a slow machine for a reason unrelated to the property.
  */
-import { mkdtempSync, mkdirSync, statSync, readdirSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, statSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -67,6 +67,51 @@ describe('writeSecureJson', () => {
 
     expect(readSecureJson<number[]>(store, (raw) => JSON.parse(raw) as number[], []).value).toEqual(
       [2],
+    )
+  })
+})
+
+/**
+ * A store another local user can WRITE is not read as authoritative.
+ *
+ * `ensureSecureDir` held the directory to owner-only, and the read path then opened the file without
+ * looking at its mode. So a `hook-approvals.json` left group- or world-writable — by an older
+ * version, by a bad umask, by anyone with write access to it — was believed. That file decides which
+ * command lines reach `spawn(cmd, { shell: true })`.
+ *
+ * Fails CLOSED and reports, rather than throwing: an unreadable store already means "nothing is
+ * approved", the caller's turn should not end because of it, and `lastReadError` is how the operator
+ * learns their approvals stopped applying. Silence would make a tampered store indistinguishable
+ * from an empty one.
+ *
+ * Found by a consumer's own B-019 test failing while it migrated onto this helper.
+ */
+describe('readSecureJson — an unsafe file mode', () => {
+  it('a_world_writable_store_is_refused_and_reported', () => {
+    writeSecureJson(store, () => '[1,2,3]\n')
+    chmodSync(store, 0o666)
+
+    const read = readSecureJson<number[]>(store, (raw) => JSON.parse(raw) as number[], [])
+
+    expect(read.value, 'a store any local user can write was believed').toEqual([])
+    expect(read.error?.message, 'the refusal was silent').toMatch(/writable|mode/i)
+  })
+
+  it('a_group_writable_store_is_refused_too', () => {
+    writeSecureJson(store, () => '[1]\n')
+    chmodSync(store, 0o660)
+
+    expect(readSecureJson<number[]>(store, (raw) => JSON.parse(raw) as number[], []).value).toEqual(
+      [],
+    )
+  })
+
+  it('an_owner_only_store_is_read_normally', () => {
+    // Anti-vacuity floor: refusing every store would satisfy both assertions above.
+    writeSecureJson(store, () => '[7]\n')
+
+    expect(readSecureJson<number[]>(store, (raw) => JSON.parse(raw) as number[], []).value).toEqual(
+      [7],
     )
   })
 })
