@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`loadInstructionTree` aceita a ordem da varredura.** O predicado tornou uma pasta de regras
+  percorrível e deixou a ordem que uma *árvore* de instruções precisa — arquivos antes de descer,
+  porque lá o externo enuncia e o interno refina. Uma *pasta* de regras é a forma oposta: os arquivos
+  são pares, e o contrato é que o mesmo diretório monte o mesmo prompt em qualquer máquina, numa
+  passagem alfabética. Meia capacidade é um defeito próprio. `'outward-in'` continua o padrão.
 - **Comandos em subpastas deixam de ser invisíveis.** O carregador parava em `!isFile()`, então um
   comando namespaceado não era "sem suporte" — era invisível: sem aviso, sem erro, o arquivo lá e o
   comando inexistente. O nome passa a ser o caminho relativo sem a extensão (`frontend/component`);
