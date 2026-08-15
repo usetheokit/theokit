@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`expandInstructionImports` fica alcancavel por si so, e ganha dois seams.** A expansao de
+  `@file.md` entrou colada ao `loadInstructionTree` e alcancavel so atraves dele — o mesmo defeito
+  que este ciclo inteiro persegue, cometido enquanto o consertava. A CAMINHADA e a EXPANSAO sao
+  capacidades separadas, e so uma delas e universal: um produto cuja convencao e a cadeia de
+  ancestrais (subir do diretorio de trabalho ate a raiz git) precisa da propria caminhada e da mesma
+  expansao. Achado ao tentar a migracao de verdade, nao ao revisar o desenho.
+
+  Os dois seams vieram da mesma tentativa, e nenhum e um botao inventado para um chamador
+  hipotetico:
+
+  - **`wrap`** — o consumidor cerca o conteudo importado com marcadores `--- import: x ---`, que
+    aparecem no prompt do modelo. Sem o seam, a troca mudaria em silencio o que o produto envia.
+    Apresentacao e de quem chama.
+  - **`alreadyLoaded`** — uma caminhada que coleta os arquivos primeiro e expande depois ja leu parte
+    do que um import pode nomear. Sem o seam, esse arquivo entra no prompt duas vezes.
+
+  Ambos opcionais: sem eles, o comportamento e byte-a-byte o de antes.
+
+### Added
+
 - **`credentialSources` — onde o resolver procurou, para a mensagem que ele nao escreve.**
   `resolveCredential` devolve `undefined` quando nada esta configurado, e isso fica: chave ausente e
   o estado ordinario de primeira execucao, e lancar torna o proximo passo do chamador mais dificil,

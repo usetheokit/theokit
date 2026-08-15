@@ -35,6 +35,20 @@ export {
 
 export { TrustStore, TrustStorePermissionsError, type TrustRecord } from './config/trust-store.js'
 
+/**
+ * The `@file.md` expansion, reachable on its own.
+ *
+ * `loadInstructionTree` uses it, but the WALK and the EXPANSION are separate capabilities and only
+ * one of them is universal. A product whose convention is to climb from the working directory to the
+ * git root — the ancestor chain, not the subtree — needs its own walk and the same expansion. Ours
+ * shipped fused to the descent, so that product kept a hand-written copy of the expansion.
+ *
+ * Exported after measuring exactly that: the first version of this feature landed inside the loader
+ * and reachable only through it, which is the defect this whole cycle is about, committed while
+ * fixing it.
+ */
+export { expandInstructionImports, type ExpandImportsInput } from './config/instruction-imports.js'
+
 export {
   loadInstructionTree,
   type InstructionBlock,

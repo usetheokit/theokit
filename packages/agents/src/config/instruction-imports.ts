@@ -102,6 +102,25 @@ export interface ExpandImportsInput {
   /** Containment boundary. An import resolving outside it is kept literal. */
   readonly rootDir: string
   readonly onWarn: (message: string) => void
+  /**
+   * Frame imported content — e.g. `--- import: x ---` markers around it.
+   *
+   * Presentation belongs to the caller: these markers end up in the model's prompt, and a loader
+   * that dictated them would silently change what a product sends. Absent means the content is
+   * inlined bare, which is what every caller saw before this seam existed.
+   *
+   * @param name    the reference as written, without the `@`
+   * @param content the imported file's content, already expanded
+   */
+  readonly wrap?: (name: string, content: string) => string
+  /**
+   * Files the CALLER already read, which must not be inlined again.
+   *
+   * A walk that collects its files first and expands second — the ancestor-chain convention, where a
+   * product climbs from the working directory to the repository root — has already loaded some of
+   * the files an import may name. Without this, such a file lands in the prompt twice.
+   */
+  readonly alreadyLoaded?: readonly string[]
 }
 
 /**
@@ -115,8 +134,11 @@ export function expandInstructionImports(input: ExpandImportsInput): string {
   return expand(input.text, input.filePath, {
     rootDir: input.rootDir,
     warn: input.onWarn,
-    visited: new Set(),
+    // Seeded with what the caller already read, so a file its walk loaded is not inlined a second
+    // time by an import that names it.
+    visited: new Set(input.alreadyLoaded ?? []),
     depth: 0,
+    ...(input.wrap === undefined ? {} : { wrap: input.wrap }),
   })
 }
 
@@ -127,6 +149,7 @@ interface ExpandContext {
   /** Files already expanded on this branch. Mutated across the whole walk, by design. */
   readonly visited: Set<string>
   readonly depth: number
+  readonly wrap?: (name: string, content: string) => string
 }
 
 function expand(text: string, filePath: string, ctx: ExpandContext): string {
@@ -166,7 +189,8 @@ function expand(text: string, filePath: string, ctx: ExpandContext): string {
       out.push(match[0])
       continue
     }
-    out.push(expand(content, target, { ...ctx, depth: ctx.depth + 1 }))
+    const expanded = expand(content, target, { ...ctx, depth: ctx.depth + 1 })
+    out.push(ctx.wrap === undefined ? expanded : ctx.wrap(name, expanded))
   }
   out.push(text.slice(cursor))
   return out.join('')
