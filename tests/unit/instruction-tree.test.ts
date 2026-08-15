@@ -4,12 +4,12 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { composeInstructions } from '../../packages/theo/src/config/compose-instructions.js'
+import { composeInstructions } from '../../packages/agents/src/config-entry.js'
 import {
   ContextPressureThresholdError,
   contextPressure,
-} from '../../packages/theo/src/config/context-pressure.js'
-import { loadInstructionTree } from '../../packages/theo/src/config/instruction-tree.js'
+} from '../../packages/agents/src/config-entry.js'
+import { loadInstructionTree } from '../../packages/agents/src/config-entry.js'
 
 /**
  * M74 — the instruction tree, the composition ladder, and context pressure.

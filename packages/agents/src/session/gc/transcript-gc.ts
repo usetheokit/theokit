@@ -41,6 +41,28 @@ import { listSessions, protectedTranscripts } from '../session-lifecycle.js'
 const FLOOR = { keepLast: 1, maxAgeDays: 1 } as const
 
 /** Raised when a retention knob is below its floor. Refusing beats clamping — see invariant 1. */
+/**
+ * The injected protection provider could not answer, so the run refuses to collect anything.
+ *
+ * Its OWN class and not a `GCFloorError`: that one means "a retention knob is below its floor", a
+ * caller mistake fixed by passing a different number. This one means "we cannot know which sessions
+ * are live" — different cause, different remedy, and collapsing them would make a diagnostic lie.
+ * Not retryable: the provider is the caller's, and the same call reproduces the same failure.
+ */
+export class GCProtectionUnavailableError extends TheokitAgentError {
+  override readonly name = 'GCProtectionUnavailableError'
+
+  constructor(readonly reason: unknown) {
+    super(
+      `transcript GC: the injected protection provider threw, so this run cannot know which ` +
+        `sessions are live and refuses to collect any. Refusing beats collecting blind — a guard ` +
+        `that fails open on its own error is worse than no guard, because it reads as protection. ` +
+        `Cause: ${reason instanceof Error ? reason.message : String(reason)}`,
+      { code: 'gc_protection_unavailable', isRetryable: false, cause: reason },
+    )
+  }
+}
+
 export class GCFloorError extends TheokitAgentError {
   override readonly name = 'GCFloorError'
 
@@ -79,6 +101,23 @@ export interface TranscriptGCOptions {
   readonly root?: string
   /** Injected clock (DIP) — a live `Date.now()` makes every age assertion depend on run speed. */
   readonly now?: number
+  /**
+   * Extra sessions this framework cannot see are live.
+   *
+   * `protectedTranscripts` derives protection from THIS framework's pointer convention. A consumer
+   * whose live-session registry lives elsewhere gets an INERT guard — silently, inside a guard that
+   * deletes user transcripts. That is the shape of the consumer's own PS-002: declared, wired, never
+   * called, and therefore reading as protection while protecting nothing.
+   *
+   * ADDITIVE ONLY. The returned ids are unioned with the built-in ones and can never remove them: a
+   * seam that could unprotect a session the framework knows is live would be a deletion vector, not
+   * a safety net.
+   *
+   * A provider that THROWS refuses the whole run — matching `GCFloorError`'s refuse-don't-clamp
+   * posture, and deliberately not reproducing the consumer's fail-open bug where an EACCES on the
+   * pointer read became "there is no live session".
+   */
+  readonly protectedIds?: () => ReadonlyMap<string, string>
 }
 
 export interface TranscriptGCPlan {
@@ -97,6 +136,28 @@ export interface TranscriptGCPlan {
  *
  * @throws {GCFloorError} when a knob is below its floor (invariant 1).
  */
+/**
+ * Union the built-in protection with whatever the consumer contributes.
+ *
+ * Built-in entries win on key collision: the framework's reason for keeping a session is not
+ * something an injected map may relabel away.
+ */
+function resolveProtection(
+  builtin: ReadonlyMap<string, string>,
+  provider: (() => ReadonlyMap<string, string>) | undefined,
+): ReadonlyMap<string, string> {
+  if (provider === undefined) return builtin
+  let extra: ReadonlyMap<string, string>
+  try {
+    extra = provider()
+  } catch (cause) {
+    throw new GCProtectionUnavailableError(cause)
+  }
+  const union = new Map(extra)
+  for (const [id, reason] of builtin) union.set(id, reason)
+  return union
+}
+
 export function planTranscriptGC(options: TranscriptGCOptions): TranscriptGCPlan {
   if (!Number.isFinite(options.keepLast) || options.keepLast < FLOOR.keepLast) {
     throw new GCFloorError('keepLast', options.keepLast)
@@ -110,7 +171,10 @@ export function planTranscriptGC(options: TranscriptGCOptions): TranscriptGCPlan
   const cutoff = now - options.maxAgeDays * 86_400_000
 
   const sessions = listSessions(options.cwd, root) // newest first
-  const protectedBy = protectedTranscripts(options.cwd, root)
+  const protectedBy = resolveProtection(
+    protectedTranscripts(options.cwd, root),
+    options.protectedIds,
+  )
 
   const candidates: GCCandidate[] = []
   const kept: GCKept[] = []
@@ -172,7 +236,11 @@ export interface RunTranscriptGCResult {
  */
 export function runTranscriptGC(
   plan: TranscriptGCPlan,
-  options: { readonly apply: boolean },
+  options: {
+    readonly apply: boolean
+    /** Same additive, fail-closed contract as on the plan — see `TranscriptGCOptions.protectedIds`. */
+    readonly protectedIds?: () => ReadonlyMap<string, string>
+  },
 ): RunTranscriptGCResult {
   const removed: string[] = []
   const errors: GCError[] = []
@@ -181,7 +249,7 @@ export function runTranscriptGC(
   // can resume a session or a process can take a lease. Re-reading protection HERE is what turns
   // "was safe when we looked" into "is safe now".
   const protectedNow = options.apply
-    ? protectedTranscripts(plan.cwd, plan.root)
+    ? resolveProtection(protectedTranscripts(plan.cwd, plan.root), options.protectedIds)
     : new Map<string, string>()
 
   for (const candidate of plan.candidates) {

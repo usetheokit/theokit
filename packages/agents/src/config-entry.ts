@@ -1,0 +1,83 @@
+/**
+ * The `@theokit/agents/config` subpath — agent configuration, trust, and the instruction tree.
+ *
+ * ## Why these modules live here and not in `theokit`
+ *
+ * They used to be reachable only through `theokit/server`, a barrel that announces its own removal
+ * on first import. That is worse than an absent capability: a builder finds it, reads that it is
+ * going away, and writes their own anyway. And the package holding it is the WEB framework — an
+ * agent builder installs `@theokit/agents` and may never install `theokit` at all. The only real
+ * consumer of this layer has four packages and none of them depends on `theokit`.
+ *
+ * The cost of that was measured, not hypothesised. Because `loadInstructionTree` was unreachable,
+ * a downstream product rewrote 533 lines of instruction-tree loading — and in rewriting it
+ * reintroduced the symlink-containment hole that `assertNoSymlinkEscape` exists to close: with
+ * `rootDir='/'`, any file on the machine became readable into the system prompt.
+ *
+ * Absorbing a consumer's module means absorbing its scar tissue, not just its interface. Keeping
+ * these behind a deprecated door in the wrong package meant nobody inherited either.
+ *
+ * ## Direction
+ *
+ * `theokit` depends on `@theokit/agents`, never the reverse (G1). Moving the modules DOWN preserves
+ * that: `theokit/server` now re-exports from here, so its consumers keep working for the one minor
+ * cycle it promised, and new consumers import from the package they already have.
+ */
+export {
+  LayeredConfig,
+  LayerOutOfOrderError,
+  type ConfigLayer,
+  type LayeredConfigInput,
+  type LayeredConfigResult,
+  type PrecedenceReport,
+  type ProvenancePerKey,
+} from './config/layered-config.js'
+
+export { TrustStore, TrustStorePermissionsError, type TrustRecord } from './config/trust-store.js'
+
+export {
+  loadInstructionTree,
+  type InstructionBlock,
+  type InstructionTree,
+  type InstructionTreeBudget,
+  type LoadInstructionTreeInput,
+} from './config/instruction-tree.js'
+
+export {
+  composeInstructions,
+  type ComposeInstructionsOptions,
+  type ComposedInstructions,
+  type InstructionSource,
+} from './config/compose-instructions.js'
+
+export {
+  loadCustomCommands,
+  type CustomCommand,
+  type CustomCommandsResult,
+  type LoadCustomCommandsInput,
+} from './config/custom-commands.js'
+
+export { frontmatterValue, splitFrontmatter, type ParsedFrontmatter } from './config/frontmatter.js'
+
+export {
+  DEFAULT_CONTEXT_PRESSURE_THRESHOLDS,
+  ContextPressureThresholdError,
+  contextPressure,
+  effectiveContextWindow,
+  type ContextPressure,
+  type ContextPressureThresholds,
+} from './config/context-pressure.js'
+
+/**
+ * `loadEnv` deliberately did NOT move, and the reason is worth stating rather than leaving as an
+ * absence someone re-derives later.
+ *
+ * It needs `dotenv` + `dotenv-expand`, which are dependencies of the web package. Moving it would
+ * add two runtime dependencies to EVERY `@theokit/agents` install, for a capability an agent builder
+ * mostly does not want — `.env` loading is a web-app concern, and it has five consumers inside
+ * `theokit` and none here. The measured damage that motivated this subpath (a consumer rewriting
+ * 533 lines of instruction-tree loading and reintroducing a symlink-containment hole) was in the
+ * instruction tree, not in env parsing.
+ *
+ * It stays reachable from `theokit/server` for the consumers that actually have it.
+ */

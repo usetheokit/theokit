@@ -1,4 +1,15 @@
-import { resolveEffectiveContextWindow } from '@theokit/agents'
+// Imported from the SDK directly, not from this package's own barrel: these files now LIVE in
+// `@theokit/agents`, so `from '@theokit/agents'` would be a package self-reference (and a cycle
+// through `src/index.ts`). The barrel re-exports the same SDK symbols for consumers; inside the
+// package we reach the source.
+import { resolveEffectiveContextWindow } from '@theokit/sdk/compaction'
+// These modules moved from `theokit` into `@theokit/agents`, and this package enforces an
+// invariant the web package does not: no exported error class extends plain `Error`. A class
+// outside the `TheokitAgentError` hierarchy is invisible to `isTransientError` and to any
+// consumer catching `instanceof TheokitAgentError` — the exact defect U-11 measured across ten
+// classes. `tests/unit/error-taxonomy.test.ts` caught all three the moment they crossed the
+// boundary, which is the guard working.
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /**
  * M74 — context pressure: the fraction of the window a run has consumed.
@@ -35,8 +46,14 @@ export const DEFAULT_CONTEXT_PRESSURE_THRESHOLDS: ContextPressureThresholds = {
 }
 
 /** Raised when thresholds are ordered in a way that makes a level unreachable. */
-export class ContextPressureThresholdError extends Error {
+export class ContextPressureThresholdError extends TheokitAgentError {
   override readonly name = 'ContextPressureThresholdError'
+
+  constructor(message: string) {
+    // Not retryable: a misordered threshold is a configuration mistake, and retrying it produces
+    // the same unreachable level forever.
+    super(message, { code: 'context_pressure_thresholds_unordered', isRetryable: false })
+  }
 }
 
 /**
