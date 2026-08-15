@@ -2,7 +2,10 @@
 
 **Date:** 2026-08-15
 **Method:** file-by-file measurement of the consumer against the layer's published surface
-**Answer:** **No — and 86% of the remaining distance is ours to close, not theirs.**
+**Answer:** **No.** Measured first at 1140 overlapping lines with 86% publish-gated. That framing was
+wrong in an important way: three of those blocks were not publish-gated at all — they were capability
+gaps on our side, and reading the consumer's code found them. All are now closed. **Every remaining
+line is publish-gated.**
 
 ## Coverage of what we publish
 
@@ -18,15 +21,30 @@ That is not a gap: it reaches the runtime through our layer, which is the intend
 
 ## What it still hand-rolls, and who is blocking each line
 
-| Consumer file | LoC | Covered by | Blocked on |
+| Consumer file | LoC | Covered by | Was it really publish? |
 |---|---:|---|---|
-| `auth/credentials.ts` | 390 | `resolveCredential`, `PermissionStore`, `providerFromApiKeyPrefix`, `Stored*` types | publish |
-| `context/agents-md.ts` | 256 | `loadInstructionTree` via `@theokit/agents/config` | publish |
-| `tools/registry.ts` | 151 | mostly already consumed — the rest is product policy | see below |
-| `config/trust-store.ts` | 145 | `TrustStore` via `@theokit/agents/config` | publish |
-| `hooks/hook-trust.ts` | 108 | `HookApprovalStore` + a one-line `map` | publish |
-| `tui/SecretInput.tsx` + `secret-buffer.ts` | 90 | `FreeTextInput` `mask` | publish |
-| **Total** | **1140** | | **989 (86%) publish-gated** |
+| `auth/credentials.ts` | 390 | `resolveCredential`, `PermissionStore`, `providerFromApiKeyPrefix`, `Stored*` types, **`credentialSources` (new)** | **no** — the "where did it look?" half was missing |
+| `context/agents-md.ts` | 256 | `loadInstructionTree` — **`@file.md` expansion (new)** | **no** — migrating without it was a regression |
+| `tools/registry.ts` | 151 | already consumed; the rest is product policy | n/a — correctly theirs |
+| `config/trust-store.ts` | 145 | `TrustStore` — **canonical key + `isTrusted` (new)** | **no** — ours keyed by raw string |
+| `hooks/hook-trust.ts` | 108 | `HookApprovalStore` + a one-line `map` | yes |
+| `tui/SecretInput.tsx` + `secret-buffer.ts` | 90 | `FreeTextInput` `mask` | yes |
+| **Total** | **1140** | | **now 100% publish-gated** |
+
+### What "86% publish-gated" got wrong
+
+The first pass counted a file as covered if a symbol with the right name existed. Reading both sides
+line by line found three cases where the name matched and the capability did not — and in two of
+them, migrating on the strength of the name would have SHIPPED A REGRESSION:
+
+- `loadInstructionTree` walked directories and never expanded `@file.md`.
+- `TrustStore` keyed decisions by raw string while its sibling `PermissionStore` canonicalised with
+  `realpath` — two stores in one package, both gating execution, disagreeing about what "the same
+  directory" means.
+- `resolveCredential` returned `undefined` without saying where it looked.
+
+That is the same defect class this whole cycle is about, turned on ourselves: a capability that is
+*nominally* present and does not do the job costs what an absent one costs.
 
 ## `registry.ts` — the file that looked worst and measured best
 
@@ -44,7 +62,7 @@ One dead line inside it: the `translateError` shim, whose own comment set a remo
 passed. Filed as [usetheoai-lab/TheoCode#20](https://github.com/usetheoai-lab/TheoCode/issues/20)
 rather than changed here — the error contract is theirs.
 
-## Gaps closed while measuring
+## Gaps closed while measuring (all merged)
 
 Measuring produced work rather than only a number:
 
@@ -77,8 +95,30 @@ Both had been repeated in PR bodies and release notes and were wrong:
 ## The ceiling
 
 Every publish in this group runs through `changesets` in CI, and CI cannot start — the account's
-billing block. Three packages are cut and waiting: `@theokit/agents@8.7.0` (tagged, GitHub release
-published), `@theokit/tui@0.53.0`, and the SDK's pending minor.
+billing block. Three packages are cut and waiting: `@theokit/agents` (8.7.0 tagged and released on
+GitHub, plus everything above), `@theokit/tui@0.53.0`, and the SDK's pending minor.
 
-Clearing that block converts 989 of the 1140 overlapping lines from "duplicated" to "deletable" —
-`^8.6.0` already admits `8.7.0`, so the consumer needs no version bump for most of it.
+**Nothing else is pending.** Every capability the consumer duplicates now exists, reachable, on our
+side. Clearing the billing block converts the whole 1140 lines from "duplicated" to "deletable" —
+`^8.6.0` already admits `8.7.0`, so most of it needs no version bump on their end either.
+
+## Second measurement, later the same day
+
+| Gap | Where | State |
+|---|---|---|
+| `providerFromApiKeyPrefix` unreachable + latent ordering defect | theokit-sdk#282 | merged |
+| `StoredCredential` / `StoredOAuthCredential` not forwarded | theokit#307 | merged |
+| `loadInstructionTree` had no `@file.md` expansion | theokit#308 | merged |
+| `TrustStore` keyed by raw string, and had no `isTrusted` | theokit#309 | merged |
+| `resolveCredential` could not say where it looked | theokit#310 | merged |
+| `FreeTextInput` mask + `StatusFooter` modeLabel (G12) | theokit-tui#76 | merged |
+| Dead `translateError` shim in the consumer | TheoCode#20 | filed |
+
+Every one was found by reading the consumer's code against ours, and every one was tamper-tested —
+break the production code, confirm the suite notices. Three of those tamper-tests initially did
+**not** notice, and each of those was a test passing for the wrong reason:
+
+- the store's temp-path collision (`toContain` satisfied by a longer run of mask characters),
+- the import cycle guard (the depth cap terminated the cycle, so the test exercised the cap under
+  the guard's name),
+- the `chmod` repair (its only real trigger became unreachable once temp names were unique).
