@@ -47,9 +47,10 @@ export {
   type ApprovalState,
   type HookApprovalStoreOptions,
 } from './approval-store.js'
-export {
-  ensureSecureDir,
-  readSecureJson,
-  writeSecureJson,
-  type SecureStoreRead,
-} from './secure-store.js'
+
+// `secure-store.js` is deliberately NOT re-exported. It had no caller through this barrel and no
+// test that reached it here (`system-design-guardrails.md` G7), and publishing low-level
+// permission-and-atomic-replace primitives invites a consumer to hand-roll a third store instead of
+// composing `HookApprovalStore` / `PermissionStore` — the opposite of why the helper was extracted.
+// Its own tests import it by path. Widening the surface later is additive; narrowing it after a
+// release is not, which is why the moment to decide is before this ships.
