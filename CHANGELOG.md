@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **O resolver passa a LER a credencial de chave de API que `writeCredential` escreve.** Ele lia de
+  volta apenas a variante `oauth` — usava `readStoredOAuth`, que por construcao so responde uma
+  delas. O framework conseguia GRAVAR uma chave que nada nele conseguia depois usar, que e por que o
+  consumidor medido mantinha o proprio leitor de arquivo. Escrever sem conseguir ler e a mesma classe
+  de uma capacidade que existe e nao se alcanca.
+
 ### Added
 
 - **`resolveAgentCredential` — a montagem de autenticacao, para um app novo nao reescrever nenhuma.**

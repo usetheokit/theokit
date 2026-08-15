@@ -1,5 +1,25 @@
 # @theokit/agents
 
+## 9.2.1
+
+### Patch Changes
+
+- **O resolver passa a LER a credencial de chave de API que `writeCredential` escreve.**
+
+  `writeCredential` persiste `{ provider, api_key }` no store, e o resolver lia de volta apenas a
+  variante `oauth` — usava `readStoredOAuth`, que por construcao so responde uma delas. O framework
+  conseguia GRAVAR uma chave que nada nele conseguia depois usar, e e por isso que o consumidor medido
+  mantinha o proprio leitor de arquivo.
+
+  Escrever sem conseguir ler e a mesma classe de defeito de uma capacidade que existe e nao se alcanca.
+
+  A proveniencia diz `{ kind: 'file', path }` — "por que esta chamando a Anthropic?" precisa ser
+  respondivel pelos dados, e "veio do store" e uma resposta diferente de "veio do ambiente". A
+  coerencia chave↔provider e aplicada tambem aqui, e um provider que o app nunca declarou continua
+  ignorado nas DUAS variantes.
+
+  Achado ao tentar a migracao do consumidor, nao ao revisar o desenho.
+
 ## 9.2.0
 
 ### Minor Changes
