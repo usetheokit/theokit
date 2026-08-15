@@ -3,8 +3,8 @@
  * IS the feature. No HTTP input reaches here — the paths come from the framework's own convention
  * resolution, and the project directory is gated on the M68/M73 trust decision.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { basename, extname, join } from 'node:path'
+import { type Stats, readFileSync, readdirSync, statSync } from 'node:fs'
+import { extname, join, relative } from 'node:path'
 
 import { frontmatterValue, splitFrontmatter } from './frontmatter.js'
 
@@ -164,11 +164,27 @@ function byProjectThenName(a: CustomCommand, b: CustomCommand): number {
   return a.name.localeCompare(b.name)
 }
 
-/** Read one commands directory. A missing one is not an error — it is a machine with no commands. */
+/**
+ * Read one commands directory, subdirectories included.
+ *
+ * It used to stop at `!statSync(path).isFile()`, so a namespaced command was not unsupported — it
+ * was INVISIBLE. No warning, no error: the file sits there and the command does not exist.
+ *
+ * Namespacing is not one product's idea. Claude Code reads `.claude/commands/frontend/component.md`
+ * as a namespaced command, and the closest consumer names nested files by their relative path for
+ * the same reason a flat directory stops scaling past a dozen commands.
+ *
+ * The name is the path relative to the root, extension removed. How it is RENDERED —
+ * `frontend:component`, `frontend/component` — is the product's, and the two known products already
+ * disagree, so the framework does not choose.
+ *
+ * A missing directory is not an error — it is a machine with no commands.
+ */
 function readCommandsDir(
   dir: string,
   source: CustomCommand['source'],
   warn: (message: string) => void,
+  root: string = dir,
 ): CustomCommand[] {
   let entries: string[]
   try {
@@ -184,15 +200,21 @@ function readCommandsDir(
 
   const commands: CustomCommand[] = []
   for (const entry of entries) {
-    if (extname(entry) !== '.md') continue
     const path = join(dir, entry)
+    let stats: Stats
     try {
-      if (!statSync(path).isFile()) continue
+      stats = statSync(path)
     } catch {
       continue // vanished between readdir and stat
     }
 
-    const command = parseCommandFile(path, entry, source, warn)
+    if (stats.isDirectory()) {
+      commands.push(...readCommandsDir(path, source, warn, root))
+      continue
+    }
+    if (!stats.isFile() || extname(entry) !== '.md') continue
+
+    const command = parseCommandFile(path, relative(root, path), source, warn)
     if (command !== undefined) commands.push(command)
   }
   return commands
@@ -225,7 +247,10 @@ function parseCommandFile(
 
   const description = frontmatterValue(parsed.frontmatter, 'description')
   return {
-    name: basename(entry, '.md'),
+    // `entry` is the path RELATIVE to the commands root, so a nested file keeps its namespace.
+    // `basename` would flatten `frontend/component.md` to `component` and let two namespaces
+    // silently collide on one name.
+    name: entry.slice(0, -extname(entry).length),
     ...(description !== undefined && { description }),
     body: parsed.body,
     source,
