@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Comandos em subpastas deixam de ser invisíveis.** O carregador parava em `!isFile()`, então um
+  comando namespaceado não era "sem suporte" — era invisível: sem aviso, sem erro, o arquivo lá e o
+  comando inexistente. O nome passa a ser o caminho relativo sem a extensão (`frontend/component`);
+  como renderizar continua sendo do produto, porque os dois produtos conhecidos já discordam.
 - **`CustomCommand.frontmatter` — o produto lê as próprias chaves.** O carregador conhece uma
   (`description`); os comandos de um produto declaram mais, e os conjuntos não coincidem. Custo
   medido de não carregar as linhas: o consumidor mais próximo escreveu um carregador de 122 linhas —
