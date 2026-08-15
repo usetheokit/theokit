@@ -392,19 +392,46 @@ describe('G5 — GC protection is injectable', () => {
 // ---------------------------------------------------------------------------
 
 describe('G7 — the parity gate walks every subpath', () => {
+  /**
+   * SCOPE CORRECTION, measured at implementation time.
+   *
+   * The gap was registered as "the gate covers 1 of 19 subpaths". Measured against the SDK's own
+   * `exports` map, only **6** of the layer's 20 subpaths have a same-named SDK counterpart — `.`,
+   * `/sandbox`, `/persistence`, `/interactive`, `/auth`, `/client`. For the other 14 the layer owns
+   * the surface outright, and "does it forward everything the SDK exports there" is not a weaker
+   * question, it is an undefined one.
+   *
+   * So the honest headline is **1 of 6 applicable**, not 1 of 19. Keeping the larger denominator
+   * would have made the gate look worse than it is and the remaining work look bigger than it is —
+   * and a register that inflates its own findings is not one anybody trusts twice.
+   */
   it('gate_enumerates_subpaths_from_the_manifest', () => {
-    const gate = 'scripts/check-surface-parity.mjs'
-    expect(exists(gate), `${gate} is missing — the gate was not generalized`).toBe(true)
-    const src = read(gate)
-    expect(
-      src,
-      'the gate still walks a hand-kept DECISIONS key set instead of the exports map',
-    ).toMatch(/exports/)
+    expect(exists('scripts/check-surface-parity.mjs'), 'the gate was not generalized').toBe(true)
+    const src = read('scripts/check-surface-parity.mjs')
+
+    expect(src, 'the gate still walks a hand-kept key set instead of the manifest').toContain(
+      'AGENTS_MANIFEST.exports',
+    )
+    expect(src, 'the SDK counterpart is guessed by folder convention rather than read').toContain(
+      'SDK_MANIFEST.exports',
+    )
   })
 
   it('gate_is_wired_into_check_all', () => {
     const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
     expect(pkg.scripts?.['check:all'] ?? '').toMatch(/check:surface-parity/)
+  })
+
+  it('warn_mode_cannot_become_permanent', () => {
+    // The forcing function, and the difference between a structural fix and "we print something":
+    // every deferred subpath carries a date past which the gate fails hard.
+    const src = read('scripts/check-surface-parity.mjs')
+    expect(src).toContain('SUNSET')
+    expect(src, 'a deferral with no date is an indefinite one').toMatch(/and that date has passed/)
+  })
+
+  it('the_gate_has_its_own_suite', () => {
+    expect(exists('tests/unit/check-surface-parity.test.ts')).toBe(true)
   })
 })
 
