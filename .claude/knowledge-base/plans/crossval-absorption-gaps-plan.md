@@ -1414,7 +1414,36 @@ VERIFY:  node scripts/check-surface-parity.mjs && pnpm vitest run scripts/__test
 
 ---
 
-### T5.2 — Promote subpaths from warn to error
+### T5.2 — Promote subpaths from warn to error — **SPLIT TRIGGER FIRED (2026-08-14)**
+
+> **Deferred to its own plan, by the rule this plan declared before it knew the number.**
+>
+> D8 set the trigger at "more than 40 undecided symbols". Measured after T5.1 landed:
+>
+> | Subpath | Undecided symbols |
+> |---|---:|
+> | `.` (SDK root barrel) | 383 |
+> | `./sandbox` | 37 |
+> | `./persistence` | 29 |
+> | `./interactive` | 9 |
+> | `./client` | 1 |
+> | **Total** | **459** |
+>
+> 459 is an order of magnitude past the trigger, and `.` alone is ten times it. Writing 459 written
+> decisions inside a plan whose Goal is "close 12 gaps" would bury the other eleven, and each
+> decision is a judgement about whether a symbol SHOULD cross — not clerical work to rush.
+>
+> **This is not a deferral without a date.** T5.1 shipped the sunset (2026-11-12) and
+> `tests/unit/check-surface-parity.test.ts` asserts that an expired deferral fails the gate hard. The
+> forcing function exists and is tested; what moves to `crossval-parity-decisions` is the work, not
+> the obligation.
+>
+> The original task text is kept below as the specification that plan inherits.
+
+</details>
+<details>
+<summary>Original T5.2 specification (inherited by <code>crossval-parity-decisions</code>)</summary>
+
 
 #### Objective
 Make the gate real on the subpaths where the measured gaps live.
@@ -1634,3 +1663,5 @@ pnpm vitest run packages/agents/tests/**/*failure*.test.ts packages/agents/tests
 2. Fix every plan-caused failure before declaring the plan complete.
 3. Re-run the chain.
 4. Pre-existing issues are documented in the PR description and do not block, **except** any failure on a security path this plan touches — those block regardless of origin.
+
+</details>
