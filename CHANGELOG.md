@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Um `paths:` declarado e ilegível deixa de virar "sem escopo".** `InstructionBlock` ganha
+  `scopesUnreadable`. A leitura de frontmatter nunca falha — ela extrai o que consegue — então um
+  `paths:` cujo valor não pôde ser lido devolvia `[]`, o mesmo valor de um arquivo que não declarou
+  escopo nenhum. Quem renderizasse isso transformava uma regra escrita para um subdiretório numa
+  regra que vale em todo lugar, sem nada dizer. Alargar escopo em silêncio é a única falha de
+  frontmatter com consequência: o modelo obedece a regra fora dos arquivos para os quais ela foi
+  escrita.
 - **`projectsRoot(root?)` — um dono só para onde ficam os transcripts de cada projeto.**
   `join(root, 'projects', …)` estava escrito em três lugares, um deles fora do framework. O modo de
   falha é silencioso: quem enumera protege a leitura com `existsSync(root) ? readdir(root) : []`,

@@ -88,6 +88,40 @@ describe('loadInstructionTree — walking and loading', () => {
     expect(tree.blocks.map((b) => b.content)).not.toContain('not markdown')
   })
 
+  it('test_a_declared_but_unreadable_paths_scope_is_flagged_not_silently_widened', () => {
+    // The widening this flag exists to stop.
+    //
+    // `parsePathsScope` reads lines and never fails, so a `paths:` whose value it cannot extract
+    // yields `[]` — which is the SAME value as a file that declared no scope at all. A consumer that
+    // renders `scopes` then turns a rule meant for one subtree into a rule that applies everywhere,
+    // and nothing anywhere says so. Widening a scope silently is the one frontmatter failure with a
+    // consequence: the model obeys a rule outside the files it was written for.
+    //
+    // `[]` and "declared but unreadable" must be distinguishable, so a product with a fail-closed
+    // policy can drop the block instead of publishing it unscoped.
+    write('scoped.md', '---\npaths:\n---\nbody')
+    write('unscoped.md', 'plain body')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+    })
+
+    const scoped = tree.blocks.find((b) => b.path === 'scoped.md')
+    const unscoped = tree.blocks.find((b) => b.path === 'unscoped.md')
+
+    expect(scoped?.scopes).toEqual([])
+    expect(scoped?.scopesUnreadable, 'a declared-but-empty paths must be distinguishable').toBe(
+      true,
+    )
+    // A file that never declared a scope is NOT flagged — otherwise the signal means nothing.
+    expect(unscoped?.scopesUnreadable).toBe(false)
+    expect(warnings.some((w) => w.includes('scoped.md'))).toBe(true)
+  })
+
   it('test_an_exact_name_list_keeps_working_unchanged', () => {
     // The widening is additive. Every existing caller passes an array, and this pins that the array
     // branch is not quietly routed through the predicate with different semantics.
