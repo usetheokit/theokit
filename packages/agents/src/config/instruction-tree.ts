@@ -51,6 +51,15 @@ export interface InstructionBlock {
   readonly content: string
   /** `paths:` from the frontmatter — the scopes this block applies to. Empty means unscoped. */
   readonly scopes: readonly string[]
+  /**
+   * A `paths:` key was declared and nothing readable came out of it.
+   *
+   * Without this, that case is indistinguishable from a file that declared no scope: both yield
+   * `scopes: []`. A consumer rendering the block would then apply a rule written for one subtree
+   * EVERYWHERE — the one frontmatter failure with a consequence, and a silent one. Products with a
+   * fail-closed policy drop the block on this flag instead of publishing it unscoped.
+   */
+  readonly scopesUnreadable: boolean
 }
 
 export interface InstructionTreeBudget {
@@ -276,8 +285,23 @@ function parseInstructionFile(
       rootDir: cwd,
       onWarn: warn,
     }),
-    scopes: parsePathsScope(parsed.frontmatter),
+    ...scopeOf(parsed.frontmatter, rel, warn),
   }
+}
+
+/** `scopes` plus whether a declared `paths:` produced nothing — the pair a caller needs to fail closed. */
+function scopeOf(
+  frontmatter: readonly string[],
+  rel: string,
+  warn: (message: string) => void,
+): { scopes: readonly string[]; scopesUnreadable: boolean } {
+  const scopes = parsePathsScope(frontmatter)
+  const declared = frontmatter.some((line) => /^paths\s*:/.test(line))
+  const scopesUnreadable = declared && scopes.length === 0
+  if (scopesUnreadable) {
+    warn(`instruction declares paths: but no scope could be read from it: ${rel}`)
+  }
+  return { scopes, scopesUnreadable }
 }
 
 /**
