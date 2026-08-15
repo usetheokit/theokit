@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **O agente agora pode pedir ao framework que delegue.** `createDelegateTool` em
+  `@theokit/agents/tools` entrega a delegação a um sub-agente local como uma ferramenta que o
+  próprio modelo chama no meio do turno — antes existiam 23 ferramentas para tudo, e delegação era a
+  única capacidade que só a aplicação alcançava. Recusa roster vazio, nomes duplicados e credencial
+  ausente na construção, não na primeira chamada; falhas de orçamento e timeout voltam como JSON que
+  o modelo consegue interpretar, em vez de encerrar o turno do pai (#22).
+
 ### Changed
 
 - **A tabela de prefixos passa a ter UM dono.** A coerencia chave↔provider restatava os prefixos;
