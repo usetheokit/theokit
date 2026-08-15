@@ -9,7 +9,10 @@ import {
   ContextPressureThresholdError,
   contextPressure,
 } from '../../packages/agents/src/config-entry.js'
-import { loadInstructionTree } from '../../packages/agents/src/config-entry.js'
+import {
+  expandInstructionImports,
+  loadInstructionTree,
+} from '../../packages/agents/src/config-entry.js'
 
 /**
  * M74 — the instruction tree, the composition ladder, and context pressure.
@@ -406,5 +409,132 @@ describe('loadInstructionTree — @file.md imports', () => {
     writeFileSync(join(root, 'AGENTS.md'), 'plain content, no refs\n', 'utf8')
 
     expect(load().blocks[0]?.content).toContain('plain content, no refs')
+  })
+})
+
+/**
+ * The expansion is reachable WITHOUT the walk.
+ *
+ * The walk and the expansion are separate capabilities, and only one of them is universal. A product
+ * whose convention is the ancestor chain — climb from the working directory to the git root — needs
+ * its own walk and the same expansion. Shipping the expansion fused to the descent is why the
+ * measured consumer kept a hand-written copy of it.
+ */
+describe('expandInstructionImports — usable on its own', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'theokit-expand-'))
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('expands_without_any_directory_walk', () => {
+    const file = join(dir, 'AGENTS.md')
+    writeFileSync(file, 'top\n\n@./style.md\n', 'utf8')
+    writeFileSync(join(dir, 'style.md'), 'two spaces', 'utf8')
+
+    const out = expandInstructionImports({
+      text: 'top\n\n@./style.md\n',
+      filePath: file,
+      rootDir: dir,
+      onWarn: () => undefined,
+    })
+
+    expect(out).toContain('two spaces')
+  })
+
+  it('keeps_the_same_containment_when_called_directly', () => {
+    // The boundary is not a property of the walk — a caller reaching the expansion directly gets it
+    // too, or the seam would be a way around the check.
+    const outside = mkdtempSync(join(tmpdir(), 'theokit-expand-out-'))
+    writeFileSync(join(outside, 'secret.md'), 'SHOULD-NOT-APPEAR', 'utf8')
+    const file = join(dir, 'AGENTS.md')
+    const ref = `@${join(outside, 'secret.md')}`
+
+    const warnings: string[] = []
+    const out = expandInstructionImports({
+      text: `see ${ref}\n`,
+      filePath: file,
+      rootDir: dir,
+      onWarn: (m) => warnings.push(m),
+    })
+
+    expect(out).not.toContain('SHOULD-NOT-APPEAR')
+    expect(warnings.join('\n')).toMatch(/outside|not found/i)
+    rmSync(outside, { recursive: true, force: true })
+  })
+})
+
+/**
+ * Two seams the measured consumer needs to stop maintaining its own copy.
+ *
+ * Neither is a knob invented for a hypothetical caller — both are the difference between "we ship
+ * the capability" and "they can actually use it", found by trying the swap:
+ *
+ *  - **`wrap`** — its expansion surrounds imported content with `--- import: x ---` markers, which
+ *    are visible in the model's prompt. Ours had no say in presentation, so a straight swap would
+ *    have silently changed what the product sends. Presentation is the caller's.
+ *  - **`alreadyLoaded`** — its walk collects the ancestor chain first, then expands, seeding the
+ *    visited set with everything the walk already read. Without that seam, a file loaded by the walk
+ *    AND referenced by an import lands in the prompt twice.
+ */
+describe('expandInstructionImports — the caller owns presentation and prior reads', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'theokit-expand-seams-'))
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('wrap_lets_the_caller_frame_imported_content', () => {
+    const file = join(dir, 'AGENTS.md')
+    writeFileSync(join(dir, 'style.md'), 'BODY', 'utf8')
+
+    const out = expandInstructionImports({
+      text: '@./style.md',
+      filePath: file,
+      rootDir: dir,
+      onWarn: () => undefined,
+      wrap: (name, content) => `<<${name}|${content}>>`,
+    })
+
+    expect(out).toBe('<<./style.md|BODY>>')
+  })
+
+  it('without_wrap_the_content_is_inlined_bare', () => {
+    // Backward-compatibility guard: every existing caller sees exactly what it saw before the seam.
+    const file = join(dir, 'AGENTS.md')
+    writeFileSync(join(dir, 'style.md'), 'BODY', 'utf8')
+
+    expect(
+      expandInstructionImports({
+        text: '@./style.md',
+        filePath: file,
+        rootDir: dir,
+        onWarn: () => undefined,
+      }),
+    ).toBe('BODY')
+  })
+
+  it('alreadyLoaded_prevents_a_second_copy_of_a_file_the_caller_read', () => {
+    const file = join(dir, 'AGENTS.md')
+    const style = join(dir, 'style.md')
+    writeFileSync(style, 'SEEN-ONCE', 'utf8')
+
+    const out = expandInstructionImports({
+      text: '@./style.md',
+      filePath: file,
+      rootDir: dir,
+      onWarn: () => undefined,
+      alreadyLoaded: [style],
+    })
+
+    expect(out, 'a file the caller already read was inlined again').toBe('@./style.md')
   })
 })
