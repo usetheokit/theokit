@@ -161,7 +161,14 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
 
   /** @returns `true` when a ceiling stopped the walk — the caller must stop descending too. */
   const visit = (dir: string, depth: number): boolean => {
-    if (depth > input.budget.maxDepth) return false
+    if (depth > input.budget.maxDepth) {
+      // Said, not just done. The file ceiling already announced itself and this one returned in
+      // silence — and a budget that stops silently is indistinguishable from a directory that had
+      // nothing left in it. The reader concludes their instruction file is missing and goes looking
+      // for a typo in the filename, when the walk simply refused to descend that far.
+      warn(`instruction budget: stopped at depth ${String(input.budget.maxDepth)}: ${dir}`)
+      return false
+    }
 
     let entries: string[]
     try {
@@ -343,8 +350,17 @@ function parsePathsScope(frontmatter: readonly string[]): string[] {
       inPaths = true
       const inline = line.slice(line.indexOf(':') + 1).trim()
       if (inline.startsWith('[')) {
+        // A list that never closes is not a list.
+        //
+        // `lastIndexOf(']')` returns -1 when the bracket never arrives, and `slice(1, -1)` then
+        // quietly drops the final character: `paths: [unclosed` came back as the scope `unclose`.
+        // That is worse than an empty list, because a scope that exists suppresses the
+        // unreadable signal — the block looked correctly scoped to a path matching nothing, so the
+        // rule stopped applying anywhere and nothing said so.
+        const close = inline.lastIndexOf(']')
+        if (close === -1) return []
         return inline
-          .slice(1, inline.lastIndexOf(']'))
+          .slice(1, close)
           .split(',')
           .map((item) => item.trim().replaceAll(/^["']|["']$/g, ''))
           .filter((item) => item.length > 0)

@@ -42,6 +42,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Uma lista `paths:` sem fechamento deixa de virar escopo.** `paths: [unclosed` devolvia o escopo
+  `unclose`, porque `lastIndexOf(']')` é -1 e o `slice` cortava o último caractere. Pior que lista
+  vazia: um escopo que existe suprime o sinal de ilegível, então a regra parecia corretamente
+  escopada — para um caminho que não casa nada — e deixava de valer em silêncio.
+- **O teto de profundidade passa a dizer onde parou.** O de arquivos já se anunciava; este era um
+  `return false` mudo, indistinguível de um diretório sem mais nada — o que manda quem escreveu o
+  arquivo procurar um erro de digitação num nome que está certo.
 - **Frontmatter volta a ser lido em arquivos CRLF.** A separação era por `'\n'`, então num checkout
   Windows a linha de fechamento é `'---\r'` e nunca casava a cerca: um arquivo válido virava
   "frontmatter nunca fecha" e era pulado — em silêncio, com o aviso culpando um `---` que está lá.
