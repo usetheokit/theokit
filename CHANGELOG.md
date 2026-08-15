@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Uma pasta de regras agora pode ser percorrida pelo framework.** `loadInstructionTree` aceita um
+  predicado em `fileNames`, além da lista de nomes exatos. Uma lista só alcança arquivos que quem
+  chama consegue nomear de antemão; numa pasta de regras quem escolhe os nomes é o usuário. Sem
+  isso, o consumidor mais próximo escreveu a própria varredura de 112 linhas — orçamento, teto de
+  profundidade e guarda de ciclo — só para perguntar `entry.endsWith('.md')`.
+
 ### Fixed
 
 - **Apagar uma sessão deixou de relatar uma remoção que não aconteceu.** `deleteSession` aceitava um
