@@ -26,11 +26,18 @@
  * written in its header:
  * *"a gate nobody can make green is a gate nobody reads"*.
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+/** Read, never hand-kept — the technique `check-package-direction.mjs` uses for the same reason. */
+const AGENTS_MANIFEST = JSON.parse(readFileSync(join(ROOT, 'packages/agents/package.json'), 'utf8'))
+const SDK_MANIFEST = JSON.parse(
+  readFileSync(join(ROOT, 'node_modules/@theokit/sdk/package.json'), 'utf8'),
+)
+const TSUP = readFileSync(join(ROOT, 'packages/agents/tsup.config.ts'), 'utf8')
 
 /**
  * Anti-vacuity floor, per subpath.
@@ -41,6 +48,69 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
  * anything.
  */
 const PISO_DE_SIMBOLOS = { auth: 15 }
+
+/**
+ * M86 — the gate walks EVERY subpath the layer publishes, not the one it was born for.
+ *
+ * The list of subpaths is read from `packages/agents/package.json#exports`, and each one's SDK
+ * counterpart from the SDK's OWN `exports` map. Both are read rather than hand-kept, borrowing the
+ * technique `check-package-direction.mjs` already uses: a guard with a hand-written list drifts the
+ * first time somebody adds a subpath and forgets the list — which is the failure mode this whole
+ * gate exists to prevent, reproduced one level up.
+ *
+ * ## Applicability, measured rather than assumed
+ *
+ * Only a subpath the SDK ALSO publishes under the same name has a parity question to answer. Of the
+ * 20 the layer publishes, 6 do (`.`, `/sandbox`, `/persistence`, `/interactive`, `/auth`, `/client`).
+ * The other 14 are the layer's own surfaces — `session`, `hooks`, `ask`, `tool-scope`, `commands`,
+ * … — and asking "does it forward everything the SDK exports at that path" is not a weaker question
+ * there, it is an undefined one. They are SKIPPED WITH A REASON, never silently.
+ *
+ * The honest headline is therefore "1 of 6 applicable", not "1 of 20". Overstating the denominator
+ * would have made the gate look worse than it is and the work look bigger than it is.
+ *
+ * ## Warn mode carries a sunset
+ *
+ * Turning 5 new subpaths into hard errors in one commit leaves CI red until every symbol has a
+ * written decision, and "a gate nobody can make green is a gate nobody reads" (this file, above).
+ * So they warn first — and each warn-mode entry carries a SUNSET, past which it fails hard. Without
+ * one, warn mode becomes the permanent state and the fix degrades into "we print something", which
+ * is the pre-existing condition with extra output. Same discipline as
+ * `code-quality-allowlist.txt` and `deps-audit-allowlist.txt`: an expired entry re-fires at full
+ * severity.
+ */
+const SUNSET = {
+  // subpath: the date its warn mode stops being tolerated (ISO, ≤ 90 days from introduction)
+  '.': '2026-11-12',
+  sandbox: '2026-11-12',
+  persistence: '2026-11-12',
+  interactive: '2026-11-12',
+  client: '2026-11-12',
+}
+
+/** Today, injectable so the sunset check is testable without waiting for a calendar. */
+const TODAY = process.env.SURFACE_PARITY_TODAY ?? new Date().toISOString().slice(0, 10)
+
+/** Resolve the `.d.ts` the SDK publishes for a subpath, or `undefined` when it publishes none. */
+function sdkTypesFor(subpath) {
+  const key = subpath === '.' ? '.' : `./${subpath}`
+  const entry = SDK_MANIFEST.exports?.[key]
+  if (typeof entry !== 'object' || entry === null) return undefined
+  // Two shapes in the wild: `types` at the top, or nested under a conditional `import` branch.
+  const nested = typeof entry.import === 'object' ? entry.import?.types : undefined
+  const types = entry.types ?? nested
+  if (typeof types !== 'string') return undefined
+  const resolved = join(ROOT, 'node_modules/@theokit/sdk', types)
+  return existsSync(resolved) ? resolved : undefined
+}
+
+/** Where the layer's entry for a subpath lives. Read from tsup, so a rename cannot silently unhook it. */
+function entryFileFor(subpath) {
+  const key = subpath === '.' ? 'index' : subpath.replace(/\//g, '-')
+  const q = String.raw`['"]`
+  const match = TSUP.match(new RegExp(`${q}?${key}${q}?\\s*:\\s*${q}([^'"]+)${q}`))
+  return match ? join(ROOT, 'packages/agents', match[1]) : undefined
+}
 
 /**
  * The decision, per SDK symbol. `'covered'` = the layer forwards it. `{ out }` = deliberately not,
@@ -94,8 +164,49 @@ const DECISIONS = {
 
 const problems = []
 
-for (const [subpath, decisoes] of Object.entries(DECISIONS)) {
-  const dts = join(ROOT, 'node_modules/@theokit/sdk/dist', subpath, 'index.d.ts')
+const warnings = []
+const skipped = []
+
+for (const key of Object.keys(AGENTS_MANIFEST.exports ?? {})) {
+  const subpath = key === '.' ? '.' : key.replace('./', '')
+  const dts = sdkTypesFor(subpath)
+
+  // No same-named SDK subpath ⇒ no parity question. Skipped WITH A REASON: a silent skip is how a
+  // gate ends up certifying surfaces it never looked at.
+  if (dts === undefined) {
+    skipped.push(
+      `${key} — the SDK publishes no subpath under this name; the layer owns it outright`,
+    )
+    continue
+  }
+
+  // Having a decision registry IS being hard-gated: the registry is what the loop below compares
+  // against, so a subpath with one fails on the first undecided symbol. `auth` is the only one today.
+  const decisoes = DECISIONS[subpath]
+  if (decisoes === undefined) {
+    const sunset = SUNSET[subpath]
+    if (sunset === undefined) {
+      problems.push(
+        `\`${key}\` has an SDK counterpart and NO decision registry, and no sunset either.\n` +
+          '  Every applicable subpath is either decided or explicitly deferred with a date. An\n' +
+          '  indefinite deferral is how warn mode becomes the permanent state.',
+      )
+      continue
+    }
+    if (TODAY >= sunset) {
+      problems.push(
+        `\`${key}\` was deferred until ${sunset} and that date has passed.\n` +
+          '  Warn mode carries a sunset precisely so it cannot become permanent — write the\n' +
+          `  decisions for this subpath in ${'scripts/check-surface-parity.mjs'}, or move the date with a reason.`,
+      )
+      continue
+    }
+    warnings.push(
+      `${key} — no decision registry yet (warn mode since 2026-08-14, hard-fails from ${sunset})`,
+    )
+    continue
+  }
+
   let source
   try {
     source = readFileSync(dts, 'utf8')
@@ -135,7 +246,15 @@ for (const [subpath, decisoes] of Object.entries(DECISIONS)) {
 
   // What the layer's entry ACTUALLY re-exports. Without this, `re-exported` is a claim the gate never
   // checked: removing a symbol from `auth-entry.ts` left everything green (review F-02).
-  const entry = readFileSync(join(ROOT, `packages/agents/src/${subpath}-entry.ts`), 'utf8')
+  const entryPath = entryFileFor(subpath)
+  if (entryPath === undefined || !existsSync(entryPath)) {
+    problems.push(
+      `Could not locate the layer entry for \`${key}\` via tsup.config.ts.\n` +
+        '  Without the entry the `re-exported` decisions are unchecked claims.',
+    )
+    continue
+  }
+  const entry = readFileSync(entryPath, 'utf8')
   const reExported = new Set(
     [...entry.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}\s*from/g)]
       .flatMap((m) => m[1].split(','))
@@ -200,10 +319,17 @@ for (const [subpath, decisoes] of Object.entries(DECISIONS)) {
   }
 }
 
+for (const s of skipped) console.log(`  · skipped: ${s}`)
+for (const w of warnings) console.warn(`  ! WARN: ${w}`)
+
 if (problems.length > 0) {
   console.error('\n✗ surface parity SDK → layer\n')
   for (const p of problems) console.error(`  • ${p}\n`)
   process.exit(1)
 }
 
-console.log('✓ surface parity: every SDK symbol has a written decision')
+const applicable = Object.keys(AGENTS_MANIFEST.exports ?? {}).length - skipped.length
+console.log(
+  `✓ surface parity: ${applicable - warnings.length}/${applicable} applicable subpath(s) decided; ` +
+    `${warnings.length} in warn mode; ${skipped.length} have no SDK counterpart`,
+)

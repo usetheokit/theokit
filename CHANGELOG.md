@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **O gate de paridade de superficie passa a andar por TODOS os subpaths publicados.**
+  `check-auth-parity.mjs` virou `check-surface-parity.mjs` (o nome antigo segue como alias por um
+  release). A lista de subpaths sai do `package.json#exports` do proprio layer, e a contraparte de
+  cada um sai do `exports` do SDK — lidos, nunca mantidos a mao, pela mesma razao que o
+  `check-package-direction.mjs`: uma guarda com lista escrita a mao deriva na primeira vez que
+  alguem adiciona um subpath e esquece a lista.
+
+  Medicao honesta: dos 20 subpaths que o layer publica, **6** tem contraparte homonima no SDK
+  (`.`, `/sandbox`, `/persistence`, `/interactive`, `/auth`, `/client`). Nos outros 14 o layer e
+  dono da superficie, e "encaminha tudo que o SDK exporta ali" nao e pergunta mais fraca: e pergunta
+  indefinida. Eles sao PULADOS COM MOTIVO, nunca em silencio. O numero real e 1 de 6 aplicaveis, nao
+  1 de 19 — inflar o denominador faria a lacuna parecer maior do que e.
+
+  Os 5 aplicaveis ainda sem registro de decisao entram em modo WARN com SUNSET (2026-11-12), passado
+  o qual falham duro. Sem data, o modo warn vira o estado permanente e a correcao degrada para
+  "imprimimos alguma coisa" — a condicao anterior com saida extra. Mesma disciplina das allowlists
+  de code-quality e deps-audit.
+
 - **`PermissionStore` — conceder "sempre permita isto" sem conceder "permita tudo".** Medido por
   grep nos dois pacotes: `alwaysAllow|allowRule|permissionRule|rememberDecision` retorna ZERO. Nem o
   framework nem o consumidor tinham isso para tools — `ApprovalDecision` resolve UMA requisicao, e o
