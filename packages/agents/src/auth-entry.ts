@@ -141,7 +141,12 @@ export type { AuthMethod, DeviceAuthProvider, PromptHooks } from './auth/device-
 // list is a parameter. WHICH providers exist stays app policy; the precedence chain, the
 // prefix<->provider consistency check and the provenance record are mechanism, and withholding
 // mechanism is what made a consumer write a 70-line dotenv parser to answer "shell or .env?".
-export { ProviderPrefixMismatchError, resolveCredential } from './auth/resolve-credential.js'
+export {
+  ProviderPrefixMismatchError,
+  credentialSources,
+  resolveCredential,
+} from './auth/resolve-credential.js'
+export type { CredentialSourcesInput } from './auth/resolve-credential.js'
 export type {
   CredentialResolution,
   ProviderDescriptor as CredentialProviderDescriptor,
