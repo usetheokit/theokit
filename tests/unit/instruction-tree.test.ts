@@ -160,6 +160,67 @@ describe('loadInstructionTree — walking and loading', () => {
     expect(tree.blocks.map((b) => b.content)).toEqual(['outer', 'inner'])
   })
 
+  it('test_an_unterminated_inline_paths_list_reads_as_unreadable_not_as_a_scope', () => {
+    // `paths: [unclosed` produced the scope `unclose`.
+    //
+    // The inline branch did `inline.slice(1, inline.lastIndexOf(']'))`, and `lastIndexOf` returns
+    // -1 when the bracket never arrives — so `slice(1, -1)` quietly dropped the last character and
+    // handed back a scope that was never written. Worse than an empty list, because
+    // `scopesUnreadable` stayed false: the block looked correctly scoped, to a path matching
+    // nothing, so the rule silently stopped applying anywhere and nothing said so.
+    write('bad.md', '---\npaths: [unclosed\n---\nbody')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+    })
+
+    const block = tree.blocks.find((b) => b.path === 'bad.md')
+    expect(block?.scopes).toEqual([])
+    expect(block?.scopesUnreadable, 'a truncated inline list is not a scope').toBe(true)
+  })
+
+  it('test_a_terminated_inline_paths_list_still_parses', () => {
+    // Anti-vacuity: refusing the unterminated one must not refuse the ordinary one.
+    write('good.md', '---\npaths: [src/**, tests/**]\n---\nbody')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+    })
+
+    expect(tree.blocks.find((b) => b.path === 'good.md')?.scopes).toEqual(['src/**', 'tests/**'])
+  })
+
+  it('test_the_depth_ceiling_says_where_it_stopped', () => {
+    // The file ceiling announced itself (`instruction budget: stopped at N files`); the depth
+    // ceiling was a bare `return false`. A budget that stops silently is indistinguishable from a
+    // directory that had nothing left in it — the reader concludes their file is missing and goes
+    // looking for a typo in the filename.
+    //
+    // Two ceilings on the same walk, one of them audible, is the asymmetry: whichever one fires,
+    // the answer to "why is my instruction file not being read?" has to be in the output.
+    write('top.md', 'shallow')
+    write('one/two/deep.md', 'too deep')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget: { maxDepth: 1, maxFiles: 50, maxChars: 100_000 },
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+    })
+
+    expect(tree.blocks.map((b) => b.content)).toEqual(['shallow'])
+    expect(warnings.some((w) => w.includes('depth') && w.includes('1'))).toBe(true)
+  })
+
   it('test_an_exact_name_list_keeps_working_unchanged', () => {
     // The widening is additive. Every existing caller passes an array, and this pins that the array
     // branch is not quietly routed through the predicate with different semantics.
