@@ -232,3 +232,36 @@ describe('CustomCommand — the frontmatter a product reads its own keys from', 
     rmSync(home, { recursive: true, force: true })
   })
 })
+
+describe('loadCustomCommands — a namespaced command directory', () => {
+  it('test_a_nested_command_is_loaded_and_named_by_its_path', () => {
+    // The loader was flat: `if (!statSync(path).isFile()) continue` skipped every subdirectory, so a
+    // namespaced command was not "unsupported" — it was invisible. No warning, no error; the file
+    // sits there and the command simply does not exist.
+    //
+    // Namespacing is not one product's idea. Claude Code reads `.claude/commands/frontend/component.md`
+    // as a namespaced command, and the closest consumer names nested files by their relative path
+    // for the same reason: a flat directory stops scaling at about a dozen commands.
+    //
+    // The NAME is the relative path without the extension. Rendering it — `frontend:component`,
+    // `frontend/component` — is the product's, and the two known products already disagree.
+    const home = mkdtempSync(join(tmpdir(), 'theokit-cmd-nested-'))
+    mkdirSync(join(home, '.theokit', 'commands', 'frontend'), { recursive: true })
+    writeFileSync(join(home, '.theokit', 'commands', 'top.md'), 'top level', 'utf8')
+    writeFileSync(
+      join(home, '.theokit', 'commands', 'frontend', 'component.md'),
+      'scaffold a component',
+      'utf8',
+    )
+
+    const { commands } = loadCustomCommands({ homeDir: home, projectTrusted: false })
+    const names = commands.map((c) => c.name).sort((a, b) => a.localeCompare(b))
+
+    expect(names).toEqual([join('frontend', 'component'), 'top'])
+    expect(commands.find((c) => c.name === join('frontend', 'component'))?.body.trim()).toBe(
+      'scaffold a component',
+    )
+
+    rmSync(home, { recursive: true, force: true })
+  })
+})
