@@ -44,6 +44,7 @@ export { inheritHooks, hooksPlugin, type CodePlugin } from '../bridge/delegation
  */
 export {
   HookApprovalStore,
+  type ApprovalRecord,
   type ApprovalState,
   type HookApprovalStoreOptions,
 } from './approval-store.js'

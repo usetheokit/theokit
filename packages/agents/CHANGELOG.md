@@ -1,5 +1,20 @@
 # @theokit/agents
 
+## 9.1.0
+
+### Minor Changes
+
+- **`HookApprovalStore.approvals(scope)` — os registros, nao so os fingerprints.**
+
+  `approvedFingerprints` responde "quais hashes estao aprovados aqui", que e o que `buildHookHandlers`
+  precisa e mais nada. Uma tela de consentimento precisa dizer QUAL comando foi aprovado e quando — e
+  o consumidor medido mantem a propria store exatamente por isso: sem os registros, adotar a nossa
+  custaria a tela dele.
+
+  `ApprovalRecord` passa a ser exportado pela mesma razao. Devolve copias, nao o mapa interno: um
+  chamador que mutasse o retorno mudaria o que o proximo `stateOf` responde sem nunca escrever em
+  disco.
+
 ## 9.0.1
 
 ### Patch Changes
