@@ -85,6 +85,7 @@ working branch", not "failing tests you caused".
 | `/code-quality` | **PASS**, 0 findings |
 | `@theokit/agents` suite | 1325 passed, 3 skipped |
 | `delegate-tool` suite | 16/16, 6 sabotages detected |
+| `pnpm test` (monorepo) | 806 files, **6275 passed**, 18 skipped, 0 failed |
 | `pnpm knip` | **FAILS — pre-existing**, verified identical without this change (redundant entry patterns in `packages/http/knip.json`). Out of this plan's scope; recorded rather than silently absorbed |
 
 ## Verdict
@@ -92,5 +93,16 @@ working branch", not "failing tests you caused".
 `READY_TO_MERGE` — no BLOCKER; the 4 HIGH/MEDIUM findings are fixed rather than mitigated, and both
 pre-existing red tests are green.
 
-One caveat carried forward honestly: `pnpm knip` still fails on `packages/http` configuration debt
-that predates this work and belongs to a separate slice.
+### Two caveats carried forward honestly
+
+1. `pnpm knip` still fails on `packages/http` configuration debt that predates this work.
+
+2. **A finding outside this slice, surfaced rather than absorbed.** Raising `theokit`'s peer floor
+   broke `create-theokit`'s `default` template, which still pinned `^4.49.0` — every scaffolded app
+   would have started with a lockfile that does not satisfy the peer. Fixed, because it was a direct
+   consequence of this change. But the same divergence exists in **`package.json` (root)** and
+   **`packages/presenter/package.json`**, both declaring `devDependencies=^4.52.1` against
+   `peerDependencies=^4.49.0`. The peer-range suite does not catch them: its `MANIFESTS` list covers
+   only `packages/theo` and `packages/agents`. Not fixed here — a peer floor is a consumer-facing
+   decision per manifest, and widening the gate's coverage is its own slice. Recorded so the gap is
+   known rather than discovered by a user.
