@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 9.4.0] - 2026-08-15
+
 ### Added
 
 - **`loadInstructionTree` aceita a ordem da varredura.** O predicado tornou uma pasta de regras

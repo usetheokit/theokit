@@ -1,5 +1,140 @@
 # @theokit/agents
 
+## 9.4.0
+
+### Minor Changes
+
+- 299a014: `createDelegateTool` — the agent can now ask the framework to delegate.
+
+  `@theokit/agents/tools` handed the model 23 tools and none of them delegated to a local sub-agent.
+  The capability shipped — `delegate()`, `delegateWithScoring()`, `delegateBackground()`, `Squad` —
+  but only the app could reach it. `createA2ATool` did not cover the case: its target is a remote peer,
+  inheriting none of the parent's tools, budget or authority.
+
+  The factory is deliberately thin. `delegate()` already merges the parent's tools, clamps the budget
+  and propagates authority; re-deriving any of that here would create a second owner of one rule.
+
+  It refuses at construction what would otherwise fail on the model's first call: an empty roster,
+  duplicate names (which collapse in the enum and dispatch silently to the wrong sub-agent) and a
+  missing credential. Budget and timeout failures come back as JSON the model can act on rather than
+  ending the parent's turn; an unexpected error propagates.
+
+- d6a5928: `CustomCommand.frontmatter` carries the frontmatter lines, so a product can read its own keys.
+
+  The loader knows one key (`description`). A product's commands declare more, and the sets do not
+  agree: the closest consumer reads `model`, `agent`, `subtask` and `hints`, while Claude Code's custom
+  commands declare `model` and `argument-hint`. Two vocabularies already, and neither is the
+  framework's to adopt.
+
+  Measured cost of not carrying them: that consumer wrote a 122-line loader — same directories, same
+  trust gate, same precedence — because the result gave it nowhere to read its own keys from. The lines
+  travel now, and `frontmatterValue` (already exported) reads whichever key the caller cares about.
+
+- 7825605: `loadInstructionTree` takes an `order`, so a rules folder is walked the way a rules folder means.
+
+  The predicate made a rules directory walkable and left the ordering the one an instruction TREE
+  needs — every file at a level before descending, because there the outer file states the general rule
+  and the inner one refines it. A rules FOLDER is the opposite shape: the files are peers, and the
+  contract its users depend on is that the same directory assembles the same prompt on any machine, in
+  one alphabetical pass.
+
+  Half a capability is its own kind of defect: offering the walk without the order left a caller able
+  to read a rules folder only in an order that misrepresents it.
+
+  Additive — `'outward-in'` stays the default, so no existing caller shifts.
+
+- c70eadb: `loadInstructionTree` now accepts a predicate for `fileNames`, so a rules DIRECTORY can be walked.
+
+  `fileNames.includes(entry)` matched a basename, so the walk could only collect files the caller
+  could name in advance. A rules directory is the opposite shape: the user drops arbitrarily named
+  files in and expects all of them read. That is not one product's idiosyncrasy — Claude Code reads
+  `.claude/rules/` and Cursor reads `.cursor/rules/*.mdc`, both arbitrary-name directories.
+
+  Measured consequence of the gap: the closest consumer wrote its own 112-line walk — budget, depth
+  ceiling, cycle guard and all — to ask `entry.endsWith('.md')`. The walk was ours; only the question
+  was theirs.
+
+  Additive: `fileNames` still accepts an array, with unchanged semantics.
+
+- 339852d: `loadCustomCommands` reads subdirectories, so a namespaced command is no longer invisible.
+
+  The loader stopped at `!statSync(path).isFile()`, which means a command in a subdirectory was not
+  "unsupported" — it was invisible. No warning, no error: the file sits there and the command does not
+  exist.
+
+  Namespacing is not one product's idea. Claude Code reads `.claude/commands/frontend/component.md` as
+  a namespaced command, and the closest consumer names nested files by their relative path for the same
+  reason a flat directory stops scaling past a dozen commands.
+
+  The name is now the path relative to the commands root with the extension removed
+  (`frontend/component`). How it is rendered — `frontend:component`, `frontend/component` — stays the
+  product's, because the two known products already disagree.
+
+- b30fe9f: `projectsRoot(root?)` — one owner for where every project's transcripts live.
+
+  `join(root, 'projects', …)` was written in three places: twice inside `project-index.ts`, and once in
+  the closest consumer, which restated it as `join(transcriptRoot(), 'projects')` to enumerate every
+  project for a GC sweep.
+
+  The failure mode is what makes it worth a function rather than a comment. That consumer guards its
+  enumeration with `existsSync(root) ? readdir(root) : []`, so a segment that stops matching does not
+  throw — it returns an empty list. The sweep then finds nothing, deletes nothing, and reports success.
+  A wrong path that throws is a bug report; a wrong path that returns nothing is a collector that
+  quietly stopped collecting.
+
+- e7c4d28: `InstructionBlock.scopesUnreadable` — a declared `paths:` that yields nothing is no longer
+  indistinguishable from no scope at all.
+
+  `parsePathsScope` reads lines and never fails, so a `paths:` whose value it cannot extract returned
+  `[]` — the same value as a file that declared no scope. A consumer rendering `scopes` then turned a
+  rule written for one subtree into a rule applying everywhere, and nothing said so.
+
+  Widening a scope silently is the one frontmatter failure with a consequence: the model obeys a rule
+  outside the files it was written for. The flag lets a product with a fail-closed policy drop the
+  block instead of publishing it unscoped, and `onWarn` now reports the case.
+
+### Patch Changes
+
+- 6b15741: Frontmatter is read on CRLF files instead of being reported as never closing.
+
+  `splitFrontmatter` split on `'\n'`, so on a CRLF checkout the closing line is `'---\r'`, which never
+  equalled the fence: a perfectly valid file returned "frontmatter never closes" and was skipped. On
+  Windows that is every instruction file with frontmatter, silently, with a warning blaming a missing
+  `---` that is sitting right there.
+
+  The trap ran one level deeper. `.` does not match `\r` and `$` does not match before it, so the
+  list-item pattern behind `paths:` failed on `'  - src/**\r'`. Fixing only the fence would have
+  turned "the file is skipped" into "the file is read and silently unscoped" — worse, because a rule
+  that applies everywhere looks like it works.
+
+  Line endings are now normalised at the boundary, and the closing fence is compared trimmed like the
+  opening one already was — an asymmetry that let a file open a frontmatter block it could never close.
+
+- b8f47a9: Two silent failures in the instruction-tree walk.
+
+  `paths: [unclosed` produced the scope `unclose`. The inline branch did
+  `inline.slice(1, inline.lastIndexOf(']'))`, and `lastIndexOf` returns -1 when the bracket never
+  arrives — so the slice quietly dropped the last character and handed back a scope nobody wrote.
+  Worse than an empty list, because a scope that exists suppresses `scopesUnreadable`: the block looked
+  correctly scoped, to a path matching nothing, so the rule stopped applying anywhere and said nothing.
+
+  The depth ceiling stopped in silence. The file ceiling already announced itself
+  (`instruction budget: stopped at N files`) and this one was a bare `return false` — indistinguishable
+  from a directory that had nothing left in it, which sends the reader looking for a typo in a filename
+  that is spelled correctly.
+
+- b023cef: `deleteSession` now refuses an async `removeFromRegistry` instead of reporting a delete that has not
+  happened.
+
+  The seam is synchronous by contract, and `options.removeFromRegistry?.(id) ?? false` sat at the
+  return: hand it an async remover and the field evaluated to a Promise — truthy — so `registryRemoved`
+  said the entry was gone before the removal occurred, and any rejection surfaced as an unhandled
+  rejection. That is not a corner case. `Agent.delete` returns `Promise<void>` and is the only agent
+  registry in the ecosystem, so every real caller has an async remover.
+
+  The check now runs BEFORE the transcript is unlinked, so a refused call leaves the session intact and
+  the caller can retry: await the registry removal first, then pass its outcome.
+
 ## 9.3.0
 
 ### Minor Changes
