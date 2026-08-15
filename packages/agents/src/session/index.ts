@@ -29,6 +29,7 @@ export {
 // the application's to decide; this is the framework deciding it once so each app does not.
 export {
   GCFloorError,
+  GCProtectionUnavailableError,
   planTranscriptGC,
   runTranscriptGC,
   type GCCandidate,
