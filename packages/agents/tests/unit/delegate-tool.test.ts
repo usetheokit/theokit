@@ -16,6 +16,7 @@
  * already declares — so the whole suite runs with no credential and no network.
  */
 import { describe, expect, it, vi } from 'vitest'
+import { ZodError } from 'zod'
 
 import { DelegationTimeoutError } from '../../src/bridge/delegation-lifecycle.js'
 import {
@@ -152,11 +153,27 @@ describe('createDelegateTool — dispatch', () => {
   })
 
   it('an_agent_name_outside_the_roster_is_rejected', async () => {
-    // NEGATIVE. The enum makes it unrepresentable for a well-behaved caller; a model that emits a
-    // name anyway must get a typed refusal naming the field, not a crash one layer down.
-    const tool = createDelegateTool({ roster: [{ name: 'worker', target: portReturning('x') }] })
+    // NEGATIVE. The enum makes an off-roster name unrepresentable; a model that emits one anyway
+    // must be refused AT THE SCHEMA, before dispatch.
+    //
+    // Asserted on the ZodError's `path`, not on a regex over its message. The first draft used
+    // `rejects.toThrow(/agent/i)` and a review showed it passed for the wrong reason: Zod's default
+    // `.message` is a JSON dump of the issue array, which happens to contain `"path": ["agent"]`.
+    // That green depended on a third-party stringification format, not on this tool's contract —
+    // and Zod has changed that shape across majors.
+    const dispatched = portReturning('x')
+    const tool = createDelegateTool({ roster: [{ name: 'worker', target: dispatched }] })
 
-    await expect(tool.handler({ agent: 'nope', task: 't' })).rejects.toThrow(/agent/i)
+    const failure = await tool.handler({ agent: 'nope', task: 't' }).then(
+      () => undefined,
+      (error: unknown) => error,
+    )
+
+    expect(failure).toBeInstanceOf(ZodError)
+    expect((failure as ZodError).issues.map((issue) => issue.path.join('.'))).toContain('agent')
+    // The contract, independent of WHICH layer validates: nothing was dispatched. A refusal that
+    // still reached a sub-agent would be a refusal in name only, and would cost real tokens.
+    expect(dispatched.seen).toEqual([])
   })
 
   it('an_empty_task_is_rejected_by_the_schema', async () => {
@@ -164,7 +181,13 @@ describe('createDelegateTool — dispatch', () => {
     // drop `min(1)` and start sending empty prompts to a paid provider.
     const tool = createDelegateTool({ roster: [{ name: 'worker', target: portReturning('x') }] })
 
-    await expect(tool.handler({ agent: 'worker', task: '' })).rejects.toThrow(/task/i)
+    const failure = await tool.handler({ agent: 'worker', task: '' }).then(
+      () => undefined,
+      (error: unknown) => error,
+    )
+
+    expect(failure).toBeInstanceOf(ZodError)
+    expect((failure as ZodError).issues.map((issue) => issue.path.join('.'))).toContain('task')
   })
 })
 

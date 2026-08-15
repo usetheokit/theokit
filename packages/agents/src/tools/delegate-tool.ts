@@ -22,7 +22,7 @@ import { z } from 'zod'
 
 import { delegate, type DelegateOptions } from '../bridge/agent-orchestrator.js'
 import { DelegationTimeoutError } from '../bridge/delegation-lifecycle.js'
-import type { DelegationPort, DelegationTarget } from '../bridge/delegation-scoring.js'
+import { isPort, type DelegationTarget } from '../bridge/delegation-scoring.js'
 import {
   DelegationBudgetExceededError,
   DelegationError,
@@ -42,7 +42,7 @@ export class DelegateToolConfigError extends TheokitAgentError {
 
   constructor(
     message: string,
-    readonly code: 'empty_roster' | 'duplicate_name' | 'missing_api_key',
+    readonly code: 'empty_roster' | 'duplicate_name' | 'missing_api_key' | 'unknown_agent',
   ) {
     super(message)
   }
@@ -68,11 +68,6 @@ export interface CreateDelegateToolOptions {
   readonly name?: string
   /** Defaults to a description naming the roster. Override to describe the roster's semantics. */
   readonly description?: string
-}
-
-/** A port answers `run`; a spec carries `compiled`. The discriminant is structural, not a flag. */
-function isPort(target: DelegationTarget): target is DelegationPort {
-  return typeof (target as DelegationPort).run === 'function'
 }
 
 function assertUsableRoster(
@@ -160,17 +155,25 @@ export function createDelegateTool(options: CreateDelegateToolOptions) {
         'Returns JSON: { ok: true, response } on success, { ok: false, error, message } when delegation is refused.',
     inputSchema,
     handler: async (raw: unknown): Promise<string> => {
-      // Validate at the boundary (rules/error-handling.md § 2): past this line the input is trusted.
-      // Explicit rather than assumed — a schema the caller cannot see enforced is a schema that can
-      // be dropped in a later edit without a test noticing.
+      // This parse is for TYPING, not for validation — and saying so matters, because a sabotage
+      // test proved the difference: replacing it with a cast left all 16 tests green. `Tool.create`
+      // already validates against this same schema before the handler runs, so the ZodError a caller
+      // sees comes from there. What the parse buys is `agent`/`task` typed without a `as` on `raw`
+      // (G3), with re-validation as a harmless byproduct on an already-valid object.
       const { agent, task } = inputSchema.parse(raw)
 
       const target = byName.get(agent)
       if (!target) {
-        // Unreachable through the enum; reachable if a caller hands the handler a raw object.
+        // UNREACHABLE by construction, and kept deliberately. `names` and `byName` are derived from
+        // the same `roster` in the same expression, so any value surviving `inputSchema.parse` above
+        // is a key here — a review confirmed empirically that no test reaches this line. It stays as
+        // defence in depth for a future edit that decouples the two derivations, and TypeScript
+        // needs the branch regardless because `Map.get` is partial. What it must NOT do is lie about
+        // which failure it is: the first draft reused `'duplicate_name'` here, which would have sent
+        // a reader of the code hunting for a collision that never happened.
         throw new DelegateToolConfigError(
           `delegate: unknown agent ${JSON.stringify(agent)} — the roster holds ${describeRoster(roster)}.`,
-          'duplicate_name',
+          'unknown_agent',
         )
       }
 
