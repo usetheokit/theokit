@@ -75,8 +75,16 @@ export interface LoadInstructionTreeInput {
    * noticing.
    */
   readonly onWarn?: (message: string) => void
-  /** File names to load. Defaults to the conventional two. */
-  readonly fileNames?: readonly string[]
+  /**
+   * Which files to load. Defaults to the conventional two.
+   *
+   * A list matches basenames exactly; a predicate answers the question a list cannot. A rules
+   * DIRECTORY — `.claude/rules/`, `.cursor/rules/`, `.theokit/rules/` — holds files the caller
+   * cannot name in advance, because the user chooses the names. With only a list on offer, the
+   * closest consumer wrote its own 112-line walk (budget, depth ceiling, cycle guard and all) to
+   * ask `entry.endsWith('.md')`. The walk was ours; only the question was theirs.
+   */
+  readonly fileNames?: readonly string[] | ((entry: string) => boolean)
 }
 
 export interface InstructionTree {
@@ -101,6 +109,11 @@ const IGNORE_WARNING = (): void => undefined
 export function loadInstructionTree(input: LoadInstructionTreeInput): InstructionTree {
   const warn = input.onWarn ?? IGNORE_WARNING
   const fileNames = input.fileNames ?? DEFAULT_FILE_NAMES
+  // Normalised once, at the edge, so the hot path inside the walk is a single call either way.
+  const accepts =
+    typeof fileNames === 'function'
+      ? fileNames
+      : (entry: string): boolean => fileNames.includes(entry)
   const cwd = resolve(input.cwd)
 
   const blocks: InstructionBlock[] = []
@@ -149,7 +162,7 @@ export function loadInstructionTree(input: LoadInstructionTreeInput): Instructio
         if (visit(path, depth + 1)) return true
         continue
       }
-      if (!fileNames.includes(entry)) continue
+      if (!accepts(entry)) continue
 
       try {
         // Cast for the upstream `.d.ts` gap named in usetheodev/theokit-sdk#280 — the symbol is
