@@ -21,6 +21,7 @@ export { loadOrCreateSessionId, persistSessionId, sessionPointerPath } from './s
 
 export {
   projectDirFor,
+  projectsRoot,
   projectDirMatches,
   recordProjectDir,
   resolveProjectDir,

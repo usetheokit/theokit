@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { acquireSessionWriter, transcriptPath } from '@theokit/sdk/persistence'
+import { acquireSessionWriter, transcriptPath, transcriptRoot } from '@theokit/sdk/persistence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -14,6 +14,7 @@ import {
 import { loadOrCreateSessionId, persistSessionId } from '../../src/session/session-pointer.js'
 import {
   projectDirFor,
+  projectsRoot,
   projectDirMatches,
   recordProjectDir,
   resolveProjectDir,
@@ -273,5 +274,27 @@ describe('project index — the reverse lookup encodeProjectDir never had', () =
   it('test_recording_is_best_effort_and_never_throws', () => {
     // An index is an optimisation. A machine that cannot write it should still run an agent.
     expect(() => recordProjectDir(CWD, unwritableRoot)).not.toThrow()
+  })
+})
+
+describe('projectsRoot — one owner for the transcript layout', () => {
+  it('test_the_projects_segment_has_a_single_owner', () => {
+    // `join(root, 'projects', encoded)` was written in three places: twice here and once in the
+    // closest consumer, which restated it as `join(transcriptRoot(), 'projects')` to enumerate every
+    // project for a GC sweep.
+    //
+    // The failure mode is silent, which is why this is worth a function. Change the segment and the
+    // consumer's `existsSync(root) ? readdir(root) : []` returns an EMPTY list — so the sweep finds
+    // nothing, deletes nothing, and reports success. A wrong path that throws is a bug report; a
+    // wrong path that returns nothing is a backup that quietly stopped running.
+    const root = '/tmp/theokit-root'
+
+    expect(projectsRoot(root)).toBe(join(root, 'projects'))
+    // The two must agree BY CONSTRUCTION, not by both being edited together.
+    expect(projectDirFor('/some/where', root).startsWith(projectsRoot(root))).toBe(true)
+  })
+
+  it('test_it_defaults_to_the_transcript_root', () => {
+    expect(projectsRoot()).toBe(projectsRoot(transcriptRoot()))
   })
 })
