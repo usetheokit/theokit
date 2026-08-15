@@ -8,6 +8,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`resolveAgentCredential` — a montagem de autenticacao, para um app novo nao reescrever nenhuma.**
+  O framework ja entregava as PECAS (store em 0600, device flow RFC 8628, refresh, `writeCredential`)
+  e nao entregava a MONTAGEM. Medido no consumidor mais proximo: ele importa seis simbolos nossos e
+  escreve ~250 linhas em cima, nenhuma sobre o dominio dele — sao a politica de resolucao que todo
+  app de agente de terminal precisa e nenhum conseguia importar.
+
+  O criterio nao foi "a politica existe como funcao", e sim **um app novo obtem auth funcionando sem
+  escrever a montagem**:
+
+  - **`DEFAULT_PROVIDERS`** — openrouter, anthropic, openai com variavel, prioridade e prefixo. O
+    consumidor abre com TRES tabelas a mao dizendo isto. Prioridades espacadas de 10 para caber um
+    provider entre dois padroes sem renumerar.
+  - **`resolveAgentCredential({ env })`** — a chamada unica, com tudo sobrescrivivel: `providers`
+    para estreitar (produto que so fala com um) ou estender (gateway self-hosted).
+  - **Pin que se recusa a cair** (`THEOKIT_PROVIDER`). Cair mandaria a requisicao — e a conta, e os
+    dados — para um provider que o operador nao escolheu. Typo no nome tambem e recusado: um erro de
+    digitacao nao pode desligar o pin em silencio.
+  - **Coerencia chave↔provider** via `keyPrefix`. `ANTHROPIC_API_KEY=sk-proj-…` e colagem na
+    variavel errada, pega de graca em vez de virar 401 remoto que nao fala do desencontro.
+  - **`requireCredential`** + `CredentialNotFoundError` carregando ONDE procurou.
+
+  `resolveCredential` segue devolvendo `undefined` — a forma nao-lancante e o que a primeira execucao
+  quer. Duas funcoes em vez de uma flag, para a intencao ficar visivel no call site.
+
+  Os prefixos vivem aqui E no SDK, o que nao e ideal e esta GUARDADO: um teste falha quando as duas
+  tabelas discordam. O simbolo do SDK esta exportado em runtime e ausente do `auth/index.d.ts`
+  (medido contra 4.52.0), entao um import tipado nao resolve — guardado por CI em vez de esperado,
+  porque foi uma tabela a mao sem guarda que produziu o bug de longest-prefix.
+
+### Added
+
 - **`HookApprovalStore` ganha escopo por PROJETO (9.0.0, BREAKING) e `approvals(scope)` (9.1.0).** O
   store chaveava so pelo fingerprint, o que torna uma aprovacao valida na maquina inteira: um hook
   aprovado num repositorio ficava pre-aprovado ao abrir outro recem-clonado. O consumidor medido
