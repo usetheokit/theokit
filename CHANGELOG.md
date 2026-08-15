@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`@theokit/agents/auth` passa a encaminhar `StoredCredential` e `StoredOAuthCredential`.** A
+  camada ja encaminhava `writeCredential` e `readStoredOAuth` — as funcoes — sem o tipo do que elas
+  carregam. Uma funcao que se pode chamar e cujo payload e preciso redescrever esta so metade
+  encaminhada, e o espelho escrito a mao e onde os dois derivam: o consumidor medido declara o
+  proprio `StoredOAuthCredential` por causa disso. Garantido em tempo de compilacao por
+  `tsc --noEmit -p packages/agents/tsconfig.test.json`, que e o gate que o CI e o hook de pre-push
+  rodam — verificado apagando o encaminhamento e vendo TS2724 + TS2305.
+
 ### Changed
 
 - **G12 fechada no repo irmao — `@theokit/tui` PR #76, mergeado.** `FreeTextInput` ganhou `mask`
