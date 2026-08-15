@@ -62,6 +62,22 @@ prose and came back answered — a plausible reply to a command that never ran.
 | `session/session-ops.ts` `listSessions` | Different question: the framework lists transcript files on disk; this lists the agent **registry** and returns `name`/`archived`, which do not exist on disk. |
 | `randomUUID`, `execFileSync` | stdlib, used correctly (parsimony rungs 2–3). |
 
+## Closing measurement
+
+Name-collision count does not fall when a duplication is closed — a facade **keeps** the name. The
+measurement that answers the question is how many of the 13 now delegate.
+
+**9 of 13 delegate.** The four that do not, each for a reason that was measured rather than assumed:
+
+| Symbol | Why it stays local |
+|---|---|
+| `listSessions` | Different question. The framework lists transcript FILES on disk; this lists the agent REGISTRY and returns `name`/`archived`, which do not exist on disk. |
+| `loadOrCreateSessionId` / `persistSessionId` | Different store, and a stronger contract. The pointer is `<project>/.theokit/tui-session` — local to the working directory — while the framework's lives under the transcript root. On top of that these never reject and queue writes per file, so a session pointer cannot take down the TUI. |
+| `sandboxWritePolicy` | Different signature — `(mode)` against `(mode, cwd)`. |
+
+Everything else that was duplicated is a facade over the framework, or was closed in the framework so
+it could become one.
+
 ## State of the promise
 
 **Not closed.** Two gates, both outside engineering:
