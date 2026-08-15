@@ -8,54 +8,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- **O teste de concorrencia do store de permissoes afirmava menos do que a garantia real.** Ele
-  checava `> 0` sobrevivencias, se protegendo de um lost update; medido, as doze sobrevivem, e
-  deterministicamente — `grant()` e sincrono de ponta a ponta, entao doze chamadores "concorrentes"
-  serializam no event loop e nenhum observa o estado meio escrito do outro. Uma assercao fraca num
-  store que decide o que pode executar e uma regressao que passa calada, entao ela agora fixa `12`.
-  O que o teste guarda de verdade e a PRE-CONDICAO dessa garantia: tornar o caminho
-  ler-modificar-escrever assincrono sem trava faz o entrelacamento virar real, e o segundo `rename`
-  descarta a concessao do primeiro — uma permissao que o operador acredita ainda ter.
+- **O CodeQL para de ficar vermelho para sempre, e passa a DIZER por que nao roda.**
 
-### Changed
+  O upload do CodeQL exige GitHub Advanced Security num repositorio PRIVADO — o comentario do proprio
+  workflow dizia "free for public repositories", e este repo e privado. Resultado: a analise rodava
+  ~4 minutos em toda PR e falhava no upload, sempre.
 
-- **`@theokit/agents/hooks` deixa de re-exportar as primitivas de disco do `secure-store`.** Elas nao
-  tinham nenhum consumidor pelo barrel (G7) e publicar primitivas de permissao e troca atomica
-  convida a escrever um terceiro store a mao em vez de compor `HookApprovalStore` /
-  `PermissionStore` — o oposto do motivo pelo qual o helper foi extraido. Alargar a superficie depois
-  e aditivo; estreitar depois de publicada, nao — por isso a decisao foi tomada antes do release.
+  Um check vermelho para sempre e pior que um que nao roda: as pessoas aprendem a passar os olhos
+  por cima do vermelho, e a proxima falha de verdade passa junto. Foi exatamente o que aconteceu
+  nesta sessao — citei "Analyze (javascript-typescript) fail" dezenas de vezes como ruido conhecido.
 
-- **Duas assercoes do registro de lacunas mediam tamanho, nao verdade.** A de README exigia "≥ 30
-  linhas nao vazias" e "≥ 10 subpaths citados" — dois numeros magicos que um stub com prosa satisfaz.
-  Agora o piso e derivado do manifesto (metade dos subpaths publicados) e vem acompanhado de uma
-  propriedade de correcao: o README **nao pode documentar subpath que o pacote nao publica**. A do
-  gate de paridade fazia grep no proprio fonte do gate (`toContain('AGENTS_MANIFEST.exports')`), o
-  que passa para um gate que le o manifesto e depois o ignora; agora o gate e **executado** e a
-  aritmetica dele e confrontada com o manifesto.
+  A analise agora e GATEADA na visibilidade do repositorio, e um segundo job **sempre roda** para
+  declarar quando ela foi pulada e por que. Remover o workflow seria mais limpo e mentiria por
+  omissao: quem lesse a lista de checks concluiria que nao ha SAST configurado, que e uma afirmacao
+  diferente e pior do que "ha SAST e ele nao consegue reportar aqui".
 
-- **Corrigido um comentario que afirmava um mecanismo falso.** O `chmod` final do `writeSecureJson`
-  se justificava por "o alvo existente pode ter modo mais largo" — medido, e falso: `rename`
-  substitui o inode e o modo antigo nao sobrevive. O que o `mode` de fato nao cobre e um temp que ja
-  existe, caso que o nome unico tornou inalcancavel. A linha fica como defesa em profundidade, agora
-  rotulada honestamente como tal.
+  Fecha a metade acionavel do B-M76-02. A outra metade — habilitar GHAS ou tornar o repo publico —
+  e decisao de plano, e o job de status diz isso em voz alta a cada execucao.
 
 ### Fixed
 
-- **Duas escritas simultaneas no store de consentimento podiam disputar o mesmo arquivo
-  temporario.** O nome do temp era relogio + pid; medido, **doze escritas de um mesmo processo
-  produziam um unico nome**. Dois escritores passam entao a corrida no mesmo caminho, e o segundo
-  `rename` de um temp ja renomeado lanca `ENOENT`. Chamadas sincronas numa unica thread serializam e
-  nunca colidem — por isso a suite estava verde —, mas `worker_threads` compartilham pid e nao
-  serializam. O nome agora sai de `randomUUID()`, e a unicidade virou uma propriedade asserida
-  diretamente (mil geracoes, mil caminhos distintos) em vez de uma esperada. Encontrado no `/review`
-  por um teste que quebrou o codigo de producao e viu a suite continuar passando.
+- **Teste flaky meu, achado ao reconstruir o sinal do CI localmente.**
+  `build-decision-is-per-run > test_with_NO_marker_a_freshly_built_dist_is_still_accepted` verificava
+  que o `dist` tinha menos de **24 horas** e entao exigia aceitacao — enquanto o codigo que ele
+  exercita usa uma janela de **10 minutos**. Passava quando a suite rodava logo apos um build e
+  falhava quando nao, cerca de uma execucao em tres, sempre em posicao diferente do log. Eu tinha
+  tratado isso como flake de infra duas vezes antes de medir. Agora o teste ESTABELECE a atualidade
+  que o nome dele promete (carimba o mtime) em vez de torcer por ela.
+- **`FRESH_WINDOW_MS` passa a ser exportado.** O literal `10 * 60 * 1000` estava duplicado entre a
+  implementacao e um teste irmao — que foi como um terceiro teste acabou verde contra uma janela que
+  ele inventou. O numero tem uma casa so.
+- **A guarda da G1 media o que o nome não prometia.** `g1-dependency-dag-boundary` afirmava a direção
+  `http ↛ agents` lendo apenas os `import` de `src` — e ficou verde sobre um manifesto que declarava a
+  aresta proibida em voz alta. O manifesto é a aresta que um gerenciador de pacotes enxerga, e é a que
+  chega ao consumidor. A guarda agora lê os dois.
 
-- **Um observador de hook herdado que falhasse desaparecia sem deixar rastro.** Os eventos
-  fire-and-forget nao podem derrubar o turno nem impedir o outro observador — isso esta certo —, mas
-  o `catch` era mudo, e um notificador que nunca dispara le exatamente igual a um que nao tem nada a
-  reportar. Passa a avisar com o mesmo prefixo dos demais avisos do pacote. E a mesma forma de
-  defeito ("declarado, ligado, nunca executa") que esta fatia inteira existiu para caçar, entao nao
-  ganha excecao dentro dela.
+## [@theokit/agents 8.7.0] - 2026-08-14
 
 ### Added
 
@@ -136,40 +124,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- **O CodeQL para de ficar vermelho para sempre, e passa a DIZER por que nao roda.**
+- **O teste de concorrencia do store de permissoes afirmava menos do que a garantia real.** Ele
+  checava `> 0` sobrevivencias, se protegendo de um lost update; medido, as doze sobrevivem, e
+  deterministicamente — `grant()` e sincrono de ponta a ponta, entao doze chamadores "concorrentes"
+  serializam no event loop e nenhum observa o estado meio escrito do outro. Uma assercao fraca num
+  store que decide o que pode executar e uma regressao que passa calada, entao ela agora fixa `12`.
+  O que o teste guarda de verdade e a PRE-CONDICAO dessa garantia: tornar o caminho
+  ler-modificar-escrever assincrono sem trava faz o entrelacamento virar real, e o segundo `rename`
+  descarta a concessao do primeiro — uma permissao que o operador acredita ainda ter.
 
-  O upload do CodeQL exige GitHub Advanced Security num repositorio PRIVADO — o comentario do proprio
-  workflow dizia "free for public repositories", e este repo e privado. Resultado: a analise rodava
-  ~4 minutos em toda PR e falhava no upload, sempre.
+- **`@theokit/agents/hooks` deixa de re-exportar as primitivas de disco do `secure-store`.** Elas nao
+  tinham nenhum consumidor pelo barrel (G7) e publicar primitivas de permissao e troca atomica
+  convida a escrever um terceiro store a mao em vez de compor `HookApprovalStore` /
+  `PermissionStore` — o oposto do motivo pelo qual o helper foi extraido. Alargar a superficie depois
+  e aditivo; estreitar depois de publicada, nao — por isso a decisao foi tomada antes do release.
 
-  Um check vermelho para sempre e pior que um que nao roda: as pessoas aprendem a passar os olhos
-  por cima do vermelho, e a proxima falha de verdade passa junto. Foi exatamente o que aconteceu
-  nesta sessao — citei "Analyze (javascript-typescript) fail" dezenas de vezes como ruido conhecido.
+- **Duas assercoes do registro de lacunas mediam tamanho, nao verdade.** A de README exigia "≥ 30
+  linhas nao vazias" e "≥ 10 subpaths citados" — dois numeros magicos que um stub com prosa satisfaz.
+  Agora o piso e derivado do manifesto (metade dos subpaths publicados) e vem acompanhado de uma
+  propriedade de correcao: o README **nao pode documentar subpath que o pacote nao publica**. A do
+  gate de paridade fazia grep no proprio fonte do gate (`toContain('AGENTS_MANIFEST.exports')`), o
+  que passa para um gate que le o manifesto e depois o ignora; agora o gate e **executado** e a
+  aritmetica dele e confrontada com o manifesto.
 
-  A analise agora e GATEADA na visibilidade do repositorio, e um segundo job **sempre roda** para
-  declarar quando ela foi pulada e por que. Remover o workflow seria mais limpo e mentiria por
-  omissao: quem lesse a lista de checks concluiria que nao ha SAST configurado, que e uma afirmacao
-  diferente e pior do que "ha SAST e ele nao consegue reportar aqui".
-
-  Fecha a metade acionavel do B-M76-02. A outra metade — habilitar GHAS ou tornar o repo publico —
-  e decisao de plano, e o job de status diz isso em voz alta a cada execucao.
+- **Corrigido um comentario que afirmava um mecanismo falso.** O `chmod` final do `writeSecureJson`
+  se justificava por "o alvo existente pode ter modo mais largo" — medido, e falso: `rename`
+  substitui o inode e o modo antigo nao sobrevive. O que o `mode` de fato nao cobre e um temp que ja
+  existe, caso que o nome unico tornou inalcancavel. A linha fica como defesa em profundidade, agora
+  rotulada honestamente como tal.
 
 ### Fixed
 
-- **Teste flaky meu, achado ao reconstruir o sinal do CI localmente.**
-  `build-decision-is-per-run > test_with_NO_marker_a_freshly_built_dist_is_still_accepted` verificava
-  que o `dist` tinha menos de **24 horas** e entao exigia aceitacao — enquanto o codigo que ele
-  exercita usa uma janela de **10 minutos**. Passava quando a suite rodava logo apos um build e
-  falhava quando nao, cerca de uma execucao em tres, sempre em posicao diferente do log. Eu tinha
-  tratado isso como flake de infra duas vezes antes de medir. Agora o teste ESTABELECE a atualidade
-  que o nome dele promete (carimba o mtime) em vez de torcer por ela.
-- **`FRESH_WINDOW_MS` passa a ser exportado.** O literal `10 * 60 * 1000` estava duplicado entre a
-  implementacao e um teste irmao — que foi como um terceiro teste acabou verde contra uma janela que
-  ele inventou. O numero tem uma casa so.
-- **A guarda da G1 media o que o nome não prometia.** `g1-dependency-dag-boundary` afirmava a direção
-  `http ↛ agents` lendo apenas os `import` de `src` — e ficou verde sobre um manifesto que declarava a
-  aresta proibida em voz alta. O manifesto é a aresta que um gerenciador de pacotes enxerga, e é a que
-  chega ao consumidor. A guarda agora lê os dois.
+- **Duas escritas simultaneas no store de consentimento podiam disputar o mesmo arquivo
+  temporario.** O nome do temp era relogio + pid; medido, **doze escritas de um mesmo processo
+  produziam um unico nome**. Dois escritores passam entao a corrida no mesmo caminho, e o segundo
+  `rename` de um temp ja renomeado lanca `ENOENT`. Chamadas sincronas numa unica thread serializam e
+  nunca colidem — por isso a suite estava verde —, mas `worker_threads` compartilham pid e nao
+  serializam. O nome agora sai de `randomUUID()`, e a unicidade virou uma propriedade asserida
+  diretamente (mil geracoes, mil caminhos distintos) em vez de uma esperada. Encontrado no `/review`
+  por um teste que quebrou o codigo de producao e viu a suite continuar passando.
+
+- **Um observador de hook herdado que falhasse desaparecia sem deixar rastro.** Os eventos
+  fire-and-forget nao podem derrubar o turno nem impedir o outro observador — isso esta certo —, mas
+  o `catch` era mudo, e um notificador que nunca dispara le exatamente igual a um que nao tem nada a
+  reportar. Passa a avisar com o mesmo prefixo dos demais avisos do pacote. E a mesma forma de
+  defeito ("declarado, ligado, nunca executa") que esta fatia inteira existiu para caçar, entao nao
+  ganha excecao dentro dela.
 
 ## [@theokit/agents 8.6.0] - 2026-08-14
 
