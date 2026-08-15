@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **`@theokit/agents/hooks` deixa de re-exportar as primitivas de disco do `secure-store`.** Elas nao
+  tinham nenhum consumidor pelo barrel (G7) e publicar primitivas de permissao e troca atomica
+  convida a escrever um terceiro store a mao em vez de compor `HookApprovalStore` /
+  `PermissionStore` — o oposto do motivo pelo qual o helper foi extraido. Alargar a superficie depois
+  e aditivo; estreitar depois de publicada, nao — por isso a decisao foi tomada antes do release.
+
+- **Duas assercoes do registro de lacunas mediam tamanho, nao verdade.** A de README exigia "≥ 30
+  linhas nao vazias" e "≥ 10 subpaths citados" — dois numeros magicos que um stub com prosa satisfaz.
+  Agora o piso e derivado do manifesto (metade dos subpaths publicados) e vem acompanhado de uma
+  propriedade de correcao: o README **nao pode documentar subpath que o pacote nao publica**. A do
+  gate de paridade fazia grep no proprio fonte do gate (`toContain('AGENTS_MANIFEST.exports')`), o
+  que passa para um gate que le o manifesto e depois o ignora; agora o gate e **executado** e a
+  aritmetica dele e confrontada com o manifesto.
+
+- **Corrigido um comentario que afirmava um mecanismo falso.** O `chmod` final do `writeSecureJson`
+  se justificava por "o alvo existente pode ter modo mais largo" — medido, e falso: `rename`
+  substitui o inode e o modo antigo nao sobrevive. O que o `mode` de fato nao cobre e um temp que ja
+  existe, caso que o nome unico tornou inalcancavel. A linha fica como defesa em profundidade, agora
+  rotulada honestamente como tal.
+
+### Fixed
+
+- **Duas escritas simultaneas no store de consentimento podiam disputar o mesmo arquivo
+  temporario.** O nome do temp era relogio + pid; medido, **doze escritas de um mesmo processo
+  produziam um unico nome**. Dois escritores passam entao a corrida no mesmo caminho, e o segundo
+  `rename` de um temp ja renomeado lanca `ENOENT`. Chamadas sincronas numa unica thread serializam e
+  nunca colidem — por isso a suite estava verde —, mas `worker_threads` compartilham pid e nao
+  serializam. O nome agora sai de `randomUUID()`, e a unicidade virou uma propriedade asserida
+  diretamente (mil geracoes, mil caminhos distintos) em vez de uma esperada. Encontrado no `/review`
+  por um teste que quebrou o codigo de producao e viu a suite continuar passando.
+
+- **Um observador de hook herdado que falhasse desaparecia sem deixar rastro.** Os eventos
+  fire-and-forget nao podem derrubar o turno nem impedir o outro observador — isso esta certo —, mas
+  o `catch` era mudo, e um notificador que nunca dispara le exatamente igual a um que nao tem nada a
+  reportar. Passa a avisar com o mesmo prefixo dos demais avisos do pacote. E a mesma forma de
+  defeito ("declarado, ligado, nunca executa") que esta fatia inteira existiu para caçar, entao nao
+  ganha excecao dentro dela.
+
 ### Added
 
 - **O gate de paridade de superficie passa a andar por TODOS os subpaths publicados.**

@@ -21,6 +21,7 @@
  *    throw that takes down the turn, and never a silent empty that is indistinguishable from "no
  *    approvals yet". The caller gets the error to surface (`error-handling.md § 2`).
  */
+import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -108,20 +109,38 @@ export function readSecureJson<T>(
 }
 
 /**
- * Replace the file atomically, owner-only.
+ * The path of the temp file a write to `filePath` will stage through.
  *
- * The temp file is created in the SAME directory: `rename` is only atomic within a filesystem, and a
- * temp elsewhere would silently degrade to a copy that a reader can catch halfway.
+ * Its own function because uniqueness is a property worth asserting directly. The previous name was
+ * `Date.now()` + pid, and measured, **twelve writes from one process produced one name** — two
+ * writers then race on the same path and the second `rename` of an already-renamed temp throws
+ * `ENOENT`. Serialised sync calls on a single thread never collide, which is why the suite was
+ * green; `worker_threads` share a pid and do not.
+ *
+ * `randomUUID` and not a clock, per `system-design-guardrails.md` G8: a timestamp is a poor source
+ * of identity precisely because two events can share one.
+ *
+ * Beside the store, never in the system temp dir: `rename` is atomic only within a filesystem, and a
+ * cross-device temp degrades to a copy a reader can catch halfway.
  */
+export function tempPathFor(filePath: string): string {
+  return join(dirname(filePath), `.${randomUUID()}.tmp`)
+}
+
+/** Replace the file atomically, owner-only. */
 export function writeSecureJson(filePath: string, serialize: () => string): void {
   ensureSecureDir(filePath)
-  const tmp = join(dirname(filePath), `.${Date.now().toString(36)}-${process.pid.toString(36)}.tmp`)
+  const tmp = tempPathFor(filePath)
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- the path is the caller's own store location, built from a home directory it owns; the filename is the fixed convention. Refusing dynamic paths here would mean refusing the store.
   writeFileSync(tmp, serialize(), { encoding: 'utf8', mode: FILE_MODE })
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- the path is the caller's own store location, built from a home directory it owns; the filename is the fixed convention. Refusing dynamic paths here would mean refusing the store.
   renameSync(tmp, filePath)
-  // `rename` preserves the temp file's mode, but an EXISTING target may have been created with a
-  // wider one before this code owned the path.
+  // Defence in depth, and honestly labelled as such. The earlier justification here — "an existing
+  // target may have a wider mode" — was measured and is FALSE: `rename` replaces the target inode,
+  // so the old mode never survives. What `mode` genuinely does not cover is a temp that already
+  // exists, since `writeFileSync` ignores `mode` on an existing file; `tempPathFor` now makes that
+  // unreachable by construction. The line stays because asserting the mode costs one syscall and
+  // the alternative is trusting an invariant that lives in another function.
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- the path is the caller's own store location, built from a home directory it owns; the filename is the fixed convention. Refusing dynamic paths here would mean refusing the store.
   chmodSync(filePath, FILE_MODE)
 }
