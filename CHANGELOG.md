@@ -8,6 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`loadInstructionTree` passa a expandir imports `@file.md`.** O loader andava por diretorios e
+  lia arquivos inteiros, e parava ai. O consumidor medido precisa de mais uma coisa de um arquivo de
+  instrucoes: poder escrever `@./style.md` e ter aquele conteudo no prompt. Sem isso, migrar para o
+  nosso loader seria REGRESSAO, nao absorcao — por isso a capacidade entra antes da migracao, e nao
+  depois.
+
+  Tres propriedades carregam o recurso, e cada uma erra em silencio:
+
+  1. **Referencia dentro de codigo nao e import.** `@foo.md` numa cerca ou entre crases e prosa
+     SOBRE a sintaxe; expandir reescreve a documentacao do proprio usuario, que so descobre lendo um
+     prompt que nao diz mais o que ele escreveu. A varredura roda sobre uma copia MASCARADA, com os
+     offsets preservados, e fatia do original.
+  2. **Contencao, no caminho real.** Um import e uma segunda porta para o filesystem e recebe a mesma
+     contencao da caminhada: resolvido por `realpath`, recusado quando cai fora, e mantido literal em
+     vez de descartado — uma linha apagada em silencio le como conteudo que ninguem escreveu.
+  3. **Profundidade e ciclos limitados.** Cap de profundidade e conjunto de visitados param coisas
+     diferentes: o cap para uma cadeia longa que nunca repete, o conjunto impede que o mesmo arquivo
+     seja expandido duas vezes no mesmo ramo.
+
+  Os tres foram tamper-testados. O de ciclo **nao pegou na primeira versao** — ele afirmava so que os
+  arquivos apareciam, e o cap de profundidade ja terminava o ciclo sozinho, entao o teste exercia o
+  cap sob o nome do guarda. Passou a afirmar a CONTAGEM, e agora cai com "expected [ALPHA, ALPHA] to
+  have a length of 1".
+
+### Added
+
 - **`@theokit/agents/auth` passa a encaminhar `StoredCredential` e `StoredOAuthCredential`.** A
   camada ja encaminhava `writeCredential` e `readStoredOAuth` — as funcoes — sem o tipo do que elas
   carregam. Uma funcao que se pode chamar e cujo payload e preciso redescrever esta so metade
