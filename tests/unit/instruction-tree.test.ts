@@ -55,6 +55,56 @@ describe('loadInstructionTree — walking and loading', () => {
     expect(tree.truncated).toBe(false)
   })
 
+  it('test_a_rules_directory_is_collected_by_predicate_not_by_name', () => {
+    // A rules FOLDER is the shape an exact-name list cannot express.
+    //
+    // `fileNames.includes(entry)` matches a basename, so the walk could only ever collect files the
+    // caller could name in advance. A rules directory is the opposite: the user drops arbitrarily
+    // named files in and expects all of them read. That is not a TheoCode idiosyncrasy — Claude Code
+    // reads `.claude/rules/` (this repository has 34 such files, named `cycle-*.md`, `git-safety.md`,
+    // `testing.md`…) and Cursor reads `.cursor/rules/*.mdc`. Both are arbitrary-name directories.
+    //
+    // Measured consequence of the gap: the closest consumer wrote its own 112-line walk — budget,
+    // depth ceiling, cycle guard and all — because ours could not be asked this question.
+    write('.theokit/rules/git-safety.md', 'never force-push')
+    write('.theokit/rules/testing.md', 'red before green')
+    write('.theokit/rules/nested/architecture.md', 'depend inward')
+    write('.theokit/rules/notes.txt', 'not markdown')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.theokit/rules'],
+      budget,
+      onWarn,
+      fileNames: (entry) => entry.endsWith('.md'),
+    })
+
+    expect(tree.blocks.map((b) => b.content).sort((a, b) => a.localeCompare(b))).toEqual([
+      'depend inward',
+      'never force-push',
+      'red before green',
+    ])
+    // The predicate is a filter, not an invitation to read everything.
+    expect(tree.blocks.map((b) => b.content)).not.toContain('not markdown')
+  })
+
+  it('test_an_exact_name_list_keeps_working_unchanged', () => {
+    // The widening is additive. Every existing caller passes an array, and this pins that the array
+    // branch is not quietly routed through the predicate with different semantics.
+    write('THEO.md', 'kept')
+    write('other.md', 'skipped')
+
+    const tree = loadInstructionTree({
+      cwd: root,
+      roots: ['.'],
+      budget,
+      onWarn,
+      fileNames: ['THEO.md'],
+    })
+
+    expect(tree.blocks.map((b) => b.content)).toEqual(['kept'])
+  })
+
   it('test_it_ignores_files_it_was_not_asked_for', () => {
     // Anti-vacuity: without this, a loader that read every file would pass the test above.
     write('THEO.md', 'wanted')
