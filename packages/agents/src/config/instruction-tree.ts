@@ -14,6 +14,7 @@ import { join, relative, resolve } from 'node:path'
 import { assertNoSymlinkEscape } from '@theokit/sdk/path-safety'
 
 import { splitFrontmatter } from './frontmatter.js'
+import { expandInstructionImports } from './instruction-imports.js'
 
 /**
  * M74 — load a tree of project instruction files, with explicit ceilings.
@@ -254,7 +255,14 @@ function parseInstructionFile(
 
   return {
     path: rel,
-    content: parsed.body,
+    // Imports expand AFTER the frontmatter split, so an `@ref` inside a frontmatter block is not one
+    // — that block is metadata about the file, not content of the prompt.
+    content: expandInstructionImports({
+      text: parsed.body,
+      filePath: path,
+      rootDir: cwd,
+      onWarn: warn,
+    }),
     scopes: parsePathsScope(parsed.frontmatter),
   }
 }
