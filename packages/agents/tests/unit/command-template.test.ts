@@ -27,20 +27,38 @@
  * The third recurring shape: an unresolved reference NEVER survives into the output. A leaked `$3`
  * or `@missing.md` reads to the model as content the user wrote, so both substitute empty and warn.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 
-import { expandCommandTemplate, templateHints } from '../../src/config/command-template.js'
+import {
+  expandCommandTemplate,
+  templateHints,
+  type TemplateDeps,
+} from '../../src/config/command-template.js'
 
 const CAP = 64 * 1024
 
-function deps(over: Partial<Parameters<typeof expandCommandTemplate>[2]> = {}) {
-  return {
+/**
+ * The injected dependencies, as spies. Typed through `vi.fn` rather than through the module's
+ * `TemplateDeps` so `.mock.calls` stays visible: assigning them to the interface widens them to the
+ * plain signatures, and the assertions here are about WHAT WAS CALLED — which shell command, which
+ * file name — not only about the value that came back.
+ */
+function deps(over: Partial<SpyDeps> = {}) {
+  const base: SpyDeps = {
     shell: vi.fn(async (_cmd: string) => ({ text: 'SHELL_OUT', ok: true })),
-    readFile: vi.fn((_name: string) => 'FILE_OUT' as string | undefined),
-    warn: vi.fn((_m: string) => {}),
-    ...over,
+    readFile: vi.fn((_name: string): string | undefined => 'FILE_OUT'),
+    warn: vi.fn((_m: string) => undefined),
   }
+  return { ...base, ...over }
 }
+
+/** The three dependencies as spies. `satisfies` proves the shape still matches the real contract. */
+interface SpyDeps {
+  shell: Mock<(cmd: string) => Promise<{ text: string; ok: boolean }>>
+  readFile: Mock<(name: string) => string | undefined>
+  warn: Mock<(message: string) => undefined>
+}
+const _shapeCheck = (d: SpyDeps): TemplateDeps => d
 
 describe('expandCommandTemplate — arguments', () => {
   it('test_numbered_placeholders_substitute_positionally', async () => {

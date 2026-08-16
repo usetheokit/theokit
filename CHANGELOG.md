@@ -46,6 +46,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A afirmação de fronteira fechada era falsa em 25 subpaths, e agora diz o que foi medido.**
+  `packages/agents/src/index.ts` declarava que "o consumidor importa ZERO `@theokit/sdk*` direto".
+  Medido contra o SDK consumido (4.52.1): 25 subpaths publicados não têm porta nenhuma nesta camada,
+  e outros 5 têm cobertura parcial. Uma fronteira documentada como fechada e mensuravelmente aberta é
+  pior do que uma documentada como parcial — o consumidor lê a afirmação e para de procurar, que é
+  exatamente como alguém acaba reconstruindo o que já existe. `check-surface-parity.mjs` não
+  conseguia ver isso, e não por descuido: ele compara subpaths que os dois pacotes publicam com o
+  **mesmo nome**, e um subpath sem porta aqui não tem nome para comparar.
+  `scripts/lib/boundary-decisions.mjs` registra uma decisão escrita por subpath sem porta, com a
+  medição por trás (quantos dos símbolos dele já alcançam a raiz desta camada), e
+  `tests/integration/boundary-doorless-subpaths.test.ts` falha quando o SDK adiciona um subpath que
+  ninguém decidiu — o próximo buraco chega como teste vermelho com nome, não escondido atrás de uma
+  frase. Nada foi repassado em bloco: 25 subpaths novos sem consumidor pedindo é crescimento de
+  superfície que G7 e G11 proíbem (crossval-4-6-absorption T4.2).
+- **O índice de capacidades passa a cobrir os três pacotes que o cliente precisa, não um.**
+  Quatro das lacunas registradas pelo consumidor apontam para `@theokit/tui` e o índice só respondia
+  por `@theokit/agents`. Entraram seções para `@theokit/tui` e `@theokit/sdk`. O guarda foi
+  generalizado junto — senão a garantia da página ("todo símbolo aqui resolve") viraria "todo símbolo
+  de `@theokit/agents` aqui resolve", em silêncio. Ele lê agora a coluna *Import from* e resolve cada
+  linha no pacote que ela nomeia; um pacote sem `dist` construído **pula alto**, nunca passa
+  (crossval-4-6-absorption T4.2).
+
+
 - **As lacunas do consumidor passam a ser fechadas por mecanismo, não por coincidência**
   (closes: U-1, closes: U-4, closes: U-6, closes: U-10). O registro do consumidor
   (`TheoCode/BACKLOG.md § Upstream`) lista 8 linhas como abertas; verificado em 2026-08-16, **nenhuma

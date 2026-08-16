@@ -178,6 +178,25 @@ Plan: `.claude/knowledge-base/plans/dogfood-regressions-fix-plan.md` v1.1 — **
 
 ## Ecosystem — the siblings, literally (one being absorbed)
 
+> **Resolution, 2026-08-16 (crossval-4-6-absorption T4.2).** The correction below stayed a
+> correction — the table kept naming five siblings while the note said eleven, which leaves a reader
+> to choose which half of the same document to believe. The table is hereby **explicitly demoted**
+> rather than completed: it is the record of the seams TheoKit *wires*, and it does not attempt to be
+> an inventory of what the group ships. Two things now carry that job, and both are mechanically
+> checked so they cannot drift back:
+>
+> - [`wiki/capability-index.md`](wiki/capability-index.md) answers *"which symbol delivers capability
+>   X"* across `@theokit/agents`, `@theokit/tui` and `@theokit/sdk`. Every row's symbol is resolved
+>   against the package it names by `tests/integration/crossval-gaps.test.ts`; a row citing a symbol
+>   that does not exist fails CI.
+> - [`scripts/lib/boundary-decisions.mjs`](scripts/lib/boundary-decisions.mjs) records, per SDK
+>   subpath with no door in this layer, whether it is forwarded or deliberately out — with the
+>   measurement behind each decision. A subpath the SDK adds later arrives as a named test failure.
+>
+> Demotion rather than completion, because a hand-maintained inventory of eleven repositories in a
+> file nothing checks is the same defect one size larger. What made the old table wrong was not its
+> length; it was that nothing could tell it it had gone stale.
+
 > **Correction, measured 2026-08-14.** This section said "five siblings" and the group has **11
 > repositories**. The gap is not academic: the only real consumer of `@theokit/agents` already
 > depends on three packages this table never mentioned — `@theokit/tui` 0.52.1, `@theokit/sdk-tools`
