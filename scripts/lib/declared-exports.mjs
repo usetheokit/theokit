@@ -42,7 +42,7 @@ const STAR_FORWARD_RE = /^export\s+\*\s+from\s+'([^']+)'/gm
  * @param {string} resolvedJsPath
  * @returns {string[]}
  */
-export function typeCandidates(resolvedJsPath) {
+function typeCandidates(resolvedJsPath) {
   return [
     resolvedJsPath.replace(/\.cjs$/, '.d.cts'),
     resolvedJsPath.replace(/\.[cm]?js$/, '.d.ts'),

@@ -3,8 +3,8 @@
  * runs under `node` with no compile step; this file is the contract its TypeScript consumers read.
  */
 
-/** The declaration files a resolved JS path might have (`.d.cts` / `.d.ts` / `.d.mts`). */
-export declare function typeCandidates(resolvedJsPath: string): string[]
+// `typeCandidates` is deliberately NOT exported: its only caller is the function below, in the same
+// module. An export whose only consumer is its own file is a public promise nobody asked for (G7).
 
 /**
  * Every name declared or re-exported by `text`, following `export *` ONE hop when `resolveFrom` is
