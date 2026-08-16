@@ -30,6 +30,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **O gate de checkpoint reprovava por colisão de ids entre planos diferentes.** Ele varria
+  `git log -n 500` sobre **toda** a história recente procurando tokens `T{N.M}` — e ids de task são
+  genéricos, então commits de outro plano (`99d5ec57` usando `T5.1`, `e3595b4b` usando `T5.2`)
+  reprovavam este. Qualquer repositório que rode mais de um plano colide. A varredura agora é
+  escopada em `base..HEAD` (default `origin/develop`), com fallback para a varredura ampla quando a
+  base não resolve — nunca para "nenhuma checagem", porque um gate que reporta limpo por não ter
+  conseguido olhar é pior do que um que exagera. Segundo defeito no mesmo check: uma task marcada
+  `blocked` **com razão** era tratada como esquecimento, então um commit que apenas *explica* o
+  bloqueio ("docs: why T5.0 is blocked") era lido como alegação de implementação. Isenta agora — e a
+  razão é obrigatória, porque `blocked` sem justificativa é exatamente o que um checkpoint velho
+  parece (review F-orch-1).
+
+
 - **O guarda contra "run vazio" era ele próprio vazio.** `ci_refuses_a_mostly_skipped_run` existe
   para impedir que uma execução onde tudo pulou passe como verde (EC-4, MUST-FIX). O comentário dele
   afirmava "runs last by declaration order so `skipped` is populated"; o bloco meta é declarado ~30
