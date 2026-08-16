@@ -1,8 +1,8 @@
 # Implementation Validation: crossval-4-6-absorption
 
 **Date:** 2026-08-16
-**Overall:** FAIL
-**Total checks:** 11 (PASS: 6, FAIL: 1, SKIP: 0)
+**Overall:** PASS
+**Total checks:** 12 (PASS: 8, FAIL: 0, SKIP: 0)
 
 ## Checks
 
@@ -34,12 +34,11 @@
 - [LOW] wiring_invalid_value: tasks[17] wiring.a = True; expected one of ['defer', 'fail', 'pass'].
 - [LOW] wiring_invalid_value: tasks[17] wiring.b = True; expected one of ['defer', 'fail', 'n/a', 'pass'].
 
-### checkpoint_consistency — `FAIL`
+### checkpoint_consistency — `PASS`
 
-- [HIGH] task_committed_in_git_not_in_progress: Task T1.2 is referenced by a real commit in git but the checkpoint still marks it 'blocked'. Update its status to 'committed' with the commit_sha.
-- [HIGH] task_committed_in_git_not_in_progress: Task T5.0 is referenced by a real commit in git but the checkpoint still marks it 'blocked'. Update its status to 'committed' with the commit_sha.
-- [HIGH] task_committed_in_git_not_in_progress: Task T5.1 is referenced by a real commit in git but the checkpoint still marks it 'blocked'. Update its status to 'committed' with the commit_sha.
-- [HIGH] task_committed_in_git_not_in_progress: Task T5.2 is referenced by a real commit in git but the checkpoint still marks it 'blocked'. Update its status to 'committed' with the commit_sha.
+
+### dist_freshness — `PASS`
+
 
 ### npm test — `PASS`
 
@@ -80,4 +79,4 @@
 
 ## Handoff decision
 
-Implementation FAILS at least one gate. Loop back to /implement to address.
+Implementation PASSes all gates. Ready for `cycle-review` (when built).
