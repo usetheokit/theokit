@@ -89,9 +89,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   um dia mais velho que o fonte e ainda declarava o retorno **síncrono** — a workspace inteira era
   tipada contra código que ninguém executa. Os testes existentes não pegaram porque cobriam só
   `formatGcPlan`, a função pura, com objetos montados à mão; nada chamava `sessionsGcCommand`, que é
-  onde a costura vive. Corrigido o `await`, e o script `typecheck` agora constrói antes de tipar —
-  como o CI já fazia — para que a versão local pare de ser silenciosamente mais fraca que a de CI.
-  Quem precisa do comportamento antigo tem `typecheck:only` (review F-wire-1).
+  onde a costura vive. Corrigido o `await`. Quanto ao falso verde: a primeira tentativa foi fazer o
+  `typecheck` construir antes de tipar, e isso se mostrou pesado demais — rodando junto com cobertura
+  dentro do `run_validation`, o processo foi morto pelo watchdog de memória desta máquina. O custo foi
+  para onde pertence: `check:all` (gate pré-merge, raro) constrói primeiro, e o `run_validation`
+  ganhou `dist_freshness`, que custa alguns `stat` e reprova o handoff quando as declarações
+  construídas são mais velhas que o fonte. Fora do handoff, fonte editada e não reconstruída é estado
+  normal de desenvolvimento; no handoff significa que o relatório prestes a ser acreditado descreve os
+  tipos errados (review F-wire-1).
 
 
 - **Um registry que não respondia travava a varredura inteira de GC.** T2.2 deu a `deleteSession` um
