@@ -20,16 +20,11 @@
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
-
-import {
-  declaredExportsFromText,
-  declaredExportsOfPackage,
-  rootSymbol,
-} from '../../scripts/lib/declared-exports.mjs'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(TEST_DIR, '..', '..')
@@ -56,14 +51,93 @@ function agentsDts(): string {
 const DIST_BUILT = agentsDts().length > 0
 
 /**
- * T0.1 / EC-2 — the published surface, parsed by the SHARED helper.
+ * T0.1 / EC-2 — what the published surface actually offers a consumer.
  *
- * The parser lives in `scripts/lib/declared-exports.mjs` rather than here because the layer→consumer
- * gate (T4.1) asks the same question and two other scripts already answer a narrower version of it.
- * A third private copy inside a test file is the DRY violation `system-design-guardrails.md § G12`
- * names, and it would put the gate's dependency inside `tests/`.
+ * Three sources, and the third is the one that matters. Until this existed the guard below asked
+ * `dts.includes(symbol)`, so `agent` matched on `agentHandle` and on the literal string
+ * `@theokit/agents` — every short symbol name was unguarded by construction, and the index's first
+ * two rows were fabricated under a green test.
+ *
+ * The `export *` hop is not optional. `dist/index.d.ts` carries five forwards contributing 38 names,
+ * including `TheokitAgentError`. A parser blind to them reports a false ABSENCE, and the reflex on a
+ * red CI is to delete the row — removing a real capability from the map. That blindness applied by
+ * hand is what produced registered gap 16 and the U-11 caveat.
+ *
+ * One hop is enough for every forward here and keeps the walk terminating without a cycle check. A
+ * target that cannot be read is REPORTED, never treated as exporting nothing — a quiet empty set is
+ * how a guard goes vacuous a second time.
+ *
+ * It lives in this file, not in `scripts/lib/`, because it has exactly ONE consumer today. The
+ * layer-invention gate (T4.1) will be the second, and extraction belongs to that task:
+ * `system-design-guardrails.md § G12` says extract on the repetition, not in anticipation of it.
+ * `check-surface-parity.mjs` parses `.d.ts` too but answers a SUBPATH-scoped question, so it is not
+ * a repetition of this one — merging them is the accidental coupling the same rule forbids.
+ *
+ * Declared limitation: `agentsDts()` unions every `.d.ts` in `dist/`, internal bundler chunks
+ * included, so some mangled aliases enter the set and the SUBPATH a symbol comes from is not
+ * checked — only that the package exports it somewhere.
  */
-const PUBLISHED = declaredExportsOfPackage(join(REPO_ROOT, 'packages', 'agents'))
+const DECLARATION_RE =
+  /^[ \t]*(?:export )?(?:declare )?(?:abstract )?(?:const|function|class|type|interface|enum) ([A-Za-z_$][\w$]*)/gm
+const EXPORT_BLOCK_RE = /export\s*\{([^}]*)\}/g
+const STAR_FORWARD_RE = /^export\s+\*\s+from\s+'([^']+)'/gm
+
+function typeCandidates(resolvedJsPath: string): string[] {
+  // `require.resolve` picks the CJS branch, whose declarations are `.d.cts` when a package ships
+  // dual types. Going straight to `.d.ts` works for the SDK only because it ships both.
+  return [
+    resolvedJsPath.replace(/\.cjs$/, '.d.cts'),
+    resolvedJsPath.replace(/\.[cm]?js$/, '.d.ts'),
+    resolvedJsPath.replace(/\.mjs$/, '.d.mts'),
+  ]
+}
+
+function declaredExportsFromText(
+  text: string,
+  resolveFrom?: string,
+): { names: Set<string>; unresolvedForwards: string[] } {
+  const names = new Set<string>()
+  const unresolvedForwards: string[] = []
+
+  const harvest = (source: string, follow: boolean): void => {
+    for (const m of source.matchAll(DECLARATION_RE)) names.add(m[1]!)
+    for (const block of source.matchAll(EXPORT_BLOCK_RE)) {
+      for (const spec of block[1]!.split(',')) {
+        // `A as B` exports B; a bare `A` exports A. The LAST identifier is the exported name.
+        const ids = spec.trim().match(/[A-Za-z_$][\w$]*/g)
+        if (ids?.length) names.add(ids[ids.length - 1]!)
+      }
+    }
+    if (!follow || !resolveFrom) return
+    const require_ = createRequire(resolveFrom)
+    for (const star of source.matchAll(STAR_FORWARD_RE)) {
+      const spec = star[1]!
+      try {
+        const dts = typeCandidates(require_.resolve(spec)).find((c) => existsSync(c))
+        if (!dts) {
+          unresolvedForwards.push(spec)
+          continue
+        }
+        harvest(readFileSync(dts, 'utf8'), false) // one hop only
+      } catch {
+        unresolvedForwards.push(spec)
+      }
+    }
+  }
+
+  harvest(text, Boolean(resolveFrom))
+  return { names, unresolvedForwards }
+}
+
+const PUBLISHED = declaredExportsFromText(
+  agentsDts(),
+  join(REPO_ROOT, 'packages', 'agents', 'package.json'),
+)
+
+/** The root symbol of a citation: `AgentBuilder.create` -> `AgentBuilder`, `Agent<T>` -> `Agent`. */
+function rootSymbol(cited: string): string {
+  return cited.split('.')[0]!.split('<')[0]!
+}
 
 /**
  * The backticked identifier in a capability row's SYMBOL column (the second cell).
