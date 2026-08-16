@@ -90,7 +90,7 @@ cli
   .action(async (options: { apply?: boolean; keepLast?: number; maxAgeDays?: number }) => {
     try {
       const { sessionsGcCommand } = await import('./commands/sessions-gc.js')
-      const { lines, failed } = sessionsGcCommand({
+      const { lines, failed } = await sessionsGcCommand({
         apply: options.apply,
         keepLast: Number(options.keepLast),
         maxAgeDays: Number(options.maxAgeDays),
