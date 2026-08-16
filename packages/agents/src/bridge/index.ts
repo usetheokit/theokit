@@ -67,7 +67,17 @@ export {
 // M96 — the approval posture crosses the boundary: without it being nameable, the consumer cannot
 // declare what `toAgentFactory` now requires. `AgentDefinition` (a name already taken just below, by
 // the builder's branded type) is untouched — the posture has a name of its own.
-export type { ApprovalPosture } from './approval-posture.js'
+/**
+ * Coverage-matrix gap 28 — *"`applyPosture` unreachable by any surface"*, whose declared resolution
+ * is "one implementation, reachable".
+ *
+ * T2.1 closed the half a TUI asks per event (`shouldAutoApprove`, below) and left this one absent,
+ * so the gap stayed open while its task was recorded closed. A surface that builds its own agent
+ * options — rather than going through `toAgentFactory` — has no way to install the gate its posture
+ * describes, which is the same "type crossed, enforcement did not" shape the invention gate exists
+ * to catch (T4.1). Exported here as a VALUE, not just a type.
+ */
+export { applyPosture, type ApprovalPosture } from './approval-posture.js'
 
 /**
  * T2.1 — the auto-approve decision, callable by a SURFACE.
