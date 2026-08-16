@@ -46,6 +46,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **As lacunas do consumidor passam a ser fechadas por mecanismo, não por coincidência**
+  (closes: U-1, closes: U-4, closes: U-6, closes: U-10). O registro do consumidor
+  (`TheoCode/BACKLOG.md § Upstream`) lista 8 linhas como abertas; verificado em 2026-08-16, **nenhuma
+  está totalmente aberta**. Cinco chegaram até ele por acidente — a mesma pessoa mantém os dois lados.
+  Um cliente sem essa sobreposição continua lendo "aberto" sobre capacidades que já existem e
+  continua reconstruindo. `check:changelog-closes` lê `.claude/rules/consumer-gaps.txt` e avisa quando
+  uma mudança toca um arquivo que responde a uma linha registrada sem nomeá-la aqui.
+
+  Estado medido, com o que está parcial dito como parcial:
+
+  - **U-4 — já fechada, e o registro não sabe.** `assertSecureModes` é exportado de
+    `@theokit/agents/auth` (`auth-entry.ts:31`). A linha diz "privado". É o caso exemplar do porquê
+    desta task existir.
+  - **U-1 — parcial.** A metade de registry da deleção passou a ser alcançável (T2.2) e o oráculo de
+    liveness — a primitiva que responde *quais* projetos podem ser coletados — foi entregue (T3.2).
+    Uma primitiva de política de retenção continua sem existir; a linha não deve ser fechada inteira.
+  - **U-10 — parcial.** A metade do TUI fechou: `WindowView` reporta contagens desde a 0.53.0 e a
+    âncora que sobrava saiu em T3.4. O `readJsonlTail` continua sem devolver índice absoluto — T2.5
+    corrigiu outro defeito no mesmo arquivo (marcador casando por substring), não este.
+  - **U-6 — adjacente, não fechada.** T2.1 publicou `WRITE_SCOPED_TOOLS` e `shouldAutoApprove`, que
+    respondem *quais ferramentas escrevem*. A pergunta da linha é sobre o **modo de sandbox**, e essa
+    continua sem export.
+  - U-2, U-3, U-5, U-7, U-8, U-9 e U-11 foram verificados fechados e alcançáveis durante a
+    cross-validation; ficam registrados aqui porque o registro do consumidor ainda os mostra abertos.
+
+
 - **`transcriptRootHint` explica uma lista de sessoes vazia.** O consumidor escrevia esse aviso, e
   a evidencia de dono estava no proprio codigo: ele lia `THEOKIT_HOME` — variavel deste pacote — e
   listava o layout `projects/`, cujo dono virou `projectsRoot()` em `b30fe9f1`. Um produto nao
