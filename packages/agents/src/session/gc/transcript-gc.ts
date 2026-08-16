@@ -5,6 +5,8 @@ import { transcriptPath, transcriptRoot } from '@theokit/sdk/persistence'
 
 import { listSessions, protectedTranscripts } from '../session-lifecycle.js'
 
+import { awaitRegistryRemoval } from './registry-remover.js'
+
 /**
  * M72 — transcript retention: plan, then apply.
  *
@@ -252,6 +254,12 @@ export async function runTranscriptGC(
      * than producing an entry no run can repair.
      */
     readonly removeFromRegistry?: (sessionId: string) => unknown
+    /**
+     * How long to wait for the registry per session before giving up on it and keeping the
+     * transcript. Absent means wait indefinitely — the pre-existing behaviour, kept as the default
+     * so adding the bound cannot change what a current caller experiences.
+     */
+    readonly registryTimeoutMs?: number
   },
 ): Promise<RunTranscriptGCResult> {
   const removed: string[] = []
@@ -275,7 +283,16 @@ export async function runTranscriptGC(
       // Registry first (EC-3). A failure here skips the unlink: an orphan transcript is collected
       // next sweep, an orphan registry entry is collected by nothing.
       try {
-        await options.removeFromRegistry(candidate.id)
+        // Bounded by the SAME helper `deleteSession` uses. The first implementation of this seam
+        // used a bare `await` here, and the consequence was not a style point: a registry that never
+        // answered hung the entire sweep — not this session, every session after it, with no error
+        // and no output. The single-session path was already tested against exactly that; the path
+        // that runs unattended over a whole project was not.
+        await awaitRegistryRemoval(
+          options.removeFromRegistry(candidate.id),
+          candidate.id,
+          options.registryTimeoutMs,
+        )
       } catch (error) {
         errors.push({
           id: candidate.id,
