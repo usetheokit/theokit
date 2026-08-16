@@ -88,6 +88,57 @@ check rather than weakening it.
 - `check:invention-reachability`, `check:changelog-closes`, `crossval-gaps` (33), boundary decisions
   (5): all green.
 
+## Defect found and fixed while verifying the DoD
+
+Checking the DoD line *"every signature change is a widening"* surfaced an asymmetry that was not a
+signature question at all: `deleteSession` bounded its registry remover with a timeout and
+`runTranscriptGC` awaited the same seam with a bare `await`. A remover that never settles therefore
+hung the whole sweep — not one session, every session after it, with no error, no timeout and no
+output. The RED that exposed it took 5010ms (the runner's own timeout); it now takes 31ms.
+
+The plan had named the fix and the first implementation skipped it
+(`session/gc/registry-remover.ts (NEW) — the shared awaiting helper`). One rule, two call sites, and
+the unwatched one was the one that mattered. Both now go through `awaitRegistryRemoval`; the bound
+stays opt-in so a caller that never passed `registryTimeoutMs` gets exactly what it had. Commit
+`96c9634d`.
+
+Worth stating plainly: the unit test for the single-session path was written FIRST and passed, which
+is what made the gap invisible. The sweep is the path that runs unattended over a whole project.
+
+## DoD verification — what was checked this iteration
+
+Green and unblocked:
+
+- `pnpm lint` — green across all 9 groups.
+- `pnpm typecheck` — clean in `theokit`, `theokit-tui` and `theokit-sdk`.
+- `pnpm check:deps` — 0 violations (412 modules, 1219 dependencies).
+- `check:direction` — no cycle, 30 packages.
+- `crossval-gaps.test.ts` — 33/33, zero silent skips.
+- `packages/agents` unit suite — 1185 passed, 3 skipped.
+- File-size budget (G6, code lines excluding blanks/comments) — every file changed by this plan is
+  under 500.
+
+Pre-existing findings, recorded rather than fixed (neither file was touched by this plan; fixing
+another slice's export could break a consumer):
+
+- `tests/unit/instruction-tree.test.ts` — 527 code lines, over the G6 budget. Introduced by
+  `b8f47a9b`/`78256052`.
+- `knip` exits 1 on two findings: unused exported type `SecureStoreRead`
+  (`hooks/secure-store.ts:35`) and duplicate export
+  `DelegationBudgetExceededError|BudgetExceededError` (`bridge/delegation-types.ts`, from `5f1832a9`).
+
+**A DoD line that contradicts the plan itself:** *"every signature change is a widening"*. T2.2's own
+design says *"accept a thenable by awaiting"*, and a function cannot await without becoming `async` —
+its return type goes from `T` to `Promise<T>`, which is breaking, not widening. `runTranscriptGC` and
+`deleteSession` are both affected and both commits carry the `!` marker. The three `pending-ledger`
+changes ARE widenings (generic parameters with defaults; a bare `PendingItem` still compiles). The
+DoD line is the thing that is wrong here, and `/review` should decide whether to amend it or to gate
+the two async changes behind a major bump.
+
+Blocked by Phase 5 and therefore unverifiable here: `cd TheoCode && npm test`, the ≥1.300 LOC deletion
+count, the BACKLOG register at zero open rows, the real-tree runtime-metric proof, and the re-scored
+weighted average.
+
 ## Next step
 
 `/review crossval-4-6-absorption`. The release, and with it Phase 5, needs the human-approved PR chain.
