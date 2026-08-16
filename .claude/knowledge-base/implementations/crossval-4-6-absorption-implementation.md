@@ -73,6 +73,18 @@ check rather than weakening it.
 - Workspace typecheck: clean.
 - Phase-boundary mini reviews: phase 0 PASS, phase 1 NEEDS_FIX (T1.2 blocked — honest), phase 2 PASS,
   phase 3 PASS.
+- Phase 4 returned NEEDS_FIX on one HIGH: `wiring_pillar_a_fail` for `DOORLESS_DECISIONS`, whose only
+  consumer was its own test — the same lesson phase 0 taught. Fixed by giving it the caller that
+  should have existed: `check-surface-parity.mjs` now reports the doorless half of the boundary
+  alongside the half it can compare. `findUnreachableEnforcement` and `missingCloses` then failed
+  pillar (b), closed by `tests/integration/tooling-gates-cli.test.ts`, which runs each gate as a
+  consumer meets it and cross-checks the CLI's verdict against the pure function.
+- **Stated precisely:** after those fixes, `check_wiring.py` — the script the mini review aggregates
+  for this check — returns PASS on all four Phase 4 symbols (`DOORLESS_DECISIONS`,
+  `declaredExportsFromText`, `findUnreachableEnforcement`, `missingCloses`). The AGGREGATE phase-4
+  re-run did not complete on this machine: it re-runs the full code-quality audit and repeatedly
+  exceeded the available window. So the finding is verified resolved with the underlying check, and a
+  fresh `PHASE_REVIEW_PASS` token was NOT emitted and is not claimed here. `/review` re-runs it.
 - `check:invention-reachability`, `check:changelog-closes`, `crossval-gaps` (33), boundary decisions
   (5): all green.
 
