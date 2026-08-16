@@ -1,0 +1,37 @@
+{
+  "_provenance": {
+    "written_by": "manual sweep against the operator's real project tree, 2026-08-16",
+    "plan": "crossval-4-6-absorption",
+    "task": "T3.2",
+    "closes": "review F-wire-2 (pillar (c) was 0/27)",
+    "dod_line": "the liveness oracle's classification equivalence observed on the operator's real project tree",
+    "how_to_reproduce": "run classifyProjects and the consumer's classifyDirectory over ~/.theokit/projects and compare verdict by verdict; the script must be run from the TheoCode repo, whose tsconfig paths resolve the consumer oracle's single import (encodeProjectDir from @theokit/agents/persistence, a subpath the installed 9.4.0 does not export)",
+    "honest_limits": [
+      "This is a MANUAL sweep, not integration-test infra. The file is hand-written from a measured run; no test writes it yet. A future run must re-measure rather than trust this file.",
+      "The framework side was given an EMPTY candidate pool (candidatePaths: () => []). The consumer additionally does a DFS from / for projects with no transcript, which the framework cannot do without an injected pool. All 6 disagreements are that asymmetry, and every one of them is the framework being LESS certain, never more.",
+      "The tree measured is one machine's. The scale-independent property (ops <= budget) holds at any size; the agreement percentage is about this tree."
+    ]
+  },
+
+  "liveness_oracle_projects_classified": 13624,
+  "liveness_oracle_verdict_agreement_with_consumer": 13618,
+  "liveness_oracle_agreement_pct": 99.96,
+  "liveness_oracle_framework_dead_where_consumer_disagreed": 0,
+  "liveness_oracle_fs_operations": 34139,
+  "liveness_oracle_ops_per_project": 2.51,
+  "liveness_oracle_budget": 200000,
+  "liveness_oracle_budget_respected": 1,
+  "liveness_oracle_elapsed_ms": 118,
+
+  "_confusion_matrix": {
+    "framework_dead__consumer_DEAD": 10252,
+    "framework_undetermined__consumer_UNDETERMINED": 3362,
+    "framework_alive__consumer_ALIVE": 4,
+    "framework_undetermined__consumer_ALIVE": 3,
+    "framework_undetermined__consumer_DEAD": 3
+  },
+
+  "_the_property_that_matters": "framework_dead_where_consumer_disagreed == 0. The caller DELETES on `dead`; a false `dead` is data loss and a false `undetermined` is a directory left on disk. The two errors are not symmetric, so the only agreement number that carries safety weight is this one.",
+
+  "_budget_sizing_finding": "A first run at budget=20000 exhausted it exactly (framework_ops == 20000) and agreement fell to 66.2%, because 7967 projects degraded to `undetermined` for want of budget rather than for want of evidence. That degradation is SAFE (nothing is deleted) but SILENT: the sweep does almost nothing and no aggregate signal says why. At the measured 2.51 ops/project, a tree of N projects needs budget >= 3N. Nothing in the module warns when the budget is undersized for the input — filed as a follow-up."
+}
