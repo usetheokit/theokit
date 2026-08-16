@@ -23,7 +23,7 @@
  */
 
 /** A decision waiting for a human, as the surface knows it. */
-export interface PendingItem {
+export interface PendingItem<TPayload = undefined> {
   /** The framework's id for the decision (an approval id, a question id). */
   readonly id: string
   /**
@@ -33,16 +33,28 @@ export interface PendingItem {
    * everything attached to messages that no longer exist.
    */
   readonly messageIndex: number
+  /**
+   * The SURFACE's own state for this item — render timestamps, collapsed flags, whatever it needs.
+   *
+   * T2.7. The framework never reads it; it is carried, not interpreted. Without this slot a surface
+   * adopting the ledger has to keep a SECOND map keyed by the same id, which is strictly worse than
+   * the single map it already maintains — and that is the measured reason `createPendingLedger`
+   * shipped and went unused while a hand-written ledger stayed in the only real consumer.
+   *
+   * The default of `undefined` is what keeps this non-breaking: every existing caller writes
+   * `PendingItem` with no argument and passes items with no payload.
+   */
+  readonly payload?: TPayload
 }
 
-export interface PendingLedger {
+export interface PendingLedger<TPayload = undefined> {
   /**
    * Record what the framework reports as pending.
    *
    * Additive and idempotent: the same list arrives on every poll. An id already settled is NOT
    * re-added — that single rule is what stops the dismissed card from coming back.
    */
-  ingest(items: readonly PendingItem[]): void
+  ingest(items: readonly PendingItem<TPayload>[]): void
   /**
    * Mark one as answered. `false` when it was unknown or already settled.
    *
@@ -51,7 +63,7 @@ export interface PendingLedger {
    */
   settle(id: string): boolean
   /** The oldest unsettled item, or `undefined`. A surface shows one at a time. */
-  findNext(): PendingItem | undefined
+  findNext(): PendingItem<TPayload> | undefined
   /**
    * Forget everything attached to a message before `messageIndex`, settled or not. Returns how many
    * unsettled items were dropped.
@@ -61,8 +73,8 @@ export interface PendingLedger {
   pruneBefore(messageIndex: number): number
 }
 
-export function createPendingLedger(): PendingLedger {
-  const open = new Map<string, PendingItem>()
+export function createPendingLedger<TPayload = undefined>(): PendingLedger<TPayload> {
+  const open = new Map<string, PendingItem<TPayload>>()
   // Settled ids are remembered, not deleted: the framework's list is stateless and will report the
   // same id again on the next poll. Forgetting it here is what would resurrect the card.
   const settled = new Map<string, number>()
@@ -84,7 +96,7 @@ export function createPendingLedger(): PendingLedger {
     },
 
     findNext() {
-      let oldest: PendingItem | undefined
+      let oldest: PendingItem<TPayload> | undefined
       for (const item of open.values()) {
         // Conversation order, not insertion order: the list arrives however the registry enumerated
         // it, and "oldest first" has to mean the conversation's oldest to make sense to a human.
