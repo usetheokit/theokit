@@ -432,11 +432,11 @@ lookup 'TheokitAgentError'  → true    (was false without hop (c) — the EC-2 
 
 #### TDD
 ```
-RED:     capability_index_symbols_are_declared_exports() — fails on `agent` and `tool` before the row fix
-RED:     honest_gaps_symbols_do_not_resolve() — fails on PermissionStore and @theokit/agents/config, which ship
-RED:     star_forwarded_symbols_resolve() — EC-2: TheokitAgentError, reachable only via `export *`
-RED:     member_and_generic_citations_resolve_on_their_root_symbol() — EC-21: `AgentBuilder.create`, `Agent<T>`
-RED:     an_unresolvable_star_target_is_reported_not_silently_empty() — EC-2 edge
+RED:     test_capability_index_symbols_are_declared_exports() — fails on `agent` and `tool` before the row fix
+RED:     test_honest_gaps_symbols_do_not_resolve() — fails on PermissionStore and @theokit/agents/config, which ship
+RED:     test_star_forwarded_symbols_resolve() — EC-2: TheokitAgentError, reachable only via `export *`
+RED:     test_member_and_generic_citations_resolve_on_their_root_symbol() — EC-21: `AgentBuilder.create`, `Agent<T>`
+RED:     test_an_unresolvable_star_target_is_reported_not_silently_empty() — EC-2 edge
 GREEN:   correct the index rows; all assertions pass
 REFACTOR: extract declaredExports() so T4.1 can import it rather than re-parse
 VERIFY:  pnpm vitest run tests/integration/crossval-gaps.test.ts
@@ -509,10 +509,10 @@ cross-validation-output/cross-validation.db — gap 16 reclassified (see Tasks)
 
 #### TDD
 ```
-RED:     base_error_is_importable_from_the_published_entry() — fails only if the star forward is removed
-RED:     sdk_thrown_error_is_instanceof_the_symbol_imported_from_the_layer() — identity, not presence
-RED:     is_transient_error_is_reachable_from_the_layer()
-RED:     unbuilt_dist_skips_with_a_reason() — EC-22 convention
+RED:     test_base_error_is_importable_from_the_published_entry() — fails only if the star forward is removed
+RED:     test_sdk_thrown_error_is_instanceof_the_symbol_imported_from_the_layer() — identity, not presence
+RED:     test_is_transient_error_is_reachable_from_the_layer()
+RED:     test_unbuilt_dist_skips_with_a_reason() — EC-22 convention
 GREEN:   (already green — this task PINS existing behaviour; the RED phase is proven by
          temporarily removing the star forward locally and observing the failure, then restoring it)
 REFACTOR: None expected
@@ -576,9 +576,9 @@ packages/agents/tests/unit/tools-surface-parity.test.ts — extend to assert the
 
 #### TDD
 ```
-RED:     sdk_view_image_returns_the_same_content_block_shape() — compares against the consumer's tool as spec
-RED:     tools_entry_symbol_count_matches_measurement() — fails today (93 claimed, 90 crossing)
-RED:     unbuilt_dist_skips_with_a_reason_and_does_not_report_parity() — EC-22, reuse the noteSkip convention
+RED:     test_sdk_view_image_returns_the_same_content_block_shape() — compares against the consumer's tool as spec
+RED:     test_tools_entry_symbol_count_matches_measurement() — fails today (93 claimed, 90 crossing)
+RED:     test_unbuilt_dist_skips_with_a_reason_and_does_not_report_parity() — EC-22, reuse the noteSkip convention
 GREEN:   cross the three names (or write the reason) and correct the count
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/agents vitest run tests/unit/tools-surface-parity.test.ts
@@ -640,7 +640,7 @@ wiki/capability-index.md — replace the Honest-gaps row with a real row
 
 #### TDD
 ```
-RED:     mcp_oauth_subpath_resolves_from_the_built_package() — import fails today
+RED:     test_mcp_oauth_subpath_resolves_from_the_built_package() — import fails today
 GREEN:   add exports + tsup entries (or take the honest-index path)
 REFACTOR: None expected
 VERIFY:  cd ../theokit-sdk && pnpm --filter @theokit/sdk test
@@ -732,11 +732,11 @@ output: true
 
 #### TDD
 ```
-RED:     absent_posture_never_auto_approves() — the B-006 scar
-RED:     full_auto_requires_enforced_confinement()
-RED:     auto_edit_only_covers_write_scoped_tools()
-RED:     unknown_tool_under_auto_edit_is_refused()
-RED:     apply_posture_still_throws_on_unenforced_confinement() — regression on the existing invariant
+RED:     test_absent_posture_never_auto_approves() — the B-006 scar
+RED:     test_full_auto_requires_enforced_confinement()
+RED:     test_auto_edit_only_covers_write_scoped_tools()
+RED:     test_unknown_tool_under_auto_edit_is_refused()
+RED:     test_apply_posture_still_throws_on_unenforced_confinement() — regression on the existing invariant
 GREEN:   implement the predicate and delegate
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/agents vitest run tests/unit/approval-decision.test.ts tests/unit/approval-posture-evidence.test.ts
@@ -831,14 +831,14 @@ output: { registryRemoved: false, registryError: e, fileDeleted: false }   # orp
 
 #### TDD
 ```
-RED:     async_remover_is_awaited_not_refused() — Agent.delete-shaped remover succeeds
-RED:     sync_remover_still_works() — backward compatibility
-RED:     registry_failure_is_reported_separately_from_file_deletion() — the scar: no collapsed boolean
-RED:     registry_removed_before_the_file_is_unlinked() — EC-3: a rejecting remover leaves the file PRESENT
-RED:     remover_that_never_settles_times_out_with_a_typed_error()
-RED:     remover_that_settles_after_the_timeout_does_not_mutate_the_returned_result() — EC-8
-RED:     dry_run_never_calls_the_remover()
-RED:     run_transcript_gc_accepts_a_remover()
+RED:     test_async_remover_is_awaited_not_refused() — Agent.delete-shaped remover succeeds
+RED:     test_sync_remover_still_works() — backward compatibility
+RED:     test_registry_failure_is_reported_separately_from_file_deletion() — the scar: no collapsed boolean
+RED:     test_registry_removed_before_the_file_is_unlinked() — EC-3: a rejecting remover leaves the file PRESENT
+RED:     test_remover_that_never_settles_times_out_with_a_typed_error()
+RED:     test_remover_that_settles_after_the_timeout_does_not_mutate_the_returned_result() — EC-8
+RED:     test_dry_run_never_calls_the_remover()
+RED:     test_run_transcript_gc_accepts_a_remover()
 GREEN:   implement the helper and wire both call sites
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/agents vitest run tests/unit/gc-registry-remover.test.ts tests/unit/session-lifecycle.test.ts tests/unit/transcript-gc-protection.test.ts
@@ -932,17 +932,17 @@ nth=1  → ReachableTurnsExceededError(1, 0)               -- EC-14: names ZERO,
 
 #### TDD
 ```
-RED:     fork_skips_tool_result_records_when_counting_turns()
-RED:     fork_starts_after_the_last_compact_boundary()
-RED:     fork_skips_goal_continuation_markers()
-RED:     fork_returns_the_selected_turn_text()
-RED:     nth_beyond_reachable_turns_raises_a_typed_error_naming_the_count()
-RED:     transcript_without_a_boundary_behaves_as_before() — regression
-RED:     previews_list_exactly_the_reachable_turns_in_order() — readUserTurnPreviews, same predicate
-RED:     previews_and_fork_agree_on_which_turn_is_nth() — the two share one predicate, asserted
+RED:     test_fork_skips_tool_result_records_when_counting_turns()
+RED:     test_fork_starts_after_the_last_compact_boundary()
+RED:     test_fork_skips_goal_continuation_markers()
+RED:     test_fork_returns_the_selected_turn_text()
+RED:     test_nth_beyond_reachable_turns_raises_a_typed_error_naming_the_count()
+RED:     test_transcript_without_a_boundary_behaves_as_before() — regression
+RED:     test_previews_list_exactly_the_reachable_turns_in_order() — readUserTurnPreviews, same predicate
+RED:     test_previews_and_fork_agree_on_which_turn_is_nth() — the two share one predicate, asserted
 RED:     nth_below_one_raises_InvalidTurnOrdinalError_not_the_exceeded_error() — EC-5
 RED:     counting_starts_after_the_LAST_boundary_when_several_are_present() — EC-14
-RED:     boundary_as_the_final_record_names_zero_reachable_turns() — EC-14
+RED:     test_boundary_as_the_final_record_names_zero_reachable_turns() — EC-14
 GREEN:   implement the three corrections
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/agents vitest run tests/unit/session-fork.test.ts
@@ -1004,11 +1004,11 @@ The exported permission check does not refuse the directory mode the framework's
 
 #### TDD
 ```
-RED:     the_check_accepts_a_home_created_by_this_framework() — fails today (0775 vs & 0o022)
-RED:     a_world_writable_home_is_still_refused() — the guarantee that must not be lost
-RED:     pre_existing_wrong_mode_is_repaired_or_named() — only when tightening
-RED:     a_symlinked_home_is_checked_on_its_target_not_on_the_link() — EC-15
-RED:     an_absent_home_is_not_reported_as_an_insecure_home() — EC-16, first run on a clean machine
+RED:     test_the_check_accepts_a_home_created_by_this_framework() — fails today (0775 vs & 0o022)
+RED:     test_a_world_writable_home_is_still_refused() — the guarantee that must not be lost
+RED:     test_pre_existing_wrong_mode_is_repaired_or_named() — only when tightening
+RED:     test_a_symlinked_home_is_checked_on_its_target_not_on_the_link() — EC-15
+RED:     test_an_absent_home_is_not_reported_as_an_insecure_home() — EC-16, first run on a clean machine
 GREEN:   implement the chosen side
 REFACTOR: None expected
 VERIFY:  cd ../theokit-sdk && pnpm --filter @theokit/sdk vitest run tests/credential-store-modes.test.ts
@@ -1068,9 +1068,9 @@ A message whose text contains `compact_boundary` does not silently truncate the 
 
 #### TDD
 ```
-RED:     a_message_containing_the_marker_text_does_not_truncate_the_read()
-RED:     a_real_marker_record_still_truncates()
-RED:     absent_marker_reads_the_whole_tail() — regression
+RED:     test_a_message_containing_the_marker_text_does_not_truncate_the_read()
+RED:     test_a_real_marker_record_still_truncates()
+RED:     test_absent_marker_reads_the_whole_tail() — regression
 GREEN:   structural match
 REFACTOR: None expected
 VERIFY:  cd ../theokit-sdk && pnpm --filter @theokit/sdk vitest run tests/transcript-tail-marker.test.ts
@@ -1144,11 +1144,11 @@ found=0, previousRoot=~/.theokit, THEOKIT_HOME=/tmp/tk, 3 projects under the old
 
 #### TDD
 ```
-RED:     hint_is_undefined_when_sessions_were_found()
-RED:     hint_is_undefined_when_the_env_var_is_unset_or_equal()
-RED:     hint_is_undefined_when_the_previous_root_is_unreadable()
-RED:     hint_is_undefined_when_the_previous_root_holds_no_projects()
-RED:     hint_names_the_project_count_and_both_roots()
+RED:     test_hint_is_undefined_when_sessions_were_found()
+RED:     test_hint_is_undefined_when_the_env_var_is_unset_or_equal()
+RED:     test_hint_is_undefined_when_the_previous_root_is_unreadable()
+RED:     test_hint_is_undefined_when_the_previous_root_holds_no_projects()
+RED:     test_hint_names_the_project_count_and_both_roots()
 GREEN:   implement
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/agents vitest run tests/unit/transcript-root-hint.test.ts
@@ -1223,10 +1223,10 @@ ledger.byThread('t-1')   → both pending items on that thread, still distinct
 
 #### TDD
 ```
-RED:     a_payload_round_trips_on_a_pending_item()
-RED:     two_questions_on_one_thread_stay_distinct_items()
-RED:     a_repeated_id_replaces_rather_than_duplicating_and_keeps_the_latest_payload() — EC-20
-RED:     existing_call_sites_compile_without_a_type_argument() — expectTypeOf, per rules/type-safety.md
+RED:     test_a_payload_round_trips_on_a_pending_item()
+RED:     test_two_questions_on_one_thread_stay_distinct_items()
+RED:     test_a_repeated_id_replaces_rather_than_duplicating_and_keeps_the_latest_payload() — EC-20
+RED:     test_existing_call_sites_compile_without_a_type_argument() — expectTypeOf, per rules/type-safety.md
 GREEN:   implement the widening
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/agents vitest run tests/unit/pending-ledger-payload.test.ts
@@ -1311,9 +1311,9 @@ toolPresentation({ run_shell: { header: (i, a) => a ? 'Executando…' : 'Executa
 
 #### TDD
 ```
-RED:     defaults_cover_every_shipped_tool_name()
-RED:     unknown_tool_falls_back_to_a_generic_header()
-RED:     a_partial_override_keeps_the_other_defaults()
+RED:     test_defaults_cover_every_shipped_tool_name()
+RED:     test_unknown_tool_falls_back_to_a_generic_header()
+RED:     test_a_partial_override_keeps_the_other_defaults()
 GREEN:   implement the maps
 REFACTOR: None expected
 VERIFY:  cd ../theokit-tui && pnpm vitest run src/tool-header-map.test.ts
@@ -1400,13 +1400,13 @@ budget=100, 3 encoded dirs, 1 resolves directly, 1 found after 40 ops, 1 needs 8
 
 #### TDD
 ```
-RED:     a_directly_resolvable_project_is_alive_without_search()
-RED:     a_moved_project_is_found_within_budget_and_is_alive()
-RED:     budget_exhaustion_yields_undetermined_never_dead()
-RED:     an_unreadable_directory_is_undetermined_with_a_reason()
-RED:     total_fs_operations_never_exceed_the_budget() — the scale-independent property
-RED:     a_symlink_cycle_terminates_within_budget_and_yields_undetermined() — EC-9
-RED:     enumeration_failure_yields_undetermined_for_every_project_with_a_typed_error() — EC-10
+RED:     test_a_directly_resolvable_project_is_alive_without_search()
+RED:     test_a_moved_project_is_found_within_budget_and_is_alive()
+RED:     test_budget_exhaustion_yields_undetermined_never_dead()
+RED:     test_an_unreadable_directory_is_undetermined_with_a_reason()
+RED:     test_total_fs_operations_never_exceed_the_budget() — the scale-independent property
+RED:     test_a_symlink_cycle_terminates_within_budget_and_yields_undetermined() — EC-9
+RED:     test_enumeration_failure_yields_undetermined_for_every_project_with_a_typed_error() — EC-10
 GREEN:   implement the classifier
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/agents vitest run tests/unit/liveness-oracle.test.ts
@@ -1491,18 +1491,18 @@ rawArgs:  '"src/a.ts"'
 
 #### TDD
 ```
-RED:     numbered_placeholders_substitute_positionally()
-RED:     quoted_arguments_count_as_one()
-RED:     a_missing_placeholder_warns_and_substitutes_empty_never_leaks_the_literal()
-RED:     shell_segments_call_the_injected_shell_and_never_spawn_directly()
-RED:     inlined_file_content_is_inert() — EC-4: a fixture containing !`echo pwned` yields that TEXT
+RED:     test_numbered_placeholders_substitute_positionally()
+RED:     test_quoted_arguments_count_as_one()
+RED:     test_a_missing_placeholder_warns_and_substitutes_empty_never_leaks_the_literal()
+RED:     test_shell_segments_call_the_injected_shell_and_never_spawn_directly()
+RED:     test_inlined_file_content_is_inert() — EC-4: a fixture containing !`echo pwned` yields that TEXT
                                           and the injected shell is never called for it
-RED:     shell_output_is_not_rescanned_for_placeholders_or_references() — EC-4, the other half
-RED:     a_missing_file_reference_warns_and_substitutes_empty() — EC-11, no literal @name leak
-RED:     a_file_of_exactly_the_cap_is_inlined_whole() — EC-12 boundary
-RED:     one_byte_over_the_cap_is_truncated_with_a_warning() — EC-12 boundary
-RED:     a_failed_shell_segment_substitutes_its_output_and_warns_never_silence() — EC-13
-RED:     hints_lists_the_declared_placeholders()
+RED:     test_shell_output_is_not_rescanned_for_placeholders_or_references() — EC-4, the other half
+RED:     test_a_missing_file_reference_warns_and_substitutes_empty() — EC-11, no literal @name leak
+RED:     test_a_file_of_exactly_the_cap_is_inlined_whole() — EC-12 boundary
+RED:     test_one_byte_over_the_cap_is_truncated_with_a_warning() — EC-12 boundary
+RED:     test_a_failed_shell_segment_substitutes_its_output_and_warns_never_silence() — EC-13
+RED:     test_hints_lists_the_declared_placeholders()
 GREEN:   implement
 REFACTOR: None expected
 VERIFY:  pnpm --filter @theokit/agents vitest run tests/unit/command-template.test.ts
@@ -1577,12 +1577,12 @@ windowAround(total=10, selected=5, size=5, 'centred') → { start: 3, end: 8, hi
 
 #### TDD
 ```
-RED:     default_anchor_is_trailing_and_unchanged() — regression
-RED:     centred_anchor_centres_in_the_middle_of_a_long_list()
-RED:     centred_anchor_clamps_at_the_head_and_at_the_tail()
-RED:     window_larger_than_the_list_hides_nothing()
-RED:     size_zero_and_selection_out_of_range_clamp_without_negative_indices() — EC-17
-RED:     an_unbound_capability_is_omitted_from_the_help_list()
+RED:     test_default_anchor_is_trailing_and_unchanged() — regression
+RED:     test_centred_anchor_centres_in_the_middle_of_a_long_list()
+RED:     test_centred_anchor_clamps_at_the_head_and_at_the_tail()
+RED:     test_window_larger_than_the_list_hides_nothing()
+RED:     test_size_zero_and_selection_out_of_range_clamp_without_negative_indices() — EC-17
+RED:     test_an_unbound_capability_is_omitted_from_the_help_list()
 GREEN:   implement both
 REFACTOR: None expected
 VERIFY:  cd ../theokit-tui && pnpm vitest run src/select-list-model.test.ts src/keyboard-help-model.test.ts
@@ -1671,13 +1671,13 @@ ApprovalPosture (exported type, bridge/approval-posture.ts)
 
 #### TDD
 ```
-RED:     gate_flags_a_type_whose_enforcement_is_unexported() — fixture reproducing ApprovalPosture
-RED:     gate_ignores_a_pure_type_module()
-RED:     gate_honours_an_unexpired_allowlist_entry()
-RED:     gate_refires_on_an_expired_allowlist_entry()
-RED:     an_absent_allowlist_is_an_empty_allowlist_not_a_crash() — EC-18
-RED:     a_malformed_sunset_is_reported_and_the_entry_is_ignored() — EC-18
-RED:     gate_exits_zero_in_warn_mode_and_nonzero_after_sunset()
+RED:     test_gate_flags_a_type_whose_enforcement_is_unexported() — fixture reproducing ApprovalPosture
+RED:     test_gate_ignores_a_pure_type_module()
+RED:     test_gate_honours_an_unexpired_allowlist_entry()
+RED:     test_gate_refires_on_an_expired_allowlist_entry()
+RED:     test_an_absent_allowlist_is_an_empty_allowlist_not_a_crash() — EC-18
+RED:     test_a_malformed_sunset_is_reported_and_the_entry_is_ignored() — EC-18
+RED:     test_gate_exits_zero_in_warn_mode_and_nonzero_after_sunset()
 GREEN:   implement the gate
 REFACTOR: share declaredExports() with T0.1 rather than re-parsing
 VERIFY:  pnpm vitest run tests/unit/surface-invention-gate.test.ts && node scripts/check-invention-reachability.mjs
@@ -1745,9 +1745,9 @@ CLAUDE.md — the Ecosystem table is completed or explicitly demoted
 
 #### TDD
 ```
-RED:     every_sdk_subpath_has_a_written_decision() — fails today (~15 undecided)
-RED:     every_forwarded_subpath_resolves_at_runtime() — the m67 lesson as a test
-RED:     boundary_comment_matches_the_decision_registry() — no claim without backing
+RED:     test_every_sdk_subpath_has_a_written_decision() — fails today (~15 undecided)
+RED:     test_every_forwarded_subpath_resolves_at_runtime() — the m67 lesson as a test
+RED:     test_boundary_comment_matches_the_decision_registry() — no claim without backing
 GREEN:   decide, forward, and rewrite
 REFACTOR: None expected
 VERIFY:  pnpm check:surface-parity && pnpm vitest run tests/integration/crossval-gaps.test.ts
@@ -1810,10 +1810,10 @@ package.json — wire into check:all
 
 #### TDD
 ```
-RED:     entry_touching_a_registered_gap_file_without_closes_is_flagged()
-RED:     entry_with_closes_passes()
-RED:     released_sections_are_never_read()
-RED:     an_absent_unreleased_section_is_not_a_violation() — EC-19, a repo mid-release
+RED:     test_entry_touching_a_registered_gap_file_without_closes_is_flagged()
+RED:     test_entry_with_closes_passes()
+RED:     test_released_sections_are_never_read()
+RED:     test_an_absent_unreleased_section_is_not_a_violation() — EC-19, a repo mid-release
 GREEN:   implement
 REFACTOR: None expected
 VERIFY:  pnpm vitest run tests/unit/changelog-closes.test.ts
@@ -1875,7 +1875,13 @@ Every floor this phase depends on resolves on the npm registry.
 
 #### TDD
 ```
-(verification task — the assertion is the per-package expected/observed pair, recorded in the implementation log)
+RED:     test_expected_version_is_served_by_the_registry() — GIVEN the version each package
+         declares in its own package.json, WHEN `npm view <pkg>@<version> version` runs, THEN it
+         returns that exact version. Red while any of the three is unpublished, which is the
+         state this checkpoint exists to detect.
+GREEN:   the publish itself is the human-gated release action (Unbreakable Rule 4); this task
+         only VERIFIES it and records the expected/observed pair per package.
+REFACTOR: None expected
 VERIFY:  for P in @theokit/agents @theokit/tui @theokit/sdk; do
            EXPECTED=$(node -p "require('./<path>/package.json').version")
            test -n "$(npm view "$P@$EXPECTED" version 2>/dev/null)" || { echo "BLOCKED: $P@$EXPECTED not on the registry"; exit 1; }
@@ -1934,8 +1940,8 @@ TheoCode: packages/tui/src/consent/approval-mode.test.ts — keep asserting B-00
 
 #### TDD
 ```
-RED:     b006_holds_through_the_framework_predicate() — full-auto + unenforced ⇒ no auto-approval
-RED:     headless_and_tui_paths_agree() — both now call one implementation
+RED:     test_b006_holds_through_the_framework_predicate() — full-auto + unenforced ⇒ no auto-approval
+RED:     test_headless_and_tui_paths_agree() — both now call one implementation
 GREEN:   import and delete
 REFACTOR: None expected
 VERIFY:  cd TheoCode && npm test
@@ -2005,13 +2011,13 @@ TheoCode: BACKLOG.md — close U-6 with evidence
 
 #### TDD
 ```
-RED:     framework_image_tool_returns_the_same_content_block()
-RED:     tool_headers_keep_the_products_wording_through_overrides()
-RED:     empty_writable_roots_is_handled_as_empty_not_as_present() — the null → [] inversion
-RED:     framework_template_expander_matches_the_local_one_on_the_products_fixtures()
+RED:     test_framework_image_tool_returns_the_same_content_block()
+RED:     test_tool_headers_keep_the_products_wording_through_overrides()
+RED:     test_empty_writable_roots_is_handled_as_empty_not_as_present() — the null → [] inversion
+RED:     test_framework_template_expander_matches_the_local_one_on_the_products_fixtures()
 RED:     subagent_names_come_from_listSubagentNames_and_the_second_reader_is_gone()
-RED:     pending_approvals_state_round_trips_through_the_ledger_payload()
-RED:     backtrack_overlay_centres_on_the_selected_turn_via_the_framework_window()
+RED:     test_pending_approvals_state_round_trips_through_the_ledger_payload()
+RED:     test_backtrack_overlay_centres_on_the_selected_turn_via_the_framework_window()
 GREEN:   switch and delete
 REFACTOR: None expected
 VERIFY:  cd TheoCode && npm test
@@ -2076,11 +2082,11 @@ TheoCode: BACKLOG.md — close U-1 and U-10's closed half
 
 #### TDD
 ```
-RED:     framework_oracle_classifies_the_real_tree_identically() — recorded evidence, real machine
-RED:     agent_delete_is_accepted_as_the_remover()
-RED:     undetermined_still_refuses_deletion()
-RED:     backtrack_lands_on_the_same_turn_as_the_local_window_did()
-RED:     registry_failure_is_shown_separately_in_the_ui()
+RED:     test_framework_oracle_classifies_the_real_tree_identically() — recorded evidence, real machine
+RED:     test_agent_delete_is_accepted_as_the_remover()
+RED:     test_undetermined_still_refuses_deletion()
+RED:     test_backtrack_lands_on_the_same_turn_as_the_local_window_did()
+RED:     test_registry_failure_is_shown_separately_in_the_ui()
 GREEN:   delete and delegate
 REFACTOR: None expected
 VERIFY:  cd TheoCode && npm test
@@ -2139,7 +2145,7 @@ cross-validation-output/scoring/dimension_scores.md — the re-score with arithm
 
 #### TDD
 ```
-RED:     all_seventeen_gap_assertions_present_and_green()
+RED:     test_all_seventeen_gap_assertions_present_and_green()
 GREEN:   (the assertions are green because Phases 0-5 closed the gaps)
 REFACTOR: None expected
 VERIFY:  pnpm vitest run tests/integration/crossval-gaps.test.ts
