@@ -326,6 +326,23 @@ Consumer files touched in Phase 5 beyond those tabled above: `TheoCode/packages/
 >
 > **Q3 — proposal: keep the mask at `0o022`; fix the CREATORS instead.** The question's premise was half wrong, and the wrong half changes the fix. `credential-store.ts:257-258` creates the credential home with `mkdirSync({mode: 0o700})` **and** an unconditional `chmodSync(dir, 0o700)`; measured on this machine, `~/.theokit` is `700`, not 775. But five other creators reach the same tree with a bare `mkdirSync(..., {recursive: true})` and no mode: `session-pointer.ts:94`, `project-index.ts:73`, `jsonl.ts:127`, `task/store.ts:166`, `lance-index.ts:126`. The framework already wrote this diagnosis itself at `trust-store.ts:157-161` — *"the mode argument is a NO-OP on a directory that already exists, and this one is shared with the SDK's transcript root — whoever creates it first sets the permissions… Found by a consumer's test failing during migration."* So the check is right and the layout disagrees with itself. **T2.4 is re-scoped: route the remaining creators through the existing `ensureSecureDir` helper** — the fix the framework applied to the trust store and left unfinished. Adopting the consumer's world-write narrowing would relax a security gate to hide an inconsistency, which is why it is not proposed here.
 >
+> **Q3 — correction to the proposal above, measured while implementing T2.4 (2026-08-16).** The
+> proposal named five creators as reaching "the same tree". Two of them do not, and the difference
+> decides the fix:
+>
+> - `session-pointer.ts:94`, `project-index.ts:73` and `jsonl.ts:127` build under `transcriptRoot()`
+>   — the shared `~/.theokit`. All three were routed through `ensureSecureDir` (the first two) or
+>   given a creation mode (the third, on the per-append hot path where a stat+chmod per write is not
+>   affordable). This is the part of the proposal that held.
+> - `task/store.ts:166` takes its directory from the CALLER and need not be under the shared root at
+>   all, so hardening it here would be a guess about someone else's layout.
+> - `lance-index.ts:126` builds `join(opts.cwd, '.theokit', 'memory', 'lance')` — the **project's**
+>   `.theokit`, not the home one. `assertSecureModes` never inspects it, and forcing `0700` on a
+>   directory inside a checked-out repository would break a shared workspace to satisfy a check that
+>   does not apply there. Same for `migrate-sqlite-to-lance.ts:162`.
+>
+> The two `.theokit` trees having the same name is exactly why the proposal conflated them.
+
 > **Q2 — proposal: no.** `encodeProjectDir` stays lossy and T3.2 proceeds as D4 planned. Making it reversible is a breaking change to an on-disk layout with live transcripts in the field; coupling it to a plan about reachability would put two unrelated risks in one release. Re-open with a migration plan of its own.
 >
 > **Q1, Q4 and Q5 remain open** — Q1 and Q4 are owner-scope decisions this plan deliberately excludes (D7; the two-shapes evidence), and Q5 is settled inside T2.5's caller audit.
