@@ -118,6 +118,23 @@ Green and unblocked:
 - File-size budget (G6, code lines excluding blanks/comments) — every file changed by this plan is
   under 500.
 
+Full suites, run to completion after every change (the earlier numbers were per-package):
+
+| Repo | Result |
+|---|---|
+| `theokit` | 822 test files, 6402 passed, 21 skipped, **0 failed** |
+| `theokit-tui` | 137 files, 1451 passed, 1 skipped |
+| `theokit-sdk` | 635 files, 4373 passed, 1 expected-fail, 42 skipped |
+
+That run is what caught the SECOND defect of this cycle, and nothing smaller would have:
+`scripts-are-importable.test.ts` (B-102) requires every build script to be importable without
+executing, and both new gates called `process.exit(0)` at module scope — importing either killed the
+test process. The convention is not bookkeeping: a script whose body runs on import is untestable by
+construction, and `theokit#200` shipped a publish guard that accused six packages falsely because the
+helper that got it wrong could not be tested alone. Both bodies now sit behind a direct-invocation
+guard, which is stricter than the sibling gates (they run on import and pass only because they happen
+not to exit). Commit `06ee38fd`.
+
 Pre-existing findings, recorded rather than fixed (neither file was touched by this plan; fixing
 another slice's export could break a consumer):
 
