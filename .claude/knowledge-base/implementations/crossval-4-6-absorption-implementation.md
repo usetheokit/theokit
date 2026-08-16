@@ -71,3 +71,22 @@ Pillar (c) — runtime metric — is **not applicable to any task in this plan**
 
 - **T2.4 and T3.2** proceed on the implementer's PROPOSED answers to Q3 and Q2 (plan § Unresolved Questions). Both are reversible and both are flagged for owner confirmation.
 - **Q1 and Q4** stay open and are out of scope by ADR D7 and by the two-shapes evidence.
+
+## Wiring deferrals (explicit, with the task that must close them)
+
+<!-- ADR-DEFER-WIRING-A: T0.1 — `declaredExportsOfPackage` and `rootSymbol` in
+scripts/lib/declared-exports.mjs have exactly one consumer today, tests/integration/crossval-gaps.test.ts,
+which check_wiring classifies as a test rather than a production caller. The second consumer is
+scheduled by the plan's own Dependency Graph: "Phase 0 blocks Phase 4 — T4.1's gate reuses the
+declared-export parser T0.1 builds." Adding a caller now would be a no-op call written to satisfy
+the metric, which SKILL.md § Anti-patterns names explicitly. `declaredExportsFromText` already
+passes pillar (a) because the package-level function calls it.
+
+CLOSES AT: T4.1, when scripts/check-invention-reachability.mjs imports both symbols. If T4.1 ends
+without importing them, they are dead code and must be removed rather than kept.
+
+NOT consolidated with scripts/check-surface-parity.mjs's own parser, despite the SEPA flagging it as
+a duplicate: that one answers a SUBPATH-scoped question (what does the SDK export at ./auth, and does
+the layer's entry re-export it) while this one answers a PACKAGE-scoped one. Merging them is the
+accidental-coupling case system-design-guardrails.md § G12 forbids — "code that LOOKS similar but
+represents DIFFERENT concepts: do NOT merge". -->
