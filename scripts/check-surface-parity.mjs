@@ -28,6 +28,8 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+
+import { DOORLESS_DECISIONS } from './lib/boundary-decisions.mjs'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -333,4 +335,24 @@ const applicable = Object.keys(AGENTS_MANIFEST.exports ?? {}).length - skipped.l
 console.log(
   `✓ surface parity: ${applicable - warnings.length}/${applicable} applicable subpath(s) decided; ` +
     `${warnings.length} in warn mode; ${skipped.length} have no SDK counterpart`,
+)
+
+// T4.2 — the other half of the same question, reported by the same gate.
+//
+// Everything above answers: of the subpaths BOTH packages publish under the same name, does the
+// layer forward what the SDK exports? Six subpaths. That is a real question and a small one, and
+// reporting only it let a reader conclude the boundary was covered — while 25 SDK subpaths had no
+// door here at all and no gate could see them, because a subpath with no door has no shared name to
+// compare against.
+//
+// The decisions and the measurement behind each live in `lib/boundary-decisions.mjs` and are
+// enforced by `tests/integration/boundary-doorless-subpaths.test.ts`. Summarising them HERE is what
+// makes this gate's output describe the whole boundary rather than the sixth of it that happens to
+// be mechanically comparable.
+const doorless = Object.entries(DOORLESS_DECISIONS)
+const forwarded = doorless.filter(([, d]) => d === 'forward').length
+console.log(
+  `  · doorless SDK subpaths: ${String(doorless.length)} decided ` +
+    `(${String(forwarded)} forward, ${String(doorless.length - forwarded)} out with a written ` +
+    `reason). See scripts/lib/boundary-decisions.mjs.`,
 )
