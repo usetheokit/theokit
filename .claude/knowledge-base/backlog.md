@@ -1150,3 +1150,34 @@ escolhido: o limiar nunca esteve errado, a medição estava.
   Fica registrado para quem vier: se aparecer intermitência neste arquivo, o primeiro candidato é
   algo reconstruindo `packages/theo/dist` durante o run, não o teste.
 
+
+---
+
+## Orçamento subdimensionado do `classifyProjects` degrada em silêncio (2026-08-16)
+
+**Onde:** `packages/agents/src/session/liveness-oracle.ts` · **Origem:** medição do pilar (c) da T3.2
+
+Medido na árvore real do operador: **13.624 diretórios de projeto, 2,51 operações por projeto,
+34.139 no total**. Com `budget: 200_000` o oráculo concorda com o do consumidor em **13.618 de
+13.624 (99,96%)** e nunca diz `dead` onde o outro discorda.
+
+Com `budget: 20_000` — número plausível para quem chuta — a concordância cai para **66,2%** e
+`framework_ops` bate exatamente o teto. Os 7.967 `undetermined` resultantes não são incerteza:
+são orçamento acabado.
+
+**O problema não é o número; é o silêncio.** A degradação é *segura* — nada é apagado, e cada
+verdict traz `reason: 'search budget exhausted'`. Mas nada no nível do sweep diz "eu parei cedo":
+quem chama recebe um `Map` completo, com todas as chaves presentes, e um GC que não apaga nada
+parece um GC que não tinha o que apagar. As duas situações são indistinguíveis para o chamador.
+
+**Regra de dimensionamento medida:** `budget >= 3 × número de projetos`.
+
+**Opções, sem prescrever:**
+- devolver, junto do `Map`, quantos projetos ficaram por falta de orçamento (muda a assinatura);
+- um `onBudgetExhausted?` opcional, chamado uma vez;
+- ou apenas documentar a regra de dimensionamento no JSDoc e aceitar o silêncio.
+
+A terceira é a mais barata e provavelmente suficiente — o dado que falta é se algum produto além
+do TheoCode chega a rodar um sweep multi-projeto. Não construir antes de saber (`G11`).
+
+**Evidência:** `.wiring-evidence.json` (raiz do repo) · commit do conserto `7fea1388`
