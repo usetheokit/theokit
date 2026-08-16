@@ -190,14 +190,23 @@ def _resolve_rule_file(filename: str, project_root: Path) -> Path | None:
         project_root / "rules" / filename,
         project_root / ".claude" / "rules" / filename,
         project_root / "knowledge-base" / filename,
+        # A project that installed the plan ecosystem under `.claude/` keeps its
+        # knowledge base there. `run_structural._find_plans_dir` already looks in
+        # `.claude/knowledge-base/plans`, so omitting it here made the resolver
+        # inconsistent with its own runner: a plan was found in a tree whose
+        # sibling files were then reported as fabricated. Measured 2026-08-16 —
+        # 3 citations across 3 plans in this repo were false positives.
+        project_root / ".claude" / "knowledge-base" / filename,
         project_root / filename,  # e.g. CHANGELOG.md, CLAUDE.md
     ]
     for c in candidates:
         if c.exists() and c.is_file():
             return c
-    # Last-resort: shallow search inside knowledge-base/ (handles ADRs etc.).
-    kb = project_root / "knowledge-base"
-    if kb.exists():
+    # Last-resort: shallow search inside the knowledge base (handles ADRs, reviews,
+    # audits etc.). Both layouts are searched for the same reason as above.
+    for kb in (project_root / "knowledge-base", project_root / ".claude" / "knowledge-base"):
+        if not kb.exists():
+            continue
         try:
             for p in kb.rglob(filename):
                 if p.is_file():
