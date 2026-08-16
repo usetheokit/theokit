@@ -53,12 +53,20 @@ export class SessionRegistryRemoverError extends TheokitAgentError {
   override readonly name = 'SessionRegistryRemoverError'
   readonly sessionId: string
 
-  constructor(sessionId: string) {
+  /**
+   * T2.2 — this used to mean "you passed a Promise to a synchronous seam". It now means the only
+   * thing left that a caller cannot fix by awaiting: the registry did not answer in time.
+   *
+   * The old message told callers to await the removal themselves and pass a boolean. That advice
+   * existed because the seam was sync; the seam now awaits, so the advice is gone rather than
+   * preserved as a misleading string.
+   */
+  constructor(sessionId: string, timeoutMs: number) {
     super(
-      `refusing to delete session ${sessionId}: removeFromRegistry returned a Promise, and this ` +
-        `function is synchronous — its result would be reported as removed before it happened. ` +
-        `Await your registry removal first, then pass its outcome: ` +
-        `const removed = await Agent.delete(id).then(() => true); deleteSession(id, { removeFromRegistry: () => removed }).`,
+      `session ${sessionId}: removeFromRegistry did not settle within ${timeoutMs}ms. The transcript ` +
+        `was NOT deleted — a registry entry pointing at a missing transcript is repaired by nothing, ` +
+        `while an orphan transcript is collected by the next sweep. Retry once the registry answers, ` +
+        `or raise registryTimeoutMs if the wait is legitimate.`,
     )
     this.sessionId = sessionId
   }
@@ -190,6 +198,14 @@ export interface DeleteSessionResult {
   readonly registryRemoved: boolean
   /** Whether the transcript file was removed. */
   readonly transcriptRemoved: boolean
+  /**
+   * Why the registry removal failed, when it did.
+   *
+   * Kept SEPARATE from `registryRemoved` on purpose: collapsing the two outcomes into one boolean is
+   * exactly how the original silent success hid. A caller that only checks `registryRemoved` sees
+   * `false` and can still surface the reason.
+   */
+  readonly registryError?: unknown
 }
 
 export interface DeleteSessionOptions {
@@ -197,8 +213,20 @@ export interface DeleteSessionOptions {
   readonly root?: string
   /** Delete even when protected. The refusal is the default because the damage is unrecoverable. */
   readonly force?: boolean
-  /** Remove the registry entry too. Injected (DIP) — the registry is the runtime's, not ours. */
-  readonly removeFromRegistry?: (sessionId: string) => boolean
+  /**
+   * Remove the registry entry too. Injected (DIP) — the registry is the runtime's, not ours.
+   *
+   * T2.2 — MAY be async. `Agent.delete(id): Promise<void>` is the only agent registry in this
+   * ecosystem, so a sync-only seam could be satisfied honestly by nobody. Returning `false` means
+   * "no entry to remove" and is not a failure; THROWING (or rejecting) is, and it stops the delete
+   * with the transcript still on disk.
+   */
+  readonly removeFromRegistry?: (sessionId: string) => unknown
+  /**
+   * Ceiling on the injected remover. A registry that never answers must not hang a sweep; the
+   * timeout surfaces as `registryError` and the transcript is left alone.
+   */
+  readonly registryTimeoutMs?: number
 }
 
 /**
@@ -210,10 +238,40 @@ export interface DeleteSessionOptions {
  *
  * @throws {SessionInUseError} when the session is protected and `force` is not set.
  */
-export function deleteSession(
+
+/**
+ * Bound an injected remover so a registry that never answers cannot hang a sweep.
+ *
+ * The race is deliberate and one-directional: whichever settles first decides, and a remover that
+ * settles AFTER the timeout can no longer affect the outcome, because the result object is already
+ * built and returned (EC-8). Reporting "not removed" for something that later succeeded is wrong in
+ * the safe direction; rewriting a returned result would not be.
+ */
+async function withRegistryTimeout(
+  outcome: unknown,
+  sessionId: string,
+  timeoutMs: number | undefined,
+): Promise<unknown> {
+  if (!isThenable(outcome) || timeoutMs === undefined) return outcome
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      outcome,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new SessionRegistryRemoverError(sessionId, timeoutMs))
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+export async function deleteSession(
   sessionId: string,
   options: DeleteSessionOptions,
-): DeleteSessionResult {
+): Promise<DeleteSessionResult> {
   const root = options.root ?? transcriptRoot()
   if (options.force !== true) {
     const reason = protectedTranscripts(options.cwd, root).get(sessionId)
@@ -232,9 +290,32 @@ export function deleteSession(
   // Refusing beats guessing: the transcript is still on disk, so the caller retries after awaiting
   // its own removal. Deleting the file and reporting a registry state that never happened is the one
   // outcome that cannot be undone.
-  const registryRemoved = options.removeFromRegistry?.(sessionId) ?? false
-  if (isThenable(registryRemoved)) {
-    throw new SessionRegistryRemoverError(sessionId)
+  // ORDER IS THE INVARIANT (EC-3): registry first, unlink second.
+  //
+  // A registry failure after the unlink leaves an entry pointing at a transcript that is gone, and
+  // nothing repairs it — GC works FROM transcripts, so it never sees the orphan entry again. The
+  // reverse leaves an orphan FILE, which the next sweep collects. One failure mode is recoverable
+  // and the other is not, so this is not a preference.
+  let registryRemoved = false
+  let registryError: unknown
+  if (options.removeFromRegistry !== undefined) {
+    try {
+      // Awaiting is what the old refusal was reaching for. It rejected a thenable because the code
+      // before it checked TRUTHINESS and reported a removal that had not happened; completion is
+      // what fixes that, and completion is `await`.
+      const outcome = await withRegistryTimeout(
+        options.removeFromRegistry(sessionId),
+        sessionId,
+        options.registryTimeoutMs,
+      )
+      // `false` means "no entry to remove" — an ordinary outcome, not a failure. `void` (the shape
+      // `Agent.delete` has) means it completed.
+      registryRemoved = outcome !== false
+    } catch (error) {
+      // The transcript is untouched, so the caller can retry after fixing the registry. Deleting it
+      // here would trade a retryable state for an unrepairable one.
+      return { registryRemoved: false, transcriptRemoved: false, registryError: error }
+    }
   }
 
   let transcriptRemoved = false
@@ -245,7 +326,7 @@ export function deleteSession(
     // Absent is the desired end state, so a missing file is not a failure — it is just `false`.
   }
 
-  return { registryRemoved, transcriptRemoved }
+  return { registryRemoved, transcriptRemoved, registryError }
 }
 
 /**

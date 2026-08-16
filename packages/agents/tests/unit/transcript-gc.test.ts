@@ -64,7 +64,7 @@ describe('INVARIANT 1 — a floor violation is REFUSED, never silently normalise
     expect(() => plan(keepLast, maxAgeDays)).toThrow(GCFloorError)
   })
 
-  it('test_the_refusal_names_the_field_and_the_floor', () => {
+  it('test_the_refusal_names_the_field_and_the_floor', async () => {
     // A refusal that does not say which knob is wrong sends the operator guessing between two.
     try {
       plan(0, 30)
@@ -76,7 +76,7 @@ describe('INVARIANT 1 — a floor violation is REFUSED, never silently normalise
     }
   })
 
-  it('test_a_value_AT_the_floor_is_accepted', () => {
+  it('test_a_value_AT_the_floor_is_accepted', async () => {
     // Counter-proof. A guard that refuses the boundary as well would be off by one, and every test
     // above would still pass.
     expect(() => plan(1, 1)).not.toThrow()
@@ -94,7 +94,7 @@ describe('INVARIANT 2 — no mtime means NEVER collect', () => {
   // coverage. The linter caught it. A vacuous test over an unreachable branch is worse than no test:
   // it reports the invariant as proven.
 
-  it('test_a_candidate_never_carries_an_invalid_date', () => {
+  it('test_a_candidate_never_carries_an_invalid_date', async () => {
     // The structural half of the same invariant: if an unreadable mtime ever became `Invalid Date`,
     // every age comparison against it is `false`, and the file would be collected by accident.
     writeTranscriptFile('a', 90)
@@ -131,7 +131,7 @@ describe('INVARIANT 4 — the apply phase re-checks between plan and apply', () 
 
     await persistSessionId(CWD, 'doomed', root) // the window: it became live after planning
 
-    const result = runTranscriptGC(computed, { apply: true })
+    const result = await runTranscriptGC(computed, { apply: true })
     expect(result.removed).not.toContain('doomed')
     expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(true)
   })
@@ -144,7 +144,7 @@ describe('INVARIANT 4 — the apply phase re-checks between plan and apply', () 
 
     const lease = await acquireSessionWriter(path)
     try {
-      const result = runTranscriptGC(computed, { apply: true })
+      const result = await runTranscriptGC(computed, { apply: true })
       expect(result.removed).not.toContain('doomed')
       expect(existsSync(path)).toBe(true)
     } finally {
@@ -152,23 +152,23 @@ describe('INVARIANT 4 — the apply phase re-checks between plan and apply', () 
     }
   })
 
-  it('test_the_backstop_does_not_refuse_everything', () => {
+  it('test_the_backstop_does_not_refuse_everything', async () => {
     // Counter-proof for the two above: a backstop that always refused would pass both and collect
     // nothing, which is a broken GC that looks like a safe one.
     writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
-    const result = runTranscriptGC(plan(1, 30), { apply: true })
+    const result = await runTranscriptGC(plan(1, 30), { apply: true })
     expect(result.removed).toContain('doomed')
     expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(false)
   })
 })
 
 describe('dry run is the default shape', () => {
-  it('test_without_apply_nothing_is_removed_and_the_plan_is_reported', () => {
+  it('test_without_apply_nothing_is_removed_and_the_plan_is_reported', async () => {
     writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
     const computed = plan(1, 30)
-    const result = runTranscriptGC(computed, { apply: false })
+    const result = await runTranscriptGC(computed, { apply: false })
     expect(result.dryRun).toBe(true)
     expect(result.removed).toEqual(['doomed'])
     expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(true)
@@ -176,7 +176,7 @@ describe('dry run is the default shape', () => {
 })
 
 describe('retention policy — keepLast and maxAgeDays together', () => {
-  it('test_the_newest_keepLast_survive_regardless_of_age', () => {
+  it('test_the_newest_keepLast_survive_regardless_of_age', async () => {
     writeTranscriptFile('old-1', 400)
     writeTranscriptFile('old-2', 300)
     writeTranscriptFile('old-3', 200)
@@ -187,7 +187,7 @@ describe('retention policy — keepLast and maxAgeDays together', () => {
     expect(result.candidates.map((c) => c.id)).toEqual(['old-1'])
   })
 
-  it('test_a_session_younger_than_maxAgeDays_is_kept_even_beyond_keepLast', () => {
+  it('test_a_session_younger_than_maxAgeDays_is_kept_even_beyond_keepLast', async () => {
     // Both conditions must hold to collect. Age alone would delete a project's whole recent history
     // the moment it exceeded `keepLast`.
     writeTranscriptFile('a', 1)
@@ -198,19 +198,19 @@ describe('retention policy — keepLast and maxAgeDays together', () => {
 })
 
 describe('errors accumulate per candidate, and ENOENT is success', () => {
-  it('test_a_file_already_gone_counts_as_removed_not_as_an_error', () => {
+  it('test_a_file_already_gone_counts_as_removed_not_as_an_error', async () => {
     // Absent is the desired end state. Reporting it as a failure would make a second run of an
     // interrupted GC look broken.
     writeTranscriptFile('doomed', 400)
     writeTranscriptFile('recent', 0)
     const computed = plan(1, 30)
     rmSync(transcriptPath(root, CWD, 'doomed')) // vanished between plan and apply
-    const result = runTranscriptGC(computed, { apply: true })
+    const result = await runTranscriptGC(computed, { apply: true })
     expect(result.errors).toEqual([])
     expect(result.removed).toContain('doomed')
   })
 
-  it('test_one_failing_candidate_does_not_abort_the_others', () => {
+  it('test_one_failing_candidate_does_not_abort_the_others', async () => {
     // Fail-open per candidate: a single undeletable file must not leave the rest of the disk
     // uncollected, and the operator must still learn which one failed.
     writeTranscriptFile('doomed-a', 400)
@@ -223,7 +223,7 @@ describe('errors accumulate per candidate, and ENOENT is success', () => {
     mkdirSync(blocked)
     writeFileSync(join(blocked, 'inside'), 'x', 'utf8')
 
-    const result = runTranscriptGC(computed, { apply: true })
+    const result = await runTranscriptGC(computed, { apply: true })
     expect(result.removed).toContain('doomed-b')
     expect(result.errors.map((e) => e.id)).toContain('doomed-a')
   })
@@ -244,7 +244,7 @@ describe('the concurrency proof the milestone named as its own mitigation', () =
 
     const lease = await acquireSessionWriter(path)
     try {
-      const result = runTranscriptGC(computed, { apply: true })
+      const result = await runTranscriptGC(computed, { apply: true })
       expect(result.removed, 'a leased transcript was collected').not.toContain('doomed')
       expect(existsSync(path), 'the file of a live session was deleted').toBe(true)
       // And it is not merely skipped-and-forgotten: nothing claims success over it.
@@ -254,13 +254,13 @@ describe('the concurrency proof the milestone named as its own mitigation', () =
     }
   })
 
-  it('test_a_dry_run_never_touches_disk_even_with_apply_absent_and_candidates_present', () => {
+  it('test_a_dry_run_never_touches_disk_even_with_apply_absent_and_candidates_present', async () => {
     // The other half of "apply is never the default": absence of the flag must mean absence of
     // effect, not a smaller effect.
     const a = writeTranscriptFile('old-a', 400)
     const b = writeTranscriptFile('old-b', 400)
     writeTranscriptFile('recent', 0)
-    runTranscriptGC(plan(1, 30), { apply: false })
+    await runTranscriptGC(plan(1, 30), { apply: false })
     expect(existsSync(a)).toBe(true)
     expect(existsSync(b)).toBe(true)
   })

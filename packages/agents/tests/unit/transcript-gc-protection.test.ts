@@ -49,7 +49,7 @@ afterEach(() => {
 })
 
 describe('transcript GC — injected protection', () => {
-  it('default_behaviour_unchanged_without_injection', () => {
+  it('default_behaviour_unchanged_without_injection', async () => {
     writeOldSession('old-1', 90)
     writeOldSession('old-2', 90)
 
@@ -59,7 +59,7 @@ describe('transcript GC — injected protection', () => {
     expect(plan.candidates.length).toBeGreaterThan(0)
   })
 
-  it('injected_ids_are_added_not_substituted', () => {
+  it('injected_ids_are_added_not_substituted', async () => {
     writeOldSession('old-1', 90)
     writeOldSession('old-2', 90)
 
@@ -76,7 +76,7 @@ describe('transcript GC — injected protection', () => {
     expect(plan.kept.map((k) => k.id)).toContain('old-2')
   })
 
-  it('injection_cannot_unprotect_what_the_framework_protects', () => {
+  it('injection_cannot_unprotect_what_the_framework_protects', async () => {
     // The safety property. A provider returning an EMPTY map must not strip built-in protection —
     // union, never difference, or the seam becomes a way to delete a live session.
     writeOldSession('old-1', 90)
@@ -100,9 +100,11 @@ describe('transcript GC — injected protection', () => {
     expect(withEmptyInjection.kept.map((k) => k.id)).toEqual(withoutInjection.kept.map((k) => k.id))
   })
 
-  it('throwing_provider_fails_closed_on_plan', () => {
+  it('throwing_provider_fails_closed_on_plan', async () => {
     writeOldSession('old-1', 90)
 
+    // `planTranscriptGC` stayed SYNCHRONOUS — only the apply half needed the async seam, because
+    // only the apply half touches a registry. Planning reads the filesystem and decides.
     expect(() =>
       planTranscriptGC({
         cwd,
@@ -117,7 +119,7 @@ describe('transcript GC — injected protection', () => {
     ).toThrow(/registry unavailable|refus/i)
   })
 
-  it('plan_then_delete_concurrent_test_rechecks_injected_ids', () => {
+  it('plan_then_delete_concurrent_test_rechecks_injected_ids', async () => {
     // Happens-before observation across the TOCTOU window: the candidate becomes live BETWEEN plan
     // and apply. The existing re-check covered only built-in protection; an injected id that turned
     // live after planning would have been deleted anyway.
@@ -128,7 +130,7 @@ describe('transcript GC — injected protection', () => {
     const target = plan.candidates[0]
     expect(target, 'fixture produced no candidate').toBeDefined()
 
-    const result = runTranscriptGC(plan, {
+    const result = await runTranscriptGC(plan, {
       apply: true,
       protectedIds: () => new Map([[target!.id, 'became live between plan and apply']]),
     })
@@ -137,18 +139,18 @@ describe('transcript GC — injected protection', () => {
     expect(existsSync(transcriptPath(root, cwd, target!.id))).toBe(true)
   })
 
-  it('throwing_provider_fails_closed_on_apply', () => {
+  it('throwing_provider_fails_closed_on_apply', async () => {
     writeOldSession('old-1', 90)
     const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 30, now: NOW })
 
-    expect(() =>
+    await expect(
       runTranscriptGC(plan, {
         apply: true,
         protectedIds: () => {
           throw new Error('registry unavailable')
         },
       }),
-    ).toThrow(/registry unavailable|refus/i)
+    ).rejects.toThrow(/registry unavailable|refus/i)
 
     // Fail-closed means nothing was deleted, not "stopped halfway".
     expect(existsSync(transcriptPath(root, cwd, 'old-1'))).toBe(true)
