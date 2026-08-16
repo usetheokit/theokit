@@ -1,0 +1,474 @@
+agent: review-crossval-4-6-absorption-tests
+review_target: origin/develop..HEAD for plan crossval-4-6-absorption (3 repos — theokit, theokit-sdk, theokit-tui)
+plan: .claude/knowledge-base/plans/crossval-4-6-absorption-plan.md
+reviewed_at: 2026-08-16
+
+test_pyramid:
+  unit_added: 16 # 11 new files in theokit (82 cases), 2 new in theokit-tui, 3 new in theokit-sdk
+  integration_added: 5 # tests/integration/{boundary-doorless-subpaths,custom-command-expansion,gc-sweep-bounded,liveness-oracle-real-tree,tooling-gates-cli}.test.ts + 5 cases into crossval-gaps
+  e2e_added: 0
+  total: 21 # new files; ~159 new/changed test cases across the three repos
+  verdict: >
+    Shape is correct — unit-heavy, integration moderate, no E2E. Not inverted, not empty.
+    Every new pgvector/DB-free boundary that has a real seam (GC sweep, liveness oracle,
+    custom-command expansion, the three CLI gates) does have an integration test. The
+    problem in this branch is not the shape of the pyramid; it is that several of its
+    bricks are hollow.
+
+edge_cases_from_plan:
+  covered: 24
+  missing:
+    - 'EC-14 (T2.3) — several `compact_boundary` markers: counting must start after the LAST one (`lastIndexOf`)'
+    - 'EC-14 (T2.3) — a `compact_boundary` as the FINAL record: zero reachable turns, the error must name ZERO not off-by-one'
+    - 'T2.3 — a transcript that is entirely pre-boundary: zero reachable turns, refuse with the typed error'
+    - 'T2.7 — two questions on one thread stay distinct items (declared RED *and* an explicit Acceptance Criteria bullet)'
+    - 'EC-20 (T2.7) — a repeated id replaces rather than duplicating, and keeps the LATEST payload'
+    - 'EC-18 (T4.1) — an absent allowlist file is an empty allowlist, not a crash'
+    - 'EC-18 (T4.1) — a malformed sunset line is reported and the entry ignored (scripts/check-invention-reachability.mjs:105 is untested)'
+    - 'T1.2 — `test_tools_entry_symbol_count_matches_measurement()`: the `93 symbols` parity claim at tools-entry.ts:18 is asserted by nothing'
+
+tdd_compliance:
+  red_before_green_commits: 0
+  note: >
+    Every new test file was introduced in the SAME commit as the implementation it covers
+    (`git log --diff-filter=A` per file). No commit in the range contains tests only.
+    tests/integration/tooling-gates-cli.test.ts (35c958cc) landed AFTER the gates it exercises
+    (fd28b86a, bf723623). RED-before-GREEN is therefore not demonstrable from history.
+
+findings:
+  - id: F-tests-1
+    severity: BLOCKER
+    file: tests/integration/crossval-gaps.test.ts
+    line: 201
+    plan_ref: "EC-4 (MUST FIX) — 'a mostly-skipped run is a vacuous pass, not a pass'"
+    summary: >
+      The guard that exists to stop the gap register passing vacuously is itself vacuous —
+      it runs BEFORE any gap assertion, so `skipped` is always empty when it asserts.
+    evidence: |
+      The test's own comment claims: "Runs last by declaration order so `skipped` is populated."
+      That is false. `describe('crossval gap register — meta')` is at line 186; the first gap
+      block (`G9`) is at line 214, G10 at 278, ... G12 at 735. Vitest runs in declaration order.
+
+      Empirically confirmed (`npx vitest run tests/integration/crossval-gaps.test.ts --reporter=verbose`):
+        ✓ crossval gap register — meta > every_registered_gap_has_an_assertion   7ms
+        ✓ crossval gap register — meta > ci_refuses_a_mostly_skipped_run         0ms   <-- 2nd of 33
+        ... 31 gap assertions follow ...
+        stderr | G12 ... [crossval-gaps] G12 SKIPPED — @theokit/tui is not installed here
+      G12 skipped in this very run and the guard never saw it. A run in which ALL 12 gaps
+      skipped would still report 33 passed. This is the exact failure class the branch was
+      asked to look for: a test that passes while exercising nothing — and the one whose whole
+      job was to prevent that.
+      Secondary: it also violates rules/testing.md § 3 ("no order dependency") by design.
+    recommended_action: >
+      Move the meta describe to the END of the file, or replace the ordering assumption with
+      vitest's `afterAll` at file scope (which is order-independent). Add a self-test that the
+      guard fires: force a skip via an env flag in a temp run and assert non-zero exit under CI.
+
+  - id: F-tests-2
+    severity: HIGH
+    file: packages/agents/tests/unit/tools-view-image-parity.test.ts
+    line: 70
+    plan_ref: "T1.2 — 'Cross the three view-image symbols, or write the reason' + AC 'dist/tools.d.ts contains all three names, OR tools-entry.ts carries a written reason naming each'"
+    summary: >
+      `it.skipIf` is an honest conditional in FORM but a disabled test in EFFECT — 3 of 4 cases
+      skip today, the task's GREEN never happened on either branch of its decision gate, and
+      nothing fails or expires to say so.
+    evidence: |
+      Measured run (`npx vitest run tests/unit/tools-view-image-parity.test.ts --reporter=verbose`):
+        ↓ test_view_image_symbols_cross_into_the_layer            SKIPPED
+        ✓ test_the_layer_forwards_every_sdk_tools_factory_it_claims_to  1ms
+        ↓ test_sdk_view_image_emits_an_image_content_block        SKIPPED
+        ↓ test_a_failed_read_stays_text_so_the_model_can_retry    SKIPPED
+        Tests  14 passed | 3 skipped
+
+      The probe is real and the reason is truthful: packages/agents/node_modules/@theokit/sdk-tools
+      is 0.26.1 and does not export `createViewImageTool`. In the sibling, `c743b5850 chore(sdk-tools):
+      0.27.0 — a versao que finalmente carrega createViewImageTool` exists but is unpublished/unbumped
+      here. So the skip is honest about CAUSE.
+
+      What is not honest is the resulting state of T1.2:
+        1. `git diff origin/develop..HEAD -- packages/agents/src/tools-entry.ts` adds only
+           `createDelegateTool` — the three view-image symbols did NOT cross.
+        2. tools-entry.ts:18-20 still reads "measured: 93 symbols, parity identical to the source"
+           and "If a symbol is ever deliberately withheld, the reason comes written here." No reason
+           was written THERE. It was written in a test file that skips.
+        3. The plan's declared RED `test_tools_entry_symbol_count_matches_measurement()` does not
+           exist anywhere (`grep -rn "93" packages/agents/tests/unit/subpath-surface.test.ts` -> 0).
+        4. The one case that DOES run is vacuously green on the symbol in question: with 0.26.1,
+           `Object.keys(sdkTools).filter(n => n.startsWith('create'))` never contains
+           `createViewImageTool`, so `missing` is trivially `[]`.
+        5. No sunset. The sibling gate `scripts/check-surface-parity.mjs:84` carries a `SUNSET` map
+           precisely so "warn mode cannot become permanent" (asserted at crossval-gaps.test.ts:699);
+           this skip has no equivalent and can sit green forever.
+      Honest verdict: the skip mechanism is defensible; the ABSENCE of an expiry around it is not.
+      A blocked task with no dated tripwire is indistinguishable in CI from a finished one.
+    recommended_action: >
+      (a) Add a dated tripwire that FAILS after a sunset (e.g. `expect(TODAY < '2026-09-14',
+      'T1.2 blocked on @theokit/sdk-tools >= 0.27.0 for 30 days').toBe(true)`), mirroring
+      check-surface-parity.mjs's SUNSET convention. (b) Until the dep is bumped, write the
+      withholding reason in tools-entry.ts:20 where the file's own rule says it goes, and
+      correct the "93 symbols" figure or assert it.
+
+  - id: F-tests-3
+    severity: HIGH
+    file: packages/agents/tests/unit/session-fork.test.ts
+    line: 185
+    plan_ref: 'T2.3 TDD — `counting_starts_after_the_LAST_boundary_when_several_are_present()` (EC-14), `test_boundary_as_the_final_record_names_zero_reachable_turns()` (EC-14)'
+    summary: >
+      `test_fork_starts_after_the_last_compact_boundary` runs against a fixture with exactly ONE
+      boundary — it cannot distinguish `lastIndexOf` from `indexOf`, so it asserts nothing about
+      "the last". The two EC-14 cases the plan declared are absent entirely.
+    evidence: |
+      grep -c "compact_boundary" packages/agents/tests/unit/session-fork.test.ts -> 4
+      (line 157 is the only fixture record; 185 is the test NAME; the rest are prose.)
+      The realistic fixture (writeRealisticTranscript, lines ~155-165) is:
+        0 user / 1 assistant / 2 user / 3 system compact_boundary / 4 user / 5 tool_result /
+        6 assistant / 7 goal-continuation / 8 user
+      One boundary. `indexOf` and `lastIndexOf` return 3 for both.
+      Missing entirely: a fixture with TWO boundaries; a fixture whose LAST record is a boundary
+      (plan: "start index equals the record count, zero reachable turns, and the typed error must
+      name ZERO rather than landing off-by-one on the boundary record itself"); a fixture that is
+      entirely pre-boundary.
+      This is the same class as the gc fixture note the author got right ("a SECOND transcript is
+      required ... otherwise every assertion here would have passed by never running") — the
+      discipline was applied in gc-registry-remover.test.ts and not here.
+    recommended_action: >
+      Add a two-boundary fixture and assert nth=1 lands after the SECOND. Add a
+      boundary-as-final-record fixture and assert the refusal message names 0 (not 1).
+      Add an entirely-pre-boundary fixture and assert the same refusal.
+
+  - id: F-tests-4
+    severity: HIGH
+    file: packages/agents/tests/unit/session-fork.test.ts
+    line: 106
+    plan_ref: "T2.3 AC — 'Beyond-range raises `ReachableTurnsExceededError` whose message contains the reachable count'; EC-5 `nth_below_one_raises_InvalidTurnOrdinalError_not_the_exceeded_error()`; rules/testing.md § 4.1"
+    summary: >
+      Negative-case tests assert a regex on a stringified message, never a typed error class.
+      The two error classes the plan's Acceptance Criteria name do not exist in the source.
+    evidence: |
+      grep -rn "ReachableTurnsExceededError|InvalidTurnOrdinal" packages/agents/src packages/agents/tests -> 0 matches
+      packages/agents/src/session/session-lifecycle.ts:297,305,318 -> `throw new TheokitAgentError(...)` (the generic base)
+      Test bodies:
+        test_nth_below_one_raises_a_distinct_typed_error  -> .toThrow(/counts user turns from 1/i)
+        test_nth_beyond_reachable_turns_names_the_reachable_count -> .toThrow(/\b2\b/)
+      `/\b2\b/` is satisfied by ANY message containing the digit 2 — including a message about
+      a session id, a path, or a count of something else. The test name promises "a distinct
+      typed error"; there is no distinct type and the assertion checks neither type nor a
+      distinctive message.
+      grep -rn "toBeInstanceOf" across session-fork / gc-registry-remover / liveness-oracle
+      unit tests -> 0 matches. The only `toBeInstanceOf` on a framework error in the whole
+      branch is tests/integration/gc-sweep-bounded.test.ts:104.
+      rules/testing.md § 4.1: "A negative-case test asserts the *specific typed error and
+      message* — not merely 'it throws'."
+    recommended_action: >
+      Either introduce `ReachableTurnsExceededError` / `InvalidTurnOrdinalError` as the plan's AC
+      states and assert `toBeInstanceOf`, or amend the plan. Replace `/\b2\b/` with the full
+      sentence fragment ("2 reachable user turn(s)") so a message about anything else fails.
+
+  - id: F-tests-5
+    severity: HIGH
+    file: packages/agents/tests/unit/pending-ledger-payload.test.ts
+    line: 60
+    plan_ref: 'T2.7 TDD — `test_two_questions_on_one_thread_stay_distinct_items()`, `test_a_repeated_id_replaces_rather_than_duplicating_and_keeps_the_latest_payload()` (EC-20); T2.7 AC bullet 2'
+    summary: >
+      Two declared RED tests are absent, one of them backed by its own Acceptance Criteria bullet.
+      The plan's "thread extractor" half of T2.7 is neither implemented nor tested.
+    evidence: |
+      The file has 4 tests: payload round-trip, framework-never-reads, default-type-arg, settle+prune.
+      Plan T2.7 title: "Widen `createPendingLedger` with a payload slot AND a thread extractor".
+      Plan AC: "- [ ] Two items on one thread stay distinct — `two_questions_on_one_thread_stay_distinct_items()` passes."
+      grep for a thread extractor or a same-thread fixture -> 0 matches.
+      EC-20 ("a repeated id replaces rather than duplicating and keeps the LATEST payload") is
+      partially shadowed by `test_settling_and_pruning_still_behave_the_same_with_a_payload`,
+      which re-ingests id 'a' but asserts only that a SETTLED id is not resurrected — it never
+      asserts the latest payload wins on an unsettled re-ingest.
+    recommended_action: >
+      Add the two declared tests, or record an explicit deviation the way T3.4 and the liveness
+      EC-9 deviation were recorded (both are good models — the deviation is argued in the test file).
+
+  - id: F-tests-6
+    severity: MEDIUM
+    file: (branch-wide)
+    line: 0
+    plan_ref: 'rules/cycle-implement.md § Chain — RED → GREEN → REFACTOR; rules/testing.md § 3'
+    summary: TDD order is not demonstrable — every test file landed in the same commit as its implementation.
+    evidence: |
+      git log --diff-filter=A -1 per new test file:
+        command-template.test.ts        -> 0e128486 feat(config): ... (T3.3)
+        liveness-oracle.test.ts         -> c3527883 feat(session): ... (T3.2)
+        gc-registry-remover.test.ts     -> bf9bc42a feat(session)!: ...
+        approval-decision.test.ts       -> 6a8a4939 feat(agents): ...
+        transcript-root-hint.test.ts    -> 4eb2bca4 feat(agents): ...
+        surface-invention-gate.test.ts  -> fd28b86a feat(gates): ... (T4.1)
+        changelog-closes.test.ts        -> bf723623 feat(gates): ... (T4.3)
+        boundary-doorless-subpaths.test.ts -> 42d1e899 feat(boundary): ... (T4.2)
+        tooling-gates-cli.test.ts       -> 35c958cc  (AFTER fd28b86a and bf723623)
+      No commit in origin/develop..HEAD adds tests alone. T1.1's plan text is candid that its
+      RED had to be produced by a local mutation and restored — that mutation left no trace
+      either, so the claim is unverifiable from the branch.
+    recommended_action: >
+      Not retro-fixable on this branch. For the next slice: commit the failing test first
+      (`test(scope): RED — ...`), then the implementation. It is the only mechanism that makes
+      "this test would have caught the regression" checkable rather than asserted.
+
+  - id: F-tests-7
+    severity: MEDIUM
+    file: tests/integration/boundary-doorless-subpaths.test.ts
+    line: 88
+    plan_ref: 'T4.2 TDD — `test_every_forwarded_subpath_resolves_at_runtime()`, `test_boundary_comment_matches_the_decision_registry()`'
+    summary: >
+      The `'forward'` branch of the decision contract is unreachable by construction (two tests
+      contradict each other), so `test_a_forward_decision_is_backed_by_an_actual_door` asserts
+      `[] === []` forever. Two declared RED tests are also absent.
+    evidence: |
+      test_no_decision_describes_a_subpath_that_already_has_a_door (line ~78):
+        overlapping = keys(DOORLESS_DECISIONS).filter(s => doors.has(s));  expect(overlapping).toEqual([])
+      test_a_forward_decision_is_backed_by_an_actual_door (line ~88):
+        promised = entries.filter(d === 'forward').map(k).filter(s => !doors.has(s)); expect(promised).toEqual([])
+      A `'forward'` entry WITH a door fails the first; a `'forward'` entry WITHOUT a door fails
+      the second. No `'forward'` entry can ever pass both.
+      Data confirms it is unused: `grep -c "out:" scripts/lib/boundary-decisions.mjs` -> 26;
+      zero entries are the literal `'forward'` (the 7 matches for "forward" are all prose/typedef).
+      So both the `if (decision === 'forward') continue` branch in
+      test_every_decision_states_a_reason_or_asks_for_a_door and the whole of
+      test_a_forward_decision_is_backed_by_an_actual_door are dead.
+      Missing declared REDs: `test_every_forwarded_subpath_resolves_at_runtime()` (nothing in the
+      branch import()s a forwarded subpath — the "m67 lesson" is checked by exports-map key only)
+      and `test_boundary_comment_matches_the_decision_registry()` (grep for a test reading
+      packages/agents/src/index.ts's boundary comment -> 0 matches).
+    recommended_action: >
+      Resolve the contradiction — exempt `'forward'` entries from the overlap test, since a
+      forward decision is EXPECTED to acquire a door. Then add the runtime-resolution test
+      (`await import()` each forwarded subpath) so `forward` means something checkable.
+
+  - id: F-tests-8
+    severity: MEDIUM
+    file: packages/agents/tests/unit/error-base-reachable.test.ts
+    line: 62
+    plan_ref: 'T1.1 TDD — `test_unbuilt_dist_skips_with_a_reason()` (EC-22 convention)'
+    summary: >
+      Two of the three tests `return` with zero assertions and zero output when `dist/` is
+      unbuilt. They report green while exercising nothing, and the declared RED that was
+      supposed to pin the skip convention does not exist.
+    evidence: |
+      line 55: `if (!DIST_BUILT) { console.warn('[error-base-reachable] SKIPPED — ...'); return }`   <- warns
+      line 62: `it('test_is_transient_error_is_reachable_from_the_layer', async () => { if (!DIST_BUILT) return; ... })`  <- silent
+      line 68: `it('test_sdk_thrown_error_is_instanceof_...', async () => { if (!DIST_BUILT) return; ... })`  <- silent
+      Vitest reports these as PASSED, not SKIPPED — there is no `it.skipIf`, so the run shows
+      "3 passed" on a tree where nothing was checked. Contrast crossval-gaps.test.ts, which uses
+      an explicit `noteSkip()` ledger for exactly this, and tools-view-image-parity.test.ts,
+      which uses `it.skipIf` so the runner shows `↓`.
+      grep for a test named `test_unbuilt_dist_skips_with_a_reason` -> 0 matches (declared in the
+      plan for T1.1 AND T1.2).
+    recommended_action: >
+      Hoist `DIST_BUILT` into `it.skipIf(!DIST_BUILT)` so the runner reports a skip rather than a
+      pass, and register it with the same `noteSkip`-style ledger crossval-gaps uses so CI can
+      refuse a mostly-skipped run (once F-tests-1 is fixed).
+
+  - id: F-tests-9
+    severity: MEDIUM
+    file: tests/unit/surface-invention-gate.test.ts
+    line: 119
+    plan_ref: 'T4.1 TDD — `test_an_absent_allowlist_is_an_empty_allowlist_not_a_crash()` (EC-18), `test_a_malformed_sunset_is_reported_and_the_entry_is_ignored()` (EC-18), `test_gate_exits_zero_in_warn_mode_and_nonzero_after_sunset()`'
+    summary: >
+      The allowlist is tested only through the pure function's in-memory array. The FILE parser —
+      the half that can crash or silently drop every entry — has no test, and neither EC-18 case
+      the plan declared exists.
+    evidence: |
+      The unit file covers unexpired (line 119) and expired (line 132) entries, both by passing an
+      `allowlist:` array directly. The real parse lives at scripts/check-invention-reachability.mjs:43-55
+      and its malformed-line branch at :105 (`console.warn('malformed allowlist line ignored: ...')`)
+      is executed by no test.
+      grep -rn "malformed|ENOENT|absent" tests/unit/surface-invention-gate.test.ts
+        tests/integration/tooling-gates-cli.test.ts -> 0 matches
+      tooling-gates-cli.test.ts asserts exit 0 in warn mode but nothing asserts the "nonzero after
+      sunset" half of the declared RED — the property that stops warn mode becoming permanent.
+      This matters more than usual here: rules/code-quality-golden-rule.md § 4 makes a malformed
+      allowlist entry a HARD finding precisely because a silently-dropped allowlist is how a gate
+      stops gating.
+    recommended_action: >
+      Export the allowlist parser from scripts/lib/ (as the other two gates already do) and unit-test
+      absent file / malformed line / malformed sunset. Add an injected-`today` CLI run past a sunset
+      asserting a non-zero exit.
+
+  - id: F-tests-10
+    severity: MEDIUM
+    file: tests/integration/tooling-gates-cli.test.ts
+    line: 62
+    plan_ref: 'T4.1/T4.3 — the CLI-vs-rule seam'
+    summary: >
+      `test_the_cli_and_the_pure_function_agree_about_*` does not compute the pure function over
+      the real modules. It calls it with EMPTY inputs (which trivially returns `[]`) and then
+      separately greps the CLI's stdout. The two halves never meet.
+    evidence: |
+      line 66-71:
+        const clean = findUnreachableEnforcement({ modules: [], publishedNames: new Set() })
+        expect(clean, 'the rule with nothing to look at finds nothing').toEqual([])
+        const { stdout } = runGate('check-invention-reachability.mjs')
+        expect(stdout.includes('OK — every decision-shaped exported type')).toBe(true)
+      The docblock states the intent exactly right — "a CLI that reads the wrong directory ...
+      still prints something plausible ... Computing the same answer here from the same source
+      and comparing is what makes the two halves one gate" — and then does not do it. A CLI that
+      globbed an empty directory would print the same OK line and pass.
+      Same shape at line 78 for `missingCloses` (`changedFiles: []`).
+      Related: `test_invention_reachability_reads_its_allowlist` (line 45) infers "clean run =>
+      allowlist was read" from two live allowlisted entries. That inference silently becomes
+      vacuous the day those two inventions are fixed, with nothing to say so.
+    recommended_action: >
+      Have the test enumerate the same modules the CLI enumerates (export that discovery from
+      scripts/lib/) and assert deep equality between the in-process result and the CLI's parsed
+      findings. Assert the allowlist by count, not by cleanliness — e.g. run the gate with the
+      allowlist path overridden to /dev/null and assert the two entries re-fire.
+
+  - id: F-tests-11
+    severity: MEDIUM
+    file: tests/integration/gc-sweep-bounded.test.ts
+    line: 96
+    plan_ref: "T2.2 Deep Dives — 'bounded by a timeout, surfaced as a typed error rather than a hang'"
+    summary: >
+      `test_the_error_the_sweep_reports_is_the_shared_typed_one` proves typed identity only on the
+      DIRECT call. For the sweep — the half whose divergence caused the defect — it asserts
+      `message` contains "timed out", which a locally constructed `new Error('timed out')` satisfies.
+    evidence: |
+      line 99-105 (direct): expect(direct).toBeInstanceOf(SessionRegistryRemoverError)  <- good
+      line 113:  expect(result.errors[0]?.message).toContain('timed out')               <- the sweep half
+      transcript-gc.ts wraps into a plain data shape: `errors.push({ id, message: 'registry removal
+      failed, transcript kept: ' + error.message })`, so `instanceof` genuinely cannot be asserted
+      on the result — but the message CAN carry the class's distinctive text. The current substring
+      is the one part of SessionRegistryRemoverError's message a lookalike is most likely to share.
+      The test's own comment claims more than the assertion delivers: "Asserting that the sweep's
+      error is the shared class — not a lookalike built locally".
+    recommended_action: >
+      Assert the distinctive fragment the shared class alone produces — e.g.
+      `/did not settle within 15ms/` and the session id — or carry the `cause` through the GCError
+      shape and assert `toBeInstanceOf` on it.
+
+  - id: F-tests-12
+    severity: MEDIUM
+    file: ../theokit-sdk/packages/sdk/tests/mcp-auth-subpath.test.ts
+    line: 47
+    plan_ref: "T1.3 TDD — `test_mcp_oauth_subpath_resolves_from_the_built_package()` — 'import fails today'"
+    summary: >
+      The declared RED asserted RESOLUTION from the built package. What shipped imports
+      `../src/mcp-auth.js` (source) and grep-checks four config files. The gap-25 class the file
+      says it closes ("exports pointing at a path tsup never emits") is verified by text, never by
+      resolving.
+    evidence: |
+      line 47-56: expect(pkg.exports['./mcp-auth']?.import?.default).toBe('./dist/mcp-auth.js')
+                  expect(toolsDts).toContain('src/mcp-auth.ts')
+                  expect(mirror).toContain('mcp-auth.d.ts')
+                  expect(tsup.includes('"mcp-auth": "src/mcp-auth.ts"')).toBe(true)
+      line 62:    const barrel = await import('../src/mcp-auth.js')   <- SOURCE, not dist
+      The file is candid that this subpath must appear in FOUR hand-maintained lists and that
+      forgetting one "fails silently" — which is precisely the argument for one resolution test
+      over four text assertions. A rename in tsup.config.ts's formatting (single vs double quotes
+      is already special-cased) or a build that emits nothing would leave every assertion green.
+    recommended_action: >
+      Add a post-build test that resolves the real thing:
+      `createRequire(...).resolve('@theokit/sdk/mcp-auth')` plus `await import('@theokit/sdk/mcp-auth')`
+      against dist, gated on dist existing with a LOUD skip (see F-tests-8).
+
+  - id: F-tests-13
+    severity: MEDIUM
+    file: packages/agents/src/bridge/approval-decision.ts
+    line: 73
+    plan_ref: ".claude/skills/implement/scripts/check_wiring.py pillar (b) — 'at least 1 file under tests/integration/ exercises the symbol'"
+    summary: >
+      Four new exported symbols have no integration test, including the branch's most
+      security-consequential one. `transcriptRootHint` additionally has no production caller.
+    evidence: |
+      for s in ...; do grep -rl "$s" tests/integration/ | wc -l; done
+        shouldAutoApprove   -> 0     (T2.1 — the auto-approve gate; unit-only)
+        transcriptRootHint  -> 0     (T2.6)
+        createDelegateTool  -> 0
+        templateHints       -> 0
+        expandCommandTemplate -> 1   OK
+        classifyProjects      -> 1   OK
+        awaitRegistryRemoval  -> 1   OK
+      Pillar (a): `shouldAutoApprove` has a real caller (bridge/approval-posture.ts:31) and is
+      exported via ./bridge (bridge/index.ts:86) — fine. `transcriptRootHint` appears only at
+      session/index.ts:49 (a barrel re-export, not a caller) and `createDelegateTool` only at
+      tools-entry.ts:130 (likewise). A re-export is not a caller.
+      The gap matters for T2.1 specifically: the plan's own framing is that the rule was
+      duplicated because it was not reachable from a SURFACE, and the branch has no test that
+      reaches it the way a surface would.
+    recommended_action: >
+      Add tests/integration/approval-decision-surface.test.ts importing `shouldAutoApprove` from
+      the `./bridge` subpath (the consumer's path, not the source path) and driving the three
+      modes end-to-end. Same for `transcriptRootHint` through `./session`.
+
+  - id: F-tests-14
+    severity: LOW
+    file: packages/agents/tests/unit/transcript-root-hint.test.ts
+    line: 75
+    plan_ref: "T2.6 — 'It is deliberately a HINT and never a repair'"
+    summary: >
+      `test_the_hint_never_moves_anything` never checks that nothing moved. It asserts an
+      unrelated fresh temp directory is defined and that a second call does not throw.
+    evidence: |
+      const previous = rootWithProjects(2)
+      transcriptRootHint(0, previous, { THEOKIT_HOME: '/new/home' })
+      expect(rootWithProjects(0)).toBeDefined()   // creates a DIFFERENT temp dir; always defined
+      expect(() => transcriptRootHint(0, previous, {...})).not.toThrow()
+      The inline comment "// no throw, and `previous` is untouched below" describes an assertion
+      that is not there. An implementation that relocated every project directory out of
+      `previous` would pass this test.
+    recommended_action: >
+      Snapshot `readdirSync(join(previous,'projects')).sort()` before and after and assert equality.
+
+  - id: F-tests-15
+    severity: LOW
+    file: tests/integration/crossval-gaps.test.ts
+    line: 468
+    plan_ref: "rules/testing.md § 6 — 'Tests asserting on internal structure (break on every refactor)'; T1.1 rationale — 'grep does not follow export *'"
+    summary: >
+      Five gap blocks assert on SOURCE TEXT or on the existence of a test file rather than on
+      behaviour — the same blind technique this branch's own T1.1 docblock identifies as the
+      reason two prior measurements were both wrong.
+    evidence: |
+      G1  :475  expect(src).toMatch(/record\.type\s*!==\s*'user'/)
+      G1  :486  expect(exists('packages/agents/tests/unit/session-fork.test.ts')).toBe(true)
+      G3  :571  expect(orchestrator).toContain('parentHooks')
+      G5  :634  (source grep on transcript-gc)
+      G6  :622  expect(src).toMatch(/kind:\s*'oauth'/)
+      G11 :516  expect(suite).not.toMatch(/<cast>/)
+      A refactor that renames a local, or moves the check into a helper, turns these red without
+      any behaviour change; conversely, a comment containing the matched text turns them green.
+      Two of the five (G1:486, G6:627) assert only that a test FILE exists — the weakest possible
+      proxy for "the gap is closed". Note the file gets this right elsewhere: G3:577
+      `inheritance_is_reachable_by_a_consumer` actually imports and checks `typeof mod.inheritHooks`.
+    recommended_action: >
+      Promote the five to behavioural assertions on the same model as G3:577 (import the symbol,
+      exercise it) or move them out of the gap register into the owning unit suite and have the
+      register assert the behaviour, not the file.
+
+positives_worth_recording:
+  - 'packages/agents/tests/unit/gc-registry-remover.test.ts — the two-session fixture note is correct AND load-bearing: verified that with one session `protectedTranscripts` keeps it and the sweep assertions would pass by never running. The author caught the exact class this review was asked to hunt.'
+  - 'tests/integration/gc-sweep-bounded.test.ts — asserts `elapsed < 5000` and `readdirSync(dir).length === 4`; the negative direction (`test_a_working_registry_still_collects`) stops the bound being satisfied by doing nothing. This is the right shape for a hang regression.'
+  - 'packages/agents/tests/unit/command-template.test.ts — all six T3.3 edge cases present, including the EC-12 exact-64KB equality case, and the ReDoS history is recorded in the test that pins the fix.'
+  - "packages/agents/tests/unit/liveness-oracle.test.ts — the EC-9 deviation from the plan's expected verdict is argued in the test file rather than quietly adjusted; the budget property is asserted on the SWEEP, which makes a 25-project fixture evidence about 13k."
+  - '../theokit-tui/src/select-list-model.test.ts — property-based sweep over total x selected x size x anchor; the strongest test in the branch.'
+  - 'tests/unit/surface-invention-gate.test.ts — the expired-allowlist test asserts `allowlistExpired` is reported, not merely that the finding re-fires.'
+
+runtime:
+  crossval_gaps_integration: '705ms (33 tests) — well under the 30s soft warn'
+  agents_unit_sample: '808ms for 17 tests across 3 files'
+  flakiness_observed: "none in this review's runs; no CI history consulted"
+  determinism_notes: >
+    All fixtures use mkdtempSync + explicit utimesSync; no Math.random, no wall-clock assertions
+    except gc-sweep-bounded's `elapsed < 5_000` (a generous hang bound, not a perf assertion) and
+    gc-registry-remover's `setTimeout(40)` after a 20ms timeout (60ms of headroom — thin but not
+    yet flaky; worth widening if CI is loaded). `today` is injected in the invention gate, which is
+    the right pattern; `scripts/check-surface-parity.mjs` has a `TODAY` module constant that no
+    test overrides.
+
+verdict: NEEDS_FIXES
+verdict_rationale: >
+  The branch's tests are, on average, unusually good — the docblocks argue their own necessity,
+  the fixtures are mostly non-vacuous, and one of them (the GC two-session note) catches exactly
+  the failure class this review was commissioned to find. But three of them are hollow in ways
+  that matter: the EC-4 guard against vacuous runs is itself vacuous (F-tests-1, BLOCKER), T1.2's
+  assertions are 75% skipped with no expiry while neither branch of its decision gate was
+  executed (F-tests-2), and the EC-14 / T2.7 / EC-18 edge cases the plan declared as RED tests
+  were not written (F-tests-3, -5, -9). Combined with zero RED-first commits (F-tests-6), the
+  suite currently cannot support the claim that it would have caught the defects it describes.

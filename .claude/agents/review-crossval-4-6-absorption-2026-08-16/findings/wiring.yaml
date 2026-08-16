@@ -1,0 +1,467 @@
+agent: review-crossval-4-6-absorption-wiring
+review_target: origin/develop..HEAD for plan crossval-4-6-absorption (theokit + ../theokit-sdk + ../theokit-tui)
+plan: .claude/knowledge-base/plans/crossval-4-6-absorption-plan.md
+date: 2026-08-16
+verdict: NEEDS_FIXES
+
+triad_revalidation:
+  total_new_symbols: 27
+  pillar_a_honest_pass: 12 / 27 # a functionally-necessary non-barrel caller in a production path
+  pillar_b_honest_pass: 7 / 27 # an integration test that CALLS the symbol with non-degenerate input
+  pillar_c_observed: 0 / 27 # no .wiring-evidence.json exists in any of the three repos
+  method: |
+    check_wiring.py re-run per symbol in each repo, then EVERY caller and EVERY test read by hand.
+    check_wiring.py's pillar (a) is a text grep and over-counts: `--symbol Liveness` reported 10
+    callers including packages/theo/src/server/boot.ts:26, which is the word "Liveness" inside a
+    JSDoc comment about HTTP health routes. Its counts were discarded wherever a read disagreed.
+  pillar_a_honest:
+    - shouldAutoApprove # approval-posture.ts:180 -> sdk-adapter.ts:684 (real production path)
+    - awaitRegistryRemoval # transcript-gc.ts:291, session-lifecycle.ts:115
+    - SessionRegistryRemoverError
+    - FILE_INLINE_CAP # command-template.ts:150-152 (internal, real)
+    - WRITE_SCOPED_TOOLS # approval-decision.ts:85 (internal, real)
+    - APPROVAL_MODES # ApprovalMode derives from it
+    - DOORLESS_DECISIONS # check-surface-parity.mjs:352 (summary only - see F-wire-10)
+    - findUnreachableEnforcement # scripts/check-invention-reachability.mjs
+    - missingCloses # scripts/check-changelog-closes.mjs
+    - declaredExportsFromText # check-invention-reachability.mjs + crossval-gaps.test.ts
+    - WindowAnchor # parameter type of windowFor, which has 3 real callers
+    - setTokens # pre-existing internal caller internal/mcp/oauth.ts
+  pillar_a_barrel_only:
+    - expandCommandTemplate # config-entry.ts:78 (barrel)
+    - templateHints # config-entry.ts:79 (barrel)
+    - classifyProjects # session/index.ts (barrel)
+    - Liveness
+    - LivenessVerdict
+    - FsSeam
+    - transcriptRootHint # session/index.ts:49 (barrel)
+    - toolPresentation # ../theokit-tui/src/index.ts:72 (barrel)
+    - DEFAULT_TOOL_PRESENTATION
+    - KNOWN_TOOL_NAMES
+    - keyboardHelpFor # ../theokit-tui/src/index.ts:64 (barrel)
+    - runPkceFlow # ../theokit-sdk/packages/sdk/src/mcp-auth.ts (barrel)
+    - refreshAccessToken
+    - getTokens
+    - lockedRefresh
+
+findings:
+  - id: F-wire-1
+    severity: BLOCKER
+    file: packages/theo/src/cli/commands/sessions-gc.ts
+    line: 83
+    plan_ref: T2.2 "Give the GC an async registry-remover seam" / D6 "Fix the shape at the framework, never at the call site"
+    summary: >
+      T2.2 made runTranscriptGC async, and the ONE in-repo production caller - the `theokit agent
+      sessions gc` CLI command - was never updated. It calls the async function without `await` and
+      then reads `.errors` off the Promise. `pnpm typecheck` reported PASS only because it resolved
+      @theokit/agents against a dist/ built BEFORE the change.
+    evidence: |
+      packages/agents/src/session/gc/transcript-gc.ts:239,264
+        -export function runTranscriptGC(...): RunTranscriptGCResult
+        +export async function runTranscriptGC(...): Promise<RunTranscriptGCResult>
+
+      packages/theo/src/cli/commands/sessions-gc.ts
+        :42  result: ReturnType<typeof runTranscriptGC>,      // now Promise<RunTranscriptGCResult>
+        :83  const result = runTranscriptGC(plan, { apply: options.apply === true })   // no await
+        :84  return { lines: formatGcPlan(plan, result), failed: result.errors.length }
+      Reached from the real entry point: packages/theo/src/cli/index.ts:92-93
+      (`theokit agent sessions gc` -> sessionsGcCommand).
+
+      Why the gate stayed green - the artifact is stale:
+        stat packages/agents/dist/session.d.ts    -> 2026-08-15 18:42:26
+        stat packages/agents/src/session/gc/transcript-gc.ts -> 2026-08-16 14:01:33
+        packages/agents/dist/session.d.ts:280  declare function runTranscriptGC(...): RunTranscriptGCResult;
+      The dist also still lacks classifyProjects / transcriptRootHint / awaitRegistryRemoval, so
+      every "typecheck PASS" and "test PASS" in the implement-validate report that crosses the
+      @theokit/agents package boundary was measured against pre-change types.
+
+      Reproduced against the real source (tsconfig with @theokit/agents/session ->
+      packages/agents/src/session/index.ts):
+        sessions-gc.ts(44,35): TS2339 Property 'dryRun' does not exist on type 'Promise<RunTranscriptGCResult>'.
+        sessions-gc.ts(46,14): TS2339 Property 'removed' does not exist on ...
+        sessions-gc.ts(49,28): TS2339 Property 'dryRun' does not exist on ...
+        sessions-gc.ts(50,29): TS2339 Property 'removed' does not exist on ...
+        sessions-gc.ts(60,14): TS2339 Property 'errors' does not exist on ...
+
+      CI builds before typechecking (.github/workflows/ci.yml:75-76: `pnpm --filter "./packages/*"
+      build` then `pnpm typecheck`), so this fails CI on the first clean run. At runtime the command
+      throws TypeError on `result.errors.length` before printing anything.
+    recommended_action: >
+      Make sessionsGcCommand async and await runTranscriptGC; retype formatGcPlan's second parameter
+      as RunTranscriptGCResult (not ReturnType<typeof runTranscriptGC>); await the call in
+      packages/theo/src/cli/index.ts:93. Then re-run `pnpm --filter "./packages/*" build && pnpm
+      typecheck && pnpm test` and re-issue the implement-validate report - the current PASS lines for
+      typecheck/test are not evidence about this branch's source.
+
+  - id: F-wire-2
+    severity: BLOCKER
+    file: .claude/knowledge-base/plans/crossval-4-6-absorption-plan.md
+    line: 2246
+    plan_ref: Global Definition of Done - "Runtime-metric proof"
+    summary: >
+      Pillar (c) is 0/27. No `.wiring-evidence.json` exists in theokit, theokit-sdk or theokit-tui;
+      no task declares a metric; and the Global DoD's one named runtime-metric proof - the liveness
+      oracle's classification equivalence observed on the operator's real project tree - was never run.
+    evidence: |
+      `find . -name .wiring-evidence.json -not -path "*/node_modules/*"` -> no results (all 3 repos).
+      .progress-crossval-4-6-absorption.json: every task has wiring.c == null or "n/a" (23 tasks).
+      Plan:2246 - "Runtime-metric proof - the liveness oracle's classification equivalence is
+      observed on the real project tree (13.269 directories), not inferred from the fixture (T5.3)."
+      T5.3 status in the checkpoint: "blocked".
+      The substitute, tests/integration/liveness-oracle-real-tree.test.ts, says so itself at :9-12
+      ("Scale is deliberately small") and runs against mkdtempSync trees of 3 and 6 directories.
+      Plan:2297-2298 also names a second unobserved real-workload proof (backtrack landing on the
+      visible turn, driven against a real transcript with a compact_boundary).
+      The implement-validate report's wiring_triad check is `N/A` with "Symbols derived from diff: 0
+      / Symbols independently resolved: 0 / Pillar (a) NOT independently confirmed" - i.e. the
+      /implement gate never verified the triad for ANY symbol on this branch.
+    recommended_action: >
+      Either (a) run the sweep on the operator's machine and record ops-vs-budget plus the
+      per-project verdict agreement as evidence, or (b) amend the DoD with an explicit ADR stating
+      the runtime-metric proof is deferred to Phase 5 with the release gate as its named blocker.
+      Do not let a blocked DoD line pass as satisfied by a 6-directory tmpdir fixture.
+
+  - id: F-wire-3
+    severity: HIGH
+    file: packages/agents/src/session/index.ts
+    line: 55
+    plan_ref: 'Architecture boundaries affected - G7: every export has a consumer ... and a consumer in the adoption phase'
+    summary: >
+      15 of the 27 new exports have pillar (a) satisfied ONLY by a barrel re-export. The plan is
+      explicit that their real consumer arrives in Phase 5 (TheoCode adoption) - and Phase 5 is
+      blocked at T5.0. As merged, these are orphan modules reachable from a barrel and a test, and
+      from nothing that runs.
+    evidence: |
+      Plan Baseline Context:164 - "Every symbol this plan changes has zero in-repo production callers
+      and real cross-repo consumers."
+      Plan:180 (G7) - "every new export in this plan ships with a test in the same task and a
+      consumer in the adoption phase."
+      .progress: T5.0-T5.4 all "blocked" - "@theokit/agents published 9.4.0 == local 9.4.0 ... every
+      change from phases 0-4 sits above the published version with no bump."
+      packages/agents/package.json is still 9.4.0, so no consumer can reach any of it either.
+      Barrel-only symbols (grep in each repo, excluding dist/ and *.test.*):
+        expandCommandTemplate, templateHints  -> packages/agents/src/config-entry.ts:78-79 only
+        classifyProjects, Liveness, LivenessVerdict, FsSeam -> packages/agents/src/session/index.ts:55-61 only
+        transcriptRootHint -> packages/agents/src/session/index.ts:49 only
+        toolPresentation, DEFAULT_TOOL_PRESENTATION, KNOWN_TOOL_NAMES -> ../theokit-tui/src/index.ts:70-72 only
+        keyboardHelpFor -> ../theokit-tui/src/index.ts:64 only
+        runPkceFlow, refreshAccessToken, getTokens, lockedRefresh -> ../theokit-sdk/packages/sdk/src/mcp-auth.ts only
+    recommended_action: >
+      This is honestly documented, so the action is to keep the honesty visible downstream rather
+      than to fix code: state in the review verdict and in the release notes that phases 0-4 ship
+      SURFACE, not adoption, and that the plan's own O5 (>= 1.300 LOC deleted in TheoCode) and O7
+      (re-scored >= 4,60) remain unmeasured. Do not archive the plan as complete on a Phase-5-blocked
+      branch.
+
+  - id: F-wire-4
+    severity: HIGH
+    file: tests/integration/tooling-gates-cli.test.ts
+    line: 63
+    plan_ref: T4.1 / T4.3 - pillar (b) for findUnreachableEnforcement and missingCloses
+    summary: >
+      The two "the CLI and the pure function agree" tests are ceremonial. They call the symbol with
+      EMPTY inputs (a degenerate case any `() => []` stub satisfies), then separately assert the CLI
+      printed a clean string. The two answers are never compared - which is precisely what the tests'
+      own docstrings claim they do. check_wiring.py scores pillar (b) PASS on both purely because the
+      names appear in a file under tests/integration/.
+    evidence: |
+      :63-67
+        const clean = findUnreachableEnforcement({ modules: [], publishedNames: new Set<string>() })
+        expect(clean, 'the rule with nothing to look at finds nothing').toEqual([])
+      :69-74
+        const cliFoundNothing = stdout.includes('OK - every decision-shaped exported type')
+        expect(cliFoundNothing, 'the CLI reports clean, so the rule run over the real modules must
+               also be clean').toBe(true)
+      Nothing joins `clean` to `cliFoundNothing`; the stated seam is asserted in prose only.
+      :58-62 claims the opposite: "Computing the same answer here from the same source and comparing
+      is what makes the two halves one gate."
+      Same shape at :80-88 for missingCloses (`changedFiles: []`).
+      :88 also accepts `|SKIP` in the regex, so a gate that skipped everything passes this test.
+      MITIGATION: the RULES themselves are substantively covered - 13 calls to
+      findUnreachableEnforcement in tests/unit/surface-invention-gate.test.ts and 10 calls to
+      missingCloses in tests/unit/changelog-closes.test.ts, with real inputs. The defect is confined
+      to the integration-pillar claim.
+    recommended_action: >
+      Make the two tests actually compare: read the same real modules the CLI reads, call
+      findUnreachableEnforcement / missingCloses on them in-process, and assert the in-process result
+      equals what the CLI reported (count and identities). Drop the `|SKIP` alternative at :88 or
+      assert explicitly which branch was taken.
+
+  - id: F-wire-5
+    severity: HIGH
+    file: .claude/knowledge-base/implementations/.progress-crossval-4-6-absorption.json
+    line: 232
+    plan_ref: cycle-implement.md "Wiring summary - independently re-verified, never self-reported"
+    summary: >
+      The checkpoint self-reports `wiring: {a: true, b: true}` for tasks whose symbols fail pillar (b)
+      on re-verification, and the /implement validation could not contradict it because its wiring
+      check derived 0 symbols from the diff. Five tasks claim an integration test that does not exist.
+    evidence: |
+      Re-run of check_wiring.py, per repo:
+        T3.1 (.progress:230-234 a:true b:true) - toolPresentation HALT b=FAIL;
+             DEFAULT_TOOL_PRESENTATION HALT b=FAIL; KNOWN_TOOL_NAMES HALT b=FAIL
+        T3.4 (.progress:284-288 a:true b:true) - keyboardHelpFor HALT b=FAIL; WindowAnchor HALT b=FAIL
+        T1.3 (.progress:72-76 a:true b:true)  - runPkceFlow/refreshAccessToken/getTokens/setTokens/
+             lockedRefresh all HALT b=FAIL
+        T2.6 (.progress:199-203 a:true b:true) - transcriptRootHint HALT b=FAIL
+        T2.1 (.progress:92-96 a:pass b:pass)   - shouldAutoApprove/APPROVAL_MODES/WRITE_SCOPED_TOOLS
+             all HALT b=FAIL (unit tests only, packages/agents/tests/unit/approval-decision.test.ts)
+      Meanwhile the gate that should have caught this reported:
+        crossval-4-6-absorption-implement-validate-2026-08-16.md:56-64
+        "wiring_triad - N/A ... Symbols derived from diff: 0 ... Pillar (a) NOT independently
+         confirmed ... Self-reported pillar (a) pass (claim, audited): 4"
+      The same file also flags 25 LOW schema errors: wiring.a/b recorded as boolean `True` where the
+      schema requires one of ['defer','fail','pass'] - the boolean form is what made the values
+      unparseable and therefore unaudited.
+    recommended_action: >
+      Rewrite the checkpoint wiring fields using the schema vocabulary and set b='defer' (with the
+      Phase-5 reason) wherever no integration test exists, instead of 'true'. Then fix
+      run_validation.py's symbol derivation so wiring_triad cannot come back N/A on a 23-task
+      implementation - an N/A there means the branch shipped with the triad unverified.
+
+  - id: F-wire-6
+    severity: HIGH
+    file: ../theokit-tui/src/keyboard-help.tsx
+    line: 32
+    plan_ref: T3.1 and T3.4 - "ship default tool header/body/approval maps" / "capability-derived shortcut list"
+    summary: >
+      Both new theokit-tui modules sit BESIDE an existing component that solves the same problem and
+      neither component was rewired. `KeyboardHelp` keeps its hardcoded DEFAULT_COMPOSER_SHORTCUTS and
+      `ToolCall` keeps rendering headers without the new presentation maps. The package now ships two
+      sources of truth for each, and the new one has zero in-package consumer - the exact "second
+      door, one room" shape the plan's own D6 rejects.
+    evidence: |
+      ../theokit-tui/src/keyboard-help.tsx:32-47 - DEFAULT_COMPOSER_SHORTCUTS, a 14-entry literal,
+        still the shipped default; no import of keyboardHelpFor anywhere.
+      ../theokit-tui/src/keyboard-help-model.ts:38 - keyboardHelpFor's docstring states the defect it
+        closes ("a hand-written literal in every product ... rebind or remove a shortcut and the help
+        keeps advertising the old one") - which is a literal description of keyboard-help.tsx:32.
+      grep -rn "keyboardHelpFor" src/ (excluding *.test.*) -> src/index.ts:64 only.
+      grep -rn "toolPresentation|DEFAULT_TOOL_PRESENTATION" src/ (excluding *.test.*) ->
+        src/tool-presentation.ts + src/index.ts:70-72 only. src/tool-call.tsx (the tool-call card,
+        176+ LOC) imports diff-model, tool-card-result, tool-result, theme - not tool-presentation.
+      windowFor's three real callers (select-list-model.ts:138, slash-menu-model.ts:91,
+        mention-menu-model.ts:79) all pass 3 arguments, so the new `centred` branch
+        (select-list-model.ts:73) has no production caller either.
+    recommended_action: >
+      Either wire the new modules into their sibling components in the same PR (KeyboardHelp derives
+      its default list via keyboardHelpFor over a declared capability set; ToolCall consults
+      toolPresentation for its header/body defaults), or record an ADR stating the components are
+      deliberately left on their literals until the consumer adopts - and say so in the CHANGELOG, so
+      a reader does not conclude the package's own UI uses the defaults it publishes.
+
+  - id: F-wire-7
+    severity: MEDIUM
+    file: packages/theo/src/server/index.ts
+    line: 185
+    plan_ref: T3.3 - "a custom command is now interpreted by the package that reads it"
+    summary: >
+      `theokit/server` - the framework's own public entry point - re-exports loadCustomCommands but
+      not expandCommandTemplate. A `theokit` app therefore still gets the loader half and has to write
+      the interpreter half itself, which is the exact gap T3.3 exists to close, one layer up.
+    evidence: |
+      packages/theo/src/server/index.ts:185 `export { loadCustomCommands } from '@theokit/agents/config'`
+      :191 frontmatterValue/splitFrontmatter also forwarded.
+      grep -n "expandCommandTemplate|templateHints|FILE_INLINE_CAP" packages/theo/src/server/index.ts
+        -> no matches.
+      Comment at :178-183 states the rationale that now applies verbatim to the expander: "a consumer
+      wrote markdown-with-frontmatter scanning against the framework's own directory ... A convention
+      with a hole in it is worse than no convention."
+    recommended_action: >
+      Forward expandCommandTemplate (+ its option types and FILE_INLINE_CAP) from
+      packages/theo/src/server/index.ts alongside loadCustomCommands, or record why the two halves
+      are deliberately split across entry points.
+
+  - id: F-wire-8
+    severity: MEDIUM
+    file: package.json
+    line: 0
+    plan_ref: O2 - "enforced by a new CI gate"; D8 - "New gates ship in warn mode with a dated sunset"
+    summary: >
+      `check:all` - the only script that runs check:invention-reachability and
+      check:changelog-closes - is invoked by NO GitHub workflow. The gates reach CI only indirectly,
+      through tests/integration/tooling-gates-cli.test.ts, which asserts exit status 0. So today the
+      gates cannot fail CI, and after the 2026-11-13 sunset promotes them to error mode nothing will
+      run them as a gate unless a workflow step is added.
+    evidence: |
+      package.json: check:all => ... && pnpm check:invention-reachability && pnpm check:changelog-closes
+      grep -rn "check:all|invention|changelog-closes" .github/ -> no results.
+      tests/integration/tooling-gates-cli.test.ts:42 `expect(status, 'warn mode - findings must not
+        fail the build').toBe(0)` and :55 `expect(status).toBe(0)`.
+      Adjacent pre-existing breakage worth flagging while here (NOT introduced by this branch):
+        .github/workflows/architecture-guards.yml:80 runs `node scripts/check-auth-parity.mjs`, a
+        file that does not exist (`ls` -> No such file). That job therefore fails at that step and
+        never reaches its `pnpm --filter @theokit/agents test` step at :90.
+    recommended_action: >
+      Add an explicit `- run: pnpm check:invention-reachability` and `- run: pnpm
+      check:changelog-closes` step (or `pnpm check:all`) to a workflow, and file the missing
+      check-auth-parity.mjs as its own issue so the surface-parity job stops being a red step nobody
+      reads.
+
+  - id: F-wire-9
+    severity: MEDIUM
+    file: ../theokit-sdk/packages/sdk/src/mcp-auth.ts
+    line: 16
+    plan_ref: T1.3 - "Publish the MCP OAuth subpath"
+    summary: >
+      The new subpath is a pure re-export with zero consumers, and its test asserts reachability by
+      `typeof barrel.X === 'function'` - it never calls any of the five symbols. Pillar (a) is the
+      barrel itself; pillar (b) is a shape check.
+    evidence: |
+      ../theokit-sdk/packages/sdk/src/mcp-auth.ts:16-22 - two `export {}` lines, no other statement.
+      check_wiring.py in that repo: runPkceFlow / refreshAccessToken / getTokens / lockedRefresh ->
+        pillar (a) callers_sample == ['packages/sdk/src/mcp-auth.ts'] (the definition barrel itself).
+      packages/sdk/tests/mcp-auth-subpath.test.ts asserts exports-map entries, tsup entry, tsc DTS
+        route, .d.cts mirror and `typeof === 'function'`. No behavioural call.
+      MITIGATION: the underlying implementations ARE exercised by pre-existing
+        packages/sdk/tests/golden/mcp/oauth.golden.test.ts (refreshAccessToken :74,:102,:122;
+        lockedRefresh :155-159; runPkceFlow :201,:226), and the plan's Failure scenarios table
+        (:2258) states up front that this task asserts reachability, not resilience. Rated MEDIUM,
+        not HIGH, for that reason.
+    recommended_action: >
+      Add one behavioural assertion through the PUBLIC barrel (e.g. a refreshAccessToken call against
+      the golden test's mocked token endpoint, imported from ../src/mcp-auth.js rather than
+      ../src/internal/mcp/oauth.js), so the subpath is proven to deliver working code and not just a
+      resolvable name.
+
+  - id: F-wire-10
+    severity: MEDIUM
+    file: tests/integration/boundary-doorless-subpaths.test.ts
+    line: 91
+    plan_ref: T4.2 - "Make the boundary claim true"
+    summary: >
+      The `'forward'` value of BoundaryDecision is structurally unreachable - two assertions in the
+      same file are mutually exclusive for it - and the parity script's "N forward" counter is
+      therefore permanently 0. A vocabulary value that can never be used reads to a maintainer as an
+      available option.
+    evidence: |
+      :70-77 test_no_decision_describes_a_subpath_that_already_has_a_door - any DOORLESS_DECISIONS key
+        that IS a layer door fails.
+      :91-103 test_a_forward_decision_is_backed_by_an_actual_door - any 'forward' entry that is NOT a
+        layer door fails.
+      => a 'forward' entry with a door fails the first, without a door fails the second.
+      scripts/lib/boundary-decisions.mjs: 26 entries, all `{ out: ... }`; zero 'forward'
+        (`grep -n "'forward'"` matches only the typedef at :32 and the docstring at :18).
+      scripts/check-surface-parity.mjs:353 `const forwarded = doorless.filter(([, d]) => d ===
+        'forward').length` - dead branch; the printed "(0 forward, 26 out with a written reason)" is
+        the only possible output.
+      Separately: DOORLESS_DECISIONS is consumed by check-surface-parity.mjs only for that
+        console.log. All enforcement lives in this vitest file, so the "gate reports the whole
+        boundary" claim (commit 68c4e2f7) is a report line, not a gate.
+    recommended_action: >
+      Drop 'forward' from the typedef and from check-surface-parity.mjs:353 (a subpath that gains a
+      door leaves the table by construction), or redefine it as a documented FUTURE intent and adjust
+      test :70 to exempt it. Either way, stop printing a counter that cannot be non-zero.
+
+  - id: F-wire-11
+    severity: MEDIUM
+    file: packages/agents/src/config/command-template.ts
+    line: 71
+    plan_ref: G7 "Every Export Has a Consumer" (rules/system-design-guardrails.md)
+    summary: >
+      `templateHints` is a dead export: no production caller anywhere (only the config-entry barrel),
+      no integration test, and its only exercise is two unit assertions. It is published surface with
+      no demonstrated need in this repo and no consumer waiting for it in the plan's Phase 5 task list.
+    evidence: |
+      grep -rn "templateHints" (all repos, excluding dist/):
+        packages/agents/src/config/command-template.ts:71   (definition)
+        packages/agents/src/config-entry.ts:79              (barrel)
+        packages/agents/tests/unit/command-template.test.ts:34,199,201,205
+      Not referenced by tests/integration/custom-command-expansion.test.ts, nor by any Phase 5 task
+      description in the plan.
+    recommended_action: >
+      Either name the consumer (which TheoCode call site needs the hint list, in which T5.x) or drop
+      the export until one exists - parsimony-ladder.md rung 1. If kept, add it to the integration
+      test that already loads a real command file so it is exercised where it will be used.
+
+  - id: F-wire-12
+    severity: MEDIUM
+    file: tests/unit/sessions-gc-command.test.ts
+    line: 3
+    plan_ref: T2.2 acceptance - the GC seam's behaviour under a real caller
+    summary: >
+      The CLI entry point that consumes the GC (`sessionsGcCommand`) has ZERO test coverage. The only
+      test in the file exercises `formatGcPlan` with a hand-written literal object. That is why
+      F-wire-1's async break is invisible to the suite: nothing ever calls the function that calls
+      runTranscriptGC.
+    evidence: |
+      tests/unit/sessions-gc-command.test.ts:3 imports only `formatGcPlan`.
+      :27 `formatGcPlan(plan, { dryRun: true, removed: ['old-1'], errors: [] })` - a literal that
+        satisfies the OLD synchronous result shape and would satisfy any shape.
+      grep -rln "sessionsGcCommand" tests/ -> no results (only packages/theo/src/cli/index.ts:92 and
+        the command file itself).
+      Suite result: 5 passed, "Type Errors no errors" - green against the stale dist.
+    recommended_action: >
+      Add a test that calls sessionsGcCommand against a tmpdir project tree (the fixture pattern
+      already used by tests/integration/gc-sweep-bounded.test.ts) and asserts the printed lines and
+      the exit-code-bearing `failed` count. Write it RED against today's code - it fails - then fix
+      F-wire-1.
+
+  - id: F-wire-13
+    severity: LOW
+    file: .claude/skills/implement/scripts/check_wiring.py
+    line: 0
+    plan_ref: cycle-implement.md "Wiring triad" pillar (a)
+    summary: >
+      check_wiring.py's pillar (a) is a plain text search and counts comments, docstrings and
+      unrelated same-named identifiers as callers. Any triad claim resting on its caller COUNT is
+      unreliable; only a read of the call site is evidence.
+    evidence: |
+      `check_wiring.py --symbol Liveness` -> pillar (a) PASS, callers_count 10, callers_sample
+        includes packages/theo/src/server/boot.ts. The only occurrence there is boot.ts:26, a JSDoc
+        comment: "Reserved health/ready routes (M7-2). Liveness defaults to 200 even when omitted."
+        - an HTTP health probe, unrelated to the session liveness oracle.
+      Barrel re-exports also count as callers throughout (config-entry.ts, session/index.ts,
+        bridge/index.ts, ../theokit-tui/src/index.ts, ../theokit-sdk/.../mcp-auth.ts), which is what
+        produces the 15 barrel-only PASSes catalogued in F-wire-3.
+    recommended_action: >
+      Exclude comment lines and barrel/index re-export files from the caller count, or report them in
+      a separate `barrel_only_callers` field so a PASS cannot be earned by a re-export alone. Until
+      then, treat pillar (a) PASS from this tool as a lead, not a verdict.
+
+  - id: F-wire-14
+    severity: MEDIUM
+    file: tests/integration/crossval-gaps.test.ts
+    line: 188
+    plan_ref: Goal - "passing 17/17 closure assertions"; Global DoD:2243
+    summary: >
+      The executable register the Goal names as its primary metric still declares 12 gaps, not 17.
+      The register's own meta-assertion pins the number at 12, so the suite is green while the Goal's
+      metric is unmet by five.
+    evidence: |
+      tests/integration/crossval-gaps.test.ts:188 `expect(Object.keys(GAPS)).toHaveLength(12)`
+      describe blocks present: G1..G12 only.
+      Plan:17 (Goal) - "measured by tests/integration/crossval-gaps.test.ts passing 17/17 closure
+        assertions"; Plan:2243 (DoD) - "17/17 assertions green ... the Goal's metric".
+      Related: T1.2's four assertions are `skipIf`-gated on an unpublished @theokit/sdk-tools, and
+        ci_refuses_a_mostly_skipped_run (:201) caps total skips at 1 under CI.
+    recommended_action: >
+      Extend GAPS to the 17 registered gaps with one describe block each (or amend the Goal and DoD
+      to the number actually asserted, with the reason). A metric that the instrument cannot reach is
+      not a metric.
+
+boundary_respect:
+  status: PASS
+  detail: |
+    No cross-tier violation found among the new modules. Direction @theokit/agents -> @theokit/sdk is
+    the sanctioned one (G1); no new file imports `theokit` core.
+      packages/agents/src/bridge/approval-decision.ts:33  import type { SandboxPosture } from '@theokit/sdk/sandbox'
+      packages/agents/src/session/gc/registry-remover.ts:19 import { TheokitAgentError } from '@theokit/sdk/errors'
+      packages/agents/src/session/liveness-oracle.ts        no imports at all
+      packages/agents/src/config/command-template.ts        no imports at all
+      packages/agents/src/session/transcript-root-hint.ts:18,20  node:fs + ./project-index.js (in-package)
+    Note (pre-existing, not introduced here): transcript-root-hint.ts uses node:fs inside
+    packages/agents/src, which G8 reserves for the adapters layer - the whole session/ module already
+    does this (session-pointer.ts, project-index.ts), so it is a standing exemption, not a new break.
+
+concurrent_safety:
+  status: PASS
+  detail: |
+    awaitRegistryRemoval (packages/agents/src/session/gc/registry-remover.ts:57-76) is correct: the
+    Promise.race is one-directional (a remover settling after the timeout cannot mutate an
+    already-built result, documented at :49-52), the timer is cleared in `finally` so a fast success
+    leaves no dangling handle, and with no timeoutMs the behaviour degrades to a plain await so
+    existing callers are unchanged. tests/integration/gc-sweep-bounded.test.ts:45-71 exercises the
+    never-settling remover end to end and asserts nothing is deleted when the registry never confirmed
+    - the fail-safe direction. classifyProjects is synchronous with a single shared budget counter and
+    no shared mutable state across calls. No read-modify-write race found.

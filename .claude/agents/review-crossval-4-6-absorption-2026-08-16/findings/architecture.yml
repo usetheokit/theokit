@@ -1,0 +1,516 @@
+agent: review-crossval-4-6-absorption-architecture
+review_target: 'origin/develop..HEAD for plan crossval-4-6-absorption (plus ../theokit-sdk 90ca4eeb6..HEAD and ../theokit-tui a0d47d7..HEAD)'
+plan: .claude/knowledge-base/plans/crossval-4-6-absorption-plan.md
+rules_read:
+  - .claude/rules/architecture.md
+  - .claude/rules/system-design-guardrails.md (G1, G6, G7, G11, G12, G13)
+  - .claude/rules/type-safety.md
+  - .claude/rules/sdk-runtime.md
+  - .claude/rules/cycle-implement.md (Quality rules / wiring triad / parsimony gate)
+patterns_skills_scanned:
+  - .claude/skills/theokit-http-decorators-pattern-from-nestjs-patterns/SKILL.md — no keyword overlap with this plan (agrees with the plan's Prior Art § note). No other *-patterns skill registered.
+
+findings:
+  - id: F-arch-1
+    severity: HIGH
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 56
+    plan_ref: D4 / T3.2 ("Move the liveness oracle into the layer")
+    summary: "The absorbed oracle re-declares `encodeProjectDir` instead of importing the SDK's, so the classifier and the path builder are two representations of one on-disk layout rule \u2014 and the caller DELETES on `dead`."
+    evidence: |
+      ```ts
+      // liveness-oracle.ts:55-58
+      /** The encoding this module is the inverse-by-search of. Kept local: it is one line and it is ours. */
+      function encodeProjectDir(cwd: string): string {
+        return cwd.replace(/[^a-zA-Z0-9]/g, '-')
+      }
+      ```
+      The sibling file in the SAME directory disagrees about ownership:
+      ```ts
+      // packages/agents/src/session/project-index.ts:9
+      import { encodeProjectDir, transcriptRoot } from '@theokit/sdk/persistence'
+      // :119  projectDirMatches ==> encodeProjectDir(cwd) === encodedName
+      ```
+      The SDK is the owner (`theokit-sdk/packages/sdk/src/internal/persistence/session-transcript.ts:51`),
+      it is published on `@theokit/sdk/persistence`, and `wiki/capability-index.md` (this same diff)
+      tells consumers so: "Locate a project's transcript directory | `encodeProjectDir` |
+      `@theokit/sdk/persistence`". `searchPool` compares `encodeProjectDir(candidate) !== name`
+      against directory names that were produced by the SDK's copy. If the two ever differ by one
+      character class, every project classifies `dead` and the GC sweep unlinks live transcripts —
+      the exact irreversible outcome the module's own docblock says the three-valued verdict exists
+      to prevent. The docblock's justification ("it is ours") is factually wrong: the plan's ADR D4
+      itself says the encoding is the thing "this package owns" while the code proves the SDK owns it.
+      G12 (same knowledge, two representations) and architecture.md § 2 (do not restate an adapter's
+      contract inside the domain).
+    recommended_action: 'Import `encodeProjectDir` from `@theokit/sdk/persistence` (or reuse `projectDirMatches` from `./project-index.js`) and delete the local copy; if a local copy is genuinely required for testability, add a test asserting byte-equality with the SDK export for a table of adversarial paths.'
+
+  - id: F-arch-2
+    severity: HIGH
+    file: ../theokit-tui/src/tool-presentation.ts
+    line: 305
+    plan_ref: T3.1 ("Ship default tool header / body / approval maps in @theokit/tui")
+    summary: '`toolPresentation()` returns a hand-rolled object asserted `as ReadonlyMap`; its `get()` never returns `undefined`, contradicting both the declared interface and `DEFAULT_TOOL_PRESENTATION`, which has the same type and the opposite behaviour.'
+    evidence: |
+      ```ts
+      // tool-presentation.ts:317-330
+      return {
+        get: (name: string) => merged.get(name) ?? genericPresentation(name),
+        has: (name: string) => merged.has(name),
+        get size() { return merged.size },
+        ...
+      } as ReadonlyMap<string, ToolPresentation>;
+      ```
+      Three separate contract breaks in one construct:
+      1. LSP — `ReadonlyMap<K,V>.get` is declared `V | undefined`. A caller that writes
+         `map.get(name) ?? fallback` (the idiomatic use, and the use the *other* exported value
+         `DEFAULT_TOOL_PRESENTATION: ReadonlyMap<...>` requires at line 294) silently never reaches
+         its fallback. Two exported values with the identical declared type behave differently.
+      2. Internal inconsistency — `has(name)` is `false` for names `get(name)` answers.
+      3. `instanceof Map`, `Symbol.toStringTag`, `new Map(returned)` (the object is iterable, so this
+         one survives) and structured cloning all behave unlike the type promises.
+      The `as` assertion is what hides all three from the compiler, and `rules/type-safety.md`
+      ("No `as` type assertions — use type guards or narrow properly") plus G3 forbid it in
+      production code. The comment at :148 also claims the defaults are "frozen"; a `Map` typed
+      `ReadonlyMap` is not frozen.
+    recommended_action: 'Return a real `ReadonlyMap` (the merged `Map`) and expose the never-undefined lookup as a separate, honestly-named function — e.g. `presentationFor(map, name): ToolPresentation` — so the total lookup is opt-in and the Map contract is not overridden.'
+
+  - id: F-arch-3
+    severity: MEDIUM
+    file: ../theokit-tui/src/tool-presentation.ts
+    line: 34
+    plan_ref: T3.1 / Objective O6 ("a closure reaches a consumer by mechanism rather than by shared maintainer")
+    summary: 'The deliberately duplicated `KNOWN_TOOL_NAMES` list has no mechanism holding it to the factories it mirrors, and it is already stale in the same branch that created it.'
+    evidence: |
+      The module documents the duplication as the lesser evil under G1 (correct — the TUI must not
+      import `@theokit/agents`) and states the mitigation: *"The test asserts the list, so drift
+      shows up as a diff to review."* The test asserts the list against the map defined 250 lines
+      below it in the same file:
+      ```ts
+      // tool-presentation.test.ts:31
+      for (const name of KNOWN_TOOL_NAMES) { DEFAULT_TOOL_PRESENTATION.get(name) ... }
+      ```
+      Nothing compares it to the upstream factories, in either repo (`grep -rn KNOWN_TOOL_NAMES`
+      across theokit, theokit-tui, theokit-sdk returns only this file, its test and the barrel).
+      Measured drift already present in THIS diff: `packages/agents/src/tools-entry.ts:130` now
+      re-exports `createDelegateTool` (default tool name `delegate`,
+      `packages/agents/src/tools/delegate-tool.ts:129`) and T1.2 lands `createViewImageTool`
+      (`view_image`) via sdk-tools 0.27.0. Neither name is in the 20-name list, so the layer's own
+      new tools render as "Running delegate".
+    recommended_action: "Add the check on the side that legally may import both \u2014 a test in `theokit` (which depends on `@theokit/agents` and can devDepend on `@theokit/tui`) asserting `KNOWN_TOOL_NAMES` equals the set of names produced by the published factories; keep the literal list in the TUI. Add `delegate` and `view_image` now."
+
+  - id: F-arch-4
+    severity: MEDIUM
+    file: packages/agents/src/session/gc/registry-remover.ts
+    line: 1
+    plan_ref: T2.2 ("Give the GC an async registry-remover seam")
+    summary: 'The shared remover helper was placed under `session/gc/` but is consumed by its parent module, producing a bidirectional dependency between `session/` and `session/gc/` that is one import away from a real cycle.'
+    evidence: |
+      ```
+      session/session-lifecycle.ts:22  import { awaitRegistryRemoval, SessionRegistryRemoverError } from './gc/registry-remover.js'
+      session/gc/transcript-gc.ts:6    import { listSessions, protectedTranscripts } from '../session-lifecycle.js'
+      session/gc/transcript-gc.ts:8    import { awaitRegistryRemoval } from './registry-remover.js'
+      ```
+      `session/` → `session/gc/` and `session/gc/` → `session/` now both exist. There is no cycle
+      today only because `registry-remover.ts` happens to import nothing local; the moment it needs
+      `SessionInUseError`, `protectedTranscripts` or a type from `session-lifecycle.ts`, the graph
+      closes. The helper's own docblock says it exists because "`deleteSession` and `runTranscriptGC`
+      both take a `removeFromRegistry`" — i.e. its consumer set spans both levels, which is precisely
+      the signal that it does not belong inside one of them (architecture.md § 3: files in the same
+      package change for the same reason; § 1: composition points sit above, not inside, a submodule).
+      `session-lifecycle.ts:26` then has to re-export `SessionRegistryRemoverError` to keep the
+      public surface intact — a re-export that exists only to paper over the placement.
+    recommended_action: 'Move the module to `packages/agents/src/session/registry-remover.ts` (peer of both consumers), import it directly from `gc/transcript-gc.ts`, and drop the compatibility re-export in `session-lifecycle.ts` once `session/index.ts` exports the class from its real home.'
+
+  - id: F-arch-5
+    severity: MEDIUM
+    file: packages/agents/src/session/session-lifecycle.ts
+    line: 202
+    plan_ref: D6 ("Fix the shape at the framework, never at the call site") / T2.2
+    summary: 'Widening the registry seam replaced a typed contract with `unknown` on both the input and the error channel, and the success rule became "anything that is not `false`".'
+    evidence: |
+      ```ts
+      // session-lifecycle.ts:186,202,262,266
+      readonly registryError?: unknown
+      readonly removeFromRegistry?: (sessionId: string) => unknown
+      registryRemoved = outcome !== false
+      return { registryRemoved: false, transcriptRemoved: false, registryError: error }
+      ```
+      (identical `=> unknown` at `session/gc/transcript-gc.ts:256`.)
+      The seam previously said `=> boolean`. `unknown` admits every value, so a remover that returns
+      `0`, `''`, `null` or a rejected-then-swallowed value reports `registryRemoved: true`, and the
+      docblock's stated contract ("`false` means no entry to remove") is enforced by nothing. This is
+      the same class of defect the change set out to fix — the old bug was a truthy Promise being
+      read as a boolean. `registryError: unknown` is likewise untyped where
+      `rules/error-handling.md § 2` asks for explicit, typed errors: a caller cannot discriminate a
+      `SessionRegistryRemoverError` (timeout, retryable) from an arbitrary throw without an
+      `instanceof` ladder the type does not hint at.
+    recommended_action: 'Type the seam as `(sessionId: string) => boolean | void | Promise<boolean | void>` and the field as `registryError?: SessionRegistryRemoverError | Error`; have `awaitRegistryRemoval` return `boolean | void` and normalise a non-Error throw the way `liveness-oracle.ts:90` already does.'
+
+  - id: F-arch-6
+    severity: MEDIUM
+    file: scripts/lib/boundary-decisions.mjs
+    line: 35
+    plan_ref: T1.3 (publish the MCP OAuth subpath) vs T4.2 (record a decision per doorless subpath)
+    summary: "T1.3 adds a new SDK subpath `./mcp-auth` while T4.2's decision table omits it, so this plan ships a gate scheduled to fail on the next SDK bump \u2014 with the decision already known and written elsewhere in the same diff."
+    evidence: |
+      `../theokit-sdk/packages/sdk/package.json` gains `"./mcp-auth"` (T1.3) and
+      `packages/agents/package.json#exports` has no matching door (verified: 20 doors, none named
+      `./mcp-auth`). `tests/integration/boundary-doorless-subpaths.test.ts:45-56` then fails:
+      "these SDK subpaths have no door in @theokit/agents and no recorded decision: ./mcp-auth".
+      Today it passes only because the installed SDK is 4.52.1, which predates the subpath.
+      The decision is not open: `wiki/capability-index.md` (same diff) already routes consumers to
+      `@theokit/sdk/mcp-auth` directly — i.e. `{ out: '...reached from the SDK directly...' }` is the
+      recorded answer, it just was not recorded. Shipping a known-red gate is the "gate nobody can
+      make green" failure D8 explicitly cites.
+    recommended_action: 'Add the `./mcp-auth` entry to `DOORLESS_DECISIONS` in this branch, with the measurement (0 of 5 reachable) and the reason already written in the capability index.'
+
+  - id: F-arch-7
+    severity: MEDIUM
+    file: scripts/lib/declared-exports.d.mts
+    line: 1
+    plan_ref: T0.1 REFACTOR ("extract declaredExports() so T4.1 can import it") / T4.1 / T4.3
+    summary: "Each new `scripts/lib/*.mjs` ships a hand-written `.d.mts` twin, and nothing verifies the two agree \u2014 the root tsconfig never puts a single `.mjs` file into the TypeScript program."
+    evidence: |
+      `tsconfig.json` lists `"scripts/**/*.mjs"` in `include`, but `allowJs` is unset. Verified:
+      ```
+      $ npx tsc --showConfig | jq '.compilerOptions.allowJs, ([.files[]|select(endswith(".mjs"))]|length)'
+      null
+      0            # 0 of 1462 program files are .mjs
+      ```
+      So `declared-exports.mjs`, `invention-reachability.mjs`, `boundary-decisions.mjs` and
+      `changelog-closes.mjs` are never checked against `declared-exports.d.mts`,
+      `invention-reachability.d.mts`, `boundary-decisions.d.mts`, `changelog-closes.d.mts`. Worse,
+      each contract is now stated twice in two languages — e.g. `BoundaryDecision` exists as a JSDoc
+      `@typedef` in `boundary-decisions.mjs:32` and as a `type` in `boundary-decisions.d.mts:4`;
+      `AllowlistEntry`/`SourceModule`/`Finding` likewise (`invention-reachability.mjs:41-43` vs the
+      `.d.mts`). A signature change in the implementation reaches the TS consumers as a silent lie.
+      This is the plan's own thesis (a claim nobody can mechanically check drifts) applied to the
+      tooling the plan wrote to enforce it.
+    recommended_action: 'Either set `"allowJs": true, "checkJs": true` for `scripts/**` (a dedicated `tsconfig.scripts.json` in `pnpm typecheck`) and delete the `.d.mts` duplicates in favour of the JSDoc, or write the modules in TypeScript and run them through the existing `tsx` path. One representation, checked.'
+
+  - id: F-arch-8
+    severity: MEDIUM
+    file: packages/agents/src/session/project-index.ts
+    line: 11
+    plan_ref: T2.4 (route the remaining creators through `ensureSecureDir`)
+    summary: '`ensureSecureDir` is a cross-cutting filesystem-permission concern living inside the `hooks/` feature; this branch tripled its fan-in to four importers across three sibling features.'
+    evidence: |
+      ```
+      packages/agents/src/session/project-index.ts:11   import { ensureSecureDir } from '../hooks/secure-store.js'
+      packages/agents/src/session/session-pointer.ts:11 import { ensureSecureDir } from '../hooks/secure-store.js'
+      packages/agents/src/config/trust-store.ts:18      import { ensureSecureDir } from '../hooks/secure-store.js'
+      packages/agents/src/auth/permission-store.ts:39   import { readSecureJson, writeSecureJson } from '../hooks/secure-store.js'
+      ```
+      `session/`, `config/` and `auth/` now all reach into `hooks/` for a helper that has nothing to
+      do with hooks, and the symbol is not on the `./hooks` public barrel — it is an internal of one
+      feature being consumed by three others. architecture.md § 3: "cross-cutting concerns live in
+      dedicated modules, not sprinkled into business code"; § 6 flags exactly this shape. The helper
+      is also mis-named for its signature — `ensureSecureDir(filePath)` takes a FILE and derives
+      `dirname` (`hooks/secure-store.ts:54-55`), which every new call site has to know.
+    recommended_action: 'Extract `ensureSecureDir` (and the `FORBIDDEN_WRITE_BITS`/`DIR_MODE` constants) into e.g. `packages/agents/src/fs/secure-dir.ts`, re-export from `hooks/secure-store.ts` for compatibility, and rename the parameter to `containedFilePath` (or add an `ensureSecureDirFor(dir)` overload) so the contract is readable at the call site.'
+
+  - id: F-arch-9
+    severity: MEDIUM
+    file: packages/agents/src/session/transcript-root-hint.ts
+    line: 41
+    plan_ref: T2.6 ("Ship the transcript-root migration hint")
+    summary: "The hint re-implements the `THEOKIT_HOME` override rule that `transcriptRoot()` already owns \u2014 a second oracle over the same fact, in a module written to eliminate second oracles."
+    evidence: |
+      ```ts
+      // transcript-root-hint.ts:41-43
+      const current = env.THEOKIT_HOME?.trim()
+      if (current === undefined || current.length === 0) return undefined
+      if (current === previousRoot) return undefined
+      ```
+      versus the owner, already imported by the sibling module in this directory:
+      ```ts
+      // theokit-sdk .../session-transcript.ts:339-343
+      export function transcriptRoot(): string {
+        const override = process.env.THEOKIT_HOME?.trim();
+        if (override !== undefined && override.length > 0) return override;
+        return join(homedir(), ".theokit");
+      }
+      ```
+      The env-var name, the trim and the empty-string semantics are duplicated. If the SDK adds a
+      second override variable or changes the precedence, the hint keeps explaining the old rule —
+      and it runs precisely on the path where the user already believes something is wrong. G12.
+    recommended_action: "Keep the injected seam but inject the resolved root rather than the environment \u2014 `transcriptRootHint(found, previousRoot, currentRoot = transcriptRoot())` \u2014 so the override rule stays in one place and the test injects a path instead of a fake env."
+
+  - id: F-arch-10
+    severity: LOW
+    file: scripts/lib/invention-reachability.mjs
+    line: 27
+    plan_ref: D3 ("Define a layer invention as an exported type whose enforcement is unexported")
+    summary: "The gate's implemented heuristic is not the one ADR D3 specifies \u2014 `*Options` was dropped and `*Strategy` added \u2014 so the gate's coverage is narrower than the decision it cites."
+    evidence: |
+      ```js
+      const DECISION_NAME = /(?:Posture|Policy|Decision|Mode|Strategy)$/
+      ```
+      D3 (plan:233): "`*Posture`, `*Policy`, `*Decision`, `*Mode`, `*Options` carrying an enforcement
+      function in the same module". The plan is internally inconsistent — its own T4.1 pseudo-code
+      (plan:1669) already says `Strategy` — and the implementation followed the pseudo-code. The
+      consequence is real: `TranscriptGCOptions` / `ClassifyProjectsOptions` / `DeleteSessionOptions`,
+      all invention types with in-module enforcement, are outside the gate the ADR claims covers them.
+    recommended_action: "Pick one definition and make the plan and the code agree in the same commit \u2014 either add `Options$` to `DECISION_NAME` (and expect allowlist churn) or amend D3 to record why `*Options` was dropped."
+
+  - id: F-arch-11
+    severity: LOW
+    file: scripts/lib/invention-reachability.mjs
+    line: 37
+    plan_ref: T4.1 / Risk R7
+    summary: "Two structural blind spots in the gate produce false negatives (missed findings), which are not among the documented limitations \u2014 only false positives are."
+    evidence: |
+      1. `FUNCTION_DECL = /^[ \t]*(export\s+)?(?:async\s+)?function\s+.../` sees only `function`
+         declarations. Enforcement written as `export const applyX = (p: SomePosture) => …` — legal
+         and common — is invisible, so the type reads as "a pure type module" and is skipped
+         (`invention-reachability.mjs:92`).
+      2. `publishedNames` is the union of EVERY `.d.ts` under `dist/`, internal bundler chunks
+         included (`check-invention-reachability.mjs:62-69`, limitation acknowledged in
+         `declared-exports.mjs:24-26`). A function that appears in a bundled chunk but is exported
+         from no subpath satisfies `publishedNames.has(fn.name)` at
+         `invention-reachability.mjs:96` and the finding is suppressed — the gate's own founding
+         case (`applyPosture`) is the shape at risk.
+      The module's docblock and the allowlist header both discuss false positives only.
+    recommended_action: "Match arrow-function consts as well, resolve `publishedNames` per published subpath entry `.d.ts` (the `exports` map) rather than by unioning `dist/`, and state both residual limitations in the gate's printed output alongside the false-positive note."
+
+  - id: F-arch-12
+    severity: LOW
+    file: scripts/check-surface-parity.mjs
+    line: 336
+    plan_ref: D2 ("Add an inverse gate for layer inventions, do not widen the parity gate")
+    summary: 'The parity gate now imports and reports the doorless decisions it does not enforce, mildly contradicting the ADR that kept its question untouched.'
+    evidence: |
+      ```js
+      import { DOORLESS_DECISIONS } from './lib/boundary-decisions.mjs'
+      ...
+      console.log(`  · doorless SDK subpaths: ${doorless.length} decided (...)`)
+      ```
+      Enforcement lives in `tests/integration/boundary-doorless-subpaths.test.ts`, a different
+      runner. `pnpm check:surface-parity` therefore prints a reassuring "25 decided" line while
+      verifying none of it; a reader of the gate's output cannot tell which half is checked. D2's
+      rationale for a separate gate ("forcing an undefined question into that gate would corrupt a
+      correct instrument") argues against exactly this coupling.
+      Minor secondary: the new import is placed between two `node:` builtins (`:31-33`), breaking the
+      file's import grouping.
+    recommended_action: 'Either move the summary into the gate that owns it (`check-invention-reachability.mjs`, or a `check:boundary-decisions` script that also runs the assertions), or have `check-surface-parity.mjs` run the same assertions it summarises. Fix the import placement.'
+
+  - id: F-arch-13
+    severity: LOW
+    file: packages/agents/src/session/gc/transcript-gc.ts
+    line: 299
+    plan_ref: T2.2
+    summary: 'Caught-error rendering now follows two different rules across three sibling modules touched by the same task.'
+    evidence: |
+      ```ts
+      // transcript-gc.ts:299 (new)      message: `... ${(error as Error).message}`
+      // registry-remover.ts (new)  ->   handled via isThenable/typed error
+      // liveness-oracle.ts:90 (new)     error instanceof Error ? error.message : String(error)
+      ```
+      A non-Error throw (a string, an object literal from a JSON-RPC registry client) renders as
+      `undefined` in the GC error list. The `as Error` cast is consistent with the pre-existing line
+      at `:312`, so this is convention drift rather than a regression, but the two new modules landed
+      the safer form in the same task.
+    recommended_action: "Extract the one-line normaliser used by `liveness-oracle.ts:90` and use it at all three sites (it is the third occurrence \u2014 G12's Rule of 3 is met)."
+
+  - id: F-arch-14
+    severity: LOW
+    file: package.json
+    line: 120
+    plan_ref: none — unplanned change carried in the review range (commit bb01ce81)
+    summary: 'The private monorepo root gained a `peerDependencies` block on `@theokit/sdk` that can never be resolved and states a floor contradicting the devDependency in the same file.'
+    evidence: |
+      ```json
+      "devDependencies": { "@theokit/sdk": "^4.52.1", ... },
+      "peerDependencies": { "@theokit/sdk": "^4.49.0" }
+      ```
+      `package.json#private === true` (verified), so this root is never installed as a dependency and
+      the peer range is inert — while being a second, lower, authoritative-looking statement of the
+      SDK floor next to the real one in `packages/agents/package.json` (`^4.52.1`). A reader
+      resolving "which SDK version does this repo require" now has three answers.
+    recommended_action: 'Delete the `peerDependencies` block from the root manifest; the floors that matter are the per-package ones.'
+
+  - id: F-arch-15
+    severity: LOW
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 52
+    plan_ref: 'T3.2 Pseudo-code (`opts: { listProjects; budget; fs?: FsSeam }`)'
+    summary: '`fs` is required where the plan declared it optional, so every consumer must restate the same one-line `existsSync` adapter.'
+    evidence: |
+      ```ts
+      export interface ClassifyProjectsOptions {
+        listProjects: () => readonly string[]
+        budget: number
+        fs: FsSeam            // plan T3.2 signature: `fs?: FsSeam`
+      }
+      ```
+      `listProjects` is correctly injected without a default (it is product policy — D4). `fs` is not
+      policy: there is exactly one sensible implementation (`existsSync`), and requiring it pushes
+      identical glue into every call site, which is how the duplication this plan measures starts.
+      The divergence from the plan's declared signature is undocumented.
+    recommended_action: 'Default it — `fs: FsSeam = { exists: existsSync }` — keeping injection available for tests and for a caller with its own retry/timeout posture, and note the change against T3.2.'
+
+  - id: F-arch-16
+    severity: LOW
+    file: ../theokit-tui/src/index.ts
+    line: 73
+    plan_ref: T3.1 / G7 ("every export has a consumer")
+    summary: '`KnownToolName` is exported from the public barrel with no production caller and no test exercising it.'
+    evidence: |
+      `grep -rn KnownToolName` across the three repos returns only its declaration
+      (`tool-presentation.ts:57`) and this barrel line. `ToolPresentation`, `KNOWN_TOOL_NAMES`,
+      `DEFAULT_TOOL_PRESENTATION` and `toolPresentation` all have tests; this one does not. G7 asks
+      for one production caller OR one test per public export.
+    recommended_action: 'Either use it in the public signature that motivates it (e.g. `toolPresentation(overrides: Partial<Record<KnownToolName | string, ...>>)`) or drop it until a consumer asks.'
+
+  - id: F-arch-17
+    severity: INFO
+    file: packages/agents/src/config/command-template.ts
+    line: 113
+    plan_ref: T3.3
+    summary: 'No issues found — the expander is the cleanest DIP in the branch.'
+    evidence: |
+      The module has ZERO imports: no `node:child_process`, no `node:fs`, no SDK. `shell`, `readFile`
+      and `warn` are injected (`TemplateDeps:54-61`), so the trust decision and containment stay with
+      the caller that already owns them — the one containment check, not a second one that can
+      disagree (architecture.md § 6, leaky abstraction). The single-pass invariant is structural
+      (`replaceAsync:83-99` matches against the source and stitches results afterwards, so a
+      replacement is never re-scanned) rather than filtered, and the one deliberate re-scan
+      (arguments first) is justified in writing. SRP holds: it interprets a format and does nothing
+      else; `loadCustomCommands` still owns reading. Exported through `./config` next to its sibling
+      (`config-entry.ts:74-83`) with a test in the same task — wiring triad pillars (a) and (b) met
+      in-repo, (c) is the consumer adoption in T5.2.
+
+  - id: F-arch-18
+    severity: INFO
+    file: packages/agents/src/bridge/approval-decision.ts
+    line: 73
+    plan_ref: T2.1
+    summary: 'No issues found — correct placement, correct openness, fail-closed default.'
+    evidence: |
+      A pure function over its arguments with no state, a type-only import from `@theokit/sdk/sandbox`
+      (no runtime coupling, G2/sdk-runtime.md respected), and an exhaustive `switch` over a
+      `as const` tuple union so a new mode is a compile error rather than a silent `false`. OCP is
+      handled by composition — `ShouldAutoApproveOptions.writeScopedTools` lets a product that
+      renamed its write tools override the set instead of forking the rule. Living beside
+      `approval-posture.ts` rather than inside it is argued from the two different questions the two
+      answer (factory-time vs per-event), which is architecture.md § 3 applied correctly. Exported on
+      the published `./bridge` subpath (`bridge/index.ts:78-84`) with `approval-decision.test.ts` in
+      the same task.
+
+  - id: F-arch-19
+    severity: INFO
+    file: packages/agents/src/session/gc/registry-remover.ts
+    line: 57
+    plan_ref: T2.2 (helper extracted after the sweep hang)
+    summary: 'The extraction itself is right (one rule, one place, third-occurrence rule met); the residual issues are its placement (F-arch-4) and its `unknown` signature (F-arch-5).'
+    evidence: |
+      `awaitRegistryRemoval` bounds the injected remover in one place for both call sites, the race is
+      one-directional and the reason is written down (a late settle cannot reach back into a returned
+      result), the timer is cleared in `finally`, and `timeoutMs === undefined` degrades to a plain
+      await so existing callers are unaffected. `SessionRegistryRemoverError extends TheokitAgentError`
+      keeps the consumer's single `instanceof` discriminator working (U-11), and the message names the
+      recoverable/unrecoverable asymmetry. Order-of-operations (registry before unlink) is stated as
+      the invariant at both call sites.
+
+  - id: F-arch-20
+    severity: INFO
+    file: ../theokit-sdk/packages/sdk/src/mcp-auth.ts
+    line: 1
+    plan_ref: T1.3
+    summary: 'No issues found in the SDK slice (mcp-auth barrel, `readJsonlTail` marker matching, `appendJsonl` directory mode).'
+    evidence: |
+      `mcp-auth.ts` is a thin public barrel over `internal/mcp/*` that deliberately withholds
+      `_resetForTests` — the right subset, and a sanctioned subpath rather than a new `internal/*`
+      one the package is retiring. `transcript-ops.ts:167-186` replaces a content-driven control path
+      (`line.includes(marker)`) with a structural discriminant check on `subtype`/`type`, moving the
+      decision off attacker/user-controlled text; the unparseable line is explicitly not a marker.
+      `jsonl.ts:127` adds `mode: 0o700` at creation only, with the hot-path reason written down and
+      the pre-existing case correctly delegated to `assertSecureModes`. No dependency direction
+      changes; `packages/sdk/tsup.config.ts` gains one entry.
+
+  - id: F-arch-21
+    severity: INFO
+    file: ../theokit-tui/src/select-list-model.ts
+    line: 55
+    plan_ref: T3.4
+    summary: 'No issues found — `windowFor` extended by an option on the existing clamp rather than a sibling function, with the pre-existing behaviour as the default.'
+    evidence: |
+      `anchor: WindowAnchor = 'trailing'` keeps every current caller byte-identical (OCP without a
+      second implementation of one rule — the alternative, a `windowAround` beside it, is named and
+      rejected in the docblock). `keyboard-help-model.ts` is likewise a pure derivation with no
+      hidden state: an unbound or blank key cannot be advertised because there is nothing to derive
+      it from, which is the structural version of the discipline it replaces.
+
+  - id: F-arch-22
+    severity: INFO
+    file: packages/agents/src/ask/pending-ledger.ts
+    line: 36
+    plan_ref: T2.7
+    summary: 'No issues found — the payload slot is a backwards-compatible type parameter the framework never reads.'
+    evidence: |
+      `PendingItem<TPayload = undefined>` / `PendingLedger<TPayload = undefined>` /
+      `createPendingLedger<TPayload = undefined>()` — every existing caller keeps compiling with no
+      argument, and the framework carries the payload without interpreting it, preserving the
+      framework/surface split the module's docstring (`ask/index.ts:12-16`) declares.
+
+  - id: F-arch-23
+    severity: INFO
+    file: packages/agents/src/index.ts
+    line: 138
+    plan_ref: T4.2
+    summary: 'No issues found — the boundary claim was narrowed from an assertion to a measurement, and the measurement is now enforced by a test rather than by a comment.'
+    evidence: |
+      The "boundary is CLOSED / consumer imports ZERO `@theokit/sdk*`" sentence is replaced by a
+      pointer to `scripts/lib/boundary-decisions.mjs` (25 decisions, each with the reachable/total
+      symbol count behind it) and to the test that fails when the SDK adds an undecided subpath. No
+      dependency direction changed; nothing was bulk-forwarded, which is the G7/G11-correct outcome.
+      The one gap in the mechanism is F-arch-6.
+
+  - id: F-arch-24
+    severity: INFO
+    file: tests/integration/crossval-gaps.test.ts
+    line: 71
+    plan_ref: T0.1 / D1
+    summary: 'No issues found — the parser extraction was correctly deferred to its second consumer, and the sibling-surface reader skips loudly rather than passing.'
+    evidence: |
+      The helper stayed inline until `check-invention-reachability.mjs` became the second consumer
+      (G12 Rule of 3 respected, and the docblock records that an early extraction was reverted at a
+      phase-boundary review). `siblingSurface()` returns `undefined` — a loud skip — when a sibling's
+      `dist` is absent, so unverifiable rows are never reported green; the `walkDts` recursion fix is
+      the false-absence class this task exists to remove.
+
+  - id: F-arch-25
+    severity: INFO
+    file: (grouped) packages/agents/src/{auth,config,hooks}/*, tests/**, CHANGELOG.md, wiki/**, .claude/**
+    line: 0
+    plan_ref: T2.4, T4.3, and out-of-plan work carried in the range
+    summary: 'Reviewed, no additional architectural findings beyond those above.'
+    evidence: |
+      Scanned for the mechanical rules and found clean: no `any` and no `console.*` in changed
+      production sources under `packages/**/src` (`git diff | grep`); every changed production file
+      is under the G6 budget excluding comments (largest: `auth/resolve-credential.ts` 277 code
+      lines of 595 raw, `session-lifecycle.ts` 201 of 404); no CommonJS in `src/`; file names
+      kebab-case, classes PascalCase, functions camelCase, module constants UPPER_SNAKE
+      (`FILE_INLINE_CAP`, `APPROVAL_MODES`, `WRITE_SCOPED_TOOLS`, `KNOWN_TOOL_NAMES`,
+      `DOORLESS_DECISIONS`). `packages/agents` imports no `theokit` core and no upward package
+      (G1 holds); `@theokit/tui` imports nothing from `@theokit/agents` (G1 holds — the cost of that
+      choice is F-arch-3). No import cycle detected in the changed graph (the nearest approach is
+      F-arch-4). Both new gates are wired into `pnpm check:all` (`package.json:33`) and are guarded
+      against side effects on import (`isDirectInvocation`), with CLI-level tests in
+      `tests/integration/tooling-gates-cli.test.ts`.
+
+summary:
+  blocker: 0
+  high: 2
+  medium: 7
+  low: 7
+  info: 9
+  verdict_input: >
+    Two HIGH findings. F-arch-1 (duplicated `encodeProjectDir` inside the absorbed liveness oracle)
+    is the material one: its failure mode is classifying live projects `dead`, and the caller of a
+    `dead` verdict deletes transcripts. F-arch-2 (a fake `ReadonlyMap` behind an `as` assertion) breaks
+    substitutability between two exports of the same declared type on the package's new public surface.
+    Both are small, local fixes. The MEDIUM band is dominated by mechanism gaps in the very machinery
+    this plan built to close mechanism gaps: an undecided subpath the plan itself created (F-arch-6),
+    unchecked `.d.mts` twins (F-arch-7), and a deliberately duplicated tool-name list with no cross-repo
+    check that is already stale (F-arch-3).

