@@ -30,6 +30,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **O guarda contra "run vazio" era ele próprio vazio.** `ci_refuses_a_mostly_skipped_run` existe
+  para impedir que uma execução onde tudo pulou passe como verde (EC-4, MUST-FIX). O comentário dele
+  afirmava "runs last by declaration order so `skipped` is populated"; o bloco meta é declarado ~30
+  linhas **acima** do primeiro bloco de lacuna, então ele executava em 2º de 33 contra uma lista
+  vazia — uma execução com as 12 lacunas puladas continuava reportando 33 passando. Passou para
+  `afterAll`, que não depende de ordem alguma, e a regra virou módulo próprio com teste direto:
+  verificar um guarda raciocinando sobre onde ele está no arquivo foi exatamente o que falhou.
+  Provado empiricamente — com `dist` removido e `CI=1` ele agora falha nomeando as lacunas não
+  verificadas (review F-tests-1).
+
+
 - **A métrica da Goal deste plano não existia, e um número de outro plano ocupava o lugar dela.** A
   Goal diz "17/17 asserções de fechamento" apontando para `crossval-gaps.test.ts` — que é o registro
   do plano **antecessor**: declara `G1..G12`, afirma `toHaveLength(12)`, e nenhuma asserção dele
