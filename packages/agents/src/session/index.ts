@@ -41,3 +41,9 @@ export {
   type TranscriptGCOptions,
   type TranscriptGCPlan,
 } from './gc/transcript-gc.js'
+
+/**
+ * T2.6 — why an empty session list can be empty. Framework-owned because it reads THEOKIT_HOME and
+ * this package's  layout: a product should not explain a directory it does not control.
+ */
+export { transcriptRootHint } from './transcript-root-hint.js'
