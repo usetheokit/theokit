@@ -47,3 +47,19 @@ export {
  * this package's  layout: a product should not explain a directory it does not control.
  */
 export { transcriptRootHint } from './transcript-root-hint.js'
+
+/**
+ * T3.2 — is the project behind an encoded transcript directory still there?
+ *
+ * Framework-owned for the same reason as the hint above: the question is only hard because
+ * `encodeProjectDir` is one-way, which is this package's decision. Enumeration stays injected —
+ * which directories are candidates is product policy — and the verdict is three-valued because
+ * callers delete on `dead` and "could not tell" must not be one.
+ */
+export {
+  classifyProjects,
+  type ClassifyProjectsOptions,
+  type FsSeam,
+  type Liveness,
+  type LivenessVerdict,
+} from './liveness-oracle.js'
