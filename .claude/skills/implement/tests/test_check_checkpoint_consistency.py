@@ -125,3 +125,83 @@ def test_empty_progress_no_commits_is_pass(tmp_path: Path) -> None:
     _commit(repo, "README.md", "# hi\n", "docs: init")  # unrelated, no task id
     report = check_checkpoint_consistency({"tasks": []}, repo, ["T1.1"])
     assert report.status == "PASS"
+
+
+def _mk(p: Path) -> Path:
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+# ---------- cross-repo tasks -------------------------------------------
+#
+# A plan may legitimately span two repositories — this one does, and its `#### Files to edit`
+# sections name `../theokit-sdk/...` explicitly. When a task's whole commit lands in the sibling,
+# `commit_sha` holds a SHA this repo has never seen, and the forward check reported it as
+# "fabricated or stale". It was neither: it was unverifiable, and the check could not tell the two
+# apart.
+#
+# So a task may declare `repo`, and the SHA is then verified THERE. This widens what gets checked —
+# a cross-repo SHA went from unverifiable to verified — and must not become a way to skip the check:
+# the last three tests below are the ones that matter, because they are the escape hatches a
+# `repo` field would open if it were implemented carelessly.
+
+
+def test_cross_repo_commit_is_verified_in_the_declared_repo(tmp_path: Path) -> None:
+    main, sibling = _repo(_mk(tmp_path / "a")), _repo(_mk(tmp_path / "b"))
+    _commit(main, "f.txt", "x", "T1.1 local work")
+    sha = _commit(sibling, "g.txt", "y", "T1.2 sibling work")
+
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T1.2", "status": "committed", "commit_sha": sha,
+                    "repo": str(sibling)}]},
+        main, ["T1.2"],
+    )
+    assert [f.code for f in report.findings if f.severity == "HIGH"] == []
+
+
+def test_cross_repo_sha_that_does_not_exist_there_still_fails(tmp_path: Path) -> None:
+    main, sibling = _repo(_mk(tmp_path / "a")), _repo(_mk(tmp_path / "b"))
+    _commit(sibling, "g.txt", "y", "T1.2 sibling work")
+
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T1.2", "status": "committed",
+                    "commit_sha": "0" * 40, "repo": str(sibling)}]},
+        main, ["T1.2"],
+    )
+    assert "committed_sha_not_in_git" in {f.code for f in report.findings}
+
+
+def test_repo_pointing_at_a_non_repository_fails(tmp_path: Path) -> None:
+    # The obvious escape hatch: name a path that is not a git repo, and hope the check gives up
+    # quietly. `git -C` fails there, so the SHA stays unverified — which is a FAILURE, not a pass.
+    main = _repo(_mk(tmp_path / "a"))
+    plain = tmp_path / "not-a-repo"
+    plain.mkdir()
+
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T1.2", "status": "committed", "commit_sha": "0" * 40,
+                    "repo": str(plain)}]},
+        main, ["T1.2"],
+    )
+    assert "committed_sha_not_in_git" in {f.code for f in report.findings}
+
+
+def test_repo_pointing_nowhere_fails(tmp_path: Path) -> None:
+    main = _repo(_mk(tmp_path / "a"))
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T1.2", "status": "committed", "commit_sha": "0" * 40,
+                    "repo": str(tmp_path / "vanished")}]},
+        main, ["T1.2"],
+    )
+    assert "committed_sha_not_in_git" in {f.code for f in report.findings}
+
+
+def test_a_local_task_is_still_checked_against_the_main_repo(tmp_path: Path) -> None:
+    # The single-repo path must be untouched: no `repo` means this repo, and a bad SHA still fails.
+    main = _repo(_mk(tmp_path / "a"))
+    _commit(main, "f.txt", "x", "T1.1 local work")
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T1.1", "status": "committed", "commit_sha": "0" * 40}]},
+        main, ["T1.1"],
+    )
+    assert "committed_sha_not_in_git" in {f.code for f in report.findings}

@@ -131,16 +131,30 @@ def check_checkpoint_consistency(
     findings: list[Finding] = []
 
     # Forward: every committed task points at a SHA that exists in git.
+    #
+    # A task MAY declare `repo` — a plan can legitimately span two repositories, and this one does
+    # (its `#### Files to edit` sections name `../theokit-sdk/...`). When the whole commit lands in
+    # the sibling, `commit_sha` is a SHA this repo has never seen. Reporting that as "fabricated or
+    # stale" conflated two different facts: the check could not distinguish a made-up SHA from one
+    # it simply had no way to look at.
+    #
+    # Verifying it in the declared repo makes it checkable, which is strictly MORE checking. It is
+    # deliberately not an escape hatch: a `repo` that is not a git repository, or does not exist, or
+    # does not contain the SHA, all fail exactly as before — `git -C` returns non-zero and
+    # `_commit_exists` is False. Absent `repo`, nothing changes.
     for tid in sorted(committed_ids):
         sha = by_id[tid].get("commit_sha")
         if not sha:
             continue  # schema gate already flags committed-without-sha
-        if not _commit_exists(repo_root, sha):
+        declared_repo = by_id[tid].get("repo")
+        where = Path(declared_repo) if isinstance(declared_repo, str) and declared_repo else repo_root
+        if not _commit_exists(where, sha):
             findings.append(Finding(
                 "HIGH", "committed_sha_not_in_git",
-                f"Task {tid} is 'committed' with commit_sha '{sha}', but no such commit "
-                "exists in the repository. The checkpoint points at a fabricated or "
-                "stale SHA."))
+                f"Task {tid} is 'committed' with commit_sha '{sha}', but no such commit exists "
+                f"in {where}. The checkpoint points at a fabricated or stale SHA"
+                + (", or `repo` names a path that is not a repository holding it."
+                   if declared_repo else ".")))
 
     # Backward: every plan task referenced by a real commit must be committed here.
     referenced = _task_ids_in_git_history(repo_root, plan_task_ids)
