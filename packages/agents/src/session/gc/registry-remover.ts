@@ -39,6 +39,21 @@ export class SessionRegistryRemoverError extends TheokitAgentError {
   }
 }
 
+/**
+ * How long to wait for a registry that has not answered, when the caller says nothing.
+ *
+ * The bound was OPT-IN in the first version of this fix, and nothing opted in: no production call
+ * site passed `registryTimeoutMs`, so the shipped default was byte-for-byte the hang the fix was
+ * written to close — while `session-lifecycle.ts` states the guarantee unconditionally and the
+ * consumer's `Agent.delete` is handed straight to this seam. A bound nobody applies is a comment.
+ *
+ * 30s is generous for what a registry removal is (a map delete, or a small write) and short enough
+ * that an operator notices. The failure direction is safe by construction: on timeout the transcript
+ * is KEPT, and an orphan file is collected by the next sweep, whereas a registry entry pointing at a
+ * deleted transcript is repaired by nothing.
+ */
+export const DEFAULT_REGISTRY_TIMEOUT_MS = 30_000
+
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   return typeof (value as PromiseLike<unknown> | null)?.then === 'function'
 }
@@ -51,15 +66,19 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
  * built (EC-8). Reporting "not removed" for something that later succeeded is wrong in the SAFE
  * direction; reaching back into a returned result would not be.
  *
- * With no `timeoutMs` the behaviour is a plain await — the bound is opt-in, so an existing caller
- * that never passed one keeps exactly what it had.
+ * With no `timeoutMs` the {@link DEFAULT_REGISTRY_TIMEOUT_MS} applies. Unbounded is still reachable
+ * — pass a non-finite value such as `Infinity` — but it has to be ASKED FOR, because the version of
+ * this function where absence meant unbounded shipped the hang it was written to close.
+ *
+ * A non-thenable outcome never reaches the race: a remover that returns a value rather than a
+ * promise has already finished.
  */
 export async function awaitRegistryRemoval(
   outcome: unknown,
   sessionId: string,
-  timeoutMs: number | undefined,
+  timeoutMs: number | undefined = DEFAULT_REGISTRY_TIMEOUT_MS,
 ): Promise<unknown> {
-  if (!isThenable(outcome) || timeoutMs === undefined) return outcome
+  if (!isThenable(outcome) || !Number.isFinite(timeoutMs)) return outcome
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
