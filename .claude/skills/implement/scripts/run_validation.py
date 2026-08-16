@@ -455,6 +455,40 @@ def check_checkpoint_consistency_gate(project_root: Path, slug: str) -> dict[str
     }
 
 
+def check_dist_freshness_gate(project_root: Path) -> dict[str, Any]:
+    """Refuse to certify a handoff whose typecheck was measured against stale artifacts.
+
+    Packages resolve each other through built `.d.ts` and `dist/` is gitignored, so nothing forces a
+    rebuild before `tsc --noEmit`. Measured 2026-08-16: an async signature change typechecked clean
+    for a full day against a declaration emitted the previous evening, and a CLI shipped calling the
+    function without `await`.
+
+    Placed HERE rather than in the `typecheck` script deliberately. Building on every typecheck made
+    a gate people run in a loop heavy enough to be killed by the memory watchdog on this machine;
+    during development an edited-but-unrebuilt source is the normal state anyway. At handoff it is
+    not: it means the report about to be believed describes the wrong types.
+    """
+    from check_dist_freshness import check_dist_freshness
+
+    packages = project_root / "packages"
+    if not packages.is_dir():
+        return {"name": "dist_freshness", "status": "SKIP",
+                "reason": "no packages/ directory — nothing resolves through built types"}
+
+    findings = check_dist_freshness(packages)
+    if not findings:
+        return {"name": "dist_freshness", "status": "PASS"}
+    return {
+        "name": "dist_freshness",
+        "status": "FAIL",
+        "findings": findings,
+        "reason": (
+            "built declarations are older than their sources; every typecheck result in this "
+            "report crossing those packages was measured against code that no longer exists"
+        ),
+    }
+
+
 def check_acceptance_criteria_gate(project_root: Path, slug: str) -> dict[str, Any]:
     """Enforce the plan's AC/DoD obligations that run_validation does not otherwise
     cover (file-size budget, CHANGELOG-updated) and surface the non-mechanizable
@@ -514,6 +548,7 @@ def main() -> int:
     checks = [
         check_progress_schema_gate(project_root, args.slug),
         check_checkpoint_consistency_gate(project_root, args.slug),
+        check_dist_freshness_gate(project_root),
         check_npm_test(project_root),
         check_npm_typecheck(project_root),
         check_npm_lint(project_root),
