@@ -135,6 +135,22 @@ helper that got it wrong could not be tested alone. Both bodies now sit behind a
 guard, which is stricter than the sibling gates (they run on import and pass only because they happen
 not to exit). Commit `06ee38fd`.
 
+The rest of `check:all`, run rather than assumed:
+
+| Gate | Result |
+|---|---|
+| `check:licenses` | OK — 554 packages, all permissive |
+| `check:audit` | OK — **0 critical/high in production dependencies** (production: 0/0/4 moderate/2 low). 15 high exist in DEV-only transitive build tooling; the gate reports them and does not block, by its own documented design, because they need upstream releases |
+| `test:coverage` | statements 84.21%, branches 77.06%, functions 83.76%, lines 86.04% — **above every configured threshold** (`vitest.config.ts`: 80/75/80/80), zero threshold failures |
+| dependencies added by this plan | **zero**. The only `package.json` additions on the branch are `@theokit/sdk` floor bumps that predate this work. Parsimony rung 4 held throughout |
+| CHANGELOG discipline | `theokit` 14 `[Unreleased]` entries, `theokit-tui` 3, `theokit-sdk` 3 changesets (`api-key-provider-prefix`, `mcp-auth-subpath`, `transcript-marker-and-dir-mode`) |
+
+One number deserves the distinction, because it reads as a pass or a fail depending on which document
+you open: the implement skill's generic Global DoD names **≥ 90%** coverage, and this project sets its
+own thresholds in `vitest.config.ts` at 80/75/80/80. The measured coverage clears the project's gate
+with margin and does not reach the template's generic figure. Reported as exactly that rather than
+resolved silently in either direction.
+
 Pre-existing findings, recorded rather than fixed (neither file was touched by this plan; fixing
 another slice's export could break a consumer):
 
