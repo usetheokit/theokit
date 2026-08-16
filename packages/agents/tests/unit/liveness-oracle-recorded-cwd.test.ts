@@ -213,3 +213,101 @@ describe('classifyProjects — the recorded cwd is the answer, the search is the
     expect(out.get(name)?.reason).toMatch(/EACCES|permission/i)
   })
 })
+
+/**
+ * Round two, 2026-08-16 — the defects the `/review` found in the round-one fix.
+ *
+ * Round one replaced a search that guessed with a transcript read that answers, and that direction
+ * was right. What it got wrong is that it treated "the recorded cwd re-encodes to this name" as
+ * VALIDATION. The file's own opening paragraph says the encoding is many-to-one, so that check
+ * narrows the recorded cwd to a COLLISION CLASS, never to a path — and the verdict derived from it
+ * was `dead`, on the branch where the caller deletes.
+ *
+ * Three failures follow from it, and the third is the one that makes this urgent rather than merely
+ * wrong: transcripts are user-writable data, so the class member that decides the verdict can be
+ * PLANTED.
+ *
+ * Note on provenance: the first-match flaw exists in the consumer's oracle too
+ * (`TheoCode/.../liveness-oracle.ts:168-181` — one `recordedCwd`, then `isDirectory(cwd)`). This is
+ * not a faithful absorption gone wrong; it is a defect the framework is in a position to fix and the
+ * consumer was not, because the framework owns the encoding that creates the collision.
+ */
+describe('classifyProjects — a collision class is not a path', () => {
+  it('test_a_live_sibling_cwd_outweighs_a_gone_one_in_the_same_collision_class', () => {
+    // `/home/op/my-app` and `/home/op/my/app` encode identically and therefore SHARE one project
+    // directory. One of them being gone says nothing about the other.
+    const live = '/home/op/my-app'
+    const gone = '/home/op/my/app'
+    const name = encode(live)
+    expect(encode(gone), 'the fixture is only meaningful if they collide').toBe(name)
+
+    const fs = seamOver([live], {
+      [`${PROJECTS_ROOT}/${name}`]: {
+        'a.jsonl': JSON.stringify({ cwd: gone }),
+        'b.jsonl': JSON.stringify({ cwd: live }),
+      },
+    })
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness).toBe('alive')
+  })
+
+  it('test_a_planted_transcript_cannot_condemn_a_live_project', () => {
+    // Transcripts are user-writable. `_home_op_my_app` was never a path, but it encodes to the same
+    // name, so under first-match-wins it decides the verdict for a project that exists.
+    const live = '/home/op/my-app'
+    const planted = '_home_op_my_app'
+    const name = encode(live)
+    expect(encode(planted)).toBe(name)
+
+    const fs = seamOver([live], {
+      [`${PROJECTS_ROOT}/${name}`]: {
+        'planted.jsonl': JSON.stringify({ cwd: planted }),
+        'real.jsonl': JSON.stringify({ cwd: live }),
+      },
+    })
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness, 'a plantable field must not reach `dead`').toBe('alive')
+  })
+
+  it('test_a_stat_that_could_not_be_performed_is_never_absence', () => {
+    // The consumer's scar B-020: its seam is `isDirectory(): boolean | undefined` because an adapter
+    // that mapped every stat failure to `false` classified live projects DEAD. Round one absorbed
+    // the interface and dropped the scar — `exists` was two-valued, on the delete path.
+    const cwd = '/home/op/unstattable'
+    const name = encode(cwd)
+    const fs: FsSeam = {
+      exists: () => {
+        const e = new Error('permission denied') as NodeJS.ErrnoException
+        e.code = 'EACCES'
+        throw e
+      },
+      listEntries: () => ['a.jsonl'],
+      firstLine: () => JSON.stringify({ cwd }),
+    }
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    })
+
+    const got = out.get(name)
+    expect(got?.liveness, 'could not look is not did not find').toBe('undetermined')
+    expect(got?.reason).toMatch(/EACCES|permission/i)
+  })
+})

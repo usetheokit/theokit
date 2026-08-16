@@ -6,27 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- **`classifyProjects` marcava projetos vivos como `dead`, no caminho em que o chamador apaga.**
-  Medido em 2026-08-16 contra o `~/.theokit/projects` de uma máquina real: **6 de 6** diretórios de
-  projeto existentes — incluindo este repositório, o SDK e o TheoCode — voltaram `dead`. Três causas,
-  e a primeira é a que originou as outras: o módulo absorveu o *fallback* do consumidor (buscar numa
-  lista de candidatos) e descartou a *resposta*. O transcript grava o `cwd` em que foi escrito;
-  ler a primeira linha dele resolve o projeto sem busca alguma, e é o caminho que o consumidor mediu
-  resolvendo 91 de 120 projetos amostrados. Agora um veredito `dead` exige **evidência positiva de
-  ausência** — um `cwd` gravado que não está no disco. Todo o resto é `undetermined`.
+- **`classifyProjects` (`@theokit/agents/session`) — responde "o projeto por trás de
+  `projects/<encoded>/` ainda existe?" sem que cada produto escreva a busca de novo.** A pergunta é
+  difícil porque `encodeProjectDir(cwd)` é `cwd.replace(/[^a-zA-Z0-9]/g, '-')`: mão única e
+  muitos-para-um, então um nome de diretório não volta a ser um caminho — só pode ser *conferido*
+  contra candidatos. Quem guarda ou coleta transcripts precisa responder isso; a versão do consumidor
+  tem 188 linhas cuja própria docstring mediu 13.269 diretórios de projeto, ~3.200 caindo em busca no
+  filesystem e ~64M syscalls sem orçamento compartilhado.
+
+  Três propriedades sustentam a segurança do módulo, e **cada uma existe porque abrir mão dela
+  produziu, medidamente, apagar dado vivo**:
+
+  1. **O veredito é de três valores e `undetermined` não é um `dead` fraco.** O chamador APAGA em
+     `dead`. Orçamento gasto, diretório ilegível, enumeração que estourou — tudo vira `undetermined`,
+     porque apagar em "não deu para saber" é perda de dado e os dois erros não são simétricos.
+  2. **`FsSeam.exists` devolve `boolean | undefined`.** O terceiro estado está no *tipo de retorno*, e
+     não na prosa, porque é o único lugar onde quem escreve o adapter lê de fato. Uma assinatura
+     `=> boolean` convida ao `try { return existsSync(p) } catch { return false }` — que é exatamente
+     a cicatriz B-020 do consumidor, onde um cwd que existe mas não pode ser stat-ado (EACCES num pai
+     não-atravessável, ENOTDIR no meio do caminho, EMFILE numa varredura larga) era classificado DEAD.
+  3. **Todos os membros da classe de colisão são sondados, não o primeiro.** Como a codificação é
+     muitos-para-um, `encodeProjectDir(cwd) === name` estreita para uma CLASSE, nunca para um caminho
+     — `/home/op/my-app` e `/home/op/my/app` dividem um diretório de projeto. Primeiro-que-casar deixa
+     um registro condenar os demais, e transcripts são graváveis pelo usuário, então esse registro pode
+     ser **plantado**. Qualquer membro vivo agora dá `alive`; `dead` exige que todos estejam
+     definitivamente ausentes.
+
+  **O orçamento é compartilhado pela varredura inteira, não por projeto** — um limite que reseta a
+  cada iteração não é limite, e foi o que produziu o número de 64M.
+
+  Medição que originou (1) e (2): em 2026-08-16, contra o `~/.theokit/projects` de uma máquina real,
+  **6 de 6** diretórios de projeto existentes — incluindo este repositório, o SDK e o TheoCode —
+  voltaram `dead`. O módulo havia absorvido o *fallback* do consumidor (buscar numa lista de
+  candidatos) e descartado a *resposta*: o transcript grava o `cwd` em que foi escrito, e ler a
+  primeira linha resolve o projeto sem busca alguma — caminho que o consumidor mediu resolvendo 91 de
+  120 projetos amostrados. Nada disso chegou a um consumidor: `npm pack @theokit/agents@9.4.0`
+  publica o subpath `./session` mas não contém `classifyProjects` nem `FsSeam`, então isto entra como
+  export novo e não como quebra.
 
 ### Changed
 
-- BREAKING: `ClassifyProjectsOptions.listProjects` virou **`candidatePaths`**, e `FsSeam` ganhou
-  `listEntries` e `firstLine` (`@theokit/agents/session`). O rename não é cosmético: `listProjects`
-  nomeava dois contratos diferentes na mesma costura — no consumidor devolve **nomes de diretório
-  codificados** (a classificação é uma costura injetada à parte), e aqui era lido como **caminhos
-  absolutos reais**. Ligar os dois é o que produziu os 6-de-6 acima. O nome novo diz o que a função
-  devolve. Migração: renomeie a opção e forneça os dois métodos novos do `FsSeam` (`readdirSync` e a
-  primeira linha do arquivo); `projectsRoot` passa a ser obrigatório, e use `projectsRoot()` em vez
-  de concatenar o segmento à mão.
 - BREAKING: `deleteSession` e `runTranscriptGC` (`@theokit/agents/session`) passaram a ser `async`.
   O retorno vai de `T` para `Promise<T>`; quem chamava sem `await` lê `undefined` em vez do resultado
   e estoura no primeiro acesso a campo — foi exatamente o que aconteceu com o comando
