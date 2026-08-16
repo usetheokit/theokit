@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **O limite que impedia o GC de travar era opt-in, e ninguém optava.** `registryTimeoutMs` era
+  opcional sem default e **zero call sites de produção** o passavam — então o comportamento enviado
+  era, byte a byte, o travamento que a correção anterior alegava ter fechado, enquanto
+  `session-lifecycle.ts` afirmava a garantia sem condição alguma. Pior: o teste que "provava" o
+  default usava um remover **síncrono**, um input incapaz de travar, e portanto fixava o bug como
+  contrato. O default agora é limitado (`DEFAULT_REGISTRY_TIMEOUT_MS`, 30s); ilimitado continua
+  alcançável passando um valor não-finito, mas precisa ser **pedido**. A direção da falha é segura
+  por construção: no timeout o transcript é mantido, e arquivo órfão a próxima varredura coleta —
+  entrada de registry apontando para transcript apagado, nada repara (review F-dom-3/concurrency).
+
+
 - **O comando `theokit agent sessions gc` quebrava em runtime, e o typecheck dizia que estava tudo
   bem.** T2.2 tornou `runTranscriptGC` assíncrona e o único consumidor de produção no repo continuou
   chamando-a sem `await`: `result.removed` era `undefined` num Promise e o comando estourava antes de
