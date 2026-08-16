@@ -87,18 +87,39 @@ def _commit_exists(repo_root: Path, sha: str) -> bool:
     return result.returncode == 0
 
 
-def _task_ids_in_git_history(repo_root: Path, candidate_ids: list[str]) -> set[str]:
+def _task_ids_in_git_history(
+    repo_root: Path,
+    candidate_ids: list[str],
+    base: str | None = None,
+) -> set[str]:
     """Of `candidate_ids`, which appear (as whole tokens) in a recent commit body.
 
     One git pass, parsed locally — cheaper and more precise than one `git log --grep`
     per id. Records are NUL-separated (`-z`); each is `<sha>\\x1f<full message>`.
+
+    SCOPED TO `base..HEAD` when `base` resolves. Unscoped, this read 500 commits of whatever
+    history happened to be recent, and task ids are generic: the 2026-08-16 review measured this
+    plan's `T5.1` and `T5.2` flagged by `99d5ec57` and `e3595b4b` — commits from a DIFFERENT plan
+    that reused the same ids. Any repository running more than one plan collides.
+
+    An unresolvable base falls back to the unscoped scan, never to an empty set. A gate that
+    reports clean because it could not look is worse than one that over-reports.
     """
     if not candidate_ids:
         return set()
+
+    scope: list[str] = []
+    if base:
+        probe = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--verify", "--quiet", base],
+            capture_output=True, text=True, timeout=10,
+        )
+        if probe.returncode == 0:
+            scope = [f"{base}..HEAD"]
     try:
         result = subprocess.run(
             ["git", "-C", str(repo_root), "log", "-n", str(_GIT_SCAN_LIMIT),
-             "-z", "--format=%H%x1f%B"],
+             "-z", "--format=%H%x1f%B", *scope],
             capture_output=True, text=True, timeout=20,
         )
     except (subprocess.SubprocessError, FileNotFoundError):
@@ -122,6 +143,7 @@ def check_checkpoint_consistency(
     progress: dict,
     repo_root: Path,
     plan_task_ids: list[str],
+    base: str | None = None,
 ) -> CheckpointConsistencyReport:
     tasks = progress.get("tasks", []) if isinstance(progress, dict) else []
     tasks = [t for t in tasks if isinstance(t, dict)]
@@ -157,7 +179,7 @@ def check_checkpoint_consistency(
                    if declared_repo else ".")))
 
     # Backward: every plan task referenced by a real commit must be committed here.
-    referenced = _task_ids_in_git_history(repo_root, plan_task_ids)
+    referenced = _task_ids_in_git_history(repo_root, plan_task_ids, base)
     for tid in plan_task_ids:
         if tid not in referenced:
             continue
@@ -168,6 +190,16 @@ def check_checkpoint_consistency(
                 f"Task {tid} is referenced by a real commit in git but has NO entry in "
                 "the checkpoint. A finished task was committed without updating "
                 ".progress — the checkpoint is out of sync with reality."))
+        elif task.get("status") == "blocked" and str(task.get("blocked_reason") or "").strip():
+            # A task recorded `blocked` WITH a reason is not a forgotten checkpoint update — it is an
+            # explicit declaration, and `phase_has_blocked_tasks` already reports it at HIGH. This
+            # check exists to catch an OMISSION; there is none here. Without the exemption a commit
+            # that merely explains why a task is blocked ("docs: why T5.0 is blocked") reads as a
+            # claim that it was implemented.
+            #
+            # The reason is required, deliberately: `blocked` with no justification is a status
+            # nobody stood behind, which is exactly what a stale checkpoint looks like.
+            continue
         elif task.get("status") != "committed":
             findings.append(Finding(
                 "HIGH", "task_committed_in_git_not_in_progress",
@@ -183,6 +215,15 @@ def check_checkpoint_consistency(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--base",
+        default="origin/develop",
+        help=(
+            "Scope the task-id scan to BASE..HEAD. Task ids are generic, so an unscoped "
+            "scan of recent history flags this plan's T5.1 with another plan's commit. "
+            "An unresolvable base falls back to the unscoped scan, never to no check."
+        ),
+    )
     parser.add_argument("--progress", type=Path, required=True)
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
@@ -203,7 +244,7 @@ def main() -> int:
         return 2
 
     plan_ids = plan_task_ids_from_text(args.plan.read_text(encoding="utf-8-sig"))
-    report = check_checkpoint_consistency(progress, args.repo_root, plan_ids)
+    report = check_checkpoint_consistency(progress, args.repo_root, plan_ids, args.base)
 
     if args.json:
         print(json.dumps({

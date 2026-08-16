@@ -170,7 +170,7 @@ def _phase_checkpoint_findings(
         return []
     all_ids = plan_task_ids_from_text(plan_path.read_text(encoding="utf-8-sig"))
     phase_ids = [tid for tid in all_ids if tid.startswith(f"T{phase}.")]
-    report = check_checkpoint_consistency(progress, repo_root, phase_ids)
+    report = check_checkpoint_consistency(progress, repo_root, phase_ids, "origin/develop")
     return [{"severity": f.severity, "code": f.code, "message": f.message}
             for f in report.findings]
 

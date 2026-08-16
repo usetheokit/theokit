@@ -445,7 +445,7 @@ def check_checkpoint_consistency_gate(project_root: Path, slug: str) -> dict[str
                 "reason": "checkpoint is malformed JSON (see progress_schema gate)"}
 
     plan_ids = plan_task_ids_from_text(plan.read_text(encoding="utf-8-sig"))
-    report = check_checkpoint_consistency(progress, project_root, plan_ids)
+    report = check_checkpoint_consistency(progress, project_root, plan_ids, "origin/develop")
     return {
         "name": "checkpoint_consistency",
         "status": report.status,

@@ -205,3 +205,91 @@ def test_a_local_task_is_still_checked_against_the_main_repo(tmp_path: Path) -> 
         main, ["T1.1"],
     )
     assert "committed_sha_not_in_git" in {f.code for f in report.findings}
+
+
+# ---------- the reverse check's two false-positive sources ---------------
+#
+# Both were measured by the 2026-08-16 review, which found this gate blocking `/review`'s own
+# pre-condition with four findings that were all wrong:
+#
+#   (a) The id scan reads `git log -n 500` over ALL recent history with no plan scoping. Task ids
+#       are generic, so a commit from a DIFFERENT plan that used `T5.1` flags this plan's T5.1.
+#       Measured: `99d5ec57 feat(scripts): T5.1 — o gate de paridade…` and
+#       `e3595b4b docs(plan): T5.2 dispara o gatilho…`, neither on the branch under test.
+#   (b) A task recorded `blocked` WITH a reason is not a forgotten checkpoint update — it is an
+#       explicit declaration, already reported at HIGH by `phase_has_blocked_tasks`. Treating it
+#       like `pending` turns "I wrote down why this cannot proceed" into a failure.
+#
+# The tests that must KEEP failing are written first, because a fix to a false positive that also
+# silences the true positive is not a fix.
+
+
+def test_a_commit_from_another_branch_does_not_flag_this_plans_task(tmp_path: Path) -> None:
+    repo = _repo(_mk(tmp_path / "a"))
+    # An older commit that merely MENTIONS the id — the shape of a different plan's history.
+    _commit(repo, "old.txt", "x", "T5.1 — some other plan's gate work")
+    _git(repo, "switch", "-c", "workspace")
+    base = _git(repo, "rev-parse", "HEAD").strip()
+    _commit(repo, "new.txt", "y", "feat: unrelated work on this branch")
+
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T5.1", "status": "pending"}]},
+        repo, ["T5.1"], base=base,
+    )
+    assert "task_committed_in_git_not_in_progress" not in {f.code for f in report.findings}
+
+
+def test_a_commit_on_this_branch_still_flags_a_stale_checkpoint(tmp_path: Path) -> None:
+    # The true positive the whole check exists for: the work landed here and nobody updated it.
+    repo = _repo(_mk(tmp_path / "a"))
+    _commit(repo, "old.txt", "x", "unrelated")
+    base = _git(repo, "rev-parse", "HEAD").strip()
+    _commit(repo, "new.txt", "y", "feat(thing): T2.9 implemented")
+
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T2.9", "status": "pending"}]},
+        repo, ["T2.9"], base=base,
+    )
+    assert "task_committed_in_git_not_in_progress" in {f.code for f in report.findings}
+
+
+def test_a_blocked_task_with_a_reason_is_not_flagged(tmp_path: Path) -> None:
+    repo = _repo(_mk(tmp_path / "a"))
+    _commit(repo, "a.txt", "x", "unrelated")
+    base = _git(repo, "rev-parse", "HEAD").strip()
+    # The commit mentions the id while EXPLAINING the blockage — this plan's own shape.
+    _commit(repo, "b.txt", "y", "docs: why T5.0 is blocked on the release gate")
+
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T5.0", "status": "blocked", "blocked_reason": "release gate"}]},
+        repo, ["T5.0"], base=base,
+    )
+    assert "task_committed_in_git_not_in_progress" not in {f.code for f in report.findings}
+
+
+def test_a_blocked_task_WITHOUT_a_reason_is_still_flagged(tmp_path: Path) -> None:
+    # The escape hatch must not be free. `blocked` with no reason is not a declaration, it is a
+    # status nobody justified — exactly what a stale checkpoint looks like.
+    repo = _repo(_mk(tmp_path / "a"))
+    _commit(repo, "a.txt", "x", "unrelated")
+    base = _git(repo, "rev-parse", "HEAD").strip()
+    _commit(repo, "b.txt", "y", "feat: T5.0 done")
+
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T5.0", "status": "blocked"}]},
+        repo, ["T5.0"], base=base,
+    )
+    assert "task_committed_in_git_not_in_progress" in {f.code for f in report.findings}
+
+
+def test_an_unresolvable_base_falls_back_rather_than_reporting_nothing(tmp_path: Path) -> None:
+    # A detached CI checkout may have no base. Silently checking nothing would be the worst
+    # outcome: a gate that reports clean because it could not look.
+    repo = _repo(_mk(tmp_path / "a"))
+    _commit(repo, "a.txt", "x", "feat: T3.7 implemented")
+
+    report = check_checkpoint_consistency(
+        {"tasks": [{"id": "T3.7", "status": "pending"}]},
+        repo, ["T3.7"], base="refs/heads/does-not-exist",
+    )
+    assert "task_committed_in_git_not_in_progress" in {f.code for f in report.findings}
