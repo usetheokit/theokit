@@ -20,11 +20,12 @@
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
+
+import { declaredExportsFromText } from '../../scripts/lib/declared-exports.mjs'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(TEST_DIR, '..', '..')
@@ -67,68 +68,16 @@ const DIST_BUILT = agentsDts().length > 0
  * target that cannot be read is REPORTED, never treated as exporting nothing — a quiet empty set is
  * how a guard goes vacuous a second time.
  *
- * It lives in this file, not in `scripts/lib/`, because it has exactly ONE consumer today. The
- * layer-invention gate (T4.1) will be the second, and extraction belongs to that task:
- * `system-design-guardrails.md § G12` says extract on the repetition, not in anticipation of it.
- * `check-surface-parity.mjs` parses `.d.ts` too but answers a SUBPATH-scoped question, so it is not
- * a repetition of this one — merging them is the accidental coupling the same rule forbids.
+ * It now lives in `scripts/lib/declared-exports.mjs`. It did NOT start there: it had exactly one
+ * consumer, and `system-design-guardrails.md § G12` says extract on the repetition rather than in
+ * anticipation of it — an early extraction here was undone at a phase-boundary review for precisely
+ * that reason. `check-invention-reachability.mjs` (T4.1) is the second consumer asking the identical
+ * question, which is the repetition that earns the shared module.
  *
  * Declared limitation: `agentsDts()` unions every `.d.ts` in `dist/`, internal bundler chunks
  * included, so some mangled aliases enter the set and the SUBPATH a symbol comes from is not
  * checked — only that the package exports it somewhere.
  */
-const DECLARATION_RE =
-  /^[ \t]*(?:export )?(?:declare )?(?:abstract )?(?:const|function|class|type|interface|enum) ([A-Za-z_$][\w$]*)/gm
-const EXPORT_BLOCK_RE = /export\s*\{([^}]*)\}/g
-const STAR_FORWARD_RE = /^export\s+\*\s+from\s+'([^']+)'/gm
-
-function typeCandidates(resolvedJsPath: string): string[] {
-  // `require.resolve` picks the CJS branch, whose declarations are `.d.cts` when a package ships
-  // dual types. Going straight to `.d.ts` works for the SDK only because it ships both.
-  return [
-    resolvedJsPath.replace(/\.cjs$/, '.d.cts'),
-    resolvedJsPath.replace(/\.[cm]?js$/, '.d.ts'),
-    resolvedJsPath.replace(/\.mjs$/, '.d.mts'),
-  ]
-}
-
-function declaredExportsFromText(
-  text: string,
-  resolveFrom?: string,
-): { names: Set<string>; unresolvedForwards: string[] } {
-  const names = new Set<string>()
-  const unresolvedForwards: string[] = []
-
-  const harvest = (source: string, follow: boolean): void => {
-    for (const m of source.matchAll(DECLARATION_RE)) names.add(m[1]!)
-    for (const block of source.matchAll(EXPORT_BLOCK_RE)) {
-      for (const spec of block[1]!.split(',')) {
-        // `A as B` exports B; a bare `A` exports A. The LAST identifier is the exported name.
-        const ids = spec.trim().match(/[A-Za-z_$][\w$]*/g)
-        if (ids?.length) names.add(ids[ids.length - 1]!)
-      }
-    }
-    if (!follow || !resolveFrom) return
-    const require_ = createRequire(resolveFrom)
-    for (const star of source.matchAll(STAR_FORWARD_RE)) {
-      const spec = star[1]!
-      try {
-        const dts = typeCandidates(require_.resolve(spec)).find((c) => existsSync(c))
-        if (!dts) {
-          unresolvedForwards.push(spec)
-          continue
-        }
-        harvest(readFileSync(dts, 'utf8'), false) // one hop only
-      } catch {
-        unresolvedForwards.push(spec)
-      }
-    }
-  }
-
-  harvest(text, Boolean(resolveFrom))
-  return { names, unresolvedForwards }
-}
-
 const PUBLISHED = declaredExportsFromText(
   agentsDts(),
   join(REPO_ROOT, 'packages', 'agents', 'package.json'),
