@@ -68,6 +68,22 @@ export {
 // declare what `toAgentFactory` now requires. `AgentDefinition` (a name already taken just below, by
 // the builder's branded type) is untouched — the posture has a name of its own.
 export type { ApprovalPosture } from './approval-posture.js'
+
+/**
+ * T2.1 — the auto-approve decision, callable by a SURFACE.
+ *
+ * `ApprovalPosture` above is a type; `applyPosture` installs the gate at factory time. Neither
+ * answers the question a TUI asks before rendering a prompt: "may I auto-approve THIS tool now?".
+ * That gap is why the rule was written twice downstream, which `approval-posture.ts:69-72` names as
+ * a G12 violation. This is the half that was missing.
+ */
+export {
+  APPROVAL_MODES,
+  shouldAutoApprove,
+  WRITE_SCOPED_TOOLS,
+  type ApprovalMode,
+  type ShouldAutoApproveOptions,
+} from './approval-decision.js'
 export type { DefinitionOrThunk } from './definition-or-thunk.js'
 // M107 — the read crosses alongside the write. While only the write was public, the consumer
 // reassembled the param key by hand to read it, which is a second oracle over the same fact.

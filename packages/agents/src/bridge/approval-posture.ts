@@ -28,6 +28,7 @@ import { debugLog } from '../debug-log.js'
 import type { HumanInTheLoopOptions } from '../types.js'
 
 import type { ApprovalRequiredEvent } from './agent-stream-events.js'
+import { shouldAutoApprove } from './approval-decision.js'
 import { createHitlPlugin, type HitlDecision } from './hitl-plugin.js'
 import { createToolHooksPlugin } from './tool-hooks-plugin.js'
 
@@ -170,7 +171,13 @@ function posturePlugins(
       //
       // The refusal quotes `detail` because "unconfined" sends an operator hunting, while
       // "bwrap unavailable: no user namespaces" sends them to the fix.
-      if (!posturePolicy.confinedBy.enforced) {
+      //
+      // T2.1 — the CONDITION comes from `shouldAutoApprove`, so the rule is evaluated in one place
+      // for both callers. The comment above claimed it "lives ONCE" while the only reachable half
+      // was the type; a surface asking per-event had nothing to call and wrote its own. The throw
+      // stays here because the MESSAGE is this seam's (it names the posture variant and its
+      // declared reason) — the predicate answers whether, this answers what to say about it.
+      if (!shouldAutoApprove('full-auto', '*', posturePolicy.confinedBy)) {
         throw new Error(
           `[@theokit/agents] approval posture "auto-approve" claims confinement ` +
             `("${posturePolicy.reason}"), but the sandbox reports it is NOT enforced: ` +
