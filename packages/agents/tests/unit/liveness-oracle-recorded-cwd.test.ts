@@ -1,0 +1,215 @@
+/**
+ * Regression suite for the defect that made `classifyProjects` unusable by the consumer it was
+ * absorbed from — and, worse, unsafe: it classified live projects `dead`, and the caller DELETES
+ * on `dead`.
+ *
+ * Reproduced 2026-08-16 against the real module with the real `~/.theokit/projects` of the machine
+ * this was measured on: 6 of 6 live project directories — including this repository, the SDK and
+ * TheoCode itself — came back `dead`.
+ *
+ * Three defects, and only the first is the one everybody names:
+ *
+ * 1. The absorbed module kept the FALLBACK (search a caller-supplied pool) and dropped the
+ *    ANSWER. The consumer resolves a project by reading the `cwd` field out of the first line of a
+ *    transcript in that project's directory — the transcript records where it came from. Its own
+ *    docstring measured that path resolving 91 of 120 sampled projects. No search, no heuristic,
+ *    no budget spent.
+ *
+ * 2. `listProjects` named two different contracts across the seam T5.3 has to cross. The
+ *    consumer's returns ENCODED DIRECTORY NAMES (classification is a separate injected seam); this
+ *    module read it as REAL PATHS. Feeding one to the other is what produced the 6-of-6.
+ *
+ * 3. The fall-through emitted `dead` where the evidence supported at most `undetermined` — and its
+ *    reason string said "no candidate project encodes to this name" when a candidate had matched.
+ *    A pool the caller supplied is a heuristic, not an oracle; exhausting it proves nothing.
+ *
+ * The invariant every case here defends: a verdict of `dead` requires POSITIVE evidence of absence
+ * — a recorded cwd that is not there. Everything else is `undetermined` (`rules/error-handling.md`,
+ * and the module's own three-valued contract).
+ */
+import { describe, expect, it } from 'vitest'
+
+import { classifyProjects, type FsSeam } from '../../src/session/liveness-oracle.js'
+
+/** The encoding under test, restated here so the test does not depend on the module's private copy. */
+const encode = (cwd: string): string => cwd.replace(/[^a-zA-Z0-9]/g, '-')
+
+/**
+ * A seam over an in-memory tree. `ops` counts every call so the budget property is measurable
+ * rather than asserted.
+ */
+function seamOver(
+  existing: readonly string[],
+  transcripts: Record<string, Record<string, string>> = {},
+): FsSeam & { ops: () => number } {
+  let ops = 0
+  const present = new Set(existing)
+  return {
+    exists: (path) => {
+      ops += 1
+      return present.has(path)
+    },
+    listEntries: (dir) => {
+      ops += 1
+      return Object.keys(transcripts[dir] ?? {})
+    },
+    firstLine: (file) => {
+      ops += 1
+      const dir = file.slice(0, file.lastIndexOf('/'))
+      const name = file.slice(file.lastIndexOf('/') + 1)
+      return transcripts[dir]?.[name] ?? ''
+    },
+    ops: () => ops,
+  }
+}
+
+const PROJECTS_ROOT = '/home/op/.theokit/projects'
+
+describe('classifyProjects — the recorded cwd is the answer, the search is the fallback', () => {
+  it('test_a_live_project_with_a_hyphen_in_its_path_is_alive_not_dead', () => {
+    // The exact shape of the reproduction: a real path containing a hyphen, which is every path in
+    // the tree this was measured on. The old `likelyPath` turned `-` into `/` and missed all of them.
+    const cwd = '/home/op/Projetos/theo/theokit-framework'
+    const name = encode(cwd)
+    const fs = seamOver([cwd], {
+      [`${PROJECTS_ROOT}/${name}`]: { 'a.jsonl': JSON.stringify({ cwd }) },
+    })
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness).toBe('alive')
+  })
+
+  it('test_an_empty_candidate_pool_is_undetermined_never_dead', () => {
+    // "The product's enumerator gave me nothing" is could-not-tell. Deleting here is data loss.
+    const name = encode('/home/op/somewhere')
+    const fs = seamOver([])
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness).toBe('undetermined')
+  })
+
+  it('test_a_pool_that_does_not_contain_the_project_is_undetermined_not_dead', () => {
+    // A caller-supplied pool is a heuristic. Exhausting it proves the pool was incomplete, not
+    // that the project is gone.
+    const name = encode('/home/op/missing-from-the-pool')
+    const fs = seamOver(['/home/op/other'])
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => ['/home/op/other'],
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness).toBe('undetermined')
+  })
+
+  it('test_a_recorded_cwd_that_is_gone_is_the_one_thing_that_proves_dead', () => {
+    // The ONLY positive evidence of absence: the transcript says where it lived, and it is not there.
+    const cwd = '/home/op/deleted-project'
+    const name = encode(cwd)
+    const fs = seamOver([], {
+      [`${PROJECTS_ROOT}/${name}`]: { 'a.jsonl': JSON.stringify({ cwd }) },
+    })
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness).toBe('dead')
+    expect(out.get(name)?.reason).toMatch(/recorded/i)
+  })
+
+  it('test_a_transcript_whose_cwd_does_not_encode_to_this_name_is_ignored', () => {
+    // Guards against trusting a stray or copied transcript: the recorded cwd must encode back to
+    // the directory it was found in, or it is not evidence about THIS project.
+    const name = encode('/home/op/project-a')
+    const fs = seamOver([], {
+      [`${PROJECTS_ROOT}/${name}`]: { 'a.jsonl': JSON.stringify({ cwd: '/home/op/project-b' }) },
+    })
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness).toBe('undetermined')
+  })
+
+  it('test_the_recorded_cwd_answers_without_touching_the_candidate_pool', () => {
+    // The measured reason the fast path matters: 91 of 120 resolve here, and each one that does
+    // spends no search budget. A pool that throws proves the pool was never consulted.
+    const cwd = '/home/op/resolved-by-transcript'
+    const name = encode(cwd)
+    const fs = seamOver([cwd], {
+      [`${PROJECTS_ROOT}/${name}`]: { 'a.jsonl': JSON.stringify({ cwd }) },
+    })
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => {
+        throw new Error('the candidate pool must not be consulted when the transcript answered')
+      },
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness).toBe('alive')
+  })
+
+  it('test_budget_exhaustion_yields_undetermined_and_never_exceeds_the_bound', () => {
+    const names = Array.from({ length: 20 }, (_, i) => encode(`/home/op/p${i}`))
+    const fs = seamOver([])
+
+    const out = classifyProjects(names, {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 5,
+      fs,
+    })
+
+    expect(fs.ops()).toBeLessThanOrEqual(5)
+    expect([...out.values()].every((v) => v.liveness !== 'dead')).toBe(true)
+    expect(out.size).toBe(names.length)
+  })
+
+  it('test_an_unreadable_project_directory_is_undetermined_with_the_real_error', () => {
+    const name = encode('/home/op/unreadable')
+    const fs: FsSeam = {
+      exists: () => false,
+      listEntries: () => {
+        const e = new Error('permission denied') as NodeJS.ErrnoException
+        e.code = 'EACCES'
+        throw e
+      },
+      firstLine: () => '',
+    }
+
+    const out = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    })
+
+    expect(out.get(name)?.liveness).toBe('undetermined')
+    expect(out.get(name)?.reason).toMatch(/EACCES|permission/i)
+  })
+})

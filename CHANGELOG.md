@@ -6,8 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`classifyProjects` marcava projetos vivos como `dead`, no caminho em que o chamador apaga.**
+  Medido em 2026-08-16 contra o `~/.theokit/projects` de uma máquina real: **6 de 6** diretórios de
+  projeto existentes — incluindo este repositório, o SDK e o TheoCode — voltaram `dead`. Três causas,
+  e a primeira é a que originou as outras: o módulo absorveu o *fallback* do consumidor (buscar numa
+  lista de candidatos) e descartou a *resposta*. O transcript grava o `cwd` em que foi escrito;
+  ler a primeira linha dele resolve o projeto sem busca alguma, e é o caminho que o consumidor mediu
+  resolvendo 91 de 120 projetos amostrados. Agora um veredito `dead` exige **evidência positiva de
+  ausência** — um `cwd` gravado que não está no disco. Todo o resto é `undetermined`.
+
 ### Changed
 
+- BREAKING: `ClassifyProjectsOptions.listProjects` virou **`candidatePaths`**, e `FsSeam` ganhou
+  `listEntries` e `firstLine` (`@theokit/agents/session`). O rename não é cosmético: `listProjects`
+  nomeava dois contratos diferentes na mesma costura — no consumidor devolve **nomes de diretório
+  codificados** (a classificação é uma costura injetada à parte), e aqui era lido como **caminhos
+  absolutos reais**. Ligar os dois é o que produziu os 6-de-6 acima. O nome novo diz o que a função
+  devolve. Migração: renomeie a opção e forneça os dois métodos novos do `FsSeam` (`readdirSync` e a
+  primeira linha do arquivo); `projectsRoot` passa a ser obrigatório, e use `projectsRoot()` em vez
+  de concatenar o segmento à mão.
 - BREAKING: `deleteSession` e `runTranscriptGC` (`@theokit/agents/session`) passaram a ser `async`.
   O retorno vai de `T` para `Promise<T>`; quem chamava sem `await` lê `undefined` em vez do resultado
   e estoura no primeiro acesso a campo — foi exatamente o que aconteceu com o comando

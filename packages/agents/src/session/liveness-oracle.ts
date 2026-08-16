@@ -31,9 +31,16 @@
  * iteration is not a bound; that is precisely what produced the 64M figure.
  */
 
-/** Whether a path exists. One call = one operation against the budget. May throw (EACCES). */
+/**
+ * The filesystem, as this module needs it. Every call is ONE operation against the budget, and any
+ * of them may throw (EACCES) — a throw is a third outcome, never "absent".
+ */
 export interface FsSeam {
   exists: (path: string) => boolean
+  /** Entry names directly under `dir`. Used to find a transcript to read the recorded cwd from. */
+  listEntries: (dir: string) => readonly string[]
+  /** The first line of `file`. The transcript's first record carries the `cwd` it was written in. */
+  firstLine: (file: string) => string
 }
 
 export type Liveness = 'alive' | 'dead' | 'undetermined'
@@ -45,12 +52,47 @@ export interface LivenessVerdict {
 }
 
 export interface ClassifyProjectsOptions {
-  /** The candidate directories. PRODUCT policy: this module must not decide what counts. */
-  listProjects: () => readonly string[]
+  /**
+   * Where `projects/<encoded>/` lives, so the recorded-cwd read can find a transcript.
+   * Use {@link projectsRoot} rather than joining the segment by hand — that segment had three
+   * owners once, and a wrong one makes every project look empty rather than erroring.
+   */
+  projectsRoot: string
+  /**
+   * REAL ABSOLUTE PATHS that might be the project — not encoded directory names.
+   *
+   * The name is explicit because the previous one was not, and the ambiguity was a defect rather
+   * than a documentation gap: the only consumer's `listProjects` returns ENCODED NAMES (it keeps
+   * classification in a separate injected seam), so wiring the two together fed encoded names to a
+   * function expecting paths. Measured 2026-08-16: 6 of 6 live projects classified `dead`, on the
+   * path where the caller DELETES.
+   *
+   * PRODUCT policy: which directories are even candidates (workspaces, ignore rules, mounted
+   * volumes) is not this module's to guess. It is also only a HEURISTIC — see the fall-through in
+   * `searchPool`, which is why exhausting it can never prove absence.
+   */
+  candidatePaths: () => readonly string[]
   /** Total filesystem operations allowed for the ENTIRE sweep. */
   budget: number
   fs: FsSeam
+  /** How many transcripts to read per project before giving up on the recorded cwd. Default 3. */
+  transcriptSamples?: number
 }
+
+/** Matches the consumer's measured default: 91 of 120 sampled projects resolved within 3. */
+const DEFAULT_TRANSCRIPT_SAMPLES = 3
+
+/**
+ * What reading the recorded cwd produced. Three outcomes, discriminated
+ * (`rules/type-safety.md` — discriminated unions for error handling), because they lead to three
+ * different verdicts and collapsing any two loses the distinction the module exists to keep:
+ * `found` can prove either liveness or death, `absent` proves nothing, and `unreadable` is a fact
+ * about the directory rather than about the project.
+ */
+type RecordedCwd =
+  | { readonly kind: 'found'; readonly cwd: string }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unreadable'; readonly error: string }
 
 /** The encoding this module is the inverse-by-search of. Kept local: it is one line and it is ours. */
 function encodeProjectDir(cwd: string): string {
@@ -58,13 +100,19 @@ function encodeProjectDir(cwd: string): string {
 }
 
 /**
- * The cheap guess: turn every `-` back into `/`. Correct for the overwhelming majority of real
- * paths, and when it is wrong the search below covers it — so it is a fast path, never an answer on
- * its own.
+ * REMOVED 2026-08-16 — `likelyPath`, which turned every `-` back into `/` and was documented as
+ * "correct for the overwhelming majority of real paths". It is correct for no path containing a
+ * hyphen, which is most of them:
+ *
+ *     encode('/home/op/Projetos/theo/theokit-framework')
+ *       → '-home-op-Projetos-theo-theokit-framework'
+ *     likelyPath(that)
+ *       → '/home/op/Projetos/theo/theokit/framework'   ← not the input
+ *
+ * The encoding is lossy on purpose (`/a/b` and `/a-b` collide), so no string transform can invert
+ * it. What replaces it is not a better guess but the actual answer: the transcript records the cwd
+ * it was written in, and reading it costs one line of one file.
  */
-function likelyPath(encoded: string): string {
-  return encoded.replace(/-/g, '/')
-}
 
 /**
  * Classify each encoded project directory. Every input appears in the output: a missing key would
@@ -93,12 +141,54 @@ export function classifyProjects(
 
   // Enumeration is resolved ONCE for the sweep: it is product policy, it may be expensive, and a
   // list that changed between projects would make the verdicts mutually inconsistent.
+  /**
+   * The ANSWER, not a guess: a transcript's first record carries the `cwd` it was written in.
+   *
+   * Absorbed from the consumer, whose docstring measured this path resolving 91 of 120 sampled
+   * projects — each one without spending a single unit of search budget. The plan's pseudo-code
+   * specified only the fallback, which is how a module that exists to avoid a 64M-syscall sweep
+   * shipped able to do nothing else.
+   *
+   * The recorded cwd MUST encode back to the directory it was found in. Without that check a stray
+   * or copied transcript would speak for a project it never belonged to.
+   */
+  const recordedCwd = (name: string): RecordedCwd => {
+    const dir = `${opts.projectsRoot}/${name}`
+    let entries: readonly string[]
+    remaining -= 1
+    try {
+      entries = opts.fs.listEntries(dir)
+    } catch (error) {
+      return {
+        kind: 'unreadable',
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+    const samples = opts.transcriptSamples ?? DEFAULT_TRANSCRIPT_SAMPLES
+    for (const file of entries.filter((f) => f.endsWith('.jsonl')).slice(0, samples)) {
+      if (remaining <= 0) return { kind: 'absent' }
+      remaining -= 1
+      let record: unknown
+      try {
+        record = JSON.parse(opts.fs.firstLine(`${dir}/${file}`))
+      } catch {
+        // A truncated or half-written first line is not an error about the PROJECT. Try the next
+        // transcript; running out of samples just means this path did not answer.
+        continue
+      }
+      const cwd = (record as { cwd?: unknown } | null)?.cwd
+      if (typeof cwd !== 'string' || cwd.length === 0) continue
+      if (encodeProjectDir(cwd) === name) return { kind: 'found', cwd }
+    }
+    return { kind: 'absent' }
+  }
+
   let candidates: readonly string[] | undefined
   let enumerationError: string | undefined
   const enumerate = (): readonly string[] => {
     if (candidates === undefined && enumerationError === undefined) {
       try {
-        candidates = opts.listProjects()
+        candidates = opts.candidatePaths()
       } catch (error) {
         // Every project becomes `undetermined`. Reporting `dead` here would delete every transcript
         // on the machine because one directory listing failed.
@@ -134,9 +224,21 @@ export function classifyProjects(
         return { liveness: 'alive', reason: `found by search at ${candidate}` }
       }
     }
+    // NEVER `dead`. The pool is a caller-supplied HEURISTIC, so exhausting it establishes that the
+    // pool did not contain the project — not that the project is gone. The only positive evidence
+    // of absence this module accepts is a recorded cwd that is not on disk, and that is decided in
+    // the sweep below, not here.
+    //
+    // What was here before returned `dead` on this line, including for an EMPTY pool, and its
+    // reason said "no candidate project encodes to this name" even when one had matched and merely
+    // failed to stat. Callers DELETE on `dead` (`rules/error-handling.md` — the fail-safe direction
+    // is not symmetric).
     return remaining <= 0
       ? { liveness: 'undetermined', reason: 'search budget exhausted' }
-      : { liveness: 'dead', reason: 'no candidate project encodes to this name, within budget' }
+      : {
+          liveness: 'undetermined',
+          reason: 'no candidate path matched, and the candidate pool is not exhaustive',
+        }
   }
 
   for (const name of encoded) {
@@ -145,17 +247,33 @@ export function classifyProjects(
       continue
     }
 
-    const direct = probe(likelyPath(name))
-    if ('error' in direct) {
+    // 1. The recorded cwd — the only path that can produce EITHER definitive verdict.
+    const recorded = recordedCwd(name)
+    if (recorded.kind === 'unreadable') {
       // Unreadable is not absent, and the real message travels with the verdict.
       out.set(name, {
         liveness: 'undetermined',
-        reason: `could not stat ${likelyPath(name)}: ${direct.error}`,
+        reason: `could not read ${opts.projectsRoot}/${name}: ${recorded.error}`,
       })
       continue
     }
-    if (direct.found) {
-      out.set(name, { liveness: 'alive', reason: 'resolved directly from the encoded name' })
+    if (recorded.kind === 'found') {
+      const at = probe(recorded.cwd)
+      if ('error' in at) {
+        out.set(name, {
+          liveness: 'undetermined',
+          reason: `could not stat ${recorded.cwd}: ${at.error}`,
+        })
+        continue
+      }
+      out.set(
+        name,
+        at.found
+          ? { liveness: 'alive', reason: `recorded cwd ${recorded.cwd} exists` }
+          : // THE one thing that proves absence: the transcript says where it lived, and it is not
+            // there. Every other branch in this function resolves to `undetermined`.
+            { liveness: 'dead', reason: `recorded cwd ${recorded.cwd} is gone` },
+      )
       continue
     }
 
