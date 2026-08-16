@@ -6,6 +6,8 @@ goal: Close the 17 registered cross-validation gaps across the TheoKit ecosystem
 
 # Plan: Close the 17 cross-validation gaps and adopt them in TheoCode
 
+> **Version 2.0 — the Goal changed, and that is the point.** The owner restated the objective in the terms the exercise actually started from: *an "EmpresaCode" must not reimplement what TheoKit already ships, and building one must be simple.* v1.x measured neither. It measured 17 test assertions and a score we compute ourselves — both of which the 2026-08-16 review proved could be green over broken work. The new Goal is a **deletion in someone else's repository**, which nobody here can declare on their own behalf. Everything below this line was written against the old Goal; the phases and tasks remain valid as *work*, but their ordering is superseded by the Goal's consequence clause. See `## Goal § Why the Goal changed`.
+>
 > **Version 1.2** — absorbs all 25 items from [`crossval-4-6-absorption-edge-cases-2026-08-16.md`](../reviews/crossval-4-6-absorption-edge-cases-2026-08-16.md): 7 MUST FIX, 15 SHOULD TEST, 3 accepted risks. One of them is not hardening. **EC-1 falsified a premise**: `TheokitAgentError` and `isTransientError` are *already* reachable from `@theokit/agents`, via the `export *` forward at `dist/index.d.ts:8` — verified by running the import (runtime: both `function`; types: clean under `strict`, exit 0). Registered gap 16 and the U-11 caveat both said otherwise because both grepped the `.d.ts` for the symbol and saw only an `import` — **grep does not follow `export *`**, and two runs of the same blind technique agreeing is not corroboration. T1.1 is therefore inverted from "add the re-export" to "pin the reachability and correct the record", the plan now closes **16** gaps rather than 17, and `Error model` is re-scored from 2,50 to 4,00 on the surviving evidence — which *raises* the projected average without any code. EC-2 is the same blindness reproduced in the plan's own parser and is fixed in T0.1. The remaining five MUST FIX: registry-before-unlink ordering (EC-3), single-pass template expansion so an inlined file cannot inject a shell segment (EC-4), rejecting `nth < 1` with a distinct error (EC-5), verifying the *expected* published version rather than that *a* version resolves (EC-6), and a sunset date that was 92 days against a 90-day cap (EC-7).
 >
 > **Version 1.1** — coverage audit against the database found the v1.0 matrix incomplete in two ways, both corrected here. (a) Three registered non-info findings (F60, F63, F64) were not rows, so the declared coverage of 91% was arithmetic over the wrong denominator — the true figure was 80% (20/25). (b) More seriously, four gaps were covered at *gap* granularity while their named sub-items had no task: ~205 LOC of `commands/`, ~100 of `consent/`, ~80 of `backtrack/` and ~130 of `components/` — ~515 LOC of the 862 the surface sweep named. Given Risk R3 (4,60 has zero slack), leaving them out held `Slash commands` and `Terminal & PTY UX` below 4,5, which are exactly the two the target needs. v1.1 adds T2.6, T2.7, T3.3, T3.4, extends T2.3 and T5.2, and corrects the matrix.
@@ -14,7 +16,27 @@ goal: Close the 17 registered cross-validation gaps across the TheoKit ecosystem
 
 ## Goal
 
-> Enable a developer building a coding-agent product on TheoKit to reach every capability the ecosystem ships — and be blocked by CI when the layer stops forwarding one — measured by `tests/integration/crossval-gaps.test.ts` passing **17/17 closure assertions** with its substring guard replaced by declared-export matching, which raises the re-scored weighted dimension average from **3,37** (the 2026-08-16 corrected baseline) to ≥ 4,60.
+> **Reduce what a coding-agent product must build for itself**, measured by a deletion that either happens or does not: **TheoCode's duplicated-capability code falls from ~862 LOC to ≤ 150**, with its own suite green and every deleted line replaced by an import from a published package.
+
+**Second half, deliberately un-numbered until measured:** a newcomer scaffolding `create-theokit --surface=tui` must reach TheoCode's core loop — tools, approval gate, session resume — without writing framework-shaped code. **No baseline exists**: nobody has ever run that scaffold as a newcomer and recorded where they got stuck. The number is therefore established by T0.2 before it can be a target. Inventing one here would be the fabricated precision this plan keeps catching elsewhere.
+
+### Why the Goal changed (v2.0)
+
+v1.x measured **17/17 closure assertions** and a **weighted score ≥ 4,60**. Both are artifacts this project controls, and during the 2026-08-16 review both were demonstrated false while green:
+
+- the register reported **33/33 passing** while measuring the *predecessor* plan's twelve gaps;
+- it stays green against a `dist/` built **before** the breaking change it is supposed to guard;
+- three of its "closure assertions" contain only `expect.fail('unreachable while blocked')` behind an early return — no assertion at all;
+- it derives its own `17` from "the Coverage Matrix has 20 rows"; the matrix has **29**, and it omits the one gap marked *critical*;
+- the score is analyst judgement, and its baseline had to be corrected from 3,31 to 3,37 mid-cycle because one registered gap turned out never to have been a gap.
+
+The failure is structural, not a set of bugs to fix: **a goal whose metric we compute about ourselves can be fully green while the customer keeps rewriting the framework by hand.** At the moment of this rewrite the plan can truthfully report "17 tasks committed, 11/17 assertions executed" while TheoCode has deleted **zero** lines. Both statements are true. Only one answers the question the whole exercise exists to answer.
+
+A deletion cannot be faked. If TheoCode removes 700 lines and its suite stays green, the framework absorbed those capabilities in a form a real consumer can use. If it removes none, nothing was absorbed — however many assertions are green.
+
+**Consequence:** `17/17` and `≥ 4,60` are **demoted from goal to derived indicator**. They remain useful for locating work and worthless as proof. No phase of this plan is complete because they are green.
+
+**Consequence for ordering:** the work that serves this Goal is (1) stop deleting live data, (2) publish so the consumer can adopt, (3) make the consumer delete. Instrument repair — the remaining review findings about registers, parity gates and evidence files — is genuinely third. It was first in v1.x, which is how a slice that fixed a data-loss defect ended a session with zero lines deleted anywhere.
 
 ## Context
 
@@ -194,13 +216,17 @@ Consumer files touched in Phase 5 beyond those tabled above: `TheoCode/packages/
 
 ## Objective
 
-- [ ] **O1** — The capability index tells the truth and a test can prove it: zero fabricated rows, guard matches declared exports rather than substrings, coverage extended from 1 package to the 32 published ones.
-- [ ] **O2** — Every capability the layer *invents* is reachable as a callable symbol from a published subpath, enforced by a new CI gate.
-- [ ] **O3** — The five wrong-shape primitives (GC remover seam, `forkBeforeUserTurn`, `assertSecureModes` mask, `readJsonlTail` index, approval decision) accept the shape their only real consumer needs.
-- [ ] **O4** — The three name-keyed tool maps ship as overridable defaults in `@theokit/tui`.
-- [ ] **O5** — TheoCode deletes ≥ 900 lines by adopting the closures, and its `BACKLOG.md` upstream register reaches zero open rows with evidence per row.
-- [ ] **O6** — A closure reaches a consumer by mechanism rather than by shared maintainer: every gap-closing CHANGELOG entry names the consumer gap id it closes.
-- [ ] **O7** — The re-scored weighted average is ≥ 4,60 with each dimension's score backed by an assertion in the executable register.
+**Re-ordered for v2.0.** The list is now sequenced by what the Goal needs, not by what is convenient to verify. O1–O3 are the Goal; O4–O6 serve it; O7–O9 are instruments and are explicitly last.
+
+- [ ] **O1 — Stop deleting live data.** The liveness oracle never returns `dead` on evidence it cannot support: not from a colliding recorded `cwd`, not from a stat it could not perform, not from an attacker-plantable transcript field. Blocks everything else, because publishing before this arms the consumer's GC.
+- [ ] **O2 — The consumer can adopt.** The three packages publish, so `@theokit/agents`, `@theokit/tui` and `@theokit/sdk` carry the closures at a version TheoCode can pin. Nothing about this plan is provable while the work sits above the published version.
+- [ ] **O3 — The consumer deletes.** TheoCode's duplicated-capability code falls from ~862 LOC to **≤ 150**, its suite stays green, and every deleted line is replaced by an import. **This is the Goal.** Its `BACKLOG.md` upstream register reaches zero open rows, each closed with a commit as evidence.
+- [ ] **O4 — A newcomer reaches the same place.** `create-theokit --surface=tui` gets a developer to tools + approval gate + session resume without writing framework-shaped code. **Baseline first (T0.2): nobody has run this as a newcomer**, so the target number is measured, not declared.
+- [ ] **O5 — Wrong-shape primitives accept the shape the consumer needs** — GC remover seam, `forkBeforeUserTurn`, `assertSecureModes` mask, `readJsonlTail` marker, approval decision, per-tool presentation maps. Each is a precondition of a specific deletion in O3, and is done when that deletion lands, not when it compiles.
+- [ ] **O6 — A closure reaches a consumer by mechanism, not by shared maintainer.** Every gap-closing CHANGELOG entry names the consumer gap id it closes. TheoCode shares a maintainer with the framework; a real customer does not, and five closures reached it by accident.
+- [ ] **O7 — Capabilities are findable.** The capability index tells the truth — zero fabricated rows, guard matching declared exports including `export *` — and covers the packages a consumer needs, not one of them.
+- [ ] **O8 — Layer inventions are reachable**, enforced by a CI gate, so the next `ApprovalPosture` cannot ship as a type with its enforcement private.
+- [ ] **O9 — The instruments stop lying.** The closure register asserts against a fresh build, derives its own count from the Coverage Matrix, and counts a blocked gap as blocked. **Demoted from Goal to hygiene:** green instruments proved compatible with broken work, so they no longer gate anything.
 
 ## ADRs
 
@@ -305,7 +331,7 @@ Consumer files touched in Phase 5 beyond those tabled above: `TheoCode/packages/
 |---|---|---|---|
 | **R1 — The adoption phase is gated on a publish train that has failed before.** The 2026-08-15 audit ended `Not closed` on exactly this: PR #312 without an approving review, and a stale npm `_authToken` (`E401`, dated 2026-08-05). TheoCode consumes published packages, so Phase 5 cannot start until `@theokit/agents`, `@theokit/tui` and `@theokit/sdk` are on npm. | **High** | Phase 5 is explicitly sequenced after a publish checkpoint (T5.0) that verifies `npm view` resolves each new version before any consumer edit. `verify-publish-credential.mjs` already refuses before a release rather than after. Human approval of the release PR is an Unbreakable-Rule-4 gate and is not automatable — it is a scheduled dependency, not a risk to engineer around. | Paulo (release) |
 | **R2 — Four repositories move together.** `theokit`, `theokit-tui`, `theokit-sdk` and `TheoCode` each need a `workspace` branch, a PR and a release. A partial landing leaves the consumer on a mix of versions. | **High** | Per-repo version floors are declared in T5.0 and asserted by the consumer's own `package.json` before adoption edits begin. `check-pack-no-workspace.mjs` already prevents a workspace-linked publish. Each repo's change is independently valid — no cross-repo atomic commit is required. | Paulo |
-| **R3 — The 4,60 target has narrow slack.** Arithmetic: total weight 24,0, so 4,60 needs ≥ 110,4 points against 79,4 today. **v1.2 revision (EC-1):** `Error model` (weight 1,0) was scored 2,50 on a gap that does not exist; re-scored on the surviving evidence — 29/29 typed classes, base class reachable, bare-throw rate 23/87 against the consumer's 6/57 — it lands at 4,00. The falsified phase-3 row was **removed** from the database rather than averaged with the correction, so the corrected **baseline is 3,37** (80,9 points), not 3,31. Projected total moves from ~111,9 to ~113,4 (**4,73**). The honest framing is not "the plan got cheaper": one of the 17 gaps was never a gap, and the score was wrong in the pessimistic direction. Two dimensions landing at 4,0 instead of 4,5 still drops it below target. | **High** | Stated openly rather than discovered at scoring time. T5.4 re-scores against the same rubric and the same weights, and if the result lands in 4,4–4,6 the honest report is the number, not a re-weighting. Weights MUST NOT be adjusted after the fact — that is score-fitting, and `plan-confidence-golden-rule.md` treats a moved target as fabrication. | Paulo |
+| **R3 — SUPERSEDED in v2.0.** This risk existed because 4,60 was the Goal; it is now a derived indicator, so a result of 4,4 is a datum rather than a failure. The arithmetic is kept because it is still the honest way to read the score, and the no-re-weighting rule below still binds. **The risk that replaces it: the new Goal can only be closed by a deletion in a repository this plan does not own, behind a publish gate that has already failed twice** — so the plan can be entirely correct and still show zero progress on its own metric. That is the intended property, not a defect: it is what makes the metric unfakeable. Mitigation is sequencing (O1 → O2 → O3), not engineering. Original arithmetic: total weight 24,0, so 4,60 needs ≥ 110,4 points against 79,4 today. **v1.2 revision (EC-1):** `Error model` (weight 1,0) was scored 2,50 on a gap that does not exist; re-scored on the surviving evidence — 29/29 typed classes, base class reachable, bare-throw rate 23/87 against the consumer's 6/57 — it lands at 4,00. The falsified phase-3 row was **removed** from the database rather than averaged with the correction, so the corrected **baseline is 3,37** (80,9 points), not 3,31. Projected total moves from ~111,9 to ~113,4 (**4,73**). The honest framing is not "the plan got cheaper": one of the 17 gaps was never a gap, and the score was wrong in the pessimistic direction. Two dimensions landing at 4,0 instead of 4,5 still drops it below target. | **High** | Stated openly rather than discovered at scoring time. T5.4 re-scores against the same rubric and the same weights, and if the result lands in 4,4–4,6 the honest report is the number, not a re-weighting. Weights MUST NOT be adjusted after the fact — that is score-fitting, and `plan-confidence-golden-rule.md` treats a moved target as fabrication. | Paulo |
 | **R4 — The score is analyst judgement anchored to evidence, not a measured quantity.** The cross-validation report says so in its own honesty section. A plan whose Goal cites the score inherits that softness. | **Medium** | The Goal's primary metric is the 17 executable assertions, which are mechanical; the score is stated as the consequence. T5.4 requires each dimension's re-score to cite the assertion that changed, so a score movement without a corresponding green assertion is refused. | Paulo |
 | **R5 — The liveness oracle absorption (D4) moves 188 LOC of measured behaviour across a repo boundary.** Its DFS budget was tuned against a real machine with 13.269 project directories; a framework-side test cannot cheaply reproduce that scale. | **Medium** | T3.2's TDD uses a synthetic fixture at reduced scale with the budget parameterised, plus one property assertion (total syscalls ≤ budget) that holds at any scale. The full-scale behaviour is verified once in the adoption phase against the consumer's real machine and recorded as evidence, not asserted from the fixture. | Paulo |
 | **R6 — `context/rules.ts` stays unmigrated by decision (D7), capping one dimension.** | **Medium** | Accounted for in the R3 arithmetic: Context & memory is projected at 4,5 from reachability alone, not 4,75. If the owner resolves Q1 during implementation, the ceiling rises; the plan does not depend on it. | Paulo |
@@ -474,6 +500,64 @@ VERIFY:  pnpm vitest run tests/integration/crossval-gaps.test.ts
 - [ ] `pnpm vitest run tests/integration/crossval-gaps.test.ts` green.
 - [ ] `pnpm typecheck` zero errors.
 - [ ] `CHANGELOG.md` `[Unreleased] § Fixed` entry naming the two corrected rows.
+
+### T0.2 — Measure where a newcomer building an EmpresaCode actually gets stuck (NEW in v2.0)
+
+#### Objective
+Establish the baseline the Goal's second half needs: how far `create-theokit --surface=tui` carries a developer toward TheoCode's core loop, and what they must write by hand after it stops.
+
+#### Why this step (action + reasoning)
+
+**What this step does.** Scaffolds a fresh app with `create-theokit --surface=tui` in a clean directory, then drives it toward the three capabilities that define a coding agent — a tool the model can call, an approval gate a human answers, and a session that resumes — recording every file the developer must create or edit and every moment they must read framework source to proceed.
+
+**Why it is necessary now.** The Goal's second half says building an EmpresaCode must be *simple*, and **there is no number for that**. Nobody has run the scaffold as a newcomer. Declaring a target before measuring would be the fabricated precision this plan has caught four times already — in the capability index's two invented rows, in the closure register deriving `17` from a matrix row-count that was wrong, in a changeset instructing a migration for an unpublished symbol, and in a commit trailer claiming `tsc exit 0` against a config it never ran. Cites the Goal's second half and `rules/parsimony-ladder.md` rung 1: do not build the improvement before knowing what is missing.
+
+**This task produces a measurement, not a fix.** Whatever it finds becomes scope for a later plan, and the honest outcome may be that the scaffold is already adequate.
+
+#### Evidence
+- `packages/create-theokit/src/cli.ts:44` — `--surface=<web|tui|desktop>` exists.
+- `packages/create-theokit/templates/surfaces/tui/` — 1.922 LOC of template (App, main, theme, tool-variations, `components/{UsagePanel,Banner,Demos}`).
+- `packages/create-theokit/src/scaffold-surface.ts:16` records that a defect here was caught only by running `npx create-theokit --surface tui` for real, never by unit tests — the same instrument-vs-reality gap this whole plan is about.
+- TheoCode reaches the three capabilities in `packages/agent/src/chat.ts` (643 LOC composition root) plus `packages/tui/src/consent/` (430) and `session/` — that is the destination this measures the distance to.
+
+#### Files to edit
+```
+(none in this repository — the scaffold runs in a throwaway directory)
+.claude/knowledge-base/audits/2026-08-XX-empresacode-newcomer-baseline.md (NEW) — the recorded run
+```
+
+#### Deep Dives
+- **The measurement must be adversarial about its own honesty.** The person running it knows this codebase, which is exactly the bias that made TheoCode a poor proxy for a customer (shared maintainer). Mitigation: record every moment framework source had to be opened to proceed, and count those separately — a newcomer cannot do that.
+- **What is counted.** Files created, files edited, framework source files read to proceed, and the wall-clock to each of the three capabilities. Not lines written — a developer copying 200 lines from a working example is closer to "simple" than one writing 20 after an hour of reading.
+- **Edge case.** The scaffold may fail outright on a clean machine (missing peer, unpublished version). That is the most valuable possible result and must be recorded as the finding, not fixed inline.
+
+#### Tasks
+1. Run `npx create-theokit empresacode-probe --surface=tui` in a clean temp directory against the **published** packages.
+2. Drive it to: a callable tool, an approval gate a human answers, a session that resumes.
+3. Record files created/edited, framework sources opened, and where progress stalled.
+4. Write the audit. Propose the O4 target number **from the measurement**.
+
+#### TDD
+```
+(measurement task — the artifact is the recorded run, not a test)
+VERIFY:  the audit exists, names the version of each package used, and states a
+         proposed O4 number derived from what was counted
+```
+
+#### Concurrency tests
+```
+(none — single-threaded)
+```
+
+#### Acceptance Criteria
+- [ ] The run used **published** packages, not workspace links — a newcomer has no monorepo.
+- [ ] Every framework source file opened to make progress is listed.
+- [ ] The proposed O4 number is derived from the count, not chosen.
+- [ ] A failure to scaffold at all is recorded as the result, not repaired mid-run.
+
+#### DoD
+- [ ] Audit committed under `knowledge-base/audits/`.
+- [ ] O4 in `## Objective` updated with the measured number.
 
 ---
 
