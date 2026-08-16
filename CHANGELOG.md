@@ -22,6 +22,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A regra de auto-aprovacao virou um simbolo que uma superficie pode chamar.**
+  `shouldAutoApprove(mode, toolName, posture?)` e `ApprovalMode` saem em `@theokit/agents/bridge`.
+  O `applyPosture` ja tinha a regra, mas so o TIPO atravessava e a assinatura respondia outra
+  pergunta — no momento da fabrica, enquanto uma TUI pergunta por evento. Por isso o consumidor
+  escreveu a regra duas vezes, o que o proprio `approval-posture.ts:69-72` chama de violacao G12.
+  As duas cicatrizes dele viraram um invariante: posture ausente NUNCA auto-aprova (B-006), e
+  posture nao-enforced tambem nao (B-021). O `applyPosture` passa a avaliar a condicao pelo mesmo
+  predicado, entao a regra vive uma vez de fato (T2.1).
+
 - **A classe-base de erro ganhou teste de regressão.** `TheokitAgentError` e `isTransientError` já
   eram alcançáveis a partir de `@theokit/agents` pelo forward `export *`, ao contrário do que duas
   medições independentes afirmaram — ambas fizeram grep no `.d.ts` e viram só o `import`. Nenhum
