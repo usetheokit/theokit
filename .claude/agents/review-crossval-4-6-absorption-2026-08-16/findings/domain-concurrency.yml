@@ -1,368 +1,686 @@
 agent: review-crossval-4-6-absorption-domain-concurrency
-review_target: origin/develop..HEAD for plan crossval-4-6-absorption
+review_target: main..HEAD (branch workspace) for plan crossval-4-6-absorption
 domain: concurrency
-verdict: NEEDS_FIXES
-domain_specific_patterns_checked:
-  - 'EC-3 ordering invariant: registry-FIRST, unlink-second (both call sites)'
-  - 'EC-8: a remover settling after the timeout cannot affect an already-built result'
-  - 'timer lifecycle in Promise.race (clearTimeout in finally; no leaked handle; no unhandled rejection from the losing branch)'
-  - 'unbounded await on an injected callback (the runTranscriptGC hang class) — swept across the whole diff'
-  - 'per-candidate error isolation: a failure at k must not abort k+1..N'
-  - 'TOCTOU: sync->async conversion of a loop that held a protection snapshot (transcript-gc invariant 4)'
-  - 'global-regex lastIndex reuse across concurrent expandCommandTemplate calls'
-  - 'shared mutable budget in classifyProjects: undetermined must never degrade to dead'
-  - 'memoised enumeration resolved exactly once (including on the throw path)'
-  - 'per-instance vs module-level state in createPendingLedger'
-  - "plan-declared '#### Concurrency tests' obligations vs tests actually shipped"
-  - '.claude/rules/error-handling.md 2 (validate at the boundary; fail-fast, typed, never silent)'
+run_date: 2026-08-16
+prior_review: .claude/knowledge-base/reviews/crossval-4-6-absorption-review-2026-08-16.md (NEEDS_FIXES, 6 BLOCKER / 22 HIGH)
 
-method_note: |
-  Static reading plus two executable probes, because assertions about Promise.race semantics and
-  RegExp.lastIndex are exactly the kind that get post-rationalised:
-    - probe 1 re-implemented awaitRegistryRemoval and confirmed (a) a loser that REJECTS after the
-      timeout produces NO unhandledRejection (Promise.race has already subscribed to it), and
-      (b) zero Timeout handles survive when the remover wins the race.
-    - probe 2 confirmed String.matchAll / String.match(/g) / String.replace(/g) never leave
-      lastIndex non-zero, but that matchAll COPIES lastIndex into its internal clone — so a
-      poisoned lastIndex silently drops leading matches ("$1 $2".matchAll after .test() yielded
-      only "$2").
-  Everything below distinguishes "verified correct" from "correct only for the interleaving the
-  tests happen to exercise".
+domain_specific_patterns_checked:
+  - 'transcript-gc.ts:24-40 invariant 4 — the apply phase re-checks (TOCTOU backstop) after T2.2 made the loop non-atomic'
+  - 'transcript-gc.ts:33 invariant 3 — an active writer lease protects its transcript (cross-process lockfile, @theokit/sdk sessionHasWriter)'
+  - 'session-lifecycle.ts:58-71 SessionInUseError contract — refusal is the default because the damage is unrecoverable'
+  - 'registry-remover.ts EC-3 ordering — registry removal BEFORE unlink; EC-8 — a late settle may not mutate a returned result'
+  - 'registry-remover.ts bounded-await contract — DEFAULT_REGISTRY_TIMEOUT_MS, unbounded reachable only when asked for'
+  - 'liveness-oracle.ts:25-32 — three-valued verdict, `undetermined` is not a soft `dead`; budget shared across the whole sweep'
+  - 'liveness-oracle.ts:1-11 — encodeProjectDir is lossy on purpose (`/a/b` and `/a-b` collide), so a directory name may belong to more than one cwd'
+  - 'rules/error-handling.md § 2 — recoverable vs unrecoverable; validate at the boundary; never fail silently'
+  - 'rules/testing.md § 4.1 — negative cases prove error handling; a vacuous assertion proves nothing'
+  - 'cycle-implement.md — declared `#### Concurrency tests` must have at least one matching test in the tree'
+
+notes_on_method: |
+  The framework itself is single-threaded; every hazard below is either (a) an interleaving between
+  two OS PROCESSES over shared filesystem state (`~/.theokit/projects`, the `.writer.lock` lease,
+  the `last-session` pointer), or (b) an interleaving between the caller's async remover and this
+  package's own irreversible `rmSync`. Both are real concurrency, and both were IMPOSSIBLE before
+  T2.2 made `deleteSession` / `runTranscriptGC` async — before the slice, check and use sat in the
+  same uninterruptible turn.
+
+  Two facts measured in this run that sharpen the previous review's narration:
+    - `@theokit/sdk` `sessionHasWriter` (node_modules/@theokit/sdk/dist/chunk-R7TKOQMJ.js:64-72) is
+      an `existsSync` on `<transcript>.writer.lock` plus a pid/host liveness check. It is a
+      CROSS-PROCESS lease. Nothing in this package can observe another process taking it except by
+      re-reading the file.
+    - `appendJsonl` (node_modules/@theokit/sdk/dist/chunk-NACDF3PK.js:132-142) opens with `'a'`,
+      which CREATES the file when absent. So deleting a transcript out from under a live writer does
+      not stop the writer — it makes the session reappear containing only the records written after
+      the delete. That is the concrete observable outcome for F-dom-1 and F-dom-2 below, and it is
+      the same "a sequence that parses but is fiction" failure the SDK's lease exists to prevent,
+      reached from the other side.
 
 findings:
   - id: F-dom-1
     severity: HIGH
+    status: STILL_OPEN
     file: packages/agents/src/session/gc/transcript-gc.ts
     line: 271
-    plan_ref: "T2.2 — runTranscriptGC accepts and honours a remover; plan Baseline Context lists 'The 4 GC invariants ... stay' as an invariant to preserve"
-    domain_anchor: "transcript-gc.ts:31-36 invariant 4 — 'The apply phase re-checks. A plan is a snapshot, and between snapshot and delete a user can resume a session. A collector that trusts its own plan deletes the session someone just returned to.'"
+    plan_ref: 'T2.2 — runTranscriptGC accepts and honours a remover; Baseline Context lists "the 4 GC invariants stay" as an invariant to preserve'
+    domain_anchor: 'transcript-gc.ts:34-36 invariant 4 — "The apply phase re-checks. A plan is a snapshot, and between snapshot and delete a user can resume a session."'
     summary: >
-      Invariant 4 is a single snapshot taken before a loop that is no longer atomic. Before this
-      slice runTranscriptGC was synchronous, so `protectedNow` and every rmSync in the loop happened
-      in one uninterruptible turn — "is safe now" was literally true. The loop now contains an
-      `await` per candidate (up to registryTimeoutMs, unbounded by default), so for candidate N the
-      snapshot can be minutes old, and a writer lease taken by ANOTHER PROCESS during that window
-      (sessionHasWriter is a cross-process file lease, not intra-process state) is invisible. The
-      invariant degraded from "is safe now" to "was safe when the sweep started" without the comment
-      that states it being updated.
+      The invariant-4 re-check is still ONE snapshot taken before a loop that contains an await per
+      candidate. Nothing in this branch changed it; commit 90e9af57 only bounded the await, so the
+      window went from unbounded to 30s per preceding candidate, which is a smaller window and not a
+      closed one. The comment at :268-270 still asserts the snapshot "turns 'was safe when we looked'
+      into 'is safe now'", which is false for every candidate after the first.
+    interleaving: |
+      Actor A = `theokit agent sessions gc --apply` in process 1, sweeping candidates [s1 … s40]
+      with a `removeFromRegistry` wired to `Agent.delete` (the wiring T2.2 exists to enable).
+      Actor B = a second process (a TUI, or `exec resume`) belonging to the same operator.
+
+        t0  A: protectedNow = resolveProtection(...)            transcript-gc.ts:271-273
+            → s37 is not protected: nobody holds its lease, it is not the pointer target.
+        t1  A: enters the loop; awaits the registry for s1      transcript-gc.ts:291-295
+            → the registry is slow (30s ceiling each, or simply a few seconds each).
+        t2  B: `acquireSessionWriter(<...>/s37.jsonl)` succeeds — the operator resumed s37.
+            B begins appending turns. `sessionHasWriter(s37)` is now TRUE on disk.
+        t3  A: reaches candidate s37. `protectedNow.has('s37')` reads the t0 snapshot → false.
+        t4  A: `rmSync(transcriptPath(root, cwd, 's37'))`        transcript-gc.ts:305
+        t5  B: appends the next turn. `appendJsonl` opens `'a'` and RECREATES s37.jsonl.
+
+      Observable wrong outcome: the operator's live conversation loses everything before t4 and
+      keeps everything after it, in a file that is syntactically valid JSONL and is missing its own
+      beginning. No error is raised on either side: A reports `removed: [... 's37' ...]`, B never
+      learns its file was unlinked. B's lease was held the whole time and protected nothing.
     evidence: |
-      Post-slice (transcript-gc.ts:271-305) — snapshot once, await inside the loop:
+      Snapshot, once, before the loop — unchanged by this branch:
       ```ts
+      // transcript-gc.ts:268-273
+      // Invariant 4 — the TOCTOU backstop. ... Re-reading protection HERE is what turns
+      // "was safe when we looked" into "is safe now".
       const protectedNow = options.apply
         ? resolveProtection(protectedTranscripts(plan.cwd, plan.root), options.protectedIds)
         : new Map<string, string>()
 
       for (const candidate of plan.candidates) {
-        if (protectedNow.has(candidate.id)) continue
-        ...
-          await awaitRegistryRemoval(options.removeFromRegistry(candidate.id), candidate.id, options.registryTimeoutMs)
-        ...
-        rmSync(transcriptPath(plan.root, plan.cwd, candidate.id))
+        if (protectedNow.has(candidate.id)) continue     // :276 — reads the t0 snapshot
       ```
-      Pre-slice (`git show origin/develop:...transcript-gc.ts:237-263`) — same snapshot, but
-      `export function runTranscriptGC(...): RunTranscriptGCResult` with a fully synchronous body.
-      The interleaving point is new; the guard was not adjusted for it.
-      No test exercises "a session becomes protected while the sweep is awaiting candidate k".
+      The yield inside the loop:
+      ```ts
+      // transcript-gc.ts:291-295
+      await awaitRegistryRemoval(
+        options.removeFromRegistry(candidate.id), candidate.id, options.registryTimeoutMs)
+      ```
+      then `rmSync(...)` at :305.
+
+      Window size after 90e9af57: `DEFAULT_REGISTRY_TIMEOUT_MS` = 30_000
+      (registry-remover.ts:55), applied per candidate, so candidate k is deleted against a snapshot
+      up to `30s * (k-1)` old in the worst case. Bounded, not eliminated.
+
+      No test covers it. `transcript-gc-protection.test.ts:122` ("plan_then_delete_concurrent_test_
+      rechecks_injected_ids") flips protection between PLAN and APPLY — i.e. before :271 — which the
+      snapshot does catch. Nothing flips protection between :271 and :305, which is the window T2.2
+      created. Every test in that file passes NO `removeFromRegistry`, so the loop in those tests has
+      no await at all and runs in one turn.
+
+      Scope note (honest): the only in-repo caller, `packages/theo/src/cli/commands/sessions-gc.ts:89`,
+      passes no `removeFromRegistry`, so the loop is await-free there and the hazard is currently
+      dormant. It arms the moment a consumer wires the seam — which is exactly what T5.3 hands
+      `Agent.delete` to.
     recommended_action: >
-      Re-check protection per candidate immediately before the unlink, not once per sweep — a
-      targeted check (pointer read + sessionHasWriter on that one transcript) is O(1) and does not
-      require re-running the full protectedTranscripts scan. Keep the pre-loop snapshot as the cheap
-      filter and add the narrow re-check as the actual gate. Add a test that flips protection (write
-      the session pointer) from inside a controlled remover barrier and asserts the transcript
-      survives.
+      Re-check protection for the single candidate immediately before `rmSync` — a pointer read plus
+      one `sessionHasWriter(candidate.transcript)` is O(1) and does not require re-running
+      `protectedTranscripts` over the whole project. Keep the pre-loop snapshot as the cheap filter.
+      Add `test_a_session_that_takes_a_lease_while_the_sweep_awaits_candidate_k_survives()` using a
+      remover that blocks on a barrier the test controls, creating the `.writer.lock` while the
+      barrier is held. Until the re-check exists, correct the comment at :268-270 — it currently
+      states a guarantee the code stopped providing in this slice.
 
   - id: F-dom-2
     severity: HIGH
+    status: STILL_OPEN
     file: packages/agents/src/session/session-lifecycle.ts
-    line: 225
-    plan_ref: "D6 — 'Fix the shape at the framework'; T2.2 widened deleteSession to async"
-    domain_anchor: "transcript-gc.ts:33-36 invariant 3/4 (an active writer lease protects its transcript, and the delete phase re-checks); SessionInUseError's own contract at session-lifecycle.ts:58-71"
+    line: 226
+    plan_ref: 'T2.2 — deleteSession widened to async; ADR D6 "fix the shape at the framework"'
+    domain_anchor: 'session-lifecycle.ts:58-71 SessionInUseError — "Deleting it would discard state something is still using"; transcript-gc.ts:33 invariant 3'
     summary: >
-      deleteSession acquired the same TOCTOU window as F-dom-1 and has no backstop at all. The
-      protection check runs, then an unbounded (or registryTimeoutMs-long) await, then rmSync. A
-      session that acquires a writer lease, or becomes the resumable pointer target, during the
-      await is deleted anyway — the refusal that SessionInUseError exists to deliver never fires.
-      Pre-slice this was impossible: the function was synchronous end to end.
+      `deleteSession` still has check → await → unlink with no re-check, and unlike the sweep it has
+      no backstop of any kind. The protection read at :226 decides, then control leaves the function
+      for up to 30s (default) or forever (explicit `Infinity`), then :272 unlinks. A session that
+      becomes protected during the await is deleted anyway and `SessionInUseError` never fires.
+    interleaving: |
+      Actor A = a surface calling `deleteSession('s5', { cwd, removeFromRegistry: id => Agent.delete(id) })`
+      with `force` unset (the documented default, "the refusal is the default because the damage is
+      unrecoverable").
+      Actor B = the operator's TUI in another process.
+
+        t0  A: `protectedTranscripts(cwd, root).get('s5')` → undefined   session-lifecycle.ts:226
+        t1  A: `await awaitRegistryRemoval(Agent.delete('s5'), ...)`     session-lifecycle.ts:255-259
+        t2  B: opens s5 (`acquireSessionWriter`) and/or `persistSessionId(cwd,'s5')` makes s5 the
+            resumable pointer target. Both are the exact reasons :226 would have refused.
+        t3  A: `rmSync(transcriptPath(root, cwd, 's5'))`                 session-lifecycle.ts:272
+        t4  A: returns `{ registryRemoved: true, transcriptRemoved: true }`.
+
+      Observable wrong outcome: a session the framework classifies as live at t3 is deleted with a
+      success result, on the code path whose declared default is refusal. If B holds the lease, the
+      transcript is recreated truncated at B's next append (see notes_on_method); if B only set the
+      pointer, the operator's next `--continue` finds a pointer aimed at a file that is gone.
     evidence: |
-      session-lifecycle.ts:225-272
       ```ts
+      // session-lifecycle.ts:225-228   <-- CHECK
       if (options.force !== true) {
-        const reason = protectedTranscripts(options.cwd, root).get(sessionId)   // :226  <-- check
+        const reason = protectedTranscripts(options.cwd, root).get(sessionId)
         if (reason !== undefined) throw new SessionInUseError(sessionId, reason)
       }
-      ...
-      const outcome = await awaitRegistryRemoval(                               // :255  <-- yield
+      // session-lifecycle.ts:255-259   <-- YIELD
+      const outcome = await awaitRegistryRemoval(
         options.removeFromRegistry(sessionId), sessionId, options.registryTimeoutMs)
-      ...
-      rmSync(transcriptPath(root, options.cwd, sessionId))                      // :272  <-- use
+      // session-lifecycle.ts:272       <-- USE
+      rmSync(transcriptPath(root, options.cwd, sessionId))
       ```
-      `git show origin/develop:...session-lifecycle.ts:187-209` — the pre-slice body is sync, so
-      check and use were in the same turn.
-      Tests: every case in packages/agents/tests/unit/gc-registry-remover.test.ts passes
-      `force: true`, which skips the check entirely — the protected path is never exercised
-      against an async remover at all.
+      Test coverage of the combination is still zero, and it is zero for a structural reason:
+        - `packages/agents/tests/unit/gc-registry-remover.test.ts` — all seven `deleteSession` cases
+          (:55, :72, :84, :106, :123, :136, :159) pass `force: true`, which skips :225-228 entirely.
+        - `packages/agents/tests/unit/session-lifecycle.test.ts:186` and `:200` exercise the
+          protected path but pass NO `removeFromRegistry`, so there is no await between check and
+          unlink.
+      So the protected path and the async path are each tested, and their intersection — the only
+      place the defect lives — is tested by nothing.
     recommended_action: >
-      Re-read protection for `sessionId` after the await and before rmSync when `force !== true`,
-      and throw SessionInUseError on the late acquisition (the transcript is still on disk, so this
-      is the recoverable direction). Add a regression test using a remover that resolves on a
-      barrier, taking the lease/pointer while the barrier is held.
+      When `force !== true`, re-read protection for `sessionId` after the await and before `rmSync`,
+      and throw `SessionInUseError` on the late acquisition. The transcript is still on disk at that
+      point, so this is the recoverable direction and costs one pointer read plus one
+      `sessionHasWriter`. Note the registry entry is already gone by then — the thrown error should
+      say so (or the result shape should carry `registryRemoved: true` alongside the refusal), because
+      silently reporting "in use" after having removed the registry entry would hide a half-applied
+      delete. Add the barrier regression test.
 
   - id: F-dom-3
-    severity: HIGH
+    severity: INFO
+    status: CLOSED
     file: packages/agents/src/session/gc/registry-remover.ts
-    line: 62
-    plan_ref: "T2.2 Concurrency tests — 'remover_that_never_settles_times_out_with_a_typed_error() asserts the timeout fires and the sweep continues rather than hanging'"
-    domain_anchor: "registry-remover.ts:12-17 — 'A remover that never settled hung runTranscriptGC indefinitely — not one session, every session after it, with no error, no timeout and no output.'; .claude/rules/error-handling.md 2 (recoverable vs unrecoverable; never fail silently)"
+    line: 55
+    plan_ref: 'T2.2 Concurrency tests — "remover_that_never_settles_times_out_with_a_typed_error"'
+    domain_anchor: 'registry-remover.ts:42-54 — "The bound was OPT-IN in the first version of this fix, and nothing opted in"'
     summary: >
-      The fix for the hung sweep is opt-in, and nothing in this repo opts in. `timeoutMs ===
-      undefined` short-circuits to a plain unbounded await, and `registryTimeoutMs` is optional on
-      BOTH callers with no default. So the shipped default behaviour is byte-for-byte the bug the
-      commit "fix(session): a registry that never answered hung the entire GC sweep" claims to have
-      closed. The docstring on the option states the guarantee unconditionally, which is where the
-      contract and the code disagree.
+      VERIFIED CLOSED by commit 90e9af57. The previous review's F-dom-3 (the hang-fix was opt-in and
+      nothing opted in) no longer holds: the bound is now a parameter default, so BOTH call sites get
+      it without changing, and unbounded has to be asked for explicitly.
     evidence: |
-      registry-remover.ts:62
       ```ts
-      if (!isThenable(outcome) || timeoutMs === undefined) return outcome   // unbounded await
+      // registry-remover.ts:55
+      export const DEFAULT_REGISTRY_TIMEOUT_MS = 30_000
+      // registry-remover.ts:76-81
+      export async function awaitRegistryRemoval(
+        outcome: unknown, sessionId: string,
+        timeoutMs: number | undefined = DEFAULT_REGISTRY_TIMEOUT_MS,
+      ): Promise<unknown> {
+        if (!isThenable(outcome) || !Number.isFinite(timeoutMs)) return outcome
       ```
-      session-lifecycle.ts:203-207 states it as a fact, not an opt-in:
-      ```
-      * Ceiling on the injected remover. A registry that never answers must not hang a sweep; the
-      * timeout surfaces as `registryError` and the transcript is left alone.
-      readonly registryTimeoutMs?: number
-      ```
-      `grep -rn registryTimeoutMs` over the repo: 0 production call sites. Every occurrence is a
-      test that passes it explicitly, plus tests/integration/gc-sweep-bounded.test.ts:121-132
-      ("test_no_timeout_configured_keeps_the_previous_behaviour") which pins the unbounded default
-      as DESIRED behaviour using a remover that returns `undefined` — i.e. it asserts the default
-      is preserved without ever exercising the default against a non-settling remover (it cannot:
-      that test would hang).
-      Phase 5 / T5.3 hands `Agent.delete` to this seam from TheoCode's per-session.ts. If the
-      adoption does not also pass a timeout, the consumer inherits the exact hang.
-    recommended_action: >
-      Either (a) give registryTimeoutMs a finite default (e.g. 30_000) and record the behaviour
-      change in CHANGELOG under Changed — a sweep that returns an error beats a sweep that never
-      returns; or (b) keep the opt-in default but make the omission loud: require the option on the
-      sweep path, or emit a structured warning when a thenable outcome is awaited with no bound. In
-      either case correct the docstring at session-lifecycle.ts:203-206 and transcript-gc.ts:257-262
-      so it stops asserting a guarantee the default does not provide, and make T5.3 pass a timeout.
+      Both call sites pass a possibly-`undefined` option, which is exactly what triggers the default:
+      transcript-gc.ts:294 and session-lifecycle.ts:258.
+
+      Proven, not assumed: `gc-registry-remover.test.ts:280`
+      ("test_the_default_is_finite_and_is_what_an_absent_option_resolves_to") omits the argument and
+      drives fake timers to `DEFAULT_REGISTRY_TIMEOUT_MS ± 1`, asserting it does not fire early and
+      does fire on time — i.e. the SHIPPED number is verified, not a smaller test-friendly one.
+      `tests/integration/gc-sweep-bounded.test.ts:134` pins the `Infinity` escape hatch.
+
+      The behaviour change is declared where a consumer will meet it:
+      `.changeset/session-lifecycle-async-major.md` ("the registry timeout now has a bounded DEFAULT
+      (`DEFAULT_REGISTRY_TIMEOUT_MS`, 30s) where it previously waited forever") and CHANGELOG.md:93-101.
+    recommended_action: No action. Recorded so a later change does not silently revert the default to opt-in.
 
   - id: F-dom-4
     severity: MEDIUM
-    file: packages/agents/src/session/liveness-oracle.ts
-    line: 78
-    plan_ref: "T3.2 Acceptance Criteria — 'Budget shared across the sweep'; Risk R5 (the DFS budget's measured behaviour becomes a framework invariant)"
-    domain_anchor: "liveness-oracle.ts:29-32 — 'The budget is shared across the whole sweep, not per project. A bound that resets each iteration is not a bound; that is precisely what produced the 64M figure.'; .claude/rules/error-handling.md 2 (validate inputs at the system boundary)"
+    status: NEW (residue of F-dom-3's fix)
+    file: packages/agents/src/session/gc/transcript-gc.ts
+    line: 257
+    plan_ref: 'T2.2 — the shared awaiting helper; previous review F-dom-3 recommended action ("correct the docstring so it stops asserting a guarantee the default does not provide")'
+    domain_anchor: 'rules/error-handling.md § 2 — a contract that disagrees with the code is a silent failure mode; CLAUDE.md G10 (honest enforcement)'
     summary: >
-      `budget` is never validated. A non-finite budget disables the bound completely rather than
-      failing: `NaN <= 0` is false and `NaN - 1` is NaN, so every `remaining <= 0` guard is dead and
-      the sweep runs unbounded over the full candidate pool for every project — the 64M-syscall
-      behaviour the module exists to prevent, reproduced silently. The realistic path is a CLI or
-      config reading the budget as `Number(process.env.X)` / `Number(argv.budget)`, which yields NaN
-      on a typo. The sibling primitive in this same slice does validate: planTranscriptGC refuses
-      with `!Number.isFinite(options.keepLast)` (transcript-gc.ts:164-169), so the two GC-adjacent
-      entry points disagree on whether a nonsense number is refused or honoured.
+      The fix landed in the helper and in `deleteSession`'s option doc, but the SWEEP's own option
+      doc was not updated and now states the OPPOSITE of what the code does. It tells the reader that
+      an absent `registryTimeoutMs` means "wait indefinitely — the pre-existing behaviour", which is
+      precisely the behaviour 90e9af57 removed. This text is emitted into the published
+      `packages/agents/dist/session.d.ts:345`, so it is the tooltip a consumer reads at the call site.
+    interleaving: |
+      Not an interleaving — a contract defect ABOUT one. Its consequence is an operator's decision:
+      a consumer with a registry that legitimately takes 45s (a network-backed registry, a cold
+      Lambda) reads "absent means wait indefinitely", omits the option deliberately, and gets
+      `SessionRegistryRemoverError` on every candidate plus a sweep that collects nothing. The
+      failure direction is safe (transcripts are kept) and completely unexplained by the doc that
+      produced the decision.
     evidence: |
-      liveness-oracle.ts:78,86,124,137,143
       ```ts
-      let remaining = opts.budget          // :78   no validation
-      const probe = (path) => { remaining -= 1; ... }
-      if (remaining <= 0) return { liveness: 'undetermined', ... }   // :124 / :143
+      // packages/agents/src/session/gc/transcript-gc.ts:257-262  — STALE
+      /**
+       * How long to wait for the registry per session before giving up on it and keeping the
+       * transcript. Absent means wait indefinitely — the pre-existing behaviour, kept as the default
+       * so adding the bound cannot change what a current caller experiences.
+       */
+      readonly registryTimeoutMs?: number
       ```
-      Probe: `NaN <= 0` -> false; `NaN - 1` -> NaN; guard never fires.
-      packages/agents/tests/unit/liveness-oracle.test.ts passes only finite budgets
-      (100, 30, 10, 3, 2) — the property test `test_total_fs_operations_never_exceed_the_budget`
-      (:121) holds for every value it is given and says nothing about the non-finite case.
-      Note the DIRECTION: budget 0 or negative degrades safely (everything `undetermined`); only
-      the non-finite case fails open.
+      versus the code it documents (registry-remover.ts:79) and versus the sibling doc on the same
+      option, which was updated: session-lifecycle.ts:203-207 ("A registry that never answers must
+      not hang a sweep"). Two docstrings on one option, contradicting each other on the only case
+      that matters — the absent one. Shipped: `packages/agents/dist/session.d.ts:345` carries the
+      stale sentence.
     recommended_action: >
-      Refuse at the boundary, matching GCFloorError's posture: `if (!Number.isInteger(opts.budget)
-      || opts.budget < 1) throw new <TypedError>(...)`. Add the negative test
-      `test_a_non_finite_budget_is_refused_not_honoured()`.
+      Replace :257-262 with the real contract: absent resolves to `DEFAULT_REGISTRY_TIMEOUT_MS` (30s);
+      unbounded requires an explicit non-finite value. Reference the exported constant by name so the
+      number cannot drift from the doc.
 
   - id: F-dom-5
     severity: MEDIUM
-    file: packages/agents/tests/unit/gc-registry-remover.test.ts
-    line: 212
-    plan_ref: "T2.2 Concurrency tests — 'Atomic-counter invariant — ... a rejecting remover on session k does not prevent sessions k+1..N from being processed'"
-    domain_anchor: ".claude/rules/testing.md 4.1 (negative cases prove error handling); cycle-implement.md post-halt-loop gate 'Test-obligation gate — declared concurrency tests must have at least one matching test in the tree'"
+    status: NEW
+    file: packages/agents/src/session/gc/registry-remover.ts
+    line: 81
+    plan_ref: 'T2.2 — the shared awaiting helper; sibling validation precedent at transcript-gc.ts:164-169'
+    domain_anchor: 'rules/error-handling.md § 2 (validate inputs at the boundary); registry-remover.ts:69-71 — "Unbounded ... has to be ASKED FOR"'
     summary: >
-      The declared mixed-outcome sweep test was not shipped. The code path is correct by inspection
-      (`continue` after pushing to `errors`, transcript-gc.ts:296-302), but nothing proves it: every
-      sweep test either uses a plan with exactly ONE candidate, or a remover that behaves identically
-      for all candidates. "Failure at k does not abort k+1..N" is therefore asserted by no test in
-      the suite, which is precisely the shape of the original defect (the single-session path was
-      tested; the sweep was not).
+      `NaN` is a non-finite value, so a garbled timeout silently selects the unbounded path — the
+      exact hang 90e9af57 closed, reachable by a typo instead of by a decision. The guard tests
+      `!Number.isFinite(timeoutMs)` and treats every non-finite value as "the caller asked for
+      unbounded", but only `Infinity` is an ask; `NaN` is a parse failure.
+    interleaving: |
+      Actor A = an operator configuring the sweep: `THEOKIT_GC_REGISTRY_TIMEOUT=30s` →
+      `Number('30s')` → `NaN` → passed as `registryTimeoutMs`.
+      Actor B = a registry that stops answering (network partition, deadlocked Agent registry).
+
+        t0  A: sweep starts, candidate s1, `awaitRegistryRemoval(promise, 's1', NaN)`
+        t1  `!Number.isFinite(NaN)` → true → `return outcome` → the async function awaits the
+            thenable with no race and no timer.
+        t2  B never settles.
+
+      Observable wrong outcome: the sweep hangs forever on candidate 1 — not one session, every
+      session after it, with no error and no output. That is verbatim the failure the module's own
+      header (:12-17) says it exists to prevent, and the operator's config was accepted without a word.
+      Note the asymmetry inside this very slice: `planTranscriptGC` REFUSES a non-finite knob
+      (`!Number.isFinite(options.keepLast)`, transcript-gc.ts:164-169) rather than honouring it. Two
+      GC-adjacent entry points, opposite answers to the same nonsense number.
     evidence: |
-      packages/agents/tests/unit/gc-registry-remover.test.ts:197-210 — `collectablePlan()` builds a
-      `candidates` array of length 1. All three sweep tests (:213, :230, :245) use it.
-      tests/integration/gc-sweep-bounded.test.ts:45-71 — multi-candidate, but the remover never
-      settles for ALL of them (`expect(result.errors.length).toBe(plan.candidates.length)`); :73-99
-      — multi-candidate, remover succeeds for all. No test has candidate k fail while k+1 succeeds.
+      ```ts
+      // registry-remover.ts:79-81
+      timeoutMs: number | undefined = DEFAULT_REGISTRY_TIMEOUT_MS,
+      ): Promise<unknown> {
+        if (!isThenable(outcome) || !Number.isFinite(timeoutMs)) return outcome
+      ```
+      `gc-registry-remover.test.ts:308` ("test_a_non_finite_timeout_opts_out_and_waits") passes
+      `Number.POSITIVE_INFINITY` only. No test passes `NaN`, and none passes `0` or a negative value
+      (which take the opposite branch and reject on the next macrotask, so a sweep configured with
+      `-1` collects nothing and errors on every candidate).
+      This is the same defect class the previous review filed against `budget` (F-dom-4, liveness-oracle),
+      which is also still open — see F-dom-9.
     recommended_action: >
-      Add `test_a_rejecting_remover_on_one_session_does_not_stop_the_rest()`: 3+ aged candidates, a
-      remover that rejects only for the 2nd, asserting `removed` contains 1st and 3rd, `errors` has
-      exactly one entry naming the 2nd, and the 2nd's transcript is still on disk (EC-3 at sweep
-      granularity).
+      Discriminate the ask from the accident: accept `Infinity` explicitly
+      (`timeoutMs === Number.POSITIVE_INFINITY`) as the unbounded opt-out, and refuse anything else
+      that is not a positive finite number with a typed error naming the received value. Add
+      `test_a_NaN_timeout_is_refused_not_treated_as_unbounded()` and
+      `test_a_non_positive_timeout_is_refused()`.
 
   - id: F-dom-6
-    severity: MEDIUM
-    file: packages/agents/tests/unit/gc-registry-remover.test.ts
-    line: 50
-    plan_ref: "T2.2 Concurrency tests — 'Happens-before observation — assert registryRemoved: true is observed only after the remover's promise has settled, by having the remover resolve on an explicit barrier the test controls'"
-    domain_anchor: ".claude/rules/testing.md 6 (vacuous assertions); plan-confidence-golden-rule.md 'tests passing != system works'"
+    severity: HIGH
+    status: NEW (introduced by 7fea1388)
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 181
+    plan_ref: 'T3.2 — the liveness question comes home to the package that made it hard'
+    domain_anchor: 'liveness-oracle.ts:4-7 — "`/a/b` and `/a-b` produce the same name, so a directory name cannot be turned back into a path"; liveness-oracle.ts:25-28 — "Callers DELETE on `dead`"'
     summary: >
-      The declared happens-before test is absent, and the test standing in for it is vacuous with
-      respect to the property it names. `test_async_remover_is_awaited_not_refused` cannot fail if
-      the await were removed: `registryRemoved = outcome !== false` is `true` for a PENDING Promise
-      exactly as it is for a settled one — which is the original silent-success bug's own mechanism.
-      The test proves the thenable is no longer REFUSED; it does not prove it is AWAITED. The
-      success-path ordering is therefore unproven. (The rejection path IS genuinely proven, by
-      :101-116, where a non-awaited rejection would have escaped and the unlink would have run.)
+      The new recorded-cwd branch proves `dead` from the FIRST transcript in the directory whose
+      recorded cwd re-encodes to the directory name — but the module's own opening premise is that a
+      directory name can belong to MORE THAN ONE cwd. One transcript's cwd being gone proves the
+      absence of that cwd, not of the directory, and the caller deletes the directory. The 3-of-N
+      sampling (`slice(0, samples)`) makes the evidence partial by construction on any project with
+      more than three transcripts.
+    interleaving: |
+      Two concurrent actors sharing one mutable resource — the encoded project directory — with no
+      partitioning between them.
+
+      Actor A = an agent run with `cwd = /home/op/my-app`.
+      Actor B = an agent run with `cwd = /home/op/my/app`.
+      `encodeProjectDir` maps BOTH to `-home-op-my-app` (`cwd.replace(/[^a-zA-Z0-9]/g,'-')`,
+      liveness-oracle.ts:98-100), so `projectDirFor` (project-index.ts:62-64) points both at
+      `~/.theokit/projects/-home-op-my-app/`. Both append transcripts there; both are legal users of it.
+
+        t0  A writes  a1.jsonl  with first record `{"cwd":"/home/op/my-app", ...}`
+        t1  B writes  b1.jsonl  with first record `{"cwd":"/home/op/my/app", ...}`   (B is live)
+        t2  the operator deletes /home/op/my-app (project finished, disk cleaned)
+        t3  a GC sweep calls `classifyProjects(['-home-op-my-app'], ...)`
+            `recordedCwd` lists the directory, filters `.jsonl`, takes the first 3 in readdir order,
+            and RETURNS ON THE FIRST MATCH (:181). readdir order puts a1.jsonl first.
+        t4  `probe('/home/op/my-app')` → not found → verdict `dead`,
+            reason "recorded cwd /home/op/my-app is gone"                 (:275)
+        t5  the caller deletes ~/.theokit/projects/-home-op-my-app/ — including b1.jsonl.
+
+      Observable wrong outcome: B's LIVE conversation history is destroyed by a verdict that carries
+      positive evidence about a different project. Swap the readdir order and the same directory is
+      `alive` — so the verdict is nondeterministic in the input the module never looks at.
+      The same aliasing also lets `deleteSession`/`planTranscriptGC` in project A enumerate and
+      collect project B's transcripts (`listSessions` reads the shared directory,
+      session-lifecycle.ts:89-128) — but there the damage is bounded by age/keepLast/lease, whereas
+      the `dead` verdict authorises deleting the whole directory at once.
     evidence: |
-      gc-registry-remover.test.ts:50-65
       ```ts
-      const result = await deleteSession('s1', { ..., removeFromRegistry: async (id) => { calls.push(id); await Promise.resolve() } })
-      expect(calls).toEqual(['s1'])
-      expect(result.registryRemoved, 'an awaited removal is a completed removal').toBe(true)
+      // liveness-oracle.ts:167-183
+      const samples = opts.transcriptSamples ?? DEFAULT_TRANSCRIPT_SAMPLES        // 3
+      for (const file of entries.filter((f) => f.endsWith('.jsonl')).slice(0, samples)) {
+        ...
+        if (encodeProjectDir(cwd) === name) return { kind: 'found', cwd }         // :181 FIRST match wins
+      }
+      // liveness-oracle.ts:269-276
+      at.found ? { liveness: 'alive', ... }
+               : { liveness: 'dead', reason: `recorded cwd ${recorded.cwd} is gone` }
       ```
-      Both assertions hold under `const outcome = options.removeFromRegistry(sessionId)` with no
-      await. The declared barrier test ("resolve on an explicit barrier the test controls") does not
-      appear anywhere in the suite.
+      The check at :181 is described as the guard against a stray transcript speaking for a project
+      ("The recorded cwd MUST encode back to the directory it was found in", :151-153) — and it is
+      exactly the check that CANNOT distinguish two legitimate cwds that encode to the same name,
+      because both satisfy it.
+      Tests: `liveness-oracle-recorded-cwd.test.ts:119`
+      ("test_a_recorded_cwd_that_is_gone_is_the_one_thing_that_proves_dead") seeds a directory with
+      ONE transcript. `:138` ("test_a_transcript_whose_cwd_does_not_encode_to_this_name_is_ignored")
+      covers the stray-transcript case, which is the case the check DOES handle. No test puts two
+      transcripts with two DIFFERENT cwds that both encode to the directory name in the same directory.
+      Note the changeset claim this falsifies: `.changeset/liveness-oracle-recorded-cwd-major.md` —
+      "A `dead` verdict now requires positive evidence of absence."
     recommended_action: >
-      Ship the declared barrier test: a remover that resolves only when the test releases it, with
-      the test asserting the transcript still exists (and `deleteSession` has not returned) before
-      release, and that both are true only after. That is the assertion that distinguishes awaited
-      from merely-called.
+      Make `dead` require that EVERY distinct recorded cwd found in the directory is absent, and make
+      the sampling honest: if `entries.filter(.jsonl).length > samples`, the evidence is partial, so
+      the strongest available verdict is `undetermined` unless every sampled cwd is absent AND the
+      sample covered the directory. Concretely: collect the set of matching cwds across the samples,
+      probe each, return `alive` on the first hit, `dead` only when all are absent and no sample was
+      skipped, `undetermined` otherwise. Add
+      `test_two_cwds_that_encode_to_the_same_directory_are_not_dead_when_one_still_exists()`.
 
   - id: F-dom-7
     severity: MEDIUM
-    file: packages/agents/src/config/command-template.ts
-    line: 136
-    plan_ref: "T3.3 Concurrency tests — '(none — single-threaded). Expansion awaits the injected shell sequentially per segment'"
-    domain_anchor: "registry-remover.ts:12-17 (the unbounded-await-on-an-injected-callback bug class this slice already paid for); command-template.ts:109-111 — 'Nothing here throws. A command whose shell segment failed ... still produces a usable prompt'"
+    status: NEW
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 121
+    plan_ref: 'T3.2 — classification absorbed into the framework; T2.2 — the deletion path is now async'
+    domain_anchor: 'liveness-oracle.ts:25-28 — "Callers DELETE on `dead`"; transcript-gc.ts:34-36 invariant 4 (the sibling module DOES state that a plan is a snapshot)'
     summary: >
-      The same bug shape the slice just fixed in the GC sweep is present, unfixed, in the template
-      expander: an unbounded `await` on a caller-injected callback, inside a sequential loop. A
-      shell segment that never settles hangs the expansion forever — and because replaceAsync awaits
-      segment k before starting k+1, it also blocks every later segment and the whole prompt, with
-      no error, no timeout and no output. The module's stated best-effort contract ("nothing here
-      throws ... still produces a usable prompt") cannot be delivered in that case: it produces
-      nothing at all. Unlike the GC seam there is not even an opt-in bound.
+      Answering the question posed: yes — classification and deletion can observe different states,
+      and the module says nothing about it. `classifyProjects` is synchronous, so its Map is a
+      point-in-time snapshot of the whole sweep; the deletion that consumes it is asynchronous (the
+      remover this slice made awaitable). Every verdict except the first is therefore consumed after
+      an arbitrary number of awaits. Unlike `transcript-gc.ts`, which at least declares invariant 4
+      and attempts a re-check, this module offers no re-validation contract, no re-check helper, and
+      no caveat in a docblock that otherwise reasons carefully about the fail-safe direction.
+    interleaving: |
+      Actor A = a sweep: `const verdicts = classifyProjects(names, opts)` then
+      `for (const [name, v] of verdicts) if (v.liveness === 'dead') { await removeFromRegistry(name); rm(dir) }`
+      — the natural composition of the two symbols this slice ships together.
+      Actor B = the operator.
+
+        t0  A: classifyProjects returns; `-home-op-proj-x` → dead (its recorded cwd was absent).
+        t1  A: begins deleting; each project costs one bounded await (up to 30s by
+            DEFAULT_REGISTRY_TIMEOUT_MS) plus filesystem work. With the measured 10 252 `dead`
+            verdicts (see F-dom-8), the tail of this loop runs minutes-to-hours after t0.
+        t2  B: `git clone` / `mkdir -p /home/op/proj-x` and starts an agent there. The project is
+            live again, and `recordProjectDir`/`persistSessionId` reattach to the SAME encoded
+            directory (project-index.ts:62-64) — the one A is about to delete.
+        t3  A: reaches `-home-op-proj-x`, still holding the t0 verdict, and deletes the directory.
+
+      Observable wrong outcome: the transcripts of a project that exists at deletion time are
+      destroyed on the strength of a verdict that was true only at t0. Re-probing costs ONE
+      `fs.exists` on the recorded cwd — the module already has that primitive (`probe`, :133-140).
     evidence: |
-      command-template.ts:83-99, 133-141
-      ```ts
-      for (const match of matches) {
-        parts.push(source.slice(cursor, match.index), await resolve(match))   // :94 sequential
-      ...
-        const result = await deps.shell(command)                              // :136 unbounded
-      ```
-      TemplateDeps.shell (:56) is `(cmd: string) => Promise<ShellResult>` — no signal, no deadline,
-      no cancellation token in the contract. The plan's own concurrency section for T3.3 records the
-      sequential await and concludes "(none — single-threaded)" without asking what happens when a
-      segment does not settle. No test covers it (the 15 tests in command-template.test.ts all use
-      immediately-resolving shells).
+      `classifyProjects` returns `Map<string, LivenessVerdict>` (:121-124) with no timestamp, no
+      re-validation entry point, and no statement that the verdict is perishable. The docblock's
+      safety reasoning (:25-32) is entirely about the classification's own fail-safe direction and
+      says nothing about the interval between the verdict and the act.
+      Contrast with the sibling in the same slice: transcript-gc.ts:34-36 names the snapshot problem
+      explicitly ("A plan is a snapshot, and between snapshot and delete a user can resume a session.
+      A collector that trusts its own plan deletes the session someone just returned to").
+      No in-repo consumer exists yet, so this is a contract gap rather than a live defect —
+      but the only documented use of the symbol is the one that deletes.
     recommended_action: >
-      Either add an optional per-segment deadline to TemplateDeps (mirroring registryTimeoutMs and
-      reusing the same bounded-await helper), or add an `AbortSignal` to the shell contract and
-      document that the caller owns the deadline — but say so in the docstring instead of claiming
-      best-effort unconditionally. Add `test_a_shell_segment_that_never_settles_does_not_hang_the_expansion()`.
+      Export a narrow re-validation helper — e.g. `confirmDead(name, verdict, opts): boolean` that
+      re-probes the recorded cwd carried on the verdict — and carry the recorded cwd on the verdict
+      so re-probing does not cost a second directory listing. At minimum, state in the docblock that
+      a verdict is a snapshot and MUST be re-confirmed immediately before an irreversible act, the
+      way transcript-gc.ts states invariant 4.
 
   - id: F-dom-8
-    severity: LOW
-    file: packages/agents/src/config/command-template.ts
-    line: 30
-    plan_ref: "T3.3 Concurrency tests — 'there is no shared mutable state across segments'"
-    domain_anchor: '.claude/rules/architecture.md 6 (leaky/shared state); Unbreakable Rule 3 (state the limit honestly)'
+    severity: MEDIUM
+    status: NEW
+    file: .wiring-evidence.json
+    line: 16
+    plan_ref: 'Global DoD — "the liveness oracle''s classification equivalence observed on the operator''s real project tree"; review F-wire-2 (pillar (c) was 0/27)'
+    domain_anchor: 'cycle-implement.md § wiring triad, pillar (c) runtime metric; rules/testing.md § 4.1 (a measurement that never exercised the path proves nothing about it)'
     summary: >
-      The plan's justification is wrong about the module, even though the code is currently safe. The
-      three module-level regexes carry the `g` flag, and `lastIndex` on a global RegExp IS shared
-      mutable state across every concurrent expansion in the process. It is benign TODAY only because
-      every use site happens to be `matchAll` / `String.match(/g)` / `String.replace(/g)`, none of
-      which leave lastIndex non-zero. The hazard is one line away: matchAll COPIES lastIndex into its
-      internal clone, so a single future `.test()` or `.exec()` on PLACEHOLDER_REGEX or
-      REFERENCE_REGEX would make concurrent expansions silently drop their leading placeholder or
-      reference — a wrong prompt, not an error.
+      Answering the question posed: the 13 624-project / 2,51-ops-per-project sweep is evidence about
+      the CLASSIFIER and about nothing else. It exercised no deletion, no registry remover, and no
+      await — so it says nothing about the deletion path, and in particular nothing about any finding
+      above. The file's own `honest_limits` are accurate as far as they go; what they omit is that the
+      measured configuration excludes the entire async half of the slice.
+    interleaving: |
+      Not an interleaving — a claim-versus-evidence gap. Three specifics:
+        1. No deletion ran. The sweep produced 10 252 `dead` verdicts (`_confusion_matrix`) and
+           deleted zero directories. The path where "callers DELETE on `dead`" was never entered, so
+           the measurement cannot speak to F-dom-6 or F-dom-7.
+        2. `candidatePaths: () => []` (stated at `honest_limits[1]`). With an empty pool, `searchPool`
+           can only return `undetermined`, so EVERY one of the 10 252 `dead` verdicts came from the
+           recorded-cwd branch — the single branch F-dom-6 shows can be wrong, measured 10 252 times
+           without a way to notice.
+        3. 118 ms wall clock for 13 624 projects is consistent with a purely synchronous classifier.
+           `runTranscriptGC`/`deleteSession`/`awaitRegistryRemoval` are not in the measured path at
+           all; the run cannot have observed a TOCTOU window because it never opened one.
+      "framework_dead where consumer disagreed == 0" is agreement between two classifiers written by
+      the same author from the same premise. Two implementations of one mistaken assumption agree.
     evidence: |
-      command-template.ts:30,36,38 — `const PLACEHOLDER_REGEX = /\$(\d+)/g`,
-      `const REFERENCE_REGEX = /.../g`, `const ARGS_REGEX = /.../gi` (module scope, shared).
-      Probe:
+      ```json
+      "liveness_oracle_projects_classified": 13624,
+      "liveness_oracle_ops_per_project": 2.51,
+      "liveness_oracle_elapsed_ms": 118,
+      "_confusion_matrix": { "framework_dead__consumer_DEAD": 10252, ... }
+      "honest_limits": [ ..., "The framework side was given an EMPTY candidate pool (candidatePaths: () => [])", ... ]
       ```
-      G.lastIndex after matchAll        -> 0
-      G.lastIndex after String.match(g) -> 0
-      G.test("$1 $2"); G.lastIndex      -> 2
-      [..."$1 $2".matchAll(G)]          -> [ '$2' ]     // leading match silently lost
-      ```
-      No test asserts two concurrent expandCommandTemplate calls produce independent results.
+      Cross-checked against the code: with `candidatePaths: () => []`, `searchPool`'s loop body never
+      executes and it returns `undetermined` unconditionally (liveness-oracle.ts:236-241), so `dead`
+      is reachable only via :275.
     recommended_action: >
-      Either construct the regexes per call, or add a one-line comment at :30 stating that these are
-      shared `g` regexes and that only lastIndex-neutral APIs (matchAll / match / replace) may be
-      used on them, plus a test that runs two expansions concurrently
-      (`await Promise.all([...])`) and asserts both outputs. Correct the plan's T3.3 concurrency
-      note — "no shared mutable state" is not true of the module, only of the segments.
+      Rename the keys or add a scope line so the artifact cannot be read as evidence about deletion —
+      e.g. `"scope": "classification only; no deletion, no registry remover, no await was exercised"`.
+      Then add the missing half: a sweep in a temp tree that actually applies, with a controlled
+      remover, recording removed/kept/errors. Pillar (c) for the deletion path is still 0.
 
   - id: F-dom-9
-    severity: LOW
-    file: packages/agents/src/session/gc/registry-remover.ts
-    line: 68
-    plan_ref: 'T2.2 — the bounded seam'
-    domain_anchor: '.claude/rules/error-handling.md 2 — validate inputs at the boundary; return explicit errors, not silent degradation'
+    severity: HIGH
+    status: STILL_OPEN
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 126
+    plan_ref: 'T3.2 Acceptance Criteria — "budget shared across the sweep"; Risk R5'
+    domain_anchor: 'liveness-oracle.ts:29-32 — "The budget is shared across the whole sweep, not per project. A bound that resets each iteration is not a bound"'
     summary: >
-      `timeoutMs` is not validated. NaN or a negative value is clamped by setTimeout to ~0, so every
-      removal times out immediately: the sweep reports "timed out" for every session, collects
-      nothing, and leaves the disk exactly as it was. The direction is fail-safe (nothing is
-      deleted), but the failure is silent-by-shape — an operator sees a GC that runs, reports errors
-      that look like a registry outage, and never collects, with no hint that the configured timeout
-      was garbage.
+      The previous review's F-dom-4 is NOT closed. `opts.budget` is still assigned unvalidated at
+      :126, so a non-finite budget disables every `remaining <= 0` guard and reproduces the
+      64M-syscall unbounded sweep the module exists to prevent. Re-verified against current source.
+    interleaving: |
+      Actor A = a CLI/config reading `budget` as `Number(process.env.THEOKIT_GC_BUDGET)` with a typo
+      ("200k") → `NaN`. Actor B = the filesystem, with a large candidate pool.
+        t0  `let remaining = NaN`                                       (:126)
+        t1  every `remaining -= 1` → NaN; every `remaining <= 0` → false (:169, :214, :236, :245)
+        t2  `searchPool` walks the ENTIRE de-duplicated pool for EVERY unresolved project.
+      Observable wrong outcome: the bound is silently absent; the sweep degenerates to the
+      quadratic search the module was written to replace, with no signal that the budget was ignored.
     evidence: |
-      registry-remover.ts:63-72 — timeoutMs flows straight into setTimeout with no check.
-      Probe: `setTimeout(fn, NaN)` fires after ~1ms; `setTimeout(fn, -5)` fires immediately.
-      Same env-parsing path as F-dom-4 (`Number(process.env...)`).
+      ```ts
+      // liveness-oracle.ts:125-126
+      const out = new Map<string, LivenessVerdict>()
+      let remaining = opts.budget          // no validation, unchanged since the previous review
+      ```
+      Sibling precedent in the same slice that DOES validate: transcript-gc.ts:164-169
+      (`!Number.isFinite(options.keepLast)` → `GCFloorError`).
+      Direction note (unchanged): 0 or negative degrades safely to `undetermined`; only non-finite
+      fails open.
     recommended_action: >
-      Guard at the top of awaitRegistryRemoval: a `timeoutMs` that is not a finite positive number is
-      refused with a typed error naming the received value, rather than becoming an
-      instantly-expiring bound.
+      Refuse at the boundary, matching `GCFloorError`'s posture:
+      `if (!Number.isInteger(opts.budget) || opts.budget < 1) throw new <TypedError>(...)`.
+      Add `test_a_non_finite_budget_is_refused_not_honoured()`.
+      Related, already recorded in the artifact itself: `_budget_sizing_finding` notes an undersized
+      budget degrades 7 967 projects to `undetermined` SILENTLY (agreement fell to 66,2%). A sweep
+      that stops classifying and says nothing is the same class of defect one size smaller — emit an
+      aggregate warning when the budget is exhausted before the input is.
 
   - id: F-dom-10
-    severity: INFO
-    file: packages/agents/src/session/gc/registry-remover.ts
-    line: 57
-    plan_ref: 'EC-8 / EC-3'
-    domain_anchor: 'registry-remover.ts:46-56'
+    severity: MEDIUM
+    status: STILL_OPEN
+    file: packages/agents/tests/unit/gc-registry-remover.test.ts
+    line: 55
+    plan_ref: >
+      T2.2 Concurrency tests — "Happens-before observation — assert `registryRemoved: true` is
+      observed only after the remover's promise has settled, by having the remover resolve on an
+      explicit barrier the test controls"
+    domain_anchor: 'rules/testing.md § 6 (vacuous assertions); cycle-implement.md test-obligation gate'
     summary: >
-      Verified-correct, recorded so a later change does not undo it unknowingly. (1) EC-8 holds at
-      both call sites: on timeout, deleteSession returns immediately (session-lifecycle.ts:266) and
-      runTranscriptGC pushes an error and `continue`s (transcript-gc.ts:296-302), so the result is
-      already built and a late settle cannot reach it. (2) The timer is always cleared — `timer` is
-      assigned synchronously inside the Promise executor before Promise.race is constructed, and the
-      `finally` runs on every exit path; probed: zero surviving Timeout handles after the remover
-      wins, so no open handle keeps a process alive. (3) A loser that REJECTS after the race settled
-      produces no unhandledRejection, because Promise.race already subscribed to it — probed
-      directly. (4) EC-3 ordering is honoured in both call sites, and a registry failure mid-sweep
-      does not abort the remaining candidates (correct by inspection; see F-dom-5 for the missing
-      proof). (5) createPendingLedger's `open` and `settled` Maps are created inside the factory —
-      no module-level state, nothing shared across instances; Map deletion during iteration in
-      pruneBefore is well-defined. (6) classifyProjects resolves the injected enumeration exactly
-      once, including on the throw path (`candidates = []` plus `enumerationError` makes the memo
-      condition permanently false), and no path lets budget exhaustion produce `dead` for a FINITE
-      budget — every exhaustion branch returns `undetermined` (:124, :137-139, :143).
+      The declared happens-before test is still absent and the test standing in for it is still
+      vacuous with respect to the property it names. Re-verified: `gc-registry-remover.test.ts:55-70`
+      is byte-identical in shape to what the previous review flagged. No barrier appears anywhere in
+      the file.
+    interleaving: |
+      The defect the test claims to guard is itself an interleaving: with the `await` removed,
+      `const outcome = options.removeFromRegistry(sessionId)` yields a PENDING promise, `outcome !== false`
+      is `true`, and `rmSync` runs BEFORE the registry entry is gone — the EC-3 order inversion, which
+      leaves an entry pointing at a deleted transcript that no sweep can ever repair. The test cannot
+      distinguish that world from the correct one, because both produce `registryRemoved === true` and
+      `calls === ['s1']`.
     evidence: |
-      Probe output:
-        caught: timeout sA            # loser rejected 50ms later -> no UNHANDLED REJECTION line
-        sB resolved, handles after: 0 # clearTimeout in finally, no leaked handle
-    recommended_action: No action. Keep the EC-8 comment at :49-55 as the anchor for these properties.
+      ```ts
+      // gc-registry-remover.test.ts:55-70 — unchanged
+      removeFromRegistry: async (id) => { calls.push(id); await Promise.resolve() },
+      ...
+      expect(calls).toEqual(['s1'])
+      expect(result.registryRemoved, 'an awaited removal is a completed removal').toBe(true)
+      ```
+      `grep -n "barrier" packages/agents/tests/unit/gc-registry-remover.test.ts` → no match.
+      The ORDER is proven elsewhere for the failure path only (`test_registry_removed_before_the_file_
+      is_unlinked` :84 and the rejection case :106, where a non-awaited rejection would escape). The
+      SUCCESS-path ordering remains unproven.
+    recommended_action: >
+      Make the remover resolve on a barrier the test controls: start `deleteSession` without awaiting,
+      assert the transcript is STILL on disk while the barrier is held, then release and assert
+      removal. That assertion fails if the `await` is deleted; the current one does not.
 
-single_thread_caveat: |
-  Stated explicitly, per the review brief. Every test in this slice's concurrency surface exercises
-  ONE interleaving: the one vitest's scheduler happens to produce for a hand-built promise. Three
-  properties are therefore claimed but not proven:
-    - "registry FIRST, unlink second" is proven for the REJECTION path only (gc-registry-remover.test.ts:101-116,
-      where a non-awaited rejection would have escaped); on the SUCCESS path the ordering assertion is
-      vacuous (F-dom-6).
-    - "a failure at k does not abort k+1..N" is proven by no test (F-dom-5) — every sweep fixture is
-      single-candidate or uniform-outcome.
-    - "protected sessions survive" is proven only when protection is stable across the whole call;
-      the new await windows in deleteSession and runTranscriptGC are never exercised against
-      protection that CHANGES during them (F-dom-1, F-dom-2), and for sessionHasWriter the competing
-      writer is a different OS process, so this is a genuine cross-process race that no
-      single-threaded reasoning about Node's event loop can rule out.
+  - id: F-dom-11
+    severity: MEDIUM
+    status: STILL_OPEN
+    file: packages/agents/tests/unit/gc-registry-remover.test.ts
+    line: 217
+    plan_ref: 'T2.2 Concurrency tests — "a rejecting remover on session k does not prevent sessions k+1..N from being processed"'
+    domain_anchor: 'transcript-gc.ts:234-237 — "Errors accumulate PER CANDIDATE (fail-open): one undeletable file must not leave the rest of the disk uncollected"'
+    summary: >
+      The declared mixed-outcome sweep test is still not in the tree. Re-verified: the three sweep
+      cases at :218, :235, :250 use a single-candidate plan, and the integration cases use a remover
+      that behaves IDENTICALLY for every candidate. "Failure at k does not abort k+1..N" is asserted
+      by nothing — which is the same shape as the original defect (the single-session path was
+      tested; the sweep was not).
+    interleaving: |
+      The property under test is per-candidate isolation across the async boundary: candidate k's
+      remover rejects (or times out after 30s), and candidates k+1..N must still be processed with
+      their own state. A regression here is invisible in production — the sweep simply collects less
+      than it should and reports one error, which reads exactly like a legitimate partial sweep.
+    evidence: |
+      `collectablePlan()` (:197-210) builds `candidates` of length 1; used by :218, :235, :250.
+      `tests/integration/gc-sweep-bounded.test.ts:45` — multi-candidate but the remover never settles
+      for ALL of them (`errors.length === candidates.length`); `:73` — multi-candidate, remover
+      succeeds for all. No case has k fail while k+1 succeeds.
+    recommended_action: >
+      Add `test_a_rejecting_remover_on_one_session_does_not_stop_the_rest()`: 3+ aged candidates, a
+      remover that rejects only for the 2nd, asserting `removed` contains the 1st and 3rd, `errors`
+      has exactly one entry naming the 2nd, and the 2nd's transcript is still on disk.
+
+  - id: F-dom-12
+    severity: LOW
+    status: NEW
+    file: packages/agents/src/session/project-index.ts
+    line: 83
+    plan_ref: 'T3.2 / T2.4 — the reverse index and its secure creation'
+    domain_anchor: 'session-pointer.ts:69-73 — "Delegates to `atomicWriteText`, so a reader never observes a half-written pointer"'
+    summary: >
+      The cwd sidecar is written with a non-atomic `writeFileSync` while its sibling in the same
+      slice — the session pointer, same directory, same shared-across-processes exposure — uses
+      `atomicWriteText` precisely so a concurrent reader cannot observe a partial value. A torn read
+      of the sidecar returns a TRUNCATED path, and `resolveProjectDir`'s documented contract only
+      covers `undefined` ("not known here"), not "a shorter path than the one that was written".
+    interleaving: |
+      Actor A = a process calling `recordProjectDir('/home/op/Projetos/theo/theokit')`.
+      Actor B = a concurrent GC/diagnostic calling `resolveProjectDir('-home-op-Projetos-theo-theokit')`.
+        t0  A: `writeFileSync(sidecar, ...)` opens `'w'` — the file is TRUNCATED to zero.
+        t1  B: `readFileSync(sidecar)` → `''` → `resolveProjectDir` returns `undefined`
+            (benign, matches the documented "not known here"), or, on a partial flush, a prefix such
+            as `/home/op/Projetos/th` — a non-empty string that is returned as if it were the cwd.
+        t2  A: finishes the write.
+      Observable wrong outcome: a caller that treats the returned string as the project's cwd probes
+      a path that does not exist. The window is small (one write of one short line) and there is no
+      in-repo consumer of `resolveProjectDir` on a deletion path today — hence LOW — but the value is
+      published as the reverse index whose stated purpose is answering "does the project behind this
+      directory still exist" before deleting anything (project-index.ts:18-25).
+    evidence: |
+      ```ts
+      // project-index.ts:82-83
+      ensureSecureDir(sidecar)
+      writeFileSync(sidecar, `${cwd}\n`, 'utf8')      // truncate-then-write
+      ```
+      versus
+      ```ts
+      // session-pointer.ts:103
+      await (atomicWriteText as ...)(target, `${sessionId}\n`)
+      ```
+      `atomicWriteText` is already imported by this package and is a published `/persistence`
+      pass-through, so the fix has no new dependency.
+    recommended_action: >
+      Use `atomicWriteText` for the sidecar as well (it is the same one-line delegation the pointer
+      already makes), or state in `resolveProjectDir`'s docblock that a non-empty return may be torn
+      and must be validated with `projectDirMatches` before use.
+
+  - id: F-dom-13
+    severity: LOW
+    status: NEW
+    file: packages/agents/src/session/gc/transcript-gc.ts
+    line: 305
+    plan_ref: 'M72 — "the framework ships everything that CREATES unbounded disk state and nothing that bounded it"'
+    domain_anchor: '"@theokit/sdk classifySessionArtifact — four artifact kinds: transcript, writer-lock, lock-directory, temp (node_modules/@theokit/sdk/dist/persistence.js:14-21)"'
+    summary: >
+      The collector removes exactly one of the four artifact kinds the SDK defines. `rmSync` targets
+      `transcriptPath(...)` only, so a `<id>.jsonl.writer.lock`, a `<id>.jsonl.lock` directory, or an
+      atomic-write `temp` left by a process that died mid-write survives every sweep forever — and
+      `listSessions` filters to `kind === 'transcript'`, so nothing ever sees them again.
+    interleaving: |
+      Actor A = an agent process holding the writer lease for s9 (`s9.jsonl.writer.lock` exists).
+      Actor B = the sweep, with the operator passing `force`/or via the F-dom-1 race.
+        t0  A is SIGKILLed. The lease file survives (release() never runs).
+        t1  B collects s9: `sessionHasWriter` returns false (the pid is dead → reclaimable), so s9
+            is a candidate; `rmSync` removes `s9.jsonl`.
+        t2  `s9.jsonl.writer.lock` remains. No subsequent sweep lists it (not a `transcript`), no
+            code deletes it.
+      Observable wrong outcome: the module whose stated purpose is bounding disk state leaves
+      monotonically growing residue in the directory it collects. Bounded in size (~80 bytes each),
+      hence LOW — but it is unbounded in count and invisible to the only tool that looks.
+    evidence: |
+      ```ts
+      // transcript-gc.ts:305
+      rmSync(transcriptPath(plan.root, plan.cwd, candidate.id))
+      ```
+      ```ts
+      // session-lifecycle.ts:124
+      if (kind !== 'transcript') continue      // writer-lock / lock-directory / temp are dropped
+      ```
+      SDK classification (node_modules/@theokit/sdk/dist/persistence.js:14-21) enumerates all four
+      kinds, so the framework has the vocabulary to collect them and chooses not to.
+    recommended_action: >
+      When a transcript is successfully unlinked, remove its sibling artifacts for the same id
+      (`<id>.jsonl.writer.lock`, `<id>.jsonl.lock`, temp targets resolving to `<id>.jsonl`) with
+      `force: true`, and only for the id just collected. Do NOT sweep orphan artifacts generally —
+      an orphan lock whose owner is alive is protection, not residue.
+
+closed_from_previous_review:
+  - id: F-dom-3 (previous)
+    verdict: CLOSED
+    by_commit: '90e9af57 "fix(session): the GC bound was opt-in and nothing opted in"'
+    evidence: >
+      Default parameter at registry-remover.ts:79, applied at both call sites (transcript-gc.ts:294,
+      session-lifecycle.ts:258); proven at its shipped value by the fake-timer test at
+      gc-registry-remover.test.ts:280; escape hatch pinned at gc-sweep-bounded.test.ts:134; declared
+      in .changeset/session-lifecycle-async-major.md and CHANGELOG.md:93-101. Residue filed as F-dom-4
+      (the sweep's own docstring still states the pre-fix contract) and F-dom-5 (NaN silently selects
+      the escape hatch).
+
+still_open_from_previous_review:
+  - previous F-dom-1 (sweep TOCTOU) -> re-filed as F-dom-1, unchanged code, window now bounded at 30s/candidate
+  - previous F-dom-2 (deleteSession TOCTOU) -> re-filed as F-dom-2, unchanged code, still no test combining protection + async remover
+  - previous F-dom-4 (budget non-finite) -> re-filed as F-dom-9
+  - previous F-dom-5 (mixed-outcome sweep test) -> re-filed as F-dom-11
+  - previous F-dom-6 (vacuous happens-before test) -> re-filed as F-dom-10
+
+suspicions_not_findings:
+  - description: >
+      Two concurrent `runTranscriptGC --apply` runs over the same project take no lock. Both plan the
+      same candidates, both call `removeFromRegistry` for the same id, and the second `rmSync` gets
+      ENOENT, which transcript-gc.ts:308-310 counts as success. The result is inflated `removed` lists
+      on both sides rather than data loss, and the newest session is protected in both snapshots.
+      I could not construct an interleaving with a wrong outcome beyond the reporting inflation, so
+      this is recorded as a suspicion, not a finding.
+  - description: >
+      PID recycling in the SDK's `reclaimable` (same-host branch decides by `process.kill(pid, 0)`)
+      can make a stale `.writer.lock` read as a live lease if the pid is reused, protecting a session
+      forever. The direction is fail-safe (data is kept), the code is the SDK's and not this slice's,
+      and I have no evidence of it occurring. Suspicion only; flagged for the SDK, not for this branch.

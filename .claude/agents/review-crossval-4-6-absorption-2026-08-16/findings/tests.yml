@@ -1,474 +1,533 @@
 agent: review-crossval-4-6-absorption-tests
-review_target: origin/develop..HEAD for plan crossval-4-6-absorption (3 repos — theokit, theokit-sdk, theokit-tui)
+review_target: f578db3b~1..HEAD (plan range on branch `workspace`) for plan crossval-4-6-absorption
 plan: .claude/knowledge-base/plans/crossval-4-6-absorption-plan.md
-reviewed_at: 2026-08-16
+re_review_of: .claude/knowledge-base/reviews/crossval-4-6-absorption-review-2026-08-16.md
 
 test_pyramid:
-  unit_added: 16 # 11 new files in theokit (82 cases), 2 new in theokit-tui, 3 new in theokit-sdk
-  integration_added: 5 # tests/integration/{boundary-doorless-subpaths,custom-command-expansion,gc-sweep-bounded,liveness-oracle-real-tree,tooling-gates-cli}.test.ts + 5 cases into crossval-gaps
+  unit_added: 98 # 13 new files under packages/agents/tests/unit + tests/unit
+  integration_added: 39 # 6 new files under tests/integration
   e2e_added: 0
-  total: 21 # new files; ~159 new/changed test cases across the three repos
-  verdict: >
-    Shape is correct — unit-heavy, integration moderate, no E2E. Not inverted, not empty.
-    Every new pgvector/DB-free boundary that has a real seam (GC sweep, liveness oracle,
-    custom-command expansion, the three CLI gates) does have an integration test. The
-    problem in this branch is not the shape of the pyramid; it is that several of its
-    bricks are hollow.
+  total: 137
+  note: |
+    Shape is correct (unit-heavy, no e2e inflation). 6 existing suites were also modified
+    (session-fork, session-lifecycle, transcript-gc, transcript-gc-protection,
+    crossval-gaps, sessions-gc-command); those deltas are not in the counts above.
+
+suite_health_measured:
+  command: npx vitest run --project root-serial
+  result: '2 failed | 98 passed | 2 skipped (102 files); 2 failed | 706 passed | 8 skipped (716 tests)'
+  duration_s: 223.65
+  note: both failures trace to ONE root cause — see F-tests-A.
+
+prior_findings_reverified:
+  F-tests-1:
+    status: FIXED — verified empirically, not by reading
+    evidence: |
+      `mv packages/agents/dist packages/agents/dist.reviewbak && CI=1 npx vitest run
+      tests/integration/crossval-gaps.test.ts` now FAILS the file:
+
+        FAIL tests/integration/crossval-gaps.test.ts
+        Error: too many gap assertions skipped (2); a mostly-skipped run is a
+        vacuous pass, not a pass: [{"gap":"G10",...},{"gap":"G12",...}]
+         ❯ refuseMostlySkipped tests/lib/refuse-mostly-skipped.ts:26:9
+         ❯ tests/integration/crossval-gaps.test.ts:224:3
+        Test Files 1 failed (1) | Tests 32 passed (32)
+
+      Before 081833db the same scenario reported 33 passed. Two independent properties
+      confirmed: (a) an `afterAll` throw DOES fail a vitest 4 run even when every `it`
+      passes (probed in isolation), and (b) `skipped` is fully populated when it runs.
+      The rule was also extracted to tests/lib/refuse-mostly-skipped.ts:26 with 5 direct
+      unit tests (tests/unit/refuse-mostly-skipped.test.ts) covering many-skips, message
+      contents, the 1-skip allowance, zero-skips, and the non-CI path. This is a real
+      fix, and stronger than the recommended one — `afterAll` removes the ordering
+      assumption instead of re-arming it. dist/ was restored; tree left clean.
+    residual: see F-tests-6 (the afterAll wiring itself has no regression test) and F-tests-5
+      (the successor register re-introduces the declaration-order pattern).
+  F-tests-2:
+    status: NOT FIXED — unchanged, and now measured precisely
+    evidence: |
+      `cd packages/agents && npx vitest run tests/unit/tools-view-image-parity.test.ts`
+        Tests  1 passed | 3 skipped (4)
+      3 of 4 skip. The single executing test
+      (packages/agents/tests/unit/tools-view-image-parity.test.ts:82
+      `test_the_layer_forwards_every_sdk_tools_factory_it_claims_to`) enumerates
+      `create*` factories on the INSTALLED @theokit/sdk-tools and asserts each is
+      reachable from tools-entry — since the installed copy has no createViewImageTool,
+      the assertion is vacuous with respect to the task's actual subject.
+      T1.2's GREEN never happened on either branch: `grep -i viewimage
+      packages/agents/src/tools-entry.ts` -> 0 matches. Nothing expires: no sunset date,
+      no date-based failure, no allowlist entry. The repo already owns the mechanism
+      that would fix this — scripts/check-surface-parity.mjs:190-208 hard-fails once a
+      deferral SUNSET date passes ("Warn mode carries a sunset precisely so it cannot
+      become permanent"). This skip declines to use it.
+    severity: HIGH (unchanged)
 
 edge_cases_from_plan:
-  covered: 24
-  missing:
-    - 'EC-14 (T2.3) — several `compact_boundary` markers: counting must start after the LAST one (`lastIndexOf`)'
-    - 'EC-14 (T2.3) — a `compact_boundary` as the FINAL record: zero reachable turns, the error must name ZERO not off-by-one'
-    - 'T2.3 — a transcript that is entirely pre-boundary: zero reachable turns, refuse with the typed error'
-    - 'T2.7 — two questions on one thread stay distinct items (declared RED *and* an explicit Acceptance Criteria bullet)'
-    - 'EC-20 (T2.7) — a repeated id replaces rather than duplicating, and keeps the LATEST payload'
-    - 'EC-18 (T4.1) — an absent allowlist file is an empty allowlist, not a crash'
-    - 'EC-18 (T4.1) — a malformed sunset line is reported and the entry ignored (scripts/check-invention-reachability.mjs:105 is untested)'
-    - 'T1.2 — `test_tools_entry_symbol_count_matches_measurement()`: the `93 symbols` parity claim at tools-entry.ts:18 is asserted by nothing'
-
-tdd_compliance:
-  red_before_green_commits: 0
-  note: >
-    Every new test file was introduced in the SAME commit as the implementation it covers
-    (`git log --diff-filter=A` per file). No commit in the range contains tests only.
-    tests/integration/tooling-gates-cli.test.ts (35c958cc) landed AFTER the gates it exercises
-    (fd28b86a, bf723623). RED-before-GREEN is therefore not demonstrable from history.
+  source: .claude/knowledge-base/reviews/crossval-4-6-absorption-edge-cases-2026-08-16.md (EC-1..EC-25)
+  covered: 15
+  partial: 3
+  missing: 5
+  covered_examples:
+    - 'EC-1 → packages/agents/tests/unit/error-base-reachable.test.ts'
+    - 'EC-2 → tests/integration/crossval-gaps.test.ts:401 test_an_unresolvable_star_target_is_reported_not_silently_empty'
+    - 'EC-3/EC-8 → packages/agents/tests/unit/gc-registry-remover.test.ts (timeout-then-success covered)'
+    - 'EC-4/EC-11/EC-12/EC-13 → packages/agents/tests/unit/command-template.test.ts:106,132,141,150,96'
+    - 'EC-5 → packages/agents/tests/unit/session-fork.test.ts:113,213'
+    - 'EC-10 → packages/agents/tests/unit/liveness-oracle.test.ts:251'
+    - 'EC-19 → tests/unit/changelog-closes.test.ts'
+    - 'EC-21 → tests/integration/crossval-gaps.test.ts:388'
+    - 'EC-22 → the noteSkip convention, tests/integration/crossval-gaps.test.ts:188'
+  partial_list:
+    - 'EC-9 (symlink loop) — a test exists but does not verify the property it is named for; see F-tests-3'
+    - "EC-14 — 'counting starts after the LAST boundary' is covered (session-fork.test.ts:185); 'boundary as the FINAL record yields zero reachable turns' has no test"
+    - "EC-18 — allowlist sunset/expiry covered (surface-invention-gate.test.ts:119,129); 'absent allowlist' and 'malformed sunset date' (both NEGATIVE) have none"
+  missing_list:
+    - 'EC-15 (NEGATIVE) — a symlinked credential home must be checked on its target, not the link. T2.4 is `committed`; packages/agents/tests/unit/transcript-root-dir-modes.test.ts has 3 tests and none involve a symlink.'
+    - 'EC-16 (EDGE) — an absent home is not an insecure home (first run on a clean machine). No test.'
+    - 'EC-17 (EDGE) — degenerate window inputs (size 0, selected -1, selected >= total) must clamp without negative indices. T3.4 is `committed`; no test references hiddenBefore/hiddenAfter in this repo or in ../theokit-tui/tests.'
+    - 'EC-18 half (NEGATIVE) — absent allowlist / malformed sunset date must not crash the gate.'
+    - 'EC-20 (EDGE) — two pending items with the same id must replace, not duplicate. T2.7 is `committed`; packages/agents/tests/unit/pending-ledger-payload.test.ts has 4 tests, none on a repeated id.'
 
 findings:
-  - id: F-tests-1
+  - id: F-tests-A
     severity: BLOCKER
-    file: tests/integration/crossval-gaps.test.ts
-    line: 201
-    plan_ref: "EC-4 (MUST FIX) — 'a mostly-skipped run is a vacuous pass, not a pass'"
+    file: tests/integration/liveness-oracle-real-tree.test.ts
+    line: 37
+    plan_ref: T3.2 / EC-24 / Global DoD "Runtime-metric proof"; cycle-review.md § Hard gates ("Failing tests on the working branch")
     summary: >
-      The guard that exists to stop the gap register passing vacuously is itself vacuous —
-      it runs BEFORE any gap assertion, so `skipped` is always empty when it asserts.
+      Commit 7fea1388 changed classifyProjects' contract and updated only the two unit suites.
+      The integration test — which is pillar (b) for classifyProjects and the plan's named
+      real-tree proof — still calls the deleted API. It is RED on HEAD, and it is also the sole
+      cause of the branch's typecheck gate being RED. This is F-wire-1's pattern reproduced by
+      the commit that was fixing F-arch-1.
     evidence: |
-      The test's own comment claims: "Runs last by declaration order so `skipped` is populated."
-      That is false. `describe('crossval gap register — meta')` is at line 186; the first gap
-      block (`G9`) is at line 214, G10 at 278, ... G12 at 735. Vitest runs in declaration order.
+      npx vitest run tests/integration/liveness-oracle-real-tree.test.ts
+        × test_the_verdicts_match_what_is_on_disk
+        AssertionError: expected 'undetermined' to be 'alive'
+         ❯ tests/integration/liveness-oracle-real-tree.test.ts:45:46
+        Test Files 1 failed (1) | Tests 1 failed | 1 passed (2)
 
-      Empirically confirmed (`npx vitest run tests/integration/crossval-gaps.test.ts --reporter=verbose`):
-        ✓ crossval gap register — meta > every_registered_gap_has_an_assertion   7ms
-        ✓ crossval gap register — meta > ci_refuses_a_mostly_skipped_run         0ms   <-- 2nd of 33
-        ... 31 gap assertions follow ...
-        stderr | G12 ... [crossval-gaps] G12 SKIPPED — @theokit/tui is not installed here
-      G12 skipped in this very run and the guard never saw it. A run in which ALL 12 gaps
-      skipped would still report 33 passed. This is the exact failure class the branch was
-      asked to look for: a test that passes while exercising nothing — and the one whose whole
-      job was to prevent that.
-      Secondary: it also violates rules/testing.md § 3 ("no order dependency") by design.
+      pnpm typecheck  (2 errors, both from this one file):
+        tests/integration/liveness-oracle-real-tree.test.ts(37,7): error TS2739:
+          Type '{ exists: (p: string) => boolean; }' is missing the following properties
+          from type 'FsSeam': listEntries, firstLine
+        tests/integration/liveness-oracle-real-tree.test.ts(59,7): error TS2739: (same)
+
+      Consequently a SECOND integration test is red — the gate this very plan added:
+        FAIL tests/integration/typecheck-clean-gate.test.ts > pnpm typecheck exits 0
+        AssertionError: expected 2 to be +0
+
+      Full root-serial run: "Test Files 2 failed | 98 passed"; both failures are this file.
+
+      It still passes `listProjects:` (renamed to `candidatePaths` at
+      packages/agents/src/session/liveness-oracle.ts:74), omits the now-required
+      `projectsRoot`, and supplies an FsSeam without listEntries/firstLine. Its third
+      assertion (`gone` -> 'dead') encodes the exact belief 7fea1388 falsified: without a
+      recorded cwd the new module returns `undetermined`, by design.
+
+      The checkpoint still claims this pillar holds:
+      .claude/knowledge-base/implementations/.progress-crossval-4-6-absorption.json T3.2 ->
+      "wiring": {"a": true, "b": true, "c": null}, files include this test file.
+      Pillar (b) for classifyProjects is false as of 7fea1388 and the checkpoint was not updated.
+
+      Why it was not caught: the root-serial vitest project sets `typecheck: {enabled: false}`
+      (vitest.config.ts:46), so a `.test.ts` under tests/integration is only type-checked by
+      `pnpm typecheck` — which the commit did not re-run. This is the same class of
+      stale/skipped verification that produced F-wire-1.
     recommended_action: >
-      Move the meta describe to the END of the file, or replace the ordering assumption with
-      vitest's `afterAll` at file scope (which is order-independent). Add a self-test that the
-      guard fires: force a skip via an env flag in a temp run and assert non-zero exit under CI.
+      Migrate the file to the new contract: pass projectsRoot, rename listProjects to
+      candidatePaths, add real listEntries/firstLine implementations over the tmpdir, and
+      write a transcript for the `gone` project so `dead` is asserted on the branch that can
+      now produce it. Then re-run `pnpm typecheck` and `npx vitest run --project root-serial`
+      and re-issue the implement-validate report — the current green lines predate 7fea1388.
 
-  - id: F-tests-2
+  - id: F-tests-B
     severity: HIGH
-    file: packages/agents/tests/unit/tools-view-image-parity.test.ts
-    line: 70
-    plan_ref: "T1.2 — 'Cross the three view-image symbols, or write the reason' + AC 'dist/tools.d.ts contains all three names, OR tools-entry.ts carries a written reason naming each'"
+    file: packages/agents/tests/unit/liveness-oracle.test.ts
+    line: 180
+    plan_ref: rules/testing.md § 4.1 (negative cases prove error handling); rules/error-handling.md; T3.2 Deep Dives ("undetermined is NOT a soft dead")
     summary: >
-      `it.skipIf` is an honest conditional in FORM but a disabled test in EFFECT — 3 of 4 cases
-      skip today, the task's GREEN never happened on either branch of its decision gate, and
-      nothing fails or expires to say so.
+      The rewrite MOVED the "unreadable" test onto a different branch and left the original
+      branch untested. A stat error on the resolved path is no longer asserted anywhere.
+      Mutation-proven: making `fs.exists` errors read as "absent" — which turns a live
+      project into `dead`, i.e. deletion — leaves all 19 tests green, while the PRE-rewrite
+      suite caught the same mutation. This is the single defect class the commit exists to
+      prevent, and its guard was lost in the rewrite.
     evidence: |
-      Measured run (`npx vitest run tests/unit/tools-view-image-parity.test.ts --reporter=verbose`):
-        ↓ test_view_image_symbols_cross_into_the_layer            SKIPPED
-        ✓ test_the_layer_forwards_every_sdk_tools_factory_it_claims_to  1ms
-        ↓ test_sdk_view_image_emits_an_image_content_block        SKIPPED
-        ↓ test_a_failed_read_stays_text_so_the_model_can_retry    SKIPPED
-        Tests  14 passed | 3 skipped
+      Mutation applied to packages/agents/src/session/liveness-oracle.ts:138
+        -      return { error: error instanceof Error ? error.message : String(error) }
+        +      void error; return { found: false }
 
-      The probe is real and the reason is truthful: packages/agents/node_modules/@theokit/sdk-tools
-      is 0.26.1 and does not export `createViewImageTool`. In the sibling, `c743b5850 chore(sdk-tools):
-      0.27.0 — a versao que finalmente carrega createViewImageTool` exists but is unpublished/unbumped
-      here. So the skip is honest about CAUSE.
+      POST-rewrite suite (HEAD):
+        npx vitest run tests/unit/liveness-oracle.test.ts tests/unit/liveness-oracle-recorded-cwd.test.ts
+        Test Files 2 passed (2) | Tests 19 passed (19)      <-- mutant SURVIVES
 
-      What is not honest is the resulting state of T1.2:
-        1. `git diff origin/develop..HEAD -- packages/agents/src/tools-entry.ts` adds only
-           `createDelegateTool` — the three view-image symbols did NOT cross.
-        2. tools-entry.ts:18-20 still reads "measured: 93 symbols, parity identical to the source"
-           and "If a symbol is ever deliberately withheld, the reason comes written here." No reason
-           was written THERE. It was written in a test file that skips.
-        3. The plan's declared RED `test_tools_entry_symbol_count_matches_measurement()` does not
-           exist anywhere (`grep -rn "93" packages/agents/tests/unit/subpath-surface.test.ts` -> 0).
-        4. The one case that DOES run is vacuously green on the symbol in question: with 0.26.1,
-           `Object.keys(sdkTools).filter(n => n.startsWith('create'))` never contains
-           `createViewImageTool`, so `missing` is trivially `[]`.
-        5. No sunset. The sibling gate `scripts/check-surface-parity.mjs:84` carries a `SUNSET` map
-           precisely so "warn mode cannot become permanent" (asserted at crossval-gaps.test.ts:699);
-           this skip has no equivalent and can sit green forever.
-      Honest verdict: the skip mechanism is defensible; the ABSENCE of an expiry around it is not.
-      A blocked task with no dated tripwire is indistinguishable in CI from a finished one.
+      PRE-rewrite suite + PRE-rewrite module (extracted from 7fea1388^ into a scratch root):
+        FAIL tests/unit/liveness-oracle.test.ts >
+             test_an_unreadable_directory_is_undetermined_with_a_reason
+        AssertionError: expected "undetermined" to be "dead"   [reported as Expected
+        "undetermined" / Received "dead"] at line 111
+        Test Files 1 failed (1) | Tests 1 failed | 9 passed (10)   <-- mutant CAUGHT
+
+      Root cause: pre-rewrite the test threw on `exists('/home/p/locked')`, which drove
+      `probe()` (line 138). Post-rewrite (line 181-183) it throws on `listEntries(dir)`
+      instead, driving a NEW branch (line 164) and leaving `probe`'s catch dead.
+
+      v8 branch coverage of the module under both suites is 79.54%; uncovered statements are
+      lines 138, 169, 177, 180, 221, 263, 267 — i.e. every stat-error branch on the delete path:
+        :138  probe()'s catch                                  (never reached)
+        :221  "could not stat {candidate}"  in searchPool       (never reached)
+        :263  "could not stat {recorded.cwd}" after a found cwd (never reached)
+      Line 263 is the one that matters most: it is the single guard standing between "EACCES
+      while stat'ing the recorded cwd" and the `dead` verdict two lines below at :273.
     recommended_action: >
-      (a) Add a dated tripwire that FAILS after a sunset (e.g. `expect(TODAY < '2026-09-14',
-      'T1.2 blocked on @theokit/sdk-tools >= 0.27.0 for 30 days').toBe(true)`), mirroring
-      check-surface-parity.mjs's SUNSET convention. (b) Until the dep is bumped, write the
-      withholding reason in tools-entry.ts:20 where the file's own rule says it goes, and
-      correct the "93 symbols" figure or assert it.
+      Add two negative-case tests, both on the destructive path — (1) recorded cwd found and
+      `exists` throws EACCES -> undetermined with the errno and the path in `reason`, never
+      dead; (2) a matching candidate in the pool whose `exists` throws -> undetermined. Assert
+      the real message, as the pre-rewrite test did.
+
+  - id: F-tests-C
+    severity: HIGH
+    file: tests/integration/crossval-4-6-closure.test.ts
+    line: 192
+    plan_ref: Goal ("17/17 closure assertions"); rules/testing.md § 3 (tests MUST be deterministic)
+    summary: >
+      The plan's Goal-metric register hard-fails in CI. `test_gap_22` requires
+      ../theokit-tui/dist/index.d.ts, and the CI workflow clones only theokit-sdk — never
+      theokit-tui. The predecessor register handles the identical situation by skipping loudly
+      (noteSkip G12); the new one asserts existsSync(...) === true unconditionally.
+    evidence: |
+      tests/integration/crossval-4-6-closure.test.ts:192-197
+        const dts = join(REPO_ROOT, '..', 'theokit-tui', 'dist', 'index.d.ts')
+        expect(existsSync(dts), 'theokit-tui is unbuilt').toBe(true)
+      GAPS['22'] carries no `blockedBy`, so `blocked('22')` returns false and the assertion runs.
+
+      .github/workflows/ci.yml:107-110 (test job) clones exactly one sibling:
+        git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+      No step clones or builds ../theokit-tui. `grep -n theokit-tui .github/workflows/ci.yml` -> 0 hits.
+
+      Contrast, same condition, predecessor file: tests/integration/crossval-gaps.test.ts:756
+      calls noteSkip(...) with "@theokit/tui is not installed here", which the EC-4 guard then
+      reports by name — the pattern this repo settled on eight commits earlier.
+
+      It passes locally only because ../theokit-tui happens to be checked out on this machine.
+    recommended_action: >
+      Give gap 22 the same treatment as G12 — skip loudly with a recorded reason when the
+      sibling is absent — or add theokit-tui to the CI clone step. Passing because of one
+      developer's directory layout is the environment-dependence rules/testing.md § 3 forbids.
 
   - id: F-tests-3
-    severity: HIGH
-    file: packages/agents/tests/unit/session-fork.test.ts
-    line: 185
-    plan_ref: 'T2.3 TDD — `counting_starts_after_the_LAST_boundary_when_several_are_present()` (EC-14), `test_boundary_as_the_final_record_names_zero_reachable_turns()` (EC-14)'
+    severity: MEDIUM
+    file: packages/agents/tests/unit/liveness-oracle.test.ts
+    line: 211
+    plan_ref: EC-9 (symlink loop); rules/testing.md § 6 (a test that asserts nothing meaningful)
     summary: >
-      `test_fork_starts_after_the_last_compact_boundary` runs against a fixture with exactly ONE
-      boundary — it cannot distinguish `lastIndexOf` from `indexOf`, so it asserts nothing about
-      "the last". The two EC-14 cases the plan declared are absent entirely.
+      `test_a_repeating_candidate_list_costs_its_distinct_entries_not_its_length` does not
+      verify the property in its own name. Deleting the de-duplication from searchPool leaves
+      the whole suite green. The rewrite renamed the test to CLAIM the dedup property while
+      removing the only assertion (`toBe('dead')`) that varied with it — so the name now
+      asserts more than the body can.
     evidence: |
-      grep -c "compact_boundary" packages/agents/tests/unit/session-fork.test.ts -> 4
-      (line 157 is the only fixture record; 185 is the test NAME; the rest are prose.)
-      The realistic fixture (writeRealisticTranscript, lines ~155-165) is:
-        0 user / 1 assistant / 2 user / 3 system compact_boundary / 4 user / 5 tool_result /
-        6 assistant / 7 goal-continuation / 8 user
-      One boundary. `indexOf` and `lastIndexOf` return 3 for both.
-      Missing entirely: a fixture with TWO boundaries; a fixture whose LAST record is a boundary
-      (plan: "start index equals the record count, zero reachable turns, and the typed error must
-      name ZERO rather than landing off-by-one on the boundary record itself"); a fixture that is
-      entirely pre-boundary.
-      This is the same class as the gc fixture note the author got right ("a SECOND transcript is
-      required ... otherwise every assertion here would have passed by never running") — the
-      discipline was applied in gc-registry-remover.test.ts and not here.
+      Mutation applied to packages/agents/src/session/liveness-oracle.ts:213-214
+        -      if (seen.has(candidate)) continue
+        -      seen.add(candidate)
+      Result: Test Files 2 passed (2) | Tests 19 passed (19).  Mutant survives.
+
+      Why both assertions are inert here:
+        expect(fs.calls()).toBeLessThanOrEqual(10)  — the budget already guarantees this and
+          it is asserted independently at :197 (test_total_fs_operations_never_exceed_the_budget).
+          With or without dedup no probe fires at all, because encodeProjectDir('/loop/a/b/a/b')
+          never equals encode('/loop/target') — the loop `continue`s before probe() and
+          `remaining` is never decremented.
+        expect(...liveness).toBe('undetermined')    — produced identically by "pool did not
+          contain it" and by "budget exhausted"; the test does not assert `reason`, so it
+          cannot tell the two apart.
     recommended_action: >
-      Add a two-boundary fixture and assert nth=1 lands after the SECOND. Add a
-      boundary-as-final-record fixture and assert the refusal message names 0 (not 1).
-      Add an entirely-pre-boundary fixture and assert the same refusal.
+      Make the list repeat a candidate that DOES encode to the target and does not exist, with
+      a budget smaller than the list length: with dedup the pool is exhausted within budget and
+      `reason` is "no candidate path matched…"; without it, `reason` is "search budget
+      exhausted". Assert `reason`, not just the verdict.
 
   - id: F-tests-4
-    severity: HIGH
-    file: packages/agents/tests/unit/session-fork.test.ts
-    line: 106
-    plan_ref: "T2.3 AC — 'Beyond-range raises `ReachableTurnsExceededError` whose message contains the reachable count'; EC-5 `nth_below_one_raises_InvalidTurnOrdinalError_not_the_exceeded_error()`; rules/testing.md § 4.1"
+    severity: MEDIUM
+    file: tests/integration/crossval-4-6-closure.test.ts
+    line: 226
+    plan_ref: Goal ("17/17 closure assertions"); rules/testing.md § 6
     summary: >
-      Negative-case tests assert a regex on a stringified message, never a typed error class.
-      The two error classes the plan's Acceptance Criteria name do not exist in the source.
+      3 of the 17 registered closure assertions have no assertion written. Gaps 29, F78 and
+      F80 contain only `expect.fail('unreachable while blocked')` behind an always-true guard.
+      They pass today, they count toward the Goal's denominator of 17, and unblocking them
+      yields a failure that says nothing about the gap.
     evidence: |
-      grep -rn "ReachableTurnsExceededError|InvalidTurnOrdinal" packages/agents/src packages/agents/tests -> 0 matches
-      packages/agents/src/session/session-lifecycle.ts:297,305,318 -> `throw new TheokitAgentError(...)` (the generic base)
-      Test bodies:
-        test_nth_below_one_raises_a_distinct_typed_error  -> .toThrow(/counts user turns from 1/i)
-        test_nth_beyond_reachable_turns_names_the_reachable_count -> .toThrow(/\b2\b/)
-      `/\b2\b/` is satisfied by ANY message containing the digit 2 — including a message about
-      a session id, a path, or a count of something else. The test name promises "a distinct
-      typed error"; there is no distinct type and the assertion checks neither type nor a
-      distinctive message.
-      grep -rn "toBeInstanceOf" across session-fork / gc-registry-remover / liveness-oracle
-      unit tests -> 0 matches. The only `toBeInstanceOf` on a framework error in the whole
-      branch is tests/integration/gc-sweep-bounded.test.ts:104.
-      rules/testing.md § 4.1: "A negative-case test asserts the *specific typed error and
-      message* — not merely 'it throws'."
+      tests/integration/crossval-4-6-closure.test.ts:226-228, 246-248, 262-264
+        it('test_gap_29_the_consumer_duplicate_is_gone', () => {
+          if (blocked('29')) return
+          expect.fail('unreachable while blocked')
+        })
+      Same body for test_gap_F78_the_consumer_register_is_at_zero and
+      test_gap_F80_verified_on_the_operator_tree.
+
+      Measured (--reporter=verbose): "[crossval-4-6 closure] 6 of 17 gaps are BLOCKED";
+      "11/17 closure assertions executed" — 19 passed. Of the 6 blocked, 3 (15, 18, 27) do
+      have a real body waiting behind the guard; 3 have none.
+
+      Related, in the executed half: 3 of the 11 assert only that a prose string exists in a
+      markdown/comment file —
+        :169  expect(index).toContain('was false for 25')            (packages/agents/src/index.ts)
+        :180  expect(guard).toContain('test_honest_gaps_symbols_do_not_resolve')
+        :202  expect(claude).toMatch(/explicitly demoted/)           (CLAUDE.md)
+      For doc-shaped gaps (24) that is defensible; pinning the exact sentence "was false for 25"
+      is brittle in the wrong direction — it breaks on an honest rewording and detects no
+      semantic regression.
+
+      Also: `test_gap_15_the_image_tool_crosses` (:145) asserts only that @theokit/sdk-tools
+      exports createViewImageTool. Gap 15 is "createViewImageTool withheld [by the LAYER]
+      without a reason"; when unblocked this will pass without the layer forwarding anything.
     recommended_action: >
-      Either introduce `ReachableTurnsExceededError` / `InvalidTurnOrdinalError` as the plan's AC
-      states and assert `toBeInstanceOf`, or amend the plan. Replace `/\b2\b/` with the full
-      sentence fragment ("2 reachable user turn(s)") so a message about anything else fails.
+      Write the three bodies now (they can sit behind the guard, like gaps 15/18/27 do), and
+      change gap 15's assertion to the layer surface (`reachable('createViewImageTool')`), which
+      is what the row is about. Replace the exact-sentence assertions with something that
+      survives rewording (e.g. the link target `boundary-decisions`, already asserted at :167).
 
   - id: F-tests-5
-    severity: HIGH
-    file: packages/agents/tests/unit/pending-ledger-payload.test.ts
-    line: 60
-    plan_ref: 'T2.7 TDD — `test_two_questions_on_one_thread_stay_distinct_items()`, `test_a_repeated_id_replaces_rather_than_duplicating_and_keeps_the_latest_payload()` (EC-20); T2.7 AC bullet 2'
+    severity: MEDIUM
+    file: tests/integration/crossval-4-6-closure.test.ts
+    line: 267
+    plan_ref: EC-4/F-tests-1 (the fix landed in 081833db); rules/testing.md § 3 ("no order dependency")
     summary: >
-      Two declared RED tests are absent, one of them backed by its own Acceptance Criteria bullet.
-      The plan's "thread extractor" half of T2.7 is neither implemented nor tested.
+      The new register's anti-vacuity guard re-introduces the declaration-order dependency that
+      081833db had just removed from its sibling — its own comment says "Runs last by file
+      order". It works today and, unlike the original bug, it fails loudly rather than
+      vacuously; but the fix commit's stated lesson was that order was the thing that broke.
     evidence: |
-      The file has 4 tests: payload round-trip, framework-never-reads, default-type-arg, settle+prune.
-      Plan T2.7 title: "Widen `createPendingLedger` with a payload slot AND a thread extractor".
-      Plan AC: "- [ ] Two items on one thread stay distinct — `two_questions_on_one_thread_stay_distinct_items()` passes."
-      grep for a thread extractor or a same-thread fixture -> 0 matches.
-      EC-20 ("a repeated id replaces rather than duplicating and keeps the LATEST payload") is
-      partially shadowed by `test_settling_and_pruning_still_behave_the_same_with_a_payload`,
-      which re-ingests id 'a' but asserts only that a SETTLED id is not resurrected — it never
-      asserts the latest payload wins on an unsettled re-ingest.
-    recommended_action: >
-      Add the two declared tests, or record an explicit deviation the way T3.4 and the liveness
-      EC-9 deviation were recorded (both are good models — the deviation is argued in the test file).
+      tests/integration/crossval-4-6-closure.test.ts:267-269
+        it('test_the_blocked_gaps_are_reported_by_name', () => {
+          // Runs last by file order, and its job is to make the skips LOUD.
+      versus the pattern adopted 8 commits earlier at
+      tests/integration/crossval-gaps.test.ts:223-225 (afterAll + tests/lib/refuse-mostly-skipped.ts),
+      whose commit message reads: "Reordering the file and hoping would have re-armed the same
+      bug for the next edit — order was the thing that broke."
+
+      Verified working today (--reporter=verbose): it reports "6 of 17 gaps are BLOCKED",
+      so `skipped` is fully populated when it runs.
+      Failure direction if reordered: `expect(skipped.length).toBe(6)` against an empty array
+      fails loudly — genuinely safer than the original defect, which is why this is MEDIUM.
+    recommended_action: Move it to `afterAll` and reuse tests/lib/refuse-mostly-skipped.ts, or a sibling of it.
 
   - id: F-tests-6
     severity: MEDIUM
-    file: (branch-wide)
-    line: 0
-    plan_ref: 'rules/cycle-implement.md § Chain — RED → GREEN → REFACTOR; rules/testing.md § 3'
-    summary: TDD order is not demonstrable — every test file landed in the same commit as its implementation.
+    file: packages/agents/tests/unit/liveness-oracle-recorded-cwd.test.ts
+    line: 1
+    plan_ref: rules/testing.md § 3 ("every bug fix starts with a failing regression test, then the fix"); cycle-implement.md § Chain (RED → GREEN)
+    summary: >
+      No RED commit. 7fea1388 lands the regression suite, the rewritten suite, the fix, the
+      changeset and the CHANGELOG in one commit; the reproduction is recorded 22 seconds later
+      in a markdown file (f838333d). Additionally, the new suite could not have been RED
+      against the old module — it uses an API that did not exist — so nothing in the history
+      demonstrates the failure the suite is named for.
     evidence: |
-      git log --diff-filter=A -1 per new test file:
-        command-template.test.ts        -> 0e128486 feat(config): ... (T3.3)
-        liveness-oracle.test.ts         -> c3527883 feat(session): ... (T3.2)
-        gc-registry-remover.test.ts     -> bf9bc42a feat(session)!: ...
-        approval-decision.test.ts       -> 6a8a4939 feat(agents): ...
-        transcript-root-hint.test.ts    -> 4eb2bca4 feat(agents): ...
-        surface-invention-gate.test.ts  -> fd28b86a feat(gates): ... (T4.1)
-        changelog-closes.test.ts        -> bf723623 feat(gates): ... (T4.3)
-        boundary-doorless-subpaths.test.ts -> 42d1e899 feat(boundary): ... (T4.2)
-        tooling-gates-cli.test.ts       -> 35c958cc  (AFTER fd28b86a and bf723623)
-      No commit in origin/develop..HEAD adds tests alone. T1.1's plan text is candid that its
-      RED had to be produced by a local mutation and restored — that mutation left no trace
-      either, so the claim is unverifiable from the branch.
+      git log --format="%h %ad %s" --date=iso:
+        c5465d16 2026-08-16 19:37:58  docs(wiring): ...
+        f838333d 2026-08-16 19:26:28  docs(crossval): o BLOCKER do oraculo, reproduzido antes de ser consertado
+        7fea1388 2026-08-16 19:26:06  fix(session)!: o oraculo marcava projetos vivos como mortos
+      The commit claiming "reproduced before it was fixed" is 22s AFTER the fix and touches
+      only .md files (git show f838333d --stat: 4 files, all knowledge-base markdown).
+
+      liveness-oracle-recorded-cwd.test.ts passes `projectsRoot`/`candidatePaths` and an FsSeam
+      with listEntries/firstLine — none of which exist at 7fea1388^. It is a test of the
+      redesigned API, not a red-then-green regression test.
     recommended_action: >
-      Not retro-fixable on this branch. For the next slice: commit the failing test first
-      (`test(scope): RED — ...`), then the implementation. It is the only mechanism that makes
-      "this test would have caught the regression" checkable rather than asserted.
+      For the next defect of this class, land the failing test first (it can be RED against the
+      old contract by asserting the verdict, not the option names). Here, record honestly in the
+      implementation summary that the reproduction was executable but was never committed red.
 
   - id: F-tests-7
     severity: MEDIUM
-    file: tests/integration/boundary-doorless-subpaths.test.ts
-    line: 88
-    plan_ref: 'T4.2 TDD — `test_every_forwarded_subpath_resolves_at_runtime()`, `test_boundary_comment_matches_the_decision_registry()`'
+    file: packages/agents/tests/unit/liveness-oracle-recorded-cwd.test.ts
+    line: 104
+    plan_ref: rules/testing.md § 6 (excessive duplication); DRY
     summary: >
-      The `'forward'` branch of the decision contract is unreachable by construction (two tests
-      contradict each other), so `test_a_forward_decision_is_backed_by_an_actual_door` asserts
-      `[] === []` forever. Two declared RED tests are also absent.
+      5 of the 8 tests in the added suite duplicate a test in the rewritten suite — including
+      one with a byte-identical name. 19 tests cover roughly 13 distinct behaviours, and the
+      budget property alone is asserted by three tests across the two files. Either copy can be
+      deleted with no signal.
     evidence: |
-      test_no_decision_describes_a_subpath_that_already_has_a_door (line ~78):
-        overlapping = keys(DOORLESS_DECISIONS).filter(s => doors.has(s));  expect(overlapping).toEqual([])
-      test_a_forward_decision_is_backed_by_an_actual_door (line ~88):
-        promised = entries.filter(d === 'forward').map(k).filter(s => !doors.has(s)); expect(promised).toEqual([])
-      A `'forward'` entry WITH a door fails the first; a `'forward'` entry WITHOUT a door fails
-      the second. No `'forward'` entry can ever pass both.
-      Data confirms it is unused: `grep -c "out:" scripts/lib/boundary-decisions.mjs` -> 26;
-      zero entries are the literal `'forward'` (the 7 matches for "forward" are all prose/typedef).
-      So both the `if (decision === 'forward') continue` branch in
-      test_every_decision_states_a_reason_or_asks_for_a_door and the whole of
-      test_a_forward_decision_is_backed_by_an_actual_door are dead.
-      Missing declared REDs: `test_every_forwarded_subpath_resolves_at_runtime()` (nothing in the
-      branch import()s a forwarded subpath — the "m67 lesson" is checked by exports-map key only)
-      and `test_boundary_comment_matches_the_decision_registry()` (grep for a test reading
-      packages/agents/src/index.ts's boundary comment -> 0 matches).
+      Same behaviour, both files:
+        test_a_pool_that_does_not_contain_the_project_is_undetermined_not_dead
+          liveness-oracle.test.ts:148   and   liveness-oracle-recorded-cwd.test.ts:104
+          — IDENTICAL NAME, same assertion, differing only in fixture strings.
+        dead-by-recorded-cwd:   oracle.test.ts:132  vs  recorded-cwd.test.ts:120
+        no-enumeration fast path: oracle.test.ts:99  vs  recorded-cwd.test.ts:155
+        unreadable project dir: oracle.test.ts:180   vs  recorded-cwd.test.ts:188
+        budget bound:           oracle.test.ts:162 AND :197  vs  recorded-cwd.test.ts:172
+      Duplicate names across files also make a failure line ambiguous in CI output.
     recommended_action: >
-      Resolve the contradiction — exempt `'forward'` entries from the overlap test, since a
-      forward decision is EXPECTED to acquire a door. Then add the runtime-resolution test
-      (`await import()` each forwarded subpath) so `forward` means something checkable.
+      Keep the stronger copy of each pair (recorded-cwd.test.ts:155 proves the fast path by
+      throwing from candidatePaths, which is stronger than asserting a vi.fn was not called) and
+      delete the weaker. Reserve the added suite for what only it covers — the hyphenated real
+      path, the stray-transcript guard, and the negative cases F-tests-B asks for.
 
   - id: F-tests-8
     severity: MEDIUM
-    file: packages/agents/tests/unit/error-base-reachable.test.ts
-    line: 62
-    plan_ref: 'T1.1 TDD — `test_unbuilt_dist_skips_with_a_reason()` (EC-22 convention)'
+    file: .wiring-evidence.json
+    line: 3
+    plan_ref: Global DoD "Runtime-metric proof"; .claude/skills/implement/SKILL.md:103,324; .claude/skills/implement/prompts/validation-fix-prompt.md:57
     summary: >
-      Two of the three tests `return` with zero assertions and zero output when `dist/` is
-      unbuilt. They report green while exercising nothing, and the declared RED that was
-      supposed to pin the skip convention does not exist.
+      No test writes this file — it is hand-written from a manual sweep, which the skill
+      contract forbids categorically rather than conditionally. The disclosure inside the file
+      is unusually honest and complete for a HUMAN reader; the gate that consumes the file
+      cannot read it, because it does a plain numeric lookup on the metric name.
     evidence: |
-      line 55: `if (!DIST_BUILT) { console.warn('[error-base-reachable] SKIPPED — ...'); return }`   <- warns
-      line 62: `it('test_is_transient_error_is_reachable_from_the_layer', async () => { if (!DIST_BUILT) return; ... })`  <- silent
-      line 68: `it('test_sdk_thrown_error_is_instanceof_...', async () => { if (!DIST_BUILT) return; ... })`  <- silent
-      Vitest reports these as PASSED, not SKIPPED — there is no `it.skipIf`, so the run shows
-      "3 passed" on a tree where nothing was checked. Contrast crossval-gaps.test.ts, which uses
-      an explicit `noteSkip()` ledger for exactly this, and tools-view-image-parity.test.ts,
-      which uses `it.skipIf` so the runner shows `↓`.
-      grep for a test named `test_unbuilt_dist_skips_with_a_reason` -> 0 matches (declared in the
-      plan for T1.1 AND T1.2).
+      Disclosure (adequate, to a human) — .wiring-evidence.json:3 and :9:
+        "written_by": "manual sweep against the operator's real project tree, 2026-08-16"
+        "honest_limits": ["This is a MANUAL sweep, not integration-test infra. The file is
+          hand-written from a measured run; no test writes it yet. A future run must
+          re-measure rather than trust this file.", ...]
+      The commit message repeats it verbatim.
+
+      The contract, however, is a prohibition, not a disclose-and-proceed:
+        .claude/skills/implement/SKILL.md:103   "`.wiring-evidence.json` (written by
+                                                 integration test infra)"
+        .claude/skills/implement/SKILL.md:324   "Forbidden: ... hand-edited `.wiring-evidence.json`"
+        validation-fix-prompt.md:57             "NEVER hand-edit `.wiring-evidence.json`
+                                                 (Unbreakable: no fabricated evidence)"
+
+      And the consumer is blind to the prose:
+        .claude/skills/implement/scripts/check_wiring.py:236-254
+          evidence_path = project_root / ".wiring-evidence.json"
+          ...
+          count = evidence.get(metric, 0)
+      A metric name matching any key would report pillar (c) PASS. Nothing parses `_provenance`.
+      No test or script anywhere references the file:
+        grep -rn "wiring-evidence" --exclude-dir=node_modules -> only skills docs, review
+        artefacts and the backlog. Zero producers.
+
+      Mitigating: no task in this plan declares a metric (.progress: every wiring.c is null or
+      "n/a"), so no gate currently reads it. The exposure is prospective, not realised.
     recommended_action: >
-      Hoist `DIST_BUILT` into `it.skipIf(!DIST_BUILT)` so the runner reports a skip rather than a
-      pass, and register it with the same `noteSkip`-style ledger crossval-gaps uses so CI can
-      refuse a mostly-skipped run (once F-tests-1 is fixed).
+      Either promote the sweep into `tests/integration/` so the file is produced by a run
+      (which is also the fix for F-tests-A, since both concern the same measurement), or rename
+      it to something the gate will not pick up (e.g. `.claude/knowledge-base/audits/
+      liveness-oracle-real-tree-2026-08-16.json`) and record pillar (c) as deferred by ADR, as
+      SKILL.md:107 prescribes. Keep the honest_limits block either way — it is the best part of
+      the artefact.
 
   - id: F-tests-9
     severity: MEDIUM
-    file: tests/unit/surface-invention-gate.test.ts
-    line: 119
-    plan_ref: 'T4.1 TDD — `test_an_absent_allowlist_is_an_empty_allowlist_not_a_crash()` (EC-18), `test_a_malformed_sunset_is_reported_and_the_entry_is_ignored()` (EC-18), `test_gate_exits_zero_in_warn_mode_and_nonzero_after_sunset()`'
+    file: packages/agents/tests/unit/transcript-root-dir-modes.test.ts
+    line: 38
+    plan_ref: EC-15, EC-16, EC-17, EC-18 (half), EC-20 — all from the plan's absorbed edge-case review
     summary: >
-      The allowlist is tested only through the pure function's in-memory array. The FILE parser —
-      the half that can crash or silently drop every entry — has no test, and neither EC-18 case
-      the plan declared exists.
+      Five edge/negative cases named in the edge-case review have no test, and all five belong
+      to tasks the checkpoint marks `committed`. Per rules/testing.md § 4.1 the two lenses are
+      not interchangeable, and the ones missing are mostly the negative lens.
     evidence: |
-      The unit file covers unexpired (line 119) and expired (line 132) entries, both by passing an
-      `allowlist:` array directly. The real parse lives at scripts/check-invention-reachability.mjs:43-55
-      and its malformed-line branch at :105 (`console.warn('malformed allowlist line ignored: ...')`)
-      is executed by no test.
-      grep -rn "malformed|ENOENT|absent" tests/unit/surface-invention-gate.test.ts
-        tests/integration/tooling-gates-cli.test.ts -> 0 matches
-      tooling-gates-cli.test.ts asserts exit 0 in warn mode but nothing asserts the "nonzero after
-      sunset" half of the declared RED — the property that stops warn mode becoming permanent.
-      This matters more than usual here: rules/code-quality-golden-rule.md § 4 makes a malformed
-      allowlist entry a HARD finding precisely because a silently-dropped allowlist is how a gate
-      stops gating.
+      EC-15 (NEGATIVE, T2.4) symlinked credential home — transcript-root-dir-modes.test.ts has
+        exactly 3 tests (:38, :50, :75); `grep -rn symlink` over the T2.4 test surface -> 0.
+      EC-16 (EDGE, T2.4) absent home is not an insecure home — no test.
+      EC-17 (EDGE, T3.4) window size 0 / selected -1 / selected >= total —
+        `grep -rn "hiddenBefore" tests packages` -> 0 in this repo; the implementation is at
+        ../theokit-tui/src/select-list-model.ts:25 and no file under ../theokit-tui/tests
+        references it either. T3.4 status: committed.
+      EC-18 (NEGATIVE, T4.1) absent allowlist / malformed sunset date —
+        tests/unit/surface-invention-gate.test.ts covers the sunset semantics (:119, :129) but
+        never an ABSENT allowlist file or a malformed date. The EC's own words: "a gate that
+        crashes on its own config file is a gate that gets removed from check:all".
+      EC-20 (EDGE, T2.7) repeated pending id — pending-ledger-payload.test.ts has 4 tests,
+        none exercising a duplicate id.
+      EC-14 second half (boundary as the FINAL record -> zero reachable turns) also absent;
+        session-fork.test.ts:185 covers only the "several markers" half.
     recommended_action: >
-      Export the allowlist parser from scripts/lib/ (as the other two gates already do) and unit-test
-      absent file / malformed line / malformed sunset. Add an injected-`today` CLI run past a sunset
-      asserting a non-zero exit.
+      Add the five named tests. EC-18 and EC-15 are the highest value — both are the class where
+      a wrong answer is silent (a crashed gate, or a check that reads a symlink's 0777 mode and
+      always passes).
 
   - id: F-tests-10
-    severity: MEDIUM
-    file: tests/integration/tooling-gates-cli.test.ts
-    line: 62
-    plan_ref: 'T4.1/T4.3 — the CLI-vs-rule seam'
-    summary: >
-      `test_the_cli_and_the_pure_function_agree_about_*` does not compute the pure function over
-      the real modules. It calls it with EMPTY inputs (which trivially returns `[]`) and then
-      separately greps the CLI's stdout. The two halves never meet.
+    severity: LOW
+    file: packages/agents/tests/unit/liveness-oracle-recorded-cwd.test.ts
+    line: 172
+    plan_ref: rules/testing.md § 3 ("each test exercises ONE behaviour; 'and' in the test name is a smell")
+    summary: Two test names join two behaviours with "and", and each body asserts all of them.
     evidence: |
-      line 66-71:
-        const clean = findUnreachableEnforcement({ modules: [], publishedNames: new Set() })
-        expect(clean, 'the rule with nothing to look at finds nothing').toEqual([])
-        const { stdout } = runGate('check-invention-reachability.mjs')
-        expect(stdout.includes('OK — every decision-shaped exported type')).toBe(true)
-      The docblock states the intent exactly right — "a CLI that reads the wrong directory ...
-      still prints something plausible ... Computing the same answer here from the same source
-      and comparing is what makes the two halves one gate" — and then does not do it. A CLI that
-      globbed an empty directory would print the same OK line and pass.
-      Same shape at line 78 for `missingCloses` (`changedFiles: []`).
-      Related: `test_invention_reachability_reads_its_allowlist` (line 45) infers "clean run =>
-      allowlist was read" from two live allowlisted entries. That inference silently becomes
-      vacuous the day those two inventions are fixed, with nothing to say so.
-    recommended_action: >
-      Have the test enumerate the same modules the CLI enumerates (export that discovery from
-      scripts/lib/) and assert deep equality between the in-process result and the CLI's parsed
-      findings. Assert the allowlist by count, not by cleanliness — e.g. run the gate with the
-      allowlist path overridden to /dev/null and assert the two entries re-fire.
+      packages/agents/tests/unit/liveness-oracle-recorded-cwd.test.ts:172
+        test_budget_exhaustion_yields_undetermined_and_never_exceeds_the_bound
+        — asserts three things: fs.ops() <= 5, no verdict is 'dead', out.size === 20.
+      packages/agents/tests/unit/liveness-oracle.test.ts:251
+        test_enumeration_failure_yields_undetermined_for_every_project_with_a_typed_error
+        — and there is no typed error: the assertion is `reason` matching /enumerat/i on a
+        plain verdict object. The name promises the rules/testing.md § 4.1 standard ("assert
+        the specific typed error") that the body does not meet. Not a defect in the module
+        (it returns verdicts, it does not throw) — a defect in the name.
+    recommended_action: Split the first; rename the second to describe the reason string it actually asserts.
 
   - id: F-tests-11
-    severity: MEDIUM
-    file: tests/integration/gc-sweep-bounded.test.ts
-    line: 96
-    plan_ref: "T2.2 Deep Dives — 'bounded by a timeout, surfaced as a typed error rather than a hang'"
-    summary: >
-      `test_the_error_the_sweep_reports_is_the_shared_typed_one` proves typed identity only on the
-      DIRECT call. For the sweep — the half whose divergence caused the defect — it asserts
-      `message` contains "timed out", which a locally constructed `new Error('timed out')` satisfies.
-    evidence: |
-      line 99-105 (direct): expect(direct).toBeInstanceOf(SessionRegistryRemoverError)  <- good
-      line 113:  expect(result.errors[0]?.message).toContain('timed out')               <- the sweep half
-      transcript-gc.ts wraps into a plain data shape: `errors.push({ id, message: 'registry removal
-      failed, transcript kept: ' + error.message })`, so `instanceof` genuinely cannot be asserted
-      on the result — but the message CAN carry the class's distinctive text. The current substring
-      is the one part of SessionRegistryRemoverError's message a lookalike is most likely to share.
-      The test's own comment claims more than the assertion delivers: "Asserting that the sweep's
-      error is the shared class — not a lookalike built locally".
-    recommended_action: >
-      Assert the distinctive fragment the shared class alone produces — e.g.
-      `/did not settle within 15ms/` and the session id — or carry the `cause` through the GCError
-      shape and assert `toBeInstanceOf` on it.
-
-  - id: F-tests-12
-    severity: MEDIUM
-    file: ../theokit-sdk/packages/sdk/tests/mcp-auth-subpath.test.ts
-    line: 47
-    plan_ref: "T1.3 TDD — `test_mcp_oauth_subpath_resolves_from_the_built_package()` — 'import fails today'"
-    summary: >
-      The declared RED asserted RESOLUTION from the built package. What shipped imports
-      `../src/mcp-auth.js` (source) and grep-checks four config files. The gap-25 class the file
-      says it closes ("exports pointing at a path tsup never emits") is verified by text, never by
-      resolving.
-    evidence: |
-      line 47-56: expect(pkg.exports['./mcp-auth']?.import?.default).toBe('./dist/mcp-auth.js')
-                  expect(toolsDts).toContain('src/mcp-auth.ts')
-                  expect(mirror).toContain('mcp-auth.d.ts')
-                  expect(tsup.includes('"mcp-auth": "src/mcp-auth.ts"')).toBe(true)
-      line 62:    const barrel = await import('../src/mcp-auth.js')   <- SOURCE, not dist
-      The file is candid that this subpath must appear in FOUR hand-maintained lists and that
-      forgetting one "fails silently" — which is precisely the argument for one resolution test
-      over four text assertions. A rename in tsup.config.ts's formatting (single vs double quotes
-      is already special-cased) or a build that emits nothing would leave every assertion green.
-    recommended_action: >
-      Add a post-build test that resolves the real thing:
-      `createRequire(...).resolve('@theokit/sdk/mcp-auth')` plus `await import('@theokit/sdk/mcp-auth')`
-      against dist, gated on dist existing with a LOUD skip (see F-tests-8).
-
-  - id: F-tests-13
-    severity: MEDIUM
-    file: packages/agents/src/bridge/approval-decision.ts
-    line: 73
-    plan_ref: ".claude/skills/implement/scripts/check_wiring.py pillar (b) — 'at least 1 file under tests/integration/ exercises the symbol'"
-    summary: >
-      Four new exported symbols have no integration test, including the branch's most
-      security-consequential one. `transcriptRootHint` additionally has no production caller.
-    evidence: |
-      for s in ...; do grep -rl "$s" tests/integration/ | wc -l; done
-        shouldAutoApprove   -> 0     (T2.1 — the auto-approve gate; unit-only)
-        transcriptRootHint  -> 0     (T2.6)
-        createDelegateTool  -> 0
-        templateHints       -> 0
-        expandCommandTemplate -> 1   OK
-        classifyProjects      -> 1   OK
-        awaitRegistryRemoval  -> 1   OK
-      Pillar (a): `shouldAutoApprove` has a real caller (bridge/approval-posture.ts:31) and is
-      exported via ./bridge (bridge/index.ts:86) — fine. `transcriptRootHint` appears only at
-      session/index.ts:49 (a barrel re-export, not a caller) and `createDelegateTool` only at
-      tools-entry.ts:130 (likewise). A re-export is not a caller.
-      The gap matters for T2.1 specifically: the plan's own framing is that the rule was
-      duplicated because it was not reachable from a SURFACE, and the branch has no test that
-      reaches it the way a surface would.
-    recommended_action: >
-      Add tests/integration/approval-decision-surface.test.ts importing `shouldAutoApprove` from
-      the `./bridge` subpath (the consumer's path, not the source path) and driving the three
-      modes end-to-end. Same for `transcriptRootHint` through `./session`.
-
-  - id: F-tests-14
-    severity: LOW
-    file: packages/agents/tests/unit/transcript-root-hint.test.ts
-    line: 75
-    plan_ref: "T2.6 — 'It is deliberately a HINT and never a repair'"
-    summary: >
-      `test_the_hint_never_moves_anything` never checks that nothing moved. It asserts an
-      unrelated fresh temp directory is defined and that a second call does not throw.
-    evidence: |
-      const previous = rootWithProjects(2)
-      transcriptRootHint(0, previous, { THEOKIT_HOME: '/new/home' })
-      expect(rootWithProjects(0)).toBeDefined()   // creates a DIFFERENT temp dir; always defined
-      expect(() => transcriptRootHint(0, previous, {...})).not.toThrow()
-      The inline comment "// no throw, and `previous` is untouched below" describes an assertion
-      that is not there. An implementation that relocated every project directory out of
-      `previous` would pass this test.
-    recommended_action: >
-      Snapshot `readdirSync(join(previous,'projects')).sort()` before and after and assert equality.
-
-  - id: F-tests-15
     severity: LOW
     file: tests/integration/crossval-gaps.test.ts
-    line: 468
-    plan_ref: "rules/testing.md § 6 — 'Tests asserting on internal structure (break on every refactor)'; T1.1 rationale — 'grep does not follow export *'"
+    line: 28
+    plan_ref: F-tests-1 fix (081833db)
     summary: >
-      Five gap blocks assert on SOURCE TEXT or on the existence of a test file rather than on
-      behaviour — the same blind technique this branch's own T1.1 docblock identifies as the
-      reason two prior measurements were both wrong.
+      The fix left three stale references behind: the file header still points readers at a
+      test name that no longer exists, and the CI predicate changed semantics in passing.
     evidence: |
-      G1  :475  expect(src).toMatch(/record\.type\s*!==\s*'user'/)
-      G1  :486  expect(exists('packages/agents/tests/unit/session-fork.test.ts')).toBe(true)
-      G3  :571  expect(orchestrator).toContain('parentHooks')
-      G5  :634  (source grep on transcript-gc)
-      G6  :622  expect(src).toMatch(/kind:\s*'oauth'/)
-      G11 :516  expect(suite).not.toMatch(/<cast>/)
-      A refactor that renames a local, or moves the check into a helper, turns these red without
-      any behaviour change; conversely, a comment containing the matched text turns them green.
-      Two of the five (G1:486, G6:627) assert only that a test FILE exists — the weakest possible
-      proxy for "the gap is closed". Note the file gets this right elsewhere: G3:577
-      `inheritance_is_reachable_by_a_consumer` actually imports and checks `typeof mod.inheritHooks`.
-    recommended_action: >
-      Promote the five to behavioural assertions on the same model as G3:577 (import the symbol,
-      exercise it) or move them out of the gap register into the owning unit suite and have the
-      register assert the behaviour, not the file.
+      tests/integration/crossval-gaps.test.ts:28-29 (docblock, untouched by 081833db)
+        "... a vacuous pass on the plan's single metric. `ci_refuses_a_mostly_skipped_run`
+         below turns that into a failure under CI."
+      That `it` no longer exists — the rule is now an afterAll at :223 calling
+      refuseMostlySkipped. A reader searching for the named test finds nothing.
 
-positives_worth_recording:
-  - 'packages/agents/tests/unit/gc-registry-remover.test.ts — the two-session fixture note is correct AND load-bearing: verified that with one session `protectedTranscripts` keeps it and the sweep assertions would pass by never running. The author caught the exact class this review was asked to hunt.'
-  - 'tests/integration/gc-sweep-bounded.test.ts — asserts `elapsed < 5000` and `readdirSync(dir).length === 4`; the negative direction (`test_a_working_registry_still_collects`) stops the bound being satisfied by doing nothing. This is the right shape for a hang regression.'
-  - 'packages/agents/tests/unit/command-template.test.ts — all six T3.3 edge cases present, including the EC-12 exact-64KB equality case, and the ReDoS history is recorded in the test that pins the fix.'
-  - "packages/agents/tests/unit/liveness-oracle.test.ts — the EC-9 deviation from the plan's expected verdict is argued in the test file rather than quietly adjusted; the budget property is asserted on the SWEEP, which makes a 25-project fixture evidence about 13k."
-  - '../theokit-tui/src/select-list-model.test.ts — property-based sweep over total x selected x size x anchor; the strongest test in the branch.'
-  - 'tests/unit/surface-invention-gate.test.ts — the expired-allowlist test asserts `allowlistExpired` is reported, not merely that the finding re-fires.'
+      Predicate change, tests/integration/crossval-gaps.test.ts:224:
+        before: if (!process.env.CI) return          -> CI="" or CI="0" disables the guard
+        after:  refuseMostlySkipped(skipped, process.env.CI !== undefined)
+                                                     -> CI="" or CI="0" now ENFORCES it
+      Stricter, therefore harmless in CI, but it is an undocumented behaviour change in a file
+      whose whole subject is when the guard fires.
 
-runtime:
-  crossval_gaps_integration: '705ms (33 tests) — well under the 30s soft warn'
-  agents_unit_sample: '808ms for 17 tests across 3 files'
-  flakiness_observed: "none in this review's runs; no CI history consulted"
-  determinism_notes: >
-    All fixtures use mkdtempSync + explicit utimesSync; no Math.random, no wall-clock assertions
-    except gc-sweep-bounded's `elapsed < 5_000` (a generous hang bound, not a perf assertion) and
-    gc-registry-remover's `setTimeout(40)` after a 20ms timeout (60ms of headroom — thin but not
-    yet flaky; worth widening if CI is loaded). `today` is injected in the invention gate, which is
-    the right pattern; `scripts/check-surface-parity.mjs` has a `TODAY` module constant that no
-    test overrides.
+      Same class, in the module under test: packages/agents/src/session/liveness-oracle.ts:14
+      still documents the option as `listProjects` after 7fea1388 renamed it to `candidatePaths`
+      (the rename is documented at :62-73, so the file contradicts itself).
+    recommended_action: Update the three docblocks; if the CI predicate change was intentional, say so in the comment.
 
-verdict: NEEDS_FIXES
-verdict_rationale: >
-  The branch's tests are, on average, unusually good — the docblocks argue their own necessity,
-  the fixtures are mostly non-vacuous, and one of them (the GC two-session note) catches exactly
-  the failure class this review was commissioned to find. But three of them are hollow in ways
-  that matter: the EC-4 guard against vacuous runs is itself vacuous (F-tests-1, BLOCKER), T1.2's
-  assertions are 75% skipped with no expiry while neither branch of its decision gate was
-  executed (F-tests-2), and the EC-14 / T2.7 / EC-18 edge cases the plan declared as RED tests
-  were not written (F-tests-3, -5, -9). Combined with zero RED-first commits (F-tests-6), the
-  suite currently cannot support the claim that it would have caught the defects it describes.
+verdict_input: |
+  NEEDS_FIXES — 1 BLOCKER, 2 HIGH.
+
+  The two carried-over items split cleanly. F-tests-1 is genuinely FIXED, and fixed better than
+  recommended: the guard was moved to `afterAll` (order-independent by construction) rather than
+  reordered, extracted into tests/lib/refuse-mostly-skipped.ts with 5 direct unit tests, and I
+  reproduced the failing behaviour empirically rather than accepting the commit message.
+  F-tests-2 is UNCHANGED: 3 of 4 tests still skip, T1.2's GREEN never happened, and nothing
+  expires — while the repo already ships the sunset mechanism that would fix it
+  (check-surface-parity.mjs:190-208).
+
+  On the fresh work, the answer to "was the rewrite faithful?" is: mostly yes, with one
+  mutation-proven exception.
+
+  Faithful, and I will say so specifically. The verdict change on
+  test_a_project_that_is_really_gone_is_dead was a SPLIT, not a deletion: the `dead` case
+  survives with a stronger precondition (oracle.test.ts:132, plus an assertion on `reason`) and
+  the old behaviour got its own explicit test asserting the new answer (:148). The symlink-cycle
+  counter-argument is sound rather than a rationalisation — the original rested on "completeness
+  of the enumeration is the enumerator's guarantee", which a real-tree measurement falsified
+  6-of-6, and the change moves the verdict from destructive (`dead` -> caller deletes) to
+  conservative. Changing a test in the fail-safe direction, with the old premise empirically
+  refuted and the remaining `dead` branch pinned harder, is a migration.
+
+  What was actually weakened is elsewhere, and it is not what the commit message flags.
+  F-tests-B: the "unreadable" test was retargeted from `exists` to `listEntries`, and the
+  stat-error branch it used to guard is now dead. I mutated `probe()` so a throw reads as
+  "absent" — the exact shape of "live project classified dead" — and all 19 tests stayed green,
+  while the pre-rewrite suite caught it. F-tests-3: the dedup property can be deleted entirely
+  with the suite still green, and the rewrite renamed the test to claim that property.
+
+  The BLOCKER is not in the rewritten suites at all — it is the integration test they left
+  behind. tests/integration/liveness-oracle-real-tree.test.ts still calls the deleted API, is
+  RED on HEAD, and is the sole cause of the branch's own typecheck gate being RED. The
+  checkpoint still records T3.2 pillar (b) as true. That is F-wire-1's pattern — a verification
+  surface that was not re-run — reproduced by the commit that was closing F-arch-1.
+
+  Yes, there is real duplication (F-tests-7: 5 of 8 added tests duplicate the rewritten suite,
+  including a byte-identical test name), and the new Goal-metric register carries three
+  assertion-free placeholders (F-tests-4) plus a CI-red environment dependency (F-tests-C).
+
+  .wiring-evidence.json discloses its manual provenance thoroughly to a human and not at all to
+  check_wiring.py, which reads `evidence.get(metric, 0)` and nothing else. The skill's
+  prohibition on hand-written evidence is categorical; the honesty of the file does not lift it.

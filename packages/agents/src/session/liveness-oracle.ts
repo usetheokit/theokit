@@ -36,7 +36,22 @@
  * of them may throw (EACCES) — a throw is a third outcome, never "absent".
  */
 export interface FsSeam {
-  exists: (path: string) => boolean
+  /**
+   * Does `path` exist? **Three-valued**: `undefined` means "could not determine", and it is NOT the
+   * same answer as `false`.
+   *
+   * The third state is in the RETURN TYPE rather than in prose because that is the only place an
+   * adapter author reliably reads it. The consumer's scar (B-020) is exactly this: its adapter
+   * mapped every `statSync` failure to `false`, and since the verdict branches on that value, a cwd
+   * that exists but cannot be stat-ed — EACCES on a non-traversable parent, ENOTDIR mid-path, EMFILE
+   * under a wide sweep — was classified DEAD, which is a deletion. A signature of `=> boolean`
+   * invites `try { return existsSync(p) } catch { return false }`, which reintroduces it silently.
+   *
+   * ENOENT is the only errno that means absence. Everything else is `undefined`. Throwing is also
+   * accepted and treated as `undefined`, so an adapter that does neither still cannot cause a
+   * deletion.
+   */
+  exists: (path: string) => boolean | undefined
   /** Entry names directly under `dir`. Used to find a transcript to read the recorded cwd from. */
   listEntries: (dir: string) => readonly string[]
   /** The first line of `file`. The transcript's first record carries the `cwd` it was written in. */
@@ -90,7 +105,7 @@ const DEFAULT_TRANSCRIPT_SAMPLES = 3
  * about the directory rather than about the project.
  */
 type RecordedCwd =
-  | { readonly kind: 'found'; readonly cwd: string }
+  | { readonly kind: 'found'; readonly cwds: readonly string[] }
   | { readonly kind: 'absent' }
   | { readonly kind: 'unreadable'; readonly error: string }
 
@@ -114,6 +129,50 @@ function encodeProjectDir(cwd: string): string {
  * it was written in, and reading it costs one line of one file.
  */
 
+/** One budgeted existence probe. `error` covers both a throw and the seam's `undefined`. */
+type Probe = (path: string) => { found: boolean } | { error: string }
+
+/**
+ * The verdict for a directory whose transcripts named one or more cwds.
+ *
+ * EVERY member of the collision class is probed and the strongest evidence wins:
+ *
+ * | observed | verdict | why |
+ * |---|---|---|
+ * | any one exists | `alive` | the class has a live member, so the directory is in use |
+ * | any one unprobeable | `undetermined` | absence was not established |
+ * | all definitively gone | `dead` | the only thing that proves absence |
+ *
+ * First-match-wins is what this replaces, and it was not a shortcut but a defect: the encoding is
+ * many-to-one, so `encodeProjectDir(cwd) === name` narrows to a CLASS, never to a path. Letting one
+ * member decide meant a single record could condemn the rest — and transcripts are user-writable, so
+ * that record can be planted. The consumer's oracle has the same flaw
+ * (`TheoCode/.../liveness-oracle.ts:168-181`); the framework can fix it because the framework owns
+ * the encoding that creates the collision.
+ */
+function verdictFromRecordedCwds(
+  cwds: readonly string[],
+  probe: Probe,
+  budgetLeft: () => boolean,
+): LivenessVerdict {
+  let unprobeable: string | undefined
+  for (const cwd of cwds) {
+    if (!budgetLeft()) {
+      unprobeable ??= 'search budget exhausted'
+      break
+    }
+    const at = probe(cwd)
+    if ('error' in at) {
+      unprobeable ??= `could not stat ${cwd}: ${at.error}`
+      continue
+    }
+    if (at.found) return { liveness: 'alive', reason: `recorded cwd ${cwd} exists` }
+  }
+  return unprobeable !== undefined
+    ? { liveness: 'undetermined', reason: unprobeable }
+    : { liveness: 'dead', reason: `every recorded cwd is gone (${cwds.join(', ')})` }
+}
+
 /**
  * Classify each encoded project directory. Every input appears in the output: a missing key would
  * read to a caller as "not dead", which is safe only by accident.
@@ -133,7 +192,13 @@ export function classifyProjects(
   const probe = (path: string): { found: boolean } | { error: string } => {
     remaining -= 1
     try {
-      return { found: opts.fs.exists(path) }
+      const answer = opts.fs.exists(path)
+      // `undefined` is the seam's "could not determine" and must NOT collapse into `false`; that
+      // collapse is the consumer's B-020 scar and it ends in a deletion. Carried out as an error so
+      // every caller below already handles it — there is no path that treats it as absence.
+      return answer === undefined
+        ? { error: `could not determine whether ${path} exists` }
+        : { found: answer }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -165,8 +230,9 @@ export function classifyProjects(
       }
     }
     const samples = opts.transcriptSamples ?? DEFAULT_TRANSCRIPT_SAMPLES
+    const cwds: string[] = []
     for (const file of entries.filter((f) => f.endsWith('.jsonl')).slice(0, samples)) {
-      if (remaining <= 0) return { kind: 'absent' }
+      if (remaining <= 0) break
       remaining -= 1
       let record: unknown
       try {
@@ -178,9 +244,13 @@ export function classifyProjects(
       }
       const cwd = (record as { cwd?: unknown } | null)?.cwd
       if (typeof cwd !== 'string' || cwd.length === 0) continue
-      if (encodeProjectDir(cwd) === name) return { kind: 'found', cwd }
+      // EVERY match is collected, never the first. `encodeProjectDir(cwd) === name` narrows to a
+      // COLLISION CLASS, not to a path — `/a/b` and `/a-b` encode identically and therefore share
+      // one project directory. Returning on the first match lets one member of the class decide the
+      // verdict for all of them, and since transcripts are user-writable that member can be planted.
+      if (encodeProjectDir(cwd) === name && !cwds.includes(cwd)) cwds.push(cwd)
     }
-    return { kind: 'absent' }
+    return cwds.length > 0 ? { kind: 'found', cwds } : { kind: 'absent' }
   }
 
   let candidates: readonly string[] | undefined
@@ -258,21 +328,9 @@ export function classifyProjects(
       continue
     }
     if (recorded.kind === 'found') {
-      const at = probe(recorded.cwd)
-      if ('error' in at) {
-        out.set(name, {
-          liveness: 'undetermined',
-          reason: `could not stat ${recorded.cwd}: ${at.error}`,
-        })
-        continue
-      }
       out.set(
         name,
-        at.found
-          ? { liveness: 'alive', reason: `recorded cwd ${recorded.cwd} exists` }
-          : // THE one thing that proves absence: the transcript says where it lived, and it is not
-            // there. Every other branch in this function resolves to `undetermined`.
-            { liveness: 'dead', reason: `recorded cwd ${recorded.cwd} is gone` },
+        verdictFromRecordedCwds(recorded.cwds, probe, () => remaining > 0),
       )
       continue
     }

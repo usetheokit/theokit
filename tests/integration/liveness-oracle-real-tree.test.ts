@@ -11,7 +11,14 @@
  * what is asserted is EQUIVALENCE with the filesystem plus the budget property, both of which are
  * scale-independent (EC-24, Risk R5).
  */
-import { existsSync, mkdirSync, mkdtempSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -30,22 +37,55 @@ describe('classifyProjects against a real tree', () => {
     mkdirSync(moved, { recursive: true })
     const gone = join(root, 'deleted')
 
+    // Transcripts carry the recorded cwd — the authoritative answer. `gone` gets one too, which is
+    // what lets it be proven dead rather than merely unfound.
+    const projectsRoot = join(root, '.theokit', 'projects')
+    for (const cwd of [alive, moved, gone]) {
+      const dir = join(projectsRoot, encode(cwd))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'a.jsonl'), `${JSON.stringify({ cwd })}\n`)
+    }
+
     let ops = 0
     const out = classifyProjects([encode(alive), encode(moved), encode(gone)], {
-      listProjects: () => [alive, moved],
-      budget: 100,
+      projectsRoot,
+      candidatePaths: () => [alive, moved],
+      budget: 200,
       fs: {
+        // Three-valued on purpose: ENOENT is the only errno that means absence. Anything else is
+        // `undefined`, because a stat we could not perform must never read as "not there" on the
+        // path where the caller deletes (the consumer's B-020 scar).
         exists: (p) => {
           ops += 1
-          return existsSync(p)
+          try {
+            return existsSync(p)
+          } catch {
+            return undefined
+          }
+        },
+        listEntries: (d) => {
+          ops += 1
+          try {
+            return readdirSync(d)
+          } catch {
+            return []
+          }
+        },
+        firstLine: (f) => {
+          ops += 1
+          try {
+            return readFileSync(f, 'utf8').split('\n', 1)[0] ?? ''
+          } catch {
+            return ''
+          }
         },
       },
     })
 
     expect(out.get(encode(alive))?.liveness).toBe('alive')
-    expect(out.get(encode(moved))?.liveness, 'a real path is found by search too').toBe('alive')
+    expect(out.get(encode(moved))?.liveness, 'resolved by its own recorded cwd').toBe('alive')
     expect(out.get(encode(gone))?.liveness).toBe('dead')
-    expect(ops).toBeLessThanOrEqual(100)
+    expect(ops).toBeLessThanOrEqual(200)
   })
 
   it('test_a_tight_budget_degrades_to_undetermined_and_never_deletes', () => {
@@ -54,9 +94,20 @@ describe('classifyProjects against a real tree', () => {
     const root = mkdtempSync(join(tmpdir(), 'liveness-'))
     const encoded = Array.from({ length: 6 }, (_, i) => encode(join(root, `p${String(i)}`)))
     const out = classifyProjects(encoded, {
-      listProjects: () => [],
+      projectsRoot: join(root, '.theokit', 'projects'),
+      candidatePaths: () => [],
       budget: 2,
-      fs: { exists: existsSync },
+      fs: {
+        exists: existsSync,
+        listEntries: (d) => {
+          try {
+            return readdirSync(d)
+          } catch {
+            return []
+          }
+        },
+        firstLine: () => '',
+      },
     })
     const verdicts = encoded.map((e) => out.get(e)?.liveness)
     expect(verdicts.filter((v) => v === 'undetermined').length).toBeGreaterThan(0)
