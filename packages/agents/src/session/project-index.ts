@@ -3,10 +3,12 @@
  * a session id or an `encodeProjectDir` hash — never from HTTP input. The variable filename IS the
  * feature: a module whose job is listing and deleting sessions cannot address them by literal.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { encodeProjectDir, transcriptRoot } from '@theokit/sdk/persistence'
+
+import { ensureSecureDir } from '../hooks/secure-store.js'
 
 /**
  * M71 — the reverse index `encodeProjectDir` never had.
@@ -70,7 +72,14 @@ export function projectDirFor(cwd: string, root: string = transcriptRoot()): str
 export function recordProjectDir(cwd: string, root: string = transcriptRoot()): void {
   const sidecar = join(projectDirFor(cwd, root), CWD_SIDECAR)
   try {
-    mkdirSync(dirname(sidecar), { recursive: true })
+    // T2.4 — not a bare `mkdirSync`. This directory lives under the transcript root, which
+    // `assertSecureModes` refuses when it is group- or world-writable: that tree decides which
+    // commands may run. A bare recursive mkdir takes the umask, so under `umask 002` this code was
+    // creating the very shape the store's own check rejects. `ensureSecureDir` also REPAIRS a
+    // pre-existing loose directory, which a `mode:` argument cannot do — and a shared root is
+    // precisely where "another process got there first" is the normal case
+    // (`config/trust-store.ts:157-161` wrote that diagnosis for a sibling).
+    ensureSecureDir(sidecar)
     writeFileSync(sidecar, `${cwd}\n`, 'utf8')
   } catch {
     // Intentionally swallowed — see the docblock. The read side treats a missing sidecar as
