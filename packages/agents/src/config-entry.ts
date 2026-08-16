@@ -71,6 +71,17 @@ export {
   type LoadCustomCommandsInput,
 } from './config/custom-commands.js'
 
+// T3.3 — the other half of a custom command. `loadCustomCommands` above reads the file and its
+// frontmatter; this interprets the body it returns. Exported next to it because a consumer that has
+// one and not the other has to write the missing half, which is precisely what happened.
+export {
+  expandCommandTemplate,
+  templateHints,
+  FILE_INLINE_CAP,
+  type ShellResult,
+  type TemplateDeps,
+} from './config/command-template.js'
+
 export { frontmatterValue, splitFrontmatter, type ParsedFrontmatter } from './config/frontmatter.js'
 
 export {
