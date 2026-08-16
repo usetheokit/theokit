@@ -218,7 +218,17 @@ Consumer files touched in Phase 5 beyond those tabled above: `TheoCode/packages/
 
 **Re-ordered for v2.0.** The list is now sequenced by what the Goal needs, not by what is convenient to verify. O1–O3 are the Goal; O4–O6 serve it; O7–O9 are instruments and are explicitly last.
 
-- [ ] **O1 — Stop deleting live data.** The liveness oracle never returns `dead` on evidence it cannot support: not from a colliding recorded `cwd`, not from a stat it could not perform, not from an attacker-plantable transcript field. Blocks everything else, because publishing before this arms the consumer's GC.
+- [x] **O1 — Stop deleting live data.** The liveness oracle never returns `dead` on evidence it cannot support: not from a colliding recorded `cwd`, not from a stat it could not perform, not from an attacker-plantable transcript field. Blocks everything else, because publishing before this arms the consumer's GC.
+
+  **Closed 2026-08-16** (`01735c72`, `50f5da79`). One regression test per clause —
+  `test_a_live_sibling_cwd_outweighs_a_gone_one_in_the_same_collision_class`,
+  `test_a_stat_that_could_not_be_performed_is_never_absence`,
+  `test_a_planted_transcript_cannot_condemn_a_live_project` — and the suite was verified by
+  MUTATION rather than by being green, because the round-one suite was green and caught neither
+  defect: reverting the probe's catch to `found: false` now fails 1 test, collapsing `undefined`
+  to `false` fails 2. Re-measured on the real tree afterwards (13 624 projects): agreement 99,96%
+  and `framework_dead_where_consumer_disagreed == 0` — every disagreement is the framework being
+  less certain, never more, which is the asymmetry the clause is about.
 - [ ] **O2 — The consumer can adopt.** The three packages publish, so `@theokit/agents`, `@theokit/tui` and `@theokit/sdk` carry the closures at a version TheoCode can pin. Nothing about this plan is provable while the work sits above the published version.
 - [ ] **O3 — The consumer deletes.** TheoCode's duplicated-capability code falls from ~862 LOC to **≤ 150**, its suite stays green, and every deleted line is replaced by an import. **This is the Goal.** Its `BACKLOG.md` upstream register reaches zero open rows, each closed with a commit as evidence.
 - [ ] **O4 — A newcomer reaches the same place.** `create-theokit --surface=tui` gets a developer to tools + approval gate + session resume without writing framework-shaped code. **Baseline first (T0.2): nobody has run this as a newcomer**, so the target number is measured, not declared.
