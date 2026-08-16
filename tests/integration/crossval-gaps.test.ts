@@ -78,6 +78,54 @@ const DIST_BUILT = agentsDts().length > 0
  * included, so some mangled aliases enter the set and the SUBPATH a symbol comes from is not
  * checked — only that the package exports it somewhere.
  */
+/**
+ * The declared surface of a SIBLING package, when its `dist` is present.
+ *
+ * T4.2 — the index grew sections for `@theokit/tui` and `@theokit/sdk`, because the consumer needs
+ * three packages and the page only answered for one. Those rows were invisible to the assertion
+ * below, which filters on `@theokit/agents`: adding them without this would have turned the page's
+ * guarantee — *"every symbol here resolves"* — into *"every `@theokit/agents` symbol here resolves"*,
+ * silently. A page that is verified for one third of its rows and says so nowhere is worse than a
+ * page with fewer rows.
+ *
+ * A sibling without a built `dist` SKIPS LOUDLY rather than passing: an unbuilt package would make
+ * every one of its rows unverifiable, and reporting that as green is the exact failure this file
+ * exists to prevent.
+ */
+function siblingSurface(relativeRepo: string, pkgDir: string): Set<string> | undefined {
+  const dist = join(REPO_ROOT, '..', relativeRepo, pkgDir, 'dist')
+  if (!existsSync(dist)) return undefined
+  // RECURSIVE, and the first draft was not: the SDK puts a subpath's declarations in
+  // `dist/<subpath>/index.d.ts`, so reading only the top level reported `resolveSandboxPosture` and
+  // every other subpath symbol ABSENT. False absence is the exact failure class this whole guard
+  // exists to catch, committed by the guard itself.
+  const text = walkDts(dist)
+    .map((f) => readFileSync(f, 'utf8'))
+    .join('\n')
+  if (text.length === 0) return undefined
+  return declaredExportsFromText(text).names
+}
+
+/** Every `.d.ts` under `dir`, at any depth. */
+function walkDts(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...walkDts(full))
+    else if (entry.name.endsWith('.d.ts')) out.push(full)
+  }
+  return out
+}
+
+/** Which package a row's `Import from` column names, and the surface that answers for it. */
+const SURFACES: ReadonlyArray<{
+  readonly marker: string
+  readonly names: () => Set<string> | undefined
+}> = [
+  { marker: '@theokit/tui', names: () => siblingSurface('theokit-tui', '.') },
+  { marker: '@theokit/sdk', names: () => siblingSurface('theokit-sdk', 'packages/sdk') },
+]
+
 const PUBLISHED = declaredExportsFromText(
   agentsDts(),
   join(REPO_ROOT, 'packages', 'agents', 'package.json'),
@@ -261,6 +309,44 @@ describe('G10 — a capability index exists and resolves', () => {
         `capability index cites \`${symbol}\`, which is not a DECLARED export of the published ` +
           `surface (looked for \`${root}\`). A substring match used to let this pass.`,
       ).toBe(true)
+    }
+  })
+
+  it('test_sibling_package_rows_resolve_in_their_own_package', () => {
+    // T4.2 — the assertion above filters on `@theokit/agents`, so rows for the sibling packages the
+    // consumer also needs were unverified. Verifying them where they actually live is what keeps the
+    // page's promise ("every symbol here resolves") true for every row rather than for one package's.
+    const index = readFileSync(join(REPO_ROOT, 'wiki', 'capability-index.md'), 'utf8')
+    for (const surface of SURFACES) {
+      const rows = index
+        .split('\n')
+        .filter(
+          (l) =>
+            l.startsWith('|') &&
+            l.includes(surface.marker) &&
+            !l.includes('@theokit/agents') &&
+            /`[A-Za-z_][\w.]*`/.test(l),
+        )
+      if (rows.length === 0) continue
+
+      const names = surface.names()
+      if (names === undefined) {
+        noteSkip(
+          'G10',
+          `${surface.marker} has no built dist — its ${String(rows.length)} row(s) are unverified`,
+        )
+        continue
+      }
+      for (const row of rows) {
+        const symbol = symbolCell(row)
+        if (!symbol) continue
+        const root = rootSymbol(symbol)
+        expect(
+          names.has(root),
+          `capability index cites \`${symbol}\` from ${surface.marker}, which does not declare it ` +
+            `(looked for \`${root}\`).`,
+        ).toBe(true)
+      }
     }
   })
 

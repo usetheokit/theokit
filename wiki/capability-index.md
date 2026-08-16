@@ -75,6 +75,40 @@ connected the need to the symbol. This page is the missing connection.
 | Catch every framework error with one `instanceof` | `TheokitAgentError` | `@theokit/agents` | 8.x |
 | Distinguish a toolset misconfiguration from any other failure | `ToolsetError` | `@theokit/agents` | 8.0 |
 
+## Terminal surfaces — `@theokit/tui`
+
+A coding-agent product is a terminal app, and four of the consumer's own registered gaps sit against
+this package. The index answered for one package while the customer needed three; these rows close
+that.
+
+| Capability | Symbol | Import from | Landed |
+|---|---|---|---|
+| Render a tool call as a card | `ToolCallCard` | `@theokit/tui` | 0.53.x |
+| Render tool output (stdout/stderr/exit) | `ToolResult` | `@theokit/tui` | 0.53.x |
+| Know how a tool NAME should read | `DEFAULT_TOOL_PRESENTATION` | `@theokit/tui` | unreleased |
+| Override one tool's presentation without restating the rest | `toolPresentation` | `@theokit/tui` | unreleased |
+| Window a long list around the selection | `windowFor` | `@theokit/tui` | 0.53.x |
+| Keep the selected row centred rather than trailing | `WindowAnchor` | `@theokit/tui` | unreleased |
+| Build the shortcut footer from what is actually bound | `keyboardHelpFor` | `@theokit/tui` | unreleased |
+| Read a secret without echoing it | `FreeTextInput` | `@theokit/tui` | 0.53.x |
+| Show spend against a budget | `CostMeter` | `@theokit/tui` | 0.52.x |
+
+## Runtime surfaces reached through the SDK — `@theokit/sdk`
+
+The layered boundary forwards SOME of the SDK, by decision rather than wholesale — see
+`scripts/lib/boundary-decisions.mjs` for the per-subpath record and the measurement behind each one.
+These are the subpaths a coding-agent builder reaches directly today.
+
+| Capability | Symbol | Import from | Landed |
+|---|---|---|---|
+| Drive an agent turn | `Agent` | `@theokit/sdk` | 4.52.x |
+| Persist and read a session transcript | `readJsonlTail` | `@theokit/sdk/persistence` | 4.52.x |
+| Locate a project's transcript directory | `encodeProjectDir` | `@theokit/sdk/persistence` | 4.52.x |
+| Ask whether the sandbox is really enforced | `resolveSandboxPosture` | `@theokit/sdk/sandbox` | 4.52.x |
+| Ask what a sandbox mode may write | `writableRootsFor` | `@theokit/sdk/sandbox` | 4.52.x |
+| Authorize against a remote MCP server (OAuth PKCE) | `runPkceFlow` | `@theokit/sdk/mcp-auth` | unreleased |
+| Refresh an MCP OAuth token without re-authorizing | `refreshAccessToken` | `@theokit/sdk/mcp-auth` | unreleased |
+
 ## Honest gaps
 
 Recorded here rather than omitted — a capability index that lists only wins teaches people to trust

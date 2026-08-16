@@ -135,8 +135,23 @@ export type AgentWithNarrowedListAlias = AgentWithNarrowedList
 
 export const Agent: AgentWithNarrowedList = AgentDoSdk
 
-// M63 — closing the layered boundary so the consumer imports ZERO `@theokit/sdk*` directly. Same
-// PASS-THROUGH doctrine as the M58 core above (Rung 9): these are already the target shape.
+// M63 — the layered-boundary forwards. Same PASS-THROUGH doctrine as the M58 core above (Rung 9):
+// these are already the target shape.
+//
+// T4.2 (2026-08-16) — this comment used to say the boundary was CLOSED: "the consumer imports ZERO
+// `@theokit/sdk*` directly". Measured against the consumed SDK 4.52.1, that was false for 25 of its
+// published subpaths, and false in the expensive direction: a documented-closed boundary is worse
+// than a documented-partial one, because a consumer reads the claim and stops looking. That is how a
+// builder ends up rebuilding what already ships.
+//
+// The honest statement is: SOME capabilities cross, each by a decision. `scripts/lib/boundary-
+// decisions.mjs` records one per doorless subpath with the measurement behind it (how many of its
+// symbols already reach this layer's root), and `tests/integration/boundary-doorless-subpaths.test.ts`
+// fails when the SDK adds a subpath nobody has decided about — so the next hole arrives as a named
+// test failure instead of hiding behind a sentence.
+//
+// `check-surface-parity.mjs` cannot cover this and says so itself: it compares subpaths both packages
+// publish under the same NAME, and a subpath with no door here has no name to compare.
 //  - `SubAgent` (a2a delegation primitive): `SubAgent.create()` is already OO; wrapping it adds nothing.
 //  - the path-safety helpers are pure functions — a class would be ceremony (parsimony-ladder Rung 5).
 export { SubAgent } from '@theokit/sdk/a2a'
