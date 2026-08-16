@@ -234,14 +234,26 @@ export interface RunTranscriptGCResult {
  * absent is the desired end state, and reporting it as failure would make the second run of an
  * interrupted GC look broken.
  */
-export function runTranscriptGC(
+export async function runTranscriptGC(
   plan: TranscriptGCPlan,
   options: {
     readonly apply: boolean
     /** Same additive, fail-closed contract as on the plan — see `TranscriptGCOptions.protectedIds`. */
     readonly protectedIds?: () => ReadonlyMap<string, string>
+    /**
+     * T2.2 — remove the registry entry as well as the transcript file.
+     *
+     * Without it this function deleted transcripts and left the agent registry pointing at files
+     * that no longer exist. Nothing repaired that: GC works FROM transcripts, so an entry whose
+     * transcript is gone is never seen again. `deleteSession` has had this seam; the sweep did not.
+     *
+     * Same contract as `deleteSession`: may be async (`Agent.delete` is the only registry there is),
+     * runs BEFORE the unlink, and a throw leaves the transcript on disk for the next sweep rather
+     * than producing an entry no run can repair.
+     */
+    readonly removeFromRegistry?: (sessionId: string) => unknown
   },
-): RunTranscriptGCResult {
+): Promise<RunTranscriptGCResult> {
   const removed: string[] = []
   const errors: GCError[] = []
 
@@ -258,6 +270,19 @@ export function runTranscriptGC(
     if (!options.apply) {
       removed.push(candidate.id)
       continue
+    }
+    if (options.removeFromRegistry !== undefined) {
+      // Registry first (EC-3). A failure here skips the unlink: an orphan transcript is collected
+      // next sweep, an orphan registry entry is collected by nothing.
+      try {
+        await options.removeFromRegistry(candidate.id)
+      } catch (error) {
+        errors.push({
+          id: candidate.id,
+          message: `registry removal failed, transcript kept: ${(error as Error).message}`,
+        })
+        continue
+      }
     }
     try {
       rmSync(transcriptPath(plan.root, plan.cwd, candidate.id))
