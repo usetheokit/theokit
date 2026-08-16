@@ -25,6 +25,12 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import {
+  declaredExportsFromText,
+  declaredExportsOfPackage,
+  rootSymbol,
+} from '../../scripts/lib/declared-exports.mjs'
+
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(TEST_DIR, '..', '..')
 
@@ -48,6 +54,29 @@ function agentsDts(): string {
 }
 
 const DIST_BUILT = agentsDts().length > 0
+
+/**
+ * T0.1 / EC-2 — the published surface, parsed by the SHARED helper.
+ *
+ * The parser lives in `scripts/lib/declared-exports.mjs` rather than here because the layer→consumer
+ * gate (T4.1) asks the same question and two other scripts already answer a narrower version of it.
+ * A third private copy inside a test file is the DRY violation `system-design-guardrails.md § G12`
+ * names, and it would put the gate's dependency inside `tests/`.
+ */
+const PUBLISHED = declaredExportsOfPackage(join(REPO_ROOT, 'packages', 'agents'))
+
+/**
+ * The backticked identifier in a capability row's SYMBOL column (the second cell).
+ *
+ * Reading the first backtick of the whole line is wrong: the Capability column is prose and may
+ * carry inline code of its own — the `instanceof` row does — so the first match can be an English
+ * keyword rather than the symbol being claimed.
+ */
+function symbolCell(row: string): string | undefined {
+  const cells = row.split('|').map((c) => c.trim())
+  // cells[0] is '' (leading pipe), cells[1] = Capability, cells[2] = Symbol.
+  return /^`([A-Za-z_][\w.<>]*)`$/.exec(cells[2] ?? '')?.[1]
+}
 
 /**
  * The gap manifest — single source of truth (DRY). A gap cannot be quietly dropped: the meta-test
@@ -74,6 +103,10 @@ type GapId = keyof typeof GAPS
 const skipped: Array<{ gap: GapId; reason: string }> = []
 
 function noteSkip(gap: GapId, reason: string): void {
+  // Deduped by gap id: one unbuilt `dist/` makes several assertions of the SAME gap skip, and
+  // `ci_refuses_a_mostly_skipped_run` caps the TOTAL at 1. Counting them separately would turn a
+  // designed skip into a CI failure the moment a gap grows a second assertion.
+  if (skipped.some((s) => s.gap === gap)) return
   skipped.push({ gap, reason })
 
   console.warn(`[crossval-gaps] ${gap} SKIPPED — ${reason}`)
@@ -192,13 +225,107 @@ describe('G10 — a capability index exists and resolves', () => {
       noteSkip('G10', 'packages/agents/dist is unbuilt — symbol resolution not verifiable')
       return
     }
-    const dts = agentsDts()
+    const { names } = PUBLISHED
     for (const row of rows) {
-      const symbol = /`([A-Za-z_][\w.]*)`/.exec(row)?.[1]
+      // The SYMBOL column, not the first backtick in the line. The Capability column is prose and
+      // may itself contain inline code — row 73 cites `instanceof` there — so taking the first
+      // match asserts a keyword against the published surface and fails a correct row.
+      const symbol = symbolCell(row)
       if (!symbol) continue
-      expect(dts, `capability index cites ${symbol}, absent from the published surface`).toContain(
-        symbol,
-      )
+      const root = rootSymbol(symbol)
+      expect(
+        names.has(root),
+        `capability index cites \`${symbol}\`, which is not a DECLARED export of the published ` +
+          `surface (looked for \`${root}\`). A substring match used to let this pass.`,
+      ).toBe(true)
+    }
+  })
+
+  it('test_star_forwarded_symbols_resolve', () => {
+    // EC-2 — the regression that keeps the parser honest. `TheokitAgentError` reaches a consumer
+    // ONLY through `export * from '@theokit/sdk/errors'` at dist/index.d.ts. A parser that reads
+    // just `declare` + `export {}` calls it absent, which is exactly the false measurement that
+    // produced registered gap 16 and sent this plan chasing a re-export that already existed.
+    if (!DIST_BUILT) {
+      noteSkip('G10', 'packages/agents/dist is unbuilt — star-forward resolution not verifiable')
+      return
+    }
+    const { names } = PUBLISHED
+    for (const symbol of ['TheokitAgentError', 'isTransientError']) {
+      expect(
+        names.has(symbol),
+        `${symbol} is forwarded by \`export *\` and the parser must follow it`,
+      ).toBe(true)
+    }
+  })
+
+  it('test_member_and_generic_citations_resolve_on_their_root_symbol', () => {
+    // The corrected rows cite entry points as members (`AgentBuilder.create`), so the guard has to
+    // resolve the root rather than the whole dotted path — otherwise correcting the fabricated
+    // rows would replace them with rows that also fail.
+    expect(rootSymbol('AgentBuilder.create')).toBe('AgentBuilder')
+    expect(rootSymbol('Agent<T>')).toBe('Agent')
+    expect(rootSymbol('Tool.create')).toBe('Tool')
+    if (!DIST_BUILT) return
+    const { names } = PUBLISHED
+    expect(names.has(rootSymbol('AgentBuilder.create'))).toBe(true)
+    expect(names.has(rootSymbol('Tool.create'))).toBe(true)
+  })
+
+  it('test_an_unresolvable_star_target_is_reported_not_silently_empty', () => {
+    // Exercised against a SYNTHETIC surface, not against `node_modules`. Asserting that the real
+    // tree has zero unresolved forwards tests the tree, not the parser — it can never go red while
+    // the install is healthy, so it would prove nothing about the behaviour it names. Feeding text
+    // with a deliberately broken forward is what proves the parser reports instead of swallowing.
+    const broken = declaredExportsFromText(
+      "export * from '@theokit/does-not-exist'\nexport { a as Kept }\n",
+      join(REPO_ROOT, 'packages', 'agents', 'package.json'),
+    )
+    expect(broken.unresolvedForwards).toEqual(['@theokit/does-not-exist'])
+    expect(broken.names.has('Kept'), 'a broken forward must not discard the names around it').toBe(
+      true,
+    )
+
+    // And the real surface must currently have none — a regression signal if an install breaks.
+    if (!DIST_BUILT) return
+    const { unresolvedForwards } = PUBLISHED
+    expect(
+      unresolvedForwards,
+      `these \`export *\` targets could not be read, so their symbols are unverified: ${unresolvedForwards.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('test_honest_gaps_symbols_do_not_resolve', () => {
+    // The inverse assertion (gap 20). A row under "Honest gaps" claims a capability is NOT
+    // available; if its symbol resolves, the row is stale and a reader builds what already ships —
+    // the same failure as a fabricated row, pointing the other way.
+    if (!DIST_BUILT) {
+      noteSkip('G10', 'packages/agents/dist is unbuilt — honest-gaps inversion not verifiable')
+      return
+    }
+    const index = read('wiki/capability-index.md')
+    const section = index.split('## Honest gaps')[1]?.split('\n## ')[0] ?? ''
+    expect(
+      section.length,
+      'wiki/capability-index.md has no `## Honest gaps` section',
+    ).toBeGreaterThan(0)
+
+    const { names } = PUBLISHED
+    for (const line of section.split('\n')) {
+      if (!line.startsWith('|')) continue
+      // A row may truthfully cite a symbol that DOES resolve while the capability does not exist —
+      // `McpOAuthConfig` is type-only and the row says so. Asserting on the symbol alone would put
+      // GREEN pressure on deleting an honest row, which is the failure this file warns about at the
+      // top. Only rows that do NOT declare the type-only/absent shape are held to non-resolution.
+      if (/type-only|no implementation|not shipped|by declaration/i.test(line)) continue
+      for (const m of line.matchAll(/`([A-Z][\w.]*)`/g)) {
+        const root = rootSymbol(m[1]!)
+        expect(
+          names.has(root),
+          `\`${root}\` is listed under "Honest gaps" but IS on the published surface — the row is ` +
+            `stale and tells a reader to build what already ships`,
+        ).toBe(false)
+      }
     }
   })
 

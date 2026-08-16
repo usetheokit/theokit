@@ -27,8 +27,8 @@ connected the need to the symbol. This page is the missing connection.
 
 | Capability | Symbol | Import from | Landed |
 |---|---|---|---|
-| Author an agent with a fluent builder | `agent` | `@theokit/agents` | 8.x |
-| Author a tool with a Zod schema | `tool` | `@theokit/agents` | 8.x |
+| Author an agent with a fluent builder | `AgentBuilder.create` | `@theokit/agents` | 8.x |
+| Author a tool with a Zod schema | `Tool.create` | `@theokit/agents` | 8.x |
 | Drive an agent turn and read its events | `createSdkAgentStream` | `@theokit/agents/bridge` | 8.x |
 | Inspect what an agent compiled to, in a test | `inspectCompiled` | `@theokit/agents/testing` | 8.x |
 
@@ -48,6 +48,8 @@ connected the need to the symbol. This page is the missing connection.
 | Decide which credential to use, and record where it came from | `resolveCredential` | `@theokit/agents/auth` | 8.x (M79) |
 | Refuse a credential store that others can write | `assertSecureModes` | `@theokit/agents/auth` | 7.4.0 |
 | OAuth device flow (RFC 8628) and refresh under a cross-process lock | `AuthProvider` | `@theokit/agents/auth` | 7.4.0 |
+| Persist an "always allow this tool" grant across processes | `PermissionStore` | `@theokit/agents/auth` | 9.x |
+| Layer config, resolve trust posture, walk an instruction tree | `LayeredConfig` | `@theokit/agents/config` | 9.x |
 
 ## Sessions
 
@@ -80,10 +82,8 @@ it and then surprises them.
 
 | Need | Status |
 |---|---|
-| Persisted "always allow this tool" grants | Landing with `PermissionStore` — see the plan `crossval-absorption-gaps` |
 | A durable, multi-process approval registry | Not shipped. The registry is in-memory and single-process **by declaration**, not by accident |
 | MCP OAuth client flow | Type-only today (`McpOAuthConfig`); no implementation in `packages/` |
-| Config layering / trust store from an agent package | Landing on `@theokit/agents/config`; until then only via the deprecated `theokit/server` barrel |
 
 ## Keeping this page true
 
