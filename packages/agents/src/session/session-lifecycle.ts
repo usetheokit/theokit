@@ -343,7 +343,7 @@ export function forkBeforeUserTurn(
   newId: string,
   nth: number,
   options: { readonly cwd: string; readonly root?: string },
-): { readonly transcript: string; readonly recordIndex: number } {
+): { readonly transcript: string; readonly recordIndex: number; readonly selectedText: string } {
   if (!Number.isInteger(nth) || nth < 1) {
     throw new TheokitAgentError(
       `forkBeforeUserTurn: \`nth\` counts user turns from 1, received ${String(nth)}.`,
@@ -362,53 +362,94 @@ export function forkBeforeUserTurn(
   const src = transcriptPath(root, options.cwd, srcId)
   const dst = transcriptPath(root, options.cwd, newId)
 
-  const recordIndex = recordIndexOfUserTurn(src, nth)
-  if (recordIndex === undefined) {
+  const turns = reachableUserTurns(src)
+  // Bounds, not a null check: `noUncheckedIndexedAccess` is off, so the element type lies about
+  // out-of-range access and the linter flags the honest guard as unnecessary.
+  if (nth > turns.length) {
     throw new TheokitAgentError(
-      `forkBeforeUserTurn: session "${srcId}" has fewer than ${String(nth)} user turns.`,
+      `forkBeforeUserTurn: session "${srcId}" has ${String(turns.length)} reachable user turn(s), ` +
+        `so turn ${String(nth)} does not exist. "Reachable" excludes tool results, goal ` +
+        `continuations, and anything before the last compaction boundary — those are records the ` +
+        `user did not type or can no longer see.`,
     )
   }
+  const selected = turns[nth - 1]
 
   // `liveSessionPaths` is the SDK's own guard against writing over a session in use, and it takes
   // the paths from the caller because only the caller knows which are live. This module computes
   // exactly that set, so passing it is not extra safety — it is the guard finally being fed.
   forkTranscript(src, dst, {
-    beforeRecordIndex: recordIndex,
+    beforeRecordIndex: selected.index,
     liveSessionPaths: [...protectedTranscripts(options.cwd, root).keys()].map((id) =>
       transcriptPath(root, options.cwd, id),
     ),
   })
-  return { transcript: dst, recordIndex }
+  // `selectedText` so a surface can re-seed its composer with what the user typed. Returning only
+  // an index forces every consumer to re-read the transcript to learn what it just selected — which
+  // is what TheoCode's backtrack module had to do.
+  return { transcript: dst, recordIndex: selected.index, selectedText: selected.text }
 }
 
 /**
- * The record index at which the `nth` user turn begins, or `undefined` when there are fewer.
+ * A record the USER actually typed, after the last compaction boundary.
  *
- * This translation is the work the milestone's signature hides: `forkTranscript` takes a RECORD
- * index, and "before the nth user turn" is a different unit. One user turn spans many records (the
- * message, the assistant reply, every tool call and result), so the two only coincide in a
- * conversation with no tools.
+ * Three exclusions, each one a way the naive count lands on the wrong turn (T2.3):
  *
- * Counting here rather than exposing `beforeRecordIndex` to callers is the point of the vocabulary:
- * a person going back in a conversation counts turns, not records, and making them count records
- * would push the SDK's storage shape into every call site.
+ *  - **Tool results carry `type: 'user'`.** That is how the protocol frames them; nobody typed
+ *    them, and "the 2nd thing I said" does not mean one.
+ *  - **Goal continuations are synthetic.** The goal runner writes them, so counting them rewinds a
+ *    user to a message they never sent.
+ *  - **Records before the last `compact_boundary` have left the model's window.** Forking there
+ *    silently rewinds past what the user can still see.
+ *
+ * The failure this closes is the worst shape available: the fork SUCCEEDS, at the wrong place, and
+ * nothing errors. The consumer encoded all three corrections in its own backtrack module
+ * (`TheoCode packages/agent/src/session/backtrack.ts:88-103`), which is the specification here.
  */
-function recordIndexOfUserTurn(src: string, nth: number): number | undefined {
+const GOAL_CONTINUATION_MARKER = '[[theokit:goal-continuation]]'
+
+interface TranscriptRecord {
+  readonly type?: string
+  readonly subtype?: string
+  readonly message?: { readonly content?: readonly { type?: string; text?: string }[] }
+}
+
+function textOfRecord(record: TranscriptRecord): string {
+  return (record.message?.content ?? [])
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('')
+}
+
+function isGenuineUserTurn(record: TranscriptRecord): boolean {
+  if (record.type !== 'user') return false
+  const text = textOfRecord(record)
+  if (text.length === 0) return false // tool results carry no text block
+  return !text.startsWith(GOAL_CONTINUATION_MARKER)
+}
+
+/** Indices of the reachable user turns, in order, and the text of each. */
+function reachableUserTurns(src: string): { index: number; text: string }[] {
   // `loadJsonl`, not `readTranscript`: the latter is declared on the SDK's internal transcript
   // module and is NOT on the `/persistence` surface. Reaching past the published entry to get it
   // would be the boundary violation this whole layer exists to remove — the same one the M67
   // measurement found a consumer committing six times.
-  // `type`, not `role`. The SDK's `SessionRecord` discriminates on a top-level
-  // `type: 'user' | 'assistant' | 'system'`; `role` lives NESTED under `message.role`. Reading
-  // `record.role` here was always `undefined`, so the predicate was never true, `seen` never
-  // advanced, and every call ended in "fewer than N user turns" — a correct signature over an
-  // implementation that could not succeed. Zero tests and zero callers is how it survived.
-  const records = loadJsonl<{ type?: string }>(src) as readonly { type?: string }[]
-  let seen = 0
-  for (const [index, record] of records.entries()) {
-    if (record.type !== 'user') continue
-    seen += 1
-    if (seen === nth) return index
+  const records = loadJsonl<TranscriptRecord>(src) as readonly TranscriptRecord[]
+
+  // The LAST boundary, not the first: an old transcript can carry several, and only the most recent
+  // one describes what the model can still see.
+  let floor = -1
+  for (let i = records.length - 1; i >= 0; i -= 1) {
+    if (records[i]?.type === 'system' && records[i]?.subtype === 'compact_boundary') {
+      floor = i
+      break
+    }
   }
-  return undefined
+
+  const turns: { index: number; text: string }[] = []
+  for (let i = floor + 1; i < records.length; i += 1) {
+    const record = records[i]
+    if (isGenuineUserTurn(record)) turns.push({ index: i, text: textOfRecord(record) })
+  }
+  return turns
 }
