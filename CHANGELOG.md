@@ -22,6 +22,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`transcriptRootHint` explica uma lista de sessoes vazia.** O consumidor escrevia esse aviso, e
+  a evidencia de dono estava no proprio codigo: ele lia `THEOKIT_HOME` — variavel deste pacote — e
+  listava o layout `projects/`, cujo dono virou `projectsRoot()` em `b30fe9f1`. Um produto nao
+  deveria explicar um diretorio que nao controla e nao mudou. E dica, nunca reparo: mover
+  transcripts e decisao de operador (T2.6).
+- **`createPendingLedger` ganhou o slot que o mantinha sem adocao.** O ledger publicado nao era
+  usado pela unica superficie real, e a razao medida era forma: ele lembra QUE uma decisao esta
+  pendente, e a superficie tambem precisa pendurar o proprio estado de render no mesmo item. Sem o
+  slot, adotar significava manter um SEGUNDO mapa com a mesma chave — pior que o mapa unico que ela
+  ja tinha. Um parametro de tipo com default, entao nenhum call site existente muda (T2.7).
+
 - **A metade de registro da delecao de sessao ficou alcancavel.** `deleteSession` e
   `runTranscriptGC` passam a aceitar um `removeFromRegistry` ASSINCRONO. O `Agent.delete` do SDK
   devolve `Promise<void>` e e o unico registro de agentes do ecossistema, entao o seam sincrono nao
