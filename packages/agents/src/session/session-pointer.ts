@@ -4,11 +4,11 @@
  * feature: a module whose job is listing and deleting sessions cannot address them by literal.
  */
 import { readFileSync } from 'node:fs'
-import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { dirname } from 'node:path'
 
 import { atomicWriteText, transcriptRoot } from '@theokit/sdk/persistence'
+
+import { ensureSecureDir } from '../hooks/secure-store.js'
 
 import { projectDirFor } from './project-index.js'
 
@@ -91,7 +91,12 @@ export async function persistSessionId(
 ): Promise<{ readonly persisted: boolean }> {
   const target = sessionPointerPath(cwd, root)
   try {
-    mkdirSync(dirname(target), { recursive: true })
+    // T2.4 — `ensureSecureDir`, not a bare recursive mkdir. This directory lives under the
+    // transcript root, and `assertSecureModes` refuses a group- or world-writable parent because
+    // that tree decides which commands may run. A bare mkdir takes the umask, so under `umask 002`
+    // this code produced the very shape the store's own check rejects — and the helper additionally
+    // repairs a directory another process already created loose, which a `mode:` argument cannot.
+    ensureSecureDir(target)
     // Same upstream `.d.ts` gap as in `session-lifecycle.ts`: declared in the barrel, absent from
     // the module's declaration file, so the symbol arrives unresolved. It is a real async function
     // (measured), and awaiting it is what the first draft got wrong.

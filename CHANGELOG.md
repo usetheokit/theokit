@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Dois diretórios sob a raiz de transcripts nasciam graváveis por terceiros.** `recordProjectDir`
+  e `persistSessionId` criavam suas pastas com um `mkdirSync` recursivo nu, que herda a umask: sob
+  `umask 002` nasciam `0775`. É a mesma árvore `~/.theokit` que `assertSecureModes` recusa quando é
+  gravável por outros — porque essa árvore decide quais comandos podem rodar. A checagem estava certa;
+  o layout é que produzia a forma que ela rejeita, dependendo de quem criasse o diretório primeiro.
+  Ambos passam agora pelo `ensureSecureDir` que o pacote já tinha, que além do modo de criação
+  **repara** um diretório deixado frouxo por outro processo — o caso que um argumento `mode:` não
+  alcança. Reparo só na folha: `assertSecureModes` lê exatamente um diretório, e subir a árvore em
+  direção ao `$HOME` seria bem mais do que a checagem pede (crossval-4-6-absorption T2.4).
 - **O índice de capacidades mandava importar dois símbolos que não existem.** As duas primeiras
   linhas de `wiki/capability-index.md` — a primeira coisa que alguém lê sobre como começar — pediam
   `agent` e `tool`. A API é `AgentBuilder.create` e `Tool.create`. O teste que existia para impedir
