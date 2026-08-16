@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- BREAKING: `deleteSession` e `runTranscriptGC` (`@theokit/agents/session`) passaram a ser `async`.
+  O retorno vai de `T` para `Promise<T>`; quem chamava sem `await` lê `undefined` em vez do resultado
+  e estoura no primeiro acesso a campo — foi exatamente o que aconteceu com o comando
+  `theokit agent sessions gc` deste próprio repo. A mudança é necessária: o único registry de agentes
+  do ecossistema é `Agent.delete(id): Promise<void>`, e a metade de registry da deleção só é
+  alcançável aguardando. Migração: adicione `await`.
+- BREAKING: `SessionRegistryRemoverError` mudou de aridade **e de significado**. Antes:
+  `constructor(sessionId)`, querendo dizer "você passou um thenable para uma costura síncrona".
+  Agora: `constructor(sessionId, timeoutMs)`, querendo dizer "o registry não respondeu a tempo". A
+  condição antiga deixou de existir, então um `catch` que dependia dela nunca mais dispara. A classe
+  também mudou de módulo (`session/gc/registry-remover.ts`) e continua re-exportada de
+  `session-lifecycle.ts`, então o caminho de import não quebra.
+
+  Ambas ficam sob `### Changed` começando com `BREAKING:` **de propósito**: `cycle-release.md`
+  § Bump-level derivation lê major apenas de um `### Removed` não-vazio ou de uma entrada em
+  `### Changed` que **comece** com essa palavra. A nota inline que existia antes (dentro de uma
+  entrada em `### Fixed`) derivaria **minor** — e 9.5.0 entraria sozinha em quem fixa `^9.4.0`,
+  levando junto uma quebra de assinatura (review F-dom-1/F-xval-2).
+
+
 ### Fixed
 
 - **A métrica da Goal deste plano não existia, e um número de outro plano ocupava o lugar dela.** A
