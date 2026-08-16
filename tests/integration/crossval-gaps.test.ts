@@ -34,9 +34,10 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
 import { declaredExportsFromText } from '../../scripts/lib/declared-exports.mjs'
+import { refuseMostlySkipped } from '../lib/refuse-mostly-skipped.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(TEST_DIR, '..', '..')
@@ -202,20 +203,25 @@ describe('crossval gap register — meta', () => {
       expect(source, `gap ${id} has no describe block`).toContain(`describe('${id} —`)
     }
   })
+})
 
-  /**
-   * EC-4 (MUST FIX) — a mostly-skipped run is a vacuous pass, not a pass.
-   *
-   * Runs last by declaration order so `skipped` is populated. Only enforced under CI: locally an
-   * unbuilt `dist/` is an ordinary state and failing on it would train people to ignore this suite.
-   */
-  it('ci_refuses_a_mostly_skipped_run', () => {
-    if (!process.env.CI) return
-    expect(
-      skipped.length,
-      `too many gap assertions skipped: ${JSON.stringify(skipped)}`,
-    ).toBeLessThanOrEqual(1)
-  })
+/**
+ * EC-4 (MUST FIX) — a mostly-skipped run is a vacuous pass, not a pass.
+ *
+ * This used to be an `it` inside the meta block above, with a comment claiming it "runs last by
+ * declaration order so `skipped` is populated". It did not: the meta block is declared at the top of
+ * this file and the first gap block ~30 lines below it, so the guard executed 2nd of 33 with
+ * `skipped` still empty. A run in which every gap assertion skipped still reported 33 passed — the
+ * guard against a vacuous pass was itself vacuous.
+ *
+ * `afterAll` removes the assumption rather than reordering and hoping. Declaration order was the
+ * thing that broke; a fix that depends on it again is the same bug waiting for the next edit.
+ *
+ * Only enforced under CI: locally an unbuilt `dist/` is an ordinary state, and failing on it would
+ * train people to ignore this suite.
+ */
+afterAll(() => {
+  refuseMostlySkipped(skipped, process.env.CI !== undefined)
 })
 
 // ---------------------------------------------------------------------------
