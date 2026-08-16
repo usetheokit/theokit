@@ -31,9 +31,14 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, utimesSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { deleteSession } from '../../src/session/session-lifecycle.js'
+import {
+  awaitRegistryRemoval,
+  DEFAULT_REGISTRY_TIMEOUT_MS,
+  SessionRegistryRemoverError,
+} from '../../src/session/gc/registry-remover.js'
 import { runTranscriptGC, type TranscriptGCPlan } from '../../src/session/gc/transcript-gc.js'
 
 /** A transcript on disk at the layout `deleteSession` expects, so nothing here is mocked. */
@@ -256,5 +261,62 @@ describe('runTranscriptGC — the sweep is bounded by the same rule', () => {
 
     expect(seen).toContain(older)
     expect(result.errors).toEqual([])
+  })
+})
+
+/**
+ * The DEFAULT bound, proved at its real value with fake timers.
+ *
+ * This cannot be asserted in wall-clock: the default is 30s and the runner's own timeout is 30s, so
+ * a real-time test races the harness and reports a hang either way. Faking the clock proves the
+ * actual production value rather than a smaller one chosen to fit a test — which would leave the
+ * shipped number unverified, and the shipped number is exactly what was wrong before.
+ *
+ * What was wrong: the bound was opt-in and NOTHING opted in. No production call site passed
+ * `registryTimeoutMs`, so the default was byte-for-byte the hang this seam was written to close,
+ * while `session-lifecycle.ts` states the guarantee with no conditions attached.
+ */
+describe('awaitRegistryRemoval — the default is bounded', () => {
+  it('test_the_default_is_finite_and_is_what_an_absent_option_resolves_to', async () => {
+    vi.useFakeTimers()
+    try {
+      expect(Number.isFinite(DEFAULT_REGISTRY_TIMEOUT_MS)).toBe(true)
+      expect(DEFAULT_REGISTRY_TIMEOUT_MS).toBeGreaterThan(0)
+
+      // The argument is OMITTED, not passed as `undefined` — "absent" is the state under test, and
+      // omission is how a caller actually expresses it.
+      const pending = awaitRegistryRemoval(new Promise<void>(() => {}), 'sX')
+      const settled = vi.fn()
+      void pending.catch(settled)
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_REGISTRY_TIMEOUT_MS - 1)
+      expect(settled, 'it must not fire early').not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(2)
+      expect(
+        settled,
+        'an absent option must resolve to the default, not to unbounded',
+      ).toHaveBeenCalled()
+      const error = settled.mock.calls[0]?.[0] as SessionRegistryRemoverError
+      expect(error).toBeInstanceOf(SessionRegistryRemoverError)
+      expect(error.message).toContain(String(DEFAULT_REGISTRY_TIMEOUT_MS))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('test_a_non_finite_timeout_opts_out_and_waits', async () => {
+    // The escape hatch stays reachable, and has to be asked for. Asserted so "unbounded" is a
+    // decision somebody wrote down rather than the accident it used to be.
+    let done = false
+    await awaitRegistryRemoval(
+      (async () => {
+        await Promise.resolve()
+        done = true
+      })(),
+      'sY',
+      Number.POSITIVE_INFINITY,
+    )
+    expect(done).toBe(true)
   })
 })

@@ -118,9 +118,9 @@ describe('runTranscriptGC over a real tree', () => {
     expect(result.errors[0]?.message).toContain('timed out')
   })
 
-  it('test_no_timeout_configured_keeps_the_previous_behaviour', async () => {
-    // The bound is opt-in. A caller that never passed `registryTimeoutMs` must get exactly what it
-    // had, or adding the option would be a behaviour change wearing a bug fix's clothes.
+  it('test_a_synchronous_remover_is_unaffected_by_the_default', async () => {
+    // The compatibility half that the rewritten test above used to stand in for. A remover that
+    // returns a value rather than a thenable never reaches the race at all.
     const { cwd, root } = agedProject(3)
     const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
     const result = await runTranscriptGC(plan, {
@@ -129,5 +129,22 @@ describe('runTranscriptGC over a real tree', () => {
     })
     expect(result.errors).toEqual([])
     expect(result.removed.length).toBe(plan.candidates.length)
+  })
+
+  it('test_unbounded_is_still_reachable_but_must_be_asked_for', async () => {
+    // The escape hatch, asserted so it is a decision rather than folklore. `Infinity` opts out.
+    const { cwd, root } = agedProject(3)
+    const plan = planTranscriptGC({ cwd, root, keepLast: 1, maxAgeDays: 1 })
+    let settled = false
+    const result = await runTranscriptGC(plan, {
+      apply: true,
+      registryTimeoutMs: Number.POSITIVE_INFINITY,
+      removeFromRegistry: async () => {
+        await new Promise((r) => setTimeout(r, 30))
+        settled = true
+      },
+    })
+    expect(settled, 'an explicit Infinity waits for the remover however long it takes').toBe(true)
+    expect(result.errors).toEqual([])
   })
 })
