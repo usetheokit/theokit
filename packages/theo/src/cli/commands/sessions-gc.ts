@@ -39,7 +39,9 @@ const DEFAULTS = { keepLast: 10, maxAgeDays: 30 } as const
 /** Render the plan for a human. Returns lines so the command is testable without capturing stdout. */
 export function formatGcPlan(
   plan: TranscriptGCPlan,
-  result: ReturnType<typeof runTranscriptGC>,
+  // `Awaited<>` because `runTranscriptGC` is async (T2.2). Without it the parameter type IS the
+  // Promise, and every field read below type-checks against a thenable that has none of them.
+  result: Awaited<ReturnType<typeof runTranscriptGC>>,
 ): string[] {
   const lines: string[] = [result.dryRun ? '  Dry run — nothing was deleted.' : '  Applied.', '']
 
@@ -71,15 +73,19 @@ export function formatGcPlan(
  * Returns the result so a caller can decide the exit code: a partial failure is reported, never
  * swallowed into a zero exit.
  */
-export function sessionsGcCommand(options: SessionsGcOptions = {}): {
+export async function sessionsGcCommand(options: SessionsGcOptions = {}): Promise<{
   readonly lines: readonly string[]
   readonly failed: number
-} {
+}> {
   const plan = planTranscriptGC({
     cwd: options.cwd ?? process.cwd(),
     keepLast: options.keepLast ?? DEFAULTS.keepLast,
     maxAgeDays: options.maxAgeDays ?? DEFAULTS.maxAgeDays,
   })
-  const result = runTranscriptGC(plan, { apply: options.apply === true })
+  // AWAITED. T2.2 made this async and this caller was not updated; `result.removed` was then
+  // `undefined` on a Promise and the command threw before printing anything. The workspace
+  // typecheck missed it because `packages/agents/dist/session.d.ts` was a day older than the source
+  // and still declared the synchronous return.
+  const result = await runTranscriptGC(plan, { apply: options.apply === true })
   return { lines: formatGcPlan(plan, result), failed: result.errors.length }
 }
