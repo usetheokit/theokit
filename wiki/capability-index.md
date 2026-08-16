@@ -83,7 +83,7 @@ it and then surprises them.
 | Need | Status |
 |---|---|
 | A durable, multi-process approval registry | Not shipped. The registry is in-memory and single-process **by declaration**, not by accident |
-| MCP OAuth client flow | Type-only today (`McpOAuthConfig`); no implementation in `packages/` |
+| MCP OAuth client flow | **Implemented, not shipped yet.** The PKCE flow, refresh and token storage exist and are tested; `@theokit/sdk/mcp-auth` now exports them (`runPkceFlow`, `refreshAccessToken`, `getTokens`, `setTokens`, `lockedRefresh`), but no published version carries the subpath yet. This row moves to the capability tables when one does — the earlier wording said *no implementation*, which sent people to write RFC 7636 by hand for code that already existed |
 
 ## Keeping this page true
 
