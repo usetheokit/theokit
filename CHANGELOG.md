@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **O comando `theokit agent sessions gc` quebrava em runtime, e o typecheck dizia que estava tudo
+  bem.** T2.2 tornou `runTranscriptGC` assíncrona e o único consumidor de produção no repo continuou
+  chamando-a sem `await`: `result.removed` era `undefined` num Promise e o comando estourava antes de
+  imprimir qualquer coisa. O `pnpm typecheck` passava porque `packages/agents/dist/session.d.ts` era
+  um dia mais velho que o fonte e ainda declarava o retorno **síncrono** — a workspace inteira era
+  tipada contra código que ninguém executa. Os testes existentes não pegaram porque cobriam só
+  `formatGcPlan`, a função pura, com objetos montados à mão; nada chamava `sessionsGcCommand`, que é
+  onde a costura vive. Corrigido o `await`, e o script `typecheck` agora constrói antes de tipar —
+  como o CI já fazia — para que a versão local pare de ser silenciosamente mais fraca que a de CI.
+  Quem precisa do comportamento antigo tem `typecheck:only` (review F-wire-1).
+
+
 - **Um registry que não respondia travava a varredura inteira de GC.** T2.2 deu a `deleteSession` um
   limite de tempo no remover e deixou `runTranscriptGC` com um `await` nu. A consequência não era
   estilística: um remover que nunca resolve pendurava a varredura indefinidamente — não uma sessão,
