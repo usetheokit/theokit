@@ -16,8 +16,14 @@ import {
   transcriptRoot,
 } from '@theokit/sdk/persistence'
 
+// T2.2 follow-up — the bound lives in ONE place now. `SessionRegistryRemoverError` is re-exported
+// because it was already public from this module: moving a symbol must not remove it from the
+// surface, which would be a breaking change dressed as a refactor.
+import { awaitRegistryRemoval, SessionRegistryRemoverError } from './gc/registry-remover.js'
 import { projectDirFor } from './project-index.js'
 import { sessionPointerPath } from './session-pointer.js'
+
+export { SessionRegistryRemoverError }
 
 /**
  * M71 — the session LIFECYCLE vocabulary: list, delete, protect, fork.
@@ -49,34 +55,6 @@ import { sessionPointerPath } from './session-pointer.js'
  * The seam is synchronous by contract because `deleteSession` is. A caller whose registry is async
  * (which, measured, is every real one) awaits its own removal and then calls this with the outcome.
  */
-export class SessionRegistryRemoverError extends TheokitAgentError {
-  override readonly name = 'SessionRegistryRemoverError'
-  readonly sessionId: string
-
-  /**
-   * T2.2 — this used to mean "you passed a Promise to a synchronous seam". It now means the only
-   * thing left that a caller cannot fix by awaiting: the registry did not answer in time.
-   *
-   * The old message told callers to await the removal themselves and pass a boolean. That advice
-   * existed because the seam was sync; the seam now awaits, so the advice is gone rather than
-   * preserved as a misleading string.
-   */
-  constructor(sessionId: string, timeoutMs: number) {
-    super(
-      `session ${sessionId}: removeFromRegistry did not settle within ${timeoutMs}ms. The transcript ` +
-        `was NOT deleted — a registry entry pointing at a missing transcript is repaired by nothing, ` +
-        `while an orphan transcript is collected by the next sweep. Retry once the registry answers, ` +
-        `or raise registryTimeoutMs if the wait is legitimate.`,
-    )
-    this.sessionId = sessionId
-  }
-}
-
-/** Structural, not `instanceof Promise` — a thenable from another realm is still a thenable. */
-function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return typeof (value as PromiseLike<unknown> | null)?.then === 'function'
-}
-
 export class SessionInUseError extends TheokitAgentError {
   override readonly name = 'SessionInUseError'
 
@@ -239,35 +217,6 @@ export interface DeleteSessionOptions {
  * @throws {SessionInUseError} when the session is protected and `force` is not set.
  */
 
-/**
- * Bound an injected remover so a registry that never answers cannot hang a sweep.
- *
- * The race is deliberate and one-directional: whichever settles first decides, and a remover that
- * settles AFTER the timeout can no longer affect the outcome, because the result object is already
- * built and returned (EC-8). Reporting "not removed" for something that later succeeded is wrong in
- * the safe direction; rewriting a returned result would not be.
- */
-async function withRegistryTimeout(
-  outcome: unknown,
-  sessionId: string,
-  timeoutMs: number | undefined,
-): Promise<unknown> {
-  if (!isThenable(outcome) || timeoutMs === undefined) return outcome
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      outcome,
-      new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => {
-          reject(new SessionRegistryRemoverError(sessionId, timeoutMs))
-        }, timeoutMs)
-      }),
-    ])
-  } finally {
-    if (timer !== undefined) clearTimeout(timer)
-  }
-}
-
 export async function deleteSession(
   sessionId: string,
   options: DeleteSessionOptions,
@@ -303,7 +252,7 @@ export async function deleteSession(
       // Awaiting is what the old refusal was reaching for. It rejected a thenable because the code
       // before it checked TRUTHINESS and reported a removal that had not happened; completion is
       // what fixes that, and completion is `await`.
-      const outcome = await withRegistryTimeout(
+      const outcome = await awaitRegistryRemoval(
         options.removeFromRegistry(sessionId),
         sessionId,
         options.registryTimeoutMs,

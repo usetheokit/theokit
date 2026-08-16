@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Um registry que não respondia travava a varredura inteira de GC.** T2.2 deu a `deleteSession` um
+  limite de tempo no remover e deixou `runTranscriptGC` com um `await` nu. A consequência não era
+  estilística: um remover que nunca resolve pendurava a varredura indefinidamente — não uma sessão,
+  todas as sessões depois dela, sem erro, sem timeout e sem saída. O caminho de sessão única já era
+  testado exatamente contra isso; o caminho que roda desacompanhado sobre um projeto inteiro, não.
+  O plano nomeava o helper compartilhado (`session/gc/registry-remover.ts`) e a primeira
+  implementação o pulou — uma regra em dois call sites, e o que ninguém observava era o que
+  importava (G12). Os dois passam agora pelo mesmo `awaitRegistryRemoval`; o limite continua opt-in,
+  então quem nunca passou `registryTimeoutMs` recebe exatamente o que tinha
+  (crossval-4-6-absorption T2.2, follow-up).
+
+
 - **O gate de checkpoint acusava de fabricação um SHA que ele só não conseguia ver.** Um plano pode
   legitimamente abranger dois repositórios — este abrange, e as seções `Files to edit` dele nomeiam
   `../theokit-sdk/` explicitamente. Quando o commit inteiro de uma task caía no irmão,

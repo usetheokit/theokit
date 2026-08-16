@@ -27,13 +27,14 @@
  *  - A remover that never settles is bounded, and the result it produces is never mutated by a late
  *    settle (EC-8).
  */
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
 import { deleteSession } from '../../src/session/session-lifecycle.js'
+import { runTranscriptGC, type TranscriptGCPlan } from '../../src/session/gc/transcript-gc.js'
 
 /** A transcript on disk at the layout `deleteSession` expects, so nothing here is mocked. */
 function seedSession(id: string): { cwd: string; root: string } {
@@ -155,5 +156,105 @@ describe('deleteSession — the registry seam accepts what the ecosystem actuall
     const result = await deleteSession('s7', { cwd, root, force: true })
     expect(result.registryRemoved).toBe(false)
     expect(result.transcriptRemoved).toBe(true)
+  })
+})
+
+/**
+ * The GC sweep's half of the same rule — and the asymmetry that had it wrong.
+ *
+ * `deleteSession` bounds its remover with a timeout and reports a typed error; the tests above pin
+ * that. `runTranscriptGC` awaited the same seam WITHOUT a bound, so a registry that never answers
+ * hung the whole sweep — not one session, every session after it, silently, with no error and no
+ * timeout.
+ *
+ * The plan named the fix and it was skipped: `session/gc/registry-remover.ts (NEW) — the shared
+ * awaiting helper`. Two call sites implementing one rule, one of them incompletely, is precisely the
+ * shape `system-design-guardrails.md § G12` describes — and here the divergence was not theoretical,
+ * it was already live.
+ */
+/**
+ * A project with TWO transcripts, and a plan naming the older one.
+ *
+ * Both details are load-bearing, and the first draft had neither. The plan is built literally rather
+ * than through `planTranscriptGC` because what is under test is how the SWEEP treats its remover;
+ * routing through the planner would make these assertions depend on retention policy. And a SECOND
+ * transcript is required because `protectedTranscripts` protects the most recent one even with no
+ * pointer — "a GC that leaves a project with nothing to continue has destroyed the feature it was
+ * protecting". With one session that one is the most recent, so it is always protected, the sweep
+ * does nothing, and every assertion here would have passed by never running.
+ */
+function projectWithTwoSessions(): { cwd: string; root: string; older: string } {
+  const root = mkdtempSync(join(tmpdir(), 'gc-sweep-'))
+  const cwd = mkdtempSync(join(tmpdir(), 'gc-project-'))
+  const dir = join(root, 'projects', cwd.replace(/[/\\]/g, '-'))
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'older.jsonl'), '{"type":"user"}\n')
+  utimesSync(join(dir, 'older.jsonl'), new Date(0), new Date(0))
+  writeFileSync(join(dir, 'newer.jsonl'), '{"type":"user"}\n')
+  return { cwd, root, older: 'older' }
+}
+
+function collectablePlan(cwd: string, root: string, id: string): TranscriptGCPlan {
+  return {
+    cwd,
+    root,
+    kept: [],
+    candidates: [
+      {
+        id,
+        transcript: join(root, 'projects', cwd.replace(/[/\\]/g, '-'), `${id}.jsonl`),
+        modifiedAt: new Date(0),
+      },
+    ],
+  }
+}
+
+describe('runTranscriptGC — the sweep is bounded by the same rule', () => {
+  it('test_a_remover_that_never_settles_does_not_hang_the_sweep', async () => {
+    const { cwd, root, older } = projectWithTwoSessions()
+    const plan = collectablePlan(cwd, root, older)
+
+    const result = await runTranscriptGC(plan, {
+      apply: true,
+      registryTimeoutMs: 25,
+      removeFromRegistry: () => new Promise<void>(() => {}), // never settles
+    })
+
+    expect(
+      result.errors.length,
+      'an unanswered registry must surface as an error, not as a sweep that never returns',
+    ).toBeGreaterThan(0)
+    expect(result.errors[0]?.message ?? '').toMatch(/timed out|timeout/i)
+  })
+
+  it('test_the_transcript_survives_a_timed_out_registry_removal', async () => {
+    // Same EC-3 invariant the single-session path holds: an orphan transcript is collected by the
+    // next sweep; an orphan registry entry is collected by nothing.
+    const { cwd, root, older } = projectWithTwoSessions()
+    const transcript = join(root, 'projects', cwd.replace(/[/\\]/g, '-'), `${older}.jsonl`)
+
+    await runTranscriptGC(collectablePlan(cwd, root, older), {
+      apply: true,
+      registryTimeoutMs: 25,
+      removeFromRegistry: () => new Promise<void>(() => {}),
+    })
+
+    expect(existsSync(transcript)).toBe(true)
+  })
+
+  it('test_a_prompt_remover_still_completes_the_sweep', async () => {
+    const { cwd, root, older } = projectWithTwoSessions()
+    const seen: string[] = []
+
+    const result = await runTranscriptGC(collectablePlan(cwd, root, older), {
+      apply: true,
+      removeFromRegistry: async (id: string) => {
+        seen.push(id)
+        await Promise.resolve()
+      },
+    })
+
+    expect(seen).toContain(older)
+    expect(result.errors).toEqual([])
   })
 })
