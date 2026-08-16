@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **O índice mandava reimplementar um fluxo OAuth que já existia.** A linha "MCP OAuth client flow"
+  dizia *"no implementation in `packages/`"*, e quem lê isso e precisa conectar num MCP server remoto
+  escreve PKCE (RFC 7636) à mão. As 286 linhas testadas existiam em `internal/mcp/oauth.ts` do SDK,
+  sem export — *"implementado, não publicado"* é um problema muito mais barato do que *"não
+  implementado"*, e o índice prescrevia o caro. O SDK ganhou o barrel `@theokit/sdk/mcp-auth`; a linha
+  agora diz a verdade e sai de "Honest gaps" quando uma versão publicada carregar o subpath
+  (crossval-4-6-absorption T1.3).
 - **Dois diretórios sob a raiz de transcripts nasciam graváveis por terceiros.** `recordProjectDir`
   e `persistSessionId` criavam suas pastas com um `mkdirSync` recursivo nu, que herda a umask: sob
   `umask 002` nasciam `0775`. É a mesma árvore `~/.theokit` que `assertSecureModes` recusa quando é
