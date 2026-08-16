@@ -102,37 +102,39 @@ describe('deleteSession — the two stores are reported separately', () => {
     writeTranscriptFile('keeper', 0)
     await persistSessionId(CWD, 'keeper', root)
 
-    const result = deleteSession('doomed', { cwd: CWD, root, removeFromRegistry: () => true })
+    const result = await deleteSession('doomed', { cwd: CWD, root, removeFromRegistry: () => true })
     expect(result).toEqual({ registryRemoved: true, transcriptRemoved: true })
     expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(false)
   })
 
-  it('test_an_async_registry_remover_is_refused_instead_of_reported_as_done', async () => {
-    // The seam could not be satisfied by any real registry, and failed dishonestly when tried.
+  it('test_an_async_registry_remover_is_awaited_rather_than_refused', async () => {
+    // REPLACES `test_an_async_registry_remover_is_refused_instead_of_reported_as_done` (T2.2).
     //
-    // Measured: the SDK's `Agent.delete` returns `Promise<void>` — it is the only agent registry in
-    // the ecosystem, and the sole synchronous `delete(name): boolean` in the SDK's surface belongs to
-    // `Budget`, not to a registry. So EVERY genuine caller has an async remover.
+    // The refusal it asserted was the right fix for the wrong shape. The original bug was
+    // `registryRemoved: remover(id) ?? false` — a Promise is truthy, so a removal was reported
+    // before it happened, and a rejection became an unhandled rejection nobody saw. Refusing the
+    // thenable stopped the lie. But the SDK's `Agent.delete` returns `Promise<void>` and is the
+    // ONLY agent registry in the ecosystem, so the refusal left the seam satisfiable by nobody:
+    // this file's own comment said "every real caller has an async remover".
     //
-    // What the old code did with one: `options.removeFromRegistry?.(id) ?? false` evaluates to a
-    // Promise, which is truthy, so `registryRemoved: true` was reported before the removal had
-    // happened — and a rejection became an unhandled rejection nobody saw. Reporting a delete that
-    // has not occurred is strictly worse than refusing to try.
-    //
-    // TypeScript blocks this at a typed call site, which is why it survived: only JS callers and
-    // `as`-casts reach it, and both get a wrong answer rather than an error.
+    // Truthiness was the defect, not asynchrony. Awaiting is what "it happened" actually looks
+    // like, so the seam awaits and the honest report survives.
     writeTranscriptFile('doomed', 60)
     writeTranscriptFile('keeper', 0)
     await persistSessionId(CWD, 'keeper', root)
 
-    const asyncRemover = (() => Promise.resolve(true)) as unknown as (id: string) => boolean
+    const result = await deleteSession('doomed', {
+      cwd: CWD,
+      root,
+      removeFromRegistry: async (id) => {
+        expect(id).toBe('doomed')
+        await Promise.resolve()
+      },
+    })
 
-    expect(() =>
-      deleteSession('doomed', { cwd: CWD, root, removeFromRegistry: asyncRemover }),
-    ).toThrow(/synchronous/i)
-
-    // And it refuses BEFORE mutating: the transcript is still there for the caller to retry.
-    expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(true)
+    expect(result.registryRemoved, 'an awaited removal is a completed removal').toBe(true)
+    expect(result.transcriptRemoved).toBe(true)
+    expect(existsSync(transcriptPath(root, CWD, 'doomed'))).toBe(false)
   })
 
   it('test_without_a_registry_remover_only_the_transcript_goes', async () => {
@@ -142,7 +144,7 @@ describe('deleteSession — the two stores are reported separately', () => {
     writeTranscriptFile('keeper', 0)
     await persistSessionId(CWD, 'keeper', root)
 
-    expect(deleteSession('doomed', { cwd: CWD, root })).toEqual({
+    expect(await deleteSession('doomed', { cwd: CWD, root })).toEqual({
       registryRemoved: false,
       transcriptRemoved: true,
     })
@@ -153,7 +155,7 @@ describe('deleteSession — the two stores are reported separately', () => {
     writeTranscriptFile('keeper', 0)
     writeTranscriptFile('other', 60)
     await persistSessionId(CWD, 'keeper', root)
-    expect(deleteSession('never-existed', { cwd: CWD, root }).transcriptRemoved).toBe(false)
+    expect((await deleteSession('never-existed', { cwd: CWD, root })).transcriptRemoved).toBe(false)
   })
 })
 
@@ -189,7 +191,7 @@ describe('deleteSession — the negative case the DoD demands', () => {
       // Typed, not a bare throw: a caller catching `SessionInUseError` distinguishes "something is
       // using this" from any IO failure, and the alternative — deleting anyway — discards state a
       // running process still holds, unrecoverably.
-      expect(() => deleteSession('live', { cwd: CWD, root })).toThrow(SessionInUseError)
+      await expect(deleteSession('live', { cwd: CWD, root })).rejects.toThrow(SessionInUseError)
     } finally {
       await (lease as { release?: () => Promise<void> }).release?.()
     }
@@ -200,7 +202,7 @@ describe('deleteSession — the negative case the DoD demands', () => {
     writeTranscriptFile('other', 0)
     const lease = await acquireSessionWriter(path)
     try {
-      deleteSession('live', { cwd: CWD, root })
+      await deleteSession('live', { cwd: CWD, root })
       expect.unreachable('a live session was deleted')
     } catch (error) {
       expect(error).toBeInstanceOf(SessionInUseError)
@@ -216,7 +218,9 @@ describe('deleteSession — the negative case the DoD demands', () => {
     // operator with a stale lock from a crashed process needs the way past.
     writeTranscriptFile('pointed')
     await persistSessionId(CWD, 'pointed', root)
-    expect(deleteSession('pointed', { cwd: CWD, root, force: true }).transcriptRemoved).toBe(true)
+    expect(
+      (await deleteSession('pointed', { cwd: CWD, root, force: true })).transcriptRemoved,
+    ).toBe(true)
   })
 })
 

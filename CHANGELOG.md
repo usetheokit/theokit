@@ -22,6 +22,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A metade de registro da delecao de sessao ficou alcancavel.** `deleteSession` e
+  `runTranscriptGC` passam a aceitar um `removeFromRegistry` ASSINCRONO. O `Agent.delete` do SDK
+  devolve `Promise<void>` e e o unico registro de agentes do ecossistema, entao o seam sincrono nao
+  podia ser satisfeito honestamente por ninguem — o proprio arquivo dizia isso. A recusa anterior
+  estava certa sobre o bug (truthiness reportava remocao antes dela acontecer) e errada sobre a
+  causa: o conserto e AGUARDAR. O `runTranscriptGC` nao tinha seam nenhum e deixava o registro
+  apontando para transcripts deletados, estado que nenhuma varredura futura repara. Ordem invariante:
+  registro primeiro, unlink depois — falha no registro deixa o arquivo em disco, porque um arquivo
+  orfao a proxima varredura coleta e uma entrada orfa ninguem coleta (T2.2, BREAKING: as duas
+  funcoes agora sao async).
+
 - **A regra de auto-aprovacao virou um simbolo que uma superficie pode chamar.**
   `shouldAutoApprove(mode, toolName, posture?)` e `ApprovalMode` saem em `@theokit/agents/bridge`.
   O `applyPosture` ja tinha a regra, mas so o TIPO atravessava e a assinatura respondia outra
