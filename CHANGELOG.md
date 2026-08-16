@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **O índice de capacidades mandava importar dois símbolos que não existem.** As duas primeiras
+  linhas de `wiki/capability-index.md` — a primeira coisa que alguém lê sobre como começar — pediam
+  `agent` e `tool`. A API é `AgentBuilder.create` e `Tool.create`. O teste que existia para impedir
+  isso comparava substring, então `agent` casava em `agentHandle` e na própria string
+  `@theokit/agents`; todo símbolo de nome curto estava desguardado. O guarda agora resolve `export *`
+  um hop, sem o que ele reporta ausência FALSA para os 38 nomes que os cinco forwards repassam
+  (crossval-4-6-absorption T0.1).
+- **Duas linhas de "Honest gaps" descreviam lacunas já fechadas.** `PermissionStore` e a config
+  layering foram entregues e continuavam listadas como pendentes, mandando quem lê construir o que já
+  existe. Saíram para a tabela de capacidades. A asserção inversa agora cobre essa direção — e isenta
+  linhas que se declaram type-only, para não pressionar a remoção de uma linha honesta (T0.1).
+
+### Added
+
+- **A classe-base de erro ganhou teste de regressão.** `TheokitAgentError` e `isTransientError` já
+  eram alcançáveis a partir de `@theokit/agents` pelo forward `export *`, ao contrário do que duas
+  medições independentes afirmaram — ambas fizeram grep no `.d.ts` e viram só o `import`. Nenhum
+  re-export foi adicionado; o que faltava era o teste que teria contradito a afirmação, e que agora
+  falha se um refactor futuro trocar os forwards por listas explícitas (T1.1).
+
 ## [@theokit/agents 9.4.0] - 2026-08-15
 
 ### Added
