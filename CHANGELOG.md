@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **O gate de checkpoint acusava de fabricação um SHA que ele só não conseguia ver.** Um plano pode
+  legitimamente abranger dois repositórios — este abrange, e as seções `Files to edit` dele nomeiam
+  `../theokit-sdk/` explicitamente. Quando o commit inteiro de uma task caía no irmão,
+  `check_checkpoint_consistency` reportava *"fabricated or stale SHA"*: o SHA era real, e o que
+  faltava era onde procurar. Uma task agora pode declarar `repo`, e o SHA é verificado **lá** — o que
+  verifica mais, não menos. Não é escapatória: um `repo` que não é repositório, que não existe, ou que
+  não contém o commit falha exatamente como um SHA local ruim, e os quatro testes que cobrem essas
+  saídas já passavam antes da mudança (crossval-4-6-absorption, fronteira da fase 2).
 - **O índice mandava reimplementar um fluxo OAuth que já existia.** A linha "MCP OAuth client flow"
   dizia *"no implementation in `packages/`"*, e quem lê isso e precisa conectar num MCP server remoto
   escreve PKCE (RFC 7636) à mão. As 286 linhas testadas existiam em `internal/mcp/oauth.ts` do SDK,
