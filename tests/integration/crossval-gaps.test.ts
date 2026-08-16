@@ -1,7 +1,18 @@
 /**
  * T0.5 — The executable gap register for the `crossval-absorption-gaps` plan.
  *
- * This file IS the plan's Goal metric: "12/12 gap-closure assertions green".
+ * This file IS the `crossval-absorption-gaps` plan's Goal metric: "12/12 gap-closure assertions
+ * green". It is NOT the metric of its successor.
+ *
+ * Corrected during the 2026-08-16 review. The `crossval-4-6-absorption` plan's Goal names "17/17
+ * closure assertions" and points at this filename; this register declares `G1..G12` and asserts
+ * `toHaveLength(12)`, and no assertion here covers a row of that plan's Coverage Matrix. Its
+ * implementation summary reported "33/33" from this file as if it were the successor's metric — 33
+ * being these 12 blocks plus sub-assertions added inside two of them. A real number, measuring
+ * something real, standing in for a claim nobody had checked.
+ *
+ * The successor's register is `crossval-4-6-closure.test.ts`, and it reports 11/17 executed with
+ * the 6 blocked ones named.
  *
  * Why a test file and not a checklist (plan D3): the worst finding of the 2026-08-14
  * cross-validation was that *completed* work went unnoticed — five absorptions shipped and the

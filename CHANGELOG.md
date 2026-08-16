@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A métrica da Goal deste plano não existia, e um número de outro plano ocupava o lugar dela.** A
+  Goal diz "17/17 asserções de fechamento" apontando para `crossval-gaps.test.ts` — que é o registro
+  do plano **antecessor**: declara `G1..G12`, afirma `toHaveLength(12)`, e nenhuma asserção dele
+  cobre uma linha da Coverage Matrix deste plano. O resumo de implementação reportou "33/33" daquele
+  arquivo como se fosse esta métrica (33 = os 12 blocos antigos mais sub-asserções). Número real,
+  medindo coisa real, ocupando o lugar de uma alegação que ninguém tinha verificado.
+  `tests/integration/crossval-4-6-closure.test.ts` passa a ser o registro deste plano: 17 linhas
+  (20 da matriz − 2 diferidas − 1 duplicata), das quais **11 executam e 6 declaram `blockedBy` e
+  pulam alto**. Um registro que descartasse as 6 em silêncio reportaria nota melhor por ter testado
+  menos — que é exatamente como quatro linhas do plano anterior ficaram erradas (review F-xval-1).
+- **A lacuna 28 continuava aberta com a task marcada fechada.** A linha diz "`applyPosture`
+  inalcançável por qualquer superfície" e a resolução declarada é "uma implementação, alcançável".
+  T2.1 entregou a metade que uma TUI pergunta por evento (`shouldAutoApprove`) e deixou esta ausente;
+  o tipo cruzava a fronteira e a aplicação não — a mesma forma que o gate de invenção do T4.1 existe
+  para pegar. Agora exportada como **valor** em `@theokit/agents/bridge` (review F-xval-1, gap 28).
+
+
 - **O limite que impedia o GC de travar era opt-in, e ninguém optava.** `registryTimeoutMs` era
   opcional sem default e **zero call sites de produção** o passavam — então o comportamento enviado
   era, byte a byte, o travamento que a correção anterior alegava ter fechado, enquanto
