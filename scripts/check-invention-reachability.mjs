@@ -13,7 +13,7 @@
  * WARN MODE. It exits 0 on findings, deliberately: the rule is a heuristic and a heuristic that
  * blocks CI teaches people to route around it. What it must never do is be silent.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -69,48 +69,77 @@ function publishedNames() {
   return declaredExportsFromText(text, join(PACKAGE_DIR, 'package.json')).names
 }
 
-const names = publishedNames()
-if (names === undefined) {
+/**
+ * B-102 — the gate runs when INVOKED, not when imported.
+ *
+ * A script whose body runs on import is untestable by construction: any test of one helper runs the
+ * whole gate and exits the process. This repo paid for that already — `theokit#200` shipped a publish
+ * guard that read the last stdout line as a filename, which in CI is `}`, and it accused six packages
+ * falsely; the helper that got it wrong could not be tested alone.
+ *
+ * The entry-point comparison is on the RESOLVED path, because `process.argv[1]` arrives however the
+ * caller wrote it — relative, symlinked, or via a package bin — and a string compare against
+ * `import.meta.url` says "not the entry" for an invocation that plainly is.
+ */
+function isDirectInvocation() {
+  const entry = process.argv[1]
+  if (entry === undefined) return false
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+
+function main() {
+  const names = publishedNames()
+  if (names === undefined) {
+    console.log(
+      '[invention-reachability] SKIP — packages/agents/dist is absent. Run the build first.',
+    )
+    return
+  }
+
+  const { entries, malformed } = readAllowlist()
+  for (const line of malformed) {
+    console.warn(`[invention-reachability] malformed allowlist line ignored: ${line}`)
+  }
+
+  const modules = walk(join(PACKAGE_DIR, 'src'), /\.ts$/)
+    .filter((f) => !f.endsWith('.d.ts'))
+    .map((f) => ({ path: relative(REPO_ROOT, f), text: readFileSync(f, 'utf8') }))
+
+  const findings = findUnreachableEnforcement({
+    modules,
+    publishedNames: names,
+    allowlist: entries,
+  })
+
+  if (findings.length === 0) {
+    console.log(
+      `[invention-reachability] OK — every decision-shaped exported type has reachable enforcement ` +
+        `(${String(modules.length)} modules scanned).`,
+    )
+    return
+  }
+
   console.log(
-    '[invention-reachability] SKIP — packages/agents/dist is absent. Run the build first.',
+    `[invention-reachability] ${String(findings.length)} finding(s). A type crossed the package ` +
+      `boundary while the code that acts on it did not, so a consumer can describe the decision and ` +
+      `cannot apply it — which is how the same rule ends up implemented twice.`,
   )
-  process.exit(0)
-}
-
-const { entries, malformed } = readAllowlist()
-for (const line of malformed) {
-  console.warn(`[invention-reachability] malformed allowlist line ignored: ${line}`)
-}
-
-const modules = walk(join(PACKAGE_DIR, 'src'), /\.ts$/)
-  .filter((f) => !f.endsWith('.d.ts'))
-  .map((f) => ({ path: relative(REPO_ROOT, f), text: readFileSync(f, 'utf8') }))
-
-const findings = findUnreachableEnforcement({ modules, publishedNames: names, allowlist: entries })
-
-if (findings.length === 0) {
+  for (const f of findings) {
+    const lapsed = f.allowlistExpired ? ' [allowlist entry EXPIRED — exemption lapsed]' : ''
+    console.log(
+      `  ${f.type} (${f.module}) — exported as a type; ${f.enforcement.join(', ')} not reachable${lapsed}`,
+    )
+  }
   console.log(
-    `[invention-reachability] OK — every decision-shaped exported type has reachable enforcement ` +
-      `(${String(modules.length)} modules scanned).`,
+    `\nThis rule is a HEURISTIC (an exported \`…Posture|Policy|Decision|Mode|Strategy\` type plus a ` +
+      `function in the same module taking it) and produces false positives. Answer one with an entry ` +
+      `in ${relative(REPO_ROOT, ALLOWLIST)} — every entry needs a sunset, and an expired entry is ` +
+      `ignored rather than honoured.`,
   )
-  process.exit(0)
 }
 
-console.log(
-  `[invention-reachability] ${String(findings.length)} finding(s). A type crossed the package ` +
-    `boundary while the code that acts on it did not, so a consumer can describe the decision and ` +
-    `cannot apply it — which is how the same rule ends up implemented twice.`,
-)
-for (const f of findings) {
-  const lapsed = f.allowlistExpired ? ' [allowlist entry EXPIRED — exemption lapsed]' : ''
-  console.log(
-    `  ${f.type} (${f.module}) — exported as a type; ${f.enforcement.join(', ')} not reachable${lapsed}`,
-  )
-}
-console.log(
-  `\nThis rule is a HEURISTIC (an exported \`…Posture|Policy|Decision|Mode|Strategy\` type plus a ` +
-    `function in the same module taking it) and produces false positives. Answer one with an entry ` +
-    `in ${relative(REPO_ROOT, ALLOWLIST)} — every entry needs a sunset, and an expired entry is ` +
-    `ignored rather than honoured.`,
-)
-process.exit(0)
+if (isDirectInvocation()) main()

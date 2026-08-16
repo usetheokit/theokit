@@ -15,7 +15,7 @@
  * (`verify-version-not-published.mjs:79`), followed here rather than invented differently.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -69,33 +69,58 @@ function changedFiles() {
   }
 }
 
-const files = changedFiles()
-if (files === undefined) process.exit(0)
-
-const found = missingCloses({
-  changedFiles: files,
-  changelog: existsSync(CHANGELOG) ? readFileSync(CHANGELOG, 'utf8') : '',
-  registry: readRegister(),
-})
-
-if (found.length === 0) {
-  console.log('[changelog-closes] OK — no registered consumer gap was closed without saying so.')
-  process.exit(0)
+/**
+ * B-102 — the gate runs when INVOKED, not when imported.
+ *
+ * A script whose body runs on import is untestable by construction: any test of one helper runs the
+ * whole gate and exits the process. This repo paid for that already — `theokit#200` shipped a publish
+ * guard that read the last stdout line as a filename, which in CI is `}`, and it accused six packages
+ * falsely; the helper that got it wrong could not be tested alone.
+ *
+ * The entry-point comparison is on the RESOLVED path, because `process.argv[1]` arrives however the
+ * caller wrote it — relative, symlinked, or via a package bin — and a string compare against
+ * `import.meta.url` says "not the entry" for an invocation that plainly is.
+ */
+function isDirectInvocation() {
+  const entry = process.argv[1]
+  if (entry === undefined) return false
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
 }
 
-console.log(
-  `[changelog-closes] ${String(found.length)} registered consumer gap(s) may have been closed ` +
-    `without a note the consumer can find. Five closures reached them by accident last time, ` +
-    `because the same person maintains both sides; a customer without that overlap keeps ` +
-    `rebuilding what already ships.`,
-)
-for (const gap of found) {
-  console.log(`  ${gap.id} — ${gap.summary}`)
-  console.log(`      touched: ${gap.files.join(', ')}`)
+function main() {
+  const files = changedFiles()
+  if (files === undefined) return
+
+  const found = missingCloses({
+    changedFiles: files,
+    changelog: existsSync(CHANGELOG) ? readFileSync(CHANGELOG, 'utf8') : '',
+    registry: readRegister(),
+  })
+
+  if (found.length === 0) {
+    console.log('[changelog-closes] OK — no registered consumer gap was closed without saying so.')
+    return
+  }
+
+  console.log(
+    `[changelog-closes] ${String(found.length)} registered consumer gap(s) may have been closed ` +
+      `without a note the consumer can find. Five closures reached them by accident last time, ` +
+      `because the same person maintains both sides; a customer without that overlap keeps ` +
+      `rebuilding what already ships.`,
+  )
+  for (const gap of found) {
+    console.log(`  ${gap.id} — ${gap.summary}`)
+    console.log(`      touched: ${gap.files.join(', ')}`)
+  }
+  console.log(
+    `\nIf this change closes one, add \`(closes: ${found[0].id})\` to its CHANGELOG entry under ` +
+      `[Unreleased]. If it does not, nothing to do — the register in ` +
+      `${relative(REPO_ROOT, REGISTER)} maps files to gaps heuristically and will over-fire.`,
+  )
 }
-console.log(
-  `\nIf this change closes one, add \`(closes: ${found[0].id})\` to its CHANGELOG entry under ` +
-    `[Unreleased]. If it does not, nothing to do — the register in ` +
-    `${relative(REPO_ROOT, REGISTER)} maps files to gaps heuristically and will over-fire.`,
-)
-process.exit(0)
+
+if (isDirectInvocation()) main()
