@@ -29,7 +29,6 @@ ignore:
   - packages/theo/node_modules
   - packages/create-theo
   - examples
-  - fixtures
   - tests
   - referencias
   - architecture-output
@@ -37,7 +36,6 @@ ignore:
   - app
   - my-test
   - my-test-bare
-  - scripts
   - packages/theo/src/devtools/dev-overlay # vendored from external — preserve original case
   # As zonas de estudo read-only do ciclo (`.claude/rules/reference-provenance.md`) e as worktrees
   # efêmeras. O `ls` acima só declara `packages/theo/src`, mas o walker desce a árvore inteira antes

@@ -32,22 +32,13 @@ export default tseslint.config(
       '**/.theokit/**',
       '**/coverage/**',
       '**/test-results/**',
+      // Study zone: clones of third-party projects, read to learn from and never edited. The
+      // `.claude/**` entries that sat here went away with the directory; `references/**` stays
+      // because a zone checked out at the repo root would otherwise be linted.
       'references/**',
-      // Study zone: clones of third-party projects, read to learn from and never edited.
-      // Measured in agent-builder#119: `.claude/knowledge-base/references/next.js` alone cost
-      // 264 s of the lint's 867 s — 30% of the total time spent linting code that is not ours and
-      // that nobody can fix here.
-      '.claude/knowledge-base/references/**',
-      '.claude/worktrees/**',
       'pnpm-lock.yaml',
-      'fixtures/**/dist/**',
       'examples/**/dist/**',
       'my-test/**',
-      // Worktrees created by agent runtimes are sandboxes with their own
-      // checkout state and possibly stale TS project graphs. They are not
-      // shipping code; linting them inflates error counts and breaks the
-      // type-checked parser (no projectService entry).
-      '.claude/worktrees/**',
       // create-theo `templates/` are pristine scaffold blueprints that get
       // copied into the user's project. They are NOT framework code; they
       // exist as didactic starting points. Lint-checking them creates
@@ -55,11 +46,10 @@ export default tseslint.config(
       // and would break with every minor scaffold-style change.
       'packages/create-theo/templates/**',
       'packages/create-theokit/templates/**',
-      // Fixtures + examples have their own per-folder tsconfig that the
-      // root project service does not own. They are end-user demo apps,
-      // not framework code; linting them produces parser-only errors that
-      // do not represent real issues in the shipping framework surface.
-      'fixtures/**',
+      // Examples have their own per-folder tsconfig that the root project
+      // service does not own. They are end-user demo apps, not framework
+      // code; linting them produces parser-only errors that do not
+      // represent real issues in the shipping framework surface.
       'examples/**',
       // http-decorators tests + config use experimentalDecorators tsconfig
       // that the root parser projectService cannot resolve. Tests are
@@ -343,12 +333,12 @@ export default tseslint.config(
     },
   },
 
-  // Fixtures — these are scaffold TEMPLATES, not framework code. Apply
-  // ergonomic rules only; everything else is irrelevant to user-facing
-  // scaffold quality (and many warnings actually exist as didactic
-  // examples of what apps may do).
+  // Examples and scratch apps — these are scaffold TEMPLATES, not framework
+  // code. Apply ergonomic rules only; everything else is irrelevant to
+  // user-facing scaffold quality (and many warnings actually exist as
+  // didactic examples of what apps may do).
   {
-    files: ['fixtures/**/*.{ts,tsx}', 'examples/**/*.{ts,tsx}', 'my-test/**/*.{ts,tsx}'],
+    files: ['examples/**/*.{ts,tsx}', 'my-test/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
@@ -393,11 +383,8 @@ export default tseslint.config(
   {
     files: [
       '**/*.config.{ts,mts,cts,js,mjs,cjs}',
-      'scripts/**/*.{ts,js,mjs}',
-      // M90 — only `packages/*/scripts/**`, and only because of `generate-reexports.mts`. The first
-      // version widened `scripts/**` to `.mts` too, and the review measured the excess: it relaxed
-      // `no-explicit-any`/`no-unsafe-*` em `scripts/preflight-native-bindings.d.mts` e
-      // `scripts/sync-template-versions.d.mts`, which asked for nothing.
+      // Only `packages/*/scripts/**`, and only because of `generate-reexports.mts`. The root
+      // `scripts/**` entry was dropped along with the directory itself.
       'packages/*/scripts/**/*.{ts,mts,js,mjs}',
       '**/tsup.config.ts',
     ],

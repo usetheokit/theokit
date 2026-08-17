@@ -8,29 +8,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Removed
 
-- **Três arquivos que nada no sistema alcança.** `scripts/quality-gate.sh` (o cabeçalho afirmava ser
-  chamado pelo lint-staged; nem `.lintstagedrc.json` nem `.githooks/pre-commit` o chamavam — o gate
-  não rodava há tempo nenhum), `turbo.json` (stub de uma tarefa de adoção do Turborepo que ficou sem
-  fechar: `turbo` nunca virou dependência nem apareceu em workflow) e
-  `halt-loop-prompts/implement-decorator-file-based-parity.md` (artefato de sessão que escapou do
-  `.gitignore`). Auditoria de alcançabilidade sobre os 2146 arquivos rastreados, cobertura 100%,
-  quatro probes por arquivo.
-
-### Fixed
-
-- **`.claude/` restaurado — 1076 arquivos apagados por engano.** O commit `8f8971d8`, cuja mensagem
-  falava apenas de remover duas skills, removeu a árvore inteira: rules, hooks, knowledge-base,
-  plans, ADRs, blueprints e attestations. Restaurado de `6558266d`. `audit-trail-rotation.md`
-  declara plans, blueprints e ADRs como material que nunca rotaciona.
-- **`wiki/v3-deletion-ledger.md` estava órfão no bundle.** O ledger do M86 — a evidência medida de
-  que o v3 valeu a pena — não era linkado de `wiki/index.md`, o que num bundle cujo contrato é o
-  cross-link o deixava inalcançável. Linkado na seção *Milestone runs*.
+- **`fixtures/` — the whole directory, 344 files.** Every demo app the test suite booted, imported
+  or built against. With it went the Playwright harness that derived one dev server per fixture
+  (`playwright.config.ts`, `tests/e2e/`), the seven `fixtures/*` workspace members declared in
+  `pnpm-workspace.yaml`, and the CI `e2e` job.
+- **`scripts/` — the whole directory, 44 files.** Every repository gate lived there. What each one
+  guaranteed, and what nothing guarantees any more, is recorded at the site it was called from —
+  see the removal notes in `.github/workflows/*.yml` and `.githooks/pre-commit`.
+- **`.claude/` — 1076 files**: rules, hooks, knowledge base, plans, ADRs, blueprints and
+  attestations. Also `CLAUDE.md`, `ROADMAP.md`, `ROADMAP-v2.md`, `ROADMAP-v3.md`, `turbo.json`,
+  `docs/audit/phase-0-typecheck-pre-flight-*.md` and
+  `halt-loop-prompts/implement-decorator-file-based-parity.md`.
+- **The tests that had lost their subject — 66 files.** Every one either drove a fixture app or
+  exercised a script that no longer exists. Where the behaviour under test did not need an app on
+  disk, the cases were rebuilt against projects created in a tmpdir instead of deleted:
+  `tests/unit/{ws-scan,cli-upgrade-readiness,load-config,validate-structure,wave0-mandatory}.test.ts`.
 
 ### Changed
 
-- **`clear-project-output/` fora do tracking.** O mesmo commit versionou o banco SQLite de análise
-  do plugin de limpeza, que muda a cada fase e não é fonte do projeto. Destrackeado e adicionado ao
-  `.gitignore`.
+- **`pnpm lint` runs `eslint .` directly.** It went through `scripts/lint-by-group.mjs`. The
+  npm scripts whose implementation was a removed script are gone with it: `check:licenses`,
+  `check:audit`, `check:bundle`, `check:direction`, `check:surface-parity`,
+  `check:invention-reachability`, `check:changelog-closes`, `check:auth-parity`, `check:secrets`,
+  `check:templates`, `sync:templates`, `check:sandbox-parity`, `check:pack-no-workspace`,
+  `check:ai-free`, `check:wire-parity`, `verify:published`, `verify:version-collision`,
+  `verify:publish-credential`, `protect:branches`, `openapi:regen-fixtures`, `test:e2e`.
+  `check:all` and `release` were narrowed to what still exists.
+- **`clear-project-output/` is no longer tracked.** The cleanup plugin's SQLite analysis database
+  changes every phase and is not project source. Untracked and added to `.gitignore`.
+
+### Fixed
+
+- **`wiki/v3-deletion-ledger.md` was orphaned in the bundle.** The M86 ledger — the measured
+  evidence that v3 paid off — was not linked from `wiki/index.md`, which in a bundle whose contract
+  is the cross-link made it unreachable. Linked under *Milestone runs*.
+
+### Security
+
+- **There is no secret scanning left in this repository.** `scripts/prevent-secrets.sh` backed both
+  the `pre-commit` GATE 1 and the CI `secret-scan` job. The hook called it inside an `if [ -f ... ]`,
+  so once the file was gone it printed "Secret scanning skipped" and carried on — a gate switched
+  off while still looking active. Both call sites were removed rather than left degrading silently.
+  A committed secret is now caught only by human review or the provider's scanner.
+- **Dependency advisories and licences are no longer checked in CI.** The `dependency-audit` and
+  `license-check` jobs ran `scripts/audit-scopes.mjs` and `scripts/check-licenses.mjs`. The
+  `dependency-review` action had been removed earlier on the grounds that those two jobs covered it.
 
 ### Added
 

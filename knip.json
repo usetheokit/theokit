@@ -1,19 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignore": [
-    ".claude/**",
-    "**/templates/**",
-    "**/examples/**",
-    "**/tests/**",
-    "**/fixtures/**",
-    "**/*.bench.ts",
-    "**/tests/benchmark/**",
-    "**/*.d.mts"
-  ],
+  "ignore": ["**/templates/**", "**/examples/**", "**/tests/**", "**/*.bench.ts", "**/*.d.mts"],
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.{ts,js,mjs,sh}"],
-      "ignore": ["my-test/**", "fixtures/**", "examples/**", "tests/**"]
+      "ignore": ["my-test/**", "examples/**", "tests/**"]
     },
     "packages/theo": {
       "entry": [
