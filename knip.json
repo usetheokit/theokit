@@ -1,9 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignore": ["**/templates/**", "**/examples/**", "**/tests/**", "**/*.bench.ts", "**/*.d.mts"],
+  "ignore": ["**/tests/**"],
   "workspaces": {
     ".": {
-      "ignore": ["my-test/**", "examples/**", "tests/**"]
+      "ignore": ["tests/**"]
     },
     "packages/theo": {
       "entry": [
@@ -15,39 +15,21 @@
         "src/adapters/netlify.ts",
         "src/adapters/aws-lambda.ts",
         "src/adapters/static.ts",
-        "src/devtools/entry.tsx",
         "src/devtools/index.ts",
         "src/core/contracts/index.ts",
         "src/server/webhook/providers/index.ts"
       ],
       "project": ["src/**/*.{ts,tsx}"]
     },
-    "packages/create-theo": {
+    "packages/http": {
+      "entry": ["src/bridge/runtime/bun.ts", "src/bridge/runtime/deno.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     },
-    "packages/http": {
-      "entry": [
-        "src/index.ts",
-        "src/theokit-plugin.ts",
-        "src/app.ts",
-        "src/runtime-node.ts",
-        "src/bridge/runtime/bun.ts",
-        "src/bridge/runtime/deno.ts"
-      ],
-      "project": ["src/**/*.{ts,tsx}"],
-      "ignoreDependencies": ["@theokit/agents"]
-    },
     "packages/agents": {
-      "entry": [
-        "src/index.ts",
-        "src/bridge-entry.ts",
-        "src/testing/index.ts",
-        "src/theokit-plugin.ts"
-      ],
+      "entry": ["src/theokit-plugin.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/create-theokit": {
-      "entry": ["src/cli.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     }
   },

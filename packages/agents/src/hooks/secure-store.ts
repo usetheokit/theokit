@@ -32,6 +32,11 @@ const FORBIDDEN_WRITE_BITS = 0o022
 const DIR_MODE = 0o700
 const FILE_MODE = 0o600
 
+/**
+ * @knipignore — exported because it is the return type of the exported `readSecureJson`. No module
+ * imports it by name, which is what knip measures; un-exporting it would make the public signature
+ * reference a private name.
+ */
 export interface SecureStoreRead<T> {
   /** Parsed content, or the empty value when the store is absent, empty or unreadable. */
   readonly value: T
