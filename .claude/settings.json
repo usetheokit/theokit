@@ -9,7 +9,7 @@
   },
   "permissions": {
     "defaultMode": "default",
-    "allow": ["Read", "Glob", "Grep", "Bash(*)", "Bash", "Edit", "Write"],
+    "allow": ["Read", "Glob", "Grep", "Bash(*)", "Bash", "Edit", "Write", "Bash(pnpm *)"],
     "ask": [],
     "deny": [
       "Bash(git checkout *)",
