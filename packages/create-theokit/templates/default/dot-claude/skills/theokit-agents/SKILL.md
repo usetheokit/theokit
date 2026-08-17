@@ -107,7 +107,7 @@ export class TaskTools {
   }
 }
 
-// compõe no agente:
+// compose onto the agent:
 //   new ToolboxCapability(new TaskTools(db), { namespace: 'tasks' })  → tasks.list_tasks
 ```
 

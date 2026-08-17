@@ -5,9 +5,8 @@ import { join } from 'node:path'
 import { scanWebSocketRoutes } from '../../packages/theo/src/server/scan/ws-scan.js'
 
 /**
- * Four of the cases below read and, removed
- * with the rest of `fixtures/`. The tree is now built in a tmpdir by the test itself: same
- * behavioural coverage, without depending on a checked-in directory.
+ * The server tree is built in a tmpdir by the test itself, so the cases below own their own
+ * inputs.
  */
 function makeServerDir(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'theokit-ws-scan-'))

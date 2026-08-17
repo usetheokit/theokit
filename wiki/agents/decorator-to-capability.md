@@ -5,11 +5,11 @@ description: Every exported agent decorator, what it contributed, and the capabi
 tags: [agents, capability, migration, audit]
 status: stable
 generated: { by: theokit-agent/unrecorded, at: 2026-07-23T00:00:00Z }
-migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: docs/agents/decorator-to-capability.md }
+migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: pre-wiki documentation tree }
 sources:
   - id: origin
-    resource: docs/agents/decorator-to-capability.md
-    title: Original document in the pre-wiki tree, preserved verbatim
+    resource: pre-wiki documentation tree
+    title: Original document, absorbed into this bundle verbatim
     last_modified: 2026-07-23
 ---
 

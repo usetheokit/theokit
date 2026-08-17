@@ -28,9 +28,8 @@ import {
  */
 
 /**
- * The clean and dirty projects are built in a tmpdir rather than read from
- * rest of `fixtures/`. They are built in a tmpdir here with the same content those fixtures
- * declared — one rule per file, so a failure points at the rule.
+ * The clean and dirty projects are built in a tmpdir, one rule per file, so a failure points at
+ * the rule.
  */
 function makeTheokitProject(contents: Record<string, string>): string {
   const dir = resolve(tmpdir(), `theokit-upgrade-${Date.now()}-${Math.random()}`)
@@ -161,8 +160,7 @@ describe('scanUpgradeReadiness — project with violations', () => {
 
 /**
  * EC-7 (SHOULD TEST): skip occurrences inside comments and string literals.
- * We test these by writing tiny one-off sources into a tmp dir; a fixture
- * pollutes the dirty fixture with noise we don't want there.
+ * Written as tiny one-off sources so the dirty project above stays free of noise.
  */
 describe('scanUpgradeReadiness — EC-7 (skip comments + string literals)', () => {
   function makeTmpProject(contents: Record<string, string>): string {

@@ -242,7 +242,7 @@ async function emitCronArtifacts(opts: {
   if (CRON_NA_TARGETS.has(opts.target)) {
     console.log(
       `  ⚠ Cron not supported by target "${opts.target}" — declared crons skipped. ` +
-        `See docs/concepts/crons.md for supported targets.`,
+        `Supported targets: node, vercel, cloudflare.`,
     )
     return
   }

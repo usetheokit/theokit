@@ -5,11 +5,11 @@ description: Letting another system discover and call your agent, and calling ag
 tags: [agents, a2a, interop]
 status: stable
 generated: { by: theokit-agent/unrecorded, at: 2026-07-07T00:00:00Z }
-migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: docs/agents/a2a.md }
+migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: pre-wiki documentation tree }
 sources:
   - id: origin
-    resource: docs/agents/a2a.md
-    title: Original document in the pre-wiki tree, preserved verbatim
+    resource: pre-wiki documentation tree
+    title: Original document, absorbed into this bundle verbatim
     last_modified: 2026-07-07
 ---
 

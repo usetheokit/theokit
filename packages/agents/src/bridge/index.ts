@@ -199,5 +199,5 @@ export {
 // consumer wrote the loader by hand.
 export { loadMcpJson, McpFileError } from './mcp-file.js'
 
-// M68 — o gate de confiança do `settingSources` (ADR 0063/0064/0065).
+// M68 — the `settingSources` trust gate (ADR 0063/0064/0065).
 export * from './setting-sources-gate.js'

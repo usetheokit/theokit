@@ -1,58 +1,30 @@
 # Changelog
 
-Workspace-level changes for the `theokit` monorepo. Per-package changes live in each package's `CHANGELOG.md` (`packages/theo/CHANGELOG.md`, `packages/create-theo/CHANGELOG.md`).
+Workspace-level changes for the `theokit` monorepo. Per-package changes live in each package's `CHANGELOG.md` (`packages/theo/CHANGELOG.md`, `packages/create-theokit/CHANGELOG.md`).
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Removed
-
-- **`fixtures/` — the whole directory, 344 files.** Every demo app the test suite booted, imported
-  or built against. With it went the Playwright harness that derived one dev server per fixture
-  (`playwright.config.ts`, `tests/e2e/`), the seven `fixtures/*` workspace members declared in
-  `pnpm-workspace.yaml`, and the CI `e2e` job.
-- **`scripts/` — the whole directory, 44 files.** Every repository gate lived there. What each one
-  guaranteed, and what nothing guarantees any more, is recorded at the site it was called from —
-  see the removal notes in `.github/workflows/*.yml` and `.githooks/pre-commit`.
-- **`.claude/` — 1076 files**: rules, hooks, knowledge base, plans, ADRs, blueprints and
-  attestations. Also `CLAUDE.md`, `ROADMAP.md`, `ROADMAP-v2.md`, `ROADMAP-v3.md`, `turbo.json`,
-  `docs/audit/phase-0-typecheck-pre-flight-*.md` and
-  `halt-loop-prompts/implement-decorator-file-based-parity.md`.
-- **The tests that had lost their subject — 66 files.** Every one either drove a fixture app or
-  exercised a script that no longer exists. Where the behaviour under test did not need an app on
-  disk, the cases were rebuilt against projects created in a tmpdir instead of deleted:
-  `tests/unit/{ws-scan,cli-upgrade-readiness,load-config,validate-structure,wave0-mandatory}.test.ts`.
-
 ### Changed
 
-- **`pnpm lint` runs `eslint .` directly.** It went through `scripts/lint-by-group.mjs`. The
-  npm scripts whose implementation was a removed script are gone with it: `check:licenses`,
-  `check:audit`, `check:bundle`, `check:direction`, `check:surface-parity`,
-  `check:invention-reachability`, `check:changelog-closes`, `check:auth-parity`, `check:secrets`,
-  `check:templates`, `sync:templates`, `check:sandbox-parity`, `check:pack-no-workspace`,
-  `check:ai-free`, `check:wire-parity`, `verify:published`, `verify:version-collision`,
-  `verify:publish-credential`, `protect:branches`, `openapi:regen-fixtures`, `test:e2e`.
-  `check:all` and `release` were narrowed to what still exists.
-- **`clear-project-output/` is no longer tracked.** The cleanup plugin's SQLite analysis database
-  changes every phase and is not project source. Untracked and added to `.gitignore`.
-
-### Fixed
-
-- **`wiki/v3-deletion-ledger.md` was orphaned in the bundle.** The M86 ledger — the measured
-  evidence that v3 paid off — was not linked from `wiki/index.md`, which in a bundle whose contract
-  is the cross-link made it unreachable. Linked under *Milestone runs*.
+- **`pnpm lint` runs `eslint .` directly.** The gate scripts it and its siblings wrapped no longer
+  ship, so `check:all` and `release` were narrowed to the checks that exist: build, lint, format,
+  typecheck, coverage and knip.
+- **Demo apps are no longer checked in.** A test that needs a whole app builds one in a temp
+  directory and tears it down afterwards, so a suite owns its own inputs.
 
 ### Security
 
-- **There is no secret scanning left in this repository.** `scripts/prevent-secrets.sh` backed both
-  the `pre-commit` GATE 1 and the CI `secret-scan` job. The hook called it inside an `if [ -f ... ]`,
-  so once the file was gone it printed "Secret scanning skipped" and carried on — a gate switched
-  off while still looking active. Both call sites were removed rather than left degrading silently.
-  A committed secret is now caught only by human review or the provider's scanner.
-- **Dependency advisories and licences are no longer checked in CI.** The `dependency-audit` and
-  `license-check` jobs ran `scripts/audit-scopes.mjs` and `scripts/check-licenses.mjs`. The
-  `dependency-review` action had been removed earlier on the grounds that those two jobs covered it.
+- **There is no secret scanning in this repository** — neither in the pre-commit hook nor in CI. A
+  committed credential is caught only by human review or the provider's scanner.
+- **Dependency advisories and licences are not checked in CI.** No job inspects either.
+- **There is no browser coverage and no client bundle budget.** Rendering, hydration, the CSP nonce
+  and the WebSocket path have no automated end-to-end exercise, and no gate measures the size of the
+  client bundle.
+- **A published tarball is no longer inspected before release.** Nothing verifies that a package
+  ships without an unresolved workspace range — the failure that made twelve published versions
+  uninstallable.
 
 ### Added
 

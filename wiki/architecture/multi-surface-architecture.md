@@ -5,11 +5,11 @@ description: One construction authored once and projected onto every surface an 
 tags: [architecture, multi-surface]
 status: stable
 generated: { by: theokit-agent/unrecorded, at: 2026-07-24T00:00:00Z }
-migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: docs/architecture/multi-surface-architecture.md }
+migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: pre-wiki documentation tree }
 sources:
   - id: origin
-    resource: docs/architecture/multi-surface-architecture.md
-    title: Original document in the pre-wiki tree, preserved verbatim
+    resource: pre-wiki documentation tree
+    title: Original document, absorbed into this bundle verbatim
     last_modified: 2026-07-24
 ---
 
@@ -19,7 +19,7 @@ sources:
 >
 > **Status (2026-07-08):** web + MCP surfaces shipped and secured; the in-process caller (the seam every non-HTTP surface needs) shipped; TUI reuses the core over HTTP today; Tauri is authorized-in-principle but **deferred + gated**. Published in `theokit@0.22.1` + `@theokit/agents@0.34.0`.
 >
-> **Evidence base:** the design was chosen after a 12-cluster adversarial deep-research pass whose critics **refuted 4 of 5 original recommendations** — this doc describes only the *narrower design that survived*. Full research: `.claude/knowledge-base/discoveries/blueprints/universal-handler-architecture-blueprint.md`. Authorizing decision: ADR-0044, at `.claude/knowledge-base/adrs/0044-m32-multi-surface-transports-framework-core.md`.
+> **Evidence base:** the design was chosen after a 12-cluster adversarial deep-research pass whose critics **refuted 4 of 5 original recommendations** — this doc describes only the *narrower design that survived*. Authorizing decision: ADR-0044.
 
 ---
 
@@ -155,7 +155,7 @@ The web SSE surface is request-scoped: a dropped client loses the run and any ch
 
 This is the transport half of Mastra-style "durable agents"; a shipped persistent cache backend is a named follow-up. The TUI/Tauri in-process path is unchanged (it does not reconnect over HTTP). Code: `packages/theo/src/server/agent/{run-event-cache,durable-ui-message-stream-response,handle-agent-run-reconnect}.ts`.
 
-**HITL continuation over the durable stream (M38, ADR-0047).** Mastra's `untilIdle` keeps the stream open across a `suspend → resume` because a Mastra background task ENDS the turn; the agent must be re-invoked on completion. TheoKit does NOT end the turn: a `@HumanInTheLoop`-gated tool `await`s the approval Promise inside the SDK `pre_tool_call` hook (`hitl-plugin.ts`), so the run PAUSES in-place — the durable stream simply waits, no `[DONE]` is sent, and the SAME run continues on the SAME `runId` when a separate `POST /approve` resolves it. So `untilIdle` (a re-invoke-after-turn-ends feature) has **no gap to fill** for the in-scope HITL trigger — TheoKit already continues on one connection, reconnectably. M38 therefore ships **proof, not a no-op flag**: `tests/integration/hitl-durable-continuation.test.ts` proves the pause + M37 reconnect + resume-continuation combination end-to-end. The re-invoke `untilIdle` becomes relevant only with a background-task DISPATCH engine that ends the turn — reaffirmed out of scope (ROADMAP § Explicitly out of scope). ADR-0047.
+**HITL continuation over the durable stream (M38, ADR-0047).** Mastra's `untilIdle` keeps the stream open across a `suspend → resume` because a Mastra background task ENDS the turn; the agent must be re-invoked on completion. TheoKit does NOT end the turn: a `@HumanInTheLoop`-gated tool `await`s the approval Promise inside the SDK `pre_tool_call` hook (`hitl-plugin.ts`), so the run PAUSES in-place — the durable stream simply waits, no `[DONE]` is sent, and the SAME run continues on the SAME `runId` when a separate `POST /approve` resolves it. So `untilIdle` (a re-invoke-after-turn-ends feature) has **no gap to fill** for the in-scope HITL trigger — TheoKit already continues on one connection, reconnectably. M38 therefore ships **proof, not a no-op flag**: `tests/integration/hitl-durable-continuation.test.ts` proves the pause + M37 reconnect + resume-continuation combination end-to-end. The re-invoke `untilIdle` becomes relevant only with a background-task DISPATCH engine that ends the turn — reaffirmed out of scope. ADR-0047.
 
 **Thread-level follow-up + subscribe over the durable transport (M39, ADR-0048).** M37/M38 interact with a *run* (`runId`); Mastra **Signals** interact with a *thread*. M39 takes the transport slice: the thread is the existing `sessionId` (the SDK conversation key), and two opt-in routes sit over the M37 cache. `POST /api/agents/<name>/threads/<sessionId>/message` is a **follow-up** — if a run is ACTIVE on the thread the message is FIFO-**queued** and dispatched as a continuation (same `sessionId` ⇒ the SDK continues the conversation) when the active run terminates; if IDLE, a run starts immediately. It returns `202` and the run streams **headless** into the cache (a `thread-dispatcher` drives the SDK generator into `RunEventCache` directly — no HTTP-reader backpressure to stall a client-less run); observe it via the thread stream. `GET /api/agents/<name>/threads/<sessionId>/stream` is a **subscribe** — attach to the thread's active run's durable stream (reusing the M37 reconnect handler), or on an idle thread WAIT (bounded) for the next run then attach (subscribe-then-post). A `thread-run-registry` tracks one active run per thread + the FIFO queue + next-run waiters; `RunEventCache.begin()` registers a run synchronously so a subscriber can attach before the first frame. **Verified constraint:** the SDK loop takes no mid-run input, so M39 QUEUEs — it is NOT Mastra's mid-run injection (which would need SDK loop surgery, out of scope). No new loop, no dispatcher-orchestration, no pub/sub broker; single-process (cross-instance leasing is infra, out of scope). The plain POST run path is byte-identical. **Security:** the thread stream GET is open like the M37 reconnect GET, but it is keyed on the caller-supplied `sessionId` (not a framework-minted unguessable `runId`). It is safe ONLY if the `sessionId` is unguessable (e.g. a client-minted UUID) — an app that uses a **predictable** sessionId (user id, email, sequential id) MUST add its own auth gate before this endpoint, or any party who can guess the sessionId can read the thread's live conversation stream. Code: `packages/theo/src/server/agent/{thread-run-registry,thread-dispatcher,handle-thread-routes,build-agent-streamer}.ts`. ADR-0048.
 
@@ -209,8 +209,7 @@ The design is deliberately incremental. What is **not** done, and why:
 | MCP server transport | `packages/theo/src/server/agent/mcp-handler.ts`, `.../serve-aux-routes.ts` |
 | Tauri desktop (M36 — sidecar + Channel) | `theo-code-v2/apps/desktop/` (`sidecar-core.ts`, `sidecar.ts`, `src-tauri/src/lib.rs`, `frontend/main.js`) — in the example, not core |
 | Boundary invariant test | `tests/unit/g1-dependency-dag-boundary.test.ts` |
-| Authorizing decision | `.claude/knowledge-base/adrs/0044-*.md`, `0045-*.md` (Tauri) (+ 0040, 0042, 0043) |
-| Research | `.claude/knowledge-base/discoveries/blueprints/universal-handler-architecture-blueprint.md` |
+| Authorizing decision | ADR-0044, ADR-0045 (Tauri), plus 0040, 0042, 0043 |
 
 ---
 

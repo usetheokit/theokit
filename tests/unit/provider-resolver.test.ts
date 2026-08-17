@@ -6,7 +6,7 @@
  *   - Priority order: OPENROUTER > OPENAI > ANTHROPIC
  *   - Error path: zero env vars → actionable error message
  *   - Registry: registerProvider() idempotent + listProviders() snapshot
- *   - Escape hatch: tryResolveProvider() não throws
+ *   - Escape hatch: tryResolveProvider() does not throw
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -115,7 +115,7 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
   })
 
   describe('tryResolveProvider() — graceful degradation', () => {
-    it('should return null when no env var (não throws)', () => {
+    it('should return null when no env var (does not throw)', () => {
       expect(tryResolveProvider()).toBeNull()
     })
 

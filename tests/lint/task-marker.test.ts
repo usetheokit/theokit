@@ -27,8 +27,8 @@ import { describe, expect, it } from 'vitest'
  * |---|---|---|
  * | `// TODO: replace this` | yes | it is a marker |
  * | `// por onde todo turno passa` | no | lowercase, no colon — M95's 3 false positives |
- * | `` `return { message: 'TODO: implement ${name}' }` `` | não | não é comentário: é a **saída** do
- *   the `theo generate` scaffold generator, a marker for the user, not debt of ours |
+ * | `` `return { message: 'TODO: implement ${name}' }` `` | no | not a comment: it is the **output**
+ *   of the `theo generate` scaffold generator, a marker for the user, not debt of ours |
  *
  * The third row is why the comment is required instead of scanning raw text: the only two occurrences
  * of `TODO:` in the repository today are exactly that one, and a gate that flagged them would be born
@@ -124,12 +124,14 @@ describe('agent-builder#120 — a task marker in a comment', () => {
   })
 
   it('test_NEGATIVE_the_pt_BR_prose_that_broke_M95_three_times_does_NOT_match', () => {
-    for (const prosa of [
+    // The strings below are DATA, not prose of ours: Portuguese text that must not trip the
+    // marker regex. They stay in Portuguese because that is the input the regression is about.
+    for (const prose of [
       '// o adaptador por onde todo turno passa',
       '// para todo erro do provedor, um código nosso',
       ' * todo estado novo entra por aqui',
     ]) {
-      expect(MARKER.test(prosa), prosa).toBe(false)
+      expect(MARKER.test(prose), prose).toBe(false)
     }
   })
 

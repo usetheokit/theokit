@@ -5,11 +5,11 @@ description: Living record of agent features identified during documentation rev
 tags: [agents, backlog, roadmap]
 status: draft
 generated: { by: theokit-agent/unrecorded, at: 2026-07-07T00:00:00Z }
-migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: docs/agents/feature-backlog.md }
+migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: pre-wiki documentation tree }
 sources:
   - id: origin
-    resource: docs/agents/feature-backlog.md
-    title: Original document in the pre-wiki tree, preserved verbatim
+    resource: pre-wiki documentation tree
+    title: Original document, absorbed into this bundle verbatim
     last_modified: 2026-07-07
 ---
 
@@ -58,7 +58,7 @@ PR #88 merged develop→main; tag + GitHub release `theokit@0.17.0`. **Não rest
 
 ## 🗺️ Todos os DEFERRED → milestones M18–M30 (ADR-0041, força total 2026-07-07)
 
-Por decisão do dono, **todos** os gaps `DEFERRED` (+ os `OUT_OF_SCOPE`, re-escopados via `ADR-0041`) viraram milestones no `ROADMAP.md`:
+By owner decision, **every** `DEFERRED` gap (plus the `OUT_OF_SCOPE` ones, re-scoped through `ADR-0041`) became a milestone:
 
 | Milestone | Gaps do backlog cobertos |
 |---|---|

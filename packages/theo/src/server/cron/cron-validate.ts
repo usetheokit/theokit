@@ -46,7 +46,7 @@ export function validateCronSchedule(schedule: string): void {
       `Invalid cron schedule "${schedule}": expected 5 fields ` +
         '("minute hour dayOfMonth month dayOfWeek"), ' +
         `got ${parts.length}. TheoKit treats all schedules as UTC; ` +
-        'for second-precision or timezone, see docs/concepts/crons.md.',
+        'second-precision and timezone-aware schedules are not supported.',
     )
   }
 

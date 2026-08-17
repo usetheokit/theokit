@@ -2,7 +2,7 @@
  * D13 gate (T1.2 do plano dogfood-fixes-and-coverage-expansion).
  *
  * Invariant: no code path in theokit/packages/theo/src may use
- * require() ou require.resolve() em @theokit/ui (que é ESM-only by design).
+ * require() or require.resolve() on @theokit/ui, which is ESM-only by design.
  *
  * This test is the CANARY that prevents a regression of the EC-S5/EC-S4 root cause.
  * @theokit/ui declares `"type": "module"` + exports[.] with only the `import`
@@ -110,7 +110,7 @@ describe('D13: zero require.resolve / require on ESM-only deps in production cod
               `  - existsSync(join(cwd, 'node_modules', '@theokit/ui', ...))  // filesystem probe\n` +
               `  - await import('@theokit/ui')  // async ESM import\n` +
               `  - import.meta.resolve('@theokit/ui')  // Node 22+ ESM resolver\n` +
-              `See ADR D13 in docs/adr/0021-dogfood-stranger-coverage-expansion.md.`
+              `See ADR D13.`
           : undefined,
       ).toEqual([])
     },

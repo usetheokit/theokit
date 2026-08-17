@@ -5,19 +5,19 @@ description: The canonical manifest for the load-bearing seam between TheoKit an
 tags: [architecture, sdk, seam]
 status: stable
 generated: { by: theokit-agent/unrecorded, at: 2026-08-06T00:00:00Z }
-migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: docs/architecture/theokit-sdk-integration.md }
+migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: pre-wiki documentation tree }
 sources:
   - id: origin
-    resource: docs/architecture/theokit-sdk-integration.md
-    title: Original document in the pre-wiki tree, preserved verbatim
+    resource: pre-wiki documentation tree
+    title: Original document, absorbed into this bundle verbatim
     last_modified: 2026-08-06
 ---
 
 # TheoKit ↔ `@theokit/sdk` integration seam
 
 Canonical manifest for the `theokit ↔ @theokit/sdk` seam — the load-bearing one, since `@theokit/sdk`
-is the **only** agent runtime (per `.claude/rules/sdk-runtime.md` / G2). This doc mirrors the structure
-of the TheoCloud integration manifest and was meant to be **mirrored into** `../theokit-sdk/architecture/theokit-sdk-integration.md` — that mirror **does not exist** (verificado 2026-08-06; o repo `theokit-sdk` não tem `docs/architecture/`)
+is the **only** agent runtime (G2). This doc mirrors the structure
+of the TheoCloud integration manifest. The counterpart on the `theokit-sdk` side does not exist (checked 2026-08-06)
 (the sibling copy) — edit one, copy the diff to the other in the same change.
 
 > **Consult this doc BEFORE editing** any seam file listed under § Consult-before-editing.
@@ -93,8 +93,7 @@ independent layers — none replaces another.
 | ≥ 0.42.0 | `^4.0.1` | `^0.11.0` |
 
 A future SDK major is a **conscious** theokit bump (the SE36 → 3.x / SE40 → 4.x precedents): close the new
-range, sync the `CustomTool` mirror until the type gate is green, update this table. Known drift to watch:
-`fixtures/template-default` still pins `@theokit/sdk ^2.20.0` (scaffold-template bump is a separate follow-up).
+range, sync the `CustomTool` mirror until the type gate is green, update this table.
 
 ## 6 — Consult-before-editing
 
