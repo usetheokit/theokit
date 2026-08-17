@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`repository`, `homepage` and `bugs` in every publishable manifest.** None of the six declared
+  them, so npm rendered each package with no link back to the source, no "Report issues" and no
+  provenance — for `theokit` itself included. The org-rename entry below was corrected in the same
+  pass: the rename did reach the README badges, the issue templates and CI, but there were no
+  manifest fields to repoint, because none had ever been declared.
+
+- **A README inside `theokit`, `@theokit/presenter` and `create-theokit`.** All three were published
+  with npm's "This package does not have a README" — including the framework's own entry package,
+  the one Quick Start tells you to install, and the scaffolder people reach first. npm packs README
+  and LICENSE regardless of `files`, so the only thing missing was the file.
+
 - A LICENSE file inside each publishable package — `@theokit/http`, `@theokit/presenter`,
   `@theokit/agents`, `@theokit/tauri`, `create-theokit` and `theokit`. npm packs only the package
   directory, so a LICENSE sitting at the repo root never reached the published tarball: the packages
@@ -36,10 +47,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **The README documented an API that had been removed.** It taught agents as
+  `@Agent` / `@Tool` / `@Toolbox` / `@MainLoop` classes — the decorators M31 took out of the public
+  surface — so the first thing a reader copied could not compile. It has been rewritten against what
+  the code exports: the file-based agent (`agents/<name>.ts` → `POST /api/agents/<name>`), the
+  `AgentBuilder.create()` chain with its compile-time guards, and `tool()`. Corrected along the way:
+  the SDK peer is 4.x, not 2.x; `HttpStatus` carries 30 codes, not 62; there are 18 stream-event
+  types, not 14; `@Roles` was never a decorator (it is the worked example for `createDecorator`);
+  Playwright is not a dependency and there is no E2E harness; and `delegate()` takes a sub-agent spec
+  rather than a class. Guard sharing between HTTP and AI is stated as it actually works — through
+  `@Expose` on a controller, where the controller's `@UseGuards` covers the agent route and
+  interceptors do not run. Package versions are now npm badges instead of hand-copied numbers that
+  were six major versions stale, and the test badge points at CI rather than a frozen count.
+  (docs-truth-pass-2026-08)
+
+- **The scaffold's own README described a project the scaffold does not generate.** It documented a
+  mock chat route under `server/routes/`, `defineAgent` / `defineAgentTool`, and a
+  `tailwind.config.ts` that no longer ships — and told the reader `@theokit/sdk` might 404 because
+  its publish was "operator-deferred", which stopped being true many versions ago. It now describes
+  the tree that is actually written, the builders that are actually exported, and the Tailwind v4
+  setup the framework wires on its own. (docs-truth-pass-2026-08)
+
+- **`@theokit/http`'s published README told you to install the wrong package.** Every heading, the
+  install line and every import said `@theokit/http-decorators` — the pre-1.0 name, still resolvable
+  on npm at 0.3.0, so following it installed a June build under a dead name instead of failing
+  loudly. It also promised `defineRoute` / `defineMiddleware` (internal since M31), claimed a guard
+  returning `false` yields 401 when it yields 403, and listed neither `@UseFilters`, `@Catch`,
+  `@Throttle`, `@SetMetadata` nor `@Expose`. The DTO-with-static-schema form is no longer presented
+  as the primary one: `@Body(schema)` is, because it needs no `emitDecoratorMetadata`.
+  (docs-truth-pass-2026-08)
+
+- `@theokit/agents`' README named the `agent()` free function that M57 replaced with
+  `AgentBuilder.create()`, and its subpath map was missing `./config` while claiming nineteen
+  entries against the twenty the manifest exports. (docs-truth-pass-2026-08)
+
+- **Package descriptions match their packages again.** `theokit` had none at all — the framework's
+  entry package sat on npm with an empty subtitle; `@theokit/http` advertised the bridge to
+  `defineRoute` + `defineMiddleware`; `@theokit/agents` advertised the `agent()`/`tool()` builders.
+  (docs-truth-pass-2026-08)
+
+- `pnpm validate:publint` now covers all six publishable packages. It checked `theokit` and
+  `create-theokit` — the two that passed — while `@theokit/agents` and `@theokit/http` failed it,
+  which is the arrangement that let the export-condition defect below ship. (docs-truth-pass-2026-08)
+
 - **The repository moved to the official `usetheokit` organization.** Existing clones keep working:
-  GitHub redirects the old `usetheodev/theokit` remote permanently. `repository`, `bugs` and
-  `homepage` metadata, README badges, issue templates, and the CI steps that clone sibling repos now
-  point at `usetheokit`. Links to `usetheodev` that are *not* the GitHub org — the X and LinkedIn
+  GitHub redirects the old `usetheodev/theokit` remote permanently. README badges, issue templates,
+  and the CI steps that clone sibling repos now point at `usetheokit`; the `repository` / `bugs` /
+  `homepage` manifest fields are new rather than repointed, and are listed under Added.
+  Links to `usetheodev` that are *not* the GitHub org — the X and LinkedIn
   profiles — were left alone, as were references to repositories that stay behind.
   (usetheokit/theokit#316)
 
@@ -91,6 +146,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   longer exists is a red suite, not coverage. (wiki-removal-2026-08)
 
 ### Fixed
+
+- **`--version` answers with the installed version.** `theokit --version` reported
+  `0.1.0-alpha.0` against a package at 0.48.8, and `create-theokit --version` reported `0.8.0`
+  against 1.23.7 — both carried the number as a literal in source, which nothing could keep in step
+  with the manifest beside it. The version is the first thing a bug report quotes, so a wrong one
+  costs its reader the time it takes to disbelieve it. Both now read the manifest, and a test fails
+  if either goes back to a literal. (docs-truth-pass-2026-08)
+
+- **`@theokit/agents` and `@theokit/http` declared their `types` condition after `import`.** Export
+  conditions are order-sensitive, so TypeScript could resolve the runtime entry before the
+  declaration file and report the package as untyped. Ten subpaths across the two packages were
+  affected, the root barrel of each included. `types` is now first everywhere, and `publint` — which
+  had never been pointed at these two — passes for all six packages. (docs-truth-pass-2026-08)
+
+- **`create-theokit --bare` left the Tailwind Vite plugin behind.** The transform deleted
+  `tailwindcss` from `devDependencies` but not `@tailwindcss/vite`, which is the entry the default
+  template actually declares (v4 has no config file and no postcss step). A bare scaffold installed a
+  Vite plugin whose engine had just been removed. It also removed `tailwind.config.ts` and
+  `postcss.config.js`, which the current template does not ship — harmless, but the comment claiming
+  they were the Tailwind toolchain was three versions out of date, as was the note explaining the
+  SDK removal by a publish that has since happened. (docs-truth-pass-2026-08)
 
 - **The `workspace:` release guard no longer passes a publish that is about to ship one.** It packs
   through `pnpm`, which substitutes the range, so it reported a clean tarball while a
