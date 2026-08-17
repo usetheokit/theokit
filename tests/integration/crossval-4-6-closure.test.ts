@@ -95,6 +95,35 @@ function blocked(id: string): boolean {
   return true
 }
 
+/**
+ * Gaps whose assertion needs something this CHECKOUT does not have — a sibling repository, a built
+ * `dist` — as opposed to something the WORK has not closed yet.
+ *
+ * Kept apart from `skipped` for two reasons. Mechanically, the summary below asserts that every
+ * entry in `skipped` corresponds to a gap declaring `blockedBy`, and an environment skip has no such
+ * declaration. Substantively, they are different facts: "this gap is still open" and "this machine
+ * could not check" are the distinction `cycle-acceptance` draws between REJECTED and NOT_VALIDATED,
+ * and a register that collapses them starts reporting unchecked work as checked.
+ */
+const environmentSkips: string[] = []
+
+/**
+ * Skip loudly when a sibling repository is absent.
+ *
+ * The predecessor register does exactly this (`crossval-gaps.test.ts` `noteSkip`); this one asserted
+ * `existsSync(...) === true` instead, so it hard-failed in CI — which clones `theokit-sdk` and never
+ * `theokit-tui`. A cross-repo assertion that cannot run is not a failing assertion, but it is also
+ * not a passing one, and silence is the answer that would let it rot.
+ */
+function siblingAbsent(gap: string, repo: string, path: string): boolean {
+  if (existsSync(path)) return false
+  environmentSkips.push(
+    `${gap}: ../${repo} is not present in this checkout (CI clones theokit-sdk only), so its built ` +
+      `surface could not be read. Run it locally with the sibling built to assert this gap.`,
+  )
+  return true
+}
+
 /** Names declared by the built `@theokit/agents`, or `undefined` when it has not been built. */
 function agentsSurface(): Set<string> | undefined {
   const dist = join(REPO_ROOT, 'packages', 'agents', 'dist')
@@ -187,7 +216,7 @@ describe('crossval-4-6-absorption — closure register', () => {
   it('test_gap_22_the_tui_ships_overridable_per_tool_rendering', () => {
     if (blocked('22')) return
     const dts = join(REPO_ROOT, '..', 'theokit-tui', 'dist', 'index.d.ts')
-    expect(existsSync(dts), 'theokit-tui is unbuilt').toBe(true)
+    if (siblingAbsent('22', 'theokit-tui', dts)) return
     const text = readFileSync(dts, 'utf8')
     for (const name of ['toolPresentation', 'DEFAULT_TOOL_PRESENTATION', 'KNOWN_TOOL_NAMES']) {
       expect(text, `${name} missing from the built @theokit/tui`).toContain(name)
@@ -276,8 +305,20 @@ describe('crossval-4-6-absorption — closure register', () => {
           `asserted:\n  ${skipped.join('\n  ')}`,
       )
     }
-    const closedNow = 17 - skipped.length
-    console.warn(`[crossval-4-6 closure] ${String(closedNow)}/17 closure assertions executed.`)
+    if (environmentSkips.length > 0) {
+      // Reported separately and just as loudly. These are NOT open gaps — they are gaps this
+      // checkout could not read, and calling them either "closed" or "open" would be a claim the
+      // run did not earn.
+      console.warn(
+        `[crossval-4-6 closure] ${String(environmentSkips.length)} gap(s) NOT VERIFIABLE in this ` +
+          `checkout:\n  ${environmentSkips.join('\n  ')}`,
+      )
+    }
+    const closedNow = 17 - skipped.length - environmentSkips.length
+    console.warn(
+      `[crossval-4-6 closure] ${String(closedNow)}/17 closure assertions executed ` +
+        `(${String(skipped.length)} blocked, ${String(environmentSkips.length)} not verifiable here).`,
+    )
     expect(skipped.length, 'every skip must carry a reason').toBe(
       Object.values(GAPS).filter((g) => g.blockedBy !== undefined).length,
     )
