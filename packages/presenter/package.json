@@ -40,7 +40,7 @@
     "vitest": "^4.1.9",
     "zod": "^4.4.3"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22.12.0"
   }

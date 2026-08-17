@@ -12,7 +12,7 @@ the framework itself.
 ## Quick start
 
 ```bash
-git clone https://github.com/usetheodev/theokit.git
+git clone https://github.com/usetheokit/theokit.git
 cd theokit
 pnpm install
 pnpm try:scaffold        # scaffolds a throwaway app into my-test/

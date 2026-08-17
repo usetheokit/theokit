@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A LICENSE file inside each publishable package — `@theokit/http`, `@theokit/presenter`,
+  `@theokit/agents`, `@theokit/tauri`, `create-theokit` and `theokit`. npm packs only the package
+  directory, so a LICENSE sitting at the repo root never reached the published tarball: the packages
+  declared `Apache-2.0` and shipped without its text. (usetheokit/theokit#316)
+
 - Secret scanning, in two layers: a `pre-commit` hook that scans the staged content with TruffleHog
   and refuses the commit, and `.github/workflows/secret-scan.yml`, which re-scans the pushed range in
   CI. The hook is what keeps a credential out of the history at all; the workflow is what
@@ -30,6 +35,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 
 ### Changed
+
+- **The repository moved to the official `usetheokit` organization.** Existing clones keep working:
+  GitHub redirects the old `usetheodev/theokit` remote permanently. `repository`, `bugs` and
+  `homepage` metadata, README badges, issue templates, and the CI steps that clone sibling repos now
+  point at `usetheokit`. Links to `usetheodev` that are *not* the GitHub org — the X and LinkedIn
+  profiles — were left alone, as were references to repositories that stay behind.
+  (usetheokit/theokit#316)
+
+- **The Apache-2.0 license text was replaced with the official one.** The text shipped until now had
+  paragraph 4(d) truncated, dropping "reasonable and customary use" from the NOTICE clause. A
+  modified body under the `Apache-2.0` SPDX identifier is effectively a custom license, and every
+  consumer had to reason about the difference. Every LICENSE file in the repo is now byte-identical
+  to the canonical text, with the appendix filled in. (usetheokit/theokit#316)
+
+- `@theokit/http` and `@theokit/presenter` declared `MIT` while the rest of the ecosystem is
+  Apache-2.0; both now declare `Apache-2.0`, matching the LICENSE that actually ships with them.
+  (usetheokit/theokit#316)
 
 - **The git history was rewritten end to end — every commit SHA changed.** Anyone holding a clone
   must re-clone or reset onto the new history; a `git pull` will try to reconcile two unrelated

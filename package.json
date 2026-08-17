@@ -1,6 +1,7 @@
 {
   "name": "theokit-monorepo",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
