@@ -7,8 +7,6 @@
 <!-- Bulleted checklist of what you ran or what reviewers should run -->
 - [ ] `npx vitest run` — unit + integration green
 - [ ] `npx tsc -p packages/theo/tsconfig.json --noEmit` — type check clean
-- [ ] `npx playwright test` — browser tests green
-- [ ] `bash scripts/dogfood-smoke.sh` — health ≥ 41/48
 - [ ] CHANGELOG.md updated under `[Unreleased]` (if user-visible)
 - [ ] New code has at least one test that would have failed without the change
 

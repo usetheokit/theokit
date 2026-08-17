@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { resolve } from 'node:path'
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,26 +27,90 @@ import {
  * MUST exit gracefully with `status: 'no-project-detected'`.
  */
 
-const CLEAN_FIXTURE = resolve(__dirname, '../../fixtures/upgrade-readiness-clean')
-const DIRTY_FIXTURE = resolve(__dirname, '../../fixtures/upgrade-readiness-dirty')
+/**
+ * The clean/dirty projects came from `fixtures/upgrade-readiness-{clean,dirty}`, removed with the
+ * rest of `fixtures/`. They are built in a tmpdir here with the same content those fixtures
+ * declared — one rule per file, so a failure points at the rule.
+ */
+function makeTheokitProject(contents: Record<string, string>): string {
+  const dir = resolve(tmpdir(), `theokit-upgrade-${Date.now()}-${Math.random()}`)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    resolve(dir, 'package.json'),
+    JSON.stringify({ name: 'tmp-app', private: true, dependencies: { theokit: '^0.2.0' } }),
+  )
+  for (const [rel, content] of Object.entries(contents)) {
+    const full = resolve(dir, rel)
+    mkdirSync(resolve(full, '..'), { recursive: true })
+    writeFileSync(full, content)
+  }
+  return dir
+}
 
-describe('scanUpgradeReadiness — clean fixture', () => {
-  it('Given clean fixture with theoFetch only, Then status=="ready" and violations is empty', async () => {
-    const report = await scanUpgradeReadiness({ cwd: CLEAN_FIXTURE })
-    expect(report.status).toBe('ready')
-    expect(report.violations).toEqual([])
+const CLEAN_SOURCES = {
+  'app/page.tsx':
+    "import { theoFetch } from 'theokit/client'\n" +
+    'export default function Page() {\n' +
+    "  const save = () => theoFetch('/api/save', { method: 'POST' })\n" +
+    '  return <button onClick={save}>save</button>\n' +
+    '}\n',
+}
+
+const DIRTY_SOURCES = {
+  'app/page.tsx':
+    'export default function Page() {\n' +
+    "  const save = () => fetch('/api/save', { method: 'POST', body: '{}' })\n" +
+    '  return (\n' +
+    '    <div onClick={save}\n' +
+    "      dangerouslySetInnerHTML={{ __html: '<script>alert(1)</script>' }} />\n" +
+    '  )\n' +
+    '}\n',
+  'public/index.html':
+    '<!doctype html>\n<html>\n<body>\n<script>window.x = 1</script>\n</body>\n</html>\n',
+  'node_modules/some-dep/index.js': "fetch('/api/x', { method: 'POST' })\n",
+}
+
+describe('scanUpgradeReadiness — clean project', () => {
+  it('Given a project with theoFetch only, Then status=="ready" and violations is empty', async () => {
+    const dir = makeTheokitProject(CLEAN_SOURCES)
+    try {
+      const report = await scanUpgradeReadiness({ cwd: dir })
+      expect(report.status).toBe('ready')
+      expect(report.violations).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('Given a clean project, Then exitCode === 0', async () => {
+    const dir = makeTheokitProject(CLEAN_SOURCES)
+    try {
+      expect((await scanUpgradeReadiness({ cwd: dir })).exitCode).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
-describe('scanUpgradeReadiness — dirty fixture', () => {
-  it('Given dirty fixture, Then status=="has-violations" and violations.length > 0', async () => {
-    const report = await scanUpgradeReadiness({ cwd: DIRTY_FIXTURE })
+describe('scanUpgradeReadiness — project with violations', () => {
+  let dir: string
+  let report: UpgradeReadinessReport
+
+  beforeAll(async () => {
+    dir = makeTheokitProject(DIRTY_SOURCES)
+    report = await scanUpgradeReadiness({ cwd: dir })
+  })
+
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('Given violations exist, Then status=="has-violations" and violations.length > 0', () => {
     expect(report.status).toBe('has-violations')
     expect(report.violations.length).toBeGreaterThan(0)
   })
 
-  it('Given page.tsx with raw fetch POST, Then a csrf-missing-header violation is reported', async () => {
-    const report = await scanUpgradeReadiness({ cwd: DIRTY_FIXTURE })
+  it('Given page.tsx with raw fetch POST, Then a csrf-missing-header violation is reported', () => {
     const v = report.violations.find((v) => v.rule === 'csrf-missing-header')
     expect(v).toBeDefined()
     expect(v?.file).toMatch(/page\.tsx$/)
@@ -55,50 +119,35 @@ describe('scanUpgradeReadiness — dirty fixture', () => {
     expect(v?.fix).toMatch(/theoFetch|X-Theo-Action/)
   })
 
-  it('Given public/index.html with inline <script>, Then an inline-script violation is reported', async () => {
-    const report = await scanUpgradeReadiness({ cwd: DIRTY_FIXTURE })
+  it('Given public/index.html with inline <script>, Then an inline-script violation is reported', () => {
     const v = report.violations.find((v) => v.rule === 'inline-script')
     expect(v).toBeDefined()
     expect(v?.file).toMatch(/index\.html$/)
     expect(v?.line).toBeGreaterThan(0)
   })
 
-  it('Given page.tsx with dangerouslySetInnerHTML containing <script>, Then dangerously-set-inline-script reported', async () => {
-    const report = await scanUpgradeReadiness({ cwd: DIRTY_FIXTURE })
+  it('Given page.tsx with dangerouslySetInnerHTML containing <script>, Then dangerously-set-inline-script reported', () => {
     const v = report.violations.find((v) => v.rule === 'dangerously-set-inline-script')
     expect(v).toBeDefined()
     expect(v?.file).toMatch(/page\.tsx$/)
   })
 
-  it('Given node_modules fetch POST in dirty fixture, Then NOT reported (node_modules skipped)', async () => {
-    const report = await scanUpgradeReadiness({ cwd: DIRTY_FIXTURE })
+  it('Given a fetch POST inside node_modules, Then NOT reported (node_modules skipped)', () => {
     expect(report.violations.every((v) => !v.file.includes('node_modules'))).toBe(true)
   })
-})
 
-describe('scanUpgradeReadiness — exit code semantics', () => {
-  it('Given dirty fixture, Then exitCode === 1 (HIGH violation blocks CI)', async () => {
-    const report = await scanUpgradeReadiness({ cwd: DIRTY_FIXTURE })
+  it('Given a HIGH violation, Then exitCode === 1 (blocks CI)', () => {
     expect(report.exitCode).toBe(1)
   })
 
-  it('Given clean fixture, Then exitCode === 0', async () => {
-    const report = await scanUpgradeReadiness({ cwd: CLEAN_FIXTURE })
-    expect(report.exitCode).toBe(0)
+  it('Given allowWarnings=true, Then exitCode === 0 even with violations', async () => {
+    const relaxed = await scanUpgradeReadiness({ cwd: dir, allowWarnings: true })
+    expect(relaxed.status).toBe('has-violations')
+    expect(relaxed.exitCode).toBe(0)
   })
 
-  it('Given dirty fixture and allowWarnings=true, Then exitCode === 0 even with violations', async () => {
-    const report = await scanUpgradeReadiness({ cwd: DIRTY_FIXTURE, allowWarnings: true })
-    expect(report.status).toBe('has-violations')
-    expect(report.exitCode).toBe(0)
-  })
-})
-
-describe('scanUpgradeReadiness — JSON output shape', () => {
-  it('Given any scan, Then result is a plain object serializable to JSON with violations array', async () => {
-    const report = await scanUpgradeReadiness({ cwd: DIRTY_FIXTURE })
-    const json = JSON.stringify(report)
-    const parsed = JSON.parse(json) as UpgradeReadinessReport
+  it('Given any scan, Then result is a plain object serializable to JSON with violations array', () => {
+    const parsed = JSON.parse(JSON.stringify(report)) as UpgradeReadinessReport
     expect(Array.isArray(parsed.violations)).toBe(true)
     expect(parsed.violations[0]).toMatchObject({
       file: expect.any(String),

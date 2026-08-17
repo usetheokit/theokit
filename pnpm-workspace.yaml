@@ -2,20 +2,9 @@ packages:
   - 'packages/*'
   - 'my-test'
   - 'examples/*'
-  - 'fixtures/template-default'
-  # T9.1 — TheoUI auto-inject fixture: needs @theokit/ui resolvable via
-  # node_modules for the entry-client probe (theoui-detect.ts) to succeed.
-  - 'fixtures/theoui-autoinject'
-  # Wave 2 completion plan T0.2 — services fixtures pre-emptively registered.
-  # Fixture service ports are 8101 (python-basic), 8102 (node-basic),
-  # 8103/8104 (both — python+node with dependsOn). Tests that spawn these
-  # MUST run serial within the same Vitest file (port collisions otherwise).
-  # Port range RESERVED: 8100–8199 for service fixtures.
-  - 'fixtures/services-python-basic'
-  - 'fixtures/services-node-basic'
-  - 'fixtures/services-both'
-  # Decorator full-stack fixture — @theokit/http-decorators + React frontend
-  - 'fixtures/decorator-fullstack'
+  # The seven members under `fixtures/` (template-default, theoui-autoinject, services-*,
+  # decorator-fullstack) went away with the directory. The 8100-8199 port range, reserved for the
+  # service fixtures, is free.
   # @theokit/sdk sibling links REMOVED (2026-06-10) — Turborepo requires all
   # workspace packages inside repo root. SDK consumed via npm registry instead.
   # To restore local dev: pnpm link ../theokit-sdk/packages/sdk
