@@ -76,6 +76,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Security
 
 - **Secret scanning covers both layers** — see the entry under Added.
+- **The secret-scan workflow now names an image tag that exists.** It asked for
+  `ghcr.io/trufflesecurity/trufflehog:v3.97.0`; the registry publishes that tag without the `v`, and
+  only the GitHub *release* carries the prefix. Docker answered `manifest unknown` and the step died
+  with exit 125, so the gate was fail-closed and blocked every push rather than passing over an
+  unscanned range — but it also never scanned one. (secret-scanning-2026-08)
 - **Dependency advisories are checked in CI again.** A `dependency-audit` job fails on a high or
   critical advisory in the PRODUCTION tree; the dev tree is reported as a warning rather than
   enforced, because its findings arrive transitively and a permanently red gate is one people learn
