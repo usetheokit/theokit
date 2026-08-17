@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 # Git pre-commit hook — runs:
-#   GATE 1. lint-staged (ESLint + Prettier on changed files only — fast)
+#   GATE 1. Secret scanning (TruffleHog over the staged content)
+#   GATE 2. lint-staged (ESLint + Prettier on changed files only — fast)
 #
 # Tests are NOT in pre-commit, to keep the loop tight. Tests run in CI (cheap there).
 #
-# There is NO secret scanning here, and none in CI either: a committed credential is caught only by
-# human review or the provider's scanner. Nor is there a template-version or workspace-link gate.
+# There is no template-version or workspace-link gate.
 #
 set -e
 
 ROOT="$(git rev-parse --show-toplevel)"
 
-# GATE 1 — lint-staged, ESLint + Prettier on staged files only.
+# GATE 1 — secret scanning. First because it is the only gate whose failure cannot be
+# repaired after the fact: lint and types are fixed by another commit, but a credential
+# written to the history has to be rotated at the provider. It also runs in CI
+# (.github/workflows/secret-scan.yml), which --no-verify cannot skip.
+"$ROOT/.githooks/secret-scan.sh"
+
+# GATE 2 — lint-staged, ESLint + Prettier on staged files only.
 if [ -f "$ROOT/node_modules/.bin/lint-staged" ]; then
   cd "$ROOT" && ./node_modules/.bin/lint-staged
 else

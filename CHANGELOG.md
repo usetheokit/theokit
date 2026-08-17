@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Secret scanning, in two layers: a `pre-commit` hook that scans the staged content with TruffleHog
+  and refuses the commit, and `.github/workflows/secret-scan.yml`, which re-scans the pushed range in
+  CI. The hook is what keeps a credential out of the history at all; the workflow is what
+  `git commit --no-verify` cannot skip. Confirmed fixtures are silenced one line at a time with a
+  `trufflehog:ignore` comment, never by excluding a path — an excluded path would also hide a real
+  secret added to that same fixture later. (secret-scanning-2026-08)
+
 ### Changed
 
 - **The git history was rewritten end to end — every commit SHA changed.** Anyone holding a clone
