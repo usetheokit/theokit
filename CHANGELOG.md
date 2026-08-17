@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`LivenessBudgetError` (`@theokit/agents/session`) — o orçamento agora tem que de fato limitar.**
+  `opts.budget` era atribuído sem validação, e `remaining -= 1` sobre `Infinity` continua `Infinity`:
+  todo guard `remaining <= 0` virava no-op e a varredura ficava ilimitada — exatamente o run de ~64M
+  syscalls que o módulo existe para impedir, reintroduzido pela porta da frente. Um valor não-inteiro
+  ou negativo é **recusado, não normalizado**, seguindo a invariante 1 do próprio pacote em
+  `transcript-gc.ts`: *"clamping is the tempting behaviour and the dangerous one — an operator who
+  asked for a policy gets silently given a different one."* `0` continua válido e significa "não
+  gaste nada", devolvendo `undetermined` para todo projeto. A mensagem nomeia o valor recusado e o
+  dimensionamento medido (≥ 3N para N projetos, a 2,54 ops/projeto).
+
 - **`classifyProjects` (`@theokit/agents/session`) — responde "o projeto por trás de
   `projects/<encoded>/` ainda existe?" sem que cada produto escreva a busca de novo.** A pergunta é
   difícil porque `encodeProjectDir(cwd)` é `cwd.replace(/[^a-zA-Z0-9]/g, '-')`: mão única e
