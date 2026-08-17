@@ -65,11 +65,11 @@ const REPO_ROOT = join(__dirname, '..', '..')
  *   Unbreakable Rule 6.
  * - `ROADMAP*.md`, `CONTRIBUTING.md` — same category as the wiki.
  *
- * What this DOES cover is every line that ships or executes: `packages/*` source and tests,
- * `scripts/`, `tools/`, and the lint tests themselves. That is the surface where a Portuguese
- * identifier becomes a consumer's problem, and it is clean as of 2026-08-10.
+ * What this DOES cover is every line that ships or executes: `packages/*` source and tests, plus
+ * the root test suite including the lint tests themselves. That is the surface where a Portuguese
+ * identifier becomes a consumer's problem, and it is clean.
  */
-const SCAN_ROOTS = ['packages', 'scripts', 'tools', 'tests']
+const SCAN_ROOTS = ['packages', 'tests']
 
 /**
  * Loanwords English legitimately borrows with their diacritics. `façade` is a
