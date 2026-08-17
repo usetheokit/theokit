@@ -58,6 +58,7 @@ export { transcriptRootHint } from './transcript-root-hint.js'
  */
 export {
   classifyProjects,
+  LivenessBudgetError,
   type ClassifyProjectsOptions,
   type FsSeam,
   type Liveness,

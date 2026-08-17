@@ -29,7 +29,11 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { classifyProjects, type FsSeam } from '../../src/session/liveness-oracle.js'
+import {
+  classifyProjects,
+  LivenessBudgetError,
+  type FsSeam,
+} from '../../src/session/liveness-oracle.js'
 
 /** The encoding under test, restated here so the test does not depend on the module's private copy. */
 const encode = (cwd: string): string => cwd.replace(/[^a-zA-Z0-9]/g, '-')
@@ -281,6 +285,56 @@ describe('classifyProjects — a collision class is not a path', () => {
     })
 
     expect(out.get(name)?.liveness, 'a plantable field must not reach `dead`').toBe('alive')
+  })
+
+  it('test_a_non_finite_budget_is_refused_not_treated_as_unbounded', () => {
+    // The whole module exists because an unbounded sweep produced ~64M syscalls and never returned.
+    // `remaining -= 1` on `Infinity` is still `Infinity`, so every `remaining <= 0` guard is a no-op
+    // and the bound silently does not exist — the exact failure, reintroduced through the front door.
+    // Refused rather than clamped, matching this package's own invariant 1 in `transcript-gc.ts`:
+    // an operator who asked for a policy must not be silently given a different one.
+    const fs = seamOver([])
+    const call = (budget: number) => () =>
+      classifyProjects(['x'], {
+        projectsRoot: PROJECTS_ROOT,
+        candidatePaths: () => [],
+        budget,
+        fs,
+      })
+
+    expect(call(Number.POSITIVE_INFINITY)).toThrow(LivenessBudgetError)
+    expect(call(Number.NaN)).toThrow(LivenessBudgetError)
+    expect(call(-1)).toThrow(LivenessBudgetError)
+    expect(call(1.5)).toThrow(LivenessBudgetError)
+    // Zero is a real policy — "spend nothing" — and its result is `undetermined`, never `dead`.
+    expect(call(0)).not.toThrow()
+    expect(
+      classifyProjects(['x'], {
+        projectsRoot: PROJECTS_ROOT,
+        candidatePaths: () => [],
+        budget: 0,
+        fs,
+      }).get('x')?.liveness,
+    ).toBe('undetermined')
+  })
+
+  it('test_the_budget_error_names_the_value_it_refused', () => {
+    // An operator reading this in a GC log needs to know WHICH knob and WHAT value, not that
+    // something was invalid (`rules/error-handling.md` — fail clear, with context).
+    let caught: unknown
+    try {
+      classifyProjects(['x'], {
+        projectsRoot: PROJECTS_ROOT,
+        candidatePaths: () => [],
+        budget: Number.POSITIVE_INFINITY,
+        fs: seamOver([]),
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(LivenessBudgetError)
+    expect((caught as Error).message).toMatch(/budget/i)
+    expect((caught as Error).message).toMatch(/Infinity/)
   })
 
   it('test_a_stat_that_could_not_be_performed_is_never_absence', () => {

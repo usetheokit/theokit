@@ -11,8 +11,11 @@
  *
  * ## What is injected, and why exactly that
  *
- * `listProjects` — which directories are even candidates is PRODUCT policy (workspaces, ignore
- * rules, mounted volumes). This module must not guess it.
+ * `candidatePaths` — which directories are even candidates is PRODUCT policy (workspaces, ignore
+ * rules, mounted volumes). This module must not guess it. It returns REAL ABSOLUTE PATHS, and the
+ * name says so because the previous one (`listProjects`) did not: the only consumer's function of
+ * that name returns ENCODED DIRECTORY NAMES, and wiring one to the other classified 6 of 6 live
+ * projects `dead`.
  *
  * `fs` — so the budget is countable and the caller can supply a stat that matches its own retry and
  * timeout posture. Every call is one operation.
@@ -30,6 +33,8 @@
  * **The budget is shared across the whole sweep, not per project.** A bound that resets each
  * iteration is not a bound; that is precisely what produced the 64M figure.
  */
+
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 /**
  * The filesystem, as this module needs it. Every call is ONE operation against the budget, and any
@@ -129,6 +134,33 @@ function encodeProjectDir(cwd: string): string {
  * it was written in, and reading it costs one line of one file.
  */
 
+/**
+ * Raised when `budget` cannot bound anything. Refusing beats clamping, for the same reason
+ * `transcript-gc.ts` states as its invariant 1: an operator who asked for a policy must not be
+ * silently given a different one.
+ */
+export class LivenessBudgetError extends TheokitAgentError {
+  constructor(budget: number) {
+    super(
+      `refusing to classify projects with budget ${String(budget)}: it must be a non-negative integer. ` +
+        `The bound is spent with \`remaining -= 1\`, and on a non-finite value that subtraction never ` +
+        `reaches zero — so every \`remaining <= 0\` guard becomes a no-op and the sweep is unbounded, ` +
+        `which is the ~64M-syscall run this module exists to prevent. Pass a real ceiling (at the ` +
+        `measured 2.54 ops/project, a tree of N projects wants >= 3N); \`0\` is valid and means ` +
+        `"spend nothing", yielding \`undetermined\` for every project.`,
+    )
+  }
+}
+
+/**
+ * The bound has to actually bound. Validated at the boundary rather than defended at each use
+ * (`rules/error-handling.md`): past this line `remaining` is trusted, and there is exactly one place
+ * to read what "usable" means.
+ */
+function assertUsableBudget(budget: number): void {
+  if (!Number.isInteger(budget) || budget < 0) throw new LivenessBudgetError(budget)
+}
+
 /** One budgeted existence probe. `error` covers both a throw and the seam's `undefined`. */
 type Probe = (path: string) => { found: boolean } | { error: string }
 
@@ -181,6 +213,8 @@ export function classifyProjects(
   encoded: readonly string[],
   opts: ClassifyProjectsOptions,
 ): Map<string, LivenessVerdict> {
+  assertUsableBudget(opts.budget)
+
   const out = new Map<string, LivenessVerdict>()
   let remaining = opts.budget
 
