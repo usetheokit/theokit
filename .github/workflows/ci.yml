@@ -41,8 +41,6 @@ jobs:
         run: pnpm lint
       - name: Prettier (format check)
         run: pnpm format:check
-      - name: Check template version sync (ADR 0019)
-        run: pnpm check:templates
 
   typecheck-build:
     name: Typecheck + Build
@@ -168,28 +166,16 @@ jobs:
           path: coverage/
           retention-days: 14
 
-  e2e:
-    name: Playwright E2E
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
-      # Build packages before E2E — fixtures spawn `theokit dev` which needs
-      # the bin at `packages/theo/dist/cli/index.js`.
-      - run: pnpm --filter "./packages/*" build
-      - run: npx playwright install --with-deps chromium
-      - run: pnpm test:e2e
+  # The `e2e` (Playwright) job lived here and was REMOVED along with `fixtures/`.
+  #
+  # The whole e2e harness was built out of fixtures: `playwright.config.ts` derived one webServer
+  # per fixture (`fixtures/wave1-hello-theo`, `fixtures/app-router-*`) and the specs under
+  # `tests/e2e/` drove those servers. With the fixtures gone there is nothing left to boot, so the
+  # config, the specs and this job went together.
+  #
+  # What was actually lost: there is NO browser coverage left. The file-system router, the
+  # scaffolded page's hydration, the CSP nonce and the WebSocket echo were exercised end to end
+  # only here.
 
   dead-code:
     name: Dead code (Knip)
@@ -212,24 +198,10 @@ jobs:
       - run: pnpm --filter "./packages/*" build
       - run: pnpm knip
 
-  dependency-audit:
-    name: Dependency audit (npm audit, high+)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check:audit
+  # The `dependency-audit` job lived here and was REMOVED along with `scripts/audit-scopes.mjs`,
+  # which was everything it ran (`pnpm check:audit`). No replacement: no gate in this repository
+  # looks at dependency advisories any more. Read the comment below with that in mind — it claims
+  # `dependency-review` could go because this job covered `fail-on-severity: high`. It no longer does.
 
   # The `dependency-review` job lived here and was REMOVED (backlog B-M67-15).
   #
@@ -248,46 +220,13 @@ jobs:
   # replacements has. That is a purchasing decision, not a CI one — and until it is made, an
   # impossible gate is worse than no gate: it teaches the team to read red as noise.
 
-  license-check:
-    name: License compliance
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check:licenses
+  # The `license-check` job lived here and was REMOVED along with `scripts/check-licenses.mjs`.
+  # There is no dependency licence check in CI any more — the allowlist it enforced (cited by the
+  # `dependency-review` comment above as equivalent coverage) went with the script.
 
-  bundle-budget:
-    name: Bundle budget (<=350 KB gzipped)
-    runs-on: ubuntu-latest
-    needs: [typecheck-build]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
-      # Filter to packages/* (skip examples) — same rationale as typecheck-build.
-      - run: pnpm --filter "./packages/*" build
-      - run: pnpm check:bundle
+  # The `bundle-budget` job lived here and was REMOVED: it ran `scripts/check-bundle-budget.sh`
+  # against a build of `fixtures/template-default`, and both sides — script and fixture — are gone.
+  # The 350 KB gzipped ceiling on the client bundle is no longer measured by anything.
 
   # O job `e2e-postgres-templates` vivia aqui e foi REMOVIDO (backlog B-M67-12).
   #
@@ -301,14 +240,10 @@ jobs:
   # ensina o time a ignorar vermelho, e foi exatamente esse hábito que deixou dois releases seguidos
   # merjarem com 12 checks vermelhos (#210).
 
-  secret-scan:
-    name: Secret scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - run: bash scripts/prevent-secrets.sh
+  # The `secret-scan` job lived here and was REMOVED along with `scripts/prevent-secrets.sh`.
+  # Together with the same script leaving the `pre-commit` hook, NO secret scanning is left in this
+  # repository — neither local nor in CI. A committed secret now depends on human review or the
+  # provider's scanner to be noticed.
 
   package-validation:
     name: Package validation (publint + ATTW + smoke)
@@ -325,10 +260,9 @@ jobs:
       - run: pnpm build
       - run: pnpm validate:publint
       - run: pnpm validate:attw
-      # theokit#153 — the guard that did not exist when the leak shipped.
-      # `theokit` 0.19.0-0.30.0 published raw `workspace:^` and every `npm install` of those
-      # twelve versions still fails; the code was fixed in 0.31.0, but a published version can
-      # only be deprecated, never corrected. This packs each publishable package and inspects
-      # the TARBALL, so the leak is caught while it is still cheap.
-      - run: node scripts/check-pack-no-workspace.mjs
+      # The `check-pack-no-workspace` step went away with `scripts/check-pack-no-workspace.mjs`. It
+      # was the theokit#153 guard: `theokit` 0.19.0-0.30.0 published raw `workspace:^` and every
+      # `npm install` of those twelve versions still fails — a published version can only be
+      # deprecated, never corrected. Packing each package and inspecting the TARBALL was what caught
+      # the leak while it was still cheap. That leak is possible again, undetected.
       - run: npx vitest run tests/smoke/

@@ -5,35 +5,22 @@ import { resolve } from 'node:path'
 /**
  * M3 (clean break) — canonical agents/chat.ts + @theokit/sdk dep in `create-theokit` template.
  *
- * Mirrors fixtures/template-default. Verified via:
- *   - Byte-identical agents/chat.ts bodies (defends drift)
+ * Verified via:
  *   - regex grep on package.json.tmpl (NOT JSON.parse — Mustache placeholders
  *     `{{name}}` make the template invalid JSON; EC-7)
  *   - defineAgent shape assertions (no proprietary surface references)
+ *
+ * The byte-for-byte parity test against `fixtures/template-default/agents/chat.ts` went away with
+ * `fixtures/`: the template no longer has a checked-in mirror to compare against. The shape
+ * assertions below still guard the template's content; what was lost is the guarantee that fixture
+ * and template do not drift apart — there is no fixture left to drift.
  */
 
 const ROOT = resolve(__dirname, '../..')
-const FIXTURE_CHAT = resolve(ROOT, 'fixtures/template-default/agents/chat.ts')
 const TEMPLATE_CHAT = resolve(ROOT, 'packages/create-theokit/templates/default/agents/chat.ts')
 const TEMPLATE_PKG = resolve(ROOT, 'packages/create-theokit/templates/default/package.json.tmpl')
 
-function normalize(s: string): string {
-  // Strip trailing whitespace per line + collapse multiple blank lines
-  return s
-    .split('\n')
-    .map((l) => l.replace(/\s+$/, ''))
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-describe('create-theokit default template — agents/chat.ts parity with fixture (M3)', () => {
-  it('agents/chat.ts bodies are identical (whitespace-normalised) — defends drift', () => {
-    const fixture = normalize(readFileSync(FIXTURE_CHAT, 'utf-8'))
-    const template = normalize(readFileSync(TEMPLATE_CHAT, 'utf-8'))
-    expect(template).toBe(fixture)
-  })
-
+describe('create-theokit default template — agents/chat.ts shape (M3)', () => {
   it('template agents/chat.ts default-exports the agent() builder (M31 builder-only API)', () => {
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
     expect(src).toMatch(/export\s+default\s+AgentBuilder\.create\(\)/)

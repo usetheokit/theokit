@@ -33,14 +33,13 @@ import { resolve } from 'node:path'
 
 const ROOT = resolve(__dirname, '../..')
 
-const FILES_TO_SCAN = [
-  'fixtures/template-default/agents/chat.ts',
-  'packages/create-theokit/templates/default/agents/chat.ts',
-] as const
+// `fixtures/template-default/agents/chat.ts` left this list along with `fixtures/`. The file that
+// is actually shipped to the user — the `create-theokit` template — is still covered.
+const FILES_TO_SCAN = ['packages/create-theokit/templates/default/agents/chat.ts'] as const
 
 describe('scaffold anti-stack lint — no raw OpenAI in default agents/chat.ts (M3)', () => {
-  it('declares exactly 2 files to scan (defends against missing file in array)', () => {
-    expect(FILES_TO_SCAN.length).toBe(2)
+  it('declares exactly 1 file to scan (defends against missing file in array)', () => {
+    expect(FILES_TO_SCAN.length).toBe(1)
   })
 
   for (const relativePath of FILES_TO_SCAN) {

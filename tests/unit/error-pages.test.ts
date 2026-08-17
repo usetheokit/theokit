@@ -1,32 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve, join, extname } from 'node:path'
+import { extname } from 'node:path'
 
-const fixtureDir = resolve(__dirname, '../../fixtures/production-build')
-
+// The `fixture files` block went away with `fixtures/production-build`: it asserted the existence
+// and contents of that fixture's `public/404.html` and `public/500.html`. The extension detection
+// below is the logic the production server uses to tell an SPA route from a static file request.
 describe('Error Pages', () => {
-  describe('fixture files', () => {
-    it('should have public/404.html fixture', () => {
-      expect(existsSync(join(fixtureDir, 'public/404.html'))).toBe(true)
-    })
-
-    it('should have public/500.html fixture', () => {
-      expect(existsSync(join(fixtureDir, 'public/500.html'))).toBe(true)
-    })
-
-    it('404.html should contain custom content', () => {
-      const content = readFileSync(join(fixtureDir, 'public/404.html'), 'utf-8')
-      expect(content).toContain('404')
-      expect(content).toContain('Not Found')
-    })
-
-    it('500.html should contain custom content', () => {
-      const content = readFileSync(join(fixtureDir, 'public/500.html'), 'utf-8')
-      expect(content).toContain('500')
-      expect(content).toContain('Server Error')
-    })
-  })
-
   describe('URL extension detection logic', () => {
     // The production server uses extname() to distinguish SPA routes from static file requests
     it('should detect file extensions for static file URLs', () => {

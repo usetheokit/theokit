@@ -1,13 +1,45 @@
-import { describe, it, expect } from 'vitest'
-import { resolve } from 'node:path'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { scanWebSocketRoutes } from '../../packages/theo/src/server/scan/ws-scan.js'
 
-const fixtureDir = resolve(__dirname, '../../fixtures/websocket-basic/server')
-const noWsDir = resolve(__dirname, '../../fixtures/basic-valid-app/server')
+/**
+ * Four of the cases below read `fixtures/websocket-basic` and `fixtures/basic-valid-app`, removed
+ * with the rest of `fixtures/`. The tree is now built in a tmpdir by the test itself: same
+ * behavioural coverage, without depending on a checked-in directory.
+ */
+function makeServerDir(files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), 'theokit-ws-scan-'))
+  for (const [rel, content] of Object.entries(files)) {
+    const abs = join(root, rel)
+    mkdirSync(join(abs, '..'), { recursive: true })
+    writeFileSync(abs, content)
+  }
+  return root
+}
 
 describe('scanWebSocketRoutes', () => {
+  const WS_HANDLER = 'export default { open() {}, message() {}, close() {} }\n'
+  let withWs: string
+  let withoutWs: string
+
+  beforeAll(() => {
+    withWs = makeServerDir({
+      'ws/echo.ts': WS_HANDLER,
+      'ws/notifications.ts': WS_HANDLER,
+      'ws/README.md': '# not a route\n',
+    })
+    withoutWs = makeServerDir({ 'routes/health.ts': 'export function GET() {}\n' })
+  })
+
+  afterAll(() => {
+    rmSync(withWs, { recursive: true, force: true })
+    rmSync(withoutWs, { recursive: true, force: true })
+  })
+
   it('should scan server/ws/ directory and return routes', () => {
-    const routes = scanWebSocketRoutes(fixtureDir)
+    const routes = scanWebSocketRoutes(withWs)
     expect(routes.length).toBeGreaterThanOrEqual(2)
     const paths = routes.map((r) => r.wsPath)
     expect(paths).toContain('/ws/echo')
@@ -15,7 +47,7 @@ describe('scanWebSocketRoutes', () => {
   })
 
   it('should return empty array when no ws/ directory', () => {
-    const routes = scanWebSocketRoutes(noWsDir)
+    const routes = scanWebSocketRoutes(withoutWs)
     expect(routes).toEqual([])
   })
 
@@ -25,16 +57,12 @@ describe('scanWebSocketRoutes', () => {
   })
 
   it('should have filePath pointing to actual files', () => {
-    const routes = scanWebSocketRoutes(fixtureDir)
-    for (const route of routes) {
-      expect(route.filePath).toContain('echo.ts')
-      break // just check first
-    }
+    const routes = scanWebSocketRoutes(withWs)
+    expect(routes.some((r) => r.filePath.endsWith('echo.ts'))).toBe(true)
   })
 
   it('should ignore non-ts files', () => {
-    const routes = scanWebSocketRoutes(fixtureDir)
-    // All routes should be from .ts files
+    const routes = scanWebSocketRoutes(withWs)
     for (const route of routes) {
       expect(route.filePath).toMatch(/\.(ts|tsx|js|jsx)$/)
     }

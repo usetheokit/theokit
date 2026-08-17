@@ -54,11 +54,10 @@ export default defineConfig({
       './packages/http/vitest.config.ts',
       './packages/presenter/vitest.config.ts',
     ],
-    // dogfood-regressions-fix-plan v1.1 T1.2 — native bindings preflight.
-    // globalSetup runs ONCE per suite (before any worker), making this the
-    // most efficient hook for the better-sqlite3 ABI mismatch guard.
-    // See: tests/setup-native-bindings.ts + scripts/preflight-native-bindings.mjs.
-    globalSetup: ['./tests/setup-native-bindings.ts'],
+    // The native-bindings `globalSetup` was removed along with `scripts/`: it existed only to call
+    // `scripts/preflight-native-bindings.mjs`, which detected a better-sqlite3 NODE_MODULE_VERSION
+    // mismatch and triggered the rebuild. Without that hook an ABI mismatch surfaces again as a raw
+    // test failure instead of an automatic rebuild — run `pnpm rebuild better-sqlite3` when it does.
     // theokit-test-suite-cleanup followup 2026-06-05 — register `tsx/esm`
     // ESM loader inside every test worker so `loadConfig()` (and downstream
     // tests that spawn `theokit dev`/`build`) can `await import(...theo.config.ts)`
