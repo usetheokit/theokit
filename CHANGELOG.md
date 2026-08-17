@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`deleteSession` apagava a sessão que alguém tinha acabado de retomar.** A checagem de proteção
+  acontecia no topo da função; o controle então saía por até `registryTimeoutMs` (30s por padrão, e
+  `Infinity` é aceito) esperando a remoção no registry do chamador; só depois o transcript era
+  removido. Tudo concluído antes daquele `await` é um **snapshot**, e um usuário que retoma a sessão
+  durante a janela o torna falso — o arquivo era apagado assim mesmo e `SessionInUseError` nunca
+  disparava, que é exatamente o desfecho que esse erro existe para impedir.
+
+  A disciplina já existia no irmão: a invariante 4 de `transcript-gc.ts` é *"the apply phase
+  re-checks — a plan is a snapshot, and between snapshot and delete a user can resume a session"*. O
+  caminho de sessão única pulava o que o caminho em lote trata como inegociável, e é o caminho que
+  não tem varredura posterior para notar o engano. Agora há re-checagem imediatamente antes do
+  unlink.
+
+  Recusar depois da remoção no registry deixa o arquivo órfão — a direção **recuperável**, que a
+  própria função já escolhera na ordenação (o inverso, uma entrada apontando para transcript
+  inexistente, nada repara). Por isso `SessionInUseError` ganhou `registryRemoved`: sem ele o
+  chamador repetiria uma remoção já feita e leria o `false` ("não havia entrada") como falha.
+
 ### Security
 
 - **Adotar `shouldAutoApprove` do framework alargaria, em silêncio, um gate de aprovação humana.**
