@@ -1,0 +1,153 @@
+{
+  "plan_slug": "v4n-loop-outcome-fidelity",
+  "plan_path": "../../knowledge-base/plans/v4n-loop-outcome-fidelity-plan.md",
+  "plan_version": "1.1",
+  "scored_at": "2026-06-26T00:28:40+00:00",
+  "completude_score": 100.0,
+  "risco_estrutural_score": 100.0,
+  "active_dimensions": ["completeness", "structural_risk"],
+  "weight_normalization_factor": 2.0,
+  "weighted_avg": 100.0,
+  "hard_caps_triggered": ["symbol_fab_unverifiable_typescript"],
+  "final_score_after_caps": 89,
+  "verdict": "SHIPPABLE_WITH_CAVEATS",
+  "reasons": {
+    "completeness": [
+      {
+        "sign": "positive",
+        "label": "Coverage Matrix 100%",
+        "weight": 60.0
+      },
+      {
+        "sign": "positive",
+        "label": "ADR alternatives (2/2)",
+        "weight": 20.0
+      },
+      {
+        "sign": "positive",
+        "label": "TDD in bug-fix (0/0)",
+        "weight": 20.0
+      }
+    ],
+    "evidence": [
+      {
+        "sign": "positive",
+        "label": "11 citations resolved",
+        "weight": 11.0
+      }
+    ],
+    "calibration": [],
+    "structural_risk": []
+  },
+  "sub_reports": {
+    "coverage_matrix": {
+      "total_gaps": 6,
+      "mapped_gaps": 6,
+      "coverage_ratio": 1.0,
+      "is_complete": true,
+      "orphan_tasks": [],
+      "unmapped_gaps": []
+    },
+    "adr_completeness": {
+      "total_adrs": 2,
+      "with_alternatives": 2,
+      "completeness_ratio": 1.0,
+      "missing_alternatives": []
+    },
+    "tdd_in_bugfix": {
+      "total_bugfix_tasks": 0,
+      "with_tdd": 0,
+      "coverage_ratio": 1.0,
+      "missing_tdd": []
+    },
+    "spec_smells": {
+      "total_hits": 0,
+      "by_category": {},
+      "total_penalty": 0
+    },
+    "architecture_compliance": {
+      "compliance_score": 1.0,
+      "project_rules_found_count": 28,
+      "fallback_to_defaults": false,
+      "rules_referenced_in_plan": ["architecture.md"],
+      "principles_cited": ["TDD"],
+      "has_dod_quality_signal": true,
+      "has_size_budget_signal": true,
+      "reasons": [
+        "References 1 project rule(s): ['architecture.md']",
+        "Cites 1 principle(s): ['TDD']",
+        "Global DoD references quality gates (lint/complexity/size)",
+        "Plan mentions file-size budget"
+      ]
+    },
+    "evidence": {
+      "total_citations": 11,
+      "unresolved_citations": []
+    },
+    "criterion_executability": {
+      "total_criteria": 24,
+      "vague_count": 0,
+      "weak_count": 4,
+      "acceptable_count": 0,
+      "executable_count": 20,
+      "vague_ratio": 0.0,
+      "acceptable_ratio": 0.833,
+      "executable_ratio": 0.833,
+      "soft_cap_triggered": false,
+      "vague_criteria_sample": []
+    },
+    "baseline_context": {
+      "section_present": true,
+      "is_complete": true,
+      "missing_subsections": [],
+      "file_table_rows": 4,
+      "file_table_placeholder_hits": 0,
+      "glossary_entries": 2,
+      "glossary_placeholder_hits": 0,
+      "reasons": []
+    },
+    "drawbacks_and_unresolved": {
+      "drawbacks_section_present": true,
+      "drawbacks_entries": 3,
+      "drawbacks_placeholder_hits": 0,
+      "drawbacks_is_complete": true,
+      "drawbacks_reasons": [],
+      "unresolved_section_present": true,
+      "unresolved_entries": 0,
+      "unresolved_explicit_none": true,
+      "unresolved_is_complete": true,
+      "unresolved_reasons": []
+    },
+    "concurrency_tests": {
+      "signals_detected": true,
+      "signals_sample": ["Concurrency"],
+      "tasks_with_concurrency_subsection": 3,
+      "tasks_with_acceptable_test_or_escape": 3,
+      "tasks_failing": [],
+      "is_complete": true,
+      "reasons": []
+    },
+    "failure_scenarios": {
+      "external_io_detected": false,
+      "signals_sample": [],
+      "section_present": false,
+      "explicit_none": false,
+      "scenarios_count": 0,
+      "is_complete": true,
+      "reasons": ["no external-I/O signals detected; check skipped"]
+    }
+  },
+  "calibration": {
+    "status": "PROVISIONAL_v1",
+    "holdout_count": 0,
+    "holdout_target": 30,
+    "kappa_measured": false
+  },
+  "code_quality": {
+    "verdict": "PASS_WITH_CAVEATS",
+    "score_cap": 89,
+    "hard_caps_triggered": ["symbol_fab_unverifiable_typescript"],
+    "soft_caps_triggered": [],
+    "languages_audited": ["typescript"]
+  }
+}

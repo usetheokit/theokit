@@ -1,0 +1,22 @@
+# Consumer gap register — the local half of a channel that did not exist.
+#
+# The consumer's own register (`TheoCode/BACKLOG.md § Upstream`) lists gaps measured against this
+# repo. Verified 2026-08-16: it says 8 are open and none is fully open — five had been closed and
+# reached that consumer BY ACCIDENT, because the same person maintains both sides. A customer without
+# that overlap keeps reading "open" against capabilities that ship, and keeps rebuilding them.
+#
+# This file is what `scripts/check-changelog-closes.mjs` reads: when a change touches one of these
+# paths, `CHANGELOG.md`'s `[Unreleased]` section must name the gap id, so the closure is discoverable
+# in the artifact the consumer already reads.
+#
+# It is a CONVENTION with a mechanical check, not a notification system. It does not push.
+#
+# Format:  U-N | comma-separated paths (a trailing / means everything under it) | one-line summary
+# Warn mode: a missing `closes:` prints, it does not block. The register is a heuristic about which
+# files answer which gap, and a heuristic that blocks CI teaches people to route around it.
+
+U-1  | packages/agents/src/session/                                  | No session GC or retention primitive; the never-delete rule is re-derived by hand
+U-4  | packages/agents/src/hooks/secure-store.ts                      | assertSecureModes is private, so a consumer cannot apply the same check to its own store
+U-6  | packages/agents/src/bridge/approval-posture.ts                 | Nothing answers "what may this sandbox mode write?", so a second oracle gets written
+U-10 | packages/agents/src/session/                                   | WindowView reported overflow as booleans and readJsonlTail returned no absolute index
+U-11 | packages/agents/src/errors.ts, packages/agents/src/capability/ | 10 of 13 error classes extend plain Error, so a consumer's instanceof check misses them

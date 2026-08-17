@@ -1,0 +1,396 @@
+agent: review-crossval-4-6-absorption-wiring
+review_target: 19c3fdc3..HEAD (slice base = parent of f408468e) for plan crossval-4-6-absorption
+plan: .claude/knowledge-base/plans/crossval-4-6-absorption-plan.md
+verdict: NEEDS_FIXES
+
+triad_revalidation:
+  total_new_symbols: 27
+  pillar_a_honest_pass: 15 / 27
+  pillar_b_honest_pass: 9 / 27
+  pillar_c_observed: 0 / 27
+  method: |
+    check_wiring.py re-run per symbol in all three repos (theokit, ../theokit-tui via
+    --project-root, ../theokit-sdk by hand), then EVERY reported caller and test opened and read.
+    "honest pass" for (a) = a production call site that is neither the barrel that re-exports the
+    symbol nor a test. "honest pass" for (b) = an integration test that CALLS the symbol, not one
+    that greps its name out of a .d.ts.
+  caveat: |
+    pillar_a_honest_pass counts 4 symbols whose only caller is inside their own defining module
+    (WRITE_SCOPED_TOOLS, DEFAULT_REGISTRY_TIMEOUT_MS, FILE_INLINE_CAP, DEFAULT_TOOL_PRESENTATION)
+    and 4 scripts/lib modules whose entry scripts reach no CI workflow (F-wire-8, still open).
+
+previous_blockers_reverified:
+  F-wire-1:
+    status: RESOLVED
+    evidence: |
+      Caller half — 0aba5959: packages/theo/src/cli/commands/sessions-gc.ts:88 now
+      `const result = await runTranscriptGC(...)`; sessionsGcCommand is `async` and returns a
+      Promise; packages/theo/src/cli/index.ts:93 awaits it. Read the call sites, not the message.
+      tests/unit/sessions-gc-command.test.ts:93-138 now drives sessionsGcCommand end-to-end
+      through THEOKIT_HOME (it previously covered only the pure formatGcPlan) — the gap that made
+      the break invisible is closed. Verified green: 4 files / 33 tests pass.
+      Stale-dist half — 0d82cd3e: `pnpm typecheck` reverted to plain `tsc --noEmit`; `pnpm build`
+      prepended to `check:all`; new handoff gate check_dist_freshness.py wired into
+      run_validation.py. Verified it actually fires: run against the current tree it FAILS with
+      "packages/agents/dist declarations are OLDER than its src" (dist 18:00:43 vs
+      liveness-oracle.ts 19:54:02). The gate is real, not decorative.
+    residual: |
+      The freshness gate scans only `packages/` of THIS repo. The slice's other two repos
+      (../theokit-tui, ../theokit-sdk) have the same dist-resolution shape and no equivalent gate.
+      Recorded, not scored — see F-wire-16.
+  F-wire-2:
+    status: PARTIALLY_ADDRESSED — the DoD line is now measured; pillar (c) is NOT closed
+    evidence: see F-wire-15 below (full argument)
+
+findings:
+  - id: F-wire-15
+    severity: BLOCKER
+    file: tests/integration/liveness-oracle-real-tree.test.ts
+    line: 37
+    plan_ref: T3.2 / Global DoD "Zero type errors — pnpm typecheck in each repo" + cycle-review § Hard gates ("Failing tests on the working branch")
+    summary: >-
+      The breaking rewrite of classifyProjects (7fea1388) migrated the two UNIT test files and left
+      the integration test — the only file that actually CALLS the symbol — on the old signature.
+      The test is RED at HEAD and `pnpm typecheck` exits 2. classifyProjects therefore has pillar
+      (b) = FAIL, not pass.
+    evidence: |
+      7fea1388 --name-only touches exactly: .changeset/…, CHANGELOG.md, src/session/liveness-oracle.ts,
+      tests/unit/liveness-oracle-recorded-cwd.test.ts, tests/unit/liveness-oracle.test.ts.
+      tests/integration/liveness-oracle-real-tree.test.ts is NOT in that list, and still calls:
+        :36  classifyProjects([...], { listProjects: () => [alive, moved], budget: 100,
+                                       fs: { exists: (p) => {...} } })
+      against the new required shape (liveness-oracle.ts:59 `projectsRoot: string`,
+      :74 `candidatePaths: () => readonly string[]`, :38-43 `FsSeam` now needs listEntries + firstLine).
+
+      Reproduced, both ways:
+        $ npx vitest run tests/integration/liveness-oracle-real-tree.test.ts
+          × test_the_verdicts_match_what_is_on_disk
+            AssertionError: expected 'undetermined' to be 'alive'   (:45)
+          Test Files 1 failed (1) · Tests 1 failed | 1 passed (2)
+        $ npx tsc --noEmit ; echo $?   →   2
+          tests/integration/liveness-oracle-real-tree.test.ts(37,7): TS2739 … missing listEntries, firstLine
+          tests/integration/liveness-oracle-real-tree.test.ts(59,7): TS2739 … missing listEntries, firstLine
+
+      Why nothing caught it: the register written to close F-xval-1
+      (tests/integration/crossval-4-6-closure.test.ts:182-185) covers gap 21 with `reachable('classifyProjects')`,
+      which reads a NAME out of packages/agents/dist/*.d.ts. The name is still there, so the register is
+      green while the function cannot be called with the arguments this repo's own test passes it.
+    recommended_action: >-
+      Migrate tests/integration/liveness-oracle-real-tree.test.ts to candidatePaths + projectsRoot +
+      the widened FsSeam, re-run it RED-first against the pre-7fea1388 expectation to confirm it
+      exercises the new path, then re-run `pnpm typecheck` and re-issue the implement-validate
+      report — the current one predates 7fea1388 and its typecheck PASS is not about this tree.
+
+  - id: F-wire-16
+    severity: BLOCKER
+    file: .claude/skills/implement/scripts/diff_symbols.py
+    line: 68
+    plan_ref: cycle-implement.md § Hard gates (post-halt-loop) — "Wiring summary — independently re-verified, never self-reported"
+    summary: >-
+      wiring_recheck derived ZERO symbols for the whole slice because all commit SHAs are passed to
+      one `git show` with check=True, and three of them live in sibling repos. One unresolvable SHA
+      discards the other twelve. Pillar (a) has therefore never been independently confirmed for ANY
+      symbol on this branch, while the checkpoint carries 16 positive self-reports.
+    evidence: |
+      diff_symbols.py:70-76 — subprocess.run(["git","-C",repo_root,"show",...,*shas], check=True)
+      on SubprocessError → `return set()`. shas_from_progress() (:46-58) ignores the per-task `repo`
+      field that commit 3c940f48 added to progress-schema.json for exactly this situation and that
+      check_checkpoint_consistency.py already honors.
+
+      Reproduced:
+        added_symbols_from_shas('.', all 15 SHAs)                       -> 0 symbols
+        added_symbols_from_shas('.', minus 7cb57baff/9d4d37c/e1e7ca2)   -> 240 symbols,
+          including classifyProjects, transcriptRootHint, expandCommandTemplate, templateHints,
+          shouldAutoApprove, applyPosture, APPROVAL_MODES, createPendingLedger, deleteSession,
+          runTranscriptGC, findUnreachableEnforcement, DOORLESS_DECISIONS.
+        (7cb57baff = ../theokit-sdk, 9d4d37c + e1e7ca2 = ../theokit-tui — each declared in the
+         checkpoint's own `repo` field.)
+
+      Consequence in the shipped report
+      (.claude/knowledge-base/reviews/crossval-4-6-absorption-implement-validate-2026-08-16.md:55-63):
+        wiring_triad — N/A · "Symbols derived from diff: 0 / Symbols independently resolved: 0 /
+        Pillar (a) NOT independently confirmed" · "Self-reported pillar (a) pass (claim, audited): 4"
+      followed at :82 by "Implementation PASSes all gates. Ready for cycle-review". The check is
+      honest; the handoff line launders it. Every in-repo symbol was derivable the entire time.
+    recommended_action: >-
+      Group SHAs by the task's declared `repo` and run one `git show` per repo, tolerating a repo
+      that is absent (SKIP by name, never a silent empty set). Then re-run run_validation.py and
+      publish the real per-symbol pillar (a) table. Secondary: the patterns also capture prose
+      ('is', 'to', 'that') and destructured locals — filter to names that resolve to an `export`
+      before scoring, or the resolved/derived ratio is meaningless.
+
+  - id: F-wire-17
+    severity: BLOCKER
+    file: .claude/knowledge-base/implementations/.progress-crossval-4-6-absorption.json
+    line: 230
+    plan_ref: >-
+      Plan rule — record `defer` naming the adopting task, NEVER a no-op caller; cycle-implement.md
+      § Wiring triad, pillar (a) = "production code path that exercises the new behavior end-to-end"
+    summary: >-
+      Six tasks self-report pillar (a) positive over symbols whose ONLY production reference is the
+      barrel that re-exports them. None of them is a planted no-op caller — the gaming this review
+      hunts for is absent — but recording `true` where the honest value is `defer` is the
+      fabricated-evidence category the plan's own rule names. 12 of the 16 entries additionally use
+      the raw `true` instead of the enum.
+    evidence: |
+      Audited by reading every caller check_wiring.py reports. Barrel-only, adopter blocked in Phase 5:
+        classifyProjects   — callers: packages/agents/src/session/index.ts:57 (barrel) only.
+                             The framework's OWN GC never consults it: transcript-gc.ts imports
+                             listSessions + protectedTranscripts + awaitRegistryRemoval and decides
+                             by age/keepLast; `grep -n 'classify\|liveness' transcript-gc.ts` → 0 hits.
+                             Adopter is T5.3 (status: blocked).      [T3.2 claims a: true]
+        transcriptRootHint — callers: session/index.ts:47 (barrel) only.  [T2.6 claims a: true, b: true;
+                             check_wiring pillar (b) = FAIL, no integration test exists]
+        expandCommandTemplate / templateHints / FILE_INLINE_CAP
+                           — callers: config-entry.ts:76 (barrel). Adopter is T5.2 (blocked).
+                             [T3.3 claims a: true]
+        createPendingLedger — callers: ask/index.ts:26 (barrel). ZERO production callers anywhere;
+                             its own test docblock says so: pending-ledger-payload.test.ts:4
+                             "the only real surface does not use it". [T2.7 claims a: true, b: true;
+                             check_wiring pillar (b) = FAIL]
+        toolPresentation / KNOWN_TOOL_NAMES / keyboardHelpFor / the `centred` anchor (../theokit-tui)
+                           — callers: src/index.ts (barrel) only.   [T3.1, T3.4 claim a: true, b: true]
+        @theokit/sdk/mcp-auth (../theokit-sdk) — a pure re-export barrel; runPkceFlow has no
+                             production caller in the SDK either (only tests/golden/mcp/oauth.golden.test.ts).
+                             [T1.3 claims a: true, b: true]
+
+      Non-enum values, already flagged LOW by the progress_schema gate and still unfixed at HEAD:
+      tasks[3,7,8,9,10,11,12,13,14,15,16,17] carry `wiring.a = True` / `wiring.b = True`.
+
+      What is NOT wrong: no planted no-op caller was found. The one call site that looked degenerate —
+      approval-posture.ts:180 `if (!shouldAutoApprove('full-auto','*',posturePolicy.confinedBy))` with
+      two literal arguments — is a genuine replacement of the previous inline
+      `if (!posturePolicy.confinedBy.enforced)` (git show 7fea1388^..; see the diff of
+      approval-posture.ts), reached in production from sdk-adapter.ts:684. That one is an honest PASS.
+    recommended_action: >-
+      Rewrite the 8 barrel-only entries as `"a": "defer"` with the adopting task named (T5.2 / T5.3),
+      and normalise the 12 raw booleans to the enum. `defer` is the truthful and PERMITTED value here —
+      Phase 5 is blocked on a release gate, which is a legitimate reason. What is not permitted is
+      `pass`.
+
+  - id: F-wire-18
+    severity: HIGH
+    file: tests/integration/crossval-4-6-closure.test.ts
+    line: 125
+    plan_ref: cycle-implement.md § Wiring triad, pillar (b) — "covers the boundary the unit test mocked"
+    summary: >-
+      The register written during review to fix the Goal metric hands pillar (b) PASS to four symbols
+      via `reachable()`, which regex-scans packages/agents/dist/*.d.ts for the NAME. It never imports
+      the module and never calls the function. check_wiring.py scores PASS because the name occurs in
+      a file under tests/integration/.
+    evidence: |
+      :125-128  function reachable(name) { expect(SURFACE?.has(name)).toBe(true) }
+                SURFACE comes from :99-120 agentsSurface(), which readFileSync's the built .d.ts and
+                matchAll's a regex over the TEXT.
+      Symbols whose only tests/integration/ reference is this shape:
+        :153-154 reachable('shouldAutoApprove'); reachable('WRITE_SCOPED_TOOLS')   ← test name says
+                 "test_gap_17_the_auto_approve_rule_is_callable"; nothing is called
+        :184     reachable('classifyProjects')
+        :225     reachable('applyPosture')
+      :187-195 gap 22 is weaker still — readFileSync of ../theokit-tui/dist/index.d.ts and
+               `expect(text).toContain('toolPresentation')`, a substring match that a comment satisfies.
+      Two independent proofs that the shape does not hold:
+        (1) F-wire-15 — gap 21 is GREEN while classifyProjects' real call site is RED.
+        (2) The oracle is a stale-able artifact: dist/*.d.ts is dated 18:00:43, the classifyProjects
+            rewrite is 19:26. The register is currently green against types that predate the breaking
+            change — the exact failure mode F-wire-1 was raised for, reproduced inside its own fix.
+      This is F-wire-4's shape recurring in a new file, and it is the same criticism the earlier
+      review made of F-wire-9's `typeof x === 'function'` subpath test.
+    recommended_action: >-
+      For gaps 17, 21, 28: import the symbol and call it with inputs whose answer differs by branch
+      (shouldAutoApprove over all three ApprovalMode values × a write-scoped and a non-write-scoped
+      tool name; applyPosture with an unenforced posture asserting the typed throw; classifyProjects
+      per F-wire-15). Keep the `reachable()` assertions as a SEPARATE packaging check with a name
+      that says so ("declared by the built surface"), so a shape check is never counted as an exercise.
+
+  - id: F-wire-19
+    severity: HIGH
+    file: .wiring-evidence.json
+    line: 3
+    plan_ref: Global DoD line "Runtime-metric proof" (plan:2246) + cycle-implement.md § Wiring triad pillar (c)
+    summary: >-
+      The hand-written evidence file DOES satisfy the plan's named DoD line — the measurement is real,
+      arithmetically self-consistent, and its safety-relevant number is the right one. It does NOT
+      satisfy pillar (c), which asks for observability in production, not a one-off sweep. And it is
+      mechanically inert: no task declares a metric, so check_wiring.py never reads the file and
+      pillar (c) remains N/A for all 27 symbols.
+    evidence: |
+      Argued, not asserted. Three separate questions:
+
+      (1) Is the measurement real, or fabricated to satisfy a grep?  REAL, on the balance of evidence.
+          The confusion matrix sums exactly: 10252+3362+4+3+3 = 13624 = liveness_oracle_projects_classified;
+          10252+3362+4 = 13618 = the agreement figure; 34139/13624 = 2.506 = ops_per_project. A
+          fabricated file does not usually close its own arithmetic in three independent places. The
+          file volunteers a FAILED first run (budget=20000 → 66.2% agreement, ops pinned at the ceiling)
+          and files the finding, which is not the behaviour of a number invented to pass a gate. The
+          anti-pattern I was told to hunt — a suspiciously low count — is inverted here: the magnitudes
+          are large, specific and mutually constrained.
+
+      (2) Does it satisfy plan:2246?  YES, on its own terms. That line asks for classification
+          equivalence observed on the operator's real tree rather than inferred from a fixture, and
+          that is what was run. It also states the honest limits itself
+          (_provenance.honest_limits, :9-13): manual sweep, no test writes it, empty candidate pool.
+
+      (3) Does it satisfy pillar (c)?  NO. cycle-implement.md defines pillar (c) as a "counter,
+          histogram, or log line that lets ops see the new behavior in production. Without
+          observability, the feature is invisible when it breaks." Nothing in the module emits one:
+          `grep -n 'console\.|logger|metric|counter' packages/agents/src/session/liveness-oracle.ts`
+          → 0 hits outside prose. The evidence file itself names the resulting blind spot:
+          ":36 That degradation is SAFE … but SILENT: the sweep does almost nothing and no aggregate
+          signal says why. Nothing in the module warns when the budget is undersized." A sweep that
+          quietly stops finding anything and a sweep that finds nothing are indistinguishable to an
+          operator — which is precisely the condition pillar (c) exists to make visible.
+          Mechanically it is also inert: check_wiring.py:229-234 returns N/A when no metric is
+          declared, and every task in the checkpoint still has `wiring.c` null or "n/a", so the file
+          is never opened by any gate. Adding it changed no verdict.
+      ../theokit-tui and ../theokit-sdk still have no .wiring-evidence.json (find, both repos, 0 hits).
+    recommended_action: >-
+      Do not re-label this as pillar (c) closed. Two separable follow-ups: (i) emit the aggregate the
+      file says is missing — a verdict-count-by-liveness plus ops-vs-budget line from the sweep, and
+      declare it as the metric so check_wiring actually consults the evidence; (ii) either promote the
+      sweep to a script under scripts/ that a test can invoke on a seeded tree, or record pillar (c)
+      as an explicit ADR-backed defer naming the release gate as the blocker. The current state is a
+      documented deferral wearing the costume of evidence, and it should be allowed to say so.
+
+  - id: F-wire-20
+    severity: HIGH
+    file: ../theokit-tui/src/index.ts
+    line: 197
+    plan_ref: T3.1 / T3.4 — D6 "Fix the shape at the framework, never at the call site"
+    summary: >-
+      Both new theokit-tui modules still ship beside the component that solves the same problem, and
+      neither component was rewired. F-wire-6 from the previous review is unfixed, and pillar (b) is
+      FAIL for every tui symbol by the checker's own run.
+    evidence: |
+      check_wiring.py --project-root ../theokit-tui:
+        toolPresentation           a: PASS (callers = src/tool-presentation.ts, src/index.ts)  b: FAIL
+        DEFAULT_TOOL_PRESENTATION  a: PASS (same two)                                          b: FAIL
+        keyboardHelpFor            a: PASS (callers = src/index.ts ONLY — the barrel)          b: FAIL
+        reason for every b: "No tests/integration/ directory found in project"
+      The b FAIL is partly a convention mismatch (that repo names its files tests/*.integration.test.ts
+      rather than tests/integration/**), but the substantive answer is the same: `grep -rn` for each
+      symbol across the repo returns only src/index.ts, the defining module, and a co-located UNIT
+      test. No integration test exercises any of them.
+      No component was rewired: src/keyboard-help.test.tsx:35 still renders
+      `<KeyboardHelp shortcuts={DEFAULT_COMPOSER_SHORTCUTS} />` — the hardcoded literal keyboardHelpFor
+      exists to replace. `grep -rn centred src/ | grep -v '\.test\.'` returns only select-list-model.ts's
+      own definition and prose: the new anchor value has no in-package caller.
+      The package now ships two sources of truth for each, and the new one has zero in-package consumer.
+    recommended_action: >-
+      Either rewire KeyboardHelp to derive from keyboardHelpFor and ToolCall to read
+      toolPresentation (which would make pillar (a) real and delete the duplicate), or record both as
+      `defer` naming T5.2, and add the missing test convention so check_wiring can see that repo at all.
+
+  - id: F-wire-21
+    severity: HIGH
+    file: package.json
+    line: 33
+    plan_ref: T4.1 / T4.3 — "a closure reaches the consumer by mechanism, not by coincidence"
+    summary: >-
+      The two gates this plan built are unreachable from CI. No GitHub workflow invokes `check:all`,
+      `check:invention-reachability` or `check:changelog-closes`, so neither gate can fail a build.
+      F-wire-8 is unfixed. This is pillar (a) at the system level: the code exists and the flow that
+      would run it does not.
+    evidence: |
+      $ grep -rn "check:all\|check:invention-reachability\|check:changelog-closes" .github/workflows/
+        (no output; 11 workflow files present, including ci.yml and architecture-guards.yml)
+      The only CI reach is tests/integration/tooling-gates-cli.test.ts, which asserts the gates exit 0:
+        :42 expect(status, 'warn mode — findings must not fail the build').toBe(0)
+        :55 expect(status).toBe(0)
+      So today a finding cannot fail CI, and after the 2026-11-13 sunset promotes the gates to error
+      mode nothing will run them as a gate either — the promotion will change a script no pipeline calls.
+    recommended_action: >-
+      Add a `pnpm check:invention-reachability && pnpm check:changelog-closes` step to
+      .github/workflows/architecture-guards.yml (the workflow whose subject this already is), and
+      assert its presence in tooling-gates-cli.test.ts the same way gap F59 already asserts membership
+      in `check:all` (crossval-4-6-closure.test.ts:241).
+
+  - id: F-wire-22
+    severity: MEDIUM
+    file: packages/agents/src/config/command-template.ts
+    line: 71
+    plan_ref: G7 "Every Export Has a Consumer" / code-quality-golden-rule.md § 2 soft_cap_orphan_export
+    summary: >-
+      Three new exports are dead by G7: no production caller, no integration test, and no consumer
+      named for them in the plan's Phase 5 task list. templateHints is the clearest — F-wire-11 from
+      the previous review, unfixed.
+    evidence: |
+      templateHints   — command-template.ts:71 defines it; the only other references are
+                        config-entry.ts:76 (barrel) and packages/agents/tests/unit/command-template.test.ts.
+                        `grep -n templateHints packages/agents/src/config/command-template.ts` shows it
+                        is never called by expandCommandTemplate either. check_wiring pillar (b): FAIL.
+      APPROVAL_MODES  — approval-decision.ts:41. Its only non-barrel use is deriving its own type on
+                        the next line (:43 `export type ApprovalMode = (typeof APPROVAL_MODES)[number]`).
+                        check_wiring pillar (b): FAIL. T5.2 adopts shouldAutoApprove, not the array.
+      KNOWN_TOOL_NAMES (../theokit-tui) — barrel + own module + unit test only.
+      Contrast, so the bar is visible: FILE_INLINE_CAP and WRITE_SCOPED_TOOLS look identical from the
+      barrel but are genuinely used internally (command-template.ts:150-152; approval-decision.ts:85)
+      and are NOT dead.
+    recommended_action: >-
+      Delete templateHints unless a Phase 5 task is amended to name it, or record it in the
+      invention-reachability allowlist with the sunset the allowlist requires. For APPROVAL_MODES and
+      KNOWN_TOOL_NAMES, the vocabulary-for-the-consumer argument is reasonable — but then it belongs
+      in the checkpoint as `defer` naming T5.2, not as `pass`.
+
+  - id: F-wire-23
+    severity: MEDIUM
+    file: packages/agents/src/session/project-index.ts
+    line: 75
+    plan_ref: T2.4 "Resolve the assertSecureModes mask against the directory the framework creates"
+    summary: >-
+      ensureSecureDir repairs only the leaf directory, so a transcript root whose ANCESTOR is already
+      group-writable on the operator's machine is still refused by assertSecureModes. The fix holds for
+      a fresh tree (which is what the tests build) and not necessarily for the tree it was written for.
+    evidence: |
+      project-index.ts:75 `ensureSecureDir(sidecar)` and session-pointer.ts:94 `ensureSecureDir(target)`
+      are correct calls — hooks/secure-store.ts:54-55 takes a FILE path and dirnames it internally.
+      But :57-73 only chmod-repairs `dir` = dirname(filePath). `mkdirSync(dir, {recursive, mode})` sets
+      the mode on directories it CREATES; a pre-existing loose ancestor (e.g. an `~/.theokit/projects`
+      made earlier by the bare `mkdirSync(dirname(sidecar), {recursive:true})` this commit replaced) is
+      left as it is.
+      The tests cannot see this: crossval-4-6-closure.test.ts:210-212 and
+      packages/agents/tests/unit/transcript-root-dir-modes.test.ts both start from mkdtempSync, where
+      every ancestor is created by the call under test.
+    recommended_action: >-
+      Add a case that pre-creates the projects root at 0o777 before calling recordProjectDir and
+      asserts the resulting mode, then either walk the ancestors under the transcript root in
+      ensureSecureDir or state in the docblock that repair is leaf-only and ancestors are the
+      installer's problem.
+
+boundary_and_concurrency:
+  boundary_respect:
+    status: PASS
+    evidence: |
+      This repo's layering contract is system-design-guardrails.md § G1 (a package DAG), not a
+      core/local/cloud tier split. Every new module checked:
+        liveness-oracle.ts        — ZERO imports; the filesystem arrives as an injected FsSeam. Textbook DIP.
+        command-template.ts       — ZERO imports.
+        approval-decision.ts:33   — `import type { SandboxPosture } from '@theokit/sdk/sandbox'` (agents → sdk, allowed)
+        registry-remover.ts:19    — `@theokit/sdk/errors` (allowed)
+        transcript-root-hint.ts   — node:fs + ./project-index.js (intra-package)
+      `pnpm check:direction` → "no cycle. Checked 30 package(s)". No G1 violation; the hook did not
+      miss anything.
+  concurrency:
+    status: PASS
+    evidence: |
+      The shared resource here is the filesystem under the transcript root plus an injected async
+      registry. awaitRegistryRemoval (registry-remover.ts:76-95) is a bounded Promise.race with the
+      timer cleared in `finally`, and the late-settle case is argued explicitly (:63-68): a remover
+      that resolves after the timeout cannot reach back into a result already built, and the failure
+      direction is transcript-KEPT, which is the safe one. No read-modify-write on a shared file was
+      found — recordProjectDir/persistSessionId are whole-file writes and the pointer path goes
+      through the SDK's atomicWriteText. Only F-wire-23's leaf-only repair is worth changing.
+
+pillar_a_verdict_for_the_slice: |
+  NOT VERIFIED — and that is a statement about the gate, not a guess about the code.
+  The /implement wiring gate resolved 0 of 27 symbols (F-wire-16), so nothing on this branch has been
+  machine-confirmed. This review confirmed 15 by hand, and every one of the 8 barrel-only symbols is a
+  legitimate `defer` mis-recorded as `pass` (F-wire-17) rather than the planted no-op caller the review
+  was hunting: none was found. What would make it verifiable, in order of leverage:
+    1. Group the checkpoint's SHAs by their declared `repo` before `git show` (F-wire-16) — this alone
+       turns 0 resolved into ~20 for the in-repo half, today, with no other change.
+    2. Teach check_wiring.py to exclude a barrel re-export from the pillar (a) caller set, or report it
+       as a distinct `BARREL_ONLY` status. Today `export { x } from './x.js'` counts as a caller, which
+       is what lets 8 defers read as passes and is the root of both F-wire-3 and F-wire-17.
+    3. Give ../theokit-tui a tests/integration/ directory (or make INTEGRATION_DIR_NAMES configurable)
+       so the checker can see that repo at all (F-wire-20).

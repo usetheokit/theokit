@@ -1,0 +1,70 @@
+# Code-quality allowlist — explicit exemptions with mandatory sunset.
+#
+# Authoritative source: rules/code-quality-golden-rule.md § 4 (Allowlist mechanism).
+#
+# Each ACTIVE entry downgrades a finding by ONE severity level
+# (HARD → SOFT_CAP, SOFT_CAP → SOFT_FLOOR). Expired entries (today > SUNSET)
+# are IGNORED — the underlying finding re-fires at full severity.
+#
+# Format (one entry per line):
+#   IDENTIFIER | FILE:LINE | SUNSET (YYYY-MM-DD) | RATIONALE
+#
+# Where:
+#   IDENTIFIER  — stable identifier from `code-quality-golden-rule.md § 2`
+#                 (e.g., dead_code_unallowlisted_python, symbol_fabrication_typescript)
+#   FILE:LINE   — absolute file path within the project + line number where the
+#                 finding fires (e.g., src/legacy/foo.py:42)
+#   SUNSET      — date in ISO format (YYYY-MM-DD). MUST be ≤ 90 days from entry.
+#   RATIONALE   — free-form justification (recommended; not enforced by parser).
+#
+# Lines starting with `#` and blank lines are skipped.
+# Whitespace around `|` is tolerated.
+#
+# Adding/modifying entries:
+#   - REQUIRES CHANGELOG entry under `[Unreleased] § Changed`.
+#   - REQUIRES ADR for HARD-level exemptions (`knowledge-base/adrs/`).
+#
+# A malformed entry triggers the `allowlist_malformed_entry` HARD finding and
+# aborts allowlist processing for the current run.
+#
+# Empty allowlist is the default. Add entries only when the underlying issue
+# cannot be fixed within the iteration AND the risk is documented.
+
+# Example (commented):
+# dead_code_unallowlisted_python | src/legacy/migrator.py:128 | 2026-09-01 | Legacy migration helper retained for v0.9 rollback path; remove after v1.0 release.
+#
+# NOTE on column format: the live parser (`load_allowlist` in
+# skills/code-quality/scripts/_shared.py) requires SIX pipe-separated columns,
+# NOT the four shown in the header above:
+#   ECOSYSTEM | FILE-PATH | FINDING-TYPE | SYMBOL-OR-LINE | REASON | SUNSET (YYYY-MM-DD)
+#   ECOSYSTEM    — one of: python | typescript | rust | go
+#   FILE-PATH    — fnmatch glob against the finding's repo-relative path
+#   FINDING-TYPE — one of: dead_code | symbol_fab | orphan_export | mutation_low
+#   SYMBOL-OR-LINE — substring (or glob) matched against the finding's symbol_or_line
+#   REASON       — non-empty justification (enforced by parser)
+#   SUNSET       — ISO date, ≤ 90 days from entry creation
+# The four-column header above is documentation drift; entries MUST be 6 columns.
+
+# --- @theokit/* monorepo subpath false-positives (D2 symbol-fab, unverifiable) ---
+# These are NOT fabrications: each import resolves to a real in-tree workspace
+# subpath (verified to exist on disk). The npm-registry probe returns an
+# ambiguous response for `@theokit/*` deep subpaths because the package's
+# `exports` subpath map is not introspectable via the registry endpoint, so D2
+# classifies them as SOFT_FLOOR "could not verify". Allowlisting downgrades to INFO.
+# Verified in-tree:
+#   - @theokit/http/runtime/node  -> packages/http/src/runtime-node.ts (exports "./runtime/node")
+#   - @theokit/ui/styles.css      -> published @theokit/ui peerDep stylesheet subpath
+typescript | *packages/agents/tests/unit/agent-route-generator.test.ts | symbol_fab | @theokit/http/runtime/node | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (packages/http exports ./runtime/node) | 2026-09-20
+typescript | *packages/agents/tests/integration/theokit-plugin.test.ts | symbol_fab | @theokit/http/runtime/node | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (packages/http exports ./runtime/node) | 2026-09-20
+typescript | *packages/create-theokit/templates/default/app/layout.tsx | symbol_fab | @theokit/ui/styles.css | known false-positive — @theokit/* monorepo subpath not resolvable via npm registry; verified to exist in-tree (@theokit/ui published stylesheet subpath) | 2026-09-20
+
+# --- Vite virtual module false-positive (D2 symbol-fab, HARD) ---
+# `virtual:` is Vite's reserved prefix for plugin-provided virtual modules,
+# resolved at build time by a Vite plugin — NOT an npm package. D2's npm-registry
+# probe reports "fabricated npm package (not found on registry)" because no such
+# package exists by design. The define-integration fixture's Vite plugin provides
+# `virtual:integration:banner/*`. Pre-existing finding in an untouched fixture
+# (unrelated to agents-thinking-event-contract; surfaced by a whole-repo D2 scan).
+# Allowlist downgrades HARD -> SOFT_CAP. ADR 0033. Proper fix: D2 should skip the
+# `virtual:` specifier prefix (tracked as a code-quality detector follow-up).
+typescript | *fixtures/define-integration/app/page.tsx | symbol_fab | virtual:integration:banner | known false-positive — Vite virtual module ('virtual:' prefix) resolved by the define-integration Vite plugin at build time, not an npm package; D2 npm-registry check cannot resolve virtual specifiers (ADR 0033) | 2026-09-20

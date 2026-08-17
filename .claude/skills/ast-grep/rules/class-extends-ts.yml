@@ -1,0 +1,11 @@
+id: class-extends-ts
+language: typescript
+severity: info
+message: |
+  Find any class that declares an `extends` clause.
+  Captures inheritance chains. Useful for mapping error hierarchies,
+  base-class adoption patterns, and "all derived classes of X".
+
+  Customize: replace $BASE with a concrete class name to narrow.
+rule:
+  pattern: 'class $NAME extends $BASE { $$$ }'

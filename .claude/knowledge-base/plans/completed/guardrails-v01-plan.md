@@ -1,0 +1,675 @@
+# Plan: `@usetheo/guardrails` v0.1 — Guardrail Pipeline + 3 Built-in Detectors
+
+> **Version 1.1** (2026-06-10) — Absorbed 8 edge cases from
+> [`reviews/guardrails-v01-edge-cases-2026-06-10.md`](../reviews/guardrails-v01-edge-cases-2026-06-10.md).
+> **2 MUST FIX absorbed inline:** EC-1 (regex collision — ordering específico→genérico
+> + teste non-collision em T3.1), EC-2 (pipeline muta ctx do caller — clone before
+> modify + teste non-mutation em T2.1). **4 SHOULD TEST added:** EC-3 (distinct fakes
+> for same-type keys), EC-4 (shell pattern in code blocks), EC-5 (Luhn check for
+> credit cards), EC-6 (modify with undefined modified field). **2 DOCUMENT
+> acknowledged:** EC-7 (obfuscated commands bypass regex), EC-8 (string content
+> loses JSON structure).
+>
+> **Version 1.0** (2026-06-10) — Criar o package `@usetheo/guardrails` com a interface `Guardrail`, o pipeline runner composável (sequential, fail-closed, short-circuit), e 3 built-in detectors (credential masking, shell-pattern, PII regex). O package é standalone (zero dep no SDK) e consome/produz tipos compatíveis com o hook system existente do `@theokit/sdk`. Os 5 novos hook points no SDK (GAPs 1-5 do blueprint) são escopo de um plano separado (`guardrails-sdk-hooks-plan`) porque tocam outro repo.
+
+## Goal
+
+> Enable agent developers to compose declarative guardrails (credential masking, shell-pattern blocking, PII redaction) on agent inputs/outputs so that sensitive data never reaches the LLM unmasked, measured by `pnpm test` returning 30+ unit tests GREEN and `pnpm build` exit 0 for the new `@usetheo/guardrails` package.
+
+## Context
+
+O blueprint `.claude/knowledge-base/discoveries/blueprints/guardrails-module-blueprint.md` (discover-confidence: SHIPPABLE 99.7) investigou NeMo Guardrails, OpenGuardrails agentfw, e LlamaFirewall. Conclusões:
+
+1. **Interface ideal:** função async pura com tristate result (allow/block/modify) — combina simplicidade do OpenGuardrails com composabilidade do NeMo.
+2. **Pipeline:** sequential por default, fail-closed, short-circuit on first block.
+3. **Detectors:** pure functions com zero deps externas (padrão OpenGuardrails) — fast, testável, minimal footprint.
+4. **Código:** package separado `@usetheo/guardrails` (como `@usetheo/memory`) — interface DIP, release cycle independente.
+
+**Evidência:** Blueprint ADRs D1-D4; NeMo `rails_manager.py:183-201` (sequential pipeline); OpenGuardrails `pipeline.ts:14-27` (fail-safe isolation); `masking.ts:451-491` (credential masking lifecycle).
+
+**Rules consultadas:** `architecture.md` (DIP nas fronteiras), `testing.md` (unit test each detector).
+
+## Baseline Context (deep review of current state)
+
+### Files that will be touched
+
+Este plano cria um **novo package** — nenhum arquivo existente é modificado.
+
+| File | LoC today | Last commit | Why it exists today | Invariants to preserve |
+|---|---|---|---|---|
+| `packages/guardrails/package.json` (NEW) | 0 | — | Package manifest | — |
+| `packages/guardrails/tsconfig.json` (NEW) | 0 | — | TypeScript config | — |
+| `packages/guardrails/src/index.ts` (NEW) | 0 | — | Public barrel export | — |
+| `packages/guardrails/src/types.ts` (NEW) | 0 | — | Core types: Guardrail, GuardrailResult, GuardrailContext | — |
+| `packages/guardrails/src/pipeline.ts` (NEW) | 0 | — | GuardrailPipeline runner (compose + execute) | — |
+| `packages/guardrails/src/detectors/credential-masking.ts` (NEW) | 0 | — | Credential masking guardrail (port from OpenGuardrails) | — |
+| `packages/guardrails/src/detectors/shell-pattern.ts` (NEW) | 0 | — | Shell-pattern blocking guardrail | — |
+| `packages/guardrails/src/detectors/pii-regex.ts` (NEW) | 0 | — | PII detection via regex (email, credit card, phone, SSN) | — |
+| `packages/guardrails/src/detectors/index.ts` (NEW) | 0 | — | Detector barrel export | — |
+| `packages/guardrails/tests/types.test.ts` (NEW) | 0 | — | Type contract tests | — |
+| `packages/guardrails/tests/pipeline.test.ts` (NEW) | 0 | — | Pipeline runner tests | — |
+| `packages/guardrails/tests/credential-masking.test.ts` (NEW) | 0 | — | Credential masking tests | — |
+| `packages/guardrails/tests/shell-pattern.test.ts` (NEW) | 0 | — | Shell-pattern tests | — |
+| `packages/guardrails/tests/pii-regex.test.ts` (NEW) | 0 | — | PII regex tests | — |
+
+### Current callers / dependents
+
+Nenhum — package novo. Futuramente consumido pelo `@theokit/sdk` via import quando os hook points forem adicionados (plano separado).
+
+### Domain glossary
+
+- **Guardrail** — função async que inspeciona um contexto (input/output de agente) e retorna allow/block/modify
+- **Pipeline** — composição ordenada de guardrails executados sequencialmente com short-circuit on block
+- **Detector** — um guardrail específico (credential masking, PII, etc.)
+- **MaskingRule** — regra de substituição de credencial: regex pattern → fake value
+- **GuardrailContext** — dados passados ao guardrail: direction (input/output), content, metadata
+
+### Architecture boundaries affected
+
+Nenhuma boundary existente é afetada. Package novo em `packages/guardrails/` com zero imports de `@theokit/sdk`. A interface DIP permite que o SDK consuma o package futuramente sem coupling reverso.
+
+## Prior Art & Related Work
+
+- **Blueprint:** `.claude/knowledge-base/discoveries/blueprints/guardrails-module-blueprint.md` § ADRs D1-D4 — decisões arquiteturais para interface, fail behavior, execution model, code location
+- **Reference: NeMo Guardrails** — `knowledge-base/references/nemo-guardrails/nemoguardrails/guardrails/rails_manager.py:183-201` (sequential pipeline com short-circuit)
+- **Reference: OpenGuardrails agentfw** — `knowledge-base/references/openguardrails-agentfw/packages/agentfw/src/daemon/risk/pipeline.ts:14-27` (fail-safe isolation), `packages/agentfw/src/core/masking.ts:451-491` (credential masking)
+- **Paper: LlamaFirewall** (arxiv 2505.03574) — taxonomia de guardrails: PromptGuard 2, Agent Alignment Checks, CodeShield
+
+## Objective
+
+- [ ] Package `@usetheo/guardrails` scaffoldado com build + test + lint funcional
+- [ ] Tipos `Guardrail`, `GuardrailResult`, `GuardrailContext` exportados
+- [ ] `GuardrailPipeline` runner com sequential execution + short-circuit + fail-closed default
+- [ ] 3 built-in detectors: credential masking (11 rules), shell-pattern (7 patterns), PII regex (4 types)
+- [ ] 30+ unit tests GREEN cobrindo pipeline + 3 detectors
+- [ ] `pnpm build` exit 0
+
+## ADRs
+
+### D1 — Interface: função async com tristate result
+
+**Decision:** `type Guardrail = (ctx: GuardrailContext) => Promise<GuardrailResult>` onde `GuardrailResult = { action: 'allow' | 'block' | 'modify', reason?: string, modified?: string }`.
+
+**Rationale:** Funções puras são testáveis sem mock (OpenGuardrails prova — zero mocks nos testes). Async suporta detectors determinísticos (regex, sync) e model-based (LLM call, async) com a mesma interface. Tristate (allow/block/modify) é mais expressivo que o binário `is_safe` do NeMo — suporta PII redaction (modify) além de block. Per `architecture.md` DIP.
+
+**Alternatives considered:** Classe abstrata com template method (NeMo `RailAction`) — rejeitada porque TS favorece composition over inheritance. Type alias mínimo `(packet) => RiskTag[]` (OpenGuardrails) — rejeitada porque precisa de async + modify capability.
+
+**Consequences:** Cada guardrail é importável individualmente. Composição via pipeline runner, não herança.
+
+### D2 — Pipeline: sequential, fail-closed, short-circuit
+
+**Decision:** Pipeline executa guardrails sequencialmente. Primeiro `block` para o pipeline (short-circuit). Exceção em guardrail = block (fail-closed default). Guardrails com `failOpen: true` swallow exceções com warn.
+
+**Rationale:** NeMo prova que sequential + short-circuit é suficiente para 95% dos casos (`rails_manager.py:183-201`). Parallel é otimização para múltiplos LLM-based guardrails — YAGNI para v0.1. Fail-closed é o default seguro para agentes com tool access.
+
+**Alternatives considered:** Parallel execution (NeMo `_run_rails_parallel`) — deferido para v0.2 quando houver demanda. Fail-open default (OpenGuardrails) — rejeitado porque o Theo SDK roda agentes com tool access.
+
+**Consequences:** v0.1 é sequential-only. Latência é O(N) com N guardrails — aceitável para 3-5 detectors regex.
+
+### D3 — Credential masking: deterministic fake swap (port OpenGuardrails)
+
+**Decision:** Port do padrão de masking do OpenGuardrails — `MaskingRule` com regex pattern + fake value + optional capture group. 11 built-in rules. Lifecycle: mask → process → restore via `Map<fake, real>`.
+
+**Rationale:** OpenGuardrails provou o padrão em produção (`masking.ts:451-491`). Deterministic fakes (não random) garantem consistência cross-request. Group-aware preserva contexto (`Bearer <token>` → `Bearer <fake>`).
+
+**Alternatives considered:** Presidio (NeMo) — rejeitado como heavy dep para v0.1 (requer `onnxruntime`).
+
+**Consequences:** Zero deps externas. PII detection via regex cobre 80% dos casos; ML-based (Presidio) deferido para v0.2.
+
+### D4 — Package location: `packages/guardrails/` no theokit-tools workspace
+
+**Decision:** O package `@usetheo/guardrails` vive em `packages/guardrails/` dentro do workspace `theokit-tools` (ao lado de `theokit-sdk/`, `theo-ui/`, etc.). Publicado no npm como `@usetheo/guardrails`.
+
+**Rationale:** Segue o precedente de `@usetheo/memory` (package separado com interface DIP). Workspace permite `pnpm link` para dev local. Release cycle independente.
+
+**Alternatives considered:** Dentro do `theokit-sdk/packages/` — rejeitado porque guardrails não é parte do SDK core (é consumido pelo SDK, não do SDK). Em `theo-data/` — rejeitado porque guardrails não é data-layer.
+
+**Consequences:** Novo entry em `pnpm-workspace.yaml` do theokit-tools (se existir). Build via `tsup` (consistente com SDK).
+
+## Drawbacks & Risks
+
+| Drawback / Risk | Severity | Mitigation | Owner |
+|---|---|---|---|
+| Regex PII detection has false positives (random 16-digit numbers flagged as credit cards) | Medium | Each detector documents known false-positive rate; callers configure sensitivity | dev |
+| Credential masking with deterministic fakes can be reverse-engineered by a model that memorizes the fakes | Low | Fakes are designed to be plausible but non-functional; model seeing consistent fakes is safer than seeing real secrets | dev |
+| v0.1 has no SDK integration (hook points pending) — users must compose manually | Medium | Clear README with composition examples; SDK hooks plan comes next | dev |
+| No parallel pipeline in v0.1 — O(N) latency for N guardrails | Low | Regex detectors are < 1ms each; parallel deferred to v0.2 when LLM-based guardrails arrive | dev |
+
+## Unresolved Questions
+
+- Q1 — Devemos usar `@usetheo/guardrails` ou `@theokit/guardrails` como npm scope? (depende de licensing decision — `@usetheo` é Apache-2.0, `@theokit` é a marca do framework OSS)
+- Q2 — O `GuardrailContext.content` deve ser `string` ou `unknown` para suportar structured data (tool args JSON)?
+
+## Dependency Graph
+
+```
+Phase 1: Package scaffold + types ──▶ Phase 2: Pipeline runner ──▶ Phase 3: Built-in detectors
+                                                                           │
+                                                                           ▼
+                                                                   Phase 4: Integration validation
+```
+
+Fases são sequenciais — cada uma depende da anterior.
+
+---
+
+## Phase 1: Package scaffold + core types
+
+**Objective:** Criar o package `@usetheo/guardrails` com build funcional e exportar os tipos core.
+
+### T1.1 — Package scaffold
+
+#### Objective
+Scaffold do package com `package.json`, `tsconfig.json`, build script, e barrel export.
+
+#### Why this step
+1. **O que faz:** Cria a estrutura mínima do package para que `pnpm build` e `pnpm test` funcionem.
+2. **Por que agora:** Tudo depende do scaffold existir. Per D4, o package vive em `packages/guardrails/`.
+
+#### Evidence
+Blueprint ADR D4 — package location decision. Precedente: `@usetheo/memory` usa a mesma estrutura.
+
+#### Files to edit
+```
+packages/guardrails/package.json          (NEW) — manifest com name, version, exports, scripts
+packages/guardrails/tsconfig.json         (NEW) — extends base tsconfig
+packages/guardrails/vitest.config.ts      (NEW) — test runner config
+packages/guardrails/src/index.ts          (NEW) — barrel export (empty initially)
+```
+
+#### Deep file dependency analysis
+Package novo — zero dependências intra-repo.
+
+#### Tasks
+1. Create `packages/guardrails/package.json` with `name: "@usetheo/guardrails"`, `version: "0.1.0"`, `type: "module"`, exports map, build/test scripts.
+2. Create `packages/guardrails/tsconfig.json` extending base config.
+3. Create `packages/guardrails/vitest.config.ts`.
+4. Create empty `packages/guardrails/src/index.ts`.
+5. Verify `pnpm install` and `pnpm build` exit 0.
+
+#### TDD
+```
+RED:     (no tests yet — scaffold only)
+GREEN:   pnpm build exit 0
+VERIFY:  pnpm build && pnpm test (empty test suite passes)
+```
+
+#### Concurrency tests
+```
+(none — single-threaded)
+```
+
+#### Acceptance Criteria
+- [ ] `pnpm build` exit 0
+- [ ] `pnpm test` exit 0 (empty suite)
+- [ ] `package.json` exports map resolves
+
+#### DoD
+- [ ] Scaffold complete
+- [ ] Build passing
+
+---
+
+### T1.2 — Core types: Guardrail, GuardrailResult, GuardrailContext
+
+#### Objective
+Exportar os tipos fundamentais que toda a API pública usa.
+
+#### Why this step
+1. **O que faz:** Define `GuardrailResult`, `GuardrailContext`, `Guardrail` type, e `GuardrailOptions`.
+2. **Por que agora:** Pipeline runner (Phase 2) e detectors (Phase 3) consomem estes tipos. Per D1, a interface é função async com tristate result.
+
+#### Evidence
+Blueprint ADR D1 — interface shape decision. NeMo `guardrails_types.py:34-40` (RailResult shape). OpenGuardrails `types.ts:3` (RiskTagger type).
+
+#### Files to edit
+```
+packages/guardrails/src/types.ts          (NEW) — core types
+packages/guardrails/src/index.ts          (MODIFIED) — re-export types
+packages/guardrails/tests/types.test.ts   (NEW) — type contract tests
+```
+
+#### Deep file dependency analysis
+- `types.ts` é a fundação — zero imports internos. Todos os outros módulos importam dele.
+- `index.ts` re-exporta para a public API surface.
+
+#### Deep Dives
+
+**GuardrailResult tristate:**
+```typescript
+type GuardrailAction = 'allow' | 'block' | 'modify'
+
+type GuardrailResult = {
+  action: GuardrailAction
+  reason?: string
+  modified?: string  // present only when action === 'modify'
+}
+```
+
+**GuardrailContext:**
+```typescript
+type GuardrailDirection = 'input' | 'output' | 'tool_input' | 'tool_output'
+
+type GuardrailContext = {
+  direction: GuardrailDirection
+  content: string
+  metadata?: Record<string, unknown>
+}
+```
+
+**Guardrail type:**
+```typescript
+type Guardrail = (ctx: GuardrailContext) => Promise<GuardrailResult>
+```
+
+**GuardrailOptions (per-guardrail config):**
+```typescript
+type GuardrailOptions = {
+  name: string
+  failOpen?: boolean  // default false (fail-closed per D2)
+}
+```
+
+#### Tasks
+1. Create `packages/guardrails/src/types.ts` with all types above.
+2. Add type-level tests in `tests/types.test.ts` (assignability, exhaustive checks).
+3. Re-export from `src/index.ts`.
+
+#### TDD
+```
+RED:     test_GuardrailResult_allowIsValid
+RED:     test_GuardrailResult_blockRequiresReason
+RED:     test_GuardrailResult_modifyRequiresModified
+RED:     test_GuardrailContext_inputDirection
+RED:     test_Guardrail_asyncFunctionShape
+GREEN:   implement types
+VERIFY:  pnpm test -- --testPathPattern=types
+```
+
+#### Concurrency tests
+```
+(none — single-threaded)
+```
+
+#### Acceptance Criteria
+- [ ] 5 type tests GREEN — `pnpm test -- --testPathPattern=types` exit 0
+- [ ] Types exported from package barrel — `node -e "import('@usetheo/guardrails').then(m => console.log(typeof m.Guardrail))"` does not throw
+- [ ] `pnpm build` exit 0 — `pnpm --filter @usetheo/guardrails build` exit 0
+
+#### DoD
+- [ ] All TDD tests GREEN — `pnpm --filter @usetheo/guardrails test` exit 0
+- [ ] Build passing — `pnpm --filter @usetheo/guardrails build` exit 0
+- [ ] Zero type errors — `pnpm --filter @usetheo/guardrails typecheck` exit 0
+
+---
+
+## Phase 2: Pipeline runner
+
+**Objective:** `GuardrailPipeline` que compõe guardrails sequencialmente com short-circuit e fail-closed default.
+
+### T2.1 — GuardrailPipeline implementation
+
+#### Objective
+Pipeline runner: aceita array de guardrails, executa sequencialmente, short-circuits on first block, fail-closed by default.
+
+#### Why this step
+1. **O que faz:** Implementa `createGuardrailPipeline(guardrails, options)` que retorna uma função `run(ctx) => Promise<GuardrailResult>`.
+2. **Por que agora:** Detectors (Phase 3) precisam de um compositor. Per D2, sequential + fail-closed + short-circuit.
+
+#### Evidence
+Blueprint ADR D2 — pipeline execution model. NeMo `rails_manager.py:183-201` (sequential short-circuit). OpenGuardrails `pipeline.ts:14-27` (fail-safe isolation with try/catch).
+
+#### Files to edit
+```
+packages/guardrails/src/pipeline.ts         (NEW) — pipeline runner
+packages/guardrails/src/index.ts            (MODIFIED) — re-export
+packages/guardrails/tests/pipeline.test.ts  (NEW) — pipeline tests
+```
+
+#### Deep file dependency analysis
+- `pipeline.ts` imports `types.ts` only.
+- Exported as `createGuardrailPipeline` from barrel.
+
+#### Deep Dives
+
+**Pipeline semantics:**
+```typescript
+function createGuardrailPipeline(
+  guardrails: Array<{ guardrail: Guardrail; options: GuardrailOptions }>,
+): { run: (ctx: GuardrailContext) => Promise<GuardrailResult> }
+```
+
+**Execution contract:**
+1. **(v1.1 EC-2)** Clone the input ctx: `const workingCtx = { ...ctx }` — NEVER mutate the caller's object
+2. Iterate guardrails in order
+3. Call each `guardrail(workingCtx)` — if result.action === 'block', return immediately (short-circuit)
+4. If result.action === 'modify' AND `result.modified != null` **(v1.1 EC-6)**, update `workingCtx.content` with `result.modified` for next guardrail. If `modified` is undefined, treat as allow.
+5. If guardrail throws: fail-closed (return block) unless `options.failOpen === true` (warn + continue)
+6. If all pass: return `{ action: 'allow' }`
+
+#### Tasks
+1. Create `packages/guardrails/src/pipeline.ts` with `createGuardrailPipeline`.
+2. Implement sequential execution with short-circuit.
+3. Implement fail-closed default + failOpen exception handling.
+4. Implement modify-chain (output of one guardrail feeds next).
+5. Tests.
+
+#### TDD
+```
+RED:     test_pipeline_allowsWhenAllGuardrailsAllow
+RED:     test_pipeline_blocksOnFirstBlock_shortCircuits
+RED:     test_pipeline_chainsModify_feedsNextGuardrail
+RED:     test_pipeline_failClosed_exceptionBecomesBlock
+RED:     test_pipeline_failOpen_exceptionBecomesWarnAndContinue
+RED:     test_pipeline_emptyGuardrails_returnsAllow
+RED:     test_pipeline_shortCircuit_doesNotCallSubsequentGuardrails
+RED:     test_pipeline_preservesReasonOnBlock
+RED:     test_pipeline_doesNotMutateOriginalContext                    ← EC-2
+RED:     test_pipeline_modifyWithUndefinedModified_treatedAsAllow      ← EC-6
+GREEN:   implement pipeline
+REFACTOR: extract error handling to helper if duplicated
+VERIFY:  pnpm test -- --testPathPattern=pipeline
+```
+
+#### Concurrency tests
+```
+(none — single-threaded)
+```
+
+#### Acceptance Criteria
+- [ ] 10 pipeline tests GREEN — `pnpm test -- --testPathPattern=pipeline` exit 0 with 10 tests passing
+- [ ] Short-circuit verified — mock guardrail after blocker has `.mock.calls.length === 0`
+- [ ] Fail-closed default verified — `expect(result.action).toBe('block')` when guardrail throws
+- [ ] Modify-chain verified — second guardrail receives `ctx.content === 'modified-by-first'`
+- [ ] **(v1.1 EC-2)** Original ctx is not mutated — `expect(originalCtx.content).toBe('original')` after pipeline.run()
+- [ ] **(v1.1 EC-6)** modify with undefined modified field — `expect(result.action).toBe('allow')`
+- [ ] `pnpm build` exit 0 — `pnpm --filter @usetheo/guardrails build` exit 0
+
+#### DoD
+- [ ] All TDD tests GREEN — `pnpm --filter @usetheo/guardrails test` exit 0
+- [ ] Build passing — `pnpm --filter @usetheo/guardrails build` exit 0
+- [ ] Zero type errors — `pnpm --filter @usetheo/guardrails typecheck` exit 0
+
+---
+
+## Phase 3: Built-in detectors
+
+**Objective:** 3 detectors prontos para uso: credential masking, shell-pattern, PII regex.
+
+### T3.1 — Credential masking detector
+
+#### Objective
+Port do padrão OpenGuardrails: 11 MaskingRules com regex pattern + deterministic fake. Returns `modify` with masked content.
+
+#### Why this step
+1. **O que faz:** `createCredentialMaskingGuardrail(config?)` retorna um `Guardrail` que substitui credenciais por fakes determinísticos.
+2. **Por que agora:** Credential leakage é o risk #1 em agentes com tool access. Per D3, port do OpenGuardrails `masking.ts`.
+
+#### Evidence
+OpenGuardrails `masking.ts:60-151` (11 built-in rules), `masking.ts:451-491` (mask/restore lifecycle).
+
+#### Files to edit
+```
+packages/guardrails/src/detectors/credential-masking.ts  (NEW)
+packages/guardrails/src/detectors/index.ts               (NEW)
+packages/guardrails/tests/credential-masking.test.ts     (NEW)
+```
+
+#### Deep Dives
+
+**MaskingRule type:**
+```typescript
+type MaskingRule = {
+  id: string
+  pattern: RegExp
+  group?: number  // capture group index to mask (rest stays)
+  fake: string
+}
+```
+
+**11 built-in rules:** anthropic-key, openai-key, stripe-key, github-pat, aws-access-key-id, aws-secret-access-key (group:1), google-key, slack-token, bearer-token (group:1), eth-private-key, btc-wif-key.
+
+**(v1.1 EC-1) Ordering invariant:** BUILTIN_RULES array MUST be ordered from most-specific to least-specific pattern to prevent a generic rule (e.g., `bearer-token`) from swallowing a more specific match (e.g., `anthropic-key` which starts with `sk-ant-`). Per OpenGuardrails `masking.ts:57-59` ordering rationale. Tests MUST verify non-collision between overlapping rules.
+
+**(v1.1 EC-3) Multiple distinct values of same type:** When the same rule matches N distinct real values, subsequent fakes get a `_N` suffix (e.g., `fake_0`, `fake_1`) per OpenGuardrails `masking.ts:479`. This ensures the restore map is bijective.
+
+**Lifecycle:** `maskCredentials(text, rules) => { masked, restore: Map<fake, real> }`. Caller uses `masked` for LLM. Restore map applied to response.
+
+#### Tasks
+1. Create `MaskingRule` type and `BUILTIN_RULES` array (11 rules).
+2. Implement `maskCredentials(text, rules)` returning `{ masked, restore }`.
+3. Implement `restoreCredentials(text, restore)`.
+4. Create `createCredentialMaskingGuardrail()` wrapper that returns `Guardrail` (action: 'modify').
+5. Tests covering each rule + edge cases.
+
+#### TDD
+```
+RED:     test_masks_anthropicKey
+RED:     test_masks_openaiKey
+RED:     test_masks_stripeKey
+RED:     test_masks_githubPat
+RED:     test_masks_awsAccessKeyId
+RED:     test_masks_awsSecretAccessKey_groupAware
+RED:     test_masks_bearerToken_groupAware
+RED:     test_masks_multipleCredentials_sameType
+RED:     test_restore_replaceFakesWithReal
+RED:     test_guardrail_returnsModifyAction
+RED:     test_guardrail_returnsAllowWhenNoCredentials
+RED:     test_masks_openaiKey_notMatchedByAnthropicRule                ← EC-1
+RED:     test_masks_twoDistinctOpenaiKeys_getDifferentFakes            ← EC-3
+GREEN:   implement
+REFACTOR: extract regex compilation if patterns are reused
+VERIFY:  pnpm test -- --testPathPattern=credential-masking
+```
+
+#### Concurrency tests
+```
+(none — single-threaded)
+```
+
+#### Acceptance Criteria
+- [ ] 13 tests GREEN — `pnpm test -- --testPathPattern=credential-masking` exit 0
+- [ ] Group-aware masking preserves context — `expect(masked).toContain('Bearer ')` when input has `Bearer sk-real...`
+- [ ] Restore map correctly reverses masking — `expect(restoreCredentials(masked, restore)).toBe(original)`
+- [ ] **(v1.1 EC-1)** OpenAI key not matched by Anthropic rule — `expect(result.masked).toContain(OPENAI_FAKE)` not `ANTHROPIC_FAKE`
+- [ ] **(v1.1 EC-3)** Two distinct keys get distinct fakes — `expect(fake1).not.toBe(fake2)`
+- [ ] Zero external deps — `jq '.dependencies // {} | keys | length' package.json` returns 0
+
+#### DoD
+- [ ] All TDD tests GREEN — `pnpm --filter @usetheo/guardrails test` exit 0
+- [ ] Build passing — `pnpm --filter @usetheo/guardrails build` exit 0
+
+---
+
+### T3.2 — Shell-pattern detector
+
+#### Objective
+Detect dangerous shell commands in agent output. Returns `block` when pattern matches.
+
+#### Why this step
+1. **O que faz:** `createShellPatternGuardrail()` retorna um `Guardrail` que bloqueia conteúdo contendo comandos shell perigosos.
+2. **Por que agora:** Agentes com `Bash` tool access podem emitir `rm -rf /`, `curl | sh`, etc. Per blueprint Q2, OpenGuardrails `shell-pattern.ts` prova o padrão.
+
+#### Evidence
+OpenGuardrails `shell-pattern.ts:4-11` (7 patterns), `shell-pattern.ts:15-39` (tagger function).
+
+#### Files to edit
+```
+packages/guardrails/src/detectors/shell-pattern.ts       (NEW)
+packages/guardrails/tests/shell-pattern.test.ts          (NEW)
+```
+
+#### Deep Dives
+
+**7 patterns:** `rm -rf /`, `curl | sh`, `wget | sh`, `sudo rm`, `chmod 777`, `dd of=/dev/`, `eval` with backtick/dollar.
+
+**Guardrail returns:** `{ action: 'block', reason: 'Dangerous shell command detected: <pattern>' }` on match. `{ action: 'allow' }` when no match.
+
+#### Tasks
+1. Define `DANGEROUS_PATTERNS` array with 7 regex patterns.
+2. Implement `createShellPatternGuardrail()`.
+3. Tests with positive and negative cases.
+
+#### TDD
+```
+RED:     test_blocks_rmRf
+RED:     test_blocks_curlPipeSh
+RED:     test_blocks_wgetPipeSh
+RED:     test_blocks_sudoRm
+RED:     test_blocks_chmod777
+RED:     test_blocks_ddOfDev
+RED:     test_blocks_evalBacktick
+RED:     test_allows_safeLsCommand
+RED:     test_allows_safeGrepCommand
+RED:     test_reason_includesPatternName
+RED:     test_blocks_rmRfEvenInCodeBlock_knownLimitation                ← EC-4 (documents behavior)
+GREEN:   implement
+VERIFY:  pnpm test -- --testPathPattern=shell-pattern
+```
+
+#### Concurrency tests
+```
+(none — single-threaded)
+```
+
+#### Acceptance Criteria
+- [ ] 11 tests GREEN — `pnpm test -- --testPathPattern=shell-pattern` exit 0
+- [ ] All 7 dangerous patterns blocked — each pattern has a test with `expect(result.action).toBe('block')`
+- [ ] Safe commands allowed — `expect(result.action).toBe('allow')` for `ls -la`, `grep foo bar`
+- [ ] Reason message includes pattern name — `expect(result.reason).toContain('rm -rf')`
+
+#### DoD
+- [ ] All TDD tests GREEN — `pnpm --filter @usetheo/guardrails test` exit 0
+- [ ] Build passing — `pnpm --filter @usetheo/guardrails build` exit 0
+
+---
+
+### T3.3 — PII regex detector
+
+#### Objective
+Detect and optionally redact PII (email, credit card, phone, SSN) via regex. Returns `modify` (redacted) or `block` depending on config.
+
+#### Why this step
+1. **O que faz:** `createPiiGuardrail(config?)` detecta PII via regex patterns e retorna `modify` com conteúdo redactado (e.g., `john@example.com` → `[REDACTED_EMAIL]`).
+2. **Por que agora:** PII leakage é compliance risk. Regex cobre 80% dos casos sem deps externas. Per blueprint D1.
+
+#### Evidence
+LlamaFirewall paper — PII detection como guardrail category. NeMo `library/sensitive_data_detection/` (Presidio-based, heavy). Blueprint D3 — regex-first, ML deferred.
+
+#### Files to edit
+```
+packages/guardrails/src/detectors/pii-regex.ts           (NEW)
+packages/guardrails/tests/pii-regex.test.ts              (NEW)
+```
+
+#### Deep Dives
+
+**4 PII types:**
+| Type | Pattern | Redacted |
+|---|---|---|
+| email | RFC 5322 simplified | `[REDACTED_EMAIL]` |
+| credit_card | Luhn-valid 13-19 digit sequences | `[REDACTED_CREDIT_CARD]` |
+| phone | E.164 + US/BR formats | `[REDACTED_PHONE]` |
+| ssn | `\d{3}-\d{2}-\d{4}` US SSN | `[REDACTED_SSN]` |
+
+**Config:** `{ types: PiiType[], strategy: 'redact' | 'block' }`. Default: redact all 4 types.
+
+#### Tasks
+1. Define `PII_PATTERNS` map (type → regex → replacement).
+2. Implement `createPiiGuardrail(config?)`.
+3. Support `strategy: 'redact'` (modify) and `strategy: 'block'` (block on detection).
+4. Tests for each PII type + config variants.
+
+#### TDD
+```
+RED:     test_redacts_email
+RED:     test_redacts_creditCard
+RED:     test_redacts_phone
+RED:     test_redacts_ssn
+RED:     test_redacts_multiplePiiInSameText
+RED:     test_blocks_whenStrategyIsBlock
+RED:     test_allows_whenNoPiiDetected
+RED:     test_config_selectiveTypes
+RED:     test_rejects_invalidLuhnNumber_notFlaggedAsCreditCard         ← EC-5
+GREEN:   implement
+VERIFY:  pnpm test -- --testPathPattern=pii-regex
+```
+
+#### Concurrency tests
+```
+(none — single-threaded)
+```
+
+#### Acceptance Criteria
+- [ ] 9 tests GREEN — `pnpm test -- --testPathPattern=pii-regex` exit 0
+- [ ] All 4 PII types detected
+- [ ] Redact strategy returns modify — `expect(result.action).toBe('modify')` and `expect(result.modified).toContain('[REDACTED_EMAIL]')`
+- [ ] Block strategy returns block — `expect(result.action).toBe('block')` when `strategy: 'block'`
+- [ ] Selective type config works — `createPiiGuardrail({ types: ['email'] })` ignores credit cards
+
+#### DoD
+- [ ] All TDD tests GREEN — `pnpm --filter @usetheo/guardrails test` exit 0
+- [ ] Build passing — `pnpm --filter @usetheo/guardrails build` exit 0
+
+---
+
+## Coverage Matrix
+
+| # | Gap / Requirement | Task(s) | Resolution |
+|---|---|---|---|
+| 1 | Package scaffold + build | T1.1 | `@usetheo/guardrails` scaffoldado com build funcional |
+| 2 | Core types (Guardrail, GuardrailResult, GuardrailContext) | T1.2 | Types exportados via barrel |
+| 3 | Pipeline runner (sequential, fail-closed, short-circuit) | T2.1 | `createGuardrailPipeline` implementado |
+| 4 | Credential masking (11 rules, mask/restore lifecycle) | T3.1 | `createCredentialMaskingGuardrail` com 11 MaskingRules |
+| 5 | Shell-pattern blocking (7 dangerous patterns) | T3.2 | `createShellPatternGuardrail` com 7 patterns |
+| 6 | PII detection/redaction (4 types, regex-based) | T3.3 | `createPiiGuardrail` com 4 PII types |
+| 7 | fail-closed default + failOpen per-guardrail | T2.1 | Pipeline handles both modes |
+| 8 | Modify-chain (output feeds next guardrail) | T2.1 | Pipeline chains modified content |
+| 9 | Zero external deps | T3.1-T3.3 | Pure TypeScript regex + built-in APIs |
+| 10 | 30+ unit tests | T1.2 + T2.1 + T3.1-T3.3 | 5 + 10 + 13 + 11 + 9 = 48 tests (v1.1: +6 edge case tests) |
+
+**Coverage: 10/10 gaps covered (100%).**
+
+## Failure scenarios
+
+```
+(none — no external I/O touched)
+```
+
+## Global Definition of Done
+
+- [ ] All 4 phases completed
+- [ ] 48 unit tests GREEN — `pnpm test` (v1.1: +6 edge case tests)
+- [ ] Zero type errors — `pnpm typecheck`
+- [ ] Zero lint warnings — `pnpm lint`
+- [ ] File-size budget respected (every src file <= 200 LoC)
+- [ ] `pnpm build` exit 0
+- [ ] CHANGELOG.md updated under `[Unreleased]` with Added section
+- [ ] README.md with usage examples for all 3 detectors + pipeline composition
+- [ ] Package publishable (`pnpm pack` produces valid tarball)
+
+## Final Phase: Integration Validation
+
+### Execution
+
+```bash
+pnpm test                    # 42 unit tests
+pnpm typecheck               # zero type errors
+pnpm lint                    # zero lint warnings
+pnpm build                   # produces dist/
+pnpm pack                    # valid tarball
+```
+
+### Acceptance Criteria
+
+- [ ] All test suites green
+- [ ] Zero type errors
+- [ ] Zero lint warnings
+- [ ] Package builds and packs successfully
+- [ ] README examples are copy-pasteable and work
+
+### If Validation Fails
+
+1. Identify which failures are plan-caused vs pre-existing
+2. Fix all plan-caused failures
+3. Re-run validation chain

@@ -1,0 +1,37 @@
+# Code-quality languages enablement — commit-tracked declarative config
+#
+# Authoritative source: rules/code-quality-golden-rule.md § Allowlist mechanism
+#                       skills/code-quality/SKILL.md § Workflow Step 1
+#
+# Format (one entry per line):
+#   LANGUAGE | MANIFEST-MARKER | STATUS | NOTES
+#
+# Where:
+#   LANGUAGE        ∈ { python, typescript, rust, go }
+#   MANIFEST-MARKER — filename used by auto-detection (auto-detect runs only if marker present)
+#   STATUS          ∈ { ENABLED, DISABLED, DEFER }
+#                     - ENABLED:  detector runs when manifest present
+#                     - DISABLED: detector SKIPPED with INFO Finding
+#                     - DEFER:    detector emits INFO "scheduled for vN"
+#   NOTES           — free-form rationale (recommended; not enforced by parser)
+#
+# Behavior:
+#   - Lines starting with `#` and blank lines are skipped.
+#   - Skill auto-detects manifest presence at repo root (no recursion).
+#   - For each ENABLED language: if manifest present, run detectors; if absent, emit INFO + skip.
+#   - For each DISABLED language: emit single INFO Finding regardless of manifest presence.
+#   - For each DEFER language: emit INFO with NOTES echoed.
+#
+# Adding/modifying entries:
+#   - Adding requires PR + rationale in commit message.
+#   - Changing STATUS (e.g., DISABLED -> ENABLED) requires test coverage of the new path.
+#
+# Defaults below ship all detectors as ENABLED. Each project may flip to DISABLED
+# for languages it does not use. The detector emits a NOOP Finding when the
+# manifest marker is absent — turning DISABLED is only useful to silence the
+# INFO trail entirely.
+
+python     | pyproject.toml   | ENABLED  | First-class detector.
+typescript | package.json     | ENABLED  | First-class detector.
+rust       | Cargo.toml       | ENABLED  | First-class detector.
+go         | go.mod           | ENABLED  | First-class detector.

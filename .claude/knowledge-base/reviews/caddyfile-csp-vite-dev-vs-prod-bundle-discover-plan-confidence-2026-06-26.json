@@ -1,0 +1,147 @@
+{
+  "plan_slug": "caddyfile-csp-vite-dev-vs-prod-bundle",
+  "plan_path": "/home/paulo/theo-cloud/theokit/.claude/knowledge-base/discoveries/plans/caddyfile-csp-vite-dev-vs-prod-bundle-plan.md",
+  "plan_version": null,
+  "scored_at": "2026-06-26T13:22:16.155777+00:00",
+  "research_coverage_score": 100.0,
+  "reference_citations_score": 100.0,
+  "plan_completeness_score": 100.0,
+  "risco_estrutural_score": 90.0,
+  "active_dimensions": [
+    "research_coverage",
+    "reference_citations",
+    "plan_completeness",
+    "structural_risk"
+  ],
+  "weight_normalization_factor": 1.0,
+  "weighted_avg": 98.5,
+  "hard_caps_triggered": [],
+  "final_score_after_caps": 98.5,
+  "verdict": "SHIPPABLE",
+  "calibration": {
+    "status": "PROVISIONAL_v1",
+    "holdout_count": 0,
+    "holdout_target": 30,
+    "kappa_measured": false
+  },
+  "reasons": {
+    "research_coverage": {
+      "contributors": [
+        "Corner 'tests' populated (2 Qs)",
+        "Corner 'deps' populated (1 Q)",
+        "Corner 'tools' populated (1 Q)"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "contributors": [],
+      "detractors": []
+    },
+    "plan_completeness": {
+      "contributors": [
+        "10/10 mandatory sections present",
+        "4 ADRs found",
+        "Question budget OK (7 Qs)"
+      ],
+      "detractors": []
+    },
+    "structural_risk": {
+      "contributors": [],
+      "detractors": [
+        "weak_imperatives: 2 hits",
+        "subjective_adjectives: 1 hits",
+        "vague_pronouns: 1 hits"
+      ]
+    }
+  },
+  "sub_reports": {
+    "research_coverage": {
+      "corners_populated": 4,
+      "corners_total": 4,
+      "corners_status": [
+        {
+          "corner": "tests",
+          "present": true,
+          "populated": true,
+          "question_count": 2,
+          "deferred": false
+        },
+        {
+          "corner": "deps",
+          "present": true,
+          "populated": true,
+          "question_count": 1,
+          "deferred": false
+        },
+        {
+          "corner": "tools",
+          "present": true,
+          "populated": true,
+          "question_count": 1,
+          "deferred": false
+        },
+        {
+          "corner": "techniques",
+          "present": true,
+          "populated": true,
+          "question_count": 3,
+          "deferred": false
+        }
+      ],
+      "empty_corners": [],
+      "contributors": [
+        "Corner 'tests' populated (2 Qs)",
+        "Corner 'deps' populated (1 Q)",
+        "Corner 'tools' populated (1 Q)"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "total": 0,
+      "verified": 0,
+      "fabricated": 0,
+      "explicitly_blocked": 0,
+      "fabricated_paths": [],
+      "blocked_paths": [],
+      "word_count": 3382,
+      "citation_density_per_200w": 0.0,
+      "contributors": [],
+      "detractors": []
+    },
+    "plan_completeness": {
+      "total_required": 10,
+      "found": 10,
+      "present": [
+        "Header",
+        "Context",
+        "Objective",
+        "In-Scope",
+        "ADRs",
+        "Research Questions",
+        "Coverage Matrix",
+        "Halt-loop Checkpoints",
+        "Acceptance Criteria",
+        "Global Definition of Done"
+      ],
+      "missing_mandatory": [],
+      "adr_count": 4,
+      "budget_violations": [],
+      "methodless_questions": [],
+      "contributors": [
+        "10/10 mandatory sections present",
+        "4 ADRs found",
+        "Question budget OK (7 Qs)"
+      ],
+      "detractors": []
+    },
+    "structural_risk": {
+      "total_hits": 4,
+      "by_category": {
+        "subjective_adjectives": 1,
+        "vague_pronouns": 1,
+        "weak_imperatives": 2
+      },
+      "total_penalty": -10
+    }
+  }
+}

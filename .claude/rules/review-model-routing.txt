@@ -1,0 +1,40 @@
+# Review model routing — assigns a Claude model to each /review specialist agent.
+#
+# Authoritative source for cost vs depth trade-offs in /review.
+# Skill consumer: skills/review/scripts/spawn_reviewers.py
+#
+# Format (one entry per line):
+#   ROLE: MODEL [KEY=VALUE ...]
+#
+# Where:
+#   ROLE                — agent role: architecture | tests | wiring | cross-validation | domain | domain-<X>
+#   MODEL               — Claude model alias known to the harness (e.g. opus, sonnet, haiku)
+#   KEY=VALUE (optional) — additional knobs the parser stores verbatim:
+#       experimental_until=YYYY-MM-DD — promote experimental model assignments to default after the date
+#
+# Special handling:
+#   Roles matching `domain-<X>` collapse to the `domain` entry when no exact
+#   entry exists for that role. This keeps secondary domain agents on the
+#   intended model without one-entry-per-domain duplication.
+#
+# Behavior on missing file / malformed entry: the consumer falls back to
+# DEFAULT_MODEL (currently 'opus') and emits a soft-cap "routing_unavailable"
+# finding. Never block /review on this file's absence.
+#
+# Lines starting with `#` and blank lines are skipped.
+# A line without `:` is silently skipped (treated as malformed entry per EC-6).
+#
+# Adding/modifying entries:
+#   - Document the rationale in a comment above the line.
+#   - Add CHANGELOG entry under `[Unreleased] § Changed` when changing defaults.
+#   - 'experimental_until' MUST be a date in the future; expired entries log a warning.
+
+# Defaults (uncomment + tune per project)
+# architecture:     opus
+# tests:            sonnet
+# wiring:           sonnet
+# cross-validation: opus
+# domain:           opus
+
+# Example experimental promotion:
+# tests: haiku experimental_until=2026-09-01

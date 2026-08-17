@@ -1,0 +1,14 @@
+id: decorated-function-python
+language: python
+severity: info
+message: |
+  Find every Python function or class with at least one decorator.
+  Uses tree-sitter's `decorated_definition` kind — returns the full
+  decorator + definition together (the multi-statement pattern that
+  fails as an inline ast-grep pattern).
+
+  Useful for: locating @pytest.fixture / @runtime_checkable / @dataclass /
+  custom framework decorators. Map test-fixture conventions across
+  Project B / Project C / any Python ref project.
+rule:
+  kind: decorated_definition

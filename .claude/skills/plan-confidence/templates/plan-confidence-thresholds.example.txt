@@ -1,0 +1,26 @@
+# Plan-Confidence Score Thresholds Allowlist (TEMPLATE)
+#
+# Copy this file to `.claude/rules/plan-confidence-thresholds.txt` in your project.
+#
+# Format: <band-name>|<min-score>|<sunset-date>|<adr-ref>
+#
+# Bands (descending):
+#   90+   -> SHIPPABLE              (verde, implementar com confianca)
+#   70-89 -> SHIPPABLE_WITH_CAVEATS (passa com ressalvas explicitas)
+#   50-69 -> NON_SHIPPABLE          (qualidade insuficiente)
+#   0-49  -> INVALID                (hard cap fired OR very low score)
+#
+# Comparison is >= (inclusive). Score == 70 -> SHIPPABLE_WITH_CAVEATS.
+#
+# Customize cutoffs to your project's calibration. Defaults (90/70/50/0) are
+# SOTA values from arXiv:2412.18004 — adjust after your holdout calibration.
+#
+# Sunset = quarterly review. Update sunset + ADR ref when you recalibrate.
+#
+# Run_structural.py emits a WARN when calibration is PROVISIONAL_v1
+# (no holdout). Adjust your project's calibration via ADR + this file.
+#
+SHIPPABLE|90|2027-01-31|YOUR_ADR_REF
+SHIPPABLE_WITH_CAVEATS|70|2027-01-31|YOUR_ADR_REF
+NON_SHIPPABLE|50|2027-01-31|YOUR_ADR_REF
+INVALID|0|2027-01-31|YOUR_ADR_REF

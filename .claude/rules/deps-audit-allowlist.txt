@@ -1,0 +1,34 @@
+# Deps-audit allowlist — explicit CVE/version exemptions with mandatory sunset.
+#
+# Authoritative source: rules/deps-audit-golden-rule.md § 4 (Allowlist mechanism).
+#
+# Each ACTIVE entry downgrades a CVE finding by ONE severity level
+# (CRITICAL → MEDIUM, HIGH → MEDIUM, MEDIUM → LOW, LOW → ignored).
+# Expired entries (today > SUNSET) are IGNORED — the finding re-fires at full severity.
+#
+# Format (one entry per line):
+#   ECOSYSTEM | PACKAGE | VERSION_RANGE | CVE_ID | SUNSET (YYYY-MM-DD) | RATIONALE
+#
+# Where:
+#   ECOSYSTEM     ∈ { npm, python, rust, go }
+#   PACKAGE       — package/crate/module name (e.g. lodash, requests, serde, github.com/foo/bar)
+#   VERSION_RANGE — affected range (e.g. ">=4.0.0,<4.17.21" or "*" for all)
+#   CVE_ID        — CVE / GHSA identifier (e.g. CVE-2023-12345, GHSA-1abc-2def-3ghi)
+#   SUNSET        — ISO date; MUST be ≤ 90 days from entry creation
+#   RATIONALE     — free-form justification (recommended; not enforced by parser)
+#
+# Lines starting with `#` and blank lines are skipped.
+# Whitespace around `|` is tolerated.
+#
+# Adding/modifying entries:
+#   - REQUIRES CHANGELOG entry under `[Unreleased] § Changed`.
+#   - REQUIRES ADR for HIGH/CRITICAL exemptions (`knowledge-base/adrs/`).
+#
+# A malformed entry triggers `deps_allowlist_malformed_entry` (HARD) and
+# aborts allowlist processing.
+#
+# Empty allowlist is the default. Add entries only when the underlying CVE
+# cannot be fixed within the iteration AND the risk is documented.
+
+# Example (commented):
+# npm | lodash | ">=4.0.0,<4.17.21" | GHSA-35jh-r3h4-6jhm | 2026-09-01 | Indirect via test-only dep; not in production bundle. Track upstream fix in github.com/foo/bar#42.

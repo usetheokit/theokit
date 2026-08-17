@@ -1,0 +1,15 @@
+id: async-function-python
+language: python
+severity: info
+message: |
+  Find every Python `async def` function declaration.
+  Returns the full function with body. Useful for mapping the
+  async surface of a codebase — what is the agent loop, what
+  reflection workers exist, what is awaited where.
+
+  Pair with method-call-ts.yml when comparing async patterns across
+  TypeScript and Python implementations.
+rule:
+  pattern: |
+    async def $NAME($$$):
+        $$$

@@ -1,0 +1,15 @@
+# Plan-Confidence Allowlist (TEMPLATE)
+#
+# Copy this file to `.claude/rules/plan-confidence-allowlist.txt` in your project.
+# Plans listed here are permitted to return verdict=INVALID without failing CI.
+# Use ONLY for in-flight work, documented-deferral, or known limitations.
+#
+# Format: <plan-slug>|<sunset-date>|<reason>
+#
+# Empty by default. Add entries as your project accumulates exceptions.
+#
+# Example entries:
+#
+# my-followup-plan|2026-12-31|Follow-up note (not a full plan); no Coverage Matrix by design
+# my-baseline-doc|2026-12-31|Baseline metrics doc; not a plan with gaps
+# my-deferred-gaps|2026-12-31|3 unmapped gaps phased to v2 per ADR-007

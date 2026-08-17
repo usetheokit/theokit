@@ -1,0 +1,141 @@
+{
+  "plan_slug": "theokit-http-decorators-pattern-from-nestjs",
+  "plan_path": "/home/paulo/Projetos/usetheo/theokit-tools/theokit/.claude/knowledge-base/discoveries/plans/theokit-http-decorators-pattern-from-nestjs-plan.md",
+  "plan_version": null,
+  "scored_at": "2026-06-08T01:24:04.634065+00:00",
+  "research_coverage_score": 100.0,
+  "reference_citations_score": 100.0,
+  "plan_completeness_score": 100.0,
+  "risco_estrutural_score": 94.0,
+  "active_dimensions": [
+    "research_coverage",
+    "reference_citations",
+    "plan_completeness",
+    "structural_risk"
+  ],
+  "weight_normalization_factor": 1.0,
+  "weighted_avg": 99.1,
+  "hard_caps_triggered": ["method_missing", "soft_floor_citation_density_low"],
+  "final_score_after_caps": 70.0,
+  "verdict": "SHIPPABLE_WITH_CAVEATS",
+  "calibration": {
+    "status": "PROVISIONAL_v1",
+    "holdout_count": 0,
+    "holdout_target": 30,
+    "kappa_measured": false
+  },
+  "reasons": {
+    "research_coverage": {
+      "contributors": [
+        "Corner 'tests' populated (1 Q)",
+        "Corner 'deps' populated (1 Q)",
+        "Corner 'tools' populated (1 Q)"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "contributors": ["4 verified .claude/knowledge-base/references/ citation(s)"],
+      "detractors": []
+    },
+    "plan_completeness": {
+      "contributors": [
+        "10/10 mandatory sections present",
+        "6 ADRs found",
+        "Question budget OK (6 Qs)"
+      ],
+      "detractors": ["Methodless Qs: ['__header_not_found__']"]
+    },
+    "structural_risk": {
+      "contributors": [],
+      "detractors": ["weak_imperatives: 2 hits"]
+    }
+  },
+  "sub_reports": {
+    "research_coverage": {
+      "corners_populated": 4,
+      "corners_total": 4,
+      "corners_status": [
+        {
+          "corner": "tests",
+          "present": true,
+          "populated": true,
+          "question_count": 1,
+          "deferred": false
+        },
+        {
+          "corner": "deps",
+          "present": true,
+          "populated": true,
+          "question_count": 1,
+          "deferred": false
+        },
+        {
+          "corner": "tools",
+          "present": true,
+          "populated": true,
+          "question_count": 1,
+          "deferred": false
+        },
+        {
+          "corner": "techniques",
+          "present": true,
+          "populated": true,
+          "question_count": 3,
+          "deferred": false
+        }
+      ],
+      "empty_corners": [],
+      "contributors": [
+        "Corner 'tests' populated (1 Q)",
+        "Corner 'deps' populated (1 Q)",
+        "Corner 'tools' populated (1 Q)"
+      ],
+      "detractors": []
+    },
+    "reference_citations": {
+      "total": 4,
+      "verified": 4,
+      "fabricated": 0,
+      "explicitly_blocked": 0,
+      "fabricated_paths": [],
+      "blocked_paths": [],
+      "word_count": 2433,
+      "citation_density_per_200w": 0.33,
+      "contributors": ["4 verified .claude/knowledge-base/references/ citation(s)"],
+      "detractors": []
+    },
+    "plan_completeness": {
+      "total_required": 10,
+      "found": 10,
+      "present": [
+        "Header",
+        "Context",
+        "Objective",
+        "In-Scope",
+        "ADRs",
+        "Research Questions",
+        "Coverage Matrix",
+        "Halt-loop Checkpoints",
+        "Acceptance Criteria",
+        "Global Definition of Done"
+      ],
+      "missing_mandatory": [],
+      "adr_count": 6,
+      "budget_violations": [],
+      "methodless_questions": ["__header_not_found__"],
+      "contributors": [
+        "10/10 mandatory sections present",
+        "6 ADRs found",
+        "Question budget OK (6 Qs)"
+      ],
+      "detractors": ["Methodless Qs: ['__header_not_found__']"]
+    },
+    "structural_risk": {
+      "total_hits": 2,
+      "by_category": {
+        "weak_imperatives": 2
+      },
+      "total_penalty": -6
+    }
+  }
+}

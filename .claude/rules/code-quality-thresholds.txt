@@ -1,0 +1,49 @@
+# Code-quality thresholds — per-project overrides for detector floors + behavioral knobs.
+#
+# Authoritative source: rules/code-quality-golden-rule.md § 6 (Per-project tuning).
+# Defaults shipped with the skill: skills/code-quality/defaults/thresholds.txt.
+#
+# This file sits between the locked golden rule and the per-project reality.
+# When unset, the value falls back to skills/code-quality/defaults/thresholds.txt.
+# Project-specific overrides go here and are CHANGELOG-tracked.
+#
+# Format (one entry per line):
+#   KEY = VALUE
+#
+# Where:
+#   KEY     — dot-separated detector.parameter (e.g., vulture.min_confidence)
+#   VALUE   — int, float, or string; type coerced by parser
+#
+# Lines starting with `#` and blank lines are skipped.
+# Whitespace around `=` is tolerated.
+#
+# Adding/changing entries:
+#   - Document the project-specific motivation in a comment above the line.
+#   - Add a CHANGELOG entry under `[Unreleased] § Changed`.
+#   - Defaults remain in skills/code-quality/defaults/thresholds.txt for portability.
+
+# D1 — Dead code
+# Defaults inherited; override only when project's call-graph analysis is unusual.
+# vulture.min_confidence = 80
+# knip.exit_code = strict
+# cargo_udeps.fail_on_unused = true
+# deadcode.fail_on_unused = true
+
+# D2 — Symbol fabrication
+# symbol_fab.cache_ttl_hours = 24
+# symbol_fab.registry_timeout_seconds = 5
+# symbol_fab.fallback_on_introspection_failure = warning
+
+# D3 — Cross-package wiring
+# orphan_export.skip_barrel_files = true
+# orphan_export.skip_entry_points = true
+
+# D4 — Mutation testing
+# mutation.critical_paths_required = true
+# mutation.score_floor_high = 80
+# mutation.score_floor_low = 60
+# mutation.timeout_minutes = 5
+
+# Orchestrator
+# orchestrator.no_network_disables_d2 = true
+# orchestrator.detector_timeout_seconds = 300

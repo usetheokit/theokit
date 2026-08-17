@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Removed
+
+- **Três arquivos que nada no sistema alcança.** `scripts/quality-gate.sh` (o cabeçalho afirmava ser
+  chamado pelo lint-staged; nem `.lintstagedrc.json` nem `.githooks/pre-commit` o chamavam — o gate
+  não rodava há tempo nenhum), `turbo.json` (stub de uma tarefa de adoção do Turborepo que ficou sem
+  fechar: `turbo` nunca virou dependência nem apareceu em workflow) e
+  `halt-loop-prompts/implement-decorator-file-based-parity.md` (artefato de sessão que escapou do
+  `.gitignore`). Auditoria de alcançabilidade sobre os 2146 arquivos rastreados, cobertura 100%,
+  quatro probes por arquivo.
+
+### Fixed
+
+- **`.claude/` restaurado — 1076 arquivos apagados por engano.** O commit `8f8971d8`, cuja mensagem
+  falava apenas de remover duas skills, removeu a árvore inteira: rules, hooks, knowledge-base,
+  plans, ADRs, blueprints e attestations. Restaurado de `6558266d`. `audit-trail-rotation.md`
+  declara plans, blueprints e ADRs como material que nunca rotaciona.
+- **`wiki/v3-deletion-ledger.md` estava órfão no bundle.** O ledger do M86 — a evidência medida de
+  que o v3 valeu a pena — não era linkado de `wiki/index.md`, o que num bundle cujo contrato é o
+  cross-link o deixava inalcançável. Linkado na seção *Milestone runs*.
+
+### Changed
+
+- **`clear-project-output/` fora do tracking.** O mesmo commit versionou o banco SQLite de análise
+  do plugin de limpeza, que muda a cada fase e não é fonte do projeto. Destrackeado e adicionado ao
+  `.gitignore`.
+
 ### Added
 
 - **`LivenessVerdict` passa a carregar o `cwd` do veredito.** `classifyProjects` **sonda** o caminho

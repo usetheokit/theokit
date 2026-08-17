@@ -1,0 +1,548 @@
+agent: review-crossval-4-6-absorption-domain-api-design
+review_target: origin/develop..HEAD for plan crossval-4-6-absorption (72 commits; publish checkpoint at 3d55d34f = @theokit/agents 9.4.0, everything after it unreleased)
+domain: api-design
+domain_specific_patterns_checked:
+  - 'Published-subpath-as-API doctrine (plan § Domain glossary): a symbol on an `exports` subpath is a contract'
+  - 'Semver derivation via changesets (.changeset/*.md -> packages/*/CHANGELOG.md), per rules/cycle-release.md § Bump-level derivation'
+  - 'Unbreakable Rule 6 — the CHANGELOG is written for the consumer, one line per change, migration actionable without the diff'
+  - 'LSP / declared-interface fidelity on published types (rules/architecture.md § 6 leaky abstractions; ECMAScript Map contract has(k) === (get(k) !== undefined))'
+  - 'ISP / role-shaped seams vs header interfaces (rules/architecture.md § 2-3)'
+  - 'rules/type-safety.md § Prohibited Patterns — `as` assertions; explicit return types; discriminated unions'
+  - 'system-design-guardrails.md § G12 (one rule / one owner) and § G7 (every export has a consumer)'
+  - "wiki/capability-index.md as the declared answer to 'which symbol delivers capability X' (CLAUDE.md § Ecosystem resolution 2026-08-16)"
+  - 'Options-object validation parity across sibling entry points in the same package'
+
+previously_reported_findings_reverified:
+  - id: F-dom-2 (previous review)
+    status: CLOSED
+    evidence: |
+      Commit 4cd49efe added `CHANGELOG.md:36-41` under `### Changed`, starting with the literal
+      `BREAKING:`, naming BOTH halves the earlier entry omitted: arity (`constructor(sessionId)` ->
+      `constructor(sessionId, timeoutMs)`) and meaning ("voce passou um thenable para uma costura
+      sincrona" -> "o registry nao respondeu a tempo"). `.changeset/session-lifecycle-async-major.md:16-22`
+      carries the same disclosure in English, which is the copy that actually reaches
+      `packages/agents/CHANGELOG.md` and therefore the npm consumer. The `### Changed` + `BREAKING:`
+      placement is deliberate and correct per `rules/cycle-release.md § Bump-level derivation`, and
+      the entry says so at :41-45. The "moved module, re-exported from its old home" framing is now
+      the LAST sentence rather than the whole entry.
+      Residual (see F-dom-2b below): one sentence of that disclosure is factually wrong, and the
+      rename recommended by the prior review was not adopted.
+  - id: F-arch-2 / F-dom-4 (previous review, reported twice)
+    status: OPEN — unchanged
+    evidence: '`../theokit-tui/src/tool-presentation.ts:305-330` is byte-identical to the reviewed state; the tui repo HEAD is still e1e7ca2 with no follow-up commit. See F-dom-1 below for the judgement asked for.'
+  - id: F-dom-3 (previous review)
+    status: OPEN — unchanged, and now with stronger evidence against it
+    evidence: 'See F-dom-3 below. `grep` for all nine new framework symbols in `wiki/capability-index.md` returns zero hits.'
+  - id: F-dom-6 (previous review)
+    status: OPEN — unchanged, both halves
+    evidence: 'See F-dom-6 below.'
+
+findings:
+  - id: F-dom-1
+    severity: HIGH
+    file: ../theokit-tui/src/tool-presentation.ts
+    line: 330
+    plan_ref: T3.1 — "Ship default tool header / body / approval maps in @theokit/tui"; O4
+    domain_anchor: >-
+      ECMAScript Map contract (has(k) === (get(k) !== undefined); ReadonlyMap<K,V>.get returns V | undefined);
+      rules/architecture.md § 6 "leaky abstractions"; rules/type-safety.md § Prohibited Patterns ("`as` type assertions")
+    summary: >-
+      RE-VERIFIED OPEN and unchanged. Judgement asked for: NO — a type-safe cast that produces an
+      incoherent API is not acceptable here. It is an LSP violation on a published type, and the cast
+      is simultaneously unnecessary (it buys nothing) and load-bearing (it is the only thing hiding
+      the incoherence from the compiler).
+    evidence: |
+      `tool-presentation.ts:317-330` — unchanged since the last review:
+      ```ts
+      return {
+        get: (name: string) => merged.get(name) ?? genericPresentation(name),   // :318
+        has: (name: string) => merged.has(name),                                // :319
+        keys: () => merged.keys(),   values: () => merged.values(),
+        entries: () => merged.entries(),
+        forEach: (fn, thisArg?: unknown) => { merged.forEach(fn, thisArg) },     // :326
+        [Symbol.iterator]: () => merged[Symbol.iterator](),
+      } as ReadonlyMap<string, ToolPresentation>                                 // :330
+      ```
+      Three arguments, and the third is the decisive one:
+
+      1. LSP. `DEFAULT_TOOL_PRESENTATION` (:294) and `toolPresentation()` (:305) carry the IDENTICAL
+         declared type `ReadonlyMap<string, ToolPresentation>` and have OPPOSITE `get` behaviour.
+         A caller that writes `m.get(n) ?? fallback` — the idiomatic form, and the form :294 REQUIRES —
+         silently never reaches its fallback on one of the two. Substitutability across the declared
+         type is exactly what is broken.
+      2. Internal incoherence. `has(n)` is false for names `get(n)` answers; `keys()`/`entries()`/
+         `[...m]` never yield the unknown name; `forEach` hands the raw `merged` Map to the callback's
+         third argument, so `m.forEach((v,k,map) => map.get(x))` re-enters WITHOUT the fallback.
+         `x instanceof Map` is false and `structuredClone(x)` throws (methods are not cloneable).
+      3. The cast buys nothing. `() => ToolPresentation` is already assignable to `get(k): V | undefined`,
+         so the assertion is not required to compile — and the consumer's inferred type is STILL
+         `ToolPresentation | undefined`. The stated purpose at :315-316 ("so no caller needs an
+         `?? fallback` at the call site") is defeated by the very type it was cast to: the guarantee
+         exists at runtime and is invisible at compile time. A cast whose only observable effect is
+         to suppress a contract mismatch is precisely what `rules/type-safety.md` forbids.
+
+      Scope honesty: `rules/type-safety.md` frontmatter scopes its `paths:` to THIS repo
+      (`packages/**`, `app/**`, `server/**`), so its letter does not bind the sibling repo. The
+      LSP/Map-contract argument binds regardless, and `system-design-guardrails.md § G3` states the
+      same prohibition for code this repo consumes.
+
+      COST WINDOW — this is still free to fix. `npm pack @theokit/tui@0.53.0` contains ZERO
+      occurrences of `toolPresentation`: the symbol is unpublished. Fixing it now costs a diff;
+      fixing it after publish costs a major on a package `@theokit/agents`' only real consumer pins.
+    recommended_action: >-
+      Return the real `merged` Map (drop the `as` entirely) and ship the total lookup as a separate,
+      honestly-typed function whose signature a consumer can SEE:
+      `export function resolveToolPresentation(map: ReadonlyMap<string, ToolPresentation>, name: string): ToolPresentation`.
+      That gives the never-undefined guarantee a visible type, keeps `get`/`has`/`keys` consistent,
+      and restores `instanceof Map` / structuredClone / spread. If the facade is kept against this
+      advice, it must at minimum make `has` agree with `get` and pass ITSELF as the `forEach` third
+      argument — but then `keys()`/`entries()`/iteration still disagree, which is why the facade is
+      the wrong shape rather than an incomplete one.
+
+  - id: F-dom-2b
+    severity: HIGH
+    file: .changeset/session-lifecycle-async-major.md
+    line: 19
+    plan_ref: T2.2 — "the registry half of session deletion becomes reachable"; Global DoD "every signature change is a widening"
+    domain_anchor: Unbreakable Rule 6 (changelog written for the consumer) + Unbreakable Rule 3 (honesty) — migration guidance on a published error type
+    summary: >-
+      The CHANGELOG half of F-dom-2 is CLOSED, but the migration sentence it added is factually
+      wrong in the direction that hurts: it tells a consumer their `catch` is dead code when in fact
+      it will still fire, under a different condition, and run the wrong recovery.
+    evidence: |
+      `.changeset/session-lifecycle-async-major.md:16-20`, mirrored at `CHANGELOG.md:36-40`:
+        "It was `constructor(sessionId)` for 'you passed a thenable to a synchronous seam'; it is now
+         `constructor(sessionId, timeoutMs)` for 'the registry did not answer in time'. The old
+         condition no longer exists, so a `catch` that depended on it will never fire again."
+        (pt-BR: "a condicao antiga deixou de existir, entao um `catch` que dependia dela nunca mais dispara")
+
+      The class is still exported and still thrown — `session/gc/registry-remover.ts:27-39` declares it,
+      and `registry-remover.ts:86-88` throws it on timeout, on a path that now runs by DEFAULT
+      (`DEFAULT_REGISTRY_TIMEOUT_MS = 30_000`, :55). So the consumer's existing handler:
+      ```ts
+      catch (e) { if (e instanceof SessionRegistryRemoverError) { await myRemover(id); retry() } }
+      ```
+      does NOT stop firing. It fires on a hung registry and re-drives the remover that just timed out —
+      the changeset's own text elsewhere calls that direction unsafe. "Will never fire again" is the
+      one sentence a migrating consumer would act on, and acting on it (deleting the handler) is
+      safer than believing it and leaving it, which is the reverse of what the sentence implies.
+
+      The prior review's recommended shape was also not adopted: a NEW name
+      (`SessionRegistryTimeoutError`) with `SessionRegistryRemoverError` kept as a `@deprecated`
+      alias for one major — the pattern this repo already applies at
+      `packages/agents/src/bridge/delegation-types.ts` for `BudgetExceededError`. Keeping the old
+      name for the new meaning is the only variant in which a stale `instanceof` silently changes
+      behaviour instead of failing to compile.
+    recommended_action: >-
+      Replace the sentence with what is true: "the class is now thrown ONLY on timeout. A `catch`
+      that treated it as 'I passed a thenable, let me await it myself' will now fire on a hung
+      registry and must not retry — the transcript was deliberately left on disk." Preferably also
+      rename to `SessionRegistryTimeoutError` and keep `SessionRegistryRemoverError` as a
+      `@deprecated` alias for one major, so a consumer's stale handler is a compile-time
+      deprecation rather than a runtime meaning swap.
+
+  - id: F-dom-3
+    severity: HIGH
+    file: wiki/capability-index.md
+    line: 30
+    plan_ref: >-
+      O1/O2 ("the capability index tells the truth"; "every capability the layer invents is reachable"); D1;
+      and the numbered task step "Add the capability-index row" in T1.2 (plan:592), T2.1 (plan:748),
+      T2.2 (plan:847), T2.3 (plan:948), T2.6 (plan:1160), T2.7 (plan:1239), T3.2 (plan:1416), T3.3 (plan:1507)
+    domain_anchor: CLAUDE.md § Ecosystem resolution 2026-08-16 — wiki/capability-index.md is the declared answer to "which symbol delivers capability X"
+    summary: >-
+      STILL OPEN, and worse than first reported: adding the index row is not merely doctrine, it is
+      an explicit numbered task step in NINE tasks of this plan. It was executed for exactly one
+      (T1.1). Every framework-side symbol this slice invented ships undiscoverable, while the two
+      sibling packages got seven rows.
+    evidence: |
+      `grep -n 'shouldAutoApprove|APPROVAL_MODES|WRITE_SCOPED_TOOLS|applyPosture|expandCommandTemplate|templateHints|FILE_INLINE_CAP|classifyProjects|transcriptRootHint|createDelegateTool|expandInstructionImports' wiki/capability-index.md`
+        -> ZERO matches. (49 table rows in the file; `@theokit/agents` rows at :30-76 are all pre-slice.)
+
+      Rows the same slice DID add, for the siblings (`capability-index.md:89-92`, `:109-110`):
+        toolPresentation · DEFAULT_TOOL_PRESENTATION · WindowAnchor · keyboardHelpFor
+        runPkceFlow · refreshAccessToken            (all marked `Landed: unreleased`)
+
+      Plan task steps not executed, one per task:
+        T1.2 plan:592  "Add a capability-index row for the image tool."      -> `createViewImageTool` absent
+        T2.1 plan:748  "Add the capability-index row."                       -> `shouldAutoApprove` absent
+        T2.2 plan:847  "Add the capability-index row."                       -> `deleteSession` absent; `runTranscriptGC` row (:58) still says "8.x" although it became async in the pending major
+        T2.3 plan:948  "Add the capability-index row."                       -> `forkBeforeUserTurn` absent entirely
+        T2.6 plan:1160 "Add the capability-index row."                       -> `transcriptRootHint` absent
+        T2.7 plan:1239 "Add the capability-index row."                       -> `createPendingLedger` row exists (:68) but was NOT updated for the payload widening
+        T3.2 plan:1416 "Add the capability-index row."                       -> `classifyProjects` absent
+        T3.3 plan:1507 "Add the capability-index row."                       -> `expandCommandTemplate` absent
+      Only T1.1 (plan:523, `TheokitAgentError`) produced its row (:75).
+
+      `shouldAutoApprove` remains the sharpest case: `bridge/approval-decision.ts:9-13` says in
+      writing that the rule was implemented twice downstream *because the enforcement was not
+      reachable* — and the fix ships equally unfindable.
+
+      Why CI is green anyway: the guard is one-directional. `tests/integration/crossval-gaps.test.ts`
+      asserts index -> surface (every cited symbol resolves) and the inverse only for the "Honest
+      gaps" table. Nothing asserts surface -> index. `scripts/check-invention-reachability.mjs:1-14`
+      asks whether an invented capability is EXPORTED, not whether it is FINDABLE. And the T4.4
+      convention at plan:1796 ("the corresponding capability-index row's `Landed` column is
+      populated in the same change") is only half mechanized: `scripts/check-changelog-closes.mjs`
+      checks the `closes:` marker in CHANGELOG.md and never looks at the index.
+    recommended_action: >-
+      Add the nine missing rows with `Landed: unreleased` (the convention the sibling rows already
+      use), refresh the `runTranscriptGC` and `createPendingLedger` rows, and close the one-way gap:
+      `check-invention-reachability.mjs` already enumerates the layer's exported symbols and the
+      index guard already resolves per-package `dist` — assert that an export added to a published
+      subpath since the last tag appears in the index OR in an allowlist with a sunset. Without the
+      inverse assertion this recurs on the next slice by construction.
+
+  - id: F-dom-6
+    severity: HIGH
+    file: ../theokit-tui/src/tool-presentation.ts
+    line: 18
+    plan_ref: T3.1; O4 — the three name-keyed tool maps ship as overridable defaults
+    domain_anchor: system-design-guardrails.md § G12 (one rule / one owner, cited in this file's own docstring); rules/testing.md § 6 (change-detector tests)
+    summary: >-
+      STILL OPEN, both halves. The tui docstring still names a control that does not exist, and the
+      framework side still asserts a hardcoded literal against itself while the machinery to derive
+      it shipped in this same branch.
+    evidence: |
+      tui claim, unchanged (`tool-presentation.ts:16-19`):
+        "...it CAN drift when a tool is added upstream ... **The test asserts the list**, so drift
+         shows up as a diff to review rather than as a surprise in a session."
+      tui test, unchanged (`../theokit-tui/src/tool-presentation.test.ts:30-39`): both operands
+      (`KNOWN_TOOL_NAMES` at :34 and `DEFAULT_TOOL_PRESENTATION` at :294) are defined in the same
+      file. It proves internal consistency, never fidelity to `@theokit/agents/tools`.
+
+      Framework side, same shape and no G1 excuse:
+        `packages/agents/src/bridge/approval-decision.ts:45-50` — "The names are the SDK factories'
+        defaults (`apply-patch.ts:51`, `edit-file.ts:155`, `write-file.ts:86`)". That is a citation
+        by line number, not a derivation.
+        `packages/agents/tests/unit/approval-decision.test.ts:95-103` —
+        `expect([...WRITE_SCOPED_TOOLS].sort(...)).toEqual(['apply_patch','edit_file','write_file'])`,
+        a literal transcribed into the test. `@theokit/agents` already depends on `@theokit/sdk-tools`
+        (`packages/agents/package.json` dependencies), so the names are derivable from the factories.
+
+      The slice's own new closure register does not close it either:
+      `tests/integration/crossval-4-6-closure.test.ts:151-155` asserts only
+      `reachable('shouldAutoApprove')` / `reachable('WRITE_SCOPED_TOOLS')` — that they are exported,
+      not that they agree with anything; and :188-196 asserts the three tui symbols appear in the
+      built `.d.ts`, not that `KNOWN_TOOL_NAMES` matches the factory names.
+    recommended_action: >-
+      Add ONE assertion to `tests/integration/crossval-4-6-closure.test.ts`, which already resolves
+      sibling `dist` per the "Import from" column and already has the skip-high convention for an
+      unbuilt sibling: the framework's published tool-factory names must equal `@theokit/tui`'s
+      `KNOWN_TOOL_NAMES`. For `WRITE_SCOPED_TOOLS`, assert against the real
+      `createEditFileTool`/`createWriteFileTool`/`createApplyPatchTool` instances' `.name` rather
+      than a literal. Until one of these exists, DELETE the sentence "The test asserts the list" —
+      a false claim about a control is worse than an acknowledged gap.
+
+  - id: F-dom-7
+    severity: HIGH
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 38
+    plan_ref: T3.2 — "Absorb the liveness oracle into @theokit/agents/session"; commit 7fea1388
+    domain_anchor: rules/architecture.md § 2 (DIP — the domain declares the interface it needs) and § 6 (leaky abstractions); system-design-guardrails.md § G12 (one rule / one owner)
+    summary: >-
+      `FsSeam` went from 1 required method to 3 in order to re-answer a question the SAME published
+      subpath already answers with `resolveProjectDir` — the package's own purpose-built cwd
+      sidecar, which the oracle neither uses nor mentions. Two reverse-index mechanisms now ship on
+      `@theokit/agents/session`, and the duplication is what forced the interface to widen.
+    evidence: |
+      Before (`git show c3527883:...liveness-oracle.ts:35-37`):
+      ```ts
+      export interface FsSeam { exists: (path: string) => boolean }
+      ```
+      After (`liveness-oracle.ts:38-44`), all three REQUIRED:
+      ```ts
+      export interface FsSeam {
+        exists: (path: string) => boolean
+        listEntries: (dir: string) => readonly string[]
+        firstLine: (file: string) => string
+      }
+      ```
+      What already existed on the same barrel — `packages/agents/src/session/index.ts:22-27` exports
+      `resolveProjectDir`, whose module docstring (`project-index.ts:29-40`) calls itself
+      "M71 — the reverse index `encodeProjectDir` never had":
+      ```ts
+      // project-index.ts:97-108
+      export function resolveProjectDir(encodedName, root = transcriptRoot()) {
+        const raw = readFileSync(join(projectsRoot(root), encodedName, CWD_SIDECAR), 'utf8')
+        ...
+      }
+      ```
+      One file read, no seam, written and maintained by `recordProjectDir` (`project-index.ts:72`)
+      for exactly this question — and re-verified by the sibling `projectDirMatches`
+      (`project-index.ts:118`), which is the same "must encode back" check `recordedCwd`
+      reimplements at `liveness-oracle.ts:175`.
+
+      The oracle instead lists a directory and JSON-parses up to 3 transcripts' first lines
+      (:155-179) to recover the cwd. The 200-line module never mentions the sidecar exists.
+
+      Honesty about which rule applies. This is NOT classic ISP-with-unused-methods: all three
+      members are called by the one exported function. The defect is that the seam is no longer
+      ROLE-shaped. `exists` is a filesystem role. `firstLine` is a transcript-FORMAT operation — the
+      transcript is written by `@theokit/sdk/persistence`, a dependency of THIS package and not of
+      the consumer, and `readJsonlTail` is already listed in `wiki/capability-index.md:104` as the
+      framework's answer for reading one. Pushing it across the seam makes the consumer responsible
+      for a format the framework owns, which is `rules/architecture.md § 6` ("adapters returning
+      driver-specific types from interfaces meant to be portable") read from the other side.
+      Contrast the sibling seam shipped by the SAME slice: `config/command-template.ts:54-59`
+      (`TemplateDeps`) also has three members, and each one carries a distinct TRUST decision the
+      caller must own (run a shell, resolve a reference, warn). `listEntries`/`firstLine` carry no
+      decision at all.
+
+      Second cost, compounding: no default implementation is exported. There is no `nodeFsSeam()`
+      anywhere in `packages/agents/src`. Every consumer of a required 3-method interface hand-writes
+      it — in the slice whose stated thesis is that a capability which exists and cannot be used
+      costs a customer what an absent one costs.
+    recommended_action: >-
+      Read the sidecar first (it is the package's own authoritative index, one file, no injected
+      call) and fall back to the transcript scan only when it is absent — which also documents why
+      the fallback exists. Either widen `resolveProjectDir` to accept the same `FsSeam` so the budget
+      stays countable, or add ONE seam member (`readText(path): string | undefined`) that serves both
+      the sidecar and the first-line read, keeping `FsSeam` at two. Ship a `nodeFsSeam()` default from
+      `@theokit/agents/session` so the required interface is satisfiable in one line. And state in the
+      oracle's docstring that `resolveProjectDir` exists and why it is or is not enough — two
+      reverse-index mechanisms on one subpath with no cross-reference is the G12 shape this plan
+      exists to remove.
+
+  - id: F-dom-8
+    severity: HIGH
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 14
+    plan_ref: commit 7fea1388 ("o oraculo marcava projetos vivos como mortos"); CHANGELOG.md:22-28
+    domain_anchor: Subpath-as-API doctrine (plan § Domain glossary) — the module TSDoc header is emitted into the published `.d.ts`
+    summary: >-
+      The rename fixed the declaration and not the documentation directly above it. The module
+      docstring still names the injected option `listProjects`, and that block ships INSIDE the
+      published type declaration — so `session.d.ts` will document one name and declare another,
+      reproducing in the same file the two-names-one-contract defect the commit exists to fix.
+    evidence: |
+      Source, current HEAD (`liveness-oracle.ts:12-15`):
+      ```
+       * ## What is injected, and why exactly that
+       *
+       * `listProjects` — which directories are even candidates is PRODUCT policy (workspaces, ignore
+       * rules, mounted volumes). This module must not guess it.
+      ```
+      Declaration, 60 lines below (`liveness-oracle.ts:74`):
+      ```ts
+        candidatePaths: () => readonly string[]
+      ```
+      Proof that the header is emitted into the shipped declaration — the previous build carries it
+      verbatim: `packages/agents/dist/session.d.ts:378` is the same `listProjects` sentence, and
+      `dist/session.d.ts:409` is the then-current `listProjects: () => readonly string[];`. After a
+      rebuild, :378 stays and :409 becomes `candidatePaths`, at which point the published `.d.ts`
+      contradicts itself.
+
+      This matters more than an ordinary stale comment because of what the commit measured: the
+      defect being fixed WAS a naming disagreement across a seam (encoded names vs real paths), it
+      cost 6-of-6 live projects classified `dead` on the delete path, and the option's own new
+      JSDoc at :63-65 says so — "the ambiguity was a defect rather than a documentation gap". The
+      same file then leaves the documentation gap open.
+    recommended_action: >-
+      Update `liveness-oracle.ts:12-18` to name `candidatePaths` and `fs`, and say what each is for
+      in one line each. Then rebuild before publishing so `dist/session.d.ts` is regenerated — the
+      committed `dist/` is currently pre-rename (`:409` still declares `listProjects`), which is the
+      same stale-artifact class the branch already fixed once at handoff (commit 0d82cd3e).
+
+  - id: F-dom-9
+    severity: MEDIUM
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 74
+    plan_ref: commit 7fea1388; plan T3.2 Deep Dives ("The type must make the third state unrepresentable-as-dead")
+    domain_anchor: rules/type-safety.md § Required Patterns (discriminated unions; make illegal states unrepresentable)
+    summary: >-
+      Assessment asked for — `candidatePaths` is a better NAME and does not prevent the collision it
+      was renamed to fix. Both sides of the confusion are still `string[]`, so the compiler still
+      cannot tell an encoded directory name from a real absolute path, and the swap that produced
+      the 6-of-6 misclassification remains representable.
+    evidence: |
+      ```ts
+      // liveness-oracle.ts:121-124
+      export function classifyProjects(
+        encoded: readonly string[],           // ENCODED NAMES, positional
+        opts: ClassifyProjectsOptions,        // .candidatePaths(): readonly string[]  — REAL PATHS (:74)
+      ): Map<string, LivenessVerdict>
+      ```
+      The measured defect (`liveness-oracle.ts:63-68`) was that the consumer's producer returned
+      encoded names and this module read them as paths. After the rename, a consumer that wires the
+      SAME producer to `candidatePaths` still compiles cleanly and still gets the same wrong answer;
+      only the prose warns them. The failure is silent and one-directional — every project falls
+      through to `searchPool`, which since this commit can only return `undetermined`, so the
+      symptom moved from "deletes live projects" to "the oracle answers nothing" and no test or type
+      notices.
+      The plan applied the opposite standard to the OUTPUT of the same function — T3.2 Deep Dives
+      (plan:1394): "The type must make the third state unrepresentable-as-dead", which the
+      three-valued `Liveness` union honours. The input got a docstring instead.
+      Two structural asymmetries also remain unexplained in the type: `encoded` is a plain array
+      while `candidatePaths` is a thunk (the laziness rationale lives in a body comment at :142-143,
+      not in the JSDoc a consumer reads), and only one of the two is in the options bag.
+    recommended_action: >-
+      Make the swap unrepresentable rather than discouraged: a branded alias
+      (`type EncodedProjectDir = string & { readonly __encoded: unique symbol }`) applied to the
+      positional parameter and to the `Map` key, with the sole producer being the package's own
+      `encodeProjectDir`. A consumer then cannot hand encoded names to `candidatePaths` without an
+      explicit cast that a reviewer sees. If branding is judged too heavy, at minimum move the
+      "resolved ONCE for the sweep" rationale from the body comment into the `candidatePaths` JSDoc,
+      so the thunk's contract is visible in `session.d.ts`.
+
+  - id: F-dom-10
+    severity: MEDIUM
+    file: .changeset/liveness-oracle-recorded-cwd-major.md
+    line: 5
+    plan_ref: Global DoD ("every signature change is a widening; no export removed"); rules/cycle-release.md § Bump-level derivation
+    domain_anchor: Unbreakable Rule 6 — a changelog entry is a statement about what a consumer must DO
+    summary: >-
+      Coverage check requested. The two pending majors cover the two async widenings and the error
+      class correctly. But one of them declares a BREAKING migration for a symbol NO published
+      version exposes, and one genuinely user-visible fix in a second package has no changeset at all.
+    evidence: |
+      Over-declared. `.changeset/liveness-oracle-recorded-cwd-major.md:1-6` is `"@theokit/agents": major`
+      and opens with "BREAKING: `classifyProjects` ... `listProjects` renamed to `candidatePaths`",
+      closing with "Migration: rename the option to `candidatePaths` ...". Measured against the
+      published surface:
+        `npm pack @theokit/agents@9.4.0` -> `package/dist/session.d.ts:286` export list contains NO
+        `classifyProjects`, `ClassifyProjectsOptions`, `FsSeam`, `Liveness`, `LivenessVerdict` or
+        `transcriptRootHint`.
+      The symbol was introduced AFTER the publish checkpoint (c3527883, post-3d55d34f) and reshaped
+      before it ever shipped. A consumer on `^9.4.0` reading 10.0.0's "Major Changes" is instructed
+      to rename an option they never had, in the section they read most carefully. Correct shape:
+      an `Added` note describing the final API. The major is already forced by the sibling
+      changeset, so nothing is lost by stating it accurately.
+
+      Under-declared. `packages/theo` (published as `theokit`, version 0.48.2) has an unreleased,
+      user-visible CLI fix with no changeset:
+        commit 0aba5959 `fix(cli)!: sessions gc called an async function without await` ->
+        `packages/theo/src/cli/commands/sessions-gc.ts` (`git diff 3d55d34f..HEAD --stat` lists it;
+        `packages/theo/package.json` is NOT in that diff, so 0.48.2 is still the released version).
+      `ls .changeset/` -> only the two `@theokit/agents` majors. With
+      `"updateInternalDependencies": "patch"` (`.changeset/config.json`) and
+      `"@theokit/agents": "workspace:^"` (`packages/theo/package.json:116`), changesets WILL bump
+      `theokit` — as a dependent, with a "Updated dependencies" line. So the package CHANGELOG that
+      a CLI user actually reads will not say that `theokit agent sessions gc` crashed before printing
+      anything, or that it now works.
+
+      Everything else post-3d55d34f is additive and needs no major: `applyPosture` as a value
+      (`bridge/index.ts`), `shouldAutoApprove`/`APPROVAL_MODES`/`WRITE_SCOPED_TOOLS`,
+      `expandCommandTemplate`/`templateHints`/`FILE_INLINE_CAP`, `transcriptRootHint`, and the
+      `PendingItem<TPayload = undefined>` type parameter (`ask/pending-ledger.ts:26`, defaulted so
+      existing `PendingItem` annotations still resolve). None of them appears in any changeset either,
+      so 10.0.0's "Minor Changes" will be empty while nine new exports ship — which is the same
+      discoverability failure as F-dom-3, one artifact over.
+    recommended_action: >-
+      (a) Rewrite the liveness changeset as an `Added` entry describing the final shape of
+      `classifyProjects` (keeping the 6-of-6 measurement, which is the useful part) and drop the
+      "rename the option" migration line. (b) Add a `"theokit": patch` changeset naming the
+      `sessions gc` runtime failure in consumer language. (c) Add a `"@theokit/agents": minor`
+      changeset listing the nine new exports, so the release notes and the capability index can be
+      populated from one source.
+
+  - id: F-dom-11
+    severity: MEDIUM
+    file: packages/agents/src/session/session-lifecycle.ts
+    line: 203
+    plan_ref: T2.2; commit 90e9af57 ("the GC bound was opt-in and nothing opted in")
+    domain_anchor: Unbreakable Rule 6 + explicit public-API contracts — the `.d.ts` is what a consumer reads, not the changeset
+    summary: >-
+      The registry wait changed from "forever" to 30 s and the escape hatch is a magic non-finite
+      value, and neither fact appears anywhere on the published surface. The constant the changeset
+      names by symbol is not exported from any subpath, so a consumer cannot import what they were
+      told to use.
+    evidence: |
+      Published option JSDoc, unchanged by the fix (`session-lifecycle.ts:203-207`):
+      ```ts
+      /**
+       * Ceiling on the injected remover. A registry that never answers must not hang a sweep; the
+       * timeout surfaces as `registryError` and the transcript is left alone.
+       */
+      readonly registryTimeoutMs?: number
+      ```
+      No default stated, no escape hatch stated. The behaviour it documents is decided elsewhere:
+        `session/gc/registry-remover.ts:55`  `export const DEFAULT_REGISTRY_TIMEOUT_MS = 30_000`
+        `session/gc/registry-remover.ts:79`  `timeoutMs: number | undefined = DEFAULT_REGISTRY_TIMEOUT_MS`
+        `session/gc/registry-remover.ts:88`  `if (!isThenable(outcome) || !Number.isFinite(timeoutMs)) return outcome`
+      i.e. unbounded is reachable only by passing `Infinity`, an undocumented magic value on a
+      published option.
+      And the symbol is unreachable: `packages/agents/src/session/index.ts` (whole file) re-exports
+      nothing from `gc/registry-remover.js` — only `gc/transcript-gc.js` at :30-41. So
+      `DEFAULT_REGISTRY_TIMEOUT_MS`, named in `.changeset/session-lifecycle-async-major.md:24-25`
+      and in `CHANGELOG.md:112-118` as the thing a consumer should know about, cannot be imported.
+      This is the plan's own failure mode applied to its own output: the changeset points at a
+      symbol, and the symbol has no door (`system-design-guardrails.md § G7` in reverse).
+      A consumer who relied on unbounded waiting (a slow remote registry) gets a behaviour change
+      whose only disclosure is changeset prose.
+    recommended_action: >-
+      Put the contract in the JSDoc of BOTH published options (`DeleteSessionOptions.registryTimeoutMs`
+      and the `runTranscriptGC` options bag): the 30 s default, that the timeout leaves the transcript
+      on disk, and that `Infinity` restores unbounded. Export `DEFAULT_REGISTRY_TIMEOUT_MS` from
+      `./session` so the constant the release notes cite is importable — or stop citing it.
+
+  - id: F-dom-12
+    severity: MEDIUM
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 76
+    plan_ref: T3.2 Deep Dives — "Total filesystem operations ≤ the configured budget, asserted at fixture scale and true at any scale"
+    domain_anchor: rules/error-handling.md § 2 (validate at the boundary; reject invalid input before processing); options-validation parity with the sibling entry point in the same package
+    summary: >-
+      Still open from the previous review (was MEDIUM) and now compounded — the 7fea1388 rewrite was
+      the natural moment to add validation and instead added a SECOND unvalidated numeric option
+      whose negative value LOOSENS the bound it names.
+    evidence: |
+      `liveness-oracle.ts:76` `budget: number` — used at :126 `let remaining = opts.budget`, guarded
+      only by `remaining <= 0` (:158-…, :201, :239). `NaN <= 0` is false and `NaN - 1` is NaN, so a
+      non-finite budget makes every guard dead and the sweep runs the full candidate pool for every
+      project — the 64M-syscall behaviour the module exists to prevent, silently. The realistic path
+      is a CLI or config doing `Number(process.env.X)` / `Number(argv.budget)`, NaN on a typo.
+
+      New in this commit — `liveness-oracle.ts:79` `transcriptSamples?: number`, consumed at :168-169:
+      ```ts
+      const samples = opts.transcriptSamples ?? DEFAULT_TRANSCRIPT_SAMPLES
+      for (const file of entries.filter((f) => f.endsWith('.jsonl')).slice(0, samples)) {
+      ```
+      `slice(0, -1)` yields ALL BUT THE LAST entry. So `transcriptSamples: -1` — the shape a caller
+      reaches for to mean "no sampling" or that arrives from an off-by-one — reads MORE transcripts
+      than the default 3, on an option documented as "How many transcripts to read per project
+      before giving up". `NaN` and `0` both yield `[]`, silently disabling the module's primary
+      resolution path (the one measured at 91/120) and pushing every project into the search
+      fallback, which since this commit can never return `dead`.
+
+      The sibling entry point in the same package validates: `session/gc/transcript-gc.ts` refuses
+      with `!Number.isFinite(options.keepLast)`. Two GC-adjacent published entry points therefore
+      disagree on whether a nonsense number is refused or honoured.
+    recommended_action: >-
+      Refuse at the boundary, matching `planTranscriptGC`'s existing shape and error type:
+      `budget` must be a finite integer ≥ 1; `transcriptSamples`, when present, a finite integer ≥ 0.
+      A typed refusal is one line and turns two silent misbehaviours into a message.
+
+  - id: F-dom-13
+    severity: LOW
+    file: packages/agents/src/session/liveness-oracle.ts
+    line: 56
+    plan_ref: commit 7fea1388 — `projectsRoot` became required
+    domain_anchor: rules/architecture.md § 6 — leaky/ambiguous abstraction boundary; Unbreakable Rule 5 (the most specific name wins)
+    summary: >-
+      The newly-REQUIRED `projectsRoot` option is documented ambiguously and built with string
+      concatenation, so the two most likely ways to get it wrong both fail silently into
+      `undetermined` for every project.
+    evidence: |
+      ```ts
+      // liveness-oracle.ts:55-60
+      /**
+       * Where `projects/<encoded>/` lives, so the recorded-cwd read can find a transcript.
+       * Use {@link projectsRoot} rather than joining the segment by hand — ...
+       */
+      projectsRoot: string
+      ```
+      "Where `projects/<encoded>/` lives" reads as the PARENT of `projects/`. The code requires the
+      `projects/` directory itself: `:156` `const dir = \`${opts.projectsRoot}/${name}\``, and the
+      exported helper returns `join(root, 'projects')` (`project-index.ts:58-60`). Passing
+      `transcriptRoot()` — the other exported root in the same package, and the reading the sentence
+      supports — makes `listEntries` throw ENOENT for every project, i.e. `undetermined` everywhere,
+      which the JSDoc itself concedes ("a wrong one makes every project look empty rather than
+      erroring") without removing the ambiguity that causes it.
+      Separately, `:156` and `:173` build paths with `/` literals while every sibling in the package
+      uses `node:path.join` (`project-index.ts:58,63,73,102`; `session-pointer.ts`). A
+      `projectsRoot` with a trailing separator yields `//`, and the module is otherwise
+      platform-neutral.
+    recommended_action: >-
+      Reword to "The `projects/` directory itself — the value `projectsRoot()` returns, not the
+      transcript root", and use `join()` at :156 and :173 like the rest of the package.
