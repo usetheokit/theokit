@@ -344,9 +344,23 @@ async function walk(dir: string, out: string[] = []): Promise<string[]> {
   return out
 }
 
-/** Split an identifier into its camelCase / PascalCase / snake_case parts. */
+/**
+ * Split an identifier into its camelCase / PascalCase / snake_case parts.
+ *
+ * The letter classes are `\p{Lu}` / `\p{Ll}` rather than `A-Z` / `a-z`, and that is the whole point
+ * rather than a tidy-up. With the ASCII classes this function silently DROPPED every accented
+ * character: `Correção` came back as `['Corre', 'o']` and `não` as `['n', 'o']`. `WORD` admits
+ * `À-ÿ` and {@link classifyLine} tests the parts for a diacritic — but the parts had none left by
+ * the time it looked, so the diacritic tier could never fire on an accented letter inside a word,
+ * which is where Portuguese accents actually live.
+ *
+ * Measured, not reasoned: `// Correção de um problema que já estava lá.` in a scanned file passed
+ * the sweep clean. The tier stayed useful-looking because unaccented lexicon words like `nao` fire
+ * the OTHER tier, so every violation that ever failed this gate hid the fact that half of it was
+ * dead. Anything written with correct Portuguese orthography walked straight through.
+ */
 function identifierParts(word: string): string[] {
-  return word.split(/[_$]/).flatMap((p) => p.match(/[A-Z]?[a-z]+|[A-Z]+(?![a-z])/g) ?? [])
+  return word.split(/[_$]/).flatMap((p) => p.match(/\p{Lu}?\p{Ll}+|\p{Lu}+(?!\p{Ll})/gu) ?? [])
 }
 
 function stripDiacritics(word: string): string {
@@ -450,4 +464,55 @@ describe('codebase is English-only (no PT-BR)', () => {
     },
     SWEEP_TIMEOUT_MS,
   )
+
+  /**
+   * The CHANGELOG exemption above is wider than the reason for it. Released entries are immutable
+   * under Unbreakable Rule 6 — that is why the file is exempt. `[Unreleased]` is not released: it is
+   * still being written, and at the next version cut it becomes part of the immutable record exactly
+   * as it stands.
+   *
+   * So the blanket exemption had a live consequence, not a theoretical one. A twelve-line Portuguese
+   * entry sat under `[Unreleased]` and would have frozen there permanently. This scans the mutable
+   * section only, which is the boundary the rule actually draws: the record is untouchable, the draft
+   * is not.
+   *
+   * `scanText` is reused rather than reimplemented — one definition of what counts as Portuguese, or
+   * the two drift and the weaker one decides.
+   */
+  it('the CHANGELOG [Unreleased] section carries no Portuguese', async () => {
+    const text = await readFile(join(REPO_ROOT, 'CHANGELOG.md'), 'utf8')
+    const lines = text.split('\n')
+
+    const start = lines.findIndex((l) => l.startsWith('## [Unreleased]'))
+    // Released headings are `## [<name> <semver>] - <date>`; `[Unreleased]` is the only one whose
+    // bracket does not open with a version. Anchoring on "the next `## [` heading" rather than on a
+    // version pattern means a future heading style cannot silently extend the scanned range to the
+    // end of the file, nor shrink it to nothing.
+    const after = lines.slice(start + 1).findIndex((l) => l.startsWith('## ['))
+    const end = after === -1 ? lines.length : start + 1 + after
+
+    // Non-vacuity floor, asserted BEFORE the result — the same failure this file records twice. If
+    // the heading is renamed or the section emptied, `slice` yields nothing and the scan reports
+    // clean over zero lines. A missing section is a defect in the changelog discipline, not a pass.
+    expect(
+      start,
+      'no `## [Unreleased]` heading in CHANGELOG.md — the scan would be vacuous',
+    ).toBeGreaterThanOrEqual(0)
+    const section = lines.slice(start, end)
+    // Counted from `start + 1`, not `start`. The heading is always present by the assertion above,
+    // so counting it would make this floor satisfy itself — a vacuity check that cannot detect the
+    // vacuity it is for.
+    expect(
+      section.slice(1).filter((l) => l.trim() !== '').length,
+      '`[Unreleased]` is empty — every change lands there first (Unbreakable Rule 6)',
+    ).toBeGreaterThan(0)
+
+    // Line numbers are reported against the real file, so a failure points at the line to edit
+    // rather than at an offset into a slice.
+    const offenders = scanText('CHANGELOG.md', section.join('\n')).map((o) => ({
+      ...o,
+      line: o.line + start,
+    }))
+    expect(offenders).toEqual([])
+  })
 })

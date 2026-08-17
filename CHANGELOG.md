@@ -15,18 +15,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `trufflehog:ignore` comment, never by excluding a path — an excluded path would also hide a real
   secret added to that same fixture later. (secret-scanning-2026-08)
 
-- **`LivenessVerdict` passa a carregar o `cwd` do veredito.** `classifyProjects` **sonda** o caminho
-  para decidir `alive` — ele o tem em mãos no instante em que retorna — e guardava só a razão em
-  prosa. Isso tornava o veredito incapaz de substituir a função de onde foi absorvido: o GC do
-  consumidor usa o cwd resolvido para consultar o registry de agentes e o pointer resumível daquele
-  projeto (`all-sessions.ts:161,175`). Recuperá-lo por casamento de string na `reason` seria
-  exatamente o acoplamento frágil que este módulo existe para remover — uma frase não é uma API.
+- **`LivenessVerdict` now carries the `cwd` the verdict is about.** `classifyProjects` PROBES the
+  path to decide `alive`, so it has the path in hand at the moment it returns — and it kept only a
+  prose `reason`. That left the verdict unable to replace the function it was absorbed from: the
+  consumer's GC uses the resolved cwd to consult the agent registry and the resumable pointer for
+  that project. Recovering it by string-matching `reason` would be exactly the brittle coupling this
+  module exists to remove — a sentence is not an API.
 
-  `alive` reporta o membro da classe de colisão que foi encontrado **existindo**, não o primeiro
-  lido: a classe pode conter um caminho morto e um vivo, e mandar a busca no registry para o irmão
-  morto anula o propósito. `dead` reporta o cwd gravado que foi conferido e não estava lá.
-  `undetermined` não estabeleceu caminho nenhum, então o campo é ausente — e não uma string vazia que
-  o chamador possa confundir com um caminho.
+  `alive` reports the member of the collision class that was found to EXIST, not the first one read:
+  the class can hold a gone path and a live one, and sending the registry lookup to the gone sibling
+  defeats the point. `dead` reports the recorded cwd that was checked and found missing.
+  `undetermined` established no path at all, so the field is absent rather than an empty string a
+  caller might mistake for one.
 
 
 ### Changed
@@ -94,6 +94,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **A release refuses to reuse a version the registry already has.** `changeset publish` SKIPS such
   a version and still exits 0, leaving a CHANGELOG entry and a tag asserting content that never
   shipped.
+- **The English-only gate was blind to correctly-spelled Portuguese.** It classifies a line by two
+  signals — an accented character, or a word from a Portuguese lexicon — and the first had never
+  worked. The identifier splitter it runs first matched ASCII letters only, so `Correção` reached the
+  accent test as `Corre` + `o` and `não` as `n` + `o`, with the accents already discarded. Only the
+  unaccented lexicon tier ever fired, which is why the gate looked effective: every violation it did
+  catch was misspelled Portuguese. A comment reading `// Correção de um problema que já estava lá.`
+  passed the sweep clean. The splitter is now Unicode-aware, and the repository is still clean under
+  it — the fix widened what the gate can see without changing what it reports today.
+- **The CHANGELOG's `[Unreleased]` section is now covered by that gate.** The whole file was exempt
+  because entries for a released version are immutable under Unbreakable Rule 6 — but `[Unreleased]`
+  is not released, and at the next version cut it becomes part of that immutable record exactly as
+  written. A twelve-line Portuguese entry was sitting there and has been translated. The new check
+  scans the mutable section only, and fails if the heading disappears or the section empties rather
+  than reporting clean over nothing.
 - **Four gates stopped certifying by absence.** A dependency rule scoped to a directory that had
   moved, an ESLint ignore anchored to a path that does not exist, five coverage exclusions naming
   files that had moved or been deleted, and a CI job named for a check whose steps had been removed
