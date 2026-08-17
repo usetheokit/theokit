@@ -229,9 +229,18 @@ Consumer files touched in Phase 5 beyond those tabled above: `TheoCode/packages/
   to `false` fails 2. Re-measured on the real tree afterwards (13 624 projects): agreement 99,96%
   and `framework_dead_where_consumer_disagreed == 0` — every disagreement is the framework being
   less certain, never more, which is the asymmetry the clause is about.
-- [ ] **O2 — The consumer can adopt.** The three packages publish, so `@theokit/agents`, `@theokit/tui` and `@theokit/sdk` carry the closures at a version TheoCode can pin. Nothing about this plan is provable while the work sits above the published version.
+- [x] **O2 — The consumer can adopt.** The three packages publish, so `@theokit/agents`, `@theokit/tui` and `@theokit/sdk` carry the closures at a version TheoCode can pin. Nothing about this plan is provable while the work sits above the published version.
 
-  **Cut but not published, 2026-08-16.** Versions are computed, committed and pushed —
+  **PUBLISHED 2026-08-16.** `@theokit/agents@10.0.0`, `theokit@0.48.3`, `@theokit/sdk@4.53.0`,
+  `@theokit/sdk-tools@0.27.0`. Verified against the REGISTRY rather than against the publish
+  command's own output: `npm pack @theokit/agents@10.0.0` carries `classifyProjects`,
+  `LivenessBudgetError`, `shouldAutoApprove` and `WRITE_SCOPED_TOOLS`, and no `workspace:` range
+  leaked into the manifest. The nine `unreleased` rows in the capability index now read `10.0.0`.
+
+  What this unblocks is O3, which is where the Goal is actually decided — TheoCode can now pin
+  these versions and delete against them.
+
+  **Historical note (superseded above).** Cut but not published, earlier the same day: Versions are computed, committed and pushed —
   `@theokit/agents` 9.4.0 → **10.0.0** (major earned: `deleteSession` and `runTranscriptGC` ship
   SYNCHRONOUS in the published 9.4.0, verified with `npm pack`), `theokit` 0.48.2 → **0.48.3**,
   `@theokit/sdk` 4.52.1 → **4.53.0**. Every pre-publish gate is green: credential preflight
