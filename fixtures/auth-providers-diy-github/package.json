@@ -1,0 +1,10 @@
+{
+  "name": "auth-providers-diy-github",
+  "private": true,
+  "type": "module",
+  "description": "Fixture: DIY GitHub OAuth using TheoKit's RFC-stable primitives (PKCE + state + session rotation) — no provider library. Demonstrates the AUTH-DELEGATION posture: TheoKit ships the protocol primitives, you wire the provider.",
+  "dependencies": {
+    "theokit": "workspace:*",
+    "zod": "^3.24.0"
+  }
+}

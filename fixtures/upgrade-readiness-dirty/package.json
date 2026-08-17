@@ -1,0 +1,8 @@
+{
+  "name": "upgrade-readiness-dirty",
+  "private": true,
+  "description": "Fixture: a TheoKit app with three anticipated 0.3 violations (raw fetch POST, inline <script>, dangerouslySetInnerHTML payload). scanUpgradeReadiness() MUST report status='has-violations' with exitCode 1.",
+  "dependencies": {
+    "theokit": "^0.2.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "auth-providers-with-authjs",
+  "private": true,
+  "type": "module",
+  "description": "Fixture: delegate OAuth to Auth.js, then sync its session into TheoKit's session store. Demonstrates the AUTH-DELEGATION posture with a specialist library owning the providers.",
+  "dependencies": {
+    "theokit": "workspace:*",
+    "@auth/core": "^0.37.0",
+    "zod": "^3.24.0"
+  }
+}

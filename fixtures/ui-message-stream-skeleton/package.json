@@ -1,0 +1,9 @@
+{
+  "name": "ui-message-stream-skeleton",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/react": "^4.0.15",
+    "ai": "^7.0.14"
+  }
+}
