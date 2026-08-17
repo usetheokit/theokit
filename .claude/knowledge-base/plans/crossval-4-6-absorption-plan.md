@@ -230,6 +230,30 @@ Consumer files touched in Phase 5 beyond those tabled above: `TheoCode/packages/
   and `framework_dead_where_consumer_disagreed == 0` — every disagreement is the framework being
   less certain, never more, which is the asymmetry the clause is about.
 - [ ] **O2 — The consumer can adopt.** The three packages publish, so `@theokit/agents`, `@theokit/tui` and `@theokit/sdk` carry the closures at a version TheoCode can pin. Nothing about this plan is provable while the work sits above the published version.
+
+  **Cut but not published, 2026-08-16.** Versions are computed, committed and pushed —
+  `@theokit/agents` 9.4.0 → **10.0.0** (major earned: `deleteSession` and `runTranscriptGC` ship
+  SYNCHRONOUS in the published 9.4.0, verified with `npm pack`), `theokit` 0.48.2 → **0.48.3**,
+  `@theokit/sdk` 4.52.1 → **4.53.0**. Every pre-publish gate is green: credential preflight
+  (`usetheodev`, read-write on both packages per `npm access list collaborators`), version-collision
+  guard (none of these exists on the registry), `workspace:`-protocol guard, full build, and the new
+  symbols confirmed present in the `dist` that would ship rather than a stale one.
+
+  Two blockers remain, and neither is code:
+
+  1. **`npm publish` is refused by the agent harness**, not by npm. The credential can publish; the
+     command is what is gated. It needs a human to run `pnpm release` in each repo.
+  2. **CI has not run on this repo since 2026-08-15** — 0 successes in 40 runs, every job failing at
+     "Set up job" with *"recent account payments have failed or your spending limit needs to be
+     increased"*. `theokit` is private and bills minutes; the public `theokit-sdk` sibling is green,
+     which is what isolates the cause. So the release would ship without a green CI. The local
+     substitute is recorded rather than skipped: 6 452 tests in this repo and 4 378 in the SDK, both
+     at 0 failures, with the data-loss and security fixes verified by MUTATION because in three of
+     them the suite was green and caught nothing.
+
+  The `unreleased` rows in [`wiki/capability-index.md`](../../../wiki/capability-index.md) stay
+  `unreleased` until the publish actually happens. Writing `10.0.0` there first would be the exact
+  defect class this plan spent the session removing — a claim the artifact does not support.
 - [ ] **O3 — The consumer deletes.** TheoCode's duplicated-capability code falls from ~862 LOC to **≤ 150**, its suite stays green, and every deleted line is replaced by an import. **This is the Goal.** Its `BACKLOG.md` upstream register reaches zero open rows, each closed with a commit as evidence.
 - [ ] **O4 — A newcomer reaches the same place.** `create-theokit --surface=tui` gets a developer to tools + approval gate + session resume without writing framework-shaped code. **Baseline first (T0.2): nobody has run this as a newcomer**, so the target number is measured, not declared.
 - [ ] **O5 — Wrong-shape primitives accept the shape the consumer needs** — GC remover seam, `forkBeforeUserTurn`, `assertSecureModes` mask, `readJsonlTail` marker, approval decision, per-tool presentation maps. Each is a precondition of a specific deletion in O3, and is done when that deletion lands, not when it compiles.
