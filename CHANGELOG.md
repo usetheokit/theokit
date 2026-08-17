@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`LivenessVerdict` passa a carregar o `cwd` do veredito.** `classifyProjects` **sonda** o caminho
+  para decidir `alive` — ele o tem em mãos no instante em que retorna — e guardava só a razão em
+  prosa. Isso tornava o veredito incapaz de substituir a função de onde foi absorvido: o GC do
+  consumidor usa o cwd resolvido para consultar o registry de agentes e o pointer resumível daquele
+  projeto (`all-sessions.ts:161,175`). Recuperá-lo por casamento de string na `reason` seria
+  exatamente o acoplamento frágil que este módulo existe para remover — uma frase não é uma API.
+
+  `alive` reporta o membro da classe de colisão que foi encontrado **existindo**, não o primeiro
+  lido: a classe pode conter um caminho morto e um vivo, e mandar a busca no registry para o irmão
+  morto anula o propósito. `dead` reporta o cwd gravado que foi conferido e não estava lá.
+  `undetermined` não estabeleceu caminho nenhum, então o campo é ausente — e não uma string vazia que
+  o chamador possa confundir com um caminho.
+
 ## [@theokit/agents 10.0.0] - 2026-08-16
 
 ### Fixed

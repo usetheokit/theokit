@@ -365,3 +365,96 @@ describe('classifyProjects — a collision class is not a path', () => {
     expect(got?.reason).toMatch(/EACCES|permission/i)
   })
 })
+
+/**
+ * The verdict dropped the one fact the caller needs to act on it.
+ *
+ * `classifyProjects` PROBES a cwd to decide `alive` — it has the path in hand at the moment it
+ * returns — and then kept only a prose `reason`. Measured against the consumer this was absorbed
+ * from: its GC uses the resolved cwd to consult the agent registry and the resumable pointer FOR
+ * THAT PROJECT (`all-sessions.ts:161,175`), so a verdict without it cannot replace the function it
+ * was meant to replace. The absorption shipped the half that was easy to return.
+ *
+ * Recovering it from `reason` by string-matching would be the fragile coupling this exists to
+ * remove — a prose sentence is not an API. The field is the API.
+ *
+ * `dead` carries it too, and for the same reason: an operator reading a GC log needs to know WHICH
+ * path was checked and found gone, and a caller cleaning up may want to report it.
+ */
+describe('classifyProjects — the resolved cwd travels with the verdict', () => {
+  it('test_an_alive_verdict_names_the_cwd_that_proved_it', () => {
+    const cwd = '/home/op/live-project'
+    const name = encode(cwd)
+    const fs = seamOver([cwd], {
+      [`${PROJECTS_ROOT}/${name}`]: { 'a.jsonl': JSON.stringify({ cwd }) },
+    })
+
+    const got = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    }).get(name)
+
+    expect(got?.liveness).toBe('alive')
+    expect(got?.cwd, 'the caller needs the path, not a sentence containing it').toBe(cwd)
+  })
+
+  it('test_a_dead_verdict_names_the_cwd_that_is_gone', () => {
+    const cwd = '/home/op/deleted-project'
+    const name = encode(cwd)
+    const fs = seamOver([], {
+      [`${PROJECTS_ROOT}/${name}`]: { 'a.jsonl': JSON.stringify({ cwd }) },
+    })
+
+    const got = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    }).get(name)
+
+    expect(got?.liveness).toBe('dead')
+    expect(got?.cwd).toBe(cwd)
+  })
+
+  it('test_an_undetermined_verdict_has_no_cwd_to_offer', () => {
+    // Anti-vacuity floor, and the honest shape: `undetermined` means no path was established, so
+    // the field is absent rather than an empty string a caller might use.
+    const name = encode('/home/op/unknown')
+    const got = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs: seamOver([]),
+    }).get(name)
+
+    expect(got?.liveness).toBe('undetermined')
+    expect(got?.cwd).toBeUndefined()
+  })
+
+  it('test_the_cwd_is_the_live_member_of_a_collision_class_not_the_first', () => {
+    // The class can hold a gone path and a live one. The verdict is `alive`, so the cwd it reports
+    // must be the one that IS there — reporting the gone sibling would send the caller's registry
+    // lookup to a directory that does not exist.
+    const live = '/home/op/my-app'
+    const gone = '/home/op/my/app'
+    const name = encode(live)
+    const fs = seamOver([live], {
+      [`${PROJECTS_ROOT}/${name}`]: {
+        'a.jsonl': JSON.stringify({ cwd: gone }),
+        'b.jsonl': JSON.stringify({ cwd: live }),
+      },
+    })
+
+    const got = classifyProjects([name], {
+      projectsRoot: PROJECTS_ROOT,
+      candidatePaths: () => [],
+      budget: 100,
+      fs,
+    }).get(name)
+
+    expect(got?.liveness).toBe('alive')
+    expect(got?.cwd).toBe(live)
+  })
+})

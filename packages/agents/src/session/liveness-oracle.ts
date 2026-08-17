@@ -69,6 +69,23 @@ export interface LivenessVerdict {
   readonly liveness: Liveness
   /** Why — carried on every verdict, so an operator reading a GC log is never left guessing. */
   readonly reason: string
+  /**
+   * The cwd this verdict is ABOUT — present on `alive` and `dead`, absent on `undetermined`.
+   *
+   * `alive` reports the member of the collision class that was found to EXIST, not the first one
+   * read: the class can hold a gone path and a live one, and sending a caller's registry lookup to
+   * the gone sibling would defeat the point. `dead` reports the recorded cwd that was checked and
+   * found missing. `undetermined` established no path, so the field is absent rather than an empty
+   * string a caller might mistake for one.
+   *
+   * Added because the verdict was dropping the one fact a caller acts on. This function PROBES the
+   * path to decide `alive` — it has it in hand at the moment it returns — and kept only a prose
+   * `reason`. The consumer this was absorbed from uses the resolved cwd to consult the agent
+   * registry and the resumable pointer for that project (`all-sessions.ts:161,175`), so a verdict
+   * without it could not replace the function it exists to replace. Recovering it by string-matching
+   * `reason` would be the fragile coupling this module exists to remove: a sentence is not an API.
+   */
+  readonly cwd?: string
 }
 
 export interface ClassifyProjectsOptions {
@@ -198,11 +215,18 @@ function verdictFromRecordedCwds(
       unprobeable ??= `could not stat ${cwd}: ${at.error}`
       continue
     }
-    if (at.found) return { liveness: 'alive', reason: `recorded cwd ${cwd} exists` }
+    if (at.found) return { liveness: 'alive', reason: `recorded cwd ${cwd} exists`, cwd }
   }
   return unprobeable !== undefined
     ? { liveness: 'undetermined', reason: unprobeable }
-    : { liveness: 'dead', reason: `every recorded cwd is gone (${cwds.join(', ')})` }
+    : {
+        liveness: 'dead',
+        reason: `every recorded cwd is gone (${cwds.join(', ')})`,
+        // Every member was proven absent, so any of them is a truthful answer to "which path was
+        // checked and found gone". The first is reported because it is the one the transcript
+        // read first, which is what an operator matching against a log will recognise.
+        cwd: cwds[0],
+      }
 }
 
 /**
@@ -325,7 +349,7 @@ export function classifyProjects(
         return { liveness: 'undetermined', reason: `could not stat ${candidate}: ${hit.error}` }
       }
       if (hit.found) {
-        return { liveness: 'alive', reason: `found by search at ${candidate}` }
+        return { liveness: 'alive', reason: `found by search at ${candidate}`, cwd: candidate }
       }
     }
     // NEVER `dead`. The pool is a caller-supplied HEURISTIC, so exhausting it establishes that the
