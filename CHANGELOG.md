@@ -92,6 +92,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The `workspace:` release guard no longer passes a publish that is about to ship one.** It packs
+  through `pnpm`, which substitutes the range, so it reported a clean tarball while a
+  `npm publish` in the same directory shipped the raw protocol. That is not hypothetical: 0.48.4
+  passed this check and reached the registry with `"@theokit/agents": "workspace:^"`, uninstallable
+  for every consumer (deprecated on npm; use 0.48.5). The guard now reads the on-disk manifest and
+  refuses outright when the publish is driven by npm, since npm never substitutes the protocol.
+
 - **A hyphenated agent name no longer generates broken code.** An agent's name comes from its file
   path, so `agents/ask-theo.ts` is named `ask-theo` — and kebab-case is right there, because the
   name is also the URL segment (`POST /api/agents/ask-theo`). The exported binding was emitted
