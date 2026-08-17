@@ -14,17 +14,13 @@ import {
 } from './schemas/index.js'
 
 // Re-export per-concern schemas + types so downstream consumers
-// (`adapters/*`, vite-plugin, generators, tests) keep their existing
-// imports valid. Per plan T2.3 — pure structural split; zero behavior
-// change at the call site.
-export {
-  cacheSchema,
-  corsSchema,
-  rateLimitSchema,
-  securityHeadersSchema,
-  securitySchema,
-  storageSchema,
-} from './schemas/index.js'
+// (`adapters/*`, vite-plugin, generators) keep their existing imports valid.
+// Per plan T2.3 — pure structural split; zero behavior change at the call site.
+//
+// `rateLimitSchema` and `securitySchema` are NOT re-exported: they are composed into
+// `theoConfigSchema` below and nothing imports them from here. They remain available at their
+// source of truth, `./schemas/index.js`.
+export { cacheSchema, corsSchema, securityHeadersSchema, storageSchema } from './schemas/index.js'
 
 export type { StorageConfig } from './schemas/index.js'
 

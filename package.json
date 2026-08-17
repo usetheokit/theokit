@@ -44,7 +44,6 @@
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.9",
-    "ai": "7.0.14",
     "better-sqlite3": "^12.11.1",
     "db0": "^0.3.4",
     "dependency-cruiser": "^17.4.3",
