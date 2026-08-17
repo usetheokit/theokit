@@ -3,6 +3,15 @@
   "version": "1.23.7",
   "type": "module",
   "description": "Scaffold a new TheoKit project",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit.git",
+    "directory": "packages/create-theokit"
+  },
+  "homepage": "https://github.com/usetheokit/theokit/tree/main/packages/create-theokit#readme",
+  "bugs": {
+    "url": "https://github.com/usetheokit/theokit/issues"
+  },
   "license": "Apache-2.0",
   "scripts": {
     "build": "tsup",
