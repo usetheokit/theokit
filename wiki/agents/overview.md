@@ -5,11 +5,11 @@ description: How an agent file in agents/ becomes a live HTTP endpoint, and the 
 tags: [agents, guide, core]
 status: stable
 generated: { by: theokit-agent/unrecorded, at: 2026-08-06T00:00:00Z }
-migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: docs/agents/overview.md }
+migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: pre-wiki documentation tree }
 sources:
   - id: origin
-    resource: docs/agents/overview.md
-    title: Original document in the pre-wiki tree, preserved verbatim
+    resource: pre-wiki documentation tree
+    title: Original document, absorbed into this bundle verbatim
     last_modified: 2026-08-06
 ---
 

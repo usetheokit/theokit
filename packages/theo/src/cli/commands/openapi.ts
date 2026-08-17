@@ -21,7 +21,7 @@ import { generateManifest } from '../../server/scan/manifest.js'
 import { emitOpenApi } from '../../vite-plugin/openapi-emit/emit.js'
 import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes.js'
 
-const MIGRATION_GUIDE_URL = 'docs/concepts/openapi.md'
+const OPENAPI_DOCS_URL = 'https://theokit.dev/concepts/openapi'
 
 interface OpenApiCommandOptions {
   /** Project root (defaults to `process.cwd()`). */
@@ -44,7 +44,7 @@ export async function openapiCommand(options: OpenApiCommandOptions = {}): Promi
         `        version: '1.0.0',\n` +
         `      },\n` +
         `    })\n\n` +
-        `  See ${MIGRATION_GUIDE_URL} for the full reference.\n`,
+        `  See ${OPENAPI_DOCS_URL} for the full reference.\n`,
     )
     process.exit(1)
     return
@@ -60,7 +60,7 @@ export async function openapiCommand(options: OpenApiCommandOptions = {}): Promi
     const result = emitOpenApiInMemory(hydrated, config.openapi)
     console.log(`\n  ✓ openapi.json (dry-run): ${String(hydrated.length)} ops`)
     console.log(JSON.stringify(result.document, null, 2))
-    console.log(`\n  Docs: ${MIGRATION_GUIDE_URL}\n`)
+    console.log(`\n  Docs: ${OPENAPI_DOCS_URL}\n`)
     return
   }
 
@@ -71,7 +71,7 @@ export async function openapiCommand(options: OpenApiCommandOptions = {}): Promi
   })
   console.log(
     `\n  ✓ openapi.json: ${String(hydrated.length)} ops → ${result.path}\n` +
-      `  Docs: ${MIGRATION_GUIDE_URL}\n`,
+      `  Docs: ${OPENAPI_DOCS_URL}\n`,
   )
 }
 

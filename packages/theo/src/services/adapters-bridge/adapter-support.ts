@@ -39,7 +39,6 @@ export function assertServicesUnsupported(
       `Wave 2 supports: ${SUPPORTED_IN_WAVE_2.join(', ')}.\n` +
       `TheoCloud is the strategic deploy target — the adapter ships in Wave 3.\n` +
       `For local dev/prod-like validation today, use \`theokit build --target node\`\n` +
-      `(emits docker-compose + Caddyfile — TheoCloud-shaped harness).\n\n` +
-      `See docs/concepts/services.md.`,
+      `(emits docker-compose + Caddyfile — TheoCloud-shaped harness).`,
   )
 }

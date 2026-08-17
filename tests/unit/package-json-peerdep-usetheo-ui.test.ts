@@ -22,7 +22,7 @@ const PKG_PATH = join(
   'package.json',
 )
 
-/** O template canônico do `create-theokit` — a fonte contra a qual a coerência é medida. */
+/** The canonical `create-theokit` template — the source coherence is measured against. */
 const TEMPLATE_TMPL_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',

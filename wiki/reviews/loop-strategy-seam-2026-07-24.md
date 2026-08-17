@@ -9,7 +9,7 @@ migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: knowled
 sources:
   - id: origin
     resource: knowledge-base/reviews/loop-strategy-seam-review-2026-07-24.md
-    title: Original document in the pre-wiki tree, preserved verbatim
+    title: Original document, absorbed into this bundle verbatim
     last_modified: 2026-07-24
 ---
 
