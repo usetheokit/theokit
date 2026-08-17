@@ -65,7 +65,7 @@ O fix do issue usetheodev/theokit#145 (`@theokit/agents@1.0.1`) trocou o separad
 
 ### Architecture boundaries affected
 
-`packages/agents/src/bridge/` (adapter SDK) e `packages/agents/src/capability/` (autoria). Hoje `capability/ → bridge/` (toolbox.ts importa agent-compiler.ts). Fazer `bridge/` lançar `ConfigurationError` — hoje definido em `capability/capabilities.ts`, que importa `bridge/agent-compiler.js` — **fecharia um ciclo**. Por isso `src/errors.ts` (sem imports) é pré-requisito ordenado, não preferência estética. Guard mecânico: `pnpm check:direction` (`scripts/check-package-direction.mjs`) + pre-push.
+`packages/agents/src/bridge/` (adapter SDK) e `packages/agents/src/capability/` (autoria). Hoje `capability/ → bridge/` (toolbox.ts importa agent-compiler.ts). Fazer `bridge/` lançar `ConfigurationError` — hoje definido em `capability/capabilities.ts`, que importa `bridge/agent-compiler.js` — **fecharia um ciclo**. Por isso `src/errors.ts` (sem imports) é pré-requisito ordenado, não preferência estética. Guard mecânico: `pnpm check:direction` + pre-push.
 
 ### Estado dos gates no baseline (medido, não presumido)
 
@@ -586,11 +586,11 @@ O único ponto que parece I/O é `Agent.create` no teste de contrato, mas a vali
 
 ## Related
 
-- Milestone: `ROADMAP.md` § `### M55`
+- Milestone:
 - Blueprint: `blueprints/tool-name-single-source.md`
 - Discovery plan: `plans/tool-name-single-source-discovery.md` (v1.1)
 - Grill: `grills/tool-name-single-source.md`
-- Regras consumidas: `.claude/rules/error-handling.md`, `.claude/rules/testing.md`, `.claude/rules/parsimony-ladder.md`, `.claude/rules/architecture.md`
+- Regras consumidas:,
 
 ## Desvios do DoD do M55 (registrados, não editados no ROADMAP)
 

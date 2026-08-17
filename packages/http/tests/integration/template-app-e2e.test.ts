@@ -347,7 +347,7 @@ describe.skipIf(!isVitest)('Template App E2E — create-theokit default', () => 
 
   // Agent SSE tests skipped — requires dynamic import of @theokit/agents
   // which doesn't resolve in vitest test context. Agent E2E tested via
-  // packages/agents/ tests and fixtures/demo-faang/.
+  // packages/agents/ tests and
 
   // ── TypedClient against the real app ──
 

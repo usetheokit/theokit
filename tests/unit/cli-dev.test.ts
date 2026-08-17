@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 /**
- * Three cases that booted a real Vite dev server against `fixtures/wave1-hello-theo` — responds 200
+ * Three cases that booted a real Vite dev server against — responds 200
  * on `/`, auto-assigns a port when `port: 0`, serves `text/html` — were REMOVED with `fixtures/`.
  *
  * They are not rebuilt in a tmpdir on purpose: a booting dev server needs an app whose `react` and

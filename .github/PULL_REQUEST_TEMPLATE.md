@@ -15,7 +15,7 @@
 <!-- Yes / No. If yes, list:
    1. What breaks
    2. Migration path
-   3. Whether docs/migrating/ needs an update -->
+   3. Whether the migration docs need an update -->
 
 ## Related
 

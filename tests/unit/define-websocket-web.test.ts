@@ -8,7 +8,6 @@
  *   - onMessage data is string | Uint8Array (not string | Buffer)
  *   - onClose reason is string (not Buffer — Web CloseEvent exposes UTF-8)
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase F (closes Phase F).
  */
 import { describe, it, expect } from 'vitest'

@@ -57,7 +57,7 @@ describe('preflightNodeAndBindings (CLI preflight)', () => {
   // minimal tmp projects without the dep and currently fail with
   // "[theokit preflight] native binding abi mismatch detected" / "required
   // dep is NOT installed". The env-var escape hatch is the production-grade
-  // fix per docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md
+  // fix
   // § Test infrastructure prerequisites Option B.
   describe('THEOKIT_SKIP_NATIVE_PREFLIGHT env-var escape hatch (Phase 6 readiness)', () => {
     it('skips ABI checks entirely when THEOKIT_SKIP_NATIVE_PREFLIGHT=1', () => {

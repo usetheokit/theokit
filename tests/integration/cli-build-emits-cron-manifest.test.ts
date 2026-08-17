@@ -59,7 +59,6 @@ const runBuild = (args = ''): { stdout: string; exitCode: number } => {
     // better-sqlite3 (the CLI's hard-required native dep) since they don't
     // exercise audit-log / LanceDB / etc. The env-var escape hatch is the
     // production-grade fix for this fixture infrastructure issue (per
-    // docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md
     // § Test infrastructure prerequisites Option B).
     // eslint-disable-next-line sonarjs/os-command -- developer-local integration test invoking the framework's own CLI
     const stdout = execSync(`npx tsx ${CLI} build ${args}`, {

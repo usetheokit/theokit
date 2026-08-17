@@ -8,7 +8,7 @@
  *
  * Remaining stages (request-handler extraction, graceful-shutdown extraction,
  * signal-handlers extraction) are deferred to a follow-up sprint — see plan
- * `docs/plans/architecture-cleanup-plan.md` T4.2 Deferred sub-tasks.
+ * ks.
  */
 
 import { existsSync } from 'node:fs'

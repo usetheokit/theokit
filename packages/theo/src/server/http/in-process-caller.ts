@@ -8,7 +8,6 @@
  * check. Failures throw typed errors (there is no HTTP status off-web).
  *
  * Prior art: tRPC `callProcedure` / `createCallerFactory`
- * (`.claude/knowledge-base/references/trpc/packages/server/src/unstable-core-do-not-import/router.ts:401,441`).
  *
  * Design (ADR-0044 / blueprint §5.4): the AUTHOR passes structured input `{query?, body?, params?}`
  * — never synthesizes a Request. A minimal in-process `Request` is provided to the handler ONLY so

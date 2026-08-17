@@ -141,7 +141,6 @@ export function sendError(
  * shape. Returns a native `Response` directly instead of mutating a
  * `ServerResponse`.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase G.
  *
  * **Difference vs IncomingMessage path:**

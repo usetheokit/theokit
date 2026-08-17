@@ -26,7 +26,6 @@ export function defineChannel<TMessage = unknown>(
  * — the rest of the surface (onMessage, onUnsubscribe) is shape-agnostic
  * (WebSocketLike is already Web-standards-compatible per `define-websocket.ts`).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase F.
  *
  * **Architectural note:** WebSocket upgrade semantics differ across

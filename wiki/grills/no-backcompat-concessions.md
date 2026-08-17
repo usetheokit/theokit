@@ -75,7 +75,7 @@ declara como superfície de trabalho é **allowlistado com sunset citando o mile
 
 ### Q3/4: qual é a Definition of Done verificável?
 
-Ver o bloco `### M56` no `ROADMAP.md`. Dois gates duros: `pnpm knip` **verde no repositório inteiro**
+Ver o bloco `### M56` no. Dois gates duros: `pnpm knip` **verde no repositório inteiro**
 (hoje sai 1) sem nenhum override de config, e `pnpm check:direction` **verde** (hoje sai 1).
 
 ### Q4/4: quais são os 2 riscos NOVOS que esta feature introduz?

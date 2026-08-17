@@ -1,7 +1,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- paths derived from build-time cwd, not user input */
 /**
  * Built-in OpenAPI docs — serves Scalar UI at /api/docs and the JSON spec
- * at /api/docs/openapi.json. Zero npm deps (Scalar loaded via CDN).
+ * at /api Zero npm deps (Scalar loaded via CDN).
  *
  * Absorbed from @theokit/plugin-openapi (theokit-plugins sibling repo).
  * Core already emits the spec via vite-plugin/openapi-emit/ — this module
@@ -16,7 +16,7 @@ import { resolve } from 'node:path'
 export interface OpenApiDocsOptions {
   /** Path to serve Scalar UI (default: '/api/docs'). */
   docsPath?: string
-  /** Path to serve the JSON spec (default: '/api/docs/openapi.json'). */
+  /** Path to serve the JSON spec (default: '/api'). */
   openapiJsonPath?: string
   /** Path to the spec file on disk (default: '.theokit/openapi.json'). */
   specFilePath?: string

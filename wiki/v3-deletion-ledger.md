@@ -170,7 +170,7 @@ gap has a number, a cause, and a next step.
 
 ## Cross-references
 
-- Milestone: `ROADMAP-v3.md § M86`
+- Milestone:
 - The primitives, by milestone: `CHANGELOG.md` `[Unreleased]`
 - Consumer: `usetheo-labs/TheoCode`
 - SDK-side companion: `usetheodev/theokit-sdk#281` (`createViewImageTool`)

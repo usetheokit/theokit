@@ -15,7 +15,7 @@ import type { TrustPosture } from '../../src/index.js'
  * but binds TypeScript consumers only — a `.js` caller or an `as any` escapes. That is the residue
  * declared in the `Agent.list` narrowing (M103), and these tests are what covers it.
  *
- * Both lenses of `.claude/rules/testing.md` § 4.1 are here on purpose. The negative one is the heart
+ * Both lenses of.1 are here on purpose. The negative one is the heart
  * of the milestone; the positive one exists because a guard that forbade EVERYTHING would pass a
  * suite made only of negative cases, and would be a breaking change disguised as security.
  */

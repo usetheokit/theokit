@@ -1,8 +1,8 @@
 /**
  * Job primitive types (R0.5.5-9).
  *
- * @see docs/adr/0002-job-backend-interface-neutral-contract.md
- * @see docs/adr/0003-enqueue-returns-void-transactional-outbox.md
+ * @
+ * @
  */
 
 /**

@@ -2,7 +2,7 @@
  * T1.1 — Assert that theokit/packages/theo/package.json declares
  * @theokit/ui as an optional peerDependency.
  *
- * This pins ADR 0018 (theokit/docs/adr/0018-usetheo-ui-vite-plugin-contract-versionado.md):
+ * This pins ADR 0018 (theokit).
  * the contract between theokit and @theokit/ui is VERSIONED and declared,
  * not implicit. The range here is the install-time gate; the runtime gate
  * is the contract test at tests/integration/contract-usetheo-ui-vite-plugin.test.ts.

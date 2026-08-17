@@ -17,7 +17,7 @@ This project includes TheoKit-aware skills that activate automatically when you 
 
 ### Settings
 
-See `.claude/settings.json` for safe-default permissions.
+ for safe-default permissions.
 
 ### Customization
 

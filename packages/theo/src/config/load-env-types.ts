@@ -1,6 +1,5 @@
 /**
  * Types for `loadEnv()` — env auto-load utility (Phase 1 of
- * docs/plans/framework-zero-config-polish-plan.md).
  *
  * The shape mirrors Next.js's `LoadedEnvFiles` (`next-env/index.ts:114`).
  */

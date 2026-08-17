@@ -2,7 +2,7 @@
  * Recursive JSON walker — collapsible object/array tree.
  *
  * Adapted from TanStack router-devtools Explorer.tsx (pattern §7.2 of
- * .claude/knowledge-base/reference/devtools.md). Pagination at 100 entries.
+ *). Pagination at 100 entries.
  *
  * NEVER use dangerouslySetInnerHTML in any devtools component — see plan EC-20.
  */

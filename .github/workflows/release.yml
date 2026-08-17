@@ -59,20 +59,11 @@ jobs:
       #
       # Same posture as the sibling `theokit-sdk`, where token-auth is validated in production.
       - run: pnpm install --frozen-lockfile
-      # The `Publish credential preflight` step (backlog B-M67-08) ran here and left with
-      # `scripts/verify-publish-credential.mjs`. It refused a release the credential lacked the
-      # AUTHORITY to finish — `npm whoami` succeeds for a read-only token, which is how the M67
-      # release ran end to end (build, version, tag, GitHub release) and died on the last step with
-      # `E404 ... PUT`, leaving `main` with a tag and a CHANGELOG announcing three versions that
-      # were never published. That failure mode is possible again.
       - run: pnpm build
       - name: Create Release Pull Request or Publish
         uses: changesets/action@v1
         with:
           publish: pnpm changeset publish
-          # `pnpm version-packages` is now plain `changeset version`: the template version sync went
-          # away with `scripts/sync-template-versions.mjs`, and so did the pre-commit drift gate
-          # that required it.
           version: pnpm version-packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

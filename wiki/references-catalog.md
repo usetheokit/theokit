@@ -332,7 +332,7 @@ Candidates considered but not curated (kept out to respect the ≤8 cap, not for
 
 The `knowledge-base/references/` tree this catalog describes **no longer exists on disk**. It
 was removed together with the rest of the pre-wiki knowledge trees, and its contents were
-deliberately never migrated into this bundle: `.claude/rules/reference-provenance.md` keeps
+deliberately never migrated into this bundle: keeps
 third-party study material out of the project, so copying a peer's source here would carry its
 licence into this repository.
 

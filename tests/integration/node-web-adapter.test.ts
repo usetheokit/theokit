@@ -6,7 +6,6 @@
  * real `http.createServer` + `fetch` round-trip to exercise the
  * conversions end-to-end (no mocks).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase G slice 5/N (closes the executor bridge surface).
  */
 import { createServer, type Server } from 'node:http'

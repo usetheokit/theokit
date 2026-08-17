@@ -111,7 +111,7 @@ that.
 ## Runtime surfaces reached through the SDK — `@theokit/sdk`
 
 The layered boundary forwards SOME of the SDK, by decision rather than wholesale — see
-`scripts/lib/boundary-decisions.mjs` for the per-subpath record and the measurement behind each one.
+ for the per-subpath record and the measurement behind each one.
 These are the subpaths a coding-agent builder reaches directly today.
 
 | Capability | Symbol | Import from | Landed |
@@ -140,5 +140,5 @@ Two mechanisms, because a stale index is worse than none:
 
 1. `tests/integration/crossval-gaps.test.ts` asserts every symbol cited here resolves in the
    published `.d.ts`.
-2. `scripts/check-surface-parity.mjs` fails CI when the layer stops forwarding an SDK symbol — which
+2. fails CI when the layer stops forwarding an SDK symbol — which
    is how capabilities went missing without anyone noticing in the first place.

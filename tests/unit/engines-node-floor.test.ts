@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 /**
  * T1.3 — every workspace package.json must declare the documented Node floor.
- * CLAUDE.md "Native bindings discipline" claims engines.node ">=22.12.0" but no
+ * "Native bindings discipline" claims engines.node ">=22.12.0" but no
  * manifest declared it; pnpm warns consumers on mismatch (Next.js pins the same way:
  * packages/next/package.json engines.node ">=20.9.0"). Aligns with .nvmrc (22).
  */

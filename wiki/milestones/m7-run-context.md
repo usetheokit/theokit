@@ -24,11 +24,11 @@ flip_commit_sha: (see chore(roadmap) commit on develop)
 
 # Milestone M7 — Run-context / dependency injection for tools
 
-## Objective (from ROADMAP.md)
+## Objective (from)
 
 Give agents and their tools a shared, typed **run-context** — set once at the agent (and overridable per-run) and injected into every tool handler — so tool config like `projectRoot` is declared in ONE place.
 
-## Definition of done (from ROADMAP.md — delivered items)
+## Definition of done (from — delivered items)
 
 - [x] `CustomTool.handler` extended to accept optional `ctx?: { signal?, context? }` (strictly additive, byte-compatible with existing 1-arg handlers)
 - [x] `defineAgent({ context })` declares agent-level context; per-run override via `createSdkAgentStream(..., { runContext })` wins over agent-level

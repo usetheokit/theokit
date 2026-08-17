@@ -1,7 +1,7 @@
 /**
  * Cost tracking types (R0.5.11).
  *
- * @see docs/adr/0002-job-backend-interface-neutral-contract.md (mirror pattern)
+ * @see (mirror pattern)
  *
  * Phase 5 — Production-Readiness #4: adds `ToolUsageRecord` for per-tool
  * latency / error tracking via SDK's onToolStart/onToolEnd/onToolError hooks.

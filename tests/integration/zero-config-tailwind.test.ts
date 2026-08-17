@@ -9,7 +9,7 @@ import { detectPackage } from '../../packages/theo/src/vite-plugin/auto-detect.j
  * T3.4 — Integration: the zero-config-tailwind fixture proves the wiring
  * contract end-to-end.
  *
- * NOTE: Phase 0 spike (`docs/spikes/usetheo-ui-vite-plugin-shape.md`) blocks
+ * NOTE: Phase 0 spike blocks
  * the CSS-emission proof — that requires `@theokit/ui` to publish its
  * `./vite-plugin` subpath (cross-repo work). Until that ships, this
  * integration test validates the WIRING contract (detection + plugin

@@ -24,27 +24,26 @@ version is too old. TheoKit targets Node 20+.
 
 ## Local testing — before every PR
 
-These three commands are the gate. CI runs the same ones; if they pass
-locally, your PR is likely to pass in CI.
+These commands are the gate. CI runs the same ones; if they pass locally,
+your PR is likely to pass in CI.
 
 ```bash
 # 1. Unit + integration tests
-npx vitest run
+pnpm test
 
 # 2. Type check
-npx tsc -p packages/theo/tsconfig.json --noEmit
+pnpm typecheck
 
-# 3. Browser tests
-npx playwright install --with-deps     # one-time, downloads browsers
-npx playwright test
+# 3. Lint + format
+pnpm lint
+pnpm format:check
 
-# 4. Dogfood smoke — proxy for /dogfood full
-bash scripts/dogfood-smoke.sh
+# 4. Dead code
+pnpm knip
 ```
 
-`scripts/dogfood-smoke.sh` exits 0 when health is ≥ 41/48 (≥ 85%).
-Lower than that means your PR is missing something foundational; fix
-before opening the PR.
+There is no browser suite: the project ships no end-to-end harness, so a
+change to rendering or hydration needs a reviewer to exercise it by hand.
 
 ## How to add a feature
 
@@ -52,43 +51,25 @@ before opening the PR.
    investing time.
 2. Branch off `develop` (NOT `main`). Branch name: `feat/<short-slug>`.
 3. Write a failing test first. Yes — even when you "know" how it'll
-   work. The TDD cycle is mandatory; see `.claude/rules/testing.md`.
+   work. The TDD cycle is mandatory.
 4. Implement the minimum code to make the test pass.
 5. Refactor for clarity; the tests stay green.
 6. Update CHANGELOG.md under `[Unreleased]`. Use the
    [Keep a Changelog](https://keepachangelog.com/) categories
    (Added / Changed / Deprecated / Removed / Fixed / Security).
-7. Run the four-command gate above.
+7. Run the gate above.
 8. Open the PR. Fill in the template.
 
-## How to add a fixture
+## How to test a primitive end-to-end
 
-Fixtures under `fixtures/` are how the framework proves it actually works.
-Each one is a minimal app that exercises ONE primitive end-to-end.
+A test that needs a whole app builds it in a temp directory and tears it down
+afterwards — see `tests/unit/wave0-mandatory.test.ts` for the shape. Do not add
+a checked-in demo app: one grows stale the moment the primitive it exercises
+changes, and every consumer of it has to be updated in lockstep.
 
-1. Create `fixtures/<your-fixture>/` with `package.json`, `theo.config.ts`,
-   `app/`, and `server/` (only what your fixture needs).
-2. Add a row to `fixtures/README.md` (the `template-html-validator` test
-   asserts every fixture has a row).
-3. If your fixture ships HTML, ensure `public/index.html` references
-   `/@theo/entry-client` (the `template-html-validator` test asserts this).
-4. Run `npx vitest run tests/unit/fixtures-index.test.ts` to confirm the
-   structural linter is green.
-
-## How to write a Playwright spec
-
-The pattern lives in `tests/e2e/template-default.spec.ts`:
-
-- `collectConsoleErrors(page)` returns a mutable array; assert it
-  equals `[]` at the end of every scenario.
-- Use `getByRole` / `getByText` selectors, not CSS selectors.
-- Each spec is independent; no shared state between tests.
-
-Run a single spec with:
-
-```bash
-npx playwright test tests/e2e/template-default.spec.ts
-```
+A primitive that genuinely cannot be exercised without a running dev server has
+no automated coverage today. Say so in the PR rather than asserting something
+weaker and calling it covered.
 
 ## Branch + commit conventions
 
@@ -97,8 +78,8 @@ npx playwright test tests/e2e/template-default.spec.ts
 - **Commits**: imperative present tense, short subject (≤ 72 chars).
   The first line is the subject; an empty line follows; the body
   explains the *why* (the diff already shows the *what*).
-- **Co-authoring**: if you paired with someone, add
-  `Co-Authored-By: Name <email>` lines at the end of the commit body.
+- **No trailers**: commit bodies carry no `Co-Authored-By` lines. A local hook
+  rejects them. Credit a pair in the body prose instead.
 - **Squash on merge**: PRs are squashed by default. The PR title becomes
   the commit subject — write it carefully.
 
@@ -107,68 +88,6 @@ npx playwright test tests/e2e/template-default.spec.ts
 The release engineer is the only person who runs `npm publish`. If your
 PR needs a new release to be visible to users, mention that in the PR
 description; the maintainer will queue the publish.
-
-For the 0.3.0 cutover specifically: the referenced plan
-(`docs/plans/theokit-0.3.0-cutover-execution-plan.md`) is **not present in the repo**
-(verified 2026-08-06). Plans now live under `.claude/knowledge-base/plans/`.
-
-## Cross-repo dev: linking @theokit/ui
-
-Por default, `@theokit/ui` é consumido como npm dep (peerDep estável `1.0.0`).
-Edições locais em `../theokit-ui/` NÃO refletem sem publish.
-
-Para iterar nos dois repos simultaneamente (ADR
-[`0020`](.claude/knowledge-base/adrs/0020-cross-repo-workspace-link-opt-in.md)):
-
-```sh
-# 1. Pré-requisito: ../theokit-ui já buildado (vite-plugin.js precisa existir em dist/)
-pnpm --dir ../theokit-ui build
-
-# 2. Ativa workspace link cross-repo (preserva pnpm-workspace.yaml como .bak)
-pnpm theo-ui:link
-
-# 3. Itera com HMR
-pnpm dev
-# ... edita ../theokit-ui/src/ e packages/theo/src/ ...
-
-# 4. Restaura antes de commit
-pnpm theo-ui:unlink
-```
-
-**Importante:** o pre-commit hook bloqueia commits enquanto
-`pnpm-workspace.yaml.bak` existe (GATE 0). Isso garante que CI sempre roda
-contra o `pnpm-workspace.yaml` canônico (publish-and-bump path), validando
-que o ciclo de release continua funcionando.
-
-CI nunca usa esse modo. Veja [ADR 0020](.claude/knowledge-base/adrs/0020-cross-repo-workspace-link-opt-in.md).
-
-### Cuidados (EC-9, EC-10, EC-link-9)
-
-- **Use um terminal por checkout.** Rodar `pnpm theo-ui:link` em paralelo no
-  mesmo checkout pode disputar o `.bak` durante a janela de cópia (<100ms).
-  Não é race destrutivo (guard `if [ -f .bak ] abort` cobre), mas evite.
-- **Você está editando DOIS repos independentes.** Edições em `../theokit-ui/src/`
-  ficam em `theokit-ui/`; edições em `packages/theo/src/` ficam em `theokit/`.
-  São DOIS `git commit`, DOIS `git push`, DOIS PRs. O modo linked acelera HMR,
-  NÃO unifica commits.
-- **Se algo der errado e o link travar** (Ctrl+C durante `pnpm install`, etc):
-  `mv pnpm-workspace.yaml.bak pnpm-workspace.yaml && pnpm install` desfaz
-  manualmente.
-
-### Assimetria intencional: SDK linked default, UI linked opt-in
-
-`@theokit/sdk` permanece como workspace link permanente em
-`pnpm-workspace.yaml`. UI fica de fora por default. A assimetria reflete o
-perfil de acoplamento:
-
-| Pillar | Acoplamento ao runtime do theokit | Workspace mode |
-|---|---|---|
-| `@theokit/sdk` | runtime de produção (`server/agent/*`) | **link permanente** |
-| `@theokit/ui` | dep opcional via auto-detect | **link opt-in** |
-
-Ver [ADR 0020](.claude/knowledge-base/adrs/0020-cross-repo-workspace-link-opt-in.md) (theokit).
-O mirror `ADR 0001` do lado do `theokit-sdk` **não existe** — aquele repo não tem
-`docs/adr/` (verificado 2026-08-06).
 
 ## Code of Conduct
 

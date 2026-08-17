@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// The valid and app-less projects used to come from `fixtures/basic-valid-app` and
-// `fixtures/invalid-no-app`, removed with the rest of `fixtures/`; they are built here now.
+// The valid and app-less projects used to come from and
+//, removed with the rest of `fixtures/`; they are built here now.
 const TEMP_DIR = path.join(tmpdir(), `theo-validate-${Date.now()}`)
 
 beforeAll(() => {

@@ -192,7 +192,7 @@ export function validateCsrfRequest(
  * that turns the boolean valid/invalid into a request-level allow decision,
  * gated by mode + structured warning in warn mode.
  *
- * Phase 5 — CSRF warn-first (EC-1). See plan docs/plans/nextjs-maturity-plan.md.
+ * Phase 5 — CSRF warn-first (EC-1).
  */
 /**
  * Dispatch the csrf.warn payload to both the structured logger and the

@@ -1,7 +1,6 @@
 /**
  * T5a.2 Phase B (slice 1/6) — CSRF integration test for executeWebRequest.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase B. Validates the Web-Standards-shaped sibling
  * `validateCsrfRequest(request: Request)` (extracted from `validateCsrf`
  * via a pure header-only helper) AND its wiring into `executeWebRequest`

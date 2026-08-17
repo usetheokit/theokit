@@ -58,8 +58,8 @@ Nenhum deles é dependência **declarada** deste plano, e nenhum é alcançável
 
 | Hard cap (§ 3) | Estado |
 |---|---|
-| 1 — golden rule existe e parseia | ✅ `.claude/rules/deps-audit-golden-rule.md` |
-| 2 — allowlist parseia | ✅ `.claude/rules/deps-audit-allowlist.txt` sem erro de sintaxe |
+| 1 — golden rule existe e parseia | ✅ |
+| 2 — allowlist parseia | ✅ sem erro de sintaxe |
 | 3 — nenhuma dep **declarada** com CVE CRITICAL/HIGH | ✅ o plano declara **zero** deps novas; as 3 existentes que ele usa não são a origem dos achados HIGH |
 | 4 — seção `## Dependencies` presente e completa no plano | ✅ com subseções Existing / New / Removed e coluna de justificativa Rule 9 |
 

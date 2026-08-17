@@ -17,7 +17,6 @@
  * Idempotent: subsequent calls noop.
  *
  * Related failures fixed (verified empirically — see
- * docs/audit/vitest-tsx-loader-fix-2026-06-05.md):
  *   - tests/unit/load-config.test.ts (EC-6 null-config + per-env merges)
  *   - tests/integration/wave{1,2,3,4,5,6,8}-mandatory.test.ts (cascade —
  *     dev-server spawn loads theo.config.ts)

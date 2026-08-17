@@ -396,7 +396,7 @@ Todas as capabilities são transformação pura de `CompiledAgentOptionsDraft`; 
 - [ ] `grep -nE "^export (function|const) (agent|contextualTool|skills|memory|mcpServers|guardrails|checkpoint|humanInTheLoop|subAgents|contextWindow|projectContext|skillsOptions)\b" packages/agents/src` → vazio (sugar eliminado)
 - [ ] Teste live no tmux `agentbuilder`: um agente autorado com `new XCapability(...)` responde de provider real
 - [ ] `/code-quality` ∈ {PASS, PASS_WITH_CAVEATS}; `/review` READY_TO_MERGE
-- [ ] `@theokit/agents` publicado (major); flip do M57 em ROADMAP-v2.md
+- [ ] `@theokit/agents` publicado (major); flip do M57 em
 - [ ] CHANGELOG + ADR 0005
 
 ## Followups
@@ -405,10 +405,10 @@ Nenhum aberto. **Verificado (baseline agent-builder):** o agent-builder NÃO usa
 
 ## Related
 
-- Milestone: `ROADMAP-v2.md` § `### M57`
+- Milestone:
 - Blueprint: `blueprints/layered-oo-boundary.md`
 - ADR revertido: `decisions/0001-capability-patterns-budget.md`
-- Regras: `.claude/rules/parsimony-ladder.md`, `.claude/rules/testing.md`, `.claude/rules/error-handling.md`
+- Regras:,
 
 # Related
 * [layered-oo-boundary](/blueprints/layered-oo-boundary.md) — the research blueprint.

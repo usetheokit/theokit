@@ -24,11 +24,11 @@ flip_commit_sha: (see chore(roadmap) commit on develop)
 
 # Milestone M8 — Fluent agent builder with type-state
 
-## Objective (from ROADMAP.md)
+## Objective (from)
 
 A composable `agent()` builder — `agent().context(...).tool(...).model(...).build()` — that accumulates **type-state** the way the most-loved TS DX does: a tool whose required context isn't provided is a compile error, tool names accumulate into a union, and `.build()` only type-checks when the agent is complete. Resolves to the SAME branded `AgentDefinition` that `defineAgent` produces.
 
-## Definition of done (from ROADMAP.md — delivered items)
+## Definition of done (from — delivered items)
 
 - [x] `agent()` builder with `.context<C>()`, `.tool(t)`, `.model()`, `.system()`, `.use(preset)`, `.build()` — typed with accumulative generics
 - [x] Type-state: `.build()` callable only when required fields (model) present — "forgot the model" is a compile error, proven by `@ts-expect-error` + `expectTypeOf` tests

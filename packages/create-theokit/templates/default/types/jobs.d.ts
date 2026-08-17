@@ -11,7 +11,6 @@
  * 2. Add `'<name>': { ...inputShape }` below
  * 3. Use `ctx.queue.enqueue('<name>', { ...input })` from any route handler
  *
- * See: docs/concepts/jobs.md
  */
 declare module 'theokit/server' {
   interface JobRegistry {

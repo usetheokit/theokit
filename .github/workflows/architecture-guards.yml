@@ -1,7 +1,6 @@
 name: architecture-guards
 
-# Enforces .claude/rules/architecture.md v2 + naming convention on every PR.
-# Added in T1.1 of architecture-review-remediation-plan (2026-05-23).
+# Enforces the architecture rules + naming convention on every PR.
 #
 # Fails the build on:
 #   • Cyclic dependencies (Acyclic Dependencies Principle — consensus)
@@ -17,15 +16,11 @@ on:
       - 'packages/theo/src/**'
       - '.dependency-cruiser.cjs'
       - '.ls-lint.yml'
-      - '.claude/rules/architecture.md'
       - 'packages/*/package.json'
-      # M91 — a suíte do pacote inteiro, não só dois entries.
-      #
-      # O job `auth-parity` roda `pnpm --filter @theokit/agents test`, e o comentário dele já dizia
-      # que "o vitest da raiz só cobre `tests/**` — sem isto ele nunca rodaria em CI". Mas o filtro
-      # listava apenas `sandbox-entry.ts` e `auth-entry.ts`: um PR que tocasse
-      # `src/capability/toolset.ts` ou `tests/unit/*` **não disparava nada**. Os gates do M91 só
-      # rodaram por acidente — o commit de release mexeu no `package.json`, que estava na lista.
+      # M91 — the whole package suite, not just two entries. Listing only `sandbox-entry.ts` and
+      # `auth-entry.ts` meant a PR touching `src/capability/toolset.ts` or `tests/unit/*` triggered
+      # nothing, and the M91 gates ran only by accident: the release commit happened to touch
+      # `package.json`, which was on the list.
       - 'packages/agents/src/**'
       - 'packages/agents/tests/**'
   pull_request:
@@ -34,25 +29,17 @@ on:
       - 'packages/theo/src/**'
       - '.dependency-cruiser.cjs'
       - '.ls-lint.yml'
-      - '.claude/rules/architecture.md'
       - 'packages/*/package.json'
-      # M91 — a suíte do pacote inteiro, não só dois entries.
-      #
-      # O job `auth-parity` roda `pnpm --filter @theokit/agents test`, e o comentário dele já dizia
-      # que "o vitest da raiz só cobre `tests/**` — sem isto ele nunca rodaria em CI". Mas o filtro
-      # listava apenas `sandbox-entry.ts` e `auth-entry.ts`: um PR que tocasse
-      # `src/capability/toolset.ts` ou `tests/unit/*` **não disparava nada**. Os gates do M91 só
-      # rodaram por acidente — o commit de release mexeu no `package.json`, que estava na lista.
+      # M91 — the whole package suite, not just two entries. Listing only `sandbox-entry.ts` and
+      # `auth-entry.ts` meant a PR touching `src/capability/toolset.ts` or `tests/unit/*` triggered
+      # nothing, and the M91 gates ran only by accident: the release commit happened to touch
+      # `package.json`, which was on the list.
       - 'packages/agents/src/**'
       - 'packages/agents/tests/**'
 
 jobs:
-  # The `direction` job (ADR 0030 — no lib depends on the principal `theokit`) lived here and was
-  # REMOVED along with `scripts/check-package-direction.mjs`, which was the entire gate. Dependency
-  # direction between the packages is no longer checked automatically.
-
   agents-surface:
-    name: surface parity (a camada enriquece o SDK, nunca reduz — M73)
+    name: surface parity (the layer enriches the SDK, never reduces it — M73)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,26 +49,16 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The `check-auth-parity.mjs` step left this job. It compared the REAL surface of the
-      # installed @theokit/sdk against what `packages/agents/src/auth-entry.ts` re-exports — and it
-      # was already broken before this cleanup: the file was absent from `scripts/` since before
-      # 33ac7024, so the job failed here without ever measuring parity. What remains below (build +
-      # the package's suite) is what actually runs.
-      # O gate de superficie do M90 (`tests/unit/subpath-surface.test.ts`) le `dist/*.d.ts`, e nao o
-      # fonte, porque o `.d.ts` e o artefato que o consumidor realmente ve. Sem build ele morre em
-      # ENOENT e o job inteiro reprova sem nunca medir nada — foi o que aconteceu em TODO run desde
-      # 2026-07-30. `...` inclui as dependencias de workspace do pacote (@theokit/http, presenter),
-      # exigidas pelo DTS do tsup. TURBO_CONCURRENCY=1 pelo mesmo motivo do pre-push: o DTS dos ~24
-      # entrypoints estoura a memoria do runner com o default.
+      # The M90 surface gate (`subpath-surface.test.ts` in the package) reads `dist/*.d.ts`, not the
+      # source, because the `.d.ts` is what the consumer actually sees. Without a build it dies on
+      # ENOENT and the whole job fails without measuring anything — which is what happened on every
+      # run from 2026-07-30. `...` pulls in the package's workspace dependencies (@theokit/http,
+      # presenter), required by tsup's DTS. TURBO_CONCURRENCY=1 because the DTS for ~24 entrypoints
+      # blows the runner's default heap.
       - run: TURBO_CONCURRENCY=1 pnpm --filter "@theokit/agents..." build
-      # O lock de identidade referencial (`toBe`) vive nos testes do pacote, e o vitest da raiz so
-      # cobre `tests/**` — sem isto ele nunca rodaria em CI.
+      # The referential-identity lock (`toBe`) lives in the package's own tests, and the root vitest
+      # run only covers `tests/**` — without this it would never run in CI.
       - run: pnpm --filter @theokit/agents test
-
-  # The `sandbox-parity` job (M75 — every public symbol has a written decision) lived here and was
-  # REMOVED along with `scripts/check-sandbox-parity.mjs` and `scripts/lib/boundary-decisions.mjs`.
-  # The boundary decisions are still written down, but nothing checks any more whether a new public
-  # symbol was added without one.
 
   dep-cruiser:
     name: dependency-cruiser (architecture rules)
@@ -110,28 +87,23 @@ jobs:
       - run: pnpm check:naming
 
   wire-ownership:
-    name: wire ownership (nenhum pacote publicado carrega o ai-sdk)
+    name: wire ownership (no published package carries the ai-sdk)
     runs-on: ubuntu-latest
-    # O DTS dos ~24 entrypoints do `theokit` estoura a heap default do runner
-    # (ERR_WORKER_OUT_OF_MEMORY). O `release.yml` ja carrega esta mesma linha pelo mesmo motivo.
+    # The DTS for theokit's ~24 entrypoints blows the runner's default heap
+    # (ERR_WORKER_OUT_OF_MEMORY). `release.yml` carries the same line for the same reason.
     env:
       NODE_OPTIONS: --max-old-space-size=8192
     steps:
-      # Pinadas por SHA: uma tag e mutavel, e um workflow que instala dependencias
-      # confia no que a tag apontar no dia.
+      # Pinned by SHA: a tag is mutable, and a workflow that installs dependencies would otherwise
+      # trust whatever the tag points at on the day.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
           cache: pnpm
-      # `--ignore-scripts`: este job so builda e roda dois scripts de inspecao; nenhum
-      # lifecycle e necessario, e permiti-los amplia a superficie de supply chain a toa.
+      # `--ignore-scripts`: this job only builds and inspects; no lifecycle script is needed, and
+      # allowing them widens the supply-chain surface for nothing.
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: TURBO_CONCURRENCY=1 pnpm --filter "./packages/*" build
-      # `pnpm check:ai-free` and `pnpm check:wire-parity` ran here and left with
-      # `scripts/check-ai-free-surface.mjs` and `scripts/check-wire-parity.mjs`. They were the two
-      # gates that read `dist/` to prove no published package carries the ai-sdk and that the wire
-      # mirror has not drifted from the `ai` union. The differential oracle below — the presenter's
-      # suite — is what is left: it covers the second property, not the first.
       - run: pnpm --filter @theokit/presenter test

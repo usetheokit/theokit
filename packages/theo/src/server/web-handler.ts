@@ -1,7 +1,6 @@
 /**
  * T5a.2 Phase A — Foundation: Web-Standards request handler entry-point.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase A. Bridges the gap between Web `Request`/`Response` and the
  * existing `defineRoute` config shape (which is consumed today by the Node-
  * shaped `executeRoute`).

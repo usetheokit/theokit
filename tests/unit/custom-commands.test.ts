@@ -239,7 +239,7 @@ describe('loadCustomCommands — a namespaced command directory', () => {
     // namespaced command was not "unsupported" — it was invisible. No warning, no error; the file
     // sits there and the command simply does not exist.
     //
-    // Namespacing is not one product's idea. Claude Code reads `.claude/commands/frontend/component.md`
+    // Namespacing is not one product's idea. Claude Code reads
     // as a namespaced command, and the closest consumer names nested files by their relative path
     // for the same reason: a flat directory stops scaling at about a dozen commands.
     //

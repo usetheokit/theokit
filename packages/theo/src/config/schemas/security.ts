@@ -30,7 +30,7 @@ export const securityHeadersSchema = z.object({
   csp: z.union([headerSafeString, z.literal(false)]).optional(),
   // T6.1 — default flipped from 'report-only' to 'enforce' for 0.3.0.
   // Users who want the old behaviour set `cspMode: 'report-only'`
-  // explicitly. See docs/migrating/0.2-to-0.3.md.
+  // explicitly.
   cspMode: z.enum(['enforce', 'report-only', 'off']).default('enforce'),
   hsts: z.union([headerSafeString, z.literal(false)]).optional(),
   frameOptions: z.enum(['DENY', 'SAMEORIGIN']).default('DENY'),
@@ -96,7 +96,7 @@ export const securitySchema = z.object({
   // T6.1 — default flipped from 'warn' to 'strict' for 0.3.0. Apps that
   // grep their warn-mode logs from 0.2.x already know which endpoints
   // break; opt back into 'warn' globally OR use disallowedRoutes for
-  // surgical migration. See docs/migrating/0.2-to-0.3.md.
+  // surgical migration.
   csrf: z.enum(['off', 'warn', 'strict']).default('strict'),
   headers: securityHeadersSchema.optional(),
   /** T5.1 — per-route escalation (Rails disallowed_warnings pattern). */

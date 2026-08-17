@@ -1,12 +1,11 @@
 /**
  * Plan T4.1 — envelope wire-format roundtrip coverage for ALL Error classes.
  *
- * Per `docs/plans/theokit-arch-gaps-implementation-plan.md` v1.2 Phase 4 T4.1.
  *
- * ARCHITECTURAL RECONCILIATION (honest framing per CLAUDE.md root Rule 3):
+ * ARCHITECTURAL RECONCILIATION (honest framing root Rule 3):
  * The T4.1 plan was authored from the architectural-review's blast-radius
  * narrative ("23 classes to migrate to TheoError") which conflicts with the
- * G5 D3 architectural decision (ADR `docs/migration/error-envelope-0-2-to-0-4.md`)
+ * G5 D3 architectural decision (ADR)
  * that was SHIPPED before this plan landed. G5 D3 explicitly KEEPS class
  * identities in place inside the codebase and translates to envelope shape
  * AT THE WIRE BOUNDARY via `serverErrorToEnvelope()` — no invasive call-site

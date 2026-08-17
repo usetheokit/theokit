@@ -396,10 +396,10 @@ Nenhum previsto — o escopo é cirúrgico e fechado pelo DoD.
 
 ## Related
 
-- Milestone: `ROADMAP.md` § `### M54`
+- Milestone:
 - Blueprint: `blueprints/loop-strategy-seam.md`
 - Grill: `grills/loop-strategy-seam.md`
-- Regras: `.claude/rules/error-handling.md`, `.claude/rules/testing.md`, `.claude/rules/parsimony-ladder.md`; ADR-0001 (Template Method recusado)
+- Regras:,; ADR-0001 (Template Method recusado)
 
 # Related
 * [loop-strategy-seam](/grills/loop-strategy-seam.md) — the scope questions.

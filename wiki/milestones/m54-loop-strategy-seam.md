@@ -29,7 +29,7 @@ checkbox_flipped_at: 2026-07-24T18:55:00Z
 
 # Milestone M54 — Abrir o seam de `LoopStrategy` (critério de parada injetável, OCP)
 
-## Objective (do ROADMAP.md)
+## Objective (do)
 
 Fechar a assimetria de OCP do `AgentRunner`: três dos quatro eixos de comportamento já aceitavam
 injeção (reflexão, compactação, produção do round); o critério de parada era o único trancado
@@ -84,7 +84,7 @@ suíte passando com **zero expectativa editada** e pelo próprio agente de revie
 
 ## Este era o último milestone aberto — ROADMAP 57/57
 
-Com o flip do M54, o `ROADMAP.md` do theokit atinge **ROADMAP_COMPLETED**: todos os 57 milestones
+Com o flip do M54, o do theokit atinge **ROADMAP_COMPLETED**: todos os 57 milestones
 (M0–M56) marcados `[x]`.
 
 # Related

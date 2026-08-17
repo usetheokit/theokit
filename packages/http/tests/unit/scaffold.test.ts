@@ -16,7 +16,7 @@ describe('T1.1 — Package scaffold', () => {
     // (the dependency was spurious — http has no executable import of theokit, only
     // JSDoc — and it created a circular graph + spurious major cascade). The old test
     // asserted `theokit` as a peerDep; this assertion is the regression guard that
-    // mirrors scripts/check-package-direction.mjs.
+    // mirrors
     expect(pkg.peerDependencies).not.toHaveProperty('theokit')
     expect(pkg.dependencies ?? {}).not.toHaveProperty('theokit')
     expect(pkg.devDependencies ?? {}).not.toHaveProperty('theokit')
