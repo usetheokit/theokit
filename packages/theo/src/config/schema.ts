@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { THEME_NAME_PATTERN } from '../core/contracts/theo-ui-theme.js'
 import { servicesConfigSchema } from '../services/index.js'
 
 import {
@@ -166,7 +167,18 @@ export const theoConfigSchema = z
       .union([
         z.literal(false),
         z.object({
-          theme: z.enum(['violet-forge', 'noir', 'paper']).optional(),
+          // Any theme @theokit/ui knows — built-in or from `defineTheme()`. This was a closed
+          // enum of `violet-forge | noir | paper`, two of which never existed in @theokit/ui, so
+          // the only accepted value was the default and every real theme was rejected. The pattern
+          // mirrors what @theokit/ui's ThemeProvider enforces, and it is load-bearing: the value is
+          // interpolated into the generated entry and into a CSS selector.
+          theme: z
+            .string()
+            .regex(
+              THEME_NAME_PATTERN,
+              'must start with a letter and contain only lowercase letters, digits and hyphens',
+            )
+            .optional(),
           fonts: z.enum(['bundled', 'cdn']).optional(),
         }),
       ])

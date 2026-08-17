@@ -76,6 +76,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`ui.theme` accepts the themes `@theokit/ui` actually ships.** The field was a closed enum,
+  `'violet-forge' | 'noir' | 'paper'`, and two of those three were never real themes — the design
+  system has no `noir` and no `paper`. In practice the only value config validation accepted was the
+  default: every genuine theme (`dracula`, `github-dark`, `aurora-terminal`, the rest) and anything
+  built with `defineTheme()` was rejected outright. It is now validated by shape rather than by a
+  hard-coded list, using the same pattern `@theokit/ui`'s own `ThemeProvider` enforces — which
+  matters beyond typing, because the value is interpolated into the generated entry and into a CSS
+  selector, so an unvalidated name is an injection vector. The union survives as an autocomplete
+  hint only, and it now lists the real theme names.
+
+  The type was spelled out separately in `config/schema.ts`, `router/entry.ts` and
+  `router/entry-server.ts`, which is why three copies could drift from the design system at once. It
+  now lives in `core/contracts/theo-ui-theme.ts` — the one layer `config/` and `router/` are both
+  allowed to depend on. A closed enum cannot come back without failing `tests/unit/config-ui-theme.test.ts`.
+
 - **A scaffolded project no longer crashes on its own OpenAPI example.** The config skill shipped
   `outDir: ''`, which the schema accepts (`z.string()` with no minimum) and which then reaches
   `mkdirSync('')` and throws a bare `ENOENT` naming no path. It now carries the schema's real

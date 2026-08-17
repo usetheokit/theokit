@@ -1,3 +1,5 @@
+import type { TheoUiTheme } from '../core/contracts/theo-ui-theme.js'
+
 interface EntryServerOptions {
   /** When true, emit a streaming entry using onShellReady + signal cleanup.
    *  When false (default), emit the legacy single-shot onAllReady entry. */
@@ -11,7 +13,7 @@ interface EntryServerOptions {
    * EC-2 (CSS): the SSR entry never imports CSS. Only the React tree is
    * mirrored — the CSS stays client-only.
    */
-  theoUi?: { theme?: 'violet-forge' | 'noir' | 'paper' }
+  theoUi?: { theme?: TheoUiTheme }
 }
 
 export function generateEntryServer(options: EntryServerOptions = {}): string {

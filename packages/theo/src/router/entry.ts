@@ -1,7 +1,11 @@
+import type { TheoUiFonts, TheoUiTheme } from '../core/contracts/theo-ui-theme.js'
+
 interface EntryClientOptions {
   theoUi?: {
-    fonts?: 'bundled' | 'cdn'
-    theme?: 'violet-forge' | 'noir' | 'paper'
+    fonts?: TheoUiFonts
+    // Imported rather than restated. This union was spelled out here, in entry-server.ts and in
+    // the config schema, and all three drifted from the themes @theokit/ui actually ships.
+    theme?: TheoUiTheme
   }
 }
 
