@@ -211,12 +211,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      # SHA-pinned, unlike the tag references elsewhere in this file. A supply-chain gate that
+      # resolves its own tooling through a movable tag can be silenced by whoever moves the tag.
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
+      # `--ignore-scripts`: this job never builds or runs the tree, it only reads it. Executing
+      # every dependency's install hooks to decide whether those dependencies are safe hands
+      # arbitrary code to the thing under audit. `pnpm audit` works from the lockfile and
+      # `check-licenses.mjs` uses only node builtins over the store, so neither loses anything.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       # `--prod` on purpose. A production advisory is inherited by every app built on the framework;
       # a dev-tree one never reaches a consumer and, measured today, would make this job permanently
       # red for findings nobody here can act on. A gate that is always red is a gate people learn to
@@ -232,10 +238,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      # Pinned and script-free for the same reason as `dependency-audit` above.
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm check:licenses

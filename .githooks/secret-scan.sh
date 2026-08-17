@@ -41,7 +41,7 @@ fi
 # edit carry no new content, and a deleted file cannot introduce a credential.
 mapfile -d '' STAGED < <(git diff --cached --name-only --diff-filter=ACM -z)
 
-if [ ${#STAGED[@]} -eq 0 ]; then
+if [[ ${#STAGED[@]} -eq 0 ]]; then
   exit 0
 fi
 
