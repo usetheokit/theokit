@@ -57,13 +57,10 @@ const REPO_ROOT = join(__dirname, '..', '..')
  * B-065 — SOURCE and its tests. Deliberately not the whole repository, and the exclusions are the
  * argument rather than convenience:
  *
- * - `wiki/` is the historical record — plans, reviews, decisions and grills written as the work
- *   happened. Rewriting them would edit what was said at the time, which is the opposite of what a
- *   record is for. New wiki pages are written in English; this gate cannot tell a 2026-06 review
- *   from one written today, so it does not judge them at all.
  * - `CHANGELOG.md` (root and per package) — entries for a RELEASED version are immutable under
- *   Unbreakable Rule 6.
- * - `ROADMAP*.md`, `CONTRIBUTING.md` — same category as the wiki.
+ *   Unbreakable Rule 6. Rewriting one would edit what was said at the time, which is the opposite
+ *   of what a record is for, and this gate cannot tell a released entry from a fresh one.
+ * - `ROADMAP*.md`, `CONTRIBUTING.md` — same category: a record of what was decided when.
  *
  * What this DOES cover is every line that ships or executes: `packages/*` source and tests, plus
  * the root test suite including the lint tests themselves. That is the surface where a Portuguese
@@ -99,9 +96,9 @@ const FILE_ALLOWLIST = new Set<string>([
   // "apos". Escaping it differently to satisfy the gate would change the rendered banner.
   'packages/create-theokit/tests/unit/scaffold-surface.test.ts',
   // Two entries were removed on 2026-08-06, each on the condition its own comment had set. The
-  // Portuguese course was decomposed into the `wiki/` bundle in English, and the recall probe that
-  // matched a Brazilian city name in both spellings went with it. The gate now covers every word
-  // that replaced them, and no exempt prose is left in the repository.
+  // Portuguese course was decomposed into English documentation, and the recall probe that matched
+  // a Brazilian city name in both spellings went with it. The gate now covers every word that
+  // replaced them, and no exempt prose is left in the repository.
 ])
 
 /**

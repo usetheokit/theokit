@@ -78,8 +78,8 @@ data, and a user cannot tell an explicit choice from a precedence fallback.
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
 question without a round trip to the repository.
 
-For "which symbol delivers capability X, and in which version did it land", the repository publishes
-a capability index at `wiki/capability-index.md`.
+For "which symbol delivers capability X, and in which version did it land", the CHANGELOG entry that
+shipped the symbol is the answer — every entry names the version it landed in.
 
 ## Boundaries this package keeps
 

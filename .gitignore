@@ -111,7 +111,7 @@ architecture-output/
 __pycache__/
 *.pyc
 
-# Generated typecheck pre-flight records (gate documented at wiki/gates/typecheck-pre-flight.md)
+# Generated typecheck pre-flight records (gate lives in tests/integration/typecheck-clean-gate.test.ts)
 .audit/
 
 # Agent tooling scratch output — analysis databases and reports, never project source.

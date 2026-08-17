@@ -74,6 +74,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Demo apps are no longer checked in.** A test that needs a whole app builds one in a temp
   directory and tears it down afterwards, so a suite owns its own inputs.
 
+### Removed
+
+- **`wiki/` is gone — the repository no longer ships its internal decision trail.** The 90 documents
+  under it were grills, plans, reviews, ADRs and milestone records: the trace of how the framework
+  was built, addressed to the people building it. A consumer cloning the repository was reading
+  someone else's working notes, so the tree that greets the community is now the code, its tests and
+  the CHANGELOG. Nothing is lost — the documents remain in the git history at the commit before this
+  one. What was reachable from a public surface has been repointed: the migration paragraph in
+  `CONTRIBUTING.md` and the capability lookup in `@theokit/agents`' README now name the CHANGELOG,
+  which records every breaking change and the version that carried it, and the feature-request issue
+  template no longer links a backlog file. (wiki-removal-2026-08)
+
+- `tests/unit/migration-guide-clean-break.test.ts`, which asserted the shape of the 0.13 → 0.14
+  migration guide by reading it off disk. Its subject went with the wiki; a test whose fixture no
+  longer exists is a red suite, not coverage. (wiki-removal-2026-08)
+
 ### Fixed
 
 - **`ui.theme` accepts the themes `@theokit/ui` actually ships.** The field was a closed enum,

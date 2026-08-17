@@ -22,9 +22,7 @@ describe('pnpm typecheck clean gate (T0.3)', () => {
   // even though count is currently 0 — the gate is "no NEW SDK errors").
   it('EC-203: pre-flight audit doc records SDK-rooted error count', () => {
     // Generated artifact, not authored knowledge: this file is rewritten on every
-    // run. It stays OUT of `wiki/` — a generated file carries no OKF frontmatter,
-    // and dropping one into the bundle breaks its one hard rule. The gate itself
-    // is documented at `wiki/gates/typecheck-pre-flight.md`.
+    // run, so it lives under `.audit/` (gitignored) rather than in the tracked tree.
     const auditDir = resolve(REPO, '.audit/typecheck')
     if (!existsSync(auditDir)) mkdirSync(auditDir, { recursive: true })
 
