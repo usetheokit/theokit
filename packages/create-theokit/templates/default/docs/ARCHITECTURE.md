@@ -42,11 +42,15 @@ folders it composes (prompts, tools, skills) live together under `agents/`, with
 ## Clean names, no phantom routes
 
 An agent is a file: `agents/<name>.ts` → `POST /api/agents/<name>`. But the framework's scanner is
-**folder-semantic** — the conventional sub-folders under `agents/` (`prompts/`, `tools/`, `skills/`,
-`lib/`, `hooks/`, `channels/`, `connections/`, `subagents/`, `schedules/`) are **that concern, not routes**.
+**folder-semantic** — thirteen sub-folder names under `agents/` (`tools/`, `skills/`, `prompts/`,
+`lib/`, `hooks/`, `channels/`, `connections/`, `subagents/`, `schedules/`, `sandbox/`, `workflows/`,
+`evals/`, `memory/`) are **that concern, not routes**.
 So the names stay clean (`tools/`, not `_tools/`) and `agents/tools/weather.ts` never becomes a phantom
 `/api/agents/tools/weather` endpoint. Markdown (`skills/*.md`) is never scanned either way. The
 prompts/tools/skills are **shared** across every agent in `agents/`.
+
+An agent that outgrows one file becomes a folder that co-locates its own composition —
+`agents/<name>/index.ts` with `tools/` and `prompts/` beside it. Same route, same identity.
 
 ## Composition
 
