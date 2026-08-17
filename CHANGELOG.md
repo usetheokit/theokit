@@ -92,6 +92,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A hyphenated agent name no longer generates broken code.** An agent's name comes from its file
+  path, so `agents/ask-theo.ts` is named `ask-theo` — and kebab-case is right there, because the
+  name is also the URL segment (`POST /api/agents/ask-theo`). The exported binding was emitted
+  verbatim, producing `export const ask-theo`, which does not parse: the generated
+  `.theokit/agents.d.ts` broke every tool that read it, and the virtual `@theo/agents` runtime
+  module emitted the same syntax error as executable code. The internal alias was already
+  sanitised; only the export was not. Names now become camelCase identifiers (`askTheo`,
+  `internalTriage`) while the route keeps its kebab form. Single-word names — every name that
+  already worked — are unchanged. (usetheokit/theokit#318)
+
+- **`ssr: true` hydrates again in development.** The dev server serves a nonce-based `script-src`,
+  but `transformIndexHtml` runs before the nonce exists, so the inline refresh preamble
+  `@vitejs/plugin-react` injects carried none. The browser blocked it, `window.$RefreshReg$` was
+  never defined, and the first component module threw "@vitejs/plugin-react can't detect preamble".
+  SSR had already produced the HTML, so the page rendered and simply never hydrated: no theme, no
+  event handlers, nothing interactive, and a console error pointing at Vite rather than at us. The
+  nonce is now minted before the transform and stamped onto every inline script the transform
+  produced. (usetheokit/theokit#319)
+
+- **A route's metadata reaches the served `<head>` under SSR.** React 19 hoists `<title>`, `<meta>`
+  and `<link>` in the BROWSER, after hydration; on the server it emits them inline, and the SSR
+  output is injected inside `<div id="root">` — so a page's own title, canonical and Open Graph
+  tags shipped in the body. Readers never noticed, because hydration moved them a moment later.
+  Crawlers did: every social unfurler reads the served head and stops, so each page of a site
+  unfurled with whatever site-wide fallback `index.html` carried. Turning SSR on for social
+  previews and finding they still do not work is the kind of afternoon this avoids. The middleware
+  now hoists them, and a route's tag supersedes the template's for the same slot. (usetheokit/theokit#319)
+
 - **`ui.theme` accepts the themes `@theokit/ui` actually ships.** The field was a closed enum,
   `'violet-forge' | 'noir' | 'paper'`, and two of those three were never real themes — the design
   system has no `noir` and no `paper`. In practice the only value config validation accepted was the

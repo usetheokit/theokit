@@ -25,6 +25,8 @@ import {
   type SecurityHeadersConfig,
 } from '../server/internal-api.js'
 
+import { hoistHeadTags } from './hoist-head-tags.js'
+
 interface SsrRenderResult {
   html: string
   hydrationData: {
@@ -39,6 +41,30 @@ interface SsrEntryServer {
     url: string,
     opts: { nonce: string },
   ) => Promise<SsrRenderResult | { redirect: Response } | string>
+}
+
+/**
+ * Stamps the request nonce onto every inline `<script>` the HTML already carries.
+ *
+ * `transformIndexHtml` lets Vite plugins inject their own scripts, and they know nothing about our
+ * CSP. `@vitejs/plugin-react` injects its refresh preamble as an INLINE module script with no
+ * nonce, so a nonce-based `script-src` blocks it, `window.$RefreshReg$` is never defined, and the
+ * first component module throws "@vitejs/plugin-react can't detect preamble". SSR still produced
+ * the HTML, so the page looks fine and simply never hydrates — nothing interactive works, and the
+ * one console error points at Vite rather than at us (usetheokit/theokit#319).
+ *
+ * Only scripts WITHOUT `src` are stamped: a same-origin `src` is already covered by `'self'`, and
+ * an inline script is the only kind a nonce is needed for. Scripts that already carry a nonce are
+ * left alone, so the render's own output is never rewritten.
+ *
+ * Deliberately not a general HTML parser: this runs per request in dev, on markup we produced or a
+ * Vite plugin injected, and the pattern only ever matches an opening `<script>` tag.
+ */
+export function applyNonceToInlineScripts(html: string, nonce: string): string {
+  return html.replace(
+    /<script(?![^>]*\ssrc=)(?![^>]*\snonce=)([^>]*)>/gi,
+    `<script nonce="${nonce}"$1>`,
+  )
 }
 
 function isSsrRenderResult(value: unknown): value is SsrRenderResult {
@@ -76,13 +102,19 @@ export function setupSsrDevMiddleware(server: ViteDevServer, opts: SsrDevMiddlew
         const indexPath = resolve(opts.projectRoot, 'index.html')
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- projectRoot is from `theokit dev`'s caller-controlled cwd
         let template = readFileSync(indexPath, 'utf-8')
-        template = await server.transformIndexHtml(url, template)
 
         // T4.1 — Generate a per-request nonce and apply security headers BEFORE render.
         // The same nonce flows into React's renderToPipeableStream({ nonce }) so every
         // emitted <script> carries it AND into the CSP script-src directive.
         // EC-3: applySecurityHeaders also forces Cache-Control: private, no-store.
+        //
+        // The nonce is minted BEFORE `transformIndexHtml` so the scripts Vite plugins inject can be
+        // stamped with it. Minting it afterwards left the React refresh preamble unnonced, the CSP
+        // blocked it, and the app never hydrated (usetheokit/theokit#319).
         const nonce = generateNonce()
+
+        template = await server.transformIndexHtml(url, template)
+        template = applyNonceToInlineScripts(template, nonce)
         applySecurityHeaders(
           res,
           opts.securityHeaders ?? {},
@@ -115,6 +147,13 @@ export function setupSsrDevMiddleware(server: ViteDevServer, opts: SsrDevMiddlew
         } else {
           ssrHtml = ''
         }
+        // Move the route's <title>/<meta>/<link> out of the rendered body and into the head.
+        // React only hoists those in the browser, after hydration — a crawler that does not run JS
+        // would otherwise never see a page's own title or social card (usetheokit/theokit#319).
+        const hoisted = hoistHeadTags(template, ssrHtml)
+        template = hoisted.template
+        ssrHtml = hoisted.html
+
         const rootDivMatch = /<div id=["']root["'][^>]*>/.exec(template)
         if (!rootDivMatch) {
           res.writeHead(200, { 'Content-Type': 'text/html' })
