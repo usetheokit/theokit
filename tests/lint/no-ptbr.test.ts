@@ -6,8 +6,8 @@
  *
  * - JSDoc on an exported symbol is emitted into the published `.d.ts`, so a
  *   Portuguese comment ships to every consumer and shows up on editor hover.
- * makes the exported types the canonical public contract; a
- *   contract nobody outside this repo can read is not a contract.
+ *   Those declarations are the canonical public contract; a contract nobody
+ *   outside this repo can read is not a contract.
  * - A Portuguese identifier in the public surface is worse still — one shipped
  *   in `@theokit/sdk/compaction` for several releases before this gate existed,
  *   and renaming it was a breaking change. The cost compounds with every
@@ -51,7 +51,7 @@ const REPO_ROOT = join(__dirname, '..', '..')
  * The root moved out of `packages/` for the same reason, one level up: scoped to packages, the gate
  * could not see `docs/`, `tools/`, `scripts/`, `examples/` or the root `README.md` / `CHANGELOG.md`,
  * so nothing stopped a Portuguese document from landing there. It found exactly that — a 2156-line
- * course under, invisible for as long as the scope was narrower than the repository.
+ * course that stayed invisible for as long as the scope was narrower than the repository.
  */
 /**
  * B-065 — SOURCE and its tests. Deliberately not the whole repository, and the exclusions are the
@@ -73,7 +73,7 @@ const SCAN_ROOTS = ['packages', 'tests']
 
 /**
  * Loanwords English legitimately borrows with their diacritics. `façade` is a
- * locked term in ("Agent façade"), so it is not a violation.
+ * locked term of the architecture vocabulary ("Agent façade"), so it is not a violation.
  */
 const WORD_ALLOWLIST = new Set(['façade', 'façades', 'naïve', 'café', 'résumé'])
 
@@ -98,14 +98,10 @@ const FILE_ALLOWLIST = new Set<string>([
   // B-065 — `What&apos;s new` is an HTML apostrophe entity; the lexicon reads it as Portuguese
   // "apos". Escaping it differently to satisfy the gate would change the rendered banner.
   'packages/create-theokit/tests/unit/scaffold-surface.test.ts',
-  // A recall probe whose assertion is what a model ANSWERS. It matches both spellings of a Brazilian
-  // city because a model replying in Portuguese uses the accented one; dropping that alternative to
-  // satisfy this gate would narrow what the probe accepts and weaken the audit it exists to run.
-  // Same category as the skipped session transcripts: linting the user's own words, not our prose.
-  // The exemption was removed on 2026-08-06, on the
-  // condition its own comment set: "delete this entry the day the course becomes English". The
-  // course was decomposed into the `wiki/` bundle in English, so the gate now covers every word
-  // that replaced it and there is no exempt prose left in the repository.
+  // Two entries were removed on 2026-08-06, each on the condition its own comment had set. The
+  // Portuguese course was decomposed into the `wiki/` bundle in English, and the recall probe that
+  // matched a Brazilian city name in both spellings went with it. The gate now covers every word
+  // that replaced them, and no exempt prose is left in the repository.
 ])
 
 /**
@@ -409,11 +405,19 @@ async function scanFile(file: string): Promise<Offender[]> {
   return named === undefined ? inside : [named, ...inside]
 }
 
-async function collectOffenders(): Promise<Offender[]> {
+async function collectOffenders(): Promise<{
+  offenders: Offender[]
+  perRoot: Record<string, number>
+}> {
   const files: string[] = []
-  for (const root of SCAN_ROOTS) files.push(...(await walk(join(REPO_ROOT, root))))
+  const perRoot: Record<string, number> = {}
+  for (const root of SCAN_ROOTS) {
+    const found = await walk(join(REPO_ROOT, root))
+    perRoot[root] = found.length
+    files.push(...found)
+  }
   const perFile = await Promise.all(files.map(scanFile))
-  return perFile.flat()
+  return { offenders: perFile.flat(), perRoot }
 }
 
 /**
@@ -427,7 +431,22 @@ describe('codebase is English-only (no PT-BR)', () => {
   it(
     'packages source and tests carry no Portuguese',
     async () => {
-      expect(await collectOffenders()).toEqual([])
+      const { offenders, perRoot } = await collectOffenders()
+
+      // Non-vacuity floor, asserted BEFORE the result. Walking a directory that is
+      // not there is silent: `walk` returns [], every scan is skipped, and the gate
+      // reports clean over nothing. That is how this file's own history records the
+      // failure twice — it walked two roots that had been removed and still passed.
+      // The floor is a PROPERTY (every declared root contributed a file), not a
+      // frozen count, so it needs no edit when the tree legitimately grows.
+      for (const root of SCAN_ROOTS) {
+        expect(
+          perRoot[root],
+          `scan root "${root}" matched no file — the sweep is vacuous`,
+        ).toBeGreaterThan(0)
+      }
+
+      expect(offenders).toEqual([])
     },
     SWEEP_TIMEOUT_MS,
   )

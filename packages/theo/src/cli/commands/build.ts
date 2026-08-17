@@ -39,6 +39,12 @@ import { describeControllerArtifacts, emitControllerArtifacts } from './build/em
 // succeeds with crons declared, but emits a warning + skip note.
 const CRON_NA_TARGETS = new Set<BuildTarget>(['bun', 'netlify', 'static'])
 
+// DERIVED, never restated. A hand-written list here went stale and told users
+// that three working targets were unsupported: it named node/vercel/cloudflare
+// while aws-lambda, deno-deploy and theo-cloud also translate crons. Deriving
+// from the two constants means adding a target cannot desynchronise the message.
+const CRON_SUPPORTED_TARGETS = VALID_TARGETS.filter((t) => !CRON_NA_TARGETS.has(t))
+
 export async function buildCommand(options?: { target?: string }): Promise<void> {
   const cwd = process.cwd()
   // Preflight (FIRST — BEFORE anything that touches native bindings).
@@ -242,7 +248,7 @@ async function emitCronArtifacts(opts: {
   if (CRON_NA_TARGETS.has(opts.target)) {
     console.log(
       `  ⚠ Cron not supported by target "${opts.target}" — declared crons skipped. ` +
-        `Supported targets: node, vercel, cloudflare.`,
+        `Supported targets: ${CRON_SUPPORTED_TARGETS.join(', ')}.`,
     )
     return
   }

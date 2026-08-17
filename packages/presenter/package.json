@@ -25,7 +25,8 @@
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
   },
   "peerDependencies": {
     "@theokit/sdk": "^4.49.0",

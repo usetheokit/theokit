@@ -143,21 +143,16 @@ export default defineConfig({
         'packages/*/dist/**',
         // Pure type files — only `interface` / `type` declarations, no runtime.
         'packages/theo/src/server/plugin-types.ts',
-        'packages/theo/src/server/agent-types.ts',
         // DOM-only React portal — a unit test would only re-test react-dom.createPortal.
-        'packages/theo/src/devtools/shadow-portal.tsx',
+        'packages/theo/src/devtools/dom/shadow-portal.tsx',
         // DOM bootstrap — `createRoot()` + `document.body.appendChild`.
         // No unit coverage: it is a DOM bootstrap, and asserting on it would only re-test
         // `createRoot` + `appendChild`.
-        'packages/theo/src/devtools/entry.tsx',
+        'packages/theo/src/devtools/dom/entry.tsx',
         // React hook with fetch + ReadableStream — needs @testing-library/react
-        // + jsdom that the project does not currently set up. Wire protocol
-        // logic is covered by agent-stream-core.ts unit tests.
-        'packages/theo/src/client/use-agent-stream.ts',
-        // M2 — same rationale: React hook (fetch + ReadableStream) needs jsdom
-        // the project does not set up. The wire-protocol core is covered by
-        // consume-ui-message-stream.ts unit tests.
-        'packages/theo/src/client/use-agent.ts',
+        // + jsdom that the project does not currently set up. The wire-protocol
+        // core is covered by consume-ui-message-stream.ts unit tests.
+        'packages/agents/src/client/use-agent.ts',
         // create-theo standalone CLI scaffolder — interactive prompts +
         // child_process spawn. The existing exclude `packages/*/src/cli/**`
         // does not match these because create-theo's CLI sits in `src/`.

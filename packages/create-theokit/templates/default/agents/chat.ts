@@ -12,7 +12,7 @@ import { weatherTool } from './tools/weather.js'
  * agent; it composes its neighbours under `agents/`: the persona in `prompts/`, capabilities in `tools/`,
  * procedures in `skills/`. Those folders are that concern, NOT extra routes — the framework's scanner
  * treats `prompts/ tools/ skills/ lib/ …` as semantic folders, so `agents/tools/weather.ts` never becomes
- * a `/api/agents/tools/weather` endpoint. Add a second agent as another `agents/<name>.ts`. See
+ * a `/api/agents/tools/weather` endpoint. Add a second agent as another `agents/<name>.ts`.
  *
  * `@theokit/sdk` runs the agent; conversation turns auto-persist per session. Provider is resolved from
  * the environment — OPENROUTER_API_KEY (preferred) OR ANTHROPIC_API_KEY / OPENAI_API_KEY; the model id is

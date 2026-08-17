@@ -1,7 +1,5 @@
 /**
  * Webhook primitive types (R0.5.10).
- *
- * @
  */
 
 export type VerifyResult = { ok: true } | { ok: false; reason: string }

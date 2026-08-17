@@ -1,8 +1,5 @@
 /**
  * Job primitive types (R0.5.5-9).
- *
- * @
- * @
  */
 
 /**

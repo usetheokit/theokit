@@ -1,7 +1,5 @@
 /**
  * Cron primitive types (R0.5.4).
- *
- * @
  */
 
 export type CronConcurrencyPolicy = 'forbid' | 'allow'

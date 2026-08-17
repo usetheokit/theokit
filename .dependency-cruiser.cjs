@@ -14,13 +14,12 @@
  *      client↔server types and may be imported directly by any module.
  *   4. Every declared edge MUST be enforced here (this file is the gate).
  *
- * Module map (12 modules; 19 directed module-pair edges):
+ * Module map (11 modules; 18 directed module-pair edges):
  *   core           → (nothing intra-monorepo)
  *   config         → core
  *   cache          → core
  *   router         → core
- *   client         → core
- *   react-query    → client
+ *   client         → core          (includes the react-query adapter)
  *   adapters       → core, router, services
  *   devtools       → core
  *   services       → (nothing intra-monorepo)
@@ -91,10 +90,12 @@ module.exports = {
     mayOnlyDependOn('client-may-only-depend-on-core', '^packages/theo/src/client/', [
       'packages/theo/src/core/',
     ]),
-    mayOnlyDependOn('react-query-may-only-depend-on-client', '^packages/theo/src/react-query/', [
-      'packages/theo/src/client/',
-      'packages/theo/src/core/',
-    ]),
+    // `react-query` is no longer a module: it was absorbed into `client/` and now
+    // lives as client/react-query.ts + client/react-query-adapter.ts. The rule that
+    // named the old directory matched zero modules and reported green over an empty
+    // set — the silent-empty-scope failure this file exists to prevent. It is not
+    // restated for the new path because `client-may-only-depend-on-core` above
+    // already covers everything under client/, and does so more strictly.
     mayOnlyDependOn(
       'adapters-may-only-depend-on-core-router-services',
       '^packages/theo/src/adapters/',

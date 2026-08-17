@@ -144,14 +144,18 @@ export const Agent: AgentWithNarrowedList = AgentDoSdk
 // than a documented-partial one, because a consumer reads the claim and stops looking. That is how a
 // builder ends up rebuilding what already ships.
 //
-// The honest statement is: SOME capabilities cross, each by a decision.
-// decisions.mjs` records one per doorless subpath with the measurement behind it (how many of its
-// symbols already reach this layer's root), and `tests/integration/boundary-doorless-subpaths.test.ts`
-// fails when the SDK adds a subpath nobody has decided about — so the next hole arrives as a named
-// test failure instead of hiding behind a sentence.
+// The honest statement is: SOME capabilities cross, each by a decision recorded at its export site
+// below.
 //
-// `check-surface-parity.mjs` cannot cover this and says so itself: it compares subpaths both packages
-// publish under the same NAME, and a subpath with no door here has no name to compare.
+// AND THERE IS NO GATE. This comment used to name a decisions manifest, an integration test that
+// "fails when the SDK adds a subpath nobody has decided about", and a parity script. None of the
+// three is in the repository — so the next doorless subpath does NOT arrive as a named test failure.
+// It arrives when a consumer needs it and cannot reach it, which is the cost this boundary exists to
+// avoid. Naming absent machinery is worse than admitting the gap: a reader takes the claim and stops
+// checking, which is the same failure as the CLOSED sentence this note replaced.
+//
+// Closing it means enumerating the SDK's 32 published subpaths, recording a decision for each, and
+// failing on an undecided one. That is a milestone, not a comment.
 //  - `SubAgent` (a2a delegation primitive): `SubAgent.create()` is already OO; wrapping it adds nothing.
 //  - the path-safety helpers are pure functions — a class would be ceremony (parsimony-ladder Rung 5).
 export { SubAgent } from '@theokit/sdk/a2a'

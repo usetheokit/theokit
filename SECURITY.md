@@ -59,8 +59,9 @@ replaced.
 In scope:
 
 - `packages/theo/**` — the framework runtime
-- `packages/create-theo/**` — the scaffolding CLI
-- The official `templates/**` shipped with `npm create theokit`
+- `packages/agents/**`, `packages/http/**`, `packages/presenter/**` — the published layers
+- `packages/create-theokit/**` — the scaffolding CLI
+- The official `packages/create-theokit/templates/**` shipped with `npm create theokit`
 
 Out of scope:
 

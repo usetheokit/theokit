@@ -14,7 +14,7 @@
  * is the correct primitive.
  *
  * @see https://nodejs.org/api/crypto.html#cryptotimingsafeequala-b
- * @see https://developer.mozilla.org/en-US
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/verify
  */
 
 type NodeTimingSafeEqual = (a: Uint8Array, b: Uint8Array) => boolean

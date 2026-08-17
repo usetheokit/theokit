@@ -32,8 +32,11 @@ export default tseslint.config(
       '**/coverage/**',
       '**/test-results/**',
       // Study zone: clones of third-party projects, read to learn from and never edited. Linting
-      // them costs minutes and reports issues nobody here can fix.
-      'references/**',
+      // them costs minutes and reports issues nobody here can fix. The pattern is root-anchored,
+      // so it must name the real prefix: plain `references/**` matched a top-level directory that
+      // does not exist, and the ignore never fired.
+      'knowledge-base/references/**',
+      'knowledge-base/tools/**',
       'pnpm-lock.yaml',
       'examples/**/dist/**',
       'my-test/**',
@@ -48,18 +51,18 @@ export default tseslint.config(
       // code; linting them produces parser-only errors that do not
       // represent real issues in the shipping framework surface.
       'examples/**',
-      // http-decorators tests + config use experimentalDecorators tsconfig
-      // that the root parser projectService cannot resolve. Tests are
-      // covered by vitest; config files are trivial. Lint the src/ only.
-      'packages/http-decorators/tests/**',
-      // `packages/*/examples/**` and not `packages/http-decorators/examples/**`: the reason above
-      // holds for the examples of ANY package, and enumerating them one by one fails by omission —
-      // that is how `packages/http/examples/**` was left out and produced 3 PARSER errors
-      // (`was not found by the project service`), invisible until the lint started finishing again
-      // (agent-builder#119).
+      // `packages/*/examples/**` and not one entry per package: the reason above holds for the
+      // examples of ANY package, and enumerating them one by one fails by omission — that is how
+      // `packages/http/examples/**` was left out and produced 3 PARSER errors (`was not found by
+      // the project service`), invisible until the lint started finishing again (agent-builder#119).
       'packages/*/examples/**',
-      'packages/http-decorators/vitest.config.ts',
-      'packages/http-decorators/tsup.config.ts',
+      // Per-package build/test config: an experimentalDecorators tsconfig the root parser's
+      // projectService cannot resolve, and trivial either way.
+      //
+      // The package TESTS are deliberately NOT exempt. An old `packages/http-decorators/tests/**`
+      // entry stopped matching the day the package was renamed to `http`, so its 58 test files were
+      // being linted regardless — and measuring showed they lint clean. Re-adding the exemption
+      // under the new name would drop 58 files from the sweep for a reason that no longer holds.
       'packages/http/tsup.config.ts',
       'packages/agents/tsup.config.ts',
       'packages/presenter/tsup.config.ts',
@@ -401,7 +404,7 @@ export default tseslint.config(
   // M53: `packages/agents` is not on this list — it no longer uses reflect-metadata, so
   // the exemption had no reason to exist there.
   {
-    files: ['packages/http-decorators/src/**/*.ts', 'packages/http/src/**/*.ts'],
+    files: ['packages/http/src/**/*.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
@@ -423,12 +426,7 @@ export default tseslint.config(
   // debug prints out of business logic, which is irrelevant in a CLI
   // tool whose stdout/stderr is its user interface.
   {
-    files: [
-      'packages/theo/src/cli/**/*.ts',
-      'packages/create-theo/src/cli.ts',
-      'packages/create-theo/src/index.ts',
-      'packages/create-theokit/src/**/*.ts',
-    ],
+    files: ['packages/theo/src/cli/**/*.ts', 'packages/create-theokit/src/**/*.ts'],
     rules: {
       'no-console': 'off',
       // CLI reads JSON files (package.json, tsconfig.json) via JSON.parse

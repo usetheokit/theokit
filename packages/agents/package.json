@@ -99,7 +99,8 @@
     "build": "tsup",
     "test:live": "vitest run --config vitest.live.config.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
   },
   "peerDependencies": {
     "@theokit/http": ">=0.1.0-alpha.0",

@@ -6,7 +6,8 @@
   "license": "Apache-2.0",
   "scripts": {
     "build": "tsup",
-    "test": "echo 'theokit tests run from root: pnpm test'"
+    "test": "echo 'theokit tests run from root: pnpm test'",
+    "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
   },
   "bin": {
     "theokit": "./dist/cli/index.js"

@@ -91,7 +91,7 @@ export default defineConfig({
   openapi: {
     title: 'My App API',
     version: '1.0.0',
- outDir: '',
+    outDir: '.theokit',
   },
 })
 ```

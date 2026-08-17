@@ -4,7 +4,7 @@ import { Link } from 'theokit/client'
 /**
  * The primary navigation menu. Add one entry per screen you add under `app/` (a screen is a folder with a
  * `page.tsx` — `app/settings/page.tsx` → `/settings`). Uses TheoKit's `Link` (react-router's Link + route
- * prefetch on hover/focus) and computes the active route from `useLocation`. See
+ * prefetch on hover/focus) and computes the active route from `useLocation`.
  */
 const LINKS = [
   { to: '/', label: 'Chat', exact: true },

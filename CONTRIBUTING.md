@@ -15,12 +15,13 @@ the framework itself.
 git clone https://github.com/usetheodev/theokit.git
 cd theokit
 pnpm install
-pnpm try:scaffold        # generates examples/onda1-hello-theo
-pnpm --filter onda1-hello-theo dev
+pnpm try:scaffold        # scaffolds a throwaway app into my-test/
+cd my-test && pnpm dev
 ```
 
 If `pnpm try:scaffold` fails, you're missing a dependency or your Node
-version is too old. TheoKit targets Node 20+.
+version is too old. Every manifest declares `engines.node >= 22.12.0`, and the
+CLI refuses to run below it rather than failing later in an unrelated place.
 
 ## Local testing — before every PR
 

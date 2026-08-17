@@ -201,3 +201,41 @@ jobs:
       - run: pnpm validate:publint
       - run: pnpm validate:attw
       - run: npx vitest run tests/smoke/
+
+  # Supply chain. Both jobs were deleted in a cleanup pass and left no replacement — an advisory in
+  # a transitive dependency, or a copyleft package entering a tree that publishes to npm, was caught
+  # by nothing. Neither reimplements a tool: audit is pnpm's own, and the licence gate reads pnpm's
+  # report and applies a policy that lives in the repository.
+  dependency-audit:
+    name: Dependency audit (production, high+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      # `--prod` on purpose. A production advisory is inherited by every app built on the framework;
+      # a dev-tree one never reaches a consumer and, measured today, would make this job permanently
+      # red for findings nobody here can act on. A gate that is always red is a gate people learn to
+      # skip, which is worse than not having it. The dev tree is reported, not enforced.
+      - name: Production dependencies — no high or critical advisory
+        run: pnpm audit --prod --audit-level=high
+      - name: Full tree (reported, does not block)
+        if: always()
+        run: pnpm audit --audit-level=high || echo "::warning::dev-tree advisories above are reported, not enforced"
+
+  license-compliance:
+    name: License compliance (production tree)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:licenses

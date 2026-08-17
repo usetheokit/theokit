@@ -93,8 +93,11 @@ ONDAS.md
 my-test/
 
 # Read-only study zone: third-party clones, study-only and heavy. Ignored so a fresh checkout of
-# one stays untracked.
+# one stays untracked. BOTH halves are listed: reference-zone-not-tracked.test.ts asserts the rule
+# over both prefixes, and for months only the first was actually excluded — so `git add -A` after a
+# clone into the second would have staged every file of a third-party tree, licence included.
 knowledge-base/references/
+knowledge-base/tools/
 .gstack/
 architecture-output
 architecture-output.old-*

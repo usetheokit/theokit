@@ -17,7 +17,7 @@ import { useChatTranscript } from './hooks/use-transcript'
  * Add a SCREEN: routing is file-based — a screen is a folder under `app/` with a `page.tsx`
  * (`app/settings/page.tsx` → `/settings`; `app/users/[id]/page.tsx` → `/users/:id`). Run
  * `theokit generate page <name>`, then add a link in `app/components/Nav.tsx`. This route is `/` (see the
- * example `app/about/page.tsx` +.
+ * example `app/about/page.tsx`).
  */
 export default function Page() {
   const [composerValue, setComposerValue] = useState('')

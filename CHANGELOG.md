@@ -15,36 +15,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `trufflehog:ignore` comment, never by excluding a path — an excluded path would also hide a real
   secret added to that same fixture later. (secret-scanning-2026-08)
 
-### Changed
-
-- **The git history was rewritten end to end — every commit SHA changed.** Anyone holding a clone
-  must re-clone or reset onto the new history; a `git pull` will try to reconcile two unrelated
-  timelines. The working trees are untouched: the tree at every commit is byte-identical to before,
-  except the two that carried build-cache and tool-database artifacts, which were purged. All 150
-  tags were rewritten onto the new commits and still name the same trees. Commit messages are now
-  English throughout, no message names files the same commit deletes, and the `Co-authored-by`
-  trailers and `# Conflicts:` blocks are gone. A bundle of the pre-rewrite history is kept at
-  `~/theokit-pre-rewrite-4217579b.bundle`.
-- **`pnpm lint` runs `eslint .` directly.** The gate scripts it and its siblings wrapped no longer
-  ship, so `check:all` and `release` were narrowed to the checks that exist: build, lint, format,
-  typecheck, coverage and knip.
-- **Demo apps are no longer checked in.** A test that needs a whole app builds one in a temp
-  directory and tears it down afterwards, so a suite owns its own inputs.
-
-### Security
-
-- **There is no secret scanning in this repository** — neither in the pre-commit hook nor in CI. A
-  committed credential is caught only by human review or the provider's scanner.
-- **Dependency advisories and licences are not checked in CI.** No job inspects either.
-- **There is no browser coverage and no client bundle budget.** Rendering, hydration, the CSP nonce
-  and the WebSocket path have no automated end-to-end exercise, and no gate measures the size of the
-  client bundle.
-- **A published tarball is no longer inspected before release.** Nothing verifies that a package
-  ships without an unresolved workspace range — the failure that made twelve published versions
-  uninstallable.
-
-### Added
-
 - **`LivenessVerdict` passa a carregar o `cwd` do veredito.** `classifyProjects` **sonda** o caminho
   para decidir `alive` — ele o tem em mãos no instante em que retorna — e guardava só a razão em
   prosa. Isso tornava o veredito incapaz de substituir a função de onde foi absorvido: o GC do
@@ -57,6 +27,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   morto anula o propósito. `dead` reporta o cwd gravado que foi conferido e não estava lá.
   `undetermined` não estabeleceu caminho nenhum, então o campo é ausente — e não uma string vazia que
   o chamador possa confundir com um caminho.
+
+
+### Changed
+
+- **The git history was rewritten end to end — every commit SHA changed.** Anyone holding a clone
+  must re-clone or reset onto the new history; a `git pull` will try to reconcile two unrelated
+  timelines. The working trees are untouched: the tree at every commit is byte-identical to before,
+  except the two that carried build-cache and tool-database artifacts, which were purged. All 150
+  tags were rewritten onto the new commits and still name the same trees. Commit messages are now
+  English throughout, no message names files the same commit deletes, and the `Co-authored-by`
+  trailers and `# Conflicts:` blocks are gone. A bundle of the pre-rewrite history is kept at
+  `~/theokit-pre-rewrite-4217579b.bundle`.
+- **`pnpm lint` runs `eslint .` directly, and `check:all` is the checks that exist**: build, lint,
+  format, typecheck, coverage and knip. The scripts these once wrapped were declared in
+  `package.json` but never committed, so on a clean checkout every one of them failed to resolve.
+  The three that were worth keeping — the pack guard, the version-collision guard and the licence
+  gate — are now in the repository and wired back into `release` and `version-packages`.
+- **`pnpm typecheck` builds before it checks.** It was a bare `tsc --noEmit`, which needs
+  `packages/*/dist/*.d.ts` to exist; on a clean checkout it failed with seven `TS7016` errors
+  pointing at test files that are not wrong. CI already built first for exactly this reason, so the
+  local gate had been the weaker of the two while carrying the same name. `typecheck:fast` keeps the
+  bare form for a tight loop.
+- **Demo apps are no longer checked in.** A test that needs a whole app builds one in a temp
+  directory and tears it down afterwards, so a suite owns its own inputs.
+
+### Fixed
+
+- **A scaffolded project no longer crashes on its own OpenAPI example.** The config skill shipped
+  `outDir: ''`, which the schema accepts (`z.string()` with no minimum) and which then reaches
+  `mkdirSync('')` and throws a bare `ENOENT` naming no path. It now carries the schema's real
+  default, `.theokit`.
+- **The `theokit build` cron warning names every target that supports crons.** It listed three of
+  six, telling users of `aws-lambda`, `deno-deploy` and `theo-cloud` that a working target was
+  unsupported. The list is derived from the target constants rather than restated, so adding a
+  target cannot desynchronise it again.
+- **Published typings no longer carry broken JSDoc.** Six `@see` tags had been reduced to a bare
+  `@`, two pointed at a parenthetical instead of a target, and two URLs were truncated mid-path.
+  `createOpenApiHandler` documented the JSON spec default as `/api` while the code serves
+  `/api/docs/openapi.json` — a consumer wiring a client to the documented path got a 404.
+- **Four scaffold template files no longer ship sentences with no subject.** The generated
+  `CLAUDE.md` began a line with ` for safe-default permissions.`; three more ended on a dangling
+  `See`. These are the first files a new project's author reads.
+- **`pnpm install --frozen-lockfile` succeeds.** The lockfile still declared `ai` and
+  `@playwright/test`, which the root manifest had dropped, plus six importers for a directory that
+  no longer exists — so every CI job failed on its first step and nothing downstream ever ran.
+
+### Security
+
+- **Secret scanning covers both layers** — see the entry under Added.
+- **Dependency advisories are checked in CI again.** A `dependency-audit` job fails on a high or
+  critical advisory in the PRODUCTION tree; the dev tree is reported as a warning rather than
+  enforced, because its findings arrive transitively and a permanently red gate is one people learn
+  to skip.
+- **Licence compliance is checked in CI again.** The gate classifies a package with no `license`
+  field by reading the licence text its tarball actually ships, rather than allowlisting the name —
+  two production packages were in exactly that state, and one of them is ours.
+- **A published tarball is inspected before release again.** `prepublishOnly` on every publishable
+  package, and the release script, refuse a tarball carrying an unresolved `workspace:` range — the
+  failure that made twelve published versions uninstallable.
+- **A release refuses to reuse a version the registry already has.** `changeset publish` SKIPS such
+  a version and still exits 0, leaving a CHANGELOG entry and a tag asserting content that never
+  shipped.
+- **Four gates stopped certifying by absence.** A dependency rule scoped to a directory that had
+  moved, an ESLint ignore anchored to a path that does not exist, five coverage exclusions naming
+  files that had moved or been deleted, and a CI job named for a check whose steps had been removed
+  — each reported green over an empty set. The job now performs the check it is named for, and a new
+  test asserts that every concrete path a gate's configuration names still resolves.
 
 ## [@theokit/agents 10.0.0] - 2026-08-16
 

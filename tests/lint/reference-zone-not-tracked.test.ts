@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
  *
  * ## The rule, and the state that contradicted it
  *
- * base/references/**` and
+ * `reference-provenance.md` § 1 says `knowledge-base/references/**` and
  * `knowledge-base/tools/**` are "never versioned — `.gitignore` excludes both". `.gitignore` does
  * exclude them. But **ten of those paths were already tracked as submodule gitlinks** (mode
  * `160000`), and `.gitignore` has no effect on an entry that is already in the index.

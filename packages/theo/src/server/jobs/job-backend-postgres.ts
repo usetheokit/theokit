@@ -21,7 +21,6 @@ import type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
  * deadlocking. Suggested pool size: `min(workerConcurrency * 1.5, 20)`.
  *
  * @see https://github.com/graphile/worker (Postgres SKIP LOCKED reference)
- * @
  */
 
 /**

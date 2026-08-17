@@ -107,3 +107,52 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: TURBO_CONCURRENCY=1 pnpm --filter "./packages/*" build
       - run: pnpm --filter @theokit/presenter test
+      # The check this job is NAMED for. It was absent: the job installed, built and ran the
+      # presenter's tests, and nothing inspected a built surface for the ai-sdk — so it certified by
+      # absence of execution, which is worse than having no job at all.
+      #
+      # The floor is the other half. A scan that finds no dist/ reports "0 files import ai" and
+      # passes, which is exactly the shape being fixed; so an empty scan FAILS instead.
+      - name: no published package carries the ai-sdk
+        run: |
+          node --input-type=module -e '
+            import { readdirSync, statSync, readFileSync } from "node:fs"
+            import { join } from "node:path"
+
+            const IMPORTS_AI = /(?:from\s*|require\(\s*)["\x27]ai["\x27]/
+            const walk = (dir) =>
+              readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+                const p = join(dir, e.name)
+                return e.isDirectory() ? walk(p) : /\.(?:js|mjs|cjs|d\.ts)$/.test(e.name) ? [p] : []
+              })
+
+            const pkgs = readdirSync("packages", { withFileTypes: true })
+              .filter((e) => e.isDirectory())
+              .map((e) => join("packages", e.name))
+              .filter((p) => { try { return statSync(join(p, "dist")).isDirectory() } catch { return false } })
+
+            if (pkgs.length === 0) {
+              console.error("no packages/*/dist found — the build did not run, so this gate measured nothing")
+              process.exit(1)
+            }
+
+            let scanned = 0
+            const offenders = []
+            for (const p of pkgs) {
+              for (const f of walk(join(p, "dist"))) {
+                scanned++
+                if (IMPORTS_AI.test(readFileSync(f, "utf8"))) offenders.push(f)
+              }
+            }
+            if (scanned === 0) {
+              console.error("scanned 0 files across " + pkgs.length + " dist directories — vacuous")
+              process.exit(1)
+            }
+            console.log("scanned " + scanned + " built files across " + pkgs.length + " packages")
+            if (offenders.length > 0) {
+              console.error("published surface imports the ai-sdk:")
+              for (const o of offenders) console.error("  " + o)
+              process.exit(1)
+            }
+            console.log("no published package carries the ai-sdk")
+          '

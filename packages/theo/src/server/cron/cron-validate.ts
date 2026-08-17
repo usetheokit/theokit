@@ -17,8 +17,6 @@ import { CronExpressionParser } from 'cron-parser'
  *
  * Throws on every invalid input. Every error message includes the
  * original input and the fix.
- *
- * @
  */
 export function validateCronSchedule(schedule: string): void {
   if (typeof schedule !== 'string') {

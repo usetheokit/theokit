@@ -1,8 +1,6 @@
 /**
  * Cost tracking types (R0.5.11).
  *
- * @see (mirror pattern)
- *
  * Phase 5 — Production-Readiness #4: adds `ToolUsageRecord` for per-tool
  * latency / error tracking via SDK's onToolStart/onToolEnd/onToolError hooks.
  * Same UsageStorageAdapter handles both via discriminated union.
