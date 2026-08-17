@@ -1,5 +1,43 @@
 # theo
 
+## 0.48.6
+
+### Patch Changes
+
+- Head hoisting now also applies to `theokit start`, not just the dev server. 0.48.5 fixed the dev
+  middleware alone, so a production build still shipped each route's metadata inside the body —
+  previews worked while developing and silently did not in the deploy, which is worse than not
+  working at all. (usetheokit/theokit#319)
+
+## 0.48.5
+
+### Patch Changes
+
+- A hyphenated agent name no longer generates code that cannot be parsed. `agents/ask-theo.ts` is
+  named `ask-theo`, and the exported binding was emitted verbatim as `export const ask-theo` —
+  breaking the generated `.theokit/agents.d.ts` and the virtual `@theo/agents` runtime module.
+  Names now become camelCase identifiers (`askTheo`) while the route keeps its kebab form.
+  (usetheokit/theokit#318)
+
+- `ssr: true` hydrates again in development. The nonce for the CSP is now minted before
+  `transformIndexHtml` and stamped onto the inline scripts it injects, so Vite's React refresh
+  preamble is no longer blocked. Previously the page rendered and never hydrated, with a console
+  error that blamed Vite. (usetheokit/theokit#319)
+
+- A route's `<title>`, `<meta>` and `<link>` now reach the served `<head>` under SSR, on both the
+  dev server and `theokit start`. React only hoists them in the browser after hydration, so they
+  used to ship inside the body — invisible to every crawler that does not run JavaScript, which is
+  every social-media unfurler. (usetheokit/theokit#319)
+
+- `ui.theme` accepts the themes `@theokit/ui` actually ships. It was a closed enum of
+  `violet-forge | noir | paper`, two of which never existed, so the only accepted value was the
+  default and every real theme name was rejected.
+
+## 0.48.4
+
+Broken publish — shipped unresolved pnpm `workspace:` ranges and is uninstallable through npm.
+Deprecated on the registry; use 0.48.5.
+
 ## 0.48.3
 
 ### Patch Changes
