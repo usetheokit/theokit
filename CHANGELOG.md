@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **Adotar `shouldAutoApprove` do framework alargaria, em silêncio, um gate de aprovação humana.**
+  `WRITE_SCOPED_TOOLS` nomeia três ferramentas (`apply_patch`, `edit_file`, `write_file`) e era o
+  **default** do modo `auto-edit`. O único consumidor real auto-aprova **uma** (`apply_patch`) e
+  registra duas (`chat.ts:272-273` registra também `edit_file`) — então deletar a cópia duplicada e
+  importar do framework faria `edit_file`, uma ferramenta viva e chamável pelo modelo, **parar de
+  exigir um humano**, como efeito colateral de remover duplicação.
+
+  A causa é conflar duas perguntas: *"esta ferramenta limita a própria escrita?"* é um **fato** sobre
+  as factories do SDK, e o framework pode respondê-lo; *"esta ferramenta pode rodar sem perguntar?"*
+  é **política do produto**, e o framework não sabe quais ferramentas o produto registrou nem sob
+  que nomes. `auto-edit` sem conjunto declarado agora **não aprova nada** — a mesma forma B-006 que
+  o módulo já aplica a postura de sandbox ("ausência de evidência não é evidência de confinamento"),
+  aplicada a nomes. `WRITE_SCOPED_TOOLS` continua exportado como catálogo, para o produto que quiser
+  passá-lo; passar é uma decisão, não uma herança.
+
+  `WRITE_SCOPED_TOOLS` também virou imutável de fato, não só no tipo. `ReadonlySet` some em runtime,
+  e um `as Set<string>` num gate de aprovação alcançável por todo consumidor do pacote alargaria o
+  que auto-aprova em todo lugar, sem diff no módulo dono da regra. `Object.freeze` sozinho não
+  resolve — um `Set` guarda as entradas em slots internos, então congelar deixa `add` funcionando;
+  os mutadores precisam ser substituídos.
+
 ### Added
 
 - **`LivenessBudgetError` (`@theokit/agents/session`) — o orçamento agora tem que de fato limitar.**
