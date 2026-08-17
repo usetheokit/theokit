@@ -1,1 +1,0 @@
-# quality-init tests
