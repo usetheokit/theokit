@@ -19,9 +19,6 @@ on:
       - '.ls-lint.yml'
       - '.claude/rules/architecture.md'
       - 'packages/*/package.json'
-      - 'scripts/check-package-direction.mjs'
-      - 'scripts/check-auth-parity.mjs'
-      - 'scripts/check-sandbox-parity.mjs'
       # M91 — a suíte do pacote inteiro, não só dois entries.
       #
       # O job `auth-parity` roda `pnpm --filter @theokit/agents test`, e o comentário dele já dizia
@@ -39,9 +36,6 @@ on:
       - '.ls-lint.yml'
       - '.claude/rules/architecture.md'
       - 'packages/*/package.json'
-      - 'scripts/check-package-direction.mjs'
-      - 'scripts/check-auth-parity.mjs'
-      - 'scripts/check-sandbox-parity.mjs'
       # M91 — a suíte do pacote inteiro, não só dois entries.
       #
       # O job `auth-parity` roda `pnpm --filter @theokit/agents test`, e o comentário dele já dizia
@@ -53,18 +47,11 @@ on:
       - 'packages/agents/tests/**'
 
 jobs:
-  direction:
-    name: dependency direction (libs never depend on principal theokit — ADR 0030)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      # Pure package.json scan — no install / no cross-repo sibling needed.
-      - run: node scripts/check-package-direction.mjs
+  # The `direction` job (ADR 0030 — no lib depends on the principal `theokit`) lived here and was
+  # REMOVED along with `scripts/check-package-direction.mjs`, which was the entire gate. Dependency
+  # direction between the packages is no longer checked automatically.
 
-  auth-parity:
+  agents-surface:
     name: surface parity (a camada enriquece o SDK, nunca reduz — M73)
     runs-on: ubuntu-latest
     steps:
@@ -74,10 +61,12 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # Precisa do install: o gate le a superficie REAL do @theokit/sdk instalado e a compara com
-      # o que `packages/agents/src/auth-entry.ts` re-exporta. Sem install nao ha o que comparar.
       - run: pnpm install --frozen-lockfile
-      - run: node scripts/check-auth-parity.mjs
+      # The `check-auth-parity.mjs` step left this job. It compared the REAL surface of the
+      # installed @theokit/sdk against what `packages/agents/src/auth-entry.ts` re-exports — and it
+      # was already broken before this cleanup: the file was absent from `scripts/` since before
+      # 33ac7024, so the job failed here without ever measuring parity. What remains below (build +
+      # the package's suite) is what actually runs.
       # O gate de superficie do M90 (`tests/unit/subpath-surface.test.ts`) le `dist/*.d.ts`, e nao o
       # fonte, porque o `.d.ts` e o artefato que o consumidor realmente ve. Sem build ele morre em
       # ENOENT e o job inteiro reprova sem nunca medir nada — foi o que aconteceu em TODO run desde
@@ -89,23 +78,10 @@ jobs:
       # cobre `tests/**` — sem isto ele nunca rodaria em CI.
       - run: pnpm --filter @theokit/agents test
 
-  sandbox-parity:
-    name: sandbox parity (todo simbolo publico tem decisao escrita — M75)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      # O gate le a FONTE DE AUTORIA do SDK (o irmao clonado), nao o link de workspace: na primeira
-      # execucao o link resolvia para uma copia 2 minors atrasada e o gate acusou 18 "decisoes orfas"
-      # que nao eram orfas. Clonar o irmao antes e o que torna a leitura correta aqui tambem.
-      - name: Checkout sibling theokit-sdk (a fonte de autoria)
-        run: git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
-      - run: pnpm install --frozen-lockfile
-      - run: node scripts/check-sandbox-parity.mjs
+  # The `sandbox-parity` job (M75 — every public symbol has a written decision) lived here and was
+  # REMOVED along with `scripts/check-sandbox-parity.mjs` and `scripts/lib/boundary-decisions.mjs`.
+  # The boundary decisions are still written down, but nothing checks any more whether a new public
+  # symbol was added without one.
 
   dep-cruiser:
     name: dependency-cruiser (architecture rules)
@@ -152,11 +128,10 @@ jobs:
       # `--ignore-scripts`: este job so builda e roda dois scripts de inspecao; nenhum
       # lifecycle e necessario, e permiti-los amplia a superficie de supply chain a toa.
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      # Os dois gates leem `dist/`. `check-ai-free-surface` FALHA quando ele nao existe, de
-      # proposito — sem o artefato ele nao mede nada, e um gate que nao mede nao pode reportar
-      # sucesso. E a mesma licao que deixou `surface parity` vermelho por semanas.
       - run: TURBO_CONCURRENCY=1 pnpm --filter "./packages/*" build
-      - run: pnpm check:ai-free
-      - run: pnpm check:wire-parity
-      # O oraculo diferencial: prova que o espelho reproduz o `ai` variante por variante.
+      # `pnpm check:ai-free` and `pnpm check:wire-parity` ran here and left with
+      # `scripts/check-ai-free-surface.mjs` and `scripts/check-wire-parity.mjs`. They were the two
+      # gates that read `dist/` to prove no published package carries the ai-sdk and that the wire
+      # mirror has not drifted from the `ai` union. The differential oracle below — the presenter's
+      # suite — is what is left: it covers the second property, not the first.
       - run: pnpm --filter @theokit/presenter test

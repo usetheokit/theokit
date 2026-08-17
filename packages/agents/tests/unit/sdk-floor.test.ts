@@ -183,11 +183,12 @@ describe('M67 T1 — the range parser refuses what it does not understand', () =
 describe('M67 T1 — the @theokit/sdk floor', () => {
   it('test_the_gate_discovers_every_workspace_member_not_a_hardcoded_list', () => {
     // The scope of this gate must be the WORKSPACE, not a list someone remembered to update.
-    // Both misses of the first version live here as regression anchors: the repo root and a fixture.
+    // The anchor left is the one that matters and that the first version missed: the ROOT manifest,
+    // which resolved 4.40.0 while `packages/*` resolved 4.51.1. The second anchor was
+    // `fixtures/template-default/package.json`, which left the workspace along with `fixtures/`.
     const discovered = workspaceManifests()
     expect(discovered).toContain('package.json')
     expect(discovered).toContain('packages/agents/package.json')
-    expect(discovered).toContain('fixtures/template-default/package.json')
     expect(manifestsDeclaringSdk().length).toBeGreaterThanOrEqual(3)
   })
 
