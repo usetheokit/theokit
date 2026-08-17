@@ -129,3 +129,7 @@ __pycache__/
 # Generated typecheck pre-flight records (gate documented at wiki/gates/typecheck-pre-flight.md)
 .audit/
 halt-loop-prompts/
+
+# loop-clear-project plugin output (analysis DB + report — not project source)
+clear-project-output/
+.claude/clear-project-loop.local.md

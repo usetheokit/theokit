@@ -121,6 +121,7 @@ What each milestone actually shipped.
 * [Milestone M56: remove every backward-compatibility concession from M55](milestones/m56-no-backcompat-concessions.md) - Reverting the six compatibility concessions M55 accepted, and the dependency cleanup that came with it.
 * [Milestone M7: run-context dependency injection for tools](milestones/m7-run-context.md) - A shared typed run-context set at the agent and injected into every tool handler.
 * [Milestone M8: fluent agent builder with type-state](milestones/m8-fluent-builder.md) - A composable agent builder that accumulates type-state so an unsatisfied requirement fails at compile time.
+* [v3 deletion ledger](v3-deletion-ledger.md) - One line per absorbed primitive, with the LOC deleted in the consumer and the milestone that delivered it — the measured evidence that v3 was worth doing.
 
 # Releases
 Cut releases and what they closed.
