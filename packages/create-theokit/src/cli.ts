@@ -16,10 +16,11 @@ import { assertNodeVersion } from './preflight-node.js'
 import { runPrompts, getDefaults, type ProjectOptions } from './prompts.js'
 import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
 import { applySurface, parseSurfaceFlags, type SurfaceKind } from './scaffold-surface.js'
+import { CLI_VERSION } from './version.js'
 
 import { scaffold } from './index.js'
 
-const VERSION = '0.8.0'
+const VERSION = CLI_VERSION
 
 function getFlag(args: string[], name: string): string | undefined {
   const flag = args.find((a) => a.startsWith(`--${name}=`))
