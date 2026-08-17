@@ -21,7 +21,10 @@ connected the need to the symbol. This page is the missing connection.
 - **Symbol** — what to import. Every symbol here resolves in the published `.d.ts`; a row citing a
   symbol that does not exist is a defect, and `tests/integration/crossval-gaps.test.ts` fails on it.
 - **Import from** — the subpath. The package barrel is not the API.
-- **Landed** — the version a consumer needs at minimum.
+- **Landed** — the version a consumer needs at minimum. `unreleased` means the symbol exists and is
+  tested on `workspace` but no published version carries it yet; it is listed anyway because the
+  measured failure this page exists to prevent is someone rebuilding a capability that already
+  exists, and "exists but you cannot find it" and "does not exist" cost a builder the same.
 
 ## Agent runtime and composition
 
@@ -59,6 +62,12 @@ connected the need to the symbol. This page is the missing connection.
 | Refuse a retention knob below its floor | `GCFloorError` | `@theokit/agents/session` | 8.x |
 | See what a GC run would delete before it deletes it | `GCCandidate` | `@theokit/agents/session` | 8.x |
 | Know which transcripts must never be collected | `protectedTranscripts` | `@theokit/agents/session` | 8.x |
+| Decide whether a project directory is still in use, before deleting its transcripts | `classifyProjects` | `@theokit/agents/session` | unreleased |
+| Refuse a search budget that cannot bound anything | `LivenessBudgetError` | `@theokit/agents/session` | unreleased |
+| Delete one session, registry half included | `deleteSession` | `@theokit/agents/session` | unreleased |
+| Refuse to delete a session another process is using | `SessionInUseError` | `@theokit/agents/session` | unreleased |
+| Record where a project directory came from, so it can be found again | `recordProjectDir` | `@theokit/agents/persistence` | unreleased |
+| Resolve a project's directory from its path | `resolveProjectDir` | `@theokit/agents/persistence` | unreleased |
 
 ## Human in the loop
 
@@ -67,6 +76,9 @@ connected the need to the symbol. This page is the missing connection.
 | Let the agent ask the operator a question and settle it safely | `createAskBridge` | `@theokit/agents/ask` | 8.x |
 | Track questions awaiting an answer without double-settling | `createPendingLedger` | `@theokit/agents/ask` | 8.x |
 | Refuse to run a repo hook whose command changed after approval | `hookFingerprint` | `@theokit/agents/hooks` | 8.2.0 |
+| Decide whether a gated tool may run without asking, per approval mode | `shouldAutoApprove` | `@theokit/agents/bridge` | unreleased |
+| Name the three approval modes a coding agent offers | `APPROVAL_MODES` | `@theokit/agents/bridge` | unreleased |
+| Know which SDK tools bound their own writes (a catalog — *not* an auto-approve policy) | `WRITE_SCOPED_TOOLS` | `@theokit/agents/bridge` | unreleased |
 
 ## Errors
 
