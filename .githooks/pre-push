@@ -29,7 +29,7 @@ fi
 node_version="$(node --version 2>/dev/null || echo "v0.0.0")"
 node_major="$(echo "$node_version" | sed -E 's/^v([0-9]+)\..*/\1/')"
 if [ "${node_major:-0}" -lt 22 ]; then
-  echo "✗ pre-push: Node ${node_version} detected, but >=v22.12.0 is required (see engines + CLAUDE.md)."
+  echo "✗ pre-push: Node ${node_version} detected, but >=v22.12.0 is required (see engines)."
   echo "  Run: nvm use   (respects .nvmrc)"
   exit 1
 fi

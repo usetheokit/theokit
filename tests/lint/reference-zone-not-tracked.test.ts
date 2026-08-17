@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest'
  * preference.
  */
 
-const ZONE_PREFIXES = ['.claude/knowledge-base/references/', '.claude/knowledge-base/tools/']
+const ZONE_PREFIXES = ['knowledge-base/references/', 'knowledge-base/tools/']
 
 /** Every tracked path, with its index mode. */
 function trackedEntries(): { mode: string; path: string }[] {
