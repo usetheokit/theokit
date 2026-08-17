@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before opening: check the [roadmap in CLAUDE.md](https://github.com/usetheodev/theokit/blob/main/CLAUDE.md) and existing feature-request issues.
+        Before opening: check the [feature backlog](https://github.com/usetheodev/theokit/blob/main/wiki/agents/feature-backlog.md) and existing feature-request issues.
         If your proposal would change the framework's scope ("the app the agent lives in"), open a discussion instead.
   - type: textarea
     id: problem

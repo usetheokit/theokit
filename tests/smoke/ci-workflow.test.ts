@@ -112,13 +112,12 @@ describe('CI Workflow', () => {
     expect(hasPublint).toBe(true)
   })
 
-  it('should have e2e job with playwright install', () => {
+  // `should have e2e job with playwright install` was REMOVED: the `e2e` job left `ci.yml` with
+  // `fixtures/`, which was where its Playwright harness got the apps it booted. Asserting the job
+  // is present would now pin a job that cannot exist.
+  it('should NOT declare an e2e job while there is no browser harness', () => {
     const workflow = loadWorkflow('ci.yml')
-    const steps = workflow.jobs.e2e.steps
-    const hasPlaywright = steps.some((s: Record<string, string>) =>
-      s.run?.includes('playwright install'),
-    )
-    expect(hasPlaywright).toBe(true)
+    expect(workflow.jobs.e2e).toBeUndefined()
   })
 })
 
