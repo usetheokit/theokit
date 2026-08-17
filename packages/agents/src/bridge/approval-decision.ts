@@ -45,18 +45,51 @@ export type ApprovalMode = (typeof APPROVAL_MODES)[number]
 /**
  * Tools whose writes are bounded by their own write root rather than by the kernel.
  *
- * The names are the SDK factories' defaults (`apply-patch.ts:51`, `edit-file.ts:155`,
- * `write-file.ts:86`), not a list invented here — a product that re-names them with `withName`
- * passes its own set rather than losing the behaviour silently.
+ * A CATALOG, not a policy. The names are the SDK factories' defaults (`apply-patch.ts:51`,
+ * `edit-file.ts:155`, `write-file.ts:86`), so this answers "does this tool confine its own writes?"
+ * — a fact about the SDK. It does NOT answer "may this tool run without asking a human?", which is
+ * the product's to decide and is why {@link shouldAutoApprove} does not read this by default. See
+ * the `auto-edit` branch there for what conflating the two cost.
+ *
+ * Genuinely immutable, not merely typed that way. `ReadonlySet` is erased at runtime, and one
+ * `as Set<string>` on an approval gate reachable from every consumer of this package would widen
+ * what auto-approves everywhere, with no diff in the module that owns the rule. `Object.freeze`
+ * alone does not do it: a Set keeps its entries in internal slots rather than own properties, so
+ * freezing leaves `add` fully functional — the mutators have to be replaced.
  */
-export const WRITE_SCOPED_TOOLS: ReadonlySet<string> = new Set([
+export const WRITE_SCOPED_TOOLS: ReadonlySet<string> = immutableSet([
   'apply_patch',
   'edit_file',
   'write_file',
 ])
 
+/** A `Set` whose mutators throw rather than a `Set` we promise not to mutate. */
+function immutableSet(values: readonly string[]): ReadonlySet<string> {
+  const set = new Set(values)
+  const refuse = (op: string) => () => {
+    throw new TypeError(
+      `${op} on an immutable set: this is an approval catalog, and widening it at runtime would ` +
+        `change what auto-approves for every consumer of this package. Pass your own set via ` +
+        `\`writeScopedTools\` instead.`,
+    )
+  }
+  return Object.freeze(
+    Object.assign(set, {
+      add: refuse('add'),
+      delete: refuse('delete'),
+      clear: refuse('clear'),
+    }),
+  )
+}
+
 export interface ShouldAutoApproveOptions {
-  /** Overrides {@link WRITE_SCOPED_TOOLS} for a product that re-named its write tools. */
+  /**
+   * Which tools this PRODUCT lets run without asking, in `auto-edit`.
+   *
+   * Required in practice: absent, `auto-edit` approves nothing. {@link WRITE_SCOPED_TOOLS} is
+   * available for a product that wants every write-scoped tool, but passing it is a decision the
+   * product makes, not a default it inherits.
+   */
   writeScopedTools?: ReadonlySet<string>
 }
 
@@ -82,7 +115,15 @@ export function shouldAutoApprove(
     case 'auto-edit':
       // No posture needed: the bound is the tool's write root, and the user opted into edits
       // specifically. An unknown name is refused — the B-006 shape applied to names.
-      return (options?.writeScopedTools ?? WRITE_SCOPED_TOOLS).has(toolName)
+      //
+      // An ABSENT set refuses everything, and that is the same shape one level up. Defaulting to
+      // WRITE_SCOPED_TOOLS made the framework decide a policy it cannot know: which tools the
+      // product registered, and under what names. Measured on the only real consumer — it registers
+      // `apply_patch` AND `edit_file` (`chat.ts:272-273`) while auto-approving only the first, so
+      // inheriting this default would have stopped a live, model-callable write tool from requiring
+      // a human, as a side effect of deleting duplicated code. A product states its set; silence
+      // asks.
+      return options?.writeScopedTools?.has(toolName) ?? false
     case 'full-auto':
       // The one place the sandbox's own report is the deciding evidence.
       return posture?.enforced === true
