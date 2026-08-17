@@ -16,6 +16,7 @@ import { type ReservedRoutes, serveReservedRoute } from '../../../server/define/
 import { sendError } from '../../../server/http/send-response.js'
 import { buildSecurityHeaders } from '../../../server/security/security-headers.js'
 import { extractHeadTags, injectIntoHead } from '../../../vite-plugin/hoist-head-tags.js'
+import { applyNonceToInlineScripts } from '../../../vite-plugin/ssr-dev-middleware.js'
 
 import {
   tryServeAction,
@@ -106,9 +107,19 @@ function send500(res: ServerResponse, custom500Html: string | null): void {
  * The dev middleware does the same thing; both paths have to, or previews work in one and not the
  * other, which is worse than neither.
  */
-function withHoistedHead(htmlHead: string, ssrHtml: string): { head: string; body: string } {
+export function withHoistedHead(
+  htmlHead: string,
+  ssrHtml: string,
+  nonce: string,
+): { head: string; body: string } {
   const { html, headTags } = extractHeadTags(ssrHtml)
-  return { head: injectIntoHead(htmlHead, headTags), body: html }
+
+  // The nonce is stamped onto the template's own inline scripts here, per request, because the
+  // nonce differs per request while `ctx.htmlHead` is computed once at startup. Without it, a CSP
+  // with a nonce blocks anything the template inlines — including the theme-init script that
+  // applications put in `<head>` specifically to avoid a flash of the wrong theme on load.
+  const head = applyNonceToInlineScripts(injectIntoHead(htmlHead, headTags), nonce)
+  return { head, body: html }
 }
 
 function buildSsrHtml(
@@ -117,7 +128,7 @@ function buildSsrHtml(
   nonce: string,
 ): string {
   if (typeof result === 'string') {
-    const { head, body } = withHoistedHead(ctx.htmlHead, result)
+    const { head, body } = withHoistedHead(ctx.htmlHead, result, nonce)
     return head + body + ctx.htmlTail
   }
   if (isSsrRenderResult(result)) {
@@ -126,10 +137,10 @@ function buildSsrHtml(
     const hydrationScript = `<script${
       nonce ? ` nonce="${nonce}"` : ''
     }>window.__staticRouterHydrationData=${dataJson}</script>`
-    const { head, body } = withHoistedHead(ctx.htmlHead, rendered.html)
+    const { head, body } = withHoistedHead(ctx.htmlHead, rendered.html, nonce)
     return head + body + hydrationScript + ctx.htmlTail
   }
-  return ctx.htmlHead + ctx.htmlTail
+  return applyNonceToInlineScripts(ctx.htmlHead, nonce) + ctx.htmlTail
 }
 
 async function handleSsrStreaming(

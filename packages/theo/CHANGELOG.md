@@ -1,5 +1,19 @@
 # theo
 
+## 0.48.8
+
+### Patch Changes
+
+- Inline scripts written into `index.html` now receive the per-request CSP nonce in production, not
+  only in dev. The nonce differs per request while the head half of the template is computed once at
+  startup, so production was serving the template's scripts unstamped and a nonce-based CSP blocked
+  them.
+
+  The visible cost fell on the standard cure for a flash of the wrong theme on load: a small
+  synchronous script in `<head>` that sets the theme attribute before the first paint. Blocked, the
+  page painted with the default palette and repainted once React hydrated — a white flash on every
+  reload of a dark-themed site, in production only.
+
 ## 0.48.7
 
 ### Patch Changes
