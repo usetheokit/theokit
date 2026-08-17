@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **The git history was rewritten end to end — every commit SHA changed.** Anyone holding a clone
+  must re-clone or reset onto the new history; a `git pull` will try to reconcile two unrelated
+  timelines. The working trees are untouched: the tree at every commit is byte-identical to before,
+  except the two that carried build-cache and tool-database artifacts, which were purged. All 150
+  tags were rewritten onto the new commits and still name the same trees. Commit messages are now
+  English throughout, no message names files the same commit deletes, and the `Co-authored-by`
+  trailers and `# Conflicts:` blocks are gone. A bundle of the pre-rewrite history is kept at
+  `~/theokit-pre-rewrite-4217579b.bundle`.
 - **`pnpm lint` runs `eslint .` directly.** The gate scripts it and its siblings wrapped no longer
   ship, so `check:all` and `release` were narrowed to the checks that exist: build, lint, format,
   typecheck, coverage and knip.
