@@ -7,6 +7,8 @@
 
 import type { ServerResponse } from 'node:http'
 
+import { findRootDiv } from '../../../core/contracts/find-root-div.js'
+
 import { resolveSsrEntry } from './bootstrap-stages.js'
 
 export interface SsrRenderResult {
@@ -81,11 +83,10 @@ export async function setupSsr(opts: {
   // Split HTML template on root div
   let htmlHead = ''
   let htmlTail = ''
-  const rootDivMatch = /<div id=["']root["'][^>]*>/.exec(opts.indexHtml)
-  if (rootDivMatch) {
-    const splitIdx = opts.indexHtml.indexOf(rootDivMatch[0]) + rootDivMatch[0].length
-    htmlHead = opts.indexHtml.slice(0, splitIdx)
-    htmlTail = opts.indexHtml.slice(splitIdx)
+  const rootDiv = findRootDiv(opts.indexHtml)
+  if (rootDiv) {
+    htmlHead = opts.indexHtml.slice(0, rootDiv.insertAt)
+    htmlTail = opts.indexHtml.slice(rootDiv.insertAt)
   }
 
   return { enabled, streamingEnabled, render, renderStreaming, htmlHead, htmlTail }

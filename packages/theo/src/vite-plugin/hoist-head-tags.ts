@@ -127,5 +127,17 @@ export function hoistHeadTags(
   ssrHtml: string,
 ): { template: string; html: string } {
   const { html, headTags } = extractHeadTags(ssrHtml)
-  return { template: injectIntoHead(template, headTags), html }
+  const hoisted = injectIntoHead(template, headTags)
+
+  // Fail SAFE, not silent. `injectIntoHead` returns the template untouched when it finds no
+  // `</head>` — and if we returned the stripped body alongside it, the metadata would be removed
+  // from one place and added to neither. It would vanish, with nothing to show for it.
+  //
+  // That is not hypothetical: a template whose COMMENT mentioned `<div id="root">` split at the
+  // comment, leaving a "head" half with no `</head>` in it, and every route silently lost its
+  // title and canonical. Metadata in the wrong place still works after hydration; metadata that is
+  // gone never comes back.
+  if (hoisted === template) return { template, html: ssrHtml }
+
+  return { template: hoisted, html }
 }

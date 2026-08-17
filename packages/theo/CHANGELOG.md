@@ -1,5 +1,19 @@
 # theo
 
+## 0.48.7
+
+### Patch Changes
+
+- The template is no longer split at a `<div id="root">` that appears inside an HTML COMMENT. A
+  comment that merely documents the mount point moved the split before `</head>`, so the "head"
+  half held no `</head>`, head injection quietly did nothing, and every rendered page lost its
+  metadata with no error anywhere. All three split sites (dev middleware, `theokit start`, the
+  static adapter) now share `findRootDiv`, which masks comments first.
+
+- Head hoisting now fails safe. When the metadata cannot be injected into the head, it stays in the
+  body instead of being stripped from one place and added to neither — misplaced tags still work
+  after hydration, deleted ones never do.
+
 ## 0.48.6
 
 ### Patch Changes

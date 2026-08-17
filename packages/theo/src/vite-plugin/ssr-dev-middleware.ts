@@ -19,6 +19,7 @@ import { resolve } from 'node:path'
 
 import type { ViteDevServer } from 'vite'
 
+import { findRootDiv } from '../core/contracts/find-root-div.js'
 import {
   applySecurityHeaders,
   generateNonce,
@@ -154,14 +155,14 @@ export function setupSsrDevMiddleware(server: ViteDevServer, opts: SsrDevMiddlew
         template = hoisted.template
         ssrHtml = hoisted.html
 
-        const rootDivMatch = /<div id=["']root["'][^>]*>/.exec(template)
-        if (!rootDivMatch) {
+        const rootDiv = findRootDiv(template)
+        if (!rootDiv) {
           res.writeHead(200, { 'Content-Type': 'text/html' })
           res.end(template)
           return
         }
 
-        const splitIdx = template.indexOf(rootDivMatch[0]) + rootDivMatch[0].length
+        const splitIdx = rootDiv.insertAt
         const html =
           template.slice(0, splitIdx) + ssrHtml + hydrationScript + template.slice(splitIdx)
 
