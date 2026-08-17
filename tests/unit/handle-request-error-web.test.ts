@@ -6,7 +6,6 @@
  * translation (serverErrorToEnvelope) PLUS preserves the legacy auth
  * error detection (instanceof + duck-type fallback).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase G.
  */
 import { describe, it, expect } from 'vitest'

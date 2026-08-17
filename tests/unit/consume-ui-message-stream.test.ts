@@ -79,7 +79,7 @@ describe('consumeUIMessageStream (M2)', () => {
     // theokit#136 decided the other way and the implementation followed — `read-message-stream.ts`
     // calls `raiseStreamError`, and the comment in the code is explicit: *"thrown, never swallowed"*.
     // Terminating cleanly would leave the consumer with a truncated turn and no signal that it
-    // failed: the silent failure mode `.claude/rules/error-handling.md` forbids. The test went red at
+    // failed: the silent failure mode the error-handling rules forbid. The test went red at
     // that commit, freezing a contract the product had already abandoned — and red by default
     // protects nothing. Backlog B-M67-01, item 8.
     //

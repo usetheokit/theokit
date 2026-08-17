@@ -18,7 +18,7 @@ import { CronExpressionParser } from 'cron-parser'
  * Throws on every invalid input. Every error message includes the
  * original input and the fix.
  *
- * @see docs/adr/0004-cron-schedule-5-field-utc-strict.md
+ * @
  */
 export function validateCronSchedule(schedule: string): void {
   if (typeof schedule !== 'string') {

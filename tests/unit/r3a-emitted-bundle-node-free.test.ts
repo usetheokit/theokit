@@ -1,7 +1,7 @@
 /**
  * R3a runtime-portability invariant — emitted-bundle empirical proof.
  *
- * Per `docs/audit/arch-gaps-phase5a-progress-2026-06-06.md` Category A:
+ * Category A.
  * the 24 type-only `import type ... from 'node:http'` declarations in
  * `packages/theo/src/server/` are TS-erased at build time. The emitted
  * JavaScript should contain ZERO `node:http` runtime references — that is

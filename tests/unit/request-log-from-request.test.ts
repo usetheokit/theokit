@@ -6,7 +6,6 @@
  * for the Web Request shape. Same canonical RequestLog shape + same
  * devtools forwarder (errors silenced).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase C. The IncomingMessage tests in `logger.test.ts` and
  * `logger-structured.test.ts` cover the legacy path; this file covers
  * the Web Request path.

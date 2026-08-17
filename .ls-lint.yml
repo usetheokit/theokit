@@ -8,9 +8,8 @@
 # Run: pnpm check:naming
 # CI:  .github/workflows/architecture-guards.yml
 
-# See `.claude/rules/architecture.md` v3.1 § Naming convention exceptions for
-# the rationale behind the regex unions (React components PascalCase + hooks
-# camelCase + type-tests acronym-prefix).
+# The regex unions below cover the exceptions: React components (PascalCase), hooks (camelCase
+# use*) and type-tests (acronym prefix).
 
 ls:
   packages/theo/src:
@@ -37,12 +36,10 @@ ignore:
   - my-test
   - my-test-bare
   - packages/theo/src/devtools/dev-overlay # vendored from external — preserve original case
-  # As zonas de estudo read-only do ciclo (`.claude/rules/reference-provenance.md`) e as worktrees
-  # efêmeras. O `ls` acima só declara `packages/theo/src`, mas o walker desce a árvore inteira antes
-  # de filtrar — com o zone populado (medido: 74.502 arquivos de terceiros), o run passou de ~2,6 s
-  # para 112 s e derrubou `test_check_naming_passes_today` por timeout de 30 s. O teste ficou flaky
-  # conforme a zona estivesse populada ou não, que é a pior forma: verde quando ninguém está
-  # pesquisando, vermelho quando alguém está. Backlog B-M67-01, item 15.
-  - .claude/knowledge-base/references
-  - .claude/knowledge-base/tools
-  - .claude/worktrees
+  # Read-only study zones. The `ls` block above only declares `packages/theo/src`, but the walker
+  # descends the whole tree before filtering — with a zone populated (measured: 74,502 third-party
+  # files) the run went from ~2.6 s to 112 s and blew the 30 s timeout of
+  # `test_check_naming_passes_today`. That made the test flaky depending on whether a zone happened
+  # to be checked out, which is the worst kind: green when nobody is researching, red when someone is.
+  - knowledge-base/references
+  - knowledge-base/tools

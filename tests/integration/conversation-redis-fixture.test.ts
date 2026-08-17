@@ -1,7 +1,7 @@
 /**
  * T9.2 — RedisConversationStorage recipe + contract tests.
  *
- * Uses a hand-rolled in-memory Redis mock (tests/fixtures/conversation-redis/
+ * Uses a hand-rolled in-memory Redis mock (tests
  * in-memory-redis.ts) rather than `ioredis-mock` for two reasons:
  *   (a) zero new dependencies
  *   (b) deterministic TTL via setTime/advanceTime (EC-12)

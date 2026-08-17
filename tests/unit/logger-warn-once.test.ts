@@ -7,7 +7,6 @@ import {
 /**
  * T2.1 — `warnOnce` helper.
  *
- * Per docs/plans/theokit-0.3.0-cutover-execution-plan.md Phase 2 + EC-2.
  *
  * Dedupes warnings by structured key (event:method:path) so logs don't
  * flood under load. Key shape is caller-provided string — convention

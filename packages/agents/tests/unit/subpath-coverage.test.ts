@@ -363,7 +363,7 @@ describe('M78 T2.1 — subpath coverage policy', () => {
    * Each `it.each` case used to run its own `await import(...)`, and whichever ran first paid for
    * loading the barrel's entire graph — measured at over 80 s of `collect` on this machine — racing
    * vitest's 5 s timeout. The test passed or failed depending on ordering and machine load, which is
-   * the definition of flaky (`.claude/rules/testing.md` § 3: a flaky test is a bug — fix it or delete
+   * the definition of flaky (x it or delete
    * it, never live with it).
    *
    * Raising the timeout would hide the symptom. The cost is import, not assertion — paying it once in

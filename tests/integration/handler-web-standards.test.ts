@@ -21,7 +21,7 @@
  *   resolvable. A vitest test CANNOT prove "no node:* required" —
  *   it can only prove the handler ACCEPTS a Web Request and returns a
  *   Web Response. The real proof of node-free execution is
- *   `wrangler dev tests/fixtures/handler-web-standards/` returning 200.
+ * `wrangler dev tests returning 200.
  *   The CI matrix gains a wrangler smoke job in Phase 5a; vitest tests
  *   here are necessary but not sufficient.
  *

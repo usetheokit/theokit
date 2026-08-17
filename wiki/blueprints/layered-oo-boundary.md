@@ -32,7 +32,7 @@ O owner definiu a arquitetura em camadas: **SDK (lib pura) → Theokit (enriquec
 
 Decisões do owner (2026-07-24): sugar = **todas** as 12 funções; camada = **re-export enriquecido seletivo** (pass-through onde é só tipo/função sem variação, interface/classe onde há padrão real); formato = **discover primeiro, depois roadmap-v2**.
 
-Regras consumidas: `.claude/rules/parsimony-ladder.md` (rung 1/9 — não reinventar o SDK; enriquecer só onde paga), `.claude/rules/architecture.md` § 2 (direção de dependência), ADR-0001 (o patterns-budget que esta iniciativa em parte reverte).
+Regras consumidas: (rung 1/9 — não reinventar o SDK; enriquecer só onde paga), DR-0001 (o patterns-budget que esta iniciativa em parte reverte).
 
 ## Objective
 
@@ -54,7 +54,7 @@ A camada do SDK **não** deve ser wrapper uniforme: o próprio SDK mistura já-O
 
 Cada factory function retorna um `Capability` (`{ name, apply }`). A conversão para classe deve produzir **o mesmo objeto compilado**. O precedente é o M52: a prova de zero-behavior comparou o `CompiledAgentOptions` do caminho novo com o do `defineAgent` (deep-equal no waist). O mesmo oráculo se aplica: `new SkillsCapability(x).apply(draft)` deve produzir draft deep-equal a `skills(x).apply(draft)`.
 
-**Decisão proposta:** cada milestone do sugar carrega o gate "a suíte atual passa sem editar expectativa" + um teste de equivalência `new XCapability(a) ≡ x(a)` no waist, antes de deletar a função. Repointa a suíte existente (que hoje chama `skills()`) para a classe, sem mudar asserção — se verde, deleta a função no mesmo milestone (playbook M49/M53, "sem sugar layer, sem deprecation window", `ROADMAP.md:1214`).
+**Decisão proposta:** cada milestone do sugar carrega o gate "a suíte atual passa sem editar expectativa" + um teste de equivalência `new XCapability(a) ≡ x(a)` no waist, antes de deletar a função. Repointa a suíte existente (que hoje chama `skills`) para a classe, sem mudar asserção — se verde, deleta a função no mesmo milestone (playbook M49/M53, "sem sugar layer, sem deprecation window",:1214`).
 
 ### Q2 — Como provar o repointing do agent-builder sem regressão?
 

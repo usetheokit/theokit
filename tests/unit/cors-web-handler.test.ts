@@ -7,7 +7,6 @@
  * same security guarantees (echo matched origin only, never `'*'` when
  * credentials enabled).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase B. The IncomingMessage tests in `cors.test.ts` cover the
  * legacy path; this file covers the Web Request path.
  */

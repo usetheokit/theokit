@@ -14,8 +14,8 @@
  * Run locally (no Cloudflare account required — Miniflare is the
  * default backend in wrangler v3+):
  *
- *   wrangler dev tests/fixtures/handler-web-standards/worker.ts \
- *     --config tests/fixtures/handler-web-standards/wrangler.toml
+ * wrangler dev tests \
+ * --config tests
  *
  * Then:
  *

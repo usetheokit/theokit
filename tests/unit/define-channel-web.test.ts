@@ -6,7 +6,6 @@
  * shape. The shape differs only in `onSubscribe`'s 3rd argument
  * (`Request` instead of `IncomingMessage`).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase F.
  */
 import { describe, it, expect } from 'vitest'

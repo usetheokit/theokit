@@ -25,7 +25,6 @@
  * (and the prod CLI start path) need to migrate from the legacy
  * `executeRoute` to `executeWebRequest` without touching call sites.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase G slice 5/N (closes the executor bridge surface).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'

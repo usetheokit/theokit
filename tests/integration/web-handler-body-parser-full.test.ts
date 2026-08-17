@@ -8,7 +8,6 @@
  * Inline-only mode (default) is unchanged — verified by the existing Phase A
  * `handler-web-standards.test.ts`.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase E.
  */
 import { describe, it, expect } from 'vitest'

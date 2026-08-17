@@ -6,7 +6,7 @@
  * boots alongside the TheoKit TS app. Empty `services: {}` is the default
  * and preserves Wave 1 behavior (no impact on TS-only apps).
  *
- * See ADRs 0012-0015 + plan: docs/plans/wave-2-polyglot-services-plan.md
+ * See ADRs 0012-0015 +
  */
 import { z } from 'zod'
 

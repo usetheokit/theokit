@@ -1,7 +1,6 @@
 /**
  * G6 T2.1 — `theokit migrate router` CLI subcommand.
  *
- * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * Wraps the pure `planRouterMigration` with side effects:
  *   - EC-2: pre-flight `isPortInUse(3000|3100)` warning to prevent the

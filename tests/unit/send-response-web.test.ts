@@ -5,7 +5,6 @@
  * `Response` instances with the same shape semantics as `sendJson` +
  * `sendError` on the IncomingMessage path.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase G.
  */
 import { describe, it, expect } from 'vitest'

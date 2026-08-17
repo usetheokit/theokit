@@ -12,7 +12,7 @@
 //
 // Acceptance for GREEN (per plan T1.2 + EC-5 honest framing):
 //   1. vitest test passes locally (this file)
-//   2. `wrangler dev tests/fixtures/handler-web-standards/` returns
+// 2. `wrangler dev tests returns
 //      200 with native Response shape (real Cloudflare Workers smoke).
 //
 // Vitest alone is NOT sufficient because vitest Node has `node:*`

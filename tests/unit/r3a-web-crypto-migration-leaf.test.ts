@@ -1,7 +1,6 @@
 /**
  * RED test for Plan T5a.1a — incremental Web Crypto migration (leaf-first).
  *
- * Per `docs/plans/theokit-arch-gaps-implementation-plan.md` v1.2 Phase 5a T5a.1
  * Task #3: "Refactor in dependency order (leaves first)".
  *
  * The full T5a.1 scope (42 files across `server/` migrating from node:* to
@@ -197,7 +196,6 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
   })
 
   // ===== Phase 5a invariant guard (R3a Web standards runtime portability) =====
-  // Documented in docs/audit/arch-gaps-phase5a-progress-2026-06-06.md.
   // The 24 current node:http consumers in server/ are ALL `import type` —
   // TypeScript erases them at build, so the emitted JS is runtime-clean.
   // This guard fires if a future change introduces a RUNTIME (non-type) node:http
@@ -242,7 +240,7 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
   })
 
   it('invariant: zero runtime node:* imports in server/ outside the documented Node-only leaves (audit doc)', () => {
-    // Per docs/audit/arch-gaps-phase5a-progress-2026-06-06.md Category B,
+    // Category B.
     // these files are legitimately Node-only at scanner/build/static-file
     // boundary per ADR-0028. Allowlisted explicitly. Any new file appearing
     // with a runtime node:* import OUTSIDE this allowlist is a regression.

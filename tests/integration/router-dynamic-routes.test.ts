@@ -10,7 +10,7 @@ import { generateRouteManifest } from '../../packages/theo/src/router/generate.j
  * react-router config wires the dynamic + catch-all routes.
  *
  * NOTE: the browser-level Playwright e2e (navigate to /blog/hello, assert the
- * rendered slug) is DEFERRED — playwright.config.ts + the served fixture app
+ * rendered slug) is DEFERRED — + the served fixture app
  * are not present on the `develop` branch (they live in a worktree/CI setup).
  * This integration test covers the same wiring at the route-manifest boundary,
  * which is where the dynamic-segment logic actually lives.

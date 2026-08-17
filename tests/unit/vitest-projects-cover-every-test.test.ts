@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest'
  * set of directories — and an enumeration fails by **omission**. Add `tests/e2e/`, and those tests
  * simply never run: no error, no red, just a smaller gate wearing the same name.
  *
- * That is the same failure `scripts/lint-by-group.mjs` guards against with its coverage floor, and
+ * That is the same failure guards against with its coverage floor, and
  * for the same reason: a scan that returns less than it should looks exactly like a complete one.
  *
  * So: every test file under `tests/` must be claimed by exactly one project. Not zero — that is the
@@ -47,7 +47,7 @@ function testFilesOnDisk(dir: string): string[] {
 
 /** What vitest says it will run, per project — the source of truth for the gate's real reach. */
 function filesVitestWillRun(): Map<string, Set<string>> {
-  // `npx` from PATH, same contract `scripts/lint-by-group.mjs` states for its own spawns: this runs
+  // `npx` from PATH, same contract states for its own spawns: this runs
   // as part of the test suite, in the repository, with the toolchain the developer already invoked.
   // An absolute path would break across macOS/nix and closes no threat — whoever controls the PATH
   // of a local test run already controls the `node` executing it.

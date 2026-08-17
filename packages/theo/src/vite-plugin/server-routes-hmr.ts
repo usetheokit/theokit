@@ -2,7 +2,6 @@
  * G6 T1.2 — Vite plugin: watch `server/routes/**` and invalidate SSR module
  * cache on add/change/unlink with a 50 ms debounce window.
  *
- * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * Pattern reference: SvelteKit `exports/vite/dev/index.js:335-398`.
  *

@@ -7,13 +7,13 @@ import { describe, expect, it } from 'vitest'
  *
  * ## The rule, and the state that contradicted it
  *
- * `.claude/rules/reference-provenance.md` § 1 is unambiguous: `knowledge-base/references/**` and
+ * base/references/**` and
  * `knowledge-base/tools/**` are "never versioned — `.gitignore` excludes both". `.gitignore` does
  * exclude them. But **ten of those paths were already tracked as submodule gitlinks** (mode
  * `160000`), and `.gitignore` has no effect on an entry that is already in the index.
  *
  * There was no `.gitmodules` to go with them, so every `git submodule` walk in CI ended with
- * `fatal: No url found for submodule path '.claude/knowledge-base/references/astro'` and exit 128.
+ * `fatal: No url found for submodule path ''` and exit 128.
  * The CodeQL job's cleanup step is where it surfaced — as a warning nobody had reason to read,
  * inside a job that was already failing for an unrelated reason.
  *

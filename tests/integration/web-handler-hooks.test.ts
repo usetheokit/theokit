@@ -16,7 +16,6 @@
  *   5. onError fires on handler throw with envelope-shaped error response.
  *   6. EC-9 — onError hook throw doesn't recurse (swallowed).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase G.
  */
 import { describe, it, expect } from 'vitest'

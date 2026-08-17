@@ -5,16 +5,16 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     globals: true,
-    // B-M67-20 passo 2 — o run passa a EXECUTAR as suítes dos pacotes, não só a da raiz.
+    // The run EXECUTES the packages' suites, not just the root one.
     //
-    // A cobertura conta `packages/*/src/**` (ver `coverage.include` abaixo) enquanto o `include`
-    // acima roda só `tests/**`. Eram 216 arquivos de teste — agents 133, http 55, create-theokit 11,
-    // presenter 10, theo 7 — fora do numerador, com os fontes que eles cobrem no denominador. Por
-    // isso `agents/src/auth` aparecia em 0% embora tenha quatro suítes que passam.
+    // Coverage counts `packages/*/src/**` (see `coverage.include` below) while the root `include`
+    // only runs `tests/**`. That left 216 test files — agents 133, http 55, create-theokit 11,
+    // presenter 10, theo 7 — out of the numerator, with the sources they cover in the denominator,
+    // which is why `agents/src/auth` reported 0% despite having four passing suites.
     //
-    // Cada projeto traz o próprio config (aliases, ambiente, setup); listá-los aqui os agrega numa
-    // execução só, e a cobertura soma. Foi o que a subida para vitest 4 destravou: até então os
-    // pacotes rodavam 3.2.6 e o provider 4.x quebrava neles.
+    // Each project brings its own config (aliases, environment, setup); listing them here
+    // aggregates them into a single run and coverage adds up. The upgrade to vitest 4 unblocked
+    // this: until then the packages ran 3.2.6 and the 4.x provider broke on them.
     projects: [
       {
         extends: true,
@@ -22,7 +22,7 @@ export default defineConfig({
           name: 'root',
           // Everything under `tests/` EXCEPT integration and smoke, which the sibling project below
           // serializes. Stated as an exclusion rather than a list of directories on purpose: a list
-          // fails by omission — add `tests/e2e/` and it silently never runs. The floor that proves
+          // fails by omission — add a directory and it silently never runs. The floor that proves
           // this reaches every file is `tests/unit/vitest-projects-cover-every-test.test.ts`, which
           // caught exactly that gap (plus a double-claim) on this split's first attempt.
           include: ['tests/**/*.test.ts', 'tests/**/*.test-d.ts'],
@@ -54,10 +54,8 @@ export default defineConfig({
       './packages/http/vitest.config.ts',
       './packages/presenter/vitest.config.ts',
     ],
-    // The native-bindings `globalSetup` was removed along with `scripts/`: it existed only to call
-    // `scripts/preflight-native-bindings.mjs`, which detected a better-sqlite3 NODE_MODULE_VERSION
-    // mismatch and triggered the rebuild. Without that hook an ABI mismatch surfaces again as a raw
-    // test failure instead of an automatic rebuild — run `pnpm rebuild better-sqlite3` when it does.
+    // A better-sqlite3 NODE_MODULE_VERSION mismatch surfaces as a raw test failure. Run
+    // `pnpm rebuild better-sqlite3` when it does.
     // theokit-test-suite-cleanup followup 2026-06-05 — register `tsx/esm`
     // ESM loader inside every test worker so `loadConfig()` (and downstream
     // tests that spawn `theokit dev`/`build`) can `await import(...theo.config.ts)`
@@ -146,20 +144,19 @@ export default defineConfig({
         // Pure type files — only `interface` / `type` declarations, no runtime.
         'packages/theo/src/server/plugin-types.ts',
         'packages/theo/src/server/agent-types.ts',
-        // DOM-only React portal — exercised by Playwright (devtools E2E),
-        // unit tests would only re-test react-dom.createPortal.
+        // DOM-only React portal — a unit test would only re-test react-dom.createPortal.
         'packages/theo/src/devtools/shadow-portal.tsx',
         // DOM bootstrap — `createRoot()` + `document.body.appendChild`.
-        // Exercised by Playwright tests/e2e/devtools-overlay*.spec.ts.
+        // No unit coverage: it is a DOM bootstrap, and asserting on it would only re-test
+        // `createRoot` + `appendChild`.
         'packages/theo/src/devtools/entry.tsx',
         // React hook with fetch + ReadableStream — needs @testing-library/react
         // + jsdom that the project does not currently set up. Wire protocol
-        // logic is covered by agent-stream-core.ts unit tests; the hook is
-        // covered end-to-end by the default-template Playwright spec.
+        // logic is covered by agent-stream-core.ts unit tests.
         'packages/theo/src/client/use-agent-stream.ts',
         // M2 — same rationale: React hook (fetch + ReadableStream) needs jsdom
         // the project does not set up. The wire-protocol core is covered by
-        // consume-ui-message-stream.ts unit tests; the hook is covered E2E.
+        // consume-ui-message-stream.ts unit tests.
         'packages/theo/src/client/use-agent.ts',
         // create-theo standalone CLI scaffolder — interactive prompts +
         // child_process spawn. The existing exclude `packages/*/src/cli/**`

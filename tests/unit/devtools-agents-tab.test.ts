@@ -7,7 +7,7 @@
  *   - ring buffer cap preserved
  *   - initial state has empty agentRuns
  *
- * E2E rendering coverage lives in tests/e2e/devtools-agents-tab.spec.ts
+ * There is no end-to-end rendering coverage for this tab.
  * (Playwright) — this file is the unit-level contract.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

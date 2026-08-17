@@ -5,7 +5,6 @@
  * mirror of `extractTraceId(req: IncomingMessage)` for the Web Request
  * shape. Same 3-tier precedence (`traceparent` → `x-request-id` → UUID).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase C (Tracing + observability). The IncomingMessage tests in
  * `trace-context.test.ts` cover the legacy path; this file covers the Web
  * Request path.

@@ -31,7 +31,7 @@ export default defineConfig([
       'server/webhook/index': 'src/server/webhook/index.ts',
       'vite-plugin/index': 'src/vite-plugin/index.ts',
       'client/index': 'src/client/index.ts',
-      // M44 (ADR-0053) — React-FREE agent-client entry (node/scripts/tests; no React in the bundle).
+      // M44 (ADR-0053) — React-FREE agent-client entry (node; no React in the bundle).
       'client/core': 'src/client/core.ts',
       'react-query/index': 'src/client/react-query.ts',
       'adapters/web-shim': 'src/adapters/web-shim.ts',

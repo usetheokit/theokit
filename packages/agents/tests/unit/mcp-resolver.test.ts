@@ -15,7 +15,7 @@ import type { McpServerConfig, McpStdioServerConfig } from '../../src/types.js'
  *
  * `McpServerConfig` became a union (stdio | http) when M112 stopped narrowing what the SDK accepts,
  * and `command`/`args`/`env` live only on the stdio arm. These assertions read them directly, so
- * from that point on `tsc --noEmit -p tsconfig.test.json` reported 8 errors here — a gate CLAUDE.md
+ * from that point on `tsc --noEmit -p tsconfig.test.json` reported 8 errors here — a gate
  * lists as mandatory-at-zero, red on a clean tree and therefore protecting nothing.
  *
  * A cast would have silenced it. This throws instead: every case below is ABOUT a stdio server, so

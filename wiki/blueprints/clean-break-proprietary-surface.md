@@ -49,7 +49,7 @@ sources:
 - **The grep→0 gate** is the primary integration proof (DoD line 1). A test asserts
   `grep -rE "AgentEvent|useAgentStream" packages/*/src` returns zero (add to a structural test,
   mirroring `tests/unit/architecture-guards-ci.test.ts`).
-- **The default template E2E** must stay green on the M2 surface. Today `tests/e2e/template-default*.spec.ts`
+- **The default template E2E** must stay green on the M2 surface. Today *.spec.ts`
   + `tests/unit/fixture-template-default-canonical-chat.test.ts` assert `useAgentStream` +
   `defineAgentEndpoint`; they migrate to assert `agents/chat.ts` `export default defineAgent`
   + `useAgent('chat')`. The M2 exemplar is `tests/integration/unified-agent-surface.test.ts`
@@ -85,9 +85,9 @@ sources:
 - **`git rm`** for the deleted files (8 src + 2 fixtures + ~16 tests).
 - **grep gate** (`grep -rE`) — the DoD proof, wired into a structural test.
 - **knip** (`/code-quality` D1) — orphan-export detection after removal.
-- **`pnpm sync:templates`** (`scripts/sync-template-versions.mjs`) — syncs template↔fixture
+- **`pnpm sync:templates`** — syncs template↔fixture
   VERSIONS only (content is a separate copy); the template migration must be applied to BOTH
-  `packages/create-theokit/templates/default/` AND `fixtures/template-default/`.
+ `packages/create-theokit/templates/default/` AND.
 - **tsc + vitest + eslint** — the standard gates; deleting exports must leave 0 type errors
   (every importer migrated) and 0 dead code.
 
@@ -135,7 +135,7 @@ sources:
 ### The migration guide (DoD line 2)
 
 Lands at `migration/0.13-to-0.14-agent-surface.md` (mirrors the existing
-`docs/migration/0.2-to-0.3.md` precedent). Covers:
+ precedent). Covers:
 1. **`useAgentStream('/api/agent')` → `useAgent('chat')`** — before/after; `events: AgentEvent[]`
    becomes `messages: UIMessage[]` (ai-sdk standard); `send(body)` typed from the agent schema.
 2. **`defineAgentEndpoint` (in `server/routes/*.ts`) → `defineAgent` (in `agents/*.ts`)** —
@@ -194,14 +194,14 @@ Lands at `migration/0.13-to-0.14-agent-surface.md` (mirrors the existing
   If `configure-agent-registry`/`provider-resolver` are meant to stay public, keep the subpath
   with only those.
 - **EC-5 — template ↔ fixture dual-copy.** The default template lives in
-  `packages/create-theokit/templates/default/` AND is mirrored in `fixtures/template-default/`.
+ `packages/create-theokit/templates/default/` AND is mirrored in.
   The `agents/chat.ts` migration + `app/page.tsx` `useAgent` rewrite must be applied to BOTH,
   and the skill docs (`dot-claude/skills/theokit-{agents,frontend,ui}/SKILL.md`) updated to drop
   the old surface.
-- **EC-6 — deleted-fixture tests.** Deleting `fixtures/use-agent-stream-react/` +
-  `fixtures/agent-endpoint-mock/` requires deleting their tests
+- **EC-6 — deleted-fixture tests.** Deleting +
+ requires deleting their tests
   (`fixture-use-agent-stream-react.test.ts`, `fixture-agent-endpoint.test.ts`,
-  `define-agent-endpoint-signal.test.ts`) AND removing the dirs from `fixtures/README.md` +
+ `define-agent-endpoint-signal.test.ts`) AND removing the dirs from +
   the `fixtures-index.test.ts` list (which already fails on a stale entry — fix in passing).
 - **EC-7 — dead-code after removal (ROADMAP risk 2).** The client tool-cards
   (`agent-tool-cards.ts` + `use-agent-tool-cards.ts`) must be DELETED, not left as orphan
@@ -211,13 +211,13 @@ Lands at `migration/0.13-to-0.14-agent-surface.md` (mirrors the existing
 
 ## References
 
-- M3 DoD: `ROADMAP.md` § M3
-- M2 replacement surface: `.claude/knowledge-base/adrs/0037-unified-agent-surface-defineagent-vs-agent-decorator.md`, `tests/integration/unified-agent-surface.test.ts`
+- M3 DoD:
+- M2 replacement surface:, `tests/integration/unified-agent-surface.test.ts`
 - Removal targets (server): `packages/theo/src/core/contracts/agent-events.ts`, `packages/theo/src/server/agent/{stream-agent-run,create-conversation-history,agent-types}.ts`, `packages/theo/src/server/define/define-agent-endpoint.ts`
 - Removal targets (client): `packages/theo/src/client/{use-agent-stream,agent-stream-core,agent-tool-cards,use-agent-tool-cards}.ts`
 - Survive: `packages/theo/src/server/agent/provider-resolver.ts`, `packages/theo/src/server/define/define-agent-tool.ts`, `packages/theo/src/client/{use-agent,consume-ui-message-stream}.ts`
-- Migration precedent: `docs/migration/0.2-to-0.3.md`
-- Template: `packages/create-theokit/templates/default/`, `fixtures/template-default/`
+- Migration precedent:
+- Template: `packages/create-theokit/templates/default/`,
 
 # Related
 * [theokit-ai-first-roadmap](/grills/theokit-ai-first-roadmap.md) — the roadmap grill that opened the track.

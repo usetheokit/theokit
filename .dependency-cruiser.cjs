@@ -1,8 +1,7 @@
 /**
  * dependency-cruiser config — TheoKit architecture rules v3.
  *
- * Encodes the 12-module DAG declared in `.claude/rules/architecture.md` v3
- * (ADR-0001 v3, accepted 2026-05-27).
+ * Encodes the 12-module DAG of ADR-0001 v3 (accepted 2026-05-27).
  *
  * Run: pnpm check:deps
  * CI:  .github/workflows/architecture-guards.yml

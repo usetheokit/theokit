@@ -15,7 +15,6 @@
  *     `executeWebRequest`'s `opts.hooks` consumes directly — Phase G
  *     slice 1/N landing zone for plugin-registered hooks.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase G.
  */
 import type {

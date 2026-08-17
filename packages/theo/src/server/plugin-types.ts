@@ -79,7 +79,7 @@ export function definePlugin(plugin: TheoPlugin): TheoPlugin {
 // ===== T5a.2 Phase F slice 1/3 — Web-Standards plugin context types =====
 //
 // Mirror of the IncomingMessage/ServerResponse-shaped `PluginContext` for
-// the Web `Request`/`Headers` shape. Per `docs/plans/t5a2-incoming-message-
+// the Web `Request`/`Headers` shape.
 // to-request-shape-refactor-plan.md` v1.0 § Phase F.
 //
 // **Key difference vs IncomingMessage path:** the Web path has no

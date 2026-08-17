@@ -144,7 +144,7 @@ export const Agent: AgentWithNarrowedList = AgentDoSdk
 // than a documented-partial one, because a consumer reads the claim and stops looking. That is how a
 // builder ends up rebuilding what already ships.
 //
-// The honest statement is: SOME capabilities cross, each by a decision. `scripts/lib/boundary-
+// The honest statement is: SOME capabilities cross, each by a decision.
 // decisions.mjs` records one per doorless subpath with the measurement behind it (how many of its
 // symbols already reach this layer's root), and `tests/integration/boundary-doorless-subpaths.test.ts`
 // fails when the SDK adds a subpath nobody has decided about — so the next hole arrives as a named

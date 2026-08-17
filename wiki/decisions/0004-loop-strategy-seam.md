@@ -77,7 +77,7 @@ O `AgentRunner` ganhou `loopStrategyIsCustom` no state. `resolvePerRunLoop(maxIt
 - Grill: `grills/loop-strategy-seam.md`
 - Prior art: `knowledge-base/references/opencode/packages/opencode/src/session/prompt.ts:1178`
 - ADR-0001 (Template Method recusado), ADR-0031 (SDK owns model call, no second runtime)
-- Regras: `.claude/rules/error-handling.md` § 2, `.claude/rules/parsimony-ladder.md`, `.claude/rules/testing.md` § 4.1
+- Regras:,.1
 
 # Related
 * [loop-strategy-seam](/grills/loop-strategy-seam.md) — the scope questions.

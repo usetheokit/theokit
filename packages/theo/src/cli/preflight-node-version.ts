@@ -168,9 +168,8 @@ function envFlagIsTruthy(value: string | undefined): boolean {
  *   - `THEOKIT_SKIP_NATIVE_PREFLIGHT=1` — skip the ABI/native-binding check
  *     entirely (still enforces Node-floor version). Test fixtures + cleanroom
  *     consumer envs that don't actually use better-sqlite3 (no audit-log, no
- *     LanceDB embedder, etc.) can opt out. Documented as a Phase 6 readiness
- *     fix in docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md
- *     § Test infrastructure prerequisites (Option B).
+ *     LanceDB embedder, etc.) can opt out. Documented as a Phase 6 readiness fix under
+ *     "Test infrastructure prerequisites" (Option B).
  *
  * @throws Error with multi-line actionable message when Node version or
  *   native binding ABI is wrong.

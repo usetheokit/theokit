@@ -22,7 +22,7 @@
   relocation.
 * **Boundary recorded**: `knowledge-base/references/` — a 165 MB read-only clone of the
   `opencode` peer project — was **deliberately excluded** from this bundle. Per
-  `.claude/rules/reference-provenance.md`, third-party study material must not be copied into
+, third-party study material must not be copied into
   the project, so none of its content was migrated. Only our own curated metadata about it
   survives, as [Peer reference catalog](/references-catalog.md). That catalog describes clones
   that no longer exist on disk; re-clone from the upstream URLs it lists if the material is

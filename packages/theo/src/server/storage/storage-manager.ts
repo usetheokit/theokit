@@ -2,7 +2,7 @@
  * StorageManager — per-process singleton coordinating pluggable storage
  * adapters (Postgres pools, Redis clients, in-memory adapters).
  *
- * Architectural decisions: see ADR-0007 (docs/adr/0007-storage-manager-singleton.md).
+ * Architectural decisions: see ADR-0007.
  *
  * Lifecycle:
  *   1. `getStorageManager()` returns the singleton (D1).

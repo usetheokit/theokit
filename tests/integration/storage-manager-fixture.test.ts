@@ -1,5 +1,5 @@
 /**
- * Integration test for `tests/fixtures/storage-manager-recipe/` — proves the
+ * Integration test for the storage manager recipe — proves the
  * end-to-end wire of `theo.config.ts > storage` → `getStorageManager().configure()`
  * → adapter consumption via `usePostgres` / `useRedis`.
  *

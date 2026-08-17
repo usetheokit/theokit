@@ -28,7 +28,7 @@ import {
  */
 
 /**
- * The clean/dirty projects came from `fixtures/upgrade-readiness-{clean,dirty}`, removed with the
+ * The clean and dirty projects are built in a tmpdir rather than read from
  * rest of `fixtures/`. They are built in a tmpdir here with the same content those fixtures
  * declared — one rule per file, so a failure points at the rule.
  */

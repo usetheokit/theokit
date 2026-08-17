@@ -170,7 +170,7 @@ function byProjectThenName(a: CustomCommand, b: CustomCommand): number {
  * It used to stop at `!statSync(path).isFile()`, so a namespaced command was not unsupported — it
  * was INVISIBLE. No warning, no error: the file sits there and the command does not exist.
  *
- * Namespacing is not one product's idea. Claude Code reads `.claude/commands/frontend/component.md`
+ * Namespacing is not one product's idea. Claude Code reads
  * as a namespaced command, and the closest consumer names nested files by their relative path for
  * the same reason a flat directory stops scaling past a dozen commands.
  *

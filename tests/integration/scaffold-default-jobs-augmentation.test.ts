@@ -19,7 +19,10 @@ describe('default template — JobRegistry augmentation example (T2.2)', () => {
   it('jobs.d.ts has documentation comment explaining EC-110 + usage', () => {
     const content = readFileSync(resolve(TEMPLATE, 'types/jobs.d.ts'), 'utf8')
     expect(content).toMatch(/REQUIRED|never|EC-110/)
-    expect(content).toMatch(/docs\/concepts\/jobs/)
+    // The three onboarding steps ARE the documentation: the template used to point at a concepts
+    // page for the rest, and a scaffold that ships a link to a page the reader cannot open is worse
+    // than one that carries the whole instruction inline.
+    expect(content).toMatch(/1\. Create `server\/jobs/)
   })
 
   it('jobs.d.ts has commented-out examples (not active by default)', () => {

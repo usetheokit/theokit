@@ -10,7 +10,7 @@ sources:
     resource: the concepts of this bundle, where each term is used
     title: Usage across this bundle
   - id: cycles
-    resource: .claude/rules/cycle-*.md
+ resource: *.md
     title: The cycle contracts that define the process vocabulary
 ---
 
@@ -132,4 +132,4 @@ Out-of-scope cross-check
 * [Agents](/agents/overview.md) — the surface most of these terms describe.
 * [Peer reference catalog](/references-catalog.md) — the prior art the blueprints drew on.
 
-[^cycles]: The cycle contracts in `.claude/rules/`, which define these artifact types and their verdicts.
+[^cycles]: The cycle contracts in, which define these artifact types and their verdicts.

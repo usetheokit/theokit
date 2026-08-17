@@ -1,5 +1,5 @@
 /**
- * Integration test for `tests/fixtures/storage-modules-db0-libsql/`.
+ * Integration test for the db0/libsql storage module.
  *
  * Uses `better-sqlite3` :memory: connector as the deterministic stand-in for
  * libSQL/Turso. Same API; production swaps the connector.

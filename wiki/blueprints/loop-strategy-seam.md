@@ -26,7 +26,7 @@ sources:
 
 O M54 abre `AgentRunnerBuilder.loopStrategy(custom: LoopStrategy)` para que o consumidor injete o critério de parada (`shouldContinue`) — o único dos quatro eixos de comportamento do runner que hoje é trancado (reflexão, compactação e produção do round já aceitam injeção). O grill (§ Q1) mapeou a assimetria de OCP; esta discovery investiga **como abrir o seam sem introduzir um loop infinito** — o risco 1 do grill, que o goal do owner proíbe tratar com workaround.
 
-Regras consumidas: `.claude/rules/error-handling.md` § 2 (fail-fast), `.claude/rules/parsimony-ladder.md` (o seam é composição, não herança — Strategy), `.claude/rules/testing.md` § 4.1 (guardrail provado por teste, não comentário), ADR-0001 (Template Method recusado).
+Regras consumidas: (o seam é composição, não herança — Strategy),.1 (guardrail provado por teste, não comentário), ADR-0001 (Template Method recusado).
 
 ## Objective
 

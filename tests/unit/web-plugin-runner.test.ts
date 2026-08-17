@@ -7,7 +7,6 @@
  * `getHooks()` returns hook arrays in the shape executeWebRequest's
  * opts.hooks consumes directly — the Phase G slice 1/N landing zone.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase G.
  */
 import { describe, it, expect } from 'vitest'

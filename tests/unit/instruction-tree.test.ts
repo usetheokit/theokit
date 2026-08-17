@@ -61,7 +61,7 @@ describe('loadInstructionTree — walking and loading', () => {
     // `fileNames.includes(entry)` matches a basename, so the walk could only ever collect files the
     // caller could name in advance. A rules directory is the opposite: the user drops arbitrarily
     // named files in and expects all of them read. That is not a TheoCode idiosyncrasy — Claude Code
-    // reads `.claude/rules/` (this repository has 34 such files, named `cycle-*.md`, `git-safety.md`,
+    // reads (this repository has 34 such files, named `cycle-*.md`, `git-safety.md`,
     // `testing.md`…) and Cursor reads `.cursor/rules/*.mdc`. Both are arbitrary-name directories.
     //
     // Measured consequence of the gap: the closest consumer wrote its own 112-line walk — budget,

@@ -6,7 +6,6 @@
  * the Web Request shape. Returns `Response` directly instead of mutating
  * `res`. Same dispatch + same normalizers + same side-effect loop.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase B. The IncomingMessage tests in `csp-report.test.ts` cover
  * the legacy path; this file covers the Web Request path.
  */

@@ -24,11 +24,11 @@ sources:
 
 ## Context
 
-O issue usetheodev/theokit#145 mostrou que um toolbox com `namespace` mintava `ns.tool` — fora do charset que o `@theokit/sdk` aceita — e portanto um caminho **documentado** nunca funcionou contra um provider real. O fix (publicado em `@theokit/agents@1.0.1`) trocou o separador para `_` e adicionou validação na autoria. A revisão de System Design + Design Pattern desse fix (2026-07-24) achou **6 defeitos residuais**, dois deles introduzidos pela própria correção, registrados em `grills/tool-name-single-source.md` § Q1 e no bloco `### M55` do `ROADMAP.md`.
+O issue usetheodev/theokit#145 mostrou que um toolbox com `namespace` mintava `ns.tool` — fora do charset que o `@theokit/sdk` aceita — e portanto um caminho **documentado** nunca funcionou contra um provider real. O fix (publicado em `@theokit/agents@1.0.1`) trocou o separador para `_` e adicionou validação na autoria. A revisão de System Design + Design Pattern desse fix (2026-07-24) achou **6 defeitos residuais**, dois deles introduzidos pela própria correção, registrados em `grills/tool-name-single-.md` § Q1 e no bloco `### M55` do.
 
 O gatilho desta discovery é uma **sonda de pré-validação** que já contradiz a premissa da correção. `node_modules/@theokit/sdk/dist/index.js:6559-6577` mostra que `validateToolName` impõe **três** regras — não-vazio (`tool_missing_name`), charset (`tool_invalid_name`) e **nome reservado** (`tool_reserved_name`, para `{shell, memory_search, memory_get}` **ou** qualquer nome começando com `mcp_`) — enquanto a nossa cópia (`packages/agents/src/bridge/agent-compiler.ts:86`) replica **apenas o charset**. Um toolbox com `namespace: 'mcp'` minta `mcp_deploy`, passa na nossa validação de autoria e é **rejeitado pelo `Agent.create`** — a mesma classe de defeito do #145, ainda viva. Isso é evidência de que o problema não é "o separador estava errado", e sim **"a regra do SDK foi copiada por amostragem"** — exatamente o que esta discovery precisa resolver com prior art antes de o M55 escrever qualquer código.
 
-Regras de projeto consumidas: `.claude/rules/error-handling.md` § 2 (validar na fronteira, falhar tipado), `.claude/rules/parsimony-ladder.md` (rungs 1 e 5 — o VO `ToolName` precisa se pagar), `.claude/rules/testing.md` § 4.1 (caso negativo asserta erro tipado + mensagem), `.claude/rules/architecture.md` § 2 (direção de dependência: `bridge/` não pode importar `capability/`).
+Regras de projeto consumidas: ar tipado), (rungs 1 e 5 — o VO `ToolName` precisa se pagar),.1 (caso negativo asserta erro tipado + mensagem), ridge/` não pode importar `capability/`).
 
 ## Objective
 
@@ -53,7 +53,7 @@ O blueprint deve permitir decidir, com evidência de código de terceiros: **ond
 
 | Project / Subdir | Why excluded |
 |---|---|
-| Peers listados na tabela do `ROADMAP.md` mas **não clonados** (`ai-sdk`, `mastra`, `openai-agents-js`, `assistant-ui`, `copilotkit`, `cloudflare-agents-starter`, `trpc`) | Não existem em `knowledge-base/references/` — citá-los seria citação fabricada (hard cap). O pacote `ai` em `node_modules` cobre o ângulo do Vercel AI SDK sem clonar |
+| Peers listados na tabela do mas **não clonados** (`ai-sdk`, `mastra`, `openai-agents-js`, `assistant-ui`, `copilotkit`, `cloudflare-agents-starter`, `trpc`) | Não existem em `knowledge-base/references/` — citá-los seria citação fabricada (hard cap). O pacote `ai` em `node_modules` cobre o ângulo do Vercel AI SDK sem clonar |
 | `knowledge-base/references/opencode/` fora de `src/mcp/` e `src/tool/` | TUI, sessão, provider — não tocam nomeação de tool |
 | `node_modules/@theokit/sdk/dist/**/*.map`, `*.cjs` | Artefatos de build duplicados do `.js`/`.d.ts` já em escopo |
 | Qualquer decisão de **implementação** do M55 | Discovery pergunta; quem responde com código é `/implement` |
@@ -110,7 +110,7 @@ O blueprint deve permitir decidir, com evidência de código de terceiros: **ond
 | Q4 | Quais regras **exatas** o `@theokit/sdk` aplica a um nome de tool, e quais delas a nossa cópia replica? **H1 (hipótese a confirmar OU refutar, EC-1):** são 3 regras — não-vazio, charset, e reservado (`{shell, memory_search, memory_get}` ∪ prefixo `mcp_`) — e a nossa cópia replica só a 2ª. | deps | `node_modules/@theokit/sdk/` | `grep -n "TOOL_NAME_PATTERN\|RESERVED_TOOL_NAMES\|validateToolName" dist/index.js dist/*.d.ts` | Read do bloco `validateToolName` **de ponta a ponta** (não só do match) + verificação de export em `dist/*.d.ts` e `package.json`. A resposta NÃO pode citar a seção `## Context` deste plano como evidência — tem de re-derivar do arquivo. | Lista das regras com código de erro tipado + veredito explícito `H1: CONFIRMADA \| REFUTADA \| PARCIAL`; delta contra `SDK_TOOL_NAME` em `packages/agents/src/bridge/agent-compiler.ts:86` |
 | Q5 | Como se testa o contrato de nome **sem mockar** o validador — e o que o peer/nosso teste cobre hoje? | tests | `node_modules/@theokit/sdk/`, repo local | `Grep -rn "tool_invalid_name\|tool_reserved_name" packages/agents/tests/` | Read de `packages/agents/tests/integration/tool-name-sdk-contract.test.ts` inteiro | Lista dos códigos de erro do SDK vs os cobertos pelo nosso teste — o gap é a lista de testes que o M55 precisa |
 | Q6 | O acoplamento **nome da tool ↔ chave do gate HITL** existe nos peers? Como eles impedem os dois de divergirem? | tests | `knowledge-base/references/opencode/`, repo local | `Grep -rn "permission\|approval\|ask(" packages/opencode/src/tool/` | Read dos pontos onde a permissão é resolvida por nome | Mecanismo citado (chave derivada da mesma função? ou lookup por objeto?) + o que isso diz sobre `compileHitlGates` |
-| Q7 | Qual gate **mecanizado** teria pego um símbolo exportado órfão como `compileHitlGates`, e ele está ligado neste repo? | tools | repo local, `knowledge-base/references/opencode/` | `Grep -rn "knip" package.json packages/agents/package.json knip.json* 2>/dev/null` | Read da config do knip + de `.claude/rules/code-quality-golden-rule.md` § 2 | Nome do gate, se está habilitado para `packages/agents`, e por que não pegou |
+| Q7 | Qual gate **mecanizado** teria pego um símbolo exportado órfão como `compileHitlGates`, e ele está ligado neste repo? | tools | repo local, `knowledge-base/references/opencode/` | `Grep -rn "knip" package.json packages/agents/package.json knip.json* 2>/dev/null` | Read da config do knip + de ilitado para `packages/agents`, e por que não pegou |
 
 ## Coverage Matrix
 
@@ -155,7 +155,7 @@ Total de questões: **7** (budget 5-10 ✓, máx 3 por corner ✓, mín 1 por co
 - [ ] Verdict final registrado no header do blueprint
 - [ ] Zero citação fabricada
 - [ ] Coverage Matrix 100%
-- [ ] Os ADRs referenciam ao menos uma regra de projeto — aqui: `.claude/rules/parsimony-ladder.md` (o VO precisa se pagar), `.claude/rules/error-handling.md` § 2 (validar na fronteira, falhar tipado) e `.claude/rules/testing.md` § 4.1 (caso negativo asserta tipo + mensagem)
+- [ ] Os ADRs referenciam ao menos uma regra de projeto — aqui: (o VO precisa se pagar), ar tipado) e.1 (caso negativo asserta tipo + mensagem)
 
 # Related
 * [tool-name-single-source](/grills/tool-name-single-source.md) — the scope questions.

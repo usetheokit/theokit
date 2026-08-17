@@ -118,7 +118,7 @@ export type WireChunk = z.infer<typeof fixedChunkSchema> | WireDataPart
 /**
  * The literal discriminators this package speaks, in declaration order.
  *
- * `scripts/check-wire-parity.mjs` diffs this list against the `ai` union to notice a variant that
+ * diffs this list against the `ai` union to notice a variant that
  * appeared upstream and that we have not mirrored. It is exported (rather than derived at the call
  * site) so the gate and the schema cannot drift apart — a gate comparing a stale list is a gate
  * whose verdict means nothing.

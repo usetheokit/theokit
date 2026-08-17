@@ -1,7 +1,6 @@
 /**
  * G6 T2.1 — Pure codemod function tests for `theokit migrate router`.
  *
- * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * Coverage:
  *   - Already-nested (no-op, idempotent)

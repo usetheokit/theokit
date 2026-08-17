@@ -277,7 +277,7 @@ function resolveTemplate(
   switch (type) {
     // Agent-capability generators. These live UNDER `agents/` — they are facets of the agent domain,
     // not standalone top-level concerns — and the folder-semantic scanner treats each as composition
-    // (never a phantom route). See docs/ARCHITECTURE.md.
+    // (never a phantom route).
     case 'workflow':
       return {
         filePath: resolve(cwd, 'agents/workflows', `${name}.ts`),
