@@ -1,7 +1,6 @@
 /**
  * G6 T1.2 — Vite watcher invalidation for `server/routes/**` with 50ms debounce.
  *
- * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * Contract:
  *   1. `configureServer` registers add/change/unlink listeners on the dev

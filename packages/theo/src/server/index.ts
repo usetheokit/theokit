@@ -116,7 +116,6 @@ export type { TheoTransformer } from './transformer.js'
 // a native Web Request and returns a native Web Response. Narrow scope:
 // method dispatch + Zod validation + envelope-shaped errors. Plugin
 // runner / CSRF / CORS / middleware integration deferred to Phase B-G
-// per docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md.
 export { executeWebRequest } from './web-handler.js'
 
 // M33 — the in-process typed caller (the seam TUI/Tauri/MCP surfaces use to invoke route logic

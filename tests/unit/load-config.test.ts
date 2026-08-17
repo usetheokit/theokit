@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Every project this file loads is built here. The valid and invalid ones used to come from
-// `fixtures/basic-valid-app` and `fixtures/invalid-config`, removed with the rest of `fixtures/`.
+// and, removed with the rest of `fixtures/`.
 const TEMP_DIR = path.join(tmpdir(), `theo-test-${Date.now()}`)
 
 beforeAll(() => {

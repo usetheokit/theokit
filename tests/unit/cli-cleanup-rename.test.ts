@@ -16,7 +16,7 @@ describe('cli-cleanup-rename (T0.2)', () => {
 
   it('test_no_stale_cli_lib_imports — no import statement references cli/lib', async () => {
     const { execSync } = await import('node:child_process')
-    // Scope to packages/theo/src only — fixtures/examples may have node_modules
+    // Scope to packages/theo/src only — may have node_modules
     // and aren't the regression surface for cli/lib imports.
     // Exclude this test file (self-reference) and any dist/ output.
     let stdout = ''

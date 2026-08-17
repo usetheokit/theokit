@@ -74,7 +74,7 @@ arquivos disjuntos destes. Os dois podem correr em qualquer ordem sem conflito.
 
 ### Q3/4: qual é a Definition of Done verificável?
 
-Ver o bloco `### M55` no `ROADMAP.md` — seis critérios, dos quais dois são gates duros: a prova de
+Ver o bloco `### M55` no — seis critérios, dos quais dois são gates duros: a prova de
 zero-behavior (a suíte atual passa **sem editar expectativa**) e a **eliminação do código morto**
 (`compileHitlGates` com chamador de produção real **ou** deletado — orfandade + duplicação é o
 achado 3 e não pode sobreviver ao milestone).
@@ -85,7 +85,7 @@ achado 3 e não pode sobreviver ao milestone).
    (`bridge/`) exige lançar `ConfigurationError`, que hoje vive em `capability/capabilities.ts:15` —
    `bridge/` importando `capability/` fecha um ciclo. Mitigação: extrair o erro para um módulo
    neutro (`src/errors.ts`) **antes** de mover a validação; `pnpm check:direction`
-   (`scripts/check-package-direction.mjs`) e o pre-push são o guard mecânico.
+ e o pre-push são o guard mecânico.
 2. **Falha nova em caminho antes silencioso.** Validar no ponto de mintagem faz `compileTools` —
    API **pública** — passar a lançar para um par namespace/tool que hoje passa e só é rejeitado
    depois pelo `Agent.create`. É a correção pretendida (falhar cedo, tipado), mas é observável para

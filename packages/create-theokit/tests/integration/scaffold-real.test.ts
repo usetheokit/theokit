@@ -43,7 +43,7 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
 
-    // Agent-centered structure (docs/ARCHITECTURE.md): the agent file + the folders it composes live
+    // Agent-centered structure: the agent file + the folders it composes live
     // together under `agents/`, clean-named. The folder-semantic scanner serves only `chat.ts`;
     // `prompts/`, `tools/`, `skills/` are that concern, NOT phantom /api/agents/tools/weather routes.
     expect(existsSync(join(targetDir, 'agents/chat.ts'))).toBe(true)
@@ -329,7 +329,6 @@ describe('scaffold (integration — real template)', () => {
     expect(existsSync(join(targetDir, '.claude/skills/theokit-frontend/SKILL.md'))).toBe(true)
     expect(existsSync(join(targetDir, '.claude/skills/theokit-config/SKILL.md'))).toBe(true)
 
-    // CLAUDE.md
     expect(existsSync(join(targetDir, 'CLAUDE.md'))).toBe(true)
     const claudeMd = readFileSync(join(targetDir, 'CLAUDE.md'), 'utf-8')
     expect(claudeMd).toContain('@AGENTS.md')

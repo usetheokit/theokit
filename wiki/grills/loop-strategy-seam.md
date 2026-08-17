@@ -66,7 +66,7 @@ arquivo e invalidaria a prova de zero-behavior daquele milestone.
 
 ### Q3/4: qual é a Definition of Done verificável?
 
-Ver o bloco `### M54` no `ROADMAP.md` — cinco critérios, dos quais dois são gates duros: a prova de
+Ver o bloco `### M54` no — cinco critérios, dos quais dois são gates duros: a prova de
 zero-behavior nas três estratégias existentes, e o guardrail de terminação (uma custom com
 `shouldContinue: () => true` DEVE parar no teto `maxIterations`).
 

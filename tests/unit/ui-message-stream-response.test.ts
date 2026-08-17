@@ -15,7 +15,7 @@
  * `tests/` tree via the root vitest config (`include: ['tests/**\/*.test.ts']`);
  * `packages/theo/tests/` is NOT collected. The plan named
  * `packages/theo/tests/unit/...` on a wrong assumption about the layout — this
- * file lives where it is actually executed (CLAUDE.md "code/README win").
+ * file lives where it is actually executed.
  */
 import { describe, expect, it } from 'vitest'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'

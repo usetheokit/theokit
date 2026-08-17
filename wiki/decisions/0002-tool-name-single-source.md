@@ -154,14 +154,14 @@ vindos de servidor MCP, onde a postura correta é **coagir** e não lançar (é 
 - `pnpm check:direction` falha por `packages/tauri` declarar dependência em `theokit` —
   pré-existente, verificado como não relacionado a este trabalho.
 - O gate `/discover-plan-confidence` pontuou `reference_citations` 100 com **zero citações
-  detectadas** (o regex do checker exige o prefixo `.claude/knowledge-base/references/` e o theokit
+ detectadas** (o regex do checker exige o prefixo e o theokit
   usa `knowledge-base/references/`). As citações foram verificadas manualmente em disco.
 
 ## Cross-references
 
-- Regras consumidas: `.claude/rules/error-handling.md` § 2 (validar na fronteira, falhar tipado),
-  `.claude/rules/testing.md` § 4.1 (caso negativo asserta tipo **e** mensagem),
-  `.claude/rules/parsimony-ladder.md` (rungs 1, 4 e 5), `.claude/rules/architecture.md` § 2
+- Regras consumidas: ar tipado),
+.1 (caso negativo asserta tipo **e** mensagem),
+ (rungs 1, 4 e 5),
   (direção de dependência — motivo de `src/errors.ts` existir)
 - ADR precedente de formato: `decisions/0001-capability-patterns-budget.md`
 

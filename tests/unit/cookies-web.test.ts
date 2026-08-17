@@ -8,7 +8,6 @@
  *   - `appendDeleteCookieToHeaders(target, name, opts)` — mirrors `deleteCookie`
  *   - `serializeCookie(name, value, opts)` — pure helper shared by both paths
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase B (closes Phase B with leaf #6 of 6 — header-only cluster
  * complete).
  */

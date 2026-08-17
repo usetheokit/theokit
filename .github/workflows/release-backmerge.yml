@@ -14,7 +14,7 @@ name: Release back-merge
 #
 # ## Why it targets `workspace` and not `develop`
 #
-# `.claude/rules/git-safety.md` § 1 is explicit: `develop` integrates work, it never originates it,
+# The branch policy is explicit: `develop` integrates work, it never originates it,
 # and it advances only through the `workspace → develop` promotion PR. A back-merge landing directly
 # on `develop` would break that rule. `workspace` is where work is born, so the release state lands
 # there and reaches `develop` through the ordinary promotion — the same path as everything else.

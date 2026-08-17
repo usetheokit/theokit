@@ -1,6 +1,5 @@
 /**
  * Types for state cleanup utilities (Phase 2 of
- * docs/plans/framework-zero-config-polish-plan.md).
  */
 
 export interface CleanOutDirOptions {

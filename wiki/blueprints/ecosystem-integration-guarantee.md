@@ -36,8 +36,8 @@ plus a parity audit of the other two seams. **Don't Reinvent** — mirror the tw
 | — | `@theokit/sdk-tools` peer **still open `>=0.11.0`** in `packages/agents/package.json:36` → close to `^0.11.0`. |
 | CustomTool mirror `:29` | mirror at `packages/theo/src/server/define/define-agent-tool.ts:29-48`; diverges from SDK 4.0.2 (`ctx.threadId`, `ctx.messages` missing; handler return narrower). |
 | `theokit-sdk#119` intentional divergence | #119 = `ctx.threadId`; mirror lacks it — the gate's canonical divergence case. |
-| mirror `theokit-theocloud-integration.md` | **that doc does NOT exist on disk** (CLAUDE.md reference is dangling) → synthesize structure from CLAUDE.md prose. |
-| stale CLAUDE.md "permanent workspace link" | confirmed stale — SDK is npm-registry consumed (`pnpm-workspace.yaml:19` removed sibling links 2026-06-10). |
+| mirror `theokit-theocloud-integration.md` | **that doc does NOT exist on disk** → synthesize structure from prose. |
+| stale "permanent workspace link" | confirmed stale — SDK is npm-registry consumed (`pnpm-workspace.yaml:19` removed sibling links 2026-06-10). |
 | — | **STALE proto-test** `tests/integration/sdk-1-1-0-exports.test.ts` hardcodes `major === 3` (`:33`) + imports `FileSystemConversationStorage`/`InMemoryConversationStorage` — **removed in SDK 4.0** → reconcile/replace. |
 | — | **Version drift already live:** root hoist resolves `@theokit/sdk@3.5.0`; `packages/{theo,agents}` resolve `4.0.2`; lockfile carries 2.20.0 + 3.5.0 + 4.0.2. The exact failure M48 guards. |
 
@@ -50,7 +50,7 @@ plus a parity audit of the other two seams. **Don't Reinvent** — mirror the tw
 
 **theo-ui producer mirror** (`theokit-tools/theokit-ui/tests/contract/theokit-consumer.test.ts` — PRESENT):
 - same shape checks; `describe.skipIf(!distBuilt)` (`:49-53`); `PKG_ROOT` via `fileURLToPath(import.meta.url)` (EC-1, `:24-27`).
-- publish gate: `theokit-ui/package.json` `prepublishOnly: "pnpm build && pnpm test:contract && node scripts/validate-exports.mjs"`.
+- publish gate: `theokit-ui/package.json` `prepublishOnly: "pnpm build && pnpm test:contract && node "`.
 
 **TheoCloud EC-7 schema-drift** (`tests/unit/services-manifest-v2.test.ts:62-107`): producer-emitted version(s) (`buildManifest().version`) ⊆ consumer-accepted set (from external JSON Schema SoT), with **walk-up path resolution + skip-clean-if-absent** (`:68-81`).
 
@@ -74,7 +74,7 @@ plus a parity audit of the other two seams. **Don't Reinvent** — mirror the tw
 3. **Type-assignability gate** `*.test-d.ts`: assert the local `CustomTool` mirror's `ctx` param **equals** the SDK's — `expectTypeOf<Parameters<Sdk.CustomTool['handler']>[1]>().toEqualTypeOf<Parameters<Local.CustomTool['handler']>[1]>()`. NOTE (critical): a one-directional `toMatchTypeOf` on the whole interface is **too weak** (contravariance makes the narrower mirror assignable). The `ctx`-param `toEqualTypeOf` is what fails on the missing `ctx.threadId`/`ctx.messages`. → M48 also **updates the mirror to add `threadId?`/`messages?`** so the gate is GREEN, then a fixture divergence proves it fails on drift.
 4. **Boot-time fail-fast** `assertSdkCompatible()` invoked from `packages/theo/src/cli/commands/start/bootstrap-stages.ts:31-41` (already imports SDK at boot, currently swallows with `.catch(()=>null)`): resolve `@theokit/sdk/package.json` version, check `^4.0.1`, throw a **typed** error (found-vs-required) — turning the per-request lazy `SDK_NOT_INSTALLED` (`sdk-adapter.ts:509-516`) into a loud boot failure. Keep the lazy event too (defense in depth for the request path).
 5. **Producer mirror** in `theokit-tools/theokit-sdk/packages/sdk/tests/contract/theokit-consumer.test.ts` + wire `test:contract` + `prepublishOnly` into that package.json (**currently NEITHER exists** — the biggest missing guarantee).
-6. **Seam doc** `architecture/theokit-sdk-integration.md` (structure synthesized from CLAUDE.md prose): flow diagram, wire/contract surface (~25 symbols), typed-error cause chain (`AgentRunError`), version-compat table, hardening invariants, "consult-before-editing" file list; mirror into `theokit-sdk/docs/architecture/` (same "edit one, diff the other" rule). Fix the stale CLAUDE.md workspace-link line.
+6. **Seam doc** `architecture/theokit-sdk-integration.md` (structure synthesized from prose): flow diagram, wire/contract surface (~25 symbols), typed-error cause chain (`AgentRunError`), version-compat table, hardening invariants, "consult-before-editing" file list; mirror into `theokit-sdk (same "edit one, diff the other" rule). Fix the stale workspace-link line.
 7. **Parity audit** (breadth): the seam doc records that `contract-usetheo-ui-vite-plugin.test.ts` (theo-ui) + `services-manifest-v2.test.ts` EC-7 (TheoCloud) still pass — all three seams accounted for.
 
 ## ADRs

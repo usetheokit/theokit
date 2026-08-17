@@ -1,7 +1,6 @@
 /**
  * G6 T0.1 — Dotted-path regression test (INVERTED after T1.1).
  *
- * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * History:
  *   - Phase 0 (RED, 2026-06-04, early hours): asserted the BROKEN behavior of the

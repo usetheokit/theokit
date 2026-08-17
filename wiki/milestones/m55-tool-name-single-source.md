@@ -28,7 +28,7 @@ checkbox_flipped_at: 2026-07-24T16:06:00Z
 
 # Milestone M55 — Nome de tool com fonte única
 
-## Objective (do ROADMAP.md)
+## Objective (do)
 
 Fechar os 6 achados da revisão de System Design + Design Pattern do fix do issue theokit#145:
 `SDK_TOOL_NAME` como cópia de contrato não exportado; validação longe do ponto de mintagem com
@@ -88,7 +88,7 @@ cópia da regra que o milestone elimina — mas a omissão não era. Registrada 
 - `run-reflective-loop.ts` com 567 linhas (orçamento 500; 566 no baseline).
 - `theokit@0.43.10` não publicou — provenance exige CI (pré-existente, sem relação com M55).
 - Dois `throw new Error` genéricos pré-existentes em `compileTools` (F-arch-4) — followup.
-- `/code-quality` Mode 2 indisponível: o script espera `.claude/knowledge-base/plans/` e o theokit usa
+- `/code-quality` Mode 2 indisponível: o script espera e o theokit usa
   `knowledge-base/` na raiz. Rodado em Mode 1; a substância dos detectores foi coberta diretamente
   (D1 por knip com override, D2 por `tsc --noEmit` limpo — que para TypeScript é garantia mais forte
   contra símbolo fabricado do que a heurística tree-sitter, já que um símbolo inexistente não compila,

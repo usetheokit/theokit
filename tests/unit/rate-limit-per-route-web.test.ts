@@ -10,7 +10,6 @@
  * resolved by the caller per-runtime (Node adapter pulls from socket;
  * CF Workers from cf-connecting-ip; etc.).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase D.
  */
 import { describe, it, expect } from 'vitest'

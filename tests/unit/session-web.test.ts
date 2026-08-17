@@ -9,7 +9,6 @@
  * key rotation logic (CR-002 constant-time decrypt walk + transparent
  * re-encrypt), same OWASP A07 rotateSession invariant.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase D.
  */
 import { describe, it, expect } from 'vitest'

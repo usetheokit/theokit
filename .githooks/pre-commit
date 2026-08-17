@@ -4,19 +4,9 @@
 #
 # Tests are NOT in pre-commit, to keep the loop tight. Tests run in CI (cheap there).
 #
-# ## Gates this hook USED to have
+# There is NO secret scanning here, and none in CI either: a committed credential is caught only by
+# human review or the provider's scanner. Nor is there a template-version or workspace-link gate.
 #
-# They went away with `scripts/`, and are recorded here because the absence is the information:
-#
-#   - Secret scanning (`scripts/prevent-secrets.sh`). This hook called the script inside an
-#     `if [ -f ... ]`, so once the file was deleted it started printing "Secret scanning skipped"
-#     and carrying on — a security gate switched off while still looking active. There is NO local
-#     secret scan: a committed secret is now caught only by human review or the provider's scanner.
-#   - theo-ui link guard (ADR 0020) and template version sync (ADR 0019). Both depended on removed
-#     scripts (`theo-ui-{link,unlink}.sh`, `sync-template-versions.mjs`); without them there is no
-#     way to enter or leave the state the first one guarded, nor to fix the drift the second one
-#     detected.
-
 set -e
 
 ROOT="$(git rev-parse --show-toplevel)"

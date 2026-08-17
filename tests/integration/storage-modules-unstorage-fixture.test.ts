@@ -1,5 +1,5 @@
 /**
- * Integration test for `tests/fixtures/storage-modules-unstorage-redis/`.
+ * Integration test for the unstorage/redis storage module.
  *
  * Verifies the end-to-end wire of `useUnstorage(name, driver)` with a custom
  * Driver implementation. Uses the in-memory `mockRedisDriver` for determinism.

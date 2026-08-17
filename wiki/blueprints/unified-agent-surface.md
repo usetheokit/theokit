@@ -17,7 +17,7 @@ sources:
 
 > **Exec summary.** M2 turns a single file — `agents/<name>.ts` (top-level, per the
 > LOCKED naming decision in
-> `.claude/knowledge-base/reference/agent-surface-naming-system-design.md`) — into a
+>) — into a
 > fully-wired agent: an SSE endpoint at `POST /api/agents/<name>` and a typed client
 > binding, with **zero manual server wiring**. It reuses the M0/M1 canonical protocol
 > unchanged — `translateToUIMessageStream`
@@ -38,7 +38,7 @@ sources:
 
 ### Scope + naming reminder (LOCKED)
 
-- **Directory is top-level `agents/`, NOT `server/agents/`.** The ROADMAP.md M2 text
+- **Directory is top-level `agents/`, NOT `server/agents/`.** The
   says `server/agents/*.ts` — that text predates the naming deep-research the user
   drove. The locked decision (top-level `agents/`, keep `server/`) is authoritative;
   the ROADMAP M2 line is corrected in the same milestone (see ADR-B1).
@@ -74,13 +74,13 @@ test-file skipping):
 - `packages/theo/src/vite-plugin/app-typed-client.ts:233-270` — `generateClientDts()`
   walks the manifest, emits `.theokit/client.d.ts` with a declared module `@theo/client`
   where **each route becomes an `import type` alias** feeding `InferResponse<typeof _rN>`.
-- Golden fixture: `fixtures/server-routes-basic/.theokit/client.d.ts` (real emitted shape).
+- Golden fixture: (real emitted shape).
   M2 adds an analogous fixture asserting an `agents/support.ts` produces a typed
   `agents.support` binding whose request type = `z.infer<typeof inputSchema>`.
 
 ### The M0/M1 E2E already proves the wire
 
-- `fixtures/use-agent-stream-react/` — a real ai-sdk `useChat` consumer over the
+- — a real ai-sdk `useChat` consumer over the
   UIMessageStream produced by the M0/M1 translator. M2's convention must produce a
   **byte-identical** stream (same `translateToUIMessageStream` + `uiMessageStreamResponse`),
   so the M2 E2E asserts: `agents/echo.ts` (convention) yields the same chunks the M1
@@ -226,7 +226,7 @@ export default defineAgent({
 
 ## References
 
-- Naming/System-Design decision: `.claude/knowledge-base/reference/agent-surface-naming-system-design.md`
+- Naming/System-Design decision:
 - M0/M1 protocol: `packages/agents/src/bridge/ui-message-stream-translator.ts`,
   `packages/theo/src/server/define/ui-message-stream-response.ts`
 - Scan machinery: `packages/theo/src/server/scan/{scan,ws-scan,action-scan,manifest}.ts`
@@ -235,7 +235,7 @@ export default defineAgent({
 - Dual path: `packages/agents/src/decorators/agent.ts`,
   `packages/agents/src/bridge/{agent-route-generator,agent-compiler,sdk-adapter}.ts`,
   `packages/theo/src/server/define/define-agent-endpoint.ts`
-- M1 ADR (canonical protocol): `.claude/knowledge-base/adrs/0036-canonical-protocol-uimessagestream-vs-agui.md`
+- M1 ADR (canonical protocol):
 
 # Related
 * [theokit-ai-first-roadmap](/grills/theokit-ai-first-roadmap.md) — the roadmap grill that opened the track.

@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // T2.6 (M6 vite-plugin/index.ts boy-scout refactor) extracted the
 // configureServer body into a sibling `configure-server-hook.ts`. The
 // source-string assertions now target the extracted file as the canonical
-// home of the openapi-emit wiring (per docs/audit/arch-gaps-phase5a-progress-2026-06-06.md
+// home of the openapi-emit wiring
 // the vite-plugin/index.ts is now an orchestrator threading state into 4
 // extracted hook bodies; configure-server-hook.ts owns the configureServer
 // body including the openapi dev-emit chain).

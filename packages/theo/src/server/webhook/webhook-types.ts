@@ -1,7 +1,7 @@
 /**
  * Webhook primitive types (R0.5.10).
  *
- * @see docs/adr/0005-webhook-verify-inline-function.md
+ * @
  */
 
 export type VerifyResult = { ok: true } | { ok: false; reason: string }

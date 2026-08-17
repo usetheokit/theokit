@@ -8,7 +8,6 @@ import { _resetEnvCache, loadEnv } from '../../packages/theo/src/config/load-env
 
 /**
  * Tests for `loadEnv()` — env auto-load utility (T1.1 of
- * docs/plans/framework-zero-config-polish-plan.md).
  *
  * Covers 12 base scenarios + 4 EC-related scenarios (EC-1, EC-2, EC-8, EC-13)
  * per the plan's TDD+BDD requirements.

@@ -1,8 +1,7 @@
 // ESLint flat config — quality gate (strict from day 1).
 //
 // Stack: typescript-eslint v8 + ESLint v9 + React 19. Rules selected to
-// catch real bugs, not stylistic preferences (Prettier owns style). See
-// CLAUDE.md "PART I — Rules of conduct" for the engineering principles.
+// catch real bugs, not stylistic preferences (Prettier owns style).
 //
 // Severity policy:
 //   - "error" for bug-producing patterns (no-floating-promises, no-misused-promises, etc).
@@ -32,9 +31,8 @@ export default tseslint.config(
       '**/.theokit/**',
       '**/coverage/**',
       '**/test-results/**',
-      // Study zone: clones of third-party projects, read to learn from and never edited. The
-      // `.claude/**` entries that sat here went away with the directory; `references/**` stays
-      // because a zone checked out at the repo root would otherwise be linted.
+      // Study zone: clones of third-party projects, read to learn from and never edited. Linting
+      // them costs minutes and reports issues nobody here can fix.
       'references/**',
       'pnpm-lock.yaml',
       'examples/**/dist/**',
@@ -44,7 +42,6 @@ export default tseslint.config(
       // exist as didactic starting points. Lint-checking them creates
       // confusing reports (the user will write their own version anyway)
       // and would break with every minor scaffold-style change.
-      'packages/create-theo/templates/**',
       'packages/create-theokit/templates/**',
       // Examples have their own per-folder tsconfig that the root project
       // service does not own. They are end-user demo apps, not framework
@@ -85,11 +82,9 @@ export default tseslint.config(
 
   // `todo-tag`, disabled across EVERY extension — agent-builder#120.
   //
-  // The rule matches the word "TODO" in any case, and "todo" is a common Portuguese word that was
-  // present throughout this repository's explanatory prose. It broke the build THREE times in M95 on
-  // legitimate Portuguese text (the word "todo" means "every"), and fixing it word by word only
-  // postpones the next one. Measured at review: REAL markers in the layer's source → 0. Zero true
-  // positives against three false ones is a permanent cost with no benefit.
+  // The rule matches the word "TODO" in any case, which collides with ordinary prose. Measured at
+  // review: REAL markers in the layer's source → 0. Zero true positives against repeated false ones
+  // is a permanent cost with no benefit.
   //
   // It was only in the `files: ['**/*.{ts,tsx,mts,cts}']` block, and therefore did NOT reach `.js` —
   // `eslint.config.js` itself failed, three times, on the very comment explaining the shutdown.
@@ -403,7 +398,7 @@ export default tseslint.config(
   // @theokit/http — CONTROLLER decorator metadata bridge requires `Function` type,
   // `any` from reflect-metadata returns (Reflect.getMetadata returns `any` per spec), and
   // single-use type parameters. Inherent to the decorator/reflect-metadata pattern, not bugs.
-  // M53: `packages/agents` was REMOVED from this list — it no longer uses reflect-metadata, so
+  // M53: `packages/agents` is not on this list — it no longer uses reflect-metadata, so
   // the exemption had no reason to exist there.
   {
     files: ['packages/http-decorators/src/**/*.ts', 'packages/http/src/**/*.ts'],

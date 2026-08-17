@@ -371,7 +371,7 @@ export async function upgradeReadinessCommand(opts: {
     console.log('  ✓ Upgrade-readiness 0.3: no violations detected.')
     console.log('')
     // T1.3 — friendly post-success URL (blueprint R4; Next.js next-codemod precedent).
-    // Anchor canon: #rollback (existing in docs/migration/0.2-to-0.3.md per T1.1).
+    // Anchor canon: #rollback (existing in per T1.1).
     console.log('  Migration guide: https://theokit.dev/migration/0.2-to-0.3')
     console.log('  Need to roll back temporarily? See #rollback')
     console.log('')

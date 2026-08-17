@@ -26,7 +26,7 @@ checkbox_flipped_at: 2026-07-24T18:05:00Z
 
 # Milestone M56 — Remover toda concessão de retrocompatibilidade do M55
 
-## Objective (do ROADMAP.md)
+## Objective (do)
 
 O M55 fechou com seis compromissos, cada um motivado por não quebrar quem já consome. Duas eram a
 mesma patologia que o M55 existiu para corrigir, deixada de pé. O owner removeu a restrição de

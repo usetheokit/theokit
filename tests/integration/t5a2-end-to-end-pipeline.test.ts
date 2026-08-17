@@ -22,7 +22,6 @@
  * smoke (Phase H plan AC for CF Workers) remains out-of-loop scope per
  * driver pause conditions — Cloudflare credentials required.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase H.
  */
 import { createServer, type Server } from 'node:http'

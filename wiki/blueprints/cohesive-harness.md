@@ -32,14 +32,14 @@ sources:
 
 ### The invariant tension (the ADR-gate's whole reason to exist)
 
-CLAUDE.md:253 locks: *"Built-in agent orchestration = out of scope. `examples/agent-saas` and the
+:253 locks: *"Built-in agent orchestration = out of scope. `examples/agent-saas` and the
 default template show how to wire an agent — they're patterns, not framework primitives. Agent
 orchestration belongs upstream in the SDK / Mastra / Vercel AI SDK."* M4 DoD-1 explicitly
 **revisits** this. The resolution the discovery supports: the invariant bans a **parallel
 runtime / orchestration engine** (a second loop that calls LLMs / dispatches tools). It does NOT
 ban **wiring the SDK's own primitives + the framework's already-shipped decorators into an app
 surface.** `@Checkpoint`/`@HumanInTheLoop` are ALREADY framework decorators (M8-era) — leaving
-them metadata-only is the honest-enforcement violation (G10 / CLAUDE.md "silence is the most
+them metadata-only is the honest-enforcement violation (G10 / "silence is the most
 dangerous tech debt"). Wiring them is completing shipped surface, not new orchestration.
 
 ### The M3 reconciliation (ROADMAP risk-2 is stale)
@@ -114,7 +114,7 @@ in `@theokit/agents`, untouched by M3).
 
 ### ADR-D1 — Harness IS an adapter; it does NOT violate the orchestration invariant (GATE)
 
-- **Context.** CLAUDE.md:253 locks "built-in agent orchestration out of scope". M4 packages loop +
+- **Context.**:253 locks "built-in agent orchestration out of scope". M4 packages loop +
   resume + HITL. Does this cross the line?
 - **Decision.** The harness is defined as **wiring**: it drives the EXISTING `runReflectiveLoop`
   (which wraps `run.stream()`), makes the ALREADY-SHIPPED `@Checkpoint`/`@HumanInTheLoop`
@@ -164,7 +164,7 @@ in `@theokit/agents`, untouched by M3).
 
 ## References
 
-- ROADMAP M4; the locked invariant `CLAUDE.md:253`.
+- ROADMAP M4; the locked invariant:253`.
 - Existing loop: `packages/agents/src/loop/run-reflective-loop.ts`, `agent-runner.ts`, `agent-orchestrator.ts`.
 - Unwired decorators: `packages/agents/src/decorators/{checkpoint,human-in-the-loop,policies}.ts`; events `packages/agents/src/bridge/agent-stream-events.ts:59,128`.
 - SDK contract: `packages/agents/src/bridge/sdk-adapter.ts` (getOrCreate/send/stream/wait/storage); SDK types at `../theokit-sdk/packages/sdk/src/types/`.

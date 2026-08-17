@@ -6,8 +6,7 @@ on:
   pull_request:
     branches: [main]
 
-# Quality gates — every job runs on every PR. Failing job blocks merge.
-# See CLAUDE.md "Quality Gates" for the rationale per gate.
+# Quality gates — every job runs on every PR. A failing job blocks merge.
 
 # tsup DTS build for theokit's ~24 entrypoints OOMs the runner's default worker
 # heap (ERR_WORKER_OUT_OF_MEMORY). Raise it workflow-wide.
@@ -118,15 +117,14 @@ jobs:
       # exercise `theokit build` (cron/job manifest tests, scaffold-build-start
       # E2E) find the bin at `packages/theo/dist/cli/index.js`.
       - run: pnpm --filter "./packages/*" build
-      # M75 T1.2 — os testes de confinamento de kernel que o agent-builder migra para cá exigem
-      # bubblewrap. `apt install` sozinho NÃO basta no ubuntu-latest: o Ubuntu 24.04 bloqueia user
-      # namespaces não-privilegiados via AppArmor, e a detecção ativa (`bwrap --unshare-user ...`)
-      # falha com "user namespaces unavailable (container/kernel restriction)". Medido no
-      # agent-builder run 30179607376: o binário instalou e 10 testes CONTINUARAM pulando; só depois
-      # do sysctl (run 30179704525) foram a 856 passed | 0 skipped.
+      # M75 T1.2 — the kernel-confinement tests need bubblewrap. `apt install` alone is NOT enough
+      # on ubuntu-latest: Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor, and the
+      # active probe (`bwrap --unshare-user ...`) fails with "user namespaces unavailable
+      # (container/kernel restriction)". Measured: the binary installed and 10 tests KEPT skipping;
+      # only after the sysctl did they reach 856 passed | 0 skipped.
       #
-      # O smoke ao final falha o passo se o userns seguir bloqueado — sem ele, um teste de
-      # confinamento que pula é reportado verde, e o gate certificaria por ausência de execução.
+      # The smoke check at the end fails the step if userns is still blocked — without it a skipped
+      # confinement test reports green, and the gate would certify by absence of execution.
       - name: Install bubblewrap + enable unprivileged userns (kernel-confinement tests)
         run: |
           sudo apt-get update && sudo apt-get install -y bubblewrap
@@ -166,17 +164,6 @@ jobs:
           path: coverage/
           retention-days: 14
 
-  # The `e2e` (Playwright) job lived here and was REMOVED along with `fixtures/`.
-  #
-  # The whole e2e harness was built out of fixtures: `playwright.config.ts` derived one webServer
-  # per fixture (`fixtures/wave1-hello-theo`, `fixtures/app-router-*`) and the specs under
-  # `tests/e2e/` drove those servers. With the fixtures gone there is nothing left to boot, so the
-  # config, the specs and this job went together.
-  #
-  # What was actually lost: there is NO browser coverage left. The file-system router, the
-  # scaffolded page's hydration, the CSP nonce and the WebSocket echo were exercised end to end
-  # only here.
-
   dead-code:
     name: Dead code (Knip)
     runs-on: ubuntu-latest
@@ -198,53 +185,6 @@ jobs:
       - run: pnpm --filter "./packages/*" build
       - run: pnpm knip
 
-  # The `dependency-audit` job lived here and was REMOVED along with `scripts/audit-scopes.mjs`,
-  # which was everything it ran (`pnpm check:audit`). No replacement: no gate in this repository
-  # looks at dependency advisories any more. Read the comment below with that in mind — it claims
-  # `dependency-review` could go because this job covered `fail-on-severity: high`. It no longer does.
-
-  # The `dependency-review` job lived here and was REMOVED (backlog B-M67-15).
-  #
-  # `actions/dependency-review-action` needs GitHub's dependency graph, which on a PRIVATE repository
-  # requires an Advanced Security licence. This repo is private with `security_and_analysis: null`, so
-  # every run ended with "Dependency review is not supported on this repository" — a gate that could
-  # not pass, by construction, no matter what the diff contained.
-  #
-  # Removing it costs nothing, because BOTH of its checks already have working equivalents here:
-  #
-  #   * `fail-on-severity: high`  ->  the `Dependency audit (npm audit, high+)` job (`pnpm check:audit`)
-  #   * `allow-licenses: …`       ->  the `License compliance` job (`scripts/check-licenses.mjs`),
-  #                                   whose allowlist is a superset of the list this job declared
-  #
-  # Licensing GHAS is a real option and would bring back the transitive-diff view neither of the two
-  # replacements has. That is a purchasing decision, not a CI one — and until it is made, an
-  # impossible gate is worse than no gate: it teaches the team to read red as noise.
-
-  # The `license-check` job lived here and was REMOVED along with `scripts/check-licenses.mjs`.
-  # There is no dependency licence check in CI any more — the allowlist it enforced (cited by the
-  # `dependency-review` comment above as equivalent coverage) went with the script.
-
-  # The `bundle-budget` job lived here and was REMOVED: it ran `scripts/check-bundle-budget.sh`
-  # against a build of `fixtures/template-default`, and both sides — script and fixture — are gone.
-  # The 350 KB gzipped ceiling on the client bundle is no longer measured by anything.
-
-  # O job `e2e-postgres-templates` vivia aqui e foi REMOVIDO (backlog B-M67-12).
-  #
-  # Ele provisionava um Postgres, empurrava dois schemas e rodava specs Playwright para as fixtures
-  # `template-postgres` e `template-saas`. O ADR 0023 (2026-06-17, default-only template set) removeu
-  # esses templates de propósito — e o job sobreviveu a eles. TODOS os artefatos que ele citava já não
-  # existiam: as duas fixtures, o `playwright.postgres-templates.config.ts` e o plano em `docs/plans/`.
-  #
-  # Ou seja: um gate IMPOSSÍVEL de passar por construção, vermelho a cada run, gastando um serviço de
-  # banco para testar algo que o time decidiu não ter. Um gate assim é pior que gate nenhum — ele
-  # ensina o time a ignorar vermelho, e foi exatamente esse hábito que deixou dois releases seguidos
-  # merjarem com 12 checks vermelhos (#210).
-
-  # The `secret-scan` job lived here and was REMOVED along with `scripts/prevent-secrets.sh`.
-  # Together with the same script leaving the `pre-commit` hook, NO secret scanning is left in this
-  # repository — neither local nor in CI. A committed secret now depends on human review or the
-  # provider's scanner to be noticed.
-
   package-validation:
     name: Package validation (publint + ATTW + smoke)
     runs-on: ubuntu-latest
@@ -260,9 +200,4 @@ jobs:
       - run: pnpm build
       - run: pnpm validate:publint
       - run: pnpm validate:attw
-      # The `check-pack-no-workspace` step went away with `scripts/check-pack-no-workspace.mjs`. It
-      # was the theokit#153 guard: `theokit` 0.19.0-0.30.0 published raw `workspace:^` and every
-      # `npm install` of those twelve versions still fails — a published version can only be
-      # deprecated, never corrected. Packing each package and inspecting the TARBALL was what caught
-      # the leak while it was still cheap. That leak is possible again, undetected.
       - run: npx vitest run tests/smoke/

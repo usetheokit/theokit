@@ -5,7 +5,7 @@ description: The gate that keeps non-SDK TypeScript errors at zero and isolates 
 tags: [gate, typescript, ci, audit]
 status: stable
 generated: { by: process:typecheck-clean-gate, at: 2026-08-05T00:00:00Z }
-migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: docs/audit/phase-0-typecheck-pre-flight-*.md }
+migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: *.md }
 sources:
   - id: gate-test
     resource: tests/integration/typecheck-clean-gate.test.ts
@@ -63,7 +63,7 @@ The dated records are a **generated artifact**, not authored knowledge: the test
 today's record on every run. They are therefore written outside this bundle, to
 `.audit/typecheck/` (gitignored), because a generated file dropped into an OKF bundle would
 carry no frontmatter and break the bundle's one hard rule.[^gate-test] Until 2026-08-06 they
-accumulated in `docs/audit/`; the 15 records written there are folded into the table
+accumulated in; the 15 records written there are folded into the table
 above.[^run-records]
 
 # Related

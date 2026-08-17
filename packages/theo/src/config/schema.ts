@@ -178,7 +178,7 @@ export const theoConfigSchema = z
      */
     cache: cacheSchema.optional(),
     /**
-     * Devtools overlay (Phase 0.4.0+ — see docs/plans/devtools-plan.md).
+     * Devtools overlay (Phase 0.4.0+ —
      *
      * - `undefined` (default): devtools auto-injects in `pnpm dev`, NEVER in `vite build`.
      * - `false`: devtools disabled entirely (Vite plugin skips injection even in dev).

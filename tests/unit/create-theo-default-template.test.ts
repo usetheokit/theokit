@@ -10,7 +10,7 @@ import { resolve } from 'node:path'
  *     `{{name}}` make the template invalid JSON; EC-7)
  *   - defineAgent shape assertions (no proprietary surface references)
  *
- * The byte-for-byte parity test against `fixtures/template-default/agents/chat.ts` went away with
+ * The byte-for-byte parity test against a checked-in mirror went away with
  * `fixtures/`: the template no longer has a checked-in mirror to compare against. The shape
  * assertions below still guard the template's content; what was lost is the guarantee that fixture
  * and template do not drift apart — there is no fixture left to drift.

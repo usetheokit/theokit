@@ -1,7 +1,6 @@
 /**
  * G6 T2.1 — Pure codemod core for `theokit migrate router`.
  *
- * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * `planRouterMigration` walks `<routesDir>` recursively and returns the
  * set of (from, to) renames required to convert legacy dotted-basename

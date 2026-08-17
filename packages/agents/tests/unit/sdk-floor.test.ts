@@ -47,7 +47,7 @@ const DEP_SECTIONS = ['dependencies', 'devDependencies', 'peerDependencies'] as 
  * Every workspace member, discovered from `pnpm-workspace.yaml` plus the repo root.
  *
  * Hardcoding the list is what let the first version of this gate pass while missing two declarations:
- * the ROOT manifest (`devDependencies: ^4.40.0`) and `fixtures/template-default` (`^2.30.0`). The
+ * the ROOT manifest (`devDependencies: ^4.40.0`) and a workspace member on `^2.30.0`. The
  * repo root kept a second live copy — `packages/*` resolved 4.51.1 while `.` resolved 4.40.0 — and a
  * gate scanning only `packages/*` reported that as healthy. Same shape as the defect this milestone
  * closes: an instrument narrower than the property it claims to verify.
@@ -155,7 +155,7 @@ function declaredRanges(): DeclaredRange[] {
 }
 
 describe('M67 T1 — the range parser refuses what it does not understand', () => {
-  // Negative lens (`.claude/rules/testing.md` § 4.1). `lowerBoundOf` is deliberately narrow, and the
+  // Negative lens. `lowerBoundOf` is deliberately narrow, and the
   // refusal is the whole point: a parser that silently accepted a shape it cannot read would return a
   // WRONG lower bound, and every assertion built on it would be green and meaningless. Without these
   // cases, deleting the `if (match === null)` branch breaks nothing in the suite.
@@ -185,7 +185,7 @@ describe('M67 T1 — the @theokit/sdk floor', () => {
     // The scope of this gate must be the WORKSPACE, not a list someone remembered to update.
     // The anchor left is the one that matters and that the first version missed: the ROOT manifest,
     // which resolved 4.40.0 while `packages/*` resolved 4.51.1. The second anchor was
-    // `fixtures/template-default/package.json`, which left the workspace along with `fixtures/`.
+    //, which left the workspace along with `fixtures/`.
     const discovered = workspaceManifests()
     expect(discovered).toContain('package.json')
     expect(discovered).toContain('packages/agents/package.json')

@@ -33,7 +33,7 @@ import { resolve } from 'node:path'
 
 const ROOT = resolve(__dirname, '../..')
 
-// `fixtures/template-default/agents/chat.ts` left this list along with `fixtures/`. The file that
+// left this list along with `fixtures/`. The file that
 // is actually shipped to the user — the `create-theokit` template — is still covered.
 const FILES_TO_SCAN = ['packages/create-theokit/templates/default/agents/chat.ts'] as const
 

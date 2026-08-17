@@ -1,6 +1,5 @@
 /**
  * State cleanup utilities (Phase 2 of
- * docs/plans/framework-zero-config-polish-plan.md).
  *
  * - `cleanOutDir` — Astro pattern: empty a directory except a skip list,
  *   used at `theokit build` start.

@@ -1,7 +1,7 @@
 /**
  * Cron primitive types (R0.5.4).
  *
- * @see docs/adr/0004-cron-schedule-5-field-utc-strict.md
+ * @
  */
 
 export type CronConcurrencyPolicy = 'forbid' | 'allow'

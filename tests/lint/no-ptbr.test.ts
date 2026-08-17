@@ -6,13 +6,13 @@
  *
  * - JSDoc on an exported symbol is emitted into the published `.d.ts`, so a
  *   Portuguese comment ships to every consumer and shows up on editor hover.
- *   `CLAUDE.md` makes the exported types the canonical public contract; a
+ * makes the exported types the canonical public contract; a
  *   contract nobody outside this repo can read is not a contract.
  * - A Portuguese identifier in the public surface is worse still — one shipped
  *   in `@theokit/sdk/compaction` for several releases before this gate existed,
  *   and renaming it was a breaking change. The cost compounds with every
  *   release that carries it.
- * - Test names are executable documentation (`.claude/rules/testing.md` § 3).
+ * - Test names are executable documentation.
  *
  * Detection is two-tier so precision is auditable:
  *
@@ -51,7 +51,7 @@ const REPO_ROOT = join(__dirname, '..', '..')
  * The root moved out of `packages/` for the same reason, one level up: scoped to packages, the gate
  * could not see `docs/`, `tools/`, `scripts/`, `examples/` or the root `README.md` / `CHANGELOG.md`,
  * so nothing stopped a Portuguese document from landing there. It found exactly that — a 2156-line
- * course under `docs/course/`, invisible for as long as the scope was narrower than the repository.
+ * course under, invisible for as long as the scope was narrower than the repository.
  */
 /**
  * B-065 — SOURCE and its tests. Deliberately not the whole repository, and the exclusions are the
@@ -63,7 +63,7 @@ const REPO_ROOT = join(__dirname, '..', '..')
  *   from one written today, so it does not judge them at all.
  * - `CHANGELOG.md` (root and per package) — entries for a RELEASED version are immutable under
  *   Unbreakable Rule 6.
- * - `ROADMAP*.md`, `CLAUDE.md`, `CONTRIBUTING.md` — same category as the wiki.
+ * - `ROADMAP*.md`, `CONTRIBUTING.md` — same category as the wiki.
  *
  * What this DOES cover is every line that ships or executes: `packages/*` source and tests,
  * `scripts/`, `tools/`, and the lint tests themselves. That is the surface where a Portuguese
@@ -73,7 +73,7 @@ const SCAN_ROOTS = ['packages', 'scripts', 'tools', 'tests']
 
 /**
  * Loanwords English legitimately borrows with their diacritics. `façade` is a
- * locked term in `CLAUDE.md` ("Agent façade"), so it is not a violation.
+ * locked term in ("Agent façade"), so it is not a violation.
  */
 const WORD_ALLOWLIST = new Set(['façade', 'façades', 'naïve', 'café', 'résumé'])
 
@@ -102,7 +102,7 @@ const FILE_ALLOWLIST = new Set<string>([
   // city because a model replying in Portuguese uses the accented one; dropping that alternative to
   // satisfy this gate would narrow what the probe accepts and weaken the audit it exists to run.
   // Same category as the skipped session transcripts: linting the user's own words, not our prose.
-  // The `docs/course/theokit-agent-ai-course.md` exemption was removed on 2026-08-06, on the
+  // The exemption was removed on 2026-08-06, on the
   // condition its own comment set: "delete this entry the day the course becomes English". The
   // course was decomposed into the `wiki/` bundle in English, so the gate now covers every word
   // that replaced it and there is no exempt prose left in the repository.

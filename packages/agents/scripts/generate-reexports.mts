@@ -13,7 +13,7 @@
  * Precedent for a single-use tool in this corpus: M72's `git blame` attribution, whose
  * `adr-governance.md § 6` says explicitly "do not reuse this procedure as a standing tool".
  *
- *   npx tsx scripts/generate-reexports.mts [--json]
+ * npx tsx [--json]
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -117,7 +117,7 @@ export function renderBlock(specifier: string, s: Surface): string {
   return parts.join('\n')
 }
 
-// Run as a CLI (`npx tsx scripts/generate-reexports.mts [--json]`), never imported by production
+// Run as a CLI (`npx tsx [--json]`), never imported by production
 // code — it is an authoring tool. The functions above are exported so the surface test uses the SAME
 // enumeration rather than reimplementing it (the duplication M78 called "two lists that have to stay
 // in sync").

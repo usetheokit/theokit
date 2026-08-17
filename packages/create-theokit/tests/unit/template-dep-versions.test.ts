@@ -1,6 +1,6 @@
 /**
  * Regression guard — the default template's EXTERNAL dep pins (`@theokit/sdk`, `@usetheo/ui`) must stay
- * compatible with what the pinned `theokit` / `@theokit/ui` require. `scripts/sync-template-versions.mjs`
+ * compatible with what the pinned `theokit` / `@theokit/ui` require.
  * only tracks WORKSPACE packages (theokit / @theokit/agents / create-theokit), so these npm-external pins
  * have NO auto-sync and silently drifted:
  *  - `@theokit/sdk` was left at a stale `^2.25.0` while `theokit@0.43.0` peers `@theokit/sdk ^4.0.1` — every

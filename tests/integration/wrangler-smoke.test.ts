@@ -1,7 +1,7 @@
 /**
  * T5a.1 AC#3 — CF Workers smoke test passes (real wrangler dev).
  *
- * Drives `wrangler dev` against `tests/fixtures/handler-web-standards/`
+ * Drives `wrangler dev` against `tests
  * using Miniflare (the default backend in wrangler v3+; no Cloudflare
  * account required). Asserts that the same `executeWebRequest` that
  * runs under Node bundles cleanly for the CF Workers runtime and serves
@@ -23,11 +23,10 @@
  * would otherwise stall the `beforeAll` to its 90s hook timeout in every
  * sandbox / minimal CI. Cloudflare Workers is a future / opt-in
  * compatibility surface — TheoCloud is the only end-to-end-validated
- * deploy target (CLAUDE.md) — so this smoke is not a default gate. When
+ * deploy target — so this smoke is not a default gate. When
  * opted in, if the `wrangler` binary is still absent the test skips too
  * (per Rule 3 — never lie about test coverage).
  *
- * Per `docs/plans/theokit-arch-gaps-implementation-plan.md` v1.2
  * T5a.1 Acceptance Criteria #3.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -64,7 +63,7 @@ const WRANGLER_BIN = resolveWrangler()
 // binds and the `beforeAll` below would hit its 90s hook timeout — even though the
 // `wrangler` BINARY is present (it ships as a devDep, so the binary guard alone is
 // not enough). Cloudflare Workers is a future / opt-in compatibility surface —
-// TheoCloud is the only end-to-end-validated deploy target (CLAUDE.md) — so this
+// TheoCloud is the only end-to-end-validated deploy target — so this
 // real smoke runs ONLY when explicitly opted in. Everywhere else it skips cleanly.
 const E2E_WRANGLER_OPT_IN =
   process.env.THEOKIT_E2E_WRANGLER === '1' || process.env.THEOKIT_E2E_WRANGLER === 'true'

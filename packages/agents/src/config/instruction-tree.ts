@@ -88,7 +88,7 @@ export interface LoadInstructionTreeInput {
    * Which files to load. Defaults to the conventional two.
    *
    * A list matches basenames exactly; a predicate answers the question a list cannot. A rules
-   * DIRECTORY — `.claude/rules/`, `.cursor/rules/`, `.theokit/rules/` — holds files the caller
+   * DIRECTORY —, `.cursor/rules/`, `.theokit/rules/` — holds files the caller
    * cannot name in advance, because the user chooses the names. With only a list on offer, the
    * closest consumer wrote its own 112-line walk (budget, depth ceiling, cycle guard and all) to
    * ask `entry.endsWith('.md')`. The walk was ours; only the question was theirs.

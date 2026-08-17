@@ -29,9 +29,9 @@ sources:
 
 ## Context
 
-O issue usetheodev/theokit#145 mostrou que um toolbox com `namespace` mintava `ns.tool` — fora do charset que o `@theokit/sdk` aceita — e portanto um caminho **documentado** nunca funcionou contra um provider real. O fix (em `@theokit/agents@1.0.1`) trocou o separador para `_` e validou na autoria. A revisão de System Design + Design Pattern desse fix achou **6 defeitos residuais**, dois deles introduzidos pela própria correção (`grills/tool-name-single-source.md` § Q1; bloco `### M55` do `ROADMAP.md`).
+O issue usetheodev/theokit#145 mostrou que um toolbox com `namespace` mintava `ns.tool` — fora do charset que o `@theokit/sdk` aceita — e portanto um caminho **documentado** nunca funcionou contra um provider real. O fix (em `@theokit/agents@1.0.1`) trocou o separador para `_` e validou na autoria. A revisão de System Design + Design Pattern desse fix achou **6 defeitos residuais**, dois deles introduzidos pela própria correção (`grills/tool-name-single-.md` § Q1; bloco `### M55` do).
 
-Esta discovery existe porque a correção tratou o **sintoma** (o separador) sem interrogar a **causa**: a regra do provider foi copiada por amostragem, e a identidade da tool vive replicada em duas estruturas. Regras consumidas: `.claude/rules/error-handling.md` § 2, `.claude/rules/parsimony-ladder.md`, `.claude/rules/testing.md` § 4.1, `.claude/rules/architecture.md` § 2.
+Esta discovery existe porque a correção tratou o **sintoma** (o separador) sem interrogar a **causa**: a regra do provider foi copiada por amostragem, e a identidade da tool vive replicada em duas estruturas. Regras consumidas:,.1,.
 
 ## Objective
 
@@ -64,7 +64,7 @@ O **gap** é de cobertura, e é derivável mecanicamente da lista de códigos de
 | `tool_invalid_name` | falha o charset `/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/` | ✅ (2 casos: `has space`, `9leading-digit`) |
 | `tool_reserved_name` | ∈ `{shell, memory_search, memory_get}` **ou** prefixo `mcp_` | ❌ — **e não é apenas gap de teste: a regra não existe no nosso código** |
 
-Além disso, os dois casos negativos existentes asseguram só `toThrow(ConfigurationError)` — **não** a mensagem. `.claude/rules/testing.md` § 4.1 exige que o caso negativo asserte **o erro tipado E a mensagem**; asserção só de tipo passa mesmo que a mensagem aponte o campo errado.
+Além disso, os dois casos negativos existentes asseguram só `toThrow(ConfigurationError)` — **não** a mensagem.1 exige que o caso negativo asserte **o erro tipado E a mensagem**; asserção só de tipo passa mesmo que a mensagem aponte o campo errado.
 
 **Decisão proposta:** a matriz acima **é** a lista de testes do M55 — um caso negativo por código de erro do SDK, cada um assertando tipo + mensagem. A tabela vira a fonte da suíte, e não uma escolha de autor.
 
@@ -128,7 +128,7 @@ Delta contra `packages/agents/src/bridge/agent-compiler.ts:86`:
 
 ### Q7 — Qual gate mecanizado teria pego o órfão, e ele está ligado aqui?
 
-**Fontes independentes:** repo local + `.claude/rules/code-quality-golden-rule.md` (2).
+**Fontes independentes:** repo local + (2).
 
 **Nenhum gate deste repositório pegaria.** Evidência em `knip.json`:
 
@@ -139,7 +139,7 @@ Delta contra `packages/agents/src/bridge/agent-compiler.ts:86`:
 
 `"exports": "off"` desliga exatamente a categoria que detecta símbolo exportado sem consumidor. Somando: `compileHitlGates` **não** é reexportado por nenhuma entry do pacote (`knip.json › workspaces["packages/agents"].entry` lista `src/index.ts`, `src/decorators-entry.ts`, `src/bridge-entry.ts`, `src/testing/index.ts`, `src/theokit-plugin.ts`; `grep` mostra que o símbolo não aparece em nenhuma delas, e o barril `src/bridge/index.ts` exporta `compileTools` mas **não** `compileHitlGates`). Ou seja, é um export de módulo interno sem consumidor — o caso canônico do knip — invisível por configuração.
 
-`.claude/rules/code-quality-golden-rule.md` § 2 classifica isso como `dead_code_unallowlisted_typescript`, cap **FAIL_HARD (49)**. O detector D1 do `/code-quality` usa knip; com `exports: off`, o D1 herda a cegueira.
+code_unallowlisted_typescript`, cap **FAIL_HARD (49)**. O detector D1 do `/code-quality` usa knip; com `exports: off`, o D1 herda a cegueira.
 
 **Consequência direta para o M55:** o critério *"`pnpm knip` limpo e nenhum símbolo exportado do pacote sem chamador"* escrito no DoD **não é verificável como está** — knip passaria verde de qualquer forma. Isso é um workaround acidental, e o objetivo é não ter nenhum.
 
@@ -198,7 +198,7 @@ Três posturas observadas, e o critério que as separa é **quem controla a entr
 | `@theokit/sdk@4.1.0` | **lança tipado** (3 códigos distintos) | `validateToolName` | O nome vem do **código do consumidor**. Um nome inválido é bug do autor, e falhar cedo é o serviço mais útil |
 | `ai@7.0.14` | **nem valida** — o nome é chave de tipo (`toolName: Extract<keyof TOOLS, string>`, `dist/index.d.ts:145`), com `DynamicToolCall` (`:1130-1134`) para o que só existe em runtime | — | Empurra a checagem para o compilador; o provider é quem rejeita em runtime |
 
-**Decisão proposta:** **lançar**, e alinhar com o SDK também nos **códigos**. Nossos namespaces vêm da autoria (código ou `.theokit/agent.json` do próprio usuário) — fronteira controlada, exatamente o caso do SDK. Coagir aqui seria pior que o bug: `namespace: 'my ops'` viraria silenciosamente `my_ops` e o autor descobriria pelo nome errado no log de tool call. Isso satisfaz `.claude/rules/error-handling.md` § 2 (validar na fronteira, falhar tipado) e o padrão do `ai` é inaplicável — nossos nomes são compostos em runtime a partir de `namespace + name`, então não há chave de tipo para inferir.
+**Decisão proposta:** **lançar**, e alinhar com o SDK também nos **códigos**. Nossos namespaces vêm da autoria (código ou `.theokit/agent.json` do próprio usuário) — fronteira controlada, exatamente o caso do SDK. Coagir aqui seria pior que o bug: `namespace: 'my ops'` viraria silenciosamente `my_ops` e o autor descobriria pelo nome errado no log de tool call. Isso satisfaz ar tipado) e o padrão do `ai` é inaplicável — nossos nomes são compostos em runtime a partir de `namespace + name`, então não há chave de tipo para inferir.
 
 ---
 
@@ -235,7 +235,7 @@ Leitura transversal: **nenhuma das três fontes usa VO**, as três colocam a reg
 
 **Rationale:** evidência do peer (Q6) — o opencode elimina o drift nome↔permissão operando sobre a mesma estrutura, com o autor declarando o motivo. Aplicar o mesmo princípio ao nosso desenho custa ~8 linhas, ressuscita um símbolo órfão e torna a propriedade "não podem discordar" estrutural. Alternativa considerada: deletar `compileHitlGates` e manter o laço na capability — resolve a orfandade mas **preserva** a duplicação de conhecimento, que é a causa-raiz do #145.
 
-**Consequences:** `compileHitlGates` volta a ter chamador; o achado (3) fecha por reconexão, não por remoção. `.claude/rules/parsimony-ladder.md` rung 4 (reusar o que já existe) resolve antes do rung 6.
+**Consequences:** `compileHitlGates` volta a ter chamador; o achado (3) fecha por reconexão, não por remoção. rung 4 (reusar o que já existe) resolve antes do rung 6.
 
 ### D5 — Value Object `ToolName`: RECUSADO
 
@@ -274,7 +274,7 @@ Nenhuma. As 7 questões foram respondidas dentro do budget (3h), com os checkpoi
 
 ## Nota honesta sobre o gate deste próprio ciclo
 
-`run_discover_plan_score.py` devolveu `SHIPPABLE` (100) para o plano, mas a dimensão `reference_citations` pontuou 100 com **zero citações detectadas**: o regex do checker (`check_reference_citations.py:22`) exige o prefixo `.claude/knowledge-base/references/`, e o theokit usa `knowledge-base/references/`. Foi um verde vazio, não um verde merecido. As 8 citações do plano foram, por isso, verificadas **manualmente** em disco (todas OK) antes desta execução. Registrado aqui em vez de silenciado, pela mesma razão que o achado (6) existe: um gate que não pode falhar não é um gate.
+`run_discover_plan_score.py` devolveu `SHIPPABLE` (100) para o plano, mas a dimensão `reference_citations` pontuou 100 com **zero citações detectadas**: o regex do checker (`check_reference_citations.py:22`) exige o prefixo, e o theokit usa `knowledge-base/references/`. Foi um verde vazio, não um verde merecido. As 8 citações do plano foram, por isso, verificadas **manualmente** em disco (todas OK) antes desta execução. Registrado aqui em vez de silenciado, pela mesma razão que o achado (6) existe: um gate que não pode falhar não é um gate.
 
 # Related
 * [tool-name-single-source](/grills/tool-name-single-source.md) — the scope questions.

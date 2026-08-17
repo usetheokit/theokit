@@ -45,7 +45,7 @@ const __IS_DEV = (() => {
  * Agents tab can render the run. Prod tree-shakes the entire dispatcher
  * import via the `__IS_DEV` IIFE guard.
  *
- * @see docs/concepts/cost-tracking.md (when implemented in T6.3)
+ * @see (when implemented in T6.3)
  */
 export async function trackAgentRun(
   input: TrackAgentRunInput,

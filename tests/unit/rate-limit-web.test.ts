@@ -13,7 +13,6 @@
  * `request.headers.get('x-forwarded-for')` without giving safer
  * extraction. KISS — accept the IP directly.
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase D.
  */
 import { describe, it, expect } from 'vitest'

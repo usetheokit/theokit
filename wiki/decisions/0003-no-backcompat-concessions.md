@@ -118,7 +118,7 @@ volta a partir desses. Sem allowlist para envelhecer. Provado nos dois sentidos:
 - Grill: `grills/no-backcompat-concessions.md`
 - ADR antecessor: `decisions/0002-tool-name-single-source.md`
 - ADR 0030 (direção de dependência), ADR-0055 (tauri como adapter acima do principal)
-- Regras: `.claude/rules/error-handling.md` § 2, `.claude/rules/parsimony-ladder.md`
+- Regras:
 
 # Related
 * [no-backcompat-concessions](/grills/no-backcompat-concessions.md) — the scope questions.

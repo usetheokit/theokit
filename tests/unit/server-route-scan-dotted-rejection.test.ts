@@ -2,7 +2,6 @@
  * G6 T1.1 — RED → GREEN: scanner REJECTS dotted basenames with
  * `RouterConventionError` and emits an actionable error message.
  *
- * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * Contract:
  *   1. Dotted middle-param basename throws RouterConventionError.

@@ -14,7 +14,7 @@ there is state or orchestration to hold, and forwarding the rest unchanged.
 > **Enriching never reduces.** A symbol the SDK exposes and this layer does not forward is
 > unreachable to whoever consumes the layer — and the only legal way out for them is to reimplement
 > it. That happened: when `./auth` exported one value against the SDK's nineteen, a downstream
-> product rewrote ~120 lines of credential mechanics. `scripts/check-surface-parity.mjs` in the
+> product rewrote ~120 lines of credential mechanics in the
 > repository root now requires a written decision per SDK symbol, so the next gap breaks CI instead
 > of quietly costing someone a week.
 

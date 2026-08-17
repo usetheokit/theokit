@@ -31,7 +31,6 @@ export function defineWebSocket(handler: WebSocketHandler): WebSocketHandler {
  * `WebSocket` instances; CF Workers / Bun / Deno coerce as needed at
  * the adapter boundary).
  *
- * Per `docs/plans/t5a2-incoming-message-to-request-shape-refactor-plan.md`
  * v1.0 § Phase F (closes Phase F).
  *
  * **Architectural note — WebSocket upgrade semantics differ across runtimes:**

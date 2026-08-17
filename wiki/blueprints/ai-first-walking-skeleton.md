@@ -29,7 +29,7 @@ Answers **Q5** (ai-sdk fixture/assertion pattern to mirror) and **Q6** (theokit 
 
 The producer's canonical test for the text stream is `to-ui-message-stream.test.ts`. The pattern is: build a fixture **array** of input parts, convert it to a `ReadableStream`, pipe through the transform under test, collect back to an array, and assert the **exact ordered chunk array** with `toEqual`.
 
-- Fixture construction + drive + collect: `convertArrayToReadableStream(parts)` → `toUIMessageStream({ stream, tools: undefined })` → `convertReadableStreamToArray(...)` — `.claude/knowledge-base/references/ai-sdk/packages/ai/src/ui-message-stream/to-ui-message-stream.test.ts:61-66`.
+- Fixture construction + drive + collect: `convertArrayToReadableStream(parts)` → `toUIMessageStream({ stream, tools: undefined })` → `convertReadableStreamToArray(.)` —:61-66`.
 - The golden text fixture (input parts): `start`, `start-step`, `text-start id:'t1'`, two `text-delta` (`'Hello'`, `', world!'`), `text-end`, `finish-step`, `finish` — `to-ui-message-stream.test.ts:28-59`.
 - The golden assertion (output chunks) is exact-array `toEqual` — `to-ui-message-stream.test.ts:68-77`:
   ```
@@ -103,9 +103,9 @@ Answers **Q7** (skeleton home + endpoint wiring + the two EC-2 test artifacts).
 
 ### Q7 — Where the walking skeleton lives + how it is wired
 
-**Skeleton home.** The closest live pattern is the fixture `fixtures/use-agent-stream-react/` — it already carries the full agent slice: `app/page.tsx` (client), `server/routes/agent.ts` (endpoint), `theo.config.ts`. The M0 skeleton is a sibling of this — either an added fixture `fixtures/agent-uimessagestream/` or a UIMessageStream variant inside a new example — that swaps the proprietary writer for the UIMessageStream writer and swaps the client from `useAgentStream` to `@ai-sdk/react`'s `useChat`.
+**Skeleton home.** The closest live pattern is the fixture — it already carries the full agent slice: `app/page.tsx` (client), `server/routes/agent.ts` (endpoint), `theo.config.ts`. The M0 skeleton is a sibling of this — either an added fixture or a UIMessageStream variant inside a new example — that swaps the proprietary writer for the UIMessageStream writer and swaps the client from `useAgentStream` to `@ai-sdk/react`'s `useChat`.
 
-- Current endpoint (proprietary path): `fixtures/use-agent-stream-react/server/routes/agent.ts:3-9` — `defineAgentEndpoint({ async *handler(){ yield { type:'message', content:… } } })`. Note the yielded `AgentEvent` is `{ type:'message', content }` (theokit-proprietary), NOT a UIMessageChunk.
+- Current endpoint (proprietary path):3-9` — `defineAgentEndpoint({ async *handler{ yield { type:'message', content:… } } })`. Note the yielded `AgentEvent` is `{ type:'message', content }` (theokit-proprietary), NOT a UIMessageChunk.
 - The endpoint builder returns a `Response` whose SSE headers are `SSE_HEADERS = { 'content-type':'text/event-stream', 'cache-control':'no-cache, no-transform', connection:'keep-alive' }` — `packages/theo/src/server/define/define-agent-endpoint.ts:84-88`. **This set lacks `x-vercel-ai-ui-message-stream: v1`** (the M0 writer must add it — see Q3).
 - The writer frames each event as `data: ${JSON.stringify(event)}\n\n` (`encodeSSE`) — `define-agent-endpoint.ts:90-92` — and has **no `[DONE]` terminal** (`controller.close()` with no flush — `define-agent-endpoint.ts:260-263`). The M0 writer must append `data: [DONE]\n\n` before close (see Q3).
 - The generator is primed to its first yield before headers commit (cookie flush) — `define-agent-endpoint.ts:191-207` — a shape the M0 writer keeps.
@@ -148,7 +148,7 @@ The minimal ordered sequence `useChat` needs to render pure streaming text, with
 
 ### Q3 — The wire contract `DefaultChatTransport` requires (EC-1 note inline)
 
-**Response headers** (producer sets the full set): `content-type: text/event-stream`, `cache-control: no-cache`, `connection: keep-alive`, `x-vercel-ai-ui-message-stream: v1`, `x-accel-buffering: no` — `.claude/knowledge-base/references/ai-sdk/packages/ai/src/ui-message-stream/ui-message-stream-headers.ts:1-7`. Applied to the `Response` at `create-ui-message-stream-response.ts:39-43`.
+**Response headers** (producer sets the full set): `content-type: text/event-stream`, `cache-control: no-cache`, `connection: keep-alive`, `x-vercel-ai-ui-message-stream: v1`, `x-accel-buffering: no` —:1-7`. Applied to the `Response` at `create-ui-message-stream-response.ts:39-43`.
 
 **Framing:** each chunk is one SSE data frame `data: ${JSON.stringify(part)}\n\n` — `json-to-sse-transform-stream.ts:10`. Then the body is UTF-8 encoded via `TextEncoderStream` — `create-ui-message-stream-response.ts:39`.
 
@@ -156,7 +156,7 @@ The minimal ordered sequence `useChat` needs to render pure streaming text, with
 
 **What the consumer actually requires vs ignores:**
 - `DefaultChatTransport.processResponseStream` pipes the raw body through `parseJsonEventStream({ stream, schema: uiMessageChunkSchema })` then throws on any parse failure — `default-chat-transport.ts:19-35`. So **every frame's JSON must validate against the `strictObject` union** (Q1) or the whole stream throws (`default-chat-transport.ts:28-30`).
-- `parseJsonEventStream` decodes text, runs `EventSourceParserStream`, and **explicitly ignores the `[DONE]` data** (`if (data === '[DONE]') return`) — `.claude/knowledge-base/references/ai-sdk/packages/provider-utils/src/parse-json-event-stream.ts:24-30`. `[DONE]` is a terminal courtesy; the consumer does not require it to parse, but the producer contract emits it.
+- `parseJsonEventStream` decodes text, runs `EventSourceParserStream`, and **explicitly ignores the `[DONE]` data** (`if (data === '[DONE]') return`) —:24-30`. `[DONE]` is a terminal courtesy; the consumer does not require it to parse, but the producer contract emits it.
 - The HTTP call is `POST` with `Content-Type: application/json` body; it requires `response.ok` and a non-empty `response.body`, else it throws — `http-chat-transport.ts:191-213`. Default `api` is `/api/chat` (override via `DefaultChatTransport({ api })`) — `http-chat-transport.ts:127-128`.
 - **Honesty note (EC-1-adjacent):** `DefaultChatTransport` does NOT assert the `x-vercel-ai-ui-message-stream: v1` header value in the parse path — parsing is driven by `EventSourceParserStream` over the body. The header is the documented convention (and required for correct proxy/`no-buffering` behavior) and MUST be emitted, but the load-bearing requirements for `useChat` to render are: (1) a readable SSE body, (2) `data: {json}\n\n` frames, (3) each JSON validating against `uiMessageChunkSchema`, (4) the `start`/`text-*`/`finish` ordering of Q1.
 

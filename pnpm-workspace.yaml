@@ -2,9 +2,6 @@ packages:
   - 'packages/*'
   - 'my-test'
   - 'examples/*'
-  # The seven members under `fixtures/` (template-default, theoui-autoinject, services-*,
-  # decorator-fullstack) went away with the directory. The 8100-8199 port range, reserved for the
-  # service fixtures, is free.
-  # @theokit/sdk sibling links REMOVED (2026-06-10) — Turborepo requires all
-  # workspace packages inside repo root. SDK consumed via npm registry instead.
-  # To restore local dev: pnpm link ../theokit-sdk/packages/sdk
+  # The @theokit/sdk sibling packages are consumed from the npm registry, not linked: a workspace
+  # link would have to sit inside the repo root. For local cross-repo work:
+  # `pnpm link ../theokit-sdk/packages/sdk`

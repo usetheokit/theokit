@@ -22,7 +22,7 @@ sources:
 > `useChat` (`@ai-sdk/react`) materializes a tool-call card and a reasoning block,
 > not just text. All chunk shapes are read from ai-sdk **v7.0.14** — the exact
 > version theokit pins (`packages/agents/package.json:57` `ai@^7.0.14`;
-> `.claude/knowledge-base/references/ai-sdk/packages/ai/package.json:3` `7.0.14`) —
+>:3` `7.0.14`) —
 > so there is **zero producer skew**. The blueprint settles four edge cases
 > (EC-1 tool lifecycle, EC-2 open/close state machine, EC-3 reasoning grouping,
 > EC-4 error branch) against the real chunk producer + the `useChat` chunk
@@ -46,7 +46,7 @@ YAGNI (not emitted by theokit `AgentStreamEvent`).
 
 ai-sdk unit-tests the producer mapping with a **fixture-array → `.map(toUIMessageChunk)` → `toEqual`/inline-snapshot** pattern, one `it()` per chunk family:
 
-- **Reasoning** (`.claude/knowledge-base/references/ai-sdk/packages/ai/src/ui-message-stream/to-ui-message-chunk.test.ts:75-127`): a 3-part fixture `[reasoning-start{id}, reasoning-delta{id,text}, reasoning-end{id}]` is mapped and snapshotted; **the same `id` (`'reasoning-1'`) threads all three chunks** — the canonical grouping proof for EC-3.
+- **Reasoning**: a 3-part fixture `[reasoning-start{id}, reasoning-delta{id,text}, reasoning-end{id}]` is mapped and snapshotted; **the same `id` (`'reasoning-1'`) threads all three chunks** — the canonical grouping proof for EC-3.
 - **Tool call** (`to-ui-message-chunk.test.ts:399-470`): a `tool-call` part `{toolCallId,toolName,input}` maps to `tool-input-available{toolCallId,toolName,input}` (`:414-423`); an `invalid:true` tool-call maps to `tool-input-error` (`:458-469`).
 - **Tool result** (`to-ui-message-chunk.test.ts:472-519`): a `tool-result` part maps to `tool-output-available{toolCallId,output}` (`:489-498`); note the `output: undefined → null` normalization (`:511-517`) so JSON serialization never drops the field (mirrored in the producer at `to-ui-message-chunk.ts:280-282`).
 
@@ -79,11 +79,11 @@ Determinism note (mirrors M0 D3): reasoning `id` must be injectable for tests �
 
 **Yes for the M1 unit test; assistant-ui is NOT a test dependency.** The M1 translator is a pure `AgentStreamEvent → UIMessageChunk` mapper (G2 / `sdk-runtime.md` — no runtime). Its acceptance oracle is ai-sdk's own `uiMessageChunkSchema()` (`ui-message-stream-translator.test.ts:136-143`), already an installed dep. `useChat` from `@ai-sdk/react` is what turns those chunks into `message.parts` `ToolUIPart`s via the chunk processor `process-ui-message-stream.ts` (Corner 4) — no third-party renderer is required for the part to materialize.
 
-**assistant-ui is the render acceptance bar (visual/E2E), not a unit dep** — and it carries a **major version skew**: `@assistant-ui/react-ai-sdk` pins `ai ^6.0.209` and `@ai-sdk/react ^3.0.211` (`.claude/knowledge-base/references/assistant-ui/packages/react-ai-sdk/package.json:53-61`), whereas theokit is on `ai ^7.0.14` (`packages/agents/package.json:57`). Adding assistant-ui as an M1 dependency would force an ai@6/ai@7 dual-install. **Recommendation:** M1 tests the chunk contract against ai@7's `uiMessageChunkSchema`; assistant-ui rendering is validated separately (a fixtures/E2E app pinned to assistant-ui's own ai@6), not wired into the `@theokit/agents` unit suite.
+**assistant-ui is the render acceptance bar (visual/E2E), not a unit dep** — and it carries a **major version skew**: `@assistant-ui/react-ai-sdk` pins `ai ^6.0.209` and `@ai-sdk/react ^3.0.211`, whereas theokit is on `ai ^7.0.14` (`packages/agents/package.json:57`). Adding assistant-ui as an M1 dependency would force an ai@6/ai@7 dual-install. **Recommendation:** M1 tests the chunk contract against ai@7's `uiMessageChunkSchema`; assistant-ui rendering is validated separately (a app pinned to assistant-ui's own ai@6), not wired into the `@theokit/agents` unit suite.
 
 ### The `ToolCallMessagePart` field list (what a tool-card reads)
 
-assistant-ui's `convertMessage.ts` guards `isToolUIPart(part)` and emits a `ToolCallMessagePart` with these fields (`.claude/knowledge-base/references/assistant-ui/packages/react-ai-sdk/src/ui/utils/convertMessage.ts:219-297`): **`type:'tool-call'`, `toolName`, `toolCallId`, `argsText`, `args`, `result`, `isError`** (`:286-297`). Sourcing: `toolName`/`toolCallId` from the part (`:220-221`); `args` from `part.input` (`:224-235`); `result` from `part.output` when `state==='output-available'` (`:241-244`); `isError=true` + `result={error:part.errorText}` when `state==='output-error'` (`:245-247`). Reasoning parts pass straight through: `part.type==='reasoning' → {type:'reasoning', text:part.text}` (`:212-217`).
+assistant-ui's `convertMessage.ts` guards `isToolUIPart(part)` and emits a `ToolCallMessagePart` with these fields: **`type:'tool-call'`, `toolName`, `toolCallId`, `argsText`, `args`, `result`, `isError`** (`:286-297`). Sourcing: `toolName`/`toolCallId` from the part (`:220-221`); `args` from `part.input` (`:224-235`); `result` from `part.output` when `state==='output-available'` (`:241-244`); `isError=true` + `result={error:part.errorText}` when `state==='output-error'` (`:245-247`). Reasoning parts pass straight through: `part.type==='reasoning' → {type:'reasoning', text:part.text}` (`:212-217`).
 
 The fallback renderer `tool-fallback.tsx` consumes exactly `toolName`, `argsText`, `result`, `status` (`:528-573`): trigger shows `Used tool: <toolName>` (`:169`), args pretty-print `argsText` (`:230-250`), result pretty-prints `result` (`:252-275`). **E2E render assertion target:** a completed tool run shows `Used tool: read`, the args JSON, and the result — proving the `tool-input-available` → `tool-output-available` pair reached the card.
 
@@ -98,11 +98,11 @@ AG-UI (as embodied in CopilotKit) is an **event-based, SSE-transported, cross-ve
 | Dimension | AG-UI (CopilotKit) | UIMessageStream (ai-sdk, M0-adopted) |
 |---|---|---|
 | Shape | Event objects `BaseEvent` + `EventType` enum | `z.strictObject` chunk union (`ui-message-chunks.ts:26-213`) |
-| Event/chunk kinds | `TEXT_MESSAGE_START/END`, `TOOL_CALL_START/END/RESULT`, `RUN_STARTED/FINISHED/ERROR` (`.claude/knowledge-base/references/copilotkit/packages/shared/src/finalize-events.ts:37-144`) | `text-*`, `tool-input-*`, `tool-output-*`, `reasoning-*`, `start`/`finish` |
-| Transport | SSE via `EventEncoder` + `rxjs Observable<BaseEvent>` (`.claude/knowledge-base/references/copilotkit/packages/runtime/src/v2/runtime/handlers/shared/sse-response.ts:1-33`) | ai-sdk transport, consumed directly by `useChat` |
+| Event/chunk kinds | `TEXT_MESSAGE_START/END`, `TOOL_CALL_START/END/RESULT`, `RUN_STARTED/FINISHED/ERROR` | `text-*`, `tool-input-*`, `tool-output-*`, `reasoning-*`, `start`/`finish` |
+| Transport | SSE via `EventEncoder` + `rxjs Observable<BaseEvent>` | ai-sdk transport, consumed directly by `useChat` |
 | Extra deps | `@ag-ui/client`, `@ag-ui/encoder`, `rxjs` (`sse-response.ts:1-3`) | none beyond `ai` (already pinned) |
-| Version maturity | `@ag-ui/client` **0.0.57** — pre-1.0 (`.claude/knowledge-base/references/copilotkit/packages/core/package.json:38`) | `ai` **7.0.14** stable (theokit already pins `packages/agents/package.json:57`) |
-| Cross-vendor | Yes — LangGraph adapter `@ag-ui/langgraph 0.0.42` (`.claude/knowledge-base/references/copilotkit/packages/sdk-js/package.json:62`) | ai-sdk-native |
+| Version maturity | `@ag-ui/client` **0.0.57** — pre-1.0 | `ai` **7.0.14** stable (theokit already pins `packages/agents/package.json:57`) |
+| Cross-vendor | Yes — LangGraph adapter `@ag-ui/langgraph 0.0.42` | ai-sdk-native |
 | theokit fit | Needs a NEW encoder + rxjs + a second wire; theokit `AgentStreamEvent` already maps 1:1 to UIMessageChunks | M0 already ships it; `useChat`/assistant-ui consume it natively |
 
 **Decision surface:** AG-UI's only advantage for theokit (cross-vendor client interop) is not a current requirement — the SDK is theokit's single runtime (`sdk-runtime.md`), and its `AgentStreamEvent` union maps directly onto UIMessageChunks (Corner 4). AG-UI would add `rxjs` + `@ag-ui/*` (pre-1.0) + a parallel wire for zero present benefit (YAGNI / G11). See ADR-2.

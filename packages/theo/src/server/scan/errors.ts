@@ -1,7 +1,6 @@
 /**
  * Router-convention errors thrown by the server-route scanner.
  *
- * Plan: .claude/knowledge-base/plans/g6-router-convention-plan.md v1.1
  *
  * theokit 0.4.0+ enforces directory-nested file-system routing
  * (`auth/[provider]/login.ts`) and REJECTS dotted-basename routes

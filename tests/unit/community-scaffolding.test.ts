@@ -54,17 +54,31 @@ describe('T7.3 — file presence', () => {
 describe('T7.3 — CONTRIBUTING references', () => {
   const md = (): string => readFileSync(r('CONTRIBUTING.md'), 'utf-8')
 
-  it('Given CONTRIBUTING.md, Then references scripts/dogfood-smoke.sh', () => {
-    expect(md()).toMatch(/dogfood-smoke|scripts\/dogfood-smoke\.sh/)
+  it('Given CONTRIBUTING.md, Then every command in the gate exists as an npm script', () => {
+    // The gate section used to name a shell script that no longer ships. Pinning the COMMANDS to
+    // the manifest means the doc cannot drift into telling a contributor to run something that is
+    // not there.
+    // pnpm's own verbs are not npm scripts; only the repo-defined ones are being checked here.
+    const PNPM_BUILTINS = new Set(['install', 'add', 'remove', 'update', 'exec', 'dlx', 'why'])
+    const commands = [...md().matchAll(/^pnpm ([a-z:]+)$/gm)]
+      .map((m) => m[1]!)
+      .filter((c) => !PNPM_BUILTINS.has(c))
+    expect(commands.length).toBeGreaterThanOrEqual(4)
+    const scripts = Object.keys(
+      (JSON.parse(readFileSync(r('package.json'), 'utf-8')) as { scripts: Record<string, string> })
+        .scripts,
+    )
+    for (const command of commands) expect(scripts).toContain(command)
   })
 
   it('Given CONTRIBUTING.md, Then references the migration guide', () => {
     expect(md()).toMatch(/docs\/migrating|0\.2-to-0\.3/)
   })
 
-  it('Given CONTRIBUTING.md, Then names vitest + playwright as the test commands', () => {
-    expect(md()).toMatch(/vitest/i)
-    expect(md()).toMatch(/playwright/i)
+  it('Given CONTRIBUTING.md, Then it states the absence of a browser suite', () => {
+    // There is no end-to-end harness. A contributor who assumes one exists will believe a
+    // rendering change is covered when nothing exercised it.
+    expect(md()).toMatch(/no browser suite/i)
   })
 })
 

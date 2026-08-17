@@ -6,7 +6,7 @@
  * public key (hex). Uses Web Crypto Ed25519 (Node ≥ 22) — no third-party crypto (Rule 9 / Web
  * Standards G8).
  *
- * @see https://discord.com/developers/docs/interactions/overview#setting-up-an-endpoint-validating-security-request-headers
+ * @see https://discord.com/developers#setting-up-an-endpoint-validating-security-request-headers
  */
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 

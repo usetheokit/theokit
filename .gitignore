@@ -38,7 +38,6 @@ Thumbs.db
 
 # Test
 coverage/
-playwright-report/
 test-results/
 .vitest/
 
@@ -80,21 +79,12 @@ test-secret-file*
 tmp/
 .tmp/
 
-# Claude Code local settings
-.claude/settings.local.json
-.claude/worktrees/
-.claude/ralph-loop.local.md
-.claude/architecture-review-loop.local.md
-# PreCompact session snapshots — rolling retention (last 10 by mtime), never commit
-.claude/.compaction-snapshots/
+# Agent tooling state — the whole tree, not a hand-kept list of leaves. A list is what let a
+# `git add -A` re-commit the directory after it had been removed.
+.claude/
 
-# Python bytecode cache from .claude skill scripts
+# Python bytecode cache
 **/__pycache__/
-
-# Cycle infrastructure (per skill SoT — halt-loop driver files + per-slug progress trackers)
-.claude/halt-loop-prompts/
-.claude/knowledge-base/discoveries/.progress-*.json
-.claude/knowledge-base/implementations/.progress-*.json
 
 # Project-specific
 ONDAS.md
@@ -102,24 +92,16 @@ ONDAS.md
 # Local test project
 my-test/
 
-# Reference framework implementations (cloned for SOTA research)
-# referencias/
-# SOTA peer clones from /roadmap-init — study-only, heavy (~850MB), never commit.
-# The curated catalog now lives at wiki/references-catalog.md and IS versioned;
-# only the raw clones are ignored. The clones themselves were removed 2026-08-06
-# (see wiki/log.md); the rules stay so a fresh clone is ignored by default.
+# Read-only study zone: third-party clones, study-only and heavy. Ignored so a fresh checkout of
+# one stays untracked.
 knowledge-base/references/
-.claude/knowledge-base/references/
 .gstack/
-fixtures/template-default/.theokit
 architecture-output
 architecture-output.old-*
 
-# Local backups (e.g., CLAUDE.md.bak, .claude/settings.json.bak from migrations)
+# Local backups
 *.bak
-*.bak/.turbo/
 .turbo/
-code-review-output/
 architecture-output/
 
 # Python bytecode (Claude Code skill scripts)
@@ -128,8 +110,8 @@ __pycache__/
 
 # Generated typecheck pre-flight records (gate documented at wiki/gates/typecheck-pre-flight.md)
 .audit/
-halt-loop-prompts/
 
-# loop-clear-project plugin output (analysis DB + report — not project source)
+# Agent tooling scratch output — analysis databases and reports, never project source.
+halt-loop-prompts/
 clear-project-output/
-.claude/clear-project-loop.local.md
+code-review-output/
