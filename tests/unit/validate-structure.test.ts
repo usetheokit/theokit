@@ -6,37 +6,52 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FIXTURES = path.resolve(__dirname, '../../fixtures')
+
+// The valid and app-less projects used to come from `fixtures/basic-valid-app` and
+// `fixtures/invalid-no-app`, removed with the rest of `fixtures/`; they are built here now.
 const TEMP_DIR = path.join(tmpdir(), `theo-validate-${Date.now()}`)
 
 beforeAll(() => {
+  // A structurally valid project: app/ + server/ + config + manifest.
+  const validDir = path.join(TEMP_DIR, 'basic-valid-app')
+  mkdirSync(path.join(validDir, 'app'), { recursive: true })
+  mkdirSync(path.join(validDir, 'server'), { recursive: true })
+  writeFileSync(path.join(validDir, 'theo.config.ts'), 'export default {}')
+  writeFileSync(path.join(validDir, 'package.json'), '{ "type": "module" }')
+
+  // A project that exists but has no app/ — the single-error case.
+  const noAppDir = path.join(TEMP_DIR, 'invalid-no-app')
+  mkdirSync(noAppDir, { recursive: true })
+  writeFileSync(path.join(noAppDir, 'theo.config.ts'), 'export default {}')
+  writeFileSync(path.join(noAppDir, 'package.json'), '{ "type": "module" }')
+
   // Create a temp dir without app/ and without theo.config.ts (for multi-error test)
   const multiErrorDir = path.join(TEMP_DIR, 'multi-error')
   mkdirSync(multiErrorDir, { recursive: true })
-  writeFileSync(path.join(multiErrorDir, 'package.json'), '{}')
+  writeFileSync(path.join(multiErrorDir, 'package.json'), '{ "type": "module" }')
   // No app/ and no theo.config.ts
 
   // Create a temp dir without optional dirs (but with required ones)
   const minimalDir = path.join(TEMP_DIR, 'minimal-valid')
   mkdirSync(path.join(minimalDir, 'app'), { recursive: true })
   writeFileSync(path.join(minimalDir, 'theo.config.ts'), 'export default {}')
-  writeFileSync(path.join(minimalDir, 'package.json'), '{}')
+  writeFileSync(path.join(minimalDir, 'package.json'), '{ "type": "module" }')
 })
 
 describe('validateProjectStructure', () => {
   it('should accept a valid project structure', () => {
-    expect(() => validateProjectStructure(path.join(FIXTURES, 'basic-valid-app'))).not.toThrow()
+    expect(() => validateProjectStructure(path.join(TEMP_DIR, 'basic-valid-app'))).not.toThrow()
   })
 
   it('should fail when app/ directory is missing', () => {
-    expect(() => validateProjectStructure(path.join(FIXTURES, 'invalid-no-app'))).toThrow(
+    expect(() => validateProjectStructure(path.join(TEMP_DIR, 'invalid-no-app'))).toThrow(
       'Missing required directory: app/',
     )
   })
 
   it('should throw TheoProjectError instance', () => {
     try {
-      validateProjectStructure(path.join(FIXTURES, 'invalid-no-app'))
+      validateProjectStructure(path.join(TEMP_DIR, 'invalid-no-app'))
     } catch (e) {
       expect(e).toBeInstanceOf(TheoProjectError)
     }

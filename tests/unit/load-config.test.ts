@@ -6,14 +6,30 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FIXTURES = path.resolve(__dirname, '../../fixtures')
 
-// Create inline temp fixtures for tests that don't depend on Phase 4 fixtures
+// Every project this file loads is built here. The valid and invalid ones used to come from
+// `fixtures/basic-valid-app` and `fixtures/invalid-config`, removed with the rest of `fixtures/`.
 const TEMP_DIR = path.join(tmpdir(), `theo-test-${Date.now()}`)
 
 beforeAll(() => {
   // Temp dir without theo.config.ts
   mkdirSync(path.join(TEMP_DIR, 'no-config'), { recursive: true })
+
+  // A valid project: app/ + server/ + an explicit config.
+  const validDir = path.join(TEMP_DIR, 'basic-valid-app')
+  mkdirSync(path.join(validDir, 'app'), { recursive: true })
+  mkdirSync(path.join(validDir, 'server'), { recursive: true })
+  writeFileSync(path.join(validDir, 'package.json'), '{ "type": "module" }')
+  writeFileSync(
+    path.join(validDir, 'theo.config.ts'),
+    "export default { port: 3000, appDir: 'app', serverDir: 'server' }\n",
+  )
+
+  // A project whose config fails validation on `port`.
+  const invalidDir = path.join(TEMP_DIR, 'invalid-config')
+  mkdirSync(path.join(invalidDir, 'app'), { recursive: true })
+  writeFileSync(path.join(invalidDir, 'package.json'), '{ "type": "module" }')
+  writeFileSync(path.join(invalidDir, 'theo.config.ts'), "export default { port: 'not-a-port' }\n")
 
   // Temp dir with config exporting null
   const nullDir = path.join(TEMP_DIR, 'null-config')
@@ -28,14 +44,14 @@ beforeAll(() => {
 
 describe('loadConfig', () => {
   it('should load and validate a valid config', async () => {
-    const config = await loadConfig(path.join(FIXTURES, 'basic-valid-app'))
+    const config = await loadConfig(path.join(TEMP_DIR, 'basic-valid-app'))
     expect(config.port).toBe(3000)
     expect(config.appDir).toBe('app')
     expect(config.serverDir).toBe('server')
   })
 
   it('should throw TheoConfigError for invalid config', async () => {
-    await expect(loadConfig(path.join(FIXTURES, 'invalid-config'))).rejects.toThrow(/port/)
+    await expect(loadConfig(path.join(TEMP_DIR, 'invalid-config'))).rejects.toThrow(/port/)
   })
 
   it('should return defaults when config file is missing', async () => {
@@ -47,7 +63,7 @@ describe('loadConfig', () => {
 
   it('should throw TheoConfigError instance', async () => {
     try {
-      await loadConfig(path.join(FIXTURES, 'invalid-config'))
+      await loadConfig(path.join(TEMP_DIR, 'invalid-config'))
       expect.unreachable('should have thrown')
     } catch (e) {
       expect(e).toBeInstanceOf(TheoConfigError)
