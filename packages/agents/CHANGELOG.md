@@ -1,5 +1,67 @@
 # @theokit/agents
 
+## 10.0.0
+
+### Major Changes
+
+- 4cd49ef: BREAKING: `deleteSession` and `runTranscriptGC` are now `async`.
+
+  Their return type goes from `T` to `Promise<T>`. A caller that does not `await` reads `undefined`
+  instead of the result and throws on the first field access — which is what happened to this repo's
+  own `theokit agent sessions gc` command, unnoticed for a day because the workspace typecheck was
+  measured against a stale `.d.ts`.
+
+  The change is required rather than cosmetic: the only agent registry in the ecosystem is
+  `Agent.delete(id): Promise<void>`, and the registry half of session deletion is unreachable without
+  awaiting it. Migration is `await`.
+
+  BREAKING: `SessionRegistryRemoverError` changes constructor arity and meaning. It was
+  `constructor(sessionId)` for "you passed a thenable to a synchronous seam"; it is now
+  `constructor(sessionId, timeoutMs)` for "the registry did not answer in time". The old condition no
+  longer exists, so a `catch` that depended on it will never fire again. The class moved module and is
+  re-exported from its old home, so import paths are unaffected.
+
+  Also: the registry timeout now has a bounded DEFAULT (`DEFAULT_REGISTRY_TIMEOUT_MS`, 30s) where it
+  previously waited forever. Unbounded remains available by passing a non-finite value.
+
+### Minor Changes
+
+- 7519927: Security: `auto-edit` no longer auto-approves from a framework-chosen default. A product declares its own set.
+
+  `shouldAutoApprove`'s `auto-edit` branch defaulted to `WRITE_SCOPED_TOOLS` — `apply_patch`, `edit_file`, `write_file`. The only real consumer auto-approves one of those and registers two, so adopting the framework symbol would have made `edit_file` stop requiring a human: a live, model-callable write tool, silently un-gated as a side effect of deleting duplicated code.
+
+  Two questions had been conflated. "Does this tool bound its own writes to a write root?" is a fact about the SDK's tool factories, and the framework can answer it. "May this tool run without asking a human?" is the product's policy, and the framework cannot answer it — it does not know which tools the product registered or what it renamed them to.
+
+  `auto-edit` with no `writeScopedTools` now approves nothing, which is the same shape the module already applies to sandbox posture (an absent posture counts as unconfined). `WRITE_SCOPED_TOOLS` is still exported as the catalog; passing it is a decision rather than an inheritance.
+
+  `WRITE_SCOPED_TOOLS` is now genuinely immutable — its mutators throw. `ReadonlySet` is erased at runtime, and one cast on an approval gate reachable from every consumer would widen what auto-approves everywhere. `Object.freeze` alone is not enough for a `Set`: entries live in internal slots, not own properties, so freezing leaves `add` working.
+
+  Not a breaking change for published consumers: `npm pack @theokit/agents@9.4.0` exports neither `shouldAutoApprove` nor `WRITE_SCOPED_TOOLS`. Anyone already calling it on a pre-release build must pass `{ writeScopedTools }` to keep `auto-edit` approving anything.
+
+- 0513d03: `deleteSession` re-checks protection immediately before unlinking, instead of trusting a snapshot taken before an await.
+
+  The protection check ran at the top of the function; control then left for as long as the caller's registry remover took — 30s by default, unbounded with `registryTimeoutMs: Infinity` — and only then was the transcript removed. Anything concluded before that await is a snapshot, and a user resuming the session during the window makes it false. The file was deleted anyway and `SessionInUseError` never fired, which is the outcome that error exists to prevent.
+
+  The batch path already treats this as non-negotiable: `transcript-gc.ts` invariant 4 is "the apply phase re-checks — a plan is a snapshot, and between snapshot and delete a user can resume a session". The single-session path skipped it, and it is the one with no later sweep to catch the mistake.
+
+  `SessionInUseError` gains `registryRemoved`. Refusing after the registry half has run leaves an orphan file — the recoverable direction the function already chose in its ordering — but the caller has to be told, or it retries a removal that is already done and reads the resulting `false` ("no entry to remove") as a failure. The constructor parameter is optional and defaults to `false`, so existing construction sites are unaffected.
+
+- 01735c7: `classifyProjects` (`@theokit/agents/session`) — answers "does the project behind `projects/<encoded>/` still exist?" without the caller writing the search itself.
+
+  `minor`, not `major`, and the distinction was measured rather than assumed: `npm pack @theokit/agents@9.4.0` ships the `./session` subpath but contains neither `classifyProjects` nor `FsSeam`. This is a new export on an existing subpath, so the option and seam changes made while stabilising it break no published consumer — there is none. The only migration note that would be honest is the one for the consumer this was absorbed from, and it is written as adoption guidance below rather than as a break.
+
+  The question is hard because `encodeProjectDir(cwd)` is `cwd.replace(/[^a-zA-Z0-9]/g, '-')` — one-way and many-to-one, so a directory name cannot be turned back into a path, only CHECKED against candidates. Every product that retains or garbage-collects transcripts has to answer it; the consumer's own version is 188 lines whose docstring measured 13,269 project directories, ~3,200 falling through to filesystem search and ~64M syscalls without a shared budget.
+
+  Three properties carry the safety of this module, and each exists because dropping it produced a measured deletion of live data:
+
+  - **The verdict is three-valued and `undetermined` is not a soft `dead`.** Callers DELETE on `dead`. Budget spent, unreadable directory, enumeration threw — all resolve to `undetermined`, because deleting on "could not tell" is data loss and the two errors are not symmetric.
+  - **`FsSeam.exists` returns `boolean | undefined`.** The third state is in the return type rather than in prose because that is the only place an adapter author reliably reads it. A signature of `=> boolean` invites `try { return existsSync(p) } catch { return false }` — which is exactly the consumer's scar B-020, where a cwd that exists but cannot be stat-ed (EACCES on a non-traversable parent, ENOTDIR mid-path, EMFILE under a wide sweep) was classified DEAD.
+  - **Every member of the collision class is probed, not the first match.** Because the encoding is many-to-one, `encodeProjectDir(cwd) === name` narrows to a CLASS, never to a path — `/home/op/my-app` and `/home/op/my/app` share one project directory. First-match-wins lets one record condemn the rest, and transcripts are user-writable, so that record can be PLANTED. Any live member now yields `alive`; `dead` requires every member to be definitively gone.
+
+  **The budget is shared across the whole sweep, not per project.** A bound that resets each iteration is not a bound — that is what produced the 64M figure.
+
+  Adoption (for a product that already wrote this search): supply `candidatePaths` returning REAL ABSOLUTE PATHS — not encoded directory names, which is the distinction that made 6 of 6 live projects classify `dead` while the two sides were being wired together — pass `projectsRoot` via the exported `projectsRoot()` rather than joining the segment by hand, and give `fs` an `exists` that returns `undefined` for every errno except ENOENT.
+
 ## 9.4.0
 
 ### Minor Changes
