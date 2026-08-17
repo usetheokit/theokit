@@ -78,15 +78,19 @@ export interface RequestHandlerCtx {
   transformer: TheoTransformer | undefined
   csrfMode: CsrfMode
   disallowed: DisallowedConfig | undefined
+  /**
+   * Async because the per-route limiter hashes the session cookie with Web Crypto when
+   * `keyBy: 'session'`, and `subtle.digest` is promise-based.
+   */
   rateLimiter:
-    | ((req: IncomingMessage) => { limited: boolean; headers: Record<string, string> })
+    | ((req: IncomingMessage) => Promise<{ limited: boolean; headers: Record<string, string> }>)
     | null
 }
 
 /** Apply rate limit; return true if request was limited (response sent). */
-function applyRateLimit(c: RequestHandlerCtx, method: string): boolean {
+async function applyRateLimit(c: RequestHandlerCtx, method: string): Promise<boolean> {
   if (!c.rateLimiter) return false
-  const check = c.rateLimiter(c.req)
+  const check = await c.rateLimiter(c.req)
   for (const [k, v] of Object.entries(check.headers)) c.res.setHeader(k, v)
   if (check.limited) {
     sendError(c.res, 'RATE_LIMITED', 'Too many requests', 429, undefined, c.requestId)
@@ -107,7 +111,7 @@ export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
   if (!c.url.startsWith('/api/__actions/')) return false
   c.res.setHeader(X_REQUEST_ID, c.requestId)
 
-  if (applyRateLimit(c, c.req.method ?? 'POST')) return true
+  if (await applyRateLimit(c, c.req.method ?? 'POST')) return true
 
   const pathAfterPrefix = c.url.slice('/api/__actions/'.length).split('?')[0]
   const segments = pathAfterPrefix.split('/').filter(Boolean)
@@ -215,7 +219,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
   // Handled BEFORE the agent-path exact match (the approve path never equals an `agentPath`).
   if (isApprovalPath(urlPath)) {
     c.res.setHeader(X_REQUEST_ID, c.requestId)
-    if (applyRateLimit(c, c.req.method ?? 'POST')) return true
+    if (await applyRateLimit(c, c.req.method ?? 'POST')) return true
     const method = (c.req.method ?? 'POST').toUpperCase()
     if (method !== 'POST') {
       sendError(
@@ -268,7 +272,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
   if (!agent) return false // fall through to the generic /api/* branch (may 404 there)
 
   c.res.setHeader(X_REQUEST_ID, c.requestId)
-  if (applyRateLimit(c, c.req.method ?? 'POST')) return true
+  if (await applyRateLimit(c, c.req.method ?? 'POST')) return true
 
   const method = (c.req.method ?? 'POST').toUpperCase()
   if (method !== 'POST') {
@@ -325,7 +329,7 @@ export async function tryServeApiRoute(c: RequestHandlerCtx): Promise<boolean> {
   if (!c.url.startsWith('/api/')) return false
   c.res.setHeader(X_REQUEST_ID, c.requestId)
 
-  if (applyRateLimit(c, c.req.method ?? 'GET')) return true
+  if (await applyRateLimit(c, c.req.method ?? 'GET')) return true
 
   const match = matchRoute(c.url, c.cachedRoutes)
   if (!match) {

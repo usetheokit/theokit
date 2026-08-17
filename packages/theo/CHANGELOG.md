@@ -1,5 +1,29 @@
 # theo
 
+## 0.48.9
+
+### Patch Changes
+
+- **`theokit start` now applies the rate limit for every config shape the schema accepts, and can key
+  buckets correctly behind a reverse proxy.** Two security fixes that had to land together.
+
+  The server only ever built a limiter for the legacy flat `{ windowMs, max }` shape. A per-route
+  config — the shape that exists so an expensive endpoint can get a tighter budget than the rest of
+  the app — produced no limiter at all, and the request handler skipped limiting on every request.
+  Nothing warned: the app booted clean and the config validated. Measured on the app that found it, 20
+  requests against a 12-per-minute budget and 150 against a 120-per-minute one returned zero 429s. The
+  correct implementation already existed in `createRouteRateLimiter`, handling both shapes, and simply
+  had no caller. (usetheokit/theokit#321)
+
+  Rate limiting by IP also keyed on `req.socket.remoteAddress`, which behind Caddy, nginx, a load
+  balancer or an ingress controller is the proxy — one bucket for the entire internet. That is worse
+  than no limit: a handful of requests exhausts the budget and every other visitor is refused, so any
+  single client can deny the endpoint to everybody. Rate limit config now takes `trustProxy`
+  (`false` by default, `true` for one proxy, or a hop count), and resolves the client address from
+  `x-forwarded-for` counting in from the right, past exactly the declared hops. It stays off by
+  default because that header is client-writable, and honouring it uninvited turns the limiter into a
+  one-header bypass. (usetheokit/theokit#322)
+
 ## 0.48.8
 
 ### Patch Changes
