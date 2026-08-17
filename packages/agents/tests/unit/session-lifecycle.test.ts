@@ -302,3 +302,112 @@ describe('projectsRoot — one owner for the transcript layout', () => {
     expect(projectsRoot()).toBe(projectsRoot(transcriptRoot()))
   })
 })
+
+/**
+ * The protection check and the unlink are separated by an `await`, and nothing re-reads the check.
+ *
+ * `deleteSession` reads `protectedTranscripts` at the top, then hands control to the caller's
+ * registry remover — for up to `registryTimeoutMs` (30s by default, and `Infinity` is accepted) —
+ * and only then unlinks. Every conclusion drawn before that await is a SNAPSHOT, and a user who
+ * resumes the session during it makes the snapshot false. The file is deleted anyway and
+ * `SessionInUseError` never fires, which is the outcome the error exists to prevent.
+ *
+ * The sibling sweep already knows this. `transcript-gc.ts` states it as invariant 4 — *"The apply
+ * phase re-checks. A plan is a snapshot, and between snapshot and delete a user can resume a
+ * session. A collector that trusts its own plan deletes the session someone just returned to."* The
+ * single-session path skipped the discipline the batch path treats as non-negotiable, and it is the
+ * path with no sweep behind it to catch the mistake later.
+ */
+describe('deleteSession — a snapshot taken before an await is not a fact after it', () => {
+  /**
+   * `doomed` must NOT be protected when the function starts, or the pre-check refuses and the test
+   * proves nothing about the window it exists to cover. `protectedTranscripts` keeps the most
+   * recent, so a second, newer transcript is what makes `doomed` deletable at t=0 — the same fixture
+   * shape the lease tests above use, and for the same reason.
+   */
+  function arrangeDeletableSession(): {
+    path: string
+    resume: () => Promise<{ release: () => void }>
+  } {
+    const path = writeTranscriptFile('doomed', 60)
+    writeTranscriptFile('other', 0)
+    return { path, resume: () => acquireSessionWriter(path) }
+  }
+
+  it('test_a_session_protected_during_the_registry_await_is_not_deleted', async () => {
+    const { path, resume } = arrangeDeletableSession()
+    let lease: { release: () => void } | undefined
+
+    // The remover is where real time passes. Taking the writer lease HERE is the user resuming the
+    // session mid-flight — the race, made deterministic instead of hoped for.
+    const removeFromRegistry = async () => {
+      lease = await resume()
+      return true
+    }
+
+    await expect(
+      deleteSession('doomed', { cwd: CWD, root, removeFromRegistry }),
+    ).rejects.toBeInstanceOf(SessionInUseError)
+
+    expect(existsSync(path), 'the transcript of a live session must survive').toBe(true)
+    lease?.release()
+  })
+
+  it('test_the_refusal_says_the_registry_half_already_happened', async () => {
+    // Refusing after the registry removal leaves an orphan FILE, which the next sweep collects —
+    // the recoverable direction the module already chose in its ordering comment. But the caller has
+    // to be TOLD, or it retries a registry removal that is already done and reads the second `false`
+    // as a failure.
+    const { resume } = arrangeDeletableSession()
+    let lease: { release: () => void } | undefined
+    const removeFromRegistry = async () => {
+      lease = await resume()
+      return true
+    }
+
+    let caught: unknown
+    try {
+      await deleteSession('doomed', { cwd: CWD, root, removeFromRegistry })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(SessionInUseError)
+    expect((caught as SessionInUseError).registryRemoved).toBe(true)
+    lease?.release()
+  })
+
+  it('test_a_session_that_stays_free_is_still_deleted', async () => {
+    // Anti-vacuity floor: a re-check that always refused would satisfy both cases above.
+    const { path } = arrangeDeletableSession()
+
+    const result = await deleteSession('doomed', {
+      cwd: CWD,
+      root,
+      removeFromRegistry: async () => true,
+    })
+
+    expect(result.transcriptRemoved).toBe(true)
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('test_force_still_deletes_a_session_that_became_protected', async () => {
+    // `force` means "I know, delete it anyway". A re-check that ignored it would turn an escape
+    // hatch into a wall.
+    const { path, resume } = arrangeDeletableSession()
+    let lease: { release: () => void } | undefined
+
+    const result = await deleteSession('doomed', {
+      cwd: CWD,
+      root,
+      force: true,
+      removeFromRegistry: async () => {
+        lease = await resume()
+        return true
+      },
+    })
+
+    expect(result.transcriptRemoved).toBe(true)
+    expect(existsSync(path)).toBe(false)
+    lease?.release()
+  })
+})

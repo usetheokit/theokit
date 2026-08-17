@@ -62,10 +62,23 @@ export class SessionInUseError extends TheokitAgentError {
     readonly sessionId: string,
     /** Why it is protected — a writer lease, the resumable pointer, or being the most recent. */
     readonly reason: string,
+    /**
+     * Whether the registry half already happened before the refusal.
+     *
+     * `true` only when the session became protected DURING the registry removal — the re-check
+     * fires after the await, so the entry is already gone while the transcript stays. The caller
+     * needs this: retrying a removal that is already done returns `false` ("no entry to remove"),
+     * which reads as a failure and is not one.
+     */
+    readonly registryRemoved = false,
   ) {
     super(
       `session "${sessionId}" is protected (${reason}). Deleting it would discard state something ` +
-        `is still using. Stop the run, or pass { force: true } to delete anyway.`,
+        `is still using. Stop the run, or pass { force: true } to delete anyway.` +
+        (registryRemoved
+          ? ` The registry entry was already removed before this was noticed — do not retry that ` +
+            `half, only the transcript.`
+          : ''),
     )
   }
 }
@@ -264,6 +277,27 @@ export async function deleteSession(
       // The transcript is untouched, so the caller can retry after fixing the registry. Deleting it
       // here would trade a retryable state for an unrepairable one.
       return { registryRemoved: false, transcriptRemoved: false, registryError: error }
+    }
+  }
+
+  // RE-CHECK (invariant 4, borrowed from the sweep that already states it): the protection read at
+  // the top of this function was a SNAPSHOT, and control has since left for as long as the caller's
+  // registry remover took — 30s by default, unbounded when `registryTimeoutMs` is `Infinity`. A user
+  // who resumes the session during that window makes the snapshot false, and unlinking on it deletes
+  // the transcript of a session someone just returned to, which is the exact outcome
+  // `SessionInUseError` exists to prevent.
+  //
+  // `transcript-gc.ts` treats this as non-negotiable for the BATCH path ("a collector that trusts
+  // its own plan deletes the session someone just returned to"). The single-session path skipped it,
+  // and it is the path with no later sweep to notice the mistake.
+  //
+  // Refusing here leaves the registry entry gone and the file present — an orphan FILE, which is the
+  // recoverable direction this function already chose in the ordering comment above, and the reason
+  // the error carries `registryRemoved`.
+  if (options.force !== true) {
+    const nowProtected = protectedTranscripts(options.cwd, root).get(sessionId)
+    if (nowProtected !== undefined) {
+      throw new SessionInUseError(sessionId, nowProtected, registryRemoved)
     }
   }
 
