@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from diff_symbols import added_symbols_from_shas, shas_from_progress
+from diff_symbols import added_symbols_from_shas_reporting, shas_from_progress
 from wiring_recheck import recheck_pillar_a
 
 
@@ -214,7 +214,7 @@ def wiring_summary(project_root: Path, slug: str) -> dict[str, Any]:
 
     # Independent verification: derive symbols from the real diff, re-run the checker.
     shas = shas_from_progress(progress) if isinstance(progress, dict) else []
-    symbols = added_symbols_from_shas(project_root, shas)
+    symbols, unresolved_shas = added_symbols_from_shas_reporting(project_root, shas)
     recheck = recheck_pillar_a(project_root, symbols)
 
     base = {
@@ -226,6 +226,11 @@ def wiring_summary(project_root: Path, slug: str) -> dict[str, Any]:
         "symbols_resolved": recheck.symbols_resolved,
         "pillar_a_fails": recheck.pillar_a_fails,
         "pillar_a_fail_symbols": list(recheck.fail_symbols),
+        # Commits git could not read. Reported ALWAYS, including on PASS: the gate
+        # once returned zero symbols because one sha from a sibling repo aborted the
+        # whole `git show`, and "verified nothing" was indistinguishable from
+        # "nothing to verify".
+        "shas_unresolved": unresolved_shas,
     }
 
     if recheck.pillar_a_fails > 0:
@@ -259,6 +264,14 @@ def wiring_summary(project_root: Path, slug: str) -> dict[str, Any]:
                 "No public symbols could be independently re-verified from the "
                 "committed diffs (no SHAs, git unavailable, or derived names not "
                 "found in the source tree). Pillar (a) NOT independently confirmed."
+                + (
+                    f" {len(unresolved_shas)} of {len(shas)} commit(s) could not be "
+                    f"read by git here: {', '.join(unresolved_shas)} — a sha that "
+                    "lives in a sibling repository is expected, an unexpected one "
+                    "means the checkpoint points at history this repo does not have."
+                    if unresolved_shas
+                    else ""
+                )
             ),
         }
 

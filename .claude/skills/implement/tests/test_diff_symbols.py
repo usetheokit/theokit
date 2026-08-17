@@ -4,7 +4,11 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from diff_symbols import added_symbols_from_shas, shas_from_progress
+from diff_symbols import (
+    added_symbols_from_shas,
+    added_symbols_from_shas_reporting,
+    shas_from_progress,
+)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -80,3 +84,40 @@ def test_shas_from_progress_filters_phase_and_missing(tmp_path: Path) -> None:
     assert shas_from_progress(progress) == ["aaa", "bbb"]
     assert shas_from_progress(progress, phase="1") == ["aaa"]
     assert shas_from_progress(progress, phase="2") == ["bbb"]
+
+
+def test_one_unresolvable_sha_does_not_discard_the_resolvable_ones(tmp_path: Path) -> None:
+    """The defect that made pillar (a) unverifiable for a whole slice.
+
+    Every sha went to ONE `git show ... check=True`, so a single sha git cannot
+    resolve — and three of this plan's commits live in SIBLING repositories, which
+    this repo genuinely cannot resolve — made git exit non-zero and the function
+    return an empty set. Twelve resolvable commits were discarded by one that was
+    not, and an empty result is indistinguishable from "this slice added no public
+    symbols". Measured consequence: wiring_recheck derived ZERO symbols for the
+    whole slice while the checkpoint carried 16 positive self-reports, so pillar
+    (a) was never independently confirmed for ANY symbol.
+    """
+    repo = _init_repo(tmp_path)
+    good = _commit_file(repo, "src/a.py", "def resolvable_symbol():\n    return 1\n", "feat")
+
+    symbols = added_symbols_from_shas(repo, ["cafebabecafebabecafebabecafebabecafebabe", good])
+
+    assert "resolvable_symbol" in symbols
+
+
+def test_unresolvable_shas_are_reported_not_swallowed(tmp_path: Path) -> None:
+    """Skipping quietly reproduces the defect one level down.
+
+    A gate that silently drops inputs reports a cleaner result for having checked
+    less. The caller has to be able to tell "no symbols were added" from "I could
+    not read three of your commits".
+    """
+    repo = _init_repo(tmp_path)
+    good = _commit_file(repo, "src/a.py", "def resolvable_symbol():\n    return 1\n", "feat")
+    bogus = "cafebabecafebabecafebabecafebabecafebabe"
+
+    symbols, unresolved = added_symbols_from_shas_reporting(repo, [bogus, good])
+
+    assert "resolvable_symbol" in symbols
+    assert unresolved == [bogus]

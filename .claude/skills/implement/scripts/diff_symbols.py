@@ -64,20 +64,52 @@ def added_symbols_from_shas(repo_root: Path, shas: list[str]) -> set[str]:
     Private (`_`-prefixed) names are excluded — pillar (a) is about public exports
     that must have a production caller, not module-internal helpers. Returns an
     empty set if git is unavailable, the repo is invalid, or `shas` is empty.
+
+    Thin wrapper over :func:`added_symbols_from_shas_reporting` for callers that
+    do not act on the unresolved list. Prefer the reporting form in a GATE: an
+    empty set here reads the same whether nothing was added or nothing could be
+    read.
+    """
+    return added_symbols_from_shas_reporting(repo_root, shas)[0]
+
+
+def added_symbols_from_shas_reporting(
+    repo_root: Path, shas: list[str]
+) -> tuple[set[str], list[str]]:
+    """Same, plus the shas git could not resolve.
+
+    Each sha is shown SEPARATELY. Passing them to one `git show ... check=True`
+    meant a single unresolvable sha made git exit non-zero and the whole call
+    return an empty set — and three of this plan's commits genuinely live in
+    SIBLING repositories, which this repo cannot resolve by design. Twelve
+    resolvable commits were discarded by one that was not, so `wiring_recheck`
+    derived ZERO symbols for the entire slice while the checkpoint carried 16
+    positive self-reports: pillar (a) was never independently confirmed for any
+    symbol, and the gate reported clean for having checked nothing.
+
+    The unresolved list is RETURNED rather than swallowed. Skipping quietly is the
+    same defect one level down — a gate that drops inputs silently reports a
+    better result the less it manages to read.
     """
     if not shas:
-        return set()
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(repo_root), "show", "--no-color", "--unified=0",
-             "--pretty=format:", *shas],
-            capture_output=True, text=True, timeout=20, check=True,
-        )
-    except (subprocess.SubprocessError, FileNotFoundError):
-        return set()
+        return set(), []
 
     symbols: set[str] = set()
-    for line in result.stdout.splitlines():
+    unresolved: list[str] = []
+    stdout_parts: list[str] = []
+    for sha in shas:
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(repo_root), "show", "--no-color", "--unified=0",
+                 "--pretty=format:", sha],
+                capture_output=True, text=True, timeout=20, check=True,
+            )
+        except (subprocess.SubprocessError, FileNotFoundError):
+            unresolved.append(sha)
+            continue
+        stdout_parts.append(result.stdout)
+
+    for line in "\n".join(stdout_parts).splitlines():
         # Added content lines start with a single '+'; diff headers start with '+++'.
         if not line.startswith("+") or line.startswith("+++"):
             continue
@@ -88,4 +120,4 @@ def added_symbols_from_shas(repo_root: Path, shas: list[str]) -> set[str]:
                 name = match.group(1)
                 if not name.startswith("_"):
                     symbols.add(name)
-    return symbols
+    return symbols, unresolved
