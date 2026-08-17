@@ -9,7 +9,7 @@ migrated: { by: claude-opus-5/okf-skill, at: 2026-08-06T00:00:00Z, from: knowled
 sources:
   - id: origin
     resource: knowledge-base/grills/transport-unification-4x-feature-grill.md
-    title: Original document in the pre-wiki tree, preserved verbatim
+    title: Original document, absorbed into this bundle verbatim
     last_modified: 2026-07-24
 # --- keys carried over from the source document ---
 slug: transport-unification-4x
@@ -19,13 +19,13 @@ questions_answered: 4
 unresolved_dims: []
 record_status: completed
 milestone_id: M66
-roadmap: ROADMAP-v2.md
+roadmap: v2 thread
 ---
 
 # Feature grill: transport-unification-4x
 
-Numeração reconciliada: o max global é **M65** (ROADMAP.md v1); ROADMAP-v2.md reusou M57–M63. O
-next-free global é **M66**, adicionado ao fio **v2** (ROADMAP-v2.md) por ser a continuação direta do
+Reconciled numbering: the global max is **M65** on the v1 thread; the v2 thread reused M57-M63. The
+next free global is **M66**, added to the **v2** thread as the direct continuation of the
 "alinhar tudo na linha 4.x" que a v2 começou.
 
 ### Q1/4: What / why now

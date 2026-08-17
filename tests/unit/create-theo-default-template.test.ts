@@ -10,10 +10,8 @@ import { resolve } from 'node:path'
  *     `{{name}}` make the template invalid JSON; EC-7)
  *   - defineAgent shape assertions (no proprietary surface references)
  *
- * The byte-for-byte parity test against a checked-in mirror went away with
- * `fixtures/`: the template no longer has a checked-in mirror to compare against. The shape
- * assertions below still guard the template's content; what was lost is the guarantee that fixture
- * and template do not drift apart — there is no fixture left to drift.
+ * The template has no checked-in mirror to diff against, so the assertions below guard its
+ * CONTENT directly rather than its equality with a second copy.
  */
 
 const ROOT = resolve(__dirname, '../..')

@@ -24,7 +24,7 @@ export const nodeAdapter: DeployAdapter = {
     if (!ctx?.makeVitePlugins) {
       throw new Error(
         '[adapter-node] build requires ctx.makeVitePlugins (CLI must inject the Vite plugin factory). ' +
-          'This is a framework-internal invariant — see ADR-0001 v3 and docs/plans/architecture-cleanup-plan.md T1.1.',
+          'This is a framework-internal invariant — see ADR-0001 v3.',
       )
     }
 

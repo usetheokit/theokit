@@ -33,8 +33,7 @@ import { resolve } from 'node:path'
 
 const ROOT = resolve(__dirname, '../..')
 
-// left this list along with `fixtures/`. The file that
-// is actually shipped to the user — the `create-theokit` template — is still covered.
+// The file that is actually shipped to the user — the `create-theokit` template.
 const FILES_TO_SCAN = ['packages/create-theokit/templates/default/agents/chat.ts'] as const
 
 describe('scaffold anti-stack lint — no raw OpenAI in default agents/chat.ts (M3)', () => {

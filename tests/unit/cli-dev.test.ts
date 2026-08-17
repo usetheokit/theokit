@@ -5,17 +5,12 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 /**
- * Three cases that booted a real Vite dev server against — responds 200
- * on `/`, auto-assigns a port when `port: 0`, serves `text/html` — were REMOVED with `fixtures/`.
+ * The happy path of `theokit dev` — that it boots at all, serves `/`, assigns a port — has NO
+ * automated coverage. A booting dev server needs an app whose `react` and `theokit` imports
+ * resolve, and a project created in a tmpdir resolves neither.
  *
- * They are not rebuilt in a tmpdir on purpose: a booting dev server needs an app whose `react` and
- * `theokit` imports resolve, and a project outside the repository resolves neither. Reproducing that
- * means putting an app back on disk inside the repo, which is the thing the fixtures were.
- *
- * So the honest state is: the happy path of `theokit dev` — that it boots at all — has NO automated
- * coverage. What survives below is the guard that needs no server.
- */
-const TEMP_DIR = path.join(tmpdir(), `theo-cli-dev-${Date.now()}`)
+ * What follows is the guard that needs no server.
+ */ const TEMP_DIR = path.join(tmpdir(), `theo-cli-dev-${Date.now()}`)
 
 beforeAll(() => {
   const noAppDir = path.join(TEMP_DIR, 'invalid-no-app')

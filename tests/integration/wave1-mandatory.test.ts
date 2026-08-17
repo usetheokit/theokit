@@ -29,8 +29,5 @@ describe('Wave 1 Mandatory Tests — Scaffold', () => {
   })
 })
 
-// The `Wave 1 Mandatory Tests — Dev Server` block lived here and was REMOVED with `fixtures/`. It
-// booted a dev server against and asserted HTTP 200 on `/` plus
-// `/@theo/entry-client` served as JavaScript. Rebuilding it in a tmpdir is not possible for the
-// same reason as `tests/unit/cli-dev.test.ts`: a booting dev server needs an app whose imports
-// resolve, which a project outside the repository does not have. The scaffold half above still runs.
+// There is no dev-server half to this contract: booting one needs an app whose imports resolve,
+// which a project created in a tmpdir does not have. Same limit as `tests/unit/cli-dev.test.ts`.

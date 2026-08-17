@@ -4,9 +4,8 @@ import path from 'node:path'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
-// The three projects below came from `fixtures/{basic-valid-app,invalid-config,invalid-no-app}`,
-// removed with the rest of `fixtures/`. They are built here so the Wave 0 contract keeps its own
-// inputs instead of depending on a checked-in directory.
+// Each project below is built here, so the Wave 0 contract owns its own inputs instead of
+// depending on a checked-in demo app.
 const TEMP_DIR = path.join(tmpdir(), `theo-wave0-${Date.now()}`)
 
 beforeAll(() => {

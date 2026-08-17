@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { extname } from 'node:path'
 
-// The `fixture files` block went away with the demo apps: it asserted the existence
-// and contents of that fixture's `public/404.html` and `public/500.html`. The extension detection
-// below is the logic the production server uses to tell an SPA route from a static file request.
+// The extension detection below is the logic the production server uses to tell an SPA route
+// from a static file request.
 describe('Error Pages', () => {
   describe('URL extension detection logic', () => {
     // The production server uses extname() to distinguish SPA routes from static file requests

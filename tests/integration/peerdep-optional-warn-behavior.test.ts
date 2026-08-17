@@ -87,7 +87,7 @@ describe('EC-4: optional peerDep emits warn on version mismatch (pnpm 9.x)', () 
   // (c) the behavior is reasonably documented by pnpm (mismatch warns fire
   // for optional peers).
   //
-  // Phase 4 Dogfood Cenário A confirms this empirically via real `pnpm install`
+  // Phase 4 dogfood scenario A confirms this empirically via a real `pnpm install`
   // in the workspace itself. Until then, this stub guards the contract by
   // failing loud if pnpm goes missing.
   //
