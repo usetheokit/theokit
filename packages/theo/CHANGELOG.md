@@ -1,5 +1,25 @@
 # theo
 
+## 0.48.10
+
+### Patch Changes
+
+- **SSR no longer serves an empty shell first.** Pages are `React.lazy()` in the route manifest, and
+  the server rendered without resolving those modules — so React suspended on the page component,
+  `onShellReady` fired with the layout alone, and the actual page streamed afterwards inside a hidden
+  div. Every reader watched the page assemble itself.
+
+  Code-splitting earns its keep in a browser, which downloads one page's JavaScript instead of all of
+  them. The server has every chunk on local disk and loads it regardless, so the suspension bought
+  nothing and cost a two-phase render. The generated server entry now matches the URL against the
+  routes and awaits the same `__theoPreloadMap` entries the client already awaits before
+  `hydrateRoot`; `React.lazy` then resolves from cache without suspending. Streaming still applies to
+  genuine data-fetching Suspense.
+
+  Measured on a production documentation site: CLS 1.12 against a 0.1 budget, largest paint at 4.8s,
+  and `<article>` absent from the DOM for the first ~700ms — the served HTML placed `<footer>` ahead
+  of `<article>`, so the footer was laid out and then pushed down. (usetheokit/theokit#323)
+
 ## 0.48.9
 
 ### Patch Changes
