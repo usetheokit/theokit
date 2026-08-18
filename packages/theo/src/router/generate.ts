@@ -121,9 +121,30 @@ export function generateRouteManifest(tree: RouteNode): string {
   )
   // No TS type annotation — this manifest is emitted as a virtual JS module
   // and Rollup rejects type annotations in production builds.
-  lines.push('export const __theoPreloadMap = {')
-  for (const e of preloadEntries) lines.push(e)
-  lines.push('}', '')
+  const preloadMapLines = ['export const __theoPreloadMap = {', ...preloadEntries, '}', '']
+
+  // Turn react-router matches into the ABSOLUTE paths this map is keyed by.
+  //
+  // `matchRoutes` reports each route's own `path`, which is RELATIVE to its parent: a nested
+  // `/docs/*` route reports `'*'`. Looking those up directly finds nothing, so no module is ever
+  // preloaded and the lookup fails silently — which is exactly what happened on both entries until
+  // usetheokit/theokit#323. Rebuilding the absolute path by accumulating segments is what makes the
+  // keys line up.
+  lines.push(
+    ...preloadMapLines,
+    'export function __theoPreloadPathsFor(matches) {',
+    '  const out = []',
+    "  let base = ''",
+    '  for (const m of matches ?? []) {',
+    '    const seg = m && m.route && m.route.path',
+    "    if (typeof seg !== 'string') continue",
+    "    base = seg.startsWith('/') ? seg : base.endsWith('/') ? base + seg : base + '/' + seg",
+    '    out.push(base)',
+    '  }',
+    '  return out.filter((p) => p in __theoPreloadMap)',
+    '}',
+    '',
+  )
 
   // Build the children-array string for one node, separately from the
   // wrapping logic — keeps `genRouteConfig` under the complexity ceiling.

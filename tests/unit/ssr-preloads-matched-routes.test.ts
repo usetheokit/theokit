@@ -52,6 +52,63 @@ describe('server entry preloads the matched routes', () => {
   })
 })
 
+/**
+ * Runs the manifest's OWN emitted helper — the map and the function are pulled out of the generated
+ * source and evaluated, so this tests the code that actually ships rather than a restatement of it.
+ */
+function loadPreloadHelper(manifest: string) {
+  const map = /export const __theoPreloadMap = \{[\s\S]*?\n\}/.exec(manifest)?.[0]
+  const fn = /export function __theoPreloadPathsFor[\s\S]*?\n\}/.exec(manifest)?.[0]
+  if (!map || !fn) throw new Error('manifest no longer emits the preload map or its helper')
+
+  const source = `${map.replace('export ', '')}\n${fn.replace('export ', '')}\nreturn { __theoPreloadMap, __theoPreloadPathsFor }`
+  // The input is this repository's own generated manifest, and running it is the point: a test that
+  // reimplemented the helper would pass while the emitted one stayed broken — which is exactly the
+  // bug being fixed here.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, sonarjs/code-eval
+  return Function(source)() as {
+    __theoPreloadMap: Record<string, unknown>
+    __theoPreloadPathsFor: (m: unknown[]) => string[]
+  }
+}
+
+describe('__theoPreloadPathsFor turns relative matches into map keys', () => {
+  const nested = generateRouteManifest({
+    segment: '',
+    path: '/',
+    page: '/app/page.tsx',
+    children: [{ segment: 'docs', path: 'docs', children: [], page: '/app/docs/page.tsx' }],
+  } as RouteNode)
+
+  it('keys the map by ABSOLUTE path', () => {
+    const { __theoPreloadMap } = loadPreloadHelper(nested)
+
+    expect(Object.keys(__theoPreloadMap)).toContain('/docs')
+  })
+
+  it('resolves a nested match whose own path is relative', () => {
+    // This is the defect: react-router reports `'docs'` for that route, the map is keyed `'/docs'`,
+    // and a direct lookup finds nothing — so nothing was ever preloaded, silently, on both entries.
+    const { __theoPreloadPathsFor } = loadPreloadHelper(nested)
+
+    expect(
+      __theoPreloadPathsFor([{ route: { path: '/' } }, { route: { path: 'docs' } }]),
+    ).toContain('/docs')
+  })
+
+  it('drops matches that name no path', () => {
+    const { __theoPreloadPathsFor } = loadPreloadHelper(nested)
+
+    expect(__theoPreloadPathsFor([{ route: {} }, { route: { path: 'nope' } }])).toEqual([])
+  })
+
+  it('returns nothing for no matches rather than throwing', () => {
+    const { __theoPreloadPathsFor } = loadPreloadHelper(nested)
+
+    expect(__theoPreloadPathsFor([])).toEqual([])
+  })
+})
+
 describe('the manifest still exposes what the server needs', () => {
   const manifest = generateRouteManifest({
     segment: '',

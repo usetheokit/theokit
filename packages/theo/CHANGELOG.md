@@ -1,5 +1,30 @@
 # theo
 
+## 0.48.12
+
+### Patch Changes
+
+- Republish of 0.48.11 with the lint fixes applied. 0.48.11 reached the registry from a working tree
+  whose commit was then rejected by the pre-commit hook, so the tag and the source did not match.
+  No behaviour differs between the two.
+
+## 0.48.11
+
+### Patch Changes
+
+- **Route preloading never actually preloaded anything on nested routes** — on the server or the
+  client. `__theoPreloadMap` is keyed by absolute path (`'/docs/*'`), while `matchRoutes` reports each
+  route's own `path`, which is relative to its parent (`'*'`). The `p in __theoPreloadMap` filter
+  therefore matched nothing for any route below the root, and the lookup failed silently: no error, no
+  warning, just a preload that did nothing.
+
+  On the client that meant the Suspense-during-hydration safeguard in `entry.ts` had never fired for a
+  nested route, despite the comment describing exactly the failure it was meant to prevent. On the
+  server it meant the fix released moments earlier in 0.48.10 was inert.
+
+  The manifest now emits `__theoPreloadPathsFor`, which rebuilds the absolute path by accumulating
+  segments down the match chain, and both entries use it.
+
 ## 0.48.10
 
 ### Patch Changes
