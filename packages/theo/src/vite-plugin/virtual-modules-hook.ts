@@ -34,6 +34,16 @@ interface VirtualModulesCtx {
   appDir: string
   ssrEnabled: boolean
   streamingEnabled: boolean
+  /**
+   * True while Vite is building the server bundle.
+   *
+   * The route manifest is emitted differently for it: pages stay `React.lazy` for the browser,
+   * where code-splitting is the whole point, and become static imports on the server, which has
+   * every chunk on local disk anyway. A lazy page suspends on first render no matter what — the
+   * import settles a microtask after the render — so on the server it only buys a two-phase render
+   * where the reader watches the document assemble itself.
+   */
+  ssrBuild?: boolean
   theoUi: TheoUiDetectResult | undefined
   transformer: TheoTransformer | undefined
 }
@@ -62,7 +72,7 @@ export function loadVirtualModule(id: string, ctx: VirtualModulesCtx): string | 
     // T3.1 — also broadcast a devtools-shaped manifest to the overlay
     // (no-op in prod / when no dev server is attached).
     broadcastRouteManifest(tree)
-    return generateRouteManifest(tree)
+    return generateRouteManifest(tree, { lazyPages: ctx.ssrBuild !== true })
   }
   if (id === ctx.ids.RESOLVED_ENTRY_SERVER_ID) {
     // SSR tree MUST mirror client tree shape — pass theoUi through so

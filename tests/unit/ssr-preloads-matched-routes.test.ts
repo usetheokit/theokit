@@ -127,3 +127,35 @@ describe('the manifest still exposes what the server needs', () => {
     expect(manifest).toContain('React.lazy')
   })
 })
+
+describe('the manifest emits pages differently per build', () => {
+  const tree = {
+    segment: '',
+    path: '/',
+    page: '/app/page.tsx',
+    children: [{ segment: 'docs', path: 'docs', children: [], page: '/app/docs/page.tsx' }],
+  } as RouteNode
+
+  it('keeps pages lazy for the browser, where code-splitting pays', () => {
+    expect(generateRouteManifest(tree)).toContain('React.lazy')
+  })
+
+  it('imports pages statically for the server, where it only costs', () => {
+    // A lazy page suspends on first render regardless of caching — the import settles a microtask
+    // after the render — so the shell flushes with the layout alone and the page arrives afterwards
+    // inside a hidden div. The server has every chunk on local disk and gains nothing in return.
+    const server = generateRouteManifest(tree, { lazyPages: false })
+
+    expect(server).not.toContain('React.lazy')
+    expect(server).toContain("import Page_docs from '/app/docs/page.tsx'")
+  })
+
+  it('still exports the preload map on the server build', () => {
+    // The generated server entry imports these bindings unconditionally; dropping them would turn
+    // a rendering improvement into an import error.
+    const server = generateRouteManifest(tree, { lazyPages: false })
+
+    expect(server).toContain('export const __theoPreloadMap')
+    expect(server).toContain('export function __theoPreloadPathsFor')
+  })
+})

@@ -71,7 +71,23 @@ function walkRouteTree(node: RouteNode, parents: string[], acc: WalkAccumulator)
   }
 }
 
-export function generateRouteManifest(tree: RouteNode): string {
+export interface RouteManifestOptions {
+  /**
+   * Emit pages as `React.lazy` (default) or as static imports.
+   *
+   * Lazy is right for the browser: it downloads one page's JavaScript instead of all of them. It is
+   * wrong for the server, which has every chunk on local disk and gains nothing — while paying for
+   * a two-phase render, because `React.lazy` suspends on first render regardless of caching (the
+   * `import()` settles a microtask after the render). The shell flushes with the layout alone and
+   * the page arrives afterwards inside a hidden div, so the reader watches the document assemble
+   * itself. Measured on a production site: CLS 1.12 against a 0.1 budget, `<footer>` served ahead
+   * of `<article>`. (usetheokit/theokit#323)
+   */
+  lazyPages?: boolean
+}
+
+export function generateRouteManifest(tree: RouteNode, options: RouteManifestOptions = {}): string {
+  const lazyPages_ = options.lazyPages !== false
   // Static imports (always-needed at boot): layouts, errors, loading, not-found.
   // Lazy-loaded pages — tracked separately so we emit React.lazy() and
   // build the preload map.
@@ -106,9 +122,13 @@ export function generateRouteManifest(tree: RouteNode): string {
     lines.push(`import ${imp.varName} from '${imp.importPath}'`)
   }
 
-  // Lazy-loaded pages
+  // Pages: lazy for the browser, static for the server. See RouteManifestOptions.
   for (const lp of lazyPages) {
-    lines.push(`const ${lp.varName} = React.lazy(() => import('${lp.importPath}'))`)
+    lines.push(
+      lazyPages_
+        ? `const ${lp.varName} = React.lazy(() => import('${lp.importPath}'))`
+        : `import ${lp.varName} from '${lp.importPath}'`,
+    )
   }
 
   lines.push('')

@@ -1,5 +1,24 @@
 # theo
 
+## 0.48.13
+
+### Patch Changes
+
+- **The server bundle no longer loads pages lazily, so SSR renders the whole document at once.**
+
+  Pages were `React.lazy` in both builds. That is right for the browser, which downloads one page's
+  JavaScript instead of all of them, and wrong for the server, which has every chunk on local disk. A
+  lazy page suspends on first render regardless of caching — the `import()` settles a microtask after
+  the render — so `onShellReady` flushed the layout alone and the page arrived afterwards inside a
+  hidden div for a client script to move into place. Readers watched the document assemble itself:
+  measured on a production site at CLS 1.12 against a 0.1 budget, with `<footer>` served ahead of
+  `<article>`.
+
+  The route manifest is now generated per environment: lazy for the browser, static imports for the
+  server. Piping still happens on `onShellReady`, which React 19 requires — piping on `onAllReady`
+  throws "React currently only supports piping to one writable stream" on every request. Nothing
+  suspends now, so the shell IS the document. (usetheokit/theokit#323)
+
 ## 0.48.12
 
 ### Patch Changes
