@@ -233,6 +233,17 @@ jobs:
         if: always()
         run: pnpm audit --audit-level=high || echo "::warning::dev-tree advisories above are reported, not enforced"
 
+  doc-citations:
+    name: Doc citations (file:line resolve)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No install: the gate reads the working tree with node's stdlib only.
+      - run: node scripts/check-doc-citations.mjs
+
   license-compliance:
     name: License compliance (production tree)
     runs-on: ubuntu-latest

@@ -147,6 +147,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A rotten `path/to/file.ts:42` citation in a living document now fails a gate.** Code that points
+  at the wrong place breaks; a document that points at the wrong place keeps rendering and misleads
+  whoever went to check — a sweep found 354 citations naming a file that no longer exists and 24
+  naming a line past the end of the file it names, and none of them failed anything. `pnpm
+  check:docs` asserts both properties (the path resolves, the line is inside the file), because
+  checking existence alone would make `file.ts:1` the cheapest way to cite without pointing.
+  CHANGELOG files are out of scope by design: a changelog describes the past, so a citation into
+  code as it stood two releases ago SHOULD stop resolving. (usetheokit/theokit#193)
+
 - **`knip` is green again, so a new dead export is visible.** The gate reported six findings, which
   is the state in which a gate stops being read. Two were a re-export of the theme contract kept
   "so existing importers keep working" — measured: there were none. The other four are types
