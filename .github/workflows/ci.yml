@@ -4,7 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Both promotion legs are pull requests — workspace -> develop and develop -> main — so
+    # both bases belong here. Until 2026-08-19 only `main` was listed, so the nine quality
+    # jobs below never ran on the first leg: a PR into `develop` reported no check at all.
+    # That is also why `develop` could not be protected — requiring a context no workflow
+    # emits blocks every PR forever, so the branch was left with an empty required list,
+    # which reads as protection and demands nothing.
+    branches: [main, develop]
 
 # Quality gates — every job runs on every PR. A failing job blocks merge.
 
