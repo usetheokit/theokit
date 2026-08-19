@@ -7,6 +7,15 @@ export interface PluginContext {
    * `request.method` is portable across `theokit dev` / `theokit start` (Node) and Web runtimes (#119,
    * ADR-0028 R3a). Method + absolute URL + headers; the request body is not exposed here (onRequest /
    * preHandler fire before the body is parsed — the handler reads it via `ctx.body`).
+   *
+   * `request.url` is ABSOLUTE (`http://host/api/thing`), because that is what a Web `Request`
+   * carries. A guard written as `request.url.startsWith('/api/')` is therefore false for every real
+   * request and fails silently — the hook simply never matches. To match on a path:
+   *
+   * ```ts
+   * const { pathname } = new URL(ctx.request.url)
+   * if (pathname.startsWith('/api/')) { … }
+   * ```
    */
   request: Request
   response: ServerResponse
@@ -107,6 +116,9 @@ export function definePlugin(plugin: TheoPlugin): TheoPlugin {
  *   Available during `onResponse` / `onError`. `undefined` during
  *   `onRequest` / `preHandler` (which fire before the handler runs).
  * - `ctx` / `requestId` — same semantics as the IncomingMessage path.
+ *
+ * `request.url` is ABSOLUTE here too — see the note on `PluginContext.request`; match paths with
+ * `new URL(ctx.request.url).pathname`, never `request.url.startsWith('/…')`.
  */
 export interface WebPluginContext {
   request: Request

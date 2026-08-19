@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`PluginContext.request.url` now says, where you read it, that it is absolute.** A guard written
+  as `request.url.startsWith('/api/…')` is false for every real request, and a hook that never
+  matches looks exactly like one with nothing to say — the same invisibility that hid the agent-route
+  lifecycle gap. The field doc and the `plugin()` example now show `new URL(ctx.request.url).pathname`
+  as the way to match a path. (usetheokit/theokit#324)
+
+
+## [theokit 0.48.14] - 2026-08-19
+
 ### Added
 
 - **`repository`, `homepage` and `bugs` in every publishable manifest.** None of the six declared
@@ -146,6 +157,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   longer exists is a red suite, not coverage. (wiki-removal-2026-08)
 
 ### Fixed
+
+- **The release guard no longer refuses every release.** It asked "is this version already on the
+  registry?" of every publishable package, but a changesets release bumps only the packages a
+  changeset names — so every untouched package sat at the version it was last published under, which
+  is the steady state after any successful release, and which the guard reported as a collision. It
+  could only pass if every package were bumped every time, which is what changesets is built not to
+  do. It now checks the packages whose version moved off `origin/main`; a package with no baseline is
+  checked, never assumed safe, and the M67 case it was built for still differs from the baseline and
+  stays in scope. The script also ran at import time, so testing it fired a live registry check.
+  (usetheokit/theokit#330)
 
 - **Issue references in code now name the org the repositories actually live in.** Six source and
   test comments still cited `usetheodev/theokit#N` after the transfer. GitHub redirects, so nothing
