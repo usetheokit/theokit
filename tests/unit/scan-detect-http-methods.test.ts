@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -23,7 +23,7 @@ function write(rel: string, content: string): string {
 }
 
 beforeEach(() => {
-  sandbox = join(tmpdir(), `theo-detect-http-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  sandbox = mkdtempSync(join(tmpdir(), 'theo-detect-http-'))
   serverDir = join(sandbox, 'server')
   mkdirSync(join(serverDir, 'routes'), { recursive: true })
 })

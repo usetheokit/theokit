@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { existsSync, readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, existsSync, readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -10,7 +10,7 @@ describe('scaffold', () => {
   let targetDir: string
 
   beforeEach(() => {
-    targetDir = join(tmpdir(), `create-theokit-scaffold-test-${randomUUID()}`)
+    targetDir = mkdtempSync(join(tmpdir(), 'create-theokit-scaffold-test-'))
   })
 
   afterEach(() => {
@@ -70,11 +70,11 @@ describe('scaffold', () => {
 
     // Clean up and test more valid names
     rmSync(targetDir, { recursive: true, force: true })
-    targetDir = join(tmpdir(), `create-theokit-scaffold-test-${randomUUID()}`)
+    targetDir = mkdtempSync(join(tmpdir(), 'create-theokit-scaffold-test-'))
     expect(() => scaffold(targetDir, 'app123')).not.toThrow()
 
     rmSync(targetDir, { recursive: true, force: true })
-    targetDir = join(tmpdir(), `create-theokit-scaffold-test-${randomUUID()}`)
+    targetDir = mkdtempSync(join(tmpdir(), 'create-theokit-scaffold-test-'))
     expect(() => scaffold(targetDir, 'my.app')).not.toThrow()
   })
 

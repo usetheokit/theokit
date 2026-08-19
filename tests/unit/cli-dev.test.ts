@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { startDevServer } from '../../packages/theo/src/cli/commands/dev.js'
 import path from 'node:path'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 /**
@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
  * resolve, and a project created in a tmpdir resolves neither.
  *
  * What follows is the guard that needs no server.
- */ const TEMP_DIR = path.join(tmpdir(), `theo-cli-dev-${Date.now()}`)
+ */ const TEMP_DIR = mkdtempSync(path.join(tmpdir(), 'theo-cli-dev-'))
 
 beforeAll(() => {
   const noAppDir = path.join(TEMP_DIR, 'invalid-no-app')

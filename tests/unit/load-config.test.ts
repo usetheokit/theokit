@@ -2,13 +2,13 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { loadConfig, TheoConfigError } from 'theokit'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Every project this file loads is built here, so the suite owns its own inputs.
-const TEMP_DIR = path.join(tmpdir(), `theo-test-${Date.now()}`)
+const TEMP_DIR = mkdtempSync(path.join(tmpdir(), 'theo-test-'))
 
 beforeAll(() => {
   // Temp dir without theo.config.ts

@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -15,7 +15,7 @@ import { scanUpgradeReadiness } from '../../packages/theo/src/cli/commands/upgra
 let tmpDir: string
 
 function makeFixture(): string {
-  const dir = join(tmpdir(), `__check_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+  const dir = mkdtempSync(join(tmpdir(), '__check_'))
   mkdirSync(join(dir, 'app'), { recursive: true })
   mkdirSync(join(dir, 'server'), { recursive: true })
   writeFileSync(

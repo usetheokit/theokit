@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -12,7 +12,7 @@ let serverDir: string
 let distDir: string
 
 beforeEach(() => {
-  sandbox = join(tmpdir(), `theo-bridge-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  sandbox = mkdtempSync(join(tmpdir(), 'theo-bridge-test-'))
   serverDir = join(sandbox, 'server')
   distDir = join(sandbox, '.theokit')
   mkdirSync(join(serverDir, 'routes'), { recursive: true })

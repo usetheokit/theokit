@@ -16,17 +16,14 @@ import {
   RouterConventionError,
   ROUTER_MIGRATION_GUIDE_URL,
 } from '../../packages/theo/src/server/scan/errors.js'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 let serverDir: string
 
 beforeEach(() => {
-  const base = join(
-    tmpdir(),
-    `theo-g6-dotted-rejection-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  )
+  const base = mkdtempSync(join(tmpdir(), 'theo-g6-dotted-rejection-'))
   serverDir = join(base, 'server')
   mkdirSync(join(serverDir, 'routes'), { recursive: true })
 })
