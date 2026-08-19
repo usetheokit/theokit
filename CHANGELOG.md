@@ -8,11 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The thread follow-up route routes by the model too.** `theokit@0.48.14` made the agent endpoint
+  honour the provider a model declares, and left the thread follow-up route resolving the credential
+  before the module was even compiled — so an agent declaring `anthropic/…` still got whichever key
+  env priority found first, and every follow-up died with `auth_failed (HTTP 401)`. A consumer
+  hitting that after 0.48.14 was hitting this, not a failed fix. (usetheokit/theokit#328)
+
+- **The server says which provider it selected, once, at the point of selection.** Resolution was
+  silent on success: `resolveProvider` returned the provider's name and every call site discarded
+  it, so an operator could only learn which provider was in use from an error — which is to say,
+  only after it had already failed, and never in the case that costs most, a stale key that
+  resolves cleanly and 401s at the provider. One line now names the provider, how it was chosen
+  (declared by the model, or by env priority) and the variable the credential came from. Never the
+  credential. (usetheokit/theokit#326)
+
 - **`create-theokit --example=<url>` no longer builds a shell command out of the URL.** The URL is
   command-line input and was interpolated into a `git clone …` string, so a `;` or a backtick in it
   ran whatever followed with the user's privileges (CodeQL `js/indirect-command-line-injection` and
   `js/shell-command-injection-from-environment`). It now reaches `git` as one argv entry through
   `execFileSync`, which removes the class rather than escaping around it. (usetheokit/theokit#315)
+
+- **The `create-theokit` bare-transform test creates its temp directory atomically.** It built a
+  path and then created it, which CodeQL reports as `js/insecure-temporary-file`: between the two
+  steps something else can occupy the path, and a random suffix makes that unlikely rather than
+  impossible. `mkdtempSync` creates it with mode 0700 in one step. The same shape remains in 25
+  other test files, tracked separately. (usetheokit/theokit#334)
 
 - **`PluginContext.request.url` now says, where you read it, that it is absolute.** A guard written
   as `request.url.startsWith('/api/…')` is false for every real request, and a hook that never

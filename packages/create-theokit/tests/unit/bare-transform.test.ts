@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { randomUUID } from 'node:crypto'
 
 import { applyBareTransform } from '../../src/bare-transform.js'
 
@@ -10,8 +9,10 @@ describe('applyBareTransform', () => {
   let targetDir: string
 
   beforeEach(() => {
-    targetDir = join(tmpdir(), `create-theokit-bare-test-${randomUUID()}`)
-    mkdirSync(targetDir, { recursive: true })
+    // `mkdtempSync` CREATES the directory atomically with 0700, so nothing can pre-exist at the
+    // path or race us into it. Building a name and then `mkdirSync`-ing it is the shape CodeQL
+    // reports as `js/insecure-temporary-file`, and a random suffix makes it unlikely, not safe.
+    targetDir = mkdtempSync(join(tmpdir(), 'create-theokit-bare-test-'))
   })
 
   afterEach(() => {
