@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { scanMiddlewares } from '../../packages/theo/src/server/scan/middleware-scan.js'
@@ -15,7 +15,7 @@ describe('scanMiddlewares', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = join(tmpdir(), `theo-mw-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    tempDir = mkdtempSync(join(tmpdir(), 'theo-mw-test-'))
     mkdirSync(tempDir, { recursive: true })
   })
 
@@ -138,7 +138,7 @@ describe('runMiddlewareAndContext', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = join(tmpdir(), `theo-mw-runner-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    tempDir = mkdtempSync(join(tmpdir(), 'theo-mw-runner-'))
     mkdirSync(tempDir, { recursive: true })
   })
 

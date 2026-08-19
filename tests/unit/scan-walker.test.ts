@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -14,7 +14,7 @@ describe('walkSourceFiles (T3.1)', () => {
   let root: string
 
   beforeEach(() => {
-    root = join(tmpdir(), `walk-${String(Date.now())}-${String(Math.random()).slice(2, 6)}`)
+    root = mkdtempSync(join(tmpdir(), 'walk-'))
     mkdirSync(root, { recursive: true })
   })
 

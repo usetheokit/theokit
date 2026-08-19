@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The `typecheck-clean-gate` suite has one budget sized on its measured cost, instead of two sized
+  under it.** Two tests each invoked `pnpm typecheck` inside a 120s budget, and the file measured 86s
+  and 96.67s isolated on two machines — 80% of that budget in the best condition available, which is
+  why it timed out inside the full suite. The call is hoisted into a single `beforeAll` with a 300s
+  budget, ~3x the measured worst case, so the margin does not shrink to nothing as the package count
+  grows. (usetheokit/theokit#338)
+
+- **Seven more test suites create their temporary directories atomically, and with them six of the
+  production alerts cleared.** The first pass fixed 15 suites and CodeQL's file count fell from 26 to
+  13 — including six `packages/*/src` files that were never defective: they take a `targetDir`
+  **parameter**, and the insecure path was flowing in from the test that called them. Fixing the
+  caller cleared the callee. The seven suites here are the remaining sources.
+  (usetheokit/theokit#334)
+
+
+### Fixed
+
 - **Fifteen test files create their temporary directories atomically.** Each built a path under
   `tmpdir()` from `Date.now()` or a random suffix and then created it — two steps, with a window
   between them in which something else can occupy the path, and `Date.now()` in particular collides
