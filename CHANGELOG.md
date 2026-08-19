@@ -147,6 +147,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Plugin hooks now run for agent routes.** `onRequest`, `preHandler`, `onResponse` and `onError`
+  fired for every route except the agent endpoints, both in `theokit start` and `theokit dev` — an
+  app could register a plugin, watch it work on `/api/*`, and never learn that agent turns went
+  past it unobserved. A short-circuiting `onRequest` is honoured there now, as it already was
+  elsewhere. (usetheokit/theokit#324)
+
 - **`--version` answers with the installed version.** `theokit --version` reported
   `0.1.0-alpha.0` against a package at 0.48.8, and `create-theokit --version` reported `0.8.0`
   against 1.23.7 — both carried the number as a literal in source, which nothing could keep in step

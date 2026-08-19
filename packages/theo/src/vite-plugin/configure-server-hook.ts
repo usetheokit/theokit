@@ -98,7 +98,7 @@ export async function runConfigureServer(
   // (mirrors the action prefix). Agents live at <projectRoot>/agents (LOCKED naming).
   // CSRF is enforced in `mountAgent` (shared dev+prod point) at the same mode as routes.
   server.middlewares.use(
-    createAgentMiddleware(server, ctx.projectRoot, ctx.csrfMode, ctx.agentsDir),
+    createAgentMiddleware(server, ctx.projectRoot, ctx.csrfMode, ctx.agentsDir, ctx.pluginRunner),
   )
   // Wave 2 completion — services-proxy prefixes flow through to the
   // api-middleware so it can call `next()` for paths that should be

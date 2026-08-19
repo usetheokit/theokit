@@ -18,6 +18,7 @@ import { sendError } from '../../../server/http/send-response.js'
 import { serveStaticFile } from '../../../server/http/static.js'
 import { logRequest } from '../../../server/observability/logger.js'
 import { findSuggestion } from '../../../server/observability/suggest.js'
+import type { PluginContext } from '../../../server/plugin-types.js'
 import type { PluginRunner } from '../../../server/plugins/plugin-runner.js'
 import type { ActionNode } from '../../../server/scan/action-scan.js'
 import type { AgentNode } from '../../../server/scan/agent-scan.js'
@@ -294,10 +295,78 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
     return true
   }
 
+  await serveAgentTurn(c, agent, method)
+  return true
+}
+
+/**
+ * Serves one agent turn through the plugin lifecycle.
+ *
+ * Extracted from `tryServeAgent` so that function stays what its name says — a router over the
+ * agent paths — while the turn itself, which is what grew a lifecycle, reads in one piece.
+ */
+async function serveAgentTurn(
+  c: RequestHandlerCtx,
+  agent: { filePath: string },
+  method: string,
+): Promise<void> {
+  // theokit#324 — the plugin lifecycle runs here too.
+  //
+  // This branch used to mount the agent without ever consulting the runner, so `onRequest`,
+  // `onResponse` and `onError` fired for every OTHER route and never for an agent turn — leaving an
+  // app embedding TheoKit with no supported place to observe or bound agent state. Reported with a repro
+  // by a consumer who found it by instrumenting a hook and watching it stay silent — the failure is
+  // invisible by construction, since a hook that never runs looks exactly like one with nothing to
+  // say.
+  //
+  // Mirrors `executeRoute`'s shape deliberately: same `PluginContext`, same short-circuit contract,
+  // same `onError` on the failure path — an agent route should not have a lifecycle of its own.
+  let pluginCtx: PluginContext | undefined
+  let request: Request
+
+  try {
+    request = incomingMessageToWebRequest(c.req)
+    pluginCtx = { request, response: c.res, ctx: {}, requestId: c.requestId }
+  } catch (err) {
+    // A request the adapter cannot represent is a 500, exactly as before this branch grew a
+    // lifecycle — the conversion used to sit inside the try below and this preserves that.
+    sendError(
+      c.res,
+      'INTERNAL',
+      err instanceof Error ? err.message : 'Agent handler failed',
+      500,
+      undefined,
+      c.requestId,
+    )
+    logRequest({
+      method,
+      url: c.url,
+      status: c.res.statusCode,
+      duration: Date.now() - c.startTime,
+      requestId: c.requestId,
+    })
+
+    return
+  }
+
+  if (c.pluginRunner) {
+    c.pluginRunner.applyDecorations(pluginCtx.ctx)
+    const onRequest = await c.pluginRunner.runOnRequest(pluginCtx)
+    if (onRequest.shortCircuited) {
+      logRequest({
+        method,
+        url: c.url,
+        status: c.res.statusCode,
+        duration: Date.now() - c.startTime,
+        requestId: c.requestId,
+      })
+      return
+    }
+  }
+
   try {
     const mod = await c.loadModule(agent.filePath)
     const apiKey = resolveProvider().apiKey
-    const request = incomingMessageToWebRequest(c.req)
     const response = await mountAgent(mod, request, apiKey, {
       source: agent.filePath,
       csrfMode: c.csrfMode,
@@ -305,6 +374,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
     })
     await writeWebResponseToServerResponse(response, c.res)
   } catch (err) {
+    if (c.pluginRunner) await c.pluginRunner.runOnError(pluginCtx, err)
     sendError(
       c.res,
       'INTERNAL',
@@ -314,6 +384,9 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
       c.requestId,
     )
   }
+
+  // After the response is written, as `executeRoute` does — a hook here observes a completed turn.
+  if (c.pluginRunner) await c.pluginRunner.runOnResponse(pluginCtx)
   logRequest({
     method,
     url: c.url,
@@ -321,7 +394,6 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
     duration: Date.now() - c.startTime,
     requestId: c.requestId,
   })
-  return true
 }
 
 /** Branch 2: API routes (`/api/*` excluding actions). */
