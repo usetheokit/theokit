@@ -21,13 +21,13 @@ import { describe, it, expect } from 'vitest'
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-// @ts-expect-error — plain .mjs gate script, no type declarations by design
 import {
   extractCitations,
   classifyCitation,
   isBareName,
   isHistoricalRecord,
   collectDocs,
+  // @ts-expect-error — plain .mjs gate script, typed here rather than shipped with declarations
 } from '../../scripts/check-doc-citations.mjs'
 
 interface Citation {

@@ -147,6 +147,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Issue references in code now name the org the repositories actually live in.** Six source and
+  test comments still cited `usetheodev/theokit#N` after the transfer. GitHub redirects, so nothing
+  broke — which is why they survived the migration sweep. Released CHANGELOG entries keep the old
+  org deliberately: they record what was true when they were written.
+  (usetheokit/theokit#316)
+
 - **A rotten `path/to/file.ts:42` citation in a living document now fails a gate.** Code that points
   at the wrong place breaks; a document that points at the wrong place keeps rendering and misleads
   whoever went to check — a sweep found 354 citations naming a file that no longer exists and 24
