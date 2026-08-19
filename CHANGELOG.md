@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`create-theokit --example=<url>` no longer builds a shell command out of the URL.** The URL is
+  command-line input and was interpolated into a `git clone …` string, so a `;` or a backtick in it
+  ran whatever followed with the user's privileges (CodeQL `js/indirect-command-line-injection` and
+  `js/shell-command-injection-from-environment`). It now reaches `git` as one argv entry through
+  `execFileSync`, which removes the class rather than escaping around it. (usetheokit/theokit#315)
+
 - **`PluginContext.request.url` now says, where you read it, that it is absolute.** A guard written
   as `request.url.startsWith('/api/…')` is false for every real request, and a hook that never
   matches looks exactly like one with nothing to say — the same invisibility that hid the agent-route
