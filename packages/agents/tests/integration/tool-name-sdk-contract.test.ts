@@ -7,7 +7,7 @@ import { ConfigurationError } from '../../src/errors.js'
 import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/toolbox.js'
 
 /**
- * Regression for usetheodev/theokit#145 — a namespaced toolbox produced `ns.tool`, and the SDK
+ * Regression for usetheokit/theokit#145 — a namespaced toolbox produced `ns.tool`, and the SDK
  * rejects the dot (`/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/`). A DOCUMENTED path never worked against a real
  * provider, and nothing caught it because every other suite here **mocks** `@theokit/sdk`.
  *

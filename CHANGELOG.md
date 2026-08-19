@@ -147,6 +147,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Issue references in code now name the org the repositories actually live in.** Six source and
+  test comments still cited `usetheodev/theokit#N` after the transfer. GitHub redirects, so nothing
+  broke — which is why they survived the migration sweep. Released CHANGELOG entries keep the old
+  org deliberately: they record what was true when they were written.
+  (usetheokit/theokit#316)
+
+- **A rotten `path/to/file.ts:42` citation in a living document now fails a gate.** Code that points
+  at the wrong place breaks; a document that points at the wrong place keeps rendering and misleads
+  whoever went to check — a sweep found 354 citations naming a file that no longer exists and 24
+  naming a line past the end of the file it names, and none of them failed anything. `pnpm
+  check:docs` asserts both properties (the path resolves, the line is inside the file), because
+  checking existence alone would make `file.ts:1` the cheapest way to cite without pointing.
+  CHANGELOG files are out of scope by design: a changelog describes the past, so a citation into
+  code as it stood two releases ago SHOULD stop resolving. (usetheokit/theokit#193)
+
+- **`knip` is green again, so a new dead export is visible.** The gate reported six findings, which
+  is the state in which a gate stops being read. Two were a re-export of the theme contract kept
+  "so existing importers keep working" — measured: there were none. The other four are types
+  referenced by an exported function's own signature, which `declaration: true` requires to stay
+  exported; `ignoreExportsUsedInFile` names that rule once instead of suppressing four symbols
+  one at a time. (usetheokit/theokit#210)
+
+- **`create-theokit --example=<name>` no longer points at a repository that never existed.** A bare
+  name was resolved against a hard-coded examples repository that returns 404 under both orgs, so
+  the named form could only fail — and it failed by shelling out to `degit` and then printing the
+  dead link as the place to "browse available examples". That was the first thing a new user met.
+  A bare name is now refused immediately with the form that works, and `--example` documents itself
+  as taking a GitHub URL. (usetheokit/theokit#315)
+
+- **The provider comes from the model, not from whichever key happens to be set.** An agent
+  declaring `anthropic/claude-sonnet-4-6` was handed an OpenRouter key whenever `OPENROUTER_API_KEY`
+  was present, because provider resolution walked a fixed priority list and never saw the model at
+  all. Every turn then failed with `auth_failed (HTTP 401)` naming a provider the agent had not
+  asked for — and nothing reported which provider had been selected, so the failure read as a bug in
+  the app. A model that names its provider now requires that provider's key, and a missing one says
+  which variable to set instead of substituting another. Bare model ids keep the previous
+  priority-order behaviour. (usetheokit/theokit#326)
+
 - **Plugin hooks now run for agent routes.** `onRequest`, `preHandler`, `onResponse` and `onError`
   fired for every route except the agent endpoints, both in `theokit start` and `theokit dev` — an
   app could register a plugin, watch it work on `/api/*`, and never learn that agent turns went

@@ -323,7 +323,8 @@ async function serveAgentTurn(t: {
 
   try {
     const mod = await loadModule(agent.filePath)
-    const apiKey = resolveProvider().apiKey
+    // theokit#326 — resolve against the model the agent declares, not by env priority.
+    const apiKey = (model: string | undefined): string => resolveProvider(model).apiKey
     const response = await mountAgent(mod, request, apiKey, {
       source: agent.filePath,
       csrfMode,

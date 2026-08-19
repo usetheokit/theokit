@@ -64,7 +64,7 @@ describe('T2.3 — theo-cloud adapter (Wave 3 v2.0 thin)', () => {
     }
   })
 
-  it('build() succeeds against a v2 manifest (project name) — regression usetheodev/theokit#9', async () => {
+  it('build() succeeds against a v2 manifest (project name) — regression usetheokit/theokit#9', async () => {
     // The bug: buildManifest emits v2 when a project name is supplied, but the
     // adapter rejected anything !== 1, so `theokit build --target theo-cloud`
     // exited 1 before any artifact. The prior happy-path test built a v1
