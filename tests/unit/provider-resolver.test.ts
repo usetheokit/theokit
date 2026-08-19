@@ -14,6 +14,7 @@ import {
   listProviders,
   registerProvider,
   resetProviderRegistry,
+  resetProviderAnnouncements,
   resolveProvider,
   tryResolveProvider,
   type ProviderDescriptor,
@@ -235,5 +236,57 @@ describe('resolveProvider(modelId) routes by the provider the model declares', (
 
     // `qwen2.5:3b` has no slash; `acme/whatever` has a slash but no such provider.
     expect(resolveProvider('acme/whatever').name).toBe('openai')
+  })
+})
+
+/**
+ * theokit#326, the half that routing did not close — a successful resolution is silent.
+ *
+ * `resolveProvider` returns `{ name, apiKey, baseUrl }` and every call site consumes only the key,
+ * so `name` is discarded at the boundary. There is no log, no endpoint and no field on any
+ * response that answers "which provider is this server using?". An operator learns it from an
+ * error message, which means only when it has already failed — and a stale key that resolves and
+ * then 401s is exactly the case where the answer matters most.
+ */
+describe('resolution announces itself once', () => {
+  beforeEach(() => {
+    resetProviderRegistry()
+    clearLLMEnv()
+    resetProviderAnnouncements()
+  })
+  afterEach(clearLLMEnv)
+
+  it('reports the provider it chose, the variable it came from, and never the key', () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-secret-value'
+    const lines: string[] = []
+
+    resolveProvider('anthropic/claude-sonnet-4-6', { announce: (line) => lines.push(line) })
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('anthropic')
+    expect(lines[0]).toContain('ANTHROPIC_API_KEY')
+    expect(lines[0]).not.toContain('sk-ant-secret-value')
+  })
+
+  it('says so when the model chose the provider, rather than env priority', () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or'
+    process.env.ANTHROPIC_API_KEY = 'sk-ant'
+    const lines: string[] = []
+
+    resolveProvider('anthropic/claude-sonnet-4-6', { announce: (line) => lines.push(line) })
+
+    expect(lines[0]).toContain('declared by the model')
+  })
+
+  it('announces once per provider, not once per request', () => {
+    process.env.OPENAI_API_KEY = 'sk-openai'
+    const lines: string[] = []
+    const announce = (line: string) => lines.push(line)
+
+    resolveProvider('gpt-4o-mini', { announce })
+    resolveProvider('gpt-4o-mini', { announce })
+    resolveProvider('gpt-4o-mini', { announce })
+
+    expect(lines).toHaveLength(1)
   })
 })

@@ -90,6 +90,27 @@ const DEFAULT_REGISTRY: ProviderDescriptor[] = [
 const registry: ProviderDescriptor[] = [...DEFAULT_REGISTRY]
 
 /**
+ * Providers already announced, so a boot line does not become a per-request line.
+ *
+ * theokit#326 — resolution was silent on success. `resolveProvider` returns `{ name, apiKey,
+ * baseUrl }` and every call site consumes only the key, so an operator could only learn which
+ * provider was selected from an error message: exactly when it has already failed, and never in
+ * the case that hurts most — a stale key that resolves cleanly and 401s at the provider.
+ */
+const announced = new Set<string>()
+
+/** Test-only reset, so announcement state does not leak between cases. @public */
+export function resetProviderAnnouncements(): void {
+  announced.clear()
+}
+
+/** Where the announcement goes, and what it may contain. @public */
+export interface ResolveOptions {
+  /** Receives one line per provider, at most once. NEVER receives the key. */
+  announce?: (line: string) => void
+}
+
+/**
  * Register a new provider (Registry pattern — runtime extension point).
  * Useful for self-hosted endpoints or custom providers without touching theokit src.
  *
@@ -130,6 +151,28 @@ export function listProviders(): readonly ProviderDescriptor[] {
 }
 
 /**
+ * Says which provider was selected, once.
+ *
+ * Carries the provider, HOW it was chosen, and the variable the credential came from — never the
+ * credential. Which env var holds it is what an operator needs to fix a mis-selection; the value
+ * is what a log must never hold.
+ */
+function announce(
+  desc: ProviderDescriptor,
+  how: 'declared by the model' | 'by env priority',
+  options: ResolveOptions | undefined,
+): void {
+  if (announced.has(desc.name)) return
+  announced.add(desc.name)
+  const line = `[theokit] provider=${desc.name} (${how}) source=${desc.envKey} baseUrl=${desc.baseUrl}`
+  if (options?.announce) options.announce(line)
+  // `warn` rather than `info` because the repo's lint rule allows only `warn`/`error` — and this
+  // line is closer to a warning in spirit anyway: it is the one chance an operator gets to notice
+  // that the provider serving their agents is not the one they expected.
+  else console.warn(line)
+}
+
+/**
  * The provider a model id declares, or `undefined` when it declares none.
  *
  * `provider/model` and `gateway/provider/model` both resolve on the FIRST segment: a gateway is a
@@ -162,13 +205,14 @@ function providerOf(
  *
  * @public
  */
-export function resolveProvider(modelId?: string): ResolvedProvider {
+export function resolveProvider(modelId?: string, options?: ResolveOptions): ResolvedProvider {
   const sorted = [...registry].sort((a, b) => a.priority - b.priority)
 
   const declared = modelId === undefined ? undefined : providerOf(modelId, sorted)
   if (declared !== undefined && modelId !== undefined) {
     const apiKey = process.env[declared.envKey]
     if (apiKey && apiKey.length > 0) {
+      announce(declared, 'declared by the model', options)
       return { name: declared.name, apiKey, baseUrl: declared.baseUrl }
     }
     // Deliberately NOT falling back to another provider's key. Silently substituting one is how
@@ -183,6 +227,7 @@ export function resolveProvider(modelId?: string): ResolvedProvider {
   for (const desc of sorted) {
     const apiKey = process.env[desc.envKey]
     if (apiKey && apiKey.length > 0) {
+      announce(desc, 'by env priority', options)
       return {
         name: desc.name,
         apiKey,

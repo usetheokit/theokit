@@ -13,6 +13,7 @@ import {
 } from '@theokit/agents'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
+import type { ApiKeyResolver } from './api-key-resolver.js'
 import { getApprovalRegistry } from './approval-registry.js'
 
 type Compiled = ReturnType<typeof compileAgentModule>
@@ -45,10 +46,17 @@ export function buildAgentHitl(compiled: Compiled) {
  * compiles the module fresh (skills resolution mutates `compiled`), resolves
  * per-request skills, builds HITL, and streams. Headless — no request signal (a
  * thread continuation runs to completion into the durable cache, not to a client).
+ *
+ * `apiKey` accepts a resolved string or an {@link ApiKeyResolver}. The resolver form exists for
+ * the same reason it does on `mountAgent` (theokit#327): the credential depends on the model, and
+ * the model is only known once the module is compiled — which happens inside the generator below.
+ * The caller resolved before that, so an agent declaring `anthropic/…` was handed whichever key
+ * env priority picked first and every follow-up died with `auth_failed`. Fixed on the agent
+ * endpoint by #327; this is the same defect on the thread route (theokit#328).
  */
 export function makeThreadStartRun(
   mod: unknown,
-  apiKey: string,
+  apiKey: string | ApiKeyResolver,
   source: string,
 ): (sessionId: string, message: string) => AsyncIterable<UIMessageChunk> {
   return (sessionId, message) =>
@@ -62,6 +70,8 @@ export function makeThreadStartRun(
         if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
       }
       const hitl = buildAgentHitl(compiled)
-      yield* streamAgentUIMessages(compiled, apiKey, { message, sessionId, hitl })
+      // Now that the model is known, let the caller pick the credential for THAT provider.
+      const resolvedApiKey = typeof apiKey === 'function' ? apiKey(compiled.model) : apiKey
+      yield* streamAgentUIMessages(compiled, resolvedApiKey, { message, sessionId, hitl })
     })()
 }
