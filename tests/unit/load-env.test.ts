@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -42,11 +42,7 @@ const KEYS_TO_CLEAN = [
 ]
 
 function makeTmp(): string {
-  const dir = join(
-    tmpdir(),
-    `${ENV_SNAPSHOT_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2)}`,
-  )
-  mkdirSync(dir, { recursive: true })
+  const dir = mkdtempSync(join(tmpdir(), ENV_SNAPSHOT_PREFIX))
   return dir
 }
 
