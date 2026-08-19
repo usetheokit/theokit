@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Pull requests into `develop` now run the quality gates.** `ci.yml` and `codeql.yml` listed only
+  `main` under `pull_request`, so the leg where every change actually arrives — `workspace` into
+  `develop` — reported no check at all, while the workflow header claimed every job runs on every PR.
+  That absence is also what kept the branch unprotected: a required check is matched by name against
+  the checks a PR reports, so requiring a context no workflow emits blocks the merge forever, and
+  `develop` was left with an empty required list instead — protection that demands nothing.
+  (usetheokit/theokit#342)
+
 - **The `typecheck-clean-gate` suite has one budget sized on its measured cost, instead of two sized
   under it.** Two tests each invoked `pnpm typecheck` inside a 120s budget, and the file measured 86s
   and 96.67s isolated on two machines — 80% of that budget in the best condition available, which is
