@@ -147,6 +147,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`create-theokit --example=<name>` no longer points at a repository that never existed.** A bare
+  name was resolved against a hard-coded examples repository that returns 404 under both orgs, so
+  the named form could only fail — and it failed by shelling out to `degit` and then printing the
+  dead link as the place to "browse available examples". That was the first thing a new user met.
+  A bare name is now refused immediately with the form that works, and `--example` documents itself
+  as taking a GitHub URL. (usetheokit/theokit#315)
+
 - **The provider comes from the model, not from whichever key happens to be set.** An agent
   declaring `anthropic/claude-sonnet-4-6` was handed an OpenRouter key whenever `OPENROUTER_API_KEY`
   was present, because provider resolution walked a fixed priority list and never saw the model at
