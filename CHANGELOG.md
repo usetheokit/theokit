@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Seven more test suites create their temporary directories atomically, and with them six of the
+  production alerts cleared.** The first pass fixed 15 suites and CodeQL's file count fell from 26 to
+  13 — including six `packages/*/src` files that were never defective: they take a `targetDir`
+  **parameter**, and the insecure path was flowing in from the test that called them. Fixing the
+  caller cleared the callee. The seven suites here are the remaining sources.
+  (usetheokit/theokit#334)
+
+
+### Fixed
+
 - **Fifteen test files create their temporary directories atomically.** Each built a path under
   `tmpdir()` from `Date.now()` or a random suffix and then created it — two steps, with a window
   between them in which something else can occupy the path, and `Date.now()` in particular collides

@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { theoPlugin } from 'theokit'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 let fixtureDir: string
 
 beforeEach(() => {
-  fixtureDir = join(tmpdir(), `theo-plugin-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  fixtureDir = mkdtempSync(join(tmpdir(), 'theo-plugin-'))
   mkdirSync(join(fixtureDir, 'app'), { recursive: true })
   writeFileSync(join(fixtureDir, 'app/page.tsx'), 'export default function P() { return null }')
 })

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { scanRoutes } from 'theokit'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -8,7 +8,7 @@ let tempBase: string
 let appDir: string
 
 beforeEach(() => {
-  tempBase = join(tmpdir(), `theo-scan-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  tempBase = mkdtempSync(join(tmpdir(), 'theo-scan-'))
   appDir = join(tempBase, 'app')
   mkdirSync(appDir, { recursive: true })
 })
