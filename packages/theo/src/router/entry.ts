@@ -1,7 +1,11 @@
+import type { TheoUiFonts, TheoUiTheme } from '../core/contracts/theo-ui-theme.js'
+
 interface EntryClientOptions {
   theoUi?: {
-    fonts?: 'bundled' | 'cdn'
-    theme?: 'violet-forge' | 'noir' | 'paper'
+    fonts?: TheoUiFonts
+    // Imported rather than restated. This union was spelled out here, in entry-server.ts and in
+    // the config schema, and all three drifted from the themes @theokit/ui actually ships.
+    theme?: TheoUiTheme
   }
 }
 
@@ -73,9 +77,10 @@ export function generateEntryClient(ssr?: boolean, opts: EntryClientOptions = {}
     ? [
         `// Phase 4 — preload matched-route modules before hydrate (EC-3 safeguard)`,
         `const __theoMatches = matchRoutes(routes, window.location.pathname) ?? []`,
-        `const __theoPreloadPaths = __theoMatches`,
-        `  .map((m) => m.route && (m.route).path)`,
-        `  .filter((p) => typeof p === 'string' && p in __theoPreloadMap)`,
+        `// Absolute paths, rebuilt from the match chain — see __theoPreloadPathsFor. Looking up`,
+        `// \`m.route.path\` directly finds nothing for any nested route, so this preload silently`,
+        `// did nothing until usetheokit/theokit#323.`,
+        `const __theoPreloadPaths = __theoPreloadPathsFor(__theoMatches)`,
         `const __theoPreloadPromise = Promise.all(`,
         `  __theoPreloadPaths.map((p) => __theoPreloadMap[p]().catch((err) => { console.error('[theo] preload failed', p, err); return null }))`,
         `)`,
@@ -100,7 +105,7 @@ export function generateEntryClient(ssr?: boolean, opts: EntryClientOptions = {}
     : [`if (el) {`, renderCall, `}`]
 
   const manifestImports = ssr
-    ? `import { routes, __theoPreloadMap } from '/@theo/route-manifest'`
+    ? `import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'`
     : `import { routes } from '/@theo/route-manifest'`
 
   const reactRouterImports = ssr

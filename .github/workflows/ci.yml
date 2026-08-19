@@ -59,7 +59,7 @@ jobs:
       # resolve at `./dist/index.d.ts`). Public repo, anonymous clone OK.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
         run: |
-          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
@@ -103,7 +103,7 @@ jobs:
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
         run: |
-          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth against
@@ -147,7 +147,7 @@ jobs:
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
         run: |
-          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       - name: Rebuild native bindings (better-sqlite3 ABI guard)
@@ -178,7 +178,7 @@ jobs:
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
         run: |
-          git clone --depth 1 https://github.com/usetheodev/theokit-sdk.git ../theokit-sdk
+          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       # Build packages first so knip can resolve theokit's dist exports.
@@ -232,6 +232,17 @@ jobs:
       - name: Full tree (reported, does not block)
         if: always()
         run: pnpm audit --audit-level=high || echo "::warning::dev-tree advisories above are reported, not enforced"
+
+  doc-citations:
+    name: Doc citations (file:line resolve)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No install: the gate reads the working tree with node's stdlib only.
+      - run: node scripts/check-doc-citations.mjs
 
   license-compliance:
     name: License compliance (production tree)

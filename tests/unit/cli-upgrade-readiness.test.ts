@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { resolve } from 'node:path'
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import {
   scanUpgradeReadiness,
@@ -32,7 +32,7 @@ import {
  * the rule.
  */
 function makeTheokitProject(contents: Record<string, string>): string {
-  const dir = resolve(tmpdir(), `theokit-upgrade-${Date.now()}-${Math.random()}`)
+  const dir = mkdtempSync(resolve(tmpdir(), 'theokit-upgrade-'))
   mkdirSync(dir, { recursive: true })
   writeFileSync(
     resolve(dir, 'package.json'),
@@ -164,7 +164,7 @@ describe('scanUpgradeReadiness — project with violations', () => {
  */
 describe('scanUpgradeReadiness — EC-7 (skip comments + string literals)', () => {
   function makeTmpProject(contents: Record<string, string>): string {
-    const dir = resolve(tmpdir(), `theokit-ec7-${Date.now()}-${Math.random()}`)
+    const dir = mkdtempSync(resolve(tmpdir(), 'theokit-ec7-'))
     mkdirSync(dir, { recursive: true })
     writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ name: 'tmp', private: true }))
     for (const [rel, content] of Object.entries(contents)) {
@@ -209,7 +209,7 @@ describe('scanUpgradeReadiness — EC-7 (skip comments + string literals)', () =
  */
 describe('scanUpgradeReadiness — EC-8 (empty project exits gracefully)', () => {
   it('Given directory with only package.json, Then exitCode===0 and status==="no-project-detected"', async () => {
-    const dir = resolve(tmpdir(), `theokit-empty-${Date.now()}-${Math.random()}`)
+    const dir = mkdtempSync(resolve(tmpdir(), 'theokit-empty-'))
     mkdirSync(dir, { recursive: true })
     writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ name: 'empty', private: true }))
     try {
@@ -231,7 +231,7 @@ describe('scanUpgradeReadiness — EC-8 (empty project exits gracefully)', () =>
  */
 describe('scanUpgradeReadiness — EC-3 (non-TheoKit project detection)', () => {
   it('Given app/ exists but package.json lacks theokit, Then status==="not-a-theokit-project" and exitCode===1', async () => {
-    const dir = resolve(tmpdir(), `not-theokit-${Date.now()}-${Math.random()}`)
+    const dir = mkdtempSync(resolve(tmpdir(), 'not-theokit-'))
     mkdirSync(resolve(dir, 'app'), { recursive: true })
     writeFileSync(resolve(dir, 'app', 'page.tsx'), 'export default function Home() { return null }')
     writeFileSync(
@@ -249,7 +249,7 @@ describe('scanUpgradeReadiness — EC-3 (non-TheoKit project detection)', () => 
   })
 
   it('Given theokit in dependencies, Then scan proceeds normally (regression check)', async () => {
-    const dir = resolve(tmpdir(), `is-theokit-${Date.now()}-${Math.random()}`)
+    const dir = mkdtempSync(resolve(tmpdir(), 'is-theokit-'))
     mkdirSync(resolve(dir, 'app'), { recursive: true })
     writeFileSync(resolve(dir, 'app', 'page.tsx'), 'export default function Home() { return null }')
     writeFileSync(
@@ -265,7 +265,7 @@ describe('scanUpgradeReadiness — EC-3 (non-TheoKit project detection)', () => 
   })
 
   it('Given theokit in devDependencies only, Then scan still proceeds (devDep is valid)', async () => {
-    const dir = resolve(tmpdir(), `is-theokit-dev-${Date.now()}-${Math.random()}`)
+    const dir = mkdtempSync(resolve(tmpdir(), 'is-theokit-dev-'))
     mkdirSync(resolve(dir, 'app'), { recursive: true })
     writeFileSync(resolve(dir, 'app', 'page.tsx'), 'export default function Home() { return null }')
     writeFileSync(
@@ -281,7 +281,7 @@ describe('scanUpgradeReadiness — EC-3 (non-TheoKit project detection)', () => 
   })
 
   it('Given malformed package.json, Then scan does NOT crash; exits gracefully', async () => {
-    const dir = resolve(tmpdir(), `bad-pkg-${Date.now()}-${Math.random()}`)
+    const dir = mkdtempSync(resolve(tmpdir(), 'bad-pkg-'))
     mkdirSync(resolve(dir, 'app'), { recursive: true })
     writeFileSync(resolve(dir, 'app', 'page.tsx'), 'export default function Home() { return null }')
     writeFileSync(resolve(dir, 'package.json'), '{ this is not json')

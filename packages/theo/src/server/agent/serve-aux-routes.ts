@@ -18,6 +18,7 @@ import type { AgentNode } from '../scan/agent-scan.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import { isAgentCardPath, handleAgentCard } from './agent-card-handler.js'
+import type { ApiKeyResolver } from './api-key-resolver.js'
 import { getApprovalRegistry } from './approval-registry.js'
 import { handleAgentRunReconnect, isAgentRunStreamPath } from './handle-agent-run-reconnect.js'
 import {
@@ -58,8 +59,12 @@ interface AuxRouteDeps {
    * M39 — lazily resolve the provider apiKey. Required only for the thread
    * follow-up route (which drives the agent); resolved on demand so non-agent
    * aux routes (card, approvals, stream) never need a provider key.
+   *
+   * theokit#328 — it receives the model the agent declares, so the credential matches the provider
+   * the agent asked for. It was called with no argument, before the module was even compiled, so
+   * an agent declaring `anthropic/…` was handed whichever key env priority found first.
    */
-  resolveApiKey?: () => string
+  resolveApiKey?: ApiKeyResolver
 }
 
 /**
@@ -133,7 +138,7 @@ export async function serveAgentAuxRoute(
  * unguessable (e.g. a client-minted UUID). An app that uses a PREDICTABLE
  * sessionId (user id, email, sequential id) MUST add its own auth gate before
  * this endpoint, or any party who can guess the sessionId can read the thread's
- * live conversation stream. Documented in `wiki/architecture/multi-surface-architecture.md`.
+ * live conversation stream.
  *
  * Returns `null` to fall through (not a thread route, wrong method, unknown agent).
  */
@@ -167,7 +172,9 @@ async function serveThreadRoute(
     const mod = await deps.loadModule(agent.filePath)
     return handleThreadMessage({
       mod,
-      apiKey: deps.resolveApiKey(),
+      // Passed unresolved: `makeThreadStartRun` calls it once the module is compiled and the
+      // model is known (theokit#328).
+      apiKey: deps.resolveApiKey,
       sessionId: msg.sessionId,
       request,
       source: `agent "${msg.name}"`,

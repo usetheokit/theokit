@@ -17,8 +17,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-export type TheoUiTheme = 'violet-forge' | 'noir' | 'paper'
-export type TheoUiFonts = 'bundled' | 'cdn'
+// The theme contract lives in core/contracts/ — config/, router/ and this plugin all need it and
+// may not depend on each other. This module used to re-export it for "existing importers"; there
+// are none (every consumer imports the contract directly), so the re-export was dead surface.
+import type { TheoUiFonts, TheoUiTheme } from '../core/contracts/theo-ui-theme.js'
 
 export interface TheoUiConfig {
   theme: TheoUiTheme

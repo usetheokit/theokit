@@ -1,5 +1,7 @@
 import cac from 'cac'
 
+import { cliVersion } from './version.js'
+
 interface CliOptions {
   port?: string | number
   target?: string
@@ -266,7 +268,7 @@ cli
   })
 
 cli.help()
-cli.version('0.1.0-alpha.0')
+cli.version(cliVersion())
 
 export function main(): void {
   cli.parse()

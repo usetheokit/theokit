@@ -15,7 +15,7 @@ import {
   isPortInUse,
   findRunningDevServerPort,
 } from '../../packages/theo/src/cli/commands/migrate/router.js'
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer, type Server } from 'node:net'
@@ -24,10 +24,7 @@ let routesDir: string
 let blockingServer: Server | null = null
 
 beforeEach(() => {
-  const base = join(
-    tmpdir(),
-    `theo-g6-cli-migrate-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  )
+  const base = mkdtempSync(join(tmpdir(), 'theo-g6-cli-migrate-'))
   routesDir = join(base, 'server', 'routes')
   mkdirSync(routesDir, { recursive: true })
 })

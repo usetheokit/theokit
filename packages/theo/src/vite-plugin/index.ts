@@ -399,8 +399,12 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
       return resolveVirtualModuleId(id, VIRTUAL_MODULE_IDS)
     },
 
-    load(id: string) {
+    // Vite calls `load` once per environment; `loadOptions.ssr` distinguishes the server build
+    // from the browser build, and the route manifest must differ between them. Named apart from the
+    // plugin's own `options` so it does not shadow it — `streamingEnabled` below reads that one.
+    load(id: string, loadOptions?: { ssr?: boolean }) {
       return loadVirtualModule(id, {
+        ssrBuild: loadOptions?.ssr === true,
         ids: VIRTUAL_MODULE_IDS,
         appDir,
         ssrEnabled,

@@ -17,9 +17,10 @@ import { join, resolve } from 'node:path'
 
 import { loadConfig } from '../../../config/load-config.js'
 import { loadEnv } from '../../../config/load-env.js'
+import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 import { defineHealthRoute } from '../../../server/define/health-route.js'
 import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
-import { createRateLimiter } from '../../../server/rate-limit/rate-limit.js'
+import { createRouteRateLimiter } from '../../../server/rate-limit/rate-limit-per-route.js'
 import { createProductionLoader } from '../../../server/scan/module-loader.js'
 import { resolveTransformer } from '../../../server/transformer.js'
 import { preflightNodeAndBindings } from '../../preflight-node-version.js'
@@ -30,6 +31,7 @@ import {
   configureAgentRegistryFromConfig,
   configureStorageManagerFromConfig,
 } from './bootstrap-stages.js'
+import { loadCronDefinitions } from './cron-bootstrap.js'
 import { installGracefulShutdown } from './graceful-shutdown.js'
 import type { RequestHandlerCtx } from './handlers.js'
 import { loadRoutesAndActions } from './manifest-loader.js'
@@ -94,13 +96,16 @@ export async function startCommand(options: StartOptions): Promise<void> {
     agents: cachedAgents,
   } = loadRoutesAndActions(distDir, serverDir, config.agentsDir)
 
-  // Rate limiter (legacy flat form only — per-route variant is handled in
-  // api-middleware integration path, not this fallback).
-  const flatRateLimit =
-    config.rateLimit && 'windowMs' in config.rateLimit && 'max' in config.rateLimit
-      ? config.rateLimit
-      : undefined
-  const rateLimiter = flatRateLimit ? createRateLimiter(flatRateLimit) : null
+  // `createRouteRateLimiter` accepts BOTH config shapes — it detects the legacy flat form and
+  // treats it as the default bucket — so one call covers everything the schema allows.
+  //
+  // The previous code built a limiter only for the flat shape, on the belief that the per-route
+  // variant was handled by an api-middleware path. No such path runs under `theokit start`, so a
+  // per-route config produced `null` here and `handlers.ts` skipped limiting on every request. The
+  // app booted clean, the config validated, and nothing was ever limited — see
+  // usetheokit/theokit#321. A config that validates and then does nothing is worse than one that
+  // fails loudly, because the operator has no reason to look.
+  const rateLimiter = config.rateLimit ? createRouteRateLimiter(config.rateLimit) : null
 
   const ssr = await setupSsr({
     distDir,
@@ -149,9 +154,19 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   await attachWebSocketHandler(server, cachedWsRoutes, loadModule)
 
+  // theokit#324: `theokit build --target node` announces an in-process
+  // scheduler here. Drive it, or the announcement is false.
+  const cronDefinitions = await loadCronDefinitions(resolve(distDir, 'crons.json'), cwd, loadModule)
+  if (cronDefinitions.length > 0) {
+    createCronScheduler(cronDefinitions).start()
+  }
+
   server.listen(port, () => {
     console.log(`\n  Theo production server`)
     console.log(`  → http://localhost:${String(port)}\n`)
+    if (cronDefinitions.length > 0) {
+      console.log(`  Crons: ${String(cronDefinitions.length)} scheduled in-process\n`)
+    }
   })
 
   installGracefulShutdown(server)

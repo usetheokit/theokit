@@ -11,16 +11,18 @@
  *   - `@theokit/agents` from `package.json` dependencies (only agents/chat.ts used it)
  *   - `app/page.tsx` agent-surface content (replaces with Hello Theo)
  *   - `agents/chat.ts` (the demo agent — depends on the SDK + TheoUI page)
- *   - `tailwind.config.ts` + `postcss.config.js` (Tailwind toolchain — only
- *     needed by the @theokit/ui-driven default surface)
- *   - tailwind* + postcss* from devDependencies (toolchain cleanup)
+ *   - tailwind* + postcss* from devDependencies, `@tailwindcss/vite` included
+ *     (toolchain cleanup — only the @theokit/ui-driven surface needs it)
+ *   - `tailwind.config.ts` + `postcss.config.js` when a template ships them.
+ *     The default template does NOT: Tailwind v4 is configured by the framework
+ *     when it detects `@theokit/ui` + `@tailwindcss/vite`, so there is no config
+ *     file to maintain. The removals stay for templates that predate v4.
  *
  * Why SDK removal is in --bare:
- *   `@theokit/sdk` is not yet on the public npm registry (operator-deferred
- *   publish per macro roadmap item #3). A user running `npx create-theokit`
- *   without `--bare` hits `npm install` → 404. The `--bare` path produces a
- *   scaffold that ALWAYS works without registry dependencies — Hello Theo
- *   with a clean structure to grow into.
+ *   `--bare` drops the demo agent, and `@theokit/sdk` is the runtime only that
+ *   agent needs. Shipping it in a scaffold with no agent is a dependency the
+ *   app never imports. (It is published — the removal is about scope, not
+ *   availability.)
  *
  * EC-4: callers MUST wrap this in try/catch + `rmSync` rollback so a partial
  * transform never leaves the target dir in a broken state.
@@ -64,9 +66,8 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as PartialPackageJson
     if (pkg.dependencies) {
       delete pkg.dependencies['@theokit/ui']
-      // Drop SDK — operator-deferred npm publish (macro roadmap item #3).
-      // Without removal, `npm install` hits 404 for any consumer outside
-      // the workspace.
+      // The SDK is the runtime of the demo agent, which --bare removes. A
+      // scaffold with no agent should not carry the agent runtime.
       delete pkg.dependencies['@theokit/sdk']
       // --bare removes the demo agent (agents/chat.ts), so its runtime dep
       // (@theokit/agents, imported only by that file) goes with it.
@@ -78,7 +79,11 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     if (pkg.devDependencies) {
       // Tailwind toolchain is only needed by the @theokit/ui-driven default
       // surface. --bare ships unstyled Hello Theo; no Tailwind required.
+      // `@tailwindcss/vite` is the entry the default template declares (v4 has
+      // no config file or postcss step) — dropping `tailwindcss` without it
+      // left the scaffold installing a Vite plugin whose engine was gone.
       delete pkg.devDependencies.tailwindcss
+      delete pkg.devDependencies['@tailwindcss/vite']
       delete pkg.devDependencies['tailwindcss-animate']
       delete pkg.devDependencies.postcss
       delete pkg.devDependencies.autoprefixer

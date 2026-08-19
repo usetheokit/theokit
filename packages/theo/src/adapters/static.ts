@@ -15,6 +15,7 @@ import { dirname, resolve, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import type { TheoConfig } from '../config/schema.js'
+import { findRootDiv } from '../core/contracts/find-root-div.js'
 import { scanRoutes } from '../router/scan.js'
 import type { RouteNode } from '../router/types.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
@@ -27,6 +28,12 @@ import {
   type ResolvedPath,
 } from './static-paths.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
+
+/** Keeps this call site's `RegExpExecArray`-shaped usage while ignoring commented mentions. */
+function findRootDivLegacyShape(html: string): [string] | null {
+  const found = findRootDiv(html)
+  return found ? [found.tag] : null
+}
 
 export class StaticApiRoutesDetectedError extends Error {
   constructor(routes: string[]) {
@@ -155,7 +162,7 @@ function createDefaultRenderHtml(cwd: string): (url: string) => Promise<string> 
       if (typeof mod.render !== 'function') return baseHtml
       const result = await mod.render(url)
       if (typeof result === 'string') {
-        const rootMatch = /<div id=["']root["'][^>]*>/.exec(baseHtml)
+        const rootMatch = findRootDivLegacyShape(baseHtml)
         if (rootMatch) {
           const splitIdx = baseHtml.indexOf(rootMatch[0]) + rootMatch[0].length
           return baseHtml.slice(0, splitIdx) + result + baseHtml.slice(splitIdx)

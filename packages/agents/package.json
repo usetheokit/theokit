@@ -1,7 +1,16 @@
 {
   "name": "@theokit/agents",
   "version": "10.1.0",
-  "description": "AI agents as first-class citizens of the TheoKit pipeline. The fluent agent()/tool() builders compile to SDK Agent.create() (M31 builder-only authoring API).",
+  "description": "AI agents as first-class citizens of the TheoKit pipeline. The AgentBuilder.create() authoring chain compiles to the @theokit/sdk runtime.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usetheokit/theokit.git",
+    "directory": "packages/agents"
+  },
+  "homepage": "https://github.com/usetheokit/theokit/tree/main/packages/agents#readme",
+  "bugs": {
+    "url": "https://github.com/usetheokit/theokit/issues"
+  },
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -9,16 +18,16 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./bridge": {
-      "import": "./dist/bridge.js",
-      "types": "./dist/bridge.d.ts"
+      "types": "./dist/bridge.d.ts",
+      "import": "./dist/bridge.js"
     },
     "./testing": {
-      "import": "./dist/testing.js",
-      "types": "./dist/testing.d.ts"
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     },
     "./sandbox": {
       "types": "./dist/sandbox.d.ts",

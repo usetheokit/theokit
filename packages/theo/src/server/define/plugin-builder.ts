@@ -9,6 +9,14 @@
  *     .onRequest((ctx) => { ctx.ctx.requestId = crypto.randomUUID() })
  *     .onResponse((ctx) => { ctx.response.setHeader('x-request-id', String(ctx.ctx.requestId)) })
  *     .build()
+ *
+ * `ctx.request` is a Web `Request`, so `ctx.request.url` is ABSOLUTE. Match a path through `URL`,
+ * never with `startsWith('/…')` — that comparison is false for every real request, and a hook that
+ * never matches looks exactly like one with nothing to say:
+ *
+ *   .onResponse((ctx) => {
+ *     if (new URL(ctx.request.url).pathname.startsWith('/api/')) { … }
+ *   })
  */
 import {
   definePlugin,

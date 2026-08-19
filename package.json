@@ -1,6 +1,7 @@
 {
   "name": "theokit-monorepo",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
@@ -9,7 +10,7 @@
     "test:types": "vitest --typecheck.only --run",
     "test:coverage": "vitest run --coverage",
     "build": "pnpm -r run build",
-    "validate:publint": "npx publint packages/theo && npx publint packages/create-theokit",
+    "validate:publint": "npx publint packages/theo && npx publint packages/agents && npx publint packages/http && npx publint packages/presenter && npx publint packages/tauri && npx publint packages/create-theokit",
     "validate:attw": "npx @arethetypeswrong/cli --pack packages/theo --ignore-rules cjs-resolves-to-esm no-resolution",
     "typecheck": "pnpm --filter \"./packages/*\" build && tsc --noEmit",
     "lint": "eslint .",
@@ -20,7 +21,7 @@
     "knip:strict": "knip --strict",
     "check:deps": "dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs",
     "check:naming": "ls-lint",
-    "check:all": "pnpm build && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm knip",
+    "check:all": "pnpm build && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm knip && pnpm check:docs",
     "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test",
     "try:dev": "cd my-test && npx tsx ../packages/theo/src/cli/index.ts dev",
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
@@ -31,6 +32,7 @@
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "verify:version-collision": "node scripts/verify-version-not-published.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
+    "check:docs": "node scripts/check-doc-citations.mjs",
     "check:audit": "pnpm audit --prod --audit-level=high",
     "typecheck:fast": "tsc --noEmit"
   },

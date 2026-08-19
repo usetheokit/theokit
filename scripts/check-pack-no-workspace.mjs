@@ -84,6 +84,38 @@ function unresolvedRanges(manifest) {
   return found
 }
 
+/**
+ * Refuses a publish driven by npm when the on-disk manifest still holds a `workspace:` range.
+ *
+ * The gate above packs through `pnpm`, which SUBSTITUTES the range — so it reports a clean tarball
+ * even when the publish about to happen will ship the raw protocol. That blind spot is not
+ * hypothetical: `theokit@0.48.4` passed this check and shipped `"@theokit/agents": "workspace:^"`,
+ * uninstallable for every consumer, because it was published with `npm publish` rather than
+ * `pnpm publish`.
+ *
+ * npm never substitutes the protocol, so the only safe answer under npm is to stop.
+ */
+function refuseNpmPublishWithWorkspaceRanges(dir) {
+  const agent = process.env.npm_config_user_agent ?? ''
+  const drivenByPnpm = agent.includes('pnpm')
+  if (drivenByPnpm) return false
+
+  const onDisk = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  const leaks = unresolvedRanges(onDisk)
+  if (leaks.length === 0) return false
+
+  console.error(
+    `✗ ${onDisk.name}@${onDisk.version}: publishing through npm would ship these verbatim:`,
+  )
+  for (const leak of leaks) console.error(`    ${leak}`)
+  console.error(
+    '\nOnly pnpm substitutes `workspace:` ranges. `npm publish` ships them as written, and npm\n' +
+      'cannot install the result — this is how theokit@0.48.4 reached the registry broken.\n' +
+      'Publish with `pnpm publish` instead.',
+  )
+  return true
+}
+
 const argDir = process.argv[2]
 const targets = argDir === undefined ? publishablePackages() : [argDir]
 
@@ -104,6 +136,10 @@ for (const dir of targets) {
 
 let failed = false
 for (const dir of targets) {
+  if (refuseNpmPublishWithWorkspaceRanges(dir)) {
+    failed = true
+    continue
+  }
   const manifest = packedManifest(dir)
   const leaks = unresolvedRanges(manifest)
   if (leaks.length > 0) {

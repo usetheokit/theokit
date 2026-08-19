@@ -39,7 +39,7 @@ export function prepareTheoCloudArtifacts(
   // v1 (deprecated, sunset 0.6.0) and v2 (current, adds `project`) share the
   // same `services[]` shape the adapter consumes — both are accepted. Any
   // other version is a forward-compat guard: bump handling here before the
-  // builder emits a newer schema. (Regression: usetheodev/theokit#9 — the
+  // builder emits a newer schema. (Regression: usetheokit/theokit#9 — the
   // builder emits v2 when a project name is supplied; rejecting v2 broke
   // every `theokit build --target theo-cloud`.)
   //

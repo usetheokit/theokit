@@ -1,14 +1,20 @@
-# @theokit/http-decorators
+# `@theokit/http`
 
-NestJS-style decorators (`@Controller`, `@Get`, `@Post`, `@Body`, `@UseGuards`) that bridge to TheoKit's `defineRoute` + `defineMiddleware`. Opt-in for teams migrating from NestJS.
+NestJS-style decorators (`@Controller`, `@Get`, `@Post`, `@Body`, `@UseGuards`) over Web Standards —
+`Request` and `Response`, not `node:http`. They compile down to the same route registrations
+[`theokit`](https://www.npmjs.com/package/theokit) serves, so a decorator controller and a
+`route()` builder are two authoring surfaces over one runtime.
+
+> **Renamed.** This package was published as `@theokit/http-decorators` until 0.3.0. That name is
+> frozen at the old surface — install `@theokit/http`.
 
 ## Install
 
 ```bash
-pnpm add @theokit/http-decorators reflect-metadata
+pnpm add @theokit/http reflect-metadata
 ```
 
-Add to your `tsconfig.json`:
+The decorators are the TypeScript legacy kind, so the consuming project needs:
 
 ```json
 {
@@ -19,62 +25,75 @@ Add to your `tsconfig.json`:
 }
 ```
 
+`emitDecoratorMetadata` is only required for the DTO-class form of `@Body` (below). The preferred
+form — `@Body(schema)` — works without it.
+
 ## Quick start
 
 ```typescript
-import { Controller, Get, Post, Body } from '@theokit/http-decorators'
+import { Controller, Get, Post, Body, Param } from '@theokit/http'
 import { z } from 'zod'
 
-const zCreateCat = z.object({ name: z.string(), age: z.number() })
-
-class CreateCatDto {
-  static schema = zCreateCat
-}
-
-@Controller('cats')
+// Convention: @Controller() on CatsController infers the prefix "api/cats".
+// Pass a string to override: @Controller('api/v2/cats').
+@Controller()
 export class CatsController {
   @Get()
-  findAll(): string {
-    return 'This action returns all cats'
+  findAll() {
+    return { cats: [] }
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return { id }
   }
 
   @Post()
-  create(@Body() body: CreateCatDto) {
-    return `Added ${(body as z.infer<typeof zCreateCat>).name}`
+  create(@Body(z.object({ name: z.string(), age: z.number().min(0) })) body: unknown) {
+    return { created: body }
   }
 }
 ```
 
-## DTO validation (Pattern D2 — Zod static schema)
+## Validation — Zod is the single source of truth
 
-TheoKit uses Zod as the single source of truth for validation. Attach a `static schema` to your DTO class:
+Pass the schema to `@Body` directly. The bridge validates the request against it and feeds the same
+schema to the OpenAPI emitter and the typed-client codegen:
 
 ```typescript
-const zCreateCat = z.object({
-  name: z.string().min(2).max(50),
-  age: z.number().min(0),
-  breed: z.string(),
-})
+@Post()
+create(@Body(z.object({ name: z.string().min(2), breed: z.string() })) body: unknown) { … }
+```
 
+A DTO class works too, when a shared, named shape reads better. Attach the schema as a static; this
+form needs `emitDecoratorMetadata`, because the bridge finds the class through `design:paramtypes`:
+
+```typescript
 class CreateCatDto {
-  static schema = zCreateCat
+  static schema = z.object({ name: z.string(), age: z.number() })
 }
+
+@Post()
+create(@Body() body: CreateCatDto) { … }
 ```
 
-The bridge reads `CreateCatDto.schema` at metadata-walk time and feeds it to `defineRoute({ body: zCreateCat })`. This preserves TheoKit's OpenAPI generation + type inference pipeline.
+When neither is present the body is passed through raw and the bridge warns — validation is never
+silently skipped.
 
-## Guards and Interceptors
+## Pipeline
+
+`middleware → guards → interceptors → handler`, with filters catching what escapes.
 
 ```typescript
-import { Controller, Get, UseGuards } from '@theokit/http-decorators'
+import { Controller, Get, UseGuards, type CanActivate, type ExecutionContext } from '@theokit/http'
 
-class AuthGuard {
-  canActivate(request: Request): boolean {
-    return request.headers.get('authorization') !== null
+class AuthGuard implements CanActivate {
+  canActivate(ctx: ExecutionContext): boolean {
+    return ctx.getRequest().headers.get('authorization') !== null
   }
 }
 
-@Controller('admin')
+@Controller('api/admin')
 export class AdminController {
   @UseGuards(AuthGuard)
   @Get()
@@ -84,89 +103,116 @@ export class AdminController {
 }
 ```
 
-Guards that return `false` produce a 401 response. `@UseInterceptors` wraps the handler for post-processing (logging, caching).
+A guard returning `false` produces **403 Forbidden** (`ForbiddenException`); throw
+`UnauthorizedException` from the guard when 401 is what you mean. Class-level guards run before
+method-level ones.
 
-## CLI scaffold
+An interceptor is `intercept(request, next)` — Web Standard `Request` in, and `next()` wrapping the
+handler call only (the body is already parsed by then). Not calling `next()` short-circuits the
+handler; calling it twice is memoized to one execution.
 
-```bash
-theokit generate controller cats
-# Creates server/controllers/cats.controller.ts
-```
+An exception filter is `catch(exception, host)` returning a `Response`, where `host.getRequest()` is
+the request that failed.
 
-## registerControllers (low-level API)
+## Serving an agent from a controller
 
-For advanced use cases without the Vite plugin:
+`@Expose` binds an agent built in `agents/<name>.ts` to a controller property, so its route, its
+streaming and its auth are visible in one place:
 
 ```typescript
-import { registerControllers } from '@theokit/http-decorators'
-import { CatsController } from './controllers/cats.controller.js'
+import { Controller, Expose, UseGuards } from '@theokit/http'
 
-const routes = registerControllers([CatsController])
-// Returns RouteRegistration[] with verb, fullPath, walkResult per method
+import supportAgent from '../../agents/support.js'
+
+@Controller('api/agents')
+@UseGuards(AuthGuard)
+export class AgentsController {
+  @Expose(supportAgent)
+  support!: unknown // → POST /api/agents/support, behind AuthGuard
+}
 ```
+
+The request is delegated straight to the one agent runtime. Guards run on that route; interceptors
+do not.
 
 ## Decorators reference
 
 | Decorator | Kind | Purpose |
 |---|---|---|
-| `@Controller(prefix?, opts?)` | Class | Route prefix scope |
-| `@Get(path?)` | Method | GET endpoint |
-| `@Post(path?)` | Method | POST endpoint |
-| `@Put(path?)` | Method | PUT endpoint |
-| `@Patch(path?)` | Method | PATCH endpoint |
-| `@Delete(path?)` | Method | DELETE endpoint |
-| `@Options(path?)` | Method | OPTIONS endpoint |
-| `@Head(path?)` | Method | HEAD endpoint |
-| `@All(path?)` | Method | All HTTP methods |
-| `@Body(key?)` | Parameter | Request body (or body[key]) |
-| `@Param(key?)` | Parameter | Route params (or params[key]) |
-| `@Query(key?)` | Parameter | Query string (or query[key]) |
+| `@Controller(prefix?, opts?)` | Class | Route prefix scope (inferred from the class name when omitted) |
+| `@Get/@Post/@Put/@Patch/@Delete/@Options/@Head/@All(path?)` | Method | HTTP verb endpoints |
+| `@Body(schemaOrKey?)` | Parameter | Request body — Zod schema, DTO class, or `body[key]` |
+| `@Param(key?)` | Parameter | Route params (or `params[key]`) |
+| `@Query(key?)` | Parameter | Query string (or `query[key]`) |
 | `@Headers(name?)` | Parameter | Request headers |
-| `@Req()` | Parameter | Full Request object |
-| `@Res(opts?)` | Parameter | Response object (`passthrough` option) |
-| `@Session()` | Parameter | Session object |
-| `@Ip()` | Parameter | Client IP |
-| `@HostParam(key?)` | Parameter | Host parameters |
-| `@HttpCode(status)` | Method | Override response status code |
-| `@Header(name, value)` | Method | Set response header |
+| `@Req()` / `@Res(opts?)` | Parameter | The raw `Request` / response (`passthrough` option) |
+| `@Session()` / `@Ip()` / `@HostParam(key?)` | Parameter | Session, client IP, host params |
+| `@HttpCode(status)` | Method | Override the response status |
+| `@Header(name, value)` | Method | Set a response header |
 | `@Redirect(url, status?)` | Method | Redirect response |
-| `@UseGuards(...guards)` | Class/Method | Attach guard classes |
-| `@UseInterceptors(...interceptors)` | Class/Method | Attach interceptor classes |
+| `@UseGuards(...)` | Class/Method | Attach guards |
+| `@UseInterceptors(...)` | Class/Method | Attach interceptors |
+| `@UseFilters(...)` / `@Catch(...)` | Class/Method | Exception filters |
+| `@Throttle(opts)` / `@SkipThrottle()` | Class/Method | Rate-limit policy |
+| `@SetMetadata(key, value)` / `createDecorator<T>()` | Class/Method | Custom metadata, read back with `Reflector` |
+| `@Expose(agent, opts?)` | Property | Serve a built agent from this controller |
+
+Build your own policy decorator with `createDecorator`:
+
+```typescript
+const Roles = createDecorator<string[]>()
+// @Roles(['admin']) → read it in a guard with reflector.get(Roles, handler)
+```
+
+`HttpStatus` ships the 30 status codes the framework uses, alongside an exception class per code
+(`BadRequestException`, `ConflictException`, `TooManyRequestsException`, …).
+
+## Subpaths
+
+| Subpath | What lives there |
+|---|---|
+| `.` | Decorators, metadata, the bridge, exceptions, `TheoApp`, `createTypedClient`, `contract`, static serving |
+| `./theokit-plugin` | The plugin that wires controllers into a TheoKit app |
+| `./app` | App-level composition |
+| `./runtime/node` | The Node runtime adapter |
+| `./action-encryption`, `./server-inserted-html`, `./css-resource` | Opt-in capabilities kept off the main bundle |
+
+## `registerControllers` (low-level)
+
+For advanced use without the Vite plugin:
+
+```typescript
+import { registerControllers } from '@theokit/http'
+
+const routes = registerControllers([CatsController])
+// RouteRegistration[] — verb, fullPath, and the metadata walk per method
+```
 
 ## Limitations
 
-### Singleton-scope controllers only (v0.1.0)
-
-Controllers are instantiated once per `registerControllers` call. NestJS request-scoped controllers (`@Injectable({ scope: Scope.REQUEST })`) are not supported. Migration path: v0.2.0+ via `@theokit/di` integration.
-
-### Interceptor wrap semantics simplified
-
-NestJS interceptors can skip calling `next()` (e.g., cache-hit short-circuit). v0.1.0 wraps always call `next()` then post-process. Consumers needing pre-handler short-circuit should use `defineMiddleware` directly.
-
-### Handler returning Response bypasses decorator-set status/headers
-
-If your handler returns a `Response` object directly, `@HttpCode` and `@Header` decorators are not applied. You own the full response. This matches NestJS behavior with `@Res({ passthrough: false })`.
+- **Singleton-scope controllers only.** A controller is instantiated once, when the handler is
+  built — NestJS request-scoped controllers (`@Injectable({ scope: Scope.REQUEST })`) have no
+  equivalent here. Guards and interceptors are the opposite: a fresh instance per request, unless a
+  DI container resolves them.
+- **No response object before the handler returns.** `ExecutionContext` exposes the request, the URL,
+  the controller class and the handler name — there is nothing to mutate headers on until a
+  `Response` exists. Set them with `@Header`, or return a `Response` yourself.
+- **A handler returning a `Response` owns it.** `@HttpCode` and `@Header` are not applied on that
+  path — the same behaviour as NestJS with `@Res({ passthrough: false })`.
 
 ## Troubleshooting
 
-### `HttpDecoratorsConfigError: emitDecoratorMetadata not enabled`
+**`HttpDecoratorsConfigError: emitDecoratorMetadata not enabled`** — add both compiler flags shown
+under Install, or pass the schema inline as `@Body(schema)`, which does not need them.
 
-Your `tsconfig.json` is missing the `emitDecoratorMetadata: true` flag. Add both flags:
-
-```json
-{
-  "compilerOptions": {
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
-  }
-}
-```
-
-### `HttpDecoratorsConfigError: missing @Controller() decorator`
-
-You have `@Get`/`@Post` methods on a class that lacks `@Controller()`. Add the decorator to the class.
+**`HttpDecoratorsConfigError: missing @Controller() decorator`** — a class has `@Get`/`@Post`
+methods but no `@Controller()`.
 
 ## Bundle cost
 
-- Opt-in consumers: ~8-13KB gzipped (`reflect-metadata` ~3KB + this package ~5-10KB)
-- Non-opt-in consumers: 0KB
+~8-13KB gzipped for consumers who opt in (`reflect-metadata` ~3KB plus this package); 0KB for those
+who do not.
+
+## Licence
+
+Apache-2.0 — see `LICENSE`.

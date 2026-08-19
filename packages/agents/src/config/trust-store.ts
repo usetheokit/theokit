@@ -151,7 +151,7 @@ export class TrustStore {
    * draft called them synchronously and `trust()` returned before the bytes landed, so an immediate
    * `read()` saw an empty store. Same shape as the M71 pointer bug, and same cause — the SDK's
    * `.d.ts` does not declare these, so nothing at compile time says they return a Promise
-   * (usetheodev/theokit-sdk#280).
+   * (usetheokit/theokit-sdk#280).
    */
   async trust(record: TrustRecord): Promise<void> {
     // `ensureSecureDir`, not a bare `mkdirSync`: the mode argument is a NO-OP on a directory that
@@ -160,7 +160,7 @@ export class TrustStore {
     // this one did not, which left the directory holding the file that authorises command execution
     // at whatever the umask produced. Found by a consumer's test failing during migration.
     ensureSecureDir(this.file)
-    // The casts are the upstream `.d.ts` gap named in usetheodev/theokit-sdk#280: several
+    // The casts are the upstream `.d.ts` gap named in usetheokit/theokit-sdk#280: several
     // persistence symbols are re-exported by the barrel and never declared, so they arrive
     // unresolved. They exist and are async (measured). Naming the shape at the call site beats
     // hiding it — and it is the same gap that let the first draft call them synchronously.

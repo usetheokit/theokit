@@ -6,6 +6,7 @@
  * ownership, agent-not-found fall-through, method enforcement) without the SDK.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { Readable } from 'node:stream'
 
 import { describe, expect, it } from 'vitest'
 
@@ -35,7 +36,13 @@ function fakeRes(): ServerResponse & { _status: number; _ended: boolean } {
 
 function ctx(url: string, method: string, agents: AgentNode[]) {
   return {
-    req: { method, url, headers: {} } as IncomingMessage,
+    // A real Readable: `incomingMessageToWebRequest` needs one. The plain object this used to be
+    // threw inside the handler's try, so these tests were silently exercising the 500 path.
+    req: Object.assign(Readable.from([]), {
+      method,
+      url,
+      headers: {},
+    }) as unknown as IncomingMessage,
     res: fakeRes(),
     url,
     requestId: 'r1',
@@ -56,11 +63,84 @@ function ctx(url: string, method: string, agents: AgentNode[]) {
   }
 }
 
+/** A plugin runner double that records which hooks ran. */
+function fakeRunner(seen: string[]) {
+  return {
+    applyDecorations() {},
+    async runOnRequest() {
+      seen.push('onRequest')
+
+      return { shortCircuited: false }
+    },
+    async runPreHandler() {
+      seen.push('preHandler')
+
+      return { shortCircuited: false }
+    },
+    async runOnResponse() {
+      seen.push('onResponse')
+    },
+    async runOnError() {
+      seen.push('onError')
+    },
+  }
+}
+
 const ECHO: AgentNode = {
   filePath: '/p/agents/echo.ts',
   agentPath: '/api/agents/echo',
   name: 'echo',
 }
+
+describe('tryServeAgent runs the plugin lifecycle (theokit#324)', () => {
+  it('runs onRequest and onResponse around an agent turn', async () => {
+    // An app embedding TheoKit had NO supported place to observe an agent turn: plugin hooks fired
+    // for every other route and not for this one, because this branch never consulted the runner.
+    // Reported with a repro at usetheokit/theokit#324.
+    const seen: string[] = []
+    const c = ctx('/api/agents/echo', 'POST', [ECHO])
+    c.pluginRunner = fakeRunner(seen) as unknown as typeof c.pluginRunner
+
+    await tryServeAgent(c as never)
+
+    expect(seen).toContain('onRequest')
+    expect(seen).toContain('onResponse')
+  })
+
+  it('lets onRequest short-circuit before the agent is mounted', async () => {
+    // The same guarantee `executeRoute` gives: a hook that answers the request stops the pipeline.
+    let mounted = false
+    const c = ctx('/api/agents/echo', 'POST', [ECHO])
+    c.loadModule = async () => {
+      mounted = true
+
+      return {}
+    }
+    c.pluginRunner = {
+      applyDecorations() {},
+      async runOnRequest() {
+        return { shortCircuited: true }
+      },
+      async runPreHandler() {
+        return { shortCircuited: false }
+      },
+      async runOnResponse() {},
+      async runOnError() {},
+    } as unknown as typeof c.pluginRunner
+
+    await tryServeAgent(c as never)
+
+    expect(mounted).toBe(false)
+  })
+
+  it('still serves the agent when no plugin runner is configured', async () => {
+    // The overwhelmingly common case: no plugins at all. The lifecycle must be optional, not a
+    // dependency, or every app without plugins breaks.
+    const c = ctx('/api/agents/echo', 'POST', [ECHO])
+
+    expect(await tryServeAgent(c as never)).toBe(true)
+  })
+})
 
 describe('tryServeAgent (M2 prod handler)', () => {
   it('test_returns_false_for_non_agent_path', async () => {

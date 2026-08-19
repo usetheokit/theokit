@@ -4,15 +4,14 @@ Thanks for your interest in TheoKit. This document is the short, runnable
 contract between you and the codebase: what to install, what to test
 before opening a PR, and what shape contributions should take.
 
-If you're upgrading an existing TheoKit app from 0.2.x to 0.3.0, see the migration
-guides under [`wiki/migration/`](wiki/migration/) — the `0.2-to-0.3` guide referenced
-here is **not present in the repo** (verified 2026-08-06). This guide is for changes to
-the framework itself.
+If you're upgrading an existing TheoKit app across versions, the breaking changes and
+their replacements are recorded in [`CHANGELOG.md`](CHANGELOG.md). This guide is for
+changes to the framework itself.
 
 ## Quick start
 
 ```bash
-git clone https://github.com/usetheodev/theokit.git
+git clone https://github.com/usetheokit/theokit.git
 cd theokit
 pnpm install
 pnpm try:scaffold        # scaffolds a throwaway app into my-test/

@@ -8,18 +8,20 @@ import {
   existsSync,
   rmSync,
 } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { resolve } from 'node:path'
 
+import { cloneExample } from './clone-example.js'
 import { runInstall } from './install.js'
 import { detectPkgManager, type PkgManager } from './pkg-manager.js'
 import { assertNodeVersion } from './preflight-node.js'
 import { runPrompts, getDefaults, type ProjectOptions } from './prompts.js'
 import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
 import { applySurface, parseSurfaceFlags, type SurfaceKind } from './scaffold-surface.js'
+import { CLI_VERSION } from './version.js'
 
 import { scaffold } from './index.js'
 
-const VERSION = '0.8.0'
+const VERSION = CLI_VERSION
 
 function getFlag(args: string[], name: string): string | undefined {
   const flag = args.find((a) => a.startsWith(`--${name}=`))
@@ -50,7 +52,7 @@ function showHelp(): void {
     --use-yarn                    Use yarn as package manager
     --use-bun                     Use bun as package manager
     --import-alias=<alias>        Import alias (default: "@/*")
-    --example=<name|github-url>   Bootstrap from a GitHub example
+    --example=<github-url>        Bootstrap from a GitHub repository
     --biome                       Use Biome instead of ESLint
     --agents-md                   Include AGENTS.md (default: true)
 
@@ -360,34 +362,6 @@ function initGit(targetDir: string): void {
     })
   } catch {
     // git not installed — silently skip
-  }
-}
-
-// ── Example cloning ──
-
-function cloneExample(example: string, targetDir: string): void {
-  const isUrl = example.startsWith('http://') || example.startsWith('https://')
-  const repo = isUrl
-    ? example
-    : `https://github.com/usetheodev/theokit-examples/tree/main/${example}`
-
-  if (isUrl) {
-    // Full repo URL — shallow clone
-    execSync(`git clone --depth 1 ${repo} ${targetDir}`, { stdio: 'inherit' })
-    // Remove .git to let user init fresh
-    rmSync(join(targetDir, '.git'), { recursive: true, force: true })
-  } else {
-    // Named example from theokit-examples repo — use degit pattern
-    try {
-      execSync(`npx --yes degit usetheodev/theokit-examples/${example} ${targetDir}`, {
-        stdio: 'inherit',
-      })
-    } catch {
-      throw new Error(
-        `Example "${example}" not found. ` +
-          `Browse available examples at https://github.com/usetheodev/theokit-examples`,
-      )
-    }
   }
 }
 

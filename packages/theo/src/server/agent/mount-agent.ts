@@ -13,9 +13,14 @@ import { compileAgentModule, resolveEnabledSkills, streamAgentUIMessages } from 
 
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
+import type { ApiKeyResolver } from './api-key-resolver.js'
 import { buildAgentHitl } from './build-agent-streamer.js'
 import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
 import { getRunEventCache, mintRunId } from './run-event-cache.js'
+
+// Re-exported so existing importers keep working. It is declared in its own module because
+// `build-agent-streamer.ts` needs it too and this file already imports from there (no-circular).
+export type { ApiKeyResolver } from './api-key-resolver.js'
 
 /** The message + session extracted from a chat request, or `null` when the body is invalid. */
 interface AgentRequestInput {
@@ -79,13 +84,19 @@ interface MountAgentOptions {
 }
 
 /**
- * Mount a loaded agent module as a `Response`. `apiKey` is resolved by the caller
- * (`resolveProvider`). See {@link MountAgentOptions} for the labeling / CSRF / app-root knobs.
+ * Mount a loaded agent module as a `Response`.
+ *
+ * `apiKey` accepts either a resolved string or an {@link ApiKeyResolver}. The resolver form exists
+ * because the credential depends on the model, and the model is only known once the module is
+ * compiled — inside here. Callers that resolved eagerly were choosing a provider before anyone
+ * could read which one the agent asked for, which is theokit#326.
+ *
+ * See {@link MountAgentOptions} for the labeling / CSRF / app-root knobs.
  */
 export async function mountAgent(
   mod: unknown,
   request: Request,
-  apiKey: string,
+  apiKey: string | ApiKeyResolver,
   { source = 'agent module', csrfMode = 'strict', projectRoot }: MountAgentOptions = {},
 ): Promise<Response> {
   // Enforce CSRF BEFORE any work — an agent run spends real LLM tokens, so a cross-origin
@@ -100,6 +111,9 @@ export async function mountAgent(
   }
 
   const compiled = compileAgentModule(mod, source)
+
+  // Now that the model is known, let the caller pick the credential for THAT provider.
+  const resolvedApiKey = typeof apiKey === 'function' ? apiKey(compiled.model) : apiKey
 
   // M13 — resolve a per-request skills selector (from `defineAgent({ skills: (ctx) => [...] })`)
   // against the M7 run-context, setting `skills.enabled` before the SDK runs. `undefined` ⇒ the
@@ -133,7 +147,7 @@ export async function mountAgent(
   // The runId is surfaced in the `x-theokit-run-id` response header.
   const runId = mintRunId()
   return durableUiMessageStreamResponse(
-    streamAgentUIMessages(compiled, apiKey, {
+    streamAgentUIMessages(compiled, resolvedApiKey, {
       ...input,
       hitl,
       signal: request.signal,

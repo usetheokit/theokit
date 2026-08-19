@@ -71,8 +71,14 @@ describe('T7.3 — CONTRIBUTING references', () => {
     for (const command of commands) expect(scripts).toContain(command)
   })
 
-  it('Given CONTRIBUTING.md, Then references the migration guide', () => {
-    expect(md()).toMatch(/docs\/migrating|0\.2-to-0\.3/)
+  it('Given CONTRIBUTING.md, Then it points an upgrader at the breaking-change record', () => {
+    // What this protects is the pointer, not a particular file: someone upgrading an app must not
+    // have to guess where breaking changes are written down. The target moved when the internal
+    // wiki was removed — the migration guides went with it, and the CHANGELOG is now the only
+    // place that records a removal and names the version it landed in. Anchoring the match to the
+    // word "upgrading" keeps this honest: a stray mention of the CHANGELOG elsewhere in the doc
+    // would not satisfy it.
+    expect(md()).toMatch(/upgrading[\s\S]{0,200}CHANGELOG\.md/)
   })
 
   it('Given CONTRIBUTING.md, Then it states the absence of a browser suite', () => {

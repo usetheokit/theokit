@@ -6,7 +6,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Fifteen test files create their temporary directories atomically.** Each built a path under
+  `tmpdir()` from `Date.now()` or a random suffix and then created it — two steps, with a window
+  between them in which something else can occupy the path, and `Date.now()` in particular collides
+  between two tests that start in the same millisecond. `mkdtempSync` creates the directory with
+  mode 0700 in one step. This clears the test half of the alert class; the eleven production sites
+  CodeQL also reports are deliberately untouched, because at least two of them
+  (`vite-plugin/actions-virtual-module.ts`, `server/scan/manifest.ts`) never call `tmpdir()` at all —
+  they write a deterministic output directory the build has to find again, and substituting a random
+  one to silence an alert would break the build. (usetheokit/theokit#334)
+
+- **The thread follow-up route routes by the model too.** `theokit@0.48.14` made the agent endpoint
+  honour the provider a model declares, and left the thread follow-up route resolving the credential
+  before the module was even compiled — so an agent declaring `anthropic/…` still got whichever key
+  env priority found first, and every follow-up died with `auth_failed (HTTP 401)`. A consumer
+  hitting that after 0.48.14 was hitting this, not a failed fix. (usetheokit/theokit#328)
+
+- **The server says which provider it selected, once, at the point of selection.** Resolution was
+  silent on success: `resolveProvider` returned the provider's name and every call site discarded
+  it, so an operator could only learn which provider was in use from an error — which is to say,
+  only after it had already failed, and never in the case that costs most, a stale key that
+  resolves cleanly and 401s at the provider. One line now names the provider, how it was chosen
+  (declared by the model, or by env priority) and the variable the credential came from. Never the
+  credential. (usetheokit/theokit#326)
+
+- **`create-theokit --example=<url>` no longer builds a shell command out of the URL.** The URL is
+  command-line input and was interpolated into a `git clone …` string, so a `;` or a backtick in it
+  ran whatever followed with the user's privileges (CodeQL `js/indirect-command-line-injection` and
+  `js/shell-command-injection-from-environment`). It now reaches `git` as one argv entry through
+  `execFileSync`, which removes the class rather than escaping around it. (usetheokit/theokit#315)
+
+- **The `create-theokit` bare-transform test creates its temp directory atomically.** It built a
+  path and then created it, which CodeQL reports as `js/insecure-temporary-file`: between the two
+  steps something else can occupy the path, and a random suffix makes that unlikely rather than
+  impossible. `mkdtempSync` creates it with mode 0700 in one step. The same shape remains in 25
+  other test files, tracked separately. (usetheokit/theokit#334)
+
+- **`PluginContext.request.url` now says, where you read it, that it is absolute.** A guard written
+  as `request.url.startsWith('/api/…')` is false for every real request, and a hook that never
+  matches looks exactly like one with nothing to say — the same invisibility that hid the agent-route
+  lifecycle gap. The field doc and the `plugin()` example now show `new URL(ctx.request.url).pathname`
+  as the way to match a path. (usetheokit/theokit#324)
+
+
+## [theokit 0.48.14] - 2026-08-19
+
 ### Added
+
+- **`repository`, `homepage` and `bugs` in every publishable manifest.** None of the six declared
+  them, so npm rendered each package with no link back to the source, no "Report issues" and no
+  provenance — for `theokit` itself included. The org-rename entry below was corrected in the same
+  pass: the rename did reach the README badges, the issue templates and CI, but there were no
+  manifest fields to repoint, because none had ever been declared.
+
+- **A README inside `theokit`, `@theokit/presenter` and `create-theokit`.** All three were published
+  with npm's "This package does not have a README" — including the framework's own entry package,
+  the one Quick Start tells you to install, and the scaffolder people reach first. npm packs README
+  and LICENSE regardless of `files`, so the only thing missing was the file.
+
+- A LICENSE file inside each publishable package — `@theokit/http`, `@theokit/presenter`,
+  `@theokit/agents`, `@theokit/tauri`, `create-theokit` and `theokit`. npm packs only the package
+  directory, so a LICENSE sitting at the repo root never reached the published tarball: the packages
+  declared `Apache-2.0` and shipped without its text. (usetheokit/theokit#316)
 
 - Secret scanning, in two layers: a `pre-commit` hook that scans the staged content with TruffleHog
   and refuses the commit, and `.github/workflows/secret-scan.yml`, which re-scans the pushed range in
@@ -31,6 +94,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **The README documented an API that had been removed.** It taught agents as
+  `@Agent` / `@Tool` / `@Toolbox` / `@MainLoop` classes — the decorators M31 took out of the public
+  surface — so the first thing a reader copied could not compile. It has been rewritten against what
+  the code exports: the file-based agent (`agents/<name>.ts` → `POST /api/agents/<name>`), the
+  `AgentBuilder.create()` chain with its compile-time guards, and `tool()`. Corrected along the way:
+  the SDK peer is 4.x, not 2.x; `HttpStatus` carries 30 codes, not 62; there are 18 stream-event
+  types, not 14; `@Roles` was never a decorator (it is the worked example for `createDecorator`);
+  Playwright is not a dependency and there is no E2E harness; and `delegate()` takes a sub-agent spec
+  rather than a class. Guard sharing between HTTP and AI is stated as it actually works — through
+  `@Expose` on a controller, where the controller's `@UseGuards` covers the agent route and
+  interceptors do not run. Package versions are now npm badges instead of hand-copied numbers that
+  were six major versions stale, and the test badge points at CI rather than a frozen count.
+  (docs-truth-pass-2026-08)
+
+- **The scaffold's own README described a project the scaffold does not generate.** It documented a
+  mock chat route under `server/routes/`, `defineAgent` / `defineAgentTool`, and a
+  `tailwind.config.ts` that no longer ships — and told the reader `@theokit/sdk` might 404 because
+  its publish was "operator-deferred", which stopped being true many versions ago. It now describes
+  the tree that is actually written, the builders that are actually exported, and the Tailwind v4
+  setup the framework wires on its own. (docs-truth-pass-2026-08)
+
+- **`@theokit/http`'s published README told you to install the wrong package.** Every heading, the
+  install line and every import said `@theokit/http-decorators` — the pre-1.0 name, still resolvable
+  on npm at 0.3.0, so following it installed a June build under a dead name instead of failing
+  loudly. It also promised `defineRoute` / `defineMiddleware` (internal since M31), claimed a guard
+  returning `false` yields 401 when it yields 403, and listed neither `@UseFilters`, `@Catch`,
+  `@Throttle`, `@SetMetadata` nor `@Expose`. The DTO-with-static-schema form is no longer presented
+  as the primary one: `@Body(schema)` is, because it needs no `emitDecoratorMetadata`.
+  (docs-truth-pass-2026-08)
+
+- `@theokit/agents`' README named the `agent()` free function that M57 replaced with
+  `AgentBuilder.create()`, and its subpath map was missing `./config` while claiming nineteen
+  entries against the twenty the manifest exports. (docs-truth-pass-2026-08)
+
+- **Package descriptions match their packages again.** `theokit` had none at all — the framework's
+  entry package sat on npm with an empty subtitle; `@theokit/http` advertised the bridge to
+  `defineRoute` + `defineMiddleware`; `@theokit/agents` advertised the `agent()`/`tool()` builders.
+  (docs-truth-pass-2026-08)
+
+- `pnpm validate:publint` now covers all six publishable packages. It checked `theokit` and
+  `create-theokit` — the two that passed — while `@theokit/agents` and `@theokit/http` failed it,
+  which is the arrangement that let the export-condition defect below ship. (docs-truth-pass-2026-08)
+
+- **The repository moved to the official `usetheokit` organization.** Existing clones keep working:
+  GitHub redirects the old `usetheodev/theokit` remote permanently. README badges, issue templates,
+  and the CI steps that clone sibling repos now point at `usetheokit`; the `repository` / `bugs` /
+  `homepage` manifest fields are new rather than repointed, and are listed under Added.
+  Links to `usetheodev` that are *not* the GitHub org — the X and LinkedIn
+  profiles — were left alone, as were references to repositories that stay behind.
+  (usetheokit/theokit#316)
+
+- **The Apache-2.0 license text was replaced with the official one.** The text shipped until now had
+  paragraph 4(d) truncated, dropping "reasonable and customary use" from the NOTICE clause. A
+  modified body under the `Apache-2.0` SPDX identifier is effectively a custom license, and every
+  consumer had to reason about the difference. Every LICENSE file in the repo is now byte-identical
+  to the canonical text, with the appendix filled in. (usetheokit/theokit#316)
+
+- `@theokit/http` and `@theokit/presenter` declared `MIT` while the rest of the ecosystem is
+  Apache-2.0; both now declare `Apache-2.0`, matching the LICENSE that actually ships with them.
+  (usetheokit/theokit#316)
+
 - **The git history was rewritten end to end — every commit SHA changed.** Anyone holding a clone
   must re-clone or reset onto the new history; a `git pull` will try to reconcile two unrelated
   timelines. The working trees are untouched: the tree at every commit is byte-identical to before,
@@ -52,7 +176,154 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Demo apps are no longer checked in.** A test that needs a whole app builds one in a temp
   directory and tears it down afterwards, so a suite owns its own inputs.
 
+### Removed
+
+- **`wiki/` is gone — the repository no longer ships its internal decision trail.** The 90 documents
+  under it were grills, plans, reviews, ADRs and milestone records: the trace of how the framework
+  was built, addressed to the people building it. A consumer cloning the repository was reading
+  someone else's working notes, so the tree that greets the community is now the code, its tests and
+  the CHANGELOG. Nothing is lost — the documents remain in the git history at the commit before this
+  one. What was reachable from a public surface has been repointed: the migration paragraph in
+  `CONTRIBUTING.md` and the capability lookup in `@theokit/agents`' README now name the CHANGELOG,
+  which records every breaking change and the version that carried it, and the feature-request issue
+  template no longer links a backlog file. (wiki-removal-2026-08)
+
+- `tests/unit/migration-guide-clean-break.test.ts`, which asserted the shape of the 0.13 → 0.14
+  migration guide by reading it off disk. Its subject went with the wiki; a test whose fixture no
+  longer exists is a red suite, not coverage. (wiki-removal-2026-08)
+
 ### Fixed
+
+- **The release guard no longer refuses every release.** It asked "is this version already on the
+  registry?" of every publishable package, but a changesets release bumps only the packages a
+  changeset names — so every untouched package sat at the version it was last published under, which
+  is the steady state after any successful release, and which the guard reported as a collision. It
+  could only pass if every package were bumped every time, which is what changesets is built not to
+  do. It now checks the packages whose version moved off `origin/main`; a package with no baseline is
+  checked, never assumed safe, and the M67 case it was built for still differs from the baseline and
+  stays in scope. The script also ran at import time, so testing it fired a live registry check.
+  (usetheokit/theokit#330)
+
+- **Issue references in code now name the org the repositories actually live in.** Six source and
+  test comments still cited `usetheodev/theokit#N` after the transfer. GitHub redirects, so nothing
+  broke — which is why they survived the migration sweep. Released CHANGELOG entries keep the old
+  org deliberately: they record what was true when they were written.
+  (usetheokit/theokit#316)
+
+- **A rotten `path/to/file.ts:42` citation in a living document now fails a gate.** Code that points
+  at the wrong place breaks; a document that points at the wrong place keeps rendering and misleads
+  whoever went to check — a sweep found 354 citations naming a file that no longer exists and 24
+  naming a line past the end of the file it names, and none of them failed anything. `pnpm
+  check:docs` asserts both properties (the path resolves, the line is inside the file), because
+  checking existence alone would make `file.ts:1` the cheapest way to cite without pointing.
+  CHANGELOG files are out of scope by design: a changelog describes the past, so a citation into
+  code as it stood two releases ago SHOULD stop resolving. (usetheokit/theokit#193)
+
+- **`knip` is green again, so a new dead export is visible.** The gate reported six findings, which
+  is the state in which a gate stops being read. Two were a re-export of the theme contract kept
+  "so existing importers keep working" — measured: there were none. The other four are types
+  referenced by an exported function's own signature, which `declaration: true` requires to stay
+  exported; `ignoreExportsUsedInFile` names that rule once instead of suppressing four symbols
+  one at a time. (usetheokit/theokit#210)
+
+- **`create-theokit --example=<name>` no longer points at a repository that never existed.** A bare
+  name was resolved against a hard-coded examples repository that returns 404 under both orgs, so
+  the named form could only fail — and it failed by shelling out to `degit` and then printing the
+  dead link as the place to "browse available examples". That was the first thing a new user met.
+  A bare name is now refused immediately with the form that works, and `--example` documents itself
+  as taking a GitHub URL. (usetheokit/theokit#315)
+
+- **The provider comes from the model, not from whichever key happens to be set.** An agent
+  declaring `anthropic/claude-sonnet-4-6` was handed an OpenRouter key whenever `OPENROUTER_API_KEY`
+  was present, because provider resolution walked a fixed priority list and never saw the model at
+  all. Every turn then failed with `auth_failed (HTTP 401)` naming a provider the agent had not
+  asked for — and nothing reported which provider had been selected, so the failure read as a bug in
+  the app. A model that names its provider now requires that provider's key, and a missing one says
+  which variable to set instead of substituting another. Bare model ids keep the previous
+  priority-order behaviour. (usetheokit/theokit#326)
+
+- **Plugin hooks now run for agent routes.** `onRequest`, `preHandler`, `onResponse` and `onError`
+  fired for every route except the agent endpoints, both in `theokit start` and `theokit dev` — an
+  app could register a plugin, watch it work on `/api/*`, and never learn that agent turns went
+  past it unobserved. A short-circuiting `onRequest` is honoured there now, as it already was
+  elsewhere. (usetheokit/theokit#324)
+
+- **Crons declared for `target: node` actually run.** `theokit build` scanned `server/crons/` and
+  `agents/schedules/`, validated each definition, wrote the manifest and printed
+  `Cron → in-process scheduler (theokit start)` — and nothing in `theokit start` ever read it, so no
+  handler was loaded, let alone fired. The server now loads the manifest the build writes and drives
+  the scheduler, reporting how many crons it scheduled at startup. (usetheokit/theokit#324)
+
+- **`--version` answers with the installed version.** `theokit --version` reported
+  `0.1.0-alpha.0` against a package at 0.48.8, and `create-theokit --version` reported `0.8.0`
+  against 1.23.7 — both carried the number as a literal in source, which nothing could keep in step
+  with the manifest beside it. The version is the first thing a bug report quotes, so a wrong one
+  costs its reader the time it takes to disbelieve it. Both now read the manifest, and a test fails
+  if either goes back to a literal. (docs-truth-pass-2026-08)
+
+- **`@theokit/agents` and `@theokit/http` declared their `types` condition after `import`.** Export
+  conditions are order-sensitive, so TypeScript could resolve the runtime entry before the
+  declaration file and report the package as untyped. Ten subpaths across the two packages were
+  affected, the root barrel of each included. `types` is now first everywhere, and `publint` — which
+  had never been pointed at these two — passes for all six packages. (docs-truth-pass-2026-08)
+
+- **`create-theokit --bare` left the Tailwind Vite plugin behind.** The transform deleted
+  `tailwindcss` from `devDependencies` but not `@tailwindcss/vite`, which is the entry the default
+  template actually declares (v4 has no config file and no postcss step). A bare scaffold installed a
+  Vite plugin whose engine had just been removed. It also removed `tailwind.config.ts` and
+  `postcss.config.js`, which the current template does not ship — harmless, but the comment claiming
+  they were the Tailwind toolchain was three versions out of date, as was the note explaining the
+  SDK removal by a publish that has since happened. (docs-truth-pass-2026-08)
+
+- **The `workspace:` release guard no longer passes a publish that is about to ship one.** It packs
+  through `pnpm`, which substitutes the range, so it reported a clean tarball while a
+  `npm publish` in the same directory shipped the raw protocol. That is not hypothetical: 0.48.4
+  passed this check and reached the registry with `"@theokit/agents": "workspace:^"`, uninstallable
+  for every consumer (deprecated on npm; use 0.48.5). The guard now reads the on-disk manifest and
+  refuses outright when the publish is driven by npm, since npm never substitutes the protocol.
+
+- **A hyphenated agent name no longer generates broken code.** An agent's name comes from its file
+  path, so `agents/ask-theo.ts` is named `ask-theo` — and kebab-case is right there, because the
+  name is also the URL segment (`POST /api/agents/ask-theo`). The exported binding was emitted
+  verbatim, producing `export const ask-theo`, which does not parse: the generated
+  `.theokit/agents.d.ts` broke every tool that read it, and the virtual `@theo/agents` runtime
+  module emitted the same syntax error as executable code. The internal alias was already
+  sanitised; only the export was not. Names now become camelCase identifiers (`askTheo`,
+  `internalTriage`) while the route keeps its kebab form. Single-word names — every name that
+  already worked — are unchanged. (usetheokit/theokit#318)
+
+- **`ssr: true` hydrates again in development.** The dev server serves a nonce-based `script-src`,
+  but `transformIndexHtml` runs before the nonce exists, so the inline refresh preamble
+  `@vitejs/plugin-react` injects carried none. The browser blocked it, `window.$RefreshReg$` was
+  never defined, and the first component module threw "@vitejs/plugin-react can't detect preamble".
+  SSR had already produced the HTML, so the page rendered and simply never hydrated: no theme, no
+  event handlers, nothing interactive, and a console error pointing at Vite rather than at us. The
+  nonce is now minted before the transform and stamped onto every inline script the transform
+  produced. (usetheokit/theokit#319)
+
+- **A route's metadata reaches the served `<head>` under SSR.** React 19 hoists `<title>`, `<meta>`
+  and `<link>` in the BROWSER, after hydration; on the server it emits them inline, and the SSR
+  output is injected inside `<div id="root">` — so a page's own title, canonical and Open Graph
+  tags shipped in the body. Readers never noticed, because hydration moved them a moment later.
+  Crawlers did: every social unfurler reads the served head and stops, so each page of a site
+  unfurled with whatever site-wide fallback `index.html` carried. Turning SSR on for social
+  previews and finding they still do not work is the kind of afternoon this avoids. The middleware
+  now hoists them, and a route's tag supersedes the template's for the same slot. (usetheokit/theokit#319)
+
+- **`ui.theme` accepts the themes `@theokit/ui` actually ships.** The field was a closed enum,
+  `'violet-forge' | 'noir' | 'paper'`, and two of those three were never real themes — the design
+  system has no `noir` and no `paper`. In practice the only value config validation accepted was the
+  default: every genuine theme (`dracula`, `github-dark`, `aurora-terminal`, the rest) and anything
+  built with `defineTheme()` was rejected outright. It is now validated by shape rather than by a
+  hard-coded list, using the same pattern `@theokit/ui`'s own `ThemeProvider` enforces — which
+  matters beyond typing, because the value is interpolated into the generated entry and into a CSS
+  selector, so an unvalidated name is an injection vector. The union survives as an autocomplete
+  hint only, and it now lists the real theme names.
+
+  The type was spelled out separately in `config/schema.ts`, `router/entry.ts` and
+  `router/entry-server.ts`, which is why three copies could drift from the design system at once. It
+  now lives in `core/contracts/theo-ui-theme.ts` — the one layer `config/` and `router/` are both
+  allowed to depend on. A closed enum cannot come back without failing `tests/unit/config-ui-theme.test.ts`.
 
 - **A scaffolded project no longer crashes on its own OpenAPI example.** The config skill shipped
   `outDir: ''`, which the schema accepts (`z.string()` with no minimum) and which then reaches

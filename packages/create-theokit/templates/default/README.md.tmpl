@@ -2,78 +2,115 @@
 
 Built with [TheoKit](https://theokit.dev) — **Build the app your agent lives in.**
 
-This is the default template: a working **agent chat surface** wired to a mock
-streaming agent, ready for you to plug in your LLM. Run it and you immediately
-see your agent talking — that's the point.
+This is the default template: a **working agent chat**, end to end. The thread
+streams real replies, the tools really run, and the approval prompt really gates
+the side-effecting one. Run it and you are talking to your agent.
 
 ## Getting Started
 
 ```bash
-# Install dependencies
-npm install
+# 1. Install dependencies
+pnpm install
 
-# Start development server (HMR)
-npm run dev
+# 2. Point the agent at a provider (OpenRouter, Anthropic, or OpenAI)
+cp .env.example .env && $EDITOR .env
+
+# 3. Start the dev server (HMR)
+pnpm dev
 ```
 
-Open the app and chat with the agent. Edit the agent at `agents/chat.ts`
-(pick your model / add tools) — the `@theokit/sdk` runtime resolves OpenRouter /
-Anthropic / Ollama / OpenAI from env vars (see the file's header comment).
+Open the app and chat. Edit `agents/chat.ts` to change the model, add tools, or
+swap the persona — `@theokit/sdk` is the runtime and resolves the provider from
+your environment.
 
 ## Project Structure
 
 ```
 {{name}}/
-├── app/
-│   ├── page.tsx              # Chat surface (@theokit/ui: ChatThread, ChatComposer, …)
-│   └── layout.tsx            # Root layout
+├── agents/                 # The agent, and what composes it
+│   ├── chat.ts             #   the agent → POST /api/agents/chat
+│   ├── prompts/            #   system prompts / personas
+│   ├── tools/              #   tools the agent can call (weather, current-time, …)
+│   └── skills/             #   procedures the model loads on demand
+├── app/                    # Frontend — file-based routing
+│   ├── page.tsx            #   the `/` route — composition root
+│   ├── layout.tsx          #   root layout
+│   ├── components/         #   presentational UI
+│   ├── hooks/              #   custom hooks — where state lives
+│   └── lib/                #   app modules / config
 ├── server/
-│   └── routes/
-│       ├── chat.ts           # Streaming agent endpoint (mock — replace with your LLM)
-│       └── health.ts         # GET /api/health
-├── tailwind.config.ts        # TheoUI design tokens
-├── theo.config.ts            # TheoKit configuration
-└── .env.example              # Environment variables
+│   └── routes/health.ts    # GET /api/health
+├── shared/agent.ts         # Branding (name, model, greeting) — one source of truth
+├── docs/                   # ARCHITECTURE · CUSTOMIZATION · ENVIRONMENT
+├── theo.config.ts          # TheoKit configuration
+└── .env.example            # Environment variables
 ```
 
 ## Key Concepts
 
-- **Agent chat surface** — `app/page.tsx` renders `@theokit/ui` chat components
-  driven by the streaming endpoint.
-- **`agents/chat.ts` (`defineAgent`)** — one file auto-served at `POST /api/agents/chat`,
-  streaming the ai-sdk `UIMessageStream` wire; `useAgent('/api/agents/chat')` on the client
-  reconstructs `UIMessage[]` you render via `message.parts`. `@theokit/sdk` owns
-  conversation persistence and provider resolution.
-- **`defineAgentTool`** — declare typed tools (the template ships a
-  `current_time` example).
+- **An agent is a file.** `agents/chat.ts` is served at `POST /api/agents/chat` —
+  nothing to register. Add a second agent as another `agents/<name>.ts`.
+- **`AgentBuilder`** is the authoring surface. The chain accumulates type-state, so
+  `.build()` without `.model()` is a compile error, not a runtime surprise:
 
-## About `@theokit/sdk`
+  ```ts
+  export default AgentBuilder.create()
+    .input(z.object({ message: z.string() }))
+    .model('openai/gpt-4o-mini')
+    .system(BASE_INSTRUCTIONS)
+    .tool(weatherTool)
+    .approval('send_notification', { question: 'Send this notification?' })
+    .skills([dailyBriefingSkill])
+    .build()
+  ```
 
-`@theokit/sdk` is the agent runtime this template depends on. Its publish to the
-public npm registry is **operator-deferred** — if `npm install` cannot resolve
-it yet, scaffold the registry-free variant instead (see Bare mode below) and add
-the SDK once it is published.
+- **A tool is a file too** — `tool('name').describe(…).input(z.object({…})).execute(…).build()`.
+  Pure metadata plus a handler; it never calls an LLM.
+- **The sub-folders under `agents/` are semantic, not routes.** `prompts/`, `tools/`,
+  `skills/` and friends are skipped by the scanner, so `agents/tools/weather.ts`
+  never becomes a phantom `/api/agents/tools/weather` endpoint.
+- **`useAgent`** binds the client to the agent and hands you the transcript:
+  `const { thread, send, status, reset, error } = useAgent('/api/agents/chat')`.
+- **Human-in-the-loop.** `.approval(tool, …)` pauses the run before that tool and
+  asks. Ask the agent to "notify me that …" to see it.
+- **Styling is wired for you.** Tailwind v4 and `@theokit/ui` are detected and
+  configured by the framework — there is no `tailwind.config.ts` to maintain.
 
-## Bare mode (`--bare`)
+Deeper detail lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md);
+customization and environment variables have their own pages beside it.
 
-Want the minimal "Hello Theo" scaffold with **no** agent UI and **no** unpublished
-registry dependencies? Scaffold with `--bare`:
+## Adding a screen
+
+Routing is file-based: a screen is a folder under `app/` with a `page.tsx`.
+
+| You want | Create | Serves |
+|---|---|---|
+| a `/settings` screen | `app/settings/page.tsx` | `/settings` |
+| a nested screen | `app/settings/billing/page.tsx` | `/settings/billing` |
+| a dynamic screen | `app/users/[id]/page.tsx` | `/users/:id` |
+
+Or run `theokit generate page settings`, then link it from `app/components/Nav.tsx`.
+
+## Other scaffolds
+
+The same agent runs behind a terminal or desktop frontend — only the transport
+changes. Scaffold them with `--surface=tui` (Ink) or `--surface=desktop` (Tauri).
+
+Want the opposite — a plain app with no agent and no `@theokit/*` runtime
+dependencies? Scaffold with `--bare`: a Hello Theo page and the same clean
+structure to grow into.
 
 ```bash
-npm create theokit my-app -- --template=default --bare
+npx create-theokit my-app --bare
 ```
-
-`--bare` strips `@theokit/ui`, `@theokit/sdk`, `lucide-react`, and the Tailwind
-toolchain, replaces `app/page.tsx` with a plain "Hello Theo" page, and removes
-the mock chat route — a scaffold that always installs without registry access.
 
 ## Commands
 
 ```bash
-npm run dev          # Start dev server with HMR
-npm run build        # Build for production
-npm run start        # Run production build
-npm run test         # Run tests (vitest)
-npm run lint         # ESLint check
-npm run typecheck    # TypeScript type check
+pnpm dev          # Start dev server with HMR
+pnpm build        # Build for production
+pnpm start        # Run the production build
+pnpm test         # Run tests (vitest)
+pnpm lint         # ESLint check
+pnpm typecheck    # TypeScript type check
 ```

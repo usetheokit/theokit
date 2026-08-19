@@ -42,7 +42,7 @@ describe('T3.5 — TheoCloud adapter scaffolding (Wave 2 stub)', () => {
   })
 
   it('accepts a v2 manifest (project field) and reports manifestVersion 2 — issue #9', () => {
-    // Regression for usetheodev/theokit#9: buildManifest() emits v2 when a
+    // Regression for usetheokit/theokit#9: buildManifest() emits v2 when a
     // project name is supplied, but the adapter rejected anything !== 1,
     // breaking `theokit build --target theo-cloud` before any artifact.
     const m: ServicesManifest = {

@@ -11,7 +11,7 @@
  * falls through to `next()` so the api-middleware can 404 it consistently.
  */
 import { randomUUID } from 'node:crypto'
-import type { ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import type { ViteDevServer, Connect } from 'vite'
 
@@ -34,6 +34,8 @@ import {
   sendError,
   type CsrfMode,
 } from '../server/internal-api.js'
+import type { PluginContext } from '../server/plugin-types.js'
+import type { PluginRunner } from '../server/plugins/plugin-runner.js'
 
 const PREFIX = '/api/agents/'
 
@@ -127,7 +129,8 @@ async function serveAux(
       baseUrl: `http://${req.headers.host ?? 'localhost'}`,
       csrfMode: deps.csrfMode,
       // M39 — the thread follow-up route drives the agent; resolve the key on demand.
-      resolveApiKey: () => resolveProvider().apiKey,
+      // theokit#328 — the thread route drives an agent, so its key follows the model too.
+      resolveApiKey: (model) => resolveProvider(model).apiKey,
     })
     if (response === null) {
       next()
@@ -160,6 +163,15 @@ export function createAgentMiddleware(
   projectRoot: string,
   csrfMode: CsrfMode = 'strict',
   agentsDir = 'agents',
+  /**
+   * theokit#324 — the plugin lifecycle runs for agent turns in dev too.
+   *
+   * Optional and last so every existing caller keeps working; `configure-server-hook` passes the
+   * same runner it already gives the action middleware. Without this, `dev` and `start` would
+   * disagree about whether a hook sees an agent turn, which is the worse of the two bugs: a plugin
+   * that works locally and silently stops in production.
+   */
+  pluginRunner?: PluginRunner,
 ): Connect.NextHandleFunction {
   const loadModule = createViteLoader(vite)
   return (req, res, next) => {
@@ -226,27 +238,112 @@ export function createAgentMiddleware(
         return
       }
 
-      try {
-        const mod = await loadModule(agent.filePath)
-        const apiKey = resolveProvider().apiKey
-        const request = incomingMessageToWebRequest(req)
-        const response = await mountAgent(mod, request, apiKey, {
-          source: agent.filePath,
-          csrfMode,
-          projectRoot,
-        })
-        await writeWebResponseToServerResponse(response, res)
-      } catch (err) {
-        sendError(
-          res,
-          'INTERNAL',
-          err instanceof Error ? err.message : 'Agent handler failed',
-          500,
-          undefined,
-          requestId,
-        )
-      }
-      logRequest({ method, url, status: res.statusCode, duration: Date.now() - start, requestId })
+      await serveAgentTurn({
+        req,
+        res,
+        agent,
+        method,
+        url,
+        requestId,
+        start,
+        loadModule,
+        csrfMode,
+        projectRoot,
+        pluginRunner,
+      })
     })()
   }
+}
+
+/**
+ * Serves one agent turn through the plugin lifecycle — the dev-server twin of
+ * `serveAgentTurn` in the production handlers. Extracted so the middleware's request
+ * callback stays a router and the turn reads in one piece.
+ */
+async function serveAgentTurn(t: {
+  req: IncomingMessage
+  res: ServerResponse
+  agent: { filePath: string }
+  method: string
+  url: string
+  requestId: string
+  start: number
+  loadModule: (filePath: string) => Promise<Record<string, unknown>>
+  csrfMode: CsrfMode
+  projectRoot: string
+  pluginRunner?: PluginRunner
+}): Promise<void> {
+  const {
+    req,
+    res,
+    agent,
+    method,
+    url,
+    requestId,
+    start,
+    loadModule,
+    csrfMode,
+    projectRoot,
+    pluginRunner,
+  } = t
+  let pluginCtx: PluginContext | undefined
+  let request: Request
+
+  try {
+    request = incomingMessageToWebRequest(req)
+    pluginCtx = { request, response: res, ctx: {}, requestId }
+  } catch (err) {
+    sendError(
+      res,
+      'INTERNAL',
+      err instanceof Error ? err.message : 'Agent handler failed',
+      500,
+      undefined,
+      requestId,
+    )
+    logRequest({ method, url, status: res.statusCode, duration: Date.now() - start, requestId })
+
+    return
+  }
+
+  if (pluginRunner) {
+    pluginRunner.applyDecorations(pluginCtx.ctx)
+    const onRequest = await pluginRunner.runOnRequest(pluginCtx)
+    if (onRequest.shortCircuited) {
+      logRequest({
+        method,
+        url,
+        status: res.statusCode,
+        duration: Date.now() - start,
+        requestId,
+      })
+
+      return
+    }
+  }
+
+  try {
+    const mod = await loadModule(agent.filePath)
+    // theokit#326 — resolve against the model the agent declares, not by env priority.
+    const apiKey = (model: string | undefined): string => resolveProvider(model).apiKey
+    const response = await mountAgent(mod, request, apiKey, {
+      source: agent.filePath,
+      csrfMode,
+      projectRoot,
+    })
+    await writeWebResponseToServerResponse(response, res)
+  } catch (err) {
+    if (pluginRunner) await pluginRunner.runOnError(pluginCtx, err)
+    sendError(
+      res,
+      'INTERNAL',
+      err instanceof Error ? err.message : 'Agent handler failed',
+      500,
+      undefined,
+      requestId,
+    )
+  }
+
+  if (pluginRunner) await pluginRunner.runOnResponse(pluginCtx)
+  logRequest({ method, url, status: res.statusCode, duration: Date.now() - start, requestId })
 }

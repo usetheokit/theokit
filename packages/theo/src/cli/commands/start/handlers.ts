@@ -18,6 +18,7 @@ import { sendError } from '../../../server/http/send-response.js'
 import { serveStaticFile } from '../../../server/http/static.js'
 import { logRequest } from '../../../server/observability/logger.js'
 import { findSuggestion } from '../../../server/observability/suggest.js'
+import type { PluginContext } from '../../../server/plugin-types.js'
 import type { PluginRunner } from '../../../server/plugins/plugin-runner.js'
 import type { ActionNode } from '../../../server/scan/action-scan.js'
 import type { AgentNode } from '../../../server/scan/agent-scan.js'
@@ -78,15 +79,19 @@ export interface RequestHandlerCtx {
   transformer: TheoTransformer | undefined
   csrfMode: CsrfMode
   disallowed: DisallowedConfig | undefined
+  /**
+   * Async because the per-route limiter hashes the session cookie with Web Crypto when
+   * `keyBy: 'session'`, and `subtle.digest` is promise-based.
+   */
   rateLimiter:
-    | ((req: IncomingMessage) => { limited: boolean; headers: Record<string, string> })
+    | ((req: IncomingMessage) => Promise<{ limited: boolean; headers: Record<string, string> }>)
     | null
 }
 
 /** Apply rate limit; return true if request was limited (response sent). */
-function applyRateLimit(c: RequestHandlerCtx, method: string): boolean {
+async function applyRateLimit(c: RequestHandlerCtx, method: string): Promise<boolean> {
   if (!c.rateLimiter) return false
-  const check = c.rateLimiter(c.req)
+  const check = await c.rateLimiter(c.req)
   for (const [k, v] of Object.entries(check.headers)) c.res.setHeader(k, v)
   if (check.limited) {
     sendError(c.res, 'RATE_LIMITED', 'Too many requests', 429, undefined, c.requestId)
@@ -107,7 +112,7 @@ export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
   if (!c.url.startsWith('/api/__actions/')) return false
   c.res.setHeader(X_REQUEST_ID, c.requestId)
 
-  if (applyRateLimit(c, c.req.method ?? 'POST')) return true
+  if (await applyRateLimit(c, c.req.method ?? 'POST')) return true
 
   const pathAfterPrefix = c.url.slice('/api/__actions/'.length).split('?')[0]
   const segments = pathAfterPrefix.split('/').filter(Boolean)
@@ -187,7 +192,8 @@ export async function tryServeAgentAux(c: RequestHandlerCtx): Promise<boolean> {
     // M34 (#97) — the MCP aux route drives the agent (spends tokens); enforce CSRF like the run route.
     csrfMode: c.csrfMode,
     // M39 — the thread follow-up route drives the agent; resolve the key on demand.
-    resolveApiKey: () => resolveProvider().apiKey,
+    // theokit#328 — the thread route drives an agent, so its key follows the model too.
+    resolveApiKey: (model) => resolveProvider(model).apiKey,
   })
   if (response === null) return false
   c.res.setHeader(X_REQUEST_ID, c.requestId)
@@ -215,7 +221,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
   // Handled BEFORE the agent-path exact match (the approve path never equals an `agentPath`).
   if (isApprovalPath(urlPath)) {
     c.res.setHeader(X_REQUEST_ID, c.requestId)
-    if (applyRateLimit(c, c.req.method ?? 'POST')) return true
+    if (await applyRateLimit(c, c.req.method ?? 'POST')) return true
     const method = (c.req.method ?? 'POST').toUpperCase()
     if (method !== 'POST') {
       sendError(
@@ -268,7 +274,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
   if (!agent) return false // fall through to the generic /api/* branch (may 404 there)
 
   c.res.setHeader(X_REQUEST_ID, c.requestId)
-  if (applyRateLimit(c, c.req.method ?? 'POST')) return true
+  if (await applyRateLimit(c, c.req.method ?? 'POST')) return true
 
   const method = (c.req.method ?? 'POST').toUpperCase()
   if (method !== 'POST') {
@@ -290,10 +296,79 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
     return true
   }
 
+  await serveAgentTurn(c, agent, method)
+  return true
+}
+
+/**
+ * Serves one agent turn through the plugin lifecycle.
+ *
+ * Extracted from `tryServeAgent` so that function stays what its name says — a router over the
+ * agent paths — while the turn itself, which is what grew a lifecycle, reads in one piece.
+ */
+async function serveAgentTurn(
+  c: RequestHandlerCtx,
+  agent: { filePath: string },
+  method: string,
+): Promise<void> {
+  // theokit#324 — the plugin lifecycle runs here too.
+  //
+  // This branch used to mount the agent without ever consulting the runner, so `onRequest`,
+  // `onResponse` and `onError` fired for every OTHER route and never for an agent turn — leaving an
+  // app embedding TheoKit with no supported place to observe or bound agent state. Reported with a repro
+  // by a consumer who found it by instrumenting a hook and watching it stay silent — the failure is
+  // invisible by construction, since a hook that never runs looks exactly like one with nothing to
+  // say.
+  //
+  // Mirrors `executeRoute`'s shape deliberately: same `PluginContext`, same short-circuit contract,
+  // same `onError` on the failure path — an agent route should not have a lifecycle of its own.
+  let pluginCtx: PluginContext | undefined
+  let request: Request
+
+  try {
+    request = incomingMessageToWebRequest(c.req)
+    pluginCtx = { request, response: c.res, ctx: {}, requestId: c.requestId }
+  } catch (err) {
+    // A request the adapter cannot represent is a 500, exactly as before this branch grew a
+    // lifecycle — the conversion used to sit inside the try below and this preserves that.
+    sendError(
+      c.res,
+      'INTERNAL',
+      err instanceof Error ? err.message : 'Agent handler failed',
+      500,
+      undefined,
+      c.requestId,
+    )
+    logRequest({
+      method,
+      url: c.url,
+      status: c.res.statusCode,
+      duration: Date.now() - c.startTime,
+      requestId: c.requestId,
+    })
+
+    return
+  }
+
+  if (c.pluginRunner) {
+    c.pluginRunner.applyDecorations(pluginCtx.ctx)
+    const onRequest = await c.pluginRunner.runOnRequest(pluginCtx)
+    if (onRequest.shortCircuited) {
+      logRequest({
+        method,
+        url: c.url,
+        status: c.res.statusCode,
+        duration: Date.now() - c.startTime,
+        requestId: c.requestId,
+      })
+      return
+    }
+  }
+
   try {
     const mod = await c.loadModule(agent.filePath)
-    const apiKey = resolveProvider().apiKey
-    const request = incomingMessageToWebRequest(c.req)
+    // theokit#326 — resolve against the model the agent declares, not by env priority.
+    const apiKey = (model: string | undefined): string => resolveProvider(model).apiKey
     const response = await mountAgent(mod, request, apiKey, {
       source: agent.filePath,
       csrfMode: c.csrfMode,
@@ -301,6 +376,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
     })
     await writeWebResponseToServerResponse(response, c.res)
   } catch (err) {
+    if (c.pluginRunner) await c.pluginRunner.runOnError(pluginCtx, err)
     sendError(
       c.res,
       'INTERNAL',
@@ -310,6 +386,9 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
       c.requestId,
     )
   }
+
+  // After the response is written, as `executeRoute` does — a hook here observes a completed turn.
+  if (c.pluginRunner) await c.pluginRunner.runOnResponse(pluginCtx)
   logRequest({
     method,
     url: c.url,
@@ -317,7 +396,6 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
     duration: Date.now() - c.startTime,
     requestId: c.requestId,
   })
-  return true
 }
 
 /** Branch 2: API routes (`/api/*` excluding actions). */
@@ -325,7 +403,7 @@ export async function tryServeApiRoute(c: RequestHandlerCtx): Promise<boolean> {
   if (!c.url.startsWith('/api/')) return false
   c.res.setHeader(X_REQUEST_ID, c.requestId)
 
-  if (applyRateLimit(c, c.req.method ?? 'GET')) return true
+  if (await applyRateLimit(c, c.req.method ?? 'GET')) return true
 
   const match = matchRoute(c.url, c.cachedRoutes)
   if (!match) {

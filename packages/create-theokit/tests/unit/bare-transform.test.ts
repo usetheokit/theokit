@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { randomUUID } from 'node:crypto'
 
 import { applyBareTransform } from '../../src/bare-transform.js'
 
@@ -10,8 +9,10 @@ describe('applyBareTransform', () => {
   let targetDir: string
 
   beforeEach(() => {
-    targetDir = join(tmpdir(), `create-theokit-bare-test-${randomUUID()}`)
-    mkdirSync(targetDir, { recursive: true })
+    // `mkdtempSync` CREATES the directory atomically with 0700, so nothing can pre-exist at the
+    // path or race us into it. Building a name and then `mkdirSync`-ing it is the shape CodeQL
+    // reports as `js/insecure-temporary-file`, and a random suffix makes it unlikely, not safe.
+    targetDir = mkdtempSync(join(tmpdir(), 'create-theokit-bare-test-'))
   })
 
   afterEach(() => {
@@ -85,6 +86,28 @@ describe('applyBareTransform', () => {
     expect(result.devDependencies['tailwindcss-animate']).toBeUndefined()
     expect(result.devDependencies.postcss).toBeUndefined()
     expect(result.devDependencies.autoprefixer).toBeUndefined()
+    expect(result.devDependencies.typescript).toBe('^5.0.0')
+  })
+
+  it('should remove the tailwind vite plugin the template actually ships', () => {
+    // Regression: the transform dropped `tailwindcss` but left `@tailwindcss/vite`, which is the
+    // entry the default template declares (Tailwind v4 has no tailwind.config / postcss step). The
+    // bare scaffold installed a Vite plugin whose engine had just been removed.
+    const pkg = {
+      name: 'test-app',
+      dependencies: {},
+      devDependencies: {
+        tailwindcss: '^4.0.0',
+        '@tailwindcss/vite': '^4.0.0',
+        typescript: '^5.0.0',
+      },
+    }
+    writeFileSync(join(targetDir, 'package.json'), JSON.stringify(pkg, null, 2))
+
+    applyBareTransform(targetDir)
+
+    const result = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+    expect(result.devDependencies['@tailwindcss/vite']).toBeUndefined()
     expect(result.devDependencies.typescript).toBe('^5.0.0')
   })
 

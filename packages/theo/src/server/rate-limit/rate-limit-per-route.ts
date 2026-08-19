@@ -1,14 +1,15 @@
 // T5a.1d — Web Crypto migration. The last node:crypto consumer in server/.
 // `createHash('sha256')` is sync but Web Crypto's `subtle.digest('SHA-256', ...)`
 // is async. This propagates through hashFragment → deriveKey → the factory's
-// returned checker. createRouteRateLimiter has NO production consumers
-// (verified via grep; api-middleware uses the sibling createRateLimiter from
-// rate-limit.ts), so the cascade only affects test sites. IncomingMessage stays
-// as a type-only import (TS-erased; runtime-clean).
+// returned checker, which is why the checker is async. `theokit start` awaits it
+// (usetheokit/theokit#321 — before that fix this factory had no production consumer at all, and a
+// per-route config silently disabled rate limiting outright). IncomingMessage stays as a type-only
+// import (TS-erased; runtime-clean).
 import type { IncomingMessage } from 'node:http'
 
 import { parseCookieHeader } from '../http/cookies.js'
 
+import { resolveClientIp, type TrustProxy } from './client-ip.js'
 import { InMemoryStore, type RateLimitStore } from './rate-limit-store.js'
 import type { RateLimitConfig, RateLimitResult } from './rate-limit.js'
 
@@ -39,6 +40,19 @@ export interface RouteRateLimitConfig {
   cookieName?: string
   /** Optional shared store (for multi-route correlation). Default per-limiter InMemoryStore. */
   store?: RateLimitStore
+  /**
+   * How many reverse proxies sit in front of the app, for `keyBy: 'ip'`. Default `false` — trust
+   * none and key on the socket address.
+   *
+   * Set this whenever the app is behind Caddy, nginx, a load balancer or an ingress controller:
+   * without it every visitor keys on the proxy's address and shares one bucket, so a handful of
+   * requests exhausts the budget for the entire internet. With it, the client address is read from
+   * `x-forwarded-for` counting in from the right, past exactly the hops declared here.
+   *
+   * Leaving it off by default is deliberate — `x-forwarded-for` is client-writable, and honouring it
+   * uninvited turns the limiter into a one-header bypass. See `client-ip.ts`.
+   */
+  trustProxy?: TrustProxy
 }
 
 /**
@@ -105,13 +119,13 @@ export async function deriveKey(
   req: IncomingMessage,
   keyBy: KeyByMode,
   cookieName: string,
+  trustProxy: TrustProxy = false,
 ): Promise<string> {
   if (typeof keyBy === 'function') return keyBy(req)
-  // `req.socket` is typed as always-present in Node typings, but in test
-  // doubles (object literals without `socket`) it can be missing — the
-  // optional chain keeps the fallback path reachable.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive for test doubles
-  const ip = req.socket?.remoteAddress ?? 'unknown'
+  // Behind a proxy the socket address is the proxy's, the same for every visitor. `resolveClientIp`
+  // returns it unchanged unless the operator declared how many proxies to trust — see its comment
+  // for why reading `x-forwarded-for` uninvited would hand out a one-header bypass.
+  const ip = resolveClientIp(req, trustProxy)
   switch (keyBy) {
     case 'session': {
       const cookie = readCookie(req, cookieName)
@@ -154,6 +168,7 @@ export function createRouteRateLimiter(config: RouteRateLimitConfig | RateLimitC
   const inMemoryStore = store
   const keyBy = cfg.keyBy ?? 'ip'
   const cookieName = cfg.cookieName ?? 'theo_session'
+  const trustProxy = cfg.trustProxy ?? false
 
   // Build a pre-compiled list of (pattern, config) tuples for matching.
   const patternList: [string | RegExp, RateLimitConfig][] = []
@@ -182,7 +197,7 @@ export function createRouteRateLimiter(config: RouteRateLimitConfig | RateLimitC
     // Bucket key includes normalized path so /api/login and /api/login/
     // collapse to the same bucket (EC-5).
     const bucketSuffix = typeof matched === 'undefined' ? '*default*' : normalizePath(url)
-    const key = `${await deriveKey(req, keyBy, cookieName)}|${bucketSuffix}`
+    const key = `${await deriveKey(req, keyBy, cookieName, trustProxy)}|${bucketSuffix}`
     const state = inMemoryStore.incrSync(key, effective.windowMs)
 
     if (state.count > effective.max) {
