@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`PluginContext.request.url` now says, where you read it, that it is absolute.** A guard written
+  as `request.url.startsWith('/api/…')` is false for every real request, and a hook that never
+  matches looks exactly like one with nothing to say — the same invisibility that hid the agent-route
+  lifecycle gap. The field doc and the `plugin()` example now show `new URL(ctx.request.url).pathname`
+  as the way to match a path. (usetheokit/theokit#324)
+
+
 ## [theokit 0.48.14] - 2026-08-19
 
 ### Added
