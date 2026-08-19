@@ -23,6 +23,25 @@ import { cloneExample } from '../../packages/create-theokit/src/clone-example.js
 
 const SRC_DIR = join(process.cwd(), 'packages/create-theokit/src')
 
+describe('create-theokit --example passes the URL as an argument, never through a shell', () => {
+  it('hands git the URL as one argv entry, so shell metacharacters cannot run', () => {
+    const calls: { file: string; args: string[] }[] = []
+    const exec = (file: string, args: string[]): void => {
+      calls.push({ file, args })
+    }
+    cloneExample('https://github.com/u/r; rm -rf ~', '/tmp/theokit-315-target', exec)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].file).toBe('git')
+    expect(calls[0].args).toEqual([
+      'clone',
+      '--depth',
+      '1',
+      'https://github.com/u/r; rm -rf ~',
+      '/tmp/theokit-315-target',
+    ])
+  })
+})
+
 describe('create-theokit --example (theokit#315)', () => {
   it('rejects a bare example name instead of cloning from a registry that does not exist', () => {
     expect(() => cloneExample('blog', '/tmp/theokit-315-should-not-be-created')).toThrow(
