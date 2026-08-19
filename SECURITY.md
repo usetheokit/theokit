@@ -10,7 +10,7 @@ mailserver setup on our side.
 
 Open a new advisory at:
 
-  https://github.com/usetheodev/theokit/security/advisories/new
+  https://github.com/usetheokit/theokit/security/advisories/new
 
 We aim to acknowledge advisories within 72 hours. After triage, you
 will receive:

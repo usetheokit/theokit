@@ -29,11 +29,11 @@ you mount HTTP surfaces).
 
 ## Subpath map
 
-Nineteen entry points. Import the one you need — the barrel is not the API.
+Twenty entry points. Import the one you need — the barrel is not the API.
 
 | Subpath | What lives there |
 |---|---|
-| `.` | The fluent `agent()` / `tool()` builders, the error hierarchy, shared types |
+| `.` | `AgentBuilder.create()` — the authoring surface — plus the error hierarchy and shared types |
 | `./bridge` | The SDK seam — `createSdkAgentStream`, event translation, the agent builder internals |
 | `./testing` | Test seams: compiled-agent inspection, mock streams |
 | `./sandbox` | Sandbox backends, postures, `sandboxWritePolicy` |
@@ -41,6 +41,7 @@ Nineteen entry points. Import the one you need — the barrel is not the API.
 | `./interactive` | The interactive-shell backend contract |
 | `./pty` | The node-pty implementation of that contract |
 | `./auth` | Credential store, OAuth/device flow, `resolveCredential`, `assertSecureModes` |
+| `./config` | Agent configuration, trust posture, and the instruction tree (`loadInstructionTree`) |
 | `./tools` | Built-in tool factories (read, list, grep, git, patch, edit, shell, …) |
 | `./client` | Transports for driving an agent from a client |
 | `./client/react` | `useAgent` and the React bindings |
@@ -78,8 +79,8 @@ data, and a user cannot tell an explicit choice from a precedence fallback.
 See [`CHANGELOG.md`](./CHANGELOG.md) — shipped inside this package, so `node_modules` answers the
 question without a round trip to the repository.
 
-For "which symbol delivers capability X, and in which version did it land", the repository publishes
-a capability index at `wiki/capability-index.md`.
+For "which symbol delivers capability X, and in which version did it land", the CHANGELOG entry that
+shipped the symbol is the answer — every entry names the version it landed in.
 
 ## Boundaries this package keeps
 

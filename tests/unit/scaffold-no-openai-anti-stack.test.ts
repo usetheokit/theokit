@@ -6,13 +6,14 @@ import { resolve } from 'node:path'
  * T2.3 — Anti-stack lint gate (FAANG-precise).
  *
  * The locked stack assumption (memory: project-stack-deps) says TheoKit's
- * default scaffold ALWAYS wires `@theokit/agents` / `defineAgent`, never a raw
+ * default scaffold ALWAYS authors through `@theokit/agents`, never a raw
  * provider SDK (OpenAI/Anthropic/etc).
  *
- * M3 (clean break): the scaffold agent file is now `agents/chat.ts` (not the
- * removed `server/routes/chat.ts`). The indirection changes from
- * `createConversationHistory|streamAgentRun` to `defineAgent|defineAgentTool`
- * — `defineAgent` compiles to the SDK at mount time (the new bridge).
+ * M3 (clean break): the scaffold agent file is `agents/chat.ts` (not the removed
+ * `server/routes/chat.ts`). The authoring surface has moved twice since —
+ * `defineAgent` went internal in M31, and M57 replaced the free `agent()` with
+ * `AgentBuilder.create()`, which is what the template writes today and what
+ * compiles to the SDK at mount time.
  *
  * Precision: this gate checks for actual IMPORTS of the `openai` npm package
  * (or `@anthropic-ai/sdk`, etc), NOT casual mentions. The wire protocol IS
@@ -62,13 +63,15 @@ describe('scaffold anti-stack lint — no raw OpenAI in default agents/chat.ts (
       ).toBe(false)
     })
 
-    it(`${relativePath} uses @theokit/agents (directly OR indirectly via agent()/tool() builders)`, () => {
+    it(`${relativePath} authors through @theokit/agents, not a provider SDK`, () => {
       const content = readFileSync(absPath, 'utf-8')
-      // M31 builder-only: the authoring surface is `agent()...build()` / `tool()...build()`
-      // (the compile-to-SDK bridge). Legacy `defineAgent`/`defineAgentTool` still accepted for
-      // any not-yet-migrated file. Any of these proves the locked stack.
-      const indirectViaTheokit = /\bagent\(\)|\btool\(|defineAgent|defineAgentTool/.test(content)
-      expect(indirectViaTheokit).toBe(true)
+      // The authoring surface is `AgentBuilder.create()…build()` (M57 renamed the free `agent()`
+      // it replaced) composing `tool()…build()` capabilities — the compile-to-SDK bridge. The
+      // legacy `defineAgent` / `defineAgentTool` still satisfy the gate for any not-yet-migrated
+      // file. Any of these proves the locked stack.
+      const authoredWithTheokit =
+        /AgentBuilder\.create\(\)|\btool\(|defineAgent|defineAgentTool/.test(content)
+      expect(authoredWithTheokit).toBe(true)
     })
   }
 })

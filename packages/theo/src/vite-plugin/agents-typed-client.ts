@@ -35,6 +35,32 @@ function aliasFor(name: string): string {
   return `_agent_${name.replace(/[^\w$]/g, '_')}`
 }
 
+/**
+ * The exported binding name for an agent.
+ *
+ * An agent's name comes from its file path, so it legitimately contains characters no JavaScript
+ * identifier can hold: `agents/ask-theo.ts` is named `ask-theo`, and kebab-case is the RIGHT choice
+ * there, because that same name is the URL segment (`POST /api/agents/ask-theo`).
+ *
+ * Emitting it verbatim produced `export const ask-theo: …`, which does not parse — the generated
+ * `.theokit/agents.d.ts` broke every tool that reads it, and `generateAgentsRuntimeModule` emitted
+ * the same syntax error as executable code (usetheokit/theokit#318). The internal alias was already
+ * sanitised by `aliasFor`; only the exported binding was not.
+ *
+ * Kebab and path separators become camelCase — what a consumer would write by hand: `ask-theo` →
+ * `askTheo`, `internal/triage` → `internalTriage`. A leading digit takes an underscore, since `2fa`
+ * is not an identifier either.
+ *
+ * Single-word names — the overwhelming majority, and every name that already worked — come through
+ * unchanged, so this repairs what was broken without renaming what was not.
+ */
+export function handleIdentifier(name: string): string {
+  const camel = name.replace(/[^\w$]+(.)?/g, (_match, next: string | undefined) =>
+    next === undefined ? '' : next.toUpperCase(),
+  )
+  return /^\d/.test(camel) ? `_${camel}` : camel
+}
+
 /** Relative `import type` path from the .d.ts dir to the agent source (extension stripped). */
 function importPath(dtsOutPath: string, projectRoot: string, filePath: string): string {
   const fromDir = dirname(dtsOutPath).replace(/\\/g, '/')
@@ -73,7 +99,7 @@ export function generateAgentsDts({
     // M47 — a named, client-safe handle per agent: `import { chat } from '@theo/agents'; useAgent(chat)`.
     // cmd-click on the generated const hops to the agent source via the type-only import above.
     handles.push(
-      `  export const ${agent.name}: AgentHandle<InferAgentInput<${alias}>, InferAgentToolNames<${alias}>>`,
+      `  export const ${handleIdentifier(agent.name)}: AgentHandle<InferAgentInput<${alias}>, InferAgentToolNames<${alias}>>`,
     )
   }
   const handleBlock = handles.length > 0 ? `\n${handles.join('\n')}\n` : ''
@@ -124,7 +150,7 @@ ${handleBlock}}
  */
 export function generateAgentsRuntimeModule(agentNames: string[]): string {
   const handleLines = agentNames.map(
-    (name) => `export const ${name} = agentHandle('/api/agents/${name}')`,
+    (name) => `export const ${handleIdentifier(name)} = agentHandle('/api/agents/${name}')`,
   )
   return (
     `import { agentHandle } from 'theokit/client'\n` +

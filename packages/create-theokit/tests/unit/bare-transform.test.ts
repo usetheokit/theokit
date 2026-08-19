@@ -88,6 +88,28 @@ describe('applyBareTransform', () => {
     expect(result.devDependencies.typescript).toBe('^5.0.0')
   })
 
+  it('should remove the tailwind vite plugin the template actually ships', () => {
+    // Regression: the transform dropped `tailwindcss` but left `@tailwindcss/vite`, which is the
+    // entry the default template declares (Tailwind v4 has no tailwind.config / postcss step). The
+    // bare scaffold installed a Vite plugin whose engine had just been removed.
+    const pkg = {
+      name: 'test-app',
+      dependencies: {},
+      devDependencies: {
+        tailwindcss: '^4.0.0',
+        '@tailwindcss/vite': '^4.0.0',
+        typescript: '^5.0.0',
+      },
+    }
+    writeFileSync(join(targetDir, 'package.json'), JSON.stringify(pkg, null, 2))
+
+    applyBareTransform(targetDir)
+
+    const result = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8'))
+    expect(result.devDependencies['@tailwindcss/vite']).toBeUndefined()
+    expect(result.devDependencies.typescript).toBe('^5.0.0')
+  })
+
   it('should replace app/page.tsx with Hello Theo', () => {
     mkdirSync(join(targetDir, 'app'), { recursive: true })
     writeFileSync(join(targetDir, 'app/page.tsx'), '<div>Agent Surface</div>')

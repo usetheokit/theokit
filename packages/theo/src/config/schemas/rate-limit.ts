@@ -25,5 +25,14 @@ export const rateLimitSchema = z.union([
       ])
       .optional(),
     cookieName: z.string().min(1).optional(),
+    /**
+     * How many reverse proxies sit in front of the app, for `keyBy: 'ip'`. `false` (default)
+     * trusts none; `true` means one; a number names a longer chain.
+     *
+     * Required for correct limiting behind Caddy/nginx/a load balancer — without it every visitor
+     * keys on the proxy address and shares a single bucket. Off by default because
+     * `x-forwarded-for` is client-writable.
+     */
+    trustProxy: z.union([z.boolean(), z.number().int().min(0)]).optional(),
   }),
 ])

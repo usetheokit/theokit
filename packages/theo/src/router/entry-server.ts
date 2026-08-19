@@ -1,3 +1,5 @@
+import type { TheoUiTheme } from '../core/contracts/theo-ui-theme.js'
+
 interface EntryServerOptions {
   /** When true, emit a streaming entry using onShellReady + signal cleanup.
    *  When false (default), emit the legacy single-shot onAllReady entry. */
@@ -11,7 +13,7 @@ interface EntryServerOptions {
    * EC-2 (CSS): the SSR entry never imports CSS. Only the React tree is
    * mirrored — the CSS stays client-only.
    */
-  theoUi?: { theme?: 'violet-forge' | 'noir' | 'paper' }
+  theoUi?: { theme?: TheoUiTheme }
 }
 
 export function generateEntryServer(options: EntryServerOptions = {}): string {
@@ -85,11 +87,28 @@ function generateSingleShotEntry(options: EntryServerOptions): string {
   return [
     `import React, { Suspense } from 'react'`,
     `import { renderToPipeableStream } from 'react-dom/server'`,
-    `import { createStaticHandler, createStaticRouter, StaticRouterProvider } from 'react-router'`,
+    `import { createStaticHandler, createStaticRouter, StaticRouterProvider, matchRoutes } from 'react-router'`,
     `import { PassThrough } from 'node:stream'`,
-    `import { routes } from '/@theo/route-manifest'`,
+    `import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'`,
     theoUiImport,
     `export async function render(url, options = {}) {`,
+    // Resolve the matched pages BEFORE rendering.
+    //
+    // Pages are React.lazy() in the route manifest, which is right for the browser and pure loss
+    // here: the server already has every chunk on local disk. Rendering without this makes React
+    // suspend on the page component, so \`onShellReady\` fires with the layout alone and the actual
+    // page streams afterwards inside a hidden div. The reader gets an empty frame that fills in --
+    // measured at CLS 1.12 and an article absent from the DOM for ~700ms on a real site.
+    //
+    // This mirrors what entry.ts already does before hydrateRoot, using the same preload map.
+    // Streaming still applies to genuine data-fetching Suspense, which is where it earns its keep.
+    // A failed import is swallowed on purpose: React.lazy will retry and suspend as before, which
+    // is strictly no worse than not having preloaded at all.
+    `  const __theoMatches = matchRoutes(routes, url.split('?')[0]) ?? []`,
+    `  await Promise.all(`,
+    `    __theoPreloadPathsFor(__theoMatches).map((p) => __theoPreloadMap[p]().catch(() => null)),`,
+    `  )`,
+    ``,
     `  const handler = createStaticHandler(routes)`,
     `  const request = new Request('http://localhost' + url)`,
     `  const context = await handler.query(request)`,
@@ -137,6 +156,23 @@ function streamingWebRenderer(appTree: string): string[] {
     `// Response with the stream as body. Honors request.signal for client`,
     `// disconnect cleanup.`,
     `export async function renderStreamingWeb(request, options = {}) {`,
+    // Resolve the matched pages BEFORE rendering.
+    //
+    // Pages are React.lazy() in the route manifest, which is right for the browser and pure loss
+    // here: the server already has every chunk on local disk. Rendering without this makes React
+    // suspend on the page component, so \`onShellReady\` fires with the layout alone and the actual
+    // page streams afterwards inside a hidden div. The reader gets an empty frame that fills in --
+    // measured at CLS 1.12 and an article absent from the DOM for ~700ms on a real site.
+    //
+    // This mirrors what entry.ts already does before hydrateRoot, using the same preload map.
+    // Streaming still applies to genuine data-fetching Suspense, which is where it earns its keep.
+    // A failed import is swallowed on purpose: React.lazy will retry and suspend as before, which
+    // is strictly no worse than not having preloaded at all.
+    `  const __theoMatches = matchRoutes(routes, url.split('?')[0]) ?? []`,
+    `  await Promise.all(`,
+    `    __theoPreloadPathsFor(__theoMatches).map((p) => __theoPreloadMap[p]().catch(() => null)),`,
+    `  )`,
+    ``,
     `  const handler = createStaticHandler(routes)`,
     `  const url = new URL(request.url)`,
     `  const context = await handler.query(request)`,
@@ -170,6 +206,23 @@ function streamingNodeRenderer(appTree: string): string[] {
     `// Flushes the shell as soon as it's ready, then streams Suspense boundaries.`,
     `// EC-11: respects request.signal for client-disconnect cleanup.`,
     `export async function renderStreaming(url, response, options = {}) {`,
+    // Resolve the matched pages BEFORE rendering.
+    //
+    // Pages are React.lazy() in the route manifest, which is right for the browser and pure loss
+    // here: the server already has every chunk on local disk. Rendering without this makes React
+    // suspend on the page component, so \`onShellReady\` fires with the layout alone and the actual
+    // page streams afterwards inside a hidden div. The reader gets an empty frame that fills in --
+    // measured at CLS 1.12 and an article absent from the DOM for ~700ms on a real site.
+    //
+    // This mirrors what entry.ts already does before hydrateRoot, using the same preload map.
+    // Streaming still applies to genuine data-fetching Suspense, which is where it earns its keep.
+    // A failed import is swallowed on purpose: React.lazy will retry and suspend as before, which
+    // is strictly no worse than not having preloaded at all.
+    `  const __theoMatches = matchRoutes(routes, url.split('?')[0]) ?? []`,
+    `  await Promise.all(`,
+    `    __theoPreloadPathsFor(__theoMatches).map((p) => __theoPreloadMap[p]().catch(() => null)),`,
+    `  )`,
+    ``,
     `  const handler = createStaticHandler(routes)`,
     `  const request = new Request('http://localhost' + url, { signal: options.signal })`,
     `  const context = await handler.query(request)`,
@@ -213,6 +266,23 @@ function backCompatRenderer(appTree: string): string[] {
     `// Backward compatibility: keep the single-shot render export available so`,
     `// callers that always used 'render()' don't break when streaming is on.`,
     `export async function render(url, options = {}) {`,
+    // Resolve the matched pages BEFORE rendering.
+    //
+    // Pages are React.lazy() in the route manifest, which is right for the browser and pure loss
+    // here: the server already has every chunk on local disk. Rendering without this makes React
+    // suspend on the page component, so \`onShellReady\` fires with the layout alone and the actual
+    // page streams afterwards inside a hidden div. The reader gets an empty frame that fills in --
+    // measured at CLS 1.12 and an article absent from the DOM for ~700ms on a real site.
+    //
+    // This mirrors what entry.ts already does before hydrateRoot, using the same preload map.
+    // Streaming still applies to genuine data-fetching Suspense, which is where it earns its keep.
+    // A failed import is swallowed on purpose: React.lazy will retry and suspend as before, which
+    // is strictly no worse than not having preloaded at all.
+    `  const __theoMatches = matchRoutes(routes, url.split('?')[0]) ?? []`,
+    `  await Promise.all(`,
+    `    __theoPreloadPathsFor(__theoMatches).map((p) => __theoPreloadMap[p]().catch(() => null)),`,
+    `  )`,
+    ``,
     `  const handler = createStaticHandler(routes)`,
     `  const request = new Request('http://localhost' + url)`,
     `  const context = await handler.query(request)`,
@@ -253,8 +323,8 @@ function generateStreamingEntry(options: EntryServerOptions): string {
   return [
     `import React, { Suspense } from 'react'`,
     `import { renderToPipeableStream, renderToReadableStream } from 'react-dom/server'`,
-    `import { createStaticHandler, createStaticRouter, StaticRouterProvider } from 'react-router'`,
-    `import { routes } from '/@theo/route-manifest'`,
+    `import { createStaticHandler, createStaticRouter, StaticRouterProvider, matchRoutes } from 'react-router'`,
+    `import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'`,
     theoUiImport,
     ``,
     ...streamingWebRenderer(appTree),

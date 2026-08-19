@@ -1,5 +1,13 @@
 # Migration guide
 
+> **Where the agent surface stands today.** This page is the v1.0 cut, when the agent decorators
+> were removed in favour of capabilities. `applyCapabilities` is still exported and still works, but
+> the surface you should be writing NEW agents against is the builder chain —
+> `AgentBuilder.create().input(…).model(…).tool(…).build()` — which carries compile-time guards the
+> capability array cannot. Migrating off decorators? Follow this guide, then read the builder in the
+> [README](README.md). Every breaking change since is recorded in [`CHANGELOG.md`](CHANGELOG.md)
+> against the version that carried it.
+
 ## `@theokit/agents` v1.0 — agent decorators removed (M53)
 
 **Breaking.** The **agent** decorators were removed. Authoring an agent is now composing

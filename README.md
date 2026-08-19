@@ -6,10 +6,10 @@ Part of the [Theo](https://usetheo.dev) family of products. TheoKit is the **web
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow?style=flat-square)](#status)
-[![Tests](https://img.shields.io/badge/tests-717%20passing-brightgreen?style=flat-square)](#)
+[![CI](https://img.shields.io/github/actions/workflow/status/usetheokit/theokit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/usetheokit/theokit/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/theokit?style=flat-square&label=theokit)](https://www.npmjs.com/package/theokit)
-[![npm](https://img.shields.io/npm/v/@theokit/http?style=flat-square&label=@theokit/http)](https://www.npmjs.com/package/@theokit/http)
 [![npm](https://img.shields.io/npm/v/@theokit/agents?style=flat-square&label=@theokit/agents)](https://www.npmjs.com/package/@theokit/agents)
+[![npm](https://img.shields.io/npm/v/@theokit/http?style=flat-square&label=@theokit/http)](https://www.npmjs.com/package/@theokit/http)
 
 ## Quick Start
 
@@ -19,50 +19,84 @@ cd my-app
 pnpm dev
 ```
 
+Node `>= 22.12.0` is required — every manifest declares it and the CLI refuses to
+start below it rather than failing later somewhere unrelated.
+
 ## Your first agent in 5 minutes
 
-1. Point TheoKit at an Anthropic model — set your key:
+The scaffold ships a working agent chat, so the five minutes are spent reading it,
+not assembling it.
+
+1. Point the agent at a provider. The SDK resolves the key from the environment —
+   OpenRouter (preferred), Anthropic, or OpenAI:
 
    ```bash
-   export ANTHROPIC_API_KEY=sk-ant-...
+   echo 'OPENROUTER_API_KEY=sk-or-v1-...' >> .env
    ```
 
-2. Create an agent and send it a message. The canonical 6-line essence uses
-   `throwOnError: true` so failures surface as exceptions you handle with
-   `try`/`catch` — no status-code checking:
+2. **An agent is a file.** `agents/chat.ts` is served at `POST /api/agents/chat` —
+   there is nothing to register:
 
    ```ts
-   import { Agent } from '@theokit/sdk'
+   // agents/chat.ts
+   import { AgentBuilder } from '@theokit/agents'
+   import { z } from 'zod'
 
-   const agent = await Agent.create({ model: 'claude-sonnet-4-6' })
+   import { weatherTool } from './tools/weather.js'
 
-   try {
-     const result = await agent.send('Write a haiku about TypeScript.', { throwOnError: true })
-     console.log(result.text)
-   } catch (err) {
-     console.error('agent failed:', err)
-   }
+   export default AgentBuilder.create()
+     .input(z.object({ message: z.string() }))
+     .model('openai/gpt-4o-mini')
+     .system('You are a helpful assistant.')
+     .tool(weatherTool)
+     // Human-in-the-loop: pause the run and ask before this tool executes.
+     .approval('weather', { question: 'Look up the weather?' })
+     .build()
    ```
 
-That is the whole loop: create, send, read the text. Everything else —
-streaming, tools, conversation history — is sugar over this.
+3. **A tool is a file too** — pure metadata plus a handler. It never calls an LLM;
+   the agent decides when to invoke it:
+
+   ```ts
+   // agents/tools/weather.ts
+   import { tool } from 'theokit/server'
+   import { z } from 'zod'
+
+   export const weatherTool = tool('weather')
+     .describe('Get the current weather for a city or place name.')
+     .input(z.object({ location: z.string() }))
+     .execute(async ({ location }) => `It is sunny in ${location}.`)
+     .build()
+   ```
+
+4. **The client binds by name**, and streams:
+
+   ```tsx
+   import { useAgent } from 'theokit/client'
+
+   const { thread, send, status, reset, error } = useAgent<{ message: string }>('/api/agents/chat')
+   ```
+
+`.build()` is a compile error if you never called `.model()`, and `.tool(t)` is a
+compile error if the tool needs a run-context the agent did not declare. The
+type-state is the point: the mistakes surface in your editor, not in production.
 
 ## What You Get
 
 - **Routes are just files** — `app/page.tsx` → `/`. Layouts, errors, loading, not-found — no config.
 - **Route groups** — `app/(marketing)/pricing/page.tsx` → `/pricing`. Organize without affecting URLs.
+- **Agents are just files** — `agents/support.ts` → `POST /api/agents/support`, bound by `useAgent`.
+- **The authoring surface is a typed builder** — `AgentBuilder.create()` accumulates type-state, so an unset model or a context-hungry tool fails at compile time.
 - **APIs that validate themselves** — Zod schemas in, types out, end-to-end.
 - **NestJS-style decorators** — `@Controller`, `@Get`, `@Post`, `@Body(Zod)`, `@UseGuards`, `@UseInterceptors`, `@UseFilters` for structured HTTP pipelines.
-- **AI agents as first-class citizens** — `@Agent`, `@Tool`, `@Toolbox`, `@MainLoop` with SSE streaming, budget control, human-in-the-loop approval.
-- **Convention over configuration** — `@Controller()` on `UsersController` infers `api/users`. `@Agent()` on `SupportAgent` infers name + route. Zero boilerplate.
-- **Shared guards between HTTP and AI** — same `@UseGuards(AuthGuard)` protects controllers and agents. Same RBAC, one model.
+- **Convention over configuration** — `@Controller()` on `UsersController` infers the `api/users` prefix. An agent's name is its filename.
+- **Human-in-the-loop, guardrails, skills, MCP** — approval gates per tool, input/output guards at the boundary, on-demand skill loading, MCP servers — all links in the same chain.
 - **Server actions without plumbing** — CSRF, validation, serialization handled.
 - **Backend calls that compile** — import the route type, get request and response inferred.
-- **Sessions that just work** — encrypted cookies, one helper to require a logged-in user.
+- **Sessions that just work** — encrypted cookies with key rotation, one helper to require a logged-in user.
 - **WebSocket as a file** — drop a file in `server/ws/`, it's a real-time endpoint.
 - **SDK is the only agent runtime** — `@theokit/sdk` handles LLM calls, tool execution, conversation persistence. No reimplemented runners.
-- **Ship to TheoCloud** — managed runtime with hosted Postgres, Redis, secret rotation, audit log.
-- **62 HTTP status codes** — `HttpStatus.OK`, `HttpStatus.TOO_MANY_REQUESTS`, etc.
+- **Nine deploy targets** — node, vercel, cloudflare, netlify, bun, deno-deploy, aws-lambda, static, and TheoCloud.
 
 ## Architecture
 
@@ -70,37 +104,145 @@ streaming, tools, conversation history — is sugar over this.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        User Application                             │
 │  app/           Frontend — file-based routing + route groups        │
-│  server/        Backend — controllers, agents, toolboxes, routes    │
+│  agents/        Agents — one file per agent, plus tools/ prompts/   │
+│  server/        Backend — routes, actions, controllers, ws          │
 └─────────────────────────────────────────────────────────────────────┘
                               │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-┌──────────────┐    ┌──────────────────┐    ┌──────────────┐
-│  theokit     │    │  @theokit/http   │    │@theokit/agents│
-│  Framework   │    │  HTTP Pipeline   │    │  AI Pipeline  │
-│  core/config │    │  16 decorators   │    │  15 decorators│
-│  router/cli  │    │  395 tests       │    │  239 tests    │
-└──────────────┘    └──────────────────┘    └──────────────┘
-                              │                     │
-                         Guards shared          @theokit/sdk
-                         (same @UseGuards)      Agent.create()
-                                                Run.stream()
+    ┌───────────────┬──────┴────────┬─────────────────┐
+    ▼               ▼               ▼                 ▼
+┌────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐
+│  theokit   │ │@theokit/http │ │@theokit/agents│ │@theokit/presenter│
+│  router    │ │ decorators   │ │ AgentBuilder  │ │ one event,       │
+│  server    │ │ pipeline     │ │ compiler      │ │ N surfaces:      │
+│  vite+cli  │ │ typed client │ │ guardrails    │ │ web·term·json    │
+└────────────┘ └──────────────┘ └───────┬──────┘ └──────────────────┘
+                                        ▼
+                                  @theokit/sdk
+                                  Agent.create()
+                                  the only runtime
 ```
 
 **Key design decisions:**
-- HTTP and AI share **guards/policies**, but run through **distinct execution pipelines** (not the same middleware chain).
-- `@UseInterceptors` and `@UseFilters` on agents emit explicit warnings — they are metadata-only in this version. Guards are the shared surface.
-- `@Budget` on top-level agents is metadata-only; enforcement is active in `delegate()` sub-agent calls via clamping + mid-stream abort.
-- `@Tool()` always requires explicit `name`, `description`, and `input` schema — no implicit tool exposure.
+
+- HTTP and AI run through **distinct execution pipelines** — not the same middleware chain. A file-based agent is gated in its own chain, with `.approval()`, `.guardrail()` and `.hooks()`. Guards become shared only where the two surfaces meet: an agent bound to a controller property with `@Expose` is served through the controller's dispatch, so the controller's `@UseGuards` protects it (interceptors do not run on that path).
+- **Agent authoring is builder-only.** The `@Agent` / `@Tool` / `@Toolbox` / `@MainLoop` decorators were removed from the public API (ADR-0043); their implementations remain internal, read by the compiler. `AgentBuilder.create()` and `tool()` are the single authoring surface.
+- `@theokit/sdk` is the **only** agent runtime. TheoKit compiles definitions and owns the surface; the SDK owns the loop, the providers, and conversation persistence.
+- A tool always requires an explicit name, description, and input schema — no implicit capability exposure.
+
+## Project Structure
+
+```
+my-app/
+├── agents/                    # The agent, and what composes it
+│   ├── chat.ts                #   → POST /api/agents/chat, useAgent('/api/agents/chat')
+│   ├── prompts/               #   system prompts / personas
+│   ├── tools/                 #   tools the agent can call
+│   └── skills/                #   procedures the model loads on demand
+├── app/                       # Pages — file-based routing + route groups
+│   ├── page.tsx               #   /
+│   ├── layout.tsx             #   root layout
+│   ├── (marketing)/           #   route group (not in the URL)
+│   │   └── pricing/page.tsx   #   /pricing
+│   ├── components/            #   presentational UI (never routes)
+│   ├── hooks/                 #   custom hooks — where state lives
+│   └── lib/                   #   app modules / config
+├── server/                    # Backend — explicit and typed
+│   ├── routes/                #   API routes (route() builder)
+│   ├── actions/               #   server actions (action() builder)
+│   ├── controllers/           #   @Controller classes
+│   ├── middleware/            #   request middleware (alphabetical; use 01-, 02- prefixes)
+│   ├── ws/                    #   WebSocket endpoints
+│   └── context.ts             #   createContext() — what every handler sees as `ctx`
+├── shared/                    # Code imported by more than one layer
+├── theo.config.ts             # Framework config
+└── package.json
+```
+
+The sub-folders under `agents/` are **semantic, not routes**. Thirteen names are reserved
+as composition concerns — `tools skills prompts lib hooks channels connections subagents
+schedules sandbox workflows evals memory` — so `agents/tools/weather.ts` never becomes a
+phantom `/api/agents/tools/weather` endpoint. An agent that outgrows one file becomes a
+folder instead: `agents/<name>/index.ts` with its own `tools/` and `prompts/` beside it.
+
+Same idea in `app/`: a folder is a route only when it holds a
+`page`/`layout`/`loading`/`error`/`not-found` file, so `components/`, `hooks/` and `lib/`
+sit next to the routes without becoming any.
+
+## Agents (`@theokit/agents`)
+
+### The builder
+
+Every link returns a new builder type, so what you have set is visible to the compiler.
+
+| Group | Methods |
+|---|---|
+| **Contract** | `.input(schema)`, `.model(id)`, `.system(prompt)`, `.reasoningEffort(effort)`, `.context(value)` |
+| **Capabilities** | `.tool(t)`, `.tools([...])`, `.skills(selection)`, `.mcp(servers)`, `.plugins([...])` |
+| **Policy** | `.approval(tool, options)`, `.approvals(map)`, `.guardrail(g)`, `.guardrails([...])`, `.hooks(map)` |
+| **State** | `.memory(settings)`, `.settingSources(selection)` |
+| **Composition** | `.use(preset)`, `.when(condition, apply)`, `.build()` |
+
+`.use(preset)` applies a reusable sub-chain and carries its type-state through;
+`.when(cond, apply)` skips a link mid-chain without collapsing what came before.
+
+### Guardrails
+
+Pluggable input/output guards that run at the framework boundary, before the SDK:
+
+```ts
+import { promptInjectionDetector, piiDetector, costGuard } from '@theokit/agents'
+
+AgentBuilder.create()
+  .model('openai/gpt-4o-mini')
+  .guardrails([promptInjectionDetector(), piiDetector(), costGuard({ maxTokens: 100_000 })])
+  .build()
+```
+
+Also shipped: `unicodeNormalizer`, `outputModeration`, and `moderateOutputStream`
+for streaming responses.
+
+### Stream events
+
+A discriminated union of 18 variants, opened by `run_started` and closed by `done` or `error`:
+
+| Group | Variants |
+|---|---|
+| Output | `text_delta`, `thinking`, `artifact_start`, `artifact_chunk` |
+| Tools | `partial_tool_call`, `tool_call`, `tool_result`, `shell_output`, `file_edit` |
+| Control | `run_started`, `iteration`, `task_progress`, `state_update`, `checkpoint_saved` |
+| Human | `approval_required`, `input_requested` |
+| Terminal | `done`, `error` |
+
+Type guards ship with the union: `isTextDelta`, `isToolCall`, `isPartialToolCall`,
+`isToolResult`, `isApprovalRequired`, `isDone`, `isError`.
+
+### Multi-agent delegation
+
+```typescript
+import { delegate } from '@theokit/agents/bridge'
+
+const result = await delegate(
+  { name: 'research', compiled: compiledResearchAgent },
+  'Find papers on RAG',
+  {
+    apiKey: process.env.API_KEY,
+    budget: 0.5,                  // USD cap for this delegation
+    parentBudgetRemaining: 1.0,   // clamped to min(budget, parent)
+    parentTools: compiledTools,   // inherited tools (sub-agent wins on collision)
+    parentHooks,                  // the member runs under the parent's authority
+  },
+)
+```
+
+Budget is clamped at delegation and enforced mid-stream; each delegation gets an
+isolated session.
 
 ## HTTP Decorators (`@theokit/http`)
 
-NestJS-compatible decorator system with Web Standards (Request/Response, not node:http).
-
-### Controllers
+NestJS-compatible decorator system on Web Standards (`Request`/`Response`, not `node:http`).
 
 ```typescript
-import { Controller, Get, Post, Body, Param, UseGuards, HttpStatus } from '@theokit/http'
+import { Controller, Get, Post, Body, Param, UseGuards, HttpCode, HttpStatus } from '@theokit/http'
 import { z } from 'zod'
 
 // Convention: @Controller() on UsersController → prefix "api/users"
@@ -127,188 +269,79 @@ class UsersController {
 
 ### Pipeline
 
+`middleware → guards → interceptors → handler`, with filters catching what escapes.
+
 ```typescript
-// Guards — decide if the request enters
-class AuthGuard {
+import { HttpException } from '@theokit/http'
+import type { ArgumentsHost, CanActivate, ExecutionContext, Interceptor } from '@theokit/http'
+
+// Guards — decide whether the request enters. `false` answers 403.
+class AuthGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     return ctx.getRequest().headers.get('authorization') !== null
   }
 }
 
-// Interceptors — wrap the handler
-class TimingInterceptor {
-  async intercept(ctx, next) {
+// Interceptors — wrap the handler call. Skip `next()` and the handler never runs.
+class TimingInterceptor implements Interceptor {
+  async intercept(request: Request, next: () => Promise<unknown>): Promise<unknown> {
     const start = Date.now()
     const result = await next()
-    ctx.getResponse().headers.set('X-Response-Time', `${Date.now() - start}ms`)
+    console.log(`${request.method} ${request.url} — ${Date.now() - start}ms`)
     return result
   }
 }
 
-// Exception Filters — transform errors into responses
+// Exception filters — turn what was thrown into a Response.
 class HttpErrorFilter {
-  catch(error, ctx) {
-    return new Response(JSON.stringify({ error: error.message }), { status: error.status ?? 500 })
+  catch(error: unknown, host: ArgumentsHost): Response {
+    const status = error instanceof HttpException ? error.statusCode : 500
+    return Response.json({ error: String(error), path: host.getRequest().url }, { status })
   }
 }
 ```
 
-### Available Decorators (16)
+An `ExecutionContext` carries `getRequest()`, `getUrl()`, `getClass()` and `getMethodName()` —
+enough for a guard to decide, and no response to mutate before there is one.
+
+### Available decorators
 
 | Category | Decorators |
 |---|---|
-| **Routing** | `@Controller`, `@Get`, `@Post`, `@Put`, `@Delete`, `@Patch` |
-| **Parameters** | `@Body`, `@Param`, `@Query`, `@Headers` |
-| **Response** | `@HttpCode` |
-| **Pipeline** | `@UseGuards`, `@UseInterceptors`, `@UseFilters` |
-| **Policies** | `@Roles`, `@Throttle` |
+| **Routing** | `@Controller`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@Options`, `@Head`, `@All` |
+| **Parameters** | `@Body`, `@Param`, `@Query`, `@Headers`, `@Session`, `@Req`, `@Res`, `@Ip`, `@HostParam` |
+| **Response** | `@HttpCode`, `@Header`, `@Redirect` |
+| **Pipeline** | `@UseGuards`, `@UseInterceptors`, `@UseFilters`, `@Catch` |
+| **Policies** | `@Throttle`, `@SkipThrottle` |
+| **Metadata** | `@SetMetadata`, `createDecorator` + `Reflector` |
+| **Agents** | `@Expose` (bind a built agent to a controller property) |
 
-## AI Agents (`@theokit/agents`)
+`createDecorator` is how you build your own: `const Roles = createDecorator<string[]>()`,
+then read it back in a guard with `reflector.get(Roles, handler)`.
 
-Decorator-based agent definitions that compile to `@theokit/sdk` runtime.
-
-### Agent + Toolbox
+`@Expose` is where the HTTP and AI surfaces meet. It binds an agent built in
+`agents/<name>.ts` to a controller property, serving it at `POST <prefix>/<property>`
+through `mountAgent` — the one runtime, never a parallel one. The exposure, its route
+and its auth then sit in a single code review:
 
 ```typescript
-import { Agent, MainLoop, Tool, Toolbox } from '@theokit/agents'
-import { UseGuards } from '@theokit/http'
-import { z } from 'zod'
+import { Controller, Expose, UseGuards } from '@theokit/http'
 
-// Convention: @Agent() on SupportAgent → name "support", route "/api/agents/support"
-@Agent()
+import supportAgent from '../../agents/support.js'
+
+@Controller('api/agents')
 @UseGuards(AuthGuard)
-class SupportAgent {
-  @MainLoop({ strategy: 'react', maxIterations: 8 })
-  async run() {}
-}
-
-// Convention: @Toolbox() on TicketTools → namespace "ticket"
-@Toolbox()
-class TicketTools {
-  @Tool({
-    name: 'search_tickets',
-    description: 'Search support tickets by keyword',
-    input: z.object({ query: z.string(), status: z.enum(['open', 'closed']).optional() }),
-  })
-  async searchTickets(input: { query: string; status?: string }) {
-    return JSON.stringify(await db.tickets.search(input.query, input.status))
-  }
-
-  @Tool({
-    name: 'close_ticket',
-    description: 'Close a ticket by ID',
-    input: z.object({ ticketId: z.string() }),
-    risk: 'medium',
-  })
-  @RequiresApproval({ reason: 'Closing a ticket affects customer workflow' })
-  async closeTicket(input: { ticketId: string }) {
-    await db.tickets.close(input.ticketId)
-    return `Ticket ${input.ticketId} closed`
-  }
+class AgentsController {
+  @Expose(supportAgent)
+  support!: unknown // → POST /api/agents/support, behind AuthGuard
 }
 ```
 
-### Available Decorators (15)
+Guards run on that route (`middleware → guards → handler`); interceptors do not,
+because the dispatcher delegates straight to the agent runtime.
 
-| Category | Decorators |
-|---|---|
-| **Definition** | `@Agent`, `@Tool`, `@Toolbox`, `@MainLoop` |
-| **Model** | `@Model`, `@SubAgents`, `@Gateway` |
-| **Policies** | `@Budget`, `@RequiresApproval` |
-| **Lifecycle** | `@Memory`, `@Checkpoint`, `@Hook` |
-| **Security** | `@Sandbox` (path traversal, command injection, null byte rejection) |
-| **Observability** | `@Trace`, `@Audit` |
-
-### Agent Stream Events (14 types)
-
-```
-run_started → text_delta → tool_call → tool_result → thinking →
-iteration → approval_required → artifact_start → artifact_chunk →
-state_update → checkpoint_saved → file_edit → error → done
-```
-
-### Multi-Agent Orchestration
-
-```typescript
-import { delegate } from '@theokit/agents/bridge'
-
-const result = await delegate(ResearchAgent, 'Find papers on RAG', {
-  apiKey: process.env.API_KEY,
-  budget: 0.50,                    // USD cap
-  parentBudgetRemaining: 1.00,     // Clamped to min(budget, parent)
-  parentTools: compiledTools,       // Inherited tools
-})
-// result: { response, toolCalls, cost, tokens }
-```
-
-Budget enforcement: clamping at delegation + mid-stream abort on exceed.
-
-## Decorator Support Matrix (Agents)
-
-| Decorator | Agent support | Notes |
-|---|---|---|
-| `@UseGuards` | **enforced** | Same as HTTP — shared execution |
-| `@UseInterceptors` | metadata-only | Warning `THEO_AGENT_INTERCEPTOR_METADATA_ONLY` |
-| `@UseFilters` | metadata-only | Warning `THEO_AGENT_FILTER_METADATA_ONLY` |
-| `@Budget` (top-level) | metadata-only | Warning `THEO_AGENT_BUDGET_TOP_LEVEL_METADATA_ONLY` |
-| `@Budget` (delegate) | **enforced** | Clamping + mid-stream abort |
-| `@RequiresApproval` | **enforced** | Human-in-the-loop |
-
-## Convention Naming
-
-Rails-style inference from class names — zero boilerplate for common patterns.
-
-```typescript
-@Controller()
-class UsersController {}        // → prefix: "api/users"
-class UserOrdersController {}   // → prefix: "api/user-orders"
-
-@Agent()
-class SupportAgent {}           // → name: "support", route: "/api/agents/support"
-class CodeReviewAgent {}        // → name: "code-review", route: "/api/agents/code-review"
-
-@Toolbox()
-class ProjectTools {}           // → namespace: "project"
-class BillingTools {}           // → namespace: "billing"
-```
-
-**Explicit always overrides inferred.** Pass arguments to any decorator to override.
-
-**Safety rule:** Convention naming applies to routing (HTTP) and namespace (toolbox) — never to tool capabilities. `@Tool()` always requires explicit `name`, `description`, and `input` schema.
-
----
-
-## How it works
-
-The rest of this README is the technical surface. Vocabulary shifts here on purpose — `route()`, `websocket()`, `theoFetch`, and friends earn their keep below.
-
-## Project Structure
-
-```
-my-app/
-├── app/                       # Pages — file-based routing
-│   ├── page.tsx               # /
-│   ├── layout.tsx             # Root layout
-│   ├── (marketing)/           # Route group (not in URL)
-│   │   └── pricing/page.tsx   # /pricing
-│   └── dashboard/
-│       └── page.tsx           # /dashboard
-├── server/                    # Backend — explicit and typed
-│   ├── controllers/           # @Controller classes
-│   ├── agents/                # @Agent classes
-│   ├── toolboxes/             # @Toolbox classes
-│   ├── guards/                # Shared guards
-│   ├── interceptors/          # HTTP interceptors
-│   ├── filters/               # Exception filters
-│   ├── routes/                # API routes (route() builder)
-│   ├── actions/               # Server actions (action() builder)
-│   ├── ws/                    # WebSocket endpoints
-│   ├── middleware.ts           # Request middleware
-│   ├── context.ts             # Request context factory
-│   └── index.ts               # Single registration point
-├── theo.config.ts              # Framework config
-└── package.json
-```
+`HttpStatus` carries the 30 status codes the framework actually uses —
+`HttpStatus.OK`, `HttpStatus.CREATED`, `HttpStatus.TOO_MANY_REQUESTS`, and so on.
 
 ## Server Routes
 
@@ -329,6 +362,10 @@ export const POST = route()
   .build()
 ```
 
+`.params(schema)` types the path params, `.response(schema)` validates the return at
+runtime, and `.csrf(false)` opts a webhook or OAuth callback out of CSRF enforcement.
+`.build()` is a compile error before `.handler()`.
+
 ## Typed Client
 
 ```typescript
@@ -341,22 +378,32 @@ const data = await theoFetch<typeof GET>('/api/users', {
 // data is typed as { users: { name: string }[] }
 ```
 
+`theokit/client` also ships `Link` (with route prefetch), `Metadata`, `Image`,
+`useAgent`, and the `theokit/react-query` adapter.
+
 ## Auth
 
 ```typescript
 import { createSessionManager, requireAuth, route } from 'theokit/server'
 
 const auth = createSessionManager<{ userId: string }>({
-  secret: process.env.SESSION_SECRET!, // min 32 chars
+  secret: process.env.SESSION_SECRET!, // min 32 chars; pass an array to rotate keys
 })
 
 export const GET = route()
   .handler(({ ctx }) => {
-    requireAuth(ctx.user) // throws 401 if null, narrows type
+    requireAuth(ctx.user) // throws AuthRequiredError (401) if null, narrows the type
     return { userId: ctx.user.userId }
   })
   .build()
 ```
+
+`ctx` is whatever `server/context.ts` returns from `createContext({ request, response })` —
+that factory is what puts `user` there, and its return type is the `ctx` every handler sees.
+
+Cookies are encrypted and `httpOnly`. The array form of `secret` (max 5) enables
+dual-key rotation: encryption always uses the newest, decryption walks the list and
+transparently re-encrypts on a hit against an older key.
 
 ## WebSocket
 
@@ -370,23 +417,34 @@ export default websocket()
   .build()
 ```
 
+`.onClose()` and `.onError()` complete the surface.
+
 ## CLI
 
 ```bash
 theokit dev                              # Dev server with HMR
-theokit build                            # Production build
+theokit build                            # Production build (--target <adapter>)
 theokit start                            # Production server
-theokit generate route users             # Scaffold API route
-theokit generate controller products     # Scaffold @Controller
-theokit generate agent support           # Scaffold @Agent
-theokit generate toolbox billing         # Scaffold @Toolbox
-theokit generate page dashboard          # Scaffold page
-theokit generate action create-user      # Scaffold action
-theokit generate ws notifications        # Scaffold WebSocket
-theokit routes                           # List all endpoints
-theokit docker                           # Generate Dockerfile
-theokit check                            # Typecheck + scan
+theokit generate page dashboard          # Scaffold a page
+theokit generate route users             # Scaffold an API route
+theokit generate agent support           # Scaffold an agent
+theokit generate resource posts title:string  # Scaffold a full resource (name:type fields)
+theokit agent support "hello"            # Run an agent in the terminal (stream + approvals)
+theokit agent sessions gc                # Collect old transcripts (dry run unless --apply)
+theokit mcp support                      # Serve an agent as an MCP server over stdio
+theokit routes                           # List all routes, actions and WebSocket endpoints
+theokit check                            # Typecheck + scan (+ eslint)
+theokit doctor                           # Report the resolved state of the installation
+theokit info                             # Print environment info
+theokit openapi                          # Emit openapi.json from route schemas
+theokit db migrate                       # Database: migrate | generate | seed
+theokit migrate router                   # One-shot convention migrations
+theokit add <package>                    # Install a known adapter or plugin (whitelist-only)
+theokit docker                           # Generate a production Dockerfile
 ```
+
+`theokit generate` also knows `action`, `ws`, `controller`, `toolbox`, `workflow`,
+`eval`, `sandbox`, `schedule`, and `memory`.
 
 ## Configuration
 
@@ -397,10 +455,25 @@ import { config } from 'theokit'
 export default config()
   .port(3000)
   .ssr(false)
-  // Named setters exist for the common keys; `.set()` carries anything else.
+  // Named setters: name, port, host, ssr, appDir, serverDir, agentsDir, distDir.
+  // `.set()` carries anything else.
   .set({ rateLimit: { windowMs: 60_000, max: 100 } })
   .build()
 ```
+
+Defaults: `appDir: 'app'`, `serverDir: 'server'`, `agentsDir: 'agents'`.
+
+## Deploy
+
+`theokit build --target <name>` selects the adapter:
+
+| Target | Notes |
+|---|---|
+| `node` | Default — a self-contained Node server |
+| `theo-cloud` | **Principal target.** Validates `.theokit/services.json` and prepares the bundle; TheoCloud emits the K8s manifests on its side |
+| `vercel`, `netlify`, `cloudflare` | Platform adapters |
+| `bun`, `deno-deploy`, `aws-lambda` | Alternative runtimes |
+| `static` | Prerendered output |
 
 ## Built With
 
@@ -408,10 +481,11 @@ export default config()
 |---|---|
 | Bundler + Dev Server | Vite 6 |
 | UI Framework | React 19 |
+| Routing (client) | react-router 7 |
 | Type Validation | Zod 4 |
 | Build | tsup |
-| Testing | Vitest + Playwright |
-| Agent Runtime | @theokit/sdk |
+| Testing | Vitest 4 (unit, integration, type-level) |
+| Agent Runtime | `@theokit/sdk` |
 
 ## Packages
 
@@ -419,77 +493,59 @@ export default config()
 
 | Package | Version | Description |
 |---|---|---|
-| [`theokit`](https://www.npmjs.com/package/theokit) | 0.15.1 | Framework core — routing, server, CLI, config, adapters, the `agents/*.ts` surface + HITL/checkpoint harness + `theokit agent` terminal |
-| [`@theokit/http`](https://www.npmjs.com/package/@theokit/http) | 0.5.4 | NestJS-style HTTP decorators + pipeline |
-| [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | 0.30.1 | AI agent decorators + SDK adapter (`defineAgent`, `@HumanInTheLoop`, `@Checkpoint`) |
-| [`create-theokit`](https://www.npmjs.com/package/create-theokit) | 1.0.16 | Project scaffolding CLI |
+| [`theokit`](https://www.npmjs.com/package/theokit) | ![npm](https://img.shields.io/npm/v/theokit?style=flat-square&label=) | Framework core — router, server, CLI, config, adapters, devtools, the agent mount + HITL/checkpoint harness |
+| [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | ![npm](https://img.shields.io/npm/v/@theokit/agents?style=flat-square&label=) | `AgentBuilder`, the SDK adapter, guardrails, skills, MCP, A2A/ACP, delegation |
+| [`@theokit/http`](https://www.npmjs.com/package/@theokit/http) | ![npm](https://img.shields.io/npm/v/@theokit/http?style=flat-square&label=) | NestJS-style HTTP decorators + pipeline + typed client |
+| [`@theokit/presenter`](https://www.npmjs.com/package/@theokit/presenter) | ![npm](https://img.shields.io/npm/v/@theokit/presenter?style=flat-square&label=) | The canonical `AgentOutputEvent` + presenters for web / terminal / JSON |
+| [`@theokit/tauri`](https://www.npmjs.com/package/@theokit/tauri) | ![npm](https://img.shields.io/npm/v/@theokit/tauri?style=flat-square&label=) | Desktop glue — the Channel/invoke transport + the JSONL sidecar |
+| [`create-theokit`](https://www.npmjs.com/package/create-theokit) | ![npm](https://img.shields.io/npm/v/create-theokit?style=flat-square&label=) | Project scaffolding CLI (`--surface=web\|tui\|desktop`, `--bare`) |
 
-### SDK (agent runtime — sibling repo)
+### Sibling repos
 
-| Package | Version | Description |
-|---|---|---|
-| [`@theokit/sdk`](https://www.npmjs.com/package/@theokit/sdk) | 2.18.1 | Agent runtime — `Agent.create()`, `Run.stream()`, providers, persistence (`>= 2.13.0` required by `@theokit/agents`) |
-| [`@theokit/sdk-tools`](https://www.npmjs.com/package/@theokit/sdk-tools) | 0.1.0 | Tool definition helpers for SDK agents |
-| [`@theokit/sdk-budget`](https://www.npmjs.com/package/@theokit/sdk-budget) | 0.1.0 | Cost tracking + budget enforcement for agent runs |
-| [`@theokit/sdk-cache`](https://www.npmjs.com/package/@theokit/sdk-cache) | 0.1.0 | Response caching layer for agent calls |
-| [`@theokit/sdk-memory`](https://www.npmjs.com/package/@theokit/sdk-memory) | 0.1.0 | Persistent memory for agent conversations |
-| [`@theokit/sdk-handoff`](https://www.npmjs.com/package/@theokit/sdk-handoff) | 0.1.0 | Agent-to-agent handoff protocol |
-| [`@theokit/codemod-sdk-2-0`](https://www.npmjs.com/package/@theokit/codemod-sdk-2-0) | 1.0.0 | ~~Codemod for SDK v1 → v2 migration~~ — **DEPRECATED/archived** (abandoned `@theokit/sdk-core` rename that never shipped; do not use) |
+Published independently; install what you need.
 
-### Auth providers (sibling repo)
+| Family | Packages |
+|---|---|
+| **Agent runtime** | `@theokit/sdk` — the only agent runtime — plus `sdk-tools`, `sdk-budget`, `sdk-cache`, `sdk-memory`, `sdk-handoff` |
+| **UI** | `@theokit/ui` (chat + agent surfaces), `@usetheo/ui` (generic primitives) |
+| **Auth providers** | `@theokit/auth-github`, `@theokit/auth-google`, `@theokit/auth-magic-link` |
+| **Plugins** | `@theokit/plugin-canvas`, `-copilot`, `-db-drizzle`, `-email`, `-forms`, `-payments`, `-realtime`, `-voice` |
+| **Gateways** | `@theokit/gateway-sms`, `-line`, `-matrix`, `-mattermost` |
 
-| Package | Version | Description |
-|---|---|---|
-| [`@theokit/auth-github`](https://www.npmjs.com/package/@theokit/auth-github) | 0.1.0 | GitHub OAuth provider |
-| [`@theokit/auth-google`](https://www.npmjs.com/package/@theokit/auth-google) | 0.1.0 | Google OAuth provider |
-| [`@theokit/auth-magic-link`](https://www.npmjs.com/package/@theokit/auth-magic-link) | 0.1.0 | Passwordless magic link auth |
-
-### Plugins (sibling repo)
-
-| Package | Version | Description |
-|---|---|---|
-| [`@theokit/plugin-canvas`](https://www.npmjs.com/package/@theokit/plugin-canvas) | 0.3.0 | Canvas/whiteboard UI plugin |
-| [`@theokit/plugin-copilot`](https://www.npmjs.com/package/@theokit/plugin-copilot) | 0.1.0 | In-app AI copilot assistant |
-| [`@theokit/plugin-db-drizzle`](https://www.npmjs.com/package/@theokit/plugin-db-drizzle) | 0.1.0 | Drizzle ORM integration |
-| [`@theokit/plugin-email`](https://www.npmjs.com/package/@theokit/plugin-email) | 0.1.0 | Transactional email (Resend/SendGrid) |
-| [`@theokit/plugin-forms`](https://www.npmjs.com/package/@theokit/plugin-forms) | 0.1.2 | Form builder + validation |
-| [`@theokit/plugin-payments`](https://www.npmjs.com/package/@theokit/plugin-payments) | 0.1.0 | Stripe payments integration |
-| [`@theokit/plugin-realtime`](https://www.npmjs.com/package/@theokit/plugin-realtime) | 0.1.0 | Real-time subscriptions (WebSocket/SSE) |
-| [`@theokit/plugin-voice`](https://www.npmjs.com/package/@theokit/plugin-voice) | 0.7.0 | Voice/audio agent interface |
-
-### Gateways (messaging channels — sibling repo)
-
-| Package | Version | Description |
-|---|---|---|
-| [`@theokit/gateway-sms`](https://www.npmjs.com/package/@theokit/gateway-sms) | 0.1.0 | SMS gateway (Twilio/Vonage) |
-| [`@theokit/gateway-line`](https://www.npmjs.com/package/@theokit/gateway-line) | 0.1.0 | LINE messaging gateway |
-| [`@theokit/gateway-matrix`](https://www.npmjs.com/package/@theokit/gateway-matrix) | 0.1.0 | Matrix protocol gateway |
-| [`@theokit/gateway-mattermost`](https://www.npmjs.com/package/@theokit/gateway-mattermost) | 0.1.0 | Mattermost gateway |
+`@theokit/codemod-sdk-2-0` is **deprecated and archived** — it targeted an
+abandoned rename that never shipped. Do not use it.
 
 ## Ecosystem
 
-TheoKit sits inside the [`Theo`](https://usetheo.dev) product family. It is **self-contained** — builds, ships, and runs without any sibling project. The ecosystem spans **27 published npm packages** across multiple repos.
+TheoKit sits inside the [Theo](https://usetheo.dev) product family. It is
+**self-contained** — it builds, ships, and runs without any sibling project.
 
-| Sibling | Direction | How it relates | Status |
-|---------|-----------|----------------|:------:|
-| **`@theokit/sdk` v2.0.1** — agent runtime | TheoKit ← sibling | SDK is the **only** agent runtime (rule: INQUEBRAVEL). `Agent.create()`, `Run.stream()`, `defineTool()`. 6 sub-packages (tools, budget, cache, memory, handoff, codemod). | ✅ Wired |
-| **`@theokit/auth-*`** — auth providers | TheoKit ← sibling | GitHub, Google OAuth + magic link. Each is an independent npm package. | ✅ Published |
-| **`@theokit/plugin-*`** — 8 plugins | TheoKit → sibling | canvas, copilot, db-drizzle, email, forms, payments, realtime, voice. Apps install explicitly. | ✅ Published |
-| **`@theokit/gateway-*`** — 4 gateways | TheoKit ← sibling | SMS, LINE, Matrix, Mattermost. Each is an independent npm package. | ✅ Published |
-| **`@theokit/ui`** — AI-native React component library | TheoKit ← sibling | Chat + agent surfaces (ChatMessage, ChatThread, AgentEvent, ToolCallCard, DiffViewer), theme system. Generic primitives moved to `@usetheo/ui`. Auto-injected when detected. npm dep, not workspace link. | ✅ Wired |
-| **TheoCloud** — managed platform | TheoKit → sibling | **Principal deploy target.** Thin validator adapter shipped. K8s emission lives in TheoCloud (Go). | ✅ Adapter shipped |
+| Sibling | Direction | How it relates |
+|---------|-----------|----------------|
+| **`@theokit/sdk`** — agent runtime | TheoKit ← sibling | The **only** agent runtime. `Agent.create()`, `Run`, `Tool.create()`, `Skill.create()`, providers, persistence. Consumed from npm, not workspace-linked. |
+| **`@theokit/ui`** — AI-native React components | TheoKit ← sibling | The chat and agent surfaces, on the Violet Forge design system. Detected at build time: when it and `@tailwindcss/vite` are installed, the framework wires Tailwind v4 and the UI plugin for you. Generic primitives live in `@usetheo/ui`. |
+| **`@theokit/auth-*`**, **`@theokit/gateway-*`** | TheoKit ← sibling | OAuth/magic-link providers and messaging channels, each an independent package. |
+| **`@theokit/plugin-*`** | TheoKit → sibling | Eight plugins. Apps install them explicitly. |
+| **TheoCloud** — managed platform | TheoKit → sibling | **Principal deploy target.** TheoKit ships a thin validator adapter; K8s emission lives inside TheoCloud. |
 
 ## Status
 
-- **717 tests passing** across the decorator + scaffolder suites (395 `@theokit/http` + 239 `@theokit/agents` + 77 `create-theokit` + 6 E2E), in addition to the `theokit` framework suite (`tests/`). Zero lint errors, zero typecheck errors.
-- **31 decorators** (16 HTTP + 15 agent) with convention naming inference.
-- **14 agent stream event types** with discriminated union.
-- **27 npm packages published** across the Theo ecosystem (4 core + 7 SDK + 3 auth + 8 plugins + 4 gateways + 1 codemod).
-- **13 system design guardrails** enforced on every interaction (G1-G13 including YAGNI, DRY, Feature Creep).
-- **Real E2E tests** — scaffold → install → dev server → HTTP request → 200 response.
-- **SDK integration complete** — all agent execution flows through `@theokit/sdk` v2.0.1.
-- **TheoCloud adapter shipped** — thin validator that bundles + uploads `services.json`.
-- **Honest warnings** — `@UseInterceptors`, `@UseFilters`, `@Budget` on agents emit stable warning codes when enforcement is metadata-only.
+Beta. The framework is used to build real apps, and the surface still moves between
+minor versions — breaking changes are recorded in [`CHANGELOG.md`](CHANGELOG.md)
+against the version that carried them.
+
+- **6007 tests in 765 files** (5986 passing, 21 skipped, zero type errors) — unit, integration and type-level suites across `theokit`, `@theokit/http`, `@theokit/agents`, `@theokit/presenter` and `create-theokit`. One command: `pnpm test`.
+- **Nine CI jobs gate every PR**: lint + format, typecheck + build, unit + type tests, a coverage floor of 80%, dead code (`knip`), package validation (`publint` + `attw` + an install smoke test), a production dependency audit, and license compliance. Alongside them run the architecture guards — `dependency-cruiser` rules, `ls-lint` filename conventions, SDK surface parity — plus CodeQL and a two-layer secret scan (pre-commit hook and workflow).
+- **Nine deploy targets**, with TheoCloud as the principal one.
+- **There is no browser/E2E harness.** A change to rendering or hydration needs a reviewer to exercise it by hand.
+- The **`wiki/`** that held the internal decision trail was removed from the tree; the CHANGELOG is the public record, and the documents remain in git history.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the local gate (`pnpm test`, `pnpm typecheck`,
+`pnpm lint`, `pnpm knip`), the TDD cycle, and the changelog rules. Security reports go
+through [SECURITY.md](SECURITY.md); upgrading an app across versions is documented in
+[MIGRATION.md](MIGRATION.md) and the CHANGELOG.
 
 ## License
 

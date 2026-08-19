@@ -1,5 +1,159 @@
 # theo
 
+## 0.48.13
+
+### Patch Changes
+
+- **The server bundle no longer loads pages lazily, so SSR renders the whole document at once.**
+
+  Pages were `React.lazy` in both builds. That is right for the browser, which downloads one page's
+  JavaScript instead of all of them, and wrong for the server, which has every chunk on local disk. A
+  lazy page suspends on first render regardless of caching — the `import()` settles a microtask after
+  the render — so `onShellReady` flushed the layout alone and the page arrived afterwards inside a
+  hidden div for a client script to move into place. Readers watched the document assemble itself:
+  measured on a production site at CLS 1.12 against a 0.1 budget, with `<footer>` served ahead of
+  `<article>`.
+
+  The route manifest is now generated per environment: lazy for the browser, static imports for the
+  server. Piping still happens on `onShellReady`, which React 19 requires — piping on `onAllReady`
+  throws "React currently only supports piping to one writable stream" on every request. Nothing
+  suspends now, so the shell IS the document. (usetheokit/theokit#323)
+
+## 0.48.12
+
+### Patch Changes
+
+- Republish of 0.48.11 with the lint fixes applied. 0.48.11 reached the registry from a working tree
+  whose commit was then rejected by the pre-commit hook, so the tag and the source did not match.
+  No behaviour differs between the two.
+
+## 0.48.11
+
+### Patch Changes
+
+- **Route preloading never actually preloaded anything on nested routes** — on the server or the
+  client. `__theoPreloadMap` is keyed by absolute path (`'/docs/*'`), while `matchRoutes` reports each
+  route's own `path`, which is relative to its parent (`'*'`). The `p in __theoPreloadMap` filter
+  therefore matched nothing for any route below the root, and the lookup failed silently: no error, no
+  warning, just a preload that did nothing.
+
+  On the client that meant the Suspense-during-hydration safeguard in `entry.ts` had never fired for a
+  nested route, despite the comment describing exactly the failure it was meant to prevent. On the
+  server it meant the fix released moments earlier in 0.48.10 was inert.
+
+  The manifest now emits `__theoPreloadPathsFor`, which rebuilds the absolute path by accumulating
+  segments down the match chain, and both entries use it.
+
+## 0.48.10
+
+### Patch Changes
+
+- **SSR no longer serves an empty shell first.** Pages are `React.lazy()` in the route manifest, and
+  the server rendered without resolving those modules — so React suspended on the page component,
+  `onShellReady` fired with the layout alone, and the actual page streamed afterwards inside a hidden
+  div. Every reader watched the page assemble itself.
+
+  Code-splitting earns its keep in a browser, which downloads one page's JavaScript instead of all of
+  them. The server has every chunk on local disk and loads it regardless, so the suspension bought
+  nothing and cost a two-phase render. The generated server entry now matches the URL against the
+  routes and awaits the same `__theoPreloadMap` entries the client already awaits before
+  `hydrateRoot`; `React.lazy` then resolves from cache without suspending. Streaming still applies to
+  genuine data-fetching Suspense.
+
+  Measured on a production documentation site: CLS 1.12 against a 0.1 budget, largest paint at 4.8s,
+  and `<article>` absent from the DOM for the first ~700ms — the served HTML placed `<footer>` ahead
+  of `<article>`, so the footer was laid out and then pushed down. (usetheokit/theokit#323)
+
+## 0.48.9
+
+### Patch Changes
+
+- **`theokit start` now applies the rate limit for every config shape the schema accepts, and can key
+  buckets correctly behind a reverse proxy.** Two security fixes that had to land together.
+
+  The server only ever built a limiter for the legacy flat `{ windowMs, max }` shape. A per-route
+  config — the shape that exists so an expensive endpoint can get a tighter budget than the rest of
+  the app — produced no limiter at all, and the request handler skipped limiting on every request.
+  Nothing warned: the app booted clean and the config validated. Measured on the app that found it, 20
+  requests against a 12-per-minute budget and 150 against a 120-per-minute one returned zero 429s. The
+  correct implementation already existed in `createRouteRateLimiter`, handling both shapes, and simply
+  had no caller. (usetheokit/theokit#321)
+
+  Rate limiting by IP also keyed on `req.socket.remoteAddress`, which behind Caddy, nginx, a load
+  balancer or an ingress controller is the proxy — one bucket for the entire internet. That is worse
+  than no limit: a handful of requests exhausts the budget and every other visitor is refused, so any
+  single client can deny the endpoint to everybody. Rate limit config now takes `trustProxy`
+  (`false` by default, `true` for one proxy, or a hop count), and resolves the client address from
+  `x-forwarded-for` counting in from the right, past exactly the declared hops. It stays off by
+  default because that header is client-writable, and honouring it uninvited turns the limiter into a
+  one-header bypass. (usetheokit/theokit#322)
+
+## 0.48.8
+
+### Patch Changes
+
+- Inline scripts written into `index.html` now receive the per-request CSP nonce in production, not
+  only in dev. The nonce differs per request while the head half of the template is computed once at
+  startup, so production was serving the template's scripts unstamped and a nonce-based CSP blocked
+  them.
+
+  The visible cost fell on the standard cure for a flash of the wrong theme on load: a small
+  synchronous script in `<head>` that sets the theme attribute before the first paint. Blocked, the
+  page painted with the default palette and repainted once React hydrated — a white flash on every
+  reload of a dark-themed site, in production only.
+
+## 0.48.7
+
+### Patch Changes
+
+- The template is no longer split at a `<div id="root">` that appears inside an HTML COMMENT. A
+  comment that merely documents the mount point moved the split before `</head>`, so the "head"
+  half held no `</head>`, head injection quietly did nothing, and every rendered page lost its
+  metadata with no error anywhere. All three split sites (dev middleware, `theokit start`, the
+  static adapter) now share `findRootDiv`, which masks comments first.
+
+- Head hoisting now fails safe. When the metadata cannot be injected into the head, it stays in the
+  body instead of being stripped from one place and added to neither — misplaced tags still work
+  after hydration, deleted ones never do.
+
+## 0.48.6
+
+### Patch Changes
+
+- Head hoisting now also applies to `theokit start`, not just the dev server. 0.48.5 fixed the dev
+  middleware alone, so a production build still shipped each route's metadata inside the body —
+  previews worked while developing and silently did not in the deploy, which is worse than not
+  working at all. (usetheokit/theokit#319)
+
+## 0.48.5
+
+### Patch Changes
+
+- A hyphenated agent name no longer generates code that cannot be parsed. `agents/ask-theo.ts` is
+  named `ask-theo`, and the exported binding was emitted verbatim as `export const ask-theo` —
+  breaking the generated `.theokit/agents.d.ts` and the virtual `@theo/agents` runtime module.
+  Names now become camelCase identifiers (`askTheo`) while the route keeps its kebab form.
+  (usetheokit/theokit#318)
+
+- `ssr: true` hydrates again in development. The nonce for the CSP is now minted before
+  `transformIndexHtml` and stamped onto the inline scripts it injects, so Vite's React refresh
+  preamble is no longer blocked. Previously the page rendered and never hydrated, with a console
+  error that blamed Vite. (usetheokit/theokit#319)
+
+- A route's `<title>`, `<meta>` and `<link>` now reach the served `<head>` under SSR, on both the
+  dev server and `theokit start`. React only hoists them in the browser after hydration, so they
+  used to ship inside the body — invisible to every crawler that does not run JavaScript, which is
+  every social-media unfurler. (usetheokit/theokit#319)
+
+- `ui.theme` accepts the themes `@theokit/ui` actually ships. It was a closed enum of
+  `violet-forge | noir | paper`, two of which never existed, so the only accepted value was the
+  default and every real theme name was rejected.
+
+## 0.48.4
+
+Broken publish — shipped unresolved pnpm `workspace:` ranges and is uninstallable through npm.
+Deprecated on the registry; use 0.48.5.
+
 ## 0.48.3
 
 ### Patch Changes

@@ -13,5 +13,17 @@ export const __theoPreloadMap = {
   '/about': () => import('/app/about/page.tsx'),
 }
 
+export function __theoPreloadPathsFor(matches) {
+  const out = []
+  let base = ''
+  for (const m of matches ?? []) {
+    const seg = m && m.route && m.route.path
+    if (typeof seg !== 'string') continue
+    base = seg.startsWith('/') ? seg : base.endsWith('/') ? base + seg : base + '/' + seg
+    out.push(base)
+  }
+  return out.filter((p) => p in __theoPreloadMap)
+}
+
 export const routes = [{ path: '/', children: [{ path: 'blog', element: React.createElement(Suspense, { fallback: null }, React.createElement(Page_blog)) }, { path: 'about', element: React.createElement(Layout_about, { children: React.createElement(Outlet) }), children: [{ index: true, element: React.createElement(Suspense, { fallback: null }, React.createElement(Page_about)) }] }] }]"
 `;

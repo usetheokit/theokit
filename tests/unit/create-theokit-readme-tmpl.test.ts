@@ -51,14 +51,20 @@ describe('generalized .tmpl substitution', () => {
     }
   })
 
-  it('README explains the operator-deferred @theokit/sdk publish', () => {
+  it('README names the runtime and the authoring surface, not a removed API', () => {
     const target = makeTargetDir()
     rmSync(target, { recursive: true, force: true })
     try {
       scaffold(target, 'sdk-doc-app', 'default')
       const readme = readFileSync(join(target, 'README.md'), 'utf-8')
       expect(readme).toMatch(/@theokit\/sdk/)
-      expect(readme).toMatch(/operator-deferred|publish/i)
+      expect(readme).toMatch(/AgentBuilder/)
+      // The assertion this replaced demanded the README explain an "operator-deferred"
+      // @theokit/sdk publish. That publish happened; a doc kept saying `npm install` might
+      // 404. `defineAgent` / `defineAgentTool` went internal in M31 — a scaffold README that
+      // teaches them hands the reader code that does not resolve.
+      expect(readme).not.toMatch(/operator-deferred/i)
+      expect(readme).not.toMatch(/defineAgentTool|defineAgent\b/)
     } finally {
       rmSync(target, { recursive: true, force: true })
     }
