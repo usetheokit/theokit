@@ -2,13 +2,13 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { validateProjectStructure, TheoProjectError } from 'theokit'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The valid and app-less projects are built here, so the suite owns its own inputs.
-const TEMP_DIR = path.join(tmpdir(), `theo-validate-${Date.now()}`)
+const TEMP_DIR = mkdtempSync(path.join(tmpdir(), 'theo-validate-'))
 
 beforeAll(() => {
   // A structurally valid project: app/ + server/ + config + manifest.

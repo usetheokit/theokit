@@ -23,17 +23,14 @@ import {
   rewriteRelativeImports,
   type RouterMigrationPlanItem,
 } from '../../packages/theo/src/cli/commands/migrate/router-codemod.js'
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 let routesDir: string
 
 beforeEach(() => {
-  const base = join(
-    tmpdir(),
-    `theo-g6-codemod-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  )
+  const base = mkdtempSync(join(tmpdir(), 'theo-g6-codemod-'))
   routesDir = join(base, 'server', 'routes')
   mkdirSync(routesDir, { recursive: true })
 })

@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { validateProjectStructure, loadConfig } from 'theokit'
 import path from 'node:path'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 // Each project below is built here, so the Wave 0 contract owns its own inputs instead of
 // depending on a checked-in demo app.
-const TEMP_DIR = path.join(tmpdir(), `theo-wave0-${Date.now()}`)
+const TEMP_DIR = mkdtempSync(path.join(tmpdir(), 'theo-wave0-'))
 
 beforeAll(() => {
   const validDir = path.join(TEMP_DIR, 'basic-valid-app')

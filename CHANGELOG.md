@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Fifteen test files create their temporary directories atomically.** Each built a path under
+  `tmpdir()` from `Date.now()` or a random suffix and then created it — two steps, with a window
+  between them in which something else can occupy the path, and `Date.now()` in particular collides
+  between two tests that start in the same millisecond. `mkdtempSync` creates the directory with
+  mode 0700 in one step. This clears the test half of the alert class; the eleven production sites
+  CodeQL also reports are deliberately untouched, because at least two of them
+  (`vite-plugin/actions-virtual-module.ts`, `server/scan/manifest.ts`) never call `tmpdir()` at all —
+  they write a deterministic output directory the build has to find again, and substituting a random
+  one to silence an alert would break the build. (usetheokit/theokit#334)
+
 - **The thread follow-up route routes by the model too.** `theokit@0.48.14` made the agent endpoint
   honour the provider a model declares, and left the thread follow-up route resolving the credential
   before the module was even compiled — so an agent declaring `anthropic/…` still got whichever key
