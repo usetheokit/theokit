@@ -147,6 +147,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`knip` is green again, so a new dead export is visible.** The gate reported six findings, which
+  is the state in which a gate stops being read. Two were a re-export of the theme contract kept
+  "so existing importers keep working" — measured: there were none. The other four are types
+  referenced by an exported function's own signature, which `declaration: true` requires to stay
+  exported; `ignoreExportsUsedInFile` names that rule once instead of suppressing four symbols
+  one at a time. (usetheokit/theokit#210)
+
 - **`create-theokit --example=<name>` no longer points at a repository that never existed.** A bare
   name was resolved against a hard-coded examples repository that returns 404 under both orgs, so
   the named form could only fail — and it failed by shelling out to `degit` and then printing the

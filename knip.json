@@ -51,5 +51,9 @@
     "types": "error",
     "duplicates": "warn"
   },
-  "tags": ["-@knipignore"]
+  "tags": ["-@knipignore"],
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  }
 }
