@@ -13,9 +13,14 @@ import { compileAgentModule, resolveEnabledSkills, streamAgentUIMessages } from 
 
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
+import type { ApiKeyResolver } from './api-key-resolver.js'
 import { buildAgentHitl } from './build-agent-streamer.js'
 import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
 import { getRunEventCache, mintRunId } from './run-event-cache.js'
+
+// Re-exported so existing importers keep working. It is declared in its own module because
+// `build-agent-streamer.ts` needs it too and this file already imports from there (no-circular).
+export type { ApiKeyResolver } from './api-key-resolver.js'
 
 /** The message + session extracted from a chat request, or `null` when the body is invalid. */
 interface AgentRequestInput {
@@ -88,14 +93,6 @@ interface MountAgentOptions {
  *
  * See {@link MountAgentOptions} for the labeling / CSRF / app-root knobs.
  */
-/**
- * Chooses the API key for a model. Receives the model id the compiled agent declares, or
- * `undefined` when it declares none.
- *
- * @public
- */
-export type ApiKeyResolver = (modelId: string | undefined) => string
-
 export async function mountAgent(
   mod: unknown,
   request: Request,

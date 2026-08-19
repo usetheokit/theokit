@@ -192,7 +192,8 @@ export async function tryServeAgentAux(c: RequestHandlerCtx): Promise<boolean> {
     // M34 (#97) — the MCP aux route drives the agent (spends tokens); enforce CSRF like the run route.
     csrfMode: c.csrfMode,
     // M39 — the thread follow-up route drives the agent; resolve the key on demand.
-    resolveApiKey: () => resolveProvider().apiKey,
+    // theokit#328 — the thread route drives an agent, so its key follows the model too.
+    resolveApiKey: (model) => resolveProvider(model).apiKey,
   })
   if (response === null) return false
   c.res.setHeader(X_REQUEST_ID, c.requestId)

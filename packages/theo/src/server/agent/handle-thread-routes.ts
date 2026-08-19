@@ -14,6 +14,7 @@
 
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
+import type { ApiKeyResolver } from './api-key-resolver.js'
 import { makeThreadStartRun } from './build-agent-streamer.js'
 import {
   encodeSse,
@@ -52,7 +53,8 @@ function jsonError(status: number, code: string, message: string): Response {
 /** Inputs for {@link handleThreadMessage} (bundled to stay within the arity budget). */
 interface ThreadMessageArgs {
   readonly mod: unknown
-  readonly apiKey: string
+  /** theokit#328 — a resolver is passed through unresolved so the model can pick the provider. */
+  readonly apiKey: string | ApiKeyResolver
   readonly sessionId: string
   readonly request: Request
   readonly source: string

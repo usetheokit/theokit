@@ -129,7 +129,8 @@ async function serveAux(
       baseUrl: `http://${req.headers.host ?? 'localhost'}`,
       csrfMode: deps.csrfMode,
       // M39 — the thread follow-up route drives the agent; resolve the key on demand.
-      resolveApiKey: () => resolveProvider().apiKey,
+      // theokit#328 — the thread route drives an agent, so its key follows the model too.
+      resolveApiKey: (model) => resolveProvider(model).apiKey,
     })
     if (response === null) {
       next()
