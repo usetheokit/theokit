@@ -153,6 +153,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   past it unobserved. A short-circuiting `onRequest` is honoured there now, as it already was
   elsewhere. (usetheokit/theokit#324)
 
+- **Crons declared for `target: node` actually run.** `theokit build` scanned `server/crons/` and
+  `agents/schedules/`, validated each definition, wrote the manifest and printed
+  `Cron → in-process scheduler (theokit start)` — and nothing in `theokit start` ever read it, so no
+  handler was loaded, let alone fired. The server now loads the manifest the build writes and drives
+  the scheduler, reporting how many crons it scheduled at startup. (usetheokit/theokit#324)
+
 - **`--version` answers with the installed version.** `theokit --version` reported
   `0.1.0-alpha.0` against a package at 0.48.8, and `create-theokit --version` reported `0.8.0`
   against 1.23.7 — both carried the number as a literal in source, which nothing could keep in step
