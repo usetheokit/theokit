@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit 0.48.14] - 2026-08-19
+
 ### Added
 
 - **`repository`, `homepage` and `bugs` in every publishable manifest.** None of the six declared

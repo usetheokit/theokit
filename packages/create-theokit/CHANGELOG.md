@@ -1,5 +1,13 @@
 # create-theo
 
+## 1.23.8
+
+### Patch Changes
+
+- `--example=<name>` no longer points at a repository that never existed. A bare name resolved against a hard-coded examples repository that returns 404 under both orgs, so the named form could only fail — by shelling out to `degit` and then printing that same dead URL as the place to browse examples. A bare name is now refused immediately, naming the form that works; `--example=https://github.com/user/repo` is unchanged.
+
+  The theme contract is no longer re-exported from the Vite plugin. The re-export was kept "so existing importers keep working"; there are none — every consumer imports `core/contracts/theo-ui-theme.js` directly.
+
 ## 1.23.7
 
 ### Patch Changes
