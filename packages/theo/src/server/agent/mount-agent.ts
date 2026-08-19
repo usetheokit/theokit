@@ -79,13 +79,27 @@ interface MountAgentOptions {
 }
 
 /**
- * Mount a loaded agent module as a `Response`. `apiKey` is resolved by the caller
- * (`resolveProvider`). See {@link MountAgentOptions} for the labeling / CSRF / app-root knobs.
+ * Mount a loaded agent module as a `Response`.
+ *
+ * `apiKey` accepts either a resolved string or an {@link ApiKeyResolver}. The resolver form exists
+ * because the credential depends on the model, and the model is only known once the module is
+ * compiled — inside here. Callers that resolved eagerly were choosing a provider before anyone
+ * could read which one the agent asked for, which is theokit#326.
+ *
+ * See {@link MountAgentOptions} for the labeling / CSRF / app-root knobs.
  */
+/**
+ * Chooses the API key for a model. Receives the model id the compiled agent declares, or
+ * `undefined` when it declares none.
+ *
+ * @public
+ */
+export type ApiKeyResolver = (modelId: string | undefined) => string
+
 export async function mountAgent(
   mod: unknown,
   request: Request,
-  apiKey: string,
+  apiKey: string | ApiKeyResolver,
   { source = 'agent module', csrfMode = 'strict', projectRoot }: MountAgentOptions = {},
 ): Promise<Response> {
   // Enforce CSRF BEFORE any work — an agent run spends real LLM tokens, so a cross-origin
@@ -100,6 +114,9 @@ export async function mountAgent(
   }
 
   const compiled = compileAgentModule(mod, source)
+
+  // Now that the model is known, let the caller pick the credential for THAT provider.
+  const resolvedApiKey = typeof apiKey === 'function' ? apiKey(compiled.model) : apiKey
 
   // M13 — resolve a per-request skills selector (from `defineAgent({ skills: (ctx) => [...] })`)
   // against the M7 run-context, setting `skills.enabled` before the SDK runs. `undefined` ⇒ the
@@ -133,7 +150,7 @@ export async function mountAgent(
   // The runId is surfaced in the `x-theokit-run-id` response header.
   const runId = mintRunId()
   return durableUiMessageStreamResponse(
-    streamAgentUIMessages(compiled, apiKey, {
+    streamAgentUIMessages(compiled, resolvedApiKey, {
       ...input,
       hitl,
       signal: request.signal,

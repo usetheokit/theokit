@@ -147,6 +147,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The provider comes from the model, not from whichever key happens to be set.** An agent
+  declaring `anthropic/claude-sonnet-4-6` was handed an OpenRouter key whenever `OPENROUTER_API_KEY`
+  was present, because provider resolution walked a fixed priority list and never saw the model at
+  all. Every turn then failed with `auth_failed (HTTP 401)` naming a provider the agent had not
+  asked for — and nothing reported which provider had been selected, so the failure read as a bug in
+  the app. A model that names its provider now requires that provider's key, and a missing one says
+  which variable to set instead of substituting another. Bare model ids keep the previous
+  priority-order behaviour. (usetheokit/theokit#326)
+
 - **Plugin hooks now run for agent routes.** `onRequest`, `preHandler`, `onResponse` and `onError`
   fired for every route except the agent endpoints, both in `theokit start` and `theokit dev` — an
   app could register a plugin, watch it work on `/api/*`, and never learn that agent turns went

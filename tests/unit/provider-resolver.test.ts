@@ -183,3 +183,57 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
     })
   })
 })
+
+/**
+ * theokit#326 — the model already names its provider, so resolution must honour it.
+ *
+ * `resolveProvider()` took no argument, so an agent declaring `anthropic/claude-sonnet-4-6`
+ * was handed whichever key happened to be set first by priority. On a machine with a stale
+ * `OPENROUTER_API_KEY`, every turn died with `auth_failed (HTTP 401)` against a provider the
+ * agent never asked for.
+ */
+describe('resolveProvider(modelId) routes by the provider the model declares', () => {
+  beforeEach(() => {
+    resetProviderRegistry()
+    clearLLMEnv()
+  })
+  afterEach(clearLLMEnv)
+
+  it('picks the provider named in the model id, not the highest-priority env var', () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-stale'
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-real'
+
+    const resolved = resolveProvider('anthropic/claude-sonnet-4-6')
+
+    expect(resolved.name).toBe('anthropic')
+    expect(resolved.apiKey).toBe('sk-ant-real')
+  })
+
+  it('names the exact variable to set when the declared provider has no key', () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-something'
+
+    expect(() => resolveProvider('anthropic/claude-sonnet-4-6')).toThrow(/ANTHROPIC_API_KEY/)
+  })
+
+  it('treats a gateway prefix as the provider, so the rest of the id stays the upstream model', () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-real'
+
+    const resolved = resolveProvider('openrouter/anthropic/claude-haiku-4.5')
+
+    expect(resolved.name).toBe('openrouter')
+  })
+
+  it('falls back to priority order when the model declares no provider', () => {
+    process.env.OPENAI_API_KEY = 'sk-openai'
+
+    expect(resolveProvider('gpt-4o-mini').name).toBe('openai')
+    expect(resolveProvider().name).toBe('openai')
+  })
+
+  it('falls back to priority order when the prefix names no registered provider', () => {
+    process.env.OPENAI_API_KEY = 'sk-openai'
+
+    // `qwen2.5:3b` has no slash; `acme/whatever` has a slash but no such provider.
+    expect(resolveProvider('acme/whatever').name).toBe('openai')
+  })
+})

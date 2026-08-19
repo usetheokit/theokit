@@ -4,8 +4,15 @@
  * Inspiration: Dapr Conversation Registry (`dapr/pkg/components/conversation/registry.go`)
  * + Encore Manager provider array (`encore/runtimes/go/pubsub/manager_internal.go`).
  *
- * Principle: provider routing is the FRAMEWORK's responsibility, not the consumer's.
- * The consumer template uses a plain `model: { id: 'gpt-4o-mini' }` — no conditionals.
+ * Principle: provider routing is the FRAMEWORK's responsibility, not the consumer's — but the
+ * consumer still gets to SAY which provider it wants, and it says so in the model id.
+ *
+ * `provider/model` is the convention every agent in this ecosystem already writes
+ * (`anthropic/claude-sonnet-4-6`, `openrouter/anthropic/claude-haiku-4.5`), and it is the one the
+ * SDK routes on. Until theokit#326 this resolver ignored it entirely and picked by env-var
+ * priority, so an agent that declared `anthropic/...` was handed an OpenRouter key whenever one
+ * happened to be present — and every turn failed with `auth_failed (HTTP 401)` against a provider
+ * nobody asked for. The declared provider now wins; priority is the fallback for a bare model id.
  *
  * Wire protocol: OpenAI Chat Completions (universal — implemented by every
  * os providers: OpenRouter, Groq, Mistral, Together, Anthropic via proxy, etc).
@@ -123,15 +130,56 @@ export function listProviders(): readonly ProviderDescriptor[] {
 }
 
 /**
- * Resolve provider from env vars by priority. FIRST env var found wins.
+ * The provider a model id declares, or `undefined` when it declares none.
+ *
+ * `provider/model` and `gateway/provider/model` both resolve on the FIRST segment: a gateway is a
+ * provider from the framework's point of view (it holds the credential), and everything after it
+ * is the upstream namespace the gateway itself routes on.
+ *
+ * A bare id (`gpt-4o-mini`, `qwen2.5:3b`) declares nothing, and an unregistered prefix is treated
+ * the same way rather than as an error — a project may legitimately point a custom id at a
+ * registered provider's endpoint, and refusing it here would break that before it reached the SDK.
+ */
+function providerOf(
+  modelId: string | undefined,
+  registered: readonly ProviderDescriptor[],
+): ProviderDescriptor | undefined {
+  if (modelId === undefined) return undefined
+  const slash = modelId.indexOf('/')
+  if (slash <= 0) return undefined
+  const prefix = modelId.slice(0, slash)
+  return registered.find((p) => p.name === prefix)
+}
+
+/**
+ * Resolve the provider for a model.
+ *
+ * When `modelId` declares a registered provider (`anthropic/…`), THAT provider's key is
+ * required — no substitution. Otherwise the registry is walked by priority, first match wins.
  *
  * @returns ResolvedProvider with apiKey + baseUrl + name
  * @throws Error if NO provider env var is set (actionable message)
  *
  * @public
  */
-export function resolveProvider(): ResolvedProvider {
+export function resolveProvider(modelId?: string): ResolvedProvider {
   const sorted = [...registry].sort((a, b) => a.priority - b.priority)
+
+  const declared = modelId === undefined ? undefined : providerOf(modelId, sorted)
+  if (declared !== undefined && modelId !== undefined) {
+    const apiKey = process.env[declared.envKey]
+    if (apiKey && apiKey.length > 0) {
+      return { name: declared.name, apiKey, baseUrl: declared.baseUrl }
+    }
+    // Deliberately NOT falling back to another provider's key. Silently substituting one is how
+    // theokit#326 produced a 401 nobody could attribute: the request went somewhere the agent
+    // never named. Say which variable is missing and stop.
+    throw new Error(
+      `Model "${modelId}" declares provider "${declared.name}", but ${declared.envKey} is not set. ` +
+        `Set ${declared.envKey}, or change the model's provider prefix.`,
+    )
+  }
+
   for (const desc of sorted) {
     const apiKey = process.env[desc.envKey]
     if (apiKey && apiKey.length > 0) {
@@ -156,9 +204,9 @@ export function resolveProvider(): ResolvedProvider {
  *
  * @public
  */
-export function tryResolveProvider(): ResolvedProvider | null {
+export function tryResolveProvider(modelId?: string): ResolvedProvider | null {
   try {
-    return resolveProvider()
+    return resolveProvider(modelId)
   } catch {
     return null
   }
