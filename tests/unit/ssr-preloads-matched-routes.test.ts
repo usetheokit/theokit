@@ -21,7 +21,9 @@ import { generateEntryServer } from '../../packages/theo/src/router/entry-server
  *
  * Regression tests for usetheokit/theokit#323.
  */
-const serverEntry = generateEntryServer({ ssr: true })
+// `ssr` was never an option `generateEntryServer` reads — passing it produced a byte-identical
+// entry and a workspace type error, which failed `pnpm typecheck` and the pre-push hook.
+const serverEntry = generateEntryServer({})
 
 describe('server entry preloads the matched routes', () => {
   it('imports the matcher and the preload map', () => {
