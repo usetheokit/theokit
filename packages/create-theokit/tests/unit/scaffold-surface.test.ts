@@ -314,3 +314,63 @@ describe('applySurface (M45)', () => {
     ).toThrow(/Forced surface failure/)
   })
 })
+
+/**
+ * Every declared script must be runnable on the surface that declares it
+ * (usetheokit/theokit#374).
+ *
+ * `SURFACE_CONFIG` overrides `dev`, `start`, `tauri`, `build:frontend` and
+ * `build:sidecar`, and never `build` — so both non-Web surfaces inherited the
+ * default template's `theokit build`, whose first act is to require the `app/`
+ * directory that `WEB_ONLY_FILES` had just deleted. `npm run build` is the most
+ * obvious thing to try after `dev`, and on both surfaces it failed immediately.
+ *
+ * The existing surface tests could not catch it: they assert that scaffolded
+ * files exist, which is the anti-pattern `three-target-parity.md` already
+ * records about `surface-matrix.test.ts` ("asserts scaffolded files, never a
+ * build or a run"). These assert the weaker but checkable property — that no
+ * declared script names a directory the same scaffold removed.
+ */
+describe('a scaffolded surface declares no script it cannot run (#374)', () => {
+  let targetDir: string
+  beforeEach(() => {
+    targetDir = join(tmpdir(), `cts-surface-scripts-${randomUUID()}`)
+  })
+  afterEach(() => {
+    rmSync(targetDir, { recursive: true, force: true })
+  })
+
+  const scriptsOf = (surface: 'tui' | 'desktop'): Record<string, string> => {
+    scaffold(targetDir, 'app')
+    applySurface({ targetDir, projectName: 'app', surface })
+    return (
+      JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8')) as {
+        scripts: Record<string, string>
+      }
+    ).scripts
+  }
+
+  it('test_no_surface_script_invokes_theokit_build_after_app_was_removed', () => {
+    for (const surface of ['tui', 'desktop'] as const) {
+      const scripts = scriptsOf(surface)
+      expect(existsSync(join(targetDir, 'app'))).toBe(false)
+      // `theokit build` requires `app/`. Any script still naming it is a script
+      // that cannot run in the project it was written into.
+      const broken = Object.entries(scripts).filter(([, cmd]) => /\btheokit build\b/.test(cmd))
+      expect(broken).toEqual([])
+      rmSync(targetDir, { recursive: true, force: true })
+    }
+  })
+
+  it('test_desktop_build_is_the_tauri_build', () => {
+    expect(scriptsOf('desktop').build).toBe('tauri build')
+  })
+
+  it('test_tui_build_typechecks_because_a_terminal_app_has_no_artifact', () => {
+    // A TUI runs from source through `tsx`; there is nothing to bundle. The
+    // honest meanings of `build` here are "typecheck" or "absent" — never a
+    // command that exits non-zero on a correct project.
+    const build = scriptsOf('tui').build
+    expect(build === undefined || /tsc\b/.test(build)).toBe(true)
+  })
+})

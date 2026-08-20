@@ -80,6 +80,12 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       start: 'tsx tui/main.tsx',
       // A visual reference of every tool render state (pending/running/success/failed/…) — no agent needed.
       'demo:tools': 'tsx tui/tool-variations.tsx',
+      // A terminal app runs from source through `tsx` and has no artifact to bundle, so `build`
+      // means "typecheck" here. It is SET rather than left alone because the default template's
+      // `theokit build` requires `app/`, which `WEB_ONLY_FILES` removes two steps later — leaving a
+      // script whose first act is to demand a directory this scaffold just deleted
+      // (usetheokit/theokit#374).
+      build: 'tsc --noEmit',
     },
     tsconfigInclude: [
       'tui/**/*.ts',
@@ -113,6 +119,11 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     scripts: {
       dev: 'tauri dev',
       tauri: 'tauri',
+      // The real build, and the reason it must be declared: the inherited `theokit build` requires
+      // `app/`, which this surface removes (usetheokit/theokit#374). `tauri.conf.json`'s
+      // `beforeBuildCommand` already chains the frontend and the sidecar, so this is the whole
+      // build rather than a shortcut past two of its steps.
+      build: 'tauri build',
       'build:frontend': 'vite build frontend',
       // Generates the Tauri externalBin launcher (src-tauri/binaries/theo-sidecar-<triple>) the Rust
       // shell spawns. Wired into tauri.conf.json beforeDev/BuildCommand — regenerated each launch.
