@@ -151,13 +151,28 @@ fourteen files under `packages/theo/src/adapters/`. The full measurement, both p
 six declared judgements, the instrument, and the four confirmed AI SDK version facts are in
 [J3's criteria file](journeys/j03-streaming.md).
 
-**Three journeys measured, two ties and one unresolved, and the framework has still not won a single
-metric on a criterion both sides satisfy.** The goal states "win all ten by a margin outside noise".
-Three of ten are in. J5's re-measurement did not change that sentence, and it is worth saying why it
-could not: shipping the missing capability moved a criterion, not a margin. J3 did not change it
-either, and its reason is sharper - the framework produced its largest margins on this journey, and
-they measure the cost of code that does not do the thing the criterion grades. A cheap
-implementation that fails is not a cheaper way to succeed.
+**J9 has both sides now, and it is the first journey where TheoKit wins every countable metric — and
+it is still not won.** Measured 2026-08-20 against a real local OTLP collector on both sides, with the
+three observability commits of that day confirmed present. Files 1 against 3, glue lines 2 against 14,
+concepts 3 against 7 — 3x, 7x and 2.33x, every one outside the bar § What counts as winning sets. The
+journey is not won because the criteria are not: TheoKit satisfies **three** of the seven, the Next.js
+side **five**. No span records the model identifier, so criterion 5's cost question has no answer on
+our side and does on theirs; the `http.request` span joins no trace and the thread route drops the
+incoming `traceparent`, so criterion 6 holds on one path of three; and a HITL pause span reports the
+run's duration rather than the human's. Every one of those is a framework defect an application cannot
+fix and none of them costs the application a line to close — which is the strongest thing that can be
+said for the 3x, and it is worth nothing until usetheokit/theokit#361, #380, #381, #385 and B-019 do
+close. The measurement, both diffs, the collector payloads and seven declared judgements are in
+[J9's criteria file](journeys/j09-observability.md).
+
+**Four journeys measured, two ties, one unresolved and one metric sweep — and the framework has not
+won a journey.** The goal states "win all ten by a margin outside noise". Four of ten are in, and the
+two that produced the largest margins are the two that most clearly did not win. J5's re-measurement
+could not change that sentence because shipping the missing capability moved a criterion, not a
+margin. J3 and J9 could not change it for opposite reasons: J3's margins price six lines whose
+trigger never fires, and J9's margins are real while the criteria they were meant to serve stay
+unsatisfied. A journey is won by costing less to build *the thing the criteria describe*; costing
+less to build something short of it is a different sentence, and this document will keep them apart.
 
 **One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
 it does not mean it will score well. A journey that is newly possible and a journey that is

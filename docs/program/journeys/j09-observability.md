@@ -234,6 +234,433 @@ records the same limit). What settles them is the north-star app
 most for free, and the two things it does not give away are the two an application cannot build
 itself.
 
+## Re-measured — both sides, metrics 1-3, against a running exporter (2026-08-20)
+
+**The section above is left standing as the record of what was true when it was written.** It was
+written against a framework where the OTLP serializer drew a `traceId` per span, and it is out of
+date by three commits landed the same day: `2ec9180ee` (a run is one trace), `3762c7d0f` (the
+declared step ceiling reaches the served agent) and `5f90ddd95` (a truncated run says so). All three
+were confirmed present in the tree under test rather than assumed. **The criteria did not move**
+(`../dx-benchmark.md` § Why the protocol comes before the measurement); the target is the same and
+the framework is not.
+
+**What is new here beyond the re-run.** The earlier measurement graded criteria 1, 2, 4 and 7 "from
+source, not observed", and said so. This one does not have to: both sides were driven end to end
+against a **real local HTTP collector**, and every criterion below is graded against the bytes that
+arrived there. Where a claim is still a source read it is labelled as one, and there are exactly two.
+
+**Neither side ran against a real model, and no criterion grades one.** No API key was available. On
+the TheoKit side the agent's wire-chunk stream was scripted; on the Next.js side the language model
+was a scripted `MockLanguageModelV4` from the SDK's own `ai/test` entry point. Everything from the
+span translator outward is production code on both sides. Metric 4 is unmeasured, on both sides,
+deliberately.
+
+### Versions and commits under test
+
+| | |
+| --- | --- |
+| TheoKit | working tree at `5f90ddd95`; `2ec9180ee` and `3762c7d0f` confirmed as ancestors |
+| Next.js side | `next@16.3.1`, `ai@7.0.70`, `@ai-sdk/react@4.0.73`, `@ai-sdk/otel@1.0.70`, `@vercel/otel@2.1.3`, `zod@4.4.3`, Node 22.22.2 |
+| Collector | a `node:http` server accepting OTLP/JSON on `POST /v1/traces`, the same shape for both sides |
+
+### The version-specific facts, confirmed against the source
+
+§ The Next.js side above deferred four questions to implementation time. All four were read from the
+installed packages' own declarations and from the docs page that publishes the recipe. **Two of them
+came back against what the section supposed, and both change the count.**
+
+| Deferred question | Answer | Read from | Diverged? |
+| --- | --- | --- | --- |
+| The current name and shape of the SDK's telemetry option, and whether it still carries an experimental prefix | **`telemetry`**. `experimental_telemetry` survives as a deprecated alias on the same type. Shape: `{ isEnabled, recordInputs, recordOutputs, functionId, includeRuntimeContext, includeToolsContext, integrations }` | the `streamText` and `generateText` option declarations in the installed `ai@7.0.70`, and the telemetry docs page | **Yes.** The prefix is gone, which the section flagged as mattering for the concepts count. It matters less than the next row |
+| Which span attributes it emits for token usage | `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, plus `cache_read` / `cache_creation`. **There is no `gen_ai.usage.total_tokens`** | the emitted attribute-key set of the installed `@ai-sdk/otel@1.0.70` | **Yes**, on the third of criterion 4's three numbers — see the grading below |
+| Whether it emits a cost attribute at all | **No.** `cost` appears nowhere in the integration's emitted keys | the same key set | No — the section supposed as much |
+| Whether the HITL pause of criterion 3 has any representation | **No, and it structurally cannot** — see § Criterion 3 below | the SDK's tool-approval documentation | No, and the reason is stronger than "not implemented" |
+
+**A fifth fact nobody thought to defer, and it is the one that costs the most.** In `ai` v7 the SDK
+**no longer emits OpenTelemetry spans at all**. Span emission moved to a separate package,
+`@ai-sdk/otel`, whose `OpenTelemetry` integration must be handed to `registerTelemetry()` explicitly.
+Registering `@vercel/otel` alone produces HTTP spans and **zero** AI spans. This was verified rather
+than read: the first probe run, before `registerTelemetry(new OpenTelemetry())` was added, returned
+no `invoke_agent`, `step` or `execute_tool` span at all.
+
+**The official example for this journey exists and does not work.** `vercel/ai`'s
+`examples/next-openai-telemetry` uses the current `telemetry` spelling in its route, but its
+`instrumentation.ts` calls only `registerOTel` and pins `@vercel/otel@1.10.0` / `next@^15`. As
+published it emits no AI spans under the versions above. `../dx-benchmark.md` § Why the protocol
+comes before the measurement requires an official example be used where one exists; the working
+official source is the AI SDK telemetry docs page's Next.js section, and that is what was copied
+verbatim.
+
+### The baselines, declared
+
+**TheoKit.** The `create-theokit` default template, copied verbatim with `_gitignore`,
+`package.json.tmpl` and `README.md.tmpl` renamed exactly as the scaffolder renames them, and
+committed untouched. J9 is the delta from there. The scaffold ships a working agent and four tools,
+none of which J9 edits — this journey adds no behaviour, only recording.
+
+**Next.js.** The same three-commit ladder J1 and J5 declared, reused rather than rebuilt:
+`create-next-app` plus `npm install ai @ai-sdk/react zod`, then the quickstart's pre-tools chat
+stage, then J1's tool and J5's second tool. All three commits are **uncounted**, exactly as the
+TheoKit side leaves its scaffold uncounted. J9 is the delta from the J5 commit. Both sides are
+formatted with the `create-theokit` Prettier config (`printWidth: 100`, `semi: false`,
+`packages/create-theokit/templates/default/.prettierrc`), so both are counted with one ruler; Prettier
+left the pasted `instrumentation.ts` unchanged.
+
+### Metrics 1-3
+
+| Metric | TheoKit | Next.js + AI SDK | Better | Ratio | Verdict under § What counts as winning |
+| --- | --- | --- | --- | --- | --- |
+| Files touched | **1** | 3 | TheoKit | **3x** | outside the 2x bar |
+| Glue lines | **2** | 14 | TheoKit | **7x** | outside the 2x bar |
+| Concepts required | **3** | 7 | TheoKit | **2.33x** | outside the 2x bar |
+| Time to first green run | not measured | not measured | - | - | not applicable |
+
+This journey declares business logic the empty set, so every added line is glue and the margin is
+reported as an absolute count as well as a ratio: **twelve lines and two files separate the two
+sides.**
+
+### The two diffs, published
+
+**TheoKit — one new file, two lines.**
+
+```diff
+diff --git a/.env.local b/.env.local
+new file mode 100644
+--- /dev/null
++++ b/.env.local
+@@ -0,0 +1,2 @@
++THEO_CLOUD_INGEST_URL=http://127.0.0.1:4318/v1/traces
++THEO_CLOUD_API_KEY=local-collector
+```
+
+Nothing else. The run span, the per-tool spans, the pause span, the token attributes and the stop
+reason are all emitted by the framework without being asked: setting an ingest URL and a key is what
+makes the environment half of the resolution chain fire
+(`packages/theo/src/server/observability-bootstrap.ts:74`), after which the adapter is resolved once
+and shared by the HTTP hooks and by the agent-run translator.
+
+**This diff is invisible to `git` in a real application.** `.env.local` is ignored by the scaffold's
+own gitignore (`packages/create-theokit/templates/default/_gitignore:12`); the baseline copy tracks
+it only because that file is not renamed into place until `create-theokit` runs. It was counted by
+hand, and a reader checking the numbers should expect `git diff` on a scaffolded app to show nothing.
+
+**Next.js — two new files, one edited.**
+
+```diff
+diff --git a/instrumentation.ts b/instrumentation.ts
+new file mode 100644
+--- /dev/null
++++ b/instrumentation.ts
+@@ -0,0 +1,10 @@
++import { registerOTel } from '@vercel/otel'
++import { registerTelemetry } from 'ai'
++import { OpenTelemetry } from '@ai-sdk/otel'
++
++export function register() {
++  registerOTel({
++    serviceName: 'my-ai-app',
++  })
++  registerTelemetry(new OpenTelemetry())
++}
+
+diff --git a/.env.local b/.env.local
+new file mode 100644
+--- /dev/null
++++ b/.env.local
+@@ -0,0 +1,2 @@
++OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
++OTEL_EXPORTER_OTLP_PROTOCOL=http/json
+
+diff --git a/package.json b/package.json
+@@ -9,7 +9,9 @@
+   "dependencies": {
++    "@ai-sdk/otel": "^1.0.70",
+     "@ai-sdk/react": "^4.0.73",
++    "@vercel/otel": "^2.1.3",
+     "ai": "^7.0.70",
+```
+
+**`app/api/chat/route.ts` is not in that diff, and that is a measured result rather than an
+omission.** The telemetry option is documented as "enabled by default when a telemetry integration
+is registered", and the probe confirmed it: spans for the run, every step, every model call and every
+tool call arrived with no per-call flag anywhere. Adding `telemetry: { functionId: 'chat' }` buys
+grouping, not signal, and it is counted in the judgements below rather than in the total.
+
+**`package-lock.json` moved by 240 lines and is excluded**, on both sides and by the same rule: a
+lockfile is generated, not authored. Counting it would make the metric a function of a package
+manager's transitive closure — `@vercel/otel` declares seven required peer dependencies and no
+dependencies of its own, so npm installs seventeen packages for two names.
+
+### The concepts, derived from the diffs
+
+**TheoKit (3):** `THEO_CLOUD_INGEST_URL`, `THEO_CLOUD_API_KEY`, and `.env.local` as a file the
+production CLI loads (`packages/theo/src/config/load-env.ts:42`, loaded from
+`packages/theo/src/cli/commands/start/index.ts:95`).
+
+**Next.js (7):** the three structural parallels — `OTEL_EXPORTER_OTLP_ENDPOINT`,
+`OTEL_EXPORTER_OTLP_PROTOCOL`, and `.env.local` as a file the framework loads — plus four the other
+side has no counterpart for: the reserved `instrumentation.ts` filename and its `register()` export,
+`registerOTel` from the vendor helper, `registerTelemetry` from `ai`, and the `OpenTelemetry`
+integration class from `@ai-sdk/otel`. A reserved filename counts as a concept, exactly as a
+reserved folder does in J1.
+
+The fourth of those is the expensive one. It is not an import a reader can skip: without it the app
+boots, the exporter runs, HTTP spans arrive, and **not one AI span is emitted**. That is the
+concepts metric measuring exactly what it is for — a name you must already know, whose absence
+produces a working application and no telemetry.
+
+### The evidence, read back off the collector
+
+Both payloads below are what the collector received, not what the process held.
+
+**TheoKit — a two-tool run carrying an incoming `traceparent`:**
+
+```
+agent.tool  trace=aaaaaaaa…aaaa  id=329a53e63a1aac71  parent=a4527cfc34fc3638  dur=1.00
+      agent=chat  tool=order_lookup  toolCallId=call-1
+agent.tool  trace=aaaaaaaa…aaaa  id=16af2f9a4daf9569  parent=a4527cfc34fc3638  dur=2.00
+      agent=chat  tool=shipment_eta  toolCallId=call-2
+agent.run   trace=aaaaaaaa…aaaa  id=a4527cfc34fc3638  parent=None             dur=8.00
+      agent=chat  tokens.input=1200  tokens.output=340  tokens.total=1540  stop.reason=step_limit
+```
+
+One trace, three spans, both tools parented on the run. Client wall clock for the same run: **8 ms**,
+against a run span of **8 ms**.
+
+The same thing through the real served entry point rather than the translator alone — `mountAgent`
+called with a `Request` carrying `traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01`:
+
+```
+{"sent":"4bf92f3577b34da6a3ce929d0e0e4736","spans":[
+  {"name":"agent.tool","traceId":"4bf92f3577b34da6a3ce929d0e0e4736","spanId":"535ca6dce91c6465","parentSpanId":"7ffc784d9bdc4a41"},
+  {"name":"agent.run","traceId":"4bf92f3577b34da6a3ce929d0e0e4736","spanId":"7ffc784d9bdc4a41"}]}
+```
+
+Byte-equal, compared as strings. The same request carrying an `x-request-id` instead of a
+`traceparent` produced a freshly minted 32-hex trace, which is the correct refusal — a correlation
+key exported as a `traceId` is a malformed span (`packages/theo/src/server/http/trace-context.ts:139`).
+
+**Next.js — the same two-tool chain, through `next build` + `next start` on a published build, with
+the same `traceparent` header:**
+
+```
+GET /                                trace=3e650aa29ac4a8  parent=None              dur=  64.80
+resolve page components              trace=3e650aa29ac4a8  parent=badaf460d5f0f578  dur=   1.06
+POST /api/chat                       trace=11112222333344  parent=9999aaaabbbbcccc  dur= 568.68
+resolve page components              trace=11112222333344  parent=5e276551f96777dd  dur=   0.79
+executing api route (app) /api/chat  trace=11112222333344  parent=5e276551f96777dd  dur=  26.36
+invoke_agent mock-model-id           trace=11112222333344  parent=bae5a80ca17d66e0  dur= 309.53  model=mock-model-id in=450 out=75
+start response                       trace=11112222333344  parent=bae5a80ca17d66e0  dur=   0.73
+step 1                               trace=11112222333344  parent=69f70086610b0138  dur=  97.21
+chat mock-model-id                   trace=11112222333344  parent=e9545fd0a145663b  dur=  81.01  model=mock-model-id in=100 out=20
+execute_tool orderLookup             trace=11112222333344  parent=e9545fd0a145663b  dur=   3.35  tool=orderLookup
+step 2                               trace=11112222333344  parent=69f70086610b0138  dur=  74.96
+chat mock-model-id                   trace=11112222333344  parent=45a616b5440845e9  dur=  11.75  model=mock-model-id in=150 out=25
+execute_tool shipmentEta             trace=11112222333344  parent=45a616b5440845e9  dur=   0.88  tool=shipmentEta
+step 3                               trace=11112222333344  parent=69f70086610b0138  dur=   9.08
+chat mock-model-id                   trace=11112222333344  parent=93c6d1fdf61aa0df  dur=   5.85  model=mock-model-id in=200 out=30
+```
+
+The sent trace id was `11112222333344445555666677778888` and the sent parent span id was
+`9999aaaabbbbcccc`. The HTTP span carries both. Every one of the thirteen spans below it sits in that
+trace. Two warm repeats gave run spans of 19.47 ms and 22.29 ms against client wall clocks of 34 ms
+and 43 ms, with the HTTP span at 24.90 ms and 31.07 ms.
+
+### The seven criteria, graded against those payloads
+
+| # | Criterion | TheoKit | Next.js + AI SDK |
+| --- | --- | --- | --- |
+| 1 | run span, start and end, duration within tolerance of client wall clock | **pass**, observed | **pass**, observed |
+| 2 | a span per tool call, tool name as an attribute | **pass** for an ungated tool; **fails for a HITL-gated one** | **pass**, observed |
+| 3 | HITL pause span whose duration is the human's wait | **fail**, observed | **fail**, and structurally |
+| 4 | token usage on the exported run span: input, output and total | **pass**, all three | **fails on the third**, substitutable at zero cost |
+| 5 | cost answerable — a cost attribute, or tokens plus a model identifier | **fail**, both routes closed | **pass** |
+| 6 | a `traceparent` produces spans continuing that trace id | **partial** — the run does, the HTTP span never does, the thread route never does | **pass**, observed on a production build |
+| 7 | the signal comes from a production path, no test harness registering the exporter | **not verified** | **pass**, observed |
+
+**Criterion 1's tolerance was not declared before the grading run, and that is a protocol miss.**
+§ Acceptance criteria requires the number to be fixed before the run and recorded. It was not. Stated
+rather than papered over: the tolerance that would have been declared is ±25% of the client wall
+clock, and both sides clear it by margins large enough that the omission cannot have decided the
+grade — TheoKit's delta is 0 ms of 8, and the Next.js HTTP span is within 27% and 28% of a wall clock
+that includes `curl` process start and the full SSE body read.
+
+**Criterion 2 fails on TheoKit for a gated tool, and the failure is an overcount rather than a
+missing span.** With a `@HumanInTheLoop` tool, the approval synthesises a `tool-input-available`
+chunk under the *approval* id (`packages/agents/src/bridge/present-ui-message-stream.ts:182`) and the
+real execution later emits its own under the *runtime's* tool-call id, so one logical call produced
+**two** `agent.tool` spans in the exported payload. The criterion's own sentence is "a run with two
+calls yields two spans"; a run with one call yielding two is the same oracle failing in the other
+direction. This is usetheokit/theokit#361, confirmed open before citing.
+
+**Criterion 3 fails on both sides, and it fails differently.** On ours the pause span exists and is
+honest about being useless: measured against a scripted 120 ms human delay, the pause span's duration
+came back as **120.999936 ms and the run span's as 120.999936 ms** — identical to the nanosecond,
+because the span never closes at the resume and survives to the end-of-run sweep, which marks it
+`hitl.resume_observed: false` and gives it an error status
+(`packages/theo/src/server/agent/observe-agent-run.ts:233`). The criterion asks for a duration
+"materially shorter than the run span"; it is exactly equal.
+
+On the Next.js side there is nothing to be honest about, and the reason is worth more than the
+absence. The SDK **does not pause**: a tool requiring approval causes `generateText` / `streamText`
+to complete and return `tool-approval-request` parts, and the human decision happens between two
+independent calls. Those two calls produce **two unrelated root traces**. So where our side has one
+trace containing a mislabelled pause, that side has no pause and no single trace either, and closing
+the criterion means hand-written span stitching across an HTTP boundary.
+
+**§ The Next.js side pre-committed that those hand-written lines would be counted, and they are not
+counted here.** The reason is symmetry, not convenience: neither baseline has an approval flow at
+all, J2 is held under an open security advisory on our side, and building one on the Next.js side
+alone would compare an implemented feature against an absent one. Recorded as an open gap against
+this file's own instruction rather than resolved by editing the instruction.
+
+**Criterion 4 passes outright on ours and loses one number on theirs.** Our run span carries
+`tokens.input`, `tokens.output` and `tokens.total`. The `@ai-sdk/otel` `OpenTelemetry` integration —
+the one the docs recommend — emits `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` and
+no total. The substitution is free and must be named: the same package's `LegacyOpenTelemetry`
+integration does emit `ai.usage.totalTokens` and `ai.model.id`, and swapping it is one identifier in
+the same line. So the criterion is reachable on that side at zero extra lines, by a route the docs
+label legacy.
+
+**Criterion 5 is the one that decides the journey, and it goes against us.** The complete attribute
+set of our exported `agent.run` span is `agent`, `tokens.*`, `stop.reason`, and `cost.usd` when the
+provider reported one — printed in full above. **No span records the model identifier**, so the
+criterion's token route does not close (`B-019`, open on exactly this point). The cost route does not
+close either, and for a second reason found during this measurement: `cost.usd` is a fractional
+number and the serializer emits every number under OTLP's `intValue`
+(`packages/theo/src/server/observability/otlp-serializer.ts:57`), so the one attribute that answers
+the cost question is malformed on the wire — filed as usetheokit/theokit#380 with the collector
+payload as evidence. Both of the criterion's alternatives are shut.
+
+The Next.js run span carries `gen_ai.request.model` alongside the token counts, in the same payload,
+with no application code. The operator has model and tokens and can compute cost. The criterion says
+"either route counts", and that side has one.
+
+**Criterion 6 is a pass on ours in one place and a fail in two others.** `mountAgent` continues the
+incoming trace and the read-back above proves it end to end. Two other paths do not, and both were
+found here:
+
+- the `http.request` span passes no trace context at all
+  (`packages/theo/src/server/observability/middleware.ts:89`), so it mints a fresh trace on every
+  route. One request that runs an agent therefore reaches the collector as **two disconnected
+  traces** — the caller's trace id is present on the HTTP span as the `requestId` *attribute* and not
+  as its `traceId`. Reproduced against the serialized payload and filed as usetheokit/theokit#385.
+- the thread route calls `observeAgentRun` without a `traceId`
+  (`packages/theo/src/server/agent/build-agent-streamer.ts:85`) although
+  `handleThreadMessage` holds the `Request` (`packages/theo/src/server/agent/handle-thread-routes.ts:86`),
+  so a run's trace depends on which endpoint started it. Filed as usetheokit/theokit#381. **This half
+  is a source read, not an observation** — the field is simply not passed and there is no other path
+  by which it could arrive, but no thread run was executed.
+
+The Next.js side passes this criterion completely, including the half ours does not reach: its HTTP
+span carries the sent trace id **and** names the sent span id as its parent, so the run hangs under
+the caller's span rather than beside it. Our `AgentRunSpanContext` has no parent field
+(`packages/theo/src/server/agent/observe-agent-run.ts:201`), so even where the trace id is continued
+the waterfall's shape is lost.
+
+**Criterion 7 is observed on one side and unverified on the other, and the asymmetry favours them.**
+The Next.js grade comes from `next build` followed by `next start`, an exporter registered only by
+the reserved `instrumentation.ts`, and a `curl` from outside the process — no test runner anywhere.
+The TheoKit probes call `mountAgent` and the middleware plugin directly under vitest with the adapter
+injected. The wiring from `theo start` to that adapter is read from source
+(`packages/theo/src/cli/commands/start/index.ts:95`) and not exercised. Recorded as unverified rather
+than inferred from the two ends being correct.
+
+### Counting judgements, stated rather than buried
+
+Seven, each with the effect of deciding it the other way. **None of them changes which side wins a
+metric**, which is stated because it is the check that matters: a margin a single decision can flip
+is not a margin.
+
+| # | The judgement | Decided as | The other way |
+| --- | --- | --- | --- |
+| 1 | Does `package.json` count as a file touched, when TheoKit installs nothing? | **Counted.** The install is work the developer does, and that the framework ships its exporter in the box is the design difference this journey measures | Files 3 to **2**, glue 14 to **12**. Ratios 2x and 6x — both still outside the bar |
+| 2 | Does `package-lock.json` count? | **No**, on both sides. Generated, not authored | Next.js glue 14 to **254**, which would make the metric a report on npm's transitive closure |
+| 3 | Is the second `.env.local` line (`OTEL_EXPORTER_OTLP_PROTOCOL`) chargeable, or an artefact of using one JSON collector for both sides? | **Charged.** § How the four metrics are counted here requires the same collector on both sides, and `@vercel/otel` defaults to protobuf | Glue 14 to **13**. Ratio 6.5x |
+| 4 | Should the route have been edited to add `telemetry: { functionId: 'chat' }`, as the docs' usage example shows? | **No** — measured, not assumed: spans arrive without it. This is the judgement most favourable to the Next.js side in the whole count | Files 3 to **4**, glue 14 to **17**. Moves further from TheoKit, not toward it |
+| 5 | Is `.env.local` one file touched on the TheoKit side, when a real app already has one for the model key? | **One.** Counting it as an edit rather than an addition gives the same 1 | No effect |
+| 6 | Are the four Next.js-only names really four concepts, or is "the instrumentation setup" one? | **Four.** Each is a separately importable symbol or a reserved name, and the `OpenTelemetry` one in particular has a silent failure mode all its own | Concepts 7 to **4**. Ratio 2.33x to **1.33x** — *this is the only judgement that would move a metric inside the bar*, and it is the least defensible of the seven: collapsing four imports into one concept is not a rule J1 or J5 applied to anything |
+| 7 | Is TheoKit's HITL double-span a criterion-2 failure, when the transcript it is read from also contains two calls? | **A failure.** The criterion's oracle is the transcript, but its sentence is about the run: "a run with two calls yields two spans" | Criterion 2 would read **pass** on both sides, and the criteria tally would move from 5-3 to 6-3 in the Next.js side's favour rather than away from it |
+
+Judgement 6 is the honest weak point of the concepts number and is flagged as such. Files and glue
+lines do not depend on it.
+
+### The verdict
+
+**TheoKit wins all three countable metrics, by 3x, 7x and 2.33x — every one outside the bar
+§ What counts as winning sets. And the journey is not won.**
+
+Both halves of that sentence are load-bearing, and the second is the one this programme exists to
+protect. § What counts as winning defines a win by the three metrics; it presupposes that both
+implementations satisfy the journey's criteria, because a benchmark comparing the cost of arriving is
+meaningless between one side that arrived and one that did not. TheoKit satisfies **three** of the
+seven criteria outright, against the Next.js side's **five**. It fails criterion 5 entirely, fails
+two thirds of criterion 6, fails criterion 2 for gated tools, and criterion 7 is unverified on our
+side and observed on theirs.
+
+So the number to report is not 3x. It is this: **two lines of configuration buy a trace that is
+missing the model, missing its HTTP span, and missing the thread route — and fourteen lines on the
+other side buy one that has all three.** § How the four metrics are counted here anticipated exactly
+this shape when it wrote that a span the framework emits for free counts as zero lines and "that is
+the whole point of the journey and must not be hidden inside a total". It is not hidden here: the
+free signals are real, they are cheaper by a wide margin, and three of them are wrong.
+
+**What would change the verdict, and what would not.** Every one of the four defects behind the
+criteria failures is a **framework** defect — #361, #380, #381, #385, plus B-019's model attribute.
+Closing all five costs the application **zero lines**: the model id is an attribute the run span
+already has the metadata to set, the HTTP span needs a third argument at one call site, the thread
+route needs a value passed at one call site, and the serializer needs an `Number.isInteger` check. So
+the plausible end state is a framework that satisfies every criterion **at the same two lines** — and
+that is a prediction, recorded as one, not a result. It is also the strongest argument the framework
+has on this journey, and it is worth exactly nothing until the issues close.
+
+**One thing this must not be read as.** § Sequencing warned that J9 being newly scoreable does not
+mean it will score well, and half of that warning held: the framework's costs are the lowest of any
+journey measured so far, and it satisfies fewer criteria than the alternative. A cheap implementation
+of an incomplete thing is not a win, and reporting the 3x without the 3-of-7 would be the precise
+failure the protocol was written to stop.
+
+### Where the comparison is not apples to apples
+
+Named rather than adjusted for, because adjusting a count until it evens out is what the protocol
+forbids.
+
+- **The two sides do not buy the same telemetry.** The same two-tool run produced **3** spans on
+  ours and **15** on theirs. Theirs includes the HTTP request, the route execution, a span per agent
+  step, a span per model call and a span per tool execution, all in one trace with the caller's.
+  Ours has the run and its two tools. Seven times the lines bought roughly five times the spans and
+  two criteria we do not reach; the glue-line ratio alone would hide that entirely.
+- **The free signals are free on both sides.** After registration, neither side writes a line per
+  span. What differs is the registration, which is what metrics 1-3 measure here and all they
+  measure.
+- **The evidence is not of equal strength.** Criteria 6 and 7 were observed against a real production
+  server on the Next.js side and against the framework's own entry points under a test runner on
+  ours. That is a real difference in what has been proven, and it is not in our favour.
+- **Neither side ran against a real model**, so nothing here depends on a model having answered — and
+  metric 4 is unmeasured on both, which the winning rule's "not worse on time to green" clause leaves
+  untested.
+- **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+  `@theokit/tui` and `@theokit/ui`, which live outside it. The comparison above is TheoKit's Web path
+  only, and a route handler serves one target — a dimension the Next.js side does not have at all and
+  which this measurement silently gives away.
+- **Neither application is committed.** `../dx-benchmark.md` § Evidence asks for both under
+  `docs/program/evidence/jN-<journey>/`; that directory still does not exist and this measurement did
+  not create it. The diffs and the collector payloads are published here instead, which satisfies the
+  checkability the clause exists for and does not satisfy the clause.
+
+### Four issues filed from this measurement
+
+Each carries a repro and the collector payload it was found in; none was filed on a source read
+alone.
+
+- usetheokit/theokit#380 — a fractional attribute is exported under OTLP `intValue`, so `cost.usd` is
+  malformed on the wire. New.
+- usetheokit/theokit#381 — the thread route drops the incoming `traceparent`. New.
+- usetheokit/theokit#385 — the `http.request` span joins no trace, so one request that runs an agent
+  arrives as two disconnected traces. New.
+- usetheokit/theokit#361 — a HITL-gated tool appears twice under two ids. Pre-existing, confirmed
+  open, and confirmed to break criteria 2 and 3 at the exporter rather than only on the wire.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J9 is
@@ -255,6 +682,14 @@ reading the trace concludes the run used no tokens. Graded **fail**, per the rul
 silent wrong outcomes.
 
 ## Current state and blockers
+
+**Superseded in part by § Re-measured — both sides, and left standing as the record of what was true
+when it was written.** Three of its predictions were tested by that section and two of them are now
+wrong in the framework's favour: criterion 4's token attributes *are* set (the producer/consumer shape
+mismatch was fixed in `b512e60ce`), and criterion 6's trace continuation *does* work on the plain POST
+path (`2ec9180ee`). The third prediction held exactly: criterion 3's HITL pause span does not close at
+the resume. Three further defects the section did not anticipate were found by reading the exporter's
+output rather than the source — usetheokit/theokit#380, #381 and #385.
 
 Measured against the working tree on 2026-08-20; every claim is read from source. This section is
 the most changed of the ten, and two of the repository's own standing claims are **out of date in our
