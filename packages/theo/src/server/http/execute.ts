@@ -1,6 +1,11 @@
 import type { ServerResponse } from 'node:http'
 
 import { isAuthRequiredError } from '../../core/contracts/auth-error-guard.js'
+import {
+  evaluateRoutePolicy,
+  subjectFromContext,
+  type RoutePolicy,
+} from '../../core/contracts/route-policy.js'
 import { TheoError } from '../../core/contracts/theo-error.js'
 import { DuplicateContextKeyError } from '../jobs/duplicate-context-key-error.js'
 import { createOutbox } from '../jobs/outbox.js'
@@ -253,6 +258,30 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
       ctx: Record<string, unknown>
     }) => unknown
     const callableHandler = handler as RouteHandlerCallable
+
+    // ADR 0001 — the same evaluator the Web executor and `callProcedure` call.
+    // Placed immediately before the handler so any identity established upstream
+    // (middleware, plugin hooks) is on `ctx` by the time the policy reads it.
+    // Wiring only the two Web-shaped paths would have left production — this one —
+    // unprotected while the parity test claimed otherwise, which is the
+    // looks-protected failure mode ADR 0001 rejects by name.
+    const accessDecision = await evaluateRoutePolicy((rc as { policy?: RoutePolicy }).policy, {
+      subject: subjectFromContext(ctx),
+      query,
+      body,
+      params,
+    })
+    if (!accessDecision.allowed) {
+      sendError(
+        res,
+        'FORBIDDEN',
+        `Access denied: ${accessDecision.reason}`,
+        403,
+        undefined,
+        requestId,
+      )
+      return
+    }
     // ADR-0028 R3a — handlers receive a Web `Request` in EVERY runtime (built once above, shared with
     // the plugin hooks). The Node path previously leaked the raw `IncomingMessage` here, so any
     // Web-standard use of `ctx.request` (e.g. `ctx.request.headers.get(...)`,

@@ -19,6 +19,15 @@ interface TheoCloudAdapterOptions {
   token: string
   /** Flush interval in ms (default: 5000). */
   flushIntervalMs?: number
+  /**
+   * Most spans held before the oldest are dropped (default: 10 000).
+   *
+   * A collector that is unreachable does not make the spans stop arriving, and a
+   * buffer with no ceiling turns a telemetry outage into an out-of-memory. The
+   * drop is counted rather than silent: losing data is a real cost, losing it
+   * without saying so is a worse one.
+   */
+  maxPendingSpans?: number
   /** Mock fetch for testing (never in production). */
   _mockFetch?: typeof globalThis.fetch
 }
@@ -27,11 +36,41 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
   readonly name = 'theo-cloud'
   private pendingSpans: SpanData[] = []
   private isShutdown = false
-  private readonly opts: Required<Pick<TheoCloudAdapterOptions, 'ingestUrl' | 'token'>> &
+  private dropped = 0
+  private readonly flushTimer: ReturnType<typeof setInterval>
+  private readonly opts: Required<
+    Pick<TheoCloudAdapterOptions, 'ingestUrl' | 'token' | 'flushIntervalMs' | 'maxPendingSpans'>
+  > &
     TheoCloudAdapterOptions
 
   constructor(options: TheoCloudAdapterOptions) {
-    this.opts = { flushIntervalMs: 5000, ...options }
+    this.opts = { flushIntervalMs: 5000, maxPendingSpans: 10_000, ...options }
+
+    // `flushIntervalMs` was accepted and defaulted here and read nowhere — there
+    // was no timer in the file. `shutdown()` was the only drain, and nothing
+    // called it, so a long-running server exported nothing at all
+    // (usetheokit/theokit#353).
+    //
+    // `unref()` is not optional: a telemetry exporter that pins the event loop
+    // turns a clean process exit into a hang, which is worse than the defect it
+    // was added to fix.
+    this.flushTimer = setInterval(() => {
+      void this.flush()
+    }, this.opts.flushIntervalMs)
+    this.flushTimer.unref()
+  }
+
+  /** How many spans were dropped because the buffer was full. */
+  droppedSpanCount(): number {
+    return this.dropped
+  }
+
+  /**
+   * Whether the periodic flush is unref'd. A test seam: "the timer does not hold
+   * the process open" is otherwise only observable by hanging.
+   */
+  hasUnrefdFlushTimer(): boolean {
+    return !this.flushTimer.hasRef()
   }
 
   startSpan(name: string, attributes?: SpanAttributes): SpanHandle {
@@ -46,6 +85,10 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
       },
       end: () => {
         span.end()
+        if (this.pendingSpans.length >= this.opts.maxPendingSpans) {
+          this.pendingSpans.shift()
+          this.dropped++
+        }
         this.pendingSpans.push(span.getData())
       },
     }
@@ -87,6 +130,10 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
 
   async shutdown(): Promise<void> {
     if (this.isShutdown) return
+    // Cleared, not merely ignored: `isShutdown` would make later ticks no-ops,
+    // and a live handle on a process that is trying to exit is the thing to
+    // remove rather than to tolerate.
+    clearInterval(this.flushTimer)
     await this.flush()
     this.isShutdown = true
   }

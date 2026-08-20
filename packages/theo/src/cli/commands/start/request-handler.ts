@@ -8,12 +8,12 @@
  * (architecture-remediation T2.1, 2026-06-12).
  */
 
-import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { generateNonce } from '../../../server/auth/nonce.js'
 import { type ReservedRoutes, serveReservedRoute } from '../../../server/define/health-route.js'
 import { sendError } from '../../../server/http/send-response.js'
+import { TRACE_HEADER, extractTraceId } from '../../../server/http/trace-context.js'
 import { buildSecurityHeaders } from '../../../server/security/security-headers.js'
 import { extractHeadTags, injectIntoHead } from '../../../vite-plugin/hoist-head-tags.js'
 import { applyNonceToInlineScripts } from '../../../vite-plugin/ssr-dev-middleware.js'
@@ -161,6 +161,15 @@ async function handleSsrStreaming(
     const result = await ctx.ssrRenderStreaming(url, res, {
       signal: controller.signal,
       nonce,
+      // #343 — the streamed response carried neither of these, so `ssrStreaming: true`
+      // served a bare React tree: no `<head>`, no client entry, no hydration data.
+      //
+      // `applyNonceToInlineScripts` and not `withHoistedHead`: hoisting reads the
+      // RENDERED body for head elements, and nothing is rendered yet when the head
+      // has to flush. Metadata hoisting under streaming is the same defect on a
+      // different surface, and it is M9's, not this one's.
+      htmlHead: applyNonceToInlineScripts(ctx.htmlHead, nonce),
+      htmlTail: ctx.htmlTail,
     })
     if (isRedirectResult(result)) sendRedirect(res, result)
     return true
@@ -213,8 +222,20 @@ export function createRequestHandler(
   return (req: IncomingMessage, res: ServerResponse) => {
     void (async () => {
       const url = req.url ?? '/'
-      const requestId = randomUUID()
+      // #353 — production minted a fresh UUID on every request and discarded the
+      // incoming W3C `traceparent`, so a trace crossing into this server started
+      // over and no span could continue it. `theo dev` has honoured the header on
+      // `/api/*` since Phase 7 (`vite-plugin/api-middleware.ts:368`); this is the
+      // same resolution on the path a deploy actually serves.
+      //
+      // The tier-2 fallback (`x-request-id`) is caller-controlled and validated
+      // inside `extractTraceId` before it is trusted — it ends up in the logs.
+      const requestId = extractTraceId(req)
       const start = Date.now()
+      // Echoed under both names, matching dev: `x-request-id` is what existing
+      // consumers read, `x-trace-id` is the canonical one.
+      res.setHeader('x-request-id', requestId)
+      res.setHeader(TRACE_HEADER, requestId)
 
       const nonce = generateNonce()
       const securityHeaders = buildSecurityHeaders(

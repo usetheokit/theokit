@@ -147,6 +147,61 @@ function generateSingleShotEntry(options: EntryServerOptions): string {
   ].join('\n')
 }
 
+/**
+ * Emitted helpers shared by both streaming renderers.
+ *
+ * `render()` returns `{ html, hydrationData }` and lets the caller place them in
+ * the template. The streaming siblings had no such seam: they returned React's
+ * output and nothing else, so the served document had no `<html>`, no `<head>`
+ * and none of the hydration data the client router reads before it boots
+ * (usetheokit/theokit#343). The document is assembled here instead, because this
+ * is the only place that holds the stream and the hydration data at once.
+ *
+ * The head is written before React produces a byte. That ordering is the reason
+ * to stream at all — a `<head>` that arrives with the fully buffered document
+ * has bought nothing.
+ */
+function streamingDocumentHelpers(): string[] {
+  return [
+    `function __theoHydrationScript(hydrationData, nonce) {`,
+    // `<` is escaped rather than the whole payload: loader data is developer
+    // data, and the only sequence that can break out of a script element is
+    // `</script`. Mirrors what the non-streaming path does in request-handler.ts.
+    `  const json = JSON.stringify(hydrationData).replace(/</g, '\\u003c')`,
+    `  const attr = nonce ? ' nonce="' + nonce + '"' : ''`,
+    `  return '<script' + attr + '>window.__staticRouterHydrationData=' + json + '<' + '/script>'`,
+    `}`,
+    ``,
+    `function __theoDocumentStream(appStream, hydrationData, options) {`,
+    `  const encoder = new TextEncoder()`,
+    `  const head = options.htmlHead ?? ''`,
+    `  const tail = options.htmlTail ?? ''`,
+    `  return new ReadableStream({`,
+    `    async start(controller) {`,
+    // Its own chunk: the reader gets <head> before React has rendered anything.
+    `      if (head) controller.enqueue(encoder.encode(head))`,
+    `      const reader = appStream.getReader()`,
+    `      try {`,
+    `        for (;;) {`,
+    `          const { done, value } = await reader.read()`,
+    `          if (done) break`,
+    `          controller.enqueue(value)`,
+    `        }`,
+    `      } finally {`,
+    `        reader.releaseLock()`,
+    `      }`,
+    // The hydration script trails the app markup and precedes the tail, so it
+    // still runs before the client entry the tail loads.
+    `      controller.enqueue(`,
+    `        encoder.encode(__theoHydrationScript(hydrationData, options.nonce) + tail),`,
+    `      )`,
+    `      controller.close()`,
+    `    },`,
+    `  })`,
+    `}`,
+  ]
+}
+
 // Generated-code fragments — extracted so the parent emitter stays under
 // the max-lines-per-function ceiling.
 function streamingWebRenderer(appTree: string): string[] {
@@ -168,13 +223,16 @@ function streamingWebRenderer(appTree: string): string[] {
     // Streaming still applies to genuine data-fetching Suspense, which is where it earns its keep.
     // A failed import is swallowed on purpose: React.lazy will retry and suspend as before, which
     // is strictly no worse than not having preloaded at all.
-    `  const __theoMatches = matchRoutes(routes, url.split('?')[0]) ?? []`,
+    // `url` is a URL here, not the string the other renderers receive as a parameter —
+    // so the match key is `.pathname`, never `.split('?')`. Hoisting the declaration
+    // without changing the accessor trades the TDZ for a TypeError (#344).
+    `  const url = new URL(request.url)`,
+    `  const __theoMatches = matchRoutes(routes, url.pathname) ?? []`,
     `  await Promise.all(`,
     `    __theoPreloadPathsFor(__theoMatches).map((p) => __theoPreloadMap[p]().catch(() => null)),`,
     `  )`,
     ``,
     `  const handler = createStaticHandler(routes)`,
-    `  const url = new URL(request.url)`,
     `  const context = await handler.query(request)`,
     ``,
     `  if (context instanceof Response) {`,
@@ -184,12 +242,14 @@ function streamingWebRenderer(appTree: string): string[] {
     `  const router = createStaticRouter(handler.dataRoutes, context)`,
     `  const app = ${appTree}`,
     ``,
+    hydrationDataExtractSnippet(),
+    ``,
     `  const stream = await renderToReadableStream(app, {`,
     `    signal: request.signal,`,
     `    nonce: options.nonce,`,
     `    onError(err) { console.error('[SSR Web Stream Error]', err) },`,
     `  })`,
-    `  return new Response(stream, {`,
+    `  return new Response(__theoDocumentStream(stream, hydrationData, options), {`,
     `    status: 200,`,
     `    headers: {`,
     `      'Content-Type': 'text/html; charset=utf-8',`,
@@ -234,15 +294,29 @@ function streamingNodeRenderer(appTree: string): string[] {
     `  const router = createStaticRouter(handler.dataRoutes, context)`,
     `  const app = ${appTree}`,
     ``,
+    hydrationDataExtractSnippet(),
+    ``,
+    `  const { PassThrough } = await import('node:stream')`,
     `  return new Promise((resolve, reject) => {`,
     `    let didError = false`,
+    // React's `pipe(dest)` ends `dest` when the source ends, which would close the
+    // response before the hydration script could be written. Piping into a
+    // PassThrough keeps the response open for the tail.
+    `    const passthrough = new PassThrough()`,
+    `    passthrough.on('data', (chunk) => { response.write(chunk) })`,
+    `    passthrough.on('end', () => {`,
+    `      response.end(__theoHydrationScript(hydrationData, options.nonce) + (options.htmlTail ?? ''))`,
+    `    })`,
+    `    passthrough.on('error', reject)`,
     `    const stream = renderToPipeableStream(app, {`,
     `      nonce: options.nonce,`,
     `      onShellReady() {`,
     `        response.statusCode = didError ? 500 : 200`,
     `        response.setHeader('Content-Type', 'text/html; charset=utf-8')`,
     `        response.setHeader('Transfer-Encoding', 'chunked')`,
-    `        stream.pipe(response)`,
+    // The head goes out on its own write, before any React byte.
+    `        if (options.htmlHead) response.write(options.htmlHead)`,
+    `        stream.pipe(passthrough)`,
     `        resolve({ streaming: true })`,
     `      },`,
     `      onShellError(err) { reject(err) },`,
@@ -326,6 +400,8 @@ function generateStreamingEntry(options: EntryServerOptions): string {
     `import { createStaticHandler, createStaticRouter, StaticRouterProvider, matchRoutes } from 'react-router'`,
     `import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'`,
     theoUiImport,
+    ``,
+    ...streamingDocumentHelpers(),
     ``,
     ...streamingWebRenderer(appTree),
     ``,

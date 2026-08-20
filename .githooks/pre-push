@@ -40,7 +40,7 @@ echo ""
 # Build first — this is the gate that catches a dropped export / fabricated
 # symbol (tsup DTS = tsc fails). Filter to packages/* so `pnpm -r build`
 # does not walk examples/.
-if ! pnpm --filter "./packages/*" build; then
+if ! pnpm build:packages; then
   echo ""
   echo "✗ pre-push: package build failed (see error above)."
   echo "  A build break must NOT reach develop. Fix it, or push anyway"

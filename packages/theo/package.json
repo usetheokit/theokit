@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.48.14",
+  "version": "0.49.0",
   "description": "The TheoKit web framework — file-based routing, typed server surfaces, the Vite plugin, the CLI and the deploy adapters, around agents served from agents/*.ts.",
   "repository": {
     "type": "git",
@@ -16,7 +16,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "build": "tsup",
-    "test": "echo 'theokit tests run from root: pnpm test'",
+    "test": "vitest run",
     "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
   },
   "bin": {

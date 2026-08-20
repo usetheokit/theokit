@@ -130,7 +130,22 @@ function scanDir(dir: string, segment: string, routePath: string): RouteNode {
   const node: RouteNode = { segment, path: routePath, children: [] }
   attachRouteFiles(node, dir)
 
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  // Sorted by name so the manifest does not inherit the filesystem's iteration order.
+  // ext4 returns entries in filename-hash order, APFS and NTFS in others — an unsorted
+  // walk emits a different module graph per machine, which is what makes the client build
+  // non-reproducible (usetheokit/theokit#346).
+  //
+  // Compared by code unit rather than with `localeCompare`: collation is locale-dependent,
+  // so the same tree could sort differently under a different `LANG` — reintroducing the
+  // very cross-machine divergence this sort exists to remove.
+  const entries = readdirSync(dir, { withFileTypes: true })
+  entries.sort((a, b) => {
+    if (a.name < b.name) return -1
+    if (a.name > b.name) return 1
+    return 0
+  })
+
+  for (const entry of entries) {
     if (!entry.isDirectory()) continue
     if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue
 

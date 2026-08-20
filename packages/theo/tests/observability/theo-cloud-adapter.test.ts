@@ -22,10 +22,16 @@ describe('T30.3 — theo-cloud adapter', () => {
   })
 
   it('sends authorization header with API key', async () => {
+    // The assertion below reads the SAME literal the adapter is constructed with.
+    // It used to assert a different, token-shaped string that no longer appears
+    // anywhere in the file — a rename that updated the constructor and not the
+    // expectation. Nothing caught it because this file ran in no vitest project
+    // for as long as it has existed (usetheokit/theokit#357).
+    const TOKEN = 'test-key-secret-fixture'
     let authHeader = ''
     const adapter = new TheoCloudObservabilityAdapter({
       ingestUrl: 'https://ingest.test/v1/traces',
-      token: 'test-key-secret-fixture',
+      token: TOKEN,
       _mockFetch: async (_url, init) => {
         authHeader = (init?.headers as Record<string, string>)?.authorization ?? ''
         return new Response('ok')
@@ -36,7 +42,7 @@ describe('T30.3 — theo-cloud adapter', () => {
     span.end()
     await adapter.flush()
 
-    expect(authHeader).toBe('Bearer tck_secret_123')
+    expect(authHeader).toBe(`Bearer ${TOKEN}`)
   })
 
   it('flush with no pending spans is a no-op', async () => {

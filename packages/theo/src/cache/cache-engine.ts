@@ -3,13 +3,31 @@ import type { CacheEntry, CacheStorageAdapter } from './storage-adapter.js'
 
 export type CacheStatus = 'hit' | 'stale' | 'miss'
 
+/**
+ * Process-wide fallbacks for the options a cache wrapper takes per call site.
+ *
+ * The engine reads none of them: `getOrCompute` and `tryReadCached` always
+ * receive explicit values. They are carried here because the engine is the one
+ * object every wrapper (`defineCachedRoute`) already holds, and a wrapper with
+ * no declared value has nowhere else to look. Per-call-site options always win.
+ *
+ * Shaped to accept `NormalizedCacheConfig['defaults']` whole (#352): every field
+ * the config schema declares is honoured, none is dropped on the way in.
+ */
+export interface CacheDefaults {
+  /** seconds; fallback for a wrapper that declares no `maxAge`. */
+  maxAge?: number
+  /** seconds; fallback stale-while-revalidate window. */
+  swr?: number
+  /** whether responses with status >= 400 may be cached. */
+  cacheErrors?: boolean
+  /** version stamp applied to entries written without an explicit one. */
+  cacheVersion?: string
+}
+
 export interface CacheEngineOptions {
   storage: CacheStorageAdapter
-  defaults?: {
-    maxAge?: number
-    swr?: number
-    cacheVersion?: string
-  }
+  defaults?: CacheDefaults
   onError?: (err: unknown, ctx: { phase: 'get' | 'set' | 'revalidate'; key: string }) => void
 }
 
@@ -60,6 +78,12 @@ export interface CacheEngine {
 
   /** Storage adapter passthrough (read-only access for diagnostics). */
   readonly storage: CacheStorageAdapter
+
+  /**
+   * Process-wide defaults the wrappers fall back to. Normalized to `{}` when the
+   * factory received none, so a caller never has to guard the access.
+   */
+  readonly defaults: CacheDefaults
 }
 
 /**
@@ -82,7 +106,7 @@ export interface CacheEngine {
  */
 // eslint-disable-next-line max-lines-per-function
 export function createCacheEngine(opts: CacheEngineOptions): CacheEngine {
-  const { storage, onError } = opts
+  const { storage, defaults = {}, onError } = opts
   const inFlight = new Map<string, Promise<unknown>>()
   const bgInFlight = new Set<string>()
   const undefinedLoaderWarned = new Set<string>()
@@ -281,6 +305,7 @@ export function createCacheEngine(opts: CacheEngineOptions): CacheEngine {
 
   return {
     storage,
+    defaults,
 
     getOrCompute,
 

@@ -9,6 +9,11 @@
  * `handler-web-standards.test.ts`.
  *
  * v1.0 § Phase E.
+ *
+ * The POSTs carry `x-theo-action: 1` because the CSRF gate is on by default:
+ * these tests are about the body parser, and the header is what a legitimate
+ * same-origin caller sends. Turning the gate off instead would exercise a
+ * path no application runs.
  */
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
@@ -63,7 +68,7 @@ describe('executeWebRequest + bodyParser: "full" (T5a.2 Phase E)', () => {
   it('JSON request → body.json populated; body.fields/files empty', async () => {
     const request = new Request('http://example.com/api', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-theo-action': '1' },
       body: JSON.stringify({ name: 'alice', age: 30 }),
     })
     const response = await executeWebRequest(request, jsonRoute, { bodyParser: 'full' })
@@ -84,6 +89,7 @@ describe('executeWebRequest + bodyParser: "full" (T5a.2 Phase E)', () => {
     formData.append('role', 'admin')
     const request = new Request('http://example.com/api', {
       method: 'POST',
+      headers: { 'x-theo-action': '1' },
       body: formData,
     })
     const response = await executeWebRequest(request, multipartRoute, { bodyParser: 'full' })
@@ -107,6 +113,7 @@ describe('executeWebRequest + bodyParser: "full" (T5a.2 Phase E)', () => {
 
     const request = new Request('http://example.com/api', {
       method: 'POST',
+      headers: { 'x-theo-action': '1' },
       body: formData,
     })
     const response = await executeWebRequest(request, multipartRoute, { bodyParser: 'full' })
@@ -127,7 +134,7 @@ describe('executeWebRequest + bodyParser: "full" (T5a.2 Phase E)', () => {
   it("empty body in 'full' mode → handler treats body as undefined", async () => {
     const request = new Request('http://example.com/api', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-theo-action': '1' },
       body: '',
     })
     const response = await executeWebRequest(request, jsonRoute, { bodyParser: 'full' })
@@ -159,7 +166,7 @@ describe('executeWebRequest + bodyParser: "full" (T5a.2 Phase E)', () => {
     }
     const request = new Request('http://example.com/api', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-theo-action': '1' },
       body: JSON.stringify({ name: 'bob' }),
     })
     // No bodyParser opt → defaults to 'inline'
