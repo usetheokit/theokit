@@ -66,11 +66,15 @@ function evaluateCsrfMultiHeaderFromInputs(
   options: CsrfMultiHeaderOptions,
 ): CsrfDecision {
   // 1. Sec-Fetch-Site
+  //
+  // Only `same-origin` and `none` prove the request came from us. `same-site`
+  // is deliberately NOT accepted: it covers every host under the same
+  // registrable domain, so any sibling subdomain -- compromised, or belonging
+  // to another tenant -- can forge a plain form POST carrying it. This gate
+  // requires no custom header, so treating `same-site` as proof would extend
+  // trust to the whole eTLD+1.
   if (inputs.secFetchSite !== undefined) {
     if (inputs.secFetchSite === 'same-origin' || inputs.secFetchSite === 'none') {
-      return { allow: true, signal: 'sec-fetch-site' }
-    }
-    if (inputs.secFetchSite === 'same-site') {
       return { allow: true, signal: 'sec-fetch-site' }
     }
     return {
@@ -82,8 +86,13 @@ function evaluateCsrfMultiHeaderFromInputs(
 
   // 2. Origin
   if (inputs.origin !== undefined) {
-    // 'null' from sandboxed iframe is a valid origin per spec
-    if (inputs.origin === 'null') return { allow: true, signal: 'origin' }
+    // `null` is the opaque origin: a `<iframe sandbox="allow-scripts
+    // allow-forms">` sends exactly this. It is a valid header value per RFC
+    // 6454 and no evidence at all about who sent the request, so it cannot
+    // stand in for a same-origin proof.
+    if (inputs.origin === 'null') {
+      return { allow: false, signal: 'origin', reason: 'Origin is null (opaque origin)' }
+    }
     if (originMatches(inputs.origin, ownOrigin, options.allowedOrigins)) {
       return { allow: true, signal: 'origin' }
     }

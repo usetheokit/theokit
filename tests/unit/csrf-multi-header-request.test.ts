@@ -37,13 +37,21 @@ describe('evaluateCsrfMultiHeaderRequest (T5a.2 Phase B slice 2/6 — Web shape)
     if (decision.allow) expect(decision.signal).toBe('sec-fetch-site')
   })
 
-  it('allows when Sec-Fetch-Site: same-site', () => {
+  it('rejects when Sec-Fetch-Site: same-site (a sibling subdomain is not us)', () => {
+    // `same-site` covers any host under the same registrable domain, so a
+    // compromised subdomain -- or one owned by another tenant -- can forge a
+    // plain form POST that carries this value. The gate demands no custom
+    // header, so accepting it would accept the whole eTLD+1 as trusted.
     const request = new Request('http://example.com/api', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-site' },
     })
     const decision = evaluateCsrfMultiHeaderRequest(request)
-    expect(decision.allow).toBe(true)
+    expect(decision.allow).toBe(false)
+    if (!decision.allow) {
+      expect(decision.signal).toBe('sec-fetch-site')
+      expect(decision.reason).toContain('same-site')
+    }
   })
 
   it('rejects when Sec-Fetch-Site: cross-site', () => {
@@ -89,7 +97,10 @@ describe('evaluateCsrfMultiHeaderRequest (T5a.2 Phase B slice 2/6 — Web shape)
     }
   })
 
-  it('allows Origin: null (sandboxed iframe RFC 6454)', () => {
+  it('rejects Origin: null (opaque origin, e.g. a sandboxed iframe)', () => {
+    // `<iframe sandbox="allow-scripts allow-forms">` sends exactly this, and
+    // an opaque origin proves nothing about who sent the request. `null` is a
+    // valid header value per RFC 6454; it is not a valid proof of same-origin.
     const request = new Request('http://example.com/api', {
       method: 'POST',
       headers: {
@@ -98,7 +109,11 @@ describe('evaluateCsrfMultiHeaderRequest (T5a.2 Phase B slice 2/6 — Web shape)
       },
     })
     const decision = evaluateCsrfMultiHeaderRequest(request)
-    expect(decision).toEqual({ allow: true, signal: 'origin' })
+    expect(decision.allow).toBe(false)
+    if (!decision.allow) {
+      expect(decision.signal).toBe('origin')
+      expect(decision.reason).toContain('null')
+    }
   })
 
   it('allows Origin in wildcard allowedOrigins list', () => {

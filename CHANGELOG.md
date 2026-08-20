@@ -217,6 +217,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- **The multi-header CSRF gate stops accepting the two signals that prove nothing: `Sec-Fetch-Site:
+  same-site` and `Origin: null`.** Neither requires the attacker to set a custom header, so a plain
+  HTML form POST carrying either value passed the gate on its own. `same-site` covers every host
+  under the same registrable domain, which makes any sibling subdomain -- compromised, or belonging
+  to another tenant -- a valid forger; `Origin: null` is what an `<iframe sandbox="allow-scripts
+  allow-forms">` sends, and an opaque origin is the absence of evidence rather than evidence of
+  same-origin. Both are rejected now, with a reason naming the header that decided it. The gate had
+  no caller and no export at the time, which is why this was latent rather than live -- and the
+  reason it is closed before the gate is published rather than after. (usetheokit/theokit#355)
+
 - **`@theokit/http/css-resource` escapes what it interpolates, so a stylesheet URL taken from
   configuration can no longer inject markup.** `renderCssResource` assembled its `<link>` and
   `<style>` tags by string interpolation and escaped nothing: an `href` or `precedence` containing
