@@ -32,6 +32,7 @@ its own error teaches nobody why it happened.
 | Route access policy | `RouteConfig.policy`, evaluated by one function (`packages/theo/src/core/contracts/route-policy.ts:65`) from the Node executor (`packages/theo/src/server/http/execute.ts:268`), the Web executor (`packages/theo/src/server/web-handler.ts:260`) and `callProcedure` (`packages/theo/src/server/http/in-process-caller.ts:103`) | Yes, on all three transports |
 | Record-level authorisation primitive | `requireOwner` (`packages/theo/src/core/contracts/route-policy.ts:86`) | **Written, not exported.** See § What is missing |
 | Build-time refusal of an undeclared policy | `scanServerRoutes` throws `MissingRoutePolicyError` (`packages/theo/src/server/scan/scan.ts:110`), naming file, route and silent methods (`packages/theo/src/server/scan/errors.ts:98`) | Yes — every entry point reaches the scanner |
+| Build-time refusal of a server-only import in the client bundle | `serverOnlyImportBoundary` throws `ServerOnlyImportError`, naming the module and the importing file (`packages/theo/src/vite-plugin/server-boundary.ts:201`) | Yes — `theoPluginAsync` returns it, so `theokit build` and `theokit dev` both carry it (`packages/theo/src/vite-plugin/index.ts:256`) |
 | Security headers, including CSP with a per-request nonce | `buildSecurityHeaders` applied on every production request (`packages/theo/src/cli/commands/start/request-handler.ts:241`) and in dev (`packages/theo/src/vite-plugin/api-middleware.ts:374`) | Yes |
 | CSP violation reporting | `handleCspReport` (`packages/theo/src/server/security/csp-report.ts:126`) | **Dev only** — mounted by the Vite plugin (`packages/theo/src/vite-plugin/api-middleware.ts:343`) |
 | Rate limiting | Per-route rules, pluggable store, client-IP derivation behind a proxy (`packages/theo/src/server/rate-limit/client-ip.ts:53`) | Yes — built at production boot (`packages/theo/src/cli/commands/start/index.ts:123`) |
@@ -53,6 +54,11 @@ its own error teaches nobody why it happened.
   that produced the wrong picture; the third column exists to stop it recurring.
 * It did not mention `RouteConfig.policy` or the build-time policy gate, because neither existed
   when it was written. Both landed on 2026-08-20.
+* It listed **server-only module markers** under "what is missing", saying importing a server module
+  from a client entry is not a build error. That was true when measured and is not true now: the
+  boundary landed on 2026-08-20 and the row moved up to the table above. It is recorded here rather
+  than deleted, because the shape of what is left changed — the gap was "no boundary at all", and it
+  is now "no tainting", which is a different and smaller thing (see § The order to close it, item 4).
 
 ---
 
@@ -97,7 +103,6 @@ its own error teaches nobody why it happened.
 | **Actions have no policy at all** | `RouteConfig.policy` covers routes. `ActionConfig` carries `input`, `accept`, `csrf` and `handler` and nothing else (`packages/theo/src/server/define/action-builder.ts:89`), and the action executor never calls `evaluateRoutePolicy`. The mutation surface most applications actually use is outside the guarantee ADR 0001 established | measured 2026-08-20 |
 | **The build gate does not reach actions** | `assertEveryMethodDeclaresPolicy` runs over route files (`packages/theo/src/server/scan/scan.ts:100`); `action-scan.ts` has no equivalent. So "absence stopped meaning open" holds for routes and not for actions | measured 2026-08-20 |
 | **A `RouteConfig` built in memory still bypasses the gate** | Deliberate and documented (`packages/theo/src/server/scan/scan.ts:94`) — the build gate reads the file system, and the runtime treats an undeclared policy as allowed (`packages/theo/src/core/contracts/route-policy.ts:69`). Correct as a migration choice; still a hole while the migration runs | measured 2026-08-20 |
-| **Server-only module markers** | Importing a server module from a client entry is not a build error, so a shared helper can publish server source into the bundle. Nothing in `eslint.config.js` or `.dependency-cruiser.cjs` names such a boundary | measured 2026-08-20 |
 | **Opaque action identifiers** | An exposed mutation is addressed by its source name in the URL (`packages/theo/src/vite-plugin/actions-virtual-module.ts:216`), with no rotation between builds. The `act-…` id nearby is a devtools telemetry id, not a wire identifier (`packages/theo/src/vite-plugin/actions-virtual-module.ts:202`) | measured 2026-08-20 |
 | **Dead-code elimination of unused mutations** | A mutation nothing references still ships and stays reachable | measured 2026-08-20 |
 | **Tainting** | No mechanism to make a value un-passable; disclosure is prevented by discipline only | measured 2026-08-20 |
@@ -131,8 +136,15 @@ it fails silently and publishes something that cannot be recalled.
 3. **Scan the built client bundle for secret values in CI.** Cheap, and the only item here that
    catches a disclosure before it ships. Point the same class of check at `dist` and search for the
    *values* of configured secrets, since build-time inlining removes their names.
-4. **Server-only markers.** Make importing a server module from a client entry a build error. This
-   converts the largest silent class into a broken build at the moment of the mistake.
+4. ~~**Server-only markers.**~~ **Done 2026-08-20.** The client graph refuses `theokit/server`,
+   every published `theokit/server/*` subpath, and every module under the project's `serverDir`,
+   naming the module and the importing file
+   (`packages/theo/src/vite-plugin/server-boundary.ts:201`). The one exception is
+   `actions/schemas/**`, which the actions facade bundles on purpose. What remains open is narrower
+   than the original item: the boundary refuses by module identity, not by taint, so a *value* read
+   on the server and passed to a client component is still unguarded. Separately, the alias cascade
+   that made the old failure read as `ENOTDIR` is still there and still breaks `theokit/client/core`
+   (usetheokit/theokit#377) — the boundary hides it on the server side, it does not fix it.
 5. **Mount CSP reporting in production.** The handler exists and is wired in dev only; a report-only
    CSP that reports to nobody in the environment that matters cannot be tightened into an enforcing
    one.

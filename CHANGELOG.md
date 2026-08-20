@@ -23,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Importing server code from a client page fails the build with an error that names both.** The
+  client bundle now refuses `theokit/server`, any `theokit/server/*` subpath, and any module under
+  your own `server/` directory, naming the module, the file whose import crossed the line, and the
+  three ways out — the typed client, the actions facade, or a type-only import. The build already
+  failed on this mistake, but with `"resolve" is not exported by "__vite-browser-external"` pointing
+  at a framework chunk: a bundler's difficulty, not the author's, and an accident of Node builtins
+  not existing in a browser rather than a rule. `server/actions/schemas/**` still reaches the client,
+  which is what it is for. (usetheokit/theokit#373)
 - **BREAKING: a route file that declares no `policy` fails the build, naming the file.** The route
   scanner refuses an HTTP export with no access policy, so `theo build`, `theo start`, `theo dev`,
   `theo routes` and every deployment adapter stop before serving a route nobody decided about.

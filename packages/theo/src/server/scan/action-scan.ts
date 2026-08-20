@@ -13,6 +13,22 @@ export interface ActionNode {
 }
 
 /**
+ * Directory under `<serverDir>/actions/` reserved for ISOMORPHIC zod schemas.
+ *
+ * The one place in the whole server tree whose files are meant to reach the browser: the
+ * `@theo/actions` virtual module emits `import { schema } from '<abs path>'` into the CLIENT
+ * facade for each file here, so `<TheoForm>` can drive `zodResolver` with the same schema the
+ * server validates against.
+ *
+ * Named once, and exported, because two rules now depend on knowing it. The scanner skips it (a
+ * schema is not an executable action), and the server-only import boundary must NOT refuse it
+ * (`vite-plugin/server-boundary.ts`). Restating the literal in the boundary would let the two
+ * drift, and the drift would be invisible: renaming the convention here would silently turn the
+ * exception into a refusal, breaking a shipped feature at build time in consumer projects only.
+ */
+export const ACTION_SCHEMAS_DIR = 'schemas'
+
+/**
  * Enriched manifest entry per plan g3-server-actions-and-useaction v1.2
  * § Phase 1 / T1.4 + ADR D4. Consumed by virtual module `@theo/actions`
  * (T3.1) and G4 devtools "Actions" tab (T5.1).
@@ -111,7 +127,7 @@ export function scanServerActionsEnriched(serverDir: string): ActionManifestEntr
     const rel = relative(actionsDir, absPath).replace(/\\/g, '/')
     // P#4 plugin-forms — `schemas/` subdir holds isomorphic zod schemas
     // for the shared-schema convention (T1.1). NOT executable actions; skip.
-    if (rel.startsWith('schemas/')) return
+    if (rel.startsWith(`${ACTION_SCHEMAS_DIR}/`)) return
     const name = rel.slice(0, -extname(rel).length)
 
     const basename = name.includes('/') ? (name.split('/').pop() ?? name) : name
@@ -221,7 +237,7 @@ function extractActionExportNames(stripped: string): string[] {
  * Tries `.ts`, `.tsx`, `.js`, `.jsx` in that order. Returns undefined when no match.
  */
 function detectSchemaFile(actionsDir: string, basename: string): string | undefined {
-  const schemasDir = join(actionsDir, 'schemas')
+  const schemasDir = join(actionsDir, ACTION_SCHEMAS_DIR)
   if (!existsSync(schemasDir)) return undefined
   for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
     const candidate = join(schemasDir, `${basename}${ext}`)
