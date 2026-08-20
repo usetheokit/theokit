@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A request no longer reaches the wrong route handler when a generic and a specific route
+  overlap.** Server route precedence is decided by the order the scanner returns, because
+  `matchRoute` stops at the first pattern that matches — and the tiebreak compared the whole path
+  with `localeCompare`. `/api/:resource/settings` therefore sorted ahead of `/api/users/:id` (`:`
+  precedes `u` in every collation) and a request for `/api/users/settings` was dispatched to the
+  generic handler, so an authorization check placed on the specific route was bypassed. Segments are
+  now compared position by position — a literal beats a parameter, a parameter beats a catch-all —
+  which is the rule the URL itself expresses and the one a whole-path comparison cannot express.
+  The final tiebreak compares by code unit rather than by collation, for the same reason the sibling
+  scanner does. (usetheokit/theokit#348)
+
 - **The package build no longer races itself, so `workspace` can be pushed again.** `pnpm --filter
   "./packages/*" build` ran the workspace in parallel, and a package's DTS pass could read a
   dependency's `dist/` while that dependency's own `clean: true` had emptied it — surfacing as
