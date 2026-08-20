@@ -103,6 +103,103 @@ assertions pass. Cold cache, at least three runs, mean and standard deviation. R
 declines to chain are retried and the retries are reported: a flaky journey is a finding about the
 journey, and hiding retries would turn it into a finding about the framework.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side, and three of five criteria.** Criteria 1 to 3 - the chain itself -
+were implemented and counted. Criteria 4 and 5 - the declared step ceiling - have no implementable
+path, so they contribute no number and the reason is stated below rather than averaged away. Metric
+4 and the whole Next.js side are unmeasured.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim and committed
+as an untouched baseline, J1's implementation was applied on top as a second uncounted commit - per
+§ How the four metrics are counted here, J1's first tool is reused unchanged and does not count here
+- and J5 was implemented over that. The counts are `git diff --numstat` over the third commit.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **2** | `agents/tools/shipment-eta.ts` added, `agents/chat.ts` edited to register it |
+| Glue lines | **8** | of 15 added lines; 5 are business logic and 2 are blank |
+| Concepts required | **5**, none of them new | `tool`, the builder's ordering rule, `z.object`, the agent builder's `.tool()`, and the `agents/<name>/tools/` folder convention |
+| Time to first green run | **not measured** | needs a live model call; see below |
+
+**Zero lines feed a tool result back to the model, and the counting rule asked for that zero
+explicitly.** § How the four metrics are counted here says that a side whose runtime closes the loop
+records a zero rather than an absence. Ours does: the per-turn loop is the SDK's
+(`packages/agents/src/bridge/sdk-adapter.ts:357`), so the second call's dependency on the first
+costs the developer a schema field and nothing else. The concepts count says the same thing from the
+other direction - all five are the five J1 already required, so a developer who has done J1 learns
+nothing new to chain a second call.
+
+**The 15 added lines, classified.** Published because the glue split is the metric most open to
+being argued after the fact, and a table nobody can check is not evidence.
+
+Glue (8): the two imports in the tool file, `tool('shipment_eta')`, `.describe(...)`, `.input(...)`,
+`.build()`, the import in `chat.ts`, and `.tool(shipmentEtaTool)`.
+
+Business logic (5): the `ETA_DAYS` table and the `.execute` body - the data the second answer comes
+from and the code that produces it.
+
+**Four judgement calls, stated rather than buried.**
+
+1. **J1's diff was applied as the baseline, and it is not counted.** § How the four metrics are
+   counted here says J1's tool is reused unchanged, which only has meaning if it is present. It was
+   reconstructed from J1's own published classification, and the reconstruction reproduces J1's
+   published numbers exactly - 3 files, 15 added lines, 8 glue, 5 business logic - which is the check
+   that it is faithful rather than convenient. Measuring J5 from the bare scaffold instead would add
+   3 files and 15 lines already counted once, in another journey.
+2. **`.input(...)` is glue.** The rule fixed this in advance: the schema field that carries the
+   dependency is glue on both sides. Counting the expression of the dependency as business logic -
+   arguable, since it is what makes the chain a chain - gives 7 glue and 6 logic.
+3. **`const ETA_DAYS: Record<string, number>` is business logic despite its type annotation**, which
+   the general rule lists as glue. Counted the same way J1 counted its own lookup table, for the same
+   reason: the line's substance is the data, not the annotation. Counting it as glue gives 9 and 4.
+   The call matters less than the fact that it is now the second journey to make it identically, and
+   the Next.js side owes the same treatment.
+4. **Concepts are what the diff uses, not what is new since J1.** Counting only the newly required
+   ones gives 0, which is true and useless as a total; the 5 is the cost of reading this diff cold.
+
+**Criteria 4 and 5 cost nothing to write because nothing can be written.** This is not a small
+number, and it must not be reported as one. The fluent builder that the scaffold uses
+(`packages/create-theokit/templates/default/agents/chat.ts:21`) has no step-ceiling method anywhere
+in its surface (`packages/agents/src/bridge/agent-builder.ts:125` opens the interface,
+`packages/agents/src/bridge/agent-builder.ts:291` closes it with `build`), so there is no declaration
+for an application to make. The ceiling that does exist on the compiled agent
+(`packages/agents/src/bridge/agent-compiler.ts:287`) is never read by the adapter that serves the
+run, which builds its send options from scratch and sets only a tool choice and an event callback
+(`packages/agents/src/bridge/sdk-adapter.ts:525`). So the criteria fail at zero developer cost, and
+the honest entry for them is "no path", never "0 lines".
+
+### What is still unmeasured, and why
+
+**Metric 4 (time to first green run) needs a live model call**, at least three times, cold cache.
+That spends real credits, and the number is only meaningful measured identically on both sides - so
+running one side alone would produce a figure with nothing to compare it to. This journey's own rule
+also requires reporting the retries when the model declines to chain, and a retry count cannot exist
+without runs.
+
+**Criteria 1 to 3 were implemented, not observed.** The diff registers a second tool whose input is
+the first tool's output; whether a model actually chains them, and whether the randomized value
+survives into the second call's recorded input, needs a run. § What resisted an oracle already
+narrowed these criteria to data flow for exactly this reason, and data flow still has to be watched
+flowing.
+
+**Criteria 4 and 5 are graded from source, not from a run.** The reading above is that the declared
+ceiling never reaches the served run; the run that would show it stopping at the framework default
+instead of the declared number was not performed, and the SDK's default is itself unread.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the
+winning rule cannot be applied. § The Next.js side predicts this is where the other stack writes the
+least code, so a 2-file, 8-glue-line count settles nothing on its own.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). What settles them is the north-star app
+(`.claude/rules/northstar-app.md`), which does not exist yet.
+
+**So: J5 is not won, not tied, and not run.** Three of its five criteria have a measured cost on one
+side; the other two have no path at all, which is a finding about the framework rather than a number
+about the benchmark.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J5 is a

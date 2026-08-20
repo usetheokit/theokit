@@ -104,6 +104,113 @@ assertions pass. Cold cache, at least three runs, mean and standard deviation. N
 journey's own subject — latency — is inside the measurement; the metric is developer wall clock, not
 stream latency, and the two are reported separately so neither is mistaken for the other.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side.** This is not the journey being won; it is the first number this
+journey has. Metric 4 and the whole Next.js side are unmeasured, and the subsection below says why.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim, committed as
+an untouched baseline, and the journey implemented on top. The counts are `git diff --numstat` over
+that commit.
+
+**The counting rule above does not survive contact with the framework, and the divergence is stated
+rather than resolved quietly.** § How the four metrics are counted here says J3 is measured "by the
+delta from a deliberately non-streaming starting point". There is no such starting point on this
+side: the agent mount answers with fixed `text/event-stream` headers
+(`packages/theo/src/server/agent/durable-ui-message-stream-response.ts:23`), nothing in
+`packages/theo/src/server/agent/mount-agent.ts:98` branches to a buffered response, and the
+scaffolded client already reads the result as a stream
+(`packages/create-theokit/templates/default/app/hooks/use-transcript.ts:29`). A non-streaming
+baseline would have to be hand-built - a plain server route that awaits the run and returns JSON -
+and the delta from that would price a detour no developer takes. So the delta is taken from the
+scaffold as it ships, the rule is reported as not applying rather than reinterpreted, and the
+Next.js side must be measured from ITS shipped starting point for the same reason, with the report
+naming both.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **0** for criteria 1-3, **1** for criterion 5 | nothing is created, edited or deleted to make tokens arrive progressively; `app/hooks/use-transcript.ts` is edited to make a dropped stream resume |
+| Glue lines | **0**, then **6** | this journey declares business logic the empty set, so every line of the criterion-5 edit is glue |
+| Concepts required | **0**, then **3** | `useAgent`'s `reconnect`, the `status` value that reports the drop, and React's `useEffect` |
+| Time to first green run | **not measured** | needs a live model call; see below |
+
+**Zero is the result, and it is the result the counting rule was least prepared for.** Criteria 1
+through 3 - a text chunk before the run terminates, two chunks separated by 50 ms, time-to-first-chunk
+at most half of time-to-completion - are properties of the scaffold as generated. Per
+`../dx-benchmark.md` § The four metrics, scaffolder output nobody edited counts on neither side, so
+this is not a zero that was awarded to us: it is a zero that was found, and what it says is that the
+developer does not participate in this part of the journey at all. A margin cannot be computed from
+it until the other side is measured - `../dx-benchmark.md` § What counts as winning asks for a
+factor or a stated absolute gap, and nothing is divisible by zero.
+
+**The 6 added lines for criterion 5, classified.** Published because the glue split is the metric
+most open to being argued after the fact, and a table nobody can check is not evidence.
+
+Glue (6): `import { useEffect } from 'react'`; the two lines the widened destructure now occupies,
+one of which replaces the single line that was there; `useEffect(() => {`;
+`if (status === 'error') reconnect()`; and `}, [status, reconnect])`.
+
+Business logic (0): J3 changes no answer, only its delivery. The counting rule fixed that in advance
+and the diff did not contradict it.
+
+**Four judgement calls, stated rather than buried.**
+
+1. **Criterion 5 was counted as needing an edit at all.** The client exposes `reconnect`
+   (`packages/agents/src/client/use-agent.ts:124`) and the store settles into `error` when the
+   stream drops (`packages/agents/src/client/agent-client.ts:221`), but nothing in the scaffold
+   calls it. A capability nobody invokes is not a satisfied criterion, so the wiring is counted.
+   Deciding the other way makes J3 a flat zero on all three metrics.
+2. **The reflowed destructure was counted as `numstat` reports it.** Six lines are added and one
+   removed; the substance is five new lines plus a reflow forced by the 100-column formatter.
+   Counting substance rather than lines gives 5.
+3. **The retry shape is the minimal one.** Reconnecting on every transition into `error` will retry
+   against a permanently failing endpoint. A guarded version - one attempt per run - adds about two
+   lines, for 8.
+4. **Concepts were derived from the diff, not from the list written above.** § How the four metrics
+   are counted here names the wire protocol name, the response builder, the client transport, the
+   React binding and the reconnect header. None of the first four appears in the measured diff,
+   because the framework supplies all of them. The reconnect header does not appear either:
+   `HttpTransport.reconnectToStream` sends no `Last-Event-ID`
+   (`packages/agents/src/client/http-transport.ts:104`), so the server falls back to replaying the
+   whole run (`packages/theo/src/server/agent/handle-agent-run-reconnect.ts:54`) and the developer
+   never names the header. Applying the list as written scores 5; applying the rule's own first
+   sentence - derive it from the diff - scores 3. The 3 is reported and the list's items are named
+   here so the choice can be checked rather than trusted.
+
+### What is still unmeasured, and why
+
+**Metric 4 (time to first green run) needs a live model call**, at least three times, cold cache.
+That spends real credits, and the number is only meaningful measured identically on both sides - so
+running one side alone would produce a figure with nothing to compare it to.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the
+winning rule cannot be applied. A journey is won or tied; a one-sided count is neither. On this
+journey that matters more than on most: § The Next.js side already predicts this is where the other
+stack is most likely to win or tie, and a zero on our side does not settle a race whose other lane
+is empty.
+
+**Criterion 4 was not exercised at all.** It grades the published build behind a deploy adapter, and
+`../../../ROADMAP.md` § M14 records the buffering shim as a live blocker across six targets. Nothing
+above was run behind an adapter, so the criterion is neither passed nor failed here - it is
+untouched, and the diff says nothing about it.
+
+**Criterion 5's behaviour under real loss was not observed.** The edit was written; a lossy run was
+not performed. Whether replay-from-start plus id-keyed upsert really yields no duplicate text in the
+reassembled message is read from source and unverified, which is the same limit § Current state and
+blockers already recorded.
+
+**Which SSE encoder a measured build uses is still unrecorded.** § Current state and blockers found
+two encoders emitting different event shapes; this measurement produced no run, so it did not settle
+which one a benchmark run would exercise.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). What settles them is the north-star app
+(`.claude/rules/northstar-app.md`), which does not exist yet.
+
+**So: J3 is not won, not tied, and not run.** It has one side of three metrics, one of which is a
+zero whose meaning depends entirely on a number nobody has produced.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J3 is a

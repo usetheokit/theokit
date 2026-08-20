@@ -108,6 +108,109 @@ assertions pass, including the reload and the storage clear. Cold cache, at leas
 and standard deviation. Database provisioning time counts on the side that needs a database; it is
 part of the journey, not setup outside it.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side, and the journey does not pass.** What follows is a floor, not a
+total: it counts the work that CAN be written in a scaffolded app, and § What is still unmeasured
+names the half that cannot be written at all. Metric 4 and the whole Next.js side are unmeasured.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim, committed as
+an untouched baseline, and the journey implemented on top. The counts are `git diff --numstat` over
+that commit.
+
+**Read the numbers with the failure attached to them.** The diff below satisfies criterion 3 - the
+identifier sent after the reload is the one sent before - and, through it, plausibly criteria 2 and
+5. It does not satisfy criterion 1, and cannot: there is no endpoint that returns past messages
+(`packages/theo/src/server/agent/serve-aux-routes.ts:92` lists what the auxiliary routes are, and
+history is not among them). Criterion 4 inherits that failure, because it is criteria 1 and 2 re-run
+after a storage clear. A cost of 3 files for a journey that still fails is a different fact from a
+cost of 3 files for a journey that passes, and reporting the first as the second would be the
+failure this programme exists to stop.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **3, and criterion 1 still fails** | `app/lib/thread-id.ts` and `app/lib/pinned-transport.ts` added, `app/hooks/use-transcript.ts` edited |
+| Glue lines | **24** of 25 added, 1 blank | this journey declares business logic the empty set; the diff did not contradict it |
+| Concepts required | **4** | `HttpTransport`, the `AgentTransport` seam, `chatId` as the server's session key, and `useAgent`'s transport binding with its memoization rule |
+| Time to first green run | **not measured** | there is no green run to time; see below |
+
+**Why the identifier costs a wrapper and not an argument.** The client mints its thread id in its
+constructor and exposes no way to supply one - `readonly #chatId = crypto.randomUUID()`
+(`packages/agents/src/client/agent-client.ts:68`), with the options object carrying only an emit
+interval (`packages/agents/src/client/agent-client.ts:56`). The id does reach the server as the
+session key (`packages/agents/src/client/http-transport.ts:92`), so the only place an application
+can substitute its own is the transport seam (`packages/agents/src/client/transport.ts:44`), which
+is public (`packages/theo/src/client/index.ts:44`). The three files are: an id that survives a
+reload, a transport that pins it, and the hook that binds the two.
+
+**The 25 added lines, classified.** Published because the glue split is the metric most open to
+being argued after the fact, and a table nobody can check is not evidence.
+
+Glue (24): in `app/lib/thread-id.ts`, all 10 - the doc comment, the signature, the `URL`
+construction, the read of the `thread` parameter, the early return, the minted id, the parameter
+write, the `replaceState`, the return and the closing brace. In `app/lib/pinned-transport.ts`, 9 of
+10 - the import, the doc comment, the signature, the inner transport, the returned object literal,
+its two delegating methods and the two closing braces. In `app/hooks/use-transcript.ts`, all 5 - the
+`useMemo` import, the two local imports, the memoized transport, and the `useAgent` call rewritten
+to take it.
+
+Blank (1): the separator line in `app/lib/pinned-transport.ts`.
+
+Business logic (0): J4 changes no answer. The counting rule fixed that in advance, and it also fixed
+that neither side may call its own persistence code business logic - a rule with nothing to bite on
+here, because our side writes no persistence at all.
+
+**Four judgement calls, stated rather than buried.**
+
+1. **The half that can be built was counted, rather than reporting no number.** The alternative was
+   to record J4 as unmeasurable and stop. Counting it says something the refusal would not - that
+   thread identity alone costs 3 files and 24 lines of pure glue - as long as the number is never
+   quoted as the journey's cost. It is a floor. The rest is unbounded, because it has no supported
+   API to be bounded by.
+2. **Platform globals were not counted as concepts.** `URL`, `crypto.randomUUID` and
+   `history.replaceState` appear in the diff and are not framework concepts; counting them gives 7
+   and starts measuring the browser. Both sides pay them identically, which is the reason they carry
+   no signal.
+3. **The id lives in the URL rather than in local storage.** Criterion 4 requires it to survive a
+   storage clear, so a `localStorage` version fails that criterion outright while costing about the
+   same three files. The choice is forced by the criteria, not preferred.
+4. **The concepts list written above did not survive the measurement.** § How the four metrics are
+   counted here named the thread identifier and where it is generated, the session base directory
+   (`packages/theo/src/server/agent/mount-agent.ts:202`), and whatever must be invented to read
+   history back. Measured: the session directory never appears in the diff, because the framework
+   resolves it and the developer never names it; the invented history reader is not in the count
+   because it could not be written; and the list did not anticipate the transport seam, because it
+   did not anticipate that the identifier is unreachable through the supported binding. Counting
+   `useAgent`'s transport binding and its memoization rule as two concepts rather than one gives 5.
+
+### What is still unmeasured, and why
+
+**Criterion 1 has no implementable path, so its cost is not a large number - it is not a number.**
+Reading history back would mean inventing a reader over the SDK's own transcript, whose format lives
+outside this repository and was not read (§ Current state and blockers records the same limit).
+Writing a figure for work whose shape is unknown would be an estimate wearing a measurement's
+clothes.
+
+**Metric 4 (time to first green run) has no green run to time.** Even setting aside that it needs a
+live model call on both sides, the run it would time does not exist on this one.
+
+**Criteria 2 and 5 are inferred from source, not observed.** The identifier reaches the server and
+the server continues a session by it; whether the model then receives the prior turns depends on the
+SDK's transcript, which was not read and about which this measurement makes no claim.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the
+winning rule cannot be applied. § The Next.js side already named the asymmetry worth watching: that
+side pays for a database and ours pays for identity, and the report must show both costs rather than
+netting them into one.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). What settles them is the north-star app
+(`.claude/rules/northstar-app.md`), which does not exist yet.
+
+**So: J4 is not won, not tied, and not run.** It is the one journey in this batch that a scaffolded
+application cannot finish, and the count above is the price of getting partway.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J4 is a
