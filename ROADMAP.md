@@ -39,6 +39,12 @@ The instrument for those lines is the north-star application
 the same runs. It is what turns *"Tauri reaches this in-process"* from a declaration into an
 exercised path.
 
+**One open decision gates two milestones.** `three-target-parity.md § The authorization seam` records
+that `callProcedure` runs no middleware and no auth by deliberate design, and that the fix is an ADR
+rather than an issue: authorization either lives in a transport-independent context contract both
+paths execute, or each surface stays responsible with a primitive the framework provides. M1 and M13
+cannot close before that ADR is decided, and their target lines say so instead of assuming an answer.
+
 It does not replace `/acceptance`. Acceptance grades the **released** artifact against the criteria
 below; the north-star app runs continuously against the working framework and catches the
 regression before it ships. A milestone naming the app as its instrument still has to pass
@@ -93,8 +99,8 @@ not itself a dependency — two milestones in the same wave may run in either or
 - [ ] importing a server-only module from client code fails the build with an error naming both the module and the importing file
 - [ ] CSRF protection on the Web handler is on by default — a cross-origin POST with no token is rejected by a build that sets no CSRF option (`packages/theo/src/server/http/web-handler.ts:314,482`, where absent currently means off)
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the same authn/authz and owner checks run on the IPC path, through the in-process caller — not a second implementation
-- [ ] TUI: the same authn/authz and owner checks run in-process; CSRF is *not applicable* — there is no browser origin to forge a request from
+- [ ] Tauri: the authorization ADR is decided and implemented — `callProcedure` runs no middleware and no auth today, deliberately (`packages/theo/src/server/http/in-process-caller.ts:5-6,69`), so this milestone closes only once that seam has a decided home and the IPC path honours it
+- [ ] TUI: same ADR, same seam — the route's access rules are enforced off-web rather than re-invented per surface. CSRF is *not applicable*: there is no browser origin to forge a request from
 
 ### M2 — [ ] rendering-pipeline
 
@@ -267,8 +273,8 @@ not itself a dependency — two milestones in the same wave may run in either or
 - [ ] a middleware declares a path matcher and runs only for the routes it matches
 - [ ] a middleware requiring a runtime capability the target lacks is refused by name rather than skipped
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the same middleware chain runs in-process before the route resolves
-- [ ] TUI: the same middleware chain runs in-process before the route resolves
+- [ ] Tauri: the middleware chain is reachable off-HTTP — both runners are transport-bound today (`middleware-runner.ts:6-7`, `web-middleware-runner.ts:19`), so closing this milestone requires the transport-independent path the authorization ADR settles
+- [ ] TUI: same transport-bound blocker, same ADR; a terminal surface must not reach a route with the middleware silently skipped
 
 ## Wave 4
 
