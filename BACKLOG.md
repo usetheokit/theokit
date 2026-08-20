@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-7 items — **Open** 7 · **In flight** 0 · **Closed** 0
+8 items — **Open** 8 · **In flight** 0 · **Closed** 0
 
-### Open (7)
+### Open (8)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -68,6 +68,7 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-005`](#b-005--cache-observability-cost-tracking-and-csrf-hardening-ship-with-no-production-caller----) | cache, observability, cost tracking and CSRF hardening ship with no production caller | `triaged` | — |
 | [`B-006`](#b-006--dynamic-route-precedence-uses-a-whole-path-localecompare-so-the-less-specific-route-wins----) | dynamic route precedence uses a whole-path `localeCompare`, so the less specific route wins | `triaged` | — |
 | [`B-007`](#b-007--resolve-the-open-private-security-advisory----) | resolve the open private security advisory | `triaged` | — |
+| [`B-008`](#b-008--the-derived-domain-routing-table-is-gitignored-so-a-fresh-checkout-routes-by-the-wrong-map----) | the derived domain routing table is gitignored, so a fresh checkout routes by the wrong map | `triaged` | — |
 
 ### In flight (0)
 
@@ -186,4 +187,18 @@ dod:
   - the advisory is resolved, its fix released, and the advisory published or withdrawn per `SECURITY.md`
   - the criteria under M1 that depend on it pass against the published build
 
-Next free id: **B-008**.
+## B-008 — the derived domain routing table is gitignored, so a fresh checkout routes by the wrong map   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: evolve
+source: discover-review
+evidence: `.gitignore:84` ignores `.claude/`; `.claude/scripts/route_domain.py` resolves its table from `rules/cycle-backlog.md` or `.claude/rules/cycle-backlog.md` (`_routing_table_path`), and gate G1 parses `## Domain routing` from it. Measured 2026-08-19 during `/backlog-init`: the table derived for this repo lives only in the local, ignored copy
+why_now: a second checkout of this repository inherits whatever table the kit ships — the `theo` ecosystem's, naming repos that do not exist here — so G1 refuses every item filed against `packages/*`. This is the exact failure already measured on `theokit-sdk` (88 items, all `BLOCKER/unroutable_repo`), and the versioned `docs/` split introduced in `8d4b46130` makes the choice of source of truth an open question rather than an oversight
+status: triaged
+dod:
+  - a checkout with no local `.claude/` routes `packages/agents` to a real specialist, verified by running the routing script on a clean clone
+  - exactly one copy of the routing table is authoritative, and the script reads that one — a second copy that drifts silently is the failure being fixed, not an acceptable cost
+  - the decision between versioning the derived table and having the script read from `docs/` is recorded as an ADR, since it binds every consumer of the kit
+
+Next free id: **B-009**.

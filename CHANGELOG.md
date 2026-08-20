@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Streaming SSR on Web targets returns a page instead of throwing.** The generated
+  `renderStreamingWeb` read `url` in its preload block before the `const url = new URL(request.url)`
+  that declares it, so every request to a Web-target deploy (Cloudflare, Bun, Deno, Vercel Edge)
+  died with `ReferenceError: Cannot access 'url' before initialization`. Hoisting the declaration
+  alone is not the fix: `url` is a `URL` there rather than the string the other renderers take as a
+  parameter, so the match key is `.pathname` — hoisting without that trades the `ReferenceError`
+  for `TypeError: url.split is not a function`, which was measured. (usetheokit/theokit#344)
+
 - **The client build is reproducible: the route scanner sorts directory entries.** `scanDir` walked
   `readdirSync` output directly, so the route manifest inherited the filesystem's iteration order —
   ext4 with `dir_index` returns entries in filename-hash order, APFS and NTFS in others, so the same
