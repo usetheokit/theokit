@@ -18,5 +18,15 @@ export default defineConfig({
     // (rules/testing.md § 3 — flaky-by-nature tests are not unit tests) and run on demand
     // via `npm run test:live`. It is still typechecked by the root tsconfig.
     exclude: ['**/node_modules/**', '**/dist/**', 'tests/live/**'],
+    // `tests/type/*.test-d.ts` matched no `include` and no typecheck config, so six
+    // type tests were compiled by `tsc` as ordinary source and asserted nothing —
+    // `expectTypeOf` is inert without the typechecker driving it
+    // (usetheokit/theokit#357). The root project has carried this block since the
+    // split; this package never got it.
+    typecheck: {
+      enabled: true,
+      include: ['tests/**/*.test-d.ts'],
+      tsconfig: '../../tsconfig.json',
+    },
   },
 })
