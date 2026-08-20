@@ -8,6 +8,84 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The observability plugin can be registered, and `theo.config.ts` finally has the
+  `observability` key its own adapter registry documents.** `createObservabilityPlugin` returned
+  `{ name, onRequest, onResponse, onError }` against a plugin contract of `{ name, register }`, so
+  the obvious wiring — putting it in `config.plugins` — threw `InvalidPluginShapeError` at boot.
+  Nothing else called it either, which meant the framework created no spans anywhere: every adapter,
+  the OTLP serializer and the span implementation were tested, published and unreachable. `theo start`
+  and `theo dev` now register it when `observability` is configured or `THEO_CLOUD_INGEST_URL` +
+  `THEO_CLOUD_API_KEY` are set. An application that configures neither is unaffected and pays no
+  plugin runner. (usetheokit/theokit#353)
+
+- **The `X-Theo-Cache` header now survives a production build, so a cached route can be shown to be
+  serving hits where it matters.** The header — `HIT`, `STALE` or `MISS`, the only signal a caller
+  has for telling one from the other — was written only when `NODE_ENV` was not `production`, and
+  every real deploy sets exactly that. Verifying a cache in the environment it was configured for
+  was therefore impossible without attaching a debugger. It is emitted unconditionally now: the
+  value is one of three fixed words, carries no key, tag, cache version or request data, and is the
+  same signal every CDN publishes in front of an application (`X-Cache`, `CF-Cache-Status`, and the
+  `Cache-Status` header of RFC 9211). (usetheokit/theokit#352)
+
+- **A cache default configured in `theo.config.ts` now reaches the routes it was configured for.**
+  `cache.defaults` was parsed at boot, handed to the engine and dropped there: `createCacheEngine`
+  destructured only `storage` and `onError`. A route that declared no `maxAge` therefore used the
+  built-in one-second fallback instead of the configured value, and `defaults.swr` and
+  `defaults.cacheErrors` had no effect anywhere. `defineCachedRoute` now resolves `maxAge`, `swr`,
+  `cacheErrors` and `cacheVersion` against the engine's defaults; anything the route declares still
+  wins over them. (usetheokit/theokit#352)
+
+- **`revalidateTag`, `revalidatePath` and `updateTag` no longer throw in every application.** All
+  three are exported publicly and resolve the cache engine from a process singleton that nothing
+  initialized — `initCacheEngine` had no production caller, so the first call to any of them raised
+  `Cache engine not initialized`. The subsystem was not unreachable code; it was a bridge with one
+  half published and the other half never built. `theo start` and `theo dev` now initialize the
+  engine from `theo.config.ts > cache`. An application with no `cache` key is unaffected: no engine
+  is created, exactly as before. (usetheokit/theokit#352)
+
+- **Build-time scanners order by code unit, so the emitted output no longer depends on the machine's
+  locale.** Five scanners still compared with `localeCompare` after #346 established the rule for the
+  route scanner — including the middleware scanner, where the order being emitted is an *execution*
+  order and therefore decides whether an auth middleware runs before what it protects. `localeCompare`
+  with no locale argument uses the default collator, and Node derives that from `LC_ALL`: an `ä` sorts
+  after `z` under `sv-SE` and before `a` under `en-US`. Cron and job manifests, detected HTTP methods
+  and the services-bridge topological tiebreak were affected the same way. (usetheokit/theokit#351)
+
+- **A request no longer reaches the wrong route handler when a generic and a specific route
+  overlap.** Server route precedence is decided by the order the scanner returns, because
+  `matchRoute` stops at the first pattern that matches — and the tiebreak compared the whole path
+  with `localeCompare`. `/api/:resource/settings` therefore sorted ahead of `/api/users/:id` (`:`
+  precedes `u` in every collation) and a request for `/api/users/settings` was dispatched to the
+  generic handler, so an authorization check placed on the specific route was bypassed. Segments are
+  now compared position by position — a literal beats a parameter, a parameter beats a catch-all —
+  which is the rule the URL itself expresses and the one a whole-path comparison cannot express.
+  The final tiebreak compares by code unit rather than by collation, for the same reason the sibling
+  scanner does. (usetheokit/theokit#348)
+
+- **The package build no longer races itself, so `workspace` can be pushed again.** `pnpm --filter
+  "./packages/*" build` ran the workspace in parallel, and a package's DTS pass could read a
+  dependency's `dist/` while that dependency's own `clean: true` had emptied it — surfacing as
+  `TS7006`/`TS7016` "implicitly has an 'any' type" errors in code that was not wrong. The `pre-push`
+  gate rolled the dice twice per push, because `typecheck` re-invoked the same parallel build. The
+  invocation is now a single `build:packages` script pinned to `--workspace-concurrency=1`, called
+  by the hook and by all five CI jobs that previously pasted the command inline.
+  (usetheokit/theokit#350)
+
+- **Streaming SSR on Web targets returns a page instead of throwing.** The generated
+  `renderStreamingWeb` read `url` in its preload block before the `const url = new URL(request.url)`
+  that declares it, so every request to a Web-target deploy (Cloudflare, Bun, Deno, Vercel Edge)
+  died with `ReferenceError: Cannot access 'url' before initialization`. Hoisting the declaration
+  alone is not the fix: `url` is a `URL` there rather than the string the other renderers take as a
+  parameter, so the match key is `.pathname` — hoisting without that trades the `ReferenceError`
+  for `TypeError: url.split is not a function`, which was measured. (usetheokit/theokit#344)
+
+- **The client build is reproducible: the route scanner sorts directory entries.** `scanDir` walked
+  `readdirSync` output directly, so the route manifest inherited the filesystem's iteration order —
+  ext4 with `dir_index` returns entries in filename-hash order, APFS and NTFS in others, so the same
+  tree produced a different module graph per machine. Sorted by code unit rather than with
+  `localeCompare`, because collation is locale-dependent and would reintroduce the cross-machine
+  divergence the sort exists to remove. (usetheokit/theokit#346)
+
 - **Pull requests into `develop` now run the quality gates.** `ci.yml` and `codeql.yml` listed only
   `main` under `pull_request`, so the leg where every change actually arrives — `workspace` into
   `develop` — reported no check at all, while the workflow header claimed every job runs on every PR.

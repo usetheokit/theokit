@@ -168,13 +168,16 @@ function streamingWebRenderer(appTree: string): string[] {
     // Streaming still applies to genuine data-fetching Suspense, which is where it earns its keep.
     // A failed import is swallowed on purpose: React.lazy will retry and suspend as before, which
     // is strictly no worse than not having preloaded at all.
-    `  const __theoMatches = matchRoutes(routes, url.split('?')[0]) ?? []`,
+    // `url` is a URL here, not the string the other renderers receive as a parameter —
+    // so the match key is `.pathname`, never `.split('?')`. Hoisting the declaration
+    // without changing the accessor trades the TDZ for a TypeError (#344).
+    `  const url = new URL(request.url)`,
+    `  const __theoMatches = matchRoutes(routes, url.pathname) ?? []`,
     `  await Promise.all(`,
     `    __theoPreloadPathsFor(__theoMatches).map((p) => __theoPreloadMap[p]().catch(() => null)),`,
     `  )`,
     ``,
     `  const handler = createStaticHandler(routes)`,
-    `  const url = new URL(request.url)`,
     `  const context = await handler.query(request)`,
     ``,
     `  if (context instanceof Response) {`,

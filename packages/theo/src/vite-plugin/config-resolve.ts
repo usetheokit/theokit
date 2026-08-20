@@ -20,6 +20,7 @@ import {
   type PluginRunner,
   type SecurityHeadersConfig,
 } from '../server/internal-api.js'
+import { createObservabilityPluginFromConfig } from '../server/observability-bootstrap.js'
 import { resolveTransformer, type TheoTransformer } from '../server/transformer.js'
 
 import { detectTheoUi, type TheoUiDetectResult } from './theoui-detect.js'
@@ -69,7 +70,19 @@ const DEFAULT_RESOLVED: ResolvedPluginConfig = {
 export async function resolvePluginConfig(projectRoot: string): Promise<ResolvedPluginConfig> {
   try {
     const userConfig = await loadConfig(projectRoot)
-    const pluginRunner = await createPluginRunnerFromConfig(userConfig.plugins)
+    // #353 — observability is registered FIRST when configured, so its span brackets
+    // the user's own hooks. The honest cost of one ordered list: its `onResponse`
+    // also runs first, so the span closes just before the tail of the chain. Head
+    // coverage matters more — auth and rate-limit hooks live there.
+    const observabilityPlugin = createObservabilityPluginFromConfig(
+      userConfig.observability,
+      process.env,
+    )
+    const pluginRunner = await createPluginRunnerFromConfig(
+      observabilityPlugin === undefined
+        ? userConfig.plugins
+        : [observabilityPlugin, ...(userConfig.plugins ?? [])],
+    )
     const transformer = resolveTransformer(userConfig.serialization)
 
     // Batching: Zod admits `boolean | { max?: number }`; normalize to object.

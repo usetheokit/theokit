@@ -67,7 +67,7 @@ const oversizedWarnedRoutes = new WeakSet()
  * 2. Derive key (path + sortedQuery + varies, prefix by method)
  * 3. Cache lookup → HIT/STALE return cached Response
  * 4. Miss → run handler, check cacheability (Set-Cookie / status / size / SSE / streaming)
- * 5. Cacheable → write entry + return Response with X-Theo-Cache: MISS (dev)
+ * 5. Cacheable → write entry + return Response with X-Theo-Cache: MISS
  * 6. Not cacheable → return original Response unchanged
  *
  * Concurrent dedupe is INTENTIONALLY NOT used for routes — Response objects
@@ -85,9 +85,14 @@ export function defineCachedRoute<
 ): RouteConfig<TQuery, TBody, TParams, TCtx, Response> {
   const { cache, handler, ...rest } = config
 
-  const maxAge = validateMaxAge(cache.maxAge, 'defineCachedRoute')
-  const swr = validateExpire(cache.swr, maxAge, 'defineCachedRoute')
-  if (cache.cacheVersion !== undefined && cache.cacheVersion === '') {
+  // #352 — anything the route leaves undeclared falls back to the engine's
+  // process-wide defaults; anything the route declares wins over them.
+  const defaults = engine.defaults
+  const maxAge = validateMaxAge(cache.maxAge ?? defaults.maxAge, 'defineCachedRoute')
+  const swr = validateExpire(cache.swr ?? defaults.swr, maxAge, 'defineCachedRoute')
+  const cacheVersion = cache.cacheVersion ?? defaults.cacheVersion
+  const cacheErrors = cache.cacheErrors ?? defaults.cacheErrors ?? false
+  if (cacheVersion === '') {
     throw new Error('defineCachedRoute: cacheVersion must be non-empty if provided')
   }
   // EC-19: maxEntrySize validation
@@ -141,7 +146,7 @@ export function defineCachedRoute<
 
     // ---- Cache lookup (T4.2 DRY — delegates to engine canonical) ----
     const cached = await engine.tryReadCached<RouteCacheValue>(key, {
-      cacheVersion: cache.cacheVersion,
+      cacheVersion,
     })
 
     // T4.3 — build options bag once; pass to all helpers (≤ 4 params each).
@@ -153,6 +158,8 @@ export function defineCachedRoute<
       maxEntrySize,
       maxAge,
       swr,
+      cacheVersion,
+      cacheErrors,
       baseTags,
       webRequest,
     }
@@ -199,6 +206,10 @@ interface RouteCacheCtx {
   maxEntrySize: number
   maxAge: number
   swr: number | undefined
+  /** Resolved against `engine.defaults` at define time (#352). */
+  cacheVersion: string | undefined
+  /** Resolved against `engine.defaults` at define time (#352). */
+  cacheErrors: boolean
   baseTags: string[]
   webRequest: Request
 }
@@ -213,17 +224,12 @@ function buildRouteCacheEntry(value: RouteCacheValue, ctx: RouteCacheCtx): Cache
     maxAge: ctx.maxAge,
     swr: ctx.swr ?? ctx.maxAge * 60,
     tags: [...ctx.baseTags, pathTag],
-    cacheVersion: ctx.cache.cacheVersion,
+    cacheVersion: ctx.cacheVersion,
   }
 }
 
 async function persistAndReturn(ctx: RouteCacheCtx, response: Response): Promise<Response> {
-  const cacheableResult = await tryCacheResponse(
-    response,
-    ctx.cache,
-    ctx.routeConfig,
-    ctx.maxEntrySize,
-  )
+  const cacheableResult = await tryCacheResponse(response, ctx)
   if (!cacheableResult) {
     // Not cached — return original response unchanged
     return response
@@ -240,7 +246,7 @@ function scheduleRouteRevalidate<THandlerCtx>(
   void (async () => {
     try {
       const response = await invokeHandlerAsResponse(handler, handlerCtx)
-      const result = await tryCacheResponse(response, ctx.cache, ctx.routeConfig, ctx.maxEntrySize)
+      const result = await tryCacheResponse(response, ctx)
       if (!result) return
       await ctx.engine.set(ctx.key, buildRouteCacheEntry(result, ctx))
     } catch {
@@ -305,10 +311,9 @@ async function invokeHandlerAsResponse<TCtx>(
  */
 async function tryCacheResponse(
   response: Response,
-  cache: RouteCacheOptions,
-  routeConfig: object,
-  maxEntrySize: number,
+  ctx: RouteCacheCtx,
 ): Promise<RouteCacheValue | undefined> {
+  const { cache, routeConfig, maxEntrySize } = ctx
   // D7 / EC-2: Set-Cookie auto-bypass
   if (response.headers.has('set-cookie')) {
     if (!setCookieWarnedRoutes.has(routeConfig)) {
@@ -329,7 +334,7 @@ async function tryCacheResponse(
     return undefined
   }
   // D9: status >= 400 not cached unless opt-in
-  if (response.status >= 400 && !cache.cacheErrors) return undefined
+  if (response.status >= 400 && !ctx.cacheErrors) return undefined
   // Custom predicate (overrides built-ins)
   if (cache.cacheable && !cache.cacheable(response)) return undefined
 
@@ -355,6 +360,29 @@ async function tryCacheResponse(
   return { body: text, status: response.status, headers }
 }
 
+/**
+ * The one signal that tells a caller a hit from a miss.
+ *
+ * It used to be written only when `process.env.NODE_ENV !== 'production'`, and
+ * every real deploy sets exactly that — so the signal existed in development and
+ * vanished in the place where anyone needed to check whether the cache was
+ * working (#352).
+ *
+ * It is emitted unconditionally rather than behind a config flag. The value is
+ * one of three fixed words derived from the lookup outcome alone: it carries no
+ * key, no tag, no cache version and nothing derived from the request or from the
+ * cached body. Entries are shared by construction — `cookie` is stripped from
+ * `varies` and a response carrying `Set-Cookie` is never written — so a `HIT`
+ * says a URL was fetched recently and cannot say by whom. Publishing cache
+ * status in production is what every CDN in front of this framework already does
+ * (`X-Cache`, `CF-Cache-Status`, and the `Cache-Status` header of RFC 9211).
+ */
+function toCacheStatusHeader(status: CacheStatus): 'HIT' | 'STALE' | 'MISS' {
+  if (status === 'hit') return 'HIT'
+  if (status === 'stale') return 'STALE'
+  return 'MISS'
+}
+
 function buildResponseFromCache(
   value: RouteCacheValue,
   status: CacheStatus,
@@ -365,11 +393,6 @@ function buildResponseFromCache(
   if (!headers.has('cache-control')) {
     headers.set('cache-control', getCacheControlHeader({ maxAge, swr: swr ?? maxAge * 60 }))
   }
-  if (process.env.NODE_ENV !== 'production') {
-    let cacheStatusHeader: 'HIT' | 'STALE' | 'MISS' = 'MISS'
-    if (status === 'hit') cacheStatusHeader = 'HIT'
-    else if (status === 'stale') cacheStatusHeader = 'STALE'
-    headers.set('X-Theo-Cache', cacheStatusHeader)
-  }
+  headers.set('X-Theo-Cache', toCacheStatusHeader(status))
   return new Response(value.body, { status: value.status, headers })
 }

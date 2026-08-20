@@ -17,8 +17,10 @@ import { join, resolve } from 'node:path'
 
 import { loadConfig } from '../../../config/load-config.js'
 import { loadEnv } from '../../../config/load-env.js'
+import { initCacheEngineFromConfig } from '../../../server/cache-bootstrap.js'
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 import { defineHealthRoute } from '../../../server/define/health-route.js'
+import { createObservabilityPluginFromConfig } from '../../../server/observability-bootstrap.js'
 import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
 import { createRouteRateLimiter } from '../../../server/rate-limit/rate-limit-per-route.js'
 import { createProductionLoader } from '../../../server/scan/module-loader.js'
@@ -59,6 +61,10 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   await configureAgentRegistryFromConfig(config.agents?.registry)
   await configureStorageManagerFromConfig(config.storage)
+  // #352 — without this, `revalidateTag` / `revalidatePath` / `updateTag` throw
+  // in every application: they resolve the engine from a singleton nothing
+  // initialized.
+  await initCacheEngineFromConfig(config.cache)
 
   const distDir = resolve(cwd, '.theokit')
   const clientDir = resolve(distDir, 'client')
@@ -81,7 +87,16 @@ export async function startCommand(options: StartOptions): Promise<void> {
   const indexHtml = readFileSync(join(clientDir, 'index.html'), 'utf-8')
   const loadModule = createProductionLoader()
   const port = options.port ?? config.port
-  const pluginRunner = await createPluginRunnerFromConfig(config.plugins)
+  // #353 — observability is registered FIRST when configured, so its span brackets
+  // the user's own hooks. The honest cost of one ordered list: its `onResponse`
+  // also runs first, so the span closes just before the tail of the chain. Head
+  // coverage matters more — auth and rate-limit hooks live there.
+  const observabilityPlugin = createObservabilityPluginFromConfig(config.observability, process.env)
+  const pluginRunner = await createPluginRunnerFromConfig(
+    observabilityPlugin === undefined
+      ? config.plugins
+      : [observabilityPlugin, ...(config.plugins ?? [])],
+  )
   const transformer = resolveTransformer(config.serialization)
 
   const custom404Path = join(clientDir, '404.html')

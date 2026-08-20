@@ -135,22 +135,59 @@ export function scanServerRoutes(serverDir: string): ServerRouteNode[] {
     )
   }
 
-  // Sort: static first, then dynamic, then catch-all last
-  const isCatchAll = (route: ServerRouteNode) => route.routePath.includes(':...')
-  results.sort((a, b) => {
-    const aStatic = a.paramNames.length === 0
-    const bStatic = b.paramNames.length === 0
-    const aCatchAll = isCatchAll(a)
-    const bCatchAll = isCatchAll(b)
-
-    // Static routes first
-    if (aStatic && !bStatic) return -1
-    if (!aStatic && bStatic) return 1
-    // Catch-all routes last
-    if (aCatchAll && !bCatchAll) return 1
-    if (!aCatchAll && bCatchAll) return -1
-    return a.routePath.localeCompare(b.routePath)
-  })
+  results.sort((a, b) => compareRouteSpecificity(a.routePath, b.routePath))
 
   return results
+}
+
+/** How constrained one path segment is. Lower is more specific. */
+const SEGMENT_STATIC = 0
+const SEGMENT_DYNAMIC = 1
+const SEGMENT_CATCH_ALL = 2
+
+function segmentSpecificity(segment: string): number {
+  if (segment.startsWith(':...')) return SEGMENT_CATCH_ALL
+  if (segment.startsWith(':')) return SEGMENT_DYNAMIC
+  return SEGMENT_STATIC
+}
+
+/**
+ * Order two route paths by specificity, most specific first.
+ *
+ * `matchRoute` returns on the first pattern that matches, so this order IS the
+ * precedence contract — not a presentation detail of the manifest.
+ *
+ * Segments are compared position by position, and the first position where they
+ * disagree decides: a literal beats a parameter, and a parameter beats a
+ * catch-all. That is the rule the URL itself expresses, and it is the rule a
+ * whole-path comparison cannot express, because a whole-path comparison reads
+ * characters across segment boundaries. Comparing `/api/:resource/settings`
+ * with `/api/users/:id` that way put the generic route first — `:` precedes `u`
+ * in every collation — so `/api/users/settings` reached the generic handler and
+ * an authorization check placed on the specific route was bypassed
+ * (usetheokit/theokit#348).
+ *
+ * Only the segments the two paths have in common are ranked. Past that point
+ * one path is a strict prefix of the other, and two such routes cannot match
+ * the same URL — so there is nothing to decide, only a stable order to pick.
+ *
+ * The final fallback compares by code unit rather than with `localeCompare`.
+ * Collation is locale-dependent, so the same route table would order
+ * differently under a different `LANG` — the cross-machine divergence
+ * usetheokit/theokit#346 removed from the sibling scanner. The tiebreak only
+ * has to be total and stable; it does not have to be alphabetical for a human.
+ */
+export function compareRouteSpecificity(a: string, b: string): number {
+  const aSegments = a.split('/')
+  const bSegments = b.split('/')
+  const shared = Math.min(aSegments.length, bSegments.length)
+
+  for (let i = 0; i < shared; i++) {
+    const difference = segmentSpecificity(aSegments[i]) - segmentSpecificity(bSegments[i])
+    if (difference !== 0) return difference
+  }
+
+  if (a < b) return -1
+  if (a > b) return 1
+  return 0
 }

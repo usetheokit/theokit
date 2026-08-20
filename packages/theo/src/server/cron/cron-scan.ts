@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 
 import { importUserModule } from '../../config/import-user-module.js'
+import { compareByCodeUnit } from '../_internal/compare-by-code-unit.js'
 import { walkSourceFiles } from '../_internal/scan-walker.js'
 
 import type { CronConcurrencyPolicy, CronDefinition } from './cron-types.js'
@@ -123,5 +124,5 @@ export async function scanCronDirs(dirs: readonly string[]): Promise<CronNode[]>
     }
   }
 
-  return nodes.sort((a, b) => a.name.localeCompare(b.name))
+  return nodes.sort((a, b) => compareByCodeUnit(a.name, b.name))
 }
