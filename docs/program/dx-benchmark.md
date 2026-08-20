@@ -83,15 +83,19 @@ The benchmark cannot run credibly yet, and pretending otherwise would waste it:
   production path (`packages/theo/src/server/agent/observe-agent-run.ts`, wired in `mount-agent.ts`
   and `build-agent-streamer.ts`; the exporter drains on its interval and on SIGTERM). **J9 is
   unblocked.** What it will measure is the framework's design, which is what the journey is for.
-- **J2 (HITL) is under an open security advisory.** Unchanged. Measuring the DX of a path whose
-  authorization is being redesigned would measure something about to change.
+- **J2 (HITL) was under an open security advisory, and was measured anyway on 2026-08-20.** The
+  advisory (GHSA-g94h-459g-rjhj) is still open, and the hold assumed the authorization was about to
+  change under the measurement. It has not: the endpoint still authenticates nobody, so criterion 4
+  was graded as the failure it is rather than waited out, and the end-to-end reproduction went to the
+  advisory rather than to a public issue. **J2 is measured and lost** — see below.
 - **J10 (deploy) depends on #350** — the build does not survive its own parallel invocation. The fix
   is merged into `develop` and the issue is still open, so this line stays until the issue is
   verified closed rather than until someone remembers it was fixed.
 
 So the honest order is: define the criteria for all ten now (this document plus ten criteria files),
-implement and measure J1, J3, J4, J5, J7, **J9** after Wave 0.5 wires what exists, and hold J2 until
-the authorization ADR lands and J8 until its own blocker is named.
+implement and measure J1, J3, J4, J5, J7, **J9** after Wave 0.5 wires what exists, and hold J8 until
+its own blocker is named. J2's hold expired for the reason above — the authorization did not change
+under it, so waiting longer would have withheld a result rather than protected one.
 
 **J1 has both sides now, and it is a tie — measured 2026-08-20.** It is the first real contrast this
 document has, and it does not go our way: TheoKit touches *more* files than the best idiomatic
@@ -182,9 +186,30 @@ one day of abnormal termination reported as normal, after #379, #384 and #382. T
 published diffs, the eleven declared judgements, the local-model instrument and the wire payloads
 from both sides are in [J6's criteria file](journeys/j06-retry.md).
 
-**Five journeys measured, three ties, one unresolved and one metric sweep — and the framework has not
-won a journey.** The goal states "win all ten by a margin outside noise". Five of ten are in, and the
-two that produced the largest margins are the two that most clearly did not win. J5's re-measurement
+**J2 has both sides now, and it is the first journey the framework outright loses — on the journey its
+own criteria file called the one where Next.js does not compete.** Measured 2026-08-20, both lanes run
+end to end against a local scripted model. Files 4 against **2**, glue lines 62 against **38**,
+concepts 7 against **6** — every countable metric goes to Next.js, and files at exactly the 2x bar
+§ What counts as winning sets, so metric 1 is a loss rather than a tie. The criteria are level at 3 of
+5 each and fail in opposite halves. The capability premise held and was measured: our run genuinely
+pauses (gate removed, 42-102 ms to the terminal frame; gate in place with a scripted 1000 ms decision,
+1053-1056 ms), and `streamText` cannot — it returns the approval request and completes in 20 ms. That
+difference is worth zero on the three metrics, and what cost the lines was elsewhere: **`ai@7.0.70`
+ships tool approval as a first-class primitive** (`toolApproval`, `addToolApprovalResponse`, and
+HMAC-signed approval requests), which retires this journey's premise that the Next.js side has only a
+recipe; and **our client store drops the approval chunk**, so an application on `useAgent` gets
+`approve(approvalId, …)` with no way to obtain the id (usetheokit/theokit#392). Criterion 4 fails to
+the tool's side effect — a separate process, holding nothing, read the id from an unauthenticated
+listing and the gated tool ran; that is recorded against GHSA-g94h-459g-rjhj, not in a public issue.
+Criterion 5 is the one thing that goes our way, and the same behaviour fails the fifth metric: an
+approval that **expires** is reported as `denied by human approver`, byte-identical to a human pressing
+Deny (usetheokit/theokit#393) — the fifth instance of the family after #379, #384, #382 and #388. The
+measurement, both published diffs, the seven declared judgements, the confirmed AI SDK version facts
+and the instrument are in [J2's criteria file](journeys/j02-hitl.md).
+
+**Six journeys measured, three ties, one loss, one unresolved and one metric sweep — and the framework
+has not won a journey.** The goal states "win all ten by a margin outside noise". Six of ten are in,
+and the two that produced the largest margins are the two that most clearly did not win. J5's re-measurement
 could not change that sentence because shipping the missing capability moved a criterion, not a
 margin. J3 and J9 could not change it for opposite reasons: J3's margins price six lines whose
 trigger never fires, and J9's margins are real while the criteria they were meant to serve stay
@@ -223,3 +248,7 @@ Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated 
   agent SSE response sends no anti-buffering headers), #384 (a dropped run settles as `done`)
 - The defect J6's measurement found and filed: #388 (a tool that throws reaches the caller as
   `isError: false` on a `done` run)
+- Defects J2's measurement found and filed: #392 (`useAgent` exposes `approve(approvalId)` and no way
+  to obtain the id), #393 (an expired approval is reported as a human denial), #394 (the
+  `tool-approval-request` chunk carries only two ids). Its criterion-4 failure is a security finding
+  and went to GHSA-g94h-459g-rjhj rather than to a public issue
