@@ -30,6 +30,12 @@ describe('evaluateCsrfMultiHeader — Sec-Fetch-Site (primary)', () => {
     expect(d.allow).toBe(false)
     expect(d.signal).toBe('sec-fetch-site')
   })
+
+  it('should reject same-site (a sibling subdomain is not us)', () => {
+    const d = evaluateCsrfMultiHeader(mockReq({ 'sec-fetch-site': 'same-site' }))
+    expect(d.allow).toBe(false)
+    expect(d.signal).toBe('sec-fetch-site')
+  })
 })
 
 describe('evaluateCsrfMultiHeader — Origin (fallback)', () => {
@@ -55,9 +61,10 @@ describe('evaluateCsrfMultiHeader — Origin (fallback)', () => {
     expect(d.signal).toBe('origin')
   })
 
-  it('should allow Origin=null from sandboxed iframe', () => {
+  it('should reject Origin=null from a sandboxed iframe (opaque origin)', () => {
     const d = evaluateCsrfMultiHeader(mockReq({ origin: 'null', host: 'example.com' }))
-    expect(d.allow).toBe(true)
+    expect(d.allow).toBe(false)
+    expect(d.signal).toBe('origin')
   })
 })
 
