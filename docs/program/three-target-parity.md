@@ -73,12 +73,30 @@ Blocking three-target parity:
 | React-free gate does not walk `@theokit/presenter` | TUI/Node | `tests/unit/create-agent-client.test.ts:197-199` |
 | Surface tests assert scaffolded files, never a build or a run | TUI, Tauri | `packages/create-theokit/tests/integration/surface-matrix.test.ts:77-83` |
 
-### The authorization seam, stated precisely
+### The authorization seam — decided and half-implemented
 
-`callProcedure` runs no middleware and no auth. This is **deliberate and documented** (`packages/theo/src/server/http/in-process-caller.ts:5-6,69`), on tRPC's precedent, and input validation *is* shared with the HTTP path, so there is no validation drift.
+`callProcedure` ran no middleware and no auth. That was **deliberate and documented**, on tRPC's
+precedent, and input validation *is* shared with the HTTP path, so there was never validation drift.
 
-The consequence is nonetheless real: authorization has no shared home off-web, so every non-HTTP surface invents its own — and the framework offers no `requireOwner`-style primitive to invent it with. Combined, that means a TUI or Tauri surface reaching a route reaches it without the access rules the same route enforces over HTTP.
+The consequence was real anyway: authorization had no shared home off-web, so every non-HTTP surface
+invented its own, and the framework offered no `requireOwner`-style primitive to invent it with. A
+TUI or Tauri surface reaching a route reached it without the access rules the same route enforced
+over HTTP.
 
-That is a design gap to resolve with an ADR — not a bug to file. The question the ADR must answer: does authorization live in a transport-independent context contract that both paths execute, or does each surface remain responsible with a primitive the framework provides? Deciding it is Onda 1 work, because every other target-parity item depends on the answer.
+**ADR 0001 decided it, and the core guarantee is now implemented.** `RouteConfig.policy` is
+evaluated by the Node executor, the Web executor and `callProcedure` from one function, and
+`requireOwner` answers "may this subject touch this record" once. The ADR named its own verification
+— a test reaching the same route both ways and asserting an identical decision for the same subject
+— and that test passes across all three transports.
+
+Identity is still established per transport, which is the split the ADR chose rather than a gap:
+middleware on Web, a plugin hook or file middleware on Node, the ctx argument in-process. The policy
+never sees a header or a cookie.
+
+**What is still open, and it is the breaking half.** The ADR also decides that absence stops meaning
+open, enforced by a build-time gate. Absence still means "not declared" at runtime, because flipping
+it would refuse every existing route in every consumer at once. That half needs the migration that
+makes it survivable, and the ADR is still `Proposed` pending the owner's sign-off for it. `session.ts`
+also still carries `ServerResponse` in its public signature.
 
 **Not measured:** whether the scaffolded TUI and desktop apps actually build and run. That requires `@theokit/tui` and `@theokit/ui`, which live outside this repository. Until it is, both targets are correct in code and unproven in CI — which is exactly what the north-star app exists to settle (`rules/northstar-app.md`).

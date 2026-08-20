@@ -119,7 +119,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 - [ ] importing a server-only module from client code fails the build with an error naming both the module and the importing file
 - [ ] CSRF protection on the Web handler is on by default — a cross-origin POST with no token is rejected by a build that sets no CSRF option (`packages/theo/src/server/web-handler.ts:314,482`, where absent currently means off)
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the authorization ADR is decided and implemented — `callProcedure` runs no middleware and no auth today, deliberately (`packages/theo/src/server/http/in-process-caller.ts:5-6,69`), so this milestone closes only once that seam has a decided home and the IPC path honours it
+- [ ] Tauri: the authorization ADR is decided and implemented — **decided, and its core guarantee is implemented as of 2026-08-20**: `RouteConfig.policy` is evaluated by both HTTP executors AND `callProcedure` from one function, verified by `tests/unit/access-decision-parity.test.ts`. The sentence this criterion was written from — "`callProcedure` runs no middleware and no auth" — no longer describes the code. What remains is the ADR's breaking half (absence stops meaning open; `session.ts` loses `ServerResponse`), which is why the box stays `[ ]` — that, and the fact that only `/acceptance` against a published build may flip it. See `docs/adr/0001-authorization-is-transport-independent.md` § Implementation status
 - [ ] TUI: same ADR, same seam — the route's access rules are enforced off-web rather than re-invented per surface. CSRF is *not applicable*: there is no browser origin to forge a request from
 
 ### M2 — [ ] rendering-pipeline
@@ -293,7 +293,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 - [ ] a middleware declares a path matcher and runs only for the routes it matches
 - [ ] a middleware requiring a runtime capability the target lacks is refused by name rather than skipped
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the middleware chain is reachable off-HTTP — both runners are transport-bound today (`middleware-runner.ts:6-7`, `web-middleware-runner.ts:19`), so closing this milestone requires the transport-independent path the authorization ADR settles
+- [ ] Tauri: the middleware chain is reachable off-HTTP — both runners are transport-bound today (`packages/theo/src/server/http/middleware-runner.ts:6-7`, `packages/theo/src/server/http/web-middleware-runner.ts:19`), and that is unchanged. What the authorization ADR settled is narrower than this criterion assumed: **access control** is now transport-independent and evaluated by `callProcedure`, while the middleware CHAIN stays on the transport by design — CORS, cookies and CSP are meaningless in a terminal. So this criterion is no longer waiting on that ADR; it is waiting on whatever transport-independent thing the remaining middleware use cases actually need, which nobody has yet named
 - [ ] TUI: same transport-bound blocker, same ADR; a terminal surface must not reach a route with the middleware silently skipped
 
 ## Wave 4
