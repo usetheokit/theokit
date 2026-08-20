@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The client build is reproducible: the route scanner sorts directory entries.** `scanDir` walked
+  `readdirSync` output directly, so the route manifest inherited the filesystem's iteration order —
+  ext4 with `dir_index` returns entries in filename-hash order, APFS and NTFS in others, so the same
+  tree produced a different module graph per machine. Sorted by code unit rather than with
+  `localeCompare`, because collation is locale-dependent and would reintroduce the cross-machine
+  divergence the sort exists to remove. (usetheokit/theokit#346)
+
 - **Pull requests into `develop` now run the quality gates.** `ci.yml` and `codeql.yml` listed only
   `main` under `pull_request`, so the leg where every change actually arrives — `workspace` into
   `develop` — reported no check at all, while the workflow header claimed every job runs on every PR.
