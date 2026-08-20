@@ -34,6 +34,28 @@ import type { ObservabilityAdapter } from './observability/adapters/types.js'
 import { createObservabilityPlugin } from './observability/middleware.js'
 import type { TheoPlugin } from './plugin-types.js'
 
+/**
+ * The adapter resolved at boot, for callers that are not the HTTP plugin.
+ *
+ * An agent run is the case that forced this: its spans are produced by
+ * `observeAgentRun` from the wire chunk stream, far from the request hooks, and
+ * it must be the SAME adapter — two independently resolved adapters mean two
+ * exporters and two half-complete pictures of one run.
+ *
+ * `undefined` when nothing asked for telemetry, which is what keeps the
+ * zero-cost path zero-cost.
+ */
+let activeAdapter: ObservabilityAdapter | undefined
+
+export function getObservabilityAdapter(): ObservabilityAdapter | undefined {
+  return activeAdapter
+}
+
+/** Test-only: forget the boot-resolved adapter. Production code must not call this. */
+export function _resetObservabilityAdapter(): void {
+  activeAdapter = undefined
+}
+
 export function createObservabilityPluginFromConfig(
   observabilityConfig: unknown,
   env: Record<string, string | undefined>,
@@ -60,5 +82,6 @@ export function createObservabilityPluginFromConfig(
   // hook is a no-op would cost a runner on the request path and buy nothing.
   if (adapter.name === 'noop') return undefined
 
+  activeAdapter = adapter
   return createObservabilityPlugin(adapter)
 }
