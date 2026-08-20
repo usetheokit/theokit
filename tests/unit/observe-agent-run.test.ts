@@ -164,13 +164,22 @@ describe('agent run observability (M8)', () => {
   it('test_token_usage_from_the_finish_chunk_lands_on_the_run_span', async () => {
     const { adapter, byName } = createRecorder()
 
+    // The fixture is the PRODUCER's shape, read from `AgentTurnMetadata`
+    // (`packages/agents/src/bridge/agent-stream-events.ts:141-146`) rather than
+    // assumed: tokens are nested under `usage`. The first version of this test
+    // invented a flat shape, the code read it flat, and the two agreed with each
+    // other while the span carried no tokens at all.
     await drain(
       observeAgentRun(
         chunks(
           { type: 'start' },
           {
             type: 'finish',
-            messageMetadata: { inputTokens: 12, outputTokens: 34, totalTokens: 46 },
+            messageMetadata: {
+              usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46, reasoningTokens: 5 },
+              cost: 0.0021,
+              durationMs: 900,
+            },
           },
         ),
         adapter,
@@ -182,6 +191,24 @@ describe('agent run observability (M8)', () => {
     expect(run.attrs['tokens.input']).toBe(12)
     expect(run.attrs['tokens.output']).toBe(34)
     expect(run.attrs['tokens.total']).toBe(46)
+    expect(run.attrs['tokens.reasoning']).toBe(5)
+    expect(run.attrs['cost.usd']).toBe(0.0021)
+  })
+
+  it('test_a_flat_metadata_shape_is_NOT_read_as_usage', async () => {
+    // The guard against the defect returning. If someone reintroduces the flat
+    // read, this passes silently unless the flat shape is explicitly refused.
+    const { adapter, byName } = createRecorder()
+
+    await drain(
+      observeAgentRun(
+        chunks({ type: 'start' }, { type: 'finish', messageMetadata: { inputTokens: 99 } }),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    expect(byName('agent.run')[0].attrs['tokens.input']).toBeUndefined()
   })
 
   it('test_a_stream_that_errors_still_closes_every_open_span', async () => {
