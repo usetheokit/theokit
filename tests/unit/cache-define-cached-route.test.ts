@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createCacheEngine } from '../../packages/theo/src/cache/cache-engine.js'
 import { defineCachedRoute } from '../../packages/theo/src/cache/define-cached-route.js'
 import { InMemoryCacheAdapter } from '../../packages/theo/src/cache/in-memory-adapter.js'
-import type { CacheEngine } from '../../packages/theo/src/cache/cache-engine.js'
+import type { CacheEngine, CacheEngineOptions } from '../../packages/theo/src/cache/cache-engine.js'
 
 function makeCtx(req: Request): {
   query: undefined
@@ -353,6 +353,112 @@ describe('defineCachedRoute', () => {
       const r = await route.handler(makeCtx(new Request('https://x/api')))
       expect(r.headers.get('content-type')).toContain('application/json')
       expect(await r.json()).toEqual({ hello: 'world' })
+    })
+  })
+
+  /**
+   * B-009 / usetheokit/theokit#352 — `CacheEngineOptions.defaults` was declared on the
+   * type and never destructured, so a configured default never reached a route:
+   * `defineCachedRoute` fell through to the hardcoded `DEFAULT_MAX_AGE`.
+   */
+  describe('engine defaults', () => {
+    function engineWith(defaults: NonNullable<CacheEngineOptions['defaults']>): CacheEngine {
+      return createCacheEngine({ storage: new InMemoryCacheAdapter(), defaults })
+    }
+
+    it('route without maxAge uses the engine default maxAge', async () => {
+      const route = defineCachedRoute(engineWith({ maxAge: 42 }), {
+        cache: {},
+        handler: () => Response.json({ ok: true }),
+      })
+      const r = await route.handler(makeCtx(new Request('https://x/api')))
+      expect(r.headers.get('cache-control')).toBe('s-maxage=42, stale-while-revalidate=2520')
+    })
+
+    it('route maxAge wins over the engine default maxAge', async () => {
+      const route = defineCachedRoute(engineWith({ maxAge: 42 }), {
+        cache: { maxAge: 7 },
+        handler: () => Response.json({ ok: true }),
+      })
+      const r = await route.handler(makeCtx(new Request('https://x/api')))
+      expect(r.headers.get('cache-control')).toBe('s-maxage=7, stale-while-revalidate=420')
+    })
+
+    it('engine default maxAge governs when the entry turns stale', async () => {
+      const route = defineCachedRoute(engineWith({ maxAge: 0.01, swr: 60 }), {
+        cache: {},
+        handler: () => Response.json({ ok: true }),
+      })
+      const req = new Request('https://x/api')
+      await route.handler(makeCtx(req))
+      await new Promise((r) => setTimeout(r, 50))
+      const r2 = await route.handler(makeCtx(req))
+      expect(r2.headers.get('X-Theo-Cache')).toBe('STALE')
+    })
+
+    it('route without swr uses the engine default swr', async () => {
+      const route = defineCachedRoute(engineWith({ maxAge: 10, swr: 99 }), {
+        cache: {},
+        handler: () => Response.json({ ok: true }),
+      })
+      const r = await route.handler(makeCtx(new Request('https://x/api')))
+      expect(r.headers.get('cache-control')).toBe('s-maxage=10, stale-while-revalidate=99')
+    })
+
+    it('route swr wins over the engine default swr', async () => {
+      const route = defineCachedRoute(engineWith({ maxAge: 10, swr: 99 }), {
+        cache: { swr: 20 },
+        handler: () => Response.json({ ok: true }),
+      })
+      const r = await route.handler(makeCtx(new Request('https://x/api')))
+      expect(r.headers.get('cache-control')).toBe('s-maxage=10, stale-while-revalidate=20')
+    })
+
+    it('route without cacheErrors uses the engine default cacheErrors', async () => {
+      let calls = 0
+      const route = defineCachedRoute(engineWith({ maxAge: 60, cacheErrors: true }), {
+        cache: {},
+        handler: () => {
+          calls++
+          return new Response('missing', { status: 404 })
+        },
+      })
+      const req = new Request('https://x/api')
+      await route.handler(makeCtx(req))
+      await route.handler(makeCtx(req))
+      expect(calls).toBe(1)
+    })
+
+    it('route cacheErrors wins over the engine default cacheErrors', async () => {
+      let calls = 0
+      const route = defineCachedRoute(engineWith({ maxAge: 60, cacheErrors: true }), {
+        cache: { cacheErrors: false },
+        handler: () => {
+          calls++
+          return new Response('missing', { status: 404 })
+        },
+      })
+      const req = new Request('https://x/api')
+      await route.handler(makeCtx(req))
+      await route.handler(makeCtx(req))
+      expect(calls).toBe(2)
+    })
+
+    it('route without cacheVersion uses the engine default cacheVersion', async () => {
+      const storage = new InMemoryCacheAdapter()
+      let calls = 0
+      const handler = (): Response => {
+        calls++
+        return Response.json({ calls })
+      }
+      const stamped = (version: string): CacheEngine =>
+        createCacheEngine({ storage, defaults: { maxAge: 60, cacheVersion: version } })
+      const routeV1 = defineCachedRoute(stamped('v1'), { cache: {}, handler })
+      const routeV2 = defineCachedRoute(stamped('v2'), { cache: {}, handler })
+      const req = new Request('https://x/api')
+      await routeV1.handler(makeCtx(req))
+      await routeV2.handler(makeCtx(req))
+      expect(calls).toBe(2)
     })
   })
 })
