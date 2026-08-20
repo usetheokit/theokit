@@ -8,10 +8,11 @@
  * approval is resolved in-process via the same registry the approve route uses (ADR-M4a: the pause
  * is the SDK's own awaited hook, so this needs no HTTP round-trip).
  *
- * Known caveat (honest): `PreToolCallContext` carries no `toolCallId` (`plugins/types.ts:33`), so the
- * approval chunk is keyed by a fresh `approvalId`, distinct from the SDK's eventual tool-call id. The
- * approval is a standalone gate; the tool run surfaces its own output. Functionally: pause, approve,
- * run, done — and deny surfaces + continues.
+ * `PreToolCallContext` still carries no `toolCallId` (`plugins/types.ts:33`), so the plugin still
+ * mints a fresh `approvalId` — that has not changed and cannot. What changed is that the translator
+ * now correlates the two ids, so the approval and the tool run are ONE call on the wire
+ * (usetheokit/theokit#361, `bridge/hitl-call-correlation.ts`). Functionally: pause, approve, run,
+ * done — and deny surfaces + continues.
  */
 import 'reflect-metadata'
 // `ai` is imported ON PURPOSE: these are ORACLE tests — they assert that what our bridge emits
@@ -39,18 +40,32 @@ type ParsedPart = { type: string; state?: string; approval?: { id?: string } } &
  * it is NOT the same as the raw chunk list (ai mutates a tool part to `state:'approval-requested'`
  * rather than surfacing a `tool-approval-request` part of its own).
  */
-async function reconstructParts(chunks: WireChunk[]): Promise<ParsedPart[]> {
+/**
+ * The same replay, keeping what the renderer saw ALONG THE WAY as well as at the end.
+ *
+ * A tool part's `state` is a value over time — ai mutates the SAME part from `input-available` to
+ * `approval-requested` to `output-available` as the chunks arrive. Reading only the final message
+ * therefore cannot tell "the approval was shown and then answered" from "the approval was never
+ * shown at all"; both end with no pending part.
+ */
+async function reconstructTimeline(
+  chunks: WireChunk[],
+): Promise<{ final: ParsedPart[]; everPending: ParsedPart[] }> {
   const stream = new ReadableStream<UIMessageChunk>({
     start(controller) {
       for (const c of chunks) controller.enqueue(c as unknown as UIMessageChunk)
       controller.close()
     },
   })
-  let parts: ParsedPart[] = []
+  let final: ParsedPart[] = []
+  const everPending: ParsedPart[] = []
   for await (const message of readUIMessageStream({ stream: stream as never })) {
-    parts = message.parts as ParsedPart[]
+    final = message.parts as ParsedPart[]
+    for (const part of final) {
+      if (part.state === 'approval-requested') everPending.push({ ...part })
+    }
   }
-  return parts
+  return { final, everPending }
 }
 
 // The stub captures the injected HITL plugin from `overrides.plugins`, fires its `pre_tool_call`
@@ -227,11 +242,20 @@ describe('HITL harness E2E (M4 / DoD-3)', () => {
     // reconstructs the `tool-approval-request` chunk by mutating the tool part to
     // `state: 'approval-requested'` with `approval.id` — it does NOT emit a `tool-approval-request`
     // part. This is exactly what the example page scans for; assert it through the real reader.
+    //
+    // Read over the whole replay, not off the last message. This assertion used to inspect the final
+    // parts, and it passed for a reason that was itself the defect: the approval synthesised a tool
+    // part under the approval id which NOTHING ever resolved, so a permanently pending ghost part
+    // survived to the end of the stream next to the real, completed one (usetheokit/theokit#361).
+    // With one id, the single part is pending while the human decides and completed afterwards — so
+    // the honest question is whether it was ever pending, and whether it ended resolved.
     const chunks = await runWithDecision(true)
-    const parts = await reconstructParts(chunks)
-    const pending = parts.find((p) => p.state === 'approval-requested')
-    expect(pending, 'a tool part must reconstruct in approval-requested state').toBeDefined()
-    expect(typeof pending?.approval?.id).toBe('string')
+    const { final, everPending } = await reconstructTimeline(chunks)
+
+    expect(everPending, 'a tool part must reach approval-requested state').not.toHaveLength(0)
+    expect(typeof everPending[0]?.approval?.id).toBe('string')
+    // And nothing is left hanging: the answered approval leaves no pending part behind.
+    expect(final.filter((p) => p.state === 'approval-requested')).toHaveLength(0)
   })
 
   it('test_e2e_sdk_stream_error_in_hitl_path_surfaces_as_error_chunk', async () => {

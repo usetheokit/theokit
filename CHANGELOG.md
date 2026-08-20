@@ -32,6 +32,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A human-in-the-loop tool call is one call on the wire again.** A `@HumanInTheLoop` tool crossed as
+  two `tool-input-available` chunks under two different `toolCallId`s — the approval id the HITL
+  plugin mints for its callback URL, and the runtime tool-call id the SDK mints when it dispatches the
+  tool — so a consumer counting tool calls counted two, a UI grouping blocks by `toolCallId` rendered
+  two cards for one call and left a permanently pending approval next to the completed one, and the
+  `agent.hitl` span opened on the approval id was never closed by a result arriving under the runtime
+  id, giving it the duration of the whole run instead of the human's wait. The two ids now correlate:
+  the call is announced once, its result carries the same id, and `tool-approval-request` keeps the
+  plugin's id in `approvalId` so the callback URL still resolves the pause. The pause span closes at
+  the resume and says so with `hitl.resume_observed`. Ungated tools are untouched.
+  (usetheokit/theokit#361)
 - **A run whose connection drops mid-answer is reported as interrupted instead of finished.** The
   agent client settled a dropped stream in `status: 'done'` with no error, so the spinner stopped,
   the error surface stayed empty, and half a sentence was committed to the thread as a completed

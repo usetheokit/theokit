@@ -3,6 +3,7 @@ import type { AgentOutputEvent } from '@theokit/presenter'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import type { AgentStreamEvent, AgentTurnMetadata, DoneEvent } from './agent-stream-events.js'
+import { HitlCallCorrelation } from './hitl-call-correlation.js'
 
 /**
  * M49 — the web surface, composed over `@theokit/presenter`. Replaces the inline `translateToUIMessageStream`.
@@ -151,35 +152,66 @@ function diagnosticDataPart(event: AgentStreamEvent): UIMessageChunk | null {
   }
 }
 
+/**
+ * Reduce a tool event to the ONE id the wire uses for its logical call — usetheokit/theokit#361.
+ *
+ * A HITL-gated call is announced by whichever of its two producers reaches the wire first (see
+ * {@link HitlCallCorrelation}). This folds the other one into that id: `null` means the event is a
+ * second announcement of a call already on the wire and must not be emitted again.
+ *
+ * Non-tool events and ungated tools pass through untouched — the correlation is identity for a call
+ * no approval ever claims, which is what keeps the non-HITL wire byte-unchanged.
+ */
+function correlateToolIds(
+  correlation: HitlCallCorrelation,
+  output: AgentOutputEvent,
+): AgentOutputEvent | null {
+  if (output.type === 'tool-call') {
+    return correlation.announceToolCall(output.name, output.callId) === 'already-announced'
+      ? null
+      : output
+  }
+  if (output.type === 'tool-result') {
+    return { ...output, callId: correlation.resultToolCallId(output.name, output.callId) }
+  }
+  return output
+}
+
 export async function* presentUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
   opts: { textId: string },
 ): AsyncGenerator<UIMessageChunk, void, unknown> {
   const presenter = new UIMessageStreamPresenter({ textId: opts.textId })
+  const correlation = new HitlCallCorrelation()
   yield { type: 'start' }
   let turnMetadata: AgentTurnMetadata | undefined
   try {
     for await (const event of events) {
       const output = toAgentOutputEvent(event)
       if (output !== null) {
-        yield* presenter.present(output)
+        const correlated = correlateToolIds(correlation, output)
+        if (correlated !== null) yield* presenter.present(correlated)
         continue
       }
       if (event.type === 'approval_required') {
         // A framework chunk must not sit inside an open text/reasoning block — close it first (as the
         // original translator did), then synthesize the tool-input (EC-1) once, then the approval.
         yield* presenter.closeBlock()
-        if (!presenter.hasSeen(event.callId)) {
-          presenter.markSeen(event.callId)
+        // #361 — the call this gates, under the id the wire uses for it. That is the runtime's own
+        // tool-call id when the SDK already announced it, and the approval id when it did not; the
+        // `approvalId` below stays the plugin's, so `approve/${approvalId}` keeps resolving.
+        const toolCallId = correlation.approvalToolCallId(event.toolName, event.callId)
+        if (!presenter.hasSeen(toolCallId)) {
+          presenter.markSeen(toolCallId)
           yield {
             type: 'tool-input-available',
-            toolCallId: event.callId,
+            toolCallId,
             toolName: event.toolName,
             input: event.input ?? {},
             dynamic: true,
           }
         }
-        yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId: event.callId }
+        yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId }
         continue
       }
       const diagnostic = diagnosticDataPart(event)

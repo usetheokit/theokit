@@ -176,9 +176,19 @@ function closeToolSpan(state: RunSpans, chunk: ObservedChunk): void {
   if (id === undefined) return
 
   // The tool producing output IS the resume: it is what "the human answered and
-  // the run continued" looks like on the wire.
-  state.pauses.get(id)?.end()
-  state.pauses.delete(id)
+  // the run continued" looks like on the wire. It closes here rather than in the
+  // end-of-run sweep because the result now arrives under the id the approval was
+  // announced with (usetheokit/theokit#361) — until that landed, the two ids never
+  // matched and every pause span fell through to the sweep below.
+  const pause = state.pauses.get(id)
+  if (pause !== undefined) {
+    // Said positively so the duration is self-describing: an operator reading this
+    // span knows the number is the human's wait rather than a sweep's leftover.
+    pause.setAttribute('hitl.resume_observed', true)
+    pause.setStatus('ok')
+    pause.end()
+    state.pauses.delete(id)
+  }
 
   const span = state.tools.get(id)
   if (span === undefined) return
@@ -226,10 +236,15 @@ export async function* observeAgentRun<T>(
       // duration approximates the whole run rather than the time a human took.
       // Saying so is not a nicety: an operator reading a four-minute pause span
       // has no other way to tell "the human thought for four minutes" from "we
-      // never saw the resume". Today that is the NORMAL case, not an edge one -
-      // the approval chunk and the tool result carry different ids for the same
-      // logical call, so `closeToolSpan` never matches the pause
-      // (usetheokit/theokit#361).
+      // never saw the resume".
+      //
+      // This is the EXCEPTIONAL path again. It was the normal one while the
+      // approval chunk and the tool result carried different ids for the same
+      // logical call and `closeToolSpan` could never match the pause
+      // (usetheokit/theokit#361, fixed in `hitl-call-correlation.ts`). What still
+      // reaches it is a pause that genuinely never resumed: the client
+      // disconnected while a human was deciding, the approval timed out into an
+      // aborted run, or the stream failed mid-pause.
       span.setAttribute('hitl.resume_observed', false)
       span.setStatus('error', 'HITL pause never observed to resume; duration is not the human wait')
       span.end()

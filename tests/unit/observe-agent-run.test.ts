@@ -146,26 +146,27 @@ describe('agent run observability (M8)', () => {
   it('test_a_pause_never_observed_to_resume_says_so_instead_of_reporting_a_duration', async () => {
     const { adapter, byName } = createRecorder()
 
+    // The stream ends with the pause still open and no output for the gated call:
+    // the client disconnected while a human was deciding, or the run failed
+    // mid-pause. Nothing on the wire says how long the human took, so the sweep
+    // must not report a duration as if it did.
+    //
+    // This fixture used to send the resume under a DIFFERENT id than the approval,
+    // because that is what the wire did for every gated call (#361). It was the
+    // normal path then; it is not a path at all now that the two ids correlate
+    // (`packages/agents/src/bridge/hitl-call-correlation.ts`), so the test would
+    // have gone on describing a shape the producer can no longer emit.
     await drain(
       observeAgentRun(
         chunks(
           { type: 'start' },
           {
             type: 'tool-input-available',
-            toolCallId: 'approval-uuid',
+            toolCallId: 'call-1',
             toolName: 'deploy',
             input: {},
           },
-          {
-            type: 'tool-approval-request',
-            approvalId: 'approval-uuid',
-            toolCallId: 'approval-uuid',
-          },
-          // The resume arrives under the SDK's own call id, not the approval id -
-          // which is what actually happens on the wire today (#361). The pause is
-          // therefore never matched, and the span must not pretend its duration
-          // is the human's wait.
-          { type: 'tool-output-available', toolCallId: 'sdk-call-id', output: {} },
+          { type: 'tool-approval-request', approvalId: 'approval-uuid', toolCallId: 'call-1' },
           { type: 'finish' },
         ),
         adapter,
@@ -203,6 +204,11 @@ describe('agent run observability (M8)', () => {
     expect(pauses[0].attrs.approvalId).toBe('a1')
     expect(pauses[0].attrs.tool).toBe('deploy')
     expect(pauses[0].ended).toBe(true)
+    // Stated positively, so the duration is self-describing. An operator filtering
+    // on the negative case only learns which spans are useless; this is what says
+    // the rest of them are the human's wait.
+    expect(pauses[0].attrs['hitl.resume_observed']).toBe(true)
+    expect(pauses[0].status).toBe('ok')
   })
 
   it('test_token_usage_from_the_finish_chunk_lands_on_the_run_span', async () => {
