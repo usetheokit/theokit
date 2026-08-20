@@ -42,10 +42,15 @@ function toAgentOutputEvent(e: AgentStreamEvent): AgentOutputEvent | null {
 /**
  * Project the `done` event's authoritative totals into the finish chunk's metadata.
  *
- * theokit#379 adds `stopReason` to what travels. Both optional fields are spread conditionally
- * rather than assigned as `undefined`: this object IS the `messageMetadata` a client reconstructs
- * onto `UIMessage.metadata`, so a key holding `undefined` would appear on every clean turn. A turn
- * that finished on its own therefore produces exactly the metadata it produced before.
+ * theokit#379 adds `stopReason` to what travels, and usetheokit/theokit#368 adds `model`. Every
+ * optional field is spread conditionally rather than assigned as `undefined`: this object IS the
+ * `messageMetadata` a client reconstructs onto `UIMessage.metadata`, so a key holding `undefined`
+ * would appear on every clean turn. A turn whose producer reported neither therefore produces
+ * exactly the metadata it produced before.
+ *
+ * `model` travels for the same reason `usage` does, one question further on: the token counts say
+ * how much was consumed and only the model says what that costs. A span carrying tokens and no
+ * model answers "how much" with a number nobody can price.
  */
 function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
   return {
@@ -53,6 +58,7 @@ function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
     durationMs: event.durationMs,
     ...(event.cost === undefined ? {} : { cost: event.cost }),
     ...(event.stopReason === undefined ? {} : { stopReason: event.stopReason }),
+    ...(event.model === undefined ? {} : { model: event.model }),
   }
 }
 

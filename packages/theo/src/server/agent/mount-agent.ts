@@ -16,14 +16,12 @@ import {
   type RoutePolicy,
   type RouteSubject,
 } from '../../core/contracts/route-policy.js'
-import { extractW3CTraceId } from '../http/trace-context.js'
-import { getObservabilityAdapter } from '../observability-bootstrap.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import type { ApiKeyResolver } from './api-key-resolver.js'
 import { buildAgentHitl } from './build-agent-streamer.js'
 import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
-import { observeAgentRun } from './observe-agent-run.js'
+import { observeServedRun } from './observe-served-run.js'
 import { getRunEventCache, mintRunId } from './run-event-cache.js'
 
 // Re-exported so existing importers keep working. It is declared in its own module because
@@ -226,20 +224,15 @@ export async function mountAgent(
   // read off the chunk stream the agent already emits. Absent adapter ⇒ the
   // stream is passed through untouched, so an app that configured no telemetry
   // pays nothing (usetheokit/theokit#353).
-  const adapter = getObservabilityAdapter()
-  return durableUiMessageStreamResponse(
-    adapter === undefined
-      ? stream
-      : observeAgentRun(stream, adapter, {
-          agent: source,
-          // M8, criterion 1 — a request carrying a `traceparent` produces spans
-          // that continue THAT trace. Absent or malformed, the run opens its
-          // own; what it must never do is export the request's `x-request-id`
-          // or a dashed UUID as a trace id.
-          traceId: extractW3CTraceId(request),
-        }),
-    { runId, cache: getRunEventCache() },
-  )
+  //
+  // The trace the spans join is decided inside `observeServedRun`, from this
+  // request — the same function the thread route calls, so the two endpoints
+  // cannot drift into producing different telemetry for the same agent
+  // (usetheokit/theokit#381).
+  return durableUiMessageStreamResponse(observeServedRun(stream, { agent: source, request }), {
+    runId,
+    cache: getRunEventCache(),
+  })
 }
 
 /**

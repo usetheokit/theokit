@@ -35,9 +35,11 @@
  * exporter carrying the reason it was cut — trading a memory leak for a silent
  * hole in the trace would be the worse bargain.
  */
+import { extractW3CTraceContext } from '../http/trace-context.js'
 import type { PluginContext, PluginErrorContext, TheoApp, TheoPlugin } from '../plugin-types.js'
 
-import type { ObservabilityAdapter, SpanHandle } from './adapters/types.js'
+import type { ObservabilityAdapter, SpanContextInput, SpanHandle } from './adapters/types.js'
+import { newTraceId } from './trace-context-propagation.js'
 
 /**
  * How many requests may be in flight with an unclosed span before the oldest is
@@ -72,6 +74,32 @@ export function createObservabilityPlugin(
     }
   }
 
+  /**
+   * Where the request's span sits: in the caller's trace, under the caller's
+   * span, when the caller sent a `traceparent` (usetheokit/theokit#385).
+   *
+   * This is the OUTERMOST span of a request, which makes it precisely the caller
+   * `startSpan`'s optional `context` was written for — and precisely the caller
+   * that went on passing the two-argument form. The consequence was worse than
+   * "the HTTP span is a root": once `mountAgent` learned to continue an incoming
+   * trace, one request that ran an agent reached the collector as TWO
+   * disconnected traces, and the caller's trace id was present on the HTTP span
+   * as the `requestId` attribute rather than as its `traceId` — resolved,
+   * carried, and written to a field no tracing backend correlates on.
+   *
+   * No `traceparent` (or a malformed one) mints a fresh trace, which is the
+   * correct answer for a request nothing upstream traced. `extractW3CTraceContext`
+   * deliberately refuses `x-request-id` and dashed UUIDs: those are fine
+   * correlation keys and are not trace ids.
+   */
+  function inboundContext(request: Request): SpanContextInput {
+    const inbound = extractW3CTraceContext(request)
+    if (inbound === undefined) return { traceId: newTraceId() }
+    return inbound.parentSpanId === undefined
+      ? { traceId: inbound.traceId }
+      : { traceId: inbound.traceId, parentSpanId: inbound.parentSpanId }
+  }
+
   /** Take the span for a request, if one is still open. */
   function claim(requestId: string): SpanHandle | undefined {
     const span = activeSpans.get(requestId)
@@ -86,13 +114,17 @@ export function createObservabilityPlugin(
     register(app: TheoApp): void {
       app.addHook('onRequest', (ctx: PluginContext) => {
         evictUntilRoom()
-        const span = adapter.startSpan('http.request', {
-          method: ctx.request.method,
-          // `ctx.request.url` is absolute, because that is what a Web `Request`
-          // carries (`plugin-types.ts` says so, at length, for this reason).
-          path: new URL(ctx.request.url).pathname,
-          requestId: ctx.requestId,
-        })
+        const span = adapter.startSpan(
+          'http.request',
+          {
+            method: ctx.request.method,
+            // `ctx.request.url` is absolute, because that is what a Web `Request`
+            // carries (`plugin-types.ts` says so, at length, for this reason).
+            path: new URL(ctx.request.url).pathname,
+            requestId: ctx.requestId,
+          },
+          inboundContext(ctx.request),
+        )
         activeSpans.set(ctx.requestId, span)
       })
 

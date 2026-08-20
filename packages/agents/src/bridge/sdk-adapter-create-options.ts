@@ -13,7 +13,7 @@ import type { McpServersMap } from '../types.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
-import type { AgentStopReason } from './agent-stream-events.js'
+import type { AgentStopReason, DoneEvent } from './agent-stream-events.js'
 import { compileProjectContext } from './compile-project-context.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
@@ -157,6 +157,16 @@ export function realUsageDone(
     stoppedByDoomLoop?: boolean
   },
   t0: number,
+  /**
+   * The model the turn ran on, already resolved by the caller
+   * (`overrides.model ?? compiled.model ?? default`). It is a PARAMETER rather than something read
+   * off `compiled` here for the reason {@link DoneEvent.model} states: `compiled.model` is the
+   * declared model, and the declared model is not always the one that ran.
+   *
+   * Optional, so the two integration tests that call this with a bare `RunResult` keep compiling
+   * and keep asserting the same event they always did.
+   */
+  model?: string,
 ): StreamEvent {
   const u = result.usage
   const inputTokens = u?.inputTokens ?? 0
@@ -177,9 +187,28 @@ export function realUsageDone(
     },
     durationMs: Date.now() - t0,
     cost: result.cost?.amount ?? 0,
-    // theokit#379: SPREAD, not `stopReason: undefined`. A clean run's `done` must stay byte-identical
-    // to what it was before this shipped — absence is what means "finished", so a key holding
-    // `undefined` would be a new, noisy field on every uncapped run.
-    ...(stopReason !== undefined ? { stopReason } : {}),
+    ...terminalExtras(stopReason, model),
   }
+}
+
+/**
+ * The terminal frame's OPTIONAL keys, spread rather than assigned as `undefined`.
+ *
+ * theokit#379: a clean run's `done` must stay byte-identical to what it was before `stopReason`
+ * shipped — absence is what means "finished", so a key holding `undefined` would be a new, noisy
+ * field on every uncapped run. The same discipline applies to the model: a producer with none to
+ * report emits the event it emitted before, key for key.
+ *
+ * They live in their own function rather than inline in {@link realUsageDone} because that function
+ * was already at the complexity ceiling, and two more conditional keys is exactly the growth the
+ * ceiling exists to notice.
+ */
+function terminalExtras(
+  stopReason: AgentStopReason | undefined,
+  model: string | undefined,
+): { stopReason?: AgentStopReason; model?: string } {
+  const extras: { stopReason?: AgentStopReason; model?: string } = {}
+  if (stopReason !== undefined) extras.stopReason = stopReason
+  if (model !== undefined) extras.model = model
+  return extras
 }

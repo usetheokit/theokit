@@ -176,6 +176,22 @@ export interface DoneEvent {
    * boundary. See {@link AgentStopReason} for why the caller needs to tell the two apart.
    */
   stopReason?: AgentStopReason
+  /**
+   * The model this turn actually ran on — the EFFECTIVE id, not the declared one.
+   *
+   * It is resolved at the one place that knows: `createSdkAgentStream`, where
+   * `overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'` is decided. A consumer reading
+   * `CompiledAgentOptions.model` instead would be wrong twice — it misses a per-run override, and
+   * it reads `undefined` for an agent that declared no model and still ran one.
+   *
+   * Tokens are on this event already, and tokens alone convert to no cost: price is per model.
+   * This is the other half of that question, and the reason it travels rather than staying inside
+   * the adapter (usetheokit/theokit#368's fifth criterion).
+   *
+   * Optional so a producer that predates it — or one building a `done` from a source with no model
+   * to report — degrades to absence rather than to a fabricated id.
+   */
+  model?: string
 }
 
 /**
@@ -197,6 +213,13 @@ export interface AgentTurnMetadata {
    * finish, exactly as on `DoneEvent`.
    */
   stopReason?: AgentStopReason
+  /**
+   * Mirrors {@link DoneEvent.model} — the model the turn ran on, carried to whoever only ever sees
+   * the wire. The observability translator is the caller that needs it: it reads the `finish`
+   * chunk and records the model beside the token counts, which is what makes a cost answerable
+   * from a trace at all. Absent when the producer reported none.
+   */
+  model?: string
 }
 
 /** Agent run started. */

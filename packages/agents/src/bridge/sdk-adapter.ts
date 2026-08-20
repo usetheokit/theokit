@@ -23,7 +23,7 @@ import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
-import { buildModelSelection } from './model-selection.js'
+import { buildModelSelection, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
 import {
@@ -639,7 +639,10 @@ async function* streamSdkAgent(
         }
       }
     } else {
-      yield realUsageDone(await (await sendPromise).wait(), t0)
+      // `modelIdOf(model)` and not `compiled.model`: `model` here is the RESOLVED value
+      // (`overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'`), which is what actually ran
+      // and therefore what a cost is computed against (usetheokit/theokit#368).
+      yield realUsageDone(await (await sendPromise).wait(), t0, modelIdOf(model))
     }
   } finally {
     await agent.dispose()

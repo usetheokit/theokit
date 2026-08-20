@@ -13,11 +13,9 @@ import {
 } from '@theokit/agents'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
-import { getObservabilityAdapter } from '../observability-bootstrap.js'
-
 import type { ApiKeyResolver } from './api-key-resolver.js'
 import { getApprovalRegistry } from './approval-registry.js'
-import { observeAgentRun } from './observe-agent-run.js'
+import { observeServedRun } from './observe-served-run.js'
 
 type Compiled = ReturnType<typeof compileAgentModule>
 
@@ -56,11 +54,18 @@ export function buildAgentHitl(compiled: Compiled) {
  * The caller resolved before that, so an agent declaring `anthropic/…` was handed whichever key
  * env priority picked first and every follow-up died with `auth_failed`. Fixed on the agent
  * endpoint by #327; this is the same defect on the thread route (theokit#328).
+ *
+ * `request` is REQUIRED, and required is the point (usetheokit/theokit#381). The trace the run's
+ * spans join lives in that request's `traceparent`, and the previous signature had no parameter
+ * that could carry it — so the value was dropped at the call site, silently, while
+ * `handleThreadMessage` held the `Request` two lines away. An optional parameter would have left
+ * the same omission available; a required one makes the call site state what it is doing.
  */
 export function makeThreadStartRun(
   mod: unknown,
   apiKey: string | ApiKeyResolver,
   source: string,
+  request: Request,
 ): (sessionId: string, message: string) => AsyncIterable<UIMessageChunk> {
   return (sessionId, message) =>
     (async function* () {
@@ -78,10 +83,11 @@ export function makeThreadStartRun(
       const stream = streamAgentUIMessages(compiled, resolvedApiKey, { message, sessionId, hitl })
       // M8 — the thread route runs the same agent and must produce the same
       // spans. Instrumenting only the plain POST would make a run's telemetry
-      // depend on which endpoint reached it (usetheokit/theokit#353).
-      const adapter = getObservabilityAdapter()
-      yield* adapter === undefined
-        ? stream
-        : observeAgentRun(stream, adapter, { agent: source, sessionId })
+      // depend on which endpoint reached it (usetheokit/theokit#353) — and for
+      // the trace id that is exactly what happened, until both routes were made
+      // to go through one function (usetheokit/theokit#381). The trace continued
+      // is the one of the request that STARTED this run, which outlives it:
+      // `observe-served-run.ts` says why that is the right answer.
+      yield* observeServedRun(stream, { agent: source, sessionId, request })
     })()
 }

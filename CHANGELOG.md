@@ -49,9 +49,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   step ceiling defaults to 8, so any run needing a ninth tool-calling turn was cut in silence, agents
   that declared no ceiling included. A run that finishes on its own carries no `stopReason` at all.
   (usetheokit/theokit#379)
+- **A recorded run says which model it ran on, so its tokens convert to a cost.** The exported
+  `agent.run` span carries `gen_ai.request.model` — the attribute name OpenTelemetry's GenAI
+  semantic conventions give it — alongside the token counts it already recorded. Tokens alone price
+  nothing, because price is per model, so a run whose provider reported no cost could not be costed
+  from its own trace at all. The value is the model that actually ran: a per-run override wins over
+  the declared one, and an agent that declared none reports the default it fell back to rather than
+  reporting nothing. It travels on the turn's `finish` metadata, so a Tauri app and a terminal
+  receive it over the same path a browser does, and a producer that reports no model records no
+  attribute rather than a guess. (B-019)
 
 ### Fixed
 
+- **One request that runs an agent arrives as one trace instead of two.** The `http.request` span
+  joined no trace: it minted a fresh one on every route, while the agent run it contained continued
+  the caller's `traceparent`. The caller's trace id was on the HTTP span all along — as the
+  `requestId` attribute, a field no tracing backend correlates on. The span now continues the inbound
+  trace and hangs under the caller's span, as does the run, so an operator searching by the request
+  finds what the agent did about it. A request with no `traceparent`, or one carrying only an
+  `x-request-id`, still roots a freshly minted trace: a correlation key exported as a `traceId` is a
+  malformed span. (usetheokit/theokit#385)
+- **A run's trace no longer depends on which endpoint started it.** The thread message route dropped
+  the incoming `traceparent`, so the same header produced the caller's trace on
+  `POST /api/agents/<name>` and an unrelated one on `POST /api/agents/<name>/threads/<id>/message`.
+  Both endpoints now open their spans through one function, which is what stops the two drifting
+  again. A thread follow-up is headless and outlives the request that queued it; the trace it joins
+  is that request's, which is the answer that gets an operator from "the client sent this" to "here
+  is what the agent did". (usetheokit/theokit#381)
 - **A container built from the documented path is reachable, and the log says which it is.**
   `config.host` had been declared, defaulted to `localhost` and never passed to `listen`, so the
   server bound every interface while its own default said otherwise. Passing it fixed that and broke

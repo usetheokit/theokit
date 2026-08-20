@@ -26,7 +26,11 @@
  * Every chunk is forwarded unchanged. A translator that drops or reshapes one
  * breaks the client in order to instrument the server.
  */
-import type { ObservabilityAdapter, SpanHandle } from '../observability/adapters/types.js'
+import type {
+  ObservabilityAdapter,
+  SpanContextInput,
+  SpanHandle,
+} from '../observability/adapters/types.js'
 import { newSpanId, newTraceId } from '../observability/trace-context-propagation.js'
 
 export interface AgentRunSpanContext {
@@ -45,6 +49,18 @@ export interface AgentRunSpanContext {
    * it — two traces for one thing that happened.
    */
   traceId?: string
+  /**
+   * The caller's span inside {@link traceId} — the `traceparent`'s parent-id.
+   *
+   * Read only when `traceId` is also present: a parent from one trace pinned
+   * inside another names a span the backend cannot resolve, which is worse than
+   * no parent at all.
+   *
+   * Without it the run was a SECOND root of the caller's trace rather than a
+   * child of the caller's span: the correlation held and the waterfall's shape
+   * did not (usetheokit/theokit#385).
+   */
+  parentSpanId?: string
 }
 
 /** The chunk fields this reads. Deliberately structural: the wire schema is owned elsewhere. */
@@ -95,6 +111,53 @@ const TOKEN_FIELDS: [string, string][] = [
  * silently create a new bucket.
  */
 const STOP_REASONS = new Set(['step_limit', 'no_progress'])
+
+/**
+ * The model that ran, under the name the OpenTelemetry GenAI semantic
+ * conventions give it — B-019's fifth criterion, and J9's criterion 5.
+ *
+ * ## Why the run span needs it at all
+ *
+ * The span already carries `tokens.input` / `tokens.output` / `tokens.total`,
+ * and `cost.usd` when the provider reported one. When the provider does not,
+ * tokens are the only route to "what did this run cost" — and tokens without a
+ * model id convert to nothing, because price is per model. So a complete token
+ * record answered the cost question for exactly the providers that had already
+ * answered it.
+ *
+ * ## Why this spelling and not one of ours
+ *
+ * `gen_ai.request.model` — "the name of the GenAI model a request is being made
+ * to" — is the registry entry in OpenTelemetry's GenAI semantic conventions
+ * (`open-telemetry/semantic-conventions-genai`,
+ * `docs/registry/attributes/gen-ai.md`), and it is what the AI SDK's
+ * OpenTelemetry integration emits for the same fact. The value here is the model
+ * the run was STARTED with, which is the request side, not
+ * `gen_ai.response.model` (what the provider says answered) — that one is not on
+ * the wire and inventing it from this would be a guess wearing a spec's name.
+ *
+ * A name of our own would have cost nothing to write and would not have been
+ * readable by a single dashboard, processor or cost tool that already knows this
+ * one.
+ */
+const GEN_AI_REQUEST_MODEL = 'gen_ai.request.model'
+
+/**
+ * The effective model id, read off the `finish` chunk's metadata.
+ *
+ * It arrives on the wire rather than from `CompiledAgentOptions.model` for two
+ * reasons, and the second is the one that matters. The declared model is not
+ * always the model: a per-run override wins over it, and an agent that declares
+ * none still runs one (the adapter's own default). And the wire is the only path
+ * the in-process targets share — a value read from the compiled agent inside the
+ * HTTP route would be recorded for the served path and absent for Tauri and the
+ * TUI, which is the split `three-target-parity.md` exists to prevent.
+ */
+function recordModel(span: SpanHandle, metadata: unknown): void {
+  if (metadata === null || typeof metadata !== 'object') return
+  const model = (metadata as { model?: unknown }).model
+  if (typeof model === 'string' && model.length > 0) span.setAttribute(GEN_AI_REQUEST_MODEL, model)
+}
 
 function recordStopReason(span: SpanHandle, metadata: unknown): void {
   if (metadata === null || typeof metadata !== 'object') return
@@ -210,9 +273,13 @@ export async function* observeAgentRun<T>(
   // by every tool and pause span below.
   const traceId = context.traceId ?? newTraceId()
   const runSpanId = newSpanId()
+  const runContext: SpanContextInput =
+    context.traceId !== undefined && context.parentSpanId !== undefined
+      ? { traceId, spanId: runSpanId, parentSpanId: context.parentSpanId }
+      : { traceId, spanId: runSpanId }
 
   const state: RunSpans = {
-    run: adapter.startSpan('agent.run', runAttributes, { traceId, spanId: runSpanId }),
+    run: adapter.startSpan('agent.run', runAttributes, runContext),
     tools: new Map(),
     pauses: new Map(),
     toolNames: new Map(),
@@ -270,6 +337,7 @@ export async function* observeAgentRun<T>(
       else if (observed.type === 'finish') {
         recordTokenUsage(state.run, observed.messageMetadata)
         recordStopReason(state.run, observed.messageMetadata)
+        recordModel(state.run, observed.messageMetadata)
       }
 
       yield chunk

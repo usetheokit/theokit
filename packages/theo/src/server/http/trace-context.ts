@@ -28,18 +28,52 @@ const REQUEST_ID_HEADER = 'x-request-id'
 const TRACEPARENT_RE = /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/
 
 /**
- * Parse a W3C Trace Context `traceparent` header value. Returns the
- * 32-hex trace-id when valid (and not the reserved all-zeros), else
- * `null`.
+ * What a valid `traceparent` says: the trace to join, and the caller's span
+ * inside it.
+ *
+ * Both halves are on the wire and only the first was ever read, so a span this
+ * process opened for an incoming request became a SECOND root of the caller's
+ * trace instead of a child of the caller's span — the trace correlated and the
+ * waterfall lost its shape (usetheokit/theokit#385).
  */
-export function parseTraceparent(value: string): string | null {
+export interface W3CTraceContext {
+  /** The trace this request belongs to. 32 hex chars. */
+  readonly traceId: string
+  /**
+   * The caller's span, which a span opened for this request hangs under.
+   *
+   * Absent when the caller sent the reserved all-zero parent id, which W3C
+   * defines as "no parent" rather than as a span to point at.
+   */
+  readonly parentSpanId?: string
+}
+
+/**
+ * Parse a W3C Trace Context `traceparent` header value into the trace it names
+ * and the caller's span within it. `null` when the value is not a well-formed
+ * `traceparent` or names the reserved all-zero trace.
+ */
+export function parseTraceparentContext(value: string): W3CTraceContext | null {
   if (!value) return null
   const m = TRACEPARENT_RE.exec(value)
   if (!m) return null
   const traceId = m[1]
   // W3C: trace-id of all zeroes is invalid by spec
   if (/^0+$/.test(traceId)) return null
-  return traceId
+  const parentSpanId = m[2]
+  // Same rule one field over: an all-zero parent-id is the spec's way of saying
+  // there is no parent, so it is dropped rather than exported as a span id no
+  // backend can resolve.
+  return /^0+$/.test(parentSpanId) ? { traceId } : { traceId, parentSpanId }
+}
+
+/**
+ * Parse a W3C Trace Context `traceparent` header value. Returns the
+ * 32-hex trace-id when valid (and not the reserved all-zeros), else
+ * `null`.
+ */
+export function parseTraceparent(value: string): string | null {
+  return parseTraceparentContext(value)?.traceId ?? null
 }
 
 /**
@@ -125,7 +159,8 @@ export function extractTraceId(req: IncomingMessage): string {
  * single-valued).
  */
 /**
- * The request's W3C trace id, or `undefined` when the caller supplied none.
+ * The request's W3C trace context — the trace to join and the caller's span
+ * within it — or `undefined` when the caller supplied no usable `traceparent`.
  *
  * Deliberately narrower than {@link extractTraceIdFromRequest}, which always
  * returns something and may return an `x-request-id` or a generated UUID. Those
@@ -134,11 +169,16 @@ export function extractTraceId(req: IncomingMessage): string {
  *
  * So a span-emitting caller asks this question instead — "is there a real trace
  * to join?" — and mints its own when the answer is no (usetheokit/theokit#368).
+ *
+ * It answers with the whole context rather than the trace id alone, because a
+ * span opened for this request belongs in the caller's trace AND under the
+ * caller's span. Returning only the first half is what made one request arrive
+ * as a trace with two roots (usetheokit/theokit#385).
  */
-export function extractW3CTraceId(request: Request): string | undefined {
+export function extractW3CTraceContext(request: Request): W3CTraceContext | undefined {
   const traceparent = request.headers.get(TRACE_PARENT_HEADER)
   if (traceparent === null) return undefined
-  return parseTraceparent(traceparent) ?? undefined
+  return parseTraceparentContext(traceparent) ?? undefined
 }
 
 export function extractTraceIdFromRequest(request: Request): string {

@@ -156,9 +156,15 @@ describe('theokit#379 a run that finishes on its own is untouched', () => {
     expect('stopReason' in (await terminalFrame())).toBe(false)
   })
 
-  it('test_clean_finish_metadata_is_unchanged', async () => {
-    // A consumer that has never heard of `stopReason` must receive what it received before. Asserted
-    // with `toEqual` (exact), not `toMatchObject`, so a stray key fails this.
+  it('test_clean_finish_metadata_carries_no_stop_reason_and_nothing_else_unexpected', async () => {
+    // A consumer that has never heard of `stopReason` must not start receiving one. Asserted with
+    // `toEqual` (exact), not `toMatchObject`, so a stray key fails this — which is how the
+    // `gen_ai.request.model` work was caught here rather than by a reviewer.
+    //
+    // `model` IS expected now, on every turn: usetheokit/theokit#368's fifth criterion needs the
+    // model beside the token counts, because tokens without a model price nothing. Unlike
+    // `stopReason` it is not conditional — a turn always ran on some model — so this assertion
+    // records the one key that was added rather than pretending the metadata never moved.
     h.waitResult = {
       result: 'all done',
       usage: { inputTokens: 3, outputTokens: 4 },
@@ -178,6 +184,7 @@ describe('theokit#379 a run that finishes on its own is untouched', () => {
       },
       durationMs: expect.any(Number) as unknown as number,
       cost: 0.5,
+      model: 'm',
     })
   })
 

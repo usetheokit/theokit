@@ -83,7 +83,9 @@ export async function handleThreadMessage(args: ThreadMessageArgs): Promise<Resp
     {
       registry: getThreadRunRegistry(),
       cache: getRunEventCache(),
-      startRun: makeThreadStartRun(mod, apiKey, source),
+      // usetheokit/theokit#381 — the request goes with it, so the run's spans join the trace of
+      // the caller that queued it instead of opening one of their own.
+      startRun: makeThreadStartRun(mod, apiKey, source, request),
     },
     sessionId,
     input.message,
