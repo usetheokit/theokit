@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The package build no longer races itself, so `workspace` can be pushed again.** `pnpm --filter
+  "./packages/*" build` ran the workspace in parallel, and a package's DTS pass could read a
+  dependency's `dist/` while that dependency's own `clean: true` had emptied it — surfacing as
+  `TS7006`/`TS7016` "implicitly has an 'any' type" errors in code that was not wrong. The `pre-push`
+  gate rolled the dice twice per push, because `typecheck` re-invoked the same parallel build. The
+  invocation is now a single `build:packages` script pinned to `--workspace-concurrency=1`, called
+  by the hook and by all five CI jobs that previously pasted the command inline.
+  (usetheokit/theokit#350)
+
 - **Streaming SSR on Web targets returns a page instead of throwing.** The generated
   `renderStreamingWeb` read `url` in its preload block before the `const url = new URL(request.url)`
   that declares it, so every request to a Web-target deploy (Cloudflare, Bun, Deno, Vercel Edge)

@@ -41,7 +41,7 @@ jobs:
       # the local lint gate had been giving false assurance for as long as this job
       # had been red. Proven by removing `packages/agents/dist` locally: the exact
       # CI errors appear, and restoring it returns exit 0.
-      - run: pnpm --filter "./packages/*" build
+      - run: pnpm build:packages
       - name: ESLint (strict — zero warnings)
         run: pnpm lint
       - name: Prettier (format check)
@@ -75,7 +75,7 @@ jobs:
       # too, which call `theokit build` (needs the bin from packages/theo,
       # but the binstub points to dist/cli/index.js which doesn't exist
       # until the theo package finishes building → ordering blow-up).
-      - run: pnpm --filter "./packages/*" build
+      - run: pnpm build:packages
       - run: pnpm typecheck
 
   test:
@@ -122,7 +122,7 @@ jobs:
       # Build packages before running tests so the integration tests that
       # exercise `theokit build` (cron/job manifest tests, scaffold-build-start
       # E2E) find the bin at `packages/theo/dist/cli/index.js`.
-      - run: pnpm --filter "./packages/*" build
+      - run: pnpm build:packages
       # M75 T1.2 — the kernel-confinement tests need bubblewrap. `apt install` alone is NOT enough
       # on ubuntu-latest: Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor, and the
       # active probe (`bwrap --unshare-user ...`) fails with "user namespaces unavailable
@@ -159,7 +159,7 @@ jobs:
       - name: Rebuild native bindings (better-sqlite3 ABI guard)
         run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
       # Build packages before tests — same rationale as `test` job above.
-      - run: pnpm --filter "./packages/*" build
+      - run: pnpm build:packages
       - name: Run tests with coverage thresholds
         run: pnpm test:coverage
       - name: Upload coverage report
@@ -188,7 +188,7 @@ jobs:
           (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       # Build packages first so knip can resolve theokit's dist exports.
-      - run: pnpm --filter "./packages/*" build
+      - run: pnpm build:packages
       - run: pnpm knip
 
   package-validation:
