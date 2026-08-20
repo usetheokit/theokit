@@ -34,6 +34,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The deprecation on `theokit/server` now names destinations that exist.** Importing the umbrella
+  prints "use sub-paths" and schedules removal for `0.x+2`, and 58 of its 272 symbols had no subpath
+  to migrate to — the instruction could not be followed. Sixteen HTTP-boundary symbols, including
+  `executeWebRequest` (the Web-Standards route executor) and `callProcedure` (the in-process path a
+  TUI or Tauri app uses), are now exported from `theokit/server/http`, where they always belonged.
+  The remaining families — cache, config, instructions, context pressure, trust — need subpaths that
+  do not exist yet and are named in the issue; a test asserts the invariant so the next symbol cannot
+  arrive orphaned unnoticed. (usetheokit/theokit#372)
 - **An agent run reaches the collector as one trace instead of one trace per span.** Spans carried no
   identity, so the OTLP serializer minted a `traceId` for each one at export time. Every export was
   well-formed and every span was an island: a run with three tool calls arrived as five unrelated
