@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **The agent endpoint can declare who may run it.** `mountAgent` accepts a `policy` and a `subject`
+  and evaluates them with the same function the route executors and the in-process caller use, so
+  ADR 0001's guarantee now reaches the surface this framework exists for. It runs before the module
+  is compiled and long before the SDK: an agent run spends real tokens, so a caller who may not run it
+  is turned away before any of that is paid for. An endpoint that declares no policy behaves exactly
+  as before. (usetheokit/theokit#365)
+
 ### Changed
 
 - **BREAKING: a route file that declares no `policy` fails the build, naming the file.** The route

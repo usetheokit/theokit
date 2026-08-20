@@ -11,6 +11,11 @@
  */
 import { compileAgentModule, resolveEnabledSkills, streamAgentUIMessages } from '@theokit/agents'
 
+import {
+  evaluateRoutePolicy,
+  type RoutePolicy,
+  type RouteSubject,
+} from '../../core/contracts/route-policy.js'
 import { getObservabilityAdapter } from '../observability-bootstrap.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
@@ -83,6 +88,69 @@ interface MountAgentOptions {
    * `.theokit/` file-based config (`.settingSources([...])`), discovery points here, NOT `process.cwd()`.
    */
   projectRoot?: string
+  /**
+   * Who may run this agent, and against which conversation (ADR 0001,
+   * usetheokit/theokit#365).
+   *
+   * `mountAgent` is not a `route()`, so the policy seam the two HTTP executors and
+   * `callProcedure` share did not reach the surface this framework exists for. The
+   * endpoint accepts a caller-supplied session id and the durable store resumes
+   * whatever conversation it names, so without this there is no owner check
+   * anywhere on the path.
+   *
+   * Evaluated against the parsed request body, so a policy can ask who owns the
+   * conversation being resumed. Absent ⇒ not evaluated, matching the route
+   * executors: absence means "not declared" and is not reinterpreted as denial.
+   */
+  policy?: RoutePolicy
+  /** The authenticated caller, resolved by whatever established identity for this transport. */
+  subject?: RouteSubject | null
+}
+
+/**
+ * Read the body and decide whether this caller may run the agent at all.
+ *
+ * Both gates live here, and both run BEFORE the module is compiled and long
+ * before the SDK is reached — the same reason the CSRF gate upstream runs first:
+ * an agent run spends real tokens, so a malformed request and an unauthorized one
+ * are turned away before any of that is paid for. A policy evaluated after the
+ * run began is a cost gate that costs.
+ *
+ * The policy sees the PARSED body, so it can ask who owns the conversation the
+ * request is trying to resume — which is the whole point, since the endpoint
+ * accepts a caller-supplied session id and the durable store resumes whatever it
+ * names (usetheokit/theokit#365).
+ *
+ * @returns the parsed input, or the `Response` that refuses the request.
+ */
+async function admitRequest(
+  request: Request,
+  policy: RoutePolicy | undefined,
+  subject: RouteSubject | null | undefined,
+): Promise<AgentRequestInput | Response> {
+  let body: unknown = null
+  try {
+    body = await request.json()
+  } catch {
+    /* invalid/empty JSON → a 400 below */
+  }
+
+  const input = parseAgentRequestBody(body)
+  if (input === null) {
+    return jsonError(400, 'BAD_REQUEST', 'Request must contain a non-empty message or messages[].')
+  }
+
+  const decision = await evaluateRoutePolicy(policy, {
+    subject: subject ?? null,
+    query: undefined,
+    body: input,
+    params: undefined,
+  })
+  if (!decision.allowed) {
+    return jsonError(403, 'FORBIDDEN', `Access denied: ${decision.reason}`)
+  }
+
+  return input
 }
 
 /**
@@ -99,7 +167,13 @@ export async function mountAgent(
   mod: unknown,
   request: Request,
   apiKey: string | ApiKeyResolver,
-  { source = 'agent module', csrfMode = 'strict', projectRoot }: MountAgentOptions = {},
+  {
+    source = 'agent module',
+    csrfMode = 'strict',
+    projectRoot,
+    policy,
+    subject,
+  }: MountAgentOptions = {},
 ): Promise<Response> {
   // Enforce CSRF BEFORE any work — an agent run spends real LLM tokens, so a cross-origin
   // POST must be rejected before it reaches the SDK (parity with actions/routes). The custom
@@ -112,6 +186,10 @@ export async function mountAgent(
     }
   }
 
+  const admitted = await admitRequest(request, policy, subject)
+  if (admitted instanceof Response) return admitted
+  const input = admitted
+
   const compiled = compileAgentModule(mod, source)
 
   // Now that the model is known, let the caller pick the credential for THAT provider.
@@ -123,18 +201,6 @@ export async function mountAgent(
   if (compiled.skillsResolver) {
     const enabled = await resolveEnabledSkills(compiled.skillsResolver, compiled.runContext ?? {})
     if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
-  }
-
-  let body: unknown = null
-  try {
-    body = await request.json()
-  } catch {
-    /* invalid/empty JSON → handled below as a 400 */
-  }
-
-  const input = parseAgentRequestBody(body)
-  if (input === null) {
-    return jsonError(400, 'BAD_REQUEST', 'Request must contain a non-empty message or messages[].')
   }
 
   // When the agent has @HumanInTheLoop-gated tools (M4), wire the pause: the plugin's `awaitApproval`
