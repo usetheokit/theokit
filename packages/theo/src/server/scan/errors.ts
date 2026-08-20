@@ -114,6 +114,12 @@ export class MissingRoutePolicyError extends Error {
       ``,
       `Add a policy to each method listed above:`,
       ``,
+      // The import is part of the remedy, not decoration. This message shipped
+      // naming `requireOwner` while no entry point exported it, so it read as
+      // actionable and was not. `tests/unit/policy-gate-remedy-is-importable.test.ts`
+      // asserts that every symbol named here is reachable from the path named here.
+      `  import { route, requireOwner } from 'theokit/server/define'`,
+      ``,
       `  export const ${methods[0] ?? 'GET'} = route()`,
       `    .policy('public')                                  // anyone may call this`,
       `    .handler(...)`,

@@ -27,6 +27,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The build error that refuses a policy-less route now names an import that resolves.** It told the
+  author to call `requireOwner(...)`, and no package entry point exported it — a gate that fails a
+  build and names an unreachable remedy. `requireOwner` and the policy types are exported from
+  `theokit/server/define`, the same entry point `route` already comes from, and the message carries
+  the import line. A test asserts that every symbol the message names is reachable from the path the
+  message names, so the two cannot drift apart again.
+
 - **A human-in-the-loop pause span no longer reports a duration that is not the human's wait.** The
   approval chunk and the tool result carry different ids for the same logical call, so the pause was
   never matched at resume and its span was closed by the end-of-run sweep — with a duration
