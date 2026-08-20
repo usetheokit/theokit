@@ -1,6 +1,12 @@
 # Observability in this framework: what exists, and where it can be better than the field
 
-Re-measured 2026-08-20 against `packages/theo/src/server/observability/`,
+Re-measured 2026-08-20, then amended the same day after three changes landed on this very surface —
+span identity and parentage (usetheokit/theokit#368), the served step ceiling (#363) and a readable
+stop reason (#379). The rows marked **Added 2026-08-20** are those; everything else is as first read.
+A surface measured in the morning and changed in the afternoon is exactly the drift the header below
+warns about, so it is recorded rather than silently refreshed.
+
+Measured against `packages/theo/src/server/observability/`,
 `packages/theo/src/server/observability-bootstrap.ts`,
 `packages/theo/src/server/agent/observe-agent-run.ts`,
 `packages/theo/src/server/http/trace-context.ts`,
@@ -34,6 +40,9 @@ exists to correct, and the third column below is what stops it recurring.
 | Request span | One `http.request` span per request, opened on `onRequest` and closed on `onResponse`/`onError` (`packages/theo/src/server/observability/middleware.ts:89`) | Yes, **on the routes that run plugin hooks** — actions, agents and `/api/*`. Not on SSR page renders. See below |
 | Bounded in-flight span state | Per-instance map capped at 1024; an evicted span is ended carrying `span.abandoned` rather than dropped (`packages/theo/src/server/observability/middleware.ts:47`) | Yes |
 | Agent run spans | `agent.run`, `agent.tool` and `agent.hitl` translated from the wire chunk stream (`packages/theo/src/server/agent/observe-agent-run.ts:134`) | Yes — `mountAgent` (`packages/theo/src/server/agent/mount-agent.ts:164`) and the thread route (`packages/theo/src/server/agent/build-agent-streamer.ts:85`) |
+| **Span identity and parentage** | Every span carries `traceId`, `spanId` and an optional `parentSpanId`, decided when the span starts (`packages/theo/src/server/observability/span.ts:8`); the OTLP serializer reads them instead of minting (`packages/theo/src/server/observability/otlp-serializer.ts:65`). `startSpan` takes an optional third argument placing the span in a trace, forwarded by `defineObservabilityAdapter` so a custom adapter is not trace-blind | Yes. **Added 2026-08-20** (usetheokit/theokit#368). Before it, the serializer drew a `traceId` per span at export time and an agent run reached a collector as N unrelated single-span traces |
+| **A run is one trace** | `observeAgentRun` mints one trace per run, pins the run span's id and names it as parent on every tool and pause span (`packages/theo/src/server/agent/observe-agent-run.ts:186`); `mountAgent` continues an incoming W3C `traceparent` rather than opening its own, via `extractW3CTraceId` (`packages/theo/src/server/http/trace-context.ts:127`) | Yes. **Added 2026-08-20.** The narrower resolver exists because `extractTraceIdFromRequest` always returns something and may return an `x-request-id` or a dashed UUID — correlation keys that are not trace ids |
+| **Stop reason on the run span** | `agent.run` carries `stop.reason` (`step_limit` / `no_progress`) when the SDK truncated the run (`packages/theo/src/server/agent/observe-agent-run.ts:213`). Span status stays `ok` — a reached ceiling is a declared outcome, not a failure, and marking it error would put every capped run in an operator's error budget | Yes. **Added 2026-08-20** (usetheokit/theokit#379). The SDK's default ceiling is 8 tool-calling turns, so runs were being truncated and reported as an ordinary `done` even for agents that declared nothing |
 | Token and cost attributes | Read from the producer's real shape, `usage.*` nested under the finish chunk's metadata (`packages/theo/src/server/agent/observe-agent-run.ts:70`) | Yes |
 | Two counters | `http.requests` and `http.errors`, deliberately unlabelled by path (`packages/theo/src/server/observability/middleware.ts:110`, `:122`) | Emitted — but see the metrics row in § Parity gaps |
 | OTLP export | An in-house serializer producing OTLP JSON, with no vendor dependency | Yes, from the managed-platform adapter |
