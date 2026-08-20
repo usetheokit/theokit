@@ -34,6 +34,18 @@ import { describe, expect, it } from 'vitest'
  * of `TODO:` in the repository today are exactly that one, and a gate that flagged them would be born
  * red from noise — and a gate born red is switched off the following week.
  *
+ * **That third row promises more than the regex delivers, and it was measured on 2026-08-20.** A test
+ * fixture wrote a realistic forgotten marker into a synthetic agent file — a comment in the file it
+ * generates, a string in the source that generates it — and this gate flagged it as debt of ours. A
+ * line-based pattern sees a line, not a syntax tree, so it cannot tell a comment from a string
+ * containing one. The fixture now assembles the marker from fragments, with the reason written at the
+ * site, and this note records that the workaround is on the caller because the gate cannot carry it.
+ *
+ * Making the distinction real needs the TypeScript AST, which is what
+ * `packages/theo/src/server/scan/` already uses for a neighbouring question. Whether that is worth it
+ * for a gate whose true-positive count in this repository is still zero is a judgement nobody has
+ * made — so this is residue, declared, rather than a silent limitation.
+ *
  * ## The anti-vacuity floor
  *
  * A scan that returns zero passes green, and is indistinguishable from one that does not know how to

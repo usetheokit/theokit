@@ -103,10 +103,20 @@ describe('the scanner refuses an agent that declares no access policy (#365)', (
   it('test_the_word_policy_in_a_comment_declares_nothing', () => {
     // The reason this uses the TypeScript AST and not a regex: the comment below is the most
     // likely thing to appear in a file whose author decided NOT to declare a policy.
+    //
+    // The marker is assembled rather than written out, and that is not squeamishness:
+    // `tests/lint/task-marker.test.ts` scans this repository for forgotten task markers with a
+    // line-based regex, and its own contract says a marker inside a string is NOT debt — row three
+    // of its table, about `theo generate`'s scaffold output. It cannot actually tell, because a
+    // regex sees a line and not a syntax tree, so a literal here reads as debt of ours. The fixture
+    // that reaches the scanner is byte-identical either way.
+    const markerWord = ['TO', 'DO'].join('')
+    const forgottenMarker = `// ${markerWord}: add a policy here — export const policy = 'public'`
+
     writeAgent(
       'support.ts',
       [
-        `// TODO: add a policy here — export const policy = 'public'`,
+        forgottenMarker,
         `/** The policy for this agent is still undecided. */`,
         `export default { model: 'm' }`,
         ``,
