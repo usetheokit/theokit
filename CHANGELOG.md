@@ -27,6 +27,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A Cloudflare Worker with `ssrStreaming: true` serves a document instead of a bare React tree.**
+  The streaming assembly was fixed in the generated entry and left unfixed at its only caller: the
+  worker called `renderStreamingWeb(request)` with no options, and both halves of the document shell
+  default to the empty string — so the response carried no `<html>`, no `<head>`, no stylesheet and no
+  client entry, with hydration data for a page that could not hydrate. The shell is now read from the
+  built `index.html` and inlined into the worker, which has no filesystem at request time. A build
+  with streaming on and no template refuses by name instead of emitting a worker that serves headless
+  pages. (usetheokit/theokit#343)
+
 - **`build --target static` produces pages again instead of a redirect loop.** Every page of an SSR
   project was emitted as `<meta http-equiv="refresh" content="0; url=/">`, and `/index.html`
   refreshed to itself. The static adapter still typed the SSR entry's `render` as returning a string;

@@ -2,10 +2,11 @@
  * Cloudflare deploy adapter. All write paths are under `cwd/.theokit/cloudflare/`
  * and `cwd/wrangler.toml`. Build-time tool — no HTTP input.
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
+import { findRootDiv } from '../core/contracts/find-root-div.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { nodeAdapter } from './node.js'
@@ -17,12 +18,70 @@ import type { AdapterBuildContext, DeployAdapter } from './types.js'
  * template from ~50 lines to ~25 and centralizes maintenance.
  */
 
-export function renderCloudflareWorkerEntry(opts: { ssrStreaming?: boolean } = {}): string {
+/**
+ * The built `index.html` split into the part before `<div id="root">` and the
+ * part after it.
+ *
+ * Refuses by name when streaming is on and the template is missing, rather than
+ * emitting a worker that serves a headless document. A build that cannot produce
+ * a correct artifact should say so at build time; the alternative is a deploy
+ * that looks successful and serves pages with no stylesheet.
+ */
+function readDocumentShell(
+  cwd: string,
+  streaming: boolean,
+): { htmlHead?: string; htmlTail?: string } {
+  if (!streaming) return {}
+
+  const indexPath = resolve(cwd, '.theokit/client/index.html')
+  if (!existsSync(indexPath)) {
+    throw new Error(
+      `[adapter-cloudflare] ssrStreaming is on but ${indexPath} does not exist, so the worker ` +
+        `would serve a document with no <head> and no client entry. Run the client build first, ` +
+        `or set ssrStreaming: false in theo.config.ts.`,
+    )
+  }
+
+  const indexHtml = readFileSync(indexPath, 'utf-8')
+  const rootDiv = findRootDiv(indexHtml)
+  if (rootDiv === undefined) {
+    throw new Error(
+      `[adapter-cloudflare] ${indexPath} has no <div id="root">, so the streamed document has ` +
+        `nowhere to put the app. Add one, or set ssrStreaming: false in theo.config.ts.`,
+    )
+  }
+
+  return {
+    htmlHead: indexHtml.slice(0, rootDiv.insertAt),
+    htmlTail: indexHtml.slice(rootDiv.insertAt),
+  }
+}
+
+export function renderCloudflareWorkerEntry(
+  opts: { ssrStreaming?: boolean; htmlHead?: string; htmlTail?: string } = {},
+): string {
   const streamingImport = opts.ssrStreaming
     ? `import { renderStreamingWeb } from '/@theo/entry-server'`
     : `// (ssrStreaming off: renderStreamingWeb not imported)`
+  // #343 — the document shell is inlined as a build-time literal because a Worker
+  // has no filesystem to read `index.html` from at request time. Without it,
+  // `renderStreamingWeb` falls back to its empty-string defaults and the response
+  // is React output with no `<html>`, no `<head>`, no stylesheet and no client
+  // entry — hydration data for a page that cannot hydrate. The streaming
+  // assembly was fixed in the generated entry and this, its only caller, was
+  // left passing nothing.
+  //
+  // `JSON.stringify` and not a template literal: the shell contains quotes,
+  // angle brackets and a `</script>`, and embedding it naively produces a worker
+  // that fails to parse at deploy time rather than here.
   const nonApiBranch = opts.ssrStreaming
-    ? `      // T2.3 — streaming SSR for non-API routes\n      return renderStreamingWeb(request)`
+    ? [
+        `      // T2.3 — streaming SSR for non-API routes`,
+        `      return renderStreamingWeb(request, {`,
+        `        htmlHead: ${JSON.stringify(opts.htmlHead ?? '')},`,
+        `        htmlTail: ${JSON.stringify(opts.htmlTail ?? '')},`,
+        `      })`,
+      ].join('\n')
     : `      return notFoundResponse()`
   // CR-006: Workers lack `process.cwd()` and the `node:*` import surface
   // is brittle even under `nodejs_compat`. We use the Web Crypto
@@ -129,9 +188,16 @@ export const cloudflareAdapter: DeployAdapter = {
     mkdirSync(outputDir, { recursive: true })
 
     // 2. Emit Worker entry (now uses the shared web-shim)
+    //
+    // The document shell is read HERE, after the Node build produced
+    // `.theokit/client/index.html`, and inlined into the worker: a Worker has no
+    // filesystem at request time. Split on the root div with the same helper the
+    // Node server uses (`ssr-setup.ts`), so the two paths cannot disagree about
+    // where the shell ends (#343).
+    const shell = readDocumentShell(cwd, config.ssrStreaming)
     writeFileSync(
       resolve(outputDir, 'worker.mjs'),
-      renderCloudflareWorkerEntry({ ssrStreaming: config.ssrStreaming }),
+      renderCloudflareWorkerEntry({ ssrStreaming: config.ssrStreaming, ...shell }),
     )
 
     // 3. Emit wrangler.toml (with nodejs_compat enforced)
